@@ -15,9 +15,10 @@ that set it instead.
 |---|---|---|---|
 | corpus files parsed without panic | 4 | M2 | `xtask corpus` |
 | fwpng round-trip byte-identical files | 3 | M2 | corpus gate |
-| wasm-clean crates (compile) | 4 | M0 | `xtask wasm` |
+| corpus files with doc-model round-trip (equal + idempotent) | 4 | M3 | `xtask corpus` |
+| wasm-clean crates (compile) | 5 | M3 | `xtask wasm` |
 | wasm smoke tests executed (fwpng) | 6 | M2 | `xtask wasm` (node + wasm-bindgen-test-runner) |
-| fuzz targets with 60s+ zero-crash campaign | 5 | M2 | `xtask fuzz` / `ci --full` |
+| fuzz targets with 60s+ zero-crash campaign | 6 | M3 | `xtask fuzz` / `ci --full` |
 | layer-table violations | 0 | M0 | `xtask layers` |
 "#;
 
@@ -33,7 +34,7 @@ A milestone flips to done only when its gate evidence is recorded in
 | M0 workspace bootstrap | done | `xtask ci` |
 | M1 foundations (blend modes, gradients, JS engine spike) | done | `xtask ci --full` + devlog 2026-10-09 |
 | M2 fwpng read path + corpus | done | corpus gate 4/4, fuzz 18.7M execs 0 crashes, wasm smoke 6/6 (devlog 2026-10-10) |
-| M3 document model + round-trip | not started | — |
+| M3 document model + round-trip | done | doc battery 4/4 (equal + idempotent), fuzz doc_read 2.9M execs cov 971 0 crashes, wasm-clean + layers green (devlog 2026-10-10) |
 | M4 CPU compositor | not started | — |
 | M5 editor shell (native + web) | not started | — |
 | M6 vector depth | not started | — |

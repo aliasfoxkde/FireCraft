@@ -117,6 +117,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "doc"
+version = "0.1.0"
+dependencies = [
+ "fwpng",
+ "geom",
+]
+
+[[package]]
 name = "euclid"
 version = "0.22.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -638,6 +646,7 @@ dependencies = [
 name = "xtask"
 version = "0.1.0"
 dependencies = [
+ "doc",
  "flate2",
  "fwpng",
  "png",

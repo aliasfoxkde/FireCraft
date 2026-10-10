@@ -127,18 +127,13 @@ fn round_trip_checks(bytes: &[u8], expect_fireworks: bool) -> Vec<(String, bool)
     checks.push((format!("fireworks detection = {expect_fireworks}"), fw));
 
     // Every node-tree payload must canonically re-serialize to its own
-    // inflated bytes.
+    // inflated bytes, and the typed document model must round-trip
+    // through it losslessly.
     for ctype in [b"mkTS", b"mkBS"] {
         for chunk in chunks.iter().filter(|c| &c.ctype == ctype) {
             let label = String::from_utf8_lossy(ctype).into_owned();
             match inflate(&chunk.data) {
-                Ok(inflated) => match fwpng::nodetree::parse(&inflated) {
-                    Ok(nodes) => {
-                        let re = fwpng::nodetree::serialize(&nodes);
-                        checks.push((format!("{label} canonical re-emit"), re == inflated));
-                    }
-                    Err(err) => checks.push((format!("{label} parse: {err}"), false)),
-                },
+                Ok(inflated) => node_tree_checks(&label, &inflated, &mut checks),
                 Err(err) => checks.push((format!("{label} inflate: {err}"), false)),
             }
         }
@@ -158,6 +153,65 @@ fn round_trip_checks(bytes: &[u8], expect_fireworks: bool) -> Vec<(String, bool)
         }
     }
     checks
+}
+
+/// Checks one inflated node-tree payload: canonical re-serialization,
+/// then the doc-model floor — read -> write -> read must reproduce the
+/// same [`doc::model::Document`], and the canonical write must be
+/// idempotent byte-for-byte (nodes the model does not interpret ride in
+/// the bag and re-bag on re-read; a byte-identical re-write proves they
+/// survive the modeled edit cycle).
+fn node_tree_checks(label: &str, inflated: &[u8], checks: &mut Vec<(String, bool)>) {
+    let nodes = match fwpng::nodetree::parse(inflated) {
+        Ok(nodes) => nodes,
+        Err(err) => {
+            checks.push((format!("{label} parse: {err}"), false));
+            return;
+        }
+    };
+    checks.push((
+        format!("{label} canonical re-emit"),
+        fwpng::nodetree::serialize(&nodes) == inflated,
+    ));
+
+    let (document, bag) = match doc::fwmap::read(&nodes) {
+        Ok(pair) => pair,
+        Err(err) => {
+            checks.push((format!("{label} doc read: {err}"), false));
+            return;
+        }
+    };
+    let (tree2, stats) = match doc::fwmap::write(&document, &bag) {
+        Ok(pair) => pair,
+        Err(err) => {
+            checks.push((format!("{label} doc write: {err}"), false));
+            return;
+        }
+    };
+    checks.push((
+        format!("{label} doc write consumes bag"),
+        stats.unconsumed_unknown == 0,
+    ));
+    let bytes2 = fwpng::nodetree::serialize(&tree2);
+    match fwpng::nodetree::parse(&bytes2) {
+        Ok(nodes2) => match doc::fwmap::read(&nodes2) {
+            Ok((document2, bag2)) => {
+                checks.push((
+                    format!("{label} doc round-trip equal"),
+                    document2 == document,
+                ));
+                checks.push((
+                    format!("{label} doc write idempotent"),
+                    match doc::fwmap::write(&document2, &bag2) {
+                        Ok((tree3, _)) => fwpng::nodetree::serialize(&tree3) == bytes2,
+                        Err(_) => false,
+                    },
+                ));
+            }
+            Err(err) => checks.push((format!("{label} doc re-read: {err}"), false)),
+        },
+        Err(err) => checks.push((format!("{label} re-parse written tree: {err}"), false)),
+    }
 }
 
 fn inflate(data: &[u8]) -> Result<Vec<u8>, String> {

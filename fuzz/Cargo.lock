@@ -64,6 +64,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "doc"
+version = "0.1.0"
+dependencies = [
+ "fwpng",
+ "geom",
+]
+
+[[package]]
 name = "euclid"
 version = "0.22.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -92,6 +100,7 @@ name = "firecraft-fuzz"
 version = "0.0.0"
 dependencies = [
  "color",
+ "doc",
  "flate2",
  "fwpng",
  "geom",

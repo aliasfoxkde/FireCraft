@@ -14,6 +14,7 @@ cargo-fuzz = true
 [workspace]
 
 [dependencies]
+doc = { path = "../crates/doc" }
 fwpng = { path = "../crates/fwpng" }
 geom = { path = "../crates/geom" }
 color = { path = "../crates/color" }
@@ -49,6 +50,11 @@ required-features = ["fuzzer"]
 [[bin]]
 name = "fwpng_mkbt"
 path = "fuzz_targets/fwpng_mkbt.rs"
+required-features = ["fuzzer"]
+
+[[bin]]
+name = "doc_read"
+path = "fuzz_targets/doc_read.rs"
 required-features = ["fuzzer"]
 
 [[bin]]

@@ -9,7 +9,8 @@ that set it instead.
 |---|---|---|---|
 | corpus files parsed without panic | 4 | M2 | `xtask corpus` |
 | fwpng round-trip byte-identical files | 3 | M2 | corpus gate |
-| wasm-clean crates (compile) | 4 | M0 | `xtask wasm` |
+| corpus files with doc-model round-trip (equal + idempotent) | 4 | M3 | `xtask corpus` |
+| wasm-clean crates (compile) | 5 | M3 | `xtask wasm` |
 | wasm smoke tests executed (fwpng) | 6 | M2 | `xtask wasm` (node + wasm-bindgen-test-runner) |
-| fuzz targets with 60s+ zero-crash campaign | 5 | M2 | `xtask fuzz` / `ci --full` |
+| fuzz targets with 60s+ zero-crash campaign | 6 | M3 | `xtask fuzz` / `ci --full` |
 | layer-table violations | 0 | M0 | `xtask layers` |

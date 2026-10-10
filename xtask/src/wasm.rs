@@ -11,7 +11,7 @@ use crate::util::cargo;
 
 /// Crates that must stay wasm-clean. Grows as milestones land; a crate
 /// added here must not use std-only APIs, threads, or C dependencies.
-const WASM_CRATES: &[&str] = &["fwpng", "geom", "color", "raster"];
+const WASM_CRATES: &[&str] = &["fwpng", "geom", "color", "raster", "doc"];
 
 /// Integration-test target exercising fwpng under wasm.
 const SMOKE_TARGET: &str = "wasm_smoke";

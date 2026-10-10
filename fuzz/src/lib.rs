@@ -19,6 +19,22 @@ pub fn anchor_fwpng_nodetree(data: &[u8]) {
     }
 }
 
+/// Untrusted node-tree payload driven through the typed document model:
+/// mapping must never panic (typed errors only), and on success the
+/// write -> serialize -> parse -> read cycle must hold together.
+pub fn anchor_doc_read(data: &[u8]) {
+    if let Ok(nodes) = fwpng::nodetree::parse(data) {
+        if let Ok((document, bag)) = doc::fwmap::read(&nodes) {
+            if let Ok((tree, _stats)) = doc::fwmap::write(&document, &bag) {
+                let bytes = fwpng::nodetree::serialize(&tree);
+                if let Ok(nodes2) = fwpng::nodetree::parse(&bytes) {
+                    let _ = doc::fwmap::read(&nodes2);
+                }
+            }
+        }
+    }
+}
+
 /// Untrusted `prVW` thumbnail payload.
 pub fn anchor_fwpng_prvw(data: &[u8]) {
     let _ = fwpng::thumbnail::parse_prvw(data);
