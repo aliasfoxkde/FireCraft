@@ -19,6 +19,8 @@ git-ignored forever).
 
 ```bash
 cargo run -p xtask -- ci        # the whole gate; must be green before any commit
+cargo run -p xtask -- ci --full # + libfuzzer compile check (cargo-fuzz, nightly)
+cargo run -p xtask -- fuzz      # libfuzzer compile check alone
 cargo run -p xtask -- layers    # workspace dependency tiers only
 cargo run -p xtask -- wasm      # wasm32 check of pure crates
 cargo run -p xtask -- corpus    # pinned corpus digest check (no-op until M2)
@@ -77,6 +79,22 @@ from files an attacker can craft. Every constructor that allocates
 proportionally to an input takes caps and returns `Result`
 (`raster::TileStore::new`, `fwpng::chunk::MAX_CHUNK_LEN`,
 `fwpng::nodetree::MAX_DEPTH`). Follow that pattern for new surfaces.
+
+## Fuzz anchors
+
+`fuzz/` is its own workspace (never a member of the root): stable
+deterministic driver + nightly libfuzzer targets sharing the anchors in
+`fuzz/src/lib.rs`. Every hostile-input surface gets an anchor there; the
+contract is "untrusted bytes must never panic".
+
+- Quick gate (`xtask ci`): `cargo run --bin anchors` — fixed seeds,
+  seeded xorshift mutations, 2048 iterations/anchor, deterministic.
+- Full gate (`xtask ci --full` / `xtask fuzz`): `cargo fuzz build
+  --features fuzzer` under nightly. Targets are `required-features =
+  ["fuzzer"]` so the stable driver never drags libfuzzer-sys.
+- A crash from either driver reproduces in the other (same anchor fns).
+- Convert any crash into a unit test next to the code under test before
+  fixing.
 
 ## Parity floors are rising-only
 

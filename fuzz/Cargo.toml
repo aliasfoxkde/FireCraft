@@ -1,0 +1,57 @@
+[package]
+name = "firecraft-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+# Lets `cargo fuzz build` accept this hand-rolled scaffold.
+[package.metadata]
+cargo-fuzz = true
+
+# Standalone workspace (not a member of the root workspace): libfuzzer
+# targets need nightly, the stable driver must never drag nightly-only
+# dependencies into the main build.
+[workspace]
+
+[dependencies]
+fwpng = { path = "../crates/fwpng" }
+geom = { path = "../crates/geom" }
+color = { path = "../crates/color" }
+flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
+libfuzzer-sys = { version = "0.4", optional = true }
+
+[features]
+# cargo fuzz add/build passes `--features fuzzer` implicitly through its
+# own scaffold; here the libfuzzer targets opt in explicitly.
+fuzzer = ["dep:libfuzzer-sys"]
+
+# Stable, deterministic driver run by `xtask ci` (quick gate).
+[[bin]]
+name = "anchors"
+path = "src/bin/anchors.rs"
+
+# libfuzzer targets (nightly only; compiled via `cargo fuzz build`).
+[[bin]]
+name = "fwpng_chunks"
+path = "fuzz_targets/fwpng_chunks.rs"
+required-features = ["fuzzer"]
+
+[[bin]]
+name = "fwpng_nodetree"
+path = "fuzz_targets/fwpng_nodetree.rs"
+required-features = ["fuzzer"]
+
+[[bin]]
+name = "fwpng_prvw"
+path = "fuzz_targets/fwpng_prvw.rs"
+required-features = ["fuzzer"]
+
+[[bin]]
+name = "fwpng_mkbt"
+path = "fuzz_targets/fwpng_mkbt.rs"
+required-features = ["fuzzer"]
+
+[[bin]]
+name = "geom_transform"
+path = "fuzz_targets/geom_transform.rs"
+required-features = ["fuzzer"]

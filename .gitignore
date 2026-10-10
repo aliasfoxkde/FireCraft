@@ -3,6 +3,10 @@
 
 # Rust build artifacts (future workspace)
 /target
+# fuzz/ is its own workspace (stable driver + nightly libfuzzer targets)
+/fuzz/target
+/fuzz/artifacts
+/fuzz/coverage
 
 # Runtime scratch (per AGENTS.md: plan/ and log/ are untracked handoff state)
 /plan/

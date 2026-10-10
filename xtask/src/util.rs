@@ -16,7 +16,12 @@ pub fn cargo(args: &[&str]) -> Result<(), String> {
 
 /// Runs a program from the workspace root, failing with its output tail.
 pub fn run(program: &str, args: &[&str]) -> Result<(), String> {
-    let output = spawn(program, args)?;
+    run_in(None, program, args)
+}
+
+/// Runs a program from `dir` (or the workspace root when `None`).
+pub fn run_in(dir: Option<&std::path::Path>, program: &str, args: &[&str]) -> Result<(), String> {
+    let output = spawn(dir, program, args)?;
     if output.status.success() {
         Ok(())
     } else {
@@ -30,18 +35,25 @@ pub fn run(program: &str, args: &[&str]) -> Result<(), String> {
 
 /// Runs `cargo metadata --no-deps` and parses the JSON document.
 pub fn cargo_metadata() -> Result<serde_json::Value, String> {
-    let output = spawn("cargo", &["metadata", "--format-version=1", "--no-deps"])?;
+    let output = spawn(
+        None,
+        "cargo",
+        &["metadata", "--format-version=1", "--no-deps"],
+    )?;
     if !output.status.success() {
         return Err(format!("cargo metadata failed:\n{}", output_tail(&output)));
     }
     serde_json::from_slice(&output.stdout).map_err(|e| format!("cargo metadata JSON: {e}"))
 }
 
-fn spawn(program: &str, args: &[&str]) -> Result<Output, String> {
-    Command::new(program)
-        .args(args)
-        .current_dir(workspace_root())
-        .output()
+fn spawn(dir: Option<&std::path::Path>, program: &str, args: &[&str]) -> Result<Output, String> {
+    let mut cmd = Command::new(program);
+    cmd.args(args);
+    match dir {
+        Some(d) => cmd.current_dir(d),
+        None => cmd.current_dir(workspace_root()),
+    };
+    cmd.output()
         .map_err(|e| format!("failed to spawn {program}: {e}"))
 }
 

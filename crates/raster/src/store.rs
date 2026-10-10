@@ -40,6 +40,8 @@ pub struct TileStore {
     cols: u32,
     rows: u32,
     tiles: Vec<Tile>,
+    /// Per-tile modification flags (row-major, same layout as `tiles`).
+    dirty: Vec<bool>,
 }
 
 impl TileStore {
@@ -76,6 +78,7 @@ impl TileStore {
             cols,
             rows,
             tiles: vec![Tile::new(); count],
+            dirty: vec![false; count],
         })
     }
 
@@ -112,10 +115,64 @@ impl TileStore {
     }
 
     /// Mutable access to the tile at (`col`, `row`); the store's clone
-    ///-on-write applies per tile. [`None`] when out of range.
+    ///-on-write applies per tile and the tile is marked dirty. [`None`]
+    /// when out of range.
     pub fn tile_mut(&mut self, col: u32, row: u32) -> Option<&mut Tile> {
         let idx = self.index(col, row)?;
+        self.dirty[idx] = true;
         self.tiles.get_mut(idx)
+    }
+
+    /// Row-major iteration over every tile as (`col`, `row`, `&tile`).
+    pub fn tiles(&self) -> impl Iterator<Item = (u32, u32, &Tile)> {
+        let cols = self.cols;
+        self.tiles.iter().enumerate().map(move |(idx, tile)| {
+            let i = idx as u32;
+            (i % cols, i / cols, tile)
+        })
+    }
+
+    /// Row-major mutable iteration; every visited tile is marked dirty.
+    pub fn tiles_mut(&mut self) -> impl Iterator<Item = (u32, u32, &mut Tile)> {
+        let cols = self.cols;
+        self.tiles
+            .iter_mut()
+            .zip(self.dirty.iter_mut())
+            .enumerate()
+            .map(move |(idx, (tile, dirty))| {
+                *dirty = true;
+                let i = idx as u32;
+                (i % cols, i / cols, tile)
+            })
+    }
+
+    /// Iteration over tiles modified since the last [`clear_dirty`]
+    /// (`dirty`-flags are part of the store state, so clones start with
+    /// their own copies).
+    ///
+    /// [`clear_dirty`]: TileStore::clear_dirty
+    pub fn iter_dirty(&self) -> impl Iterator<Item = (u32, u32, &Tile)> {
+        let cols = self.cols;
+        self.tiles
+            .iter()
+            .zip(self.dirty.iter())
+            .enumerate()
+            .filter(|(_, (_, dirty))| **dirty)
+            .map(move |(idx, (tile, _))| {
+                let i = idx as u32;
+                (i % cols, i / cols, tile)
+            })
+    }
+
+    /// Number of tiles currently marked dirty.
+    #[must_use]
+    pub fn dirty_count(&self) -> usize {
+        self.dirty.iter().filter(|dirty| **dirty).count()
+    }
+
+    /// Clears every dirty flag (e.g. after flushing repaints).
+    pub fn clear_dirty(&mut self) {
+        self.dirty.fill(false);
     }
 
     fn index(&self, col: u32, row: u32) -> Option<usize> {
@@ -144,5 +201,59 @@ mod tests {
         let s = TileStore::new(256, 256).expect("2x2 tiles");
         assert_eq!(s.tile_cols(), 2);
         assert_eq!(s.tile_rows(), 2);
+    }
+
+    #[test]
+    fn tile_mut_marks_dirty_and_iter_reports_it() {
+        let mut s = TileStore::new(300, 300).expect("3x3 tiles");
+        assert_eq!(s.dirty_count(), 0);
+
+        let tile = s.tile_mut(1, 2).expect("in range");
+        tile.pixels_mut()[0] = 0xFF;
+        assert_eq!(s.dirty_count(), 1);
+        let visited: Vec<(u32, u32)> = s.iter_dirty().map(|(c, r, _)| (c, r)).collect();
+        assert_eq!(visited, vec![(1, 2)]);
+
+        s.clear_dirty();
+        assert_eq!(s.dirty_count(), 0);
+        assert!(s.iter_dirty().next().is_none());
+    }
+
+    #[test]
+    fn out_of_range_write_marks_nothing() {
+        let mut s = TileStore::new(128, 128).expect("1 tile");
+        assert!(s.tile_mut(5, 5).is_none());
+        assert_eq!(s.dirty_count(), 0);
+    }
+
+    #[test]
+    fn tiles_iterates_row_major_over_every_tile() {
+        let s = TileStore::new(257, 130).expect("3 cols x 2 rows");
+        let visited: Vec<(u32, u32)> = s.tiles().map(|(c, r, _)| (c, r)).collect();
+        assert_eq!(visited.len(), 6);
+        assert_eq!(visited[0], (0, 0));
+        assert_eq!(visited[1], (1, 0));
+        assert_eq!(visited[3], (0, 1));
+        assert_eq!(visited[5], (2, 1));
+    }
+
+    #[test]
+    fn tiles_mut_marks_everything_dirty() {
+        let mut s = TileStore::new(300, 300).expect("3x3 tiles");
+        let count = s.tiles_mut().count();
+        assert_eq!(count, 9);
+        assert_eq!(s.dirty_count(), 9);
+    }
+
+    #[test]
+    fn dirty_flags_clone_independently() {
+        let mut s = TileStore::new(128, 128).expect("1 tile");
+        let _ = s.tile_mut(0, 0).expect("in range");
+        let snapshot = s.clone();
+        assert_eq!(snapshot.dirty_count(), 1);
+
+        s.clear_dirty();
+        assert_eq!(s.dirty_count(), 0);
+        assert_eq!(snapshot.dirty_count(), 1, "clone keeps its own flags");
     }
 }

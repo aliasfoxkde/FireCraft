@@ -1,12 +1,14 @@
 //! FireCraft verification gates (`cargo run -p xtask -- <gate>`).
 //!
-//! Gates: `ci` (everything), `layers` (workspace dependency tiers),
-//! `wasm` (wasm32 check for pure crates), `corpus` (pinned corpus
-//! digests), `parity` (rising-only parity floors), `scorecard`
-//! (milestone status). Diagnostics go to stderr; stdout stays clean so
-//! output can be piped.
+//! Gates: `ci [--full]` (everything; `--full` adds the libfuzzer
+//! compile check), `layers` (workspace dependency tiers), `wasm`
+//! (wasm32 check for pure crates), `corpus` (pinned corpus digests),
+//! `fuzz` (libfuzzer compile check alone), `parity` (rising-only parity
+//! floors), `scorecard` (milestone status). Diagnostics go to stderr;
+//! stdout stays clean so output can be piped.
 
 mod corpus;
+mod fuzz;
 mod layers;
 mod status;
 mod util;
@@ -14,14 +16,16 @@ mod wasm;
 
 use std::process::ExitCode;
 
-const USAGE: &str = "usage: cargo run -p xtask -- <ci|layers|wasm|corpus|parity|scorecard>";
+const USAGE: &str =
+    "usage: cargo run -p xtask -- <ci [--full]|layers|wasm|corpus|fuzz|parity|scorecard>";
 
 fn main() -> ExitCode {
     match std::env::args().nth(1).as_deref() {
-        Some("ci") => run_ci(),
+        Some("ci") => run_ci(std::env::args().nth(2).as_deref()),
         Some("layers") => finish("layers", layers::run()),
         Some("wasm") => finish("wasm", wasm::run()),
         Some("corpus") => finish("corpus", corpus::run()),
+        Some("fuzz") => finish("fuzz", fuzz::full()),
         Some("parity") => finish("parity", status::parity()),
         Some("scorecard") => finish("scorecard", status::scorecard()),
         _ => {
@@ -34,8 +38,8 @@ fn main() -> ExitCode {
 /// One gate: a name plus the check it runs.
 type Gate = (&'static str, fn() -> Result<(), String>);
 
-fn run_ci() -> ExitCode {
-    let steps: [Gate; 8] = [
+fn run_ci(full: Option<&str>) -> ExitCode {
+    let mut steps: Vec<Gate> = vec![
         ("fmt", || util::cargo(&["fmt", "--all", "--", "--check"])),
         ("clippy", || {
             util::cargo(&[
@@ -51,9 +55,13 @@ fn run_ci() -> ExitCode {
         ("layers", layers::run),
         ("wasm", wasm::run),
         ("corpus", corpus::run),
+        ("fuzz", fuzz::quick),
         ("parity", status::parity),
         ("scorecard", status::scorecard),
     ];
+    if full == Some("--full") || full == Some("full") {
+        steps.insert(steps.len() - 2, ("fuzz-full", fuzz::full));
+    }
     for (name, step) in steps {
         eprintln!("[xtask] {name} ...");
         if let Err(err) = step() {

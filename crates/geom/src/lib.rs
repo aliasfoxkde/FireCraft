@@ -5,8 +5,12 @@
 
 pub mod bounds;
 pub mod hit;
+pub mod stroke;
+pub mod transform;
 
 pub use kurbo::{Affine, BezPath, Point, Rect, Vec2};
+pub use stroke::{STROKE_TOLERANCE, stroke_outline};
+pub use transform::{map_rect, scale_about};
 
 #[cfg(test)]
 mod tests {

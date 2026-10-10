@@ -1,12 +1,15 @@
-//! Color foundations for FireCraft: pixel formats, premultiplication, and
-//! blend modes.
+//! Color foundations for FireCraft: pixel formats, premultiplication,
+//! sRGB/linear conversion, and the 27 blend modes.
 //!
-//! Layer L0: depends on nothing from this workspace. The full 27-mode
-//! Fireworks blend table lands in M1; M0 ships the pixel model and the
-//! source-over ("Normal") compositor everything else builds on.
+//! Layer L0: depends on nothing from this workspace.
 
 pub mod blend;
+pub mod convert;
 pub mod pixel;
+
+pub use blend::{BlendMode, blend};
+pub use convert::{PixelFormat, linear_to_srgb, srgb_to_linear};
+pub use pixel::Rgba8;
 
 #[cfg(test)]
 mod tests {
