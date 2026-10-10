@@ -1,0 +1,29 @@
+[workspace]
+resolver = "3"
+members = ["crates/*", "xtask"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+rust-version = "1.85"
+authors = ["FireCraft contributors"]
+repository = "https://github.com/aliasfoxkde/FireCraft"
+homepage = "https://github.com/aliasfoxkde/FireCraft"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+unreachable = "deny"
+dbg_macro = "deny"
+print_stdout = "deny"
+exit = "deny"
+
+[profile.release]
+lto = "thin"

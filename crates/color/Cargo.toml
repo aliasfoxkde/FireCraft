@@ -1,0 +1,15 @@
+[package]
+name = "color"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Color foundations for FireCraft: pixel formats, premultiplication, and blend modes."
+
+[dependencies]
+
+[lints]
+workspace = true

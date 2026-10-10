@@ -1,0 +1,19 @@
+[package]
+name = "fwpng"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+license = "MIT OR Apache-2.0"
+authors = ["FireCraft contributors"]
+repository = "https://github.com/aliasfoxkde/FireCraft"
+homepage = "https://github.com/aliasfoxkde/FireCraft"
+description = "Reader and writer for the Adobe Fireworks PNG document format: private chunks and the mkTS node tree. Clean-room implementation."
+categories = ["parser-implementations", "multimedia::encoding"]
+keywords = ["png", "fireworks", "image", "graphics", "format"]
+
+[dependencies]
+crc32fast = "1"
+flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
+
+[lints]
+workspace = true

@@ -2,4 +2,9 @@
 /source/
 
 # Rust build artifacts (future workspace)
-/target/
+/target
+
+# Runtime scratch (per AGENTS.md: plan/ and log/ are untracked handoff state)
+/plan/
+/log/
+/corpus/

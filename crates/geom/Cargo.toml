@@ -1,0 +1,16 @@
+[package]
+name = "geom"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Geometry foundations for FireCraft: affine transforms, bezier paths, bounds, hit testing."
+
+[dependencies]
+kurbo = "0.13"
+
+[lints]
+workspace = true

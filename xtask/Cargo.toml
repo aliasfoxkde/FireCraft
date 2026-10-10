@@ -1,0 +1,17 @@
+[package]
+name = "xtask"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "FireCraft verification gates: ci, layers, wasm, corpus, parity, scorecard."
+
+[dependencies]
+serde_json = "1"
+sha2 = "0.10"
+
+[lints]
+workspace = true

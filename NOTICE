@@ -1,0 +1,22 @@
+FireCraft
+Copyright 2026 FireCraft contributors
+
+This product includes software developed as part of the FireCraft project
+(https://github.com/aliasfoxkde/FireCraft), licensed under the MIT OR
+Apache-2.0 dual license.
+
+Trademarks:
+
+  Adobe, Fireworks, Photoshop, Illustrator, and Macromedia are trademarks or
+  registered trademarks of Adobe Inc. in the United States and/or other
+  countries. FireCraft is an independent, open-source project and is not
+  affiliated with, sponsored by, or endorsed by Adobe Inc. These names are
+  used only to describe the workflows and file formats FireCraft is
+  compatible with.
+
+Vendored third-party material (with its own licenses) is recorded in
+docs/ATTRIBUTION.md.
+
+No content from the Adobe Fireworks CS6 application (source code, binaries,
+resources, scripts, or artwork) is included in, or distributed by, this
+project.
