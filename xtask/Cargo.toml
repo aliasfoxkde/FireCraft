@@ -16,6 +16,9 @@ serde_json = "1"
 sha2 = "0.10"
 doc = { path = "../crates/doc" }
 fwpng = { path = "../crates/fwpng" }
+image-compare = "0.5.0"
+image = "0.25.9"
+compose = { version = "0.1.0", path = "../crates/compose" }
 
 [lints]
 workspace = true

@@ -3,12 +3,14 @@
 //! Gates: `ci [--full]` (everything; `--full` adds the libfuzzer
 //! compile check), `layers` (workspace dependency tiers), `wasm`
 //! (wasm32 check for pure crates), `corpus` (pinned corpus digests),
-//! `fuzz` (libfuzzer compile check alone), `parity` (rising-only parity
+//! `golden` (render pins + semantic anchors + CS6 report), `fuzz`
+//! (libfuzzer compile check alone), `parity` (rising-only parity
 //! floors), `scorecard` (milestone status). Diagnostics go to stderr;
 //! stdout stays clean so output can be piped.
 
 mod corpus;
 mod fuzz;
+mod golden;
 mod layers;
 mod status;
 mod util;
@@ -16,7 +18,7 @@ mod wasm;
 
 use std::process::ExitCode;
 
-const USAGE: &str = "usage: cargo run -p xtask -- <ci [--full]|layers|wasm|corpus [--report]|corpus-gen|fuzz|parity|scorecard>";
+const USAGE: &str = "usage: cargo run -p xtask -- <ci [--full]|layers|wasm|corpus [--report]|corpus-gen|golden [--bless]|fuzz|parity|scorecard>";
 
 fn main() -> ExitCode {
     match std::env::args().nth(1).as_deref() {
@@ -28,6 +30,10 @@ fn main() -> ExitCode {
             _ => finish("corpus", corpus::run()),
         },
         Some("corpus-gen") => finish("corpus-gen", corpus::gen_fixtures()),
+        Some("golden") => match std::env::args().nth(2).as_deref() {
+            Some("--bless") => finish("golden --bless", golden::bless()),
+            _ => finish("golden", golden::run()),
+        },
         Some("fuzz") => finish("fuzz", fuzz::full()),
         Some("parity") => finish("parity", status::parity()),
         Some("scorecard") => finish("scorecard", status::scorecard()),
@@ -58,6 +64,7 @@ fn run_ci(full: Option<&str>) -> ExitCode {
         ("layers", layers::run),
         ("wasm", wasm::run),
         ("corpus", corpus::run),
+        ("golden", golden::run),
         ("fuzz", fuzz::quick),
         ("parity", status::parity),
         ("scorecard", status::scorecard),

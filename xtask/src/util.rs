@@ -1,5 +1,7 @@
 //! Shared helpers for the xtask gates.
 
+use sha2::{Digest, Sha256};
+use std::io::Read as _;
 use std::path::PathBuf;
 use std::process::{Command, Output};
 
@@ -7,6 +9,31 @@ use std::process::{Command, Output};
 #[must_use]
 pub fn workspace_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..")
+}
+
+/// Lowercase hex of a digest (the manifest's spelling).
+#[must_use]
+pub fn hex(digest: &[u8]) -> String {
+    let mut s = String::with_capacity(digest.len() * 2);
+    for byte in digest {
+        s.push_str(&format!("{byte:02x}"));
+    }
+    s
+}
+
+/// The SHA-256 of `data`, lowercase hex.
+#[must_use]
+pub fn sha256_hex(data: &[u8]) -> String {
+    hex(&Sha256::digest(data))
+}
+
+/// Inflates a zlib payload (the mkTS/mkBS/mkBT inner streams).
+pub fn inflate(data: &[u8]) -> Result<Vec<u8>, String> {
+    let mut out = Vec::new();
+    flate2::read::ZlibDecoder::new(data)
+        .read_to_end(&mut out)
+        .map_err(|e| format!("zlib inflate failed: {e}"))?;
+    Ok(out)
 }
 
 /// Runs `cargo` with arguments from the workspace root.

@@ -13,10 +13,9 @@
 //! verifies digests, then runs the round-trip battery on every entry and
 //! fails when the pass rate drops below [`ROUNDTRIP_FLOOR`].
 
-use crate::util::workspace_root;
+use crate::util::{inflate, sha256_hex, workspace_root};
 use fwpng::chunk::{is_fireworks, parse_chunks, write_chunk};
-use sha2::{Digest, Sha256};
-use std::io::{Read as _, Write as _};
+use std::io::Write as _;
 use std::path::Path;
 
 /// Minimum share (percent) of corpus entries that must pass the
@@ -36,7 +35,9 @@ pub fn report() -> Result<(), String> {
     verify(true)
 }
 
-fn verify(verbose: bool) -> Result<(), String> {
+/// Parsed manifest: (pinned sha256, workspace-relative path) pairs,
+/// comments and blanks skipped. Shared by the corpus and golden gates.
+pub fn manifest_entries() -> Result<Vec<(String, String)>, String> {
     let manifest = workspace_root().join(MANIFEST);
     if !manifest.exists() {
         return Err(format!(
@@ -44,39 +45,45 @@ fn verify(verbose: bool) -> Result<(), String> {
         ));
     }
     let text = std::fs::read_to_string(&manifest).map_err(|e| format!("read manifest: {e}"))?;
-    let mut checked = 0usize;
-    let mut passed = 0usize;
-    let mut errors = Vec::new();
+    let mut entries = Vec::new();
     for line in text.lines() {
         let line = line.trim();
         if line.is_empty() || line.starts_with('#') {
             continue;
         }
-        let mut fields = line.split_whitespace();
-        let Some(want) = fields.next() else {
-            continue;
-        };
-        let Some(rel) = fields.next() else {
-            errors.push(format!("malformed manifest line: {line}"));
-            continue;
-        };
-        let bytes = match std::fs::read(workspace_root().join(rel)) {
+        match (
+            line.split_whitespace().next(),
+            line.split_whitespace().nth(1),
+        ) {
+            (Some(want), Some(rel)) => entries.push((want.to_owned(), rel.to_owned())),
+            _ => return Err(format!("malformed manifest line: {line}")),
+        }
+    }
+    Ok(entries)
+}
+
+fn verify(verbose: bool) -> Result<(), String> {
+    let mut checked = 0usize;
+    let mut passed = 0usize;
+    let mut errors = Vec::new();
+    for (want, rel) in manifest_entries()? {
+        let bytes = match std::fs::read(workspace_root().join(&rel)) {
             Ok(b) => b,
             Err(err) => {
                 errors.push(format!("{rel}: {err}"));
                 continue;
             }
         };
-        let got = hex(&Sha256::digest(&bytes));
+        let got = sha256_hex(&bytes);
         if got != want {
             errors.push(format!("{rel}: sha256 {got} != pinned {want}"));
             continue;
         }
         checked += 1;
-        let name = Path::new(rel)
+        let name = Path::new(&rel)
             .file_name()
             .and_then(|n| n.to_str())
-            .unwrap_or(rel);
+            .unwrap_or(&rel);
         // The filename carries the detection contract: `*.fw.png` must be
         // recognized as Fireworks, plain `.png` must not.
         let checks = round_trip_checks(&bytes, rel.ends_with(".fw.png"));
@@ -214,14 +221,6 @@ fn node_tree_checks(label: &str, inflated: &[u8], checks: &mut Vec<(String, bool
     }
 }
 
-fn inflate(data: &[u8]) -> Result<Vec<u8>, String> {
-    let mut out = Vec::new();
-    flate2::read::ZlibDecoder::new(data)
-        .read_to_end(&mut out)
-        .map_err(|e| format!("zlib inflate failed: {e}"))?;
-    Ok(out)
-}
-
 /// Regenerates every fixture deterministically and rewrites the manifest
 /// with fresh digests.
 pub fn gen_fixtures() -> Result<(), String> {
@@ -230,7 +229,7 @@ pub fn gen_fixtures() -> Result<(), String> {
 
     /// One pending fixture: name, built bytes, manifest note.
     type Fixture = (&'static str, Result<Vec<u8>, String>, &'static str);
-    let fixtures: [Fixture; 4] = [
+    let fixtures: [Fixture; 5] = [
         (
             "minimal.fw.png",
             build_minimal(),
@@ -245,6 +244,11 @@ pub fn gen_fixtures() -> Result<(), String> {
             "legacy-drift.fw.png",
             build_legacy_drift(),
             "generated: mkBS deliberately diverges from mkTS (comparison-helper target)",
+        ),
+        (
+            "composed.fw.png",
+            build_composed(),
+            "generated: 16x16 page, red rect + 1000\u{2030} group holding a black half-canvas rect at 400\u{2030} (golden anchor)",
         ),
         (
             "plain.png",
@@ -264,7 +268,7 @@ pub fn gen_fixtures() -> Result<(), String> {
         std::fs::write(dir.join(name), &bytes).map_err(|e| format!("write {name}: {e}"))?;
         manifest.push_str(&format!(
             "{} {FIXTURE_DIR}/{name} # {}\n",
-            hex(&Sha256::digest(&bytes)),
+            sha256_hex(&bytes),
             note
         ));
     }
@@ -273,6 +277,10 @@ pub fn gen_fixtures() -> Result<(), String> {
     eprintln!(
         "[xtask] corpus-gen: {fixture_count} fixture(s) written to {FIXTURE_DIR}/, manifest updated"
     );
+    // Fresh fixtures need fresh goldens: re-render and re-pin. This also
+    // re-checks the semantic anchors, so a generator that stops matching
+    // its hand-computed pixels fails here, before anything gets pinned.
+    crate::golden::bless()?;
     Ok(())
 }
 
@@ -332,6 +340,33 @@ fn build_plain() -> Result<Vec<u8>, String> {
     encode_rgba8(3, 3, |x, y| {
         [255, 255, 255, if (x + y) % 2 == 0 { 255 } else { 0 }]
     })
+}
+
+/// The golden anchor: a 16×16 page with a full-canvas red rectangle
+/// (`FCLi` = ABGR red, opaque) plus a group at 1000‰ holding a black
+/// left-half rectangle at 400‰. Every quantization point is
+/// integer-exact: black α = 0.4 over red leaves 255 × 0.6 = 153 on the
+/// red channel — left half (153, 0, 0, 255), right half (255, 0, 0,
+/// 255). mkTS and mkBS carry the same tree.
+///
+/// Scalar spelling is the node-tree canonical form the corpus gate
+/// pins: lowercase hex ints, one-decimal whole floats, 0/1 bools.
+fn build_composed() -> Result<Vec<u8>, String> {
+    let standard = encode_rgba8(16, 16, |_, _| [255, 0, 0, 255])?;
+    let tree = b"MKBv{FRCi{1}}\
+PDCv{FRCi{1}FRCi{1}XLCf{0.0}YLCf{0.0}WIDf{16.0}HITf{16.0}RESf{72.0}RSUi{0}BGCi{ffffff}\
+LYLv{LAYv{BKGb{0}\
+CLLv{CELv{VISb{1}ELMv{\
+PTHv{PATv{BCLi{0}FCLi{ff0000ff}}PBLv{PBPv{ISCb{1}PPCi{4}\
+PBTv{XLCf{0.0}YLCf{0.0}}PBTv{XLCf{16.0}YLCf{0.0}}\
+PBTv{XLCf{16.0}YLCf{16.0}}PBTv{XLCf{0.0}YLCf{16.0}}}}\
+VISb{1}OPAi{3e8}}\
+GRPv{GRTi{0}OPAi{3e8}BLDi{0}VISb{1}ELMv{\
+PTHv{PATv{BCLi{0}FCLi{ff000000}}PBLv{PBPv{ISCb{1}PPCi{4}\
+PBTv{XLCf{0.0}YLCf{0.0}}PBTv{XLCf{8.0}YLCf{0.0}}\
+PBTv{XLCf{8.0}YLCf{16.0}}PBTv{XLCf{0.0}YLCf{16.0}}}}\
+VISb{1}OPAi{190}}}}}}}}}}";
+    insert_before_iend(&standard, &[(b"mkTS", zlib(tree)?), (b"mkBS", zlib(tree)?)])
 }
 
 /// Where the tile-0 stream is cut in `tiles-split.fw.png` (inside the
@@ -418,18 +453,11 @@ fn zlib(raw: &[u8]) -> Result<Vec<u8>, String> {
     enc.finish().map_err(|e| format!("zlib finish: {e}"))
 }
 
-fn hex(digest: &[u8]) -> String {
-    let mut s = String::with_capacity(digest.len() * 2);
-    for b in digest {
-        s.push_str(&format!("{b:02x}"));
-    }
-    s
-}
-
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used, clippy::expect_used)]
     use super::*;
+    use crate::util::hex;
 
     #[test]
     fn generated_fixtures_pass_their_own_battery() {
@@ -437,6 +465,7 @@ mod tests {
             ("minimal", build_minimal()),
             ("tiles-split", build_tiles_split()),
             ("legacy-drift", build_legacy_drift()),
+            ("composed", build_composed()),
         ] {
             let checks = round_trip_checks(&built.unwrap(), true);
             assert!(checks.iter().all(|(_, ok)| *ok), "{name}: {checks:?}");
@@ -445,6 +474,15 @@ mod tests {
         // checks apply.
         let checks = round_trip_checks(&build_plain().unwrap(), false);
         assert!(checks.iter().all(|(_, ok)| *ok), "{checks:?}");
+    }
+
+    #[test]
+    fn composed_fixture_has_pages_and_renders() {
+        let bytes = build_composed().unwrap();
+        let render = crate::golden::render_entry(&bytes)
+            .unwrap()
+            .expect("composed fixture must be renderable");
+        assert_eq!((render.width, render.height), (16, 16));
     }
 
     #[test]

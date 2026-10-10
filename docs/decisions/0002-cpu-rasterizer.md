@@ -13,8 +13,8 @@ identical. `compose` must be deterministic (same input → byte-identical
 pixels — it is the oracle every test and the golden-image suite compare
 against), pure Rust (the whole L0–L3 stack builds for
 `wasm32-unknown-unknown`), and cover the Fireworks surface: even-odd
-fills, strokes, per-mille opacity layers, the 27 blend modes, gradients,
-clip layers, and (later M7) filter kernels.
+fills, strokes, per-mille opacity layers, the documented blend modes,
+gradients, clip layers, and (later M7) filter kernels.
 
 Candidates: `vello_cpu 0.3` (Linebender CPU renderer, SIMD, shares the
 peniko/vello_common paint model) and `tiny-skia` (mature, but a smaller
@@ -38,8 +38,17 @@ Native run produced the expected premultiplied RGBA8;
 - Fill/stroke/transform/fill-rule/opacity-layer/blend-mode/gradient API
   maps 1:1 onto the Fireworks compose pipeline (incl. `push_layer` with
   clip + blend + opacity — exactly layer/cell/group semantics).
-- peniko `Brush`/`BlendMode` is the same 27-blend-mode family our
-  `color` crate implemented in M1; values cross-check directly.
+- peniko `Brush`/`BlendMode` covers the 16 W3C mix modes (verified
+  against peniko 0.6.1 during the compose build — *not* the 27-mode
+  family this ADR originally claimed; corrected 2026-10-10). Fireworks
+  `BLDi` values with a peniko formula map directly (multiply,
+  difference, overlay, screen, darken, lighten, hue, saturation, color,
+  luminosity, exclusion, hard-light, soft-light, color-dodge,
+  color-burn); the rest — dissolve, the extended burn/light family,
+  invert, erase, tint, average, negation, reflect — fall back to Normal
+  in `compose::convert::blend_mode` until M7 adds compositing passes
+  (our own M1 `color` crate already implements the full 27-mode set and
+  remains the reference for those passes).
 - Pure Rust, wasm-clean (verified by the spike), no C FFI.
 
 ## Consequences
