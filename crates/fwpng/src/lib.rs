@@ -19,16 +19,19 @@
 //! corpus in milestone M2 (see `docs/planning/firecraft/M2-fwpng-read.md`).
 
 pub mod chunk;
+pub mod document;
 pub mod error;
+pub mod image;
 pub mod nodetree;
 pub mod thumbnail;
 pub mod tile;
 
 pub use chunk::{RawChunk, is_fireworks, parse_chunks, write_chunk};
 pub use error::FwPngError;
+pub use image::{StandardImage, decode_standard_rgba8};
 pub use nodetree::{Node, NodeValue};
 pub use thumbnail::Thumbnail;
-pub use tile::TileImage;
+pub use tile::{TileImage, parse_mkbt_chunks, parse_mkbt_stream};
 
 #[cfg(test)]
 mod tests {

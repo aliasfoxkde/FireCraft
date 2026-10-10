@@ -178,6 +178,34 @@ mod tests {
     }
 
     #[test]
+    fn private_chunks_round_trip_byte_identically() {
+        // Standard + private mix in the shape of a real .fw.png: unknown
+        // ancillary chunks must survive in order, byte for byte.
+        let mut png = PNG_SIGNATURE.to_vec();
+        write_chunk(&mut png, b"IHDR", &[0, 0, 0, 1, 0, 0, 0, 1, 8, 6, 0, 0, 0]);
+        write_chunk(&mut png, b"prVW", &[0xCA, 0xFE, 0xBE, 0xEF, 1, 2, 3, 4]);
+        write_chunk(&mut png, b"mkTS", b"MKBv{FRCi{1}}");
+        write_chunk(&mut png, b"mkBS", b"MKBv{FRCi{1}}");
+        write_chunk(&mut png, b"mkBT", &[0xFA, 0xCE, 0xCA, 0xFE, 0, 0, 0, 0]);
+        write_chunk(&mut png, b"gAmA", &[0, 1, 0x86, 0xA0]);
+        write_chunk(&mut png, b"IEND", &[]);
+        assert!(is_fireworks(&parse_chunks(&png).expect("parses")));
+
+        let chunks = parse_chunks(&png).expect("parses");
+        let types: Vec<&str> = chunks.iter().map(|c| c.type_str()).collect();
+        assert_eq!(
+            types,
+            ["IHDR", "prVW", "mkTS", "mkBS", "mkBT", "gAmA", "IEND"]
+        );
+
+        let mut rebuilt = PNG_SIGNATURE.to_vec();
+        for chunk in &chunks {
+            write_chunk(&mut rebuilt, &chunk.ctype, &chunk.data);
+        }
+        assert_eq!(rebuilt, png, "reconstruction must be byte-identical");
+    }
+
+    #[test]
     fn oversized_length_is_rejected_before_allocation() {
         let mut file = PNG_SIGNATURE.to_vec();
         file.extend_from_slice(&u32::MAX.to_be_bytes());

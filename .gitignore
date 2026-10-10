@@ -7,8 +7,11 @@
 /fuzz/target
 /fuzz/artifacts
 /fuzz/coverage
+/fuzz/corpus
 
 # Runtime scratch (per AGENTS.md: plan/ and log/ are untracked handoff state)
 /plan/
 /log/
-/corpus/
+# Real Fireworks files never enter the repo; generated fixtures/ and
+# MANIFEST.tsv are tracked.
+/corpus/incoming/

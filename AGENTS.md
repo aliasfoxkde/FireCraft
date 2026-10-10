@@ -22,8 +22,10 @@ cargo run -p xtask -- ci        # the whole gate; must be green before any commi
 cargo run -p xtask -- ci --full # + libfuzzer compile check (cargo-fuzz, nightly)
 cargo run -p xtask -- fuzz      # libfuzzer compile check alone
 cargo run -p xtask -- layers    # workspace dependency tiers only
-cargo run -p xtask -- wasm      # wasm32 check of pure crates
-cargo run -p xtask -- corpus    # pinned corpus digest check (no-op until M2)
+cargo run -p xtask -- wasm      # wasm32 check + runtime smoke (node, when runner on PATH)
+cargo run -p xtask -- corpus    # pinned digests + round-trip floor
+cargo run -p xtask -- corpus --report # per-fixture detail on stderr
+cargo run -p xtask -- corpus-gen      # regenerate fixtures + MANIFEST.tsv digests
 cargo run -p xtask -- parity    # regenerate parity floors
 cargo run -p xtask -- scorecard # regenerate milestone scorecard
 cargo test -p fwpng             # one crate

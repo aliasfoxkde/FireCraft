@@ -16,15 +16,18 @@ mod wasm;
 
 use std::process::ExitCode;
 
-const USAGE: &str =
-    "usage: cargo run -p xtask -- <ci [--full]|layers|wasm|corpus|fuzz|parity|scorecard>";
+const USAGE: &str = "usage: cargo run -p xtask -- <ci [--full]|layers|wasm|corpus [--report]|corpus-gen|fuzz|parity|scorecard>";
 
 fn main() -> ExitCode {
     match std::env::args().nth(1).as_deref() {
         Some("ci") => run_ci(std::env::args().nth(2).as_deref()),
         Some("layers") => finish("layers", layers::run()),
         Some("wasm") => finish("wasm", wasm::run()),
-        Some("corpus") => finish("corpus", corpus::run()),
+        Some("corpus") => match std::env::args().nth(2).as_deref() {
+            Some("--report") => finish("corpus --report", corpus::report()),
+            _ => finish("corpus", corpus::run()),
+        },
+        Some("corpus-gen") => finish("corpus-gen", corpus::gen_fixtures()),
         Some("fuzz") => finish("fuzz", fuzz::full()),
         Some("parity") => finish("parity", status::parity()),
         Some("scorecard") => finish("scorecard", status::scorecard()),

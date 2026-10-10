@@ -71,6 +71,17 @@ pub enum FwPngError {
         /// Which limit.
         limit: &'static str,
     },
+    /// The standard (non-private) PNG image stream failed to decode.
+    PngDecode {
+        /// What the decoder rejected, as reported by the `png` crate.
+        reason: String,
+    },
+    /// A decoded image layout has no RGBA8 mapping (decoder
+    /// normalization should have prevented this).
+    UnsupportedImage {
+        /// The layout that has no mapping.
+        layout: String,
+    },
 }
 
 impl fmt::Display for FwPngError {
@@ -128,6 +139,12 @@ impl fmt::Display for FwPngError {
             }
             Self::LimitExceeded { limit } => {
                 write!(f, "structural limit exceeded: {limit}")
+            }
+            Self::PngDecode { reason } => {
+                write!(f, "standard PNG stream failed to decode: {reason}")
+            }
+            Self::UnsupportedImage { layout } => {
+                write!(f, "no RGBA8 mapping for image layout: {layout}")
             }
         }
     }

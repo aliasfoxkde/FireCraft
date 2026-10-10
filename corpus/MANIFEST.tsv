@@ -1,0 +1,7 @@
+# FireCraft corpus — digests pinned by `cargo run -p xtask -- corpus-gen`.
+# fixtures/ are clean-room generated (committed); incoming/ holds real
+# Fireworks files, which stay uncommitted.
+dbfd11b617ddb8b360db8b881b6d7e79989dc6acc15ddc6d62e28f86cf642c23 corpus/fixtures/minimal.fw.png # generated: standard 8x8 RGBA + prVW + mkTS/mkBS (same tree) + mkBF + mkBT tile 0
+deb3a7f8a7449784ee1a4fb883639207a3088aa77c3d06ba43e2111077823603 corpus/fixtures/tiles-split.fw.png # generated: mkBT tile 0 split across two chunks, tile 1 single
+390ab91e99186e88acce129bec4b9f8e38ec12f200b4a3f81e6d44f426539a9c corpus/fixtures/legacy-drift.fw.png # generated: mkBS deliberately diverges from mkTS (comparison-helper target)
+ad4b7ae41ec773685c4049ea460d6b85cac2de0e2074df8f7cca453aace109c6 corpus/fixtures/plain.png # generated: control, no private chunks (is_fireworks must be false)

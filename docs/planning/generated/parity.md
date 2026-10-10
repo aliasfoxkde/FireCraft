@@ -7,7 +7,9 @@ that set it instead.
 
 | Metric | Floor | Set in | Enforced by |
 |---|---|---|---|
-| corpus files parsed without panic | 0 | M0 | `xtask corpus` (active from M2) |
-| fwpng round-trip byte-identical files | 0 | M0 | corpus gate (M2) |
-| wasm-clean crates | 4 | M0 | `xtask wasm` |
+| corpus files parsed without panic | 4 | M2 | `xtask corpus` |
+| fwpng round-trip byte-identical files | 3 | M2 | corpus gate |
+| wasm-clean crates (compile) | 4 | M0 | `xtask wasm` |
+| wasm smoke tests executed (fwpng) | 6 | M2 | `xtask wasm` (node + wasm-bindgen-test-runner) |
+| fuzz targets with 60s+ zero-crash campaign | 5 | M2 | `xtask fuzz` / `ci --full` |
 | layer-table violations | 0 | M0 | `xtask layers` |

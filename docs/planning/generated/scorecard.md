@@ -7,9 +7,9 @@ A milestone flips to done only when its gate evidence is recorded in
 
 | Milestone | Status | Gate evidence |
 |---|---|---|
-| M0 workspace bootstrap | in progress | `xtask ci` |
-| M1 foundations (blend modes, gradients, JS engine spike) | not started | — |
-| M2 fwpng read path + corpus | not started | — |
+| M0 workspace bootstrap | done | `xtask ci` |
+| M1 foundations (blend modes, gradients, JS engine spike) | done | `xtask ci --full` + devlog 2026-10-09 |
+| M2 fwpng read path + corpus | done | corpus gate 4/4, fuzz 18.7M execs 0 crashes, wasm smoke 6/6 (devlog 2026-10-10) |
 | M3 document model + round-trip | not started | — |
 | M4 CPU compositor | not started | — |
 | M5 editor shell (native + web) | not started | — |
