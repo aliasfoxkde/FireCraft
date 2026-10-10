@@ -1,0 +1,5 @@
+# Proprietary Adobe binaries/resources — reference only, never commit
+/source/
+
+# Rust build artifacts (future workspace)
+/target/
