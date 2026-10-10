@@ -12,6 +12,13 @@ description = "FireCraft typed document model and its Fireworks PNG node-tree ma
 [dependencies]
 fwpng = { path = "../fwpng" }
 geom = { path = "../geom" }
+serde = { version = "1", features = ["derive"], optional = true }
+
+[features]
+# Serializability of the model and registry: engine payloads, deltas,
+# and journal entries all flow through serde (off by default so the
+# base model stays dependency-free).
+serde = ["dep:serde", "geom/serde"]
 
 [lints]
 workspace = true

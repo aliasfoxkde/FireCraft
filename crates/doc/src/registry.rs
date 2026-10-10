@@ -6,6 +6,7 @@
 /// removals of *other* objects; using a stale id (after its slot was
 /// freed and reused) fails by generation mismatch.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ObjectId {
     index: u32,
     generation: u32,
@@ -24,6 +25,15 @@ impl ObjectId {
         self.generation
     }
 
+    /// Builds an id from its parts. Payloads already admit forged ids
+    /// through serde, so this adds no new risk — it exists so callers
+    /// outside a registry can name stale slots (tests, dangling-id
+    /// probes).
+    #[must_use]
+    pub fn from_parts(index: u32, generation: u32) -> Self {
+        Self { index, generation }
+    }
+
     /// A deliberately stale id, for exercising the dangling-id path.
     #[cfg(test)]
     pub(crate) fn dangling(index: u32, generation: u32) -> Self {
@@ -32,6 +42,7 @@ impl ObjectId {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 struct Slot {
     generation: u32,
     object: Option<ObjectData>,
@@ -40,6 +51,7 @@ struct Slot {
 /// The registry itself. Dense enough for iteration, stable enough for
 /// edits: removal frees the slot for reuse and bumps its generation.
 #[derive(Clone, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Registry {
     slots: Vec<Slot>,
     free: Vec<u32>,
@@ -82,6 +94,22 @@ impl Registry {
         slot.generation += 1;
         self.free.push(id.index);
         Some(removed)
+    }
+
+    /// Puts `object` back into its exact slot with its exact
+    /// generation, undoing a [`Registry::remove`] — every id handed
+    /// out before the removal becomes live again. The slot must be
+    /// empty and `id` must name it.
+    pub fn restore(&mut self, id: ObjectId, object: ObjectData) -> Option<()> {
+        let free_pos = self.free.iter().position(|&free| free == id.index)?;
+        let slot = self.slots.get_mut(id.index())?;
+        if slot.object.is_some() {
+            return None;
+        }
+        self.free.swap_remove(free_pos);
+        slot.generation = id.generation();
+        slot.object = Some(object);
+        Some(())
     }
 
     /// The object behind `id`, or `None` when stale.
@@ -150,6 +178,7 @@ impl Registry {
 /// One object in the document. Kinds mirror the Fireworks element union
 /// (`ELMv`); each variant maps to exactly one node type.
 #[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum ObjectData {
     /// `PTHv` — vector path, with optional primitive source.
     Path(PathObject),

@@ -8,6 +8,7 @@ use geom::{Affine, Point, Rect};
 
 /// A document: the `MKBv` node plus its pages (`PDCv`).
 #[derive(Clone, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Document {
     /// Scalars and canvas of the document node itself.
     pub info: DocumentInfo,
@@ -28,6 +29,7 @@ pub struct Document {
 
 /// Scalars shared by the document node and pages.
 #[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DocumentInfo {
     /// `PGNs` — the document node's legacy page name (the reduced
     /// page-1 copy inside `MKBv`).
@@ -66,6 +68,7 @@ impl Default for DocumentInfo {
 
 /// Canvas geometry (`XLCf YLCf WIDf HITf RESf RSUi BGCi`).
 #[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Canvas {
     /// `XLCf` — canvas x location.
     pub x: f64,
@@ -100,6 +103,7 @@ impl Default for Canvas {
 
 /// One page (`PDCv`).
 #[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Page {
     /// Page identity and canvas (`VRSi`/`VRMi`/`FRCi` x2/canvas fields).
     pub info: PageInfo,
@@ -127,6 +131,7 @@ pub struct Page {
 /// current frame count and total); both are kept so writes stay
 /// faithful.
 #[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PageInfo {
     /// `VRSi`.
     pub version: Option<i64>,
@@ -148,6 +153,7 @@ pub struct PageInfo {
 
 /// An ordered layer list (`LYLv`).
 #[derive(Clone, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct LayerList {
     /// Layers, bottom-first (file order).
     pub layers: Vec<Layer>,
@@ -156,6 +162,7 @@ pub struct LayerList {
 /// One layer (`LAYv`). Per-state content lives in [`Layer::cells`]:
 /// cell *i* belongs to state *i* of the owning page.
 #[derive(Clone, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Layer {
     /// `LNMs` — layer name.
     pub name: String,
@@ -179,6 +186,7 @@ pub struct Layer {
 
 /// One animation cell (`CELv`): the element list of one state.
 #[derive(Clone, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Cell {
     /// `LCKb` — cell is locked.
     pub locked: bool,
@@ -190,6 +198,7 @@ pub struct Cell {
 
 /// Grid (`GRDv`).
 #[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Grid {
     /// `GOXf`/`GOYf` — origin offset.
     pub offset: Point,
@@ -211,6 +220,7 @@ impl Default for Grid {
 
 /// Guides (`GDSv`): horizontal and vertical guide coordinates.
 #[derive(Clone, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Guides {
     /// `GDLb` — guides are locked.
     pub locked: bool,
@@ -225,6 +235,7 @@ pub struct Guides {
 /// A symbol definition (`MSTv`), referenced by `ALSv` instances via
 /// [`SymbolInstanceObject::symbol_number`].
 #[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SymbolDefinition {
     /// `UNMs` — user-facing name.
     pub name: String,
@@ -244,6 +255,7 @@ pub struct SymbolDefinition {
 /// colours; the gradient/pattern subtrees (`FPLv`, `TXBv`, `TXFv`,
 /// `BPLv`) ride in the unknown bag.
 #[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PaintStyle {
     /// `BCLi` — brush (stroke) colour, ABGR layout.
     pub stroke_raw: i64,
@@ -253,6 +265,7 @@ pub struct PaintStyle {
 
 /// `PTHv` — a vector path.
 #[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PathObject {
     /// `PBLv`/`PBPv` — the editable geometry: one entry per contour.
     pub contours: Vec<Contour>,
@@ -287,6 +300,7 @@ pub struct PathObject {
 
 /// One contour (`PBPv`): a closed flag plus bezier points.
 #[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Contour {
     /// `ISCb` — contour is closed.
     pub closed: bool,
@@ -298,6 +312,7 @@ pub struct Contour {
 
 /// One bezier point (`PBTv`): anchor plus optional control handles.
 #[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PathPoint {
     /// `XLCf`/`YLCf` — anchor.
     pub anchor: Point,
@@ -311,6 +326,7 @@ pub struct PathPoint {
 
 /// `PRIv` — the primitive a path was created from.
 #[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PrimitiveSource {
     /// `RCTv` — the primitive rectangle.
     pub rect: Rect,
@@ -327,6 +343,7 @@ pub struct PrimitiveSource {
 /// frame geometry and preserves the run subtree verbatim in the
 /// unknown bag.
 #[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TextObject {
     /// `LFTf TOPf RITf BOTf` — text frame bounds.
     pub frame: Rect,
@@ -336,6 +353,7 @@ pub struct TextObject {
 
 /// `GRPv` — a group, including mask-structured groups.
 #[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct GroupObject {
     /// `GRTi` — group type.
     pub group_type: i64,
@@ -357,6 +375,7 @@ pub struct GroupObject {
 
 /// `IMGv` — a raster image backed by `mkBT` tiles.
 #[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ImageObject {
     /// `XLCf`/`YLCf` — location.
     pub location: Point,
@@ -384,6 +403,7 @@ pub struct ImageObject {
 /// solid matte color (`TMCi` substitutes for `TIDi` when a tile area
 /// needs only a flat color).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum TileRef {
     /// `TIDi` — tile index into the file's `mkBT` chunks.
     Tile(u32),
@@ -394,6 +414,7 @@ pub enum TileRef {
 
 /// `URLv` — a slice or hotspot.
 #[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SliceObject {
     /// `INMs` — internal name.
     pub internal_name: Option<String>,
@@ -411,6 +432,7 @@ pub struct SliceObject {
 
 /// `ALSv` — a symbol instance.
 #[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SymbolInstanceObject {
     /// `MSNi` — the referenced [`SymbolDefinition::symbol_number`].
     pub symbol_number: i64,

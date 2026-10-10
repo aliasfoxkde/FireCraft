@@ -428,6 +428,7 @@ version = "0.1.0"
 dependencies = [
  "fwpng",
  "geom",
+ "serde",
 ]
 
 [[package]]
@@ -435,6 +436,16 @@ name = "either"
 version = "1.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0e9c71c2167ca323c882b99918929403426e2373ea17242ff5653e0d5e1058be"
+
+[[package]]
+name = "engine"
+version = "0.1.0"
+dependencies = [
+ "doc",
+ "geom",
+ "serde",
+ "serde_json",
+]
 
 [[package]]
 name = "equator"
@@ -780,6 +791,7 @@ dependencies = [
  "arrayvec",
  "euclid",
  "polycool",
+ "serde",
  "smallvec",
 ]
 
@@ -1458,6 +1470,9 @@ name = "smallvec"
 version = "1.16.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5b3dc8af474f516a851ff4bd12db780f948b9250ad37211e4eec0bccea54e01b"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "stable_deref_trait"

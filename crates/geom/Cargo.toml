@@ -12,5 +12,10 @@ description = "Geometry foundations for FireCraft: affine transforms, bezier pat
 [dependencies]
 kurbo = "0.13"
 
+[features]
+# Serde support for the re-exported kurbo geometry (Affine, Point,
+# Rect): engine payloads and deltas carry these.
+serde = ["kurbo/serde"]
+
 [lints]
 workspace = true
