@@ -52,6 +52,14 @@ pub enum EngineError {
     NothingToUndo,
     /// Redo was requested with nothing on the redo stack.
     NothingToRedo,
+    /// A journal line could not be parsed, or the sequence has a gap
+    /// (truncated or corrupted journal).
+    Journal {
+        /// 1-based line the problem is on.
+        line: usize,
+        /// What was wrong.
+        detail: String,
+    },
 }
 
 impl std::fmt::Display for EngineError {
@@ -73,6 +81,7 @@ impl std::fmt::Display for EngineError {
             EngineError::DeltaMismatch { detail } => write!(f, "delta mismatch: {detail}"),
             EngineError::NothingToUndo => write!(f, "nothing to undo"),
             EngineError::NothingToRedo => write!(f, "nothing to redo"),
+            EngineError::Journal { line, detail } => write!(f, "journal line {line}: {detail}"),
         }
     }
 }

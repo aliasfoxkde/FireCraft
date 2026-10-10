@@ -16,9 +16,13 @@ pub mod catalog;
 pub mod command;
 pub mod delta;
 pub mod error;
+pub mod history;
+pub mod journal;
 pub mod registry;
 
 pub use command::{Command, TypedCommand};
 pub use delta::Delta;
 pub use error::EngineError;
+pub use history::{Call, History, Step};
+pub use journal::{Journal, JournalEntry};
 pub use registry::CommandRegistry;

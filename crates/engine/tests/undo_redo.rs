@@ -5,9 +5,10 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-use doc::{
-    Cell, Contour, Document, Layer, LayerList, ObjectData, Page, PageInfo, PathObject, PathPoint,
-};
+mod support;
+
+use support::{DocumentBytes, sample_document};
+
 use engine::{CommandRegistry, Delta, EngineError};
 use serde_json::json;
 
@@ -30,108 +31,13 @@ impl Xorshift {
     }
 }
 
-fn point(x: f64, y: f64) -> PathPoint {
-    PathPoint {
-        anchor: geom::Point::new(x, y),
-        primary: None,
-        secondary: None,
-        is_curve: false,
-    }
-}
-
-fn path_object(seed: u64) -> ObjectData {
-    ObjectData::Path(PathObject {
-        contours: vec![Contour {
-            closed: true,
-            point_count: 4,
-            points: vec![
-                point(0.0, 0.0),
-                point(seed as f64 + 8.0, 0.0),
-                point(seed as f64 + 8.0, 8.0),
-                point(0.0, 8.0),
-            ],
-        }],
-        primitive: None,
-        even_odd: false,
-        paint: None,
-        fill_start: None,
-        fill_end: None,
-        fill_third: None,
-        brush_placement: None,
-        fill_on_top: None,
-        locked: false,
-        visible: true,
-        opacity: 1000,
-        blend: 0,
-        name: None,
-    })
-}
-
-/// A document with two pages, two layers per page (two cells each —
-/// two states), and two path objects per cell: enough structure that
-/// page/layer/cell indices are all live.
-fn sample_document() -> (Document, Vec<doc::ObjectId>) {
-    let mut document = Document::default();
-    let mut ids = Vec::new();
-    for page_index in 0..2 {
-        let mut layers = LayerList::default();
-        for layer_index in 0..2 {
-            let mut layer = Layer {
-                name: format!("Layer {layer_index}"),
-                display: true,
-                ..Layer::default()
-            };
-            for _cell_index in 0..2 {
-                let mut cell = Cell {
-                    locked: false,
-                    visible: true,
-                    elements: Vec::new(),
-                };
-                for _ in 0..2 {
-                    let id = document.registry.insert(path_object(ids.len() as u64 + 1));
-                    cell.elements.push(id);
-                    ids.push(id);
-                }
-                layer.cells.push(cell);
-            }
-            layers.layers.push(layer);
-        }
-        document.pages.push(Page {
-            info: PageInfo {
-                version: None,
-                revision: None,
-                frame_count: 2,
-                frame_count_duplicate: 2,
-                request_id: 0,
-                canvas: Default::default(),
-                onion_before: 0,
-                onion_after: 0,
-            },
-            name: Some(format!("Page {page_index}")),
-            is_master: false,
-            is_linked: false,
-            page_id: None,
-            last_export_dir: None,
-            last_export_file: None,
-            layers,
-            grid: None,
-            guides: Default::default(),
-        });
-    }
-    (document, ids)
-}
-
-fn bytes(document: &Document) -> Vec<u8> {
-    serde_json::to_vec(document).expect("document serializes")
-}
-
 #[test]
 fn undo_redo_round_trip_on_random_sequences() {
     for seed in [0x5EED_0001u64, 0x5EED_0002, 0x5EED_0003] {
         let mut rng = Xorshift(seed);
         let registry = builtins();
         let (mut document, ids) = sample_document();
-        let original = bytes(&document);
+        let original = DocumentBytes::of(&document);
 
         // A mix of valid and deliberately invalid calls; failures must
         // not disturb the document. Applied calls keep their deltas —
@@ -139,7 +45,7 @@ fn undo_redo_round_trip_on_random_sequences() {
         let mut applied: Vec<(String, serde_json::Value, Delta)> = Vec::new();
         for step in 0..48 {
             let (name, payload) = random_call(&mut rng, &ids, step, document.pages.len());
-            let before = bytes(&document);
+            let before = DocumentBytes::of(&document);
             match registry.execute(&mut document, &name, payload.clone()) {
                 Ok(delta) => applied.push((name, payload, delta)),
                 Err(error) => {
@@ -150,11 +56,15 @@ fn undo_redo_round_trip_on_random_sequences() {
                         ),
                         "unexpected error from {name}: {error}"
                     );
-                    assert_eq!(bytes(&document), before, "failed call mutated the document");
+                    assert_eq!(
+                        DocumentBytes::of(&document),
+                        before,
+                        "failed call mutated the document"
+                    );
                 }
             }
         }
-        let after_all = bytes(&document);
+        let after_all = DocumentBytes::of(&document);
 
         // Undo everything in reverse: back to the original, byte for
         // byte.
@@ -164,7 +74,7 @@ fn undo_redo_round_trip_on_random_sequences() {
                 .unwrap_or_else(|error| panic!("undo of {name} failed: {error}"));
         }
         assert_eq!(
-            bytes(&document),
+            DocumentBytes::of(&document),
             original,
             "undo restores the original document"
         );
@@ -176,7 +86,7 @@ fn undo_redo_round_trip_on_random_sequences() {
                 .unwrap_or_else(|error| panic!("redo of {name} failed: {error}"));
         }
         assert_eq!(
-            bytes(&document),
+            DocumentBytes::of(&document),
             after_all,
             "redo restores the edited document"
         );
@@ -207,8 +117,8 @@ fn apply_undo_apply_matches_apply_once() {
         );
         if applied_once {
             assert_eq!(
-                bytes(&two),
-                bytes(&one),
+                DocumentBytes::of(&two),
+                DocumentBytes::of(&one),
                 "apply-undo-apply diverges from apply-once for {name}"
             );
         }
