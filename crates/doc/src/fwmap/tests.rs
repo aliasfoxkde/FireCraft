@@ -11,7 +11,7 @@ use super::unknown::UnknownBag;
 use super::writer::{mapped_indices, splice, write};
 use crate::model::{
     Canvas, Cell, Contour, Document, DocumentInfo, Grid, GroupObject, Guides, ImageObject, Layer,
-    LayerList, Page, PageInfo, PathObject, PathPoint, PrimitiveSource, SliceObject,
+    LayerList, Page, PageInfo, PaintStyle, PathObject, PathPoint, PrimitiveSource, SliceObject,
     SymbolDefinition, SymbolInstanceObject, TextObject, TileRef,
 };
 use crate::registry::{ObjectData, ObjectId, Registry};
@@ -102,6 +102,17 @@ fn sample_document() -> Document {
         contours: Vec::new(),
         primitive: None,
         even_odd: false,
+        paint: None,
+        fill_start: None,
+        fill_end: None,
+        fill_third: None,
+        brush_placement: None,
+        fill_on_top: None,
+        locked: false,
+        visible: true,
+        opacity: 1000,
+        blend: 0,
+        name: None,
     }));
     let path_id = doc.registry.insert(ObjectData::Path(PathObject {
         contours: vec![Contour {
@@ -134,6 +145,20 @@ fn sample_document() -> Document {
             maintain_radius: true,
         }),
         even_odd: true,
+        paint: Some(PaintStyle {
+            stroke_raw: 0x20_40_80_FF,
+            fill_raw: 0xC0_80_40_FF,
+        }),
+        fill_start: Some(Point::new(0.0, 0.0)),
+        fill_end: Some(Point::new(10.0, 20.0)),
+        fill_third: None,
+        brush_placement: Some(1),
+        fill_on_top: Some(false),
+        locked: false,
+        visible: true,
+        opacity: 850,
+        blend: 2,
+        name: Some("panel".into()),
     }));
     let image_id = doc.registry.insert(ObjectData::Image(ImageObject {
         location: Point::new(8.0, 8.0),
@@ -319,17 +344,21 @@ fn mapped_indices_skip_bagged_slots() {
 #[test]
 fn unknown_nodes_survive_modeled_edits() {
     // Write the sample, then inject unknown nodes into the first path
-    // object's children: PATv before PBLv, TOXf after it.
+    // object: unknown children inside its modeled `PATv`, and an
+    // unknown scalar (`TOXf`) between the object's own children.
     let doc = sample_document();
     let (mut tree, _stats) = write(&doc, &UnknownBag::new()).expect("write");
-    let patv_node = n_k(
-        b"PATv",
-        vec![n_s(b"BRUs", "brush-payload"), n_i(b"SEDi", 4242)],
-    );
+    let brus = n_s(b"BRUs", "brush-payload");
+    let sedi = n_i(b"SEDi", 4242);
+    let toxf = n_f(b"TOXf", 1.5);
     {
         let pthv = first_path_object_mut(&mut tree);
-        children_mut(pthv).insert(0, n_f(b"TOXf", 1.5));
-        children_mut(pthv).insert(0, patv_node.clone());
+        let kids = children_mut(pthv);
+        assert_eq!(kids[0].fourcc, *b"PATv", "sample path carries a pattern");
+        let patv = &mut kids[0];
+        children_mut(patv).insert(0, brus.clone());
+        children_mut(patv).insert(1, sedi.clone());
+        kids.insert(1, toxf.clone());
     }
 
     let (mut doc2, bag) = {
@@ -337,8 +366,15 @@ fn unknown_nodes_survive_modeled_edits() {
         let parsed = parse(&bytes).expect("parse");
         read(&parsed).expect("read")
     };
-    assert_eq!(bag.len(), 2, "PATv + TOXf preserved");
-    assert!(bag.iter().all(|(path, _, _)| path.ends_with("ELMv[0]")));
+    assert_eq!(
+        bag.len(),
+        3,
+        "BRUs + SEDi inside PATv, TOXf at the object level"
+    );
+    assert!(
+        bag.iter()
+            .all(|(path, _, _)| path.ends_with("PATv") || path.ends_with("ELMv[0]"))
+    );
 
     // Modeled edit: turn even-odd off on the path object.
     for (_, object) in doc2.registry.iter_mut() {
@@ -349,18 +385,23 @@ fn unknown_nodes_survive_modeled_edits() {
     let (mut tree2, stats2) = write(&doc2, &bag).expect("write");
     assert_eq!(stats2.unconsumed_unknown, 0);
 
-    let patv_bytes = {
+    {
         let pthv2 = first_path_object_mut(&mut tree2);
         let kids = children(pthv2);
-        assert_eq!(kids[0].fourcc, *b"PATv", "unknown container still first");
+        assert_eq!(kids[0].fourcc, *b"PATv", "pattern still first");
         assert_eq!(kids[1].fourcc, *b"TOXf", "unknown scalar at recorded index");
-        serialize(std::slice::from_ref(&kids[0]))
-    };
-    assert_eq!(
-        patv_bytes,
-        serialize(&[patv_node]),
-        "PATv subtree byte-identical across the edit"
-    );
+        let patv_kids = children(&kids[0]);
+        assert_eq!(
+            serialize(&patv_kids[0..2]),
+            serialize(&[brus, sedi]),
+            "unknown PATv children byte-identical across the edit"
+        );
+        assert_eq!(
+            &patv_kids[2..4],
+            &[n_i(b"BCLi", 0x20_40_80_FF), n_i(b"FCLi", 0xC0_80_40_FF),],
+            "mapped colour slots re-emit at canonical depth after the unknowns"
+        );
+    }
     let edited = serialize(&tree2);
 
     // And the edit is visible in the model after a second read, with the
@@ -700,6 +741,20 @@ fn model_structs_are_fully_constructed() {
             maintain_radius: false,
         }),
         even_odd: false,
+        paint: Some(PaintStyle {
+            stroke_raw: 0,
+            fill_raw: 0,
+        }),
+        fill_start: None,
+        fill_end: None,
+        fill_third: None,
+        brush_placement: None,
+        fill_on_top: None,
+        locked: false,
+        visible: true,
+        opacity: 1000,
+        blend: 0,
+        name: None,
     };
     let _text = TextObject {
         frame: Rect {

@@ -18,7 +18,7 @@ pub mod registry;
 
 pub use model::{
     Canvas, Cell, Contour, Document, DocumentInfo, Grid, GroupObject, Guides, ImageObject, Layer,
-    LayerList, Page, PageInfo, PathObject, PathPoint, PrimitiveSource, SliceObject,
+    LayerList, Page, PageInfo, PaintStyle, PathObject, PathPoint, PrimitiveSource, SliceObject,
     SymbolDefinition, SymbolInstanceObject, TextObject, TileRef,
 };
 pub use registry::{ObjectData, ObjectId, Registry};

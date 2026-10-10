@@ -12,9 +12,9 @@
 use crate::fwmap::unknown::UnknownBag;
 use crate::fwmap::{FourCC, MapError};
 use crate::model::{
-    Cell, Contour, Document, Grid, GroupObject, Guides, ImageObject, Layer, LayerList, PathObject,
-    PathPoint, PrimitiveSource, SliceObject, SymbolDefinition, SymbolInstanceObject, TextObject,
-    TileRef,
+    Cell, Contour, Document, Grid, GroupObject, Guides, ImageObject, Layer, LayerList, PaintStyle,
+    PathObject, PathPoint, PrimitiveSource, SliceObject, SymbolDefinition, SymbolInstanceObject,
+    TextObject, TileRef,
 };
 use crate::registry::{ObjectData, ObjectId};
 use fwpng::nodetree::{Node, NodeValue};
@@ -359,17 +359,63 @@ impl Writer<'_> {
     }
 
     fn write_path_object(&mut self, object: &PathObject, path: &str) -> Result<Node, MapError> {
-        // Dictionary order: … PBLv … EOFb … PRIv (last).
+        // Dictionary order: LCKb? PATv BRPi PTTi? FOTb RNDi? TOXf/TOYf?
+        // PCFb? PSXf PSYf PEXf PEYf PFXf PFYf PBLv PCLv? DTAv? EOFb?
+        // AGMb? IMGv? OBNs? BLDi? PRIv? EFLv? VISb? OPAi?. PTTi, RNDi,
+        // texture/seed/contour and effect nodes have no model slot and
+        // splice back from the bag between the mapped children.
         let mut mapped = Vec::new();
+        if object.locked {
+            mapped.push(n_b(*b"LCKb", true));
+        }
+        if let Some(paint) = &object.paint {
+            mapped.push(self.write_paint(paint, &format!("{path}/PATv"))?);
+        }
+        if let Some(placement) = object.brush_placement {
+            mapped.push(n_i(*b"BRPi", placement));
+        }
+        if let Some(on_top) = object.fill_on_top {
+            mapped.push(n_b(*b"FOTb", on_top));
+        }
+        if let Some(point) = &object.fill_start {
+            mapped.push(n_f(*b"PSXf", point.x));
+            mapped.push(n_f(*b"PSYf", point.y));
+        }
+        if let Some(point) = &object.fill_end {
+            mapped.push(n_f(*b"PEXf", point.x));
+            mapped.push(n_f(*b"PEYf", point.y));
+        }
+        if let Some(point) = &object.fill_third {
+            mapped.push(n_f(*b"PFXf", point.x));
+            mapped.push(n_f(*b"PFYf", point.y));
+        }
         mapped.push(self.write_contours(&object.contours, path)?);
         if object.even_odd {
             mapped.push(n_b(*b"EOFb", true));
         }
+        if let Some(name) = &object.name {
+            mapped.push(n_s(*b"OBNs", name));
+        }
+        mapped.push(n_i(*b"BLDi", object.blend));
         if let Some(primitive) = &object.primitive {
             mapped.push(self.write_primitive(primitive, path)?);
         }
+        mapped.push(n_b(*b"VISb", object.visible));
+        mapped.push(n_i(*b"OPAi", object.opacity));
         let children = self.splice_container(mapped, path);
         Ok(n_kids(*b"PTHv", children))
+    }
+
+    /// `PATv` children in dictionary order: BCLi FCLi, then the
+    /// gradient/texture subtrees (`FPLv` `TXBv` `TXFv` `BPLv`) splice
+    /// back from the bag.
+    fn write_paint(&mut self, paint: &PaintStyle, path: &str) -> Result<Node, MapError> {
+        let mapped = vec![
+            n_i(*b"BCLi", paint.stroke_raw),
+            n_i(*b"FCLi", paint.fill_raw),
+        ];
+        let children = self.splice_container(mapped, path);
+        Ok(n_kids(*b"PATv", children))
     }
 
     fn write_contours(

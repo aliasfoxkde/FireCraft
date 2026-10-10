@@ -240,6 +240,17 @@ pub struct SymbolDefinition {
     pub background_raw: i64,
 }
 
+/// Paint style carried by a path's `PATv`. M4 maps the two solid
+/// colours; the gradient/pattern subtrees (`FPLv`, `TXBv`, `TXFv`,
+/// `BPLv`) ride in the unknown bag.
+#[derive(Clone, Debug, PartialEq)]
+pub struct PaintStyle {
+    /// `BCLi` — brush (stroke) colour, ABGR layout.
+    pub stroke_raw: i64,
+    /// `FCLi` — fill colour, ABGR layout.
+    pub fill_raw: i64,
+}
+
 /// `PTHv` — a vector path.
 #[derive(Clone, Debug, PartialEq)]
 pub struct PathObject {
@@ -250,6 +261,28 @@ pub struct PathObject {
     pub primitive: Option<PrimitiveSource>,
     /// `EOFb` — even-odd fill rule.
     pub even_odd: bool,
+    /// `PATv`? — paint style; `None` when the path carries no pattern.
+    pub paint: Option<PaintStyle>,
+    /// `PSXf`/`PSYf` — fill point 1 (start).
+    pub fill_start: Option<Point>,
+    /// `PEXf`/`PEYf` — fill point 2 (end).
+    pub fill_end: Option<Point>,
+    /// `PFXf`/`PFYf` — fill point 3 (third handle).
+    pub fill_third: Option<Point>,
+    /// `BRPi` — brush placement (0 inside, 1 middle, 2 outside).
+    pub brush_placement: Option<i64>,
+    /// `FOTb` — fill over stroke.
+    pub fill_on_top: Option<bool>,
+    /// `LCKb` — path is locked.
+    pub locked: bool,
+    /// `VISb` — path is visible.
+    pub visible: bool,
+    /// `OPAi` — opacity, per mille.
+    pub opacity: i64,
+    /// `BLDi` — blend mode.
+    pub blend: i64,
+    /// `OBNs` — object name.
+    pub name: Option<String>,
 }
 
 /// One contour (`PBPv`): a closed flag plus bezier points.
@@ -435,6 +468,20 @@ pub(crate) mod tests {
                 maintain_radius: true,
             }),
             even_odd: false,
+            paint: Some(PaintStyle {
+                stroke_raw: 0xFF_00_00_FF,
+                fill_raw: 0x00_FF_00_FF,
+            }),
+            fill_start: None,
+            fill_end: None,
+            fill_third: None,
+            brush_placement: Some(0),
+            fill_on_top: None,
+            locked: false,
+            visible: true,
+            opacity: 1000,
+            blend: 0,
+            name: None,
         })
     }
 

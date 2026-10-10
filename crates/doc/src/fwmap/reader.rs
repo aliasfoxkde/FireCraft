@@ -11,7 +11,7 @@ use crate::fwmap::MapError;
 use crate::fwmap::unknown::UnknownBag;
 use crate::model::{
     Canvas, Cell, Contour, Document, DocumentInfo, Grid, GroupObject, Guides, ImageObject, Layer,
-    LayerList, Page, PageInfo, PathObject, PathPoint, PrimitiveSource, SliceObject,
+    LayerList, Page, PageInfo, PaintStyle, PathObject, PathPoint, PrimitiveSource, SliceObject,
     SymbolDefinition, SymbolInstanceObject, TextObject, TileRef,
 };
 use crate::registry::{ObjectData, ObjectId, Registry};
@@ -669,9 +669,32 @@ impl Reader {
         let mut primitive: Option<PrimitiveSource> = None;
         let mut primitive_lost = false;
         let mut even_odd = None;
+        let (mut paint, mut brush_placement, mut fill_on_top) = (None, None, None);
+        let (mut psx, mut psy, mut pex, mut pey, mut pfx, mut pfy) =
+            (None, None, None, None, None, None);
+        let (mut locked, mut visible, mut opacity, mut blend, mut name) =
+            (None, None, None, None, None);
 
         for (i, child) in children.iter().enumerate() {
             match &child.fourcc {
+                b"LCKb" => self.slot_bool(child, path, i, &mut locked)?,
+                b"PATv" => {
+                    if paint.is_none() {
+                        let kids = children_of(child, path)?;
+                        let patv_path = format!("{path}/PATv");
+                        paint = Some(self.read_paint(kids, &patv_path)?);
+                    } else {
+                        self.bag_node(path, i, child);
+                    }
+                }
+                b"BRPi" => self.slot_i64(child, path, i, &mut brush_placement)?,
+                b"FOTb" => self.slot_bool(child, path, i, &mut fill_on_top)?,
+                b"PSXf" => self.slot_f64(child, path, i, &mut psx)?,
+                b"PSYf" => self.slot_f64(child, path, i, &mut psy)?,
+                b"PEXf" => self.slot_f64(child, path, i, &mut pex)?,
+                b"PEYf" => self.slot_f64(child, path, i, &mut pey)?,
+                b"PFXf" => self.slot_f64(child, path, i, &mut pfx)?,
+                b"PFYf" => self.slot_f64(child, path, i, &mut pfy)?,
                 b"PBLv" => {
                     if contours.is_empty() {
                         let kids = children_of(child, path)?;
@@ -694,8 +717,27 @@ impl Reader {
                         self.bag_node(path, i, child);
                     }
                 }
+                b"OBNs" => self.slot_str(child, path, i, &mut name)?,
+                b"BLDi" => self.slot_i64(child, path, i, &mut blend)?,
+                b"VISb" => self.slot_bool(child, path, i, &mut visible)?,
+                b"OPAi" => self.slot_i64(child, path, i, &mut opacity)?,
                 _ => self.bag_node(path, i, child),
             }
+        }
+
+        // Fill points are recorded as x/y pairs; half a pair is a shape
+        // we cannot represent faithfully (same discipline as PBTv
+        // control points).
+        if psx.is_some() != psy.is_some()
+            || pex.is_some() != pey.is_some()
+            || pfx.is_some() != pfy.is_some()
+        {
+            return Err(MapError::BadShape {
+                path: path.to_owned(),
+                node: *b"PTHv",
+                expected: "paired x/y fill points",
+                found: "unpaired fill scalar",
+            });
         }
 
         if primitive_lost {
@@ -705,7 +747,35 @@ impl Reader {
             contours,
             primitive,
             even_odd: even_odd.unwrap_or(false),
+            paint,
+            fill_start: psx.zip(psy).map(|(x, y)| Point::new(x, y)),
+            fill_end: pex.zip(pey).map(|(x, y)| Point::new(x, y)),
+            fill_third: pfx.zip(pfy).map(|(x, y)| Point::new(x, y)),
+            brush_placement,
+            fill_on_top,
+            locked: locked.unwrap_or(false),
+            visible: visible.unwrap_or(true),
+            opacity: opacity.unwrap_or(1000),
+            blend: blend.unwrap_or(0),
+            name,
         })))
+    }
+
+    /// Reads a `PATv` paint: the two solid colours are modeled; the
+    /// gradient/pattern subtrees stay in the bag under the `PATv` path.
+    fn read_paint(&mut self, children: &[Node], path: &str) -> Result<PaintStyle, MapError> {
+        let (mut brush, mut fill) = (None, None);
+        for (i, child) in children.iter().enumerate() {
+            match &child.fourcc {
+                b"BCLi" => self.slot_i64(child, path, i, &mut brush)?,
+                b"FCLi" => self.slot_i64(child, path, i, &mut fill)?,
+                _ => self.bag_node(path, i, child),
+            }
+        }
+        Ok(PaintStyle {
+            stroke_raw: brush.unwrap_or(0),
+            fill_raw: fill.unwrap_or(0),
+        })
     }
 
     fn read_contours(&mut self, children: &[Node], path: &str) -> Result<Vec<Contour>, MapError> {
