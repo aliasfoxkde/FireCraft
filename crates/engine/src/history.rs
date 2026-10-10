@@ -123,6 +123,24 @@ impl History {
         self.undo.push(step);
     }
 
+    /// Aborts the open transaction: un-applies every buffered delta in
+    /// reverse (the document returns to its pre-transaction state) and
+    /// discards the buffer. Returns how many calls were rolled back.
+    pub fn abort_transaction(
+        &mut self,
+        document: &mut doc::Document,
+    ) -> Result<usize, EngineError> {
+        let buffer = self.open.take().ok_or(EngineError::InvalidState {
+            name: "transaction.abort".to_owned(),
+            detail: "no transaction is open".to_owned(),
+        })?;
+        let rolled = buffer.calls.len();
+        for delta in buffer.deltas.iter().rev() {
+            delta.apply_inverse(document)?;
+        }
+        Ok(rolled)
+    }
+
     /// Pops the top undo step and hands it over for inversion; the
     /// caller applies [`Step::delta`] to the document and then files
     /// the step with [`History::file_redo`].

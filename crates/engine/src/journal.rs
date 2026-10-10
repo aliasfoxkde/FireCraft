@@ -94,6 +94,23 @@ impl Journal {
         out
     }
 
+    /// Rolls back the trailing run of entries carrying `txn` (an
+    /// aborted transaction), restoring the sequence counter. Returns
+    /// how many entries were removed.
+    pub fn rollback_txn(&mut self, txn: &str) -> usize {
+        let mut removed = 0;
+        while self
+            .entries
+            .last()
+            .is_some_and(|entry| entry.txn.as_deref() == Some(txn))
+        {
+            self.entries.pop();
+            removed += 1;
+        }
+        self.next_seq -= removed as u64;
+        removed
+    }
+
     /// Parses JSON lines. Blank lines are skipped; a malformed line or
     /// a sequence gap is an error.
     pub fn from_lines(text: &str) -> Result<Self, EngineError> {

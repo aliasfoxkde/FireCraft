@@ -15,5 +15,11 @@ geom = { path = "../geom" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
+[features]
+default = ["memory-fs"]
+# In-memory file system for tests and offline demos (no std::fs, so
+# it is itself wasm-clean).
+memory-fs = []
+
 [lints]
 workspace = true

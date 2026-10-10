@@ -18,7 +18,9 @@ pub mod delta;
 pub mod error;
 pub mod history;
 pub mod journal;
+pub mod platform;
 pub mod registry;
+pub mod session;
 
 pub use command::{Command, TypedCommand};
 pub use delta::Delta;
@@ -26,3 +28,4 @@ pub use error::EngineError;
 pub use history::{Call, History, Step};
 pub use journal::{Journal, JournalEntry};
 pub use registry::CommandRegistry;
+pub use session::{Session, TransactionGuard};

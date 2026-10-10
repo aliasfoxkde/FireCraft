@@ -60,6 +60,14 @@ pub enum EngineError {
         /// What was wrong.
         detail: String,
     },
+    /// An injected file-system operation failed (missing file, denied
+    /// write).
+    Io {
+        /// The path involved.
+        path: String,
+        /// What went wrong.
+        detail: String,
+    },
 }
 
 impl std::fmt::Display for EngineError {
@@ -82,6 +90,7 @@ impl std::fmt::Display for EngineError {
             EngineError::NothingToUndo => write!(f, "nothing to undo"),
             EngineError::NothingToRedo => write!(f, "nothing to redo"),
             EngineError::Journal { line, detail } => write!(f, "journal line {line}: {detail}"),
+            EngineError::Io { path, detail } => write!(f, "{path}: {detail}"),
         }
     }
 }
