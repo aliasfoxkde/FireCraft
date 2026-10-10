@@ -14,7 +14,14 @@ doc = { path = "../doc" }
 vello_cpu = { version = "0.3", default-features = false, features = ["std", "u8_pipeline"] }
 
 [dev-dependencies]
+criterion = "0.7.0"
+flate2 = "1.1.10"
+fwpng = { path = "../fwpng" }
 geom = { path = "../geom" }
+
+[[bench]]
+name = "render"
+harness = false
 
 [lints]
 workspace = true
