@@ -24,7 +24,7 @@
 use doc::{Cell, Document, GroupObject, Layer, LayerList, ObjectData, Page, PageInfo};
 use geom::Point;
 
-use crate::{ImportError, Plane};
+use crate::{ExportError, ImportError, Plane};
 
 /// The format name every error carries.
 const FORMAT: &str = "psd";
@@ -1017,4 +1017,694 @@ fn per_mille(opacity: u8) -> i64 {
 /// over an empty string).
 fn non_empty(name: &str) -> Option<String> {
     (!name.is_empty()).then(|| name.to_owned())
+}
+
+// ------------------------------------------------------------------ //
+// The writer (M8 task 6): layered RGB/8 PSD, maximize compatibility.
+// One record per object, groups as the bottom-first divider/header
+// pair, RLE channel data (one table + packed rows per channel), and
+// the merged composite with its spec'd u32 length prefix.
+// ------------------------------------------------------------------ //
+
+/// Maximum group nesting the writer walks (model files are house-made,
+/// but the registry accepts anything a `.fw.png` carried).
+const MAX_GROUP_DEPTH: usize = 64;
+
+/// Maximum layer records: PSD stores the count in a *signed* u16.
+const MAX_RECORDS: usize = 32_767;
+
+/// One prepared layer record awaiting serialization.
+struct Record {
+    name: String,
+    top: i32,
+    left: i32,
+    bottom: i32,
+    right: i32,
+    blend: [u8; 4],
+    opacity: u8,
+    flags: u8,
+    /// `lsct` section type: `Some(3)` bounding divider, `Some(1)`
+    /// group header, `None` for a plain raster layer.
+    section: Option<i32>,
+    /// The channel streams: `(id, marker + byte-count table + packed
+    /// rows)` in R, G, B, A order.
+    channels: Vec<(i16, Vec<u8>)>,
+}
+
+impl Record {
+    /// A group divider (the record that sits *below* the children).
+    /// Real writers flag it hidden, so it never shows as an empty
+    /// layer in other apps' stacks.
+    fn divider() -> Self {
+        Self {
+            name: "</Layer group>".to_owned(),
+            top: 0,
+            left: 0,
+            bottom: 0,
+            right: 0,
+            blend: *b"norm",
+            opacity: 255,
+            flags: 0b10,
+            section: Some(3),
+            channels: Vec::new(),
+        }
+    }
+}
+
+/// Encodes page `page` (state 0) of `document` as a layered RGB/8 PSD.
+/// Raster objects write their bank pixels at their bounds; groups
+/// become the divider/header pair; every other object flattens through
+/// compose into a full-canvas raster. The merged composite always
+/// follows (maximize compatibility).
+///
+/// # Errors
+/// [`ExportError::Unsupported`] for canvases outside the format's
+/// reach, unrenderable documents, missing bank tiles, oversized
+/// planes, or nesting/record counts beyond the writer's caps;
+/// [`ExportError::PlaneSize`] for internal pixel-count mismatches.
+pub fn encode(document: &Document, page: usize) -> Result<Vec<u8>, ExportError> {
+    let page_data = document.pages.get(page).ok_or(ExportError::Unsupported {
+        format: FORMAT,
+        reason: format!("page {page} is outside the document"),
+    })?;
+    let width_f = page_data.info.canvas.width.round();
+    let height_f = page_data.info.canvas.height.round();
+    if width_f < 1.0 || height_f < 1.0 {
+        return Err(ExportError::Unsupported {
+            format: FORMAT,
+            reason: "canvas rounds to fewer than one pixel on an axis".to_owned(),
+        });
+    }
+    if width_f > f64::from(u16::MAX) || height_f > f64::from(u16::MAX) {
+        return Err(ExportError::Unsupported {
+            format: FORMAT,
+            reason: format!(
+                "canvas {}x{} exceeds the PSD u16 extent",
+                page_data.info.canvas.width, page_data.info.canvas.height
+            ),
+        });
+    }
+    let (width, height) = (width_f as u32, height_f as u32);
+
+    // Bottom-first record walk: model layers in stored order, one
+    // record per cell element, groups expanded in place.
+    let mut records: Vec<Record> = Vec::new();
+    for layer in &page_data.layers.layers {
+        let Some(cell) = layer.cells.first() else {
+            continue;
+        };
+        for id in &cell.elements {
+            let shown = layer.display;
+            push_object(
+                document,
+                *id,
+                shown,
+                0,
+                &page_data.info.canvas,
+                &mut records,
+            )?;
+            if records.len() > MAX_RECORDS {
+                return Err(ExportError::Unsupported {
+                    format: FORMAT,
+                    reason: format!("more than {MAX_RECORDS} layer records"),
+                });
+            }
+        }
+    }
+
+    // The merged composite: the full page through compose, straight
+    // alpha, three RLE channels pooled into one byte-count table.
+    let rendered =
+        compose::render(document, page, 0).map_err(|error| ExportError::Unsupported {
+            format: FORMAT,
+            reason: format!("composite render failed: {error}"),
+        })?;
+    if rendered.width != width as u16 || rendered.height != height as u16 {
+        return Err(ExportError::Unsupported {
+            format: FORMAT,
+            reason: format!(
+                "composite rendered {}x{}, canvas is {width}x{height}",
+                rendered.width, rendered.height
+            ),
+        });
+    }
+    let composite = composite_section(&rendered.pixels, width, height)?;
+
+    Ok(assemble(&records, width, height, &composite))
+}
+
+/// Appends the records for one object (recursing through groups).
+fn push_object(
+    document: &Document,
+    id: doc::ObjectId,
+    shown: bool,
+    depth: usize,
+    page_canvas: &doc::Canvas,
+    records: &mut Vec<Record>,
+) -> Result<(), ExportError> {
+    let Some(object) = document.registry.get(id) else {
+        return Err(ExportError::Unsupported {
+            format: FORMAT,
+            reason: format!("object {id:?} is dangling in the registry"),
+        });
+    };
+    match object {
+        ObjectData::Group(group) => {
+            if depth >= MAX_GROUP_DEPTH {
+                return Err(ExportError::Unsupported {
+                    format: FORMAT,
+                    reason: format!("groups nest deeper than {MAX_GROUP_DEPTH}"),
+                });
+            }
+            // Bottom-first order: the bounding divider sits BELOW the
+            // children, so it leads the run; the header closes it.
+            records.push(Record::divider());
+            for child in &group.children {
+                push_object(
+                    document,
+                    *child,
+                    shown && group.visible,
+                    depth + 1,
+                    page_canvas,
+                    records,
+                )?;
+            }
+            records.push(group_record(group, shown));
+        }
+        ObjectData::Image(image) => records.push(image_record(document, image, shown)?),
+        other => records.push(flattened_record(document, id, other, shown, page_canvas)?),
+    }
+    Ok(())
+}
+
+/// The group header record — the one *above* the children, carrying
+/// the group's real name, blend, opacity, and visibility.
+fn group_record(group: &doc::GroupObject, shown: bool) -> Record {
+    Record {
+        name: group.name.clone().unwrap_or_else(|| "Group".to_owned()),
+        top: 0,
+        left: 0,
+        bottom: 0,
+        right: 0,
+        blend: blend_key(group.blend),
+        opacity: opacity_byte(group.opacity),
+        flags: flag_byte(shown && group.visible),
+        section: Some(1), // open folder; collapsed state is not carried
+        channels: Vec::new(),
+    }
+}
+
+/// The raster record for an `IMGv`: straight-alpha pixels extracted
+/// from the tile bank at the object's bounds.
+fn image_record(
+    document: &Document,
+    image: &doc::ImageObject,
+    shown: bool,
+) -> Result<Record, ExportError> {
+    let (width, height) = (image.pixels.0.max(0), image.pixels.1.max(0));
+    if width == 0 || height == 0 {
+        return Err(ExportError::Unsupported {
+            format: FORMAT,
+            reason: "image object has an empty pixel extent".to_owned(),
+        });
+    }
+    if width as u64 * height as u64 > MAX_PLANE_PIXELS as u64 {
+        return Err(ExportError::Unsupported {
+            format: FORMAT,
+            reason: format!("image {width}x{height} exceeds the plane cap"),
+        });
+    }
+    if image.tile_size != raster::TILE_SIDE as i64 {
+        return Err(ExportError::Unsupported {
+            format: FORMAT,
+            reason: format!("tile size {} is not the bank's 128", image.tile_size),
+        });
+    }
+    let left = rect_edge(image.location.x);
+    let top = rect_edge(image.location.y);
+    let right = rect_edge(image.location.x + width as f64);
+    let bottom = rect_edge(image.location.y + height as f64);
+    let (width, height) = (width as usize, height as usize);
+    let mut rgba = vec![0u8; width * height * 4];
+    let cols = width.div_ceil(raster::TILE_SIDE);
+    let rows = height.div_ceil(raster::TILE_SIDE);
+    for row in 0..rows {
+        for col in 0..cols {
+            let reference =
+                image
+                    .tiles
+                    .get(row * cols + col)
+                    .ok_or_else(|| ExportError::Unsupported {
+                        format: FORMAT,
+                        reason: "image object references fewer tiles than its extent".to_owned(),
+                    })?;
+            for y in 0..raster::TILE_SIDE {
+                let py = row * raster::TILE_SIDE + y;
+                if py >= height {
+                    break;
+                }
+                for x in 0..raster::TILE_SIDE {
+                    let px = col * raster::TILE_SIDE + x;
+                    if px >= width {
+                        break;
+                    }
+                    let pixel = tile_pixel(document, reference, x, y)?;
+                    let at = (py * width + px) * 4;
+                    rgba[at..at + 4].copy_from_slice(&pixel);
+                }
+            }
+        }
+    }
+    record_from_pixels(
+        image.name.clone().unwrap_or_else(|| "Layer".to_owned()),
+        top,
+        left,
+        bottom,
+        right,
+        image.blend,
+        image.opacity,
+        shown && image.visible,
+        &rgba,
+        width,
+    )
+}
+
+/// One straight-alpha pixel out of the tile bank.
+fn tile_pixel(
+    document: &Document,
+    reference: &doc::TileRef,
+    x: usize,
+    y: usize,
+) -> Result<[u8; 4], ExportError> {
+    let at = (y * raster::TILE_SIDE + x) * 4;
+    match reference {
+        doc::TileRef::Tile(id) => {
+            let tile = document
+                .tiles
+                .get(*id)
+                .ok_or_else(|| ExportError::Unsupported {
+                    format: FORMAT,
+                    reason: format!("tile {id} is not in the bank"),
+                })?;
+            let premultiplied = &tile.pixels()[at..at + 4];
+            Ok(straight_pixel(premultiplied))
+        }
+        doc::TileRef::Matte(raw) => {
+            // TMCi is an ARGB raw int; straight alpha as stored.
+            let value = u32::try_from(*raw).unwrap_or(0);
+            Ok([
+                ((value >> 16) & 0xff) as u8,
+                ((value >> 8) & 0xff) as u8,
+                (value & 0xff) as u8,
+                ((value >> 24) & 0xff) as u8,
+            ])
+        }
+    }
+}
+
+/// Un-premultiplies one pixel (compose's straight-alpha policy).
+fn straight_pixel(premultiplied: &[u8]) -> [u8; 4] {
+    let [r, g, b, a] = [
+        premultiplied[0],
+        premultiplied[1],
+        premultiplied[2],
+        premultiplied[3],
+    ];
+    if a == 0 || a == 255 {
+        [r, g, b, a]
+    } else {
+        let un = |c: u8| ((u16::from(c) * 255) / u16::from(a)) as u8;
+        [un(r), un(g), un(b), a]
+    }
+}
+
+/// Renders one non-raster object alone (a probe document holding just
+/// that element) and flattens it to a full-canvas raster record.
+fn flattened_record(
+    document: &Document,
+    id: doc::ObjectId,
+    object: &ObjectData,
+    shown: bool,
+    canvas: &doc::Canvas,
+) -> Result<Record, ExportError> {
+    let width_f = canvas.width.round();
+    let height_f = canvas.height.round();
+    let (width, height) = (width_f as usize, height_f as usize);
+    if width == 0 || height == 0 {
+        return Err(ExportError::Unsupported {
+            format: FORMAT,
+            reason: "canvas is empty; nothing to flatten onto".to_owned(),
+        });
+    }
+    let mut probe = document.clone();
+    probe.pages.clear();
+    crate::raster::build_single_object_page(&mut probe, canvas.clone(), vec![id]);
+    let rendered = compose::render(&probe, 0, 0).map_err(|error| ExportError::Unsupported {
+        format: FORMAT,
+        reason: format!("object flatten render failed: {error}"),
+    })?;
+    let rgba = compose::straight_alpha(&rendered.pixels);
+    let name = object_name(object).unwrap_or_else(|| "Layer".to_owned());
+    // Opacity is deliberately not read here — the render already baked
+    // it into the pixels, so the record writes opaque (below).
+    let (blend, visible) = match object {
+        ObjectData::Path(path) => (path.blend, path.visible),
+        ObjectData::Text(text) => (text.blend, text.visible),
+        _ => (0, true),
+    };
+    // The lone-object render bakes the object's opacity into its
+    // pixels (alpha against the empty backdrop), so the record writes
+    // opaque and keeps only the blend key live — writing both would
+    // dim twice on read-back. Slices/symbols carry no blend fields.
+    record_from_pixels(
+        name,
+        0,
+        0,
+        height as i32,
+        width as i32,
+        blend,
+        1000,
+        shown && visible,
+        &rgba,
+        width,
+    )
+}
+
+/// The object's `OBNs`, when present and non-empty.
+fn object_name(object: &ObjectData) -> Option<String> {
+    match object {
+        ObjectData::Path(path) => path.name.clone(),
+        ObjectData::Text(text) => text.name.clone(),
+        ObjectData::Image(image) => image.name.clone(),
+        ObjectData::Group(group) => group.name.clone(),
+        ObjectData::Slice(slice) => slice.name.clone(),
+        ObjectData::SymbolInstance(symbol) => symbol.name.clone(),
+    }
+}
+
+/// Builds a four-channel RLE record from a straight-alpha plane.
+#[allow(clippy::too_many_arguments)]
+fn record_from_pixels(
+    name: String,
+    top: i32,
+    left: i32,
+    bottom: i32,
+    right: i32,
+    blend: i64,
+    opacity: i64,
+    visible: bool,
+    rgba: &[u8],
+    width: usize,
+) -> Result<Record, ExportError> {
+    let pixels = rgba.len() / 4;
+    if rgba.len() != pixels * 4 || width == 0 || pixels % width != 0 {
+        return Err(ExportError::PlaneSize {
+            width: width as u32,
+            height: (pixels / width.max(1)) as u32,
+            len: rgba.len(),
+        });
+    }
+    let height = pixels / width;
+    // Planes are channel-major: all red rows, then green, blue, alpha.
+    let mut planes: [Vec<u8>; 4] = std::array::from_fn(|_| vec![0u8; pixels]);
+    for (index, pixel) in rgba.chunks_exact(4).enumerate() {
+        for (channel, value) in pixel.iter().enumerate() {
+            planes[channel][index] = *value;
+        }
+    }
+    let channels = planes
+        .iter()
+        .zip([0i16, 1, 2, -1])
+        .map(|(plane, id)| (id, rle_channel(width, height, plane)))
+        .collect();
+    Ok(Record {
+        name,
+        top,
+        left,
+        bottom,
+        right,
+        blend: blend_key(blend),
+        opacity: opacity_byte(opacity),
+        flags: flag_byte(visible),
+        section: None,
+        channels,
+    })
+}
+
+/// PackBits-encodes one scanline (2+ equal bytes become a run;
+/// everything else rides in literals of up to 128).
+fn pack_line(row: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(row.len() + row.len() / 2 + 2);
+    let mut at = 0;
+    while at < row.len() {
+        let mut run = 1;
+        while at + run < row.len() && row[at + run] == row[at] && run < 128 {
+            run += 1;
+        }
+        if run >= 2 {
+            out.push((1 - run as i8) as u8);
+            out.push(row[at]);
+            at += run;
+        } else {
+            let start = at;
+            at += 1;
+            while at < row.len()
+                && at - start < 128
+                && (at + 1 >= row.len() || row[at] != row[at + 1])
+            {
+                at += 1;
+            }
+            out.push((at - start - 1) as u8);
+            out.extend_from_slice(&row[start..at]);
+        }
+    }
+    out
+}
+
+/// One channel's stream: the RLE marker, a per-scanline byte-count
+/// table, then the packed rows (the layer-channel layout — each
+/// channel's data is self-contained inside its own length).
+fn rle_channel(width: usize, height: usize, plane: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(2 + height * 2 + plane.len());
+    out.extend_from_slice(&1u16.to_be_bytes());
+    let mut packed = Vec::with_capacity(plane.len());
+    for row in 0..height {
+        let line = pack_line(&plane[row * width..(row + 1) * width]);
+        out.extend_from_slice(&(line.len() as u16).to_be_bytes());
+        packed.extend_from_slice(&line);
+    }
+    out.extend_from_slice(&packed);
+    out
+}
+
+/// The merged-composite section body: u16 compression, ONE pooled
+/// byte-count table (rows x channels), one packed stream — written
+/// length-less, the layout every real consumer expects (see below).
+fn composite_section(
+    premultiplied: &[u8],
+    width: u32,
+    height: u32,
+) -> Result<Vec<u8>, ExportError> {
+    let width = width as usize;
+    let height = height as usize;
+    let pixels = width * height;
+    if premultiplied.len() != pixels * 4 {
+        return Err(ExportError::PlaneSize {
+            width: width as u32,
+            height: height as u32,
+            len: premultiplied.len(),
+        });
+    }
+    // Three planes (the header declares 3 channels): the composite is
+    // validation-only for layered files and the flat-document fallback
+    // reads it the same way.
+    let mut planes: [Vec<u8>; 3] = std::array::from_fn(|_| vec![0u8; pixels]);
+    for (index, pixel) in premultiplied.chunks_exact(4).enumerate() {
+        let pixel = straight_pixel(pixel);
+        planes[0][index] = pixel[0];
+        planes[1][index] = pixel[1];
+        planes[2][index] = pixel[2];
+    }
+    let mut packed = Vec::with_capacity(pixels * 3);
+    let mut out = Vec::with_capacity(2 + height * 6 + pixels * 3);
+    out.extend_from_slice(&1u16.to_be_bytes());
+    for plane in &planes {
+        for row in 0..height {
+            let line = pack_line(&plane[row * width..(row + 1) * width]);
+            out.extend_from_slice(&(line.len() as u16).to_be_bytes());
+            packed.extend_from_slice(&line);
+        }
+    }
+    out.extend_from_slice(&packed);
+    // No u32 length prefix: the spec allows one, but ag-psd,
+    // ImageMagick, and PIL all write/read the composite bare — the
+    // prefixed form made PIL fail the composite by exactly 4 bytes.
+    // The reader accepts both.
+    Ok(out)
+}
+
+/// Serializes the header, the layer section over `records`, and the
+/// composite into the final byte stream.
+fn assemble(records: &[Record], width: u32, height: u32, composite: &[u8]) -> Vec<u8> {
+    let mut out = Vec::new();
+    out.extend_from_slice(b"8BPS");
+    out.extend_from_slice(&1u16.to_be_bytes()); // version: PSD
+    out.extend_from_slice(&[0; 6]); // reserved
+    out.extend_from_slice(&3u16.to_be_bytes()); // channels
+    out.extend_from_slice(&height.to_be_bytes());
+    out.extend_from_slice(&width.to_be_bytes());
+    out.extend_from_slice(&8u16.to_be_bytes()); // depth
+    out.extend_from_slice(&3u16.to_be_bytes()); // RGB
+    section(&mut out, &[]); // color mode data
+    section(&mut out, &[]); // image resources
+
+    // Layer-info: count, records, then the channel-stream block (the
+    // spec layout — all streams after all records).
+    let mut info = Vec::new();
+    info.extend_from_slice(&(records.len() as u16).to_be_bytes());
+    for record in records {
+        write_record_head(&mut info, record);
+    }
+    for record in records {
+        for (_, stream) in &record.channels {
+            info.extend_from_slice(stream);
+        }
+    }
+    // Layer-and-mask section: layer-info, then the global layer mask
+    // info (empty), wrapped.
+    let mut inner = section_bytes(&info);
+    inner.extend_from_slice(&0u32.to_be_bytes());
+    let layer_and_mask = section_bytes(&inner);
+    out.extend_from_slice(&layer_and_mask);
+    out.extend_from_slice(composite);
+    out
+}
+
+/// One record's fixed head: rect, channel infos, blend/opacity/flags,
+/// and the extra-data block (mask 0, ranges 0, pascal name, `luni`,
+/// `lsct` for groups).
+fn write_record_head(out: &mut Vec<u8>, record: &Record) {
+    out.extend_from_slice(&record.top.to_be_bytes());
+    out.extend_from_slice(&record.left.to_be_bytes());
+    out.extend_from_slice(&record.bottom.to_be_bytes());
+    out.extend_from_slice(&record.right.to_be_bytes());
+    out.extend_from_slice(&(record.channels.len() as u16).to_be_bytes());
+    for (id, stream) in &record.channels {
+        out.extend_from_slice(&id.to_be_bytes());
+        out.extend_from_slice(&(stream.len() as u32).to_be_bytes());
+    }
+    out.extend_from_slice(b"8BIM");
+    out.extend_from_slice(&record.blend);
+    out.push(record.opacity);
+    out.push(0); // clipping: never written (no model clipping pair)
+    out.push(record.flags);
+    out.push(0); // filler
+
+    let mut extra = Vec::new();
+    extra.extend_from_slice(&0u32.to_be_bytes()); // no layer mask
+    extra.extend_from_slice(&0u32.to_be_bytes()); // no blending ranges
+    extra.extend_from_slice(&pascal(&record.name));
+    // luni: the Unicode name (the reader's preferred source).
+    let mut luni = (record.name.encode_utf16().count() as u32)
+        .to_be_bytes()
+        .to_vec();
+    for unit in record.name.encode_utf16() {
+        luni.extend_from_slice(&unit.to_be_bytes());
+    }
+    block(&mut extra, b"luni", &luni);
+    if let Some(section) = record.section {
+        let mut lsct = section.to_be_bytes().to_vec();
+        if section != 3 {
+            // Group headers carry the blend key + subtype (the
+            // Photoshop-compatible form ag-psd writes).
+            lsct.extend_from_slice(b"8BIM");
+            lsct.extend_from_slice(&record.blend);
+            lsct.extend_from_slice(&0u32.to_be_bytes());
+        }
+        block(&mut extra, b"lsct", &lsct);
+    }
+    out.extend_from_slice(&section_bytes(&extra));
+}
+
+/// An `8BIM` info block: signature, key, length, body padded to 4.
+fn block(out: &mut Vec<u8>, key: &[u8; 4], body: &[u8]) {
+    out.extend_from_slice(b"8BIM");
+    out.extend_from_slice(key);
+    out.extend_from_slice(&section_bytes(body));
+    while out.len() % 4 != 0 {
+        out.push(0);
+    }
+}
+
+/// A pascal string: length byte + bytes, padded so the total is a
+/// multiple of 4.
+fn pascal(name: &str) -> Vec<u8> {
+    let bytes = &name.as_bytes()[..name.len().min(255)];
+    let mut out = Vec::with_capacity(bytes.len() + 4);
+    out.push(bytes.len() as u8);
+    out.extend_from_slice(bytes);
+    while out.len() % 4 != 0 {
+        out.push(0);
+    }
+    out
+}
+
+/// Length-prefixed section bytes.
+fn section_bytes(body: &[u8]) -> Vec<u8> {
+    let mut out = (body.len() as u32).to_be_bytes().to_vec();
+    out.extend_from_slice(body);
+    out
+}
+
+/// Appends a length-prefixed section.
+fn section(out: &mut Vec<u8>, body: &[u8]) {
+    out.extend_from_slice(&section_bytes(body));
+}
+
+/// A model blend value's PSD key (the exact inverse of the reader's
+/// table); values with no PSD equivalent land on `normal` — the
+/// checklist records the limitation.
+fn blend_key(value: i64) -> [u8; 4] {
+    match value {
+        2 => *b"mul ",
+        3 => *b"diff",
+        4 => *b"over",
+        5 => *b"scrn",
+        9 => *b"dark",
+        10 => *b"lite",
+        11 => *b"hue ",
+        12 => *b"sat ",
+        13 => *b"colr",
+        14 => *b"lum ",
+        32 => *b"smud",
+        33 => *b"hLit",
+        34 => *b"sLit",
+        36 => *b"div ",
+        37 => *b"idiv",
+        _ => *b"norm",
+    }
+}
+
+/// Per-mille opacity to the record's u8: `(per mille * 255 + 500) /
+/// 1000`, half-up — the exact inverse of the reader's widening.
+fn opacity_byte(per_mille: i64) -> u8 {
+    let clamped = per_mille.clamp(0, 1000);
+    ((clamped * 255 + 500) / 1000) as u8
+}
+
+/// Visibility to the record's flags byte: bit 1 set means hidden.
+fn flag_byte(visible: bool) -> u8 {
+    if visible { 0 } else { 0b10 }
+}
+
+/// Rounds a canvas coordinate into the record's i32 rect edges.
+fn rect_edge(coordinate: f64) -> i32 {
+    let rounded = coordinate.round();
+    if rounded > f64::from(i32::MAX) {
+        i32::MAX
+    } else if rounded < f64::from(i32::MIN) {
+        i32::MIN
+    } else {
+        rounded as i32
+    }
 }

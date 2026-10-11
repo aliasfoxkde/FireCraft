@@ -316,8 +316,8 @@ pub(crate) fn attach_image(
 
 /// A one-page, one-layer document skeleton whose single cell holds
 /// `elements` in z-order (the raster import shape — also reused by the
-/// SVG import for its root walk).
-pub(crate) fn build_single_object_page(
+/// SVG import and the PSD writer's single-object probe render).
+pub fn build_single_object_page(
     document: &mut Document,
     canvas: doc::Canvas,
     elements: Vec<doc::ObjectId>,

@@ -137,3 +137,12 @@ pub fn export_svg(document: &doc::Document) -> Result<Vec<u8>, CliError> {
     }
     Ok(out.svg.into_bytes())
 }
+
+/// Encodes page 0 of `document` as a layered RGB/8 PSD (merged
+/// composite + RLE layer channels — the maximize-compatibility shape).
+///
+/// # Errors
+/// [`CliError`] wrapping the encoder's refusals.
+pub fn export_psd(document: &doc::Document) -> Result<Vec<u8>, CliError> {
+    ::io::psd::encode(document, 0).map_err(|error| CliError(error.to_string()))
+}

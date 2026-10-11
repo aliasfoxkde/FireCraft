@@ -1,6 +1,6 @@
-# 0006 — PSD fidelity: the mapped-feature checklist and the import contract
+# 0006 — PSD fidelity: the mapped-feature checklist and the import/export contract
 
-- **Status:** Accepted (M8 task 5, 2026-10-11)
+- **Status:** Accepted (M8 task 5, 2026-10-11; extended by task 6, 2026-10-11)
 - **Deciders:** Michael Kinney, Claude
 - **Scope:** `io::psd` (L4) — the PSD reader's feature mapping, what
   imports faithfully, what flattens, what refuses; the fidelity
@@ -148,6 +148,36 @@ three actually emit.
   writers.
 - ZIP-compressed layers stay unimportable until a real file demands
   them; the refusal names the compression so the gap is loud.
+
+## Task 6: the writer, in reverse (same rows, opposite direction)
+
+The writer (`io::psd::encode`) satisfies the checklist read backwards
+— write → read equality through our own reader on the same rows, plus
+the host oracles:
+
+| Model feature | We write | Note |
+|---|---|---|
+| Model layers, bottom-first | one raster record each, in `layers` order | record order == render order |
+| Image objects (`IMGv`) | pixels extracted from the tile bank at the object's bounds (premultiplied → straight), record rect at the object's location | lossless; requires `tile_size` 128 and in-bank tiles — anything else refuses |
+| Path/Text/Slice/Symbol objects | flattened to a full-canvas raster through a single-object probe render (compose) | the flatten bakes the object's opacity into its pixels (alpha against the empty backdrop), so the record writes **opaque** and keeps only the blend key live — writing both would dim twice on read-back |
+| Groups | the pair: divider (`lsct` 3, pascal `</Layer group>`, **flags hidden**) below, header (`lsct` 1) above with the group's name/blend/opacity/visibility | divider hidden so other apps never show an empty layer; nesting depth capped at 64, records capped at 32 767 |
+| Blend modes | the 16 `blend_value`-invertible keys as `8BIM` 4-byte tags | the writer's table is exactly the reader's inverse; unknown model blends would write `norm` (unreachable today) |
+| Opacity per-mille | u8 `(pm * 255 + 500) / 1000` | round trip ±2‰ (700 → 179 → 702, pinned by test) |
+| Visibility | flags bit 1 on the record; layer `display` | hidden layers stay hidden |
+| Names | pascal (≤255, 4-padded) + `luni` Unicode block | our reader prefers `luni`, as does ag-psd |
+| Merged composite | always written (maximize compatibility): 3-channel RGB, RLE, **one pooled byte-count table**, and **no u32 length prefix** | the spec'd prefix made PIL fail the composite by exactly 4 bytes; ag-psd, ImageMagick, and PIL all expect it bare — the reader accepts both forms |
+| Clipping/masks/effects | never written | no model pair — the same gap list as import, in reverse |
+
+Oracle report (devlog, 2026-10-11): the scripted 64×64 sample (wash
+bitmap + orange square path + group of two dots + hidden ghost) opens
+in ImageMagick (composite + all 5 raster frames, geometry and pixels
+exact — wash `(40,60,200)`, dot-a `(255,255,0)`, square `(255,136,0)`
+in and out of the composite) and in PIL (all 7 records, names,
+bboxes, PackBits). Known gap carried from M7: compose renders image
+objects as nothing, so the **composite** (and any flattened record)
+omits image objects — the layered records carry them losslessly from
+the tile bank; the flat preview in other apps shows only the vector
+content until the compose tile path lands.
 
 ## References
 

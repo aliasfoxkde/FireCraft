@@ -20,7 +20,7 @@ use std::process::ExitCode;
 use app_cli::{CliError, info, io, ops};
 use engine::platform::FileSystem as _;
 
-const USAGE: &str = "usage: firecraft-cli <info <file>|convert <in> <out>|apply <doc> <journal> [--out <out>]|export <in.fw.png> <out.(png|jpg|bmp|tiff|wbmp|svg)> [--quality <1-100>] [--progressive] [--matte <white|black>]|import <in.raster> <out.fw.png> [name]";
+const USAGE: &str = "usage: firecraft-cli <info <file>|convert <in> <out>|apply <doc> <journal> [--out <out>]|export <in.fw.png> <out.(png|jpg|bmp|tiff|wbmp|svg|psd)> [--quality <1-100>] [--progressive] [--matte <white|black>]|import <in.raster> <out.fw.png> [name]";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -98,14 +98,15 @@ fn run(args: &[String]) -> Result<(), CliError> {
                 .read_file(input)
                 .map_err(|error| CliError(error.to_string()))?;
             let loaded = io::open(&bytes)?;
-            let is_svg = output
+            let ext = output
                 .rsplit('.')
                 .next()
-                .is_some_and(|ext| ext.eq_ignore_ascii_case("svg"));
-            let written = if is_svg {
-                ops::export_svg(&loaded.document)?
-            } else {
-                ops::export_raster(&loaded.document, output, &flags)?
+                .unwrap_or_default()
+                .to_ascii_lowercase();
+            let written = match ext.as_str() {
+                "svg" => ops::export_svg(&loaded.document)?,
+                "psd" => ops::export_psd(&loaded.document)?,
+                _ => ops::export_raster(&loaded.document, output, &flags)?,
             };
             fs.write_file(output, &written)
                 .map_err(|error| CliError(error.to_string()))?;

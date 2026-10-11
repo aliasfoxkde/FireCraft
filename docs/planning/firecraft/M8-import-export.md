@@ -225,13 +225,39 @@ that was only compared against itself.
    pooled composite RLE table, and `raster::attach_image`'s global
    tile-id collision (per-image numbering clobbered bank slot 0 on
    every multi-image import).
-6. **PSD writer** — layered RGB/8 PSD from `Document` (maximize
-   compatibility = merged composite + RLE layer channels); round-trip
-   through our reader (semantic equality), open-provable by
-   ImageMagick + PIL on the host (oracle report); `document.savePsd`
-   command. **Stopping condition:** write→read equality on a scripted
-   multi-layer document (paths, groups, opacity, blend modes, a bitmap
-   object); oracle report archived in the devlog; checklist updated.
+6. **PSD writer** — **done.** `io::psd::encode(&Document, page)`:
+   layered RGB/8 maximize-compatibility PSD — raster objects write
+   their tile-bank pixels at their bounds (premultiplied → straight,
+   PackBits per channel), groups become the divider/header pair
+   (divider `lsct` 3 flagged hidden below, header above carrying
+   name/blend/opacity/visibility; depth cap 64, 32 767-record cap),
+   every other object flattens through a single-object compose probe
+   render (full-canvas raster; the render bakes the object's opacity
+   into its pixels, so the record writes opaque and keeps only the
+   blend key live — the flatten-opacity semantics), and the merged
+   composite always follows (3-channel RLE, one pooled byte-count
+   table, written length-less — the spec'd u32 prefix made PIL fail
+   the composite by exactly 4 bytes; ag-psd/IM/PIL all expect it bare,
+   and our reader accepts both forms). Blend keys are the reader
+   table's exact inverse; opacity u8 round-trips ±2‰. CLI: `export`
+   accepts `.psd` (`ops::export_psd`; the ticket's `document.savePsd`
+   lands with the engine save-command surface — the SVG-export
+   precedent is the CLI verb, recorded). **Stopping condition met:**
+   8-test write→read battery in `crates/io/tests/psdwrite.rs` —
+   scripted 16×16 multi-layer document (bitmap + flattened path +
+   group at 700‰ with multiply/screen children + hidden raster):
+   names/order/structure, opacity and blend round-trips, visibility,
+   image pixels at tile offsets, the flattened layer's pixels equal
+   compose's own probe render per-pixel, nested groups, the
+   empty-document composite fallback, refusal reasons (page range,
+   >65535 canvas, sub-pixel canvas, dangling child, 70-deep
+   nesting), byte-determinism. Oracle report: the scripted 64×64
+   sample opens in ImageMagick (composite + all 5 raster frames,
+   geometry and pixels exact) and PIL 11.1 (all 7 records, names,
+   bboxes, PackBits); archived in the devlog. Reverse checklist rows
+   in decision 0006, including the recorded M7-owed gap (compose
+   renders image objects as nothing, so composites/flattens omit
+   them; layered records are lossless from the tile bank).
 7. **Animated GIF ↔ states** — import: GIF89a frame loop →
    `frame_count = N`, frame *i* composited into cell *i* (disposal
    method respected; delays in the doc's per-state record — map to
