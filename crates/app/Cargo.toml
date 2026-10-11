@@ -28,7 +28,7 @@ eframe = { version = "0.36", default-features = false, features = [
     "wayland",
     "x11",
 ] }
-serde_json = "1"
+serde_json = { version = "1", features = ["float_roundtrip"] }
 
 [lints]
 workspace = true

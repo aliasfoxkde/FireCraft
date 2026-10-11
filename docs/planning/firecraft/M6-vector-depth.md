@@ -79,6 +79,11 @@ generators; executing the original `.jsf` on a JS host stays M9.
    shell-driven edits replay byte-identically via journal (the M5
    equivalence harness, now over vector commands); 9-slice guides
    round-trip through the document format.
+   *Deferral (2026-10-11):* the 9-slice command moves to M10 — `NGSv`
+   is a child of the `MSTv` symbol tree (see
+   `docs/research/fireworks-png-nodes.md`), and there is no symbol
+   model to host it until M10 lands. Freeform/reshape shipped here as
+   `path.movePoints` + `path.warp`.
 8. **Surfaces + gates** — shell tools wired (Auto Shape tool group,
    align panel, path ops menu), `vector` added to `WASM_CRATES` (it is
    L2 pure math: no IO, no threads), CI picks everything up via the

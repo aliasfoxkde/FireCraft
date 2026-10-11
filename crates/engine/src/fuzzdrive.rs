@@ -311,6 +311,8 @@ pub const CALLS: &[&str] = &[
     "object.reorder",
     "object.moveToCell",
     "object.createPath",
+    "object.align",
+    "object.distribute",
     "autoshape.rect",
     "autoshape.star",
     "autoshape.polygon",
@@ -326,6 +328,8 @@ pub const CALLS: &[&str] = &[
     "path.simplify",
     "path.expandStroke",
     "path.inset",
+    "path.movePoints",
+    "path.warp",
     "cell.setVisible",
     "cell.setLocked",
     "layer.rename",
@@ -557,6 +561,45 @@ pub fn random_call(rng: &mut FuzzRng, document: &Document) -> (String, serde_jso
             "layer": any_index(rng, 3),
             "cell": any_index(rng, frames),
             "name": serde_json::Value::Null,
+        }),
+        "object.align" => {
+            let count = 2 + rng.below(3);
+            let ids: Vec<serde_json::Value> = (0..count).map(|_| any_id(rng)).collect();
+            serde_json::json!({
+                "ids": ids,
+                "mode": rng
+                    .pick(&["left", "centerX", "right", "top", "centerY", "bottom"])
+                    .copied(),
+            })
+        }
+        "object.distribute" => {
+            let count = 3 + rng.below(3);
+            let ids: Vec<serde_json::Value> = (0..count).map(|_| any_id(rng)).collect();
+            serde_json::json!({
+                "ids": ids,
+                "axis": rng.pick(&["horizontal", "vertical"]).copied(),
+            })
+        }
+        "path.movePoints" => {
+            let edits: Vec<serde_json::Value> = (0..1 + rng.below(4))
+                .map(|_| {
+                    serde_json::json!({
+                        "contour": rng.below(4),
+                        "point": rng.below(12),
+                        "dx": -(rng.below(100) as f64) / 10.0,
+                        "dy": -(rng.below(100) as f64) / 10.0,
+                    })
+                })
+                .collect();
+            serde_json::json!({ "id": any_id(rng), "edits": edits })
+        }
+        "path.warp" => serde_json::json!({
+            "id": any_id(rng),
+            "x": -(rng.below(400) as f64),
+            "y": -(rng.below(400) as f64),
+            "radius": 5.0 + rng.below(200) as f64,
+            "dx": -(rng.below(100) as f64) / 5.0,
+            "dy": -(rng.below(100) as f64) / 5.0,
         }),
         "path.boolean" => serde_json::json!({
             "a": any_id(rng),

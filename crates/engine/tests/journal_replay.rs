@@ -246,6 +246,31 @@ fn journal_round_trips_through_lines() {
 }
 
 #[test]
+fn float_payloads_replay_bit_exact() {
+    // Journal lines are text; a payload's f64 fields must survive the
+    // text round-trip bit-exactly or replay drifts a ULP from the live
+    // session (found by panic_hunt seed 6018027439184454733: autoshape
+    // geometry diverged because serde_json's default parser is not
+    // correctly rounded — the `float_roundtrip` feature is mandatory).
+    let (document, _ids) = sample_document();
+    let mut session = Scratch::open(document);
+    let start = 1.948_407_346_410_206_7_f64;
+    session.apply(
+        "autoshape.pie",
+        json!({
+            "centerX": -185.0, "centerY": -125.0,
+            "outer": 119.0, "inner": 127.0,
+            "start": start, "end": start - 1.0,
+            "page": 1, "layer": 1, "cell": 0,
+        }),
+        None,
+    );
+    let live = session.bytes();
+    let restarted = session.restart();
+    assert_eq!(restarted.bytes(), live, "replay drifted from live bytes");
+}
+
+#[test]
 fn empty_transaction_is_refused() {
     let mut history = History::new();
     history.begin_transaction("nothing").expect("opens");

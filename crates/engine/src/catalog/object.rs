@@ -492,6 +492,42 @@ pub(crate) fn detach(
     }
 }
 
+/// Fails with the exact error [`detach`] would produce, without
+/// touching anything — the multi-object commands' pre-flight so a
+/// refused call mutates nothing (contract: errors leave the document
+/// byte-identical).
+pub(crate) fn ensure_detachable(
+    document: &Document,
+    name: &'static str,
+    id: ObjectId,
+) -> Result<(), EngineError> {
+    match find_owner(document, id) {
+        Some(Owner::Group { id: parent, .. }) => {
+            if matches!(document.registry.get(parent), Some(ObjectData::Group(_))) {
+                Ok(())
+            } else {
+                Err(EngineError::MissingTarget {
+                    name: name.to_owned(),
+                    detail: format!(
+                        "parent group {} (generation {}) is not live",
+                        parent.index(),
+                        parent.generation()
+                    ),
+                })
+            }
+        }
+        Some(Owner::Cell { .. }) => Ok(()),
+        None => Err(EngineError::MissingTarget {
+            name: name.to_owned(),
+            detail: format!(
+                "object {} (generation {}) is referenced by no cell or group",
+                id.index(),
+                id.generation()
+            ),
+        }),
+    }
+}
+
 /// Inserts `id` into one cell at `at` (`None` appends), capturing the
 /// cell's prior state.
 #[allow(clippy::too_many_arguments)]

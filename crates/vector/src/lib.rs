@@ -10,15 +10,18 @@
 //! in `docs/decisions/0003-path-booleans.md`. Every numeric gate is a
 //! named constant here so proofs stay tolerance-pinned.
 
+mod arrange;
 mod autoshape;
 mod boolean;
 mod bridge;
+mod edit;
 mod flatten;
 mod intersect;
 mod offset;
 mod simplify;
 mod split;
 
+pub use arrange::{AlignMode, DistributeAxis, align, distribute};
 pub use autoshape::{
     ArrowHead, ArrowLineParams, ArrowParams, ConnectorParams, CornerKind, LShapeParams,
     MAX_TIGHTNESS_DEG, MIN_TIGHTNESS_DEG, MeasureParams, PieParams, PolygonParams, RectParams,
@@ -29,6 +32,7 @@ pub use boolean::{BooleanOp, boolean};
 pub use bridge::{
     Seg, bezpath_to_contour, canonicalize_contour, contour_segments, contour_to_bezpath,
 };
+pub use edit::{translate_path, translate_points, warp};
 pub use flatten::{FLATTEN_MAX_CHORDS, FLATTEN_TOLERANCE, flatten_cubic};
 pub use offset::{CapKind, DEFAULT_MITER_LIMIT, JoinKind, StrokeStyle, expand_stroke, offset_path};
 pub use simplify::simplify;
@@ -74,6 +78,19 @@ pub enum VectorError {
     /// A `BezPath` carried a quadratic segment, which the `doc` path
     /// model (cubic-and-line spans) cannot represent.
     QuadraticSegment,
+    /// A point edit named a contour or point index the path does not
+    /// have.
+    PointOutOfBounds {
+        /// The contour index that was out of range (or held the bad
+        /// point index).
+        contour: usize,
+        /// The point index, when the contour exists but the point does
+        /// not.
+        point: usize,
+    },
+    /// A parameter was outside its valid domain (non-finite or not
+    /// positive where positivity is required).
+    InvalidParameter,
 }
 
 impl std::fmt::Display for VectorError {
@@ -87,6 +104,13 @@ impl std::fmt::Display for VectorError {
             Self::QuadraticSegment => {
                 write!(f, "quadratic segment cannot map to the doc path model")
             }
+            Self::PointOutOfBounds { contour, point } => {
+                write!(
+                    f,
+                    "point edit targets contour {contour} point {point}, which does not exist"
+                )
+            }
+            Self::InvalidParameter => write!(f, "parameter outside its valid domain"),
         }
     }
 }

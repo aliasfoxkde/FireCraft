@@ -4,6 +4,7 @@
 //! scripting. Payloads use `deny_unknown_fields` — a typo'd key is a
 //! rejected payload, never a silently ignored one.
 
+pub(crate) mod arrange;
 pub(crate) mod autoshape;
 pub(crate) mod cell;
 pub(crate) mod display;
@@ -18,6 +19,7 @@ use crate::registry::CommandRegistry;
 /// Registers the built-in catalog into `registry`.
 pub fn install(registry: &mut CommandRegistry) -> Result<(), EngineError> {
     object::install(registry)?;
+    arrange::install(registry)?;
     autoshape::install(registry)?;
     path::install(registry)?;
     cell::install(registry)?;

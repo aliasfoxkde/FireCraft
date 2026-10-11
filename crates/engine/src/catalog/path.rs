@@ -27,7 +27,9 @@ pub(crate) fn install(registry: &mut CommandRegistry) -> Result<(), EngineError>
     registry.register(PathBoolean)?;
     registry.register(PathSimplify)?;
     registry.register(PathExpandStroke)?;
-    registry.register(PathInset)
+    registry.register(PathInset)?;
+    registry.register(PathMovePoints)?;
+    registry.register(PathWarp)
 }
 
 /// Maps a vector-pipeline failure to a command error. [`VectorError`]
@@ -112,6 +114,14 @@ impl TypedCommand for PathBoolean {
         // neither operand.
         let result = vector::boolean(a_path, b_path, payload.op.into())
             .map_err(|error| vector_error(NAME, error))?;
+
+        // Pre-flight every detach the chosen branch will perform: an
+        // unattached (or group-orphaned) operand must refuse BEFORE the
+        // first detach, not after the first operand is already gone.
+        object::ensure_detachable(document, NAME, payload.b)?;
+        if result.contours.is_empty() {
+            object::ensure_detachable(document, NAME, payload.a)?;
+        }
 
         let mut deltas = Vec::new();
         if result.contours.is_empty() {
@@ -416,6 +426,139 @@ impl TypedCommand for PathInset {
                 .map_err(|error| vector_error(NAME, error))?
         };
         splice_geometry(document, NAME, payload.id, offset)?;
+        Ok(Delta::Object {
+            id: payload.id,
+            inverse: ObjectInverse::Mutated {
+                object: Box::new(before),
+            },
+        })
+    }
+}
+
+/// One per-point move for `path.movePoints`.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, PartialEq)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct PointEdit {
+    /// Contour index within the path.
+    contour: usize,
+    /// Point index within the contour.
+    point: usize,
+    /// Translation, world units.
+    dx: f64,
+    /// Translation, world units.
+    dy: f64,
+}
+
+/// `path.movePoints` — the reshape tool's primitive: moves whole path
+/// points (anchor plus both handles, so curve shape rides along).
+/// Duplicate edits to the same point compose in payload order.
+struct PathMovePoints;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct PathMovePointsPayload {
+    /// Target object.
+    id: doc::ObjectId,
+    /// Point moves; at least one.
+    edits: Vec<PointEdit>,
+}
+
+impl TypedCommand for PathMovePoints {
+    type Payload = PathMovePointsPayload;
+
+    fn name(&self) -> &'static str {
+        "path.movePoints"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "path.movePoints";
+        if payload.edits.is_empty() {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: "no point edits".to_owned(),
+            });
+        }
+        let before = access::object(document, NAME, payload.id)?.clone();
+        let edited = {
+            let ObjectData::Path(path) = &before else {
+                return Err(EngineError::InvalidState {
+                    name: NAME.to_owned(),
+                    detail: format!("object {} is not a path", payload.id.index()),
+                });
+            };
+            let edits: Vec<(usize, usize, geom::Vec2)> = payload
+                .edits
+                .iter()
+                .map(|edit| (edit.contour, edit.point, geom::Vec2::new(edit.dx, edit.dy)))
+                .collect();
+            vector::translate_points(path, &edits).map_err(|error| vector_error(NAME, error))?
+        };
+        splice_geometry(document, NAME, payload.id, edited)?;
+        Ok(Delta::Object {
+            id: payload.id,
+            inverse: ObjectInverse::Mutated {
+                object: Box::new(before),
+            },
+        })
+    }
+}
+
+/// `path.warp` — the freeform tool's primitive: pushes every point
+/// inside a radius with linear falloff toward the ring edge (handles
+/// ride along with their anchor).
+struct PathWarp;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct PathWarpPayload {
+    /// Target object.
+    id: doc::ObjectId,
+    /// Ring center, world coordinates.
+    x: f64,
+    /// Ring center, world coordinates.
+    y: f64,
+    /// Ring radius; must be finite and > 0.
+    radius: f64,
+    /// Drag vector, world units.
+    dx: f64,
+    /// Drag vector, world units.
+    dy: f64,
+}
+
+impl TypedCommand for PathWarp {
+    type Payload = PathWarpPayload;
+
+    fn name(&self) -> &'static str {
+        "path.warp"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "path.warp";
+        let before = access::object(document, NAME, payload.id)?.clone();
+        let warped = {
+            let ObjectData::Path(path) = &before else {
+                return Err(EngineError::InvalidState {
+                    name: NAME.to_owned(),
+                    detail: format!("object {} is not a path", payload.id.index()),
+                });
+            };
+            vector::warp(
+                path,
+                geom::Point::new(payload.x, payload.y),
+                payload.radius,
+                geom::Vec2::new(payload.dx, payload.dy),
+            )
+            .map_err(|error| vector_error(NAME, error))?
+        };
+        splice_geometry(document, NAME, payload.id, warped)?;
         Ok(Delta::Object {
             id: payload.id,
             inverse: ObjectInverse::Mutated {
@@ -826,6 +969,166 @@ mod tests {
         )
         .unwrap_err();
         assert!(matches!(error, EngineError::BadPayload { .. }), "{error}");
+    }
+
+    #[test]
+    fn move_points_translates_and_inverts() {
+        let (mut document, ids) = document_with(vec![square(0.0, 0.0, 8.0, 8.0)]);
+        let before = document_bytes(&document);
+        let delta = apply_by_name(
+            &mut document,
+            "path.movePoints",
+            json!({
+                "id": ids[0],
+                "edits": [
+                    { "contour": 0, "point": 0, "dx": 5.0, "dy": -3.0 },
+                    { "contour": 0, "point": 2, "dx": 5.0, "dy": -3.0 }
+                ],
+            }),
+        )
+        .unwrap();
+        let mut got = anchors(&document, ids[0]);
+        got.sort_unstable();
+        assert_eq!(got, vec![(0, 8), (5, -3), (8, 0), (13, 5)]);
+        delta.apply_inverse(&mut document).unwrap();
+        assert_eq!(document_bytes(&document), before);
+    }
+
+    #[test]
+    fn move_points_rejects_bad_indices_untouched() {
+        let (mut document, ids) = document_with(vec![square(0.0, 0.0, 8.0, 8.0)]);
+        let before = document_bytes(&document);
+        let error = apply_by_name(
+            &mut document,
+            "path.movePoints",
+            json!({
+                "id": ids[0],
+                "edits": [{ "contour": 0, "point": 99, "dx": 1.0, "dy": 1.0 }],
+            }),
+        )
+        .unwrap_err();
+        assert!(matches!(error, EngineError::InvalidState { .. }), "{error}");
+        assert_eq!(document_bytes(&document), before);
+
+        // An empty edit list is refused before touching the object.
+        let error = apply_by_name(
+            &mut document,
+            "path.movePoints",
+            json!({ "id": ids[0], "edits": [] }),
+        )
+        .unwrap_err();
+        assert!(matches!(error, EngineError::InvalidState { .. }), "{error}");
+        assert_eq!(document_bytes(&document), before);
+    }
+
+    #[test]
+    fn warp_pushes_inside_the_ring_and_inverts() {
+        // Ring centered on the square's left edge, radius 8: the two
+        // left corners (distance 4) shift by half the drag (weight
+        // 1 − 4/8), the right edge is outside and stays.
+        let (mut document, ids) = document_with(vec![square(0.0, 0.0, 8.0, 8.0)]);
+        let before = document_bytes(&document);
+        let first = apply_by_name(
+            &mut document,
+            "path.warp",
+            json!({
+                "id": ids[0],
+                "x": 0.0, "y": 4.0, "radius": 8.0,
+                "dx": -4.0, "dy": 0.0,
+            }),
+        )
+        .unwrap();
+        assert_eq!(
+            anchors(&document, ids[0]),
+            vec![(-2, 0), (8, 0), (8, 8), (-2, 8)]
+        );
+        let delta = apply_by_name(
+            &mut document,
+            "path.warp",
+            json!({
+                "id": ids[0],
+                "x": 0.0, "y": 4.0, "radius": 0.001,
+                "dx": 2.0, "dy": 0.0,
+            }),
+        )
+        .unwrap();
+        // Nothing within the tiny ring: the command still reports a
+        // mutation (the vector layer is total), but the geometry is
+        // byte-identical to the warped state, so its inverse restores
+        // exactly that.
+        let warped_bytes = document_bytes(&document);
+        assert!(matches!(
+            delta,
+            Delta::Object {
+                inverse: ObjectInverse::Mutated { .. },
+                ..
+            }
+        ));
+        assert_eq!(
+            anchors(&document, ids[0]),
+            vec![(-2, 0), (8, 0), (8, 8), (-2, 8)]
+        );
+        delta.apply_inverse(&mut document).unwrap();
+        assert_eq!(document_bytes(&document), warped_bytes);
+        // And the first warp's own delta restores the pristine square.
+        first.apply_inverse(&mut document).unwrap();
+        assert_eq!(document_bytes(&document), before);
+    }
+
+    #[test]
+    fn warp_rejects_non_positive_radius_untouched() {
+        let (mut document, ids) = document_with(vec![square(0.0, 0.0, 8.0, 8.0)]);
+        let before = document_bytes(&document);
+        let error = apply_by_name(
+            &mut document,
+            "path.warp",
+            json!({ "id": ids[0], "x": 0.0, "y": 0.0, "radius": 0.0, "dx": 1.0, "dy": 0.0 }),
+        )
+        .unwrap_err();
+        assert!(matches!(error, EngineError::InvalidState { .. }), "{error}");
+        assert_eq!(document_bytes(&document), before);
+    }
+
+    #[test]
+    fn boolean_refuses_unattached_operand_before_detaching() {
+        // Contract: a refused call mutates nothing. An unattached
+        // operand makes every combine refuse — it must refuse BEFORE
+        // the other operand is detached and removed (found by
+        // panic_hunt seed 728034928435966080 step 37).
+        let (mut document, ids) = document_with(vec![square(0.0, 0.0, 8.0, 8.0)]);
+        // A live path no cell references.
+        let orphan = document.registry.insert(square(20.0, 0.0, 28.0, 8.0));
+        let before = document_bytes(&document);
+
+        // `b` unattached: non-empty result branch refuses at pre-flight.
+        let error = apply_by_name(
+            &mut document,
+            "path.boolean",
+            json!({ "a": ids[0], "b": orphan, "op": "union" }),
+        )
+        .unwrap_err();
+        assert!(
+            matches!(error, EngineError::MissingTarget { .. }),
+            "{error}"
+        );
+        assert_eq!(document_bytes(&document), before);
+
+        // `a` unattached with a disjoint pair (empty result would drop
+        // both): the `a` pre-flight must fire before `b` is detached.
+        let (mut document, ids) = document_with(vec![square(40.0, 40.0, 48.0, 48.0)]);
+        let orphan = document.registry.insert(square(0.0, 0.0, 8.0, 8.0));
+        let before = document_bytes(&document);
+        let error = apply_by_name(
+            &mut document,
+            "path.boolean",
+            json!({ "a": orphan, "b": ids[0], "op": "intersect" }),
+        )
+        .unwrap_err();
+        assert!(
+            matches!(error, EngineError::MissingTarget { .. }),
+            "{error}"
+        );
+        assert_eq!(document_bytes(&document), before);
     }
 
     #[test]
