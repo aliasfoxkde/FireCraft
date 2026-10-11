@@ -13,7 +13,7 @@ use crate::model::{
     Canvas, Cell, Contour, Document, DocumentInfo, Effect, EffectProperty, EffectValue, Grid,
     GroupObject, Guides, ImageObject, Layer, LayerList, Page, PageInfo, PaintStyle, PathObject,
     PathPoint, PrimitiveSource, SliceObject, SymbolDefinition, SymbolInstanceObject, TextObject,
-    TextRun, TextStyle, TileRef,
+    TextOnPath, TextRun, TextStyle, TileRef,
 };
 use crate::registry::{ObjectData, ObjectId, Registry};
 use fwpng::nodetree::{Node, NodeValue};
@@ -998,6 +998,7 @@ impl Reader {
             (None, None, None, None, None);
         let mut style: Option<TextStyle> = None;
         let mut runs: Vec<TextRun> = Vec::new();
+        let mut on_path: Option<TextOnPath> = None;
         let mut transform: Option<Affine> = None;
         let mut transform_lost = false;
         let mut effects = Vec::new();
@@ -1009,6 +1010,17 @@ impl Reader {
                 b"RITf" => self.slot_f64(child, path, i, &mut right)?,
                 b"BOTf" => self.slot_f64(child, path, i, &mut bottom)?,
                 b"TFTi" => self.slot_i64(child, path, i, &mut flow)?,
+                b"TAPv" => {
+                    // One TAPv is the model slot; a second splices back
+                    // verbatim.
+                    if on_path.is_none() {
+                        let kids = children_of(child, path)?;
+                        let tapv_path = format!("{path}/TAPv");
+                        on_path = Some(self.read_text_on_path(kids, &tapv_path)?);
+                    } else {
+                        self.bag_node(path, i, child);
+                    }
+                }
                 b"TAAi" => self.slot_i64(child, path, i, &mut anti_alias)?,
                 b"ATEb" => self.slot_bool(child, path, i, &mut auto_enlarge)?,
                 b"ATKb" => self.slot_bool(child, path, i, &mut auto_kern)?,
@@ -1052,8 +1064,7 @@ impl Reader {
                     }
                 }
                 // Anchors, TXTv-level style mirrors (`FONs` `PTSf` …),
-                // `TAPv` text-on-path (M7 task 8), `PATv`, fill points,
-                // data: preserved verbatim.
+                // `PATv`, fill points, data: preserved verbatim.
                 _ => self.bag_node(path, i, child),
             }
         }
@@ -1068,6 +1079,7 @@ impl Reader {
             style,
             runs,
             flow,
+            on_path,
             anti_alias,
             auto_enlarge,
             auto_kern,
@@ -1079,6 +1091,57 @@ impl Reader {
             transform,
             effects,
         }))
+    }
+
+    /// Reads one `TAPv`: `TAMi` orientation, `CHOf` start offset, and
+    /// the embedded `PTHv` guide path (its `PBLv` contours map; the
+    /// node's styling children bag in place — the guide path renders as
+    /// nothing itself).
+    fn read_text_on_path(&mut self, children: &[Node], path: &str) -> Result<TextOnPath, MapError> {
+        let (mut alignment, mut offset) = (None, None);
+        let mut path_contours: Option<Vec<Contour>> = None;
+        for (i, child) in children.iter().enumerate() {
+            match &child.fourcc {
+                b"TAMi" => self.slot_i64(child, path, i, &mut alignment)?,
+                b"CHOf" => self.slot_f64(child, path, i, &mut offset)?,
+                b"PTHv" => {
+                    // One guide path maps; extras splice back verbatim.
+                    if path_contours.is_none() {
+                        let kids = children_of(child, path)?;
+                        let pthv_path = format!("{path}/PTHv");
+                        let mut contours = Vec::new();
+                        for (j, sub) in kids.iter().enumerate() {
+                            match &sub.fourcc {
+                                b"PBLv" => {
+                                    // The writer re-emits the guide as
+                                    // the PTHv's first mapped child, so
+                                    // descendants bag under the
+                                    // canonical [0] regardless of where
+                                    // the node sat in the file.
+                                    if contours.is_empty() {
+                                        let pblv_kids = children_of(sub, path)?;
+                                        let pblv_path = format!("{pthv_path}[0]/PBLv");
+                                        contours = self.read_contours(pblv_kids, &pblv_path)?;
+                                    } else {
+                                        self.bag_node(&pthv_path, j, sub);
+                                    }
+                                }
+                                _ => self.bag_node(&pthv_path, j, sub),
+                            }
+                        }
+                        path_contours = Some(contours);
+                    } else {
+                        self.bag_node(path, i, child);
+                    }
+                }
+                _ => self.bag_node(path, i, child),
+            }
+        }
+        Ok(TextOnPath {
+            alignment,
+            offset: offset.unwrap_or(0.0),
+            path: path_contours.unwrap_or_default(),
+        })
     }
 
     /// Reads one `TFSv`: the mapped style scalars plus `TRNs`+ runs.

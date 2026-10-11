@@ -232,6 +232,7 @@ fn sample_document() -> Document {
             text: "Fireworks".into(),
         }],
         flow: Some(0),
+        on_path: None,
         anti_alias: Some(2),
         auto_enlarge: None,
         auto_kern: Some(true),
@@ -1002,6 +1003,7 @@ fn model_structs_are_fully_constructed() {
         style: None,
         runs: Vec::new(),
         flow: None,
+        on_path: None,
         anti_alias: None,
         auto_enlarge: None,
         auto_kern: None,
@@ -1064,4 +1066,135 @@ fn model_structs_are_fully_constructed() {
 fn children_helper_reads_containers() {
     let node = n_k(b"TSTv", vec![n_i(b"AAAi", 1)]);
     assert_eq!(children(&node).len(), 1);
+}
+
+/// A `TAPv` guide path maps into `TextObject.on_path` and round-trips:
+/// the `PTHv`'s unknown styling children splice back, the contours
+/// survive byte-stable regeneration, and a second generation is
+/// canonical.
+#[test]
+fn text_on_path_round_trips_through_bytes() {
+    let txtv = n_k(
+        b"TXTv",
+        vec![
+            n_f(b"LFTf", 10.0),
+            n_f(b"TOPf", 20.0),
+            n_f(b"RITf", 210.0),
+            n_f(b"BOTf", 40.0),
+            n_i(b"TFTi", 2),
+            n_k(
+                b"TAPv",
+                vec![
+                    n_i(b"TAMi", 2),
+                    n_f(b"CHOf", 7.5),
+                    n_k(
+                        b"PTHv",
+                        vec![
+                            // Unknown styling inside the guide node.
+                            n_s(b"OBNs", "guide"),
+                            n_k(
+                                b"PBLv",
+                                vec![n_k(
+                                    b"PBPv",
+                                    vec![
+                                        n_b(b"ISCb", false),
+                                        n_i(b"PPCi", 3),
+                                        n_k(b"PBTv", vec![n_f(b"XLCf", 0.0), n_f(b"YLCf", 50.0)]),
+                                        n_k(
+                                            b"PBTv",
+                                            vec![
+                                                n_f(b"XLCf", 40.0),
+                                                n_f(b"YLCf", 0.0),
+                                                n_f(b"XPCf", 22.0),
+                                                n_f(b"YPCf", 0.0),
+                                                n_b(b"CRVb", true),
+                                            ],
+                                        ),
+                                        n_k(
+                                            b"PBTv",
+                                            vec![
+                                                n_f(b"XLCf", 100.0),
+                                                n_f(b"YLCf", 0.0),
+                                                n_f(b"XSCf", 66.0),
+                                                n_f(b"YSCf", 0.0),
+                                                n_b(b"CRVb", true),
+                                            ],
+                                        ),
+                                    ],
+                                )],
+                            ),
+                        ],
+                    ),
+                ],
+            ),
+            n_s(b"OBNs", "arc tag"),
+            n_b(b"VISb", true),
+            n_i(b"OPAi", 1000),
+            n_i(b"BLDi", 0),
+        ],
+    );
+    let tree = vec![n_k(
+        b"MKBv",
+        vec![
+            n_i(b"FRCi", 1),
+            n_k(
+                b"LYLv",
+                vec![n_k(
+                    b"LAYv",
+                    vec![
+                        n_b(b"BKGb", false),
+                        n_b(b"URLb", false),
+                        n_s(b"LNMs", "L"),
+                        n_b(b"DISb", true),
+                        n_k(
+                            b"CLLv",
+                            vec![n_k(
+                                b"CELv",
+                                vec![
+                                    n_b(b"LCKb", false),
+                                    n_k(b"ELMv", vec![txtv]),
+                                    n_b(b"VISb", true),
+                                ],
+                            )],
+                        ),
+                    ],
+                )],
+            ),
+            n_k(b"GRDv", vec![n_i(b"GCLi", 0)]),
+            n_k(b"GDSv", vec![n_k(b"GDHv", vec![]), n_k(b"GDVv", vec![])]),
+            n_i(b"OSBi", 0),
+            n_i(b"OSAi", 0),
+        ],
+    )];
+    let (doc, bag) = read(&tree).expect("read");
+    let (_, ObjectData::Text(text)) = doc.registry.iter().next().expect("text object") else {
+        panic!("first object must be the text");
+    };
+    assert_eq!(text.flow, Some(2));
+    let on_path = text.on_path.as_ref().expect("TAPv mapped");
+    assert_eq!(on_path.alignment, Some(2));
+    assert_eq!(on_path.offset, 7.5);
+    assert_eq!(on_path.path.len(), 1);
+    let contour = &on_path.path[0];
+    assert!(!contour.closed);
+    assert_eq!(contour.points.len(), 3);
+    assert_eq!(
+        contour.points[1].primary.as_ref().map(|p| (p.x, p.y)),
+        Some((22.0, 0.0))
+    );
+    assert_eq!(
+        contour.points[2].secondary.as_ref().map(|p| (p.x, p.y)),
+        Some((66.0, 0.0))
+    );
+
+    // Through bytes: model equal, bagged styling preserved, and the
+    // second generation byte-stable.
+    let (bytes, doc2, bag2) = round_trip_bytes(&doc, &bag);
+    let (_, ObjectData::Text(text2)) = doc2.registry.iter().next().expect("text object") else {
+        panic!("text object must survive the round trip");
+    };
+    assert_eq!(text.on_path, text2.on_path);
+    assert!(bag2.iter().any(|(path, _, _)| path.ends_with("TAPv/PTHv")));
+    let (bytes2, _doc3, _bag3) = round_trip_bytes(&doc2, &bag2);
+    assert_eq!(bytes, bytes2);
 }

@@ -576,6 +576,26 @@ pub struct TextRun {
     pub text: String,
 }
 
+/// `TAPv` — text along a path (flow 2): the guide path is embedded in
+/// the text object, not a reference to another element. No corpus file
+/// with `TAPv` exists yet, so the child order the writer emits is
+/// Fireworks-unverified and pinned by the synthetic round-trip fixture;
+/// corpus evidence refines it when real exports land.
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct TextOnPath {
+    /// `TAMi` — orientation mode: 0 rotate with the path, 1 upright,
+    /// 2 skew vertical (vertical strokes stay vertical), 3 skew
+    /// horizontal (baseline stays horizontal).
+    pub alignment: Option<i64>,
+    /// `CHOf` — offset in pixels along the path where the text begins.
+    pub offset: f64,
+    /// `PTHv`/`PBLv` — the guide path contours. The node's styling
+    /// children (paint and friends) stay bagged: the guide path renders
+    /// as nothing itself.
+    pub path: Vec<Contour>,
+}
+
 /// `TXTv` — a text object: a frame, one formatted-string style set with
 /// its runs, and the object-level plumbing every element carries.
 #[derive(Clone, Debug, PartialEq)]
@@ -591,6 +611,9 @@ pub struct TextObject {
     /// `TFTi` — flow: 0 normal, 1 fit to width, 2 follow path, 3 fit
     /// inside shape.
     pub flow: Option<i64>,
+    /// `TAPv` — the text-on-path carrier (flow 2): orientation mode,
+    /// start offset, and the embedded guide path.
+    pub on_path: Option<TextOnPath>,
     /// `TAAi` — anti-alias preset (0 none/smooth .. 3 system, 4 custom).
     pub anti_alias: Option<i64>,
     /// `ATEb` — auto-enlarge.
@@ -622,6 +645,7 @@ impl TextObject {
             style: None,
             runs: Vec::new(),
             flow: None,
+            on_path: None,
             anti_alias: None,
             auto_enlarge: None,
             auto_kern: None,

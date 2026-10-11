@@ -14,7 +14,7 @@ use crate::fwmap::{FourCC, MapError};
 use crate::model::{
     Cell, Contour, Document, Effect, EffectProperty, EffectValue, Grid, GroupObject, Guides,
     ImageObject, Layer, LayerList, PaintStyle, PathObject, PathPoint, PrimitiveSource, SliceObject,
-    SymbolDefinition, SymbolInstanceObject, TextObject, TextRun, TextStyle, TileRef,
+    SymbolDefinition, SymbolInstanceObject, TextObject, TextOnPath, TextRun, TextStyle, TileRef,
 };
 use crate::registry::{ObjectData, ObjectId};
 use fwpng::nodetree::{Node, NodeValue};
@@ -569,11 +569,13 @@ impl Writer<'_> {
     }
 
     fn write_text_object(&mut self, object: &TextObject, path: &str) -> Result<Node, MapError> {
-        // Dictionary order: LFTf TOPf RITf BOTf … TFTi … LCKb … TAAi …
-        // ATEb ATKb … TFSv … OBNs OPAi EFLv MTXv VISb BLDi. Everything
-        // unmapped (anchors, TXTv-level style mirrors, `TAPv`, `PATv`,
-        // fill points) splices back from the bag around the mapped
-        // children.
+        // Dictionary order: LFTf TOPf RITf BOTf … TFTi TAPv … LCKb …
+        // TAAi … ATEb ATKb … TFSv … OBNs OPAi EFLv MTXv VISb BLDi.
+        // Everything unmapped (anchors, TXTv-level style mirrors,
+        // `PATv`, fill points) splices back from the bag around the
+        // mapped children. TAPv's position is Fireworks-unverified —
+        // no corpus file carries one yet — and pinned by the synthetic
+        // fixture (see `TextOnPath`).
         let mut mapped = vec![
             n_f(*b"LFTf", object.frame.x0),
             n_f(*b"TOPf", object.frame.y0),
@@ -582,6 +584,10 @@ impl Writer<'_> {
         ];
         if let Some(flow) = object.flow {
             mapped.push(n_i(*b"TFTi", flow));
+        }
+        if let Some(on_path) = &object.on_path {
+            let tapv = self.write_text_on_path(on_path, &format!("{path}/TAPv"))?;
+            mapped.push(tapv);
         }
         // LCKb is never present with the value `false` (dictionary).
         if object.locked {
@@ -612,6 +618,25 @@ impl Writer<'_> {
         mapped.push(n_i(*b"BLDi", object.blend));
         let children = self.splice_container(mapped, path);
         Ok(n_kids(*b"TXTv", children))
+    }
+
+    /// One `TAPv`: the mapped scalars plus the embedded guide path's
+    /// `PBLv`; anything unmapped inside the `PTHv` (its styling) splices
+    /// back between them.
+    fn write_text_on_path(&mut self, on_path: &TextOnPath, path: &str) -> Result<Node, MapError> {
+        let mut mapped = Vec::new();
+        if let Some(alignment) = on_path.alignment {
+            mapped.push(n_i(*b"TAMi", alignment));
+        }
+        if on_path.offset != 0.0 {
+            mapped.push(n_f(*b"CHOf", on_path.offset));
+        }
+        let bagged = self.bag.take_under(&format!("{path}/PTHv"));
+        let pblv = self.write_contours(&on_path.path, &format!("{path}/PTHv[0]"))?;
+        let pthv = n_kids(*b"PTHv", splice(vec![pblv], bagged));
+        mapped.push(pthv);
+        let rest = self.bag.take_under(path);
+        Ok(n_kids(*b"TAPv", splice(mapped, rest)))
     }
 
     /// One `TFSv`: the mapped style scalars in dictionary order, then
