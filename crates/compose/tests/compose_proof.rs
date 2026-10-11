@@ -5,10 +5,10 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-use compose::{ComposeError, render};
+use compose::{ComposeError, EffectCache, render, render_with_cache};
 use doc::{
-    Canvas, Cell, Contour, Document, Layer, LayerList, ObjectData, Page, PageInfo, PaintStyle,
-    PathObject, PathPoint, Registry,
+    Canvas, Cell, Contour, Document, Effect, EffectProperty, EffectValue, Layer, LayerList,
+    ObjectData, Page, PageInfo, PaintStyle, PathObject, PathPoint, Registry,
 };
 use geom::Point;
 
@@ -536,6 +536,444 @@ fn stroke_paints_along_the_path() {
         assert_eq!(pixel(&render, 0, y), [0, 0, 0, 0], "outside left");
         assert_eq!(pixel(&render, 3, y), [0, 0, 0, 0], "outside right");
     }
+}
+
+// --- live effects (M7 task 4) ---------------------------------------------
+
+/// Opaque mid-gray ABGR (r=g=b=128 — the contrast pivot).
+const GRAY: i64 = 0xFF_80_80_80;
+/// Opaque level-100 gray ABGR (off the pivot, so contrast moves it).
+const GRAY100: i64 = 0xFF64_6464;
+/// Brightness/Contrast `EffectMoaID` (dictionary line 1497).
+const GUID_BC: &str = "3439b08c-1921-11d3-9bde00e02910d580";
+/// Gaussian Blur `EffectMoaID` (dictionary line 1508).
+const GUID_GB: &str = "d04ef8c0-71b3-11d1-8c8200a024cdc039";
+/// Invert `EffectMoaID` (dictionary line 1512).
+const GUID_INVERT: &str = "d2541291-70d6-11d1-8c8000a024cdc039";
+
+/// Builds one live effect from `DCKs`/`DCVs` pairs.
+fn effect(name: &str, props: &[(&str, &str)]) -> Effect {
+    Effect {
+        category: String::new(),
+        internal_name: name.to_owned(),
+        properties: props
+            .iter()
+            .map(|(key, value)| EffectProperty {
+                key: (*key).to_owned(),
+                value: EffectValue::Text((*value).to_owned()),
+            })
+            .collect(),
+    }
+}
+
+/// Attaches a live-effect stack to an existing path object.
+fn set_effects(doc: &mut Document, id: doc::ObjectId, effects: Vec<Effect>) {
+    let ObjectData::Path(path) = doc.registry.get_mut(id).expect("registered") else {
+        panic!("inserted a path");
+    };
+    path.effects = effects;
+}
+
+/// Invert is alpha-passing and integer-exact: red (255,0,0) becomes
+/// (0,255,255) on every covered pixel. Both identities — the CS6 GUID
+/// and the bare internal name — must produce it.
+#[test]
+fn invert_filter_negates_solid_fill() {
+    for stack in [
+        vec![effect("dropShadow", &[("EffectMoaID", GUID_INVERT)])],
+        vec![effect("invert", &[])],
+    ] {
+        let mut doc = Document::default();
+        let rect = rect_object(
+            &mut doc.registry,
+            rect_contour(0.0, 0.0, 4.0, 4.0),
+            RED,
+            1000,
+            0,
+        );
+        set_effects(&mut doc, rect, stack.clone());
+        doc.pages
+            .push(page(4.0, 4.0, vec![layer(vec![cell(vec![rect])])]));
+
+        let render = render(&doc, 0, 0).expect("render");
+        assert_solid(&render, [0, 255, 255, 255]);
+    }
+}
+
+/// Brightness/Contrast against the pinned LUT arithmetic:
+/// `brightness 25` lifts level 128 by `round(25·128/100) = 32` → 160;
+/// `contrast 50` contracts level 100 about 128 by 1.5×:
+/// `round((100−128)·150/100) = −42` → 86. Both exact integers.
+#[test]
+fn brightness_and_contrast_match_the_pinned_lut() {
+    let mut doc = Document::default();
+    let bright = rect_object(
+        &mut doc.registry,
+        rect_contour(0.0, 0.0, 4.0, 4.0),
+        GRAY,
+        1000,
+        0,
+    );
+    set_effects(
+        &mut doc,
+        bright,
+        vec![effect(
+            "brightnessContrast",
+            &[
+                ("EffectMoaID", GUID_BC),
+                ("brightness_amount", "25"),
+                ("contrast_amount", "0"),
+            ],
+        )],
+    );
+    let contrast = rect_object(
+        &mut doc.registry,
+        rect_contour(0.0, 4.0, 4.0, 8.0),
+        GRAY100,
+        1000,
+        0,
+    );
+    set_effects(
+        &mut doc,
+        contrast,
+        vec![effect(
+            "brightnessContrast",
+            &[
+                ("EffectMoaID", GUID_BC),
+                ("brightness_amount", "0"),
+                ("contrast_amount", "50"),
+            ],
+        )],
+    );
+    doc.pages.push(page(
+        4.0,
+        8.0,
+        vec![layer(vec![cell(vec![bright, contrast])])],
+    ));
+
+    let render = render(&doc, 0, 0).expect("render");
+    assert_eq!(pixel(&render, 1, 1), [160, 160, 160, 255], "brightness");
+    assert_eq!(pixel(&render, 1, 5), [86, 86, 86, 255], "contrast");
+}
+
+/// Stack order where the math says it matters: on level 128,
+/// `brightness +25` then invert gives invert(160) = 95, while invert
+/// then brightness gives 127 + 32 = 159. Both values pinned; the two
+/// orders must differ.
+#[test]
+fn stack_order_changes_where_the_math_says() {
+    let stack = |reversed: bool| {
+        let mut effects = vec![
+            effect(
+                "brightnessContrast",
+                &[
+                    ("EffectMoaID", GUID_BC),
+                    ("brightness_amount", "25"),
+                    ("contrast_amount", "0"),
+                ],
+            ),
+            effect("invert", &[("EffectMoaID", GUID_INVERT)]),
+        ];
+        if reversed {
+            effects.reverse();
+        }
+        effects
+    };
+    let mut doc = Document::default();
+    let first = rect_object(
+        &mut doc.registry,
+        rect_contour(0.0, 0.0, 4.0, 4.0),
+        GRAY,
+        1000,
+        0,
+    );
+    set_effects(&mut doc, first, stack(false));
+    let second = rect_object(
+        &mut doc.registry,
+        rect_contour(0.0, 4.0, 4.0, 8.0),
+        GRAY,
+        1000,
+        0,
+    );
+    set_effects(&mut doc, second, stack(true));
+    doc.pages
+        .push(page(4.0, 8.0, vec![layer(vec![cell(vec![first, second])])]));
+
+    let render = render(&doc, 0, 0).expect("render");
+    assert_eq!(
+        pixel(&render, 1, 1),
+        [95, 95, 95, 255],
+        "brightness then invert"
+    );
+    assert_eq!(
+        pixel(&render, 1, 5),
+        [159, 159, 159, 255],
+        "invert then brightness"
+    );
+}
+
+/// Point ops whose LUTs compose exactly commute: brightness +25 twice
+/// is brightness +50 (32 + 32 = 64 levels both ways, no rounding
+/// drift).
+#[test]
+fn commuting_brightness_shifts_compose_exactly() {
+    let lift = |amount: &str| {
+        vec![effect(
+            "brightnessContrast",
+            &[
+                ("EffectMoaID", GUID_BC),
+                ("brightness_amount", amount),
+                ("contrast_amount", "0"),
+            ],
+        )]
+    };
+    let mut doc = Document::default();
+    let twice = rect_object(
+        &mut doc.registry,
+        rect_contour(0.0, 0.0, 4.0, 4.0),
+        GRAY,
+        1000,
+        0,
+    );
+    let mut stacked = lift("25");
+    stacked.extend(lift("25"));
+    set_effects(&mut doc, twice, stacked);
+    let once = rect_object(
+        &mut doc.registry,
+        rect_contour(0.0, 4.0, 4.0, 8.0),
+        GRAY,
+        1000,
+        0,
+    );
+    set_effects(&mut doc, once, lift("50"));
+    doc.pages
+        .push(page(4.0, 8.0, vec![layer(vec![cell(vec![twice, once])])]));
+
+    let render = render(&doc, 0, 0).expect("render");
+    assert_eq!(pixel(&render, 1, 1), [192, 192, 192, 255], "25 ∘ 25");
+    assert_eq!(pixel(&render, 1, 5), [192, 192, 192, 255], "50");
+}
+
+/// Effects the kernel catalog cannot interpret (a GUIDed dropShadow)
+/// and hidden effects (`EffectIsVisible` false) leave the object
+/// rendered unfiltered — never dropped, never approximated.
+#[test]
+fn unsupported_and_hidden_effects_render_unfiltered() {
+    let mut doc = Document::default();
+    let plain = rect_object(
+        &mut doc.registry,
+        rect_contour(0.0, 0.0, 4.0, 4.0),
+        RED,
+        1000,
+        0,
+    );
+    doc.pages
+        .push(page(4.0, 4.0, vec![layer(vec![cell(vec![plain])])]));
+    let unfiltered = render(&doc, 0, 0).expect("render");
+
+    let mut dressed = Document::default();
+    let shadowed = rect_object(
+        &mut dressed.registry,
+        rect_contour(0.0, 0.0, 4.0, 4.0),
+        RED,
+        1000,
+        0,
+    );
+    set_effects(
+        &mut dressed,
+        shadowed,
+        vec![effect(
+            "dropShadow",
+            &[
+                ("EffectMoaID", "deadbeef-0000-11d1-8c8000a024cdc039"),
+                ("ShadowColor", "0"),
+                ("ShadowBlur", "4"),
+            ],
+        )],
+    );
+    let hidden = rect_object(
+        &mut dressed.registry,
+        rect_contour(0.0, 4.0, 4.0, 8.0),
+        RED,
+        1000,
+        0,
+    );
+    set_effects(
+        &mut dressed,
+        hidden,
+        vec![effect(
+            "invert",
+            &[("EffectMoaID", GUID_INVERT), ("EffectIsVisible", "false")],
+        )],
+    );
+    dressed.pages.push(page(
+        4.0,
+        8.0,
+        vec![layer(vec![cell(vec![shadowed, hidden])])],
+    ));
+    let dressed_render = render(&dressed, 0, 0).expect("render");
+
+    assert_eq!(pixel(&dressed_render, 1, 1), [255, 0, 0, 255]);
+    assert_eq!(pixel(&dressed_render, 1, 5), [255, 0, 0, 255]);
+    assert_eq!(dressed_render.pixels.len() / 2, unfiltered.pixels.len());
+}
+
+/// Gaussian blur must spread past the shape's bounding box (the
+/// full-canvas offscreen, decision 0005): paint appears at (5,5) —
+/// outside the 8..16 geometry — and the far corner stays empty.
+#[test]
+fn gaussian_blur_spreads_past_the_geometry() {
+    let mut doc = Document::default();
+    let rect = rect_object(
+        &mut doc.registry,
+        rect_contour(8.0, 8.0, 16.0, 16.0),
+        RED,
+        1000,
+        0,
+    );
+    set_effects(
+        &mut doc,
+        rect,
+        vec![effect(
+            "gaussianBlur",
+            &[("EffectMoaID", GUID_GB), ("gaussian_blur_radius", "2")],
+        )],
+    );
+    doc.pages
+        .push(page(24.0, 24.0, vec![layer(vec![cell(vec![rect])])]));
+
+    let render = render(&doc, 0, 0).expect("render");
+    assert!(pixel(&render, 12, 12)[3] > 200, "interior stays painted");
+    assert!(pixel(&render, 5, 5)[3] > 0, "bleed lands beyond the bbox");
+    assert_eq!(pixel(&render, 0, 0), [0, 0, 0, 0], "far corner untouched");
+}
+
+/// The content-hash cache: repeat renders hit identical bytes without
+/// new entries; an edit re-filters (new entry, new pixels); the
+/// cache-less entry point agrees with the cached one.
+#[test]
+fn effect_cache_hits_are_byte_identical_and_content_tracked() {
+    let mut doc = Document::default();
+    let rect = rect_object(
+        &mut doc.registry,
+        rect_contour(0.0, 0.0, 4.0, 4.0),
+        GRAY,
+        1000,
+        0,
+    );
+    set_effects(
+        &mut doc,
+        rect,
+        vec![effect(
+            "brightnessContrast",
+            &[
+                ("EffectMoaID", GUID_BC),
+                ("brightness_amount", "25"),
+                ("contrast_amount", "0"),
+            ],
+        )],
+    );
+    doc.pages
+        .push(page(4.0, 4.0, vec![layer(vec![cell(vec![rect])])]));
+
+    let mut cache = EffectCache::new();
+    let first = render_with_cache(&doc, 0, 0, &mut cache).expect("render");
+    assert_eq!(cache.len(), 1, "one filtered object → one entry");
+    let second = render_with_cache(&doc, 0, 0, &mut cache).expect("render");
+    assert_eq!(first, second, "a hit must be byte-identical");
+    assert_eq!(cache.len(), 1, "hits do not grow the cache");
+    assert_eq!(
+        first.pixels,
+        render(&doc, 0, 0).expect("uncached").pixels,
+        "cached and uncached agree"
+    );
+
+    let ObjectData::Path(path) = doc.registry.get_mut(rect).expect("registered") else {
+        panic!("inserted a path");
+    };
+    path.contours[0].points[0].anchor = Point::new(1.0, 1.0);
+    let third = render_with_cache(&doc, 0, 0, &mut cache).expect("render");
+    assert_eq!(cache.len(), 2, "edited content re-filters");
+    assert_ne!(third.pixels, first.pixels, "the edit changed the output");
+}
+
+/// A group's filters see the composite of its children: inverting a
+/// half-red/half-blue group yields the exact complements per half.
+#[test]
+fn group_filters_apply_to_the_child_composite() {
+    let mut doc = Document::default();
+    let left = rect_object(
+        &mut doc.registry,
+        rect_contour(0.0, 0.0, 2.0, 4.0),
+        RED,
+        1000,
+        0,
+    );
+    let right = rect_object(
+        &mut doc.registry,
+        rect_contour(2.0, 0.0, 4.0, 4.0),
+        BLUE,
+        1000,
+        0,
+    );
+    let group = doc.registry.insert(ObjectData::Group(doc::GroupObject {
+        group_type: 0,
+        name: None,
+        children: vec![left, right],
+        opacity: 1000,
+        blend: 0,
+        visible: true,
+        locked: false,
+        mask_hidden: false,
+        effects: vec![effect("invert", &[("EffectMoaID", GUID_INVERT)])],
+    }));
+    doc.pages
+        .push(page(4.0, 4.0, vec![layer(vec![cell(vec![group])])]));
+
+    let render = render(&doc, 0, 0).expect("render");
+    assert_eq!(pixel(&render, 0, 0), [0, 255, 255, 255], "invert(red)");
+    assert_eq!(pixel(&render, 3, 0), [255, 255, 0, 255], "invert(blue)");
+}
+
+/// Nested stacks order correctly: a child inverted inside a group
+/// inverted composes to the identity on opaque pixels — byte-equal to
+/// the unfiltered render.
+#[test]
+fn nested_inverts_cancel_exactly() {
+    let build = |effects_on_child: bool, effects_on_group: bool| {
+        let mut doc = Document::default();
+        let rect = rect_object(
+            &mut doc.registry,
+            rect_contour(0.0, 0.0, 2.0, 4.0),
+            RED,
+            1000,
+            0,
+        );
+        if effects_on_child {
+            set_effects(&mut doc, rect, vec![effect("invert", &[])]);
+        }
+        let group = doc.registry.insert(ObjectData::Group(doc::GroupObject {
+            group_type: 0,
+            name: None,
+            children: vec![rect],
+            opacity: 1000,
+            blend: 0,
+            visible: true,
+            locked: false,
+            mask_hidden: false,
+            effects: if effects_on_group {
+                vec![effect("invert", &[])]
+            } else {
+                Vec::new()
+            },
+        }));
+        doc.pages
+            .push(page(4.0, 4.0, vec![layer(vec![cell(vec![group])])]));
+        doc
+    };
+    let plain = render(&build(false, false), 0, 0).expect("plain");
+    let nested = render(&build(true, true), 0, 0).expect("nested");
+    assert_eq!(nested, plain, "invert ∘ invert through a group = identity");
 }
 
 // --- errors --------------------------------------------------------------

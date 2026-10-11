@@ -439,6 +439,7 @@ version = "0.1.0"
 dependencies = [
  "criterion",
  "doc",
+ "filters",
  "flate2",
  "fwpng",
  "geom",

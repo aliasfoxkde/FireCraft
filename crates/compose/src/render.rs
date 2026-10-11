@@ -1,12 +1,25 @@
 //! The document walk: page canvas → layer list → state cell → objects,
 //! painted bottom-first through per-object opacity/blend layers.
+//!
+//! Live effects (M7): an object whose stack interprets to kernels is
+//! first rasterized alone into a full-canvas offscreen context, pushed
+//! through `filters`, and blitted back as an image paint — inside the
+//! same per-object opacity/blend layer as the unfiltered path, so the
+//! two paths differ only by the filter math. The offscreen is the full
+//! canvas (not the shape's bounding box), so a blur's spread past the
+//! geometry survives and margin math reduces to the canvas edge
+//! (decision 0005).
 
+use crate::cache::EffectCache;
 use crate::convert::{abgr, blend_mode, to_bezpath};
+use crate::effects;
 use doc::{Document, GroupObject, Layer, ObjectData, PathObject};
+use filters::Surface;
 use std::fmt;
-use vello_cpu::kurbo::Stroke;
-use vello_cpu::peniko::{BlendMode, Brush, Compose, Fill};
-use vello_cpu::{Pixmap, RenderContext, Resources};
+use std::sync::Arc;
+use vello_cpu::kurbo::{Rect, Stroke};
+use vello_cpu::peniko::{BlendMode, Brush, Compose, Fill, ImageBrush, ImageQuality, ImageSampler};
+use vello_cpu::{ImageSource, Pixmap, RenderContext, Resources};
 
 /// A finished composition: premultiplied sRGB RGBA8, row-major,
 /// top-left origin. Deterministic — the same document, page and frame
@@ -45,6 +58,13 @@ pub enum ComposeError {
         /// Generation the id carried.
         generation: u32,
     },
+    /// A live-effect raster could not move through the kernel bridge.
+    /// Only reachable through an internal size mismatch — kernel math
+    /// itself cannot fail.
+    FilterPipeline {
+        /// What mismatched.
+        detail: String,
+    },
 }
 
 impl fmt::Display for ComposeError {
@@ -65,6 +85,9 @@ impl fmt::Display for ComposeError {
                     "cell references dangling object {index} (gen {generation})"
                 )
             }
+            ComposeError::FilterPipeline { detail } => {
+                write!(f, "live-effect pipeline failed: {detail}")
+            }
         }
     }
 }
@@ -76,7 +99,23 @@ impl std::error::Error for ComposeError {}
 /// layer's cell list render that layer as empty. Document coordinates
 /// are canvas pixels (identity transform); resolution scaling is an
 /// export-time concern.
+///
+/// Uses a throwaway effect cache — one render pays for every filter
+/// once. Hosts that re-render repeatedly between edits call
+/// [`render_with_cache`] instead.
 pub fn render(document: &Document, page: usize, frame: usize) -> Result<Render, ComposeError> {
+    render_with_cache(document, page, frame, &mut EffectCache::new())
+}
+
+/// [`render`] over a caller-owned effect cache: filtered object
+/// rasters survive between calls keyed on content, so unchanged
+/// objects skip their kernels on the next render.
+pub fn render_with_cache(
+    document: &Document,
+    page: usize,
+    frame: usize,
+    cache: &mut EffectCache,
+) -> Result<Render, ComposeError> {
     let page = document
         .pages
         .get(page)
@@ -97,7 +136,14 @@ pub fn render(document: &Document, page: usize, frame: usize) -> Result<Render, 
 
     let mut ctx = RenderContext::new(width, height);
     let mut resources = Resources::new();
-    walk_layers(&page.layers.layers, document, frame, &mut ctx)?;
+    walk_layers(
+        &page.layers.layers,
+        document,
+        frame,
+        (width, height),
+        cache,
+        &mut ctx,
+    )?;
     ctx.flush();
 
     let mut pixmap = Pixmap::new(width, height);
@@ -138,6 +184,8 @@ fn walk_layers(
     layers: &[Layer],
     document: &Document,
     frame: usize,
+    canvas: (u16, u16),
+    cache: &mut EffectCache,
     ctx: &mut RenderContext,
 ) -> Result<(), ComposeError> {
     for layer in layers {
@@ -156,7 +204,7 @@ fn walk_layers(
             continue;
         }
         for id in &cell.elements {
-            render_object(document, *id, frame, ctx)?;
+            render_object(document, *id, frame, canvas, cache, ctx)?;
         }
     }
     Ok(())
@@ -166,6 +214,8 @@ fn render_object(
     document: &Document,
     id: doc::ObjectId,
     frame: usize,
+    canvas: (u16, u16),
+    cache: &mut EffectCache,
     ctx: &mut RenderContext,
 ) -> Result<(), ComposeError> {
     let object = document.registry.get(id).ok_or(ComposeError::DanglingId {
@@ -173,8 +223,8 @@ fn render_object(
         generation: id.generation(),
     })?;
     match object {
-        ObjectData::Path(path) => render_path(path, ctx),
-        ObjectData::Group(group) => render_group(document, group, frame, ctx),
+        ObjectData::Path(path) => render_path(path, canvas, cache, ctx),
+        ObjectData::Group(group) => render_group(document, group, frame, canvas, cache, ctx),
         // Images (no tile decode this milestone), slices, text (M6) and
         // symbol instances render as nothing — the M4 plan's
         // out-of-scope list.
@@ -185,13 +235,52 @@ fn render_object(
     }
 }
 
-fn render_path(path: &PathObject, ctx: &mut RenderContext) -> Result<(), ComposeError> {
+fn render_path(
+    path: &PathObject,
+    canvas: (u16, u16),
+    cache: &mut EffectCache,
+    ctx: &mut RenderContext,
+) -> Result<(), ComposeError> {
     if !path.visible {
         return Ok(());
     }
     let Some(paint) = &path.paint else {
         return Ok(());
     };
+    let plan = effects::plan(&path.effects);
+    if plan.ops.is_empty() {
+        paint_path(path, paint, ctx);
+        return Ok(());
+    }
+
+    // Content-addressed: a cache hit skips both the offscreen render
+    // and the kernels. Blend/opacity are not part of the key — they
+    // wrap the filtered image below and never touch the cached bytes.
+    let key = crate::cache::hash_path(path, canvas, &plan);
+    if let Some(pixels) = cache.get(key).map(|entry| entry.pixels.clone()) {
+        return paint_surface(&pixels, canvas, path.blend, path.opacity, ctx);
+    }
+
+    let base = rasterize_path(path, paint, canvas)?;
+    let pixels = apply_filtered(base, canvas, &plan, key, cache)?;
+    paint_surface(&pixels, canvas, path.blend, path.opacity, ctx)
+}
+
+/// Rasterizes one path alone over transparent black — the filter
+/// input.
+fn rasterize_path(
+    path: &PathObject,
+    paint: &doc::PaintStyle,
+    canvas: (u16, u16),
+) -> Result<Vec<u8>, ComposeError> {
+    let mut offscreen = RenderContext::new(canvas.0, canvas.1);
+    paint_path(path, paint, &mut offscreen);
+    flush_offscreen(offscreen, canvas)
+}
+
+/// Paints one path through its own layer (fill/stroke order per
+/// `FOTb`). Runs against the live context or an offscreen one.
+fn paint_path(path: &PathObject, paint: &doc::PaintStyle, ctx: &mut RenderContext) {
     let geometry = to_bezpath(&path.contours);
 
     // Every object paints through its own layer so opacity and blend
@@ -219,7 +308,6 @@ fn render_path(path: &PathObject, ctx: &mut RenderContext) -> Result<(), Compose
         paint_stroke(paint.stroke_raw, &geometry, ctx);
     }
     ctx.pop_layer();
-    Ok(())
 }
 
 fn paint_fill(color: i64, geometry: &vello_cpu::kurbo::BezPath, ctx: &mut RenderContext) {
@@ -241,26 +329,118 @@ fn render_group(
     document: &Document,
     group: &GroupObject,
     frame: usize,
+    canvas: (u16, u16),
+    cache: &mut EffectCache,
     ctx: &mut RenderContext,
 ) -> Result<(), ComposeError> {
     if !group.visible {
         return Ok(());
     }
+    let plan = effects::plan(&group.effects);
+    if plan.ops.is_empty() {
+        ctx.push_layer(
+            None,
+            Some(BlendMode::new(blend_mode(group.blend), Compose::SrcOver)),
+            Some(group.opacity as f32 / 1000.0),
+            None,
+            None,
+        );
+        // Mask-structured groups composite all children unmasked this
+        // milestone (masks as pixel content are M6/M7; `MNAb` is
+        // carried by the model only).
+        for id in &group.children {
+            render_object(document, *id, frame, canvas, cache, ctx)?;
+        }
+        ctx.pop_layer();
+        return Ok(());
+    }
+
+    // The group's filters see the composite of its children (each
+    // child's own effects already applied); the group's blend/opacity
+    // wrap the filtered image, as on the unfiltered path.
+    let mut offscreen = RenderContext::new(canvas.0, canvas.1);
+    for id in &group.children {
+        render_object(document, *id, frame, canvas, cache, &mut offscreen)?;
+    }
+    offscreen.flush();
+    let mut pixmap = Pixmap::new(canvas.0, canvas.1);
+    offscreen.render(pixmap.as_mut(), &mut Resources::new());
+    let base = pixmap.data_as_u8_slice().to_vec();
+    let key = crate::cache::hash_pixels(&base, canvas, &plan);
+    let pixels = match cache.get(key).map(|entry| entry.pixels.clone()) {
+        Some(pixels) => pixels,
+        None => apply_filtered(base, canvas, &plan, key, cache)?,
+    };
+    paint_surface(&pixels, canvas, group.blend, group.opacity, ctx)
+}
+
+/// Drives the rendered base through the kernel stack and stores the
+/// result under `key`.
+fn apply_filtered(
+    base: Vec<u8>,
+    canvas: (u16, u16),
+    plan: &effects::Plan,
+    key: u64,
+    cache: &mut EffectCache,
+) -> Result<Vec<u8>, ComposeError> {
+    let surface = Surface::from_premultiplied(u32::from(canvas.0), u32::from(canvas.1), base)
+        .map_err(|error| ComposeError::FilterPipeline {
+            detail: error.to_string(),
+        })?;
+    let pixels = effects::apply_stack(surface, &plan.ops).into_pixels();
+    cache.insert(key, canvas.0, canvas.1, pixels.clone());
+    Ok(pixels)
+}
+
+/// Composites a filtered raster back onto the live context: the
+/// object's own opacity/blend layer wraps a 1:1 canvas-sized image
+/// paint (nearest sampling — the pixels are already at output scale).
+fn paint_surface(
+    pixels: &[u8],
+    canvas: (u16, u16),
+    blend: i64,
+    opacity: i64,
+    ctx: &mut RenderContext,
+) -> Result<(), ComposeError> {
     ctx.push_layer(
         None,
-        Some(BlendMode::new(blend_mode(group.blend), Compose::SrcOver)),
-        Some(group.opacity as f32 / 1000.0),
+        Some(BlendMode::new(blend_mode(blend), Compose::SrcOver)),
+        Some(opacity as f32 / 1000.0),
         None,
         None,
     );
-    // Mask-structured groups composite all children unmasked this
-    // milestone (masks as pixel content are M6/M7; `MNAb` is carried by
-    // the model only).
-    for id in &group.children {
-        render_object(document, *id, frame, ctx)?;
+    let mut pixmap = Pixmap::new(canvas.0, canvas.1);
+    let target = pixmap.data_as_u8_slice_mut();
+    if target.len() != pixels.len() {
+        return Err(ComposeError::FilterPipeline {
+            detail: format!(
+                "filtered raster holds {} bytes, canvas takes {}",
+                pixels.len(),
+                target.len()
+            ),
+        });
     }
+    target.copy_from_slice(pixels);
+    ctx.set_paint(ImageBrush {
+        image: ImageSource::Pixmap(Arc::new(pixmap)),
+        sampler: ImageSampler::new().with_quality(ImageQuality::Low),
+    });
+    ctx.fill_rect(&Rect::new(
+        0.0,
+        0.0,
+        f64::from(canvas.0),
+        f64::from(canvas.1),
+    ));
     ctx.pop_layer();
     Ok(())
+}
+
+/// Flushes an offscreen context into its pixel bytes.
+fn flush_offscreen(mut ctx: RenderContext, canvas: (u16, u16)) -> Result<Vec<u8>, ComposeError> {
+    ctx.flush();
+    let mut pixmap = Pixmap::new(canvas.0, canvas.1);
+    ctx.render(pixmap.as_mut(), &mut Resources::new());
+    Ok(pixmap.data_as_u8_slice().to_vec())
 }
 
 #[cfg(test)]

@@ -70,6 +70,15 @@ format round-trip. Recorded-vs-enforced is stated per task; nothing
    filter bounds/margin handling recorded. **Stopping condition:**
    golden pins for every filter on pinned shapes; stack-order tests
    (A∘B ≠ B∘A where the math says so, equal where it doesn't).
+   *Done (2026-10-11):* `compose::effects` interprets 10 effects into
+   the kernel catalog (identity: `EffectMoaID` GUID primary, `INMs`
+   name fallback; unknown/hidden/missing-param → skip-and-count);
+   content-hash `EffectCache` (paths key on rendering content, groups
+   on base pixels); full-canvas offscreen + 1:1 image blit inside the
+   existing opacity/blend layer. Stack-order proofs pin both
+   directions (95 vs 159) and the commuting case byte-equal; golden
+   `filtered.fw.png` pins three kernel families plus an unknown-GUID
+   pass-through. Policy in `docs/decisions/0005-live-effect-render.md`.
 5. **Bitmap objects + selections** — `IMGv` pixel editing through the
    `raster` tile store: marquee/lasso/wand → `Mask` (a raster alpha
    plane), feather, and the masked ops (fill, erase, move). Registry

@@ -8,12 +8,19 @@
 //!
 //! M4 surface (see `docs/planning/firecraft/M4-compositor.md`): paths
 //! with solid paints and groups, with per-object opacity layers and
-//! blend modes. Images, slices, text and symbol instances render as
-//! nothing; gradient/texture paints ride the document's unknown bag.
-//! Blend values beyond the rasterizer's 16 W3C mix modes fall back to
-//! Normal (recorded limitation, ADR 0002).
+//! blend modes. M7 adds live effects: an object's `EFLv` stack is
+//! interpreted to `filters` kernels ([`effects`]) and applied to a
+//! full-canvas offscreen raster of the object, content-cached through
+//! [`EffectCache`] (decision 0005). Images, slices, text and symbol
+//! instances render as nothing; gradient/texture paints ride the
+//! document's unknown bag. Blend values beyond the rasterizer's 16 W3C
+//! mix modes fall back to Normal (recorded limitation, ADR 0002).
 
+mod cache;
 mod convert;
+#[allow(clippy::module_name_repetitions)]
+mod effects;
 mod render;
 
-pub use render::{ComposeError, Render, render, straight_alpha};
+pub use cache::EffectCache;
+pub use render::{ComposeError, Render, render, render_with_cache, straight_alpha};

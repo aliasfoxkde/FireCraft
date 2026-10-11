@@ -229,7 +229,7 @@ pub fn gen_fixtures() -> Result<(), String> {
 
     /// One pending fixture: name, built bytes, manifest note.
     type Fixture = (&'static str, Result<Vec<u8>, String>, &'static str);
-    let fixtures: [Fixture; 6] = [
+    let fixtures: [Fixture; 7] = [
         (
             "minimal.fw.png",
             build_minimal(),
@@ -254,6 +254,11 @@ pub fn gen_fixtures() -> Result<(), String> {
             "scripted.fw.png",
             build_scripted(),
             "generated: 64x48 page, autoshape star + pie + spiral created through the engine registry (scripted-shape golden pin)",
+        ),
+        (
+            "filtered.fw.png",
+            build_filtered(),
+            "generated: 64x48 page, autoshapes carrying live effect stacks through filter.add (M7 filter golden pin; dropShadow is the unfiltered pass-through control)",
         ),
         (
             "plain.png",
@@ -456,6 +461,154 @@ fn build_scripted() -> Result<Vec<u8>, String> {
     )
 }
 
+/// Builds `filtered.fw.png`: four Auto Shapes, each carrying a live
+/// effect stack added through `filter.add` — the M7 scripted-filter
+/// golden. One object per kernel family the compositor interprets
+/// (blur, point lift, invert) plus a dropShadow whose GUID is beyond
+/// the catalog, pinning unfiltered pass-through in the same image.
+/// Filter identity is the CS6 `EffectMoaID` GUID with `DCVs` decimal
+/// strings, exactly as the reader sees them in real files.
+fn build_filtered() -> Result<Vec<u8>, String> {
+    fn apply(
+        session: &mut engine::Session,
+        name: &str,
+        payload: serde_json::Value,
+    ) -> Result<(), String> {
+        session
+            .apply(name, payload)
+            .map_err(|e| format!("filtered fixture: {name}: {e}"))
+    }
+    // Placement into the fixture's first cell, like `build_scripted`.
+    fn placed(mut object: serde_json::Value) -> serde_json::Value {
+        let place = serde_json::json!({ "page": 0, "layer": 0, "cell": 0, "name": null });
+        if let (Some(fields), Some(place)) = (object.as_object_mut(), place.as_object()) {
+            for (key, value) in place {
+                fields.insert(key.clone(), value.clone());
+            }
+        }
+        object
+    }
+    // The id an autoshape command allocates: the cell's newest element.
+    fn newest(session: &engine::Session) -> Result<serde_json::Value, String> {
+        let document = session.document();
+        let elements = &document.pages[0].layers.layers[0].cells[0].elements;
+        let id = elements
+            .last()
+            .ok_or_else(|| "filtered fixture: no object in cell".to_owned())?;
+        Ok(serde_json::json!({
+            "index": id.index(),
+            "generation": id.generation(),
+        }))
+    }
+    fn attach(
+        session: &mut engine::Session,
+        shape: serde_json::Value,
+        shape_name: &str,
+        effect: serde_json::Value,
+    ) -> Result<(), String> {
+        apply(session, &format!("autoshape.{shape_name}"), placed(shape))?;
+        let mut payload = effect;
+        if let Some(fields) = payload.as_object_mut() {
+            fields.insert("id".to_owned(), newest(session)?);
+        }
+        apply(session, "filter.add", payload)
+    }
+
+    let mut registry = engine::CommandRegistry::new();
+    engine::catalog::install(&mut registry).map_err(|e| format!("catalog install: {e}"))?;
+    let mut session = engine::Session::with_registry(doc::Document::default(), registry);
+    apply(
+        &mut session,
+        "page.add",
+        serde_json::json!({ "index": null }),
+    )?;
+    apply(
+        &mut session,
+        "page.setCanvasSize",
+        serde_json::json!({ "page": 0, "width": 64.0, "height": 48.0 }),
+    )?;
+    attach(
+        &mut session,
+        serde_json::json!({
+            "centerX": 16.0, "centerY": 14.0,
+            "outer": 10.0, "inner": 5.0,
+            "outerRound": 0.0, "innerRound": 0.0,
+            "points": 5, "startAngle": -std::f64::consts::FRAC_PI_2,
+        }),
+        "star",
+        serde_json::json!({
+            "name": "gaussianBlur", "category": "Blur",
+            "params": [
+                { "key": "EffectMoaID", "value": "{d04ef8c0-71b3-11d1-8c8200a024cdc039}" },
+                { "key": "gaussian_blur_radius", "value": "2.000000" },
+            ],
+        }),
+    )?;
+    attach(
+        &mut session,
+        serde_json::json!({
+            "centerX": 44.0, "centerY": 14.0,
+            "outer": 10.0, "inner": 0.0,
+            "start": -std::f64::consts::FRAC_PI_2, "end": std::f64::consts::PI,
+        }),
+        "pie",
+        serde_json::json!({
+            "name": "brightnessContrast", "category": "Adjust Color",
+            "params": [
+                { "key": "EffectMoaID", "value": "{3439b08c-1921-11d3-9bde00e02910d580}" },
+                { "key": "brightness_amount", "value": "25.000000" },
+                { "key": "contrast_amount", "value": "0.000000" },
+            ],
+        }),
+    )?;
+    attach(
+        &mut session,
+        serde_json::json!({
+            "centerX": 16.0, "centerY": 36.0,
+            "radius": 9.0, "tightnessDeg": 80.0,
+            "clockwise": true, "closed": false,
+        }),
+        "spiral",
+        serde_json::json!({
+            "name": "invert", "category": "Adjust Color",
+            "params": [
+                { "key": "EffectMoaID", "value": "{d2541291-70d6-11d1-8c8000a024cdc039}" },
+            ],
+        }),
+    )?;
+    attach(
+        &mut session,
+        serde_json::json!({
+            "centerX": 44.0, "centerY": 36.0,
+            "outer": 9.0, "inner": 4.5,
+            "start": -std::f64::consts::FRAC_PI_2,
+            "end": 3.0 * std::f64::consts::FRAC_PI_2,
+        }),
+        "doughnut",
+        serde_json::json!({
+            "name": "dropShadow", "category": "Shadow and Glow",
+            "params": [
+                { "key": "EffectMoaID", "value": "{deadbeef-0000-11d1-8c8000a024cdc039}" },
+                { "key": "ShadowBlur", "value": "4.000000" },
+            ],
+        }),
+    )?;
+    let (tree, stats) = doc::fwmap::write(session.document(), &doc::fwmap::UnknownBag::default())
+        .map_err(|e| format!("filtered fixture: doc write: {e}"))?;
+    if stats.unconsumed_unknown != 0 {
+        return Err(format!(
+            "filtered fixture: doc write left {} unknown node(s)",
+            stats.unconsumed_unknown
+        ));
+    }
+    let payload = fwpng::nodetree::serialize(&tree);
+    let standard = encode_rgba8(64, 48, |_, _| [255, 255, 255, 255])?;
+    insert_before_iend(
+        &standard,
+        &[(b"mkTS", zlib(&payload)?), (b"mkBS", zlib(&payload)?)],
+    )
+}
+
 /// Parses a standard PNG we just encoded and re-emits it with `extra`
 /// private chunks inserted before IEND.
 fn insert_before_iend(standard: &[u8], extra: &[(&[u8; 4], Vec<u8>)]) -> Result<Vec<u8>, String> {
@@ -550,6 +703,7 @@ mod tests {
             ("legacy-drift", build_legacy_drift()),
             ("composed", build_composed()),
             ("scripted", build_scripted()),
+            ("filtered", build_filtered()),
         ] {
             let checks = round_trip_checks(&built.unwrap(), true);
             assert!(checks.iter().all(|(_, ok)| *ok), "{name}: {checks:?}");
@@ -599,6 +753,58 @@ mod tests {
             (7, 3, 54, 45),
             "shapes must span all quadrants"
         );
+    }
+
+    #[test]
+    fn filtered_fixture_filters_and_passes_unknown_through() {
+        // Both fixtures place the same four shapes on the same canvas,
+        // so each quadrant pairs: filtered vs unfiltered. The three
+        // interpreted effects must change their quadrant; the
+        // dropShadow's unknown GUID must leave its quadrant untouched.
+        let plain = build_scripted().unwrap();
+        let filtered = build_filtered().unwrap();
+        let plain = crate::golden::render_entry(&plain)
+            .unwrap()
+            .expect("scripted fixture must be renderable");
+        let filtered = crate::golden::render_entry(&filtered)
+            .unwrap()
+            .expect("filtered fixture must be renderable");
+        assert_eq!(
+            (plain.width, plain.height),
+            (filtered.width, filtered.height)
+        );
+        let width = u32::from(filtered.width);
+        let height = u32::from(filtered.height);
+        // Inset 6px per side: the pie's bottom edge rasterizes into the
+        // doughnut's quadrant row, and its brightness lift must not
+        // contaminate the pass-through control.
+        const INSET: u32 = 6;
+        let quadrant = |render: &compose::Render, x0: u32, y0: u32| -> Vec<u8> {
+            let mut pixels = Vec::new();
+            for y in y0 + INSET..y0 + height / 2 - INSET {
+                for x in x0 + INSET..x0 + width / 2 - INSET {
+                    let index = ((y * width + x) * 4) as usize;
+                    pixels.extend_from_slice(&render.pixels[index..index + 4]);
+                }
+            }
+            pixels
+        };
+        for (name, x0, y0, must_differ) in [
+            ("star (gaussian blur)", 0, 0, true),
+            ("pie (brightness)", width / 2, 0, true),
+            ("spiral (invert)", 0, height / 2, true),
+            ("doughnut (unknown GUID)", width / 2, height / 2, false),
+        ] {
+            let a = quadrant(&plain, x0, y0);
+            let b = quadrant(&filtered, x0, y0);
+            assert_eq!(a.is_empty(), b.is_empty(), "{name}: coverage changed");
+            assert_ne!(a.len(), 0, "{name}: quadrant is empty");
+            if must_differ {
+                assert_ne!(a, b, "{name}: effect did not change the quadrant");
+            } else {
+                assert_eq!(a, b, "{name}: unknown effect must render unfiltered");
+            }
+        }
     }
 
     #[test]
