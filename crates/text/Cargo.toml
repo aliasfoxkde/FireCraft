@@ -1,0 +1,24 @@
+[package]
+name = "text"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Deterministic text layout for FireCraft: shaping over the bundled fonts, glyph outlines as document contours."
+
+[dependencies]
+cosmic-text = { version = "0.19", default-features = false, features = ["std", "swash"] }
+# Public-API surface of cosmic-text (fontdb::Source, swash::zeno::Command):
+# versions pinned to cosmic-text's own requirements.
+fontdb = { version = "0.23", default-features = false, features = ["std"] }
+swash = { version = "0.2.6", default-features = false, features = ["render", "scale"] }
+# The `Fallback` trait's method signature exposes unicode_script::Script.
+unicode-script = "0.5"
+doc = { path = "../doc" }
+geom = { path = "../geom" }
+
+[lints]
+workspace = true

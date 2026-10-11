@@ -20,6 +20,8 @@ the same change**, with the license file physically adjacent to the asset.
 | Path | Title | Author | Source | License |
 |---|---|---|---|---|
 | `docs/research/fireworks-png-nodes.md` | Fireworks Node Types (reverse-engineered node dictionary for the Fireworks PNG format) | davidje13 | [png-analyser](https://github.com/davidje13/png-analyser) `docs/FireworksNodes.md` | MIT ([png-analyser LICENSE](https://github.com/davidje13/png-analyser/blob/main/LICENSE)) |
+| `crates/text/assets/LiberationSans-Regular.ttf` | Liberation Sans (Regular) | Liberation Fonts contributors | [liberation-fonts](https://github.com/liberationfonts/liberation-fonts) 2.1.5 (as packaged in Debian `fonts-liberation`) | SIL Open Font License 1.1 ([adjacent license](../crates/text/assets/LICENSE-OFL.txt)) |
+| `crates/text/assets/LiberationSans-Bold.ttf` | Liberation Sans (Bold) | Liberation Fonts contributors | [liberation-fonts](https://github.com/liberationfonts/liberation-fonts) 2.1.5 (as packaged in Debian `fonts-liberation`) | SIL Open Font License 1.1 ([adjacent license](../crates/text/assets/LICENSE-OFL.txt)) |
 
 ## Reference material (used for study, never committed, never shipped)
 
