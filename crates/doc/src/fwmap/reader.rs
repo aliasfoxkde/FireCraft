@@ -13,7 +13,7 @@ use crate::model::{
     Canvas, Cell, Contour, Document, DocumentInfo, Effect, EffectProperty, EffectValue, Grid,
     GroupObject, Guides, ImageObject, Layer, LayerList, Page, PageInfo, PaintStyle, PathObject,
     PathPoint, PrimitiveSource, SliceObject, SymbolDefinition, SymbolInstanceObject, TextObject,
-    TileRef,
+    TextRun, TextStyle, TileRef,
 };
 use crate::registry::{ObjectData, ObjectId, Registry};
 use fwpng::nodetree::{Node, NodeValue};
@@ -993,6 +993,11 @@ impl Reader {
 
     fn read_text(&mut self, children: &[Node], path: &str) -> Result<ObjectData, MapError> {
         let (mut left, mut top, mut right, mut bottom) = (None, None, None, None);
+        let (mut flow, mut anti_alias, mut auto_enlarge, mut auto_kern) = (None, None, None, None);
+        let (mut locked, mut visible, mut opacity, mut blend, mut name) =
+            (None, None, None, None, None);
+        let mut style: Option<TextStyle> = None;
+        let mut runs: Vec<TextRun> = Vec::new();
         let mut transform: Option<Affine> = None;
         let mut transform_lost = false;
         let mut effects = Vec::new();
@@ -1003,6 +1008,30 @@ impl Reader {
                 b"TOPf" => self.slot_f64(child, path, i, &mut top)?,
                 b"RITf" => self.slot_f64(child, path, i, &mut right)?,
                 b"BOTf" => self.slot_f64(child, path, i, &mut bottom)?,
+                b"TFTi" => self.slot_i64(child, path, i, &mut flow)?,
+                b"TAAi" => self.slot_i64(child, path, i, &mut anti_alias)?,
+                b"ATEb" => self.slot_bool(child, path, i, &mut auto_enlarge)?,
+                b"ATKb" => self.slot_bool(child, path, i, &mut auto_kern)?,
+                b"LCKb" => self.slot_bool(child, path, i, &mut locked)?,
+                b"OBNs" => self.slot_str(child, path, i, &mut name)?,
+                b"OPAi" => self.slot_i64(child, path, i, &mut opacity)?,
+                b"VISb" => self.slot_bool(child, path, i, &mut visible)?,
+                b"BLDi" => self.slot_i64(child, path, i, &mut blend)?,
+                b"TFSv" => {
+                    // One TFSv is the model slot; style copies live at
+                    // TXTv level and stay bagged. A second TFSv splices
+                    // back verbatim.
+                    if style.is_none() {
+                        let kids = children_of(child, path)?;
+                        let tfsv_path = format!("{path}/TFSv");
+                        let (parsed_style, parsed_runs) =
+                            self.read_formatted_string(kids, &tfsv_path)?;
+                        style = Some(parsed_style);
+                        runs = parsed_runs;
+                    } else {
+                        self.bag_node(path, i, child);
+                    }
+                }
                 b"EFLv" => {
                     let eflv_path = format!("{path}/EFLv[{}]", effects.len());
                     effects.push(self.read_effect(child, &eflv_path)?);
@@ -1022,8 +1051,9 @@ impl Reader {
                         self.bag_node(path, i, child);
                     }
                 }
-                // TFSv run subtree, style plumbing, anchors: all preserved
-                // (deep text engine is M7 task 7).
+                // Anchors, TXTv-level style mirrors (`FONs` `PTSf` …),
+                // `TAPv` text-on-path (M7 task 8), `PATv`, fill points,
+                // data: preserved verbatim.
                 _ => self.bag_node(path, i, child),
             }
         }
@@ -1035,9 +1065,62 @@ impl Reader {
                 x1: right.unwrap_or(0.0),
                 y1: bottom.unwrap_or(0.0),
             },
+            style,
+            runs,
+            flow,
+            anti_alias,
+            auto_enlarge,
+            auto_kern,
+            name,
+            opacity: opacity.unwrap_or(1000),
+            blend: blend.unwrap_or(0),
+            visible: visible.unwrap_or(true),
+            locked: locked.unwrap_or(false),
             transform,
             effects,
         }))
+    }
+
+    /// Reads one `TFSv`: the mapped style scalars plus `TRNs`+ runs.
+    /// Unknown styling (gradient fills and friends) bags in place, so
+    /// the container still round-trips whole.
+    fn read_formatted_string(
+        &mut self,
+        children: &[Node],
+        path: &str,
+    ) -> Result<(TextStyle, Vec<TextRun>), MapError> {
+        let mut style = TextStyle::default();
+        let mut runs = Vec::new();
+
+        for (i, child) in children.iter().enumerate() {
+            match &child.fourcc {
+                b"FONs" => self.slot_str(child, path, i, &mut style.font)?,
+                b"PTSf" => self.slot_f64(child, path, i, &mut style.size)?,
+                b"BOLb" => self.slot_bool(child, path, i, &mut style.bold)?,
+                b"ITLb" => self.slot_bool(child, path, i, &mut style.italic)?,
+                b"UNDb" => self.slot_bool(child, path, i, &mut style.underline)?,
+                b"HSCf" => self.slot_f64(child, path, i, &mut style.horizontal_scale)?,
+                b"RKNf" => self.slot_f64(child, path, i, &mut style.kerning)?,
+                b"BLSf" => self.slot_f64(child, path, i, &mut style.baseline_shift)?,
+                b"LEDf" => self.slot_f64(child, path, i, &mut style.leading)?,
+                b"LDMi" => self.slot_i64(child, path, i, &mut style.leading_unit)?,
+                b"JSTi" => self.slot_i64(child, path, i, &mut style.justification)?,
+                b"FCLi" => self.slot_i64(child, path, i, &mut style.fill_raw)?,
+                b"PINf" => self.slot_f64(child, path, i, &mut style.paragraph_indent)?,
+                b"PSBf" => self.slot_f64(child, path, i, &mut style.space_before)?,
+                b"PSAf" => self.slot_f64(child, path, i, &mut style.space_after)?,
+                b"TRNs" => match child.as_str() {
+                    // Decision 0007: the run characters as a string node.
+                    Some(text) => runs.push(TextRun {
+                        text: text.to_owned(),
+                    }),
+                    // Undocumented payload shape: preserve it verbatim.
+                    None => self.bag_node(path, i, child),
+                },
+                _ => self.bag_node(path, i, child),
+            }
+        }
+        Ok((style, runs))
     }
 
     /// Reads one `EFLv` — one live effect: `CATs`/`INMs` names plus the

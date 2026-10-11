@@ -14,7 +14,7 @@ use crate::fwmap::{FourCC, MapError};
 use crate::model::{
     Cell, Contour, Document, Effect, EffectProperty, EffectValue, Grid, GroupObject, Guides,
     ImageObject, Layer, LayerList, PaintStyle, PathObject, PathPoint, PrimitiveSource, SliceObject,
-    SymbolDefinition, SymbolInstanceObject, TextObject, TileRef,
+    SymbolDefinition, SymbolInstanceObject, TextObject, TextRun, TextStyle, TileRef,
 };
 use crate::registry::{ObjectData, ObjectId};
 use fwpng::nodetree::{Node, NodeValue};
@@ -569,20 +569,106 @@ impl Writer<'_> {
     }
 
     fn write_text_object(&mut self, object: &TextObject, path: &str) -> Result<Node, MapError> {
-        // Bounds first; everything else (TFSv runs, anchors, style) is
-        // spliced from the bag around them. MTXv sits after the bounds.
+        // Dictionary order: LFTf TOPf RITf BOTf … TFTi … LCKb … TAAi …
+        // ATEb ATKb … TFSv … OBNs OPAi EFLv MTXv VISb BLDi. Everything
+        // unmapped (anchors, TXTv-level style mirrors, `TAPv`, `PATv`,
+        // fill points) splices back from the bag around the mapped
+        // children.
         let mut mapped = vec![
             n_f(*b"LFTf", object.frame.x0),
             n_f(*b"TOPf", object.frame.y0),
             n_f(*b"RITf", object.frame.x1),
             n_f(*b"BOTf", object.frame.y1),
         ];
+        if let Some(flow) = object.flow {
+            mapped.push(n_i(*b"TFTi", flow));
+        }
+        // LCKb is never present with the value `false` (dictionary).
+        if object.locked {
+            mapped.push(n_b(*b"LCKb", true));
+        }
+        if let Some(anti_alias) = object.anti_alias {
+            mapped.push(n_i(*b"TAAi", anti_alias));
+        }
+        if let Some(auto_enlarge) = object.auto_enlarge {
+            mapped.push(n_b(*b"ATEb", auto_enlarge));
+        }
+        if let Some(auto_kern) = object.auto_kern {
+            mapped.push(n_b(*b"ATKb", auto_kern));
+        }
+        if let Some(style) = &object.style {
+            let tfsv_path = format!("{path}/TFSv");
+            mapped.push(self.write_formatted_string(style, &object.runs, &tfsv_path));
+        }
+        if let Some(name) = &object.name {
+            mapped.push(n_s(*b"OBNs", name));
+        }
+        mapped.push(n_i(*b"OPAi", object.opacity));
         mapped.extend(self.write_effects(&object.effects, path)?);
         if let Some(transform) = &object.transform {
             mapped.push(self.write_matrix(transform, &format!("{path}/MTXv")));
         }
+        mapped.push(n_b(*b"VISb", object.visible));
+        mapped.push(n_i(*b"BLDi", object.blend));
         let children = self.splice_container(mapped, path);
         Ok(n_kids(*b"TXTv", children))
+    }
+
+    /// One `TFSv`: the mapped style scalars in dictionary order, then
+    /// one string-node `TRNs` per run (decision 0007). Unmapped styling
+    /// splices back between the mapped children.
+    fn write_formatted_string(&mut self, style: &TextStyle, runs: &[TextRun], path: &str) -> Node {
+        let mut mapped = Vec::new();
+        if let Some(font) = &style.font {
+            mapped.push(n_s(*b"FONs", font));
+        }
+        if let Some(size) = style.size {
+            mapped.push(n_f(*b"PTSf", size));
+        }
+        if let Some(bold) = style.bold {
+            mapped.push(n_b(*b"BOLb", bold));
+        }
+        if let Some(italic) = style.italic {
+            mapped.push(n_b(*b"ITLb", italic));
+        }
+        if let Some(underline) = style.underline {
+            mapped.push(n_b(*b"UNDb", underline));
+        }
+        if let Some(scale) = style.horizontal_scale {
+            mapped.push(n_f(*b"HSCf", scale));
+        }
+        if let Some(kerning) = style.kerning {
+            mapped.push(n_f(*b"RKNf", kerning));
+        }
+        if let Some(shift) = style.baseline_shift {
+            mapped.push(n_f(*b"BLSf", shift));
+        }
+        if let Some(leading) = style.leading {
+            mapped.push(n_f(*b"LEDf", leading));
+        }
+        if let Some(unit) = style.leading_unit {
+            mapped.push(n_i(*b"LDMi", unit));
+        }
+        if let Some(justification) = style.justification {
+            mapped.push(n_i(*b"JSTi", justification));
+        }
+        if let Some(fill_raw) = style.fill_raw {
+            mapped.push(n_i(*b"FCLi", fill_raw));
+        }
+        if let Some(indent) = style.paragraph_indent {
+            mapped.push(n_f(*b"PINf", indent));
+        }
+        if let Some(before) = style.space_before {
+            mapped.push(n_f(*b"PSBf", before));
+        }
+        if let Some(after) = style.space_after {
+            mapped.push(n_f(*b"PSAf", after));
+        }
+        for run in runs {
+            mapped.push(n_s(*b"TRNs", &run.text));
+        }
+        let bagged = self.bag.take_under(path);
+        n_kids(*b"TFSv", splice(mapped, bagged))
     }
 
     fn write_group_object(&mut self, object: &GroupObject, path: &str) -> Result<Node, MapError> {

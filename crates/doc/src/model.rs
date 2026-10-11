@@ -523,18 +523,117 @@ pub struct PrimitiveSource {
     pub maintain_radius: bool,
 }
 
-/// `TXTv` — a text object. The deep text engine is M6; M3 maps the
-/// frame geometry and preserves the run subtree verbatim in the
-/// unknown bag.
+/// `TFSv` — one style set shared by the [`TextRun`]s that follow it.
+/// Every field is optional: the dictionary marks the TFSv children with
+/// `*` (zero or more), so a file may omit any of them and the reader
+/// must too. Unmapped styling (gradient fills, `CFTs` typefaces) stays
+/// bagged at the container level.
+#[derive(Clone, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct TextStyle {
+    /// `FONs` — font family.
+    pub font: Option<String>,
+    /// `PTSf` — font point size.
+    pub size: Option<f64>,
+    /// `BOLb` — bold.
+    pub bold: Option<bool>,
+    /// `ITLb` — italic.
+    pub italic: Option<bool>,
+    /// `UNDb` — underline (begin/end run marker).
+    pub underline: Option<bool>,
+    /// `HSCf` — horizontal scale, percent as written.
+    pub horizontal_scale: Option<f64>,
+    /// `RKNf` — kerning.
+    pub kerning: Option<f64>,
+    /// `BLSf` — baseline shift.
+    pub baseline_shift: Option<f64>,
+    /// `LEDf` — line height, in [`TextStyle::leading_unit`]s.
+    pub leading: Option<f64>,
+    /// `LDMi` — line height unit.
+    pub leading_unit: Option<i64>,
+    /// `JSTi` — justification.
+    pub justification: Option<i64>,
+    /// `FCLi` — fill colour, raw int (same ABGR layout as
+    /// [`PaintStyle`]).
+    pub fill_raw: Option<i64>,
+    /// `PINf` — paragraph indent.
+    pub paragraph_indent: Option<f64>,
+    /// `PSBf` — paragraph space before.
+    pub space_before: Option<f64>,
+    /// `PSAf` — paragraph space after.
+    pub space_after: Option<f64>,
+}
+
+/// `TRNs` — one run of characters sharing the enclosing [`TextStyle`].
+/// The dictionary does not document the run payload's node shape and no
+/// corpus sample exists yet; FireCraft emits the characters as a string
+/// node and accepts a string node back (decision 0007). Anything else
+/// rides in the unknown bag.
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct TextRun {
+    /// The run's characters.
+    pub text: String,
+}
+
+/// `TXTv` — a text object: a frame, one formatted-string style set with
+/// its runs, and the object-level plumbing every element carries.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TextObject {
     /// `LFTf TOPf RITf BOTf` — text frame bounds.
     pub frame: Rect,
+    /// `TFSv` — the mapped style set; `None` when the file carries no
+    /// `TFSv` (style copies at `TXTv` level stay bagged).
+    pub style: Option<TextStyle>,
+    /// `TFSv`→`TRNs`* — the runs, in file order.
+    pub runs: Vec<TextRun>,
+    /// `TFTi` — flow: 0 normal, 1 fit to width, 2 follow path, 3 fit
+    /// inside shape.
+    pub flow: Option<i64>,
+    /// `TAAi` — anti-alias preset (0 none/smooth .. 3 system, 4 custom).
+    pub anti_alias: Option<i64>,
+    /// `ATEb` — auto-enlarge.
+    pub auto_enlarge: Option<bool>,
+    /// `ATKb` — auto-kern.
+    pub auto_kern: Option<bool>,
+    /// `OBNs` — object name.
+    pub name: Option<String>,
+    /// `OPAi` — opacity, per mille.
+    pub opacity: i64,
+    /// `BLDi` — blend mode.
+    pub blend: i64,
+    /// `VISb` — visible.
+    pub visible: bool,
+    /// `LCKb` — locked.
+    pub locked: bool,
     /// `MTXv` — transform (affine rows enforced like [`PrimitiveSource`]).
     pub transform: Option<Affine>,
     /// `EFLv`* — live effects, file order.
     pub effects: Vec<Effect>,
+}
+
+impl TextObject {
+    /// A neutral, visible text object over `frame`: no style, no runs,
+    /// opaque, normal blend — the object `text.createText` starts from.
+    pub fn new(frame: Rect) -> Self {
+        Self {
+            frame,
+            style: None,
+            runs: Vec::new(),
+            flow: None,
+            anti_alias: None,
+            auto_enlarge: None,
+            auto_kern: None,
+            name: None,
+            opacity: 1000,
+            blend: 0,
+            visible: true,
+            locked: false,
+            transform: None,
+            effects: Vec::new(),
+        }
+    }
 }
 
 /// `GRPv` — a group, including mask-structured groups.
