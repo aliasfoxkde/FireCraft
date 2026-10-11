@@ -85,3 +85,8 @@ required-features = ["fuzzer"]
 name = "svgimport"
 path = "fuzz_targets/svgimport.rs"
 required-features = ["fuzzer"]
+
+[[bin]]
+name = "psdimport"
+path = "fuzz_targets/psdimport.rs"
+required-features = ["fuzzer"]

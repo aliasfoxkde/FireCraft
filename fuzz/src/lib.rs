@@ -23,14 +23,13 @@ pub fn anchor_fwpng_nodetree(data: &[u8]) {
 /// mapping must never panic (typed errors only), and on success the
 /// write -> serialize -> parse -> read cycle must hold together.
 pub fn anchor_doc_read(data: &[u8]) {
-    if let Ok(nodes) = fwpng::nodetree::parse(data) {
-        if let Ok((document, bag)) = doc::fwmap::read(&nodes) {
-            if let Ok((tree, _stats)) = doc::fwmap::write(&document, &bag) {
-                let bytes = fwpng::nodetree::serialize(&tree);
-                if let Ok(nodes2) = fwpng::nodetree::parse(&bytes) {
-                    let _ = doc::fwmap::read(&nodes2);
-                }
-            }
+    if let Ok(nodes) = fwpng::nodetree::parse(data)
+        && let Ok((document, bag)) = doc::fwmap::read(&nodes)
+        && let Ok((tree, _stats)) = doc::fwmap::write(&document, &bag)
+    {
+        let bytes = fwpng::nodetree::serialize(&tree);
+        if let Ok(nodes2) = fwpng::nodetree::parse(&bytes) {
+            let _ = doc::fwmap::read(&nodes2);
         }
     }
 }
@@ -162,6 +161,16 @@ pub fn anchor_svgimport(data: &[u8]) {
     if let Ok(imported) = io::svgimport::decode(data) {
         // The imported document must render (or refuse) without
         // panicking too — compose is the first consumer of the walk.
+        let _ = compose::render(&imported.document, 0, 0);
+    }
+}
+
+/// Untrusted byte stream interpreted as a PSD: the header gates, the
+/// flat record walk over both real-world channel layouts, and the
+/// composite fallback must refuse, import, or report — never panic.
+pub fn anchor_psdimport(data: &[u8]) {
+    if let Ok(imported) = io::psd::decode(data) {
+        // compose is the first consumer of the walk.
         let _ = compose::render(&imported.document, 0, 0);
     }
 }

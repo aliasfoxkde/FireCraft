@@ -75,7 +75,19 @@ fn anchors(seeds: &Seeds) -> AnchorSet {
             firecraft_fuzz::anchor_svgimport,
             vec![seeds.minimal_svg.clone(), seeds.minimal_svg_corrupt.clone()],
         ),
+        (
+            "psdimport",
+            firecraft_fuzz::anchor_psdimport,
+            vec![seeds.minimal_psd.clone(), seeds.minimal_psd_corrupt.clone()],
+        ),
     ]
+}
+
+/// Length-prefixed section bytes.
+fn section_bytes(body: &[u8]) -> Vec<u8> {
+    let mut out = (body.len() as u32).to_be_bytes().to_vec();
+    out.extend_from_slice(body);
+    out
 }
 
 /// Deterministic xorshift64*.
@@ -172,6 +184,8 @@ struct Seeds {
     float_blob: Vec<u8>,
     minimal_svg: Vec<u8>,
     minimal_svg_corrupt: Vec<u8>,
+    minimal_psd: Vec<u8>,
+    minimal_psd_corrupt: Vec<u8>,
 }
 
 /// Seeds built in code so the driver needs no corpus files.
@@ -194,8 +208,6 @@ fn seeds() -> Seeds {
         nested_tree.extend_from_slice(&unit.to_be_bytes());
     }
     nested_tree.extend_from_slice(b"}SUBv{FRZi{ff}NEGi{-1a}FRZf{3.5}SUBv{BKGb{1}}}}");
-
-    // prVW: magic + 16x16 size + 2 palette entries + 3x3 index bytes.
 
     // prVW: magic + 16x16 size + 2 palette entries + 3x3 index bytes.
     let mut prvw = Vec::new();
@@ -240,6 +252,56 @@ fn seeds() -> Seeds {
         <pa/h d=\"M 0 0 L 4 0 L 4 4 L 0 4 Z\" fill=\"#ff0000\"></svg>"
         .to_vec();
 
+    // A minimal one-layer PSD (deep-path seed): 2x2 canvas, one 1x1
+    // layer with raw channels interleaved after its record (the
+    // ImageMagick layout), zero composite — the layout the reader must
+    // fully accept — plus a cousin cut mid-record (must refuse).
+    let mut minimal_psd = Vec::new();
+    minimal_psd.extend_from_slice(b"8BPS");
+    minimal_psd.extend_from_slice(&1u16.to_be_bytes());
+    minimal_psd.extend_from_slice(&[0; 6]);
+    minimal_psd.extend_from_slice(&3u16.to_be_bytes()); // channels
+    minimal_psd.extend_from_slice(&2u32.to_be_bytes()); // height
+    minimal_psd.extend_from_slice(&2u32.to_be_bytes()); // width
+    minimal_psd.extend_from_slice(&8u16.to_be_bytes()); // depth
+    minimal_psd.extend_from_slice(&3u16.to_be_bytes()); // RGB
+    let section = |out: &mut Vec<u8>, body: &[u8]| {
+        out.extend_from_slice(&(body.len() as u32).to_be_bytes());
+        out.extend_from_slice(body);
+    };
+    section(&mut minimal_psd, &[]); // color mode data
+    section(&mut minimal_psd, &[]); // image resources
+    let mut record = Vec::new();
+    for value in [0i32, 0, 1, 1] {
+        record.extend_from_slice(&value.to_be_bytes()); // rect
+    }
+    record.extend_from_slice(&4u16.to_be_bytes()); // channel count
+    for id in [0i16, 1, 2, -1] {
+        record.extend_from_slice(&id.to_be_bytes());
+        record.extend_from_slice(&3u32.to_be_bytes()); // marker + pixel
+    }
+    record.extend_from_slice(b"8BIMnorm"); // blend key
+    record.push(255); // opacity
+    record.push(0); // clipping
+    record.push(0); // flags: visible
+    record.push(0); // filler
+    let extra_len = 4 + 4 + 4; // mask 0, ranges 0, pascal "a" padded
+    record.extend_from_slice(&(extra_len as u32).to_be_bytes());
+    record.extend_from_slice(&[0; 8]); // no mask, no ranges
+    record.extend_from_slice(&[1, b'a', 0, 0]);
+    for value in [1u8, 2, 3, 255] {
+        record.extend_from_slice(&0u16.to_be_bytes()); // raw marker
+        record.push(value);
+    }
+    let mut info = 1u16.to_be_bytes().to_vec();
+    info.extend_from_slice(&record);
+    section(&mut minimal_psd, &section_bytes(&info));
+    // Composite: compression 0, zeroed R/G/B planes.
+    let mut merged = 0u16.to_be_bytes().to_vec();
+    merged.extend_from_slice(&[0u8; 12]);
+    section(&mut minimal_psd, &merged);
+    let minimal_psd_corrupt = minimal_psd[..50].to_vec();
+
     Seeds {
         empty: Vec::new(),
         minimal_png,
@@ -250,5 +312,7 @@ fn seeds() -> Seeds {
         float_blob,
         minimal_svg,
         minimal_svg_corrupt,
+        minimal_psd,
+        minimal_psd_corrupt,
     }
 }

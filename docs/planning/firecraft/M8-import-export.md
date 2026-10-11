@@ -188,7 +188,7 @@ that was only compared against itself.
    flattening, hostile refusal, absurd-but-valid ±1e30 geometry
    imports without panicking). Evidence: io 55 tests green, clippy
    clean, wasm green (io in `WASM_CRATES`).
-5. **PSD spike + reader** — spike first per risk #3: generate layered
+5. **PSD spike + reader** — **done.** Spike first per risk #3: layered
    PSDs with ImageMagick + ag-psd (node, scratch under `/var/tmp`,
    never committed), enumerate the record zoo actually emitted
    (layer records, channel info, PackBits, group markers
@@ -197,13 +197,34 @@ that was only compared against itself.
    public Adobe spec: header, color modes (RGB/8-bit first; others
    refuse with a report), layer+mask section, channel data (raw +
    RLE), merged composite. Model mapping: layers → layers, groups →
-   groups, opacity/blend/visibility/clipping mapped (blend-mode table
-   PSD↔Fireworks in the decision note), text layers import as raster
-   (limitation recorded), adjustment/vector-mask layers flatten into
-   the composite. **Stopping condition:** own-generated minimal PSD
-   fixtures (hand-built byte arrays, house style) + ImageMagick
-   samples parse to expected trees; zero panics on the mutated-byte
-   fuzz arm; fidelity checklist rows for every mapped feature.
+   PSDs generated with ImageMagick + ag-psd (node, scratch under
+   `/var/tmp`, never committed); the record zoo actually emitted is
+   enumerated in `docs/decisions/0006-psd-fidelity.md` (bottom-first
+   inverted group pairs, two real-world channel-stream layouts, the
+   length-less composite section, the pooled composite RLE table, IM's
+   byte-reversed blend key). Reader from the public Adobe spec
+   (`io::psd::decode`): header gates, layer+mask walk, raw + PackBits
+   channels (both layouts via interleaved-then-block retry), composite
+   (prefixed + length-less detection), scope gates + note-drops per
+   the decision's checklist. **Stopping condition met:** own-generated
+   minimal fixtures (hand-built byte arrays) + the ag-psd oracle
+   fixture (committed) + ImageMagick samples parse to expected trees —
+   15-test battery in `crates/io/tests/psdread.rs` (composite-only
+   flat file, layered offsets/premultiply, exact RLE decode, group
+   pairs incl. the inverted real-world order, unicode names, hidden
+   flags, text-as-raster, adjustment skip, reversed-key tolerance,
+   clip/mask reports, the full blend table, the oracle tree, hostile
+   stream refusals, negative-count alpha, the pooled composite RLE
+   table); ImageMagick 7.1.1 corpus parses (`-depth 8` raw + RLE,
+   flat + layered; 16-bit and ZIP refuse with reasons); zero panics
+   on the mutated-byte fuzz arm (`psdimport` libfuzzer target +
+   stable anchor, seeds built in code, anchors 2048 + panic_hunt 256
+   seeds clean). **Defects the battery caught in shipped code:** a
+   PackBits precedence underflow (`1 - control as usize` panicked on
+   hostile runs), the composite length-prefix misalignment, the
+   pooled composite RLE table, and `raster::attach_image`'s global
+   tile-id collision (per-image numbering clobbered bank slot 0 on
+   every multi-image import).
 6. **PSD writer** — layered RGB/8 PSD from `Document` (maximize
    compatibility = merged composite + RLE layer channels); round-trip
    through our reader (semantic equality), open-provable by

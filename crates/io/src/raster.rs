@@ -240,10 +240,25 @@ pub(crate) fn attach_image(
         });
     }
 
-    // Tile references, row-major; payloads follow below.
+    // Tile references, row-major; payloads follow below. Ids are
+    // global bank slots — local per-image numbering would make every
+    // import clobber the first bank tile.
+    let base = document.tiles.len();
+    let last = base
+        .checked_add(tile_count)
+        .ok_or_else(|| ImportError::Unsupported {
+            format: "raster",
+            reason: "tile grid overflows".to_owned(),
+        })?;
+    if u64::try_from(last).unwrap_or(u64::MAX) > u64::from(u32::MAX) + 1 {
+        return Err(ImportError::Unsupported {
+            format: "raster",
+            reason: format!("{last} bank slots exceed the u32 tile id space"),
+        });
+    }
     let mut tiles = Vec::with_capacity(tile_count);
     for index in 0..tile_count {
-        let id = u32::try_from(index).unwrap_or(u32::MAX);
+        let id = u32::try_from(base + index).unwrap_or(u32::MAX);
         tiles.push(TileRef::Tile(id));
     }
 
@@ -271,7 +286,7 @@ pub(crate) fn attach_image(
     // are always full 128×128 planes).
     for row in 0..rows {
         for col in 0..cols {
-            let id = u32::try_from(row * cols + col).unwrap_or(u32::MAX);
+            let id = u32::try_from(base + row * cols + col).unwrap_or(u32::MAX);
             let mut buffer = [0u8; TILE_BYTES];
             for py in 0..TILE_SIDE {
                 let y = row * TILE_SIDE + py;
