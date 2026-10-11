@@ -17,8 +17,13 @@ pub mod model;
 pub mod registry;
 
 pub use model::{
-    Canvas, Cell, Contour, Document, DocumentInfo, Grid, GroupObject, Guides, ImageObject, Layer,
-    LayerList, Page, PageInfo, PaintStyle, PathObject, PathPoint, PrimitiveSource, SliceObject,
-    SymbolDefinition, SymbolInstanceObject, TextObject, TileRef,
+    Canvas, Cell, Contour, Document, DocumentInfo, Effect, EffectProperty, EffectValue, Grid,
+    GroupObject, Guides, ImageObject, Layer, LayerList, Page, PageInfo, PaintStyle, PathObject,
+    PathPoint, PrimitiveSource, SliceObject, SymbolDefinition, SymbolInstanceObject, TextObject,
+    TileRef,
 };
 pub use registry::{ObjectData, ObjectId, Registry};
+// `EffectValue::Raw` exposes the node type; re-export it so consumers
+// of the model (engine commands, tests) can name it without a direct
+// fwpng dependency edge.
+pub use fwpng::nodetree::{Node, NodeValue};

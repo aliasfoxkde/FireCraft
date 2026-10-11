@@ -13,8 +13,9 @@
 //! unit test pins that.
 
 use doc::{
-    Cell, Contour, Document, DocumentInfo, GroupObject, ImageObject, Layer, LayerList, ObjectData,
-    Page, PageInfo, PathObject, PathPoint, SliceObject, SymbolInstanceObject, TextObject, TileRef,
+    Cell, Contour, Document, DocumentInfo, Effect, EffectProperty, EffectValue, GroupObject,
+    ImageObject, Layer, LayerList, ObjectData, Page, PageInfo, PathObject, PathPoint, SliceObject,
+    SymbolInstanceObject, TextObject, TileRef,
 };
 
 /// A seeded xorshift64* PRNG — small, fast, reproducible across
@@ -135,7 +136,7 @@ pub fn random_document(rng: &mut FuzzRng) -> Document {
                 visible: true,
                 locked: false,
                 mask_hidden: false,
-                effects: Vec::new(),
+                effects: random_effects(rng),
             }));
             tops.retain(|top| !children.contains(top));
             tops.push(group_id);
@@ -203,6 +204,31 @@ fn random_point(rng: &mut FuzzRng) -> geom::Point {
     geom::Point::new(rng.below(64) as f64, rng.below(64) as f64)
 }
 
+/// 0..=2 seeded effects with 0..=2 string parameters — the fuzz
+/// documents carry live filter stacks for the `filter.*` commands
+/// (text-valued parameters only; raw node values arrive via reads).
+fn random_effects(rng: &mut FuzzRng) -> Vec<Effect> {
+    if !rng.chance(35) {
+        return Vec::new();
+    }
+    (0..1 + rng.below(2))
+        .map(|_| Effect {
+            category: if rng.chance(50) {
+                "Fuzz".to_owned()
+            } else {
+                String::new()
+            },
+            internal_name: format!("effect-{}", rng.below(12)),
+            properties: (0..rng.below(3))
+                .map(|_| EffectProperty {
+                    key: format!("p-{}", rng.below(6)),
+                    value: EffectValue::Text(format!("{}", rng.below(100))),
+                })
+                .collect(),
+        })
+        .collect()
+}
+
 fn random_path(rng: &mut FuzzRng, index: usize) -> ObjectData {
     let point_count = 2 + rng.below(3);
     let points: Vec<PathPoint> = (0..point_count)
@@ -251,7 +277,7 @@ fn random_path(rng: &mut FuzzRng, index: usize) -> ObjectData {
         } else {
             None
         },
-        effects: Vec::new(),
+        effects: random_effects(rng),
     })
 }
 
@@ -267,7 +293,7 @@ fn random_image(rng: &mut FuzzRng) -> ObjectData {
         blend: rng.below(27) as i64,
         visible: true,
         locked: rng.chance(10),
-        effects: Vec::new(),
+        effects: random_effects(rng),
     })
 }
 
@@ -276,7 +302,7 @@ fn random_text(rng: &mut FuzzRng) -> ObjectData {
     ObjectData::Text(TextObject {
         frame: geom::Rect::new(a.x, a.y, a.x + 10.0, a.y + 4.0),
         transform: None,
-        effects: Vec::new(),
+        effects: random_effects(rng),
     })
 }
 
@@ -334,6 +360,9 @@ pub const CALLS: &[&str] = &[
     "path.inset",
     "path.movePoints",
     "path.warp",
+    "filter.add",
+    "filter.remove",
+    "filter.setParam",
     "cell.setVisible",
     "cell.setLocked",
     "layer.rename",
@@ -408,6 +437,41 @@ pub fn random_call(rng: &mut FuzzRng, document: &Document) -> (String, serde_jso
             },
         }),
         "object.delete" => serde_json::json!({ "id": any_id(rng) }),
+        "filter.add" => {
+            let mut payload = serde_json::json!({
+                "id": any_id(rng),
+                "name": if rng.chance(5) {
+                    String::new()
+                } else {
+                    format!("effect-{}", rng.below(12))
+                },
+            });
+            if rng.chance(60) {
+                payload["category"] = serde_json::Value::String("Fuzz".to_owned());
+            }
+            if rng.chance(70) {
+                payload["params"] = serde_json::json!([
+                    {
+                        "key": format!("p-{}", rng.below(6)),
+                        "value": format!("{}", rng.below(100)),
+                    },
+                ]);
+            }
+            if rng.chance(50) {
+                payload["index"] = any_opt_index(rng, 4);
+            }
+            payload
+        }
+        "filter.remove" => serde_json::json!({
+            "id": any_id(rng),
+            "index": rng.below(5),
+        }),
+        "filter.setParam" => serde_json::json!({
+            "id": any_id(rng),
+            "index": rng.below(5),
+            "key": format!("p-{}", rng.below(6)),
+            "value": format!("{}", rng.below(200)),
+        }),
         "object.reorder" => serde_json::json!({
             "id": any_id(rng),
             "to": rng.below(8),

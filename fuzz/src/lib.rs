@@ -105,6 +105,7 @@ pub fn anchor_vector_ops(data: &[u8]) {
         opacity: 1000,
         blend: 0,
         name: None,
+        effects: Vec::new(),
     };
     let (a, b) = (quad(0), quad(8));
     for op in [

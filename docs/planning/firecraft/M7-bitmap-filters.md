@@ -61,6 +61,10 @@ format round-trip. Recorded-vs-enforced is stated per task; nothing
    commands. **Stopping condition:** fuzz campaign clean; undo/redo +
    journal replay equivalence byte-compares over filter sequences
    (the M5 harness, now over effects).
+   *Sequencing note (2026-10-11):* the `bitmap.*` instant ops land
+   with task 5 — they need the `IMGv`↔tile-store pixel plumbing that
+   task builds; task 3 ships the effect-list commands and arms them in
+   `fuzzdrive`.
 4. **Compose integration: lazy stack application** — live filters
    compose in any order under the content-hash cache (PLANNING §7.3);
    filter bounds/margin handling recorded. **Stopping condition:**

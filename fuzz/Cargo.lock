@@ -140,6 +140,7 @@ dependencies = [
  "crc32fast",
  "flate2",
  "png",
+ "serde",
 ]
 
 [[package]]
