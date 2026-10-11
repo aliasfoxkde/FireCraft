@@ -81,6 +81,7 @@ pub(crate) mod testdoc {
             opacity: 1000,
             blend: 0,
             name: None,
+            effects: Vec::new(),
         })
     }
 

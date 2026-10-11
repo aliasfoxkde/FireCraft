@@ -12,9 +12,9 @@
 use crate::fwmap::unknown::UnknownBag;
 use crate::fwmap::{FourCC, MapError};
 use crate::model::{
-    Cell, Contour, Document, Grid, GroupObject, Guides, ImageObject, Layer, LayerList, PaintStyle,
-    PathObject, PathPoint, PrimitiveSource, SliceObject, SymbolDefinition, SymbolInstanceObject,
-    TextObject, TileRef,
+    Cell, Contour, Document, Effect, EffectProperty, EffectValue, Grid, GroupObject, Guides,
+    ImageObject, Layer, LayerList, PaintStyle, PathObject, PathPoint, PrimitiveSource, SliceObject,
+    SymbolDefinition, SymbolInstanceObject, TextObject, TileRef,
 };
 use crate::registry::{ObjectData, ObjectId};
 use fwpng::nodetree::{Node, NodeValue};
@@ -84,6 +84,17 @@ fn n_kids(fourcc: FourCC, children: Vec<Node>) -> Node {
         fourcc,
         value: NodeValue::Children(children),
     }
+}
+
+/// One `DCEv` property: `DCKs` key, then exactly one value node —
+/// text properties become `DCVs`; raw values are the preserved node
+/// verbatim (grab-point lists, nested dictionaries).
+fn effect_property_node(prop: &EffectProperty) -> Node {
+    let value = match &prop.value {
+        EffectValue::Text(text) => n_s(*b"DCVs", text),
+        EffectValue::Raw(node) => node.clone(),
+    };
+    n_kids(*b"DCEv", vec![n_s(*b"DCKs", &prop.key), value])
 }
 
 /// Merges mapped children with bagged ones: bagged nodes land at their
@@ -400,10 +411,53 @@ impl Writer<'_> {
         if let Some(primitive) = &object.primitive {
             mapped.push(self.write_primitive(primitive, path)?);
         }
+        mapped.extend(self.write_effects(&object.effects, path)?);
         mapped.push(n_b(*b"VISb", object.visible));
         mapped.push(n_i(*b"OPAi", object.opacity));
         let children = self.splice_container(mapped, path);
         Ok(n_kids(*b"PTHv", children))
+    }
+
+    /// Effect lists (`EFLv`+), one node per model effect. Bagged
+    /// siblings handled by each object writer's `splice_container`;
+    /// the `[i]` suffix matches the reader's path convention (both
+    /// count mapped effects in file order).
+    fn write_effects(
+        &mut self,
+        effects: &[Effect],
+        parent_path: &str,
+    ) -> Result<Vec<Node>, MapError> {
+        let mut out = Vec::with_capacity(effects.len());
+        for (i, effect) in effects.iter().enumerate() {
+            let path = format!("{parent_path}/EFLv[{i}]");
+            out.push(self.write_effect(effect, &path)?);
+        }
+        Ok(out)
+    }
+
+    /// One `EFLv`: `CATs`/`INMs` when present, then the first `EPSv`.
+    /// Empty names are skipped rather than emitted (a name that arrived
+    /// bagged — e.g. a non-string `CATs` — splices back from the bag).
+    fn write_effect(&mut self, effect: &Effect, path: &str) -> Result<Node, MapError> {
+        let mut mapped = Vec::new();
+        if !effect.category.is_empty() {
+            mapped.push(n_s(*b"CATs", &effect.category));
+        }
+        if !effect.internal_name.is_empty() {
+            mapped.push(n_s(*b"INMs", &effect.internal_name));
+        }
+        if !effect.properties.is_empty() {
+            let epsv_path = format!("{path}/EPSv");
+            let bagged = self.bag.take_under(&epsv_path);
+            let props = effect
+                .properties
+                .iter()
+                .map(effect_property_node)
+                .collect::<Vec<_>>();
+            mapped.push(n_kids(*b"EPSv", splice(props, bagged)));
+        }
+        let children = self.splice_container(mapped, path);
+        Ok(n_kids(*b"EFLv", children))
     }
 
     /// `PATv` children in dictionary order: BCLi FCLi, then the
@@ -523,6 +577,7 @@ impl Writer<'_> {
             n_f(*b"RITf", object.frame.x1),
             n_f(*b"BOTf", object.frame.y1),
         ];
+        mapped.extend(self.write_effects(&object.effects, path)?);
         if let Some(transform) = &object.transform {
             mapped.push(self.write_matrix(transform, &format!("{path}/MTXv")));
         }
@@ -542,6 +597,7 @@ impl Writer<'_> {
         if let Some(name) = &object.name {
             mapped.push(n_s(*b"OBNs", name));
         }
+        mapped.extend(self.write_effects(&object.effects, path)?);
         if object.mask_hidden {
             mapped.push(n_b(*b"MNAb", true));
         }
@@ -568,6 +624,7 @@ impl Writer<'_> {
         mapped.push(n_i(*b"TSZi", object.tile_size));
         mapped.push(self.write_tiles(&object.tiles, path)?);
         mapped.push(n_i(*b"BLDi", object.blend));
+        mapped.extend(self.write_effects(&object.effects, path)?);
         mapped.push(n_i(*b"OPAi", object.opacity));
         mapped.push(n_b(*b"VISb", object.visible));
         if let Some(name) = &object.name {

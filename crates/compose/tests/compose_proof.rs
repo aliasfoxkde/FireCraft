@@ -99,6 +99,7 @@ fn rect_object(
         opacity,
         blend,
         name: None,
+        effects: Vec::new(),
     }))
 }
 
@@ -311,6 +312,7 @@ fn group_opacity_composes_over_its_children() {
         visible: true,
         locked: false,
         mask_hidden: false,
+        effects: Vec::new(),
     }));
     doc.pages.push(page(
         4.0,
@@ -381,6 +383,7 @@ fn structural_visibility_rules() {
         opacity: 1000,
         blend: 0,
         name: None,
+        effects: Vec::new(),
     }));
 
     let mut hidden_layer = layer(vec![cell(vec![hidden_layer_rect])]);
@@ -475,6 +478,7 @@ fn repeated_renders_are_byte_identical() {
         visible: true,
         locked: false,
         mask_hidden: false,
+        effects: Vec::new(),
     }));
     doc.pages.push(page(
         8.0,
@@ -516,6 +520,7 @@ fn stroke_paints_along_the_path() {
         opacity: 1000,
         blend: 0,
         name: None,
+        effects: Vec::new(),
     }));
     doc.pages
         .push(page(4.0, 4.0, vec![layer(vec![cell(vec![line])])]));
@@ -551,6 +556,7 @@ fn dangling_object_id_is_an_error() {
     let id = doc.registry.insert(ObjectData::Text(doc::TextObject {
         frame: geom::Rect::new(0.0, 0.0, 1.0, 1.0),
         transform: None,
+        effects: Vec::new(),
     }));
     doc.registry.remove(id);
     doc.pages

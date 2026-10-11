@@ -10,9 +10,10 @@
 use crate::fwmap::MapError;
 use crate::fwmap::unknown::UnknownBag;
 use crate::model::{
-    Canvas, Cell, Contour, Document, DocumentInfo, Grid, GroupObject, Guides, ImageObject, Layer,
-    LayerList, Page, PageInfo, PaintStyle, PathObject, PathPoint, PrimitiveSource, SliceObject,
-    SymbolDefinition, SymbolInstanceObject, TextObject, TileRef,
+    Canvas, Cell, Contour, Document, DocumentInfo, Effect, EffectProperty, EffectValue, Grid,
+    GroupObject, Guides, ImageObject, Layer, LayerList, Page, PageInfo, PaintStyle, PathObject,
+    PathPoint, PrimitiveSource, SliceObject, SymbolDefinition, SymbolInstanceObject, TextObject,
+    TileRef,
 };
 use crate::registry::{ObjectData, ObjectId, Registry};
 use fwpng::nodetree::{Node, NodeValue};
@@ -674,6 +675,7 @@ impl Reader {
             (None, None, None, None, None, None);
         let (mut locked, mut visible, mut opacity, mut blend, mut name) =
             (None, None, None, None, None);
+        let mut effects = Vec::new();
 
         for (i, child) in children.iter().enumerate() {
             match &child.fourcc {
@@ -719,6 +721,10 @@ impl Reader {
                 }
                 b"OBNs" => self.slot_str(child, path, i, &mut name)?,
                 b"BLDi" => self.slot_i64(child, path, i, &mut blend)?,
+                b"EFLv" => {
+                    let eflv_path = format!("{path}/EFLv[{}]", effects.len());
+                    effects.push(self.read_effect(child, &eflv_path)?);
+                }
                 b"VISb" => self.slot_bool(child, path, i, &mut visible)?,
                 b"OPAi" => self.slot_i64(child, path, i, &mut opacity)?,
                 _ => self.bag_node(path, i, child),
@@ -758,6 +764,7 @@ impl Reader {
             opacity: opacity.unwrap_or(1000),
             blend: blend.unwrap_or(0),
             name,
+            effects,
         })))
     }
 
@@ -988,6 +995,7 @@ impl Reader {
         let (mut left, mut top, mut right, mut bottom) = (None, None, None, None);
         let mut transform: Option<Affine> = None;
         let mut transform_lost = false;
+        let mut effects = Vec::new();
 
         for (i, child) in children.iter().enumerate() {
             match &child.fourcc {
@@ -995,6 +1003,10 @@ impl Reader {
                 b"TOPf" => self.slot_f64(child, path, i, &mut top)?,
                 b"RITf" => self.slot_f64(child, path, i, &mut right)?,
                 b"BOTf" => self.slot_f64(child, path, i, &mut bottom)?,
+                b"EFLv" => {
+                    let eflv_path = format!("{path}/EFLv[{}]", effects.len());
+                    effects.push(self.read_effect(child, &eflv_path)?);
+                }
                 b"MTXv" => {
                     if transform.is_none() && !transform_lost {
                         let mtxv_path = format!("{path}/MTXv");
@@ -1011,7 +1023,7 @@ impl Reader {
                     }
                 }
                 // TFSv run subtree, style plumbing, anchors: all preserved
-                // (deep text engine is M6).
+                // (deep text engine is M7 task 7).
                 _ => self.bag_node(path, i, child),
             }
         }
@@ -1024,13 +1036,108 @@ impl Reader {
                 y1: bottom.unwrap_or(0.0),
             },
             transform,
+            effects,
         }))
+    }
+
+    /// Reads one `EFLv` — one live effect: `CATs`/`INMs` names plus the
+    /// first `EPSv` property list. Unknown children and malformed
+    /// `DCEv` entries bag in place rather than fail: an effect we only
+    /// half-understand must still round-trip whole.
+    fn read_effect(&mut self, node: &Node, path: &str) -> Result<Effect, MapError> {
+        let children = children_of(node, path)?;
+        let (mut category, mut internal_name) = (None, None);
+        let mut properties = Vec::new();
+        let mut epsv_read = false;
+
+        for (i, child) in children.iter().enumerate() {
+            match &child.fourcc {
+                b"CATs" => match child.as_str() {
+                    Some(text) => category = Some(text.to_owned()),
+                    None => self.bag_node(path, i, child),
+                },
+                b"INMs" => match child.as_str() {
+                    Some(text) => internal_name = Some(text.to_owned()),
+                    None => self.bag_node(path, i, child),
+                },
+                b"EPSv" => {
+                    if epsv_read {
+                        // First property list wins; extras splice back.
+                        self.bag_node(path, i, child);
+                    } else {
+                        let epsv_path = format!("{path}/EPSv");
+                        let kids = children_of(child, &epsv_path)?;
+                        for (j, entry) in kids.iter().enumerate() {
+                            match self.read_effect_entry(entry, &epsv_path, j)? {
+                                Some(property) => properties.push(property),
+                                // Malformed entry: preserve it whole.
+                                None => self.bag_node(&epsv_path, j, entry),
+                            }
+                        }
+                        epsv_read = true;
+                    }
+                }
+                _ => self.bag_node(path, i, child),
+            }
+        }
+
+        Ok(Effect {
+            category: category.unwrap_or_default(),
+            internal_name: internal_name.unwrap_or_default(),
+            properties,
+        })
+    }
+
+    /// One `DCEv` dictionary entry: a `DCKs` key plus exactly one value
+    /// node. String values (`DCVs`) read as [`EffectValue::Text`];
+    /// everything else (`GPLv` grab-point lists, `GDTv` nested
+    /// dictionaries, anything unrecognized) is preserved verbatim.
+    /// Returns `None` for entries without exactly one key and one
+    /// value — the caller then keeps the whole entry in the bag.
+    fn read_effect_entry(
+        &mut self,
+        node: &Node,
+        parent_path: &str,
+        index: usize,
+    ) -> Result<Option<EffectProperty>, MapError> {
+        let path = format!("{parent_path}[{index}]");
+        let children = children_of(node, &path)?;
+        let (mut key, mut value) = (None, None);
+
+        for child in children {
+            match &child.fourcc {
+                b"DCKs" => {
+                    if key.is_some() {
+                        return Ok(None);
+                    }
+                    match child.as_str() {
+                        Some(text) => key = Some(text.to_owned()),
+                        None => return Ok(None),
+                    }
+                }
+                _ => {
+                    if value.is_some() {
+                        return Ok(None);
+                    }
+                    value = Some(match (child.fourcc == *b"DCVs", child.as_str()) {
+                        (true, Some(text)) => EffectValue::Text(text.to_owned()),
+                        _ => EffectValue::Raw(child.clone()),
+                    });
+                }
+            }
+        }
+
+        Ok(match (key, value) {
+            (Some(key), Some(value)) => Some(EffectProperty { key, value }),
+            _ => None,
+        })
     }
 
     fn read_group(&mut self, children: &[Node], path: &str) -> Result<ObjectData, MapError> {
         let (mut group_type, mut opacity, mut blend) = (None, None, None);
         let (mut visible, mut locked, mut mask_hidden) = (None, None, None);
         let (mut name, mut element_ids) = (None, None);
+        let mut effects = Vec::new();
 
         for (i, child) in children.iter().enumerate() {
             match &child.fourcc {
@@ -1050,8 +1157,12 @@ impl Reader {
                         self.bag_node(path, i, child);
                     }
                 }
-                // DTAv / IMGv / EFLv / MRMv / LNKb / ISSv and anything
-                // else: preserved.
+                // DTAv / IMGv / MRMv / LNKb / ISSv and anything else:
+                // preserved (EFLv maps below).
+                b"EFLv" => {
+                    let eflv_path = format!("{path}/EFLv[{}]", effects.len());
+                    effects.push(self.read_effect(child, &eflv_path)?);
+                }
                 _ => self.bag_node(path, i, child),
             }
         }
@@ -1065,6 +1176,7 @@ impl Reader {
             visible: visible.unwrap_or(true),
             locked: locked.unwrap_or(false),
             mask_hidden: mask_hidden.unwrap_or(false),
+            effects,
         }))
     }
 
@@ -1074,6 +1186,7 @@ impl Reader {
         let (mut opacity, mut blend, mut visible, mut locked, mut name) =
             (None, None, None, None, None);
         let mut tiles = Vec::new();
+        let mut effects = Vec::new();
 
         for (i, child) in children.iter().enumerate() {
             match &child.fourcc {
@@ -1098,7 +1211,11 @@ impl Reader {
                         self.bag_node(path, i, child);
                     }
                 }
-                // DTAv / EFLv / nested IMGv and anything else: preserved.
+                b"EFLv" => {
+                    let eflv_path = format!("{path}/EFLv[{}]", effects.len());
+                    effects.push(self.read_effect(child, &eflv_path)?);
+                }
+                // DTAv / nested IMGv and anything else: preserved.
                 _ => self.bag_node(path, i, child),
             }
         }
@@ -1114,6 +1231,7 @@ impl Reader {
             blend: blend.unwrap_or(0),
             visible: visible.unwrap_or(true),
             locked: locked.unwrap_or(false),
+            effects,
         }))
     }
 

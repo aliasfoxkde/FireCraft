@@ -1005,6 +1005,7 @@ dependencies = [
  "crc32fast",
  "flate2",
  "png",
+ "serde",
  "wasm-bindgen-test",
 ]
 

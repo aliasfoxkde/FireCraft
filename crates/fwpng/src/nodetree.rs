@@ -32,6 +32,7 @@ pub const MAX_SCALAR_LEN: usize = 4096;
 
 /// The typed payload of a node.
 #[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum NodeValue {
     /// Hex-encoded 64-bit signed integer (`'i'` type letter).
     Int(i64),
@@ -47,6 +48,7 @@ pub enum NodeValue {
 
 /// One node: a four-character code plus its typed payload.
 #[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Node {
     /// The FourCC as it appears in the stream (type letter included).
     pub fourcc: [u8; 4],

@@ -41,6 +41,7 @@ pub fn path_object(seed: u64) -> ObjectData {
         opacity: 1000,
         blend: 0,
         name: None,
+        effects: Vec::new(),
     })
 }
 

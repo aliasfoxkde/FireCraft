@@ -135,6 +135,7 @@ pub fn random_document(rng: &mut FuzzRng) -> Document {
                 visible: true,
                 locked: false,
                 mask_hidden: false,
+                effects: Vec::new(),
             }));
             tops.retain(|top| !children.contains(top));
             tops.push(group_id);
@@ -250,6 +251,7 @@ fn random_path(rng: &mut FuzzRng, index: usize) -> ObjectData {
         } else {
             None
         },
+        effects: Vec::new(),
     })
 }
 
@@ -265,6 +267,7 @@ fn random_image(rng: &mut FuzzRng) -> ObjectData {
         blend: rng.below(27) as i64,
         visible: true,
         locked: rng.chance(10),
+        effects: Vec::new(),
     })
 }
 
@@ -273,6 +276,7 @@ fn random_text(rng: &mut FuzzRng) -> ObjectData {
     ObjectData::Text(TextObject {
         frame: geom::Rect::new(a.x, a.y, a.x + 10.0, a.y + 4.0),
         transform: None,
+        effects: Vec::new(),
     })
 }
 

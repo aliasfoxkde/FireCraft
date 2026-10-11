@@ -124,6 +124,7 @@ fn insert_shape(
         opacity: 1000,
         blend: 0,
         name: placement.object_name().cloned(),
+        effects: Vec::new(),
     });
 
     let id = document.registry.insert(object);

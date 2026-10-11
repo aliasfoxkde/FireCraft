@@ -15,6 +15,12 @@ keywords = ["png", "fireworks", "image", "graphics", "format"]
 crc32fast = "1"
 flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
 png = "0.18"
+# Off by default: only the doc model's serde feature needs nodes to be
+# serializable (raw-preserved effect values ride along inside it).
+serde = { version = "1", features = ["derive"], optional = true }
+
+[features]
+serde = ["dep:serde"]
 
 [dev-dependencies]
 # Kept in lockstep with the installed wasm-bindgen-test-runner

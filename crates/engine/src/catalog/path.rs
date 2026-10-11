@@ -617,6 +617,7 @@ mod tests {
             opacity: 1000,
             blend: 0,
             name: Some("square".to_owned()),
+            effects: Vec::new(),
         })
     }
 
@@ -632,6 +633,7 @@ mod tests {
             blend: 0,
             visible: true,
             locked: false,
+            effects: Vec::new(),
         })
     }
 

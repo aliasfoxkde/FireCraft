@@ -723,6 +723,7 @@ fn neutral(contours: Vec<Contour>) -> PathObject {
         opacity: 1000,
         blend: 0,
         name: None,
+        effects: Vec::new(),
     }
 }
 

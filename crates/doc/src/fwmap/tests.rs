@@ -10,9 +10,10 @@ use super::reader::read;
 use super::unknown::UnknownBag;
 use super::writer::{mapped_indices, splice, write};
 use crate::model::{
-    Canvas, Cell, Contour, Document, DocumentInfo, Grid, GroupObject, Guides, ImageObject, Layer,
-    LayerList, Page, PageInfo, PaintStyle, PathObject, PathPoint, PrimitiveSource, SliceObject,
-    SymbolDefinition, SymbolInstanceObject, TextObject, TileRef,
+    Canvas, Cell, Contour, Document, DocumentInfo, Effect, EffectProperty, EffectValue, Grid,
+    GroupObject, Guides, ImageObject, Layer, LayerList, Page, PageInfo, PaintStyle, PathObject,
+    PathPoint, PrimitiveSource, SliceObject, SymbolDefinition, SymbolInstanceObject, TextObject,
+    TileRef,
 };
 use crate::registry::{ObjectData, ObjectId, Registry};
 use fwpng::nodetree::{Node, NodeValue, parse, serialize};
@@ -113,6 +114,7 @@ fn sample_document() -> Document {
         opacity: 1000,
         blend: 0,
         name: None,
+        effects: Vec::new(),
     }));
     let path_id = doc.registry.insert(ObjectData::Path(PathObject {
         contours: vec![Contour {
@@ -159,6 +161,24 @@ fn sample_document() -> Document {
         opacity: 850,
         blend: 2,
         name: Some("panel".into()),
+        effects: vec![Effect {
+            category: "Shadow and Glow".into(),
+            internal_name: "dropShadow".into(),
+            properties: vec![
+                EffectProperty {
+                    key: "EffectMoaID".into(),
+                    value: EffectValue::Text("9CS6CoreShadowAndGlowDropShadow".into()),
+                },
+                EffectProperty {
+                    key: "gaussian_blur_radius".into(),
+                    value: EffectValue::Text("5".into()),
+                },
+                EffectProperty {
+                    key: "rgb_points".into(),
+                    value: EffectValue::Raw(curve_points()),
+                },
+            ],
+        }],
     }));
     let image_id = doc.registry.insert(ObjectData::Image(ImageObject {
         location: Point::new(8.0, 8.0),
@@ -175,6 +195,14 @@ fn sample_document() -> Document {
         blend: 3,
         visible: true,
         locked: false,
+        effects: vec![Effect {
+            category: "Adjust Color".into(),
+            internal_name: "gaussianBlur".into(),
+            properties: vec![EffectProperty {
+                key: "gaussian_blur_radius".into(),
+                value: EffectValue::Text("2.5".into()),
+            }],
+        }],
     }));
     let text_id = doc.registry.insert(ObjectData::Text(TextObject {
         frame: Rect {
@@ -184,6 +212,27 @@ fn sample_document() -> Document {
             y1: 22.0,
         },
         transform: Some(Affine::new([2.0, 0.0, 0.0, 2.0, 0.0, 0.0])),
+        effects: vec![Effect {
+            category: String::new(),
+            internal_name: "brightnessContrast".into(),
+            properties: vec![
+                EffectProperty {
+                    key: "EffectMoaID".into(),
+                    value: EffectValue::Text("9CS6AdjustColorBrightnessContrast".into()),
+                },
+                EffectProperty {
+                    key: "brightness".into(),
+                    value: EffectValue::Text("12".into()),
+                },
+                EffectProperty {
+                    key: "gdt_payload".into(),
+                    value: EffectValue::Raw(n_k(
+                        b"GDTv",
+                        vec![n_i(b"GDIi", 7), n_s(b"GDSs", "nested")],
+                    )),
+                },
+            ],
+        }],
     }));
     let slice_id = doc.registry.insert(ObjectData::Slice(SliceObject {
         internal_name: Some("slice_1".into()),
@@ -207,6 +256,11 @@ fn sample_document() -> Document {
         visible: true,
         locked: false,
         mask_hidden: false,
+        effects: vec![Effect {
+            category: "Adjust Color".into(),
+            internal_name: "autoLevels".into(),
+            properties: Vec::new(),
+        }],
     }));
     let instance_id = doc
         .registry
@@ -300,6 +354,18 @@ fn round_trip_bytes(doc: &Document, bag: &UnknownBag) -> (Vec<u8>, Document, Unk
     let parsed = parse(&bytes).expect("reparse");
     let (doc2, bag2) = read(&parsed).expect("read");
     (bytes, doc2, bag2)
+}
+
+/// An `rgb_points` grab-point curve: `GPLv` of two `GPTv` `XLCf`/`YLCf`
+/// pairs (dictionary shape for the colour-transform curves).
+fn curve_points() -> Node {
+    n_k(
+        b"GPLv",
+        vec![
+            n_k(b"GPTv", vec![n_f(b"XLCf", 0.0), n_f(b"YLCf", 0.0)]),
+            n_k(b"GPTv", vec![n_f(b"XLCf", 1.0), n_f(b"YLCf", 1.0)]),
+        ],
+    )
 }
 
 // --- tests --------------------------------------------------------------
@@ -413,6 +479,145 @@ fn unknown_nodes_survive_modeled_edits() {
         if let ObjectData::Path(path) = object {
             assert!(!path.even_odd, "modeled edit survived the round trip");
         }
+    }
+}
+
+#[test]
+fn effect_lists_round_trip_through_bytes() {
+    // The sample carries effects on all four container kinds (path
+    // text group image) — the lossless harness proves them end to end.
+    let doc = sample_document();
+    let (bytes, doc2, bag2) = round_trip_bytes(&doc, &UnknownBag::new());
+    assert!(bag2.is_empty(), "mapped effects leave no bag residue");
+    assert_eq!(doc, doc2, "effect payloads survive real PNG bytes");
+    let (bytes2, _doc3, bag3) = round_trip_bytes(&doc2, &bag2);
+    assert_eq!(bytes, bytes2, "canonical emission is byte-stable");
+    assert!(bag3.is_empty());
+}
+
+#[test]
+fn effect_node_shape_preserves_raw_values() {
+    let doc = sample_document();
+    let (mut tree, _stats) = write(&doc, &UnknownBag::new()).expect("write");
+    let pthv = first_path_object_mut(&mut tree);
+    let eflv = children_mut(pthv)
+        .iter_mut()
+        .find(|node| node.fourcc == *b"EFLv")
+        .expect("sample path carries an effect");
+    let kids = children(eflv).clone();
+    let fourccs: Vec<[u8; 4]> = kids.iter().map(|node| node.fourcc).collect();
+    assert_eq!(
+        fourccs,
+        vec![*b"CATs", *b"INMs", *b"EPSv"],
+        "dictionary slot order inside EFLv"
+    );
+    let epsv = &kids[2];
+    let entries = children(epsv).clone();
+    assert_eq!(entries.len(), 3);
+    for entry in &entries {
+        assert_eq!(entry.fourcc, *b"DCEv");
+        let pair = children(entry);
+        assert_eq!(pair.len(), 2, "DCKs + exactly one value node");
+        assert_eq!(pair[0].fourcc, *b"DCKs");
+    }
+    // The curve property is the raw node preserved verbatim —
+    // byte-equal to its construction, grab points included.
+    let rgb = entries
+        .iter()
+        .find(|entry| children(entry)[0] == n_s(b"DCKs", "rgb_points"))
+        .expect("rgb_points entry");
+    let expected = n_k(b"DCEv", vec![n_s(b"DCKs", "rgb_points"), curve_points()]);
+    assert_eq!(
+        serialize(children(rgb)),
+        serialize(children(&expected)),
+        "GPLv grab points survive byte-identically"
+    );
+}
+
+#[test]
+fn malformed_effect_entries_bag_and_reemit() {
+    // A DCEv with two value nodes and a second EPSv sibling: both are
+    // structural surprises — bagged whole, never half-mapped.
+    let doc = sample_document();
+    let (mut tree, _stats) = write(&doc, &UnknownBag::new()).expect("write");
+    let malformed = n_k(
+        b"DCEv",
+        vec![
+            n_s(b"DCKs", "mystery_param"),
+            n_s(b"DCVs", "value"),
+            n_i(b"DCVi", 17),
+        ],
+    );
+    let extra = n_k(
+        b"EPSv",
+        vec![n_k(
+            b"DCEv",
+            vec![n_s(b"DCKs", "EffectMoaID"), n_s(b"DCVs", "SecondList")],
+        )],
+    );
+    {
+        let pthv = first_path_object_mut(&mut tree);
+        let eflv = children_mut(pthv)
+            .iter_mut()
+            .find(|node| node.fourcc == *b"EFLv")
+            .expect("EFLv");
+        let epsv = children_mut(eflv)
+            .iter_mut()
+            .find(|node| node.fourcc == *b"EPSv")
+            .expect("EPSv");
+        children_mut(epsv).push(malformed.clone());
+        children_mut(eflv).push(extra.clone());
+    }
+
+    let (doc2, bag) = {
+        let bytes = serialize(&tree);
+        let parsed = parse(&bytes).expect("parse");
+        read(&parsed).expect("read")
+    };
+    assert_eq!(bag.len(), 2, "malformed DCEv + extra EPSv");
+    let mut checked = 0;
+    for (_, object) in doc2.registry.iter() {
+        if let ObjectData::Path(path) = object {
+            if path.name.as_deref() == Some("panel") {
+                let effect = &path.effects[0];
+                assert_eq!(
+                    effect.properties.len(),
+                    3,
+                    "only the well-formed entries map"
+                );
+                assert!(
+                    effect
+                        .properties
+                        .iter()
+                        .all(|prop| prop.key != "mystery_param")
+                );
+                checked += 1;
+            }
+        }
+    }
+    assert_eq!(checked, 1, "the panel path was inspected");
+
+    // Writing back re-emits both surprises byte-exact at their slots.
+    let (mut tree2, stats2) = write(&doc2, &bag).expect("write");
+    assert_eq!(stats2.unconsumed_unknown, 0);
+    {
+        let pthv = first_path_object_mut(&mut tree2);
+        let eflv = children_mut(pthv)
+            .iter_mut()
+            .find(|node| node.fourcc == *b"EFLv")
+            .expect("EFLv");
+        let kids = children(eflv);
+        assert_eq!(
+            kids.last(),
+            Some(&extra),
+            "extra EPSv back at its recorded child index"
+        );
+        let epsv = &kids[2];
+        assert_eq!(
+            children(epsv).last(),
+            Some(&malformed),
+            "malformed DCEv back at its recorded entry index"
+        );
     }
 }
 
@@ -755,6 +960,7 @@ fn model_structs_are_fully_constructed() {
         opacity: 1000,
         blend: 0,
         name: None,
+        effects: Vec::new(),
     };
     let _text = TextObject {
         frame: Rect {
@@ -764,6 +970,7 @@ fn model_structs_are_fully_constructed() {
             y1: 0.0,
         },
         transform: None,
+        effects: Vec::new(),
     };
     let _group = GroupObject {
         group_type: 0,
@@ -774,6 +981,7 @@ fn model_structs_are_fully_constructed() {
         visible: true,
         locked: false,
         mask_hidden: false,
+        effects: Vec::new(),
     };
     let _image = ImageObject {
         location: Point::ZERO,
@@ -786,6 +994,7 @@ fn model_structs_are_fully_constructed() {
         blend: 0,
         visible: true,
         locked: false,
+        effects: Vec::new(),
     };
     let _slice = SliceObject {
         internal_name: None,

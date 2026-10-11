@@ -4,7 +4,49 @@
 //! is still unpinned (raw color ints) say so in their docs.
 
 use crate::registry::{ObjectId, Registry};
+use fwpng::nodetree::Node;
 use geom::{Affine, Point, Rect};
+
+/// One live effect: one `EFLv` child of a path/text/group/image
+/// object — its category (`CATs`), internal name (`INMs`), and the
+/// `EPSv` property entries. The effect's identity is the
+/// `EffectMoaID` property (a GUID string); the readable name lives in
+/// the internal name.
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Effect {
+    /// `CATs` — UI category (e.g. "Shadow and Glow"). Empty when the
+    /// node is absent (writers skip it, so the round trip is exact).
+    pub category: String,
+    /// `INMs` — internal name (e.g. "dropShadow").
+    pub internal_name: String,
+    /// `EPSv` dictionary entries in file order.
+    pub properties: Vec<EffectProperty>,
+}
+
+/// One `DCEv` entry inside an effect's `EPSv`.
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct EffectProperty {
+    /// `DCKs` key (e.g. "EffectMoaID", "gaussian_blur_radius").
+    pub key: String,
+    pub value: EffectValue,
+}
+
+/// The value half of a `DCEv`. The dictionary allows three value node
+/// types; the model reads the common one and preserves the rest
+/// verbatim (M3 rule: round-trip never waits on semantics).
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum EffectValue {
+    /// `DCVs` — a string value. Numeric effect parameters arrive as
+    /// decimal strings in the file; they stay strings here until a
+    /// consumer interprets them.
+    Text(String),
+    /// `GPLv` (curve grab points) / `GDTv` (nested dictionary) — kept
+    /// byte-exact, uninterpreted.
+    Raw(Node),
+}
 
 /// A document: the `MKBv` node plus its pages (`PDCv`).
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -296,6 +338,8 @@ pub struct PathObject {
     pub blend: i64,
     /// `OBNs` — object name.
     pub name: Option<String>,
+    /// `EFLv`* — live effects, file order.
+    pub effects: Vec<Effect>,
 }
 
 impl PathObject {
@@ -319,6 +363,7 @@ impl PathObject {
             opacity: 1000,
             blend: 0,
             name: None,
+            effects: Vec::new(),
         }
     }
 }
@@ -374,6 +419,8 @@ pub struct TextObject {
     pub frame: Rect,
     /// `MTXv` — transform (affine rows enforced like [`PrimitiveSource`]).
     pub transform: Option<Affine>,
+    /// `EFLv`* — live effects, file order.
+    pub effects: Vec<Effect>,
 }
 
 /// `GRPv` — a group, including mask-structured groups.
@@ -396,6 +443,8 @@ pub struct GroupObject {
     pub locked: bool,
     /// `MNAb` — mask group with the mask image itself hidden.
     pub mask_hidden: bool,
+    /// `EFLv`* — live effects, file order.
+    pub effects: Vec<Effect>,
 }
 
 /// `IMGv` — a raster image backed by `mkBT` tiles.
@@ -422,6 +471,8 @@ pub struct ImageObject {
     pub visible: bool,
     /// `LCKb` — locked.
     pub locked: bool,
+    /// `EFLv`* — live effects, file order.
+    pub effects: Vec<Effect>,
 }
 
 /// One entry in a `TILv`: a tile is *either* an `mkBT` reference *or* a
@@ -529,6 +580,7 @@ pub(crate) mod tests {
             opacity: 1000,
             blend: 0,
             name: None,
+            effects: Vec::new(),
         })
     }
 

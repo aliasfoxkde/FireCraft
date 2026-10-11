@@ -911,6 +911,7 @@ impl TypedCommand for CreatePath {
             opacity: 1000,
             blend: 0,
             name: payload.name.clone(),
+            effects: Vec::new(),
         });
 
         let id = document.registry.insert(object);
@@ -1070,6 +1071,7 @@ mod tests {
             opacity: 1000,
             blend: 0,
             name: None,
+            effects: Vec::new(),
         })
     }
 
@@ -1085,6 +1087,7 @@ mod tests {
             blend: 0,
             visible: true,
             locked: false,
+            effects: Vec::new(),
         })
     }
 
@@ -1322,6 +1325,7 @@ mod tests {
             visible: true,
             locked: false,
             mask_hidden: false,
+            effects: Vec::new(),
         }));
         document.pages[0].layers.layers[0].cells[0].elements = vec![ids[0], group_id];
 
@@ -1382,6 +1386,7 @@ mod tests {
             visible: true,
             locked: false,
             mask_hidden: false,
+            effects: Vec::new(),
         }));
         document.pages[0].layers.layers[0].cells[0].elements = vec![group_id];
         let delta = ReorderObject
