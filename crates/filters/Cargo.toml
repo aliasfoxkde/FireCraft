@@ -1,0 +1,16 @@
+[package]
+name = "filters"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Deterministic CPU image kernels for FireCraft: point ops, convolutions, seeded noise."
+
+[dependencies]
+color = { path = "../color" }
+
+[lints]
+workspace = true

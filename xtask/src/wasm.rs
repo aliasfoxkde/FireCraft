@@ -14,9 +14,12 @@ use crate::util::cargo;
 /// `engine` and the shells joined in M5 — the editor core and both
 /// surfaces must compile for the browser even though their *native*
 /// platform services (`StdFs`) would never run there. `vector` joined
-/// in M6: L2 pure math over `doc`+`geom`, no IO, no threads.
+/// in M6: L2 pure math over `doc`+`geom`, no IO, no threads. `filters`
+/// joined in M7 at birth: L2 pure kernels over `color`, integer math,
+/// no IO.
 const WASM_CRATES: &[&str] = &[
     "fwpng", "geom", "color", "raster", "doc", "vector", "compose", "engine", "app-cli", "app",
+    "filters",
 ];
 
 /// Integration-test target exercising fwpng under wasm.
