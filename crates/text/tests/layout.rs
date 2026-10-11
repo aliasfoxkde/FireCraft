@@ -4,8 +4,8 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-use doc::{TextObject, TextRun, TextStyle};
-use geom::{Affine, Rect};
+use doc::{Contour, PathPoint, TextObject, TextOnPath, TextRun, TextStyle};
+use geom::{Affine, Point, Rect};
 use text::{TextEngine, TextGeometry};
 
 /// The golden object: Liberation Sans, 24px, left-aligned, in a 200×40
@@ -32,6 +32,55 @@ fn with_style(style: TextStyle) -> TextObject {
 
 fn layout(object: &TextObject) -> TextGeometry {
     TextEngine::new().glyph_contours(object)
+}
+
+/// An open two-anchor rail from `from` to `to` — the simplest guide
+/// path with a constant tangent.
+fn rail(from: (f64, f64), to: (f64, f64)) -> Vec<Contour> {
+    vec![Contour {
+        closed: false,
+        point_count: 2,
+        points: vec![
+            PathPoint {
+                anchor: Point::new(from.0, from.1),
+                primary: None,
+                secondary: None,
+                is_curve: false,
+            },
+            PathPoint {
+                anchor: Point::new(to.0, to.1),
+                primary: None,
+                secondary: None,
+                is_curve: false,
+            },
+        ],
+    }]
+}
+
+/// The pinned text riding a guide path: 10px (so a short rail holds the
+/// whole string), flow 2.
+fn on_path(path: Vec<Contour>, alignment: Option<i64>, offset: f64) -> TextObject {
+    let mut object = TextObject::new(Rect::new(10.0, 20.0, 30.0, 24.0));
+    object.style = Some(TextStyle {
+        font: Some("Liberation Sans".into()),
+        size: Some(10.0),
+        justification: Some(0),
+        ..TextStyle::default()
+    });
+    object.runs = vec![TextRun {
+        text: "FireCraft".into(),
+    }];
+    object.flow = Some(2);
+    object.on_path = Some(TextOnPath {
+        alignment,
+        offset,
+        path,
+    });
+    object
+}
+
+fn ink(geometry: &TextGeometry) -> Rect {
+    geometry.ink.expect("on-path text must produce ink")
 }
 
 /// Pinned render: pinned font + pinned string → pinned geometry. These
@@ -313,4 +362,173 @@ fn flows_two_and_three_fall_back_to_normal_flow() {
         let geometry = layout(&object);
         assert_eq!(geometry, layout(&pinned()));
     }
+}
+
+#[test]
+fn flow_two_without_a_path_still_falls_back() {
+    let mut object = on_path(Vec::new(), Some(0), 0.0);
+    object.flow = Some(2);
+    let mut linear = on_path(Vec::new(), Some(0), 0.0);
+    linear.flow = Some(0);
+    linear.on_path = None;
+    assert_eq!(layout(&object), layout(&linear));
+}
+
+/// A horizontal rail lays text exactly like rotate and upright agree —
+/// both bases are the identity at tangent (1, 0).
+#[test]
+fn on_horizontal_rail_rotate_and_upright_agree() {
+    let path = rail((10.0, 40.0), (210.0, 40.0));
+    assert_eq!(
+        layout(&on_path(path.clone(), Some(0), 0.0)),
+        layout(&on_path(path, Some(1), 0.0))
+    );
+}
+
+/// On-path text ignores the frame: a 30px-wide frame would wrap the
+/// plain flow into many lines, but the rail holds the whole string on
+/// one baseline.
+#[test]
+fn on_path_ignores_the_frame_width() {
+    // The same text in plain flow inside the same tiny frame wraps.
+    let mut wrapped = on_path(Vec::new(), Some(0), 0.0);
+    wrapped.flow = Some(0);
+    wrapped.on_path = None;
+    assert!(layout(&wrapped).block.1 > 2.0 * 12.0, "plain flow wraps");
+
+    let geometry = layout(&on_path(rail((10.0, 40.0), (210.0, 40.0)), Some(0), 0.0));
+    let bounds = ink(&geometry);
+    assert!(bounds.height() < 10.0, "one line expected, got {bounds:?}");
+}
+
+/// The baseline rides the rail: ink bottoms sit at the rail's y.
+#[test]
+fn baseline_rides_the_rail() {
+    let geometry = layout(&on_path(rail((10.0, 40.0), (210.0, 40.0)), Some(0), 0.0));
+    let bounds = ink(&geometry);
+    // "FireCraft" has no descenders: ink ends within ~1.5px of the rail.
+    assert!((bounds.y1 - 40.0).abs() < 1.5, "{bounds:?}");
+    assert!(bounds.y0 > 30.0, "caps rise above the rail: {bounds:?}");
+}
+
+/// `CHOf` starts the text `offset` pixels along the rail.
+#[test]
+fn character_offset_starts_farther_along() {
+    let at_zero = ink(&layout(&on_path(
+        rail((0.0, 40.0), (210.0, 40.0)),
+        Some(0),
+        0.0,
+    )));
+    let at_thirty = ink(&layout(&on_path(
+        rail((0.0, 40.0), (210.0, 40.0)),
+        Some(0),
+        30.0,
+    )));
+    assert!((at_thirty.x0 - at_zero.x0 - 30.0).abs() < 0.75);
+}
+
+/// A vertical rail + rotate runs the text downward: the ink is tall and
+/// narrow, and starts at the rail's x.
+#[test]
+fn rotate_follows_a_vertical_rail_downward() {
+    let geometry = layout(&on_path(rail((100.0, 10.0), (100.0, 210.0)), Some(0), 0.0));
+    let bounds = ink(&geometry);
+    assert!(bounds.height() > bounds.width() * 3.0, "{bounds:?}");
+    // First glyph's baseline starts at the rail: the rotated F's stem
+    // hangs left of the rail, its caps reach right — the box straddles
+    // x=100 within a cap height.
+    assert!(bounds.x0 > 100.0 - 8.0 && bounds.x0 < 100.0, "{bounds:?}");
+}
+
+/// Upright on a vertical rail stacks unrotated glyphs to the right of
+/// the rail (left side bearing, ascent above each baseline), while the
+/// rotated case straddles it — caps reach left of the rail.
+#[test]
+fn upright_on_a_vertical_rail_stays_unrotated() {
+    let rotated = ink(&layout(&on_path(
+        rail((100.0, 10.0), (100.0, 210.0)),
+        Some(0),
+        0.0,
+    )));
+    let upright = ink(&layout(&on_path(
+        rail((100.0, 10.0), (100.0, 210.0)),
+        Some(1),
+        0.0,
+    )));
+    assert!(upright.x0 > 100.0, "upright hangs right: {upright:?}");
+    assert!(rotated.x0 < 100.0, "rotated straddles: {rotated:?}");
+    // Upright glyphs stack within a line height of the rail.
+    assert!(upright.width() < 12.0, "{upright:?}");
+}
+
+/// Glyphs beyond the rail's end are dropped: a 12px rail holds at most
+/// a couple of glyphs of the pinned string.
+#[test]
+fn glyphs_past_the_rail_end_are_dropped() {
+    let full = layout(&on_path(rail((0.0, 40.0), (210.0, 40.0)), Some(0), 0.0));
+    let short = layout(&on_path(rail((0.0, 40.0), (12.0, 40.0)), Some(0), 0.0));
+    assert!(short.contours.len() < full.contours.len());
+    // block.0 reports the rail length, not the laid-out width.
+    assert!((short.block.0 - 12.0).abs() < 0.001);
+    let bounds = ink(&short);
+    assert!(
+        bounds.x1 < 12.0 + 8.0,
+        "overhang limited to one glyph: {bounds:?}"
+    );
+}
+
+/// Negative offsets land before the rail's start — those glyphs drop
+/// too.
+#[test]
+fn glyphs_before_the_rail_start_are_dropped() {
+    let shifted = layout(&on_path(rail((0.0, 40.0), (110.0, 40.0)), Some(0), -6.0));
+    let at_zero = layout(&on_path(rail((0.0, 40.0), (110.0, 40.0)), Some(0), 0.0));
+    assert!(shifted.contours.len() < at_zero.contours.len());
+}
+
+/// A second line continues along the same rail past the first line's
+/// extent (the recorded multi-line mapping).
+#[test]
+fn second_line_continues_along_the_rail() {
+    let mut object = on_path(rail((0.0, 40.0), (410.0, 40.0)), Some(0), 0.0);
+    object.runs = vec![TextRun {
+        text: "FireCraft\nFireCraft".into(),
+    }];
+    let wrapped = ink(&layout(&object));
+    let single = ink(&layout(&on_path(
+        rail((0.0, 40.0), (410.0, 40.0)),
+        Some(0),
+        0.0,
+    )));
+    assert!(
+        wrapped.x1 > single.x1 + 5.0,
+        "second line must land past the first: {wrapped:?} vs {single:?}"
+    );
+}
+
+/// Skew modes agree with rotate on a 45° rail in kind, not in bytes:
+/// each preserves a different axis, so the ink boxes differ.
+#[test]
+fn skew_modes_differ_from_rotation_on_a_diagonal() {
+    let diagonal = rail((0.0, 0.0), (100.0, 100.0));
+    let rotate = ink(&layout(&on_path(diagonal.clone(), Some(0), 0.0)));
+    let skew_v = ink(&layout(&on_path(diagonal.clone(), Some(2), 0.0)));
+    let skew_h = ink(&layout(&on_path(diagonal.clone(), Some(3), 0.0)));
+    assert!(
+        (rotate.width() - skew_v.width()).abs() > 0.5,
+        "{rotate:?} vs {skew_v:?}"
+    );
+    assert!(
+        (rotate.height() - skew_h.height()).abs() > 0.5,
+        "{rotate:?} vs {skew_h:?}"
+    );
+    // All three produce real ink (the bases are invertible at 45°).
+    assert!(skew_v.width() > 20.0 && skew_h.height() > 5.0);
+}
+
+/// On-path layout is deterministic across engines, like linear flow.
+#[test]
+fn on_path_two_engines_agree() {
+    let object = on_path(rail((10.0, 40.0), (110.0, 140.0)), Some(0), 5.0);
+    assert_eq!(layout(&object), layout(&object));
 }
