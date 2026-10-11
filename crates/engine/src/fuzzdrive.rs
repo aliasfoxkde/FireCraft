@@ -301,6 +301,30 @@ fn random_text(rng: &mut FuzzRng) -> ObjectData {
     let a = random_point(rng);
     ObjectData::Text(TextObject {
         frame: geom::Rect::new(a.x, a.y, a.x + 10.0, a.y + 4.0),
+        style: Some(doc::TextStyle {
+            font: rng.chance(2).then(|| "Liberation Sans".to_owned()),
+            size: rng.chance(2).then(|| (rng.below(96) as f64) + 6.0),
+            bold: rng.chance(2).then(|| rng.chance(2)),
+            italic: rng.chance(2).then(|| rng.chance(2)),
+            underline: rng.chance(2).then(|| rng.chance(2)),
+            ..doc::TextStyle::default()
+        }),
+        runs: if rng.chance(4) {
+            vec![doc::TextRun {
+                text: "FireCraft".to_owned(),
+            }]
+        } else {
+            Vec::new()
+        },
+        flow: rng.chance(2).then(|| rng.below(4) as i64),
+        anti_alias: rng.chance(2).then(|| rng.below(5) as i64),
+        auto_enlarge: rng.chance(2).then(|| rng.chance(2)),
+        auto_kern: rng.chance(2).then(|| rng.chance(2)),
+        name: None,
+        opacity: rng.below(1001) as i64,
+        blend: rng.below(27) as i64,
+        visible: true,
+        locked: rng.chance(10),
         transform: None,
         effects: random_effects(rng),
     })
@@ -384,6 +408,10 @@ pub const CALLS: &[&str] = &[
     "retouch.clone",
     "retouch.eraser",
     "retouch.redEye",
+    "text.createText",
+    "text.setText",
+    "text.setAttrs",
+    "text.setFont",
 ];
 
 /// Builds a random call against `document`: a random catalog id and a
@@ -830,6 +858,85 @@ pub fn random_call(rng: &mut FuzzRng, document: &Document) -> (String, serde_jso
             "x": -(rng.below(300) as f64),
             "y": -(rng.below(300) as f64),
             "radius": rng.below(520),
+        }),
+        "text.createText" => serde_json::json!({
+            "page": any_index(rng, pages),
+            "layer": any_index(rng, 3),
+            "cell": any_index(rng, frames),
+            "x": -(rng.below(400) as f64),
+            "y": -(rng.below(400) as f64),
+            "width": rng.below(400) as f64,
+            "height": rng.below(400) as f64,
+            "text": if rng.chance(4) {
+                String::new()
+            } else {
+                "FireCraft".to_owned()
+            },
+            "name": if rng.chance(50) {
+                serde_json::Value::Null
+            } else {
+                serde_json::json!("fuzz text")
+            },
+        }),
+        "text.setText" => serde_json::json!({
+            "id": any_id(rng),
+            "text": if rng.chance(4) {
+                String::new()
+            } else {
+                format!("text {}", rng.below(100))
+            },
+        }),
+        "text.setAttrs" => {
+            let mut payload = serde_json::json!({ "id": any_id(rng) });
+            if rng.chance(60) {
+                payload["size"] = serde_json::json!(rng.below(200) as f64 + 0.5);
+            }
+            if rng.chance(50) {
+                payload["bold"] = serde_json::json!(rng.chance(50));
+            }
+            if rng.chance(50) {
+                payload["italic"] = serde_json::json!(rng.chance(50));
+            }
+            if rng.chance(50) {
+                payload["underline"] = serde_json::json!(rng.chance(50));
+            }
+            if rng.chance(40) {
+                payload["horizontal_scale"] = serde_json::json!(rng.below(200) as f64 + 0.5);
+            }
+            if rng.chance(40) {
+                payload["kerning"] = serde_json::json!((rng.below(200) as f64) - 100.0);
+            }
+            if rng.chance(40) {
+                payload["baseline_shift"] = serde_json::json!((rng.below(100) as f64) - 50.0);
+            }
+            if rng.chance(40) {
+                payload["leading"] = serde_json::json!(rng.below(100) as f64 + 0.5);
+            }
+            if rng.chance(30) {
+                payload["leading_unit"] = serde_json::json!(rng.below(3));
+            }
+            if rng.chance(30) {
+                payload["justification"] = serde_json::json!(rng.below(5));
+            }
+            if rng.chance(30) {
+                payload["fill_raw"] = serde_json::json!(rng.next_u64() as i64);
+            }
+            if rng.chance(20) {
+                payload["anti_alias"] = serde_json::json!(rng.below(10));
+            }
+            if rng.chance(20) {
+                payload["auto_enlarge"] = serde_json::json!(rng.chance(50));
+            }
+            if rng.chance(20) {
+                payload["auto_kern"] = serde_json::json!(rng.chance(50));
+            }
+            payload
+        }
+        "text.setFont" => serde_json::json!({
+            "id": any_id(rng),
+            "font": rng
+                .pick(&["Liberation Sans", "Arial", "Unknown Face"])
+                .copied(),
         }),
         other => {
             let _ = other;

@@ -1,9 +1,10 @@
 //! Shared-field mutation for the object kinds that carry them.
 //!
-//! `Path`, `Group`, and `Image` all carry the display quartet
-//! (`VISb`/`LCKb`/`OPAi`/`BLDi`); `Path`, `Group`, `Image`, and `Slice`
-//! all carry the `OBNs` name. One helper per field family keeps the
-//! per-kind matches in one place instead of four commands each.
+//! `Path`, `Group`, `Image`, and `Text` all carry the display quartet
+//! (`VISb`/`LCKb`/`OPAi`/`BLDi`); `Path`, `Group`, `Image`, `Slice`,
+//! and `Text` all carry the `OBNs` name. One helper per field family
+//! keeps the per-kind matches in one place instead of four commands
+//! each.
 
 use doc::{Document, ObjectData, ObjectId};
 
@@ -21,7 +22,7 @@ pub(crate) struct DisplayFields<'a> {
 
 /// Runs `edit` against the display fields of the object `id` names.
 /// `None` when the id is stale or names a kind without the quartet
-/// (`Text`, `Slice`, `SymbolInstance`).
+/// (`Slice`, `SymbolInstance`).
 pub(crate) fn with_display<R>(
     document: &mut Document,
     id: ObjectId,
@@ -46,13 +47,19 @@ pub(crate) fn with_display<R>(
             opacity: &mut image.opacity,
             blend: &mut image.blend,
         })),
+        ObjectData::Text(text) => Some(edit(&mut DisplayFields {
+            visible: &mut text.visible,
+            locked: &mut text.locked,
+            opacity: &mut text.opacity,
+            blend: &mut text.blend,
+        })),
         _ => None,
     }
 }
 
 /// Runs `edit` against the `OBNs` name of the object `id` names.
 /// `None` when the id is stale or names a kind without a name field
-/// (`Text`, `SymbolInstance`).
+/// (`SymbolInstance`).
 pub(crate) fn with_name<R>(
     document: &mut Document,
     id: ObjectId,
@@ -63,6 +70,7 @@ pub(crate) fn with_name<R>(
         ObjectData::Group(group) => Some(edit(&mut group.name)),
         ObjectData::Image(image) => Some(edit(&mut image.name)),
         ObjectData::Slice(slice) => Some(edit(&mut slice.name)),
+        ObjectData::Text(text) => Some(edit(&mut text.name)),
         _ => None,
     }
 }
