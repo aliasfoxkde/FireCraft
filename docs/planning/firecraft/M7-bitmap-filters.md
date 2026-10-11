@@ -120,10 +120,37 @@ format round-trip. Recorded-vs-enforced is stated per task; nothing
    **Stopping condition:** layout goldens (pinned font + pinned string
    → pinned render); attribute round-trip through the format;
    wasm-clean (`text` joins `WASM_CRATES`).
+   Done (2026-10-11): `text` crate over cosmic-text 0.19 — `TFSv` runs
+   map to `TextStyle` (font/size/bold/italic/underline/horizontal
+   scale/kerning/baseline shift/leading+unit/justification/fill), width-
+   wrapped frames with em- or pixel-leading, bundled Liberation Sans
+   (SIL OFL 1.1, attribution row shipped in the same change). Engine
+   commands `text.createText/setText/setAttrs/setFont` with whole-object
+   capturing inverses and refusal matrices; fuzzdrive arms. `TXTv`
+   round-trips through fwmap (reader/writer with bag preservation).
+   Golden `text.fw.png`: registry-built text through the real command
+   path, sha-pinned render, plus a semantic anchor (ink must exist, be
+   pure black, and stay inside the frame — a blank render cannot pin
+   itself). `text` in `WASM_CRATES` (12 crates); 29 layout tests.
 8. **Text-on-path** — text laid along a `PTHv` contour, orientation
    and baseline behavior pinned by tests (Fireworks' recorded behavior
    from the `.jsf`/help specs). **Stopping condition:** golden pins;
    round-trip.
+   Done (2026-10-11): `TAPv` mapped into the model (`TextOnPath`:
+   `TAMi` alignment, `CHOf` offset, embedded `PTHv`/`PBLv` contours;
+   guide styling stays bagged). All four `TAMi` bases pinned as matrices
+   (rotate/upright/skew-vertical/skew-horizontal); layout rules recorded
+   in the text-crate header (baselines ride the rail, `CHOf` start,
+   per-line continuation past the previous extent, off-rail glyphs
+   drop, no underlines, frame width ignored). `PathRail` flattens
+   cubics at fixed 16 subdivisions (byte-stable) and arc-length indexes
+   the polyline. Commands `text.attachPath` (validating wire contours,
+   sets `TFTi` 2) and `text.detachPath` (back to normal flow) with
+   capturing inverses + refusal matrix; fuzzdrive arms. `TAPv` byte
+   round-trip test in fwmap. Golden `textpath.fw.png`: registry-built
+   text on an arc, sha-pinned, semantic anchor demanding ≥20px vertical
+   span — a linear-flow fallback renders one 8px line and fails the
+   gate. 11 on-path layout tests.
 9. **Surfaces + gates** — shell: filter panel (live effect list),
    text tool + text properties, selection tool group; `filters` and
    `text` added to `WASM_CRATES`; parity floors raised where the gate
