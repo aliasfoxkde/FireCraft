@@ -8,7 +8,7 @@ use doc::ObjectData;
 use egui::{Color32, ColorImage, Pos2, Rect, Sense, TextureHandle, TextureOptions, Vec2};
 
 use crate::canvas::View;
-use crate::editor::{Editor, Tool};
+use crate::editor::{AutoShape, Editor, Tool};
 
 /// Desktop file routing for v1: the open/save path comes from
 /// `FIRECRAFT_DOC` (default `untitled.fw.png` in the working
@@ -163,7 +163,15 @@ impl Shell {
         }
     }
 
-    /// The menu bar: File/Edit/Tools/Commands.
+    /// Applies through the editor and reports failures on the status
+    /// line — the one idiom every menu/panel action shares.
+    fn run_command(&mut self, name: &str, payload: serde_json::Value) {
+        if let Err(error) = self.editor.apply(name, payload) {
+            self.status = format!("{name} failed: {error}");
+        }
+    }
+
+    /// The menu bar: File/Edit/Tools/Path/Commands.
     fn menu_bar(&mut self, ui: &mut egui::Ui) {
         egui::MenuBar::new().ui(ui, |ui| {
             ui.menu_button("File", |ui| {
@@ -219,6 +227,83 @@ impl Shell {
                     {
                         self.editor.tool = tool;
                     }
+                }
+                // The Auto Shape group: same drag-to-create gesture,
+                // one pinned-default payload per shape.
+                ui.menu_button("Auto Shape", |ui| {
+                    for shape in AutoShape::ALL {
+                        let tool = Tool::AutoShape(shape);
+                        if ui
+                            .selectable_label(self.editor.tool == tool, shape.label())
+                            .clicked()
+                        {
+                            self.editor.tool = tool;
+                        }
+                    }
+                });
+            });
+            // Path ops on the current selection. Booleans need exactly
+            // two live paths; single-object ops need one.
+            ui.menu_button("Path", |ui| {
+                let pair = self.editor.boolean_pair();
+                for (op, label) in [
+                    ("union", "Union"),
+                    ("intersect", "Intersect"),
+                    ("punch", "Punch"),
+                    ("crop", "Crop"),
+                ] {
+                    if ui
+                        .add_enabled(pair.is_some(), egui::Button::new(label))
+                        .clicked()
+                    {
+                        if let Some((a, b)) = pair {
+                            self.run_command(
+                                "path.boolean",
+                                serde_json::json!({ "a": a, "b": b, "op": op }),
+                            );
+                        }
+                    }
+                }
+                ui.separator();
+                let id = self.editor.selected_live();
+                if ui
+                    .add_enabled(id.is_some(), egui::Button::new("Simplify (1px)"))
+                    .clicked()
+                {
+                    self.run_command(
+                        "path.simplify",
+                        serde_json::json!({ "id": id, "tolerance": 1.0 }),
+                    );
+                }
+                if ui
+                    .add_enabled(id.is_some(), egui::Button::new("Expand Stroke (2px)"))
+                    .clicked()
+                {
+                    self.run_command(
+                        "path.expandStroke",
+                        serde_json::json!({
+                            "id": id, "width": 2.0,
+                            "cap": "butt", "join": "miter", "miter_limit": 4.0,
+                        }),
+                    );
+                }
+                if ui
+                    .add_enabled(id.is_some(), egui::Button::new("Inset 2px"))
+                    .clicked()
+                {
+                    self.run_command(
+                        "path.inset",
+                        serde_json::json!({ "id": id, "distance": 2.0 }),
+                    );
+                }
+                if ui
+                    .add_enabled(id.is_some(), egui::Button::new("Outset 2px"))
+                    .clicked()
+                {
+                    self.run_command(
+                        "path.inset",
+                        serde_json::json!({ "id": id, "distance": -2.0 }),
+                    );
                 }
             });
             // Registry-driven commands: every catalog id, enabled only
@@ -324,8 +409,52 @@ impl Shell {
         }
     }
 
-    /// Right panel: properties of the selection.
+    /// Right panel: the align/distribute group, then properties of the
+    /// selection.
     fn properties_panel(&mut self, ui: &mut egui::Ui) {
+        ui.heading("Align");
+        let ids = self.editor.live_selection();
+        for row in [
+            [
+                ("left", "Left"),
+                ("centerX", "Center X"),
+                ("right", "Right"),
+            ],
+            [
+                ("top", "Top"),
+                ("centerY", "Center Y"),
+                ("bottom", "Bottom"),
+            ],
+        ] {
+            ui.horizontal(|ui| {
+                for (mode, label) in row {
+                    if ui
+                        .add_enabled(ids.len() >= 2, egui::Button::new(label).small())
+                        .clicked()
+                    {
+                        self.run_command(
+                            "object.align",
+                            serde_json::json!({ "ids": ids, "mode": mode }),
+                        );
+                    }
+                }
+            });
+        }
+        ui.horizontal(|ui| {
+            for (axis, label) in [("horizontal", "Space H"), ("vertical", "Space V")] {
+                if ui
+                    .add_enabled(ids.len() >= 3, egui::Button::new(label).small())
+                    .clicked()
+                {
+                    self.run_command(
+                        "object.distribute",
+                        serde_json::json!({ "ids": ids, "axis": axis }),
+                    );
+                }
+            }
+        });
+        ui.separator();
+
         ui.heading("Properties");
         let Some(id) = self.editor.selection else {
             ui.label("nothing selected");
@@ -521,7 +650,12 @@ impl Shell {
                 let local = pos - rect.left_top().to_vec2();
                 match self.editor.tool {
                     Tool::Pointer | Tool::Subselect => {
-                        let _ = self.editor.select_at(self.view.to_world(local));
+                        let world = self.view.to_world(local);
+                        if ui.input(|i| i.modifiers.shift) {
+                            self.editor.toggle_select_at(world);
+                        } else {
+                            let _ = self.editor.select_at(world);
+                        }
                     }
                     Tool::Hand => {}
                     Tool::Zoom => {

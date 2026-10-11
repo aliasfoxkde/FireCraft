@@ -7,11 +7,11 @@ that set it instead.
 
 | Metric | Floor | Set in | Enforced by |
 |---|---|---|---|
-| corpus files parsed without panic | 4 | M2 | `xtask corpus` |
-| fwpng round-trip byte-identical files | 3 | M2 | corpus gate |
-| corpus files with doc-model round-trip (equal + idempotent) | 5 | M4 | `xtask corpus` |
-| corpus fixtures with golden pins (deterministic + anchored) | 1 | M4 | `xtask golden` |
-| wasm-clean crates (compile) | 9 | M5 | `xtask wasm` |
+| corpus files parsed without panic | 6 | M6 | `xtask corpus` |
+| fwpng round-trip byte-identical files | 4 | M6 | corpus gate |
+| corpus files with doc-model round-trip (equal + idempotent) | 6 | M6 | `xtask corpus` |
+| corpus fixtures with golden pins (deterministic + anchored) | 2 | M6 | `xtask golden` |
+| wasm-clean crates (compile) | 10 | M6 | `xtask wasm` |
 | web bundle builds (trunk) | 1 | M5 | `xtask wasm` (trunk build of `web/`) |
 | wasm smoke tests executed (fwpng) | 6 | M2 | `xtask wasm` (node + wasm-bindgen-test-runner) |
 | fuzz targets with 60s+ zero-crash campaign | 6 | M3 | `xtask fuzz` / `ci --full` |

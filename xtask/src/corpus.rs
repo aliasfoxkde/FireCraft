@@ -229,7 +229,7 @@ pub fn gen_fixtures() -> Result<(), String> {
 
     /// One pending fixture: name, built bytes, manifest note.
     type Fixture = (&'static str, Result<Vec<u8>, String>, &'static str);
-    let fixtures: [Fixture; 5] = [
+    let fixtures: [Fixture; 6] = [
         (
             "minimal.fw.png",
             build_minimal(),
@@ -249,6 +249,11 @@ pub fn gen_fixtures() -> Result<(), String> {
             "composed.fw.png",
             build_composed(),
             "generated: 16x16 page, red rect + 1000\u{2030} group holding a black half-canvas rect at 400\u{2030} (golden anchor)",
+        ),
+        (
+            "scripted.fw.png",
+            build_scripted(),
+            "generated: 64x48 page, autoshape star + pie + spiral created through the engine registry (scripted-shape golden pin)",
         ),
         (
             "plain.png",
@@ -373,6 +378,84 @@ VISb{1}OPAi{190}}}}}}}}}}";
 /// zlib payload, well past the 76-byte header).
 const MKBT_SPLIT_AT: usize = 96;
 
+/// Builds `scripted.fw.png`: a page whose objects are created through
+/// the engine registry's `autoshape.*` commands — the M6 scripted-shape
+/// golden. Same pipeline the app and CLI drive (registry → doc model →
+/// canonical writer), so the fixture pins the whole scripted-shape path,
+/// generator geometry included.
+fn build_scripted() -> Result<Vec<u8>, String> {
+    let mut registry = engine::CommandRegistry::new();
+    engine::catalog::install(&mut registry).map_err(|e| format!("catalog install: {e}"))?;
+    let mut session = engine::Session::with_registry(doc::Document::default(), registry);
+    let mut apply = |name: &str, payload: serde_json::Value| -> Result<(), String> {
+        session
+            .apply(name, payload)
+            .map_err(|e| format!("scripted fixture: {name}: {e}"))
+    };
+    apply("page.add", serde_json::json!({ "index": null }))?;
+    apply(
+        "page.setCanvasSize",
+        serde_json::json!({ "page": 0, "width": 64.0, "height": 48.0 }),
+    )?;
+    let placed = |mut object: serde_json::Value| -> serde_json::Value {
+        let place = serde_json::json!({ "page": 0, "layer": 0, "cell": 0, "name": null });
+        if let (Some(fields), Some(place)) = (object.as_object_mut(), place.as_object()) {
+            for (key, value) in place {
+                fields.insert(key.clone(), value.clone());
+            }
+        }
+        object
+    };
+    apply(
+        "autoshape.star",
+        placed(serde_json::json!({
+            "centerX": 16.0, "centerY": 14.0,
+            "outer": 10.0, "inner": 5.0,
+            "outerRound": 0.0, "innerRound": 0.0,
+            "points": 5, "startAngle": -std::f64::consts::FRAC_PI_2,
+        })),
+    )?;
+    apply(
+        "autoshape.pie",
+        placed(serde_json::json!({
+            "centerX": 44.0, "centerY": 14.0,
+            "outer": 10.0, "inner": 0.0,
+            "start": -std::f64::consts::FRAC_PI_2, "end": std::f64::consts::PI,
+        })),
+    )?;
+    apply(
+        "autoshape.spiral",
+        placed(serde_json::json!({
+            "centerX": 16.0, "centerY": 36.0,
+            "radius": 9.0, "tightnessDeg": 80.0,
+            "clockwise": true, "closed": false,
+        })),
+    )?;
+    apply(
+        "autoshape.doughnut",
+        placed(serde_json::json!({
+            "centerX": 44.0, "centerY": 36.0,
+            "outer": 9.0, "inner": 4.5,
+            "start": -std::f64::consts::FRAC_PI_2,
+            "end": 3.0 * std::f64::consts::FRAC_PI_2,
+        })),
+    )?;
+    let (tree, stats) = doc::fwmap::write(session.document(), &doc::fwmap::UnknownBag::default())
+        .map_err(|e| format!("scripted fixture: doc write: {e}"))?;
+    if stats.unconsumed_unknown != 0 {
+        return Err(format!(
+            "scripted fixture: doc write left {} unknown node(s)",
+            stats.unconsumed_unknown
+        ));
+    }
+    let payload = fwpng::nodetree::serialize(&tree);
+    let standard = encode_rgba8(64, 48, |_, _| [255, 255, 255, 255])?;
+    insert_before_iend(
+        &standard,
+        &[(b"mkTS", zlib(&payload)?), (b"mkBS", zlib(&payload)?)],
+    )
+}
+
 /// Parses a standard PNG we just encoded and re-emits it with `extra`
 /// private chunks inserted before IEND.
 fn insert_before_iend(standard: &[u8], extra: &[(&[u8; 4], Vec<u8>)]) -> Result<Vec<u8>, String> {
@@ -466,6 +549,7 @@ mod tests {
             ("tiles-split", build_tiles_split()),
             ("legacy-drift", build_legacy_drift()),
             ("composed", build_composed()),
+            ("scripted", build_scripted()),
         ] {
             let checks = round_trip_checks(&built.unwrap(), true);
             assert!(checks.iter().all(|(_, ok)| *ok), "{name}: {checks:?}");
@@ -474,6 +558,47 @@ mod tests {
         // checks apply.
         let checks = round_trip_checks(&build_plain().unwrap(), false);
         assert!(checks.iter().all(|(_, ok)| *ok), "{checks:?}");
+    }
+
+    #[test]
+    fn scripted_fixture_renders_all_four_shapes() {
+        let bytes = build_scripted().unwrap();
+        let render = crate::golden::render_entry(&bytes)
+            .unwrap()
+            .expect("scripted fixture must be renderable");
+        assert_eq!((render.width, render.height), (64, 48));
+        // A determinism pin of an empty canvas would pass forever while
+        // proving nothing. The four autoshapes sit in the page's four
+        // quadrants with the default fill: their opaque pixels must
+        // span the whole canvas without flooding it.
+        let width = u32::from(render.width);
+        let mut opaque = 0usize;
+        let mut bounds = Option::<(u32, u32, u32, u32)>::None; // x0 y0 x1 y1
+        for (index, pixel) in render.pixels.chunks_exact(4).enumerate() {
+            if pixel[3] == 0 {
+                continue;
+            }
+            opaque += 1;
+            let (x, y) = ((index as u32) % width, (index as u32) / width);
+            bounds = Some(match bounds {
+                None => (x, y, x, y),
+                Some((x0, y0, x1, y1)) => (x0.min(x), y0.min(y), x1.max(x), y1.max(y)),
+            });
+        }
+        let total = usize::from(render.width) * usize::from(render.height);
+        assert!(opaque > 200, "only {opaque} opaque pixel(s) rendered");
+        assert!(
+            opaque * 2 < total,
+            "{opaque}/{total} opaque: canvas flooded"
+        );
+        let (x0, y0, x1, y1) = bounds.expect("no opaque pixels");
+        // Exact corner pin (anti-aliasing reaches one pixel past the
+        // pure geometry: star top y = 14−10 = 4, rasterized at 3).
+        assert_eq!(
+            (x0, y0, x1, y1),
+            (7, 3, 54, 45),
+            "shapes must span all quadrants"
+        );
     }
 
     #[test]

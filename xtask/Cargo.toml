@@ -15,6 +15,9 @@ png = "0.18"
 serde_json = "1"
 sha2 = "0.10"
 doc = { path = "../crates/doc" }
+# Scripted-shape fixture generation drives the same registry the app
+# and CLI drive (autoshape.* → doc model → canonical writer).
+engine = { path = "../crates/engine" }
 fwpng = { path = "../crates/fwpng" }
 image-compare = "0.5.0"
 # default-features = false: `image`'s defaults enable every format codec
