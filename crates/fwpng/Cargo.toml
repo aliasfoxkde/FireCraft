@@ -18,9 +18,11 @@ png = "0.18"
 
 [dev-dependencies]
 # Kept in lockstep with the installed wasm-bindgen-test-runner
-# (0.2.108): 0.3.58 is the test-crate release that pins
-# wasm-bindgen =0.2.108. Bump runner and this together.
-wasm-bindgen-test = "=0.3.58"
+# (0.2.129): 0.3.79 is the test-crate release that pins
+# wasm-bindgen =0.2.129 (and js-sys =0.3.106, which eframe 0.36 can
+# also accept — the two suites coexist in one workspace lockfile).
+# Bump runner and this together.
+wasm-bindgen-test = "=0.3.79"
 
 [lints]
 workspace = true

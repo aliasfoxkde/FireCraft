@@ -64,6 +64,23 @@ pub fn save(
         .map_err(|error| CliError(format!("deflate: {error}")))?;
 
     let mut out = Vec::from(PNG_SIGNATURE);
+    // A never-opened document has no original stream: mint a fresh one
+    // around the new tree (IHDR sized from the canvas, RGBA8). The
+    // refusal below stays for real files that lost their mkTS — those
+    // are suspicious, a blank slate is not.
+    if original.is_empty() {
+        let canvas = &document.info.canvas;
+        let width = u32::try_from(canvas.width.max(1.0) as u64).unwrap_or(u32::MAX);
+        let height = u32::try_from(canvas.height.max(1.0) as u64).unwrap_or(u32::MAX);
+        let mut ihdr = Vec::with_capacity(13);
+        ihdr.extend_from_slice(&width.to_be_bytes());
+        ihdr.extend_from_slice(&height.to_be_bytes());
+        ihdr.extend_from_slice(&[8, 6, 0, 0, 0]);
+        write_chunk(&mut out, b"IHDR", &ihdr);
+        write_chunk(&mut out, b"mkTS", &compressed);
+        write_chunk(&mut out, b"IEND", &[]);
+        return Ok(out);
+    }
     let mut tree_written = false;
     for chunk in original {
         if &chunk.ctype == b"mkTS" {
