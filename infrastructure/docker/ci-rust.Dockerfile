@@ -68,12 +68,16 @@ RUN cargo fetch --locked \
 
 FROM rust:1.99-slim-bookworm
 
-# nodejs executes the wasm-bindgen smoke suite under
-# wasm-bindgen-test-runner. No git: no CI step talks to git, and no
-# dependency in either lockfile comes from a git source. No libssl:
-# nothing in the graph builds openssl-sys.
+# No nodejs here: bookworm's nodejs is 18, and the wasm-bindgen 0.2.129
+# test runtime traps in its V8 before running a single smoke test
+# (observed: raw "Stacktrace: ptr1=..." V8 dump inside the first test's
+# js_sys call; the same suite passes under node 24). Node is installed
+# from the official distribution below, pinned to the developer's
+# version. No git: no CI step talks to git, and no dependency in either
+# lockfile comes from a git source. No libssl: nothing in the graph
+# builds openssl-sys.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates nodejs \
+    && apt-get install -y --no-install-recommends ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
     && rustup component add rustfmt clippy \
     && rustup target add wasm32-unknown-unknown
@@ -83,6 +87,16 @@ RUN apt-get update \
 # Each in its own layer so bumping one never rebuilds the other.
 RUN cargo install --locked trunk --version 0.21.14
 RUN cargo install --locked wasm-bindgen-cli --version 0.2.129
+
+# node v24.16.0 — the developer's version (local dev runs v24.16.0 via
+# nvm; bookworm's 18 is too old for the wasm-bindgen test runtime, see
+# the apt note above). Checksum-pinned so the build fails loudly if the
+# distribution ever changes under the pin. Kept after the cargo install
+# layers so bumping node never rebuilds the toolchain layers.
+ADD --checksum=sha256:2faf6a387e9b62b888e21c54f01249fb27537ffecf1842f29f4c919d0a59a0ff \
+    https://nodejs.org/dist/v24.16.0/node-v24.16.0-linux-x64.tar.gz /tmp/node.tar.gz
+RUN tar -xzf /tmp/node.tar.gz --strip-components=1 -C /usr/local \
+    && rm /tmp/node.tar.gz
 
 COPY --from=fetch /usr/local/cargo/registry /usr/local/cargo/registry
 

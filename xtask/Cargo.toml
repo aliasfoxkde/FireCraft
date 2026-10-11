@@ -17,7 +17,11 @@ sha2 = "0.10"
 doc = { path = "../crates/doc" }
 fwpng = { path = "../crates/fwpng" }
 image-compare = "0.5.0"
-image = "0.25.9"
+# default-features = false: `image`'s defaults enable every format codec
+# including avif → ravif → rav1e (the AV1 encoder), which otherwise lands
+# in every xtask (and therefore CI) build for one `image::open` of a PNG
+# sidecar. Only the golden machinery's PNG loads are needed here.
+image = { version = "0.25.9", default-features = false, features = ["png"] }
 compose = { version = "0.1.0", path = "../crates/compose" }
 
 [lints]
