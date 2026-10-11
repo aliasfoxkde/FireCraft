@@ -6,6 +6,7 @@
 
 pub(crate) mod arrange;
 pub(crate) mod autoshape;
+pub(crate) mod bitmap;
 pub(crate) mod cell;
 pub(crate) mod display;
 pub(crate) mod filter;
@@ -21,6 +22,7 @@ use crate::registry::CommandRegistry;
 pub fn install(registry: &mut CommandRegistry) -> Result<(), EngineError> {
     object::install(registry)?;
     arrange::install(registry)?;
+    bitmap::install(registry)?;
     autoshape::install(registry)?;
     filter::install(registry)?;
     path::install(registry)?;

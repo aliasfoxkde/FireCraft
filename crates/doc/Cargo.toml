@@ -12,6 +12,7 @@ description = "FireCraft typed document model and its Fireworks PNG node-tree ma
 [dependencies]
 fwpng = { path = "../fwpng" }
 geom = { path = "../geom" }
+raster = { path = "../raster" }
 serde = { version = "1", features = ["derive"], optional = true }
 
 [features]
@@ -19,7 +20,7 @@ serde = { version = "1", features = ["derive"], optional = true }
 # and journal entries all flow through serde (off by default so the
 # base model stays dependency-free). fwpng/serde covers the raw node
 # values preserved verbatim inside effect properties.
-serde = ["dep:serde", "geom/serde", "fwpng/serde"]
+serde = ["dep:serde", "raster/serde", "geom/serde", "fwpng/serde"]
 
 [lints]
 workspace = true

@@ -12,6 +12,7 @@ description = "FireCraft editor engine: command registry, inverse deltas, transa
 [dependencies]
 doc = { path = "../doc", features = ["serde"] }
 geom = { path = "../geom" }
+raster = { path = "../raster", features = ["serde"] }
 vector = { path = "../vector" }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["float_roundtrip"] }

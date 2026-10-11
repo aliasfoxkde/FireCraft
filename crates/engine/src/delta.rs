@@ -88,6 +88,23 @@ pub enum Delta {
         /// The info as it was before the command.
         before: Box<DocumentInfo>,
     },
+    /// Restore bitmap tiles of one image (M7 pixel edits): every
+    /// touched `TIDi` with its pre-command copy-on-write tile. Commands
+    /// only touch tiles already present in the bank (absent payload is
+    /// a refusal), so undo is always a re-insert.
+    Tiles {
+        /// The image object the tiles belong to (lineage bookkeeping).
+        id: ObjectId,
+        /// `(tile id, pre-command tile)` for every tile the command
+        /// touched.
+        before: Vec<(u32, raster::Tile)>,
+    },
+    /// Restore the active selection (or its absence).
+    Selection {
+        /// The mask as it was before the command, `None` when nothing
+        /// was selected.
+        before: Option<Box<doc::SelectionMask>>,
+    },
     /// Restore one page's scalars and canvas.
     PageInfo {
         /// Page index.
@@ -205,6 +222,14 @@ impl Delta {
                 *slot = (**before).clone();
             }
             Delta::Info { before } => document.info = (**before).clone(),
+            Delta::Tiles { before, .. } => {
+                for (tile_id, tile) in before {
+                    document.tiles.insert(*tile_id, tile.clone());
+                }
+            }
+            Delta::Selection { before } => {
+                document.selection = before.as_deref().cloned();
+            }
             Delta::PageInfo { page, before } => {
                 page_mut(document, *page)?.info = (**before).clone();
             }

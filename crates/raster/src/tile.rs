@@ -68,6 +68,27 @@ impl std::fmt::Debug for Tile {
     }
 }
 
+// Journal persistence moves tiles inside deltas, so `serde` serializes
+// the pixel buffer as an opaque byte vector (written explicitly rather
+// than derived: the fixed-size array keeps serde out of the hot type).
+#[cfg(feature = "serde")]
+impl serde::Serialize for Tile {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_bytes(self.pixels())
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de> serde::Deserialize<'de> for Tile {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let pixels = Vec::<u8>::deserialize(deserializer)?;
+        let buffer: [u8; TILE_BYTES] = pixels.clone().try_into().map_err(|_| {
+            serde::de::Error::invalid_length(pixels.len(), &"exactly 65536 tile bytes")
+        })?;
+        Ok(Self::from_rgba8(buffer))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

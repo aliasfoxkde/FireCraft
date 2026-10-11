@@ -370,6 +370,15 @@ pub const CALLS: &[&str] = &[
     "page.add",
     "page.delete",
     "page.setCanvasSize",
+    "bitmap.selectRect",
+    "bitmap.selectEllipse",
+    "bitmap.selectLasso",
+    "bitmap.selectWand",
+    "bitmap.feather",
+    "bitmap.selectNone",
+    "bitmap.fill",
+    "bitmap.erase",
+    "bitmap.movePixels",
 ];
 
 /// Builds a random call against `document`: a random catalog id and a
@@ -748,6 +757,45 @@ pub fn random_call(rng: &mut FuzzRng, document: &Document) -> (String, serde_jso
                 "height": size(rng),
             })
         }
+        "bitmap.selectRect" | "bitmap.selectEllipse" => serde_json::json!({
+            "id": any_id(rng),
+            "x": -(rng.below(300) as f64),
+            "y": -(rng.below(300) as f64),
+            "width": rng.below(600) as f64,
+            "height": rng.below(600) as f64,
+            "mode": rng.pick(&["replace", "add", "subtract"]).copied(),
+        }),
+        "bitmap.selectLasso" => serde_json::json!({
+            "id": any_id(rng),
+            "points": (0..2 + rng.below(5))
+                .map(|_| [-(rng.below(300) as f64), -(rng.below(300) as f64)])
+                .collect::<Vec<_>>(),
+            "mode": rng.pick(&["replace", "add", "subtract"]).copied(),
+        }),
+        "bitmap.selectWand" => serde_json::json!({
+            "id": any_id(rng),
+            "x": rng.below(300),
+            "y": rng.below(300),
+            "tolerance": rng.below(256),
+            "contiguous": rng.chance(2),
+            "mode": rng.pick(&["replace", "add", "subtract"]).copied(),
+        }),
+        "bitmap.feather" => serde_json::json!({
+            "radius": rng.below(70),
+        }),
+        "bitmap.selectNone" => serde_json::json!({}),
+        "bitmap.fill" => serde_json::json!({
+            "id": any_id(rng),
+            "color_raw": rng.next_u64() as i64,
+        }),
+        "bitmap.erase" => serde_json::json!({
+            "id": any_id(rng),
+        }),
+        "bitmap.movePixels" => serde_json::json!({
+            "id": any_id(rng),
+            "dx": rng.below(600) as i64 - 300,
+            "dy": rng.below(600) as i64 - 300,
+        }),
         other => {
             let _ = other;
             // A catalog command without a builder: an empty payload is

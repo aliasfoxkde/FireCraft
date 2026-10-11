@@ -872,6 +872,7 @@ fn model_structs_are_fully_constructed() {
         pages: Vec::new(),
         symbols: Vec::new(),
         registry: Registry::new(),
+        ..Document::default()
     };
     let _page = Page {
         info: PageInfo {

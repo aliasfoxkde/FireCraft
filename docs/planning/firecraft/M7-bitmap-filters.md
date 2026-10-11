@@ -85,6 +85,16 @@ format round-trip. Recorded-vs-enforced is stated per task; nothing
    commands with mask-capturing deltas. **Stopping condition:**
    table-driven mask tests (feather falloff, wand tolerance);
    undo byte-exact; journal replay equivalence.
+   Done (2026-10-11): `Document.tiles` (TileBank) + `Document.selection`
+   (SelectionMask) in `doc`; `Delta::Tiles`/`Delta::Selection`; the
+   `engine::mask` algorithms (center-rule rect/ellipse/polygon, per-channel
+   tolerance wand, 3×box feather with a hand-pinned falloff table) and
+   `engine::bitmap` gather/scatter (premultiplied tiles ↔ straight flat
+   buffer, 4096² cap, matte slots keep their grid position, missing
+   payloads refuse). Nine `bitmap.*` registry commands, armed in fuzzdrive.
+   Replay/undo equivalence in `tests/bitmap_journal.rs` (3 tests);
+   `Scratch` hoisted into `tests/support` so replay starts from a
+   tile-loaded base.
 6. **Retouch tools** — deterministic retouch over masks: blur tool,
    smudge-lite, clone (aligned), eraser, red-eye. Every tool takes
    explicit geometry (no pointer state in the engine). **Stopping

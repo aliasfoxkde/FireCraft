@@ -12,6 +12,7 @@
 //! before they mutate and validate before they capture.
 
 pub mod access;
+pub mod bitmap;
 pub mod catalog;
 pub mod command;
 pub mod delta;
@@ -19,6 +20,7 @@ pub mod error;
 pub mod fuzzdrive;
 pub mod history;
 pub mod journal;
+pub mod mask;
 pub mod platform;
 pub mod registry;
 pub mod session;

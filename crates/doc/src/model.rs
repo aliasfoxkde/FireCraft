@@ -67,6 +67,120 @@ pub struct Document {
     pub symbols: Vec<SymbolDefinition>,
     /// Flat object registry everything else points into.
     pub registry: Registry,
+    /// `mkBT` tile payloads the hosts loaded, keyed by the `TIDi` the
+    /// `TILv` references point at. The node tree itself stays
+    /// reference-faithful — payloads live here so bitmap edits (M7)
+    /// and renders share one copy-on-write bank.
+    pub tiles: TileBank,
+    /// The active marquee/lasso/wand selection, in image pixel space.
+    /// Editing state, never file content: the format has no selection
+    /// node and the writer never reads this field.
+    pub selection: Option<SelectionMask>,
+}
+
+/// The document's tile payload bank: `TIDi` → premultiplied RGBA8
+/// tile bytes. Hosts populate it from a file's `mkBT` chunks (after
+/// ARGB→RGBA8 conversion); commands edit tiles in place through
+/// copy-on-write clones, so capturing one in a delta is a pointer bump.
+#[derive(Clone, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct TileBank {
+    tiles: std::collections::BTreeMap<u32, raster::Tile>,
+}
+
+impl TileBank {
+    /// An empty bank.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Stored tile for `id`, when the host loaded it.
+    #[must_use]
+    pub fn get(&self, id: u32) -> Option<&raster::Tile> {
+        self.tiles.get(&id)
+    }
+
+    /// Stores (or replaces) the payload for `id`.
+    pub fn insert(&mut self, id: u32, tile: raster::Tile) {
+        self.tiles.insert(id, tile);
+    }
+
+    /// Drops the payload for `id`, returning it when present.
+    pub fn remove(&mut self, id: u32) -> Option<raster::Tile> {
+        self.tiles.remove(&id)
+    }
+
+    /// Loaded tile ids in ascending order.
+    pub fn ids(&self) -> impl Iterator<Item = u32> + '_ {
+        self.tiles.keys().copied()
+    }
+
+    /// Loaded tile count.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.tiles.len()
+    }
+
+    /// Whether nothing is loaded.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.tiles.is_empty()
+    }
+}
+
+/// An alpha-plane selection: one `0..=255` coverage byte per image
+/// pixel (255 = fully selected), row-major, image pixel space. The
+/// plane always spans the whole target image so masked ops need no
+/// offset bookkeeping.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct SelectionMask {
+    /// Image width the plane spans.
+    pub width: u32,
+    /// Image height the plane spans.
+    pub height: u32,
+    /// `width * height` coverage bytes.
+    pub alpha: Vec<u8>,
+}
+
+impl SelectionMask {
+    /// A fully cleared plane over `width` × `height`.
+    #[must_use]
+    pub fn empty(width: u32, height: u32) -> Self {
+        Self {
+            width,
+            height,
+            alpha: vec![
+                0;
+                (u64::from(width) * u64::from(height))
+                    .try_into()
+                    .unwrap_or(0)
+            ],
+        }
+    }
+
+    /// Coverage byte at `(x, y)`, `None` outside the plane.
+    #[must_use]
+    pub fn get(&self, x: u32, y: u32) -> Option<u8> {
+        let index = self.index_of(x, y)?;
+        self.alpha.get(index).copied()
+    }
+
+    /// Sets the coverage byte at `(x, y)`; out-of-plane writes are
+    /// ignored (clip semantics for mask builders).
+    pub fn set(&mut self, x: u32, y: u32, coverage: u8) {
+        if let Some(index) = self.index_of(x, y) {
+            self.alpha[index] = coverage;
+        }
+    }
+
+    fn index_of(&self, x: u32, y: u32) -> Option<usize> {
+        if x >= self.width || y >= self.height {
+            return None;
+        }
+        usize::try_from(u64::from(y) * u64::from(self.width) + u64::from(x)).ok()
+    }
 }
 
 /// Scalars shared by the document node and pages.

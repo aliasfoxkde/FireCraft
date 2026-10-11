@@ -10,6 +10,12 @@ homepage.workspace = true
 description = "Tiled raster storage for FireCraft: copy-on-write 128x128 RGBA8 tiles."
 
 [dependencies]
+serde = { version = "1", features = ["derive"], optional = true }
+
+[features]
+# Journal/delta persistence of tile bytes (off by default so the base
+# storage stays dependency-free, mirroring the doc/fwpng feature).
+serde = ["dep:serde"]
 
 [lints]
 workspace = true
