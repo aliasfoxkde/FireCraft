@@ -317,6 +317,7 @@ fn random_text(rng: &mut FuzzRng) -> ObjectData {
             Vec::new()
         },
         flow: rng.chance(2).then(|| rng.below(4) as i64),
+        on_path: None,
         anti_alias: rng.chance(2).then(|| rng.below(5) as i64),
         auto_enlarge: rng.chance(2).then(|| rng.chance(2)),
         auto_kern: rng.chance(2).then(|| rng.chance(2)),
@@ -412,6 +413,8 @@ pub const CALLS: &[&str] = &[
     "text.setText",
     "text.setAttrs",
     "text.setFont",
+    "text.attachPath",
+    "text.detachPath",
 ];
 
 /// Builds a random call against `document`: a random catalog id and a
@@ -938,6 +941,47 @@ pub fn random_call(rng: &mut FuzzRng, document: &Document) -> (String, serde_jso
                 .pick(&["Liberation Sans", "Arial", "Unknown Face"])
                 .copied(),
         }),
+        "text.attachPath" => {
+            let point = |rng: &mut FuzzRng| -> serde_json::Value {
+                let mut point = serde_json::json!({
+                    "x": (rng.below(200) as f64) - 20.0,
+                    "y": (rng.below(200) as f64) - 20.0,
+                });
+                if rng.chance(40) {
+                    point["secondary"] = serde_json::json!({
+                        "x": (rng.below(200) as f64) - 20.0,
+                        "y": (rng.below(200) as f64) - 20.0,
+                    });
+                }
+                if rng.chance(40) {
+                    point["primary"] = serde_json::json!({
+                        "x": (rng.below(200) as f64) - 20.0,
+                        "y": (rng.below(200) as f64) - 20.0,
+                    });
+                }
+                point
+            };
+            let contour = |rng: &mut FuzzRng| -> serde_json::Value {
+                let points: Vec<serde_json::Value> =
+                    (0..2 + rng.below(3)).map(|_| point(rng)).collect();
+                serde_json::json!({ "points": points })
+            };
+            let contours: Vec<serde_json::Value> = if rng.chance(15) {
+                // A degenerate empty path on purpose — must refuse.
+                Vec::new()
+            } else {
+                (0..1 + rng.below(2)).map(|_| contour(rng)).collect()
+            };
+            let mut payload = serde_json::json!({ "id": any_id(rng), "path": contours });
+            if rng.chance(70) {
+                payload["alignment"] = serde_json::json!(rng.below(5));
+            }
+            if rng.chance(70) {
+                payload["offset"] = serde_json::json!((rng.below(200) as f64) - 100.0);
+            }
+            payload
+        }
+        "text.detachPath" => serde_json::json!({ "id": any_id(rng) }),
         other => {
             let _ = other;
             // A catalog command without a builder: an empty payload is

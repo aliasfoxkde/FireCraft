@@ -7,8 +7,8 @@
 //! layout itself lives in the `text` crate — these commands only move
 //! the model; nothing here shapes glyphs.
 
-use doc::{Document, ObjectData, TextObject, TextRun, TextStyle};
-use geom::Rect;
+use doc::{Contour, Document, ObjectData, PathPoint, TextObject, TextOnPath, TextRun, TextStyle};
+use geom::{Point, Rect};
 
 use crate::access;
 use crate::catalog::object::attach_cell;
@@ -22,7 +22,9 @@ pub(crate) fn install(registry: &mut CommandRegistry) -> Result<(), EngineError>
     registry.register(CreateText)?;
     registry.register(SetText)?;
     registry.register(SetAttrs)?;
-    registry.register(SetFont)
+    registry.register(SetFont)?;
+    registry.register(AttachPath)?;
+    registry.register(DetachPath)
 }
 
 /// Edits the text object `id` names, capturing it for the inverse.
@@ -391,6 +393,213 @@ impl TypedCommand for SetFont {
     }
 }
 
+/// One anchor control (`XPCf`/`YPCf`, `XSCf`/`YSCf`) over the wire,
+/// in absolute document coordinates — the model stores handles
+/// absolutely, and the attach payload mirrors that exactly.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct WireHandle {
+    x: f64,
+    y: f64,
+}
+
+/// One path point of the attach payload: anchor plus optional handles.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct WirePoint {
+    x: f64,
+    y: f64,
+    /// Arrival control (`XPCf`/`YPCf`), absolute.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    primary: Option<WireHandle>,
+    /// Departure control (`XSCf`/`YSCf`), absolute.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    secondary: Option<WireHandle>,
+    /// `CRVb` — the point is a curve point.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    curve: Option<bool>,
+}
+
+/// One contour of the attach payload (`ISCb` + `PBTv`*).
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct WireContour {
+    /// `ISCb` — default false, matching the reader's default.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    closed: Option<bool>,
+    points: Vec<WirePoint>,
+}
+
+/// `text.attachPath` — lay the object's text along guide contours
+/// (`TAPv`): sets `TFTi` to 2 (follow path) and replaces any previous
+/// guide. The guide renders as nothing itself; styling children it
+/// would carry in a real file stay a writer concern, not a command one.
+struct AttachPath;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct AttachPathPayload {
+    /// Target text object.
+    id: doc::ObjectId,
+    /// Guide contours (`PTHv`/`PBLv`).
+    path: Vec<WireContour>,
+    /// `TAMi` — 0 rotate with the path, 1 upright, 2 skew vertical,
+    /// 3 skew horizontal. Absent leaves the model's default (rotate).
+    alignment: Option<i64>,
+    /// `CHOf` — distance along the path where the text starts. May be
+    /// negative (leading glyphs fall off the rail and drop).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    offset: Option<f64>,
+}
+
+impl AttachPathPayload {
+    fn validate(&self, name: &'static str) -> Result<Vec<Contour>, EngineError> {
+        if self.path.is_empty() {
+            return Err(EngineError::InvalidState {
+                name: name.to_owned(),
+                detail: "path must carry at least one contour".to_owned(),
+            });
+        }
+        if let Some(alignment) = self.alignment {
+            if !(0..=3).contains(&alignment) {
+                return Err(EngineError::InvalidState {
+                    name: name.to_owned(),
+                    detail: format!("alignment {alignment} outside 0..3"),
+                });
+            }
+        }
+        if let Some(offset) = self.offset {
+            if !offset.is_finite() {
+                return Err(EngineError::InvalidState {
+                    name: name.to_owned(),
+                    detail: "offset must be finite".to_owned(),
+                });
+            }
+        }
+        self.path
+            .iter()
+            .enumerate()
+            .try_for_each(|(index, contour)| contour.validate(name, index))?;
+        Ok(self
+            .path
+            .iter()
+            .map(|contour| contour.to_contour())
+            .collect())
+    }
+}
+
+impl WireContour {
+    /// A rail contour needs two anchors or more; fewer flatten to a
+    /// zero-length rail and would silently drop every glyph.
+    fn validate(&self, name: &'static str, index: usize) -> Result<(), EngineError> {
+        if self.points.len() < 2 {
+            return Err(EngineError::InvalidState {
+                name: name.to_owned(),
+                detail: format!(
+                    "contour {index} carries {} points, needs 2 or more",
+                    self.points.len()
+                ),
+            });
+        }
+        for point in &self.points {
+            let mut finite = [point.x, point.y].iter().all(|value| value.is_finite());
+            if let Some(handle) = &point.primary {
+                finite &= [handle.x, handle.y].iter().all(|value| value.is_finite());
+            }
+            if let Some(handle) = &point.secondary {
+                finite &= [handle.x, handle.y].iter().all(|value| value.is_finite());
+            }
+            if !finite {
+                return Err(EngineError::InvalidState {
+                    name: name.to_owned(),
+                    detail: "point coordinates must be finite".to_owned(),
+                });
+            }
+        }
+        Ok(())
+    }
+
+    fn to_contour(&self) -> Contour {
+        Contour {
+            closed: self.closed.unwrap_or(false),
+            point_count: self.points.len() as i64,
+            points: self
+                .points
+                .iter()
+                .map(|point| PathPoint {
+                    anchor: Point::new(point.x, point.y),
+                    primary: point
+                        .primary
+                        .as_ref()
+                        .map(|handle| Point::new(handle.x, handle.y)),
+                    secondary: point
+                        .secondary
+                        .as_ref()
+                        .map(|handle| Point::new(handle.x, handle.y)),
+                    is_curve: point.curve.unwrap_or(false),
+                })
+                .collect(),
+        }
+    }
+}
+
+impl TypedCommand for AttachPath {
+    type Payload = AttachPathPayload;
+
+    fn name(&self) -> &'static str {
+        "text.attachPath"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "text.attachPath";
+        let contours = payload.validate(NAME)?;
+        mutate_text(document, NAME, payload.id, |object| {
+            object.on_path = Some(TextOnPath {
+                alignment: payload.alignment,
+                offset: payload.offset.unwrap_or(0.0),
+                path: contours,
+            });
+            object.flow = Some(2);
+        })
+    }
+}
+
+/// `text.detachPath` — return the object to plain flow: clears the
+/// guide and `TFTi` (absent means normal). Does not refuse text that
+/// was never on a path; the clear is the requested end state.
+struct DetachPath;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct DetachPathPayload {
+    /// Target text object.
+    id: doc::ObjectId,
+}
+
+impl TypedCommand for DetachPath {
+    type Payload = DetachPathPayload;
+
+    fn name(&self) -> &'static str {
+        "text.detachPath"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "text.detachPath";
+        mutate_text(document, NAME, payload.id, |object| {
+            object.on_path = None;
+            object.flow = None;
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
@@ -503,6 +712,18 @@ mod tests {
             ObjectData::Text(text) => text,
             other => panic!("wrong object kind: {other:?}"),
         }
+    }
+
+    /// A three-point rail: one curved segment then a straight one.
+    fn guide_json() -> serde_json::Value {
+        json!([{
+            "closed": false,
+            "points": [
+                {"x": 10.0, "y": 40.0, "secondary": {"x": 18.0, "y": 40.0}, "curve": true},
+                {"x": 30.0, "y": 40.0, "primary": {"x": 22.0, "y": 40.0}, "curve": true},
+                {"x": 30.0, "y": 60.0},
+            ],
+        }])
     }
 
     #[test]
@@ -680,6 +901,183 @@ mod tests {
     }
 
     #[test]
+    fn attach_path_sets_the_guide_and_inverts() {
+        let mut document = document();
+        let (_, id) = create(&mut document, "curved");
+        let delta = registry()
+            .execute(
+                &mut document,
+                "text.attachPath",
+                json!({
+                    "id": id,
+                    "path": guide_json(),
+                    "alignment": 2,
+                    "offset": 7.5,
+                }),
+            )
+            .unwrap();
+        let object = text_object(&document, id);
+        let guide = object.on_path.as_ref().unwrap();
+        assert_eq!(guide.alignment, Some(2));
+        assert_eq!(guide.offset, 7.5);
+        assert_eq!(guide.path.len(), 1);
+        let contour = &guide.path[0];
+        assert_eq!(contour.point_count, 3);
+        assert!(!contour.closed);
+        assert_eq!(contour.points[0].anchor, Point::new(10.0, 40.0));
+        assert_eq!(contour.points[0].secondary, Some(Point::new(18.0, 40.0)));
+        assert!(contour.points[0].is_curve);
+        assert_eq!(contour.points[1].primary, Some(Point::new(22.0, 40.0)));
+        assert!(contour.points[1].is_curve);
+        assert_eq!(contour.points[2].primary, None);
+        assert_eq!(contour.points[2].secondary, None);
+        assert!(!contour.points[2].is_curve);
+        assert_eq!(object.flow, Some(2));
+        delta.apply_inverse(&mut document).unwrap();
+        let object = text_object(&document, id);
+        assert!(object.on_path.is_none());
+        assert_eq!(object.flow, None);
+    }
+
+    #[test]
+    fn attach_path_defaults_then_replaces_the_guide() {
+        let mut document = document();
+        let (_, id) = create(&mut document, "rail");
+        let registry = registry();
+        registry
+            .execute(
+                &mut document,
+                "text.attachPath",
+                json!({ "id": id, "path": guide_json() }),
+            )
+            .unwrap();
+        let first = text_object(&document, id).on_path.clone().unwrap();
+        assert_eq!(first.alignment, None);
+        assert_eq!(first.offset, 0.0);
+        // A second attach replaces the guide wholesale.
+        registry
+            .execute(
+                &mut document,
+                "text.attachPath",
+                json!({
+                    "id": id,
+                    "path": [
+                        {"closed": true, "points": [
+                            {"x": 0.0, "y": 0.0},
+                            {"x": 10.0, "y": 0.0},
+                            {"x": 10.0, "y": 10.0},
+                            {"x": 0.0, "y": 10.0},
+                        ]},
+                        {"points": [{"x": 50.0, "y": 50.0}, {"x": 90.0, "y": 50.0}]},
+                    ],
+                    "offset": -6.0,
+                }),
+            )
+            .unwrap();
+        let guide = text_object(&document, id).on_path.as_ref().unwrap();
+        assert_eq!(guide.path.len(), 2);
+        assert!(guide.path[0].closed);
+        assert_eq!(guide.path[1].point_count, 2);
+        assert_eq!(guide.offset, -6.0);
+    }
+
+    #[test]
+    fn attach_path_refuses_degenerate_geometry() {
+        let mut document = document();
+        let (_, id) = create(&mut document, "checked");
+        // JSON cannot carry non-finite floats (they encode as null), so
+        // the wire-level loop accepts a decode error or the typed
+        // refusal; the typed surface reaches the checks directly.
+        let mut refused = |payload: serde_json::Value, label: &str| {
+            let error = registry()
+                .execute(&mut document, "text.attachPath", payload)
+                .unwrap_err();
+            assert!(
+                matches!(
+                    error,
+                    EngineError::BadPayload { .. } | EngineError::InvalidState { .. }
+                ),
+                "{label}"
+            );
+        };
+        refused(json!({ "id": id, "path": [] }), "no contours");
+        refused(
+            json!({ "id": id, "path": [{"points": [{"x": 0.0, "y": 0.0}]}] }),
+            "single point contour",
+        );
+        refused(
+            json!({ "id": id, "path": guide_json(), "alignment": 4 }),
+            "alignment out of range",
+        );
+        refused(
+            json!({ "id": id, "path": [{"points": [
+                {"x": 0.0, "y": 0.0, "secondary": {"x": 4.0}},
+                {"x": 8.0, "y": 0.0},
+            ]}]}),
+            "handle missing a coordinate",
+        );
+        let typed = AttachPathPayload {
+            id,
+            path: vec![WireContour {
+                closed: Some(false),
+                points: vec![
+                    WirePoint {
+                        x: f64::NAN,
+                        y: 0.0,
+                        primary: None,
+                        secondary: None,
+                        curve: None,
+                    },
+                    WirePoint {
+                        x: 8.0,
+                        y: 0.0,
+                        primary: None,
+                        secondary: None,
+                        curve: None,
+                    },
+                ],
+            }],
+            alignment: None,
+            offset: Some(f64::INFINITY),
+        };
+        let error = AttachPath.apply(&mut document, &typed).unwrap_err();
+        assert!(matches!(error, EngineError::InvalidState { .. }));
+        // Nothing mutated through any refusal.
+        assert!(text_object(&document, id).on_path.is_none());
+    }
+
+    #[test]
+    fn detach_path_clears_the_guide_and_inverts() {
+        let mut document = document();
+        let (_, id) = create(&mut document, "unravel");
+        let registry = registry();
+        registry
+            .execute(
+                &mut document,
+                "text.attachPath",
+                json!({ "id": id, "path": guide_json() }),
+            )
+            .unwrap();
+        let delta = registry
+            .execute(&mut document, "text.detachPath", json!({ "id": id }))
+            .unwrap();
+        let object = text_object(&document, id);
+        assert!(object.on_path.is_none());
+        assert_eq!(object.flow, None);
+        // Inverse restores the attached guide.
+        delta.apply_inverse(&mut document).unwrap();
+        let object = text_object(&document, id);
+        assert!(object.on_path.is_some());
+        assert_eq!(object.flow, Some(2));
+        // A fresh object detaches as a no-op end state.
+        let (_, plain) = create(&mut document, "plain");
+        registry
+            .execute(&mut document, "text.detachPath", json!({ "id": plain }))
+            .unwrap();
+        assert!(text_object(&document, plain).on_path.is_none());
+    }
+
+    #[test]
     fn text_mutations_refuse_non_text_objects() {
         let mut document = document();
         let path_id = document.registry.insert(path_fixture());
@@ -687,6 +1085,11 @@ mod tests {
             ("text.setText", json!({ "id": path_id, "text": "x" })),
             ("text.setAttrs", json!({ "id": path_id, "size": 12.0 })),
             ("text.setFont", json!({ "id": path_id, "font": "Arial" })),
+            (
+                "text.attachPath",
+                json!({ "id": path_id, "path": guide_json() }),
+            ),
+            ("text.detachPath", json!({ "id": path_id })),
         ] {
             let error = registry()
                 .execute(&mut document, name, payload)
