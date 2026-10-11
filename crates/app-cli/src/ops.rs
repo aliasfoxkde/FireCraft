@@ -37,6 +37,18 @@ pub fn apply_journal(loaded: Loaded, journal_text: &str) -> Result<Applied, CliE
     })
 }
 
+/// Imports any supported raster stream (`io::raster::decode`) into a
+/// fresh single-page document and re-emits it as a canonical `.fw.png`
+/// stream. Import-as-open: nothing enters a journal.
+///
+/// # Errors
+/// [`CliError`] wrapping decode or save failures.
+pub fn import_to_fwpng(input: &[u8], name: Option<String>) -> Result<Vec<u8>, CliError> {
+    let document = ::io::raster::decode_to_document(input, name)
+        .map_err(|error| CliError(error.to_string()))?;
+    crate::io::save(&document, &doc::fwmap::UnknownBag::default(), &[])
+}
+
 /// Raster export flags parsed from the CLI (`::io` — the leading
 /// path separator reaches the extern `io` codec crate; `crate::io`
 /// is this crate's own file-access module).

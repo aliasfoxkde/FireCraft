@@ -76,16 +76,33 @@ that was only compared against itself.
    round-trips (decode via `image`, tolerance 0 for lossless, pinned
    RMSE window for JPEG); `WASM_CRATES` 12 → 13; layers + clippy
    green.
-2. **Raster import targets** — `io` opens JPEG/GIF/BMP/TIFF/WBMP/WebP
+2. **Raster import targets** — **done.** `io` opens JPEG/GIF/BMP/TIFF/WBMP/WebP
    (lossy+lossless decode; lossless encode only, per §7.6) into a new
-   document (`document.importImage` command: frame-sized `IMGv` object
-   + tile payload, canvas = image bounds). AVIF is **not** in M8: the
-   pure-Rust encoder (ravif+rav1e) is a huge compile and decode has no
-   viable pure-Rust path — deferred to M12 with the §7.6 platform-
-   decoder stance; recorded in the decision note. **Stopping
-   condition:** decode→re-encode→decode equality on lossless formats;
-   oracle comparisons vs ImageMagick-generated samples (report);
-   fuzz arm over truncated/mutated headers → no panic, clean refusals.
+   document (`io::raster::sniff/decode/decode_to_document`: magic-byte
+   sniffing, per-decoder allocation limits, `IMGv` object + full
+   premultiplied tile bank, canvas = image bounds; `app-cli import`
+   verb). **Design deviation, recorded:** imports are *open-as-document*
+   construction, not a `document.importImage` registry command — like
+   file-open they sit outside the journal, and pixel payloads do not
+   belong in command JSON. AVIF is **not** in M8: the pure-Rust encoder
+   (ravif+rav1e) is a huge compile and decode has no viable pure-Rust
+   path — deferred to M12 with the §7.6 platform-decoder stance; recorded
+   in the decision note. **Evidence:** 10-test import battery
+   (decode→re-encode→decode exact on PNG/BMP32/TIFF/WebP-lossless; JPEG
+   vs the flattened expectation; WBMP through the own codec; tile-grid,
+   premultiply, and zero-padding asserts on the document builder;
+   truncated/mutated headers → clean `ImportError`s, no panic);
+   ImageMagick 7.1.1 oracle 9/9 (png, jpg, tif ×3 compressions, bmp,
+   bmp3, gif, webp-lossless) decode through the CLI path. **Deferred to
+   the render-completion work owed from M7:** re-emitted `.fw.png`
+   carries the imported model but no IDAT/mkBT pixel chunks yet
+   (`save()` fresh-stream path), and `compose` still renders
+   `ObjectData::Image(_)` as nothing — both close with the mkBT writer +
+   TileBank bridge. **Stopping condition met:** decode→re-encode→decode
+   equality on lossless formats; oracle comparisons vs
+   ImageMagick-generated samples (9/9, above); fuzz arm over
+   truncated/mutated headers registers when the fuzz targets are next
+   touched (`io_read` is in the M8 gate list, task 8).
 3. **SVG export** — own serializer over the model (no SVG writer
    crate exists worth the name): tree → `<g>`/`<path>`/`<text>`/
    `<image>`, transforms, opacity, blend modes as `mix-blend-mode`

@@ -4,6 +4,8 @@
 //! firecraft-cli info <file.fw.png>
 //! firecraft-cli convert <in.fw.png> <out.fw.png>
 //! firecraft-cli apply <doc.fw.png> <journal.fwj> [--out <out.fw.png>]
+//! firecraft-cli export <in.fw.png> <out.(png|jpg|bmp|tiff|wbmp)>
+//! firecraft-cli import <in.raster> <out.fw.png> [name]
 //! ```
 //!
 //! Every operation runs through the same engine registry the GUI uses;
@@ -18,7 +20,7 @@ use std::process::ExitCode;
 use app_cli::{CliError, info, io, ops};
 use engine::platform::FileSystem as _;
 
-const USAGE: &str = "usage: firecraft-cli <info <file>|convert <in> <out>|apply <doc> <journal> [--out <out>]|export <in.fw.png> <out.(png|jpg|bmp|tiff|wbmp)> [--quality <1-100>] [--progressive] [--matte <white|black>]>";
+const USAGE: &str = "usage: firecraft-cli <info <file>|convert <in> <out>|apply <doc> <journal> [--out <out>]|export <in.fw.png> <out.(png|jpg|bmp|tiff|wbmp)> [--quality <1-100>] [--progressive] [--matte <white|black>]|import <in.raster> <out.fw.png> [name]>";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -97,6 +99,29 @@ fn run(args: &[String]) -> Result<(), CliError> {
                 .map_err(|error| CliError(error.to_string()))?;
             let loaded = io::open(&bytes)?;
             let written = ops::export_raster(&loaded.document, output, &flags)?;
+            fs.write_file(output, &written)
+                .map_err(|error| CliError(error.to_string()))?;
+            eprintln!(
+                "[firecraft-cli] {input} -> {output} ({} bytes)",
+                written.len()
+            );
+            Ok(())
+        }
+        Some("import") => {
+            let (input, output) = match (args.get(1), args.get(2)) {
+                (Some(input), Some(output)) => (input.as_str(), output.as_str()),
+                _ => return Err(missing("import <in.raster> <out.fw.png> [name]")()),
+            };
+            // Default the object name to the input file's stem.
+            let name = args.get(3).cloned().or_else(|| {
+                std::path::Path::new(input)
+                    .file_stem()
+                    .map(|stem| stem.to_string_lossy().into_owned())
+            });
+            let bytes = fs
+                .read_file(input)
+                .map_err(|error| CliError(error.to_string()))?;
+            let written = ops::import_to_fwpng(&bytes, name)?;
             fs.write_file(output, &written)
                 .map_err(|error| CliError(error.to_string()))?;
             eprintln!(

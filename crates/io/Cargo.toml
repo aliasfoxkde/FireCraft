@@ -10,8 +10,11 @@ homepage.workspace = true
 description = "FireCraft import/export codecs: raster formats, PSD, SVG."
 
 [dependencies]
+doc = { path = "../doc" }
 fwpng = { path = "../fwpng" }
-image = { version = "0.25.9", default-features = false, features = ["png", "jpeg", "bmp", "tiff"] }
+raster = { path = "../raster" }
+geom = { path = "../geom" }
+image = { version = "0.25.9", default-features = false, features = ["png", "jpeg", "bmp", "tiff", "gif", "webp"] }
 jpeg-encoder = "0.6.1"
 tiff = "0.11.3"
 
