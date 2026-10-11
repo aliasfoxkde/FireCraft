@@ -15,3 +15,6 @@
 # Real Fireworks files never enter the repo; generated fixtures/ and
 # MANIFEST.tsv are tracked.
 /corpus/incoming/
+
+# trunk build output
+web/dist/

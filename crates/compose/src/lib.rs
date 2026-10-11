@@ -16,4 +16,4 @@
 mod convert;
 mod render;
 
-pub use render::{ComposeError, Render, render};
+pub use render::{ComposeError, Render, render, straight_alpha};

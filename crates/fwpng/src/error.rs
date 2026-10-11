@@ -76,6 +76,11 @@ pub enum FwPngError {
         /// What the decoder rejected, as reported by the `png` crate.
         reason: String,
     },
+    /// An RGBA8 encode failed (the `png` crate rejected the write).
+    PngEncode {
+        /// What the encoder rejected, as reported by the `png` crate.
+        reason: String,
+    },
     /// A decoded image layout has no RGBA8 mapping (decoder
     /// normalization should have prevented this).
     UnsupportedImage {
@@ -142,6 +147,9 @@ impl fmt::Display for FwPngError {
             }
             Self::PngDecode { reason } => {
                 write!(f, "standard PNG stream failed to decode: {reason}")
+            }
+            Self::PngEncode { reason } => {
+                write!(f, "standard PNG encode failed: {reason}")
             }
             Self::UnsupportedImage { layout } => {
                 write!(f, "no RGBA8 mapping for image layout: {layout}")

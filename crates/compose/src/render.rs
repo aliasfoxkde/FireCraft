@@ -109,6 +109,27 @@ pub fn render(document: &Document, page: usize, frame: usize) -> Result<Render, 
     })
 }
 
+/// Converts a [`Render`]'s premultiplied pixels to straight alpha —
+/// the layout PNG (and most image encoders) expect. `Render` is
+/// premultiplied so it uploads to the GPU without a conversion step;
+/// export paths call this first.
+#[must_use]
+pub fn straight_alpha(premultiplied: &[u8]) -> Vec<u8> {
+    premultiplied
+        .chunks_exact(4)
+        .flat_map(|pixel| {
+            let [r, g, b, a] = [pixel[0], pixel[1], pixel[2], pixel[3]];
+            if a == 0 || a == 255 {
+                [r, g, b, a]
+            } else {
+                // u16 intermediates: r ≤ a, so each quotient fits u8.
+                let un = |c: u8| (u16::from(c) * 255 / u16::from(a)) as u8;
+                [un(r), un(g), un(b), a]
+            }
+        })
+        .collect()
+}
+
 /// Paints a layer list in file order (bottom-first). A layer is
 /// skipped when its `DISb` display flag is off, its per-frame
 /// visibility override hides this frame, or this frame's cell is
@@ -240,4 +261,25 @@ fn render_group(
     }
     ctx.pop_layer();
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+    use super::*;
+
+    #[test]
+    fn straight_alpha_round_trips_opaque_and_transparent() {
+        // Opaque pixels are unchanged; fully transparent goes to zero.
+        assert_eq!(
+            straight_alpha(&[1, 2, 3, 255, 0, 0, 0, 0]),
+            [1, 2, 3, 255, 0, 0, 0, 0]
+        );
+    }
+
+    #[test]
+    fn straight_alpha_unpremultiplies_partial_coverage() {
+        // Half-alpha red: premultiplied (128, 0, 0, 128) → (255, 0, 0, 128).
+        assert_eq!(straight_alpha(&[128, 0, 0, 128]), [255, 0, 0, 128]);
+    }
 }

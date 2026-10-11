@@ -65,6 +65,42 @@ fn png_decode_err(err: png::DecodingError) -> FwPngError {
     }
 }
 
+/// Encodes straight-alpha RGBA8 pixels as a standard PNG (the write
+/// side of [`decode_standard_rgba8`]): 8-bit RGBA, no interlace — the
+/// export path for rasterized pages.
+///
+/// # Errors
+/// [`FwPngError::PngEncode`] when the `png` crate rejects the write
+/// (buffer length mismatch, stream failure).
+pub fn encode_rgba8(width: u32, height: u32, rgba8: &[u8]) -> Result<Vec<u8>, FwPngError> {
+    let expected = width as usize * height as usize * 4;
+    if rgba8.len() != expected {
+        return Err(FwPngError::UnsupportedImage {
+            layout: format!(
+                "encode: {} bytes for {width}x{height} (want {expected})",
+                rgba8.len()
+            ),
+        });
+    }
+    let mut out = Vec::new();
+    {
+        let mut encoder = png::Encoder::new(&mut out, width, height);
+        encoder.set_color(png::ColorType::Rgba);
+        encoder.set_depth(png::BitDepth::Eight);
+        let mut writer = encoder
+            .write_header()
+            .map_err(|err| FwPngError::PngEncode {
+                reason: err.to_string(),
+            })?;
+        writer
+            .write_image_data(rgba8)
+            .map_err(|err| FwPngError::PngEncode {
+                reason: err.to_string(),
+            })?;
+    }
+    Ok(out)
+}
+
 /// RGB (3 bytes/px) -> RGBA (4 bytes/px) with opaque alpha.
 fn expand_rgb(buf: &[u8]) -> Vec<u8> {
     let mut out = Vec::with_capacity(buf.len() / 3 * 4);
@@ -160,5 +196,20 @@ mod tests {
     #[test]
     fn garbage_errors_cleanly() {
         assert!(decode_standard_rgba8(b"not a png").is_err());
+    }
+
+    #[test]
+    fn encode_round_trips_through_decode() {
+        let pixels = [10_u8, 20, 30, 40, 50, 60, 70, 80];
+        let encoded = super::encode_rgba8(2, 1, &pixels).expect("encodes");
+        let decoded = decode_standard_rgba8(&encoded).expect("decodes");
+        assert_eq!(decoded.width, 2);
+        assert_eq!(decoded.height, 1);
+        assert_eq!(decoded.rgba8, pixels);
+    }
+
+    #[test]
+    fn encode_rejects_a_short_buffer() {
+        assert!(super::encode_rgba8(2, 1, &[1, 2, 3]).is_err());
     }
 }

@@ -6,7 +6,6 @@
 
 use doc::ObjectData;
 use egui::{Color32, ColorImage, Pos2, Rect, Sense, TextureHandle, TextureOptions, Vec2};
-use engine::platform::{Dialogs as _, FileSystem as _};
 
 use crate::canvas::View;
 use crate::editor::{Editor, Tool};
@@ -49,6 +48,9 @@ impl engine::platform::Dialogs for EnvDialogs {
 }
 
 /// The eframe app. Holds the editor core plus everything window-shaped.
+/// Platform services are trait objects: the desktop build injects
+/// [`EnvDialogs`] + `StdFs`, the wasm build (crate `firecraft-web`)
+/// injects browser implementations without touching this code.
 pub struct Shell {
     /// The editor core (document, tools, selection).
     pub editor: Editor,
@@ -57,23 +59,50 @@ pub struct Shell {
     /// Cached page raster + the document stamp it was made from.
     raster: Option<(TextureHandle, (usize, usize, usize))>,
     /// Injected platform services.
-    fs: app_cli::io::StdFs,
-    dialogs: EnvDialogs,
+    fs: Box<dyn engine::platform::FileSystem>,
+    dialogs: Box<dyn engine::platform::Dialogs>,
     /// Last status line (errors, save confirmations).
     pub status: String,
 }
 
 impl Shell {
-    /// Builds the shell for an eframe creation context.
+    /// Builds the shell with desktop platform defaults.
     pub fn new(_cc: &eframe::CreationContext<'_>) -> Self {
+        Self::with_platform(
+            Editor::untitled(),
+            Box::new(app_cli::io::StdFs),
+            Box::new(EnvDialogs::default()),
+        )
+    }
+
+    /// Builds the shell over an editor and explicit platform services.
+    pub fn with_platform(
+        editor: Editor,
+        fs: Box<dyn engine::platform::FileSystem>,
+        dialogs: Box<dyn engine::platform::Dialogs>,
+    ) -> Self {
         Self {
-            editor: Editor::untitled(),
+            editor,
             view: View::default(),
             raster: None,
-            fs: app_cli::io::StdFs,
-            dialogs: EnvDialogs::default(),
+            fs,
+            dialogs,
             status: "ready".to_owned(),
         }
+    }
+
+    /// Replaces the document from raw `.fw.png` bytes — the same read
+    /// path the desktop open uses (`io::open`, no registry side door).
+    ///
+    /// # Errors
+    /// Whatever the reader refuses; the current document is kept.
+    pub fn load_document_bytes(&mut self, bytes: &[u8]) -> Result<(), engine::EngineError> {
+        let editor = Editor::open(bytes)?;
+        self.editor = editor;
+        self.view = View::default();
+        self.raster = None;
+        self.status = "opened document".to_owned();
+        Ok(())
     }
 
     /// A change stamp over the session: any apply/undo/redo moves at
