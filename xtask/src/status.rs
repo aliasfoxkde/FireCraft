@@ -17,7 +17,8 @@ that set it instead.
 | fwpng round-trip byte-identical files | 3 | M2 | corpus gate |
 | corpus files with doc-model round-trip (equal + idempotent) | 5 | M4 | `xtask corpus` |
 | corpus fixtures with golden pins (deterministic + anchored) | 1 | M4 | `xtask golden` |
-| wasm-clean crates (compile) | 6 | M4 | `xtask wasm` |
+| wasm-clean crates (compile) | 9 | M5 | `xtask wasm` |
+| web bundle builds (trunk) | 1 | M5 | `xtask wasm` (trunk build of `web/`) |
 | wasm smoke tests executed (fwpng) | 6 | M2 | `xtask wasm` (node + wasm-bindgen-test-runner) |
 | fuzz targets with 60s+ zero-crash campaign | 6 | M3 | `xtask fuzz` / `ci --full` |
 | layer-table violations | 0 | M0 | `xtask layers` |
@@ -37,7 +38,7 @@ A milestone flips to done only when its gate evidence is recorded in
 | M2 fwpng read path + corpus | done | corpus gate 4/4, fuzz 18.7M execs 0 crashes, wasm smoke 6/6 (devlog 2026-10-10) |
 | M3 document model + round-trip | done | doc battery 4/4 (equal + idempotent), fuzz doc_read 2.9M execs cov 971 0 crashes, wasm-clean + layers green (devlog 2026-10-10) |
 | M4 CPU compositor | done | 14 integer-exact compose proofs; golden gate (anchor + determinism pin) green; corpus 5/5; bench 18.7 µs compose / 40.1 µs pipeline at 16×16 (devlog 2026-10-10) |
-| M5 editor shell (native + web) | not started | — |
+| M5 editor shell (native + web) | done | egui shell v1 (canvas/tools/panels, registry-only mutations); trunk web bundle + postMessage bridge (openDocument/apply/exportPng/exportDocument); object.createPath + retract_insert byte-exact undo; equivalence green (3 fuzz seeds + corpus fixture: replay == apply loop, save round-trips); wasm gate 9 crates + trunk build; panic-hunt campaign (see devlog 2026-10-10) |
 | M6 vector depth | not started | — |
 | M7 bitmap + filters | not started | — |
 | M8 import/export | not started | — |

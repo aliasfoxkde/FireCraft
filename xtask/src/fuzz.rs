@@ -83,6 +83,10 @@ pub fn panic_hunt() -> Result<(), String> {
             "run",
             "engine_commands",
             "--release",
+            // The libfuzzer targets are feature-gated (keeps the stable
+            // driver buildable without nightly) — same as `fuzz::full`.
+            "--features",
+            "fuzzer",
             "--",
             "-max_total_time=60",
         ],
