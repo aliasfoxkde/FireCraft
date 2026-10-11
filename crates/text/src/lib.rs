@@ -72,6 +72,12 @@ const FACES: &[&[u8]] = &[
     include_bytes!("../assets/LiberationSans-Bold.ttf"),
 ];
 
+/// The same face binaries, for consumers that must teach an outside
+/// font stack our vocabulary — the SVG importer's usvg/fontdb bridge
+/// loads these so `<text>` flattens against the identical faces the
+/// compositor rasterizes.
+pub const FACE_BINARIES: &[&[u8]] = FACES;
+
 /// Laid-out text as document geometry: glyph outlines (plus underline
 /// rules) in the text object's frame space.
 #[derive(Clone, Debug, PartialEq)]

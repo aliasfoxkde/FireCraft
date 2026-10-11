@@ -70,6 +70,11 @@ fn anchors(seeds: &Seeds) -> AnchorSet {
             firecraft_fuzz::anchor_geom_transform,
             vec![seeds.float_blob.clone()],
         ),
+        (
+            "svgimport",
+            firecraft_fuzz::anchor_svgimport,
+            vec![seeds.minimal_svg.clone(), seeds.minimal_svg_corrupt.clone()],
+        ),
     ]
 }
 
@@ -165,6 +170,8 @@ struct Seeds {
     prvw: Vec<u8>,
     mkbt: Vec<u8>,
     float_blob: Vec<u8>,
+    minimal_svg: Vec<u8>,
+    minimal_svg_corrupt: Vec<u8>,
 }
 
 /// Seeds built in code so the driver needs no corpus files.
@@ -224,6 +231,15 @@ fn seeds() -> Seeds {
         float_blob.extend_from_slice(&v.to_le_bytes());
     }
 
+    // A valid one-path SVG (deep-path seed: parses, renders, imports)
+    // and a half-mutated cousin (parse must refuse cleanly).
+    let minimal_svg = b"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"8\" height=\"8\">\
+        <path d=\"M 0 0 L 4 0 L 4 4 L 0 4 Z\" fill=\"#ff0000\"/></svg>"
+        .to_vec();
+    let minimal_svg_corrupt = b"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"8\" heigh\
+        <pa/h d=\"M 0 0 L 4 0 L 4 4 L 0 4 Z\" fill=\"#ff0000\"></svg>"
+        .to_vec();
+
     Seeds {
         empty: Vec::new(),
         minimal_png,
@@ -232,5 +248,7 @@ fn seeds() -> Seeds {
         prvw,
         mkbt,
         float_blob,
+        minimal_svg,
+        minimal_svg_corrupt,
     }
 }

@@ -1433,7 +1433,9 @@ dependencies = [
  "image",
  "jpeg-encoder",
  "raster",
+ "text",
  "tiff 0.11.3",
+ "usvg",
 ]
 
 [[package]]

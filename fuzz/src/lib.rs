@@ -154,6 +154,18 @@ pub fn anchor_vector_ops(data: &[u8]) {
     }
 }
 
+/// Untrusted byte stream interpreted as an SVG document: the usvg
+/// parse → model walk must refuse, import, or report — never panic,
+/// hang, or overflow the stack (the importer's own depth ceiling and
+/// canvas ceiling are part of the contract under test).
+pub fn anchor_svgimport(data: &[u8]) {
+    if let Ok(imported) = io::svgimport::decode(data) {
+        // The imported document must render (or refuse) without
+        // panicking too — compose is the first consumer of the walk.
+        let _ = compose::render(&imported.document, 0, 0);
+    }
+}
+
 /// How many random catalog calls one seed drives.
 pub const HUNT_STEPS: usize = 48;
 

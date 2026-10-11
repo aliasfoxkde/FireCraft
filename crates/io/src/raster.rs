@@ -188,8 +188,33 @@ pub fn document_from_image(
     image: &DecodedImage,
     name: Option<String>,
 ) -> Result<Document, ImportError> {
-    let width = usize::try_from(image.width).unwrap_or(usize::MAX);
-    let height = usize::try_from(image.height).unwrap_or(usize::MAX);
+    let mut document = Document::default();
+    document.info.frame_count = 1;
+    document.info.canvas.width = f64::from(image.width);
+    document.info.canvas.height = f64::from(image.height);
+    let image_id = attach_image(&mut document, image.width, image.height, &image.rgba, name)?;
+    let canvas = document.info.canvas.clone();
+    build_single_object_page(&mut document, canvas, vec![image_id]);
+    Ok(document)
+}
+
+/// Splits a straight-alpha RGBA plane into a premultiplied, zero-padded
+/// tile bank and registers an `IMGv` object for it in `document`'s
+/// registry. Shared by the raster import path and the SVG embedded-image
+/// path. Tile ids are dense from 0, row-major.
+///
+/// # Errors
+/// [`ImportError::Unsupported`] when the tile grid would exceed 4096
+/// tiles or the plane length mismatches the dimensions.
+pub(crate) fn attach_image(
+    document: &mut Document,
+    width: u32,
+    height: u32,
+    rgba: &[u8],
+    name: Option<String>,
+) -> Result<doc::ObjectId, ImportError> {
+    let width = usize::try_from(width).unwrap_or(usize::MAX);
+    let height = usize::try_from(height).unwrap_or(usize::MAX);
     let cols = width.div_ceil(TILE_SIDE);
     let rows = height.div_ceil(TILE_SIDE);
     let tile_count = cols
@@ -204,11 +229,16 @@ pub fn document_from_image(
             reason: format!("{tile_count} tiles exceeds the 4096-tile ceiling"),
         });
     }
-
-    let mut document = Document::default();
-    document.info.frame_count = 1;
-    document.info.canvas.width = f64::from(image.width);
-    document.info.canvas.height = f64::from(image.height);
+    if rgba.len() != width * height * 4 {
+        return Err(ImportError::Decode {
+            format: "raster",
+            reason: format!(
+                "image plane holds {} bytes, {width}x{height} needs {}",
+                rgba.len(),
+                width * height * 4
+            ),
+        });
+    }
 
     // Tile references, row-major; payloads follow below.
     let mut tiles = Vec::with_capacity(tile_count);
@@ -222,7 +252,10 @@ pub fn document_from_image(
         .insert(ObjectData::Image(doc::ImageObject {
             location: geom::Point::ZERO,
             offset: geom::Point::ZERO,
-            pixels: (i64::from(image.width), i64::from(image.height)),
+            pixels: (
+                i64::try_from(width).unwrap_or(i64::MAX),
+                i64::try_from(height).unwrap_or(i64::MAX),
+            ),
             tile_size: TILE_SIDE as i64,
             tiles,
             name,
@@ -251,23 +284,33 @@ pub fn document_from_image(
                         break;
                     }
                     let src = (y * width + x) * 4;
-                    let a = u32::from(image.rgba[src + 3]);
+                    let a = u32::from(rgba[src + 3]);
                     let dst = (py * TILE_SIDE + px) * 4;
                     for channel in 0..3 {
                         buffer[dst + channel] =
-                            ((u32::from(image.rgba[src + channel]) * a + 127) / 255) as u8;
+                            ((u32::from(rgba[src + channel]) * a + 127) / 255) as u8;
                     }
-                    buffer[dst + 3] = image.rgba[src + 3];
+                    buffer[dst + 3] = rgba[src + 3];
                 }
             }
             document.tiles.insert(id, Tile::from_rgba8(buffer));
         }
     }
+    Ok(image_id)
+}
 
+/// A one-page, one-layer document skeleton whose single cell holds
+/// `elements` in z-order (the raster import shape — also reused by the
+/// SVG import for its root walk).
+pub(crate) fn build_single_object_page(
+    document: &mut Document,
+    canvas: doc::Canvas,
+    elements: Vec<doc::ObjectId>,
+) {
     let cell = Cell {
         locked: false,
         visible: true,
-        elements: vec![image_id],
+        elements,
     };
     let layer = Layer {
         name: "Layer 1".to_owned(),
@@ -282,7 +325,7 @@ pub fn document_from_image(
             frame_count: 1,
             frame_count_duplicate: 1,
             request_id: 0,
-            canvas: document.info.canvas.clone(),
+            canvas,
             onion_before: 0,
             onion_after: 0,
         },
@@ -298,7 +341,6 @@ pub fn document_from_image(
         grid: None,
         guides: Default::default(),
     });
-    Ok(document)
 }
 
 /// Detects the format by magic bytes (never by file extension).

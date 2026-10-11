@@ -1,10 +1,12 @@
 # 0008 — SVG export: the live-filter mapping table and the resvg golden loop
 
-- **Status:** Accepted (M8 task 3, 2026-10-11)
+- **Status:** Accepted (M8 tasks 3–4, 2026-10-11)
 - **Deciders:** Michael Kinney, Claude
 - **Scope:** `io::svg` (L4) — how a document's `EFLv` effect stacks,
-  paints, and geometry serialize to SVG 1.1; and how the serializer is
-  proven (`xtask svg-golden`).
+  paints, and geometry serialize to SVG 1.1, and how the serializer is
+  proven (`xtask svg-golden`); and `io::svgimport` (L4) — the inverse
+  walk, its recorded limitations, and how it is proven
+  (`xtask svg-roundtrip`).
 - **Supersedes:** none · **Superseded by:** none
 
 ## Context
@@ -128,6 +130,58 @@ saturates to 255 over a region and cannot hide under these bounds.
 Re-measure after renderer or kernel changes with
 `cargo run -p xtask -- svg-golden --measure`; re-pin only with intent.
 
+### 6. The import half: bake, don't represent (task 4)
+
+`io::svgimport::decode` walks the usvg tree into the model with the
+mirror-image rule set:
+
+- **Transforms bake into geometry.** The model has no transform spine,
+  so usvg's per-node absolute transforms compose into the path data
+  (quads raise to cubics at the ⅔ control-point marks — the exact
+  degree-elevation identity). Groups keep only semantics the model can
+  represent: per-mille opacity, blend (through
+  `compose::blend_value`, the export table's exact inverse), and
+  structure.
+- **Unrepresentable features drop with a report entry, never
+  silently** — the same discipline as export. `SvgImportReport`
+  counts `texts_flattened` (text layouts through fontdb seeded with
+  `text::FACE_BINARIES`, the same binaries compose rasterizes — they
+  arrive as glyph paths, which is lossless *as rendered*),
+  `gradients_dropped` (no model gradient paint yet), `strokes_flattened`
+  (the model records 1px strokes; width ≠ 1 and dash arrays flatten
+  with notes), `clips_dropped` (children import unmasked — compose
+  parity, §4), `filters_dropped`, and `images` (embedded rasters →
+  `IMGv` over the shared tile bank; nested SVG images refuse).
+- **usvg behaviors pinned by tests** (behavioral specs, not code
+  copy): single-stop gradients collapse to solid `Color` at parse;
+  `fill="none"` paths are culled at parse and never reach the walk;
+  SVG's default fill is black, so "unpainted" requires `fill="none"`;
+  a serializer's `<g id="layer-1">` wrapper imports as a structured
+  group.
+
+**The hostile-input finding: two upstream crates recurse without a
+depth cap.** The fuzz arm's first deep-nesting input (4096 `<g>`
+elements) overflowed the 8 MB main-thread stack *inside
+`roxmltree 0.20`'s `Document::parse`* — before usvg's own converter
+ever ran, and usvg's converter recurses unbounded too. Neither crate
+exposes a depth knob (`ParsingOptions` is `allow_dtd` + `nodes_limit`
+only). The importer therefore gates first with a flat, stack-safe
+element-depth scan (`MAX_ELEMENT_DEPTH = 128`; exact for well-formed
+XML, conservative only in the reject direction) and refuses canvases
+above the 65535px compose `Render` ceiling (u16 dimensions —
+importing larger would just relocate the failure). This is recorded
+as an upstream defect worth reporting: hostile SVG is web-edge input,
+and a stack overflow is a crash, not a clean error.
+
+**Provenance (`xtask svg-roundtrip`, in `ci`):** export → import →
+compose render vs the original compose render — both sides render
+with compose, so any delta is import loss. Measured **bit-exact at
+Δ 0 on the whole eligible set** (composed, scripted); zero tolerance
+pinned. Fixtures skip with reasons: filtered (SVG filters import
+unfiltered — the recorded both-directions limitation), text. SVG
+bytes are already sha-pinned by the export gate, so no additional
+pins.
+
 ## Consequences
 
 - SVG export fidelity is checked by an outside renderer, so a bug in
@@ -138,9 +192,16 @@ Re-measure after renderer or kernel changes with
 - Straight-vs-premultiplied blur remains a recorded, bounded
   divergence; closing it would mean premultiplied kernels in
   `filters` — an M7-affecting change, deliberately not taken here.
+- SVG now round-trips at Δ 0 through our own serializer and importer;
+  any future serializer *or* importer change that loses a pixel fails
+  `svg-roundtrip` in CI. Gradient, filter, and clip support arriving
+  in the model re-opens both halves of this note deliberately.
+- The depth gate is a load-bearing seam: bumping `MAX_ELEMENT_DEPTH`
+  or adopting a fixed usvg/roxmltree must re-prove the deep-nesting
+  fuzz case.
 
 ## References
 
-- `docs/planning/firecraft/M8-import-export.md` task 3 (stopping condition)
+- `docs/planning/firecraft/M8-import-export.md` tasks 3–4 (stopping conditions)
 - `docs/decisions/0005-live-effect-render.md` (offscreen margins, cache)
 - `docs/decisions/0004-filter-color-order.md` (pinned channel order the LUTs inherit)

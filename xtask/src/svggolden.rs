@@ -17,6 +17,7 @@
 use crate::corpus::manifest_entries;
 use crate::util::{inflate, workspace_root};
 use fwpng::chunk::parse_chunks;
+use io::svgimport::ImportedSvg;
 use sha2::{Digest, Sha256};
 use std::path::Path;
 
@@ -267,6 +268,173 @@ fn delta_profile(got: &[u8], want: &[u8], width: u32) -> String {
 fn bytes_digest(bytes: &[u8]) -> String {
     let digest = Sha256::digest(bytes);
     digest.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+/// Round-trip tolerance constants (M8 task 4 stopping condition). Both
+/// sides of this comparison render with compose — original document vs
+/// export→import document — so deltas measure *import loss*, not
+/// renderer disagreement. Measured (`xtask svg-roundtrip --measure`,
+/// M8): **bit-exact at Δ 0** on the whole eligible set — the
+/// serializer prints full-precision coordinates and compose's blend/
+/// opacity/FOTb semantics survive the usvg walk identically — so the
+/// gate pins zero tolerance; any delta at all is import loss and
+/// demands a re-measure before raising. The filtered fixture is
+/// skipped (SVG filters import unfiltered — the recorded both-directions
+/// limitation in `docs/decisions/0008-svg-filter-mapping.md`), as are
+/// the text fixtures.
+pub const ROUNDTRIP_MAX_CHANNEL_DELTA: u8 = 0;
+
+/// Mean-delta bound for the round-trip gate (see
+/// [`ROUNDTRIP_MAX_CHANNEL_DELTA`]).
+pub const ROUNDTRIP_MAX_MEAN_DELTA: f64 = 0.0;
+
+/// Gate half: export → import → render ≈ original render, per eligible
+/// fixture, under the recorded round-trip tolerance. SVG bytes are
+/// already sha-pinned by the export gate, so the import input is
+/// deterministic and no additional pin is needed.
+pub fn roundtrip() -> Result<(), String> {
+    roundtrip_inner(false)
+}
+
+/// `xtask svg-roundtrip --measure`: report observed deltas without
+/// enforcing (used to record the tolerance).
+pub fn roundtrip_measure() -> Result<(), String> {
+    roundtrip_inner(true)
+}
+
+fn roundtrip_inner(measure: bool) -> Result<(), String> {
+    let mut compared = 0usize;
+    let mut skipped: Vec<String> = Vec::new();
+    let mut errors = Vec::new();
+    for (_, rel) in manifest_entries()? {
+        if !rel.starts_with(FIXTURE_PREFIX) {
+            continue;
+        }
+        let bytes = match std::fs::read(workspace_root().join(&rel)) {
+            Ok(b) => b,
+            Err(err) => {
+                errors.push(format!("{rel}: {err}"));
+                continue;
+            }
+        };
+        let Some(document) = parse_document(&bytes) else {
+            continue; // not a compositor fixture
+        };
+        let name = rel[FIXTURE_PREFIX.len()..].to_owned();
+
+        let out = match io::svg::encode(&document, &io::svg::SvgOptions::default()) {
+            Ok(out) => out,
+            Err(err) => {
+                errors.push(format!("{name}: svg encode: {err}"));
+                continue;
+            }
+        };
+        let report = out.report;
+        if report.text_objects > 0 || report.image_objects > 0 || report.dropped_filters > 0 {
+            skipped.push(format!(
+                "{name} (text={} image={} dropped_filters={})",
+                report.text_objects, report.image_objects, report.dropped_filters
+            ));
+            continue;
+        }
+
+        let reference = match compose::render(&document, 0, 0) {
+            Ok(r) => r,
+            Err(err) => {
+                errors.push(format!("{name}: compose: {err}"));
+                continue;
+            }
+        };
+        let imported = match io::svgimport::decode(out.svg.as_bytes()) {
+            Ok(ImportedSvg { document, report }) => {
+                if !report.notes.is_empty() {
+                    skipped.push(format!(
+                        "{name} ({} import note(s): {})",
+                        report.notes.len(),
+                        report.notes.join("; ")
+                    ));
+                    continue;
+                }
+                document
+            }
+            Err(err) => {
+                errors.push(format!("{name}: svg import: {err}"));
+                continue;
+            }
+        };
+        let rendered = match compose::render(&imported, 0, 0) {
+            Ok(r) => r,
+            Err(err) => {
+                errors.push(format!("{name}: compose after import: {err}"));
+                continue;
+            }
+        };
+        if rendered.width != reference.width || rendered.height != reference.height {
+            errors.push(format!(
+                "{name}: round trip resized the canvas {}x{} -> {}x{}",
+                reference.width, reference.height, rendered.width, rendered.height
+            ));
+            continue;
+        }
+
+        if measure {
+            eprintln!(
+                "[xtask] svg-roundtrip: {name}: {}",
+                delta_profile(
+                    &rendered.pixels,
+                    &reference.pixels,
+                    u32::from(reference.width)
+                )
+            );
+        } else {
+            let (max, mean) = compare_roundtrip(&rendered.pixels, &reference.pixels)?;
+            eprintln!("[xtask] svg-roundtrip: {name}: max Δ {max}, mean Δ {mean:.4}");
+        }
+        compared += 1;
+    }
+
+    if !errors.is_empty() {
+        return Err(errors.join("\n"));
+    }
+    if compared == 0 {
+        return Err(
+            "svg-roundtrip: no fixture was eligible — the loop compares nothing".to_owned(),
+        );
+    }
+    eprintln!(
+        "[xtask] svg-roundtrip: {compared} fixture(s) within tolerance \
+         (max Δ ≤ {ROUNDTRIP_MAX_CHANNEL_DELTA}, mean Δ ≤ {ROUNDTRIP_MAX_MEAN_DELTA}), \
+         {} skipped: {}",
+        skipped.len(),
+        skipped.join(", ")
+    );
+    Ok(())
+}
+
+/// Round-trip comparison under the (expected-bit-exact) tolerance.
+fn compare_roundtrip(got: &[u8], want: &[u8]) -> Result<(u8, f64), String> {
+    let mut max: u8 = 0;
+    let mut total = 0u64;
+    for (a, b) in got.iter().zip(want.iter()) {
+        let delta = a.abs_diff(*b);
+        max = max.max(delta);
+        total += u64::from(delta);
+    }
+    let mean = total as f64 / got.len() as f64;
+    if max > ROUNDTRIP_MAX_CHANNEL_DELTA {
+        return Err(format!(
+            "round-trip channel delta {max} exceeds the recorded max \
+             {ROUNDTRIP_MAX_CHANNEL_DELTA} (import loss — re-measure with \
+             `xtask svg-roundtrip --measure` before raising)"
+        ));
+    }
+    if mean > ROUNDTRIP_MAX_MEAN_DELTA {
+        return Err(format!(
+            "round-trip mean delta {mean:.4} exceeds the recorded max \
+             {ROUNDTRIP_MAX_MEAN_DELTA}"
+        ));
+    }
+    Ok((max, mean))
 }
 
 /// Dev-only measurement pass: reports the observed deltas per fixture

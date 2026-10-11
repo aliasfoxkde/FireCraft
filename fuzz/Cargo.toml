@@ -20,6 +20,8 @@ fwpng = { path = "../crates/fwpng" }
 geom = { path = "../crates/geom" }
 vector = { path = "../crates/vector" }
 color = { path = "../crates/color" }
+io = { path = "../crates/io" }
+compose = { path = "../crates/compose" }
 flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
 serde_json = { version = "1", features = ["float_roundtrip"] }
 libfuzzer-sys = { version = "0.4", optional = true }
@@ -77,4 +79,9 @@ required-features = ["fuzzer"]
 [[bin]]
 name = "engine_commands"
 path = "fuzz_targets/engine_commands.rs"
+required-features = ["fuzzer"]
+
+[[bin]]
+name = "svgimport"
+path = "fuzz_targets/svgimport.rs"
 required-features = ["fuzzer"]

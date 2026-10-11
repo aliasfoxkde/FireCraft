@@ -15,6 +15,7 @@ pub mod jpeg;
 pub mod png;
 pub mod raster;
 pub mod svg;
+pub mod svgimport;
 pub mod tiff;
 pub mod wbmp;
 

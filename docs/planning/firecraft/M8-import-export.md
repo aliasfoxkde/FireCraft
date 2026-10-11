@@ -144,14 +144,50 @@ that was only compared against itself.
    primitives, text style attrs, data-URI image decodes back to the
    tile pixels, hostile canvases refused); filter-mapping table in
    `docs/decisions/0008-svg-filter-mapping.md`.
-4. **SVG import** — `usvg` 0.48 parse → model walk: paths (fills/
-   strokes/gradients), groups (transforms, opacity, clipping as
-   masks), embedded rasters → `IMGv`; text via usvg's fontdb layout
-   over the bundled Liberation Sans dir (text arrives as glyph paths
-   — editable-text import is a recorded limitation). **Stopping
-   condition:** round-trip our own SVG export → import → compose
-   render ≈ original render (pinned tolerance); hostile-SVG fuzz arm
-   (no panic); limitation list in the report struct, documented.
+4. **SVG import** — **done.** `usvg` **0.45.1** (the ticket said 0.48;
+   no such release exists — 0.45.1 is the version resvg 0.45 pins, so
+   no new crates.io packages beyond the workspace graph) parse → model
+   walk (`io::svgimport::decode`): paths bake usvg's absolute
+   transforms into geometry (no model transform spine), quads raise to
+   cubics at the ⅔ marks; groups carry per-mille opacity and blend
+   values through `compose::blend_value` (the export table's exact
+   inverse); solid paints → `FCLi`/`BCLi` raws (paint opacity is the
+   alpha byte); `PaintOrder::StrokeAndFill` → `FOTb`; even-odd →
+   `EOFb`; embedded rasters → `IMGv` over the shared tile bank
+   (`raster::attach_image`, translation-only placement recorded);
+   text layouts through fontdb seeded with `text::FACE_BINARIES` —
+   the same binaries compose rasterizes — and arrive as glyph paths.
+   **Limitation list** lives in `SvgImportReport` (notes + counters:
+   texts_flattened, gradients_dropped, strokes_flattened (model
+   records 1px strokes only), clips_dropped (children import unmasked
+   — compose parity), filters_dropped, images) and is documented in
+   decision 0008. usvg behaviors discovered and pinned by tests:
+   single-stop gradients collapse to solid `Color`; `fill="none"`
+   paths are culled at parse (never reach the walk); the serializer's
+   `<g id="layer-1">` wrapper imports as a structured group; SVG's
+   default fill is black, so "unpainted" requires `fill="none"`.
+   **Hostile-input hardening, found by the fuzz arm's battery:** usvg
+   AND roxmltree 0.20 both overflow the stack on deeply nested
+   documents with no internal cap — the importer gates first with a
+   flat, stack-safe element-depth scan (`MAX_ELEMENT_DEPTH` 128,
+   exact for well-formed XML, conservative in the reject direction);
+   canvases above the 65535px compose `Render` ceiling refuse at
+   import. **Stopping condition met:** `xtask svg-roundtrip` (in
+   `ci`): export → import → compose render vs original compose render
+   — **bit-exact at Δ 0 on the whole eligible set** (composed,
+   scripted; zero tolerance pinned — both sides render with compose so
+   any delta is import loss); filtered skips (SVG filters import
+   unfiltered — the recorded both-directions limitation), text
+   fixtures skip with counts. Hostile-SVG fuzz arm: `svgimport`
+   libfuzzer target + stable anchor (decode → compose render must not
+   panic/hang/overflow), seeded corpus, deterministic 13-case battery
+   in `crates/io/tests/svgimport.rs` (16 tests total: round-trips
+   bit-exact incl. blend/opacity/even-odd/FOTb, transform baking,
+   quad→cubic marks, text flattening renders, embedded image tile
+   bank, gradient/stroke/clip/filter drop reports, pass-through group
+   flattening, hostile refusal, absurd-but-valid ±1e30 geometry
+   imports without panicking). Evidence: io 55 tests green, clippy
+   clean, wasm green (io in `WASM_CRATES`).
 5. **PSD spike + reader** — spike first per risk #3: generate layered
    PSDs with ImageMagick + ag-psd (node, scratch under `/var/tmp`,
    never committed), enumerate the record zoo actually emitted

@@ -16,7 +16,9 @@ raster = { path = "../raster" }
 geom = { path = "../geom" }
 compose = { path = "../compose" }
 filters = { path = "../filters" }
+text = { path = "../text" }
 image = { version = "0.25.9", default-features = false, features = ["png", "jpeg", "bmp", "tiff", "gif", "webp"] }
+usvg = "0.45.1"
 jpeg-encoder = "0.6.1"
 tiff = "0.11.3"
 base64 = "0.22.1"

@@ -47,6 +47,33 @@ pub fn blend_mode(bldi: i64) -> Mix {
     }
 }
 
+/// The inverse of [`blend_mode`]: the `BLDi` value a model object
+/// carries for a rasterizer mix mode. `Mix::Normal` — the fallback
+/// target as well as the 0 value — maps back to 0, so importers that
+/// round-trip through the pair never fabricate a dictionary entry for
+/// an unknown mode.
+#[must_use]
+pub fn blend_value(mode: Mix) -> i64 {
+    match mode {
+        Mix::Normal => 0,
+        Mix::Multiply => 2,
+        Mix::Difference => 3,
+        Mix::Overlay => 4,
+        Mix::Screen => 5,
+        Mix::Darken => 9,
+        Mix::Lighten => 10,
+        Mix::Hue => 11,
+        Mix::Saturation => 12,
+        Mix::Color => 13,
+        Mix::Luminosity => 14,
+        Mix::Exclusion => 32,
+        Mix::HardLight => 33,
+        Mix::SoftLight => 34,
+        Mix::ColorDodge => 36,
+        Mix::ColorBurn => 37,
+    }
+}
+
 /// Emits the model's contours as a rasterizer path. One-sided bezier
 /// controls collapse onto their segment endpoint (a missing control
 /// contributes no curvature); contours with no points are skipped.
