@@ -379,6 +379,11 @@ pub const CALLS: &[&str] = &[
     "bitmap.fill",
     "bitmap.erase",
     "bitmap.movePixels",
+    "retouch.blur",
+    "retouch.smudge",
+    "retouch.clone",
+    "retouch.eraser",
+    "retouch.redEye",
 ];
 
 /// Builds a random call against `document`: a random catalog id and a
@@ -796,6 +801,36 @@ pub fn random_call(rng: &mut FuzzRng, document: &Document) -> (String, serde_jso
             "dx": rng.below(600) as i64 - 300,
             "dy": rng.below(600) as i64 - 300,
         }),
+        "retouch.blur" | "retouch.eraser" => serde_json::json!({
+            "id": any_id(rng),
+            "x": -(rng.below(300) as f64),
+            "y": -(rng.below(300) as f64),
+            "radius": rng.below(520),
+            "strength": rng.below(105),
+        }),
+        "retouch.smudge" => serde_json::json!({
+            "id": any_id(rng),
+            "x": -(rng.below(300) as f64),
+            "y": -(rng.below(300) as f64),
+            "radius": rng.below(520),
+            "strength": rng.below(105),
+            "dx": rng.below(20) as i32 - 10,
+            "dy": rng.below(20) as i32 - 10,
+        }),
+        "retouch.clone" => serde_json::json!({
+            "id": any_id(rng),
+            "source_x": -(rng.below(300) as f64),
+            "source_y": -(rng.below(300) as f64),
+            "target_x": -(rng.below(300) as f64),
+            "target_y": -(rng.below(300) as f64),
+            "radius": rng.below(520),
+        }),
+        "retouch.redEye" => serde_json::json!({
+            "id": any_id(rng),
+            "x": -(rng.below(300) as f64),
+            "y": -(rng.below(300) as f64),
+            "radius": rng.below(520),
+        }),
         other => {
             let _ = other;
             // A catalog command without a builder: an empty payload is
@@ -830,6 +865,8 @@ fn corrupt(rng: &mut FuzzRng, mut payload: serde_json::Value) -> serde_json::Val
             "opacity",
             "blend",
             "color_raw",
+            "radius",
+            "strength",
             "name",
             "to",
             "index",

@@ -99,6 +99,18 @@ format round-trip. Recorded-vs-enforced is stated per task; nothing
    smudge-lite, clone (aligned), eraser, red-eye. Every tool takes
    explicit geometry (no pointer state in the engine). **Stopping
    condition:** golden pins with fixed inputs; undo byte-exact.
+   Done (2026-10-11): `engine::catalog::retouch` — five brush tools
+   (`retouch.blur/smudge/clone/eraser/redEye`) with explicit payload
+   geometry (center + radius 1..=512, no pointer state), a deterministic
+   soft-edge circle (full to r/2, linear falloff to rim), selection-scaled
+   effects, and tile-capturing deltas through `masked_pixel_edit`. Blur is
+   one separable edge-replicated box average (u32 sliding sums, half-up);
+   smudge is a single behind-sample; clone is one stamp at a caller-held
+   offset (alignment across strokes is the caller's contract); red-eye
+   clamps red to max(g,b)+32 in u16 (u8 ceiling overflowed on white).
+   Hand-pinned tables per tool in module tests; every tool undo
+   byte-exact; retouch strokes folded into `tests/bitmap_journal.rs`
+   replay/undo/redo equivalence; armed in fuzzdrive.
 7. **`text` crate (L2): layout + `TXTv` runs** — cosmic-text 0.19
    layout over the `TXTv` frame; `TFSv` run attributes mapped into the
    model (font, size, fill, kerning/tracking/leading/baseline shift,

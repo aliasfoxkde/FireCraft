@@ -368,7 +368,7 @@ impl TypedCommand for SelectNone {
 /// Captures the tiles `image`'s active selection touches, borrows the
 /// flat working buffer through `edit`, scatters the result back, and
 /// returns the combined delta. Shared by fill/erase/move.
-fn masked_pixel_edit(
+pub(crate) fn masked_pixel_edit(
     document: &mut Document,
     name: &'static str,
     id: ObjectId,
@@ -424,7 +424,7 @@ fn masked_pixel_edit(
 
 /// Blends one straight pixel toward `target` by coverage/255 (the
 /// feathered-fill rule), writing into `pixel`.
-fn blend_pixel(pixel: &mut [u8; 4], target: [u8; 4], coverage: u8) {
+pub(crate) fn blend_pixel(pixel: &mut [u8; 4], target: [u8; 4], coverage: u8) {
     if coverage == 255 {
         *pixel = target;
         return;

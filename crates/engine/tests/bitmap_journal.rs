@@ -47,18 +47,34 @@ fn bitmap_edits_replay_and_undo_byte_exact() {
         json!({ "id": image, "dx": 1, "dy": 0 }),
         None,
     );
+    // Retouch strokes: explicit geometry, selection-scaled effects.
+    session.apply(
+        "retouch.blur",
+        json!({ "id": image, "x": 3.0, "y": 3.0, "radius": 3, "strength": 80 }),
+        None,
+    );
+    session.apply(
+        "retouch.clone",
+        json!({ "id": image, "source_x": 0.5, "source_y": 0.5, "target_x": 9.5, "target_y": 9.5, "radius": 4 }),
+        None,
+    );
+    session.apply(
+        "retouch.eraser",
+        json!({ "id": image, "x": 2.0, "y": 7.0, "radius": 2, "strength": 60 }),
+        None,
+    );
     session.apply("bitmap.selectNone", json!({}), None);
     let edited = session.bytes();
 
     // --- restart: fresh document + tiles + history, replay ---
     let mut restarted = session.restart();
     assert_eq!(restarted.bytes(), edited, "replay reproduces the pixels");
-    assert_eq!(restarted.history.undo_len(), 8);
+    assert_eq!(restarted.history.undo_len(), 11);
     assert_eq!(restarted.history.redo_len(), 0);
 
     // Undo everything across the restart boundary: the tile payloads
     // and the selection must both return to the base state.
-    for _ in 0..8 {
+    for _ in 0..11 {
         restarted.undo();
     }
     assert_eq!(restarted.bytes(), original, "undo reaches the base bytes");
@@ -66,10 +82,10 @@ fn bitmap_edits_replay_and_undo_byte_exact() {
         restarted.document.selection.is_none(),
         "base has no selection"
     );
-    assert_eq!(restarted.history.redo_len(), 8);
+    assert_eq!(restarted.history.redo_len(), 11);
 
     // Redo everything: byte-identical to the live session's result.
-    for _ in 0..8 {
+    for _ in 0..11 {
         restarted.redo();
     }
     assert_eq!(restarted.bytes(), edited, "redo closes the loop");

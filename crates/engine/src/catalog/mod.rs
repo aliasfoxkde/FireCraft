@@ -14,6 +14,7 @@ pub(crate) mod layer;
 pub(crate) mod object;
 pub(crate) mod page;
 pub(crate) mod path;
+pub(crate) mod retouch;
 
 use crate::error::EngineError;
 use crate::registry::CommandRegistry;
@@ -23,6 +24,7 @@ pub fn install(registry: &mut CommandRegistry) -> Result<(), EngineError> {
     object::install(registry)?;
     arrange::install(registry)?;
     bitmap::install(registry)?;
+    retouch::install(registry)?;
     autoshape::install(registry)?;
     filter::install(registry)?;
     path::install(registry)?;
