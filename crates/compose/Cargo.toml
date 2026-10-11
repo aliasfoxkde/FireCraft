@@ -12,6 +12,7 @@ description = "FireCraft deterministic CPU compositor: document pages to pixels.
 [dependencies]
 doc = { path = "../doc" }
 filters = { path = "../filters" }
+text = { path = "../text" }
 vello_cpu = { version = "0.3", default-features = false, features = ["std", "u8_pipeline"] }
 
 [dev-dependencies]

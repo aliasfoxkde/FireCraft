@@ -136,12 +136,16 @@ pub fn render_with_cache(
 
     let mut ctx = RenderContext::new(width, height);
     let mut resources = Resources::new();
+    // The text shaping engine builds lazily — documents without text
+    // never pay for the font database.
+    let mut text_engine = None;
     walk_layers(
         &page.layers.layers,
         document,
         frame,
         (width, height),
         cache,
+        &mut text_engine,
         &mut ctx,
     )?;
     ctx.flush();
@@ -186,6 +190,7 @@ fn walk_layers(
     frame: usize,
     canvas: (u16, u16),
     cache: &mut EffectCache,
+    text_engine: &mut Option<text::TextEngine>,
     ctx: &mut RenderContext,
 ) -> Result<(), ComposeError> {
     for layer in layers {
@@ -204,7 +209,7 @@ fn walk_layers(
             continue;
         }
         for id in &cell.elements {
-            render_object(document, *id, frame, canvas, cache, ctx)?;
+            render_object(document, *id, frame, canvas, cache, text_engine, ctx)?;
         }
     }
     Ok(())
@@ -216,6 +221,7 @@ fn render_object(
     frame: usize,
     canvas: (u16, u16),
     cache: &mut EffectCache,
+    text_engine: &mut Option<text::TextEngine>,
     ctx: &mut RenderContext,
 ) -> Result<(), ComposeError> {
     let object = document.registry.get(id).ok_or(ComposeError::DanglingId {
@@ -224,15 +230,62 @@ fn render_object(
     })?;
     match object {
         ObjectData::Path(path) => render_path(path, canvas, cache, ctx),
-        ObjectData::Group(group) => render_group(document, group, frame, canvas, cache, ctx),
-        // Images (no tile decode this milestone), slices, text (M6) and
-        // symbol instances render as nothing — the M4 plan's
-        // out-of-scope list.
-        ObjectData::Image(_)
-        | ObjectData::Slice(_)
-        | ObjectData::Text(_)
-        | ObjectData::SymbolInstance(_) => Ok(()),
+        ObjectData::Group(group) => {
+            render_group(document, group, frame, canvas, cache, text_engine, ctx)
+        }
+        ObjectData::Text(object) => {
+            let engine = text_engine.get_or_insert_with(text::TextEngine::default);
+            render_text(object, engine, canvas, cache, ctx)
+        }
+        // Images (no tile decode this milestone), slices and symbol
+        // instances render as nothing — the M4 plan's out-of-scope list.
+        ObjectData::Image(_) | ObjectData::Slice(_) | ObjectData::SymbolInstance(_) => Ok(()),
     }
+}
+
+/// Text renders through the path pipeline: glyphs lower to document
+/// contours (the `text` crate), which ride a synthetic path object —
+/// inheriting the fill paint, the blend/opacity layer, and the live
+/// effect stack.
+fn render_text(
+    object: &doc::TextObject,
+    engine: &mut text::TextEngine,
+    canvas: (u16, u16),
+    cache: &mut EffectCache,
+    ctx: &mut RenderContext,
+) -> Result<(), ComposeError> {
+    if !object.visible {
+        return Ok(());
+    }
+    let geometry = engine.glyph_contours(object);
+    // Fireworks' default text fill is opaque black; `FCLi` overrides.
+    const DEFAULT_FILL: i64 = 0xFF00_0000; // ABGR: alpha 255, black
+    let fill = object
+        .style
+        .as_ref()
+        .and_then(|style| style.fill_raw)
+        .unwrap_or(DEFAULT_FILL);
+    let synthetic = PathObject {
+        contours: geometry.contours,
+        even_odd: false,
+        primitive: None,
+        paint: Some(doc::PaintStyle {
+            stroke_raw: 0, // ABGR alpha 0 — text never strokes
+            fill_raw: fill,
+        }),
+        fill_start: None,
+        fill_end: None,
+        fill_third: None,
+        brush_placement: None,
+        fill_on_top: None,
+        locked: object.locked,
+        visible: true,
+        opacity: object.opacity,
+        blend: object.blend,
+        name: None,
+        effects: object.effects.clone(),
+    };
+    render_path(&synthetic, canvas, cache, ctx)
 }
 
 fn render_path(
@@ -331,6 +384,7 @@ fn render_group(
     frame: usize,
     canvas: (u16, u16),
     cache: &mut EffectCache,
+    text_engine: &mut Option<text::TextEngine>,
     ctx: &mut RenderContext,
 ) -> Result<(), ComposeError> {
     if !group.visible {
@@ -349,7 +403,7 @@ fn render_group(
         // milestone (masks as pixel content are M6/M7; `MNAb` is
         // carried by the model only).
         for id in &group.children {
-            render_object(document, *id, frame, canvas, cache, ctx)?;
+            render_object(document, *id, frame, canvas, cache, text_engine, ctx)?;
         }
         ctx.pop_layer();
         return Ok(());
@@ -360,7 +414,15 @@ fn render_group(
     // wrap the filtered image, as on the unfiltered path.
     let mut offscreen = RenderContext::new(canvas.0, canvas.1);
     for id in &group.children {
-        render_object(document, *id, frame, canvas, cache, &mut offscreen)?;
+        render_object(
+            document,
+            *id,
+            frame,
+            canvas,
+            cache,
+            text_engine,
+            &mut offscreen,
+        )?;
     }
     offscreen.flush();
     let mut pixmap = Pixmap::new(canvas.0, canvas.1);

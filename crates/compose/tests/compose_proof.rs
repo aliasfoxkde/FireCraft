@@ -991,11 +991,11 @@ fn page_out_of_bounds_is_an_error() {
 #[test]
 fn dangling_object_id_is_an_error() {
     let mut doc = Document::default();
-    let id = doc.registry.insert(ObjectData::Text(doc::TextObject {
-        frame: geom::Rect::new(0.0, 0.0, 1.0, 1.0),
-        transform: None,
-        effects: Vec::new(),
-    }));
+    let id = doc
+        .registry
+        .insert(ObjectData::Text(doc::TextObject::new(geom::Rect::new(
+            0.0, 0.0, 1.0, 1.0,
+        ))));
     doc.registry.remove(id);
     doc.pages
         .push(page(4.0, 4.0, vec![layer(vec![cell(vec![id])])]));
