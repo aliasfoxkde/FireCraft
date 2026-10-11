@@ -229,7 +229,7 @@ pub fn gen_fixtures() -> Result<(), String> {
 
     /// One pending fixture: name, built bytes, manifest note.
     type Fixture = (&'static str, Result<Vec<u8>, String>, &'static str);
-    let fixtures: [Fixture; 8] = [
+    let fixtures: [Fixture; 9] = [
         (
             "minimal.fw.png",
             build_minimal(),
@@ -264,6 +264,11 @@ pub fn gen_fixtures() -> Result<(), String> {
             "text.fw.png",
             build_text(),
             "generated: 64x48 page, one text object through text.createText/setAttrs/setFont (M7 text golden pin; glyphs lay out over the bundled Liberation Sans)",
+        ),
+        (
+            "textpath.fw.png",
+            build_textpath(),
+            "generated: 64x48 page, text attached to an arc guide through text.attachPath (M7 text-on-path golden pin; TFTi 2 + TAPv with TAMi rotate)",
         ),
         (
             "plain.png",
@@ -531,6 +536,97 @@ fn build_text() -> Result<Vec<u8>, String> {
     if stats.unconsumed_unknown != 0 {
         return Err(format!(
             "text fixture: doc write left {} unknown node(s)",
+            stats.unconsumed_unknown
+        ));
+    }
+    let payload = fwpng::nodetree::serialize(&tree);
+    let standard = encode_rgba8(64, 48, |_, _| [255, 255, 255, 255])?;
+    insert_before_iend(
+        &standard,
+        &[(b"mkTS", zlib(&payload)?), (b"mkBS", zlib(&payload)?)],
+    )
+}
+
+/// Builds `textpath.fw.png`: the text fixture's object attached to an
+/// arc guide through `text.attachPath` — the M7 text-on-path golden.
+/// The rail is one cubic rising from (8,40) to (56,16); with `TAMi` 0
+/// the baselines ride it, so the ink band spans far taller than any
+/// linear flow would.
+fn build_textpath() -> Result<Vec<u8>, String> {
+    fn apply(
+        session: &mut engine::Session,
+        name: &str,
+        payload: serde_json::Value,
+    ) -> Result<(), String> {
+        session
+            .apply(name, payload)
+            .map_err(|e| format!("textpath fixture: {name}: {e}"))
+    }
+    // The id the text command allocated: the cell's newest element.
+    fn newest(session: &engine::Session) -> Result<serde_json::Value, String> {
+        let elements = &session.document().pages[0].layers.layers[0].cells[0].elements;
+        let id = elements
+            .last()
+            .ok_or_else(|| "textpath fixture: no object in cell".to_owned())?;
+        Ok(serde_json::json!({
+            "index": id.index(),
+            "generation": id.generation(),
+        }))
+    }
+
+    let mut registry = engine::CommandRegistry::new();
+    engine::catalog::install(&mut registry).map_err(|e| format!("catalog install: {e}"))?;
+    let mut session = engine::Session::with_registry(doc::Document::default(), registry);
+    apply(
+        &mut session,
+        "page.add",
+        serde_json::json!({ "index": null }),
+    )?;
+    apply(
+        &mut session,
+        "page.setCanvasSize",
+        serde_json::json!({ "page": 0, "width": 64.0, "height": 48.0 }),
+    )?;
+    apply(
+        &mut session,
+        "text.createText",
+        serde_json::json!({
+            "page": 0, "layer": 0, "cell": 0,
+            "x": 8.0, "y": 16.0, "width": 48.0, "height": 32.0,
+            "text": "FireCraft",
+            "name": "arc tagline",
+        }),
+    )?;
+    let mut attrs = serde_json::json!({ "size": 8.0, "fill_raw": 4_278_190_080i64 });
+    if let Some(fields) = attrs.as_object_mut() {
+        fields.insert("id".to_owned(), newest(&session)?);
+    }
+    apply(&mut session, "text.setAttrs", attrs)?;
+    let mut font = serde_json::json!({ "font": "Liberation Sans" });
+    if let Some(fields) = font.as_object_mut() {
+        fields.insert("id".to_owned(), newest(&session)?);
+    }
+    apply(&mut session, "text.setFont", font)?;
+    let mut attach = serde_json::json!({
+        "path": [{
+            "closed": false,
+            "points": [
+                {"x": 8.0, "y": 40.0, "secondary": {"x": 24.0, "y": 40.0}, "curve": true},
+                {"x": 56.0, "y": 16.0, "primary": {"x": 40.0, "y": 16.0}, "curve": true},
+            ],
+        }],
+        "alignment": 0,
+        "offset": 2.0,
+    });
+    if let Some(fields) = attach.as_object_mut() {
+        fields.insert("id".to_owned(), newest(&session)?);
+    }
+    apply(&mut session, "text.attachPath", attach)?;
+    let (tree, stats) = doc::fwmap::write(session.document(), &doc::fwmap::UnknownBag::default())
+        .map_err(|e| format!("textpath fixture: doc write: {e}"))?;
+    if stats.unconsumed_unknown != 0 {
+        return Err(format!(
+            "textpath fixture: doc write left {} unknown node(s)",
             stats.unconsumed_unknown
         ));
     }

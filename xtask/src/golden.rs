@@ -165,6 +165,7 @@ fn semantic_anchor(name: &str, render: &Render) -> Result<(), String> {
     match name {
         "composed.fw.png" => anchor_composed(name, render),
         "text.fw.png" => anchor_text(name, render),
+        "textpath.fw.png" => anchor_textpath(name, render),
         _ => Ok(()),
     }
 }
@@ -254,6 +255,58 @@ fn anchor_text(name: &str, render: &Render) -> Result<(), String> {
     if ink < 40 || (x1 - x0) < 20 {
         return Err(format!(
             "{name}: ink collapsed to {ink} px in a {x0}..{x1} × {y0}..{y1} box"
+        ));
+    }
+    Ok(())
+}
+
+/// The on-path golden: text must ride the arc. A linear-flow fallback
+/// would still render black ink — inside the frame's ~12px band — so
+/// the anchor demands a vertical span the rail's 24px rise makes
+/// impossible without on-path lowering.
+fn anchor_textpath(name: &str, render: &Render) -> Result<(), String> {
+    let mut ink = 0usize;
+    let mut bounds: Option<(u32, u32, u32, u32)> = None;
+    for y in 0..u32::from(render.height) {
+        for x in 0..u32::from(render.width) {
+            let index = ((y * u32::from(render.width) + x) as usize) * 4;
+            let (r, g, b, a) = (
+                render.pixels[index],
+                render.pixels[index + 1],
+                render.pixels[index + 2],
+                render.pixels[index + 3],
+            );
+            if a == 0 {
+                continue;
+            }
+            if r != 0 || g != 0 || b != 0 {
+                return Err(format!(
+                    "{name}: ink at ({x},{y}) is rgb({r},{g},{b}) — text fill must be black"
+                ));
+            }
+            ink += 1;
+            bounds = Some(match bounds {
+                None => (x, y, x, y),
+                Some((x0, y0, x1, y1)) => (x0.min(x), y0.min(y), x1.max(x), y1.max(y)),
+            });
+        }
+    }
+    let Some((x0, y0, x1, y1)) = bounds else {
+        return Err(format!(
+            "{name}: nothing rendered — on-path text produced no ink"
+        ));
+    };
+    if ink < 40 || (x1 - x0) < 20 {
+        return Err(format!(
+            "{name}: ink collapsed to {ink} px in a {x0}..{x1} × {y0}..{y1} box"
+        ));
+    }
+    // The rail climbs 24px over its run; glyphs rotate with it. A
+    // linear fallback spans one 8px line instead.
+    let span = u64::from(y1 - y0);
+    if span < 20 {
+        return Err(format!(
+            "{name}: ink spans only {span}px vertically — text did not follow the arc"
         ));
     }
     Ok(())
