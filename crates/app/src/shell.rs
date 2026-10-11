@@ -4,11 +4,51 @@
 //! goes through the injected [`engine::platform`] traits (`EnvDialogs`
 //! below; real modal dialogs land with desktop integration).
 
-use doc::ObjectData;
+use doc::{ObjectData, PathObject, TextObject};
 use egui::{Color32, ColorImage, Pos2, Rect, Sense, TextureHandle, TextureOptions, Vec2};
 
 use crate::canvas::View;
 use crate::editor::{AutoShape, Editor, Tool};
+
+/// The quick-add list of the filter panel: internal name plus the
+/// `DCVs` defaults that make each kernel do something visible. All of
+/// these compose interprets by name (`dropShadow` is the deliberate
+/// pass-through control, exactly as in `filtered.fw.png`).
+const FILTER_PRESETS: &[(&str, &[(&str, &str)])] = &[
+    ("invert", &[]),
+    ("gaussianBlur", &[("gaussian_blur_radius", "2")]),
+    ("blur", &[]),
+    ("blurMore", &[]),
+    ("findEdges", &[]),
+    (
+        "brightnessContrast",
+        &[("brightness_amount", "10"), ("contrast_amount", "10")],
+    ),
+    (
+        "hueSaturation",
+        &[
+            ("hue_amount", "15"),
+            ("saturation_amount", "10"),
+            ("lightness_amount", "0"),
+        ],
+    ),
+    (
+        "unsharpMask",
+        &[("unsharp_mask_radius", "2"), ("unsharp_mask_amount", "50")],
+    ),
+    ("addNoise", &[("add_noise_amount", "10")]),
+    ("dropShadow", &[]),
+];
+
+/// The display quartet plus name, captured read-only from any
+/// property-bearing kind.
+struct DisplayState {
+    opacity: i64,
+    blend: i64,
+    visible: bool,
+    locked: bool,
+    name: Option<String>,
+}
 
 /// Desktop file routing for v1: the open/save path comes from
 /// `FIRECRAFT_DOC` (default `untitled.fw.png` in the working
@@ -218,6 +258,7 @@ impl Shell {
                     (Tool::Rect, "Rectangle (R)"),
                     (Tool::Ellipse, "Ellipse (E)"),
                     (Tool::Line, "Line (L)"),
+                    (Tool::Text, "Text (T)"),
                     (Tool::Zoom, "Zoom (Z)"),
                     (Tool::Hand, "Hand (H)"),
                 ] {
@@ -460,15 +501,163 @@ impl Shell {
             ui.label("nothing selected");
             return;
         };
-        let Some(ObjectData::Path(path)) = self.editor.document().registry.get(id) else {
-            ui.label("selection is not a path");
-            return;
+        let object = self.editor.document().registry.get(id).cloned();
+        let effects = match object {
+            Some(ObjectData::Path(path)) => {
+                self.path_properties(ui, id, &path);
+                path.effects
+            }
+            Some(ObjectData::Text(text)) => {
+                self.text_properties(ui, id, &text);
+                text.effects
+            }
+            Some(_) => {
+                ui.label("selection has no editable properties yet");
+                return;
+            }
+            None => {
+                ui.label("stale selection");
+                return;
+            }
         };
-        let path = path.clone();
+        // The live effect list: every kind that carries an `EFLv` spine.
+        self.filter_panel(ui, id, &effects);
+    }
 
+    /// Path-object properties, then the shared display controls.
+    fn path_properties(&mut self, ui: &mut egui::Ui, id: doc::ObjectId, path: &PathObject) {
         ui.label(format!("object {} (gen {})", id.index(), id.generation()));
+        self.display_controls(
+            ui,
+            id,
+            DisplayState {
+                opacity: path.opacity,
+                blend: path.blend,
+                visible: path.visible,
+                locked: path.locked,
+                name: path.name.clone(),
+            },
+        );
+    }
+
+    /// Text-object properties: characters, font, size, style flags,
+    /// then the shared display controls.
+    fn text_properties(&mut self, ui: &mut egui::Ui, id: doc::ObjectId, text: &TextObject) {
+        ui.label(format!("object {} (gen {})", id.index(), id.generation()));
+        // Characters: one run, applied on Enter like the name field.
+        let mut content = text
+            .runs
+            .first()
+            .map(|run| run.text.clone())
+            .unwrap_or_default();
+        let field =
+            ui.add(egui::TextEdit::singleline(&mut content).hint_text("text (Enter applies)"));
+        if field.lost_focus() && ui.input(|input| input.key_pressed(egui::Key::Enter)) {
+            let _ = self.editor.apply(
+                "text.setText",
+                serde_json::json!({ "id": id, "text": content }),
+            );
+        }
+        // The family name round-trips verbatim; unknown families render
+        // in the bundled sans, so the list is a convenience, not a
+        // whitelist.
+        let font = text
+            .style
+            .as_ref()
+            .and_then(|style| style.font.clone())
+            .unwrap_or_else(|| "Liberation Sans".to_owned());
+        egui::ComboBox::from_label("font")
+            .selected_text(font.clone())
+            .show_ui(ui, |ui| {
+                for family in [
+                    "Liberation Sans",
+                    "Arial",
+                    "Verdana",
+                    "Times New Roman",
+                    "Courier New",
+                ] {
+                    if ui.selectable_label(font == family, family).clicked() {
+                        let _ = self.editor.apply(
+                            "text.setFont",
+                            serde_json::json!({ "id": id, "font": family }),
+                        );
+                    }
+                }
+            });
+        let mut size = text
+            .style
+            .as_ref()
+            .and_then(|style| style.size)
+            .unwrap_or(12.0);
+        if ui
+            .add(egui::Slider::new(&mut size, 4.0..=200.0).text("size"))
+            .changed()
+        {
+            let _ = self.editor.apply(
+                "text.setAttrs",
+                serde_json::json!({ "id": id, "size": size }),
+            );
+        }
+        ui.horizontal(|ui| {
+            let mut bold = text
+                .style
+                .as_ref()
+                .and_then(|style| style.bold)
+                .unwrap_or(false);
+            if ui.checkbox(&mut bold, "bold").changed() {
+                let _ = self.editor.apply(
+                    "text.setAttrs",
+                    serde_json::json!({ "id": id, "bold": bold }),
+                );
+            }
+            let mut italic = text
+                .style
+                .as_ref()
+                .and_then(|style| style.italic)
+                .unwrap_or(false);
+            if ui.checkbox(&mut italic, "italic").changed() {
+                let _ = self.editor.apply(
+                    "text.setAttrs",
+                    serde_json::json!({ "id": id, "italic": italic }),
+                );
+            }
+            let mut underline = text
+                .style
+                .as_ref()
+                .and_then(|style| style.underline)
+                .unwrap_or(false);
+            if ui.checkbox(&mut underline, "underline").changed() {
+                let _ = self.editor.apply(
+                    "text.setAttrs",
+                    serde_json::json!({ "id": id, "underline": underline }),
+                );
+            }
+        });
+        self.display_controls(
+            ui,
+            id,
+            DisplayState {
+                opacity: text.opacity,
+                blend: text.blend,
+                visible: text.visible,
+                locked: text.locked,
+                name: text.name.clone(),
+            },
+        );
+    }
+
+    /// The display quartet plus the object name — shared by every
+    /// property-bearing kind.
+    fn display_controls(&mut self, ui: &mut egui::Ui, id: doc::ObjectId, state: DisplayState) {
+        let DisplayState {
+            opacity,
+            blend,
+            visible,
+            locked,
+            name,
+        } = state;
         // Opacity, per mille.
-        let mut opacity = path.opacity;
+        let mut opacity = opacity;
         if ui
             .add(egui::Slider::new(&mut opacity, 0..=1000).text("opacity"))
             .changed()
@@ -483,12 +672,12 @@ impl Shell {
             .iter()
             .map(|mode| mode.as_str())
             .collect();
-        let blend = (path.blend as usize).min(blend_names.len() - 1);
+        let blend = (blend as usize).min(blend_names.len() - 1);
         egui::ComboBox::from_label("blend")
             .selected_text(blend_names[blend])
             .show_ui(ui, |ui| {
-                for (index, name) in blend_names.iter().enumerate() {
-                    if ui.selectable_label(index == blend, *name).clicked() {
+                for (index, mode) in blend_names.iter().enumerate() {
+                    if ui.selectable_label(index == blend, *mode).clicked() {
                         let _ = self.editor.apply(
                             "object.setBlend",
                             serde_json::json!({ "id": id, "blend": index }),
@@ -498,21 +687,21 @@ impl Shell {
             });
         // Visibility / lock.
         ui.horizontal(|ui| {
-            if ui.checkbox(&mut path.visible.clone(), "visible").changed() {
+            if ui.checkbox(&mut { visible }, "visible").changed() {
                 let _ = self.editor.apply(
                     "object.setVisible",
-                    serde_json::json!({ "id": id, "visible": !path.visible }),
+                    serde_json::json!({ "id": id, "visible": !visible }),
                 );
             }
-            if ui.checkbox(&mut path.locked.clone(), "locked").changed() {
+            if ui.checkbox(&mut { locked }, "locked").changed() {
                 let _ = self.editor.apply(
                     "object.setLocked",
-                    serde_json::json!({ "id": id, "locked": !path.locked }),
+                    serde_json::json!({ "id": id, "locked": !locked }),
                 );
             }
         });
         // Name.
-        let mut name = path.name.clone().unwrap_or_default();
+        let mut name = name.unwrap_or_default();
         if ui
             .add(egui::TextEdit::singleline(&mut name).hint_text("object name"))
             .lost_focus()
@@ -528,6 +717,52 @@ impl Shell {
                 serde_json::json!({ "id": id, "name": value }),
             );
         }
+    }
+
+    /// The live effect list: one row per effect with a remove button,
+    /// plus a quick-add combo over the kernels compose interprets.
+    fn filter_panel(&mut self, ui: &mut egui::Ui, id: doc::ObjectId, effects: &[doc::Effect]) {
+        ui.heading("Filters");
+        if effects.is_empty() {
+            ui.label("(none)");
+        }
+        for (index, effect) in effects.iter().enumerate() {
+            ui.horizontal(|ui| {
+                let params = if effect.properties.is_empty() {
+                    String::new()
+                } else {
+                    format!(" ({})", effect.properties.len())
+                };
+                ui.label(format!("{}. {}{params}", index + 1, effect.internal_name));
+                if ui.small_button("remove").clicked() {
+                    let _ = self.editor.apply(
+                        "filter.remove",
+                        serde_json::json!({ "id": id, "index": index }),
+                    );
+                }
+            });
+        }
+        egui::ComboBox::from_label("add filter")
+            .selected_text("add…")
+            .show_ui(ui, |ui| {
+                for (name, params) in FILTER_PRESETS {
+                    if ui.selectable_label(false, *name).clicked() {
+                        let _ = self.editor.apply(
+                            "filter.add",
+                            serde_json::json!({
+                                "id": id,
+                                "name": name,
+                                "params": params
+                                    .iter()
+                                    .map(|(key, value)| serde_json::json!({
+                                        "key": key, "value": value,
+                                    }))
+                                    .collect::<Vec<_>>(),
+                            }),
+                        );
+                    }
+                }
+            });
     }
 
     /// The canvas: compose renders the page, egui shows the texture,

@@ -23,6 +23,10 @@ pub enum Tool {
     Ellipse,
     /// Drag to create a line (corner to corner).
     Line,
+    /// Drag to create an empty text frame; characters are typed into
+    /// the properties panel (in-canvas editing lands with text tool
+    /// polish in a later milestone).
+    Text,
     /// Drag = marquee zoom, click = zoom in, alt-click = zoom out.
     Zoom,
     /// Drag to pan.
@@ -388,6 +392,14 @@ impl Editor {
                     }),
                 )
             }
+            Tool::Text => self.apply(
+                "text.createText",
+                serde_json::json!({
+                    "page": self.page, "layer": 0, "cell": self.frame,
+                    "x": x, "y": y, "width": width, "height": height,
+                    "text": "", "name": null,
+                }),
+            ),
             Tool::AutoShape(shape) => {
                 self.apply(shape.command(), shape.payload(drag, self.page, self.frame))
             }
@@ -539,6 +551,25 @@ mod tests {
         editor.drag_to(geom::Point::new(5.2, 5.1));
         editor.end_drag().unwrap();
         assert_eq!(editor.current_cell().unwrap().elements.len(), 0);
+    }
+
+    #[test]
+    fn text_drag_creates_an_empty_text_object() {
+        let mut editor = Editor::untitled();
+        editor.tool = Tool::Text;
+        editor.begin_drag(geom::Point::new(10.0, 10.0));
+        editor.drag_to(geom::Point::new(90.0, 40.0));
+        editor.end_drag().unwrap();
+
+        let id = editor.current_cell().unwrap().elements[0];
+        let Some(ObjectData::Text(text)) = editor.document().registry.get(id) else {
+            panic!("the text tool creates a text object");
+        };
+        // Empty until the properties panel applies characters.
+        assert!(text.runs.is_empty());
+        assert_eq!(text.frame, geom::Rect::new(10.0, 10.0, 90.0, 40.0));
+        editor.undo().unwrap();
+        assert!(editor.document().registry.get(id).is_none());
     }
 
     #[test]
