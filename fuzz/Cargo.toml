@@ -15,10 +15,12 @@ cargo-fuzz = true
 
 [dependencies]
 doc = { path = "../crates/doc" }
+engine = { path = "../crates/engine" }
 fwpng = { path = "../crates/fwpng" }
 geom = { path = "../crates/geom" }
 color = { path = "../crates/color" }
 flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
+serde_json = "1"
 libfuzzer-sys = { version = "0.4", optional = true }
 
 [features]
@@ -26,10 +28,14 @@ libfuzzer-sys = { version = "0.4", optional = true }
 # own scaffold; here the libfuzzer targets opt in explicitly.
 fuzzer = ["dep:libfuzzer-sys"]
 
-# Stable, deterministic driver run by `xtask ci` (quick gate).
+# Stable, deterministic drivers run by `xtask ci` (quick gate).
 [[bin]]
 name = "anchors"
 path = "src/bin/anchors.rs"
+
+[[bin]]
+name = "panic_hunt"
+path = "src/bin/panic_hunt.rs"
 
 # libfuzzer targets (nightly only; compiled via `cargo fuzz build`).
 [[bin]]
@@ -60,4 +66,9 @@ required-features = ["fuzzer"]
 [[bin]]
 name = "geom_transform"
 path = "fuzz_targets/geom_transform.rs"
+required-features = ["fuzzer"]
+
+[[bin]]
+name = "engine_commands"
+path = "fuzz_targets/engine_commands.rs"
 required-features = ["fuzzer"]

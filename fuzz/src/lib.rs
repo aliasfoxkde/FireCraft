@@ -63,3 +63,97 @@ pub fn anchor_geom_transform(data: &[u8]) {
     let _ = geom::transform::map_rect(a, rect);
     let _ = a.inverse();
 }
+
+/// How many random catalog calls one seed drives.
+pub const HUNT_STEPS: usize = 48;
+
+/// panic_hunt: drives the full built-in command catalog with random
+/// (sometimes corrupt) payloads against a random document. The contract
+/// — violated by panic, which is the failure signal:
+///
+/// 1. a command either succeeds or returns an error, never panics;
+/// 2. a failed call leaves the document byte-identical;
+/// 3. a successful call undoes back to the prior bytes and redoes
+///    forward again;
+/// 4. the journal replays onto a fresh copy of the seed document, and
+///    the replayed undo stack reaches the original again.
+///
+/// `seed` is the only input: the stable driver enumerates seeds, the
+/// libfuzzer target derives one from the input bytes, so any crash
+/// either finds is reproducible by both.
+pub fn anchor_engine_commands(seed: u64) {
+    use engine::Session;
+
+    let mut rng = engine::fuzzdrive::FuzzRng::new(seed);
+    let document = engine::fuzzdrive::random_document(&mut rng);
+    let Ok(original) = serde_json::to_vec(&document) else {
+        panic!("seed {seed}: the random document failed to serialize");
+    };
+    let mut session = Session::new(document);
+
+    for step in 0..HUNT_STEPS {
+        let (name, payload) = engine::fuzzdrive::random_call(&mut rng, session.document());
+        let before = document_bytes(session.document(), seed, step, &name);
+        match session.apply(&name, payload) {
+            Err(_) => {
+                let after = document_bytes(session.document(), seed, step, &name);
+                assert_eq!(
+                    after, before,
+                    "seed {seed} step {step}: failed call {name} mutated the document"
+                );
+            }
+            Ok(()) => {
+                let applied = document_bytes(session.document(), seed, step, &name);
+                session
+                    .undo()
+                    .unwrap_or_else(|error| panic!("seed {seed} step {step}: undo broke: {error}"));
+                let undone = document_bytes(session.document(), seed, step, &name);
+                assert_eq!(
+                    undone, before,
+                    "seed {seed} step {step}: undo diverged after {name}"
+                );
+                session
+                    .redo()
+                    .unwrap_or_else(|error| panic!("seed {seed} step {step}: redo broke: {error}"));
+                let redone = document_bytes(session.document(), seed, step, &name);
+                assert_eq!(
+                    redone, applied,
+                    "seed {seed} step {step}: redo diverged after {name}"
+                );
+            }
+        }
+    }
+
+    // Replay: same journal onto a fresh copy of the seed document.
+    let lines = session.journal_lines();
+    let edited = document_bytes(session.document(), seed, HUNT_STEPS, "replay");
+    let Ok(fresh) = serde_json::from_slice::<doc::Document>(&original) else {
+        panic!("seed {seed}: the seed document failed to deserialize");
+    };
+    let mut restarted = Session::reopen(fresh, &lines)
+        .unwrap_or_else(|error| panic!("seed {seed}: journal replay broke: {error}"));
+    assert_eq!(
+        document_bytes(restarted.document(), seed, HUNT_STEPS, "replay"),
+        edited,
+        "seed {seed}: replay diverged from the live session"
+    );
+    while restarted.undo_len() > 0 {
+        restarted
+            .undo()
+            .unwrap_or_else(|error| panic!("seed {seed}: replayed undo broke: {error}"));
+    }
+    let undone_all = document_bytes(restarted.document(), seed, HUNT_STEPS, "replay-undo");
+    assert_eq!(
+        undone_all, original,
+        "seed {seed}: replayed undo did not reach the original"
+    );
+}
+
+/// Serializes the document for a contract check; a serialization
+/// failure is itself a panic (the failure signal).
+fn document_bytes(document: &doc::Document, seed: u64, step: usize, name: &str) -> Vec<u8> {
+    match serde_json::to_vec(document) {
+        Ok(bytes) => bytes,
+        Err(error) => panic!("seed {seed} step {step} ({name}): serialize broke: {error}"),
+    }
+}

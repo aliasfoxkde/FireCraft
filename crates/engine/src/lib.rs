@@ -16,6 +16,7 @@ pub mod catalog;
 pub mod command;
 pub mod delta;
 pub mod error;
+pub mod fuzzdrive;
 pub mod history;
 pub mod journal;
 pub mod platform;

@@ -12,10 +12,7 @@ use std::io::Write as _;
 
 fn main() {
     let mut args = std::env::args().skip(1);
-    let iterations: usize = args
-        .next()
-        .and_then(|a| a.parse().ok())
-        .unwrap_or(2048);
+    let iterations: usize = args.next().and_then(|a| a.parse().ok()).unwrap_or(2048);
     let base_seed: u64 = args
         .next()
         .and_then(|a| a.parse().ok())

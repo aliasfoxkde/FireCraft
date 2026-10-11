@@ -4,9 +4,10 @@
 //! compile check), `layers` (workspace dependency tiers), `wasm`
 //! (wasm32 check for pure crates), `corpus` (pinned corpus digests),
 //! `golden` (render pins + semantic anchors + CS6 report), `fuzz`
-//! (libfuzzer compile check alone), `parity` (rising-only parity
-//! floors), `scorecard` (milestone status). Diagnostics go to stderr;
-//! stdout stays clean so output can be piped.
+//! (libfuzzer compile check alone), `panic-hunt` (catalog fuzz
+//! campaign), `parity` (rising-only parity floors), `scorecard`
+//! (milestone status). Diagnostics go to stderr; stdout stays clean so
+//! output can be piped.
 
 mod corpus;
 mod fuzz;
@@ -18,7 +19,7 @@ mod wasm;
 
 use std::process::ExitCode;
 
-const USAGE: &str = "usage: cargo run -p xtask -- <ci [--full]|layers|wasm|corpus [--report]|corpus-gen|golden [--bless]|fuzz|parity|scorecard>";
+const USAGE: &str = "usage: cargo run -p xtask -- <ci [--full]|layers|wasm|corpus [--report]|corpus-gen|golden [--bless]|fuzz|panic-hunt|parity|scorecard>";
 
 fn main() -> ExitCode {
     match std::env::args().nth(1).as_deref() {
@@ -35,6 +36,7 @@ fn main() -> ExitCode {
             _ => finish("golden", golden::run()),
         },
         Some("fuzz") => finish("fuzz", fuzz::full()),
+        Some("panic-hunt") => finish("panic-hunt", fuzz::panic_hunt()),
         Some("parity") => finish("parity", status::parity()),
         Some("scorecard") => finish("scorecard", status::scorecard()),
         _ => {

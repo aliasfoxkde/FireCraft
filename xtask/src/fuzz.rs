@@ -1,10 +1,13 @@
 //! Fuzz gates over the standalone `fuzz/` workspace.
 //!
-//! - `quick`: stable, deterministic anchor driver (fixed seeds, bounded
-//!   iterations). Part of `ci`.
+//! - `quick`: stable, deterministic drivers (anchors + panic_hunt).
+//!   Part of `ci`.
 //! - `full`: compiles the libfuzzer targets with cargo-fuzz under
 //!   nightly. Part of `ci --full`; skipped with a note when cargo-fuzz
 //!   is not installed.
+//! - `panic_hunt`: the wide campaign — the full stable driver, then
+//!   60 s of libfuzzer over the `engine_commands` target when
+//!   cargo-fuzz is installed.
 
 use crate::util::{self, workspace_root};
 
@@ -22,7 +25,8 @@ pub fn quick() -> Result<(), String> {
         Some(&dir),
         "cargo",
         &["run", "--bin", "anchors", "--", "2048"],
-    )
+    )?;
+    util::run_in(Some(&dir), "cargo", &["run", "--bin", "panic_hunt"])
 }
 
 /// Full gate: compile-check every libfuzzer target.
@@ -46,5 +50,41 @@ pub fn full() -> Result<(), String> {
         None,
         "cargo",
         &["+nightly", "fuzz", "build", "--features", "fuzzer"],
+    )
+}
+
+/// The panic_hunt campaign: the whole stable driver across a wide seed
+/// range, then 60 s of libfuzzer over `engine_commands` when cargo-fuzz
+/// is available. `xtask panic-hunt`.
+pub fn panic_hunt() -> Result<(), String> {
+    let dir = fuzz_dir();
+    if !dir.join("Cargo.toml").exists() {
+        return Err("fuzz/ workspace is missing (expected fuzz/Cargo.toml)".into());
+    }
+    // 4096 seeds x 48 steps: a few seconds on the stable toolchain.
+    util::run_in(
+        Some(&dir),
+        "cargo",
+        &["run", "--release", "--bin", "panic_hunt", "--", "4096"],
+    )?;
+    if util::run_in(Some(&dir), "cargo", &["fuzz", "--version"]).is_err() {
+        eprintln!(
+            "[xtask] panic-hunt: cargo-fuzz not installed; stable sweep \
+             only (install: cargo install cargo-fuzz)"
+        );
+        return Ok(());
+    }
+    util::run_in(
+        None,
+        "cargo",
+        &[
+            "+nightly",
+            "fuzz",
+            "run",
+            "engine_commands",
+            "--release",
+            "--",
+            "-max_total_time=60",
+        ],
     )
 }
