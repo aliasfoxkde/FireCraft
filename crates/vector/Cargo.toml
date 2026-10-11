@@ -1,0 +1,20 @@
+[package]
+name = "vector"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Vector depth for FireCraft: path booleans and curve-aware path operations."
+
+[dependencies]
+doc = { path = "../doc" }
+geom = { path = "../geom" }
+# Direct dep for the segment primitives (CubicBez, Line) that geom does
+# not re-export; version matched to geom's kurbo so the lockfile pins one.
+kurbo = "0.13"
+
+[lints]
+workspace = true

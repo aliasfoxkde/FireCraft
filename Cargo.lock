@@ -2741,6 +2741,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2ef6dac1e96601b4fb3acccccff2139741fcb757cb9a36089bf5be91cfb285ce"
 
 [[package]]
+name = "vector"
+version = "0.1.0"
+dependencies = [
+ "doc",
+ "geom",
+ "kurbo",
+]
+
+[[package]]
 name = "vello_common"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

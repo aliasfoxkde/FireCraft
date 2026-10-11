@@ -33,7 +33,7 @@ generators; executing the original `.jsf` on a JS host stays M9.
 1. **`vector` crate (L2) + boolean spike** — new `vector` crate: owns
    boolean ops (union/intersect/punch/crop), simplify, expand stroke,
    inset. First deliverable is the algorithm decision
-   (`docs/decisions/0002-path-booleans.md`): flatten-and-clip (polygon
+   (`docs/decisions/0003-path-booleans.md`): flatten-and-clip (polygon
    clipping at a recorded tolerance) vs Bézier-aware clipping —
    decided by evidence on adversarial cases (overlapping loops,
    collinear/tangent edges, self-intersection, split-result
