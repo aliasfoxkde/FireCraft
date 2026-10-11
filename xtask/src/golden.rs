@@ -162,9 +162,14 @@ fn output_digest(render: &Render) -> String {
 /// output is derivable by arithmetic belong here; everything else is
 /// covered by the determinism pins alone.
 fn semantic_anchor(name: &str, render: &Render) -> Result<(), String> {
-    if name != "composed.fw.png" {
-        return Ok(());
+    match name {
+        "composed.fw.png" => anchor_composed(name, render),
+        "text.fw.png" => anchor_text(name, render),
+        _ => Ok(()),
     }
+}
+
+fn anchor_composed(name: &str, render: &Render) -> Result<(), String> {
     let pixel = |x: u32, y: u32| -> [u8; 4] {
         let index = ((y * u32::from(render.width) + x) as usize) * 4;
         [
@@ -193,6 +198,63 @@ fn semantic_anchor(name: &str, render: &Render) -> Result<(), String> {
                 "{name}: pixel ({x},{y}) is {got:?}, hand-computed {want:?}"
             ));
         }
+    }
+    Ok(())
+}
+
+/// The text golden: "FireCraft" set at 10px in frame (12,18,40,12),
+/// filled ABGR 0xFF00_0000 (opaque black), nothing else on the page.
+/// Every ink pixel must be premultiplied black (any channel value with
+/// alpha means a broken fill decode), must fall inside the frame (±1px
+/// antialiasing slack), and must exist — an empty render pins happily,
+/// so emptiness is asserted, not assumed.
+fn anchor_text(name: &str, render: &Render) -> Result<(), String> {
+    const FRAME: (f64, f64, f64, f64) = (12.0, 18.0, 40.0, 12.0);
+    let mut ink = 0usize;
+    let mut bounds: Option<(u32, u32, u32, u32)> = None;
+    for y in 0..u32::from(render.height) {
+        for x in 0..u32::from(render.width) {
+            let index = ((y * u32::from(render.width) + x) as usize) * 4;
+            let (r, g, b, a) = (
+                render.pixels[index],
+                render.pixels[index + 1],
+                render.pixels[index + 2],
+                render.pixels[index + 3],
+            );
+            if a == 0 {
+                continue;
+            }
+            if r != 0 || g != 0 || b != 0 {
+                return Err(format!(
+                    "{name}: ink at ({x},{y}) is rgb({r},{g},{b}) — text fill must be black"
+                ));
+            }
+            let (fx, fy, fw, fh) = FRAME;
+            let inside = (x as f64) >= fx - 1.0
+                && (x as f64) <= fx + fw + 1.0
+                && (y as f64) >= fy - 1.0
+                && (y as f64) <= fy + fh + 1.0;
+            if !inside {
+                return Err(format!(
+                    "{name}: ink at ({x},{y}) falls outside the text frame {FRAME:?}"
+                ));
+            }
+            ink += 1;
+            bounds = Some(match bounds {
+                None => (x, y, x, y),
+                Some((x0, y0, x1, y1)) => (x0.min(x), y0.min(y), x1.max(x), y1.max(y)),
+            });
+        }
+    }
+    let Some((x0, y0, x1, y1)) = bounds else {
+        return Err(format!("{name}: nothing rendered — text produced no ink"));
+    };
+    // Nine glyphs at 10px spread well past 40 dark pixels; a shaper or
+    // lowering collapse shows up as a near-empty box.
+    if ink < 40 || (x1 - x0) < 20 {
+        return Err(format!(
+            "{name}: ink collapsed to {ink} px in a {x0}..{x1} × {y0}..{y1} box"
+        ));
     }
     Ok(())
 }

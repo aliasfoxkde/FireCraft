@@ -16,10 +16,12 @@ use crate::util::cargo;
 /// platform services (`StdFs`) would never run there. `vector` joined
 /// in M6: L2 pure math over `doc`+`geom`, no IO, no threads. `filters`
 /// joined in M7 at birth: L2 pure kernels over `color`, integer math,
-/// no IO.
+/// no IO. `text` joined in M7 task 7: cosmic-text shaping over
+/// `include_bytes!` fonts — no filesystem, no system font scan, no
+/// threads.
 const WASM_CRATES: &[&str] = &[
     "fwpng", "geom", "color", "raster", "doc", "vector", "compose", "engine", "app-cli", "app",
-    "filters",
+    "filters", "text",
 ];
 
 /// Integration-test target exercising fwpng under wasm.

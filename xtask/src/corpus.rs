@@ -229,7 +229,7 @@ pub fn gen_fixtures() -> Result<(), String> {
 
     /// One pending fixture: name, built bytes, manifest note.
     type Fixture = (&'static str, Result<Vec<u8>, String>, &'static str);
-    let fixtures: [Fixture; 7] = [
+    let fixtures: [Fixture; 8] = [
         (
             "minimal.fw.png",
             build_minimal(),
@@ -259,6 +259,11 @@ pub fn gen_fixtures() -> Result<(), String> {
             "filtered.fw.png",
             build_filtered(),
             "generated: 64x48 page, autoshapes carrying live effect stacks through filter.add (M7 filter golden pin; dropShadow is the unfiltered pass-through control)",
+        ),
+        (
+            "text.fw.png",
+            build_text(),
+            "generated: 64x48 page, one text object through text.createText/setAttrs/setFont (M7 text golden pin; glyphs lay out over the bundled Liberation Sans)",
         ),
         (
             "plain.png",
@@ -450,6 +455,82 @@ fn build_scripted() -> Result<Vec<u8>, String> {
     if stats.unconsumed_unknown != 0 {
         return Err(format!(
             "scripted fixture: doc write left {} unknown node(s)",
+            stats.unconsumed_unknown
+        ));
+    }
+    let payload = fwpng::nodetree::serialize(&tree);
+    let standard = encode_rgba8(64, 48, |_, _| [255, 255, 255, 255])?;
+    insert_before_iend(
+        &standard,
+        &[(b"mkTS", zlib(&payload)?), (b"mkBS", zlib(&payload)?)],
+    )
+}
+
+/// Builds `text.fw.png`: one text object created and styled entirely
+/// through the engine registry (`text.createText` / `text.setAttrs` /
+/// `text.setFont`) — the M7 text golden. The glyph outlines the
+/// compositor rasterizes come from the bundled Liberation Sans via the
+/// `text` crate, so the pin covers layout + lowering + fill paint.
+fn build_text() -> Result<Vec<u8>, String> {
+    fn apply(
+        session: &mut engine::Session,
+        name: &str,
+        payload: serde_json::Value,
+    ) -> Result<(), String> {
+        session
+            .apply(name, payload)
+            .map_err(|e| format!("text fixture: {name}: {e}"))
+    }
+    // The id the text command allocated: the cell's newest element.
+    fn newest(session: &engine::Session) -> Result<serde_json::Value, String> {
+        let elements = &session.document().pages[0].layers.layers[0].cells[0].elements;
+        let id = elements
+            .last()
+            .ok_or_else(|| "text fixture: no object in cell".to_owned())?;
+        Ok(serde_json::json!({
+            "index": id.index(),
+            "generation": id.generation(),
+        }))
+    }
+
+    let mut registry = engine::CommandRegistry::new();
+    engine::catalog::install(&mut registry).map_err(|e| format!("catalog install: {e}"))?;
+    let mut session = engine::Session::with_registry(doc::Document::default(), registry);
+    apply(
+        &mut session,
+        "page.add",
+        serde_json::json!({ "index": null }),
+    )?;
+    apply(
+        &mut session,
+        "page.setCanvasSize",
+        serde_json::json!({ "page": 0, "width": 64.0, "height": 48.0 }),
+    )?;
+    apply(
+        &mut session,
+        "text.createText",
+        serde_json::json!({
+            "page": 0, "layer": 0, "cell": 0,
+            "x": 12.0, "y": 18.0, "width": 40.0, "height": 12.0,
+            "text": "FireCraft",
+            "name": "tagline",
+        }),
+    )?;
+    let mut attrs = serde_json::json!({ "size": 10.0, "fill_raw": 4_278_190_080i64 });
+    if let Some(fields) = attrs.as_object_mut() {
+        fields.insert("id".to_owned(), newest(&session)?);
+    }
+    apply(&mut session, "text.setAttrs", attrs)?;
+    let mut font = serde_json::json!({ "font": "Liberation Sans" });
+    if let Some(fields) = font.as_object_mut() {
+        fields.insert("id".to_owned(), newest(&session)?);
+    }
+    apply(&mut session, "text.setFont", font)?;
+    let (tree, stats) = doc::fwmap::write(session.document(), &doc::fwmap::UnknownBag::default())
+        .map_err(|e| format!("text fixture: doc write: {e}"))?;
+    if stats.unconsumed_unknown != 0 {
+        return Err(format!(
+            "text fixture: doc write left {} unknown node(s)",
             stats.unconsumed_unknown
         ));
     }
