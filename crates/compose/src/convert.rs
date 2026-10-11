@@ -7,7 +7,8 @@ use vello_cpu::peniko::{Color, Mix};
 
 /// Decodes a Fireworks `FCLi`/`BCLi` colour int (ABGR layout, per the
 /// node dictionary) into a peniko colour.
-pub(crate) fn abgr(raw: i64) -> Color {
+#[must_use]
+pub fn abgr(raw: i64) -> Color {
     let raw = raw as u32;
     Color::from_rgba8(
         (raw & 0xFF) as u8,
@@ -24,7 +25,8 @@ pub(crate) fn abgr(raw: i64) -> Color {
 /// invert, erase, tint, average, negation, and the rest — fall back to
 /// [`Mix::Normal`] until `compose` grows its own compositing passes
 /// (M7); recorded in ADR 0002.
-pub(crate) fn blend_mode(bldi: i64) -> Mix {
+#[must_use]
+pub fn blend_mode(bldi: i64) -> Mix {
     match bldi {
         2 => Mix::Multiply,
         3 => Mix::Difference,

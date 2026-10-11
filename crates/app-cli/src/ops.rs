@@ -122,3 +122,18 @@ pub fn export_raster(
         ))),
     }
 }
+
+/// Serializes page 0 / state 0 of `document` to SVG (vector export —
+/// the model walks straight to `<path>`/`<text>`/`<image>` elements;
+/// no rasterization step).
+///
+/// # Errors
+/// [`CliError`] wrapping the serializer's refusals.
+pub fn export_svg(document: &doc::Document) -> Result<Vec<u8>, CliError> {
+    let out = ::io::svg::encode(document, &::io::svg::SvgOptions::default())
+        .map_err(|error| CliError(error.to_string()))?;
+    for note in &out.report.notes {
+        eprintln!("svg note: {note}");
+    }
+    Ok(out.svg.into_bytes())
+}

@@ -23,4 +23,9 @@ mod effects;
 mod render;
 
 pub use cache::EffectCache;
+pub use convert::{abgr, blend_mode};
+pub use effects::{KernelOp, Plan, plan};
 pub use render::{ComposeError, Render, render, render_with_cache, straight_alpha};
+// The mix vocabulary `blend_mode` speaks, re-exported so export
+// surfaces can match on it without a second vello dependency edge.
+pub use vello_cpu::peniko::Mix;

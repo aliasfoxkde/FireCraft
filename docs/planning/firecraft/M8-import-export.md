@@ -103,17 +103,47 @@ that was only compared against itself.
    ImageMagick-generated samples (9/9, above); fuzz arm over
    truncated/mutated headers registers when the fuzz targets are next
    touched (`io_read` is in the M8 gate list, task 8).
-3. **SVG export** — own serializer over the model (no SVG writer
-   crate exists worth the name): tree → `<g>`/`<path>`/`<text>`/
-   `<image>`, transforms, opacity, blend modes as `mix-blend-mode`
-   where SVG names one, live-filter stacks → SVG filter primitives
-   for the supported kernel set (feGaussianBlur, feColorMatrix,
-   feComponentTransfer, feConvolveMatrix, feTurbulence-family only if
-   semantics match; unmappable filters are dropped *with a report
-   entry*, never silently). **Stopping condition:** golden loop —
-   render our SVG with `resvg` (xtask dev-dep) vs `compose::render`
-   of the same document at recorded tolerance; SVG bytes sha-pinned;
-   filter-mapping table in the decision note.
+3. **SVG export** — **done.** Own serializer over the model
+   (`io::svg::encode`, no SVG writer crate exists worth the name):
+   tree → `<g>`/`<path>`/`<text>`/`<image>`; opacity per mille →
+   fractional `opacity`; blend modes as `mix-blend-mode` through
+   `compose::blend_mode` (semantics imported, not re-declared);
+   live-filter stacks → SVG filter primitives through `compose::plan`
+   — per-channel kernels (BrightnessContrast/Levels/Invert) as
+   `feComponentTransfer` 256-entry tables **derived by running the
+   real `filters` kernels over a 256×1 ramp** (zero duplicated math,
+   exact at every u8 sample); GaussianBlur → `feGaussianBlur`; BoxBlur
+   → `feConvolveMatrix` (separable == square, duplicate == clamp-edge);
+   UnsharpMask → blur + arithmetic `feComposite`; HueSaturation/
+   AddNoise/FindEdges **dropped whole with a report entry per effect**
+   (mapping rationale per kernel in decision 0008). Every `<filter>`
+   is full-canvas `userSpaceOnUse` + `color-interpolation-filters=
+   "sRGB"` (compose's offscreen semantics, decision 0005; linearRGB
+   default would silently wrong the LUTs). Report struct counts
+   text/image/dropped-filter divergence. `app-cli export *.svg` wired.
+   **Design deviation, recorded:** the ticket's `feColorMatrix`/
+   `feTurbulence` suggestions are not used — color-matrix ops in our
+   kernel set are per-channel curves, which the derived-LUT form
+   expresses exactly, and no kernel maps to turbulence.
+   **Stopping condition met:** `xtask svg-golden` (in `ci`): resvg
+   (independent renderer) vs `compose::render`, both premultiplied —
+   composed fixture **bit-exact (Δ 0)**; scripted max Δ 77 / mean
+   0.48, filtered max Δ 73 / mean 0.64, fully attributed to thin-
+   feature AA + premultiplied filter arithmetic at alpha edges (flat
+   interiors exact); recorded bounds max 96 / mean 0.9; SVG bytes
+   sha-pinned (`<fixture>.svgpin`), divergent fixtures skip with
+   explicit reasons (text/image counts), nothing silently. The loop
+   caught a real serializer bug on day one (pass-through groups closed
+   a wrapper they never opened — unbalanced tags that could drop later
+   siblings out of an ancestor's blend/filter wrapper); the io battery
+   now asserts tag balance. Evidence: 17-test SVG battery
+   (determinism, path/bezier/even-odd/FOTb two-path form, opacity+
+   blend wrapper, alpha paint opacity, compose-parity skips, group
+   nesting, exact invert LUT endpoints, kernel-derived
+   brightness/contrast ramp, unmapped-drop reporting, all three blur
+   primitives, text style attrs, data-URI image decodes back to the
+   tile pixels, hostile canvases refused); filter-mapping table in
+   `docs/decisions/0008-svg-filter-mapping.md`.
 4. **SVG import** — `usvg` 0.48 parse → model walk: paths (fills/
    strokes/gradients), groups (transforms, opacity, clipping as
    masks), embedded rasters → `IMGv`; text via usvg's fontdb layout

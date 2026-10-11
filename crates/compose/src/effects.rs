@@ -41,7 +41,7 @@ const GUID_FIND_EDGES: &str = "fc7093f1-f95c-11d0-8be200a024cdc039";
 
 /// One interpretable kernel step, in stack order.
 #[derive(Clone, Debug, PartialEq)]
-pub(crate) enum KernelOp {
+pub enum KernelOp {
     /// Brightness/Contrast, both −100..=100 (clamped).
     BrightnessContrast {
         /// `brightness_amount`.
@@ -110,16 +110,16 @@ pub(crate) enum KernelOp {
 /// An interpreted stack: the kernel ops in file order plus how many
 /// effects were passed over.
 #[derive(Clone, Debug, PartialEq)]
-pub(crate) struct Plan {
+pub struct Plan {
     /// Interpretable steps in stack order (bottom → top).
-    pub(crate) ops: Vec<KernelOp>,
+    pub ops: Vec<KernelOp>,
     /// Effects skipped as uninterpretable (wrong identity, unknown
     /// name, missing parameter, hidden via `EffectIsVisible`).
-    pub(crate) skipped: usize,
+    pub skipped: usize,
 }
 
 /// Interprets a live-effect stack into kernel ops.
-pub(crate) fn plan(stack: &[Effect]) -> Plan {
+pub fn plan(stack: &[Effect]) -> Plan {
     let mut ops = Vec::new();
     let mut skipped = 0usize;
     for effect in stack {
@@ -171,7 +171,7 @@ pub(crate) fn plan(stack: &[Effect]) -> Plan {
 }
 
 /// Applies a plan's ops to a surface, in order.
-pub(crate) fn apply_stack(mut surface: Surface, ops: &[KernelOp]) -> Surface {
+pub fn apply_stack(mut surface: Surface, ops: &[KernelOp]) -> Surface {
     for op in ops {
         surface = match op {
             KernelOp::BrightnessContrast {
