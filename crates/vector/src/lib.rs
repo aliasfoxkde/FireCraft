@@ -10,6 +10,7 @@
 //! in `docs/decisions/0003-path-booleans.md`. Every numeric gate is a
 //! named constant here so proofs stay tolerance-pinned.
 
+mod autoshape;
 mod boolean;
 mod bridge;
 mod flatten;
@@ -18,6 +19,12 @@ mod offset;
 mod simplify;
 mod split;
 
+pub use autoshape::{
+    ArrowHead, ArrowLineParams, ArrowParams, ConnectorParams, CornerKind, LShapeParams,
+    MAX_TIGHTNESS_DEG, MIN_TIGHTNESS_DEG, MeasureParams, PieParams, PolygonParams, RectParams,
+    SpiralParams, StarParams, arrow, arrow_line, connector_line, doughnut, lshape, measure, pie,
+    rectangle, smart_polygon, spiral, star, tightness_from_control,
+};
 pub use boolean::{BooleanOp, boolean};
 pub use bridge::{
     Seg, bezpath_to_contour, canonicalize_contour, contour_segments, contour_to_bezpath,

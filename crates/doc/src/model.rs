@@ -298,6 +298,31 @@ pub struct PathObject {
     pub name: Option<String>,
 }
 
+impl PathObject {
+    /// A neutral, visible path over `contours`: opaque, normal blend,
+    /// nonzero fill, no paint — the shape every geometry generator
+    /// starts from (booleans, Auto Shapes). Paint and metadata are the
+    /// caller's to attach.
+    pub fn neutral(contours: Vec<Contour>) -> Self {
+        Self {
+            contours,
+            primitive: None,
+            even_odd: false,
+            paint: None,
+            fill_start: None,
+            fill_end: None,
+            fill_third: None,
+            brush_placement: None,
+            fill_on_top: None,
+            locked: false,
+            visible: true,
+            opacity: 1000,
+            blend: 0,
+            name: None,
+        }
+    }
+}
+
 /// One contour (`PBPv`): a closed flag plus bezier points.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]

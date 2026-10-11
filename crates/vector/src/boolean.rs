@@ -423,20 +423,8 @@ fn assemble(loops: Vec<Vec<Piece>>) -> PathObject {
     });
     PathObject {
         contours,
-        primitive: None,
         // The loops are emitted closed and consistently wound, so the
         // nonzero rule reproduces the result region exactly.
-        even_odd: false,
-        paint: None,
-        fill_start: None,
-        fill_end: None,
-        fill_third: None,
-        brush_placement: None,
-        fill_on_top: None,
-        locked: false,
-        visible: true,
-        opacity: 1000,
-        blend: 0,
-        name: None,
+        ..PathObject::neutral(Vec::new())
     }
 }

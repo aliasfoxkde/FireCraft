@@ -495,7 +495,7 @@ pub(crate) fn detach(
 /// Inserts `id` into one cell at `at` (`None` appends), capturing the
 /// cell's prior state.
 #[allow(clippy::too_many_arguments)]
-fn attach_cell(
+pub(crate) fn attach_cell(
     document: &mut Document,
     name: &'static str,
     page: usize,
