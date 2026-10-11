@@ -221,6 +221,14 @@ entirely** — never analyzed as part of feature work, never reimplemented.
   documents + their flattened exports for golden-image and round-trip tests.
 - **png-analyser web app** (https://davidje13.github.io/png-analyser/) as a
   differential-testing reference for our parser.
+- **REA** (https://github.com/morluto/rea, MIT) — optional accelerator, not a
+  dependency: an MCP server/CLI that lets an agent drive Ghidra/Hopper/IDA
+  (pseudocode, strings, symbols) plus ELF/Electron/APK analysis. Useful for
+  the §5.5 Ghidra passes over `Fireworks.exe` (e.g. the
+  `CMkbStructureOutputter` writer path) from inside an agent session. Clean
+  room unchanged: it extracts *evidence*; nothing it emits is ever pasted
+  into FireCraft code, and it never touches `source/` placement or the
+  no-committed-derivatives rule.
 
 ---
 
