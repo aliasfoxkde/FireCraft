@@ -39,8 +39,13 @@ the L3 note in PLANNING §7.1). Signatures:
   take straight-alpha RGBA8 planes composited by the caller
   (`compose::render` → `straight_alpha`); io never renders.
 - **Registry:** document-mutating imports land as commands
-  (`document.importImage`, …) with capturing deltas; pure byte
-  emission (save/export) is a query-like call, not a delta.
+  (`image.placeDecoded` — the payload is *already-decoded* pixels,
+  since decoding happens in io at the shell layer) with capturing
+  deltas; pure byte emission (save/export) is a query-like call, not
+  a delta.
+- **Layer direction:** io (L4) may depend on doc/raster/compose; the
+  engine (L3) must never call io — export orchestration lives at L5
+  (web bridge, app-cli, app), which already own the compose render.
 
 This keeps `io` wasm-clean by construction — it joins `WASM_CRATES`.
 
@@ -65,9 +70,9 @@ that was only compared against itself.
    4:2:0/4:4:4), `io::bmp` (24/32-bit), `io::tiff` (uncompressed +
    packbits, RGB/RGBA), `io::wbmp` (hand-rolled — the format is
    ~20 bytes of header over 1-bit packed rows; threshold policy
-   recorded). Engine gains `document.export` (format + options +
-   destination-memory) and the web bridge's `exportPng` reroutes
-   through it. **Stopping condition:** per-format encode→decode
+   recorded). Shells reroute: the web bridge's `exportPng` goes
+   through `io::png`, and `app-cli` gains `export`. **Stopping
+   condition:** per-format encode→decode
    round-trips (decode via `image`, tolerance 0 for lossless, pinned
    RMSE window for JPEG); `WASM_CRATES` 12 → 13; layers + clippy
    green.
