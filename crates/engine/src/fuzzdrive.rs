@@ -310,6 +310,7 @@ pub const CALLS: &[&str] = &[
     "object.delete",
     "object.reorder",
     "object.moveToCell",
+    "object.createPath",
     "cell.setVisible",
     "cell.setLocked",
     "layer.rename",
@@ -394,6 +395,21 @@ pub fn random_call(rng: &mut FuzzRng, document: &Document) -> (String, serde_jso
             "layer": any_index(rng, 3),
             "cell": any_index(rng, frames),
             "index": any_opt_index(rng, 6),
+        }),
+        "object.createPath" => serde_json::json!({
+            "kind": rng.pick(&["rect", "ellipse", "line"]).copied(),
+            "x": -(rng.below(400) as f64),
+            "y": -(rng.below(400) as f64),
+            "width": rng.below(400) as f64,
+            "height": rng.below(400) as f64,
+            "page": any_index(rng, pages),
+            "layer": any_index(rng, 3),
+            "cell": any_index(rng, frames),
+            "name": if rng.chance(50) {
+                serde_json::Value::Null
+            } else {
+                serde_json::json!("fuzz path")
+            },
         }),
         "cell.setVisible" => serde_json::json!({
             "page": any_index(rng, pages),

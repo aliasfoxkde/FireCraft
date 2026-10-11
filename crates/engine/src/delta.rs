@@ -134,16 +134,15 @@ impl Delta {
                         ),
                     })?,
                 ObjectInverse::Created => {
-                    document
-                        .registry
-                        .remove(*id)
-                        .ok_or_else(|| EngineError::DeltaMismatch {
+                    document.registry.retract_insert(*id).ok_or_else(|| {
+                        EngineError::DeltaMismatch {
                             detail: format!(
-                                "cannot remove object {} (generation {}): not live",
+                                "cannot retract object {} (generation {}): not live",
                                 id.index(),
                                 id.generation()
                             ),
-                        })?;
+                        }
+                    })?;
                 }
             },
             Delta::Page { index, before } => match before {

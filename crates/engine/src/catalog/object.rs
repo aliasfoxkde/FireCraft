@@ -7,7 +7,7 @@
 //! captured as a whole-container delta, so undo overwrites the container
 //! with its exact prior content.
 
-use doc::{Document, ObjectData, ObjectId, PaintStyle};
+use doc::{Document, ObjectData, ObjectId, PaintStyle, PathObject};
 
 use crate::access;
 use crate::catalog::display;
@@ -27,7 +27,8 @@ pub(crate) fn install(registry: &mut CommandRegistry) -> Result<(), EngineError>
     registry.register(RenameObject)?;
     registry.register(DeleteObject)?;
     registry.register(ReorderObject)?;
-    registry.register(MoveObjectToCell)
+    registry.register(MoveObjectToCell)?;
+    registry.register(CreatePath)
 }
 
 /// The blend table is `color::BlendMode`'s 27 modes in UI order; `BLDi`
@@ -770,6 +771,220 @@ impl TypedCommand for MoveObjectToCell {
     }
 }
 
+/// `object.createPath` — creates a primitive path (rect, ellipse, or
+/// line) from a world-space bounding box and appends it to a target
+/// cell. Rect/ellipse carry a `PRIv` primitive source, so they stay
+/// live-editable as primitives; a line is a bare 2-point open contour.
+struct CreatePath;
+
+/// What geometry the created path holds.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+enum CreateKind {
+    /// Four-corner closed rectangle.
+    Rect,
+    /// Four-point closed ellipse (kappa handles).
+    Ellipse,
+    /// Two-point open contour, corner to corner.
+    Line,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct CreatePathPayload {
+    /// What geometry to build.
+    kind: CreateKind,
+    /// Bounding box, world coordinates.
+    x: f64,
+    /// Bounding box, world coordinates.
+    y: f64,
+    /// Bounding box, world coordinates.
+    width: f64,
+    /// Bounding box, world coordinates.
+    height: f64,
+    /// Target page index.
+    page: usize,
+    /// Target layer index.
+    layer: usize,
+    /// Target cell index (state number).
+    cell: usize,
+    /// Optional object name.
+    name: Option<String>,
+}
+
+/// Circle-approximation constant: distance from an ellipse's corner
+/// anchor to its control handles along the tangent.
+const ELLIPSE_KAPPA: f64 = 0.552_284_749_830_793_3;
+
+impl TypedCommand for CreatePath {
+    type Payload = CreatePathPayload;
+
+    fn name(&self) -> &'static str {
+        "object.createPath"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "object.createPath";
+        if !payload.width.is_finite()
+            || !payload.height.is_finite()
+            || !payload.x.is_finite()
+            || !payload.y.is_finite()
+        {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: "geometry must be finite".to_owned(),
+            });
+        }
+        // Validate the destination before anything mutates.
+        access::cell_mut(document, NAME, payload.page, payload.layer, payload.cell)?;
+
+        let rect = geom::Rect::new(
+            payload.x,
+            payload.y,
+            payload.x + payload.width,
+            payload.y + payload.height,
+        );
+        let (contours, primitive) = match payload.kind {
+            CreateKind::Rect => (rect_contour(rect), Some(rect_primitive(rect))),
+            CreateKind::Ellipse => (ellipse_contour(rect), Some(rect_primitive(rect))),
+            CreateKind::Line => (line_contour(rect), None),
+        };
+        let object = ObjectData::Path(PathObject {
+            contours,
+            primitive,
+            even_odd: false,
+            paint: Some(PaintStyle {
+                stroke_raw: 0xFF00_0000, // transparent black — no stroke yet
+                fill_raw: 0xFF00_0000,   // transparent black — no fill yet
+            }),
+            fill_start: None,
+            fill_end: None,
+            fill_third: None,
+            brush_placement: None,
+            fill_on_top: None,
+            locked: false,
+            visible: true,
+            opacity: 1000,
+            blend: 0,
+            name: payload.name.clone(),
+        });
+
+        let id = document.registry.insert(object);
+        // Append (top of z-order). The same cell lookup passed above,
+        // and `None` appends — this cannot fail, so there is no
+        // orphan-registration cleanup to run.
+        let placed = attach_cell(
+            document,
+            NAME,
+            payload.page,
+            payload.layer,
+            payload.cell,
+            id,
+            None,
+        )?;
+        Ok(Delta::Group(vec![
+            placed,
+            Delta::Object {
+                id,
+                inverse: ObjectInverse::Created,
+            },
+        ]))
+    }
+}
+
+/// One closed 4-anchor contour from a rect's corners.
+fn rect_contour(rect: geom::Rect) -> Vec<doc::Contour> {
+    let points = vec![
+        corner(rect.x0, rect.y0),
+        corner(rect.x1, rect.y0),
+        corner(rect.x1, rect.y1),
+        corner(rect.x0, rect.y1),
+    ];
+    vec![doc::Contour {
+        closed: true,
+        point_count: 4,
+        points,
+    }]
+}
+
+/// One closed 4-anchor ellipse contour with kappa control handles.
+fn ellipse_contour(rect: geom::Rect) -> Vec<doc::Contour> {
+    let cx = (rect.x0 + rect.x1) / 2.0;
+    let cy = (rect.y0 + rect.y1) / 2.0;
+    let rx = rect.width() / 2.0;
+    let ry = rect.height() / 2.0;
+    let kx = rx * ELLIPSE_KAPPA;
+    let ky = ry * ELLIPSE_KAPPA;
+    // Anchors at 12/3/6/9 o'clock; each control handle offsets along
+    // the neighbouring tangent.
+    let curve = |anchor: geom::Point, c1: geom::Point, c2: geom::Point| doc::PathPoint {
+        anchor,
+        primary: Some(c1),
+        secondary: Some(c2),
+        is_curve: true,
+    };
+    let points = vec![
+        curve(
+            geom::Point::new(cx, rect.y0),
+            geom::Point::new(cx + kx, rect.y0),
+            geom::Point::new(cx - kx, rect.y0),
+        ),
+        curve(
+            geom::Point::new(rect.x1, cy),
+            geom::Point::new(rect.x1, rect.y0 + ky),
+            geom::Point::new(rect.x1, rect.y1 - ky),
+        ),
+        curve(
+            geom::Point::new(cx, rect.y1),
+            geom::Point::new(cx + kx, rect.y1),
+            geom::Point::new(cx - kx, rect.y1),
+        ),
+        curve(
+            geom::Point::new(rect.x0, cy),
+            geom::Point::new(rect.x0, rect.y1 - ky),
+            geom::Point::new(rect.x0, rect.y0 + ky),
+        ),
+    ];
+    vec![doc::Contour {
+        closed: true,
+        point_count: 4,
+        points,
+    }]
+}
+
+/// One open 2-anchor contour, corner to corner.
+fn line_contour(rect: geom::Rect) -> Vec<doc::Contour> {
+    vec![doc::Contour {
+        closed: false,
+        point_count: 2,
+        points: vec![corner(rect.x0, rect.y0), corner(rect.x1, rect.y1)],
+    }]
+}
+
+/// A straight corner point.
+fn corner(x: f64, y: f64) -> doc::PathPoint {
+    doc::PathPoint {
+        anchor: geom::Point::new(x, y),
+        primary: None,
+        secondary: None,
+        is_curve: false,
+    }
+}
+
+/// A `PRIv` primitive source spanning `rect`, identity transform.
+fn rect_primitive(rect: geom::Rect) -> doc::PrimitiveSource {
+    doc::PrimitiveSource {
+        rect,
+        radius: 0.0,
+        transform: geom::Affine::IDENTITY,
+        maintain_radius: false,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
@@ -1234,5 +1449,129 @@ mod tests {
             .apply_json(&mut document, json!({ "id": ids[0], "opacity": 400 }))
             .unwrap_err();
         assert!(matches!(error, EngineError::MissingTarget { .. }));
+    }
+
+    #[test]
+    fn create_path_appends_a_rect_and_undo_removes_both_halves() {
+        let (mut document, _) = document_with(vec![]);
+        let original = serde_json::to_vec(&document).unwrap();
+        let delta = CreatePath
+            .apply_json(
+                &mut document,
+                json!({
+                    "kind": "rect",
+                    "x": 10.0, "y": 20.0, "width": 30.0, "height": 40.0,
+                    "page": 0, "layer": 0, "cell": 0,
+                    "name": "plaque",
+                }),
+            )
+            .unwrap();
+        let cell = &document.pages[0].layers.layers[0].cells[0];
+        assert_eq!(cell.elements.len(), 1);
+        let id = cell.elements[0];
+        match document.registry.get(id).unwrap() {
+            ObjectData::Path(path) => {
+                assert_eq!(path.contours.len(), 1);
+                assert!(path.contours[0].closed);
+                assert_eq!(
+                    path.contours[0].points[0].anchor,
+                    geom::Point::new(10.0, 20.0)
+                );
+                assert_eq!(
+                    path.contours[0].points[2].anchor,
+                    geom::Point::new(40.0, 60.0)
+                );
+                assert!(path.primitive.is_some());
+                assert_eq!(path.name.as_deref(), Some("plaque"));
+            }
+            other => panic!("wrong object kind: {other:?}"),
+        }
+        delta.apply_inverse(&mut document).unwrap();
+        assert!(document.registry.get(id).is_none());
+        assert_eq!(
+            serde_json::to_vec(&document).unwrap(),
+            original,
+            "undo restores the exact pre-create bytes"
+        );
+    }
+
+    #[test]
+    fn create_ellipse_and_line_shapes() {
+        let (mut document, _) = document_with(vec![]);
+        CreatePath
+            .apply_json(
+                &mut document,
+                json!({
+                    "kind": "ellipse",
+                    "x": -10.0, "y": -10.0, "width": 20.0, "height": 20.0,
+                    "page": 0, "layer": 0, "cell": 0, "name": null,
+                }),
+            )
+            .unwrap();
+        let id = document.pages[0].layers.layers[0].cells[0].elements[0];
+        match document.registry.get(id).unwrap() {
+            ObjectData::Path(path) => {
+                assert!(path.primitive.is_some());
+                // Every point is a curve point with both handles.
+                assert!(path.contours[0].points.iter().all(|point| point.is_curve));
+            }
+            other => panic!("wrong object kind: {other:?}"),
+        }
+
+        CreatePath
+            .apply_json(
+                &mut document,
+                json!({
+                    "kind": "line",
+                    "x": 0.0, "y": 0.0, "width": 50.0, "height": 25.0,
+                    "page": 0, "layer": 0, "cell": 0, "name": null,
+                }),
+            )
+            .unwrap();
+        let id = document.pages[0].layers.layers[0].cells[0].elements[1];
+        match document.registry.get(id).unwrap() {
+            ObjectData::Path(path) => {
+                assert!(path.primitive.is_none(), "a line is not a primitive");
+                assert!(!path.contours[0].closed);
+                assert_eq!(path.contours[0].points.len(), 2);
+            }
+            other => panic!("wrong object kind: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn create_path_validates_the_target_first() {
+        let (mut document, _) = document_with(vec![path_object()]);
+        let before = serde_json::to_vec(&document).unwrap();
+        // Out-of-range cell: refused, and nothing registers.
+        let error = CreatePath
+            .apply_json(
+                &mut document,
+                json!({
+                    "kind": "rect",
+                    "x": 0.0, "y": 0.0, "width": 10.0, "height": 10.0,
+                    "page": 0, "layer": 0, "cell": 9, "name": null,
+                }),
+            )
+            .unwrap_err();
+        assert!(matches!(error, EngineError::MissingTarget { .. }));
+        assert_eq!(
+            serde_json::to_vec(&document).unwrap(),
+            before,
+            "a refused create must not leave an orphan registration"
+        );
+        // Non-finite geometry: refused too.
+        let error = CreatePath
+            .apply_json(
+                &mut document,
+                json!({
+                    "kind": "rect",
+                    "x": 0.0, "y": 0.0, "width": "bad", "height": 10.0,
+                    "page": 0, "layer": 0, "cell": 0, "name": null,
+                }),
+            )
+            .unwrap_err();
+        assert!(matches!(error, EngineError::BadPayload { .. }));
+        assert_eq!(document.registry.len(), 1, "still just the fixture path");
     }
 }

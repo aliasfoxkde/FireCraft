@@ -122,6 +122,27 @@ impl Registry {
         slot.object.as_ref()
     }
 
+    /// Undoes an [`Registry::insert`]: the slot returns to its exact
+    /// pre-insert state. A generation-0 slot was freshly allocated by
+    /// the insert (it never existed before) and is popped outright; a
+    /// recycled slot keeps its generation and returns to the free
+    /// list — precisely the state `insert` found it in, so documents
+    /// compare equal across create→undo. `None` when `id` is not live.
+    pub fn retract_insert(&mut self, id: ObjectId) -> Option<()> {
+        let slot = self.slots.get(id.index())?;
+        if slot.generation != id.generation() || slot.object.is_none() {
+            return None;
+        }
+        if id.generation() == 0 {
+            self.slots.pop();
+        } else {
+            let slot = self.slots.get_mut(id.index())?;
+            slot.object = None;
+            self.free.push(id.index);
+        }
+        Some(())
+    }
+
     /// Mutable access behind `id`, or `None` when stale.
     pub fn get_mut(&mut self, id: ObjectId) -> Option<&mut ObjectData> {
         let slot = self.slots.get_mut(id.index())?;
@@ -236,5 +257,33 @@ mod tests {
         registry.remove(a).expect("remove");
         let live: Vec<ObjectId> = registry.iter().map(|(id, _)| id).collect();
         assert_eq!(live, vec![b]);
+    }
+
+    #[test]
+    fn retract_of_a_trailing_insert_pops_the_slot() {
+        let mut registry = Registry::new();
+        let before = registry.clone();
+        let id = registry.insert(sample_path());
+        registry.retract_insert(id).expect("live id");
+        assert_eq!(registry, before, "trailing slot is popped outright");
+        assert!(registry.retract_insert(id).is_none(), "already retracted");
+    }
+
+    #[test]
+    fn retract_of_a_recycled_insert_restores_the_free_slot() {
+        let mut registry = Registry::new();
+        let first = registry.insert(sample_path());
+        registry.remove(first).expect("remove");
+        let before = registry.clone();
+        let second = registry.insert(sample_path());
+        registry.retract_insert(second).expect("live id");
+        assert_eq!(
+            registry, before,
+            "recycled slot returns to its exact pre-insert state"
+        );
+        // The retracted id is stale; the original id revives normally.
+        assert!(registry.get(second).is_none());
+        registry.restore(first, sample_path()).expect("restorable");
+        assert!(registry.get(first).is_some());
     }
 }
