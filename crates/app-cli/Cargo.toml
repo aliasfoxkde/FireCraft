@@ -16,7 +16,9 @@ path = "src/main.rs"
 [dependencies]
 doc = { path = "../doc" }
 engine = { path = "../engine" }
+compose = { path = "../compose" }
 fwpng = { path = "../fwpng" }
+io = { path = "../io" }
 flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
 serde_json = { version = "1", features = ["float_roundtrip"] }
 

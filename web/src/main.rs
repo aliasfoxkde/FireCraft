@@ -268,11 +268,13 @@ fn handle_message(runner: &std::rc::Rc<eframe::WebRunner>, event: web_sys::Messa
             match rendered {
                 Some(Ok(render)) => {
                     let straight = compose::straight_alpha(&render.pixels);
-                    match fwpng::image::encode_rgba8(
+                    let encode = io::Plane::new(
                         u32::from(render.width),
                         u32::from(render.height),
                         &straight,
-                    ) {
+                    )
+                    .and_then(|plane| io::png::encode(&plane));
+                    match encode {
                         Ok(png) => reply_bytes("png", &png),
                         Err(error) => reply_status("png", false, Some(&error.to_string())),
                     }

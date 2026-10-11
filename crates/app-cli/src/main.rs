@@ -18,8 +18,7 @@ use std::process::ExitCode;
 use app_cli::{CliError, info, io, ops};
 use engine::platform::FileSystem as _;
 
-const USAGE: &str =
-    "usage: firecraft-cli <info <file>|convert <in> <out>|apply <doc> <journal> [--out <out>]>";
+const USAGE: &str = "usage: firecraft-cli <info <file>|convert <in> <out>|apply <doc> <journal> [--out <out>]|export <in.fw.png> <out.(png|jpg|bmp|tiff|wbmp)> [--quality <1-100>] [--progressive] [--matte <white|black>]>";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -58,6 +57,51 @@ fn run(args: &[String]) -> Result<(), CliError> {
             eprintln!(
                 "[firecraft-cli] {input} -> {output} ({} bytes)",
                 converted.len()
+            );
+            Ok(())
+        }
+        Some("export") => {
+            let mut positional = Vec::new();
+            let mut flags = ops::ExportFlags::default();
+            let mut rest = args.iter().skip(1);
+            while let Some(flag) = rest.next() {
+                match flag.as_str() {
+                    "--quality" => {
+                        let value = rest
+                            .next()
+                            .ok_or_else(|| CliError("--quality needs a value".to_owned()))?;
+                        flags.quality = value
+                            .parse()
+                            .map_err(|_| CliError(format!("--quality: {value} is not 1-100")))?;
+                    }
+                    "--progressive" => flags.progressive = true,
+                    "--matte" => {
+                        let value = rest
+                            .next()
+                            .ok_or_else(|| CliError("--matte needs white|black".to_owned()))?;
+                        flags.matte = match value.as_str() {
+                            "white" => ::io::Matte::White,
+                            "black" => ::io::Matte::Black,
+                            other => return Err(CliError(format!("--matte: unknown {other}"))),
+                        };
+                    }
+                    other => positional.push(other.to_owned()),
+                }
+            }
+            let (input, output) = match (positional.first(), positional.get(1)) {
+                (Some(input), Some(output)) => (input.as_str(), output.as_str()),
+                _ => return Err(missing(USAGE)()),
+            };
+            let bytes = fs
+                .read_file(input)
+                .map_err(|error| CliError(error.to_string()))?;
+            let loaded = io::open(&bytes)?;
+            let written = ops::export_raster(&loaded.document, output, &flags)?;
+            fs.write_file(output, &written)
+                .map_err(|error| CliError(error.to_string()))?;
+            eprintln!(
+                "[firecraft-cli] {input} -> {output} ({} bytes)",
+                written.len()
             );
             Ok(())
         }

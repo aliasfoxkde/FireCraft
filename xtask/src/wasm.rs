@@ -21,7 +21,7 @@ use crate::util::cargo;
 /// threads.
 const WASM_CRATES: &[&str] = &[
     "fwpng", "geom", "color", "raster", "doc", "vector", "compose", "engine", "app-cli", "app",
-    "filters", "text",
+    "filters", "text", "io",
 ];
 
 /// Integration-test target exercising fwpng under wasm.

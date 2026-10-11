@@ -1,0 +1,19 @@
+[package]
+name = "io"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "FireCraft import/export codecs: raster formats, PSD, SVG."
+
+[dependencies]
+fwpng = { path = "../fwpng" }
+image = { version = "0.25.9", default-features = false, features = ["png", "jpeg", "bmp", "tiff"] }
+jpeg-encoder = "0.6.1"
+tiff = "0.11.3"
+
+[lints]
+workspace = true
