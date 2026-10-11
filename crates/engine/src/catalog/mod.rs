@@ -9,6 +9,7 @@ pub(crate) mod display;
 pub(crate) mod layer;
 pub(crate) mod object;
 pub(crate) mod page;
+pub(crate) mod path;
 
 use crate::error::EngineError;
 use crate::registry::CommandRegistry;
@@ -16,6 +17,7 @@ use crate::registry::CommandRegistry;
 /// Registers the built-in catalog into `registry`.
 pub fn install(registry: &mut CommandRegistry) -> Result<(), EngineError> {
     object::install(registry)?;
+    path::install(registry)?;
     cell::install(registry)?;
     layer::install(registry)?;
     page::install(registry)

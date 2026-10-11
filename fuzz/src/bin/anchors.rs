@@ -61,6 +61,11 @@ fn anchors(seeds: &Seeds) -> AnchorSet {
             vec![seeds.canonical_tree.clone(), seeds.nested_tree.clone()],
         ),
         (
+            "vector_ops",
+            firecraft_fuzz::anchor_vector_ops,
+            vec![seeds.empty.clone()],
+        ),
+        (
             "geom_transform",
             firecraft_fuzz::anchor_geom_transform,
             vec![seeds.float_blob.clone()],

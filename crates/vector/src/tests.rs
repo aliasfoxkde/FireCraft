@@ -1,4 +1,5 @@
-//! Tolerance-pinned proofs for the boolean pipeline and the bridge.
+//! Tolerance-pinned proofs for the boolean pipeline, the bridge, and
+//! the vector ops (simplify, expand stroke, inset/outset).
 //!
 //! Square/circle cases assert exact anchor sets (splits land on integer
 //! coordinates by construction); curve cases assert topology plus
@@ -14,6 +15,8 @@ use crate::bridge::{
 };
 use crate::flatten::{FLATTEN_TOLERANCE, flatten_cubic};
 use crate::intersect::{dedup_params, segment_intersection};
+use crate::offset::{CapKind, JoinKind, StrokeStyle, expand_stroke, offset_path};
+use crate::simplify::simplify;
 use crate::split::split_seg;
 use doc::model::{Contour, PathObject, PathPoint};
 use geom::Point;
@@ -142,6 +145,40 @@ fn set(items: &[(i64, i64)]) -> BTreeSet<(i64, i64)> {
     items.iter().copied().collect()
 }
 
+/// Open polyline as one unclosed all-line contour.
+fn open_path(points: Vec<PathPoint>) -> PathObject {
+    let n = points.len() as i64;
+    neutral_path(vec![Contour {
+        closed: false,
+        point_count: n,
+        points,
+    }])
+}
+
+/// Anchor-coordinate bounding box over every contour of `path`.
+fn bounds(p: &PathObject) -> (Point, Point) {
+    let mut min = Point::new(f64::INFINITY, f64::INFINITY);
+    let mut max = Point::new(f64::NEG_INFINITY, f64::NEG_INFINITY);
+    for c in &p.contours {
+        for pt in &c.points {
+            min.x = min.x.min(pt.anchor.x);
+            min.y = min.y.min(pt.anchor.y);
+            max.x = max.x.max(pt.anchor.x);
+            max.y = max.y.max(pt.anchor.y);
+        }
+    }
+    (min, max)
+}
+
+fn stroke(width: f64, cap: CapKind, join: JoinKind) -> StrokeStyle {
+    StrokeStyle {
+        width,
+        cap,
+        join,
+        miter_limit: crate::offset::DEFAULT_MITER_LIMIT,
+    }
+}
+
 // ---------------------------------------------------------------------
 // bridge
 
@@ -245,7 +282,7 @@ fn flatten_circle_stays_within_tolerance() {
         (552.2847498307936, 1000.0),
         (0.0, 1000.0),
     );
-    let poly = flatten_cubic(c);
+    let poly = flatten_cubic(c).unwrap();
     assert_eq!(poly.first().unwrap().0, 0.0);
     assert_eq!(poly.last().unwrap().0, 1.0);
     // Parameters strictly ascending.
@@ -634,4 +671,346 @@ fn result_metadata_is_neutral_and_nonzero() {
     assert_eq!(r.blend, 0);
     assert!(r.visible && !r.locked);
     assert!(r.name.is_none() && r.primitive.is_none());
+}
+
+// ---------------------------------------------------------------------
+// simplify
+
+#[test]
+fn simplify_drops_collinear_interior_anchors() {
+    let p = open_path(vec![
+        anchor(0.0, 0.0),
+        anchor(5.0, 0.0),
+        anchor(10.0, 0.0),
+        anchor(10.0, 10.0),
+    ]);
+    let r = simplify(&p, 0.5).unwrap();
+    assert_eq!(r.contours.len(), 1);
+    assert!(!r.contours[0].closed);
+    assert_eq!(anchor_set(&r), set(&[(0, 0), (10, 0), (10, 10)]));
+}
+
+#[test]
+fn simplify_respects_tolerance() {
+    // Deviation 0.4 from the chord: inside 0.5, outside 0.1.
+    let zigzag = || open_path(vec![anchor(0.0, 0.0), anchor(2.0, 0.4), anchor(4.0, 0.0)]);
+    let coarse = simplify(&zigzag(), 0.5).unwrap();
+    assert_eq!(anchor_set(&coarse), set(&[(0, 0), (4, 0)]));
+    let fine = simplify(&zigzag(), 0.1).unwrap();
+    assert_eq!(anchor_set(&fine), set(&[(0, 0), (2, 0), (4, 0)]));
+}
+
+#[test]
+fn simplify_keeps_curve_spans_and_their_bounding_anchors_exactly() {
+    // Curve span into a collinear three-anchor tail (open contour): the
+    // tail run reduces, the curve span and its bounding anchors — with
+    // handles byte-intact — survive untouched.
+    let mut head = circle_path(0.0, 0.0, 10.0).contours[0].points[0].clone();
+    head.primary = None; // incoming span becomes a line at the head
+    let head_ref = head.clone();
+    let p = open_path(vec![
+        head,
+        anchor(20.0, 0.0),
+        anchor(25.0, 0.0),
+        anchor(30.0, 0.0),
+    ]);
+    let r = simplify(&p, 5.0).unwrap();
+    let kept = &r.contours[0].points;
+    assert_eq!(kept.len(), 2);
+    assert_eq!(&kept[0], &head_ref);
+    assert_eq!(kept[1].anchor, Point::new(30.0, 0.0));
+    assert!(!kept[1].is_curve);
+}
+
+#[test]
+fn simplify_is_idempotent_byte_exactly() {
+    let p = open_path(vec![
+        anchor(0.0, 0.0),
+        anchor(3.0, 0.2),
+        anchor(6.0, 0.0),
+        anchor(9.0, 0.2),
+        anchor(12.0, 0.0),
+    ]);
+    let once = simplify(&p, 0.5).unwrap();
+    let twice = simplify(&once, 0.5).unwrap();
+    assert_eq!(once, twice);
+}
+
+#[test]
+fn simplify_rejects_non_positive_or_non_finite_tolerance() {
+    let p = rect_path(0.0, 0.0, 4.0, 4.0);
+    for t in [0.0, -1.0, f64::NAN, f64::INFINITY] {
+        assert_eq!(simplify(&p, t), Err(crate::VectorError::DegenerateSegment));
+    }
+}
+
+#[test]
+fn simplify_never_collapses_below_the_well_formed_floor() {
+    // Open line: RDP keeps the endpoints — the 2-anchor floor.
+    let line = open_path(vec![anchor(0.0, 0.0), anchor(5.0, 0.0), anchor(10.0, 0.0)]);
+    let r = simplify(&line, 10.0).unwrap();
+    assert_eq!(anchor_set(&r), set(&[(0, 0), (10, 0)]));
+    // All-line closed contours hit the wrap-span run and pass through
+    // unchanged (wrap-aware RDP is corpus-gated).
+    let square = rect_path(0.0, 0.0, 10.0, 10.0);
+    assert_eq!(simplify(&square, 10.0).unwrap(), square);
+    // A curve-only circle passes through byte-identically.
+    let circle = circle_path(0.0, 0.0, 6.0);
+    assert_eq!(simplify(&circle, 10.0).unwrap(), circle);
+}
+
+// ---------------------------------------------------------------------
+// expand stroke
+
+#[test]
+fn expand_stroke_line_butt_caps_is_the_exact_rectangle() {
+    let line = open_path(vec![anchor(0.0, 0.0), anchor(10.0, 0.0)]);
+    let r = expand_stroke(&line, &stroke(2.0, CapKind::Butt, JoinKind::Miter)).unwrap();
+    assert_eq!(r.contours.len(), 1);
+    assert!(r.contours[0].closed);
+    assert_eq!(anchor_set(&r), set(&[(0, 1), (10, 1), (10, -1), (0, -1)]));
+    // All-line outline: no curve anchors anywhere.
+    assert!(r.contours[0].points.iter().all(|p| !p.is_curve));
+}
+
+#[test]
+fn expand_stroke_line_square_caps_extend_by_the_radius() {
+    let line = open_path(vec![anchor(0.0, 0.0), anchor(10.0, 0.0)]);
+    let r = expand_stroke(&line, &stroke(2.0, CapKind::Square, JoinKind::Miter)).unwrap();
+    assert_eq!(
+        anchor_set(&r),
+        set(&[
+            (0, 1),
+            (10, 1),
+            (11, 1),
+            (11, -1),
+            (10, -1),
+            (0, -1),
+            (-1, -1),
+            (-1, 1),
+        ])
+    );
+}
+
+#[test]
+fn expand_stroke_line_round_caps_stay_inside_the_radius_box() {
+    let line = open_path(vec![anchor(0.0, 0.0), anchor(10.0, 0.0)]);
+    let r = expand_stroke(&line, &stroke(2.0, CapKind::Round, JoinKind::Round)).unwrap();
+    assert_eq!(r.contours.len(), 1);
+    let pts = &r.contours[0].points;
+    // Butt-rect sides plus two semicircular caps: two cubics per cap
+    // (anchor at each equator), all curve anchors on the caps, and
+    // nothing pokes outside the stroke radius box.
+    assert!(pts.iter().any(|p| p.is_curve));
+    assert_eq!(
+        anchor_set(&r),
+        set(&[(0, 1), (10, 1), (11, 0), (10, -1), (0, -1), (-1, 0),])
+    );
+    let (min, max) = bounds(&r);
+    assert!(min.x > -1.05 && min.y > -1.05);
+    assert!(max.x < 11.05 && max.y < 1.05);
+}
+
+#[test]
+fn expand_stroke_closed_square_yields_two_exact_rings() {
+    let r = expand_stroke(
+        &rect_path(0.0, 0.0, 10.0, 10.0),
+        &stroke(2.0, CapKind::Butt, JoinKind::Miter),
+    )
+    .unwrap();
+    // A band: outer square (−1,−1)–(11,11) with inner hole (1,1)–(9,9),
+    // both exact (miter extends the outer corners, the union trims the
+    // inner ones at the transversal crossings).
+    assert_eq!(r.contours.len(), 2);
+    let sets: Vec<_> = r
+        .contours
+        .iter()
+        .map(|c| anchor_set(&neutral_path(vec![c.clone()])))
+        .collect();
+    let outer = set(&[(-1, -1), (11, -1), (11, 11), (-1, 11)]);
+    let inner = set(&[(1, 1), (9, 1), (9, 9), (1, 9)]);
+    assert!(sets.contains(&outer) && sets.contains(&inner), "{sets:?}");
+}
+
+#[test]
+fn expand_stroke_closed_square_round_joins_round_the_outer_corners() {
+    let r = expand_stroke(
+        &rect_path(0.0, 0.0, 10.0, 10.0),
+        &stroke(2.0, CapKind::Butt, JoinKind::Round),
+    )
+    .unwrap();
+    assert_eq!(r.contours.len(), 2);
+    for c in &r.contours {
+        assert!(c.closed);
+    }
+    let (min, max) = bounds(&r);
+    assert!((min.x + 1.0).abs() < 0.05 && (min.y + 1.0).abs() < 0.05);
+    assert!((max.x - 11.0).abs() < 0.05 && (max.y - 11.0).abs() < 0.05);
+    // Round joins are arc geometry: curve anchors on the outer ring.
+    assert!(
+        r.contours
+            .iter()
+            .any(|c| c.points.iter().any(|p| p.is_curve))
+    );
+}
+
+#[test]
+fn expand_stroke_circle_approximates_the_radius_ring_pair() {
+    let r = expand_stroke(
+        &circle_path(0.0, 0.0, 10.0),
+        &stroke(2.0, CapKind::Butt, JoinKind::Round),
+    )
+    .unwrap();
+    // Tiller–Hanson on the kappa circle stays well within 0.2 px.
+    assert_eq!(r.contours.len(), 2);
+    let (min, max) = bounds(&r);
+    assert!((max.x - 11.0).abs() < 0.2 && (max.y - 11.0).abs() < 0.2);
+    assert!((min.x + 11.0).abs() < 0.2 && (min.y + 11.0).abs() < 0.2);
+}
+
+// ---------------------------------------------------------------------
+// inset / outset
+
+#[test]
+fn offset_outset_square_expands_exactly() {
+    let r = offset_path(&rect_path(0.0, 0.0, 10.0, 10.0), 2.0).unwrap();
+    assert_eq!(r.contours.len(), 1);
+    assert_eq!(
+        anchor_set(&r),
+        set(&[(-2, -2), (12, -2), (12, 12), (-2, 12)])
+    );
+    assert!(r.contours[0].points.iter().all(|p| !p.is_curve));
+}
+
+#[test]
+fn offset_inset_square_shrinks_exactly() {
+    let r = offset_path(&rect_path(0.0, 0.0, 10.0, 10.0), -2.0).unwrap();
+    assert_eq!(r.contours.len(), 1);
+    assert_eq!(anchor_set(&r), set(&[(2, 2), (8, 2), (8, 8), (2, 8)]));
+    assert!(r.contours[0].points.iter().all(|p| !p.is_curve));
+}
+
+#[test]
+fn offset_inset_moves_holes_the_same_direction_as_bodies() {
+    // Body (0,0)–(20,20) CCW with a CW hole (10,10)–(15,15): an inset
+    // of −1 thins the body on both sides — outer boundary in, hole
+    // boundary out (hole grows to (9,9)–(16,16)).
+    let hole_points = vec![
+        anchor(10.0, 10.0),
+        anchor(10.0, 15.0),
+        anchor(15.0, 15.0),
+        anchor(15.0, 10.0),
+    ];
+    let body = neutral_path(vec![
+        Contour {
+            closed: true,
+            point_count: 4,
+            points: vec![
+                anchor(0.0, 0.0),
+                anchor(20.0, 0.0),
+                anchor(20.0, 20.0),
+                anchor(0.0, 20.0),
+            ],
+        },
+        Contour {
+            closed: true,
+            point_count: 4,
+            points: hole_points,
+        },
+    ]);
+    let r = offset_path(&body, -1.0).unwrap();
+    assert_eq!(r.contours.len(), 2, "body and hole both survive");
+    let sets: Vec<_> = r
+        .contours
+        .iter()
+        .map(|c| anchor_set(&neutral_path(vec![c.clone()])))
+        .collect();
+    let outer = set(&[(1, 1), (19, 1), (19, 19), (1, 19)]);
+    let hole = set(&[(9, 9), (16, 9), (16, 16), (9, 16)]);
+    assert!(sets.contains(&outer) && sets.contains(&hole), "{sets:?}");
+}
+
+#[test]
+fn offset_past_half_width_collapses_deterministically() {
+    // Inset 6 into a 10-wide square: the offsets cross the centerline;
+    // the only contract is no-panic + determinism.
+    let square = rect_path(0.0, 0.0, 10.0, 10.0);
+    let a = offset_path(&square, -6.0);
+    let b = offset_path(&square, -6.0);
+    assert_eq!(a, b);
+}
+
+#[test]
+fn offset_rejects_non_finite_distance() {
+    let square = rect_path(0.0, 0.0, 4.0, 4.0);
+    for d in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+        assert_eq!(
+            offset_path(&square, d),
+            Err(crate::VectorError::DegenerateSegment)
+        );
+    }
+    assert_eq!(
+        expand_stroke(&square, &stroke(f64::NAN, CapKind::Butt, JoinKind::Miter)),
+        Err(crate::VectorError::DegenerateSegment)
+    );
+}
+
+#[test]
+fn flatten_refuses_hostile_geometry_instead_of_exploding() {
+    // Control points at ~1e300 fail every flatness test; the budget
+    // caps emission and the pipeline refuses in bounded time (this
+    // test doubles as the timeout: unbounded, it emitted 2^24 chords).
+    let wild = kurbo::CubicBez::new((0.0, 0.0), (1e300, 1e-300), (1e-300, 1e300), (1e300, 1e300));
+    let mut contour = open_path(vec![anchor(0.0, 0.0), anchor(1.0, 0.0)]);
+    // Swap the line span for the wild cubic via a full object rebuild.
+    let wild_obj = neutral_path(vec![doc::Contour {
+        closed: false,
+        point_count: 2,
+        points: vec![
+            PathPoint {
+                anchor: geom::Point::new(0.0, 0.0),
+                primary: None,
+                secondary: Some(geom::Point::new(1e300, 1e-300)),
+                is_curve: true,
+            },
+            PathPoint {
+                anchor: geom::Point::new(1e300, 1e300),
+                primary: Some(geom::Point::new(1e-300, 1e300)),
+                secondary: None,
+                is_curve: true,
+            },
+        ],
+    }]);
+    let _ = &mut contour; // fixture parity with the other tests
+    assert_eq!(
+        crate::boolean::boolean(&wild_obj, &wild_obj, crate::BooleanOp::Union),
+        Err(crate::VectorError::DegenerateSegment)
+    );
+    assert_eq!(
+        offset_path(&wild_obj, 2.0),
+        Err(crate::VectorError::DegenerateSegment)
+    );
+    let _ = wild; // kurbo value unused directly; the doc-model path carries it
+}
+
+#[test]
+fn offset_operations_are_byte_deterministic() {
+    let circle = circle_path(0.0, 0.0, 8.0);
+    let a = offset_path(&circle, 1.5).unwrap();
+    let b = offset_path(&circle, 1.5).unwrap();
+    assert_eq!(a, b);
+    let style = stroke(2.0, CapKind::Round, JoinKind::Round);
+    let c = expand_stroke(&circle, &style).unwrap();
+    let d = expand_stroke(&circle, &style).unwrap();
+    assert_eq!(c, d);
+}
+
+#[test]
+fn self_union_of_identical_operands_preserves_the_region() {
+    // The trick expand_stroke and offset_path lean on: unioning a path
+    // with itself keeps the region boundary with resolved outlines.
+    let square = rect_path(0.0, 0.0, 10.0, 10.0);
+    let r = boolean(&square, &square, BooleanOp::Union).unwrap();
+    assert_eq!(r.contours.len(), 1);
+    assert_eq!(anchor_set(&r), set(&[(0, 0), (10, 0), (10, 10), (0, 10)]));
 }

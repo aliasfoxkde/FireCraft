@@ -64,6 +64,95 @@ pub fn anchor_geom_transform(data: &[u8]) {
     let _ = a.inverse();
 }
 
+/// 256 bytes as 32 f64s: two closed 4-anchor paths (8 points). Every
+/// boolean op, both offset directions, and every cap/join combination
+/// must either succeed or return a typed error — never panic — and the
+/// boolean pipeline must be byte-deterministic (same input, same output
+/// bytes, twice).
+pub fn anchor_vector_ops(data: &[u8]) {
+    let mut vals = [0.0f64; 16];
+    for (i, val) in vals.iter_mut().enumerate() {
+        let start = i * 8;
+        if start + 8 <= data.len() {
+            let mut bytes = [0u8; 8];
+            bytes.copy_from_slice(&data[start..start + 8]);
+            *val = f64::from_le_bytes(bytes);
+        }
+    }
+    let quad = |base: usize| doc::PathObject {
+        contours: vec![doc::Contour {
+            closed: true,
+            point_count: 4,
+            points: (0..4)
+                .map(|k| doc::PathPoint {
+                    anchor: geom::Point::new(vals[base + k * 2], vals[base + k * 2 + 1]),
+                    primary: None,
+                    secondary: None,
+                    is_curve: false,
+                })
+                .collect(),
+        }],
+        primitive: None,
+        even_odd: false,
+        paint: None,
+        fill_start: None,
+        fill_end: None,
+        fill_third: None,
+        brush_placement: None,
+        fill_on_top: None,
+        locked: false,
+        visible: true,
+        opacity: 1000,
+        blend: 0,
+        name: None,
+    };
+    let (a, b) = (quad(0), quad(8));
+    for op in [
+        vector::BooleanOp::Union,
+        vector::BooleanOp::Intersect,
+        vector::BooleanOp::Punch,
+        vector::BooleanOp::Crop,
+    ] {
+        if let Ok(first) = vector::boolean(&a, &b, op) {
+            let again = vector::boolean(&a, &b, op).unwrap_or_else(|error| {
+                panic!("boolean lost determinism on retry: {error}");
+            });
+            let encode = |path: &doc::PathObject| -> Vec<u8> {
+                let mut out = Vec::new();
+                for contour in &path.contours {
+                    for point in &contour.points {
+                        out.extend_from_slice(&point.anchor.x.to_le_bytes());
+                        out.extend_from_slice(&point.anchor.y.to_le_bytes());
+                        out.push(u8::from(point.is_curve));
+                    }
+                }
+                out
+            };
+            assert_eq!(
+                encode(&first),
+                encode(&again),
+                "boolean({op:?}) is not byte-deterministic"
+            );
+        }
+    }
+    for distance in [vals[0], -vals[0].abs()] {
+        let _ = vector::offset_path(&a, distance);
+    }
+    for cap in [vector::CapKind::Butt, vector::CapKind::Square, vector::CapKind::Round] {
+        for join in [vector::JoinKind::Miter, vector::JoinKind::Bevel, vector::JoinKind::Round] {
+            let _ = vector::expand_stroke(
+                &a,
+                &vector::StrokeStyle {
+                    width: vals[0].abs().max(1.0),
+                    cap,
+                    join,
+                    miter_limit: vector::DEFAULT_MITER_LIMIT,
+                },
+            );
+        }
+    }
+}
+
 /// How many random catalog calls one seed drives.
 pub const HUNT_STEPS: usize = 48;
 

@@ -311,6 +311,10 @@ pub const CALLS: &[&str] = &[
     "object.reorder",
     "object.moveToCell",
     "object.createPath",
+    "path.boolean",
+    "path.simplify",
+    "path.expandStroke",
+    "path.inset",
     "cell.setVisible",
     "cell.setLocked",
     "layer.rename",
@@ -411,6 +415,46 @@ pub fn random_call(rng: &mut FuzzRng, document: &Document) -> (String, serde_jso
                 serde_json::json!("fuzz path")
             },
         }),
+        "path.boolean" => serde_json::json!({
+            "a": any_id(rng),
+            "b": any_id(rng),
+            "op": rng.pick(&["union", "intersect", "punch", "crop"]).copied(),
+        }),
+        "path.simplify" => serde_json::json!({
+            "id": any_id(rng),
+            "tolerance": if rng.chance(85) {
+                0.1 + rng.below(400) as f64 / 100.0
+            } else {
+                // Non-positive on purpose (refused).
+                -(rng.below(10) as f64)
+            },
+        }),
+        "path.expandStroke" => serde_json::json!({
+            "id": any_id(rng),
+            "width": if rng.chance(85) { 1.0 + rng.below(40) as f64 } else { 0.0 },
+            "cap": rng.pick(&["butt", "square", "round"]).copied(),
+            "join": rng.pick(&["miter", "bevel", "round"]).copied(),
+            "miter_limit": 1.0 + rng.below(80) as f64 / 10.0,
+        }),
+        "path.inset" => {
+            let distance = |rng: &mut FuzzRng| -> f64 {
+                if rng.chance(85) {
+                    let magnitude = rng.below(30) as f64 / 10.0;
+                    if rng.chance(50) {
+                        magnitude
+                    } else {
+                        -magnitude
+                    }
+                } else {
+                    // Non-finite on purpose (refused).
+                    f64::NAN
+                }
+            };
+            serde_json::json!({
+                "id": any_id(rng),
+                "distance": distance(rng),
+            })
+        }
         "cell.setVisible" => serde_json::json!({
             "page": any_index(rng, pages),
             "layer": any_index(rng, 3),

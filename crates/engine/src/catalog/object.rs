@@ -419,7 +419,11 @@ fn find_owner(document: &Document, id: ObjectId) -> Option<Owner> {
 
 /// Removes `id` from its container, capturing the container's prior
 /// state. The object itself is left in the registry.
-fn detach(document: &mut Document, name: &'static str, id: ObjectId) -> Result<Delta, EngineError> {
+pub(crate) fn detach(
+    document: &mut Document,
+    name: &'static str,
+    id: ObjectId,
+) -> Result<Delta, EngineError> {
     match find_owner(document, id) {
         Some(Owner::Cell {
             page,

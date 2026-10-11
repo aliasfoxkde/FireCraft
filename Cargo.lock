@@ -798,6 +798,7 @@ dependencies = [
  "geom",
  "serde",
  "serde_json",
+ "vector",
 ]
 
 [[package]]

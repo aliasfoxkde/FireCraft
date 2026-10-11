@@ -13,6 +13,7 @@
 //! the leftmost chain's `t0`-duplicate is skipped — the parameter
 //! sequence is complete and strictly ascending with no duplicates.
 
+use crate::VectorError;
 use geom::Point;
 use kurbo::{CubicBez, ParamCurve, Vec2};
 
@@ -25,33 +26,52 @@ pub const FLATTEN_TOLERANCE: f64 = 0.05;
 /// control polygon is emitted as a chord.
 const MAX_DEPTH: u32 = 24;
 
+/// Hard ceiling on emitted chords per span. A curve that cannot flatten
+/// to within [`FLATTEN_TOLERANCE`] in 4096 chords (a full circle needs
+/// ~100; a canvas-spanning arc a few hundred) is hostile geometry —
+/// huge coordinates make every subdivision level fail the flatness
+/// test, and unbounded emission feeds the quadratic intersection probe
+/// gigabytes of chords. Refuse instead.
+pub const FLATTEN_MAX_CHORDS: usize = 4096;
+
 /// A flattened span: `(t, point)` pairs at ascending `t`, always
 /// starting at `(0.0, p0)` and ending at `(1.0, p3)`.
 pub type Polyline = Vec<(f64, Point)>;
 
 /// Flattens one cubic to within [`FLATTEN_TOLERANCE`].
-#[must_use]
-pub fn flatten_cubic(c: CubicBez) -> Polyline {
+///
+/// # Errors
+/// [`VectorError::DegenerateSegment`] when flattening exceeds
+/// [`FLATTEN_MAX_CHORDS`] chords (hostile geometry).
+pub fn flatten_cubic(c: CubicBez) -> Result<Polyline, VectorError> {
     let mut out = Polyline::new();
     out.push((0.0, Point::new(c.p0.x, c.p0.y)));
-    flatten_rec(&c, 0.0, 1.0, 0, &mut out);
+    let mut budget = FLATTEN_MAX_CHORDS;
+    flatten_rec(&c, 0.0, 1.0, 0, &mut out, &mut budget);
+    if budget == 0 {
+        return Err(VectorError::DegenerateSegment);
+    }
     out.push((1.0, Point::new(c.p3.x, c.p3.y)));
-    out
+    Ok(out)
 }
 
-fn flatten_rec(c: &CubicBez, t0: f64, t1: f64, depth: u32, out: &mut Polyline) {
+fn flatten_rec(c: &CubicBez, t0: f64, t1: f64, depth: u32, out: &mut Polyline, budget: &mut usize) {
+    if *budget == 0 {
+        return; // unwind fast; the caller refuses.
+    }
     if depth >= MAX_DEPTH || is_flat(c, FLATTEN_TOLERANCE) {
         // `t0 > 0` skips the leftmost subdivision chain: its start is
         // the root start the caller already emitted.
         if t0 > 0.0 {
             out.push((t0, Point::new(c.p0.x, c.p0.y)));
+            *budget -= 1;
         }
         return;
     }
     let tm = 0.5 * (t0 + t1);
     let (a, b) = c.subdivide();
-    flatten_rec(&a, t0, tm, depth + 1, out);
-    flatten_rec(&b, tm, t1, depth + 1, out);
+    flatten_rec(&a, t0, tm, depth + 1, out, budget);
+    flatten_rec(&b, tm, t1, depth + 1, out, budget);
 }
 
 /// Both inner control points within `tol` of the chord p0→p3.

@@ -14,13 +14,17 @@ mod boolean;
 mod bridge;
 mod flatten;
 mod intersect;
+mod offset;
+mod simplify;
 mod split;
 
 pub use boolean::{BooleanOp, boolean};
 pub use bridge::{
     Seg, bezpath_to_contour, canonicalize_contour, contour_segments, contour_to_bezpath,
 };
-pub use flatten::{FLATTEN_TOLERANCE, flatten_cubic};
+pub use flatten::{FLATTEN_MAX_CHORDS, FLATTEN_TOLERANCE, flatten_cubic};
+pub use offset::{CapKind, DEFAULT_MITER_LIMIT, JoinKind, StrokeStyle, expand_stroke, offset_path};
+pub use simplify::simplify;
 
 /// Pinned numeric gates for the boolean pipeline (pixels / normalized
 /// parameters). Changing any of them moves every golden floor built on

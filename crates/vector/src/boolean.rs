@@ -21,10 +21,11 @@
 //! 5. **Stitch** — boundary pieces chain end-to-start on the [`SNAP`]
 //!    grid into closed loops; failure is [`VectorError::OpenChain`],
 //!    never a guess.
-//! 6. **Assemble** — loops become closed contours in deterministic
-//!    order (first-anchor `total_cmp`); metadata is neutral
-//!    (opaque, normal blend, nonzero fill — the loops carry their own
-//!    winding, so even-odd need not survive).
+//! 6. **Assemble** — coincident loops (identical operands stitch the
+//!    same boundary twice) collapse to the first; loops become closed
+//!    contours in deterministic order (first-anchor `total_cmp`);
+//!    metadata is neutral (opaque, normal blend, nonzero fill — the
+//!    loops carry their own winding, so even-odd need not survive).
 
 use crate::bridge::{Seg, contour_segments};
 use crate::flatten::flatten_cubic;
@@ -41,7 +42,7 @@ const EPS_PARAM: f64 = 1e-9;
 
 /// A chord hit is a real crossing only when strictly interior to the
 /// chord; endpoint touches are anchor artifacts (see the probe loops).
-fn chord_interior(t: f64) -> bool {
+pub(crate) fn chord_interior(t: f64) -> bool {
     t > EPS_PARAM && t < 1.0 - EPS_PARAM
 }
 
@@ -82,7 +83,7 @@ struct FlatSeg {
     tb: f64,
 }
 
-fn prepare(path: &PathObject) -> Operand {
+fn prepare(path: &PathObject) -> Result<Operand, VectorError> {
     let mut segs = Vec::new();
     let mut flats = Vec::new();
     let mut span_owner = Vec::new();
@@ -93,7 +94,7 @@ fn prepare(path: &PathObject) -> Operand {
         for (local, seg) in contour_segments(contour).into_iter().enumerate() {
             let (a, b) = (seg.start(), seg.end());
             let poly = match seg {
-                Seg::Cubic(c) => flatten_cubic(c),
+                Seg::Cubic(c) => flatten_cubic(c)?,
                 Seg::Line(_) => vec![(0.0, a), (1.0, b)],
             };
             let seg_idx = segs.len();
@@ -112,14 +113,14 @@ fn prepare(path: &PathObject) -> Operand {
         spans_per_contour.push(segs.len() - first_span);
         contour_closed.push(contour.closed);
     }
-    Operand {
+    Ok(Operand {
         segs,
         flats,
         span_owner,
         spans_per_contour,
         contour_closed,
         even_odd: path.even_odd,
-    }
+    })
 }
 
 /// Combines two paths. Operand order matters only for [`BooleanOp::Punch`]
@@ -137,8 +138,8 @@ fn prepare(path: &PathObject) -> Operand {
 /// [`VectorError::DegenerateSegment`] when a piece has no usable
 /// tangent for side sampling.
 pub fn boolean(a: &PathObject, b: &PathObject, op: BooleanOp) -> Result<PathObject, VectorError> {
-    let oa = prepare(a);
-    let ob = prepare(b);
+    let oa = prepare(a)?;
+    let ob = prepare(b)?;
 
     let mut params_a: Vec<Vec<f64>> = vec![Vec::new(); oa.segs.len()];
     let mut params_b: Vec<Vec<f64>> = vec![Vec::new(); ob.segs.len()];
@@ -373,10 +374,22 @@ fn ccw_angle(r: Point, d: Point) -> f64 {
 }
 
 /// Loops → closed contours in deterministic order, wrapped in a neutral
-/// [`PathObject`].
+/// [`PathObject`]. Coincident loops (identical operands — the self-union
+/// the offset ops lean on — stitch each operand's boundary into its own
+/// loop) collapse to the first: a region boundary never legitimately
+/// repeats.
 fn assemble(loops: Vec<Vec<Piece>>) -> PathObject {
+    let mut seen = std::collections::HashSet::new();
     let mut contours: Vec<Contour> = loops
         .into_iter()
+        .filter(|chain| {
+            seen.insert(
+                chain
+                    .iter()
+                    .map(|p| snap_key(p.start))
+                    .collect::<std::collections::BTreeSet<_>>(),
+            )
+        })
         .map(|chain| {
             let n = chain.len();
             let mut points = Vec::with_capacity(n);
