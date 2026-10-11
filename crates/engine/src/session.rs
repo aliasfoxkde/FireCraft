@@ -185,7 +185,9 @@ impl Session {
 
     /// The session-restart path: fresh document + journal lines in,
     /// live session out. The replayed history is fully undoable — undo
-    /// survives the restart (the M5 gate).
+    /// survives the restart (the M5 gate) — and the journal itself is
+    /// retained so further edits APPEND to the replayed prefix; a
+    /// truncated journal here would double-apply on the next restart.
     pub fn reopen(document: Document, lines: &str) -> Result<Self, EngineError> {
         let mut registry = CommandRegistry::new();
         crate::catalog::install(&mut registry)?;
@@ -193,7 +195,8 @@ impl Session {
         let mut session = Self::with_registry(document, registry);
         session.history =
             journal::replay(&mut session.document, &session.registry, journal.entries())?;
-        session.dirty = !journal.is_empty();
+        session.journal = journal;
+        session.dirty = !session.journal.is_empty();
         Ok(session)
     }
 
