@@ -13,11 +13,11 @@ that set it instead.
 
 | Metric | Floor | Set in | Enforced by |
 |---|---|---|---|
-| corpus files parsed without panic | 6 | M6 | `xtask corpus` |
-| fwpng round-trip byte-identical files | 4 | M6 | corpus gate |
-| corpus files with doc-model round-trip (equal + idempotent) | 6 | M6 | `xtask corpus` |
-| corpus fixtures with golden pins (deterministic + anchored) | 2 | M6 | `xtask golden` |
-| wasm-clean crates (compile) | 10 | M6 | `xtask wasm` |
+| corpus files parsed without panic | 9 | M7 | `xtask corpus` |
+| fwpng round-trip byte-identical files | 8 | M7 | corpus gate |
+| corpus files with doc-model round-trip (equal + idempotent) | 9 | M7 | `xtask corpus` |
+| corpus fixtures with golden pins (deterministic + anchored) | 5 | M7 | `xtask golden` |
+| wasm-clean crates (compile) | 12 | M7 | `xtask wasm` |
 | web bundle builds (trunk) | 1 | M5 | `xtask wasm` (trunk build of `web/`) |
 | wasm smoke tests executed (fwpng) | 6 | M2 | `xtask wasm` (node + wasm-bindgen-test-runner) |
 | fuzz targets with 60s+ zero-crash campaign | 6 | M3 | `xtask fuzz` / `ci --full` |
@@ -40,7 +40,7 @@ A milestone flips to done only when its gate evidence is recorded in
 | M4 CPU compositor | done | 14 integer-exact compose proofs; golden gate (anchor + determinism pin) green; corpus 5/5; bench 18.7 µs compose / 40.1 µs pipeline at 16×16 (devlog 2026-10-10) |
 | M5 editor shell (native + web) | done | egui shell v1 (canvas/tools/panels, registry-only mutations); trunk web bundle + postMessage bridge (openDocument/apply/exportPng/exportDocument); object.createPath + retract_insert byte-exact undo; equivalence green (3 fuzz seeds + corpus fixture: replay == apply loop, save round-trips); wasm gate 9 crates + trunk build; panic-hunt campaign (see devlog 2026-10-10) |
 | M6 vector depth | done | `vector` crate: 4 booleans (integer-pinned proofs), simplify/expandStroke/inset, 11 `autoshape.*` generators ported from the CS6 `.jsf` specs, align/distribute, `path.movePoints`/`path.warp`; 2 fuzz-found defects fixed (serde_json `float_roundtrip` — journal replay drifted a ULP; `path.boolean` partial mutation before refusing); scripted-shape golden fixture through the engine registry (`scripted.fw.png`, pinned); shell: Auto Shape tool group, Path menu, align/distribute panel, shift multi-select; `vector` in `WASM_CRATES` (10 crates); 9-slice (`NGSv`) deferred to M10 (needs the symbol tree); panic-hunt 256 seeds + anchors 2048 green (devlog 2026-10-11) |
-| M7 bitmap + filters | not started | — |
+| M7 bitmap + filters | done | `filters` kernel crate (pinned color order, integer-exact proofs: brightness/contrast, levels, invert, HSL, gaussian/box blur, unsharp, noise, find-edges); compose interprets live stacks by EffectMoaID with internal-name fallback, unknown GUIDs pass through unfiltered; `filter.add/remove/setParam` with list-capturing deltas; bitmap selection tools (`bitmap.selectRect/Ellipse/Lasso/Wand`, feather) + `bitmap.fill/erase/movePixels`; five `retouch.*` brushes with soft-edge falloff; `text` crate over cosmic-text 0.19 (`text.createText/setText/setAttrs/setFont`, bundled Liberation Sans per OFL); text-on-path end to end (`TAPv`/`TAMi`/`CHOf` mapped, `PathRail` flattening, four pinned basis matrices, `text.attachPath/detachPath`); goldens: `filtered`, `text`, `textpath` (anchor demands bent ink — a linear fallback fails); corpus 9/9, fuzz arms for every new command; `filters`+`text` in `WASM_CRATES` (12 crates); shell: filter panel, text tool + text properties (devlog 2026-10-11) |
 | M8 import/export | not started | — |
 | M9 scripting + automation | not started | — |
 | M10 symbols + shared content | not started | — |
