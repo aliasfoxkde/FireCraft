@@ -26,6 +26,7 @@
 #   cp Cargo.toml Cargo.lock "$tmp"/
 #   cp --parents crates/*/Cargo.toml "$tmp"/
 #   cp --parents -r crates/*/src "$tmp"/
+#   cp --parents -r crates/*/benches "$tmp"/
 #   cp --parents xtask/Cargo.toml xtask/src web/Cargo.toml web/src "$tmp"/
 #   cp --parents fuzz/Cargo.toml fuzz/Cargo.lock "$tmp"/
 #   cp --parents -r fuzz/src fuzz/fuzz_targets "$tmp"/
@@ -33,7 +34,8 @@
 #          -t firecraft-ci-rust:1 "$tmp"
 #
 # cargo fetch needs each workspace member's manifest plus its declared
-# targets (src/); nothing else ships in the context.
+# targets (src/ and benches/ — compose's criterion bench breaks manifest
+# parsing when absent); nothing else ships in the context.
 #
 # Ship to every fleet member before pushing a commit that relies on it —
 # the GitForge runner has a hard 60-second sandbox-acquisition cap and
