@@ -26,7 +26,21 @@ pub fn quick() -> Result<(), String> {
         "cargo",
         &["run", "--bin", "anchors", "--", "2048"],
     )?;
-    util::run_in(Some(&dir), "cargo", &["run", "--bin", "panic_hunt"])
+    util::run_in(Some(&dir), "cargo", &["run", "--bin", "panic_hunt"])?;
+    // M9 task 8: the scripting host under mutation, and the two
+    // machine surfaces under hostile traffic. Release: the boa
+    // interpreter is an order of magnitude faster optimized, and the
+    // sweep's cost is per-case engine builds.
+    util::run_in(
+        Some(&dir),
+        "cargo",
+        &["run", "--release", "--bin", "script_mutation"],
+    )?;
+    util::run_in(
+        Some(&dir),
+        "cargo",
+        &["run", "--release", "--bin", "control_channel"],
+    )
 }
 
 /// Full gate: compile-check every libfuzzer target.

@@ -22,6 +22,8 @@ vector = { path = "../crates/vector" }
 color = { path = "../crates/color" }
 io = { path = "../crates/io" }
 compose = { path = "../crates/compose" }
+scripting = { path = "../crates/scripting" }
+app-cli = { path = "../crates/app-cli" }
 gif = "0.14.2"
 flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
 serde_json = { version = "1", features = ["float_roundtrip"] }
@@ -40,6 +42,14 @@ path = "src/bin/anchors.rs"
 [[bin]]
 name = "panic_hunt"
 path = "src/bin/panic_hunt.rs"
+
+[[bin]]
+name = "script_mutation"
+path = "src/bin/script_mutation.rs"
+
+[[bin]]
+name = "control_channel"
+path = "src/bin/control_channel.rs"
 
 # libfuzzer targets (nightly only; compiled via `cargo fuzz build`).
 [[bin]]

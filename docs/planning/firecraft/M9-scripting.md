@@ -270,6 +270,32 @@ silently wrong). The gate metric is corpus-run status, not API count.
    decisions doc (host-model contract, quirk ledger, surface bounds);
    devlog. **Stopping condition:** `xtask ci` green via GitForge; M9
    scorecard row → done with gate evidence.
+   **Done.** Two stable fuzz drivers in the standalone `fuzz/`
+   workspace (synthetic seeds only — no Adobe material): `script_
+   mutation` (16 seed scripts + 16 byte-level mutants per seed over
+   the fw/dom/Files/limits surface; contract: `LimitExceeded` leaves
+   the document byte-identical, every other outcome leaves a journal
+   that replays onto the pristine base to exactly the current bytes,
+   nothing panics) and `control_channel` (mutated/truncated templates
+   + junk-JSON + valid-traffic interleave through BOTH dispatchers;
+   contract: channel replies `{ok:bool,...}`/`{ok:false,error}`,
+   accepted requests grow the journal by exactly one, MCP envelopes
+   well-formed, journal never shrinks). Wired into `xtask fuzz-quick`
+   (release — boa is an order of magnitude faster optimized) and
+   `scripts` wired into `xtask ci`. The script-mutation arm's FIRST
+   finding was the anchor itself over-asserting: the unmuted
+   `selectAllOnLayer(0); pathUnion()` baseline "failed" because
+   `fail_drain` keeps the applied prefix per Decision 0011 §4 — the
+   anchor now pins the real contract (limit ⇒ untouched, otherwise
+   replay-exact), and the universal invariant is stronger evidence
+   than the naive "non-completed ⇒ untouched" it replaced. Floors
+   raised where earned: script mutation 8192 cases/sweep (proven,
+   release), control channel 4096 sweeps, corpus-run 19 (task 5);
+   parity table carries all three. `scripts` regenerates
+   byte-identically (timestamp apart). Decision 0013 (machine
+   surfaces: one registry door, transport-free dispatch, typed
+   replies, native-only channel, floors). Scorecard M9 → done.
+   Stopping-condition residue: GitForge `xtask ci` run on this push.
 
 ## CI image constraint
 

@@ -15,4 +15,7 @@ that set it instead.
 | web bundle builds (trunk) | 1 | M5 | `xtask wasm` (trunk build of `web/`) |
 | wasm smoke tests executed (fwpng) | 6 | M2 | `xtask wasm` (node + wasm-bindgen-test-runner) |
 | fuzz targets with 60s+ zero-crash campaign | 10 | M8 | `xtask fuzz` / `ci --full` |
+| script cases per sweep (typed outcomes, replay-exact, no panic) | 8192 | M9 | `xtask fuzz-quick` (script-mutation driver) |
+| control-channel sweeps per run (typed replies, both dispatchers) | 4096 | M9 | `xtask fuzz-quick` (control-channel driver) |
+| shipped scripts running headless (rising floor) | 19 | M9 | `xtask scripts` |
 | layer-table violations | 0 | M0 | `xtask layers` |

@@ -347,3 +347,407 @@ fn document_bytes(document: &doc::Document, seed: u64, step: usize, name: &str) 
         Err(error) => panic!("seed {seed} step {step} ({name}): serialize broke: {error}"),
     }
 }
+
+// --- M9 task 8: script mutation ---
+
+/// Rising-only floor: script cases (baselines + mutants) one full
+/// driver sweep must clear. Raise only with a sweep proving the higher
+/// count stays typed-never-panic (8192 proven: 256 seeds x 32 cases,
+/// 2026-10-12, release).
+pub const SCRIPT_MUTATION_FLOOR: usize = 8192;
+
+/// Mutated runs per seed (each seed also runs every seed script
+/// unmutated as its baseline).
+pub const SCRIPT_MUTANTS_PER_SEED: usize = 16;
+
+/// Fuzz limits for script runs: the sandbox contract under test is
+/// "every failure is a typed report", and the loop/recursion limits
+/// are part of what mutants hammer — tighter bounds keep the debug
+/// build's sweep cheap while still firing every limit path.
+pub const FUZZ_LIMITS: scripting::Limits = scripting::Limits {
+    loop_iterations: 100_000,
+    recursion: 128,
+    stack_bytes: 1 << 18,
+    host_calls: 2_000,
+};
+
+/// Synthetic seed scripts (written here, owned here — no Adobe
+/// material): they sweep the fw/dom surface, the Files host, control
+/// marks/reverts, and every failure shape (throw, syntax error, limit
+/// halt). Mutations of these are the untrusted corpus.
+pub const SCRIPT_SEEDS: &[&str] = &[
+    "fw.getDocumentDOM().addNewRectangle(2, 4, 40, 12, 'plate');",
+    "var dom = fw.getDocumentDOM(); dom.addNewText(0, 0, 30, 10, 'hi', 'label');",
+    "var dom = fw.getDocumentDOM(); dom.addNewLayer(null, false); dom.deleteLayer(0);",
+    "var dom = fw.getDocumentDOM(); dom.selectAllOnLayer(0); dom.pathUnion();",
+    "var dom = fw.getDocumentDOM(); dom.addNewRectangle(0, 0, 8, 8, null); \
+     dom.clipCopy(); dom.addNewLayer(null, false); dom.clipPaste();",
+    "var t = Files.read('data.txt'); fw.getDocumentDOM().addNewText(0, 0, 40, 10, t, null);",
+    "fw.getDocumentDOM().addNewRectangle(1, 1, 5, 5, 'a'); \
+     dom = null; fw.getDocumentDOM().clipCut();",
+    "var dom = fw.getDocumentDOM(); dom.addNewRectangle(0, 0, 3, 3, 'm'); dom.mark(); \
+     dom.addNewRectangle(9, 9, 3, 3, 'n'); dom.revert();",
+    "throw new Error('aborted mid-run');",
+    "var dom = fw.getDocumentDOM(",
+    "while (true) { fw.getDocumentDOM().addNewRectangle(1, 2, 3, 4); }",
+    "function f(n) { return n === 0 ? 0 : f(n - 1); } f(9999);",
+    "fw.noSuchApi();",
+    "var x = ",
+    "fw.getDocumentDOM().addNewRectangle('a', 'b', 'c', 'd', 'e');",
+    "fw.getDocumentDOM().addNewRectangle(0, 0, 10, 10, null); // trailing",
+];
+
+/// The byte-level mutation set, shared by the script and JSON anchors.
+fn mutate_bytes(rng: &mut engine::fuzzdrive::FuzzRng, bytes: &mut Vec<u8>) {
+    const TOKENS: &[&[u8]] = &[
+        b"{",
+        b"}",
+        b"(",
+        b")",
+        b"[",
+        b"]",
+        b";",
+        b",",
+        b"'",
+        b"\"",
+        b"\\",
+        b"+",
+        b"-",
+        b"/",
+        b"*",
+        b"=",
+        b"<",
+        b">",
+        b"!",
+        b"&",
+        b"|",
+        b"%",
+        b"$",
+        b"#",
+        b"\n",
+        b"\t",
+        b" ",
+        b"0",
+        b"9",
+        b"fw",
+        b"dom",
+        b"null",
+        b"true",
+        b"function",
+        b"while",
+        b"return",
+        b"command",
+        b"args",
+        b"method",
+        b"params",
+        b"id",
+        b"jsonrpc",
+        b"name",
+        b"arguments",
+    ];
+    match rng.below(5) {
+        0 => {
+            // Flip one byte.
+            if !bytes.is_empty() {
+                let at = rng.below(bytes.len());
+                bytes[at] ^= 0x5A;
+            }
+        }
+        1 => {
+            // Delete a short run.
+            if bytes.len() > 8 {
+                let at = rng.below(bytes.len() - 4);
+                let take = 1 + rng.below(8);
+                bytes.drain(at..(at + take).min(bytes.len()));
+            }
+        }
+        2 => {
+            // Duplicate a short run to the end.
+            if bytes.len() > 4 {
+                let at = rng.below(bytes.len() - 2);
+                let take = 1 + rng.below(6);
+                let end = (at + take).min(bytes.len());
+                let slice = bytes[at..end].to_vec();
+                bytes.extend_from_slice(&slice);
+            }
+        }
+        3 => {
+            // Splice a token in.
+            let token: Vec<u8> = rng.pick(TOKENS).copied().unwrap_or(b"?").to_vec();
+            let at = rng.below(bytes.len() + 1);
+            bytes.splice(at..at, token);
+        }
+        _ => {
+            // Truncate.
+            if !bytes.is_empty() {
+                let keep = rng.below(bytes.len());
+                bytes.truncate(keep);
+            }
+        }
+    }
+}
+
+/// One script-mutation case: run `source` through the scripting host
+/// against a fresh session. The contract:
+///
+/// 1. the run ends in a typed [`scripting::ScriptReport`] — a panic is
+///    the failure signal (the driver catches and reports);
+/// 2. a limit-halted run leaves the document byte-identical — limits
+///    fire during interpretation, before any intent drains;
+/// 3. any other outcome (completed, threw before the drain, or threw
+///    mid-drain where the host deliberately keeps the applied prefix
+///    and reports the failing intent) leaves a journal that replays
+///    onto a pristine copy of the base document to exactly the current
+///    bytes — the universal integrity invariant.
+pub fn anchor_script_mutation(seed: u64, case: usize, source: &str) {
+    use engine::platform::{FileSystem, MemoryFs};
+
+    let base =
+        engine::fuzzdrive::random_document(&mut engine::fuzzdrive::FuzzRng::new(seed ^ 0x5C1_0000));
+    let base_bytes = match serde_json::to_vec(&base) {
+        Ok(bytes) => bytes,
+        Err(error) => panic!("seed {seed} case {case}: base serialize broke: {error}"),
+    };
+    let mut session = engine::Session::new(base);
+    let mut script = match scripting::ScriptEngine::new(FUZZ_LIMITS) {
+        Ok(script) => script,
+        Err(error) => panic!("seed {seed} case {case}: engine build failed: {error}"),
+    };
+    let fs: std::rc::Rc<dyn FileSystem> = std::rc::Rc::new(MemoryFs::new());
+    let _ = fs.write_file("data.txt", b"seed data");
+    let report = scripting::run_with_file_system(fs, || {
+        scripting::run_in_session(&mut session, &mut script, "mutant.jsf", source)
+    });
+    if report.outcome == scripting::Outcome::LimitExceeded {
+        let after = match serde_json::to_vec(session.document()) {
+            Ok(bytes) => bytes,
+            Err(error) => panic!("seed {seed} case {case}: serialize broke: {error}"),
+        };
+        assert_eq!(
+            after, base_bytes,
+            "seed {seed} case {case}: a limit-halted run mutated the document"
+        );
+        return;
+    }
+    // Completed or threw (pre- or mid-drain): the journal replays onto
+    // a pristine copy of the base to exactly the current document.
+    let lines = session.journal_lines();
+    let Ok(replay_base) = serde_json::from_slice::<doc::Document>(&base_bytes) else {
+        panic!("seed {seed} case {case}: base deserialize broke");
+    };
+    let replayed = match engine::Session::reopen(replay_base, &lines) {
+        Ok(replayed) => replayed,
+        Err(error) => panic!("seed {seed} case {case}: replay broke: {error}"),
+    };
+    let live = match serde_json::to_vec(session.document()) {
+        Ok(bytes) => bytes,
+        Err(error) => panic!("seed {seed} case {case}: serialize broke: {error}"),
+    };
+    let rebuilt = match serde_json::to_vec(replayed.document()) {
+        Ok(bytes) => bytes,
+        Err(error) => panic!("seed {seed} case {case}: serialize broke: {error}"),
+    };
+    assert_eq!(
+        live, rebuilt,
+        "seed {seed} case {case}: journal replay diverged from the live run"
+    );
+}
+
+/// The mutator: `0..mutations` byte-level edits over one seed script.
+/// Returns the mutated source (lossy UTF-8 — mutation may split
+/// characters; the host takes `&str`).
+pub fn mutated_script(seed: u64, case: usize) -> String {
+    let mut rng = engine::fuzzdrive::FuzzRng::new(seed ^ ((case as u64) << 24) ^ 0x5C1);
+    let seed_script = SCRIPT_SEEDS[case % SCRIPT_SEEDS.len()];
+    let mut bytes = seed_script.as_bytes().to_vec();
+    let edits = 1 + rng.below(4);
+    for _ in 0..edits {
+        mutate_bytes(&mut rng, &mut bytes);
+    }
+    String::from_utf8_lossy(&bytes).into_owned()
+}
+
+// --- M9 task 8: control channel ---
+
+/// Rising-only floor: hostile requests one full channel sweep must
+/// clear across both dispatchers (4096 proven: 256 seeds x 16 cases,
+/// 2026-10-12, release).
+pub const CONTROL_CHANNEL_FLOOR: usize = 4096;
+
+/// Requests per seed (a deterministic fraction are valid traffic).
+pub const CHANNEL_CASES_PER_SEED: usize = 16;
+
+/// A valid control-channel request shape (the mutator's base).
+const CHANNEL_TEMPLATE: &str = r#"{"command":"object.createPath","args":{"kind":"rect","x":5,"y":6,"width":20,"height":10,"page":0,"layer":0,"cell":0,"name":"c"}}"#;
+
+/// A valid MCP tools/call envelope (the mutator's base).
+const MCP_TEMPLATE: &str = r#"{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"firecraft.apply","arguments":{"command":"object.rename","args":{"id":{"page":0,"layer":0,"cell":0,"index":0},"name":"renamed"}}}}"#;
+
+/// Random junk JSON: the structural garbage the transport may receive.
+fn junk_json(rng: &mut engine::fuzzdrive::FuzzRng, depth: usize) -> serde_json::Value {
+    const KEYS: &[&str] = &[
+        "command",
+        "args",
+        "method",
+        "params",
+        "id",
+        "jsonrpc",
+        "name",
+        "arguments",
+        "result",
+        "error",
+        "code",
+        "path",
+        "",
+        "firecraft.apply",
+        "tools/call",
+    ];
+    if depth == 0 || rng.chance(40) {
+        return match rng.below(5) {
+            0 => serde_json::Value::Null,
+            1 => serde_json::json!(rng.below(2) == 1),
+            2 => serde_json::json!(rng.below(1000) as i64 - 500),
+            3 => serde_json::json!(format!("junk-{}", rng.below(1000))),
+            _ => serde_json::json!(rng.below(1 << 30) as f64 / 7.0),
+        };
+    }
+    if rng.chance(50) {
+        let len = rng.below(4);
+        let mut items = Vec::new();
+        for _ in 0..len {
+            items.push(junk_json(rng, depth - 1));
+        }
+        return serde_json::Value::Array(items);
+    }
+    let len = rng.below(4);
+    let mut map = serde_json::Map::new();
+    for _ in 0..len {
+        let key = rng.pick(KEYS).copied().unwrap_or("k").to_owned();
+        map.insert(key, junk_json(rng, depth - 1));
+    }
+    serde_json::Value::Object(map)
+}
+
+/// One control-channel case against both dispatchers. The contract:
+///
+/// 1. `channel::handle` answers `{ok: bool, ...}` — `error` is a
+///    string when `ok` is false, and an accepted request grows the
+///    journal by exactly one;
+/// 2. `mcp::handle` answers `None` only for `notifications/*` and
+///    otherwise a well-formed JSON-RPC envelope (exactly one of
+///    `error` / `result`);
+/// 3. neither dispatcher ever panics (the driver catches), and the
+///    journal never shrinks.
+pub fn anchor_control_channel(seed: u64, case: usize) {
+    use app_cli::{channel, mcp};
+    use engine::platform::{FileSystem, MemoryFs};
+
+    let mut rng = engine::fuzzdrive::FuzzRng::new(seed ^ ((case as u64) << 24) ^ 0xC4A);
+    let base =
+        engine::fuzzdrive::random_document(&mut engine::fuzzdrive::FuzzRng::new(seed ^ 0xC4A_0000));
+    let mut session = engine::Session::new(base);
+    let fs: std::rc::Rc<dyn FileSystem> = std::rc::Rc::new(MemoryFs::new());
+
+    // Roughly one case in eight is unmuted valid traffic so the
+    // accepted paths stay exercised amid the garbage.
+    let valid = case.is_multiple_of(8);
+    let template = if rng.chance(50) {
+        MCP_TEMPLATE
+    } else {
+        CHANNEL_TEMPLATE
+    };
+    let request = if valid {
+        template.to_owned()
+    } else {
+        let mut bytes = template.as_bytes().to_vec();
+        let edits = 1 + rng.below(6);
+        for _ in 0..edits {
+            mutate_bytes(&mut rng, &mut bytes);
+        }
+        // Sometimes pure junk instead of a mutated template.
+        if rng.chance(30) {
+            return; // junk-JSON cases are driven as parsed values below
+        }
+        String::from_utf8_lossy(&bytes).into_owned()
+    };
+
+    match serde_json::from_str::<serde_json::Value>(&request) {
+        Err(_) => {
+            // The mcp verb's transport-parse path: always the typed
+            // -32700 envelope.
+            let parse = mcp::parse_error(&request);
+            assert_eq!(parse["jsonrpc"], "2.0");
+            assert_eq!(parse["error"]["code"], -32700);
+        }
+        Ok(value) => {
+            // Channel dispatcher.
+            let before = session.journal_len();
+            let reply = channel::handle(&mut session, &value);
+            let ok = reply.get("ok").and_then(serde_json::Value::as_bool);
+            match ok {
+                Some(false) => assert!(
+                    reply.get("error").is_some_and(serde_json::Value::is_string),
+                    "seed {seed} case {case}: refusal without a string error: {reply}"
+                ),
+                Some(true) => {
+                    let grew = session.journal_len() - before;
+                    assert_eq!(
+                        grew, 1,
+                        "seed {seed} case {case}: accepted request grew the journal by {grew}"
+                    );
+                }
+                other => {
+                    panic!("seed {seed} case {case}: untyped channel reply {other:?}: {reply}")
+                }
+            }
+            assert!(
+                session.journal_len() >= before,
+                "seed {seed} case {case}: the journal shrank"
+            );
+
+            // MCP dispatcher over the same value.
+            if let Some(reply) = mcp::handle(&mut session, fs.clone(), &value) {
+                assert_eq!(reply["jsonrpc"], "2.0", "seed {seed} case {case}: {reply}");
+                let has_error = reply.get("error").is_some_and(serde_json::Value::is_object);
+                let has_result = reply
+                    .get("result")
+                    .is_some_and(serde_json::Value::is_object);
+                assert!(
+                    has_error ^ has_result,
+                    "seed {seed} case {case}: envelope must carry exactly one of error/result: {reply}"
+                );
+            }
+        }
+    }
+}
+
+/// The junk-JSON arm: parsed structural garbage straight into both
+/// dispatchers (no transport parse step to hide behind).
+pub fn anchor_control_channel_junk(seed: u64, case: usize) {
+    use app_cli::{channel, mcp};
+    use engine::platform::{FileSystem, MemoryFs};
+
+    let base =
+        engine::fuzzdrive::random_document(&mut engine::fuzzdrive::FuzzRng::new(seed ^ 0x0DD_0000));
+    let mut session = engine::Session::new(base);
+    let fs: std::rc::Rc<dyn FileSystem> = std::rc::Rc::new(MemoryFs::new());
+    let mut rng = engine::fuzzdrive::FuzzRng::new(seed ^ ((case as u64) << 24) ^ 0xDD0);
+    let value = junk_json(&mut rng, 3);
+    let reply = channel::handle(&mut session, &value);
+    let ok = reply.get("ok").and_then(serde_json::Value::as_bool);
+    assert!(
+        ok == Some(true) || ok == Some(false),
+        "seed {seed} case {case}: untyped channel reply: {reply}"
+    );
+    if let Some(reply) = mcp::handle(&mut session, fs, &value) {
+        assert_eq!(reply["jsonrpc"], "2.0", "seed {seed} case {case}: {reply}");
+        let has_error = reply.get("error").is_some_and(serde_json::Value::is_object);
+        let has_result = reply
+            .get("result")
+            .is_some_and(serde_json::Value::is_object);
+        assert!(
+            has_error ^ has_result,
+            "seed {seed} case {case}: envelope must carry exactly one of error/result: {reply}"
+        );
+    }
+}

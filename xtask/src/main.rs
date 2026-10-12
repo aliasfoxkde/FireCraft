@@ -82,6 +82,7 @@ fn run_ci(full: Option<&str>) -> ExitCode {
         ("layers", layers::run),
         ("wasm", wasm::run),
         ("corpus", corpus::run),
+        ("scripts", scripts::run),
         ("golden", golden::run),
         ("svg-golden", svggolden::run),
         ("svg-roundtrip", svggolden::roundtrip),
