@@ -15,6 +15,7 @@ mod corpus;
 mod fuzz;
 mod golden;
 mod layers;
+mod library;
 mod scripts;
 mod status;
 #[allow(clippy::module_inception)]
@@ -24,7 +25,7 @@ mod wasm;
 
 use std::process::ExitCode;
 
-const USAGE: &str = "usage: cargo run -p xtask -- <ci [--full]|layers|wasm|corpus [--report]|corpus-gen|scripts|golden [--bless]|svg-golden [--bless]|svg-roundtrip [--measure]|fuzz|fuzz-quick|panic-hunt|parity|scorecard>";
+const USAGE: &str = "usage: cargo run -p xtask -- <ci [--full]|layers|wasm|corpus [--report]|corpus-gen|library-gen|scripts|golden [--bless]|svg-golden [--bless]|svg-roundtrip [--measure]|fuzz|fuzz-quick|panic-hunt|parity|scorecard>";
 
 fn main() -> ExitCode {
     match std::env::args().nth(1).as_deref() {
@@ -36,6 +37,7 @@ fn main() -> ExitCode {
             _ => finish("corpus", corpus::run()),
         },
         Some("corpus-gen") => finish("corpus-gen", corpus::gen_fixtures()),
+        Some("library-gen") => finish("library-gen", library::run()),
         Some("scripts") => finish("scripts", scripts::run()),
         Some("golden") => match std::env::args().nth(2).as_deref() {
             Some("--bless") => finish("golden --bless", golden::bless()),

@@ -13,6 +13,8 @@
 //! instances reference — never by library position, so payloads stay
 //! stable across library edits.
 
+use std::collections::{BTreeMap, BTreeSet};
+
 use doc::{
     Cell, Document, Layer, LayerList, NineSliceGuides, ObjectData, ObjectId, SymbolDefinition,
     SymbolInstanceObject, SymbolType,
@@ -45,7 +47,8 @@ pub(crate) fn install(registry: &mut CommandRegistry) -> Result<(), EngineError>
     registry.register(EditReorder)?;
     registry.register(LibraryAdd)?;
     registry.register(LibraryRemove)?;
-    registry.register(LibraryRename)
+    registry.register(LibraryRename)?;
+    registry.register(LibraryImport)
 }
 
 /// The settable symbol types. `Other(raw)` definitions stay readable
@@ -1289,6 +1292,169 @@ impl TypedCommand for LibraryRename {
     }
 }
 
+/// Map key for the import remap table — `ObjectId` is `Hash` but not
+/// `Ord` (see `doc::library` for the same idiom).
+type IdKey = (usize, u32);
+
+/// The map key of an id.
+fn id_key(id: ObjectId) -> IdKey {
+    (id.index(), id.generation())
+}
+
+/// `library.importSymbol` — installs a definition and its member
+/// closure from a foreign document (a library file's `MSLv` + unpaged
+/// registry). Payload ids are *source* ids: members re-slot into fresh
+/// registry slots and every reference (group children, definition
+/// cell lists) is rewritten through the remap; the definition is
+/// renumbered to the next free `MSNi`. The command refuses unless the
+/// closure is complete — every id reachable from the definition
+/// present exactly once in the payload — because a partial import
+/// would mint dangling ids, the same defect `library.remove` refuses
+/// to create. Payload members outside the reachable closure are
+/// ignored: a library file's registry may carry members of *other*
+/// definitions, and importing one symbol must not drag the rest in as
+/// unreferenced registry orphans.
+struct LibraryImport;
+
+/// One member of the imported closure: its source-registry id and the
+/// object as it lived there.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct ImportedMember {
+    /// The object's id in the source document.
+    pub(crate) id: ObjectId,
+    /// The object data.
+    pub(crate) object: ObjectData,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct LibraryImportPayload {
+    /// The definition as it lived in the source document; layer lists
+    /// still reference source ids and are remapped on the way in.
+    pub(crate) definition: SymbolDefinition,
+    /// The member closure in source-registry form.
+    pub(crate) members: Vec<ImportedMember>,
+}
+
+impl TypedCommand for LibraryImport {
+    type Payload = LibraryImportPayload;
+
+    fn name(&self) -> &'static str {
+        "library.importSymbol"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "library.importSymbol";
+        // Closure check: every member id unique, every referenced id
+        // (definition roots, group children inside members) present.
+        let mut members: BTreeMap<IdKey, &ObjectData> = BTreeMap::new();
+        for member in &payload.members {
+            if members.insert(id_key(member.id), &member.object).is_some() {
+                return Err(EngineError::InvalidState {
+                    name: NAME.to_owned(),
+                    detail: format!(
+                        "member {}:{} appears twice in the payload",
+                        member.id.index(),
+                        member.id.generation()
+                    ),
+                });
+            }
+        }
+        let references: Vec<ObjectId> = payload
+            .definition
+            .layers
+            .layers
+            .iter()
+            .flat_map(|layer| layer.cells.iter())
+            .flat_map(|cell| cell.elements.iter())
+            .copied()
+            .collect();
+        // Worklist walk over the whole closure: every id reachable
+        // from the definition — through nested group children — must
+        // be a payload member, and the walk order is what gets
+        // imported (first-touch, so slot allocation is deterministic
+        // across replay).
+        let mut order: Vec<ObjectId> = Vec::new();
+        let mut seen: BTreeSet<IdKey> = BTreeSet::new();
+        let mut queue: std::collections::VecDeque<ObjectId> = references.into();
+        while let Some(id) = queue.pop_front() {
+            if !seen.insert(id_key(id)) {
+                continue;
+            }
+            let Some(object) = members.get(&id_key(id)) else {
+                return Err(EngineError::InvalidState {
+                    name: NAME.to_owned(),
+                    detail: format!(
+                        "the closure is incomplete: {}:{} is referenced but not in the payload",
+                        id.index(),
+                        id.generation()
+                    ),
+                });
+            };
+            order.push(id);
+            if let ObjectData::Group(group) = object {
+                for child in &group.children {
+                    queue.push_back(*child);
+                }
+            }
+        }
+
+        // Insert the closure, then rewrite references through the map.
+        // Every id in `order` (and every child it names) is in the map
+        // by the walk above, so a missing entry is unreachable — the
+        // fallback keeps the lookup total.
+        let before = document.symbols.clone();
+        let mut map: BTreeMap<IdKey, ObjectId> = BTreeMap::new();
+        for id in &order {
+            let object = members[&id_key(*id)];
+            let fresh = document.registry.insert(object.clone());
+            map.insert(id_key(*id), fresh);
+        }
+        for id in &order {
+            let Some(slot) = document.registry.get_mut(map[&id_key(*id)]) else {
+                continue;
+            };
+            if let ObjectData::Group(group) = slot {
+                for child in &mut group.children {
+                    if let Some(fresh) = map.get(&id_key(*child)) {
+                        *child = *fresh;
+                    }
+                }
+            }
+        }
+        let mut definition = payload.definition.clone();
+        definition.symbol_number = next_symbol_number(document);
+        for layer in &mut definition.layers.layers {
+            for cell in &mut layer.cells {
+                cell.elements = cell
+                    .elements
+                    .iter()
+                    .map(|id| map.get(&id_key(*id)).copied().unwrap_or(*id))
+                    .collect::<Vec<_>>();
+            }
+        }
+        document.symbols.push(definition);
+
+        // Captures in mutation order: member creations first, the
+        // library capture last — undo restores the list (dropping the
+        // imported definition), then removes the members.
+        let mut deltas: Vec<Delta> = order
+            .iter()
+            .map(|id| Delta::Object {
+                id: map[&id_key(*id)],
+                inverse: ObjectInverse::Created,
+            })
+            .collect();
+        deltas.push(Delta::Library { before });
+        Ok(Delta::Group(deltas))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
@@ -2232,5 +2398,263 @@ mod tests {
             .unwrap_err();
         assert!(matches!(error, EngineError::InvalidState { .. }));
         assert_eq!(serde_json::to_vec(&document).unwrap(), refused);
+    }
+
+    // --- library.importSymbol -------------------------------------------
+
+    use doc::{Contour, GroupObject, PathObject, PathPoint};
+
+    /// One named rectangle path.
+    fn path_named(name: &str) -> ObjectData {
+        let point = |x: f64, y: f64| PathPoint {
+            anchor: geom::Point::new(x, y),
+            primary: None,
+            secondary: None,
+            is_curve: false,
+        };
+        ObjectData::Path(PathObject {
+            contours: vec![Contour {
+                closed: true,
+                point_count: 4,
+                points: vec![
+                    point(0.0, 0.0),
+                    point(8.0, 0.0),
+                    point(8.0, 8.0),
+                    point(0.0, 8.0),
+                ],
+            }],
+            primitive: None,
+            even_odd: false,
+            paint: None,
+            fill_start: None,
+            fill_end: None,
+            fill_third: None,
+            brush_placement: None,
+            fill_on_top: None,
+            locked: false,
+            visible: true,
+            opacity: 1000,
+            blend: 0,
+            name: Some(name.to_owned()),
+            effects: Vec::new(),
+        })
+    }
+
+    fn group_named(name: Option<&str>, children: Vec<ObjectId>) -> ObjectData {
+        ObjectData::Group(GroupObject {
+            group_type: 0,
+            name: name.map(str::to_owned),
+            children,
+            opacity: 1000,
+            blend: 0,
+            visible: true,
+            locked: false,
+            mask_hidden: false,
+            effects: Vec::new(),
+        })
+    }
+
+    /// A library file: one graphic definition "btn" whose closure is a
+    /// nested group (outer > inner > path), nothing on any page.
+    fn library_file() -> Document {
+        let mut source = Document::default();
+        let leaf = source.registry.insert(path_named("dot"));
+        let inner = source
+            .registry
+            .insert(group_named(Some("inner"), vec![leaf]));
+        let outer = source.registry.insert(group_named(None, vec![inner]));
+        source.symbols.push(SymbolDefinition {
+            name: "btn".to_owned(),
+            symbol_number: 0,
+            origin: geom::Point::ZERO,
+            frame_count: 1,
+            layers: LayerList {
+                layers: vec![Layer {
+                    name: String::new(),
+                    display: true,
+                    cells: vec![Cell {
+                        locked: false,
+                        visible: true,
+                        elements: vec![outer],
+                    }],
+                    ..Layer::default()
+                }],
+            },
+            background_raw: 0,
+            symbol_type: SymbolType::Graphic,
+            nine_slice: None,
+            op_code: None,
+        });
+        doc::library::extract(&source, &["btn"]).unwrap()
+    }
+
+    /// The import payload as it would cross the file boundary: the
+    /// extracted definition plus every registry entry as a member.
+    fn import_payload(library: &Document) -> serde_json::Value {
+        serde_json::to_value(LibraryImportPayload {
+            definition: library.symbols[0].clone(),
+            members: library
+                .registry
+                .iter()
+                .map(|(id, object)| ImportedMember {
+                    id,
+                    object: object.clone(),
+                })
+                .collect(),
+        })
+        .unwrap()
+    }
+
+    #[test]
+    fn import_installs_the_closure_and_renumbers() {
+        let mut payload = import_payload(&library_file());
+        // An orphan member — referenced by nothing — rides along, the
+        // way a multi-definition library file's registry does. The
+        // import must not drag it in as an unreferenced slot.
+        payload["members"].as_array_mut().unwrap().push(json!({
+            "id": { "index": 4242, "generation": 7 },
+            "object": {
+                "Path": {
+                    "contours": [],
+                    "primitive": null,
+                    "even_odd": false,
+                    "paint": null,
+                    "fill_start": null,
+                    "fill_end": null,
+                    "fill_third": null,
+                    "brush_placement": null,
+                    "fill_on_top": null,
+                    "locked": false,
+                    "visible": true,
+                    "opacity": 1000,
+                    "blend": 0,
+                    "name": null,
+                    "effects": [],
+                },
+            },
+        }));
+        let source_ids: Vec<(usize, u32)> = payload["members"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|member| {
+                (
+                    member["id"]["index"].as_u64().unwrap() as usize,
+                    member["id"]["generation"].as_u64().unwrap() as u32,
+                )
+            })
+            .collect();
+
+        let (mut document, _) = testdoc::sample_document();
+        let registry = registry();
+        // An existing definition so the import renumbers past it.
+        registry
+            .execute(
+                &mut document,
+                "library.add",
+                json!({ "name": "existing", "symbol_type": "graphic" }),
+            )
+            .unwrap();
+        let live_before_import = document.registry.iter().count();
+        let delta = registry
+            .execute(&mut document, "library.importSymbol", payload)
+            .unwrap();
+
+        // The imported definition is renumbered to the next free slot.
+        assert_eq!(document.symbols.len(), 2);
+        assert_eq!(document.symbols[1].name, "btn");
+        assert_eq!(document.symbols[1].symbol_number, 1);
+
+        // The closure is live and remapped: outer > inner > "dot",
+        // every id fresh (none of the payload's source ids survived).
+        let root = document.symbols[1].layers.layers[0].cells[0].elements[0];
+        let fresh_ids = {
+            let mut ids = vec![(root.index(), root.generation())];
+            let mut child = root;
+            for _ in 0..2 {
+                match document.registry.get(child) {
+                    Some(ObjectData::Group(group)) => {
+                        child = group.children[0];
+                        ids.push((child.index(), child.generation()));
+                    }
+                    Some(ObjectData::Path(path)) => {
+                        assert_eq!(path.name.as_deref(), Some("dot"));
+                    }
+                    other => panic!("unexpected member shape: {other:?}"),
+                }
+            }
+            ids
+        };
+        assert_eq!(
+            document.registry.iter().count(),
+            live_before_import + fresh_ids.len(),
+            "the pre-import registry stays put; three members arrive"
+        );
+        for source in &source_ids {
+            assert!(
+                !fresh_ids.contains(source),
+                "source id {source:?} must not survive the re-slot"
+            );
+        }
+
+        delta.apply_inverse(&mut document).unwrap();
+        assert_eq!(document.symbols.len(), 1);
+    }
+
+    #[test]
+    fn import_undoes_to_the_pre_import_bytes() {
+        let (mut document, _) = testdoc::sample_document();
+        let before = serde_json::to_vec(&document).unwrap();
+        let live = document.registry.iter().count();
+
+        let delta = registry()
+            .execute(
+                &mut document,
+                "library.importSymbol",
+                import_payload(&library_file()),
+            )
+            .unwrap();
+        assert_eq!(document.symbols.len(), 1);
+        delta.apply_inverse(&mut document).unwrap();
+        assert!(document.symbols.is_empty());
+        assert_eq!(
+            document.registry.iter().count(),
+            live,
+            "the member slots are gone again"
+        );
+        assert_eq!(serde_json::to_vec(&document).unwrap(), before);
+    }
+
+    #[test]
+    fn import_refuses_incomplete_closures_without_mutation() {
+        let (mut document, _) = testdoc::sample_document();
+        let before = serde_json::to_vec(&document).unwrap();
+        let registry = registry();
+
+        // Drop the leaf path: the inner group then references an id
+        // outside the payload. (`ObjectData` is externally tagged, so
+        // the path member sits under the `"Path"` key.)
+        let mut partial = import_payload(&library_file());
+        partial["members"]
+            .as_array_mut()
+            .unwrap()
+            .retain(|member| member["object"].get("Path").is_none());
+        let error = registry
+            .execute(&mut document, "library.importSymbol", partial)
+            .unwrap_err();
+        assert!(matches!(error, EngineError::InvalidState { .. }));
+        assert_eq!(serde_json::to_vec(&document).unwrap(), before);
+
+        // A duplicated member id is the same refusal.
+        let mut duplicated = import_payload(&library_file());
+        let members = duplicated["members"].as_array_mut().unwrap();
+        let again = members[0].clone();
+        members.push(again);
+        let error = registry
+            .execute(&mut document, "library.importSymbol", duplicated)
+            .unwrap_err();
+        assert!(matches!(error, EngineError::InvalidState { .. }));
+        assert_eq!(serde_json::to_vec(&document).unwrap(), before);
+        assert!(document.symbols.is_empty());
     }
 }

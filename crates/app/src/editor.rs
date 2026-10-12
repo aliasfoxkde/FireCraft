@@ -353,6 +353,75 @@ impl Editor {
         })
     }
 
+    /// Exports the named definitions (first name match wins) and their
+    /// member closures as a library file: an ordinary `.fw.png` whose
+    /// `MSLv` carries the definitions and whose registry holds their
+    /// members, nothing on a page. Written through the same save path
+    /// as any document, so it opens anywhere the format does.
+    ///
+    /// # Errors
+    /// An unknown name or a dangling member id (corrupt library).
+    pub fn export_library(&self, names: &[&str]) -> Result<Vec<u8>, EngineError> {
+        let library = doc::library::extract(self.session.document(), names).map_err(|error| {
+            EngineError::InvalidState {
+                name: "library.export".to_owned(),
+                detail: error.to_string(),
+            }
+        })?;
+        app_cli::io::save(&library, &doc::fwmap::UnknownBag::default(), &[]).map_err(|error| {
+            EngineError::Io {
+                path: "<bytes>".to_owned(),
+                detail: error.0,
+            }
+        })
+    }
+
+    /// Imports definitions from library-file bytes: reads the file
+    /// through the full read path, then installs each selected
+    /// definition with its member closure via `library.importSymbol`,
+    /// renumbered into this document's library (`None` selects every
+    /// definition in the file, file order). Returns the new `MSNi`
+    /// numbers in import order — one undoable step per definition.
+    ///
+    /// # Errors
+    /// Whatever the reader refuses, or an import refuses (a payload
+    /// whose closure is incomplete — a corrupt library file).
+    pub fn import_library(
+        &mut self,
+        bytes: &[u8],
+        names: Option<&[&str]>,
+    ) -> Result<Vec<i64>, EngineError> {
+        let loaded = app_cli::io::open(bytes).map_err(|error| EngineError::Io {
+            path: "<bytes>".to_owned(),
+            detail: error.0,
+        })?;
+        let mut numbers = Vec::new();
+        for definition in &loaded.document.symbols {
+            if let Some(names) = names {
+                if !names.iter().any(|name| *name == definition.name) {
+                    continue;
+                }
+            }
+            let members: Vec<serde_json::Value> = loaded
+                .document
+                .registry
+                .iter()
+                .map(|(id, object)| serde_json::json!({ "id": id, "object": object }))
+                .collect();
+            self.apply(
+                "library.importSymbol",
+                serde_json::json!({
+                    "definition": definition,
+                    "members": members,
+                }),
+            )?;
+            if let Some(added) = self.document().symbols.last() {
+                numbers.push(added.symbol_number);
+            }
+        }
+        Ok(numbers)
+    }
+
     /// Applies a catalog command. The only mutation door in the app.
     ///
     /// # Errors

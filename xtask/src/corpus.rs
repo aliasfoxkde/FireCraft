@@ -909,7 +909,10 @@ fn build_filtered() -> Result<Vec<u8>, String> {
 
 /// Parses a standard PNG we just encoded and re-emits it with `extra`
 /// private chunks inserted before IEND.
-fn insert_before_iend(standard: &[u8], extra: &[(&[u8; 4], Vec<u8>)]) -> Result<Vec<u8>, String> {
+pub(crate) fn insert_before_iend(
+    standard: &[u8],
+    extra: &[(&[u8; 4], Vec<u8>)],
+) -> Result<Vec<u8>, String> {
     let chunks = parse_chunks(standard).map_err(|e| format!("re-parse own encoder output: {e}"))?;
     let mut file = fwpng::chunk::PNG_SIGNATURE.to_vec();
     for chunk in &chunks {
@@ -923,7 +926,7 @@ fn insert_before_iend(standard: &[u8], extra: &[(&[u8; 4], Vec<u8>)]) -> Result<
     Ok(file)
 }
 
-fn encode_rgba8(
+pub(crate) fn encode_rgba8(
     width: u32,
     height: u32,
     px: impl Fn(u32, u32) -> [u8; 4],
@@ -981,7 +984,7 @@ fn mkbt_payload(index: u32, grayscale: bool) -> Result<Vec<u8>, String> {
     Ok(payload)
 }
 
-fn zlib(raw: &[u8]) -> Result<Vec<u8>, String> {
+pub(crate) fn zlib(raw: &[u8]) -> Result<Vec<u8>, String> {
     let mut enc = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::default());
     enc.write_all(raw).map_err(|e| format!("zlib write: {e}"))?;
     enc.finish().map_err(|e| format!("zlib finish: {e}"))

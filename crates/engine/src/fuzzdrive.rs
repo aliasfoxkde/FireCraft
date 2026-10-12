@@ -494,6 +494,7 @@ pub const CALLS: &[&str] = &[
     "symbol.editDetach",
     "symbol.editReorder",
     "library.add",
+    "library.importSymbol",
     "library.remove",
     "library.rename",
 ];
@@ -1208,6 +1209,58 @@ pub fn random_call(rng: &mut FuzzRng, document: &Document) -> (String, serde_jso
             "symbol": rng.below(3),
             "name": format!("L-{}", rng.below(100)),
         }),
+        "library.importSymbol" => {
+            // A tiny synthetic closure with fabricated source ids:
+            // closure completeness is checked inside the payload only,
+            // so this imports cleanly whatever the target holds.
+            let mut library = Document::default();
+            let leaf = library.registry.insert(random_path(rng, 0));
+            let group = library.registry.insert(ObjectData::Group(GroupObject {
+                group_type: 0,
+                name: None,
+                children: vec![leaf],
+                opacity: 1000,
+                blend: 0,
+                visible: true,
+                locked: false,
+                mask_hidden: false,
+                effects: Vec::new(),
+            }));
+            library.symbols.push(SymbolDefinition {
+                name: format!("L-{}", rng.below(100)),
+                symbol_number: 0,
+                origin: geom::Point::ZERO,
+                frame_count: 1,
+                layers: LayerList {
+                    layers: vec![Layer {
+                        name: String::new(),
+                        display: true,
+                        cells: vec![Cell {
+                            locked: false,
+                            visible: true,
+                            elements: vec![group],
+                        }],
+                        ..Layer::default()
+                    }],
+                },
+                background_raw: 0,
+                symbol_type: SymbolType::Graphic,
+                nine_slice: None,
+                op_code: None,
+            });
+            let payload = crate::catalog::symbol::LibraryImportPayload {
+                definition: library.symbols.remove(0),
+                members: library
+                    .registry
+                    .iter()
+                    .map(|(id, object)| crate::catalog::symbol::ImportedMember {
+                        id,
+                        object: object.clone(),
+                    })
+                    .collect(),
+            };
+            serde_json::to_value(&payload).unwrap_or_default()
+        }
         other => {
             let _ = other;
             // A catalog command without a builder: an empty payload is

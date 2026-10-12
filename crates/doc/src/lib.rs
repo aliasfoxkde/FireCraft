@@ -13,6 +13,7 @@
 //! depends on it (L1 over L0), not the other way around.
 
 pub mod fwmap;
+pub mod library;
 pub mod model;
 pub mod registry;
 
