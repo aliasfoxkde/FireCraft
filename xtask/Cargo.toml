@@ -14,6 +14,9 @@ flate2 = "1"
 png = "0.18"
 serde_json = "1"
 sha2 = "0.10"
+# Bridge-smoke host page embeds the corpus fixture inline (same
+# version io already pins — no lockfile movement).
+base64 = "0.22"
 # Scripted-shape fixture generation drives the same registry the app
 # and CLI drive (autoshape.* → doc model → canonical writer).
 engine = { path = "../crates/engine" }

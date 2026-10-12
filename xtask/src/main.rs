@@ -12,6 +12,7 @@
 //! output can be piped.
 
 mod corpus;
+mod dist;
 mod fuzz;
 mod golden;
 mod layers;
@@ -27,7 +28,7 @@ mod webgolden;
 
 use std::process::ExitCode;
 
-const USAGE: &str = "usage: cargo run -p xtask -- <ci [--full]|layers|wasm|corpus [--report]|corpus-gen|library-gen|scripts|golden [--bless]|svg-golden [--bless]|svg-roundtrip [--measure]|web-golden [--bless|--measure]|perf [--bless|--measure]|fuzz|fuzz-quick|panic-hunt|parity|scorecard>";
+const USAGE: &str = "usage: cargo run -p xtask -- <ci [--full]|layers|wasm|corpus [--report]|corpus-gen|library-gen|scripts|golden [--bless]|svg-golden [--bless]|svg-roundtrip [--measure]|web-golden [--bless|--measure]|perf [--bless|--measure]|dist --web|fuzz|fuzz-quick|panic-hunt|parity|scorecard>";
 
 fn main() -> ExitCode {
     match std::env::args().nth(1).as_deref() {
@@ -70,6 +71,13 @@ fn main() -> ExitCode {
         Some("perf-child") => match std::env::args().nth(2) {
             Some(path) => finish("perf-child", perf::child(&path)),
             None => {
+                eprintln!("{USAGE}");
+                ExitCode::FAILURE
+            }
+        },
+        Some("dist") => match std::env::args().nth(2).as_deref() {
+            Some("--web") => finish("dist --web", dist::web()),
+            _ => {
                 eprintln!("{USAGE}");
                 ExitCode::FAILURE
             }
