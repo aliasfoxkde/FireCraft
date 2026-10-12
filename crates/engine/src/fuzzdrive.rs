@@ -77,6 +77,37 @@ pub fn random_document(rng: &mut FuzzRng) -> Document {
     document.info.canvas.width = 32.0 + rng.below(64) as f64;
     document.info.canvas.height = 32.0 + rng.below(64) as f64;
 
+    // One library definition so generated instances resolve during
+    // renders — compose refuses a dangling `MSNi` as a document
+    // defect. The content is a plain path (no instance inside), so no
+    // cycle can arise from the seed itself.
+    //
+    // The definition content is inserted FIRST, before any page
+    // object: the wire carries it inline in the document `MSLv`, which
+    // the reader parses ahead of every page layer, so read order must
+    // match this insertion order or reloaded documents renumber every
+    // object id — silently corrupting journal replay.
+    let definition_content = document.registry.insert(random_path(rng, 9_999));
+    document.symbols.push(SymbolDefinition {
+        name: "fuzz symbol".to_owned(),
+        symbol_number: 0,
+        origin: geom::Point::ZERO,
+        frame_count: 1,
+        layers: LayerList {
+            layers: vec![Layer {
+                name: "fuzz symbol layer".to_owned(),
+                cells: vec![Cell {
+                    elements: vec![definition_content],
+                    ..Cell::default()
+                }],
+                ..Layer::default()
+            }],
+        },
+        background_raw: 0,
+        symbol_type: SymbolType::Graphic,
+        nine_slice: None,
+    });
+
     let page_count = 1 + rng.below(3);
     for page_index in 0..page_count {
         let mut page = Page {
@@ -173,31 +204,6 @@ pub fn random_document(rng: &mut FuzzRng) -> Document {
             }
         }
     }
-
-    // One library definition so generated instances resolve during
-    // renders — compose refuses a dangling `MSNi` as a document
-    // defect. The content is a plain path (no instance inside), so no
-    // cycle can arise from the seed itself.
-    let definition_content = document.registry.insert(random_path(rng, 9_999));
-    document.symbols.push(SymbolDefinition {
-        name: "fuzz symbol".to_owned(),
-        symbol_number: 0,
-        origin: geom::Point::ZERO,
-        frame_count: 1,
-        layers: LayerList {
-            layers: vec![Layer {
-                name: "fuzz symbol layer".to_owned(),
-                cells: vec![Cell {
-                    elements: vec![definition_content],
-                    ..Cell::default()
-                }],
-                ..Layer::default()
-            }],
-        },
-        background_raw: 0,
-        symbol_type: SymbolType::Graphic,
-        nine_slice: None,
-    });
 
     document
 }
