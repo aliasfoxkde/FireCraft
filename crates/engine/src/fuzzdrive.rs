@@ -393,6 +393,8 @@ pub const CALLS: &[&str] = &[
     "filter.setParam",
     "cell.setVisible",
     "cell.setLocked",
+    "layer.add",
+    "layer.delete",
     "layer.rename",
     "layer.setDisplay",
     "page.add",
@@ -768,6 +770,19 @@ pub fn random_call(rng: &mut FuzzRng, document: &Document) -> (String, serde_jso
             "layer": any_index(rng, 3),
             "cell": any_index(rng, frames),
             "locked": rng.chance(50),
+        }),
+        "layer.add" => serde_json::json!({
+            "page": any_index(rng, pages),
+            "name": if rng.chance(50) {
+                serde_json::Value::Null
+            } else {
+                serde_json::json!(format!("L-{}", rng.below(100)))
+            },
+            "index": any_opt_index(rng, 4),
+        }),
+        "layer.delete" => serde_json::json!({
+            "page": any_index(rng, pages),
+            "layer": any_index(rng, 3),
         }),
         "layer.rename" => serde_json::json!({
             "page": any_index(rng, pages),

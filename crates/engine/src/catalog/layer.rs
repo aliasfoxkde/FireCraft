@@ -1,6 +1,6 @@
-//! Layer commands: naming and display.
+//! Layer commands: add, delete, naming and display.
 
-use doc::Document;
+use doc::{Cell, Document, Layer};
 
 use crate::access;
 use crate::command::TypedCommand;
@@ -10,8 +10,126 @@ use crate::registry::CommandRegistry;
 
 /// Registers the layer commands.
 pub(crate) fn install(registry: &mut CommandRegistry) -> Result<(), EngineError> {
+    registry.register(AddLayer)?;
+    registry.register(DeleteLayer)?;
     registry.register(RenameLayer)?;
     registry.register(SetLayerDisplay)
+}
+
+/// `layer.add` — insert an empty layer (one unlocked, visible cell per
+/// frame). Absent `name` gets the Fireworks-style `Layer {n+1}` from
+/// the final position; absent `index` appends.
+struct AddLayer;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct AddLayerPayload {
+    /// Page index.
+    page: usize,
+    /// Name; absent derives from the final position.
+    name: Option<String>,
+    /// Insert position, bottom-first; absent appends.
+    index: Option<usize>,
+}
+
+impl TypedCommand for AddLayer {
+    type Payload = AddLayerPayload;
+
+    fn name(&self) -> &'static str {
+        "layer.add"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "layer.add";
+        let page = access::page_mut(document, NAME, payload.page)?;
+        let len = page.layers.layers.len();
+        let at = payload.index.unwrap_or(len);
+        if at > len {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: format!("insert index {at} beyond {len} layers"),
+            });
+        }
+        // One unlocked, visible cell per frame: a new layer must be
+        // editable in every state, mirroring `page.add`.
+        let frame_count = page.info.frame_count.max(1);
+        let cells = (0..frame_count)
+            .map(|_| Cell {
+                locked: false,
+                visible: true,
+                elements: Vec::new(),
+            })
+            .collect();
+        let mut layer = Layer {
+            cells,
+            ..Layer::default()
+        };
+        layer.name = payload
+            .name
+            .clone()
+            .unwrap_or_else(|| format!("Layer {}", at + 1));
+        let before = page.layers.clone();
+        page.layers.layers.insert(at, layer);
+        Ok(Delta::Layers {
+            page: payload.page,
+            layers: before,
+        })
+    }
+}
+
+/// `layer.delete` — remove a layer and its elements' containment
+/// (objects stay in the registry until the last reference is gone;
+/// the registry generation bump invalidates their ids). The last
+/// layer of a page cannot be deleted: a page with no layers has
+/// nothing to edit.
+struct DeleteLayer;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct DeleteLayerPayload {
+    /// Page index.
+    page: usize,
+    /// Layer index, bottom-first.
+    layer: usize,
+}
+
+impl TypedCommand for DeleteLayer {
+    type Payload = DeleteLayerPayload;
+
+    fn name(&self) -> &'static str {
+        "layer.delete"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "layer.delete";
+        let page = access::page_mut(document, NAME, payload.page)?;
+        if page.layers.layers.len() <= 1 {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: "cannot delete a page's last layer".to_owned(),
+            });
+        }
+        if payload.layer >= page.layers.layers.len() {
+            return Err(EngineError::MissingTarget {
+                name: NAME.to_owned(),
+                detail: format!("layer {} absent on page {}", payload.layer, payload.page),
+            });
+        }
+        let before = page.layers.clone();
+        page.layers.layers.remove(payload.layer);
+        Ok(Delta::Layers {
+            page: payload.page,
+            layers: before,
+        })
+    }
 }
 
 /// `layer.rename` — set a layer's `LNMs` name.

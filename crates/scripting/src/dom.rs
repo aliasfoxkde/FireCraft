@@ -1,44 +1,104 @@
 //! Read-side projection of [`doc::Document`] into the JS host
 //! objects the shipped scripts read: `fw.documents`,
 //! `fw.getDocumentDOM()`, `fw.selection`, and the page/frame/layer/
-//! element walk (`dom.width/height/left/top/resolution`,
-//! `dom.pagesCount`, `dom.currentPageNum`, `dom.frames[]`,
-//! `dom.layers[].elements[]` with `left/top/width/height/name`).
+//! element walk — in the corpus's shape (`dom.layers[i].frames[f].
+//! elements[]`, settable `currentLayerNum`, `isMasterPageLayer`).
 //!
-//! The projection is a snapshot: the host re-attaches after any
-//! mutation (once command dispatch lands), so reads always see fresh
-//! state without re-entrant accessors. Element selection is UI state
+//! The projection is a snapshot: the host re-attaches after mutations
+//! ([`crate::run_in_session`] does), so reads always see fresh state
+//! without re-entrant accessors. Element selection is UI/view state
 //! the model does not carry (its `selection` field is a pixel-space
 //! mask, not the corpus's element list), so `fw.selection` projects
-//! as an empty read-only array until element selection exists.
+//! from the host-side selection list and mutates as a plain JS
+//! property.
 
 use boa_engine::{
     Context, JsObject, JsResult, JsValue, Source, js_string, object::builtins::JsArray,
     property::Attribute,
 };
-use doc::{Document, ObjectData};
+use doc::{Document, ObjectData, ObjectId};
 use geom::Point;
 
-/// Projects `document` and installs the read surface: `fw.documents`
-/// (one-element array), `fw.getDocumentDOM()` (native, returns the
-/// projected DOM), `fw.selection` (empty). Called by
-/// [`ScriptEngine::attach_document`].
-pub fn attach(context: &mut Context, document: &Document) -> JsResult<()> {
-    let dom = project_document(context, document)?;
+use crate::host;
+
+/// What the projection needs from the host state beyond the document:
+/// the persistent selection (object ids as `"index:generation"`) and
+/// the current page.
+pub struct AttachView {
+    /// Object ids (`"index:generation"`) selected across the session;
+    /// dangling entries are dropped.
+    pub selection: Vec<String>,
+    /// Page index to project as current (out of range falls back to
+    /// the first page).
+    pub current_page: usize,
+}
+
+/// Projects `document` and installs the read + mutate surface:
+/// `fw.documents` (one-element array), `fw.getDocumentDOM()`,
+/// `fw.selection`, `dom` (the projection, carrying the mutating
+/// methods from [`host::DOM_MUTATORS`]). Called by
+/// [`crate::ScriptEngine::attach_document`].
+pub fn attach(context: &mut Context, document: &Document, view: &AttachView) -> JsResult<()> {
+    let dom = project_document(context, document, view)?;
     context.register_global_property(js_string!("__fwDom"), dom, Attribute::all())?;
-    // The accessor half: `fw.documents` wraps the one DOM,
-    // `getDocumentDOM()` returns it, `fw.selection` stays empty until
-    // element selection exists.
+    // `dom` names the projection (replacing the prelude's refusing
+    // stub), and `fw.selection` projects from the host-side selection.
     context.eval(Source::from_bytes(
-        "fw.documents = [__fwDom];\nfw.getDocumentDOM = function () { return __fwDom; };\nfw.selection = [];\n",
+        "fw.documents = [__fwDom];\nfw.getDocumentDOM = function () { return __fwDom; };\nglobalThis.dom = __fwDom;\n",
     ))?;
+    context.eval(Source::from_bytes(host::DOM_MUTATORS))?;
+    project_selection(context, document, view)?;
     Ok(())
 }
 
+/// Projects `fw.selection` from the host-side selection list (each
+/// entry `"index:generation"`; dangling ids are dropped silently —
+/// deleted objects stop being selected).
+fn project_selection(
+    context: &mut Context,
+    document: &Document,
+    view: &AttachView,
+) -> JsResult<()> {
+    let selection = JsArray::new(context);
+    for key in &view.selection {
+        let Some(id) = parse_id(key) else {
+            continue;
+        };
+        let Some(data) = document.registry.get(id) else {
+            continue;
+        };
+        selection.push(
+            JsValue::from(project_element(context, document, id, data)?),
+            context,
+        )?;
+    }
+    context.register_global_property(js_string!("__fwSelArray"), selection, Attribute::all())?;
+    context.eval(Source::from_bytes("fw.selection = __fwSelArray;\n"))?;
+    Ok(())
+}
+
+/// `"index:generation"` → [`ObjectId`].
+fn parse_id(key: &str) -> Option<ObjectId> {
+    let (index, generation) = key.split_once(':')?;
+    Some(ObjectId::from_parts(
+        index.parse().ok()?,
+        generation.parse().ok()?,
+    ))
+}
+
 /// The projected DOM object (snapshot values; see module docs).
-fn project_document(context: &mut Context, document: &Document) -> JsResult<JsObject> {
+fn project_document(
+    context: &mut Context,
+    document: &Document,
+    view: &AttachView,
+) -> JsResult<JsObject> {
     let dom = JsObject::with_object_proto(context.intrinsics());
-    let page = document.pages.first();
+    let page_index = if view.current_page < document.pages.len() {
+        view.current_page
+    } else {
+        0
+    };
+    let page = document.pages.get(page_index);
     let canvas = &document.info.canvas;
     let frame_count = page
         .map(|p| p.info.frame_count)
@@ -56,8 +116,17 @@ fn project_document(context: &mut Context, document: &Document) -> JsResult<JsOb
         canvas.resolution_unit as f64,
     )?;
     set_number(context, &dom, "pagesCount", document.pages.len() as f64)?;
-    set_number(context, &dom, "currentPageNum", 0.0)?;
+    set_number(context, &dom, "currentPageNum", page_index as f64)?;
     set_number(context, &dom, "currentFrameNum", 0.0)?;
+
+    // The master page (first flagged `is_master`), or -1 when none —
+    // `isMasterPageLayer` reads it.
+    let master = document
+        .pages
+        .iter()
+        .position(|page| page.is_master)
+        .map_or(-1.0, |index| index as f64);
+    set_number(context, &dom, "masterPageNum", master)?;
 
     let frames = JsArray::new(context);
     for _ in 0..frame_count.max(0) {
@@ -75,12 +144,22 @@ fn project_document(context: &mut Context, document: &Document) -> JsResult<JsOb
             )?;
         }
     }
+    // The active layer defaults to the top of the stack (where
+    // Fireworks puts new elements); scripts assign `currentLayerNum`.
+    let top = layers.length(context)?;
+    dom.set(
+        js_string!("currentLayerNum"),
+        JsValue::from(top.saturating_sub(1) as f64),
+        false,
+        context,
+    )?;
     dom.set(js_string!("layers"), JsValue::from(layers), false, context)?;
     Ok(dom)
 }
 
-/// One projected layer: `name`, `display`, `elements[]` (the cell of
-/// the current frame).
+/// One projected layer: `name`, `display`, `frames[]` (per-state
+/// `elements`/`locked`/`visible`, the corpus's access shape) and the
+/// state-0 `elements` convenience.
 fn project_layer(
     context: &mut Context,
     document: &Document,
@@ -101,37 +180,78 @@ fn project_layer(
         context,
     )?;
 
-    // The cell of the current frame (0 for this snapshot); negative
-    // frame counts collapse to the first cell, absurd ones to the last.
-    let cell_index = if frame_count <= 0 {
-        0
-    } else {
-        (frame_count as usize).min(layer.cells.len().saturating_sub(1))
+    // Per-state frames; negative frame counts collapse to the first
+    // cell, absurd ones to the last.
+    let cell_index = |state: i64| -> usize {
+        if state <= 0 {
+            0
+        } else {
+            (state as usize).min(layer.cells.len().saturating_sub(1))
+        }
     };
-    let cell = layer.cells.get(cell_index);
-    let elements = JsArray::new(context);
-    for id in cell.map(|c| c.elements.as_slice()).unwrap_or(&[]) {
-        let Some(data) = document.registry.get(*id) else {
-            continue; // dangling id — refuse to project, never guess
-        };
-        elements.push(
-            JsValue::from(project_element(context, document, data)?),
+    let frames_array = JsArray::new(context);
+    let mut first_elements: Option<JsArray> = None;
+    for state in 0..frame_count.max(0) {
+        let cell = layer.cells.get(cell_index(state));
+        let frame = JsObject::with_object_proto(context.intrinsics());
+        frame.set(
+            js_string!("locked"),
+            JsValue::from(cell.map(|c| c.locked).unwrap_or(false)),
+            false,
             context,
         )?;
+        frame.set(
+            js_string!("visible"),
+            JsValue::from(cell.map(|c| c.visible).unwrap_or(true)),
+            false,
+            context,
+        )?;
+        let elements = JsArray::new(context);
+        for id in cell.map(|c| c.elements.as_slice()).unwrap_or(&[]) {
+            let Some(data) = document.registry.get(*id) else {
+                continue; // dangling id — refuse to project, never guess
+            };
+            elements.push(
+                JsValue::from(project_element(context, document, *id, data)?),
+                context,
+            )?;
+        }
+        if first_elements.is_none() {
+            first_elements = Some(elements.clone());
+        }
+        frame.set(
+            js_string!("elements"),
+            JsValue::from(elements),
+            false,
+            context,
+        )?;
+        frames_array.push(JsValue::from(frame), context)?;
     }
     object.set(
-        js_string!("elements"),
-        JsValue::from(elements),
+        js_string!("frames"),
+        JsValue::from(frames_array),
         false,
         context,
     )?;
+    // Convenience: state 0's elements directly on the layer.
+    if let Some(elements) = first_elements {
+        object.set(
+            js_string!("elements"),
+            JsValue::from(elements),
+            false,
+            context,
+        )?;
+    }
     Ok(object)
 }
 
-/// One projected element: `name` plus bounds (`left/top/width/height`).
+/// One projected element: `name`, bounds (`left/top/width/height`),
+/// and `__fwId` (`"index:generation"` — the handle mutating methods
+/// put into command payloads).
 fn project_element(
     context: &mut Context,
     document: &Document,
+    id: ObjectId,
     data: &doc::ObjectData,
 ) -> JsResult<JsObject> {
     let object = JsObject::with_object_proto(context.intrinsics());
@@ -195,6 +315,23 @@ fn project_element(
     set_number(context, &object, "top", bounds.1)?;
     set_number(context, &object, "width", bounds.2)?;
     set_number(context, &object, "height", bounds.3)?;
+    // `__fwId` is the payload form of the object id — an object with
+    // `index`/`generation`, exactly what command payloads carry, so
+    // the mutating methods can embed it verbatim.
+    let fw_id = JsObject::with_object_proto(context.intrinsics());
+    fw_id.set(
+        js_string!("index"),
+        JsValue::from(id.index() as f64),
+        false,
+        context,
+    )?;
+    fw_id.set(
+        js_string!("generation"),
+        JsValue::from(f64::from(id.generation())),
+        false,
+        context,
+    )?;
+    object.set(js_string!("__fwId"), JsValue::from(fw_id), false, context)?;
     Ok(object)
 }
 

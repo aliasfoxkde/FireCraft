@@ -97,13 +97,36 @@ silently wrong). The gate metric is corpus-run status, not API count.
    shipped walk scripts) and by task 5's corpus harness, which will
    run the real `.jsf` files headless. **Stopping condition met** (the
    corpus-script leg defers to task 5's harness by design). ✅
-3. **Mutating host API → registry commands** — the corpus's mutating
-   calls (`dom.addNew*`, `dom.set*`, `fw.setUpRevert`, smartShape
-   handlers) dispatch to engine command ids with JSON args; unknown
-   names throw typed; the command id + args land in the journal like
-   any GUI mutation. **Stopping condition:** replay equivalence —
-   script run ≡ journal replay ≡ direct command invocation (byte-equal
-   documents); battery covers every implemented mutating name.
+3. **Mutating host API → registry commands** — **done.** Mutating
+   host calls queue `(command id, payload)` intents in GC-held state;
+   `run_in_session(session, engine, …)` drains through the new
+   `Session::apply_delta` only when the run completed — failing
+   scripts leave the document untouched, and `fw.setUpRevert`/
+   `fw.revert` truncate the queue before application, so revert is
+   exact (no journal/undo residue). Contract recorded in
+   `docs/decisions/0011-script-mutation-queue.md`. Implemented
+   mutators (each pinned three-ways byte-equal in
+   `tests/mutate.rs`, 13 tests): `addNewText`→`text.createText`,
+   `addNewRectangle`→`object.createPath`(rect),
+   `addNewLayer`→`layer.add` (new catalog command),
+   `deleteLayer`→`layer.delete` (new; last-layer refused),
+   `moveSelectionToLayer`→`object.moveToCell`,
+   `pathUnion`→`path.boolean` fold,
+   `setTextAutoExpand`→`text.setAttrs`; view state (never journaled):
+   `selectAllOnLayer`/`selectNone`/`fw.selection` (projection-carried
+   `__fwId` objects), `currentLayerNum` (default top, assignable),
+   `changeCurrentPage` (validated, persists across attaches).
+   Projection corrected to the corpus's real shapes found while
+   wiring: `layer.frames[f].elements`, `isMasterPageLayer`/
+   `masterPageNum`. Refusals: `dom.exportElements` (M11 export),
+   `ungroup`/`splitPaths`/`convertToPaths` (group machinery, task 5's
+   report owns the work list), smartShape handlers (task 5 — the
+   corpus run enumerates which the shape library needs). Fuzz
+   coverage: `layer.add`/`layer.delete` joined the fuzzdrive call
+   table (catalog-coverage test enforces). Gates: engine 129 +
+   scripting 29 tests, clippy `-D warnings` both crates, fmt, wasm
+   checks clean. **Stopping condition met** (script ≡ direct ≡
+   replay byte-equal per mutator). ✅
 4. **`.jsf` loading + `Files`/`fw.runScript`** — script files load
    through `engine::platform::FileSystem` (app/user Command dirs,
    virtual FS on web); `fw.runScript(path)`, `fw.runCommands(...)`,

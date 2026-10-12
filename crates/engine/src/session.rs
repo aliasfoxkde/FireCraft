@@ -8,6 +8,7 @@
 
 use doc::Document;
 
+use crate::delta::Delta;
 use crate::error::EngineError;
 use crate::history::{Call, History};
 use crate::journal::{self, Journal};
@@ -53,6 +54,18 @@ impl Session {
     /// *joins* it (the surface opened the group deliberately); undo and
     /// redo commit a pending group first so stacks never straddle one.
     pub fn apply(&mut self, name: &str, payload: serde_json::Value) -> Result<(), EngineError> {
+        self.apply_delta(name, payload).map(|_delta| ())
+    }
+
+    /// [`Session::apply`] returning the captured delta — the scripting
+    /// host reads created object ids out of it (addNew\* selects what
+    /// it created). The journal and history records are identical to
+    /// [`Session::apply`].
+    pub fn apply_delta(
+        &mut self,
+        name: &str,
+        payload: serde_json::Value,
+    ) -> Result<Delta, EngineError> {
         let delta = self
             .registry
             .execute(&mut self.document, name, payload.clone())?;
@@ -63,10 +76,10 @@ impl Session {
                 name: name.to_owned(),
                 payload,
             },
-            delta,
+            delta.clone(),
         );
         self.dirty = true;
-        Ok(())
+        Ok(delta)
     }
 
     /// Begins a transaction: subsequent applies (until
