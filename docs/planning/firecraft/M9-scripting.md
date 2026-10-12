@@ -127,15 +127,42 @@ silently wrong). The gate metric is corpus-run status, not API count.
    scripting 29 tests, clippy `-D warnings` both crates, fmt, wasm
    checks clean. **Stopping condition met** (script ≡ direct ≡
    replay byte-equal per mutator). ✅
-4. **`.jsf` loading + `Files`/`fw.runScript`** — script files load
-   through `engine::platform::FileSystem` (app/user Command dirs,
-   virtual FS on web); `fw.runScript(path)`, `fw.runCommands(...)`,
-   `Files.read/write/exists` (scoped to the FS trait — no direct
-   `std::fs` in the crate); ES3 quirk shims recorded in a
-   `docs/decisions/` quirk ledger as discovered. **Stopping
-   condition:** a shipped `Commands/` script loads from the virtual FS
-   and runs; quirk ledger has its first entries with pinned repro
-   tests.
+4. **`.jsf` loading + `Files`/`fw.runScript`** — **done.** Scripts
+   load through `engine::platform::FileSystem` (engine's `MemoryFs`
+   in tests; virtual FS on web, app/user dirs on desktop) scoped via
+   `scripting::run_with_file_system` (thread-local attachment — boa's
+   `Context` data store needs `Trace` types, which `Rc<dyn
+   FileSystem>` is not). Implemented: `Files.read/write/exists` →
+   natives `__fwRead/__fwWrite/__fwExists`, `fw.runScript(path)` →
+   `__fwRunScript` (immediate `ctx.eval`, so sub-script intents join
+   the same queue and the same read snapshot), `fw.runCommands(...)`
+   → per-string-arg `__fwQueue(arg, "{}")` (all-optional-args
+   commands like `page.add` drain successfully; the rest fail typed
+   at drain with the id in the report). No direct `std::fs` in the
+   crate; a run with no attached FS fails typed ("no file system is
+   attached"), never silently. Remaining `Files.*` names
+   (`getLanguageDirectory`, `enumFiles`, `copy`, …) refuse typed
+   naming task 5. Quirk ledger opened:
+   `docs/decisions/0012-es3-quirk-ledger.md` (5 entries: BOM+CRLF
+   normalization; no `#target`/`#include` in the shipped corpus —
+   the loader does not pre-process `#` lines; plain-assignment
+   `fw.selection`; read staleness under the queue-drain contract
+   (cross-ref 0011); modern `JSON` as harmless superset). Battery
+   `tests/files.rs` (6 tests): Files round trip over the injected FS
+   with zero journal rows; **stopping-condition leg**
+   `command_script_loads_from_virtual_fs_and_runs` — BOM+CRLF
+   `Commands/assemble.jsf` → `fw.runScript('Commands/part.jsf')` →
+   `addNewRectangle`, script ≡ direct ≡ replay byte-equal (own-
+   authored stand-in with the shipped file shapes; committed code
+   never references `source/`); no-FS typed refusal;
+   runCommands success + typed drain failure + non-string refusal;
+   runScript A→B→A recursion bounded (`LimitExceeded`, interpreter
+   bound fires, not the machine stack); `#target` line is a typed
+   syntax error, not a silently ignored directive. Hostile battery
+   updated (runScript/Files.read are implemented; the refusals list
+   now pins `Files.getLanguageDirectory`/`Files.copy`). Gates:
+   scripting 35 tests, clippy `-D warnings`, fmt, wasm32 clean.
+   **Stopping condition met.** ✅
 5. **Corpus run harness (`xtask scripts`)** — copies the 89 shipped
    scripts from `source/` into scratch (never committed), runs each
    headless against fixture documents, emits a committed report:

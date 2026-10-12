@@ -14,6 +14,8 @@
 //! Layer position: L4 (may depend on `doc`/`engine`/`compose`; the
 //! engine never depends on this crate).
 
+use std::rc::Rc;
+
 use boa_engine::{Context, JsResult, JsValue, Source, js_string, native_function::NativeFunction};
 use boa_gc::{Gc, GcRefCell};
 
@@ -22,7 +24,7 @@ pub mod host;
 pub mod marshal;
 
 use doc::ObjectId;
-use engine::{Delta, Session, delta::ObjectInverse};
+use engine::{Delta, Session, delta::ObjectInverse, platform::FileSystem};
 
 /// Sandbox limits. Defaults are generous for Auto Shape handlers
 /// (point loops in the hundreds) and hostile for `while (true)`.
@@ -457,6 +459,79 @@ fn install_prelude(context: &mut Context, state: Gc<GcRefCell<HostState>>) -> Js
                 state.borrow_mut().intents.push(Intent { id, payload });
                 Ok(JsValue::undefined())
             },
+            state.clone(),
+        ),
+    )?;
+
+    // Script-file access: `Files.*` and `fw.runScript` resolve through
+    // the attached [`FileSystem`] (thread-scoped, see
+    // [`run_with_file_system`]). Each consumes budget.
+    context.register_global_callable(
+        js_string!("__fwRead"),
+        1,
+        NativeFunction::from_copy_closure_with_captures(
+            |_this, args, state: &Gc<GcRefCell<HostState>>, ctx| {
+                take_budget(state)?;
+                let path = string_arg(args, ctx)?;
+                let bytes = fs_op("Files.read", move |fs| fs.read_file(&path))?;
+                let text = String::from_utf8_lossy(&bytes);
+                Ok(JsValue::from(js_string!(text.as_ref())))
+            },
+            state.clone(),
+        ),
+    )?;
+
+    context.register_global_callable(
+        js_string!("__fwWrite"),
+        2,
+        NativeFunction::from_copy_closure_with_captures(
+            |_this, args, state: &Gc<GcRefCell<HostState>>, ctx| {
+                take_budget(state)?;
+                let path = string_arg(args, ctx)?;
+                let contents = args
+                    .get(1)
+                    .unwrap_or(&JsValue::undefined())
+                    .to_string(ctx)?
+                    .to_std_string_escaped();
+                fs_op("Files.write", move |fs| {
+                    fs.write_file(&path, contents.as_bytes())
+                })?;
+                Ok(JsValue::from(true))
+            },
+            state.clone(),
+        ),
+    )?;
+
+    context.register_global_callable(
+        js_string!("__fwExists"),
+        1,
+        NativeFunction::from_copy_closure_with_captures(
+            |_this, args, state: &Gc<GcRefCell<HostState>>, ctx| {
+                take_budget(state)?;
+                let path = string_arg(args, ctx)?;
+                let exists = current_file_system()?.exists(&path);
+                Ok(JsValue::from(exists))
+            },
+            state.clone(),
+        ),
+    )?;
+
+    // `fw.runScript(path)`: loads and evaluates immediately, so the
+    // sub-script queues its mutations into the same intent queue and
+    // reads the same snapshot the caller sees. Recursion is bounded by
+    // the runtime limits + the host budget like any script.
+    context.register_global_callable(
+        js_string!("__fwRunScript"),
+        1,
+        NativeFunction::from_copy_closure_with_captures(
+            |_this, args, state: &Gc<GcRefCell<HostState>>, ctx| {
+                take_budget(state)?;
+                let path = string_arg(args, ctx)?;
+                let bytes = fs_op("fw.runScript", move |fs| fs.read_file(&path))?;
+                let source = prepare_source(&String::from_utf8_lossy(&bytes));
+                ctx.eval(Source::from_bytes(source.as_bytes()))?;
+                Ok(JsValue::undefined())
+            },
             state,
         ),
     )?;
@@ -464,4 +539,59 @@ fn install_prelude(context: &mut Context, state: Gc<GcRefCell<HostState>>) -> Js
     // The prelude's JS half: host-array Proxy + the typed shells.
     context.eval(Source::from_bytes(host::PRELUDE))?;
     Ok(())
+}
+
+/// The one string argument, as a Rust string.
+fn string_arg(args: &[JsValue], ctx: &mut Context) -> JsResult<String> {
+    Ok(args
+        .first()
+        .unwrap_or(&JsValue::undefined())
+        .to_string(ctx)?
+        .to_std_string_escaped())
+}
+
+/// The script file system for the current thread ([`run_with_file_system`]
+/// scoped). Missing or failed attachments throw typed, never silently.
+fn current_file_system() -> JsResult<Rc<dyn FileSystem>> {
+    FILE_SYSTEM
+        .with(|slot| slot.borrow().clone())
+        .ok_or_else(|| {
+            boa_engine::JsNativeError::error()
+                .with_message("no file system is attached to this script run")
+                .into()
+        })
+}
+
+/// Runs a [`FileSystem`] operation, mapping engine errors into typed
+/// JS errors that name the calling host operation.
+fn fs_op<T>(
+    name: &str,
+    op: impl FnOnce(&dyn FileSystem) -> Result<T, engine::EngineError>,
+) -> JsResult<T> {
+    let fs = current_file_system()?;
+    op(fs.as_ref()).map_err(|error| {
+        boa_engine::JsNativeError::error()
+            .with_message(format!("{name}: {error}"))
+            .into()
+    })
+}
+
+thread_local! {
+    /// The attached script file system. Boa's [`Context`] is
+    /// single-threaded, and the attachment is always cleared when
+    /// [`run_with_file_system`] returns, so engines cannot leak file
+    /// systems into each other.
+    static FILE_SYSTEM: std::cell::RefCell<Option<Rc<dyn FileSystem>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// Runs `f` with `fs` attached as the script file system — what
+/// `Files.*` and `fw.runScript` resolve through. The attachment is
+/// thread-scoped and cleared when this returns; a run without one
+/// gets typed "no file system" errors from those calls.
+pub fn run_with_file_system<R>(fs: Rc<dyn FileSystem>, f: impl FnOnce() -> R) -> R {
+    FILE_SYSTEM.with(|slot| *slot.borrow_mut() = Some(fs));
+    let result = f();
+    FILE_SYSTEM.with(|slot| *slot.borrow_mut() = None);
+    result
 }

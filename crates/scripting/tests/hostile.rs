@@ -51,8 +51,13 @@ fn not_implemented_names_throw_typed() {
     let mut engine = ScriptEngine::new(Limits::default()).expect("engine");
     for (source, needle) in [
         ("fw.getDocumentDOM();", "fw.getDocumentDOM"),
-        ("fw.runScript('x.jsf');", "fw.runScript"),
-        ("Files.read('/x');", "Files.read"),
+        // Task 4 implemented runScript/Files.read-write-exists; the
+        // Files names the corpus harness (task 5) still owns refuse.
+        (
+            "Files.getLanguageDirectory();",
+            "Files.getLanguageDirectory",
+        ),
+        ("Files.copy('/a', '/b');", "Files.copy"),
         ("dom.addNewRectangle({});", "dom.addNewRectangle"),
         (
             "smartShape.GetCurrentContour();",

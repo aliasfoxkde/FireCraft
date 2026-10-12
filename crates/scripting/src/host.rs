@@ -1,8 +1,8 @@
 //! The host prelude's JS half: the host-array Proxy (the decision-0001
 //! semantic — reading an unassigned index below `length` materializes
 //! a default element, which is how shipped scripts grow point lists),
-//! the typed `fw`/`dom` shells, the `smartShape` global, and the
-//! per-attach mutating methods ([`DOM_MUTATORS`]).
+//! the typed `fw`/`dom` shells, the `smartShape` global, script-file
+//! access, and the per-attach mutating methods ([`DOM_MUTATORS`]).
 //!
 //! Kept as JS source strings so the prelude is executable grammar,
 //! not a mirror of it. Names marked "not implemented" throw a typed
@@ -85,10 +85,20 @@ globalThis.fw = {
         __notImplemented("fw.revert", 3);
     },
     runScript: function (path) {
-        __notImplemented("fw.runScript", 4);
+        return __fwRunScript(String(path));
     },
+    // Corpus shape: command names as strings. Each queues with an empty
+    // payload — commands whose arguments are all optional succeed at
+    // drain, the rest fail typed (name visible in the report).
     runCommands: function () {
-        __notImplemented("fw.runCommands", 4);
+        for (var i = 0; i < arguments.length; i++) {
+            if (typeof arguments[i] !== "string") {
+                throw new Error(
+                    "runCommands: argument " + i + " must be a command name string"
+                );
+            }
+            __fwQueue(arguments[i], "{}");
+        }
     },
     dispatchEvent: function (event) {
         __notImplemented("fw.dispatchEvent", 3);
@@ -108,16 +118,49 @@ globalThis.dom = {
     },
 };
 
-// --- Files: script file access (real FS lands in task 4) --------------
+// --- Files: script file access ------------------------------------------
+// read/write/exists resolve through the natives (`__fwRead`/`__fwWrite`/
+// `__fwExists`), which speak the `engine::platform::FileSystem` attached
+// for this run — virtual FS on web, app/user dirs on desktop. A run
+// with no attached FS gets a typed error, never a silent default.
 globalThis.Files = {
     read: function (path) {
-        __notImplemented("Files.read", 4);
+        return __fwRead(String(path));
     },
     write: function (path, contents) {
-        __notImplemented("Files.write", 4);
+        return __fwWrite(String(path), contents === undefined ? "" : String(contents));
     },
     exists: function (path) {
-        __notImplemented("Files.exists", 4);
+        return __fwExists(String(path));
+    },
+    // Names the shipped corpus touches beyond read/write/exists; task 5
+    // (the corpus run harness) owns wiring the ones its scripts need.
+    getLanguageDirectory: function () {
+        __notImplemented("Files.getLanguageDirectory", 5);
+    },
+    deleteFileIfExisting: function (path) {
+        __notImplemented("Files.deleteFileIfExisting", 5);
+    },
+    createDirectory: function (path) {
+        __notImplemented("Files.createDirectory", 5);
+    },
+    open: function (path, mode) {
+        __notImplemented("Files.open", 5);
+    },
+    createFile: function (path) {
+        __notImplemented("Files.createFile", 5);
+    },
+    getDirectory: function (prompt, forOpen) {
+        __notImplemented("Files.getDirectory", 5);
+    },
+    enumFiles: function (path) {
+        __notImplemented("Files.enumFiles", 5);
+    },
+    getFilename: function (prompt, save, defaultName) {
+        __notImplemented("Files.getFilename", 5);
+    },
+    copy: function (from, to) {
+        __notImplemented("Files.copy", 5);
     },
 };
 "#;
