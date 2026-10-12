@@ -187,6 +187,7 @@ fn page_template(frame_count: i64, info: &DocumentInfo) -> Page {
             canvas: info.canvas.clone(),
             onion_before: info.onion_before,
             onion_after: info.onion_after,
+            frame_durations: Vec::new(),
         },
         name: None,
         is_master: false,

@@ -22,6 +22,7 @@ vector = { path = "../crates/vector" }
 color = { path = "../crates/color" }
 io = { path = "../crates/io" }
 compose = { path = "../crates/compose" }
+gif = "0.14.2"
 flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
 serde_json = { version = "1", features = ["float_roundtrip"] }
 libfuzzer-sys = { version = "0.4", optional = true }
@@ -89,4 +90,9 @@ required-features = ["fuzzer"]
 [[bin]]
 name = "psdimport"
 path = "fuzz_targets/psdimport.rs"
+required-features = ["fuzzer"]
+
+[[bin]]
+name = "gifanim"
+path = "fuzz_targets/gifanim.rs"
 required-features = ["fuzzer"]

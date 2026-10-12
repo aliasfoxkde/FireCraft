@@ -20,6 +20,7 @@ compose = { path = "../compose" }
 fwpng = { path = "../fwpng" }
 io = { path = "../io" }
 flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
+gif = "0.14.2"
 serde_json = { version = "1", features = ["float_roundtrip"] }
 
 [lints]

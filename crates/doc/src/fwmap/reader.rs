@@ -365,6 +365,9 @@ impl Reader {
                 canvas,
                 onion_before: onion_before.unwrap_or(0),
                 onion_after: onion_after.unwrap_or(0),
+                // `FNLv` frame durations land with the `EXPv` mapping
+                // (M8 task 8); until then every document reads empty.
+                frame_durations: Vec::new(),
             },
             name,
             is_master: is_master.unwrap_or(false),

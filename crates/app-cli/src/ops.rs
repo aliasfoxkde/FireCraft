@@ -1,5 +1,7 @@
 //! The CLI's document operations: convert and journal replay.
 
+use std::io::Cursor;
+
 use engine::Session;
 
 use crate::CliError;
@@ -39,14 +41,43 @@ pub fn apply_journal(loaded: Loaded, journal_text: &str) -> Result<Applied, CliE
 
 /// Imports any supported raster stream (`io::raster::decode`) into a
 /// fresh single-page document and re-emits it as a canonical `.fw.png`
-/// stream. Import-as-open: nothing enters a journal.
+/// stream. Import-as-open: nothing enters a journal. Animated GIFs
+/// (more than one frame) route to the states importer instead — each
+/// frame composites into its own state.
 ///
 /// # Errors
 /// [`CliError`] wrapping decode or save failures.
 pub fn import_to_fwpng(input: &[u8], name: Option<String>) -> Result<Vec<u8>, CliError> {
+    if is_animated_gif(input) {
+        let imported =
+            ::io::gif::decode_animated(input).map_err(|error| CliError(error.to_string()))?;
+        for note in &imported.report.notes {
+            eprintln!("gif note: {note}");
+        }
+        return crate::io::save(&imported.document, &doc::fwmap::UnknownBag::default(), &[]);
+    }
     let document = ::io::raster::decode_to_document(input, name)
         .map_err(|error| CliError(error.to_string()))?;
     crate::io::save(&document, &doc::fwmap::UnknownBag::default(), &[])
+}
+
+/// True when `input` sniffs as GIF and the frame loop yields more than
+/// one frame (the animated/static routing line).
+fn is_animated_gif(input: &[u8]) -> bool {
+    if !input.starts_with(b"GIF8") {
+        return false;
+    }
+    let Ok(mut decoder) = gif::DecodeOptions::new().read_info(Cursor::new(input)) else {
+        return false;
+    };
+    let mut frames = 0usize;
+    while frames <= 1 {
+        match decoder.read_next_frame() {
+            Ok(Some(_)) => frames += 1,
+            _ => break,
+        }
+    }
+    frames > 1
 }
 
 /// Raster export flags parsed from the CLI (`::io` — the leading
@@ -145,4 +176,16 @@ pub fn export_svg(document: &doc::Document) -> Result<Vec<u8>, CliError> {
 /// [`CliError`] wrapping the encoder's refusals.
 pub fn export_psd(document: &doc::Document) -> Result<Vec<u8>, CliError> {
     ::io::psd::encode(document, 0).map_err(|error| CliError(error.to_string()))
+}
+
+/// Encodes page 0 of `document` as an animated GIF — one frame per
+/// state (a single-state document writes a one-frame GIF). The
+/// `EXPv` crop/diff behaviors land with task 8; the CLI writes full
+/// frames on an infinite loop.
+///
+/// # Errors
+/// [`CliError`] wrapping the encoder's refusals.
+pub fn export_gif(document: &doc::Document) -> Result<Vec<u8>, CliError> {
+    ::io::gif::encode_animated(document, 0, &::io::gif::GifOptions::default())
+        .map_err(|error| CliError(error.to_string()))
 }

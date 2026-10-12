@@ -1137,6 +1137,7 @@ mod tests {
                 canvas: Default::default(),
                 onion_before: 0,
                 onion_after: 0,
+                frame_durations: Vec::new(),
             },
             name: Some("Page 0".to_owned()),
             is_master: false,

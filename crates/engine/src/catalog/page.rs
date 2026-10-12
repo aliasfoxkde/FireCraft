@@ -73,6 +73,7 @@ impl TypedCommand for AddPage {
                 canvas: document.info.canvas.clone(),
                 onion_before: document.info.onion_before,
                 onion_after: document.info.onion_after,
+                frame_durations: Vec::new(),
             },
             name: None,
             is_master: false,

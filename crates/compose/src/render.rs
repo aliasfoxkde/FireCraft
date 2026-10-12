@@ -13,7 +13,7 @@
 use crate::cache::EffectCache;
 use crate::convert::{abgr, blend_mode, to_bezpath};
 use crate::effects;
-use doc::{Document, GroupObject, Layer, ObjectData, PathObject};
+use doc::{Document, GroupObject, Layer, ObjectData, PathObject, TileRef};
 use filters::Surface;
 use std::fmt;
 use std::sync::Arc;
@@ -65,6 +65,20 @@ pub enum ComposeError {
         /// What mismatched.
         detail: String,
     },
+    /// An image object references a tile id the document's bank does
+    /// not hold — a document defect (a `.fw.png` whose `mkBT` chunks
+    /// were never bridged into the bank, most often), never painted
+    /// as a silent hole.
+    TileBankMiss {
+        /// The tile id the `TIDi` slot named.
+        tile: u32,
+    },
+    /// An image object needs a tile geometry the bank cannot back
+    /// (the bank's slots are fixed 128×128).
+    TileSource {
+        /// What geometry was requested.
+        detail: String,
+    },
 }
 
 impl fmt::Display for ComposeError {
@@ -88,6 +102,10 @@ impl fmt::Display for ComposeError {
             ComposeError::FilterPipeline { detail } => {
                 write!(f, "live-effect pipeline failed: {detail}")
             }
+            ComposeError::TileBankMiss { tile } => {
+                write!(f, "image references tile {tile}, absent from the tile bank")
+            }
+            ComposeError::TileSource { detail } => write!(f, "image tiles unsupported: {detail}"),
         }
     }
 }
@@ -237,10 +255,155 @@ fn render_object(
             let engine = text_engine.get_or_insert_with(text::TextEngine::default);
             render_text(object, engine, canvas, cache, ctx)
         }
-        // Images (no tile decode this milestone), slices and symbol
-        // instances render as nothing — the M4 plan's out-of-scope list.
-        ObjectData::Image(_) | ObjectData::Slice(_) | ObjectData::SymbolInstance(_) => Ok(()),
+        ObjectData::Image(image) => render_image(document, image, canvas, cache, ctx),
+        // Slices and symbol instances still render as nothing — the
+        // M4 plan's out-of-scope list (slices are export-time markers,
+        // symbol instances need the M10 symbol table).
+        ObjectData::Slice(_) | ObjectData::SymbolInstance(_) => Ok(()),
     }
+}
+
+/// Bitmaps paint from the tile bank: the `TILv` grid assembles into a
+/// full-canvas premultiplied buffer that rides the same image-paint
+/// blit as filtered surfaces — inside the object's own opacity/blend
+/// layer, with the live effect stack applied to the assembled raster
+/// exactly as it is to a rasterized path.
+fn render_image(
+    document: &Document,
+    image: &doc::ImageObject,
+    canvas: (u16, u16),
+    cache: &mut EffectCache,
+    ctx: &mut RenderContext,
+) -> Result<(), ComposeError> {
+    if !image.visible {
+        return Ok(());
+    }
+    let base = assemble_image(document, image, canvas)?;
+    let plan = effects::plan(&image.effects);
+    if plan.ops.is_empty() {
+        return paint_surface(&base, canvas, image.blend, image.opacity, ctx);
+    }
+    // Content-addressed like paths and groups: blend/opacity stay out
+    // of the key — they wrap the filtered image below.
+    let key = crate::cache::hash_pixels(&base, canvas, &plan);
+    let pixels = match cache.get(key).map(|entry| entry.pixels.clone()) {
+        Some(pixels) => pixels,
+        None => apply_filtered(base, canvas, &plan, key, cache)?,
+    };
+    paint_surface(&pixels, canvas, image.blend, image.opacity, ctx)
+}
+
+/// Assembles an image object's tile grid into a full-canvas
+/// premultiplied buffer — the image-paint source and the filter
+/// input. `TIDi` slots copy bank tiles (fixed 128×128 premultiplied
+/// slots; `TSZi` 256 has no bank bridge yet and refuses loudly rather
+/// than laying a wrong grid); `TMCi` slots fill solid ARGB (the
+/// dictionary's recorded order here — the fill/stroke paint raws are
+/// the opposite byte order, ABGR). The `WPXi`/`HPXi` extent sits at
+/// location+offset, clipped to the canvas; a `TIDi` id absent from
+/// the bank is a document defect, not a silent hole.
+fn assemble_image(
+    document: &Document,
+    image: &doc::ImageObject,
+    canvas: (u16, u16),
+) -> Result<Vec<u8>, ComposeError> {
+    let side = i64::from(raster::TILE_SIDE as u32);
+    if image.tile_size != side {
+        return Err(ComposeError::TileSource {
+            detail: format!(
+                "tile size {} has no tile-bank bridge yet (bank slots are {side})",
+                image.tile_size
+            ),
+        });
+    }
+    let width = usize::from(canvas.0);
+    let height = usize::from(canvas.1);
+    let mut out = vec![0u8; width * height * 4];
+    // Saturating everywhere: document locations are untrusted f64 (the
+    // SVG importer accepts ±1e30), and i64 casts saturate rather than
+    // wrap, so the clamps below see a sane rect either way.
+    let left = (image.location.x + image.offset.x).round() as i64;
+    let top = (image.location.y + image.offset.y).round() as i64;
+    let (extent_w, extent_h) = image.pixels;
+    if extent_w <= 0 || extent_h <= 0 {
+        return Ok(out);
+    }
+    let right = left.saturating_add(extent_w);
+    let bottom = top.saturating_add(extent_h);
+    // Horizontal window of the extent that lies on the canvas.
+    let visible = |a: i64, b: i64, limit: i64| a.clamp(0, limit)..b.clamp(0, limit);
+    // Signed div_ceil is unstable; both operands are positive here.
+    let cols = extent_w / side + i64::from(extent_w % side != 0);
+    for (slot, tile_ref) in image.tiles.iter().enumerate() {
+        let slot = slot as i64;
+        let tile_left = left + (slot % cols) * side;
+        let tile_top = top + (slot / cols) * side;
+        let x = visible(tile_left, tile_left + side, width as i64);
+        let y = visible(tile_top, tile_top + side, height as i64);
+        if x.is_empty() || y.is_empty() {
+            continue;
+        }
+        // The extent clips the grid's last row/column.
+        let x = x.start.max(left)..x.end.min(right);
+        let y = y.start.max(top)..y.end.min(bottom);
+        if x.is_empty() || y.is_empty() {
+            continue;
+        }
+        match tile_ref {
+            TileRef::Tile(tile_id) => {
+                let tile = document
+                    .tiles
+                    .get(*tile_id)
+                    .ok_or(ComposeError::TileBankMiss { tile: *tile_id })?;
+                blit_tile(&mut out, width, tile.pixels(), &x, &y, tile_left, tile_top);
+            }
+            TileRef::Matte(raw) => {
+                let pixel = matte_premultiplied(*raw);
+                for py in y.start as usize..y.end as usize {
+                    for px in x.start as usize..x.end as usize {
+                        let at = (py * width + px) * 4;
+                        out[at..at + 4].copy_from_slice(&pixel);
+                    }
+                }
+            }
+        }
+    }
+    Ok(out)
+}
+
+/// Copies the `x`/`y` window of a 128×128 tile into the canvas buffer
+/// at the tile's absolute origin.
+fn blit_tile(
+    out: &mut [u8],
+    width: usize,
+    tile: &[u8; raster::TILE_BYTES],
+    x: &std::ops::Range<i64>,
+    y: &std::ops::Range<i64>,
+    tile_left: i64,
+    tile_top: i64,
+) {
+    for py in y.start..y.end {
+        let source_y = (py - tile_top) as usize;
+        for px in x.start..x.end {
+            let source = (source_y * raster::TILE_SIDE + (px - tile_left) as usize) * 4;
+            let target = (py as usize * width + px as usize) * 4;
+            out[target..target + 4].copy_from_slice(&tile[source..source + 4]);
+        }
+    }
+}
+
+/// `TMCi` decodes ARGB per the dictionary, then premultiplies for the
+/// canvas buffer.
+fn matte_premultiplied(raw: i64) -> [u8; 4] {
+    let raw = raw as u32;
+    let (r, g, b, a) = (
+        ((raw >> 16) & 0xFF) as u8,
+        ((raw >> 8) & 0xFF) as u8,
+        (raw & 0xFF) as u8,
+        ((raw >> 24) & 0xFF) as u8,
+    );
+    let premul = |c: u8| ((u16::from(c) * u16::from(a) + 127) / 255) as u8;
+    [premul(r), premul(g), premul(b), a]
 }
 
 /// Text renders through the path pipeline: glyphs lower to document

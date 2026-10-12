@@ -133,6 +133,7 @@ pub(crate) mod testdoc {
                     canvas: Default::default(),
                     onion_before: 0,
                     onion_after: 0,
+                    frame_durations: Vec::new(),
                 },
                 name: Some(format!("Page {page_index}")),
                 is_master: false,

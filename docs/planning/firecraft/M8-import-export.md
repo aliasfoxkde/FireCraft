@@ -258,17 +258,47 @@ that was only compared against itself.
    in decision 0006, including the recorded M7-owed gap (compose
    renders image objects as nothing, so composites/flattens omit
    them; layered records are lossless from the tile bank).
-7. **Animated GIF ↔ states** — import: GIF89a frame loop →
-   `frame_count = N`, frame *i* composited into cell *i* (disposal
-   method respected; delays in the doc's per-state record — map to
-   `FRVi`-style timing if the model carries it, else bag exact-path
-   and record). Export: states → animated GIF (global palette with
-   per-frame local palettes as needed, loop count, per-frame delay);
-   the `AACb`/`AADb` crop/diff `EXPv` flags honored when set.
-   **Stopping condition:** golden pin: N-frame animated GIF export
-   (frame count + delays + per-frame ink anchors — a single-frame
-   collapse cannot pin itself); import→export→import frame-count +
-   delay equality; `gif` fuzz arm.
+7. **Animated GIF ↔ states** — **done.** Import
+   (`io::gif::decode_animated`): GIF89a frame loop with browser
+   compositing — frame *i* draws over the screen, state *i* captures
+   the screen after frame *i*, disposal applied before the next frame
+   (`Keep`/`Any`→keep with a note, `Background` clears the frame rect,
+   `Previous` restores a pre-frame snapshot); `frame_count = N`, one
+   `IMGv` per state over its own dense bank range in cell *i*, delays
+   in `PageInfo::frame_durations` (hundredths of a second — the `FNDi`
+   unit; the model has no `FRVi` timing node, so this vec is the
+   record and the `EXPv`/`FNLv` disk mapping is task 8); frame loop
+   bounded before decoding by the tile-bank budget
+   (`min(4096/canvas_tiles, 4096)` states); frames leaving the screen
+   refuse. Export (`io::gif::encode_animated`): one compose render per
+   state; global palette trained on every state at once
+   (`color_quant`, sample 1, slot 0 reserved) kept while every state's
+   mean abs per-channel error ≤ 8.0, else per-frame local palettes
+   (diff off there — no stable index space); `AACb` crop to ink bboxes
+   (empty state → 1×1 placeholder frame), `AADb` indexed-space diff
+   with **Keep disposal on every frame including the seed** (a
+   Background seed wipes the screen the next diff relies on — the bug
+   the battery caught in draft); loop count via `GifOptions::repeat`;
+   delay default 10 cs with the real-corpus `FNDi` revisit note.
+   `compose` gained its Image arm (the M7-owed gap): `TILv` grid →
+   premultiplied buffer → the shared effects/blend/opacity path,
+   `TMCi` mattes decoded ARGB (unlike fill/stroke ABGR), missing
+   `TIDi`/`TSZi` 256 refusing loudly (`TileBankMiss`/`TileSource`);
+   CLI: animated GIFs (>1 frame) route to the states importer,
+   `export .gif` wired with defaults. Policies in
+   `docs/decisions/0009-animated-gif.md`. **Stopping condition met:**
+   17-test battery in `crates/io/tests/gifanim.rs` — golden pin
+   (frame count + delays + per-frame ink anchors), import→export→
+   import frame-count/delay/ink equality (transparency exact, color
+   within quantization tolerance), all four disposals, crop rects +
+   placeholder, diff transparency compositing back to the original
+   states, loop extension + byte-determinism, hostile refusals (page
+   range, zero axis, >65535 canvas, >4096 states, missing-tile
+   passthrough); `compose/tests/image_render.rs` 11 placement/
+   compositing/refusal pins; `gifanim` fuzz arm (libfuzzer target +
+   stable anchor, in-code 3-frame seed, decode → render-all-states →
+   re-encode both option paths → re-decode, 256 mutated iterations
+   clean); io/compose/doc/engine suites green.
 8. **Optimization settings, batch, surfaces + gates** — `EXPv` mapped
    both ways: `ExportOptions` children written under the dictionary's
    node tags where semantics are known, unknown children preserved

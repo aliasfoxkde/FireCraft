@@ -37,6 +37,7 @@ fn page(width: f64, height: f64, layers: Vec<Layer>) -> Page {
             canvas: canvas(width, height),
             onion_before: 0,
             onion_after: 0,
+            frame_durations: Vec::new(),
         },
         name: None,
         is_master: false,

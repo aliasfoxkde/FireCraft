@@ -76,6 +76,7 @@ fn document(objects: Vec<ObjectData>) -> Document {
             canvas: document.info.canvas.clone(),
             onion_before: 0,
             onion_after: 0,
+            frame_durations: Vec::new(),
         },
         name: None,
         is_master: false,

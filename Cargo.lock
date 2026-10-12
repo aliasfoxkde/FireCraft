@@ -101,6 +101,7 @@ dependencies = [
  "engine",
  "flate2",
  "fwpng",
+ "gif 0.14.2",
  "io",
  "serde_json",
 ]
@@ -463,6 +464,7 @@ dependencies = [
  "flate2",
  "fwpng",
  "geom",
+ "raster",
  "text",
  "vello_cpu 0.3.0",
 ]
@@ -1425,11 +1427,13 @@ name = "io"
 version = "0.1.0"
 dependencies = [
  "base64",
+ "color_quant",
  "compose",
  "doc",
  "filters",
  "fwpng",
  "geom",
+ "gif 0.14.2",
  "image",
  "jpeg-encoder",
  "raster",

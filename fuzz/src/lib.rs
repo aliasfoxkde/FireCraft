@@ -175,6 +175,33 @@ pub fn anchor_psdimport(data: &[u8]) {
     }
 }
 
+/// Untrusted byte stream interpreted as an animated GIF: the frame
+/// loop, every composited state through compose, and the full
+/// import→export→import round trip (both option paths — cropped diff
+/// frames and full frames) must refuse, produce, or report — never
+/// panic.
+pub fn anchor_gifanim(data: &[u8]) {
+    let Ok(imported) = io::gif::decode_animated(data) else {
+        return;
+    };
+    for frame in 0..imported.report.frames {
+        let _ = compose::render(&imported.document, 0, frame);
+    }
+    let options = [
+        io::gif::GifOptions::default(),
+        io::gif::GifOptions {
+            crop: true,
+            diff: true,
+            repeat: Some(3),
+        },
+    ];
+    for option in &options {
+        if let Ok(out) = io::gif::encode_animated(&imported.document, 0, option) {
+            let _ = io::gif::decode_animated(&out);
+        }
+    }
+}
+
 /// How many random catalog calls one seed drives.
 pub const HUNT_STEPS: usize = 48;
 

@@ -305,6 +305,12 @@ pub struct PageInfo {
     pub onion_before: i64,
     /// `OSAi`.
     pub onion_after: i64,
+    /// Per-state display delay in hundredths of a second — the `FNDi`
+    /// Frame Duration unit — indexed by state. Entries past the vec
+    /// (or an empty vec) mean "no explicit delay recorded"; consumers
+    /// pick their own default (the GIF exporter documents its 10).
+    /// Persistence rides the document-level `EXPv`/`FNLv` mapping.
+    pub frame_durations: Vec<i64>,
 }
 
 /// An ordered layer list (`LYLv`).

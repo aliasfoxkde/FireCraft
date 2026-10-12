@@ -20,7 +20,7 @@ use std::process::ExitCode;
 use app_cli::{CliError, info, io, ops};
 use engine::platform::FileSystem as _;
 
-const USAGE: &str = "usage: firecraft-cli <info <file>|convert <in> <out>|apply <doc> <journal> [--out <out>]|export <in.fw.png> <out.(png|jpg|bmp|tiff|wbmp|svg|psd)> [--quality <1-100>] [--progressive] [--matte <white|black>]|import <in.raster> <out.fw.png> [name]";
+const USAGE: &str = "usage: firecraft-cli <info <file>|convert <in> <out>|apply <doc> <journal> [--out <out>]|export <in.fw.png> <out.(png|jpg|bmp|tiff|wbmp|svg|psd|gif)> [--quality <1-100>] [--progressive] [--matte <white|black>]|import <in.raster> <out.fw.png> [name]";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -106,6 +106,7 @@ fn run(args: &[String]) -> Result<(), CliError> {
             let written = match ext.as_str() {
                 "svg" => ops::export_svg(&loaded.document)?,
                 "psd" => ops::export_psd(&loaded.document)?,
+                "gif" => ops::export_gif(&loaded.document)?,
                 _ => ops::export_raster(&loaded.document, output, &flags)?,
             };
             fs.write_file(output, &written)

@@ -80,6 +80,11 @@ fn anchors(seeds: &Seeds) -> AnchorSet {
             firecraft_fuzz::anchor_psdimport,
             vec![seeds.minimal_psd.clone(), seeds.minimal_psd_corrupt.clone()],
         ),
+        (
+            "gifanim",
+            firecraft_fuzz::anchor_gifanim,
+            vec![seeds.minimal_gif.clone()],
+        ),
     ]
 }
 
@@ -186,6 +191,7 @@ struct Seeds {
     minimal_svg_corrupt: Vec<u8>,
     minimal_psd: Vec<u8>,
     minimal_psd_corrupt: Vec<u8>,
+    minimal_gif: Vec<u8>,
 }
 
 /// Seeds built in code so the driver needs no corpus files.
@@ -302,6 +308,27 @@ fn seeds() -> Seeds {
     section(&mut minimal_psd, &merged);
     let minimal_psd_corrupt = minimal_psd[..50].to_vec();
 
+    // A minimal 3-frame animated GIF (deep-path seed: decodes into a
+    // multi-state document, renders, re-encodes, re-decodes), on a
+    // 4-color global palette with index 0 reserved for transparency.
+    let mut minimal_gif = Vec::new();
+    let palette: [u8; 12] = [0, 0, 0, 255, 0, 0, 0, 0, 255, 0, 255, 0];
+    {
+        let mut encoder = gif::Encoder::new(&mut minimal_gif, 8, 4, &palette)
+            .expect("in-memory gif write cannot fail");
+        encoder
+            .set_repeat(gif::Repeat::Infinite)
+            .expect("in-memory gif write cannot fail");
+        for (delay, value) in [(5u16, 1u8), (10, 2), (20, 3)] {
+            let mut frame = gif::Frame::from_indexed_pixels(8, 4, vec![value; 32], Some(0));
+            frame.delay = delay;
+            frame.dispose = gif::DisposalMethod::Background;
+            encoder
+                .write_frame(&frame)
+                .expect("in-memory gif write cannot fail");
+        }
+    }
+
     Seeds {
         empty: Vec::new(),
         minimal_png,
@@ -314,5 +341,6 @@ fn seeds() -> Seeds {
         minimal_svg_corrupt,
         minimal_psd,
         minimal_psd_corrupt,
+        minimal_gif,
     }
 }

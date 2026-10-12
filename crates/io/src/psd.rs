@@ -733,6 +733,7 @@ fn build_model(
             canvas,
             onion_before: 0,
             onion_after: 0,
+            frame_durations: Vec::new(),
         },
         name: None,
         is_master: false,

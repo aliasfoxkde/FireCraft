@@ -12,6 +12,8 @@ description = "FireCraft import/export codecs: raster formats, PSD, SVG."
 [dependencies]
 doc = { path = "../doc" }
 fwpng = { path = "../fwpng" }
+gif = "0.14.2"
+color_quant = "1.1.0"
 raster = { path = "../raster" }
 geom = { path = "../geom" }
 compose = { path = "../compose" }
