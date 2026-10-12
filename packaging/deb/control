@@ -1,0 +1,14 @@
+Package: firecraft
+Version: 0.1.0
+Section: graphics
+Priority: optional
+Architecture: amd64
+Depends: libc6 (>= 2.31)
+Maintainer: FireCraft contributors <firecraft@localhost>
+Homepage: https://github.com/aliasfoxkde/FireCraft
+Description: Clean-room reimplementation of Adobe Fireworks CS6
+ Editor shell and CLI for the Fireworks PNG (.fw.png) format:
+ vector editing, bitmap layers with live filters, text on path,
+ symbols and nine-slice, .jsf scripting, and import/export across
+ PSD, SVG, PNG, JPEG, GIF and more. WASM-first project; this is
+ the native Linux desktop package.
