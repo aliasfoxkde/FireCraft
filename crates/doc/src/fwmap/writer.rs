@@ -914,11 +914,18 @@ impl Writer<'_> {
     }
 
     fn write_slice_object(&mut self, object: &SliceObject, path: &str) -> Result<Node, MapError> {
-        // Dictionary order: INMs? … FCLi URSi LFTf TOPf RITf BOTf …
-        // OBNs? … TSLi?
+        // Dictionary order: INMs? A2Ts? ALTs? FCLi URSi LFTf TOPf
+        // RITf BOTf PBPv* OBNs? DTAv? LCKb? BEVv? TSLi? MSNi? CBTb?
+        // CBRi? CBAi? CBHi? CHVi? CBVi? CVVi? FILs? TDTs? EXPv?
         let mut mapped = Vec::new();
         if let Some(internal_name) = &object.internal_name {
             mapped.push(n_s(*b"INMs", internal_name));
+        }
+        if let Some(link) = &object.link {
+            mapped.push(n_s(*b"A2Ts", link));
+        }
+        if let Some(alt) = &object.alt {
+            mapped.push(n_s(*b"ALTs", alt));
         }
         mapped.push(n_i(*b"FCLi", object.fill_raw));
         mapped.push(n_i(*b"URSi", object.shape));
@@ -926,11 +933,82 @@ impl Writer<'_> {
         mapped.push(n_f(*b"TOPf", object.frame.y0));
         mapped.push(n_f(*b"RITf", object.frame.x1));
         mapped.push(n_f(*b"BOTf", object.frame.y1));
+        for (i, contour) in object.contours.iter().enumerate() {
+            // Polygon outlines ride `URLv` directly (no `PBLv` wrap —
+            // the dictionary lists `PBPv` as a `URLv` child).
+            let pbpv_path = format!("{path}/PBPv[{i}]");
+            mapped.push(self.write_contour(contour, &pbpv_path)?);
+        }
         if let Some(name) = &object.name {
             mapped.push(n_s(*b"OBNs", name));
         }
+        if !object.custom_data.is_empty() {
+            // One `DCEv` (`DCKs` + `DCVs`) per entry, in the map's
+            // canonical order — the same shape the instance writer
+            // emits for `ALSv` custom data.
+            let entries: Vec<Node> = object
+                .custom_data
+                .iter()
+                .map(|(key, value)| {
+                    n_kids(*b"DCEv", vec![n_s(*b"DCKs", key), n_s(*b"DCVs", value)])
+                })
+                .collect();
+            mapped.push(n_kids(*b"DTAv", entries));
+        }
+        if !object.behaviors.is_empty() {
+            let bevv_path = format!("{path}/BEVv");
+            let bagged_bevv = self.bag.take_under(&bevv_path);
+            let indices = mapped_indices(&bagged_bevv, object.behaviors.len());
+            let mut behv_nodes = Vec::with_capacity(object.behaviors.len());
+            for (i, behavior) in object.behaviors.iter().enumerate() {
+                // The rest of each behavior subtree re-splices from the
+                // bag under this `BEHv`'s original position.
+                let behv_path = format!("{bevv_path}/BEHv[{}]", indices[i]);
+                let beti = vec![n_i(*b"BETi", behavior.kind)];
+                let kids = self.splice_container(beti, &behv_path);
+                behv_nodes.push(n_kids(*b"BEHv", kids));
+            }
+            let bevv = splice(behv_nodes, bagged_bevv);
+            mapped.push(n_kids(*b"BEVv", bevv));
+        } else {
+            // Unreadable behaviors (whole-bagged) still re-emit.
+            let bevv_path = format!("{path}/BEVv");
+            let bagged_bevv = self.bag.take_under(&bevv_path);
+            if !bagged_bevv.is_empty() {
+                mapped.push(n_kids(*b"BEVv", splice(Vec::new(), bagged_bevv)));
+            }
+        }
         if let Some(slice_type) = object.slice_type {
             mapped.push(n_i(*b"TSLi", slice_type));
+        }
+        if let Some(background) = &object.background {
+            if let Some(is_background) = background.is_background {
+                mapped.push(n_b(*b"CBTb", is_background));
+            }
+            if let Some(repeat) = background.repeat {
+                mapped.push(n_i(*b"CBRi", repeat));
+            }
+            if let Some(attachment) = background.attachment {
+                mapped.push(n_i(*b"CBAi", attachment));
+            }
+            if let Some(h_position) = background.h_position {
+                mapped.push(n_i(*b"CBHi", h_position));
+            }
+            if let Some(h_value) = background.h_value {
+                mapped.push(n_i(*b"CHVi", h_value));
+            }
+            if let Some(v_position) = background.v_position {
+                mapped.push(n_i(*b"CBVi", v_position));
+            }
+            if let Some(v_value) = background.v_value {
+                mapped.push(n_i(*b"CVVi", v_value));
+            }
+        }
+        if let Some(label) = &object.label {
+            mapped.push(n_s(*b"FILs", label));
+        }
+        if let Some(td_text) = &object.td_text {
+            mapped.push(n_s(*b"TDTs", td_text));
         }
         if let Some(export) = &object.export {
             let expv_path = format!("{path}/EXPv");

@@ -375,6 +375,14 @@ fn random_slice(rng: &mut FuzzRng) -> ObjectData {
         fill_raw: 0,
         name: None,
         slice_type: None,
+        link: None,
+        alt: None,
+        label: None,
+        td_text: None,
+        contours: Vec::new(),
+        background: None,
+        behaviors: Vec::new(),
+        custom_data: std::collections::BTreeMap::new(),
         export: None,
     })
 }
@@ -497,6 +505,15 @@ pub const CALLS: &[&str] = &[
     "library.importSymbol",
     "library.remove",
     "library.rename",
+    "slice.create",
+    "hotspot.create",
+    "slice.setLink",
+    "slice.setType",
+    "slice.setBackground",
+    "slice.setExport",
+    "slice.addBehavior",
+    "slice.removeBehavior",
+    "slice.setData",
 ];
 
 /// Builds a random call against `document`: a random catalog id and a
@@ -1208,6 +1225,76 @@ pub fn random_call(rng: &mut FuzzRng, document: &Document) -> (String, serde_jso
         "library.rename" => serde_json::json!({
             "symbol": rng.below(3),
             "name": format!("L-{}", rng.below(100)),
+        }),
+        "slice.create" | "hotspot.create" => {
+            let shape = rng.below(3);
+            let shape_name = match shape {
+                0 => "rect",
+                1 => "ellipse",
+                _ => "polygon",
+            };
+            let points = (shape == 2).then(|| {
+                (0..3 + rng.below(3))
+                    .map(|_| {
+                        serde_json::json!({
+                            "x": rng.below(64) as f64,
+                            "y": rng.below(64) as f64,
+                        })
+                    })
+                    .collect::<Vec<_>>()
+            });
+            serde_json::json!({
+                "shape": shape_name,
+                "x": rng.below(40) as f64,
+                "y": rng.below(40) as f64,
+                "width": 1.0 + rng.below(24) as f64,
+                "height": 1.0 + rng.below(24) as f64,
+                "points": points,
+                "page": any_index(rng, 2),
+                "name": rng.chance(50).then(|| format!("S-{}", rng.below(100))),
+                "link": rng.chance(30).then(|| format!("https://example.invalid/{}", rng.below(9))),
+                "alt": rng.chance(30).then(|| "alt".to_owned()),
+            })
+        }
+        "slice.setLink" => serde_json::json!({
+            "id": any_id(rng),
+            "link": rng.chance(70).then(|| format!("https://example.invalid/{}", rng.below(9))),
+            "alt": rng.chance(50).then(|| "alt".to_owned()),
+        }),
+        "slice.setType" => serde_json::json!({
+            "id": any_id(rng),
+            "slice_type": match rng.below(3) {
+                0 => serde_json::json!(0),
+                1 => serde_json::json!(2),
+                _ => serde_json::Value::Null,
+            },
+        }),
+        "slice.setBackground" => serde_json::json!({
+            "id": any_id(rng),
+            "is_background": rng.chance(70).then(|| rng.chance(50)),
+            "repeat": rng.chance(50).then(|| rng.below(5) as i64 - 1),
+            "attachment": rng.chance(50).then(|| rng.below(3) as i64 - 1),
+            "h_position": rng.chance(50).then(|| rng.below(5) as i64 - 1),
+            "v_position": rng.chance(50).then(|| rng.below(5) as i64 - 1),
+        }),
+        "slice.setExport" => serde_json::json!({
+            "id": any_id(rng),
+            "format": rng.chance(60).then(|| rng.below(5) as i64),
+            "jpeg_quality": rng.chance(40).then(|| rng.below(110) as i64),
+            "clear": rng.chance(15),
+        }),
+        "slice.addBehavior" => serde_json::json!({
+            "id": any_id(rng),
+            "kind": rng.below(12) as i64,
+        }),
+        "slice.removeBehavior" => serde_json::json!({
+            "id": any_id(rng),
+            "index": any_index(rng, 3),
+        }),
+        "slice.setData" => serde_json::json!({
+            "id": any_id(rng),
+            "key": format!("k-{}", rng.below(4)),
+            "value": rng.chance(75).then(|| format!("v-{}", rng.below(9))),
         }),
         "library.importSymbol" => {
             // A tiny synthetic closure with fabricated source ids:

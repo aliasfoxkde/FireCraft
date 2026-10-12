@@ -1099,6 +1099,14 @@ mod tests {
             fill_raw: 0,
             name: None,
             slice_type: None,
+            link: None,
+            alt: None,
+            label: None,
+            td_text: None,
+            contours: Vec::new(),
+            background: None,
+            behaviors: Vec::new(),
+            custom_data: std::collections::BTreeMap::new(),
             export: None,
         })
     }

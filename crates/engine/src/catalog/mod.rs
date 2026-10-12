@@ -17,6 +17,7 @@ pub(crate) mod path;
 pub(crate) mod retouch;
 pub(crate) mod symbol;
 pub(crate) mod text;
+pub(crate) mod web;
 
 use crate::error::EngineError;
 use crate::registry::CommandRegistry;
@@ -34,7 +35,8 @@ pub fn install(registry: &mut CommandRegistry) -> Result<(), EngineError> {
     layer::install(registry)?;
     page::install(registry)?;
     text::install(registry)?;
-    symbol::install(registry)
+    symbol::install(registry)?;
+    web::install(registry)
 }
 
 /// Every registered built-in, sorted (surfaces enumerate this).

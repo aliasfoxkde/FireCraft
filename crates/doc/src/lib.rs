@@ -20,9 +20,9 @@ pub mod registry;
 pub use model::{
     Canvas, Cell, Contour, Document, DocumentInfo, Effect, EffectProperty, EffectValue,
     ExportOptions, Grid, GroupObject, Guides, ImageObject, Layer, LayerList, NineSliceGuides, Page,
-    PageInfo, PaintStyle, PathObject, PathPoint, PrimitiveSource, SelectionMask, SliceObject,
-    SymbolAnimation, SymbolDefinition, SymbolInstanceObject, SymbolType, TextObject, TextOnPath,
-    TextRun, TextStyle, TileBank, TileRef,
+    PageInfo, PaintStyle, PathObject, PathPoint, PrimitiveSource, SelectionMask, SliceBackground,
+    SliceBehavior, SliceObject, SymbolAnimation, SymbolDefinition, SymbolInstanceObject,
+    SymbolType, TextObject, TextOnPath, TextRun, TextStyle, TileBank, TileRef,
 };
 pub use registry::{ObjectData, ObjectId, Registry};
 // `EffectValue::Raw` exposes the node type; re-export it so consumers

@@ -10,10 +10,11 @@ use super::reader::read;
 use super::unknown::UnknownBag;
 use super::writer::{mapped_indices, splice, write};
 use crate::model::{
-    Canvas, Cell, Contour, Document, DocumentInfo, Effect, EffectProperty, EffectValue, Grid,
-    GroupObject, Guides, ImageObject, Layer, LayerList, NineSliceGuides, Page, PageInfo,
-    PaintStyle, PathObject, PathPoint, PrimitiveSource, SliceObject, SymbolAnimation,
-    SymbolDefinition, SymbolInstanceObject, SymbolType, TextObject, TextRun, TextStyle, TileRef,
+    Canvas, Cell, Contour, Document, DocumentInfo, Effect, EffectProperty, EffectValue,
+    ExportOptions, Grid, GroupObject, Guides, ImageObject, Layer, LayerList, NineSliceGuides, Page,
+    PageInfo, PaintStyle, PathObject, PathPoint, PrimitiveSource, SliceBackground, SliceBehavior,
+    SliceObject, SymbolAnimation, SymbolDefinition, SymbolInstanceObject, SymbolType, TextObject,
+    TextRun, TextStyle, TileRef,
 };
 use crate::registry::{ObjectData, ObjectId, Registry};
 use fwpng::nodetree::{Node, NodeValue, parse, serialize};
@@ -276,7 +277,55 @@ fn sample_document() -> Document {
         fill_raw: 0x33_66_99,
         name: Some("Slice".into()),
         slice_type: Some(1),
-        export: None,
+        // The full URLv string/behavior/data family: the compile-fail
+        // gate keeps every mapped node honest.
+        link: Some("https://firecraft.example/".into()),
+        alt: Some("a slice".into()),
+        label: Some("hero".into()),
+        td_text: Some("cell text".into()),
+        contours: vec![Contour {
+            closed: true,
+            point_count: 3,
+            points: vec![
+                PathPoint {
+                    anchor: Point::new(1.0, 2.0),
+                    primary: None,
+                    secondary: None,
+                    is_curve: false,
+                },
+                PathPoint {
+                    anchor: Point::new(9.0, 2.0),
+                    primary: None,
+                    secondary: None,
+                    is_curve: false,
+                },
+                PathPoint {
+                    anchor: Point::new(5.0, 8.0),
+                    primary: None,
+                    secondary: None,
+                    is_curve: false,
+                },
+            ],
+        }],
+        background: Some(SliceBackground {
+            is_background: Some(false),
+            repeat: Some(2),
+            attachment: Some(1),
+            h_position: Some(3),
+            h_value: Some(12),
+            v_position: Some(0),
+            v_value: None,
+        }),
+        behaviors: vec![SliceBehavior { kind: 9 }],
+        custom_data: std::collections::BTreeMap::from([(
+            "swapTarget".to_owned(),
+            "hero_f2.png".to_owned(),
+        )]),
+        export: Some(ExportOptions {
+            format: Some(1),
+            jpeg_quality: Some(82),
+            ..ExportOptions::default()
+        }),
     }));
     let group_id = doc.registry.insert(ObjectData::Group(GroupObject {
         group_type: 1,
@@ -1277,6 +1326,14 @@ fn model_structs_are_fully_constructed() {
         fill_raw: 0,
         name: None,
         slice_type: None,
+        link: None,
+        alt: None,
+        label: None,
+        td_text: None,
+        contours: Vec::new(),
+        background: None,
+        behaviors: Vec::new(),
+        custom_data: std::collections::BTreeMap::new(),
         export: None,
     };
     let _instance = SymbolInstanceObject {
@@ -1809,4 +1866,148 @@ fn slice_expv_maps_selective_settings() {
         "the selective JPEG quality slot"
     );
     assert!(bag.iter().all(|(path, _, _)| !path.contains("EXPv")));
+}
+
+#[test]
+fn bevv_behavior_payloads_survive_round_trips() {
+    // One readable behavior (`BETi` 9 popup-menu plus an opaque
+    // payload sibling) and one behavior with no readable `BETi`. The
+    // model carries the kinds; everything else must re-emerge verbatim
+    // at its recorded position.
+    let menu_payload = n_s(b"BMXs", "menu-item-payload");
+    let opaque = n_k(
+        b"BEHv",
+        vec![n_s(b"BZZs", "unreadable-behavior"), n_i(b"BZXi", 7)],
+    );
+    let slice = n_k(
+        b"URLv",
+        vec![
+            n_s(b"INMs", "slice_0"),
+            n_i(b"FCLi", 0),
+            n_i(b"URSi", 0),
+            n_f(b"LFTf", 0.0),
+            n_f(b"TOPf", 0.0),
+            n_f(b"RITf", 100.0),
+            n_f(b"BOTf", 40.0),
+            n_k(
+                b"BEVv",
+                vec![
+                    n_k(b"BEHv", vec![n_i(b"BETi", 9), menu_payload.clone()]),
+                    opaque.clone(),
+                ],
+            ),
+            n_i(b"TSLi", 0),
+        ],
+    );
+    let tree = vec![n_k(
+        b"MKBv",
+        vec![
+            n_i(b"FRCi", 1),
+            n_k(
+                b"LYLv",
+                vec![n_k(
+                    b"LAYv",
+                    vec![
+                        n_b(b"BKGb", false),
+                        n_b(b"URLb", false),
+                        n_s(b"LNMs", "L"),
+                        n_b(b"DISb", true),
+                        n_k(
+                            b"CLLv",
+                            vec![n_k(
+                                b"CELv",
+                                vec![
+                                    n_b(b"LCKb", false),
+                                    n_k(b"ELMv", vec![slice]),
+                                    n_b(b"VISb", true),
+                                ],
+                            )],
+                        ),
+                    ],
+                )],
+            ),
+        ],
+    )];
+
+    let (doc, bag) = read(&tree).expect("read");
+    let mut slices = Vec::new();
+    for (_, object) in doc.registry.iter() {
+        if let ObjectData::Slice(slice) = object {
+            slices.push(slice.clone());
+        }
+    }
+    let slice = slices.first().expect("the slice was modeled");
+    assert_eq!(
+        slice.behaviors,
+        vec![SliceBehavior { kind: 9 }],
+        "only the readable behavior is modeled"
+    );
+    assert_eq!(
+        bag.iter()
+            .filter(|(path, _, _)| path.ends_with("/BEVv/BEHv[0]"))
+            .count(),
+        1,
+        "the popup-menu payload rides the bag inside its BEHv"
+    );
+    assert_eq!(
+        bag.iter()
+            .filter(|(path, _, node)| path.ends_with("/BEVv") && node.fourcc == opaque.fourcc)
+            .count(),
+        1,
+        "the unreadable behavior is whole-bagged at the BEVv level"
+    );
+
+    let (tree2, stats) = write(&doc, &bag).expect("write");
+    assert_eq!(stats.unconsumed_unknown, 0);
+    let mkbv = children(&tree2[0]);
+    let layv = &children(
+        mkbv.iter()
+            .find(|node| node.fourcc == *b"LYLv")
+            .expect("LYLv"),
+    )[0];
+    let celv = &children(
+        &children(
+            children(layv)
+                .iter()
+                .find(|node| node.fourcc == *b"CLLv")
+                .expect("CLLv"),
+        )[0],
+    );
+    let elm = celv
+        .iter()
+        .find(|node| node.fourcc == *b"ELMv")
+        .expect("ELMv");
+    let urlv = children(elm)
+        .iter()
+        .find(|node| node.fourcc == *b"URLv")
+        .expect("URLv");
+    let bevv = children(urlv)
+        .iter()
+        .find(|node| node.fourcc == *b"BEVv")
+        .expect("BEVv re-emitted");
+    let behvs = children(bevv);
+    assert_eq!(behvs.len(), 2);
+    assert_eq!(
+        serialize(children(&behvs[0])),
+        serialize(&[n_i(b"BETi", 9), menu_payload]),
+        "the modeled kind re-emits with its payload at the recorded slot"
+    );
+    assert_eq!(
+        serialize(std::slice::from_ref(&behvs[1])),
+        serialize(std::slice::from_ref(&opaque)),
+        "the unreadable behavior re-emits verbatim"
+    );
+
+    // Byte stability: re-read and re-write produce the same tree.
+    let (doc3, bag3) = {
+        let bytes = serialize(&tree2);
+        read(&parse(&bytes).expect("parse")).expect("re-read")
+    };
+    assert_eq!(doc3, doc);
+    let (tree3, _) = write(&doc3, &bag3).expect("rewrite");
+    assert_eq!(
+        serialize(&tree3),
+        serialize(&tree2),
+        "second write is stable"
+    );
 }

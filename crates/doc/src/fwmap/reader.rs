@@ -12,9 +12,9 @@ use crate::fwmap::unknown::UnknownBag;
 use crate::model::{
     Canvas, Cell, Contour, Document, DocumentInfo, Effect, EffectProperty, EffectValue,
     ExportOptions, Grid, GroupObject, Guides, ImageObject, Layer, LayerList, NineSliceGuides, Page,
-    PageInfo, PaintStyle, PathObject, PathPoint, PrimitiveSource, SliceObject, SymbolAnimation,
-    SymbolDefinition, SymbolInstanceObject, SymbolType, TextObject, TextOnPath, TextRun, TextStyle,
-    TileRef,
+    PageInfo, PaintStyle, PathObject, PathPoint, PrimitiveSource, SliceBackground, SliceBehavior,
+    SliceObject, SymbolAnimation, SymbolDefinition, SymbolInstanceObject, SymbolType, TextObject,
+    TextOnPath, TextRun, TextStyle, TileRef,
 };
 use crate::registry::{ObjectData, ObjectId, Registry};
 use fwpng::nodetree::{Node, NodeValue};
@@ -1581,6 +1581,12 @@ impl Reader {
         let (mut internal_name, mut name, mut slice_type) = (None, None, None);
         let (mut shape, mut fill_raw) = (None, None);
         let (mut left, mut top, mut right, mut bottom) = (None, None, None, None);
+        let (mut link, mut alt, mut label, mut td_text) = (None, None, None, None);
+        let mut contours: Vec<Contour> = Vec::new();
+        let (mut cbt, mut cbr, mut cba, mut cbh, mut chv, mut cbv, mut cvv) =
+            (None, None, None, None, None, None, None);
+        let mut behaviors: Vec<SliceBehavior> = Vec::new();
+        let mut custom_data = std::collections::BTreeMap::new();
         let mut export: Option<ExportOptions> = None;
 
         for (i, child) in children.iter().enumerate() {
@@ -1594,6 +1600,67 @@ impl Reader {
                 b"TOPf" => self.slot_f64(child, path, i, &mut top)?,
                 b"RITf" => self.slot_f64(child, path, i, &mut right)?,
                 b"BOTf" => self.slot_f64(child, path, i, &mut bottom)?,
+                b"A2Ts" => self.slot_str(child, path, i, &mut link)?,
+                b"ALTs" => self.slot_str(child, path, i, &mut alt)?,
+                b"FILs" => self.slot_str(child, path, i, &mut label)?,
+                b"TDTs" => self.slot_str(child, path, i, &mut td_text)?,
+                b"PBPv" => {
+                    // Polygon slice outlines — the path contour
+                    // layout (`ISCb`/`PPCi`/`PBTv`).
+                    let kids = children_of(child, path)?;
+                    let pbpv_path = format!("{path}/PBPv[{i}]");
+                    contours.push(self.read_contour(kids, &pbpv_path)?);
+                }
+                b"BEVv" => {
+                    // Each `BEHv` contributes its `BETi`; the rest of
+                    // the behavior subtree rides the bag under this
+                    // `BEHv`'s own path so the writer re-emits it.
+                    if behaviors.is_empty() {
+                        let kids = children_of(child, path)?;
+                        let bevv_path = format!("{path}/BEVv");
+                        for (j, behv) in kids.iter().enumerate() {
+                            let behv_path = format!("{bevv_path}/BEHv[{j}]");
+                            if behv.fourcc != *b"BEHv" {
+                                self.bag_node(&bevv_path, j, behv);
+                                continue;
+                            }
+                            let behv_kids = children_of(behv, &behv_path)?;
+                            match Self::read_behavior_kind(behv_kids, &behv_path) {
+                                Some(kind) => {
+                                    behaviors.push(SliceBehavior { kind });
+                                    for (k, entry) in behv_kids.iter().enumerate() {
+                                        if entry.fourcc != *b"BETi" {
+                                            self.bag_node(&behv_path, k, entry);
+                                        }
+                                    }
+                                }
+                                // No readable `BETi`: preserve the
+                                // whole behavior untouched.
+                                None => self.bag_node(&bevv_path, j, behv),
+                            }
+                        }
+                    } else {
+                        self.bag_node(path, i, child);
+                    }
+                }
+                b"DTAv" => {
+                    if custom_data.is_empty() {
+                        let kids = children_of(child, path)?;
+                        match Self::read_custom_data(kids) {
+                            Some(entries) => custom_data = entries,
+                            None => self.bag_node(path, i, child),
+                        }
+                    } else {
+                        self.bag_node(path, i, child);
+                    }
+                }
+                b"CBTb" => self.slot_bool(child, path, i, &mut cbt)?,
+                b"CBRi" => self.slot_i64(child, path, i, &mut cbr)?,
+                b"CBAi" => self.slot_i64(child, path, i, &mut cba)?,
+                b"CBHi" => self.slot_i64(child, path, i, &mut cbh)?,
+                b"CHVi" => self.slot_i64(child, path, i, &mut chv)?,
+                b"CBVi" => self.slot_i64(child, path, i, &mut cbv)?,
+                b"CVVi" => self.slot_i64(child, path, i, &mut cvv)?,
                 b"EXPv" => {
                     // The per-slice export override — the selective
                     // JPEG quality table's home. A slice's `FNLv` has
@@ -1607,11 +1674,29 @@ impl Reader {
                         export = Some(options);
                     }
                 }
-                // A2Ts / ALTs / PBPv / DTAv / BEVv / MSNi and
-                // anything else: preserved.
+                // MSNi and anything else: preserved.
                 _ => self.bag_node(path, i, child),
             }
         }
+
+        // The cell-background family is minted only when some member
+        // was recorded — an absent family means no nodes on the wire.
+        let has_background = cbt.is_some()
+            || cbr.is_some()
+            || cba.is_some()
+            || cbh.is_some()
+            || chv.is_some()
+            || cbv.is_some()
+            || cvv.is_some();
+        let background = has_background.then_some(SliceBackground {
+            is_background: cbt,
+            repeat: cbr,
+            attachment: cba,
+            h_position: cbh,
+            h_value: chv,
+            v_position: cbv,
+            v_value: cvv,
+        });
 
         Ok(ObjectData::Slice(SliceObject {
             internal_name,
@@ -1625,8 +1710,28 @@ impl Reader {
             fill_raw: fill_raw.unwrap_or(0),
             name,
             slice_type,
+            link,
+            alt,
+            label,
+            td_text,
+            contours,
+            background,
+            behaviors,
+            custom_data,
             export,
         }))
+    }
+
+    /// The `BETi` of one `BEHv`, or `None` when absent/mis-shaped
+    /// (the whole behavior then stays bagged).
+    fn read_behavior_kind(children: &[Node], path: &str) -> Option<i64> {
+        for child in children {
+            if child.fourcc == *b"BETi" {
+                return child.as_int();
+            }
+        }
+        let _ = path;
+        None
     }
 
     /// Returns `Ok(None)` when the instance cannot be modeled (absent or

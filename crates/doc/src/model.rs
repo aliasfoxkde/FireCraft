@@ -863,18 +863,86 @@ pub struct SliceObject {
     pub internal_name: Option<String>,
     /// `LFTf TOPf RITf BOTf` — slice bounds.
     pub frame: Rect,
-    /// `URSi` — hotspot shape.
+    /// `URSi` — hotspot shape: 0 rectangle, 1 ellipse, 2 polygon.
     pub shape: i64,
     /// `FCLi` — fill color as a raw int (layout unpinned).
     pub fill_raw: i64,
     /// `OBNs` — object name.
     pub name: Option<String>,
-    /// `TSLi` — type of slice.
+    /// `TSLi` — type of slice: 0 foreground, 2 background.
     pub slice_type: Option<i64>,
+    /// `A2Ts` — the anchor link URL. The dictionary labels this node
+    /// "Anchor Link Alt Text" and `ALTs` "Anchor Link Target", but
+    /// `ALTs` spells the HTML `alt` attribute; the labels read as the
+    /// analyser's guesses. Mapped per node mnemonics (decision 0017) —
+    /// a round-trip is byte-comparable under either reading, so corpus
+    /// evidence can re-label these without a format change.
+    pub link: Option<String>,
+    /// `ALTs` — alt text (the HTML `alt` attribute).
+    pub alt: Option<String>,
+    /// `FILs` — the auto-naming label (the element the exporter's
+    /// naming scheme substitutes when present).
+    pub label: Option<String>,
+    /// `TDTs` — cell (`TD`) text, the payload of a background slice
+    /// exported as HTML table text.
+    pub td_text: Option<String>,
+    /// `PBPv` — polygon outline (same layout as path contours).
+    /// Empty for rectangle/ellipse slices, which carry only `frame`.
+    pub contours: Vec<Contour>,
+    /// `CBTb` + the cell-background family — the background-slice
+    /// export knobs. `None` (and no nodes on the wire) for foreground
+    /// slices.
+    pub background: Option<SliceBackground>,
+    /// `BEVv` — behaviors. Only `BETi` is typed (the dictionary
+    /// documents the layout only for popup menus, `BETi` 9); every
+    /// `BEHv`'s remaining children ride the unknown bag verbatim.
+    pub behaviors: Vec<SliceBehavior>,
+    /// `DTAv` — per-slice script data (the same `DCEv` key/value
+    /// machinery as instances). Export-facing behavior parameters
+    /// (swap target/frame, nav group) live here — see decision 0017.
+    pub custom_data: std::collections::BTreeMap<String, String>,
     /// `EXPv` — this slice's export override (the selective-JPEG
     /// quality table's home; every field `None` when the file carries
     /// an `EXPv` with none of the mapped children).
     pub export: Option<ExportOptions>,
+}
+
+/// The background-slice export knobs (`CBTb` + family under `URLv`).
+/// Only present on the wire when recorded; every field is the raw
+/// dictionary value.
+#[derive(Clone, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct SliceBackground {
+    /// `CBTb` — background slice (set when `TSLi` is 2). `None` when
+    /// the file recorded no `CBTb`; the node is presence-tracked so a
+    /// recorded `false` survives the round trip.
+    pub is_background: Option<bool>,
+    /// `CBRi` — repeat: 0 no-repeat, 1 repeat-both, 2 repeat-x,
+    /// 3 repeat-y.
+    pub repeat: Option<i64>,
+    /// `CBAi` — attachment: 0 fixed, 1 scroll.
+    pub attachment: Option<i64>,
+    /// `CBHi` — horizontal position: 0 left, 1 center, 2 right,
+    /// 3 value (`CHVi`).
+    pub h_position: Option<i64>,
+    /// `CHVi` — horizontal value for `CBHi` 3.
+    pub h_value: Option<i64>,
+    /// `CBVi` — vertical position: 0 top, 1 center, 2 bottom,
+    /// 3 value (`CVVi`).
+    pub v_position: Option<i64>,
+    /// `CVVi` — vertical value for `CBVi` 3.
+    pub v_value: Option<i64>,
+}
+
+/// One entry of a slice's `BEVv` behavior list. `BETi` is the only
+/// node the dictionary documents across behavior types (9 = popup
+/// menu, whose payload structure is known but is a non-goal here);
+/// the rest of each `BEHv` is preserved verbatim in the unknown bag.
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct SliceBehavior {
+    /// `BETi` — raw behavior type (9 = popup menu).
+    pub kind: i64,
 }
 
 /// The animation parameter family carried by a symbol instance

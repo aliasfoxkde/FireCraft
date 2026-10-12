@@ -123,6 +123,14 @@ impl TypedCommand for DeleteLayer {
                 detail: format!("layer {} absent on page {}", payload.layer, payload.page),
             });
         }
+        // `MSLb` special layers (the Web Layer) block deletion —
+        // CS6's behavior for its special layer.
+        if page.layers.layers[payload.layer].is_special {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: "a special layer (Web Layer) cannot be deleted".to_owned(),
+            });
+        }
         let before = page.layers.clone();
         page.layers.layers.remove(payload.layer);
         Ok(Delta::Layers {
