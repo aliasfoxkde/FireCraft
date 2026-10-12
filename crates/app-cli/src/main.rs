@@ -29,7 +29,7 @@ use app_cli::{CliError, channel, info, io, mcp, ops};
 use engine::Session;
 use engine::platform::FileSystem as _;
 
-const USAGE: &str = "usage: firecraft-cli <info <file>|convert <in> <out>|apply <doc> <journal> [--out <out>] [--steps <out.fwsteps>]|export <in.fw.png> <out.(png|jpg|bmp|tiff|wbmp|svg|psd|gif)> [--quality <1-100>] [--progressive] [--matte <white|black>]|import <in.raster> <out.fw.png> [name]|batch <dir> --format <png|jpg|bmp|tiff|wbmp|svg|psd|gif> [--options <json|file>] [--out <dir>]|run-script <script.jsf> <doc> [--out <out>]|serve <doc> [--out <out>]|mcp <doc> [--out <out>]";
+const USAGE: &str = "usage: firecraft-cli <info <file>|convert <in> <out>|apply <doc> <journal> [--out <out>] [--steps <out.fwsteps>]|export <in.fw.png> <out.(png|jpg|bmp|tiff|wbmp|svg|psd|gif)> [--quality <1-100>] [--progressive] [--matte <white|black>]|import <in.raster> <out.fw.png> [name]|batch <dir> --format <png|jpg|bmp|tiff|wbmp|svg|psd|gif> [--options <json|file>] [--out <dir>]|export-web <in.fw.png> <out-dir> [--workflow <images|html|css|sprites|properties|pages|states|layers|gif>] [--page <n>] [--state <n>] [--name <base>] [--images-dir <prefix>] [--pct-width <n>] [--no-shim] [--skip-undefined]|run-script <script.jsf> <doc> [--out <out>]|serve <doc> [--out <out>]|mcp <doc> [--out <out>]";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -125,6 +125,82 @@ fn run(args: &[String]) -> Result<(), CliError> {
                 "[firecraft-cli] {input} -> {output} ({} bytes)",
                 written.len()
             );
+            Ok(())
+        }
+        Some("export-web") => {
+            let mut positional = Vec::new();
+            let mut workflow = webexport::Workflow::HtmlAndImages;
+            let mut options = webexport::WebExportOptions::default();
+            let mut rest = args.iter().skip(1);
+            while let Some(flag) = rest.next() {
+                let mut value = |name: &str| -> Result<String, CliError> {
+                    rest.next()
+                        .cloned()
+                        .ok_or_else(|| CliError(format!("{name} needs a value")))
+                };
+                match flag.as_str() {
+                    "--workflow" => {
+                        let value = value("--workflow")?;
+                        workflow = ops::parse_workflow(&value)?;
+                    }
+                    "--page" => {
+                        let value = value("--page")?;
+                        options.page = value
+                            .parse()
+                            .map_err(|_| CliError(format!("--page: {value} is not a number")))?;
+                    }
+                    "--state" => {
+                        let value = value("--state")?;
+                        options.state = value
+                            .parse()
+                            .map_err(|_| CliError(format!("--state: {value} is not a number")))?;
+                    }
+                    "--name" => {
+                        let name = value("--name")?;
+                        options.doc_name = name.clone();
+                        options.title = name;
+                    }
+                    "--images-dir" => options.images_dir = value("--images-dir")?,
+                    "--pct-width" => {
+                        let value = value("--pct-width")?;
+                        options.table_pct_width = Some(value.parse().map_err(|_| {
+                            CliError(format!("--pct-width: {value} is not a number"))
+                        })?);
+                    }
+                    "--no-shim" => options.shim = false,
+                    "--skip-undefined" => options.include_undefined = false,
+                    other => positional.push(other.to_owned()),
+                }
+            }
+            let (input, out_dir) = match (positional.first(), positional.get(1)) {
+                (Some(input), Some(out_dir)) => (input.as_str(), out_dir.as_str()),
+                _ => return Err(missing("export-web <in.fw.png> <out-dir> [flags]")()),
+            };
+            let bytes = fs
+                .read_file(input)
+                .map_err(|error| CliError(error.to_string()))?;
+            let loaded = io::open(&bytes)?;
+            let export = ops::export_web(&loaded.document, &options, workflow)?;
+            let write = |name: &str, data: &[u8]| -> Result<String, CliError> {
+                let path = std::path::Path::new(out_dir)
+                    .join(name)
+                    .to_string_lossy()
+                    .into_owned();
+                fs.write_file(&path, data)
+                    .map_err(|error| CliError(error.to_string()))?;
+                Ok(path)
+            };
+            let mut count = 0;
+            for file in &export.files {
+                write(&file.name, &file.bytes)?;
+                count += 1;
+            }
+            if let Some(html) = &export.html {
+                let stem = format!("{}.html", options.doc_name);
+                write(&stem, html.as_bytes())?;
+                count += 1;
+            }
+            eprintln!("[firecraft-cli] {input} -> {out_dir} ({count} files)");
             Ok(())
         }
         Some("import") => {

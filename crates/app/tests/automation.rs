@@ -96,6 +96,92 @@ fn one_command_id_through_gui_cli_and_mcp() {
     assert_eq!(via_mcp.journal_len(), 1);
 }
 
+/// The M11 task 5 battery: the web-layer ids through the same three
+/// surfaces — `slice.create`, then `slice.setLink` naming the id the
+/// create minted (identical everywhere because every surface starts
+/// from the same base).
+#[test]
+fn web_command_ids_through_gui_cli_and_mcp() {
+    let base = Editor::untitled().session.document().clone();
+    let create = serde_json::json!({
+        "shape": "rect",
+        "x": 8.0, "y": 8.0, "width": 64.0, "height": 32.0,
+        "page": 0,
+        "name": "banner", "link": null, "alt": null,
+    });
+
+    // Scratch run: learn the id `slice.create` mints so the link
+    // payload can name it (same slot on every surface).
+    let mut scratch = Session::new(base.clone());
+    let reply = channel::handle(
+        &mut scratch,
+        &serde_json::json!({ "command": "slice.create", "args": create }),
+    );
+    assert_eq!(reply["ok"], serde_json::json!(true), "channel: {reply}");
+    let slice_id = scratch.document().pages[0]
+        .layers
+        .layers
+        .iter()
+        .find(|layer| layer.has_url && layer.is_special)
+        .and_then(|layer| layer.cells[0].elements.first())
+        .copied()
+        .expect("the created slice is on the web layer");
+    let link = serde_json::json!({
+        "id": slice_id,
+        "link": "https://example.test/",
+        "alt": "banner",
+    });
+
+    // GUI surface: slice-create → link through Editor::apply.
+    let mut gui = Editor::from_document(base.clone());
+    gui.apply("slice.create", create.clone())
+        .expect("GUI create");
+    gui.apply("slice.setLink", link.clone()).expect("GUI link");
+
+    // CLI surface: the control channel, both rows.
+    let mut cli = Session::new(base.clone());
+    for (command, args) in [("slice.create", &create), ("slice.setLink", &link)] {
+        let reply = channel::handle(
+            &mut cli,
+            &serde_json::json!({ "command": command, "args": args }),
+        );
+        assert_eq!(reply["ok"], serde_json::json!(true), "channel: {reply}");
+    }
+
+    // MCP surface: firecraft.apply, both rows.
+    let mut via_mcp = Session::new(base);
+    for (command, args) in [("slice.create", &create), ("slice.setLink", &link)] {
+        let reply = mcp::handle(
+            &mut via_mcp,
+            mcp_fs(),
+            &serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": 9,
+                "method": "tools/call",
+                "params": {
+                    "name": "firecraft.apply",
+                    "arguments": { "command": command, "args": args },
+                },
+            }),
+        )
+        .expect("tools/call answers");
+        assert!(reply["error"].is_null(), "mcp: {reply}");
+    }
+
+    // Three surfaces, one registry: byte-equal documents.
+    let gui_doc = serde_json::to_vec(gui.session.document()).unwrap();
+    assert_eq!(
+        serde_json::to_vec(cli.document()).unwrap(),
+        gui_doc,
+        "the control channel diverged from the GUI"
+    );
+    assert_eq!(
+        serde_json::to_vec(via_mcp.document()).unwrap(),
+        gui_doc,
+        "the MCP server diverged from the GUI"
+    );
+}
+
 #[test]
 fn mcp_handshake_and_tool_table() {
     let mut session = Session::new(doc::Document::default());

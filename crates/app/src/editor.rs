@@ -29,6 +29,11 @@ pub enum Tool {
     Text,
     /// Drag = marquee zoom, click = zoom in, alt-click = zoom out.
     Zoom,
+    /// Drag to create a foreground slice on the page's Web Layer
+    /// (`slice.create`).
+    Slice,
+    /// Drag to create a link-only hotspot area (`hotspot.create`).
+    Hotspot,
     /// Drag to pan.
     Hand,
     /// Drag to create an Auto Shape with the tool's default
@@ -822,6 +827,26 @@ impl Editor {
             Tool::AutoShape(shape) => {
                 self.apply(shape.command(), shape.payload(drag, self.page, self.frame))?;
                 true
+            }
+            Tool::Slice | Tool::Hotspot => {
+                // Web objects normalize any-direction drags to a
+                // positive frame and live on the Web Layer — never in
+                // the current cell, so no symbol-scope lift.
+                let command = match drag.tool {
+                    Tool::Slice => "slice.create",
+                    _ => "hotspot.create",
+                };
+                self.apply(
+                    command,
+                    serde_json::json!({
+                        "shape": "rect",
+                        "x": x.min(drag.current.x), "y": y.min(drag.current.y),
+                        "width": width.abs(), "height": height.abs(),
+                        "page": self.page,
+                        "name": null, "link": null, "alt": null,
+                    }),
+                )?;
+                false
             }
             Tool::Pointer | Tool::Subselect | Tool::Zoom | Tool::Hand => false,
         };

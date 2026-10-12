@@ -227,6 +227,44 @@ pub fn export_gif(document: &doc::Document) -> Result<Vec<u8>, CliError> {
     ::io::gif::encode_animated(document, 0, &options).map_err(|error| CliError(error.to_string()))
 }
 
+/// Parses the `--workflow` value of the `export-web` verb.
+///
+/// # Errors
+/// [`CliError`] for an unknown workflow name.
+pub fn parse_workflow(name: &str) -> Result<webexport::Workflow, CliError> {
+    let workflow = match name {
+        "images" => webexport::Workflow::ImagesOnly,
+        "html" => webexport::Workflow::HtmlAndImages,
+        "css" => webexport::Workflow::CssAndImages,
+        "sprites" => webexport::Workflow::CssSprites,
+        "properties" => webexport::Workflow::CssProperties,
+        "pages" => webexport::Workflow::PagesToFiles,
+        "states" => webexport::Workflow::StatesToFiles,
+        "layers" => webexport::Workflow::LayersToFiles,
+        "gif" => webexport::Workflow::StatesToGif,
+        other => {
+            return Err(CliError(format!(
+                "unknown web workflow '{other}' (images|html|css|sprites|properties|pages|states|layers|gif)"
+            )));
+        }
+    };
+    Ok(workflow)
+}
+
+/// Runs a web export workflow (M11): the pure `webexport::export`
+/// pipeline the CLI verb and the GUI's export dialog share.
+///
+/// # Errors
+/// [`CliError`] for out-of-range page/state, oversize canvases, and
+/// compose/codec failures.
+pub fn export_web(
+    document: &doc::Document,
+    options: &webexport::WebExportOptions,
+    workflow: webexport::Workflow,
+) -> Result<webexport::WebExport, CliError> {
+    webexport::export(document, options, workflow).map_err(|error| CliError(error.to_string()))
+}
+
 /// Parses a batch `--options` value: either inline JSON or the path of
 /// a file holding JSON. Both decode to a partial [`doc::ExportOptions`]
 /// — only the fields present are stamped onto each document, so a

@@ -98,6 +98,7 @@ dependencies = [
  "io",
  "scripting",
  "serde_json",
+ "webexport",
 ]
 
 [[package]]
@@ -115,6 +116,7 @@ dependencies = [
  "raster",
  "scripting",
  "serde_json",
+ "webexport",
 ]
 
 [[package]]

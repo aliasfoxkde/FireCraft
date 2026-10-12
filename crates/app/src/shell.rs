@@ -60,6 +60,17 @@ struct DisplayState {
     name: Option<String>,
 }
 
+/// One Web Layer panel row: id, display name, is-foreground-slice,
+/// link, alt text, and the raw `TSLi` behind the foreground toggle.
+type WebRow = (
+    doc::ObjectId,
+    String,
+    bool,
+    Option<String>,
+    Option<String>,
+    i64,
+);
+
 /// Desktop file routing for v1: the open/save path comes from
 /// `FIRECRAFT_DOC` (default `untitled.fw.png` in the working
 /// directory), messages go to stderr. No dialog library yet — the
@@ -100,13 +111,55 @@ impl engine::platform::Dialogs for EnvDialogs {
 /// The export formats the dialog offers, in menu order.
 const EXPORT_FORMATS: &[&str] = &["png", "jpg", "bmp", "tiff", "wbmp", "svg", "psd", "gif"];
 
+/// The web export workflows the dialog offers (the M11 set), in menu
+/// order — the same names the CLI's `--workflow` flag takes.
+const WEB_WORKFLOWS: &[&str] = &[
+    "images only",
+    "HTML + images",
+    "CSS + images",
+    "CSS sprites",
+    "CSS properties",
+    "pages to files",
+    "states to files",
+    "layers to files",
+    "states to GIF",
+];
+
+/// The [`webexport::Workflow`] behind a dialog index — the two lists
+/// move together.
+fn web_workflow(index: usize) -> Option<webexport::Workflow> {
+    if index >= WEB_WORKFLOWS.len() {
+        return None;
+    }
+    Some(match index {
+        0 => webexport::Workflow::ImagesOnly,
+        1 => webexport::Workflow::HtmlAndImages,
+        2 => webexport::Workflow::CssAndImages,
+        3 => webexport::Workflow::CssSprites,
+        4 => webexport::Workflow::CssProperties,
+        5 => webexport::Workflow::PagesToFiles,
+        6 => webexport::Workflow::StatesToFiles,
+        7 => webexport::Workflow::LayersToFiles,
+        _ => webexport::Workflow::StatesToGif,
+    })
+}
+
 /// Export-dialog state (File → Export…): format, per-format controls,
 /// and the cached 2-Up preview. The controls mirror the `EXPv` fields
 /// the model maps; Export stamps them onto a cloned document and runs
-/// the same codec path the CLI does.
+/// the same codec path the CLI does. A web workflow replaces the
+/// raster format entirely — the dialog then drives
+/// [`app_cli::ops::export_web`], the same entry point the CLI verb
+/// shares.
 struct ExportDialog {
     /// Index into [`EXPORT_FORMATS`].
     format: usize,
+    /// Selected web workflow, or `None` for the raster formats.
+    web: Option<usize>,
+    /// Emit the 1px shim row/column (web table workflows).
+    web_shim: bool,
+    /// Give areas without slices their own image (`include_undefined`).
+    web_undefined: bool,
     /// JPEG quality 1..=100.
     quality: i32,
     /// Progressive JPEG scans.
@@ -131,6 +184,9 @@ impl Default for ExportDialog {
     fn default() -> Self {
         Self {
             format: 0,
+            web: None,
+            web_shim: true,
+            web_undefined: true,
             quality: 90,
             progressive: false,
             matte_black: false,
@@ -296,6 +352,92 @@ impl Shell {
         }
     }
 
+    /// The Web Layer panel: the page's slices and hotspots with link
+    /// editing (`slice.setLink`) and the foreground/background toggle
+    /// (`slice.setType`). Snapshots the web objects first so the edit
+    /// fields never borrow the document while commands run.
+    fn web_panel(&mut self, ui: &mut egui::Ui) {
+        ui.heading("Web Layer");
+        let page = self.editor.page;
+        let frame = self.editor.frame;
+        let rows: Vec<WebRow> = {
+            let document = self.editor.document();
+            let Some(layer) = document.pages.get(page).and_then(|page| {
+                page.layers
+                    .layers
+                    .iter()
+                    .rev()
+                    .find(|layer| layer.has_url && layer.is_special)
+            }) else {
+                return;
+            };
+            let Some(cell) = layer.cells.get(frame) else {
+                return;
+            };
+            cell.elements
+                .iter()
+                .filter_map(|id| match document.registry.get(*id) {
+                    Some(ObjectData::Slice(slice)) => Some((
+                        *id,
+                        slice
+                            .name
+                            .clone()
+                            .unwrap_or_else(|| format!("slice {}", id.index())),
+                        slice.slice_type.is_some(),
+                        slice.link.clone(),
+                        slice.alt.clone(),
+                        slice.slice_type.unwrap_or(0),
+                    )),
+                    _ => None,
+                })
+                .collect()
+        };
+        if rows.is_empty() {
+            ui.label("no slices on this state");
+            return;
+        }
+        for (id, name, is_slice, link, alt, slice_type) in rows {
+            ui.horizontal(|ui| {
+                ui.strong(&name);
+                ui.label(if is_slice { "slice" } else { "hotspot" });
+            });
+            let mut edited = link.unwrap_or_default();
+            let response = ui.add(
+                egui::TextEdit::singleline(&mut edited)
+                    .hint_text("link URL")
+                    .desired_width(f32::INFINITY),
+            );
+            if response.changed() {
+                // An emptied field clears the link (null, not "");
+                // re-assert the existing alt so a link edit never
+                // clears it.
+                let link = (!edited.is_empty()).then_some(edited);
+                self.run_command(
+                    "slice.setLink",
+                    serde_json::json!({ "id": id, "link": link, "alt": alt }),
+                );
+            }
+            if is_slice {
+                ui.horizontal(|ui| {
+                    ui.label("type");
+                    if ui.selectable_label(slice_type == 0, "foreground").clicked() {
+                        self.run_command(
+                            "slice.setType",
+                            serde_json::json!({ "id": id, "slice_type": 0 }),
+                        );
+                    }
+                    if ui.selectable_label(slice_type == 2, "background").clicked() {
+                        self.run_command(
+                            "slice.setType",
+                            serde_json::json!({ "id": id, "slice_type": 2 }),
+                        );
+                    }
+                });
+            }
+            ui.separator();
+        }
+    }
+
     /// History → Replay…: pick a `.fwsteps` file, then the base
     /// document it replays onto (the File → Open flow — a steps file
     /// is a journal prefix, so it needs the pre-steps document). The
@@ -363,6 +505,21 @@ impl Shell {
             .num_columns(2)
             .spacing([8.0, 6.0])
             .show(ui, |ui| {
+                egui::ComboBox::from_label("Web workflow")
+                    .selected_text(match dialog.web {
+                        Some(index) => WEB_WORKFLOWS[index],
+                        None => "—",
+                    })
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(&mut dialog.web, None, "—");
+                        for (i, name) in WEB_WORKFLOWS.iter().enumerate() {
+                            ui.selectable_value(&mut dialog.web, Some(i), *name);
+                        }
+                    });
+                if dialog.web.is_some() {
+                    ui.checkbox(&mut dialog.web_shim, "Shim edges");
+                    ui.checkbox(&mut dialog.web_undefined, "Include areas without slices");
+                }
                 egui::ComboBox::from_label("Format")
                     .selected_text(EXPORT_FORMATS[dialog.format])
                     .show_ui(ui, |ui| {
@@ -403,12 +560,13 @@ impl Shell {
 
         // The 2-Up: left pane is the chosen settings, right pane the
         // lossless PNG reference. Regenerates when settings or the
-        // document move.
+        // document move. Web workflows write many files — no preview.
         let stamp = self.preview_stamp();
-        let regenerate = match &dialog.preview {
-            Some((made, _, _, _, _)) => *made != stamp,
-            None => true,
-        };
+        let regenerate = dialog.web.is_none()
+            && match &dialog.preview {
+                Some((made, _, _, _, _)) => *made != stamp,
+                None => true,
+            };
         if regenerate {
             let fresh = self.render_preview(ui.ctx());
             dialog.preview = fresh;
@@ -573,8 +731,13 @@ impl Shell {
     }
 
     /// Export through the save dialog: encode with the dialog's
-    /// settings, write through the injected file system.
+    /// settings, write through the injected file system. A selected
+    /// web workflow routes to [`Self::export_web_via_dialog`] instead.
     fn export_via_dialog(&mut self, dialog: &ExportDialog) {
+        if let Some(index) = dialog.web {
+            self.export_web_via_dialog(dialog, index);
+            return;
+        }
         let format = EXPORT_FORMATS[dialog.format];
         let encoded = match self.encode_with_dialog(dialog, format) {
             Ok(bytes) => bytes,
@@ -598,6 +761,69 @@ impl Shell {
             }
             Err(error) => self.status = format!("export failed: {error}"),
         }
+    }
+
+    /// Web export through the save dialog: the save path names the
+    /// primary text artifact (`export.html`, the sprite/properties
+    /// CSS); every image file lands beside it under its export name.
+    /// The pipeline is [`app_cli::ops::export_web`] — the CLI verb's
+    /// exact path, so the dialog cannot drift from the CLI.
+    fn export_web_via_dialog(&mut self, dialog: &ExportDialog, index: usize) {
+        let Some(workflow) = web_workflow(index) else {
+            return;
+        };
+        let options = webexport::WebExportOptions {
+            page: self.editor.page,
+            state: self.editor.frame,
+            doc_name: "export".to_owned(),
+            title: "export".to_owned(),
+            shim: dialog.web_shim,
+            include_undefined: dialog.web_undefined,
+            ..webexport::WebExportOptions::default()
+        };
+        let export = match app_cli::ops::export_web(self.editor.document(), &options, workflow) {
+            Ok(export) => export,
+            Err(error) => {
+                self.status = format!("export failed: {error}");
+                return;
+            }
+        };
+        let (suggested, filter) = match workflow {
+            webexport::Workflow::CssSprites => ("sprites.css", "css"),
+            webexport::Workflow::CssProperties => ("properties.css", "css"),
+            webexport::Workflow::StatesToGif => ("export.gif", "gif"),
+            _ => ("export.html", "html"),
+        };
+        let Some(path) = self.dialogs.save_path(
+            "Export",
+            suggested,
+            &[(filter.to_owned(), vec![filter.to_owned()])],
+        ) else {
+            return;
+        };
+        let dir = std::path::Path::new(&path)
+            .parent()
+            .map_or_else(std::path::PathBuf::new, std::path::Path::to_path_buf);
+        let mut count = 0usize;
+        for file in &export.files {
+            let target = dir.join(&file.name);
+            match self.fs.write_file(&target.to_string_lossy(), &file.bytes) {
+                Ok(()) => count += 1,
+                Err(error) => {
+                    self.status = format!("export failed: {error}");
+                    return;
+                }
+            }
+        }
+        if let Some(text) = &export.html {
+            if let Err(error) = self.fs.write_file(&path, text.as_bytes()) {
+                self.status = format!("export failed: {error}");
+                return;
+            }
+            count += 1;
+        }
+        self.status = format!("exported {count} files to {}", dir.to_string_lossy());
+        self.export_dialog = None;
     }
 
     /// The menu bar: File/Edit/Tools/Path/Commands.
@@ -653,6 +879,8 @@ impl Shell {
                     (Tool::Text, "Text (T)"),
                     (Tool::Zoom, "Zoom (Z)"),
                     (Tool::Hand, "Hand (H)"),
+                    (Tool::Slice, "Slice"),
+                    (Tool::Hotspot, "Hotspot"),
                 ] {
                     if ui
                         .selectable_label(self.editor.tool == tool, label)
@@ -1670,6 +1898,7 @@ impl eframe::App for Shell {
         egui::Panel::top(egui::Id::new("menu")).show(ui, |ui| self.menu_bar(ui));
         egui::Panel::left(egui::Id::new("document")).show(ui, |ui| self.document_panel(ui));
         egui::Panel::right(egui::Id::new("properties")).show(ui, |ui| self.properties_panel(ui));
+        egui::Panel::right(egui::Id::new("weblayer")).show(ui, |ui| self.web_panel(ui));
         egui::Panel::bottom(egui::Id::new("status")).show(ui, |ui| {
             ui.horizontal(|ui| {
                 ui.label(&self.status);
@@ -1790,5 +2019,51 @@ mod tests {
             serde_json::to_vec(editor.session.document()).unwrap(),
             "the replayed session equals the original, byte for byte"
         );
+    }
+
+    #[test]
+    fn web_export_dialog_writes_html_and_files() {
+        // A slice dragged on the canvas, then the dialog pointed at
+        // the HTML+Images workflow.
+        let mut editor = Editor::untitled();
+        editor.tool = Tool::Slice;
+        editor.begin_drag(geom::Point::new(10.0, 10.0));
+        editor.drag_to(geom::Point::new(90.0, 50.0));
+        editor.end_drag().unwrap();
+        let id = editor.document().pages[0]
+            .layers
+            .layers
+            .iter()
+            .find(|layer| layer.has_url && layer.is_special)
+            .and_then(|layer| layer.cells[0].elements.first())
+            .copied()
+            .unwrap();
+        editor
+            .apply(
+                "slice.setLink",
+                serde_json::json!({ "id": id, "link": "https://example.test/", "alt": "go" }),
+            )
+            .unwrap();
+
+        let dialogs = FixedDialogs {
+            steps: "export.html".to_owned(),
+            doc: String::new(),
+        };
+        let mut shell = Shell::with_platform(editor, Box::new(MemoryFs::new()), Box::new(dialogs));
+        shell.export_dialog = Some(ExportDialog {
+            web: Some(1), // HTML + images
+            ..ExportDialog::default()
+        });
+        let dialog = shell.export_dialog.take().unwrap();
+        shell.export_via_dialog(&dialog);
+
+        assert!(shell.status.contains("exported"), "{}", shell.status);
+        assert!(shell.export_dialog.is_none(), "the dialog closes");
+        let html = String::from_utf8(shell.fs.read_file("export.html").unwrap()).unwrap();
+        assert!(html.contains(r#"href="https://example.test/""#));
+        // The slice's image landed beside the HTML under its auto
+        // name; the dialog's doc base is "export".
+        let image = shell.fs.read_file("nexport_1_1.png").unwrap();
+        assert_eq!(&image[..4], b"\x89PNG");
     }
 }
