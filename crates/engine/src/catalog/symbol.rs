@@ -599,17 +599,46 @@ impl TypedCommand for BreakApart {
         }
 
         // The anchor is the instance's pre-detach stacking position —
-        // capture it before the detach removes the instance from its
-        // container.
-        let anchor = find_owner(document, payload.id);
+        // resolve it before anything moves (the pre-flight above
+        // already refuses unplaced instances; this is the same check
+        // on the same data, kept ahead of the first mutation).
+        let anchor = match find_owner(document, payload.id) {
+            Some(anchor) => anchor,
+            None => {
+                return Err(EngineError::MissingTarget {
+                    name: NAME.to_owned(),
+                    detail: format!(
+                        "instance {} (generation {}) is referenced by no cell or group",
+                        payload.id.index(),
+                        payload.id.generation()
+                    ),
+                });
+            }
+        };
         let removed = detach(document, NAME, payload.id)?;
+        // Break apart dissolves the instance: it leaves the registry
+        // too, not just its cell. An object referenced by nothing
+        // would never reach the wire (the writer emits attached
+        // objects only) and would fork the model on re-open.
+        let object = match document.registry.remove(payload.id) {
+            Some(object) => object,
+            None => {
+                return Err(EngineError::InvalidState {
+                    name: NAME.to_owned(),
+                    detail: format!(
+                        "instance {} vanished before its removal",
+                        payload.id.index()
+                    ),
+                });
+            }
+        };
         let placed = match anchor {
-            Some(Owner::Cell {
+            Owner::Cell {
                 page,
                 layer,
                 cell,
                 position,
-            }) => {
+            } => {
                 let mut deltas = Vec::with_capacity(copies.len());
                 for (offset, copy) in copies.iter().enumerate() {
                     deltas.push(attach_cell(
@@ -624,10 +653,10 @@ impl TypedCommand for BreakApart {
                 }
                 deltas
             }
-            Some(Owner::Group {
+            Owner::Group {
                 id: parent,
                 position,
-            }) => {
+            } => {
                 let mut deltas = Vec::with_capacity(copies.len());
                 for (offset, copy) in copies.iter().enumerate() {
                     deltas.push(attach_group(
@@ -640,19 +669,9 @@ impl TypedCommand for BreakApart {
                 }
                 deltas
             }
-            None => {
-                return Err(EngineError::MissingTarget {
-                    name: NAME.to_owned(),
-                    detail: format!(
-                        "instance {} (generation {}) lost its container mid-command",
-                        payload.id.index(),
-                        payload.id.generation()
-                    ),
-                });
-            }
         };
 
-        let mut deltas = Vec::with_capacity(copies.len() + placed.len() + 2);
+        let mut deltas = Vec::with_capacity(copies.len() + placed.len() + 3);
         for copy in &copies {
             deltas.push(Delta::Object {
                 id: *copy,
@@ -660,6 +679,12 @@ impl TypedCommand for BreakApart {
             });
         }
         deltas.push(removed);
+        deltas.push(Delta::Object {
+            id: payload.id,
+            inverse: ObjectInverse::Removed {
+                object: Box::new(object),
+            },
+        });
         deltas.extend(placed);
         Ok(Delta::Group(deltas))
     }
@@ -1372,6 +1397,7 @@ mod tests {
             }));
         document.pages[0].layers.layers[0].cells[0].elements = vec![instance, ids[1]];
         let original = serde_json::to_vec(&document).unwrap();
+        let live_before = document.registry.len();
 
         let registry = registry();
         let delta = registry
@@ -1387,6 +1413,12 @@ mod tests {
         assert_eq!(placed.len(), 2, "the copy takes the instance's slot");
         assert!(placed.contains(&ids[1]));
         assert_ne!(placed[0], content, "the copy is a fresh slot");
+        // The instance dissolves entirely: gone from the registry, not
+        // just its cell — an object referenced by nothing would never
+        // reach the wire and would fork the model on re-open. The one
+        // copy added balances the one instance removed.
+        assert!(document.registry.get(instance).is_none());
+        assert_eq!(document.registry.len(), live_before);
         match document.registry.get(placed[0]).unwrap() {
             ObjectData::Path(path) => match document.registry.get(content).unwrap() {
                 ObjectData::Path(original_path) => {
@@ -1403,6 +1435,8 @@ mod tests {
 
         delta.apply_inverse(&mut document).unwrap();
         assert!(document.registry.get(placed[0]).is_none());
+        // Undo revives the instance at its exact slot and generation.
+        assert!(document.registry.get(instance).is_some());
         assert_eq!(cell_elements(&document), &[instance, ids[1]]);
         assert_eq!(serde_json::to_vec(&document).unwrap(), original);
     }

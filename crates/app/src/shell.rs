@@ -4,11 +4,21 @@
 //! goes through the injected [`engine::platform`] traits (`EnvDialogs`
 //! below; real modal dialogs land with desktop integration).
 
-use doc::{ObjectData, PathObject, TextObject};
+use doc::{ObjectData, PathObject, SymbolInstanceObject, SymbolType, TextObject};
 use egui::{Color32, ColorImage, Pos2, Rect, Sense, TextureHandle, TextureOptions, Vec2};
 
 use crate::canvas::View;
-use crate::editor::{AutoShape, Editor, Tool};
+use crate::editor::{AutoShape, Editor, NineSliceEdge, Tool};
+
+/// UI label for a symbol type (`MSYi`).
+fn symbol_type_label(kind: &SymbolType) -> String {
+    match kind {
+        SymbolType::Graphic => "graphic".to_owned(),
+        SymbolType::Button => "button".to_owned(),
+        SymbolType::Animation => "animation".to_owned(),
+        SymbolType::Other(raw) => format!("other ({raw})"),
+    }
+}
 
 /// The quick-add list of the filter panel: internal name plus the
 /// `DCVs` defaults that make each kernel do something visible. All of
@@ -832,6 +842,9 @@ impl Shell {
         }
 
         ui.separator();
+        self.library_panel(ui);
+
+        ui.separator();
         ui.heading("History");
         // Snapshot the rows so closures never borrow the session while
         // the editor is mutable (same rule as the layer list above).
@@ -868,6 +881,93 @@ impl Shell {
                 self.replay_steps();
             }
         });
+    }
+
+    /// The document library: one row per definition — click enters
+    /// symbol editing, drag places an instance on the canvas, the
+    /// field renames, the button removes (refused by the engine while
+    /// instances remain). While a definition is entered, the banner
+    /// says so and offers the way out.
+    fn library_panel(&mut self, ui: &mut egui::Ui) {
+        ui.heading("Library");
+        let editing = self.editor.editing_definition().map(|d| d.name.clone());
+        if let Some(name) = editing {
+            ui.horizontal(|ui| {
+                ui.label(format!("editing {name}"));
+                if ui.button("Exit Symbol").clicked() {
+                    self.editor.exit_symbol();
+                }
+            });
+        }
+        // (number, name, kind label, states, objects in state 1,
+        // entered) — snapshotted so closures never borrow the document
+        // while the editor is mutable (the panel rule).
+        let rows: Vec<(i64, String, String, i64, usize, bool)> = self
+            .editor
+            .document()
+            .symbols
+            .iter()
+            .map(|definition| {
+                (
+                    definition.symbol_number,
+                    definition.name.clone(),
+                    symbol_type_label(&definition.symbol_type),
+                    definition.frame_count,
+                    definition.layers.layers.first().map_or(0, |layer| {
+                        layer.cells.first().map_or(0, |cell| cell.elements.len())
+                    }),
+                    self.editor.symbol_scope == Some(definition.symbol_number),
+                )
+            })
+            .collect();
+        for (number, name, kind, states, parts, entered) in &rows {
+            ui.horizontal(|ui| {
+                let row = ui.selectable_label(*entered, format!("{name} · {kind} · {states}"));
+                if row.drag_started() {
+                    // Drag-to-place: the canvas is the drop target.
+                    egui::DragAndDrop::set_payload(ui.ctx(), *number);
+                }
+                if row.clicked()
+                    && let Err(error) = self.editor.enter_symbol(*number)
+                {
+                    self.status = format!("enter symbol failed: {error}");
+                }
+                let mut edited = name.clone();
+                let field = ui
+                    .add(egui::TextEdit::singleline(&mut edited).desired_width(72.0))
+                    .on_hover_text("rename (Enter applies)");
+                if field.lost_focus()
+                    && ui.input(|input| input.key_pressed(egui::Key::Enter))
+                    && edited != *name
+                {
+                    self.run_command(
+                        "library.rename",
+                        serde_json::json!({ "symbol": number, "name": edited }),
+                    );
+                }
+                if ui
+                    .small_button("remove")
+                    .on_hover_text(format!("remove {name} from the library"))
+                    .clicked()
+                {
+                    self.run_command("library.remove", serde_json::json!({ "symbol": number }));
+                }
+            });
+            ui.label(format!("{} object(s) in state 1", parts));
+        }
+        if ui.button("New Symbol").clicked() {
+            let count = self.editor.document().symbols.len();
+            self.run_command(
+                "library.add",
+                serde_json::json!({
+                    "name": format!("Symbol {}", count + 1),
+                    "symbol_type": "graphic",
+                }),
+            );
+        }
+        if rows.is_empty() {
+            ui.label("(empty — create a symbol from a selection)");
+        }
     }
 
     /// Right panel: the align/distribute group, then properties of the
@@ -931,6 +1031,10 @@ impl Shell {
                 self.text_properties(ui, id, &text);
                 text.effects
             }
+            Some(ObjectData::SymbolInstance(instance)) => {
+                self.symbol_instance_properties(ui, id, &instance);
+                return;
+            }
             Some(_) => {
                 ui.label("selection has no editable properties yet");
                 return;
@@ -942,6 +1046,106 @@ impl Shell {
         };
         // The live effect list: every kind that carries an `EFLv` spine.
         self.filter_panel(ui, id, &effects);
+    }
+
+    /// Symbol-instance properties: the referenced definition, the
+    /// button-state inspector (per-state content), the 9-slice
+    /// toggle, and the actions on the instance or its definition.
+    fn symbol_instance_properties(
+        &mut self,
+        ui: &mut egui::Ui,
+        id: doc::ObjectId,
+        instance: &SymbolInstanceObject,
+    ) {
+        let number = instance.symbol_number;
+        // Snapshot the definition facts so closures never borrow the
+        // document while the editor is mutable.
+        let facts = self.editor.definition_of(number).map(|definition| {
+            (
+                definition.name.clone(),
+                symbol_type_label(&definition.symbol_type),
+                definition.symbol_type,
+                definition
+                    .layers
+                    .layers
+                    .first()
+                    .map_or_else(Vec::new, |layer| {
+                        layer.cells.iter().map(|cell| cell.elements.len()).collect()
+                    }),
+                definition.nine_slice.is_some(),
+            )
+        });
+        let Some((name, kind, kind_raw, state_parts, sliced)) = facts else {
+            ui.label(format!("instance of missing symbol {number}"));
+            return;
+        };
+        ui.label(format!("instance of {name} (symbol {number}, {kind})"));
+        let placed = instance.transform.translation();
+        ui.label(format!("placed at ({:.1}, {:.1})", placed.x, placed.y));
+
+        ui.horizontal(|ui| {
+            if ui.button("Edit Definition").clicked()
+                && let Err(error) = self.editor.enter_symbol(number)
+            {
+                self.status = format!("enter symbol failed: {error}");
+            }
+            if ui
+                .button("Break Apart")
+                .on_hover_text("release the instance's content onto the page")
+                .clicked()
+            {
+                self.run_command("symbol.breakApart", serde_json::json!({ "id": id }));
+            }
+        });
+
+        // The type switches (button-state inspector wiring): the
+        // engine keeps per-state content, the UI offers the observed
+        // kinds.
+        ui.horizontal(|ui| {
+            ui.label("type");
+            for (choice, label) in [
+                ("graphic", "graphic"),
+                ("button", "button"),
+                ("animation", "animation"),
+            ] {
+                let current = match &kind_raw {
+                    SymbolType::Graphic => "graphic",
+                    SymbolType::Button => "button",
+                    SymbolType::Animation => "animation",
+                    SymbolType::Other(_) => "other",
+                };
+                if ui.selectable_label(current == choice, label).clicked() {
+                    self.run_command(
+                        "symbol.setType",
+                        serde_json::json!({ "symbol": number, "symbol_type": choice }),
+                    );
+                }
+            }
+        });
+
+        // States: one row per definition state with its object count —
+        // the button inspector's read side.
+        ui.heading("States");
+        if state_parts.is_empty() {
+            ui.label("(the definition has no states)");
+        }
+        for (index, parts) in state_parts.iter().enumerate() {
+            ui.label(format!("State {}: {} object(s)", index + 1, parts));
+        }
+
+        // 9-slice guides: install defaults / clear, drag the on-canvas
+        // handles to set the insets.
+        let mut sliced_flag = sliced;
+        if ui.checkbox(&mut sliced_flag, "nine-slice guides").changed() && sliced_flag != sliced {
+            let outcome = if sliced_flag {
+                self.editor.enable_nine_slice(number)
+            } else {
+                self.editor.disable_nine_slice(number)
+            };
+            if let Err(error) = outcome {
+                self.status = format!("nine-slice failed: {error}");
+            }
+        }
     }
 
     /// Path-object properties, then the shared display controls.
@@ -1185,6 +1389,48 @@ impl Shell {
             });
     }
 
+    /// Canvas-local screen position of a world point.
+    fn screen_of(&self, world: geom::Point) -> Pos2 {
+        let screen = self.view.to_screen(world);
+        Pos2::new(screen.x, screen.y)
+    }
+
+    /// The entered definition's nine-slice guides in canvas-local
+    /// space: the shape bounds plus one drag handle per edge, at the
+    /// current insets. `None` when not editing a guided symbol.
+    fn nine_slice_overlay(&self) -> Option<(Rect, [(Rect, NineSliceEdge); 4])> {
+        let guides = self.editor.editing_definition()?.nine_slice.clone()?;
+        let bounds = guides.shape_bounds;
+        let screen = Rect::from_min_max(
+            self.screen_of(geom::Point::new(bounds.x0, bounds.y0)),
+            self.screen_of(geom::Point::new(bounds.x1, bounds.y1)),
+        );
+        let [top, bottom, left, right] = guides.controls.map(|value| value as f32);
+        let (mid_x, mid_y) = (screen.center().x, screen.center().y);
+        let handle = |x: f32, y: f32| Rect::from_center_size(Pos2::new(x, y), Vec2::splat(10.0));
+        Some((
+            screen,
+            [
+                (handle(mid_x, screen.top() + top), NineSliceEdge::Top),
+                (
+                    handle(mid_x, screen.bottom() - bottom),
+                    NineSliceEdge::Bottom,
+                ),
+                (handle(screen.left() + left, mid_y), NineSliceEdge::Left),
+                (handle(screen.right() - right, mid_y), NineSliceEdge::Right),
+            ],
+        ))
+    }
+
+    /// The nine-slice guide edge under a canvas-local point, if any.
+    fn nine_slice_edge_at(&self, local: Pos2) -> Option<NineSliceEdge> {
+        let (_, handles) = self.nine_slice_overlay()?;
+        handles
+            .iter()
+            .find(|(handle, _)| handle.contains(local))
+            .map(|(_, edge)| *edge)
+    }
+
     /// The canvas: compose renders the page, egui shows the texture,
     /// tools drive the editor through world-space input.
     fn canvas(&mut self, ui: &mut egui::Ui) {
@@ -1259,6 +1505,51 @@ impl Shell {
             Color32::WHITE,
         );
 
+        // Nine-slice guide overlay while a guided definition is
+        // entered: shape bounds, the four guide lines, one handle per
+        // edge. Overlay geometry is canvas-local; shift by the widget
+        // origin to paint.
+        if let Some((bounds, handles)) = self.nine_slice_overlay() {
+            let color = Color32::from_rgb(90, 200, 250);
+            let shift = egui::Vec2::new(rect.left(), rect.top());
+            let bounds = bounds.translate(shift);
+            let painter = ui.painter();
+            painter.rect_stroke(bounds, 0.0, (1.0, color), egui::StrokeKind::Outside);
+            let handles = handles.map(|(handle, edge)| (handle.translate(shift), edge));
+            let [(top, _), (bottom, _), (left, _), (right, _)] = handles;
+            painter.line_segment(
+                [
+                    Pos2::new(bounds.left(), top.center().y),
+                    Pos2::new(bounds.right(), top.center().y),
+                ],
+                (1.0, color),
+            );
+            painter.line_segment(
+                [
+                    Pos2::new(bounds.left(), bottom.center().y),
+                    Pos2::new(bounds.right(), bottom.center().y),
+                ],
+                (1.0, color),
+            );
+            painter.line_segment(
+                [
+                    Pos2::new(left.center().x, bounds.top()),
+                    Pos2::new(left.center().x, bounds.bottom()),
+                ],
+                (1.0, color),
+            );
+            painter.line_segment(
+                [
+                    Pos2::new(right.center().x, bounds.top()),
+                    Pos2::new(right.center().x, bounds.bottom()),
+                ],
+                (1.0, color),
+            );
+            for (handle, _) in handles {
+                painter.rect_filled(handle, 2.0, color);
+            }
+        }
+
         // Rubber band for a creation drag.
         if let Some(drag) = self.editor.drag {
             let a = self.view.to_screen(drag.start);
@@ -1277,17 +1568,32 @@ impl Shell {
 
         // Input routing, by tool. Pointer coordinates are widget-local;
         // the view works in the same local space (top_left origin).
+        // A press on a nine-slice guide handle drags that guide
+        // instead of the tool.
         if response.drag_started() {
             if let Some(pos) = response.interact_pointer_pos() {
                 let local = pos - rect.left_top().to_vec2();
-                self.editor.begin_drag(self.view.to_world(local));
+                let world = self.view.to_world(local);
+                match self.nine_slice_edge_at(local) {
+                    Some(edge) => {
+                        if let Some(symbol) = self.editor.symbol_scope {
+                            if let Err(error) = self.editor.begin_guide_drag(symbol, edge, world) {
+                                self.status = format!("guide drag failed: {error}");
+                            }
+                        }
+                    }
+                    None => self.editor.begin_drag(world),
+                }
             }
         }
         if response.dragged() {
             if let Some(pos) = response.interact_pointer_pos() {
                 let local = pos - rect.left_top().to_vec2();
-                if self.editor.drag.is_some() {
-                    self.editor.drag_to(self.view.to_world(local));
+                let world = self.view.to_world(local);
+                if self.editor.guide_drag.is_some() {
+                    self.editor.drag_guide_to(world);
+                } else if self.editor.drag.is_some() {
+                    self.editor.drag_to(world);
                 } else if self.editor.tool == Tool::Hand
                     || response.dragged_by(egui::PointerButton::Middle)
                 {
@@ -1296,8 +1602,28 @@ impl Shell {
             }
         }
         if response.drag_stopped() {
+            if self.editor.guide_drag.is_some()
+                && let Err(error) = self.editor.end_guide_drag()
+            {
+                self.status = format!("nine-slice drag failed: {error}");
+            }
             if let Err(error) = self.editor.end_drag() {
                 self.status = format!("create failed: {error}");
+            }
+        }
+        // Drop target for the Library panel's drag-to-place: the
+        // payload clears itself at end of frame, release included.
+        if response.hovered() && ui.input(|input| input.pointer.any_released()) {
+            if let Some(symbol) = egui::DragAndDrop::take_payload::<i64>(ui.ctx()) {
+                let placed_at = ui
+                    .input(|input| input.pointer.latest_pos())
+                    .map_or(rect.center(), |pos| pos - rect.left_top().to_vec2());
+                if let Err(error) = self
+                    .editor
+                    .place_symbol(*symbol, self.view.to_world(placed_at))
+                {
+                    self.status = format!("place failed: {error}");
+                }
             }
         }
         if response.clicked() {

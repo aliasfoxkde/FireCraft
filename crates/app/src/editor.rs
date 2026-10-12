@@ -204,6 +204,47 @@ pub struct Drag {
     pub current: geom::Point,
 }
 
+/// The four nine-slice inset edges, in `NGCf` dictionary order
+/// (top, bottom, left, right) — the same order as
+/// [`doc::NineSliceGuides::controls`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NineSliceEdge {
+    /// Upper inset, measured down from the shape's top edge.
+    Top,
+    /// Lower inset, measured up from the shape's bottom edge.
+    Bottom,
+    /// Left inset, measured right from the shape's left edge.
+    Left,
+    /// Right inset, measured left from the shape's right edge.
+    Right,
+}
+
+impl NineSliceEdge {
+    /// Index into `NineSliceGuides::controls`.
+    #[must_use]
+    pub fn control(self) -> usize {
+        match self {
+            Self::Top => 0,
+            Self::Bottom => 1,
+            Self::Left => 2,
+            Self::Right => 3,
+        }
+    }
+}
+
+/// A nine-slice guide edge being dragged to a new inset. The drag
+/// lives in the editor (not the shell) so the inset it commits is a
+/// `symbol.set9Slice` command like every other edit.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct GuideDrag {
+    /// The definition whose guides are moving, by `MSNi`.
+    pub symbol: i64,
+    /// Which inset edge is under the pointer.
+    pub edge: NineSliceEdge,
+    /// Latest world position of the pointer.
+    pub current: geom::Point,
+}
+
 /// Everything the shell shows, minus the window itself.
 pub struct Editor {
     /// The editing session (document + history + journal).
@@ -225,6 +266,15 @@ pub struct Editor {
     pub selection_set: Vec<ObjectId>,
     /// Creation drag in progress.
     pub drag: Option<Drag>,
+    /// The symbol definition being edited, by `MSNi`; `None` edits the
+    /// page tree. While set, creation commands land their objects in
+    /// the definition (via a page-side create plus `symbol.editAttach`)
+    /// and hit-testing looks at the definition's own cells.
+    pub symbol_scope: Option<i64>,
+    /// Active layer inside the symbol scope (view state).
+    pub symbol_layer: usize,
+    /// Nine-slice guide edge drag in progress.
+    pub guide_drag: Option<GuideDrag>,
 }
 
 impl Editor {
@@ -272,6 +322,9 @@ impl Editor {
             selection: None,
             selection_set: Vec::new(),
             drag: None,
+            symbol_scope: None,
+            symbol_layer: 0,
+            guide_drag: None,
         }
     }
 
@@ -366,6 +419,267 @@ impl Editor {
             .find_map(|layer: &Layer| layer.cells.get(self.frame))
     }
 
+    /// A library definition by its `MSNi` number.
+    #[must_use]
+    pub fn definition_of(&self, symbol: i64) -> Option<&doc::SymbolDefinition> {
+        self.document()
+            .symbols
+            .iter()
+            .find(|definition| definition.symbol_number == symbol)
+    }
+
+    /// The definition currently being edited, if any.
+    #[must_use]
+    pub fn editing_definition(&self) -> Option<&doc::SymbolDefinition> {
+        self.definition_of(self.symbol_scope?)
+    }
+
+    /// Enters symbol editing: tools target the definition's own cells,
+    /// hit-testing looks at definition content. A view-state change —
+    /// it does not journal, and refuses unknown symbol numbers.
+    ///
+    /// # Errors
+    /// No definition carries `symbol`.
+    pub fn enter_symbol(&mut self, symbol: i64) -> Result<(), EngineError> {
+        if self.definition_of(symbol).is_none() {
+            return Err(EngineError::MissingTarget {
+                name: "symbol.edit".to_owned(),
+                detail: format!("no symbol numbered {symbol}"),
+            });
+        }
+        self.symbol_scope = Some(symbol);
+        self.symbol_layer = 0;
+        self.selection = None;
+        self.selection_set.clear();
+        Ok(())
+    }
+
+    /// Leaves symbol editing; tools target the page tree again.
+    pub fn exit_symbol(&mut self) {
+        self.symbol_scope = None;
+        self.symbol_layer = 0;
+        self.selection = None;
+        self.selection_set.clear();
+    }
+
+    /// The cell the tools edit: the definition's active cell in symbol
+    /// scope, the page cell otherwise. Clamped to what the definition
+    /// has (definitions carry their own state count).
+    #[must_use]
+    pub fn editing_cell(&self) -> Option<&Cell> {
+        let Some(definition) = self.editing_definition() else {
+            return self.current_cell();
+        };
+        let layer = definition.layers.layers.get(self.symbol_layer)?;
+        let index = self.frame.min(layer.cells.len().saturating_sub(1));
+        layer.cells.get(index)
+    }
+
+    /// The definition cell index new scope creations lift into.
+    fn symbol_cell_index(&self) -> usize {
+        let Some(definition) = self.editing_definition() else {
+            return 0;
+        };
+        let cells = definition
+            .layers
+            .layers
+            .get(self.symbol_layer)
+            .map_or(1, |layer| layer.cells.len());
+        self.frame.min(cells.saturating_sub(1))
+    }
+
+    /// Places an instance of `symbol` at `world` on the current page
+    /// and state (the Library panel's drag-to-place), then selects it.
+    ///
+    /// # Errors
+    /// Whatever `symbol.createInstance` refuses (unknown symbol,
+    /// missing destination cell).
+    pub fn place_symbol(&mut self, symbol: i64, world: geom::Point) -> Result<(), EngineError> {
+        let before: Vec<ObjectId> = self
+            .current_cell()
+            .map_or_else(Vec::new, |cell| cell.elements.clone());
+        self.apply(
+            "symbol.createInstance",
+            serde_json::json!({
+                "symbol": symbol,
+                "page": self.page, "layer": 0, "cell": self.frame,
+                "index": null,
+                "x": world.x, "y": world.y,
+                "name": null,
+            }),
+        )?;
+        // Select what was placed: the first element the cell gained.
+        let placed = self
+            .current_cell()
+            .and_then(|cell| cell.elements.iter().find(|id| !before.contains(id)))
+            .copied();
+        if let Some(id) = placed {
+            self.selection = Some(id);
+            self.selection_set = vec![id];
+        }
+        Ok(())
+    }
+
+    /// Installs default nine-slice guides on `symbol`: shape bounds
+    /// from the definition's content, zero insets, guides free to move
+    /// anywhere within the shape.
+    ///
+    /// # Errors
+    /// Unknown symbol, or the definition has no bounded content to
+    /// slice.
+    pub fn enable_nine_slice(&mut self, symbol: i64) -> Result<(), EngineError> {
+        const NAME: &str = "symbol.set9Slice";
+        let Some(bounds) = self.definition_content_bounds(symbol) else {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: "the definition has no bounded content to slice".to_owned(),
+            });
+        };
+        self.apply(
+            NAME,
+            serde_json::json!({
+                "symbol": symbol,
+                "guides": {
+                    "locked": false, "color_raw": 0xFF_00_FF,
+                    "controls": [0.0, 0.0, 0.0, 0.0],
+                    "shape_bounds": {
+                        "x0": bounds.x0, "y0": bounds.y0,
+                        "x1": bounds.x1, "y1": bounds.y1,
+                    },
+                    "limits": {
+                        "x0": bounds.x0, "y0": bounds.y0,
+                        "x1": bounds.x1, "y1": bounds.y1,
+                    },
+                },
+            }),
+        )
+    }
+
+    /// Clears `symbol`'s nine-slice guides.
+    ///
+    /// # Errors
+    /// Unknown symbol.
+    pub fn disable_nine_slice(&mut self, symbol: i64) -> Result<(), EngineError> {
+        self.apply(
+            "symbol.set9Slice",
+            serde_json::json!({ "symbol": symbol, "guides": null }),
+        )
+    }
+
+    /// Union bounding box of the definition's path content, in
+    /// definition-local coordinates.
+    #[must_use]
+    pub fn definition_content_bounds(&self, symbol: i64) -> Option<geom::Rect> {
+        let definition = self.definition_of(symbol)?;
+        let mut bounds: Option<geom::Rect> = None;
+        for layer in &definition.layers.layers {
+            for cell in &layer.cells {
+                for id in &cell.elements {
+                    if let Some(ObjectData::Path(path)) = self.document().registry.get(*id) {
+                        let path_bounds = bounds_of(path);
+                        bounds = Some(match bounds {
+                            Some(so_far) => so_far.union(path_bounds),
+                            None => path_bounds,
+                        });
+                    }
+                }
+            }
+        }
+        bounds
+    }
+
+    /// Begins dragging a nine-slice guide edge. Refuses definitions
+    /// without guides — there is nothing to drag.
+    ///
+    /// # Errors
+    /// Unknown symbol, or no `NGSv` guides installed.
+    pub fn begin_guide_drag(
+        &mut self,
+        symbol: i64,
+        edge: NineSliceEdge,
+        world: geom::Point,
+    ) -> Result<(), EngineError> {
+        if self
+            .definition_of(symbol)
+            .and_then(|definition| definition.nine_slice.as_ref())
+            .is_none()
+        {
+            return Err(EngineError::MissingTarget {
+                name: "symbol.set9Slice".to_owned(),
+                detail: format!("symbol {symbol} has no nine-slice guides"),
+            });
+        }
+        self.guide_drag = Some(GuideDrag {
+            symbol,
+            edge,
+            current: world,
+        });
+        Ok(())
+    }
+
+    /// Updates the in-progress guide drag.
+    pub fn drag_guide_to(&mut self, world: geom::Point) {
+        if let Some(drag) = &mut self.guide_drag {
+            drag.current = world;
+        }
+    }
+
+    /// Ends the guide drag: commits the edge's new inset with
+    /// `symbol.set9Slice`, the other guide data preserved. Insets are
+    /// measured from the shape edges (dictionary order top, bottom,
+    /// left, right) and clamp to the shape's extent.
+    ///
+    /// # Errors
+    /// Whatever `symbol.set9Slice` refuses (unknown symbol, guides
+    /// removed mid-drag).
+    pub fn end_guide_drag(&mut self) -> Result<(), EngineError> {
+        const NAME: &str = "symbol.set9Slice";
+        let Some(drag) = self.guide_drag.take() else {
+            return Ok(());
+        };
+        let Some(guides) = self
+            .definition_of(drag.symbol)
+            .and_then(|definition| definition.nine_slice.clone())
+        else {
+            return Err(EngineError::MissingTarget {
+                name: NAME.to_owned(),
+                detail: format!("symbol {} has no nine-slice guides", drag.symbol),
+            });
+        };
+        let bounds = guides.shape_bounds;
+        let inset = match drag.edge {
+            NineSliceEdge::Top => drag.current.y - bounds.y0,
+            NineSliceEdge::Bottom => bounds.y1 - drag.current.y,
+            NineSliceEdge::Left => drag.current.x - bounds.x0,
+            NineSliceEdge::Right => bounds.x1 - drag.current.x,
+        };
+        let extent = match drag.edge {
+            NineSliceEdge::Top | NineSliceEdge::Bottom => bounds.height(),
+            NineSliceEdge::Left | NineSliceEdge::Right => bounds.width(),
+        };
+        let mut controls = guides.controls;
+        controls[drag.edge.control()] = inset.clamp(0.0, extent.max(0.0));
+        self.apply(
+            NAME,
+            serde_json::json!({
+                "symbol": drag.symbol,
+                "guides": {
+                    "locked": guides.locked,
+                    "color_raw": guides.color_raw,
+                    "controls": controls,
+                    "shape_bounds": {
+                        "x0": bounds.x0, "y0": bounds.y0,
+                        "x1": bounds.x1, "y1": bounds.y1,
+                    },
+                    "limits": {
+                        "x0": guides.limits.x0, "y0": guides.limits.y0,
+                        "x1": guides.limits.x1, "y1": guides.limits.y1,
+                    },
+                },
+            }),
+        )
+    }
+
     /// Begins a pointer drag in world space.
     pub fn begin_drag(&mut self, world: geom::Point) {
         self.drag = Some(Drag {
@@ -384,10 +698,12 @@ impl Editor {
 
     /// Ends the drag. Creation tools apply their create command through
     /// the session; degenerate drags (a click) create nothing.
-    /// Panning/zooming tools touch only the view (shell's job).
+    /// Panning/zooming tools touch only the view (shell's job). While
+    /// a symbol is being edited, the fresh creation is lifted into the
+    /// definition.
     ///
     /// # Errors
-    /// Whatever the creation command refuses.
+    /// Whatever the creation command (or the scope lift) refuses.
     pub fn end_drag(&mut self) -> Result<(), EngineError> {
         let Some(drag) = self.drag.take() else {
             return Ok(());
@@ -398,7 +714,13 @@ impl Editor {
         if width.abs() < 0.5 || height.abs() < 0.5 {
             return Ok(());
         }
-        match drag.tool {
+        // The page cell creation writes into, snapshotted before the
+        // apply so the created id can be found by diff — creation
+        // commands carry no return value.
+        let before: Vec<ObjectId> = self
+            .current_cell()
+            .map_or_else(Vec::new, |cell| cell.elements.clone());
+        let created = match drag.tool {
             Tool::Rect | Tool::Ellipse | Tool::Line => {
                 let kind = match drag.tool {
                     Tool::Rect => "rect",
@@ -414,21 +736,64 @@ impl Editor {
                         "page": self.page, "layer": 0, "cell": self.frame,
                         "name": null,
                     }),
-                )
+                )?;
+                true
             }
-            Tool::Text => self.apply(
-                "text.createText",
-                serde_json::json!({
-                    "page": self.page, "layer": 0, "cell": self.frame,
-                    "x": x, "y": y, "width": width, "height": height,
-                    "text": "", "name": null,
-                }),
-            ),
+            Tool::Text => {
+                self.apply(
+                    "text.createText",
+                    serde_json::json!({
+                        "page": self.page, "layer": 0, "cell": self.frame,
+                        "x": x, "y": y, "width": width, "height": height,
+                        "text": "", "name": null,
+                    }),
+                )?;
+                true
+            }
             Tool::AutoShape(shape) => {
-                self.apply(shape.command(), shape.payload(drag, self.page, self.frame))
+                self.apply(shape.command(), shape.payload(drag, self.page, self.frame))?;
+                true
             }
-            Tool::Pointer | Tool::Subselect | Tool::Zoom | Tool::Hand => Ok(()),
+            Tool::Pointer | Tool::Subselect | Tool::Zoom | Tool::Hand => false,
+        };
+        if created && self.symbol_scope.is_some() {
+            self.lift_creation_into_scope(&before)?;
         }
+        Ok(())
+    }
+
+    /// While a symbol is being edited, a fresh creation belongs to the
+    /// definition, not the page — but creation commands only write
+    /// pages. So the object lands on the page and this lifts it into
+    /// the definition with `symbol.editAttach`: two journal rows, both
+    /// replayable, undo walks them back in order.
+    ///
+    /// # Errors
+    /// The created object cannot be located in the page cell, or the
+    /// lift is refused.
+    fn lift_creation_into_scope(&mut self, before: &[ObjectId]) -> Result<(), EngineError> {
+        const NAME: &str = "symbol.editAttach";
+        let Some(symbol) = self.symbol_scope else {
+            return Ok(());
+        };
+        let created = self
+            .current_cell()
+            .and_then(|cell| cell.elements.iter().find(|id| !before.contains(id)))
+            .copied();
+        let Some(id) = created else {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: "the created object did not appear in the page cell".to_owned(),
+            });
+        };
+        self.apply(
+            NAME,
+            serde_json::json!({
+                "symbol": symbol, "id": id,
+                "layer": self.symbol_layer, "cell": self.symbol_cell_index(),
+                "index": null,
+            }),
+        )
     }
 
     /// Selects the topmost object in the current cell whose contour
@@ -461,10 +826,11 @@ impl Editor {
         true
     }
 
-    /// The topmost live path in the current cell hit by `world`.
+    /// The topmost live path in the edited cell hit by `world` — the
+    /// definition's cell in symbol scope, the page cell otherwise.
     #[must_use]
     pub fn hit_at(&self, world: geom::Point) -> Option<ObjectId> {
-        let cell = self.current_cell()?;
+        let cell = self.editing_cell()?;
         let candidates: Vec<ObjectId> = cell.elements.iter().copied().rev().collect();
         candidates.into_iter().find(|id| {
             matches!(
@@ -506,10 +872,11 @@ impl Editor {
         Some((ids[0], ids[1]))
     }
 
-    /// Cell element index of `id` (z position); unattached objects
-    /// sort last without disturbing the relative order of found ones.
+    /// Cell element index of `id` (z position) in the edited cell;
+    /// unattached objects sort last without disturbing the relative
+    /// order of found ones.
     fn z_order(&self, id: ObjectId) -> usize {
-        self.current_cell()
+        self.editing_cell()
             .and_then(|cell| cell.elements.iter().position(|element| *element == id))
             .unwrap_or(usize::MAX)
     }
@@ -708,5 +1075,191 @@ mod tests {
             Some(ObjectData::Path(path)) => assert_eq!(path.opacity, 700),
             other => panic!("wrong object kind: {other:?}"),
         }
+    }
+
+    /// One drawn rect turned into a symbol: the definition owns the
+    /// artwork, the page cell holds the instance.
+    fn symbol_editor() -> (Editor, doc::ObjectId, doc::ObjectId) {
+        let mut editor = Editor::untitled();
+        editor.tool = Tool::Rect;
+        editor.begin_drag(geom::Point::new(10.0, 10.0));
+        editor.drag_to(geom::Point::new(90.0, 50.0));
+        editor.end_drag().unwrap();
+        let content = editor.current_cell().unwrap().elements[0];
+        editor
+            .apply(
+                "symbol.create",
+                serde_json::json!({
+                    "ids": [content], "name": "badge", "symbol_type": "graphic",
+                }),
+            )
+            .unwrap();
+        let instance = editor.current_cell().unwrap().elements[0];
+        (editor, content, instance)
+    }
+
+    #[test]
+    fn symbol_scope_routes_tools_at_the_definition() {
+        let (mut editor, content, instance) = symbol_editor();
+
+        editor.enter_symbol(0).unwrap();
+        assert_eq!(editor.symbol_scope, Some(0));
+        // The edited cell is the definition's, not the page's: the
+        // artwork sits there, the instance does not.
+        let cell = editor.editing_cell().unwrap();
+        assert_eq!(cell.elements, vec![content]);
+        assert_ne!(cell.elements[0], instance);
+
+        // Unknown symbol numbers refuse and leave the scope alone.
+        assert!(editor.enter_symbol(9).is_err());
+        assert_eq!(editor.symbol_scope, Some(0));
+
+        editor.exit_symbol();
+        assert!(editor.symbol_scope.is_none());
+        assert_eq!(
+            editor.editing_cell().map(|cell| cell.elements.clone()),
+            editor.current_cell().map(|cell| cell.elements.clone()),
+            "back on the page, the edited cell is the page cell again"
+        );
+    }
+
+    #[test]
+    fn a_scope_creation_lands_in_the_definition() {
+        let (mut editor, _content, _instance) = symbol_editor();
+        editor.enter_symbol(0).unwrap();
+
+        editor.tool = Tool::Rect;
+        editor.begin_drag(geom::Point::new(100.0, 100.0));
+        editor.drag_to(geom::Point::new(140.0, 130.0));
+        editor.end_drag().unwrap();
+
+        // The definition gained the artwork; the page cell is
+        // unchanged (just the instance).
+        let definition_cell = editor.editing_cell().unwrap();
+        assert_eq!(definition_cell.elements.len(), 2);
+        let page_cell = editor.current_cell().unwrap();
+        assert_eq!(page_cell.elements.len(), 1);
+
+        // Undo walks the two journal rows back: lift, then create.
+        editor.undo().unwrap();
+        editor.undo().unwrap();
+        assert_eq!(editor.editing_cell().unwrap().elements.len(), 1);
+        assert_eq!(
+            editor.current_cell().unwrap().elements.len(),
+            1,
+            "the page keeps the instance, nothing else"
+        );
+    }
+
+    #[test]
+    fn place_symbol_places_and_selects_an_instance() {
+        let (mut editor, _content, instance) = symbol_editor();
+        editor.exit_symbol();
+        editor.selection = None;
+        editor.selection_set.clear();
+
+        editor
+            .place_symbol(0, geom::Point::new(200.0, 220.0))
+            .unwrap();
+        let cell = editor.current_cell().unwrap();
+        assert_eq!(cell.elements.len(), 2);
+        assert_eq!(editor.selection, Some(cell.elements[1]));
+        assert_ne!(cell.elements[1], instance);
+        match editor.document().registry.get(cell.elements[1]) {
+            Some(ObjectData::SymbolInstance(placed)) => {
+                let translation = placed.transform.translation();
+                assert_eq!(translation, geom::Vec2::new(200.0, 220.0));
+            }
+            other => panic!("a placement creates an instance: {other:?}"),
+        }
+        editor.undo().unwrap();
+        assert_eq!(editor.current_cell().unwrap().elements.len(), 1);
+    }
+
+    #[test]
+    fn hit_at_inside_scope_finds_definition_content() {
+        let (mut editor, _content, _instance) = symbol_editor();
+        editor.enter_symbol(0).unwrap();
+
+        // Over the original artwork: inside the scope this is the
+        // definition member, never the page instance.
+        let hit = editor.hit_at(geom::Point::new(50.0, 30.0)).unwrap();
+        assert!(editor.editing_cell().unwrap().elements.contains(&hit));
+    }
+
+    #[test]
+    fn guide_drag_commits_a_new_inset() {
+        let (mut editor, _content, _instance) = symbol_editor();
+        editor.enable_nine_slice(0).unwrap();
+        // Defaults: zero insets, shape bounds from the definition's
+        // content.
+        let guides = editor.document().symbols[0]
+            .nine_slice
+            .clone()
+            .expect("guides installed");
+        assert_eq!(guides.controls, [0.0, 0.0, 0.0, 0.0]);
+        assert_eq!(guides.shape_bounds, geom::Rect::new(10.0, 10.0, 90.0, 50.0));
+
+        // Drag the top guide down to world y=30: a 20px inset.
+        editor
+            .begin_guide_drag(0, NineSliceEdge::Top, geom::Point::new(50.0, 30.0))
+            .unwrap();
+        editor.drag_guide_to(geom::Point::new(52.0, 30.0));
+        editor.end_guide_drag().unwrap();
+        let guides = editor.document().symbols[0]
+            .nine_slice
+            .clone()
+            .expect("guides survive the drag");
+        assert_eq!(guides.controls, [20.0, 0.0, 0.0, 0.0]);
+
+        // Dictionary order: a right-edge drag writes slot 3, measured
+        // in from the right edge, clamped to the shape width.
+        editor
+            .begin_guide_drag(0, NineSliceEdge::Right, geom::Point::new(60.0, 30.0))
+            .unwrap();
+        editor.end_guide_drag().unwrap();
+        let guides = editor.document().symbols[0].nine_slice.clone().unwrap();
+        assert_eq!(guides.controls, [20.0, 0.0, 0.0, 30.0]);
+
+        // A drag over an unguided symbol refuses cleanly.
+        editor
+            .apply(
+                "library.add",
+                serde_json::json!({ "name": "bare", "symbol_type": "graphic" }),
+            )
+            .unwrap();
+        let bare = editor.document().symbols[1].symbol_number;
+        assert!(
+            editor
+                .begin_guide_drag(bare, NineSliceEdge::Top, geom::Point::new(0.0, 0.0))
+                .is_err()
+        );
+        assert!(editor.guide_drag.is_none());
+        // An abandoned drag (no edge picked) commits nothing.
+        editor.guide_drag = None;
+        editor.end_guide_drag().unwrap();
+        assert_eq!(
+            editor.document().symbols[0]
+                .nine_slice
+                .as_ref()
+                .unwrap()
+                .controls,
+            [20.0, 0.0, 0.0, 30.0]
+        );
+    }
+
+    #[test]
+    fn nine_slice_defaults_refuse_empty_definitions() {
+        let mut editor = Editor::untitled();
+        editor
+            .apply(
+                "library.add",
+                serde_json::json!({ "name": "empty", "symbol_type": "graphic" }),
+            )
+            .unwrap();
+        let number = editor.document().symbols[0].symbol_number;
+        assert!(editor.enable_nine_slice(number).is_err());
+        editor.disable_nine_slice(number).unwrap();
+        assert!(editor.document().symbols[0].nine_slice.is_none());
     }
 }
