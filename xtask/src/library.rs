@@ -18,7 +18,7 @@ use crate::corpus::{encode_rgba8, insert_before_iend, zlib};
 use crate::util::workspace_root;
 
 /// Output directory, workspace-relative.
-const DIR: &str = "assets/library";
+pub(crate) const DIR: &str = "assets/library";
 
 /// Canvas the builders work on; the art positions below fit inside it.
 const CANVAS: (f64, f64) = (96.0, 64.0);

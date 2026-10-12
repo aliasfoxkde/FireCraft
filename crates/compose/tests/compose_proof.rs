@@ -1223,6 +1223,89 @@ fn nine_slice_instance_scales_by_guide_insets_at_two_sizes() {
 }
 
 #[test]
+fn nine_slice_instance_smaller_than_its_corners_shrinks_corners() {
+    let mut doc = Document::default();
+    // The same nine-piece 8x8 source as the two-size proof above:
+    // corners RED/BLUE/CYAN/BLACK, center GREEN.
+    let pieces: [([f64; 4], i64); 9] = [
+        ([0.0, 0.0, 2.0, 2.0], RED),
+        ([2.0, 0.0, 6.0, 2.0], MAGENTA),
+        ([6.0, 0.0, 8.0, 2.0], BLUE),
+        ([0.0, 2.0, 2.0, 6.0], RED),
+        ([2.0, 2.0, 6.0, 6.0], GREEN),
+        ([6.0, 2.0, 8.0, 6.0], BLUE),
+        ([0.0, 6.0, 2.0, 8.0], CYAN),
+        ([2.0, 6.0, 6.0, 8.0], YELLOW),
+        ([6.0, 6.0, 8.0, 8.0], BLACK),
+    ];
+    let content: Vec<doc::ObjectId> = pieces
+        .iter()
+        .map(|([x0, y0, x1, y1], fill)| {
+            rect_object(
+                &mut doc.registry,
+                rect_contour(*x0, *y0, *x1, *y1),
+                *fill,
+                1000,
+                0,
+            )
+        })
+        .collect();
+    let mut definition = symbol_definition(9, SymbolType::Graphic, vec![cell(content)]);
+    definition.nine_slice = Some(NineSliceGuides {
+        locked: false,
+        color_raw: 0,
+        controls: [2.0, 2.0, 2.0, 2.0],
+        shape_bounds: Rect::new(0.0, 0.0, 8.0, 8.0),
+        limits: Rect::new(-2.0, -2.0, 10.0, 10.0),
+    });
+    doc.symbols.push(definition);
+
+    // Destination 3x2: smaller than the 2+2 corner insets on both
+    // axes. The corners shrink proportionally (2 -> 1), the center
+    // pieces collapse to zero width/height, and nothing goes negative
+    // - the output is four shrunken corners and no center.
+    let tiny = doc.registry.insert(ObjectData::SymbolInstance(instance(
+        9,
+        Affine::scale_non_uniform(3.0 / 8.0, 2.0 / 8.0),
+        None,
+    )));
+    // The page canvas hosts the 8x8 source raster; the *destination*
+    // is what shrinks to 3x2.
+    doc.pages
+        .push(page(8.0, 8.0, vec![layer(vec![cell(vec![tiny])])]));
+
+    let render = render(&doc, 0, 0).expect("render");
+    // Corner widths resolve to 1 (left) and 2 (right), heights 1 and
+    // 1; the middle pieces are zero-sized and paint nothing.
+    assert_eq!(
+        pixel(&render, 0, 0),
+        [255, 0, 0, 255],
+        "shrunken red corner"
+    );
+    assert_eq!(
+        pixel(&render, 1, 0),
+        PIXEL_BLUE,
+        "blue corner fills the rest"
+    );
+    assert_eq!(pixel(&render, 2, 0), PIXEL_BLUE, "blue corner is 2 wide");
+    assert_eq!(
+        pixel(&render, 0, 1),
+        [0, 255, 255, 255],
+        "shrunken cyan corner"
+    );
+    assert_eq!(
+        pixel(&render, 1, 1),
+        [0, 0, 0, 255],
+        "black corner fills the rest"
+    );
+    assert_eq!(
+        pixel(&render, 2, 1),
+        [0, 0, 0, 255],
+        "black corner is 2 wide"
+    );
+}
+
+#[test]
 fn animation_instance_spans_states_with_shifted_placements() {
     let (mut doc, placement) = red_dot_document();
     let Some(ObjectData::SymbolInstance(animated)) = doc.registry.get_mut(placement) else {
