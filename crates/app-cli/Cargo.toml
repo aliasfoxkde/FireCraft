@@ -13,6 +13,14 @@ description = "Headless FireCraft command line: document info, canonical convert
 name = "firecraft-cli"
 path = "src/main.rs"
 
+[features]
+default = ["scripting"]
+# Native-only automation surface (PLANNING §7.4/§7.5): `run-script` and
+# the MCP `firecraft.runScript` tool link the scripting engine. The
+# wasm build drops them with --no-default-features — the web shell
+# embeds scripting directly; the control channel never crosses wasm.
+scripting = ["dep:scripting"]
+
 [dependencies]
 doc = { path = "../doc", features = ["serde"] }
 geom = { path = "../geom" }
@@ -24,6 +32,7 @@ io = { path = "../io" }
 flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
 gif = "0.14.2"
 serde_json = { version = "1", features = ["float_roundtrip"] }
+scripting = { path = "../scripting", optional = true }
 
 [lints]
 workspace = true

@@ -6,21 +6,30 @@
 //! firecraft-cli apply <doc.fw.png> <journal.fwj> [--out <out.fw.png>] [--steps <out.fwsteps>]
 //! firecraft-cli export <in.fw.png> <out.(png|jpg|bmp|tiff|wbmp|svg)>
 //! firecraft-cli import <in.raster> <out.fw.png> [name]
+//! firecraft-cli run-script <script.jsf> <doc.fw.png> [--out <out.fw.png>]
+//! firecraft-cli serve <doc.fw.png> [--out <out.fw.png>]
+//! firecraft-cli mcp <doc.fw.png> [--out <out.fw.png>]
 //! ```
 //!
 //! Every operation runs through the same engine registry the GUI uses;
 //! there is no side door. Results on stdout, diagnostics on stderr.
+//! `serve` speaks newline-delimited JSON control requests on stdin
+//! (native-only, PLANNING §7.4); `mcp` speaks the MCP JSON-RPC 2.0
+//! stdio framing over the same registry ids.
 
 // The deny lives in the workspace lints to keep library code silent;
 // in the binary, stdout is the product (info summaries).
 #![allow(clippy::print_stdout)]
 
+use std::io::BufRead as _;
 use std::process::ExitCode;
+use std::rc::Rc;
 
-use app_cli::{CliError, info, io, ops};
+use app_cli::{CliError, channel, info, io, mcp, ops};
+use engine::Session;
 use engine::platform::FileSystem as _;
 
-const USAGE: &str = "usage: firecraft-cli <info <file>|convert <in> <out>|apply <doc> <journal> [--out <out>] [--steps <out.fwsteps>]|export <in.fw.png> <out.(png|jpg|bmp|tiff|wbmp|svg|psd|gif)> [--quality <1-100>] [--progressive] [--matte <white|black>]|import <in.raster> <out.fw.png> [name]|batch <dir> --format <png|jpg|bmp|tiff|wbmp|svg|psd|gif> [--options <json|file>] [--out <dir>]";
+const USAGE: &str = "usage: firecraft-cli <info <file>|convert <in> <out>|apply <doc> <journal> [--out <out>] [--steps <out.fwsteps>]|export <in.fw.png> <out.(png|jpg|bmp|tiff|wbmp|svg|psd|gif)> [--quality <1-100>] [--progressive] [--matte <white|black>]|import <in.raster> <out.fw.png> [name]|batch <dir> --format <png|jpg|bmp|tiff|wbmp|svg|psd|gif> [--options <json|file>] [--out <dir>]|run-script <script.jsf> <doc> [--out <out>]|serve <doc> [--out <out>]|mcp <doc> [--out <out>]";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -233,11 +242,180 @@ fn run(args: &[String]) -> Result<(), CliError> {
             }
             Ok(())
         }
+        #[cfg(feature = "scripting")]
+        Some("run-script") => {
+            let parsed =
+                parse_session_args(args, "run-script <script.jsf> <doc> [--out <out>]", 2)?;
+            let script_path = parsed.positional[0];
+            let doc_path = parsed.positional[1];
+            let script_bytes = fs
+                .read_file(script_path)
+                .map_err(|error| CliError(error.to_string()))?;
+            let source = String::from_utf8(script_bytes)
+                .map_err(|error| CliError(format!("{script_path}: {error}")))?;
+            let bytes = fs
+                .read_file(doc_path)
+                .map_err(|error| CliError(error.to_string()))?;
+            let loaded = io::open(&bytes)?;
+            let applied = ops::run_script(loaded, Rc::new(io::StdFs), script_path, &source)?;
+            finish_session(applied, parsed.out)
+        }
+        Some("serve") => {
+            let parsed = parse_session_args(args, "serve <doc> [--out <out>]", 1)?;
+            let doc_path = parsed.positional[0];
+            let bytes = fs
+                .read_file(doc_path)
+                .map_err(|error| CliError(error.to_string()))?;
+            let loaded = io::open(&bytes)?;
+            let io::Loaded {
+                document,
+                unknown,
+                chunks,
+            } = loaded;
+            let mut session = Session::new(document);
+            let stdin = std::io::stdin();
+            for line in stdin.lock().lines() {
+                let line = line.map_err(|error| CliError(format!("stdin: {error}")))?;
+                let trimmed = line.trim();
+                if trimmed.is_empty() {
+                    continue;
+                }
+                let reply = match serde_json::from_str(trimmed) {
+                    Ok(value) => channel::handle(&mut session, &value),
+                    Err(error) => {
+                        serde_json::json!({ "ok": false, "error": format!("bad JSON: {error}") })
+                    }
+                };
+                println!("{reply}");
+            }
+            save_session(&session, &unknown, &chunks, parsed.out)?;
+            Ok(())
+        }
+        Some("mcp") => {
+            let parsed = parse_session_args(args, "mcp <doc> [--out <out>]", 1)?;
+            let doc_path = parsed.positional[0];
+            let bytes = fs
+                .read_file(doc_path)
+                .map_err(|error| CliError(error.to_string()))?;
+            let loaded = io::open(&bytes)?;
+            let io::Loaded {
+                document,
+                unknown,
+                chunks,
+            } = loaded;
+            let mut session = Session::new(document);
+            let fs: Rc<dyn engine::platform::FileSystem> = Rc::new(io::StdFs);
+            let stdin = std::io::stdin();
+            for line in stdin.lock().lines() {
+                let line = line.map_err(|error| CliError(format!("stdin: {error}")))?;
+                let trimmed = line.trim();
+                if trimmed.is_empty() {
+                    continue;
+                }
+                let reply = match serde_json::from_str(trimmed) {
+                    Ok(value) => mcp::handle(&mut session, fs.clone(), &value),
+                    Err(error) => Some(mcp::parse_error(&error.to_string())),
+                };
+                if let Some(reply) = reply {
+                    println!("{reply}");
+                }
+            }
+            save_session(&session, &unknown, &chunks, parsed.out)?;
+            Ok(())
+        }
         _ => {
             eprintln!("{USAGE}");
             Err(CliError("unknown or missing command".to_owned()))
         }
     }
+}
+
+/// The saved result of a session-shaped verb: save to `out` when given,
+/// otherwise summarize on stdout. (Only `run-script` returns an
+/// [`ops::Applied`] today, so this rides its feature gate.)
+#[cfg_attr(not(feature = "scripting"), allow(dead_code))]
+fn finish_session(applied: ops::Applied, out: Option<&str>) -> Result<(), CliError> {
+    match out {
+        Some(out_path) => {
+            let fs = io::StdFs;
+            let written = io::save(
+                applied.session.document(),
+                &applied.unknown,
+                &applied.chunks,
+            )?;
+            fs.write_file(out_path, &written)
+                .map_err(|error| CliError(error.to_string()))?;
+            eprintln!(
+                "[firecraft-cli] -> {out_path} ({} bytes, {} journal rows)",
+                written.len(),
+                applied.session.journal_len()
+            );
+        }
+        None => println!("{}", info::summarize(applied.session.document())),
+    }
+    Ok(())
+}
+
+/// Saves a live session's document (the `serve`/`mcp` EOF path) when
+/// `out` is given; otherwise nothing is written. `unknown`/`chunks`
+/// ride along from the opened file, as in every other save path.
+fn save_session(
+    session: &Session,
+    unknown: &doc::fwmap::UnknownBag,
+    chunks: &[fwpng::chunk::RawChunk],
+    out: Option<&str>,
+) -> Result<(), CliError> {
+    let Some(out_path) = out else {
+        return Ok(());
+    };
+    let fs = io::StdFs;
+    let written = io::save(session.document(), unknown, chunks)?;
+    fs.write_file(out_path, &written)
+        .map_err(|error| CliError(error.to_string()))?;
+    eprintln!(
+        "[firecraft-cli] -> {out_path} ({} bytes, {} journal rows)",
+        written.len(),
+        session.journal_len()
+    );
+    Ok(())
+}
+
+/// Positional + `--out` parsing for the session-shaped verbs
+/// (`run-script`, `serve`, `mcp`): exactly `positional_count` positionals
+/// in front, then optional `--out <path>`.
+struct SessionArgs<'a> {
+    positional: Vec<&'a str>,
+    out: Option<&'a str>,
+}
+
+fn parse_session_args<'a>(
+    args: &'a [String],
+    usage: &'static str,
+    positional_count: usize,
+) -> Result<SessionArgs<'a>, CliError> {
+    let mut positional = Vec::new();
+    let mut out = None;
+    let mut rest = args.iter().skip(1);
+    while let Some(item) = rest.next() {
+        match item.as_str() {
+            "--out" => {
+                out = Some(
+                    rest.next()
+                        .ok_or_else(|| CliError("--out needs a path".to_owned()))?
+                        .as_str(),
+                );
+            }
+            other if positional.len() < positional_count => positional.push(other),
+            other => {
+                let _ = other;
+                return Err(missing(usage)());
+            }
+        }
+    }
+    if positional.len() != positional_count {
+        return Err(missing(usage)());
+    }
+    Ok(SessionArgs { positional, out })
 }
 
 fn missing(usage: &'static str) -> impl Fn() -> CliError {

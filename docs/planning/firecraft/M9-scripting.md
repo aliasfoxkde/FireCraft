@@ -237,6 +237,33 @@ silently wrong). The gate metric is corpus-run status, not API count.
    the same command id demonstrably runs via CLI, GUI, and MCP in one
    test battery; control channel fuzz (malformed JSON → typed errors,
    no panic).
+   **Done.** Shipped as transport-free dispatch + thin stdio loops:
+   `app_cli::channel::handle` (JSON `{command, args}` →
+   `Session::apply`, reply `{ok, journal}` / `{ok:false, error}`) and
+   `app_cli::mcp::handle` (JSON-RPC 2.0: initialize →
+   protocolVersion 2025-06-18 + serverInfo, ping, tools/list
+   [`firecraft.apply` always; `firecraft.runScript` under the
+   default-on `scripting` feature], tools/call with tool-level
+   failures as `isError` results and protocol failures as -32601/
+   -32602/-32700; `notifications/*` take no reply). Binary verbs
+   `serve`/`mcp` are newline-delimited stdin loops over the same
+   dispatchers (native-only; `--no-default-features` drops run-script
+   + the runScript tool, wasm32 check clean). `ops::run_script` runs a
+   `.jsf` through the scripting host — intents drain only on
+   completion, so a failing script leaves the document untouched.
+   Stopping-condition battery `crates/app/tests/automation.rs`:
+   `object.createPath` with an identical payload through Editor::apply
+   (GUI), channel::handle (CLI), and mcp::handle tools/call (MCP) over
+   one shared base → three byte-equal documents, one journal row each;
+   handshake + tools/list asserts; hostile battery (13 garbage shapes
+   through the channel + 22 through MCP incl. protocol-level) → typed
+   replies, well-formed envelopes, journals untouched, no panic. Live
+   binary smoke: `serve` (live apply, bad-JSON + bad-payload typed
+   errors, EOF save), `mcp` (initialize/notification-silence/tools/
+   list/apply/parse-error/missing-script isError/real-script run →
+   rect added, saved). Gates: app-cli clippy `-D warnings` both
+   feature configs, app clippy, fmt, all tests green, wasm32 clean,
+   layers ok, lockfile unmoved (no image re-ship). ✅
 8. **Gates** — floors raised where earned (corpus-run floor, control
    channel fuzz floor); fuzz arms (script fuzz target: mutated `.jsf`
    → typed report, never panic); parity + scorecard regenerated;

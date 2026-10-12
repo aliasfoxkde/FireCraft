@@ -39,6 +39,45 @@ pub fn apply_journal(loaded: Loaded, journal_text: &str) -> Result<Applied, CliE
     })
 }
 
+/// Runs a `.jsf` script against an opened document (M9 task 7's
+/// `run-script` verb). The script's queued intents drain through the
+/// same registry only when the run completes — a failing or
+/// limit-halted script leaves the document untouched and comes back as
+/// an error carrying the report. `fs` backs `Files.*`/`runScript`
+/// inside the script (desktop: the real file system).
+///
+/// # Errors
+/// [`CliError`] wrapping attach failures and non-completed runs.
+#[cfg(feature = "scripting")]
+pub fn run_script(
+    loaded: Loaded,
+    fs: std::rc::Rc<dyn engine::platform::FileSystem>,
+    name: &str,
+    source: &str,
+) -> Result<Applied, CliError> {
+    let mut session = Session::new(loaded.document);
+    let mut engine = scripting::ScriptEngine::new(scripting::Limits::default())
+        .map_err(|error| CliError(format!("script engine: {error}")))?;
+    let report = scripting::run_with_file_system(fs, || {
+        scripting::run_in_session(&mut session, &mut engine, name, source)
+    });
+    if report.completed() {
+        Ok(Applied {
+            session,
+            unknown: loaded.unknown,
+            chunks: loaded.chunks,
+        })
+    } else {
+        Err(CliError(format!(
+            "{name}: {}",
+            report
+                .message
+                .as_deref()
+                .unwrap_or("script did not complete")
+        )))
+    }
+}
+
 /// Imports any supported raster stream (`io::raster::decode`) into a
 /// fresh single-page document and re-emits it as a canonical `.fw.png`
 /// stream. Import-as-open: nothing enters a journal. Animated GIFs

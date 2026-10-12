@@ -112,6 +112,7 @@ dependencies = [
  "gif 0.14.2",
  "io",
  "raster",
+ "scripting",
  "serde_json",
 ]
 

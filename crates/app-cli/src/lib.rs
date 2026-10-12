@@ -5,8 +5,10 @@
 //! [`engine`] command registry — open/save wrap the full `.fw.png`
 //! read/write path, and journal replay goes through [`engine::Session`].
 
+pub mod channel;
 pub mod info;
 pub mod io;
+pub mod mcp;
 pub mod ops;
 
 /// Library error: one message, printed to stderr by the binary.
