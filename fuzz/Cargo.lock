@@ -29,6 +29,7 @@ dependencies = [
  "raster",
  "scripting",
  "serde_json",
+ "webexport",
 ]
 
 [[package]]
@@ -2038,6 +2039,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "23f0c9c52aa7cd7d77769a4cfe2a9adb1b331f489a41d912ce14513d5ab995c6"
 dependencies = [
  "unicode-ident",
+]
+
+[[package]]
+name = "webexport"
+version = "0.1.0"
+dependencies = [
+ "compose",
+ "doc",
+ "geom",
+ "io",
 ]
 
 [[package]]

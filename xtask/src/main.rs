@@ -16,6 +16,7 @@ mod fuzz;
 mod golden;
 mod layers;
 mod library;
+mod perf;
 mod scripts;
 mod status;
 #[allow(clippy::module_inception)]
@@ -26,7 +27,7 @@ mod webgolden;
 
 use std::process::ExitCode;
 
-const USAGE: &str = "usage: cargo run -p xtask -- <ci [--full]|layers|wasm|corpus [--report]|corpus-gen|library-gen|scripts|golden [--bless]|svg-golden [--bless]|svg-roundtrip [--measure]|web-golden [--bless|--measure]|fuzz|fuzz-quick|panic-hunt|parity|scorecard>";
+const USAGE: &str = "usage: cargo run -p xtask -- <ci [--full]|layers|wasm|corpus [--report]|corpus-gen|library-gen|scripts|golden [--bless]|svg-golden [--bless]|svg-roundtrip [--measure]|web-golden [--bless|--measure]|perf [--bless|--measure]|fuzz|fuzz-quick|panic-hunt|parity|scorecard>";
 
 fn main() -> ExitCode {
     match std::env::args().nth(1).as_deref() {
@@ -57,6 +58,21 @@ fn main() -> ExitCode {
             Some("--bless") => finish("web-golden --bless", webgolden::bless()),
             Some("--measure") => finish("web-golden --measure", webgolden::measure()),
             _ => finish("web-golden", webgolden::run()),
+        },
+        Some("perf") => match std::env::args().nth(2).as_deref() {
+            Some("--bless") => finish("perf --bless", perf::bless()),
+            Some("--measure") => finish("perf --measure", perf::measure()),
+            _ => finish("perf", perf::run()),
+        },
+        // Hidden probe verb: `perf` re-execs this binary in a fresh
+        // process so the VmHWM it reports is the open path's peak, not
+        // the gate's lifetime high-water mark.
+        Some("perf-child") => match std::env::args().nth(2) {
+            Some(path) => finish("perf-child", perf::child(&path)),
+            None => {
+                eprintln!("{USAGE}");
+                ExitCode::FAILURE
+            }
         },
         Some("fuzz") => finish("fuzz", fuzz::full()),
         Some("fuzz-quick") => finish("fuzz-quick", fuzz::quick()),
@@ -95,6 +111,7 @@ fn run_ci(full: Option<&str>) -> ExitCode {
         ("svg-golden", svggolden::run),
         ("svg-roundtrip", svggolden::roundtrip),
         ("web-golden", webgolden::run),
+        ("perf", perf::run),
         ("fuzz", fuzz::quick),
         ("parity", status::parity),
         ("scorecard", status::scorecard),

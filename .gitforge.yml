@@ -85,6 +85,17 @@ jobs:
         run: CARGO_TARGET_DIR=/tmp/ci-target cargo run --locked -p xtask -- golden
     timeout: 30m
 
+  - name: perf-budgets
+    image: firecraft-ci-rust:1
+    needs: [corpus-golden]
+    steps:
+      - name: Performance budgets (open / frame / save / peak memory)
+        # M12: the parity table's ceilings, enforced on the runner
+        # fleet. The report line names the host, so a trip is
+        # diagnosable as regression vs environment shift.
+        run: CARGO_TARGET_DIR=/tmp/ci-target cargo run --locked -p xtask -- perf
+    timeout: 20m
+
   - name: fuzz
     image: firecraft-ci-rust:1
     needs: [corpus-golden]

@@ -21,3 +21,25 @@ that set it instead.
 | control-channel sweeps per run (typed replies, both dispatchers) | 4096 | M9 | `xtask fuzz-quick` (control-channel driver) |
 | shipped scripts running headless (rising floor) | 19 | M9 | `xtask scripts` |
 | layer-table violations | 0 | M0 | `xtask layers` |
+
+## Performance ceilings (falling-only)
+
+Enforced by `xtask perf` (M12). Ceilings are pinned from observation
+with headroom and only move **down** — raising one reopens the
+milestone that set it, the mirror of the floors above. Timings are
+dev-profile medians (median-of-7 after a warm pass) on the recording
+host (AMD Ryzen 7 5700U); memory is the open path's VmHWM measured in
+an isolated child process. Every ceiling is enforced in both
+directions: an unpinned measurement or an unmeasured budget fails the
+gate.
+
+| Budget | Ceiling | Pinned from | Enforced by |
+|---|---|---|---|
+| cold open `composed.fw.png` (µs) | 5073 | 1690.7 | `xtask perf` |
+| pan-zoom frame `composed.fw.png` (µs) | 3772 | 1257.3 | `xtask perf` |
+| canonical save `composed.fw.png` (µs) | 1563 | 520.8 | `xtask perf` |
+| open peak memory `composed.fw.png` (KiB) | 22404 | 14936 | `xtask perf` |
+| cold open `scripted.fw.png` (µs) | 30929 | 10309.4 | `xtask perf` |
+| pan-zoom frame `scripted.fw.png` (µs) | 28566 | 9521.7 | `xtask perf` |
+| canonical save `scripted.fw.png` (µs) | 4077 | 1358.8 | `xtask perf` |
+| open peak memory `scripted.fw.png` (KiB) | 21972 | 14648 | `xtask perf` |
