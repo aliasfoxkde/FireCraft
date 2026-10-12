@@ -261,6 +261,86 @@ impl Shell {
         }
     }
 
+    /// History → Save Steps…: the session journal written as a
+    /// `.fwsteps` command file (JSON lines) through the injected
+    /// traits. The file replays through [`Session::reopen`] — the same
+    /// path the CLI's `apply` verb drives — so a saved command is not
+    /// an export but the session's own restart record.
+    fn save_steps(&mut self) {
+        let Some(path) = self.dialogs.save_path(
+            "Save Steps As Command",
+            "steps.fwsteps",
+            &[("FireCraft steps".to_owned(), vec!["fwsteps".to_owned()])],
+        ) else {
+            return;
+        };
+        let text = self.editor.steps_text();
+        match self.fs.write_file(&path, text.as_bytes()) {
+            Ok(()) => {
+                self.status = format!(
+                    "saved steps {path} ({} rows)",
+                    self.editor.session.journal_len()
+                );
+            }
+            Err(error) => self.status = format!("save steps failed: {error}"),
+        }
+    }
+
+    /// History → Replay…: pick a `.fwsteps` file, then the base
+    /// document it replays onto (the File → Open flow — a steps file
+    /// is a journal prefix, so it needs the pre-steps document). The
+    /// replayed session replaces the current one, undo history
+    /// included.
+    fn replay_steps(&mut self) {
+        let steps_filters = [("FireCraft steps".to_owned(), vec!["fwsteps".to_owned()])];
+        let Some(steps_path) = self.dialogs.open_path("Replay steps", &steps_filters) else {
+            return;
+        };
+        let steps = match self
+            .fs
+            .read_file(&steps_path)
+            .map_err(|error| error.to_string())
+            .and_then(|bytes| String::from_utf8(bytes).map_err(|error| error.to_string()))
+        {
+            Ok(text) => text,
+            Err(error) => {
+                self.status = format!("replay failed: {error}");
+                return;
+            }
+        };
+        let doc_filters = [("Fireworks PNG".to_owned(), vec!["png".to_owned()])];
+        let Some(doc_path) = self
+            .dialogs
+            .open_path("Base document for replay", &doc_filters)
+        else {
+            return;
+        };
+        let replayed = self
+            .fs
+            .read_file(&doc_path)
+            .map_err(|e| e.to_string())
+            .and_then(|bytes| {
+                Editor::open(&bytes)
+                    .map_err(|e| e.to_string())
+                    .and_then(|mut editor| {
+                        editor
+                            .replay_steps(&steps)
+                            .map(|()| editor)
+                            .map_err(|e| e.to_string())
+                    })
+            });
+        match replayed {
+            Ok(editor) => {
+                let rows = editor.session.journal_len();
+                self.editor = editor;
+                self.view = View::default();
+                self.raster = None;
+                self.status = format!("replayed {steps_path} onto {doc_path} ({rows} rows)");
+            }
+            Err(error) => self.status = format!("replay failed: {error}"),
+        }
+    }
+
     /// The export dialog (File → Export…): format + per-format
     /// controls, a 2-Up preview of the chosen settings against a
     /// lossless PNG pane, and Export through the save dialog.
@@ -750,6 +830,44 @@ impl Shell {
                 self.raster = None;
             }
         }
+
+        ui.separator();
+        ui.heading("History");
+        // Snapshot the rows so closures never borrow the session while
+        // the editor is mutable (same rule as the layer list above).
+        let rows: Vec<String> = self
+            .editor
+            .session
+            .journal_entries()
+            .iter()
+            .map(|entry| match &entry.txn {
+                Some(txn) => format!("{}. {txn}: {}", entry.seq, entry.name),
+                None => format!("{}. {}", entry.seq, entry.name),
+            })
+            .collect();
+        egui::ScrollArea::vertical()
+            .max_height(160.0)
+            .show(ui, |ui| {
+                for row in &rows {
+                    ui.label(row);
+                }
+            });
+        ui.horizontal(|ui| {
+            if ui
+                .button("Save Steps…")
+                .on_hover_text("Write the journal as a .fwsteps command file")
+                .clicked()
+            {
+                self.save_steps();
+            }
+            if ui
+                .button("Replay…")
+                .on_hover_text("Rebuild a session from a steps file over a base document")
+                .clicked()
+            {
+                self.replay_steps();
+            }
+        });
     }
 
     /// Right panel: the align/distribute group, then properties of the
@@ -1250,5 +1368,101 @@ impl eframe::App for Shell {
                 .collapsible(false)
                 .show(ui.ctx(), |ui| self.export_dialog_ui(ui));
         }
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+mod tests {
+    use super::*;
+    use engine::platform::{FileSystem, MemoryFs};
+
+    /// Scripted dialogs: the steps path answers the replay/save
+    /// picks, the document path the base pick — matched by title.
+    struct FixedDialogs {
+        steps: String,
+        doc: String,
+    }
+
+    impl engine::platform::Dialogs for FixedDialogs {
+        fn open_path(&self, title: &str, _filters: &[(String, Vec<String>)]) -> Option<String> {
+            if title.starts_with("Replay") {
+                Some(self.steps.clone())
+            } else {
+                Some(self.doc.clone())
+            }
+        }
+
+        fn save_path(
+            &self,
+            _title: &str,
+            _suggested_name: &str,
+            _filters: &[(String, Vec<String>)],
+        ) -> Option<String> {
+            Some(self.steps.clone())
+        }
+
+        fn message(&self, title: &str, text: &str) {
+            eprintln!("[firecraft-test] {title}: {text}");
+        }
+    }
+
+    /// A GUI-shaped session: seeds + drag-created rect + a rename.
+    fn gui_editor() -> Editor {
+        let mut editor = Editor::untitled();
+        editor.tool = Tool::Rect;
+        editor.begin_drag(geom::Point::new(10.0, 10.0));
+        editor.drag_to(geom::Point::new(90.0, 50.0));
+        editor.end_drag().unwrap();
+        let id = editor.current_cell().unwrap().elements[0];
+        editor
+            .apply(
+                "object.rename",
+                serde_json::json!({ "id": id, "name": "plate" }),
+            )
+            .unwrap();
+        editor
+    }
+
+    #[test]
+    fn history_panel_saves_and_replays_steps() {
+        let editor = gui_editor();
+        let steps = editor.steps_text();
+        // The replay base is the PRE-steps document — what the user
+        // opens before running the recorded steps — not the edited one.
+        let base = Editor::from_document(doc::Document::default())
+            .save()
+            .unwrap();
+
+        // Save through the panel action.
+        let dialogs = FixedDialogs {
+            steps: "session.fwsteps".to_owned(),
+            doc: "base.fw.png".to_owned(),
+        };
+        let mut saver = Shell::with_platform(
+            gui_editor(),
+            Box::new(MemoryFs::new()),
+            Box::new(FixedDialogs {
+                steps: dialogs.steps.clone(),
+                doc: dialogs.doc.clone(),
+            }),
+        );
+        saver.save_steps();
+        assert!(saver.status.contains("saved steps"), "{}", saver.status);
+
+        // Replay through the panel action: fresh FS carrying the base
+        // document and the steps file, base opened from disk.
+        let fs = MemoryFs::new();
+        fs.write_file("session.fwsteps", steps.as_bytes()).unwrap();
+        fs.write_file("base.fw.png", &base).unwrap();
+        let mut replayer =
+            Shell::with_platform(Editor::untitled(), Box::new(fs), Box::new(dialogs));
+        replayer.replay_steps();
+        assert!(replayer.status.contains("replayed"), "{}", replayer.status);
+        assert_eq!(
+            serde_json::to_vec(replayer.editor.session.document()).unwrap(),
+            serde_json::to_vec(editor.session.document()).unwrap(),
+            "the replayed session equals the original, byte for byte"
+        );
     }
 }

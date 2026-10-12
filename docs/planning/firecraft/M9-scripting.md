@@ -195,12 +195,38 @@ silently wrong). The gate metric is corpus-run status, not API count.
    clippy `-D warnings`, fmt, 10 tests green. **Stopping condition
    met** (report generated + committed, floor set from it, work list
    recorded). ✅
-6. **History replay + Save Steps As Command** — journal rows export
-   as a runnable command file; shell History panel gains save/replay;
-   `firecraft-cli` replays command files identically to journals
-   (same registry path). **Stopping condition:** equivalence test —
-   GUI-session journal → saved command file → replay on a fresh doc ≡
-   original document (byte-equal).
+6. **History replay + Save Steps As Command** — **done.** A steps
+   file (`.fwsteps`) IS the journal: `Session::journal_lines()` JSON
+   lines on disk, replayed through `Session::reopen` — the same
+   registry path a restarted UI session and the CLI `apply` verb take,
+   so save and replay are inverse by construction (no new export
+   format, no second replay machine). Shell (crates/app): the left
+   panel gains a History section — the journal's step list (seq, txn
+   label, command name, from the new read-only
+   `Session::journal_entries()`) with **Save Steps…** (write
+   `steps_text()` through the save dialog + injected FS) and
+   **Replay…** (pick a `.fwsteps` file, then the PRE-steps base
+   document through the File → Open flow; `Editor::replay_steps`
+   rebuilds the session over it, undo history included, journal
+   becomes the replayed prefix so further edits append). Editor
+   additions: `steps_text()` + `replay_steps()`. CLI (crates/app-cli):
+   `apply <doc> <journal> [--out <out>] [--steps <out.fwsteps>]` —
+   `--steps` writes the replayed session's journal as a command file
+   (headless Save Steps As Command). **Stopping condition met** —
+   `crates/app/tests/steps.rs::saved_steps_replay_to_a_byte_equal_document`:
+   GUI session (untitled seeds + drag-created rect + opacity + rename)
+   → journal → `.fwsteps` file over `MemoryFs` → `Session::reopen` on
+   a fresh `Document::default()` → documents byte-equal (canonical
+   JSON), Editor save bytes byte-equal, undo depth equal, and the
+   rebuilt journal identical to the file. Shell seam pinned by
+   `shell::tests::history_panel_saves_and_replays_steps` (panel
+   actions through scripted dialogs + MemoryFs, base document opened
+   from disk); CLI leg pinned by
+   `app-cli::equivalence::steps_file_replays_identically_through_the_cli`
+   (fuzz-generated sessions, seeds 21/22: steps-file replay ≡ session,
+   journal round-trips verbatim). Gates: engine + app-cli + app clippy
+   `-D warnings`, fmt, tests green; engine wasm32 clean; lockfile
+   unmoved (no image re-ship). ✅
 7. **CLI `run-script` + JSON control channel + MCP server** —
    `firecraft-cli run-script <script> <doc>` (scripting feature,
    default-off on wasm per §7.4 note — boa still ships in the wasm

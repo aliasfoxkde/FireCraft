@@ -85,6 +85,65 @@ fn reopen_replays_to_the_same_document_as_the_apply_loop() {
     }
 }
 
+/// Assembles a minimal `.fw.png` stream carrying `document` (the
+/// canonical writer's output, deflated into mkTS).
+fn fwpng_bytes(document: &doc::Document) -> Vec<u8> {
+    let (tree, _) =
+        doc::fwmap::write(document, &doc::fwmap::UnknownBag::default()).expect("writes");
+    let inflated = fwpng::nodetree::serialize(&tree);
+    let mut compressed = Vec::new();
+    let mut encoder =
+        flate2::write::ZlibEncoder::new(&mut compressed, flate2::Compression::default());
+    std::io::Write::write_all(&mut encoder, &inflated).expect("deflate");
+    std::io::Write::flush(&mut encoder).expect("deflate");
+    drop(encoder);
+    let mut file = Vec::new();
+    file.extend_from_slice(&fwpng::chunk::PNG_SIGNATURE);
+    fwpng::chunk::write_chunk(&mut file, b"mkTS", &compressed);
+    fwpng::chunk::write_chunk(&mut file, b"IEND", &[]);
+    file
+}
+
+/// The M9 task 6 CLI leg: a session journal — the `.fwsteps` command
+/// file body — replays through the CLI helper (one `Session::reopen`)
+/// to a byte-equal document and a byte-identical journal, so the CLI
+/// replays command files exactly as it replays journals.
+#[test]
+fn steps_file_replays_identically_through_the_cli() {
+    for seed in [21_u64, 22] {
+        let mut rng = FuzzRng::new(seed);
+        let seed_document = random_document(&mut rng);
+
+        // Surface-style session: every edit through Session::apply,
+        // the GUI's one mutation door.
+        let mut session = Session::with_registry(seed_document.clone(), registry());
+        let mut applied = 0;
+        for _ in 0..16 {
+            let (name, payload) = random_call(&mut rng, session.document());
+            if session.apply(&name, payload).is_ok() {
+                applied += 1;
+            }
+        }
+        assert!(applied > 0, "generator must land some live calls");
+        let steps = session.journal_lines();
+
+        // Base document through the full read path + the steps file.
+        let loaded = io::open(&fwpng_bytes(&seed_document)).expect("opens the base document");
+        let replayed = app_cli::ops::apply_journal(loaded, &steps).expect("replays");
+
+        assert_eq!(
+            bytes(replayed.session.document()),
+            bytes(session.document()),
+            "seed {seed}: steps-file replay diverged from the session"
+        );
+        assert_eq!(
+            replayed.session.journal_lines(),
+            steps,
+            "the replayed journal is the steps file verbatim"
+        );
+    }
+}
+
 #[test]
 fn cli_apply_journal_matches_engine_apply_journal() {
     // A journal built in-engine (session.journal_lines) replays
@@ -126,21 +185,7 @@ fn convert_round_trips_through_open_and_save() {
     // byte-identical on the second pass (canonical form is stable).
     let mut rng = FuzzRng::new(7);
     let document = random_document(&mut rng);
-    let (tree, _) =
-        doc::fwmap::write(&document, &doc::fwmap::UnknownBag::default()).expect("writes");
-    let inflated = fwpng::nodetree::serialize(&tree);
-
-    let mut compressed = Vec::new();
-    let mut encoder =
-        flate2::write::ZlibEncoder::new(&mut compressed, flate2::Compression::default());
-    std::io::Write::write_all(&mut encoder, &inflated).expect("deflate");
-    std::io::Write::flush(&mut encoder).expect("deflate");
-    drop(encoder);
-
-    let mut file = Vec::new();
-    file.extend_from_slice(&fwpng::chunk::PNG_SIGNATURE);
-    fwpng::chunk::write_chunk(&mut file, b"mkTS", &compressed);
-    fwpng::chunk::write_chunk(&mut file, b"IEND", &[]);
+    let file = fwpng_bytes(&document);
 
     let first = app_cli::ops::convert(&file).expect("converts");
     let second = app_cli::ops::convert(&first).expect("reconverts");

@@ -11,7 +11,7 @@ use doc::Document;
 use crate::delta::Delta;
 use crate::error::EngineError;
 use crate::history::{Call, History};
-use crate::journal::{self, Journal};
+use crate::journal::{self, Journal, JournalEntry};
 use crate::registry::CommandRegistry;
 
 /// One open editing session over one document.
@@ -171,6 +171,12 @@ impl Session {
     #[must_use]
     pub fn journal_len(&self) -> usize {
         self.journal.len()
+    }
+
+    /// The journal entries in order (the History panel's step list).
+    #[must_use]
+    pub fn journal_entries(&self) -> &[JournalEntry] {
+        self.journal.entries()
     }
 
     /// Undo-stack depth.

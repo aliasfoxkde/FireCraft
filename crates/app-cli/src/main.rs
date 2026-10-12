@@ -3,7 +3,7 @@
 //! ```text
 //! firecraft-cli info <file.fw.png>
 //! firecraft-cli convert <in.fw.png> <out.fw.png>
-//! firecraft-cli apply <doc.fw.png> <journal.fwj> [--out <out.fw.png>]
+//! firecraft-cli apply <doc.fw.png> <journal.fwj> [--out <out.fw.png>] [--steps <out.fwsteps>]
 //! firecraft-cli export <in.fw.png> <out.(png|jpg|bmp|tiff|wbmp|svg)>
 //! firecraft-cli import <in.raster> <out.fw.png> [name]
 //! ```
@@ -20,7 +20,7 @@ use std::process::ExitCode;
 use app_cli::{CliError, info, io, ops};
 use engine::platform::FileSystem as _;
 
-const USAGE: &str = "usage: firecraft-cli <info <file>|convert <in> <out>|apply <doc> <journal> [--out <out>]|export <in.fw.png> <out.(png|jpg|bmp|tiff|wbmp|svg|psd|gif)> [--quality <1-100>] [--progressive] [--matte <white|black>]|import <in.raster> <out.fw.png> [name]|batch <dir> --format <png|jpg|bmp|tiff|wbmp|svg|psd|gif> [--options <json|file>] [--out <dir>]";
+const USAGE: &str = "usage: firecraft-cli <info <file>|convert <in> <out>|apply <doc> <journal> [--out <out>] [--steps <out.fwsteps>]|export <in.fw.png> <out.(png|jpg|bmp|tiff|wbmp|svg|psd|gif)> [--quality <1-100>] [--progressive] [--matte <white|black>]|import <in.raster> <out.fw.png> [name]|batch <dir> --format <png|jpg|bmp|tiff|wbmp|svg|psd|gif> [--options <json|file>] [--out <dir>]";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -191,18 +191,30 @@ fn run(args: &[String]) -> Result<(), CliError> {
             Ok(())
         }
         Some("apply") => {
-            let (doc_path, journal_path, out) = parse_apply(args)?;
+            let args = parse_apply(args)?;
             let bytes = fs
-                .read_file(doc_path)
+                .read_file(args.doc)
                 .map_err(|error| CliError(error.to_string()))?;
             let journal = fs
-                .read_file(journal_path)
+                .read_file(args.journal)
                 .map_err(|error| CliError(error.to_string()))?;
             let journal_text = String::from_utf8(journal)
                 .map_err(|error| CliError(format!("journal: {error}")))?;
             let loaded = io::open(&bytes)?;
             let applied = ops::apply_journal(loaded, &journal_text)?;
-            match out {
+            // `--steps`: the replayed session's journal as a `.fwsteps`
+            // command file (Save Steps As Command, headless form).
+            if let Some(steps_path) = args.steps {
+                let text = applied.session.journal_lines();
+                fs.write_file(steps_path, text.as_bytes())
+                    .map_err(|error| CliError(error.to_string()))?;
+                eprintln!(
+                    "[firecraft-cli] {} -> {steps_path} ({} rows)",
+                    args.journal,
+                    applied.session.journal_len()
+                );
+            }
+            match args.out {
                 Some(out_path) => {
                     let written = io::save(
                         applied.session.document(),
@@ -212,7 +224,8 @@ fn run(args: &[String]) -> Result<(), CliError> {
                     fs.write_file(out_path, &written)
                         .map_err(|error| CliError(error.to_string()))?;
                     eprintln!(
-                        "[firecraft-cli] {doc_path} + {} entries -> {out_path}",
+                        "[firecraft-cli] {} + {} entries -> {out_path}",
+                        args.doc,
                         applied.session.journal_len()
                     );
                 }
@@ -231,25 +244,45 @@ fn missing(usage: &'static str) -> impl Fn() -> CliError {
     move || CliError(format!("missing arguments (expected: {usage})"))
 }
 
-fn parse_apply(args: &[String]) -> Result<(&str, &str, Option<&str>), CliError> {
-    let doc = args
-        .get(1)
-        .ok_or_else(missing("apply <doc> <journal> [--out <out>]"))?;
-    let journal = args
-        .get(2)
-        .ok_or_else(missing("apply <doc> <journal> [--out <out>]"))?;
+/// Parsed `apply` arguments: the base document, the journal/steps
+/// file, and the two optional outputs.
+struct ApplyArgs<'a> {
+    doc: &'a str,
+    journal: &'a str,
+    out: Option<&'a str>,
+    steps: Option<&'a str>,
+}
+
+fn parse_apply(args: &[String]) -> Result<ApplyArgs<'_>, CliError> {
+    let usage = "apply <doc> <journal> [--out <out>] [--steps <out.fwsteps>]";
+    let doc = args.get(1).ok_or_else(missing(usage))?;
+    let journal = args.get(2).ok_or_else(missing(usage))?;
     let mut out = None;
+    let mut steps = None;
     let mut rest = args.iter().skip(3);
     while let Some(flag) = rest.next() {
-        if flag == "--out" {
-            out = Some(
-                rest.next()
-                    .ok_or_else(|| CliError("--out needs a path".to_owned()))?
-                    .as_str(),
-            );
-        } else {
-            return Err(CliError(format!("unknown flag: {flag}")));
+        match flag.as_str() {
+            "--out" => {
+                out = Some(
+                    rest.next()
+                        .ok_or_else(|| CliError("--out needs a path".to_owned()))?
+                        .as_str(),
+                );
+            }
+            "--steps" => {
+                steps = Some(
+                    rest.next()
+                        .ok_or_else(|| CliError("--steps needs a path".to_owned()))?
+                        .as_str(),
+                );
+            }
+            other => return Err(CliError(format!("unknown flag: {other}"))),
         }
     }
-    Ok((doc, journal, out))
+    Ok(ApplyArgs {
+        doc,
+        journal,
+        out,
+        steps,
+    })
 }

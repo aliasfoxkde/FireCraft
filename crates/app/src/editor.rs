@@ -308,6 +308,30 @@ impl Editor {
         self.session.apply(name, payload)
     }
 
+    /// The session journal as a steps-file body: the same JSON-lines
+    /// text [`Session::reopen`] consumes, so "Save Steps As Command"
+    /// and replay are exact inverses by construction (M9 task 6).
+    #[must_use]
+    pub fn steps_text(&self) -> String {
+        self.session.journal_lines()
+    }
+
+    /// Rebuilds the session from a steps file over the current
+    /// document as the base — the same restart path a reopened CLI
+    /// session takes. History is reconstructed (undo survives), and
+    /// the journal becomes exactly `lines`, so further edits append to
+    /// the replayed prefix. Callers replaying onto a *pristine* base
+    /// open that base first (`Editor::open`) and replay onto it.
+    ///
+    /// # Errors
+    /// Whatever the journal refuses (malformed line, sequence gap) or
+    /// a replayed command fails.
+    pub fn replay_steps(&mut self, lines: &str) -> Result<(), EngineError> {
+        let session = Session::reopen(self.session.document().clone(), lines)?;
+        self.session = session;
+        Ok(())
+    }
+
     /// Undoes the last step, returning its command name.
     ///
     /// # Errors
