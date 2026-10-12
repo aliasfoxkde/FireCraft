@@ -856,7 +856,7 @@ pub struct ExportOptions {
 }
 
 /// `URLv` — a slice or hotspot.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SliceObject {
     /// `INMs` — internal name.

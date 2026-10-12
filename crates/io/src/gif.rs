@@ -25,7 +25,7 @@ use doc::{Cell, Document, Layer, LayerList, Page, PageInfo};
 use gif::{ColorOutput, DecodeOptions, DisposalMethod, Frame, Repeat};
 use raster::TILE_SIDE;
 
-use crate::{ExportError, ImportError};
+use crate::{ExportError, ImportError, Plane};
 
 /// State ceiling: one `IMGv` per state, and the model's tile bank
 /// holds at most 4096 tiles in total (`raster::attach_image`'s rule —
@@ -789,4 +789,53 @@ fn cropped_frame(
         u16::try_from(min_y).unwrap_or(0),
         transparent,
     ))
+}
+
+/// Encodes a single-frame GIF from a straight-alpha plane: a local
+/// palette per frame (`from_rgba_speed`), no global palette and no
+/// NETSCAPE block — a still image, not an animation.
+///
+/// # Errors
+/// [`ExportError`] for planes outside the `u16` extent, size/length
+/// mismatches, and codec failures.
+pub fn encode_frame(plane: &Plane<'_>) -> Result<Vec<u8>, ExportError> {
+    if plane.width > u32::from(u16::MAX) || plane.height > u32::from(u16::MAX) {
+        return Err(ExportError::TooLarge {
+            format: "gif",
+            width: plane.width,
+            height: plane.height,
+            limit: u32::from(u16::MAX),
+        });
+    }
+    let expected = usize::try_from(plane.width).unwrap_or(usize::MAX)
+        * usize::try_from(plane.height).unwrap_or(usize::MAX)
+        * 4;
+    if plane.rgba.len() != expected {
+        return Err(ExportError::PlaneSize {
+            width: plane.width,
+            height: plane.height,
+            len: plane.rgba.len(),
+        });
+    }
+    let (width, height) = (plane.width as u16, plane.height as u16);
+    let mut rgba = plane.rgba.to_vec();
+    let mut frame = Frame::from_rgba_speed(width, height, &mut rgba, 10);
+    // A single frame needs no disposal: nothing follows it.
+    frame.dispose = DisposalMethod::Any;
+
+    let mut out = Vec::new();
+    let mut encoder =
+        gif::Encoder::new(&mut out, width, height, &[]).map_err(|error| ExportError::Encode {
+            format: "gif",
+            reason: error.to_string(),
+        })?;
+    encoder
+        .write_frame(&frame)
+        .map_err(|error| ExportError::Encode {
+            format: "gif",
+            reason: error.to_string(),
+        })?;
+    // The encoder borrows `out`; drop it so the bytes can move.
+    drop(encoder);
+    Ok(out)
 }

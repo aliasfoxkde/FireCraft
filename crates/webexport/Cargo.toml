@@ -1,0 +1,22 @@
+[package]
+name = "webexport"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "FireCraft web export workflows: HTML+Images, Images Only."
+
+[dependencies]
+compose = { path = "../compose" }
+doc = { path = "../doc" }
+geom = { path = "../geom" }
+io = { path = "../io" }
+
+[dev-dependencies]
+raster = { path = "../raster" }
+
+[lints]
+workspace = true

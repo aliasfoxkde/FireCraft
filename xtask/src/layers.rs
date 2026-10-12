@@ -6,7 +6,7 @@
 //! L1  doc                             document model
 //! L2  vector, filters, text, ops      feature engines
 //! L3  compose, gpu, engine            rendering + orchestration
-//! L4  io                              import/export codecs
+//! L4  io, scripting, webexport        import/export codecs + web export
 //! L5  app, app-cli, automation        shells
 //! L6  testkit                         test-only, may depend on anything
 //! L7  xtask                           verification tooling
@@ -29,6 +29,7 @@ const LAYERS: &[(&str, u8)] = &[
     ("engine", 3),
     ("io", 4),
     ("scripting", 4),
+    ("webexport", 4),
     ("app", 5),
     ("app-cli", 5),
     ("firecraft-web", 5),

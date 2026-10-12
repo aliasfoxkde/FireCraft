@@ -4248,6 +4248,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "webexport"
+version = "0.1.0"
+dependencies = [
+ "compose",
+ "doc",
+ "geom",
+ "io",
+ "raster",
+]
+
+[[package]]
 name = "weezl"
 version = "0.1.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
