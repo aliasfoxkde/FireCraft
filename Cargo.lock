@@ -4711,6 +4711,7 @@ dependencies = [
  "io",
  "png 0.18.1",
  "resvg",
+ "scripting",
  "serde_json",
  "sha2",
 ]

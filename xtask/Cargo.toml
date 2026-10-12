@@ -14,10 +14,14 @@ flate2 = "1"
 png = "0.18"
 serde_json = "1"
 sha2 = "0.10"
-doc = { path = "../crates/doc" }
 # Scripted-shape fixture generation drives the same registry the app
 # and CLI drive (autoshape.* → doc model → canonical writer).
 engine = { path = "../crates/engine" }
+# Script-corpus harness (`xtask scripts`, M9 task 5) runs the shipped
+# .jsf corpus headless through the scripting host; serde on doc for
+# the report's document digests.
+scripting = { path = "../crates/scripting" }
+doc = { path = "../crates/doc", features = ["serde"] }
 fwpng = { path = "../crates/fwpng" }
 image-compare = "0.5.0"
 # default-features = false: `image`'s defaults enable every format codec

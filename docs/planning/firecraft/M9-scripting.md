@@ -163,15 +163,38 @@ silently wrong). The gate metric is corpus-run status, not API count.
    now pins `Files.getLanguageDirectory`/`Files.copy`). Gates:
    scripting 35 tests, clippy `-D warnings`, fmt, wasm32 clean.
    **Stopping condition met.** ✅
-5. **Corpus run harness (`xtask scripts`)** — copies the 89 shipped
-   scripts from `source/` into scratch (never committed), runs each
-   headless against fixture documents, emits a committed report:
-   per-script status (ran/threw/not-implemented-name/hung→refused),
-   implemented-name coverage, DOM effect diff where the script's
-   effect is deterministic. **Stopping condition:** report generated +
-   committed; **gate floor set from it** (corpus scripts running
-   headless, rising-only); the not-implemented list becomes the next
-   task's work list.
+5. **Corpus run harness (`xtask scripts`)** — **done.** `xtask
+   scripts` walks `source/…/Configuration` for `*.jsf` (89 found),
+   snapshots them to `TMPDIR` scratch (never committed, `source/`
+   never touched), and runs each twice headless through the
+   `scripting` host (fresh session + engine + per-run `MemoryFs`
+   seeded with the whole corpus, so runScript siblings resolve and
+   `Files.write` cannot leak between runs) against a registry-seeded
+   fixture (480×320, 2 layers, 2 path objects). Committed report
+   `corpus/scripts-report.json`: per-script status
+   (ran/threw/not-implemented/drain-failed/limited), per-run message,
+   applied-command count and byte-stable document digest when both
+   runs agree (`"varies"` otherwise), the runtime refusal histogram,
+   and the static call surface with **runtime name probing** (each
+   statically-extracted `root.ident` is `typeof`-probed against a
+   live attached host — "missing" is observed, never hand-tabulated).
+   First-run result: **19/89 ran** (floor `CORPUS_RUN_FLOOR = 19`,
+   rising-only, enforced by `check_floor`; CI's no-source path
+   verifies the committed report, pinned by the in-crate test
+   `committed_report_holds_the_corpus_floor`). Work list for the
+   mapping task: 49 missing host names, dominated by the smartShape
+   handler surface (`smartShape.elem` ×2453 call sites,
+   `currentControlPoint*`/`currentMousePos`, `GetDefaultMoveParms`,
+   modifier-key readers), `fw.ellipseBCPConst` (×193), `fw.getPref`,
+   the PS-font-name helpers, group machinery (`dom.ungroup/
+   splitPaths/convertToPaths`), `Files.deleteFile`, `fw.platform`;
+   32 scripts die on the typed `Files.getLanguageDirectory` refusal;
+   1 script with a real mutation runs end-to-end (Distribute to
+   Layers, applied 2, digest-pinned). Extraction-bug regression
+   pinned (`call_extraction_keeps_the_full_name`). Gates: xtask
+   clippy `-D warnings`, fmt, 10 tests green. **Stopping condition
+   met** (report generated + committed, floor set from it, work list
+   recorded). ✅
 6. **History replay + Save Steps As Command** — journal rows export
    as a runnable command file; shell History panel gains save/replay;
    `firecraft-cli` replays command files identically to journals
