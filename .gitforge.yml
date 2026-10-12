@@ -119,15 +119,21 @@ jobs:
     image: firecraft-ci-rust:1
     needs: [fuzz]
     steps:
-      - name: Parity floors + scorecard regen, then drift check
+      - name: Parity floors + scorecard + changelog regen, then drift check
         # The committed generated docs must byte-equal what the gates
         # produce: copies are taken before regenerating, and cmp fails
         # the job on any hand-edit (git is not assumed in the checkout).
+        # CHANGELOG.md runs without the cmp: it is generated FROM the
+        # git log, so its own tip commit can never appear in the copy
+        # it ships in — it is refreshed at release time (RELEASING.md),
+        # and the verb still runs here to verify licenses + versions
+        # and that the log parses on the runner.
         run: |
           cp docs/planning/generated/parity.md /tmp/parity.committed
           cp docs/planning/generated/scorecard.md /tmp/scorecard.committed
           CARGO_TARGET_DIR=/tmp/ci-target cargo run --locked -p xtask -- parity
           CARGO_TARGET_DIR=/tmp/ci-target cargo run --locked -p xtask -- scorecard
+          CARGO_TARGET_DIR=/tmp/ci-target cargo run --locked -p xtask -- changelog
           cmp /tmp/parity.committed docs/planning/generated/parity.md
           cmp /tmp/scorecard.committed docs/planning/generated/scorecard.md
     timeout: 20m

@@ -8,9 +8,11 @@
 //! pair from `ci`; the CI pipeline's fuzz job), `panic-hunt` (catalog
 //! fuzz
 //! campaign), `parity` (rising-only parity floors), `scorecard`
-//! (milestone status). Diagnostics go to stderr; stdout stays clean so
-//! output can be piped.
+//! (milestone status), `changelog` (release chore: generated
+//! CHANGELOG + license/version stamps). Diagnostics go to stderr;
+//! stdout stays clean so output can be piped.
 
+mod changelog;
 mod corpus;
 mod dist;
 mod fuzz;
@@ -88,6 +90,7 @@ fn main() -> ExitCode {
         Some("panic-hunt") => finish("panic-hunt", fuzz::panic_hunt()),
         Some("parity") => finish("parity", status::parity()),
         Some("scorecard") => finish("scorecard", status::scorecard()),
+        Some("changelog") => finish("changelog", changelog::run()),
         _ => {
             eprintln!("{USAGE}");
             ExitCode::FAILURE
@@ -124,6 +127,7 @@ fn run_ci(full: Option<&str>) -> ExitCode {
         ("fuzz", fuzz::quick),
         ("parity", status::parity),
         ("scorecard", status::scorecard),
+        ("changelog", changelog::run),
     ];
     if full == Some("--full") || full == Some("full") {
         steps.insert(steps.len() - 2, ("fuzz-full", fuzz::full));

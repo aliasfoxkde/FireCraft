@@ -193,7 +193,7 @@ fn clear_dir(dir: &Path) -> Result<(), String> {
 /// The workspace version (`[workspace.package] version`), via cargo
 /// metadata — the same number every artifact name and the deb control
 /// file must carry.
-fn workspace_version() -> Result<String, String> {
+pub(crate) fn workspace_version() -> Result<String, String> {
     let meta = crate::util::cargo_metadata()?;
     meta["packages"]
         .as_array()

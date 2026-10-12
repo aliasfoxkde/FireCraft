@@ -30,15 +30,15 @@ that set it instead.
 
 ## Performance ceilings (falling-only)
 
-Enforced by `xtask perf` (M12). Ceilings are pinned from observation
-with headroom and only move **down** — raising one reopens the
-milestone that set it, the mirror of the floors above. Timings are
-dev-profile medians (median-of-7 fixtures, median-of-3 stress, after a
-warm pass) recorded under a loaded host window (~16/16 — the regime
-CI's co-tenant waves share) on an AMD Ryzen 7 5700U; memory is the
-open path's VmHWM measured in an isolated child process. Every
-ceiling is enforced in both directions: an unpinned measurement or an
-unmeasured budget fails the gate.
+Enforced by `xtask perf` and `xtask dist --web` (M12). Ceilings are
+pinned from observation with headroom and only move **down** — raising
+one reopens the milestone that set it, the mirror of the floors above.
+Timings are dev-profile medians (median-of-7 fixtures, median-of-3
+stress, after a warm pass) recorded under a loaded host window (~16/16
+— the regime CI's co-tenant waves share) on an AMD Ryzen 7 5700U;
+memory is the open path's VmHWM measured in an isolated child process.
+Every ceiling is enforced in both directions: an unpinned measurement
+or an unmeasured budget fails its gate.
 
 | Budget | Ceiling | Pinned from | Enforced by |
 |---|---|---|---|
@@ -54,6 +54,7 @@ unmeasured budget fails the gate.
 | pan-zoom frame stress doc, 2,000 objects (µs) | 8217552 | 2739183.9 | `xtask perf` |
 | canonical save stress doc, 2,000 objects (µs) | 791618 | 263872.5 | `xtask perf` |
 | open peak memory stress doc, 2,000 objects (KiB) | 34014 | 22676 | `xtask perf` |
+| web bundle wasm size (B) | 14000000 | 10873780 | `xtask dist --web` |
 "#;
 
 const SCORECARD: &str = r#"\
@@ -77,7 +78,7 @@ A milestone flips to done only when its gate evidence is recorded in
 | M9 scripting + automation | done | `scripting` crate: boa ES3 host with `fw`/`fw.getDocumentDOM()`/`Files` projection, ES3 quirk ledger (`with` scoping, AS2-style fallbacks), per-run limits (loop/recursion/stack/host-call budget) with typed `ScriptReport` — never a panic; intent queue drains through the registry only on completion, drain failure keeps the applied prefix and names the failing intent; 19/89 shipped `.jsf` scripts run headless (rising floor, committed report); History panel with Save Steps As Command + replay (steps file ≡ journal; save/replay exact inverses, byte-equal, fully undoable); CLI `run-script` + newline JSON control channel (`serve`) + MCP server (`mcp`, tools `firecraft.apply` + `firecraft.runScript`) over the SAME registry ids; one-command-id battery (GUI ≡ channel ≡ MCP byte-equal), 35 hostile shapes typed-never-panic; fuzz arms script-mutation 8192 cases + control-channel 4096 sweeps 0 violations (floors raised); live binary smoke through both stdin loops (devlog 2026-10-12) |
 | M10 symbols + shared content | done | symbol wire format depth (`MSYi`, full `NGSv` nine-slice subtree, `ANNi`/`ANRi`/`ASOi`/`AEOi` animation family; af3b2b1); compose renders instances by `MSNi` over page-authored definition content (decision 0014) with proofs for graphic/two-instance-sizes/animation/button (79934cb); registry commands `symbol.create/update/swap/set9Slice/setScript/editAttach/editDetach`, `library.add/rename/remove/importSymbol` — every new command fuzz-armed and in the call-table coverage test (3753fed); shell Library panel with drag-to-place, symbol editing scope, draggable nine-slice overlay, instance inspector (ee61745); rich symbols re-derive through the M9 host (`rederive_symbol`, defaults + apply passes, journal replay byte-exact) (250b6bb); library export/import round-trip byte-comparable with closure-complete `library.importSymbol` (BFS closure validation, deterministic insertion order, orphan payload members ignored) + 5 generated Common Library assets pinned in `MANIFEST.tsv` (58adca7); floors: corpus 15 parsed / 14 byte round-trip / 14 doc-model / 6 goldens / 5 library assets; nine-slice degenerate proof (instance smaller than its corners) closes the M6 debt in compose (devlog 2026-10-12) |
 | M11 web export pipeline | done | web-layer model through the registry: `page.add` provisions a Web Layer (`has_url`/`is_special`, `MSLb`-protected), `slice.create`/`hotspot.create` (rect/ellipse/polygon), `slice.setLink/setType/setBackground/setExport/addBehavior/removeBehavior/setData` — journaled, undoable, fuzz-armed, in the call-table coverage test; behaviors typed where the templates consume (swap/nav kinds via `DTAv` `swapTarget`), `BETi` 9 + unknowns preserved verbatim (decision 0017); `webexport` crate, pure `(&Document, options) -> {text, images}`: HTML+Images shim table per SLICES.XTT (row/col scan, rowspan/colspan, 1px shim edges, `name_rX_cY` auto-naming, `usemap`, `MM_swapImage`/`MM_nbGroup` hooks with clean-room runtime), Images Only, CSS+Images per CssLayers.htt, CSS Sprites (one sheet + negative offsets), Pages/States/Layers To Files, states→animated GIF, CSS Properties extraction — all nine workflows double-run byte-deterministic and pinned by exact-string/byte tests (2881559, fd3a9a3); shell: Slice/Hotspot tools, Web Layer panel (link editing + fg/bg), export-dialog workflow picker; `firecraft-cli export-web`; GUI ≡ channel ≡ MCP battery (bdcd0e6); gates: `sliced.fw.png` corpus fixture through the engine registry (corpus 16 parsed / 15 byte / 15 doc-model / 7 goldens), `xtask web-golden` structural pins (normalized tag/CSS skeleton + emitted name set, distance 0), svg-golden/svg-roundtrip eligibility fixed to read the export report's notes — closing the M10-latent symbol-instance divergence (`rich.fw.png`); floors raised + decision 0017 (devlog 2026-10-12) |
-| M12 parity + release matrix | not started | — |
+| M12 parity + release matrix | done | `xtask perf` enforces 12 budgets (cold open / pan-zoom frame / canonical save / VmHWM peak memory on composed + scripted fixtures + a generated 2,000-object stress doc; dev-profile median-of-N after a warm pass, pinned under a loaded ~16/16 host window, isolated-child VmHWM, bidirectional enforcement — negative test: tightened ceiling fails "14936 KiB exceeds ceiling 1000 (14.94× over)"); ceilings hold on the runner fleet (GitForge perf-budgets green on a1630c7 + 9e10128); `xtask dist --web` from a clean tree (fresh `dist/web/` staging, sha256 manifest `sha256sum -c`-verified, 14 MB wasm ceiling vs 10,873,780 B observed, bridge smoke on the release bytes — loopback HTTP + headless chromium driving open→apply→exportPng→exportDocument through the M5 bridge); docs/WEBOS.md is load-bearing (the smoke page is the doc's worked page extracted verbatim between markers, `__FIXTURE_B64__` the only substitution); `xtask dist --native` (desktop tar.gz + CLI archive + amd64 deb from the pinned `packaging/deb/control` with workspace-version cross-check, deterministic tar/gzip -n + SOURCE_DATE_EPOCH, `dpkg-deb --info`/`--contents` read-back, NAS setgid normalized, `bash -n` parse checks on the AppImage/dmg recipes — negative tests: control-version drift and a broken recipe both fail the gate); macOS dmg + Windows installer/portable ship as checked-in recipes only (no-untested-claims; `packaging/`, table in docs/TOOLCHAINS.md); `xtask changelog` regenerates docs/CHANGELOG.md from the conventional-commit log and verifies the dual-license files + single workspace version; release checklist docs/RELEASING.md (devlog 2026-10-12) |
 "#;
 
 /// Writes `docs/planning/generated/parity.md`.
