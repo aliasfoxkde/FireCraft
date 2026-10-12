@@ -13,6 +13,7 @@ description = "FireCraft scripting host: boa_engine embedding, sandbox limits, a
 boa_engine = "0.20"
 boa_gc = "0.20"
 doc = { path = "../doc" }
+geom = { path = "../geom" }
 engine = { path = "../engine" }
 serde_json = { version = "1", features = ["float_roundtrip"] }
 

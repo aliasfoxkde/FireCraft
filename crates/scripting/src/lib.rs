@@ -15,6 +15,7 @@
 use boa_engine::{Context, JsResult, JsValue, Source, js_string, native_function::NativeFunction};
 use boa_gc::{Gc, GcRefCell};
 
+pub mod dom;
 pub mod host;
 pub mod marshal;
 
@@ -120,6 +121,20 @@ impl ScriptEngine {
             state,
             budget_total: limits.host_calls,
         })
+    }
+
+    /// Projects `document` into the read surface: `fw.documents`,
+    /// `fw.getDocumentDOM()`, `fw.selection`. A snapshot — re-attach
+    /// after mutations so reads stay fresh. Replaces any previous
+    /// projection.
+    ///
+    /// # Errors
+    /// A string when projection or installation fails (internal
+    /// defect; document data that cannot project is skipped in-place
+    /// by the projection itself).
+    pub fn attach_document(&mut self, document: &doc::Document) -> Result<(), String> {
+        dom::attach(&mut self.context, document)
+            .map_err(|error| format!("dom projection failed: {error}"))
     }
 
     /// Runs `source` (a `.jsf` body or fragment) to completion, a

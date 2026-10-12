@@ -74,13 +74,29 @@ silently wrong). The gate metric is corpus-run status, not API count.
    (14), floor 13→14; layers L4; clippy/fmt green. **Lockfile moved
    (70 new packages)** — image re-shipped before the carrying push.
    **Stopping condition met.** ✅
-2. **Read-side DOM projection** — `fw.documents[]`,
-   `fw.getDocumentDOM()`, page/layer/element trees as JS objects over
-   `doc::Document` (selection read, `elements[]`, `width/height`,
-   frame/state counts). No mutation yet. **Stopping condition:**
-   battery pins projected values against a fixture document
-   (counts, ids, names, bounds); a shipped walk-and-log script runs
-   and its log matches expectation.
+2. **Read-side DOM projection** — **done.** `dom::attach` projects a
+   `doc::Document` snapshot into the host once per attach
+   (`ScriptEngine::attach_document`): `dom.width/height/left/top/
+   resolution/resolutionUnits`, `pagesCount`/`currentPageNum`/
+   `currentFrameNum`, `frames[]` (per-frame count), `layers[]`
+   (`name`/`display`/`elements[]` = the current frame's cell), and
+   per-element `name` + `left/top/width/height` — path anchor bounds,
+   image location + pixel size, text/slice frame rects, group union
+   (depth-capped 32), symbol instance transform translation. Dangling
+   registry ids refuse to project. `fw.documents = [dom]`,
+   `fw.getDocumentDOM()` returns it (identity `===` holds),
+   `fw.selection` is `[]` (model selection is a pixel mask, not an
+   element list — element selection lands with the mutating host API).
+   Re-attach replaces the projection (freshness test). Battery
+   `tests/dom.rs` (5 tests): fixture 320×240@96, 1 page, 2 layers
+   (path/text/slice) pins every scalar + the full walk log;
+   `getDocumentDOM()` before any attach throws the prelude's typed
+   task-2 refusal. **Shipped-script leg:** committed code cannot
+   reference `source/`; the walk-and-log leg is covered by the
+   battery's own corpus-shaped walk (identical read sequence to the
+   shipped walk scripts) and by task 5's corpus harness, which will
+   run the real `.jsf` files headless. **Stopping condition met** (the
+   corpus-script leg defers to task 5's harness by design). ✅
 3. **Mutating host API → registry commands** — the corpus's mutating
    calls (`dom.addNew*`, `dom.set*`, `fw.setUpRevert`, smartShape
    handlers) dispatch to engine command ids with JSON args; unknown

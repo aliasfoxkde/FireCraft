@@ -3174,6 +3174,7 @@ dependencies = [
  "boa_gc",
  "doc",
  "engine",
+ "geom",
  "getrandom 0.2.17",
  "serde_json",
 ]
