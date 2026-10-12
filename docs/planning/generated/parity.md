@@ -24,15 +24,15 @@ that set it instead.
 
 ## Performance ceilings (falling-only)
 
-Enforced by `xtask perf` (M12). Ceilings are pinned from observation
-with headroom and only move **down** — raising one reopens the
-milestone that set it, the mirror of the floors above. Timings are
-dev-profile medians (median-of-7 fixtures, median-of-3 stress, after a
-warm pass) recorded under a loaded host window (~16/16 — the regime
-CI's co-tenant waves share) on an AMD Ryzen 7 5700U; memory is the
-open path's VmHWM measured in an isolated child process. Every
-ceiling is enforced in both directions: an unpinned measurement or an
-unmeasured budget fails the gate.
+Enforced by `xtask perf` and `xtask dist --web` (M12). Ceilings are
+pinned from observation with headroom and only move **down** — raising
+one reopens the milestone that set it, the mirror of the floors above.
+Timings are dev-profile medians (median-of-7 fixtures, median-of-3
+stress, after a warm pass) recorded under a loaded host window (~16/16
+— the regime CI's co-tenant waves share) on an AMD Ryzen 7 5700U;
+memory is the open path's VmHWM measured in an isolated child process.
+Every ceiling is enforced in both directions: an unpinned measurement
+or an unmeasured budget fails its gate.
 
 | Budget | Ceiling | Pinned from | Enforced by |
 |---|---|---|---|
@@ -48,3 +48,4 @@ unmeasured budget fails the gate.
 | pan-zoom frame stress doc, 2,000 objects (µs) | 8217552 | 2739183.9 | `xtask perf` |
 | canonical save stress doc, 2,000 objects (µs) | 791618 | 263872.5 | `xtask perf` |
 | open peak memory stress doc, 2,000 objects (KiB) | 34014 | 22676 | `xtask perf` |
+| web bundle wasm size (B) | 14000000 | 10873780 | `xtask dist --web` |
