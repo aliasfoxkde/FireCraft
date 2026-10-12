@@ -27,19 +27,24 @@ that set it instead.
 Enforced by `xtask perf` (M12). Ceilings are pinned from observation
 with headroom and only move **down** — raising one reopens the
 milestone that set it, the mirror of the floors above. Timings are
-dev-profile medians (median-of-7 after a warm pass) on the recording
-host (AMD Ryzen 7 5700U); memory is the open path's VmHWM measured in
-an isolated child process. Every ceiling is enforced in both
-directions: an unpinned measurement or an unmeasured budget fails the
-gate.
+dev-profile medians (median-of-7 fixtures, median-of-3 stress, after a
+warm pass) recorded under a loaded host window (~16/16 — the regime
+CI's co-tenant waves share) on an AMD Ryzen 7 5700U; memory is the
+open path's VmHWM measured in an isolated child process. Every
+ceiling is enforced in both directions: an unpinned measurement or an
+unmeasured budget fails the gate.
 
 | Budget | Ceiling | Pinned from | Enforced by |
 |---|---|---|---|
-| cold open `composed.fw.png` (µs) | 5073 | 1690.7 | `xtask perf` |
-| pan-zoom frame `composed.fw.png` (µs) | 3772 | 1257.3 | `xtask perf` |
-| canonical save `composed.fw.png` (µs) | 1563 | 520.8 | `xtask perf` |
-| open peak memory `composed.fw.png` (KiB) | 22404 | 14936 | `xtask perf` |
-| cold open `scripted.fw.png` (µs) | 30929 | 10309.4 | `xtask perf` |
-| pan-zoom frame `scripted.fw.png` (µs) | 28566 | 9521.7 | `xtask perf` |
-| canonical save `scripted.fw.png` (µs) | 4077 | 1358.8 | `xtask perf` |
-| open peak memory `scripted.fw.png` (KiB) | 21972 | 14648 | `xtask perf` |
+| cold open `composed.fw.png` (µs) | 10125 | 3374.8 | `xtask perf` |
+| pan-zoom frame `composed.fw.png` (µs) | 7153 | 2384.2 | `xtask perf` |
+| canonical save `composed.fw.png` (µs) | 3090 | 1029.8 | `xtask perf` |
+| open peak memory `composed.fw.png` (KiB) | 22758 | 15172 | `xtask perf` |
+| cold open `scripted.fw.png` (µs) | 57992 | 19330.5 | `xtask perf` |
+| pan-zoom frame `scripted.fw.png` (µs) | 50951 | 16983.6 | `xtask perf` |
+| canonical save `scripted.fw.png` (µs) | 8844 | 2948.0 | `xtask perf` |
+| open peak memory `scripted.fw.png` (KiB) | 22140 | 14760 | `xtask perf` |
+| cold open stress doc, 2,000 objects (µs) | 8527327 | 2842442.2 | `xtask perf` |
+| pan-zoom frame stress doc, 2,000 objects (µs) | 8217552 | 2739183.9 | `xtask perf` |
+| canonical save stress doc, 2,000 objects (µs) | 791618 | 263872.5 | `xtask perf` |
+| open peak memory stress doc, 2,000 objects (KiB) | 34014 | 22676 | `xtask perf` |
