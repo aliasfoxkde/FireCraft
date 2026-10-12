@@ -342,3 +342,230 @@ fn skipped_undefined_areas_produce_no_cell() {
     assert_eq!(filled.files.len(), 3);
     let _ = exported;
 }
+
+#[test]
+fn css_and_images_positions_slices_as_divs() {
+    let document = sliced_document();
+    let exported = export(
+        &document,
+        &WebExportOptions::default(),
+        Workflow::CssAndImages,
+    )
+    .unwrap();
+    let html = exported.html.as_deref().unwrap();
+
+    assert!(html.starts_with("<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\""));
+    // The body rule carries the canvas background.
+    assert!(html.contains("body {\n\tbackground-color: #ffffff;"));
+    // The #main wrap takes the canvas width.
+    assert!(html.contains("#main {\n\tmargin: 0 auto;\n\twidth: 8px;\n}"));
+    // The csspos absolute-branch order for the left piece.
+    assert!(html.contains(
+        "#left {\n\tleft: 0px;\n\tposition: absolute;\n\ttop: 0px;\n\tbackground-image: url(left.png);\n\toverflow: hidden;\n\theight: 4px;\n\tmargin-bottom: 0;\n\twidth: 4px;\n}"
+    ));
+    assert!(html.contains(
+        "#right {\n\tleft: 4px;\n\tposition: absolute;\n\ttop: 0px;\n\tbackground-image: url(right.png);\n\toverflow: hidden;\n\theight: 4px;\n\tmargin-bottom: 0;\n\twidth: 4px;\n}"
+    ));
+    // The div tree references each piece exactly once.
+    assert!(html.contains("<div id=\"left\"></div>"));
+    assert!(html.contains("<div id=\"right\"></div>"));
+    // No shim table in this workflow.
+    assert!(!html.contains("shim.gif"));
+    // Same image files as Images Only.
+    assert_eq!(exported.files.len(), 2);
+}
+
+#[test]
+fn css_sprites_build_one_sheet_with_offsets() {
+    let document = sliced_document();
+    let exported = export(
+        &document,
+        &WebExportOptions::default(),
+        Workflow::CssSprites,
+    )
+    .unwrap();
+
+    // One sheet spanning both pieces' union (the full 8x4 canvas).
+    assert_eq!(exported.files.len(), 1);
+    let sheet = &exported.files[0];
+    assert_eq!(sheet.name, "doc_sprite.png");
+    let (w, h, rgba) = png_pixels(&sheet.bytes);
+    assert_eq!((w, h), (8, 4));
+    // The sheet is the composer's canvas, verbatim.
+    assert_eq!(rgba, composer_pixels(&document));
+
+    let css = exported.html.as_deref().unwrap();
+    assert!(css.contains("background-image: url(doc_sprite.png);"));
+    assert!(
+        css.contains(
+            "#left {\n\tbackground-position: -0px -0px;\n\twidth: 4px;\n\theight: 4px;\n}"
+        )
+    );
+    assert!(
+        css.contains(
+            "#right {\n\tbackground-position: -4px -0px;\n\twidth: 4px;\n\theight: 4px;\n}"
+        )
+    );
+}
+
+#[test]
+fn css_properties_describes_geometry_fill_and_effects() {
+    let mut document = sliced_document();
+    let point = |x: f64, y: f64| doc::PathPoint {
+        anchor: geom::Point::new(x, y),
+        primary: None,
+        secondary: None,
+        is_curve: false,
+    };
+    let text = |raw: &str| doc::EffectValue::Text(raw.to_owned());
+    let button = document
+        .registry
+        .insert(doc::ObjectData::Path(doc::PathObject {
+            contours: vec![doc::Contour {
+                closed: true,
+                point_count: 4,
+                points: vec![
+                    point(1.0, 0.0),
+                    point(3.0, 0.0),
+                    point(3.0, 2.0),
+                    point(1.0, 2.0),
+                ],
+            }],
+            primitive: Some(doc::PrimitiveSource {
+                rect: geom::Rect::new(1.0, 0.0, 3.0, 2.0),
+                radius: 2.0,
+                transform: geom::Affine::IDENTITY,
+                maintain_radius: false,
+            }),
+            even_odd: false,
+            paint: Some(doc::PaintStyle {
+                stroke_raw: 0,
+                fill_raw: 0x00_00_00_FF, // ABGR: red
+            }),
+            fill_start: None,
+            fill_end: None,
+            fill_third: None,
+            brush_placement: None,
+            fill_on_top: None,
+            locked: false,
+            visible: true,
+            opacity: 500,
+            blend: 0,
+            name: None,
+            effects: vec![doc::Effect {
+                category: "Shadow and Glow".to_owned(),
+                internal_name: "dropShadow".to_owned(),
+                properties: vec![
+                    doc::EffectProperty {
+                        key: "gaussian_blur_radius".to_owned(),
+                        value: text("4"),
+                    },
+                    doc::EffectProperty {
+                        key: "x_offset".to_owned(),
+                        value: text("3"),
+                    },
+                    doc::EffectProperty {
+                        key: "y_offset".to_owned(),
+                        value: text("2"),
+                    },
+                ],
+            }],
+        }));
+    document.pages[0].layers.layers[0].cells[0]
+        .elements
+        .push(button);
+
+    let exported = export(
+        &document,
+        &WebExportOptions::default(),
+        Workflow::CssProperties,
+    )
+    .unwrap();
+    assert!(exported.files.is_empty());
+    let css = exported.html.as_deref().unwrap();
+
+    // Geometry from the contour anchors.
+    assert!(css.contains("#object"));
+    assert!(css.contains("\tleft: 1px;\n\ttop: 0px;\n\twidth: 2px;\n\theight: 2px;\n"));
+    // Fill (ABGR raw → hex), radius, opacity, shadow.
+    assert!(css.contains("\tbackground-color: #ff0000;\n"));
+    assert!(css.contains("\tborder-radius: 2px;\n"));
+    assert!(css.contains("\topacity: 0.500;\n"));
+    assert!(css.contains("\tbox-shadow: 3px 2px 4px #000000;\n"));
+}
+
+#[test]
+fn batch_workflows_follow_their_naming() {
+    let document = sliced_document();
+
+    let pages = export(
+        &document,
+        &WebExportOptions::default(),
+        Workflow::PagesToFiles,
+    )
+    .unwrap();
+    assert_eq!(pages.files.len(), 1);
+    assert_eq!(pages.files[0].name, "doc_p1.png");
+    let (w, h, _) = png_pixels(&pages.files[0].bytes);
+    assert_eq!((w, h), (8, 4));
+
+    let states = export(
+        &document,
+        &WebExportOptions::default(),
+        Workflow::StatesToFiles,
+    )
+    .unwrap();
+    assert_eq!(states.files.len(), 1);
+    assert_eq!(states.files[0].name, "doc_state1.png");
+
+    let layers = export(
+        &document,
+        &WebExportOptions::default(),
+        Workflow::LayersToFiles,
+    )
+    .unwrap();
+    // Both layers are visible; each exports under its cleaned name.
+    assert_eq!(
+        layers
+            .files
+            .iter()
+            .map(|file| file.name.as_str())
+            .collect::<Vec<_>>(),
+        vec!["Layer1.png", "WebLayer.png"]
+    );
+    // The ink layer renders the tile; the web layer renders only the
+    // canvas background.
+    let (_, _, rgba) = png_pixels(&layers.files[0].bytes);
+    assert_eq!(&rgba[0..4], &RED);
+
+    let gif = export(
+        &document,
+        &WebExportOptions::default(),
+        Workflow::StatesToGif,
+    )
+    .unwrap();
+    assert_eq!(gif.files.len(), 1);
+    assert_eq!(gif.files[0].name, "doc.gif");
+    assert_eq!(&gif.files[0].bytes[..6], b"GIF89a");
+}
+
+#[test]
+fn every_workflow_is_byte_deterministic() {
+    let document = sliced_document();
+    let options = WebExportOptions::default();
+    for workflow in [
+        Workflow::ImagesOnly,
+        Workflow::HtmlAndImages,
+        Workflow::CssAndImages,
+        Workflow::CssSprites,
+        Workflow::CssProperties,
+        Workflow::PagesToFiles,
+        Workflow::StatesToFiles,
+        Workflow::LayersToFiles,
+        Workflow::StatesToGif,
+    ] {
+        let first = export(&document, &options, workflow).unwrap();
+        let second = export(&document, &options, workflow).unwrap();
+        assert_eq!(first, second, "{workflow:?} is not byte-deterministic");
+    }
+}

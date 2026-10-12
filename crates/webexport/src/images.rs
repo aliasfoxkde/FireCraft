@@ -90,7 +90,7 @@ fn extension_of(slice: Option<&doc::SliceObject>) -> &'static str {
 
 /// Crops one region from the straight-alpha canvas, applying the
 /// shape mask (pixel-center containment) for ellipse/polygon slices.
-fn crop(
+pub(crate) fn crop(
     canvas: &[u8],
     canvas_w: u32,
     x: u32,
@@ -163,7 +163,8 @@ pub(crate) fn shim() -> Result<Vec<u8>, WebExportError> {
 }
 
 /// Rasterizes every piece of the grid into image files, in piece
-/// order.
+/// order. With `emit_images` false the run only plans the pieces
+/// (the CSS-sprites path encodes its own sheet instead).
 ///
 /// # Errors
 /// [`WebExportError::Encode`] when a codec refuses a region.
@@ -173,6 +174,7 @@ pub(crate) fn rasterize(
     grid: &Grid,
     canvas: &[u8],
     canvas_w: u16,
+    emit_images: bool,
 ) -> Result<(Vec<ExportedFile>, Vec<Piece>), WebExportError> {
     let multi = grid.rows() > 1 || grid.columns() > 1;
     let mut files = Vec::new();
@@ -214,19 +216,21 @@ pub(crate) fn rasterize(
             stem = format!("{stem}_x");
         }
         let file = naming::with_extension(&stem, extension);
-        let rgba = crop(
-            canvas,
-            u32::from(canvas_w),
-            x,
-            y,
-            w,
-            h,
-            slice.filter(|slice| slice.shape != 0),
-        );
-        files.push(ExportedFile {
-            name: file.clone(),
-            bytes: encode(rgba, w, h, slice)?,
-        });
+        if emit_images {
+            let rgba = crop(
+                canvas,
+                u32::from(canvas_w),
+                x,
+                y,
+                w,
+                h,
+                slice.filter(|slice| slice.shape != 0),
+            );
+            files.push(ExportedFile {
+                name: file.clone(),
+                bytes: encode(rgba, w, h, slice)?,
+            });
+        }
         pieces.push(Piece {
             row,
             col,
@@ -329,7 +333,7 @@ mod tests {
             }
         }
         let options = WebExportOptions::default();
-        let (files, pieces) = rasterize(&options, &objects, &grid, &canvas, 20).unwrap();
+        let (files, pieces) = rasterize(&options, &objects, &grid, &canvas, 20, true).unwrap();
         assert_eq!(pieces.len(), 3);
         assert_eq!(files[0].name, "logo.png");
         // Auto names carry the grid suffix.

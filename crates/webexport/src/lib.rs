@@ -23,6 +23,8 @@
 //!   A hotspot spanning several regions therefore emits one area, not
 //!   a per-region clip.
 
+pub mod batch;
+pub mod css;
 pub mod html;
 pub mod images;
 pub mod layout;
@@ -30,13 +32,29 @@ pub mod naming;
 
 use doc::{Document, Layer, ObjectData, SliceObject};
 
-/// Which export workflow to run. More arrive with M11 task 4.
+/// Which export workflow to run.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Workflow {
     /// One image file per slice region, no HTML.
     ImagesOnly,
     /// The classic shim table plus the same image files.
     HtmlAndImages,
+    /// Absolutely-positioned divs with background images
+    /// (CssLayers.htt structure), plus the same image files.
+    CssAndImages,
+    /// One sprite sheet PNG; the CSS (with `background-position`
+    /// offsets) rides in `html`.
+    CssSprites,
+    /// The per-object CSS Properties text artifact; no image files.
+    CssProperties,
+    /// One flattened PNG per page.
+    PagesToFiles,
+    /// One flattened PNG per state of the exported page.
+    StatesToFiles,
+    /// One flattened PNG per visible layer of the exported page.
+    LayersToFiles,
+    /// The page's states as one animated GIF (M8 codec).
+    StatesToGif,
 }
 
 /// Options for one export run. File-system-free: names, not paths.
@@ -191,7 +209,8 @@ pub(crate) fn web_objects<'a>(
     out
 }
 
-/// Runs one export workflow: render, lay out, rasterize, (write HTML).
+/// Runs one export workflow: render, lay out, rasterize, (write HTML
+/// or CSS).
 ///
 /// # Errors
 /// [`WebExportError`] for out-of-range page/state, canvases outside
@@ -212,6 +231,51 @@ pub fn export(
         });
     }
 
+    // The batch and text-only workflows bypass the slice pipeline.
+    match workflow {
+        Workflow::CssProperties => {
+            return Ok(WebExport {
+                files: Vec::new(),
+                html: Some(css::write_properties(document, options)?),
+            });
+        }
+        Workflow::StatesToGif => {
+            let bytes =
+                io::gif::encode_animated(document, options.page, &io::gif::GifOptions::default())
+                    .map_err(|error| WebExportError::Encode(error.to_string()))?;
+            let base = naming::clean(&options.doc_name);
+            return Ok(WebExport {
+                files: vec![ExportedFile {
+                    name: naming::with_extension(&base, "gif"),
+                    bytes,
+                }],
+                html: None,
+            });
+        }
+        Workflow::PagesToFiles => {
+            return Ok(WebExport {
+                files: batch::pages_to_files(document, options)?,
+                html: None,
+            });
+        }
+        Workflow::StatesToFiles => {
+            return Ok(WebExport {
+                files: batch::states_to_files(document, options)?,
+                html: None,
+            });
+        }
+        Workflow::LayersToFiles => {
+            return Ok(WebExport {
+                files: batch::layers_to_files(document, options)?,
+                html: None,
+            });
+        }
+        Workflow::ImagesOnly
+        | Workflow::HtmlAndImages
+        | Workflow::CssAndImages
+        | Workflow::CssSprites => {}
+    }
+
     let objects = web_objects(document, options);
     let rendered = compose::render(document, options.page, options.state)
         .map_err(|error| WebExportError::Compose(error.to_string()))?;
@@ -221,7 +285,14 @@ pub fn export(
     let canvas = images::straight_rgba(&rendered);
 
     let grid = layout::scan(&objects, rendered.width, rendered.height);
-    let (mut files, pieces) = images::rasterize(options, &objects, &grid, &canvas, rendered.width)?;
+    let (mut files, pieces) = images::rasterize(
+        options,
+        &objects,
+        &grid,
+        &canvas,
+        rendered.width,
+        workflow != Workflow::CssSprites,
+    )?;
 
     let html = match workflow {
         Workflow::ImagesOnly => None,
@@ -238,6 +309,34 @@ pub fn export(
                 document, options, &objects, &grid, &pieces,
             ))
         }
+        Workflow::CssAndImages => {
+            Some(css::write_css_and_images(document, options, &grid, &pieces))
+        }
+        Workflow::CssSprites => {
+            let extent = css::sheet_extent(&grid, &pieces);
+            let stem = format!("{}_sprite", naming::clean(&options.doc_name));
+            let sheet = naming::with_extension(&stem, "png");
+            if let Some((x, y, w, h)) = extent {
+                let rgba = images::crop(&canvas, u32::from(rendered.width), x, y, w, h, None);
+                let plane = io::Plane::new(w, h, &rgba)
+                    .map_err(|error| WebExportError::Encode(error.to_string()))?;
+                let bytes = io::png::encode(&plane)
+                    .map_err(|error| WebExportError::Encode(error.to_string()))?;
+                files.push(ExportedFile {
+                    name: sheet.clone(),
+                    bytes,
+                });
+            }
+            let origin = extent.map_or((0, 0), |(x, y, _, _)| (x, y));
+            Some(css::write_sprite_css(
+                options, &grid, &pieces, &sheet, origin,
+            ))
+        }
+        Workflow::CssProperties
+        | Workflow::PagesToFiles
+        | Workflow::StatesToFiles
+        | Workflow::LayersToFiles
+        | Workflow::StatesToGif => None, // dispatched above
     };
     Ok(WebExport { files, html })
 }
