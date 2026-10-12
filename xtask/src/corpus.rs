@@ -229,7 +229,7 @@ pub fn gen_fixtures() -> Result<(), String> {
 
     /// One pending fixture: name, built bytes, manifest note.
     type Fixture = (&'static str, Result<Vec<u8>, String>, &'static str);
-    let fixtures: [Fixture; 10] = [
+    let fixtures: [Fixture; 11] = [
         (
             "minimal.fw.png",
             build_minimal(),
@@ -274,6 +274,11 @@ pub fn gen_fixtures() -> Result<(), String> {
             "rich.fw.png",
             build_rich(),
             "generated: 64x48 page, named rect+text become rich symbol \"btn\" — the definition carries a Widget script (JSVv under MSTv), the instance a parameter store (DTAv), and the opCode-2 re-derivation mutates the definition members through the M9 host drain (M10 rich-symbol golden pin)",
+        ),
+        (
+            "sliced.fw.png",
+            build_sliced(),
+            "generated: 64x48 page, web layer with a linked rect slice (swap-image behavior + preserved popup-menu kind), ellipse + polygon slices, and a link hotspot through the engine registry (M11 web-export golden pin)",
         ),
         (
             "plain.png",
@@ -606,6 +611,147 @@ for (var i = 0; i < values.length; i++) {
     if stats.unconsumed_unknown != 0 {
         return Err(format!(
             "rich fixture: doc write left {} unknown node(s)",
+            stats.unconsumed_unknown
+        ));
+    }
+    let payload = fwpng::nodetree::serialize(&tree);
+    let standard = encode_rgba8(64, 48, |_, _| [255, 255, 255, 255])?;
+    insert_before_iend(
+        &standard,
+        &[(b"mkTS", zlib(&payload)?), (b"mkBS", zlib(&payload)?)],
+    )
+}
+
+/// Builds `sliced.fw.png`: the web-layer family created through the
+/// engine registry — a linked rect slice carrying a swap-image
+/// behavior (target via `slice.setData`) plus the popup-menu kind
+/// preserved verbatim, an ellipse slice, a polygon slice, and a
+/// map-only link hotspot. The M11 web-export golden: every workflow
+/// pin in the web-golden gate reads this fixture.
+fn build_sliced() -> Result<Vec<u8>, String> {
+    fn apply(
+        session: &mut engine::Session,
+        name: &str,
+        payload: serde_json::Value,
+    ) -> Result<(), String> {
+        session
+            .apply(name, payload)
+            .map_err(|e| format!("sliced fixture: {name}: {e}"))
+    }
+    // The newest object on the page's Web Layer — the id the last web
+    // command minted.
+    fn newest_web(session: &engine::Session) -> Result<serde_json::Value, String> {
+        let layer = session.document().pages[0]
+            .layers
+            .layers
+            .iter()
+            .rev()
+            .find(|layer| layer.has_url && layer.is_special)
+            .ok_or_else(|| "sliced fixture: no web layer".to_owned())?;
+        let id = layer.cells[0]
+            .elements
+            .last()
+            .ok_or_else(|| "sliced fixture: empty web layer".to_owned())?;
+        Ok(serde_json::json!({
+            "index": id.index(),
+            "generation": id.generation(),
+        }))
+    }
+
+    let mut registry = engine::CommandRegistry::new();
+    engine::catalog::install(&mut registry).map_err(|e| format!("catalog install: {e}"))?;
+    let mut session = engine::Session::with_registry(doc::Document::default(), registry);
+    apply(
+        &mut session,
+        "page.add",
+        serde_json::json!({ "index": null }),
+    )?;
+    apply(
+        &mut session,
+        "page.setCanvasSize",
+        serde_json::json!({ "page": 0, "width": 64.0, "height": 48.0 }),
+    )?;
+    // Content ink under the slices: something every raster workflow
+    // can actually cut.
+    apply(
+        &mut session,
+        "object.createPath",
+        serde_json::json!({
+            "kind": "rect", "x": 8.0, "y": 8.0,
+            "width": 48.0, "height": 32.0,
+            "page": 0, "layer": 0, "cell": 0, "name": "plate",
+        }),
+    )?;
+    // The linked foreground slice with both behavior faces: the typed
+    // swap-image hook (target rides `DTAv`) and the raw popup-menu
+    // kind (9) that must survive untouched.
+    apply(
+        &mut session,
+        "slice.create",
+        serde_json::json!({
+            "shape": "rect", "x": 8.0, "y": 8.0,
+            "width": 24.0, "height": 32.0,
+            "page": 0, "name": "header",
+            "link": "https://example.test/", "alt": "header",
+        }),
+    )?;
+    let header = newest_web(&session)?;
+    apply(
+        &mut session,
+        "slice.addBehavior",
+        serde_json::json!({ "id": header, "kind": 2 }),
+    )?;
+    apply(
+        &mut session,
+        "slice.setData",
+        serde_json::json!({ "id": header, "key": "swapTarget", "value": "header_f2.png" }),
+    )?;
+    apply(
+        &mut session,
+        "slice.addBehavior",
+        serde_json::json!({ "id": header, "kind": 9 }),
+    )?;
+    // An ellipse slice (map-area shape 1 at export).
+    apply(
+        &mut session,
+        "slice.create",
+        serde_json::json!({
+            "shape": "ellipse", "x": 36.0, "y": 10.0,
+            "width": 16.0, "height": 16.0,
+            "page": 0, "name": "badge", "link": null, "alt": null,
+        }),
+    )?;
+    // A polygon slice (map-area shape 2 at export).
+    apply(
+        &mut session,
+        "slice.create",
+        serde_json::json!({
+            "shape": "polygon", "x": 12.0, "y": 26.0,
+            "width": 20.0, "height": 14.0,
+            "points": [
+                { "x": 12.0, "y": 40.0 },
+                { "x": 22.0, "y": 26.0 },
+                { "x": 32.0, "y": 40.0 },
+            ],
+            "page": 0, "name": "delta", "link": null, "alt": null,
+        }),
+    )?;
+    // A map-only hotspot (no `TSLi`): link target without a slice file.
+    apply(
+        &mut session,
+        "hotspot.create",
+        serde_json::json!({
+            "shape": "rect", "x": 44.0, "y": 30.0,
+            "width": 12.0, "height": 10.0,
+            "page": 0, "name": "info",
+            "link": "https://example.test/info", "alt": "info",
+        }),
+    )?;
+    let (tree, stats) = doc::fwmap::write(session.document(), &doc::fwmap::UnknownBag::default())
+        .map_err(|e| format!("sliced fixture: doc write: {e}"))?;
+    if stats.unconsumed_unknown != 0 {
+        return Err(format!(
+            "sliced fixture: doc write left {} unknown node(s)",
             stats.unconsumed_unknown
         ));
     }

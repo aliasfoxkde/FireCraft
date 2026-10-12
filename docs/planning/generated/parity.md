@@ -7,11 +7,12 @@ that set it instead.
 
 | Metric | Floor | Set in | Enforced by |
 |---|---|---|---|
-| corpus files parsed without panic | 15 | M10 | `xtask corpus` |
-| fwpng round-trip byte-identical files | 14 | M10 | corpus gate |
-| corpus files with doc-model round-trip (equal + idempotent) | 14 | M10 | `xtask corpus` |
-| corpus fixtures with golden pins (deterministic + anchored) | 6 | M10 | `xtask golden` |
+| corpus files parsed without panic | 16 | M11 | `xtask corpus` |
+| fwpng round-trip byte-identical files | 15 | M11 | corpus gate |
+| corpus files with doc-model round-trip (equal + idempotent) | 15 | M11 | `xtask corpus` |
+| corpus fixtures with golden pins (deterministic + anchored) | 7 | M11 | `xtask golden` |
 | Common Library assets pinned + round-tripped | 5 | M10 | `xtask corpus` (assets/library in MANIFEST.tsv) |
+| web export fixtures with structural pins (distance 0) | 1 | M11 | `xtask web-golden` |
 | wasm-clean crates (compile) | 14 | M9 | `xtask wasm` |
 | web bundle builds (trunk) | 1 | M5 | `xtask wasm` (trunk build of `web/`) |
 | wasm smoke tests executed (fwpng) | 6 | M2 | `xtask wasm` (node + wasm-bindgen-test-runner) |

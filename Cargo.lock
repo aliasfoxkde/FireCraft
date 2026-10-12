@@ -4729,6 +4729,7 @@ dependencies = [
  "scripting",
  "serde_json",
  "sha2",
+ "webexport",
 ]
 
 [[package]]

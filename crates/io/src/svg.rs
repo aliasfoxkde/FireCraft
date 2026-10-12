@@ -18,8 +18,9 @@
 //! a real `<text>` — pixel fidelity then depends on the viewer's font
 //! stack, because our own rasterization lowers glyphs through the
 //! `text` crate (the golden loop accounts for this). Images embed as
-//! data-URI PNGs. Slices and symbol instances render as nothing —
-//! compose parity — and are reported.
+//! data-URI PNGs. Slices render as nothing (compose parity); symbol
+//! instances compose *does* draw (decision 0014), so their absence is
+//! a recorded divergence — both are reported, never silent.
 
 use base64::Engine as _;
 
@@ -171,10 +172,20 @@ impl SvgWriter<'_> {
             }
             Some(ObjectData::Text(text)) => self.write_text(text),
             Some(ObjectData::Image(image)) => self.write_image(image),
-            _ => self
+            // Slices render as nothing in both stacks (compose parity);
+            // symbol instances compose *does* draw (decision 0014), so
+            // the gap is a recorded divergence, not parity.
+            Some(ObjectData::Slice(_)) => self
                 .report
                 .notes
-                .push("slice/symbol instance renders as nothing (compose parity)".to_owned()),
+                .push("slice renders as nothing (compose parity)".to_owned()),
+            Some(ObjectData::SymbolInstance(_)) => self
+                .report
+                .notes
+                .push("symbol instance renders as nothing (compose draws it)".to_owned()),
+            // A dangling element id draws nothing; registry integrity
+            // is the document layer's contract, not the serializer's.
+            None => {}
         }
     }
 

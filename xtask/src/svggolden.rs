@@ -11,8 +11,10 @@
 //! Fixtures are *ineligible* — skipped, never silently — when the
 //! document carries anything whose SVG and compose semantics provably
 //! diverge today: text (font-stack dependent), images (compose renders
-//! them as nothing), or a filter stack with an unmapped op (compose
-//! applies, SVG drops).
+//! them as nothing), symbol instances (compose draws them, decision
+//! 0014; the SVG drops them), or a filter stack with an unmapped op
+//! (compose applies, SVG drops). The export report is the eligibility
+//! oracle: counters plus its notes.
 
 use crate::corpus::manifest_entries;
 use crate::util::{inflate, workspace_root};
@@ -79,11 +81,8 @@ fn run_inner(write_pins: bool) -> Result<(), String> {
             }
         };
         let report = out.report;
-        if report.text_objects > 0 || report.image_objects > 0 || report.dropped_filters > 0 {
-            skipped.push(format!(
-                "{name} (text={} image={} dropped_filters={})",
-                report.text_objects, report.image_objects, report.dropped_filters
-            ));
+        if ineligible(&report) {
+            skipped.push(format!("{name} ({})", skip_reason(&report)));
             continue;
         }
 
@@ -166,6 +165,31 @@ fn parse_document(bytes: &[u8]) -> Option<doc::Document> {
     let nodes = fwpng::nodetree::parse(&inflated).ok()?;
     let (document, _bag) = doc::fwmap::read(&nodes).ok()?;
     (!document.pages.is_empty()).then_some(document)
+}
+
+/// A fixture is ineligible when the export *report* says the SVG
+/// provably diverges from compose or is lossy: text/images render as
+/// data URIs, filters dropped, or any note (a symbol instance composes
+/// but the SVG drops it — decision 0014; a slice drops in both).
+/// Notes are the encoder's contract: nothing diverges silently, and
+/// nothing ineligible is compared anyway.
+fn ineligible(report: &io::svg::SvgReport) -> bool {
+    report.text_objects > 0
+        || report.image_objects > 0
+        || report.dropped_filters > 0
+        || !report.notes.is_empty()
+}
+
+/// The skip message: counters plus the notes that triggered it.
+fn skip_reason(report: &io::svg::SvgReport) -> String {
+    let mut reason = format!(
+        "text={} image={} dropped_filters={}",
+        report.text_objects, report.image_objects, report.dropped_filters
+    );
+    if !report.notes.is_empty() {
+        reason.push_str(&format!("; notes: {}", report.notes.join("; ")));
+    }
+    reason
 }
 
 /// Rasterizes `svg` at exactly `width`×`height` with resvg. A size
@@ -330,11 +354,8 @@ fn roundtrip_inner(measure: bool) -> Result<(), String> {
             }
         };
         let report = out.report;
-        if report.text_objects > 0 || report.image_objects > 0 || report.dropped_filters > 0 {
-            skipped.push(format!(
-                "{name} (text={} image={} dropped_filters={})",
-                report.text_objects, report.image_objects, report.dropped_filters
-            ));
+        if ineligible(&report) {
+            skipped.push(format!("{name} ({})", skip_reason(&report)));
             continue;
         }
 
@@ -456,7 +477,7 @@ pub fn measure() -> Result<(), String> {
             continue;
         };
         let report = out.report;
-        if report.text_objects > 0 || report.image_objects > 0 || report.dropped_filters > 0 {
+        if ineligible(&report) {
             eprintln!("[xtask] svg-golden: {name}: ineligible (parity surface)");
             continue;
         }
