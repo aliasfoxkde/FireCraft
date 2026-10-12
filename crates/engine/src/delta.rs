@@ -5,7 +5,10 @@
 //! command. Undo replays the delta; redo re-applies the original
 //! payload, so a delta only ever has to answer "what was here before?".
 
-use doc::{Cell, Document, DocumentInfo, Layer, LayerList, ObjectData, ObjectId, Page, PageInfo};
+use doc::{
+    Cell, Document, DocumentInfo, Layer, LayerList, ObjectData, ObjectId, Page, PageInfo,
+    SymbolDefinition,
+};
 
 use crate::error::EngineError;
 
@@ -111,6 +114,14 @@ pub enum Delta {
         page: usize,
         /// The info as it was before the command.
         before: Box<PageInfo>,
+    },
+    /// Restore the whole document symbol library. Library mutations are
+    /// list-capturing: a definition carries its layer lists and the
+    /// cell references inside them, so the pre-command `Vec` is the
+    /// exact inverse of any add / remove / edit the command performed.
+    Library {
+        /// The library as it was before the command.
+        before: Vec<SymbolDefinition>,
     },
     /// Several inverses, applied last-captured-first on undo. Commands
     /// push captures in the order they mutate, so a plain reverse walk
@@ -233,6 +244,7 @@ impl Delta {
             Delta::PageInfo { page, before } => {
                 page_mut(document, *page)?.info = (**before).clone();
             }
+            Delta::Library { before } => document.symbols = before.clone(),
             Delta::Group(deltas) => {
                 for delta in deltas.iter().rev() {
                     delta.apply_inverse(document)?;

@@ -480,6 +480,17 @@ pub const CALLS: &[&str] = &[
     "text.setFont",
     "text.attachPath",
     "text.detachPath",
+    "symbol.create",
+    "symbol.createInstance",
+    "symbol.breakApart",
+    "symbol.setType",
+    "symbol.set9Slice",
+    "symbol.editAttach",
+    "symbol.editDetach",
+    "symbol.editReorder",
+    "library.add",
+    "library.remove",
+    "library.rename",
 ];
 
 /// Builds a random call against `document`: a random catalog id and a
@@ -1060,6 +1071,103 @@ pub fn random_call(rng: &mut FuzzRng, document: &Document) -> (String, serde_jso
             payload
         }
         "text.detachPath" => serde_json::json!({ "id": any_id(rng) }),
+        "symbol.create" => {
+            let count = 1 + rng.below(3);
+            let mut ids = Vec::with_capacity(count);
+            for _ in 0..count {
+                ids.push(any_id(rng));
+            }
+            serde_json::json!({
+                "ids": ids,
+                "name": "fuzz lib",
+                "symbol_type": rng
+                    .pick(&["graphic", "button", "animation"])
+                    .copied()
+                    .unwrap_or("graphic"),
+            })
+        }
+        "symbol.createInstance" => serde_json::json!({
+            "symbol": rng.below(3),
+            "page": any_index(rng, pages),
+            "layer": any_index(rng, 3),
+            "cell": any_index(rng, frames),
+            "index": any_opt_index(rng, 6),
+            "x": (rng.below(400) as f64) - 200.0,
+            "y": (rng.below(400) as f64) - 200.0,
+            "name": if rng.chance(50) {
+                serde_json::Value::Null
+            } else {
+                serde_json::json!("fuzz instance")
+            },
+        }),
+        "symbol.breakApart" => serde_json::json!({ "id": any_id(rng) }),
+        "symbol.setType" => serde_json::json!({
+            "symbol": rng.below(3),
+            "symbol_type": rng
+                .pick(&["graphic", "button", "animation"])
+                .copied()
+                .unwrap_or("graphic"),
+        }),
+        "symbol.set9Slice" => {
+            let symbol = rng.below(3);
+            if rng.chance(50) {
+                serde_json::json!({ "symbol": symbol, "guides": serde_json::Value::Null })
+            } else {
+                serde_json::json!({
+                    "symbol": symbol,
+                    "guides": {
+                        "locked": rng.chance(50),
+                        "color_raw": rng.below(0x1_000_000),
+                        "controls": [
+                            rng.below(40) as f64,
+                            rng.below(40) as f64,
+                            rng.below(40) as f64,
+                            rng.below(40) as f64,
+                        ],
+                        "shape_bounds": {
+                            "x0": 0.0,
+                            "y0": 0.0,
+                            "x1": rng.below(200) as f64,
+                            "y1": rng.below(200) as f64,
+                        },
+                        "limits": {
+                            "x0": 0.0,
+                            "y0": 0.0,
+                            "x1": rng.below(200) as f64,
+                            "y1": rng.below(200) as f64,
+                        },
+                    },
+                })
+            }
+        }
+        "symbol.editAttach" => serde_json::json!({
+            "symbol": rng.below(3),
+            "id": any_id(rng),
+            "layer": any_index(rng, 2),
+            "cell": any_index(rng, frames),
+            "index": any_opt_index(rng, 6),
+        }),
+        "symbol.editDetach" => serde_json::json!({
+            "symbol": rng.below(3),
+            "id": any_id(rng),
+        }),
+        "symbol.editReorder" => serde_json::json!({
+            "symbol": rng.below(3),
+            "id": any_id(rng),
+            "to": rng.below(6),
+        }),
+        "library.add" => serde_json::json!({
+            "name": format!("L-{}", rng.below(100)),
+            "symbol_type": rng
+                .pick(&["graphic", "button", "animation"])
+                .copied()
+                .unwrap_or("graphic"),
+        }),
+        "library.remove" => serde_json::json!({ "symbol": rng.below(3) }),
+        "library.rename" => serde_json::json!({
+            "symbol": rng.below(3),
+            "name": format!("L-{}", rng.below(100)),
+        }),
         other => {
             let _ = other;
             // A catalog command without a builder: an empty payload is

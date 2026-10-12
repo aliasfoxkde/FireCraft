@@ -364,7 +364,7 @@ impl TypedCommand for RenameObject {
 /// Where an object is referenced from. An object lives in exactly one
 /// container: a cell's element list, or one group's children.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Owner {
+pub(crate) enum Owner {
     /// An element of one cell at `position`.
     Cell {
         /// Page index.
@@ -389,7 +389,7 @@ enum Owner {
 /// reference to `id`. Cell references win over group references (an
 /// object referenced twice is a corrupted document; the walk order
 /// keeps the result deterministic).
-fn find_owner(document: &Document, id: ObjectId) -> Option<Owner> {
+pub(crate) fn find_owner(document: &Document, id: ObjectId) -> Option<Owner> {
     for (page, page_data) in document.pages.iter().enumerate() {
         for (layer, layer_data) in page_data.layers.layers.iter().enumerate() {
             for (cell, cell_data) in layer_data.cells.iter().enumerate() {

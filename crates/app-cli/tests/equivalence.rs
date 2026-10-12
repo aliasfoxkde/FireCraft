@@ -144,6 +144,62 @@ fn steps_file_replays_identically_through_the_cli() {
     }
 }
 
+/// The M10 symbol leg: a symbol-heavy journal — definition creation,
+/// instance placement, break-apart, library edits — replays through the
+/// CLI read path (`io::open` from a `.fw.png` stream) to a byte-equal
+/// document. This is the gate for the wire-order invariant: the writer
+/// emits the symbol library inline in the document `MSLv`, the reader
+/// parses it ahead of every page layer, so any reordering between the
+/// apply loop's registry order and the read order shows up here as a
+/// byte divergence.
+#[test]
+fn symbol_journal_replays_identically_through_the_cli() {
+    let is_symbol = |name: &str| name.starts_with("symbol.") || name.starts_with("library.");
+    for seed in [31_u64, 32] {
+        let mut rng = FuzzRng::new(seed);
+        let seed_document = random_document(&mut rng);
+
+        // Surface-style session; every second step is forced to a
+        // symbol or library call so the journal cannot dodge the
+        // definition wire path.
+        let mut session = Session::with_registry(seed_document.clone(), registry());
+        let mut applied = 0;
+        let mut symbol_applied = 0;
+        for step in 0..30 {
+            loop {
+                let (name, payload) = random_call(&mut rng, session.document());
+                if (step % 2 == 0) == is_symbol(&name) {
+                    if session.apply(&name, payload).is_ok() {
+                        applied += 1;
+                        if is_symbol(&name) {
+                            symbol_applied += 1;
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+        assert!(applied > 0, "generator must land some live calls");
+        assert!(symbol_applied > 0, "seed {seed}: symbol calls must land");
+        let steps = session.journal_lines();
+
+        // Base document through the full read path + the steps file.
+        let loaded = io::open(&fwpng_bytes(&seed_document)).expect("opens the base document");
+        let replayed = app_cli::ops::apply_journal(loaded, &steps).expect("replays");
+
+        assert_eq!(
+            bytes(replayed.session.document()),
+            bytes(session.document()),
+            "seed {seed}: symbol journal replay diverged from the session"
+        );
+        assert_eq!(
+            replayed.session.journal_lines(),
+            steps,
+            "the replayed journal is the steps file verbatim"
+        );
+    }
+}
+
 #[test]
 fn cli_apply_journal_matches_engine_apply_journal() {
     // A journal built in-engine (session.journal_lines) replays
