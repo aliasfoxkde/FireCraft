@@ -16,6 +16,18 @@ pub trait FileSystem {
 
     /// `true` when the path exists.
     fn exists(&self, path: &str) -> bool;
+
+    /// Lists regular file names directly inside a directory (not
+    /// recursive, no `.`/`..`). The default refuses: surfaces that do
+    /// not support directory listing (wasm browser storage) report it
+    /// as an I/O error.
+    fn read_dir(&self, path: &str) -> Result<Vec<String>, crate::EngineError> {
+        let _ = path;
+        Err(crate::EngineError::Io {
+            path: path.to_owned(),
+            detail: "directory listing is not supported by this file system".to_owned(),
+        })
+    }
 }
 
 /// Open/save dialogs and user messages.

@@ -564,6 +564,7 @@ mod tests {
             layers,
             grid: None,
             guides: Default::default(),
+            export: None,
         });
         (document, image)
     }

@@ -148,6 +148,7 @@ fn document(layers: Vec<(&str, bool, Vec<doc::ObjectId>)>) -> Document {
         },
         grid: None,
         guides: Default::default(),
+        export: None,
     });
     document
 }

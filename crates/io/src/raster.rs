@@ -356,6 +356,7 @@ pub fn build_single_object_page(
         },
         grid: None,
         guides: Default::default(),
+        export: None,
     });
 }
 

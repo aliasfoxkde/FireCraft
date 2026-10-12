@@ -20,7 +20,7 @@ use std::process::ExitCode;
 use app_cli::{CliError, info, io, ops};
 use engine::platform::FileSystem as _;
 
-const USAGE: &str = "usage: firecraft-cli <info <file>|convert <in> <out>|apply <doc> <journal> [--out <out>]|export <in.fw.png> <out.(png|jpg|bmp|tiff|wbmp|svg|psd|gif)> [--quality <1-100>] [--progressive] [--matte <white|black>]|import <in.raster> <out.fw.png> [name]";
+const USAGE: &str = "usage: firecraft-cli <info <file>|convert <in> <out>|apply <doc> <journal> [--out <out>]|export <in.fw.png> <out.(png|jpg|bmp|tiff|wbmp|svg|psd|gif)> [--quality <1-100>] [--progressive] [--matte <white|black>]|import <in.raster> <out.fw.png> [name]|batch <dir> --format <png|jpg|bmp|tiff|wbmp|svg|psd|gif> [--options <json|file>] [--out <dir>]";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -72,9 +72,10 @@ fn run(args: &[String]) -> Result<(), CliError> {
                         let value = rest
                             .next()
                             .ok_or_else(|| CliError("--quality needs a value".to_owned()))?;
-                        flags.quality = value
-                            .parse()
-                            .map_err(|_| CliError(format!("--quality: {value} is not 1-100")))?;
+                        flags.quality =
+                            Some(value.parse().map_err(|_| {
+                                CliError(format!("--quality: {value} is not 1-100"))
+                            })?);
                     }
                     "--progressive" => flags.progressive = true,
                     "--matte" => {
@@ -136,6 +137,55 @@ fn run(args: &[String]) -> Result<(), CliError> {
                 .map_err(|error| CliError(error.to_string()))?;
             eprintln!(
                 "[firecraft-cli] {input} -> {output} ({} bytes)",
+                written.len()
+            );
+            Ok(())
+        }
+        Some("batch") => {
+            let mut positional = Vec::new();
+            let mut format: Option<String> = None;
+            let mut options: Option<String> = None;
+            let mut out_dir: Option<String> = None;
+            let mut rest = args.iter().skip(1);
+            while let Some(flag) = rest.next() {
+                match flag.as_str() {
+                    "--format" => {
+                        format = Some(
+                            rest.next()
+                                .ok_or_else(|| CliError("--format needs a value".to_owned()))?
+                                .to_ascii_lowercase(),
+                        );
+                    }
+                    "--options" => {
+                        options = Some(
+                            rest.next()
+                                .ok_or_else(|| CliError("--options needs a value".to_owned()))?
+                                .to_owned(),
+                        );
+                    }
+                    "--out" => {
+                        out_dir = Some(
+                            rest.next()
+                                .ok_or_else(|| CliError("--out needs a path".to_owned()))?
+                                .to_owned(),
+                        );
+                    }
+                    other => positional.push(other.to_owned()),
+                }
+            }
+            let dir = positional.first().ok_or_else(missing(
+                "batch <dir> --format <f> [--options <json>] [--out <dir>]",
+            ))?;
+            let format = format
+                .as_deref()
+                .ok_or_else(|| CliError("batch: --format is required".to_owned()))?;
+            let overlay = match options.as_deref() {
+                Some(value) => Some(ops::parse_export_options(value)?),
+                None => None,
+            };
+            let written = ops::batch(&fs, dir, format, overlay.as_ref(), out_dir.as_deref())?;
+            eprintln!(
+                "[firecraft-cli] batch: {} file(s) exported as {format}",
                 written.len()
             );
             Ok(())

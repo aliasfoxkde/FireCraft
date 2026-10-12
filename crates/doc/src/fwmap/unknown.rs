@@ -66,6 +66,14 @@ impl UnknownBag {
             .retain(|entry| entry.path != path && !entry.path.starts_with(&prefix));
     }
 
+    /// Drops every entry whose recorded path starts with `prefix`.
+    /// Used when a model-driven list changes length: per-index bags of
+    /// entries past the new count have no host slot (the `FNMv` list
+    /// shrinks with the recorded durations — the model wins on count).
+    pub fn purge_prefix(&mut self, prefix: &str) {
+        self.entries.retain(|entry| !entry.path.starts_with(prefix));
+    }
+
     /// Number of preserved nodes.
     #[must_use]
     pub fn len(&self) -> usize {

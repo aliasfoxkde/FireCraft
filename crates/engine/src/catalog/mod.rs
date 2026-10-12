@@ -144,6 +144,7 @@ pub(crate) mod testdoc {
                 layers,
                 grid: None,
                 guides: Default::default(),
+                export: None,
             });
         }
         (document, ids)

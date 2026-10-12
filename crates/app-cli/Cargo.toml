@@ -14,7 +14,9 @@ name = "firecraft-cli"
 path = "src/main.rs"
 
 [dependencies]
-doc = { path = "../doc" }
+doc = { path = "../doc", features = ["serde"] }
+geom = { path = "../geom" }
+raster = { path = "../raster" }
 engine = { path = "../engine" }
 compose = { path = "../compose" }
 fwpng = { path = "../fwpng" }

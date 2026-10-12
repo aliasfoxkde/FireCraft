@@ -87,6 +87,53 @@ impl engine::platform::Dialogs for EnvDialogs {
     }
 }
 
+/// The export formats the dialog offers, in menu order.
+const EXPORT_FORMATS: &[&str] = &["png", "jpg", "bmp", "tiff", "wbmp", "svg", "psd", "gif"];
+
+/// Export-dialog state (File → Export…): format, per-format controls,
+/// and the cached 2-Up preview. The controls mirror the `EXPv` fields
+/// the model maps; Export stamps them onto a cloned document and runs
+/// the same codec path the CLI does.
+struct ExportDialog {
+    /// Index into [`EXPORT_FORMATS`].
+    format: usize,
+    /// JPEG quality 1..=100.
+    quality: i32,
+    /// Progressive JPEG scans.
+    progressive: bool,
+    /// Matte for alpha-less formats: false = white, true = black.
+    matte_black: bool,
+    /// GIF loop: 0 infinite, 1 never, 2 repeat n times.
+    gif_loop: usize,
+    /// Repeat count when `gif_loop == 2`.
+    gif_times: i32,
+    /// GIF per-frame ink crop (`AACb`).
+    gif_crop: bool,
+    /// GIF diff frames (`AADb`).
+    gif_diff: bool,
+    /// GIF Floyd–Steinberg amount (`PLDi`), percent.
+    gif_dither: i32,
+    /// Cached 2-Up panes and the settings stamp they were made from.
+    preview: Option<(u64, TextureHandle, String, TextureHandle, String)>,
+}
+
+impl Default for ExportDialog {
+    fn default() -> Self {
+        Self {
+            format: 0,
+            quality: 90,
+            progressive: false,
+            matte_black: false,
+            gif_loop: 0,
+            gif_times: 3,
+            gif_crop: false,
+            gif_diff: false,
+            gif_dither: 0,
+            preview: None,
+        }
+    }
+}
+
 /// The eframe app. Holds the editor core plus everything window-shaped.
 /// Platform services are trait objects: the desktop build injects
 /// [`EnvDialogs`] + `StdFs`, the wasm build (crate `firecraft-web`)
@@ -103,6 +150,8 @@ pub struct Shell {
     dialogs: Box<dyn engine::platform::Dialogs>,
     /// Last status line (errors, save confirmations).
     pub status: String,
+    /// Open export dialog, if any.
+    export_dialog: Option<ExportDialog>,
 }
 
 impl Shell {
@@ -128,6 +177,7 @@ impl Shell {
             fs,
             dialogs,
             status: "ready".to_owned(),
+            export_dialog: None,
         }
     }
 
@@ -211,6 +261,255 @@ impl Shell {
         }
     }
 
+    /// The export dialog (File → Export…): format + per-format
+    /// controls, a 2-Up preview of the chosen settings against a
+    /// lossless PNG pane, and Export through the save dialog.
+    fn export_dialog_ui(&mut self, ui: &mut egui::Ui) {
+        let mut dialog = match self.export_dialog.take() {
+            Some(dialog) => dialog,
+            None => return,
+        };
+        egui::Grid::new("export_controls")
+            .num_columns(2)
+            .spacing([8.0, 6.0])
+            .show(ui, |ui| {
+                egui::ComboBox::from_label("Format")
+                    .selected_text(EXPORT_FORMATS[dialog.format])
+                    .show_ui(ui, |ui| {
+                        for (i, name) in EXPORT_FORMATS.iter().enumerate() {
+                            ui.selectable_value(&mut dialog.format, i, *name);
+                        }
+                    });
+                let format = EXPORT_FORMATS[dialog.format];
+                if format == "jpg" {
+                    ui.add(egui::Slider::new(&mut dialog.quality, 1..=100).text("Quality"));
+                    ui.checkbox(&mut dialog.progressive, "Progressive");
+                    ui.horizontal(|ui| {
+                        ui.label("Matte");
+                        ui.selectable_value(&mut dialog.matte_black, false, "white");
+                        ui.selectable_value(&mut dialog.matte_black, true, "black");
+                    });
+                }
+                if format == "gif" {
+                    egui::ComboBox::from_label("Loop")
+                        .selected_text(match dialog.gif_loop {
+                            0 => "infinite",
+                            1 => "never",
+                            _ => "repeat n times",
+                        })
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(&mut dialog.gif_loop, 0, "infinite");
+                            ui.selectable_value(&mut dialog.gif_loop, 1, "never");
+                            ui.selectable_value(&mut dialog.gif_loop, 2, "repeat n times");
+                        });
+                    if dialog.gif_loop == 2 {
+                        ui.add(egui::DragValue::new(&mut dialog.gif_times).range(1..=65535));
+                    }
+                    ui.checkbox(&mut dialog.gif_crop, "Crop frames");
+                    ui.checkbox(&mut dialog.gif_diff, "Diff frames");
+                    ui.add(egui::Slider::new(&mut dialog.gif_dither, 0..=100).text("Dither %"));
+                }
+            });
+
+        // The 2-Up: left pane is the chosen settings, right pane the
+        // lossless PNG reference. Regenerates when settings or the
+        // document move.
+        let stamp = self.preview_stamp();
+        let regenerate = match &dialog.preview {
+            Some((made, _, _, _, _)) => *made != stamp,
+            None => true,
+        };
+        if regenerate {
+            let fresh = self.render_preview(ui.ctx());
+            dialog.preview = fresh;
+        }
+        if let Some((_, left, left_label, right, right_label)) = &dialog.preview {
+            ui.separator();
+            ui.columns(2, |columns| {
+                columns[0].label(format!("export ({left_label})"));
+                columns[0].add(egui::Image::new((left.id(), Vec2::splat(128.0))));
+                columns[1].label(format!("png reference ({right_label})"));
+                columns[1].add(egui::Image::new((right.id(), Vec2::splat(128.0))));
+            });
+        }
+
+        ui.separator();
+        ui.horizontal(|ui| {
+            if ui.button("Export…").clicked() {
+                self.export_via_dialog(&dialog);
+            }
+            if ui.button("Cancel").clicked() {
+                self.status = "export cancelled".to_owned();
+            }
+        });
+        self.export_dialog = Some(dialog);
+    }
+
+    /// A change stamp over the dialog settings plus the document, so
+    /// the preview regenerates exactly when either could have moved.
+    fn preview_stamp(&self) -> u64 {
+        use std::hash::{Hash, Hasher};
+        let Some(dialog) = &self.export_dialog else {
+            return 0;
+        };
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        (
+            dialog.format,
+            dialog.quality,
+            dialog.progressive,
+            dialog.matte_black,
+            dialog.gif_loop,
+            dialog.gif_times,
+            dialog.gif_crop,
+            dialog.gif_diff,
+            dialog.gif_dither,
+            self.stamp(),
+        )
+            .hash(&mut hasher);
+        hasher.finish()
+    }
+
+    /// The dialog's settings as a model `ExportOptions` (what Export
+    /// stamps onto the document; the 2-Up and the file share it).
+    fn dialog_options(dialog: &ExportDialog) -> doc::ExportOptions {
+        let jpg = EXPORT_FORMATS[dialog.format] == "jpg";
+        let gif = EXPORT_FORMATS[dialog.format] == "gif";
+        doc::ExportOptions {
+            format: Some(i64::try_from(dialog.format).unwrap_or(0)),
+            jpeg_quality: jpg.then_some(i64::from(dialog.quality)),
+            jpeg_progressive: jpg.then_some(dialog.progressive),
+            frame_loop: gif.then_some(match dialog.gif_loop {
+                0 => 0,
+                1 => -1,
+                _ => i64::from(dialog.gif_times),
+            }),
+            anim_crop: gif.then_some(dialog.gif_crop),
+            anim_diff: gif.then_some(dialog.gif_diff),
+            dither: gif.then_some(i64::from(dialog.gif_dither)),
+            ..doc::ExportOptions::default()
+        }
+    }
+
+    /// The dialog's JPEG flags (the stated-over-recorded side of the
+    /// same controls).
+    fn dialog_flags(dialog: &ExportDialog) -> app_cli::ops::ExportFlags {
+        app_cli::ops::ExportFlags {
+            quality: if EXPORT_FORMATS[dialog.format] == "jpg" {
+                Some(u8::try_from(dialog.quality).unwrap_or(90))
+            } else {
+                None
+            },
+            progressive: dialog.progressive,
+            matte: if dialog.matte_black {
+                io::Matte::Black
+            } else {
+                io::Matte::White
+            },
+        }
+    }
+
+    /// Encodes page 0 / state 0 in `format` with the dialog's settings
+    /// stamped onto a cloned document — byte-identical to what Export
+    /// writes.
+    fn encode_with_dialog(&self, dialog: &ExportDialog, format: &str) -> Result<Vec<u8>, String> {
+        let mut document = self.editor.document().clone();
+        let export = Self::dialog_options(dialog);
+        if let Some(page) = document.pages.first_mut() {
+            page.export = Some(export);
+        }
+        let flags = Self::dialog_flags(dialog);
+        let mapped = |result: Result<Vec<u8>, app_cli::CliError>| match result {
+            Ok(bytes) => Ok(bytes),
+            Err(error) => Err(error.to_string()),
+        };
+        match format {
+            "svg" => mapped(app_cli::ops::export_svg(&document)),
+            "psd" => mapped(app_cli::ops::export_psd(&document)),
+            "gif" => mapped(app_cli::ops::export_gif(&document)),
+            _ => mapped(app_cli::ops::export_raster(
+                &document,
+                &format!("x.{format}"),
+                &flags,
+            )),
+        }
+    }
+
+    /// Renders state 0 once and builds the two 2-Up panes: chosen
+    /// settings, and a lossless PNG for comparison. Each pane keeps
+    /// its byte size in the label. `ctx` is the live egui context the
+    /// textures are loaded onto.
+    fn render_preview(
+        &mut self,
+        ctx: &egui::Context,
+    ) -> Option<(u64, TextureHandle, String, TextureHandle, String)> {
+        let dialog = self.export_dialog.as_ref()?;
+        let format = EXPORT_FORMATS[dialog.format];
+        let chosen = match self.encode_with_dialog(dialog, format) {
+            Ok(bytes) => bytes,
+            Err(error) => {
+                self.status = format!("preview failed: {error}");
+                return None;
+            }
+        };
+        let reference = match self.encode_with_dialog(dialog, "png") {
+            Ok(bytes) => bytes,
+            Err(error) => {
+                self.status = format!("preview failed: {error}");
+                return None;
+            }
+        };
+        let to_texture = |bytes: &[u8]| -> Option<(TextureHandle, String)> {
+            let decoded = io::raster::decode(bytes).ok()?;
+            let image = egui::ColorImage::from_rgba_unmultiplied(
+                [decoded.width as usize, decoded.height as usize],
+                &decoded.rgba,
+            );
+            let label = format!("{} bytes", bytes.len());
+            Some((
+                ctx.load_texture("export-preview", image, TextureOptions::LINEAR),
+                label,
+            ))
+        };
+        let ((left, left_size), (right, right_size)) =
+            (to_texture(&chosen)?, to_texture(&reference)?);
+        let stamp = self.preview_stamp();
+        Some((
+            stamp,
+            left,
+            format!("{format}, {left_size}"),
+            right,
+            format!("png, {right_size}"),
+        ))
+    }
+
+    /// Export through the save dialog: encode with the dialog's
+    /// settings, write through the injected file system.
+    fn export_via_dialog(&mut self, dialog: &ExportDialog) {
+        let format = EXPORT_FORMATS[dialog.format];
+        let encoded = match self.encode_with_dialog(dialog, format) {
+            Ok(bytes) => bytes,
+            Err(error) => {
+                self.status = format!("export failed: {error}");
+                return;
+            }
+        };
+        let suggested = format!("export.{format}");
+        let Some(path) = self.dialogs.save_path(
+            "Export",
+            &suggested,
+            &[(format.to_owned(), vec![format.to_owned()])],
+        ) else {
+            return;
+        };
+        match self.fs.write_file(&path, &encoded) {
+            Ok(()) => {
+                self.status = format!("exported {path} ({} bytes)", encoded.len());
+                self.export_dialog = None;
+            }
+            Err(error) => self.status = format!("export failed: {error}"),
+        }
+    }
+
     /// The menu bar: File/Edit/Tools/Path/Commands.
     fn menu_bar(&mut self, ui: &mut egui::Ui) {
         egui::MenuBar::new().ui(ui, |ui| {
@@ -220,6 +519,9 @@ impl Shell {
                 }
                 if ui.button("Save").clicked() {
                     self.save_document();
+                }
+                if ui.button("Export…").clicked() {
+                    self.export_dialog = Some(ExportDialog::default());
                 }
                 if ui.button("Quit").clicked() {
                     ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
@@ -942,5 +1244,11 @@ impl eframe::App for Shell {
         egui::CentralPanel::default()
             .frame(egui::Frame::NONE)
             .show(ui, |ui| self.canvas(ui));
+        if self.export_dialog.is_some() {
+            egui::Window::new("Export")
+                .resizable(false)
+                .collapsible(false)
+                .show(ui.ctx(), |ui| self.export_dialog_ui(ui));
+        }
     }
 }

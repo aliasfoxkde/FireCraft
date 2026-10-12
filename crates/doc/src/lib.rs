@@ -17,10 +17,11 @@ pub mod model;
 pub mod registry;
 
 pub use model::{
-    Canvas, Cell, Contour, Document, DocumentInfo, Effect, EffectProperty, EffectValue, Grid,
-    GroupObject, Guides, ImageObject, Layer, LayerList, Page, PageInfo, PaintStyle, PathObject,
-    PathPoint, PrimitiveSource, SelectionMask, SliceObject, SymbolDefinition, SymbolInstanceObject,
-    TextObject, TextOnPath, TextRun, TextStyle, TileBank, TileRef,
+    Canvas, Cell, Contour, Document, DocumentInfo, Effect, EffectProperty, EffectValue,
+    ExportOptions, Grid, GroupObject, Guides, ImageObject, Layer, LayerList, Page, PageInfo,
+    PaintStyle, PathObject, PathPoint, PrimitiveSource, SelectionMask, SliceObject,
+    SymbolDefinition, SymbolInstanceObject, TextObject, TextOnPath, TextRun, TextStyle, TileBank,
+    TileRef,
 };
 pub use registry::{ObjectData, ObjectId, Registry};
 // `EffectValue::Raw` exposes the node type; re-export it so consumers

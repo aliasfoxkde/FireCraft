@@ -12,9 +12,10 @@
 use crate::fwmap::unknown::UnknownBag;
 use crate::fwmap::{FourCC, MapError};
 use crate::model::{
-    Cell, Contour, Document, Effect, EffectProperty, EffectValue, Grid, GroupObject, Guides,
-    ImageObject, Layer, LayerList, PaintStyle, PathObject, PathPoint, PrimitiveSource, SliceObject,
-    SymbolDefinition, SymbolInstanceObject, TextObject, TextOnPath, TextRun, TextStyle, TileRef,
+    Cell, Contour, Document, Effect, EffectProperty, EffectValue, ExportOptions, Grid, GroupObject,
+    Guides, ImageObject, Layer, LayerList, PaintStyle, PathObject, PathPoint, PrimitiveSource,
+    SliceObject, SymbolDefinition, SymbolInstanceObject, TextObject, TextOnPath, TextRun,
+    TextStyle, TileRef,
 };
 use crate::registry::{ObjectData, ObjectId};
 use fwpng::nodetree::{Node, NodeValue};
@@ -158,8 +159,8 @@ impl Writer<'_> {
 
     /// Document node (`MKBv`). Dictionary order: version scalars, frame
     /// count, canvas, `MSLv`, `PGNs`, `LYLv`, grid, guides, onion
-    /// skinning. Definition lists, export options and the page scalars
-    /// have no document-level model slot — they come back from the bag.
+    /// skinning, `EXPv`. Definition lists and the page scalars have no
+    /// document-level model slot — they come back from the bag.
     fn write_document(&mut self) -> Result<Node, MapError> {
         let doc = self.doc;
         let path = "/MKBv";
@@ -192,6 +193,13 @@ impl Writer<'_> {
         mapped.push(self.write_guides(&doc.guides, path)?);
         mapped.push(n_i(*b"OSBi", info.onion_before));
         mapped.push(n_i(*b"OSAi", info.onion_after));
+        if let Some(export) = &doc.export {
+            // The document's `EXPv` carries export defaults only; its
+            // `FNLv` has no model home here, so no frames are emitted
+            // and any bagged ones splice back verbatim.
+            let expv_path = format!("{path}/EXPv");
+            mapped.push(self.write_export_options(export, &expv_path, &[]));
+        }
         let children = self.splice_container(mapped, path);
         Ok(n_kids(*b"MKBv", children))
     }
@@ -242,8 +250,93 @@ impl Writer<'_> {
         if let Some(grid) = &page.grid {
             mapped.push(self.write_grid(grid, &path)?);
         }
+        // The page's `EXPv` carries the settings *and* the `FNLv` frame
+        // configurations — the on-disk home of `frame_durations` — so
+        // it is minted even around an empty settings record when the
+        // document has timing to persist.
+        if page.export.is_some() || !info.frame_durations.is_empty() {
+            let default = ExportOptions::default();
+            let export = page.export.as_ref().unwrap_or(&default);
+            let expv_path = format!("{path}/EXPv");
+            mapped.push(self.write_export_options(export, &expv_path, &info.frame_durations));
+        }
         let children = self.splice_container(mapped, &path);
         Ok(n_kids(*b"PDCv", children))
+    }
+
+    /// `EXPv` node: mapped children in dictionary order, then the
+    /// preserved unknowns at their recorded indices. `frames` non-empty
+    /// appends an `FNLv` of one `FNMv` per entry (`FNDi` duration).
+    fn write_export_options(&mut self, export: &ExportOptions, path: &str, frames: &[i64]) -> Node {
+        let mut mapped: Vec<Node> = Vec::new();
+        if let Some(value) = export.format {
+            mapped.push(n_i(*b"FMTi", value));
+        }
+        if let Some(value) = export.matte_raw {
+            mapped.push(n_i(*b"FCLi", value));
+        }
+        if let Some(value) = export.jpeg_quality {
+            mapped.push(n_i(*b"JPQi", value));
+        }
+        if let Some(value) = export.jpeg_smoothing {
+            mapped.push(n_i(*b"JPSi", value));
+        }
+        if let Some(value) = export.jpeg_colour {
+            mapped.push(n_i(*b"JPOi", value));
+        }
+        if let Some(value) = export.jpeg_progressive {
+            mapped.push(n_b(*b"JPPb", value));
+        }
+        if let Some(value) = export.interlaced {
+            mapped.push(n_b(*b"GFIb", value));
+        }
+        if let Some(value) = export.gif_loss {
+            mapped.push(n_i(*b"GLTi", value));
+        }
+        if let Some(value) = export.palette_type {
+            mapped.push(n_i(*b"PLTi", value));
+        }
+        if let Some(value) = export.dither {
+            mapped.push(n_i(*b"PLDi", value));
+        }
+        if let Some(value) = export.palette_pruning {
+            mapped.push(n_b(*b"PLOb", value));
+        }
+        if let Some(value) = export.transparency_type {
+            mapped.push(n_i(*b"PTNi", value));
+        }
+        if let Some(value) = export.anim_crop {
+            mapped.push(n_b(*b"AACb", value));
+        }
+        if let Some(value) = export.anim_diff {
+            mapped.push(n_b(*b"AADb", value));
+        }
+        if let Some(value) = export.frame_loop {
+            mapped.push(n_i(*b"FLPi", value));
+        }
+        if !frames.is_empty() {
+            let fnlv_path = format!("{path}/FNLv");
+            mapped.push(self.write_frame_configs(frames, &fnlv_path));
+        }
+        let children = self.splice_container(mapped, path);
+        n_kids(*b"EXPv", children)
+    }
+
+    /// `FNLv` node: one `FNMv` per recorded duration, each carrying its
+    /// `FNDi` plus whatever configuration scalars the source file kept.
+    /// Configurations past the recorded count have no host frame — the
+    /// model wins on count.
+    fn write_frame_configs(&mut self, frames: &[i64], fnlv_path: &str) -> Node {
+        let fnmv_prefix = format!("{fnlv_path}/FNMv[");
+        self.bag.purge_prefix(&fnmv_prefix);
+        let mut mapped = Vec::with_capacity(frames.len());
+        for (i, duration) in frames.iter().enumerate() {
+            let fnmv_path = format!("{fnlv_path}/FNMv[{i}]");
+            let kids = self.splice_container(vec![n_i(*b"FNDi", *duration)], &fnmv_path);
+            mapped.push(n_kids(*b"FNMv", kids));
+        }
+        let children = self.splice_container(mapped, fnlv_path);
+        n_kids(*b"FNLv", children)
     }
 
     fn write_symbol_list(&mut self, parent_path: &str) -> Result<Node, MapError> {
@@ -776,6 +869,10 @@ impl Writer<'_> {
         }
         if let Some(slice_type) = object.slice_type {
             mapped.push(n_i(*b"TSLi", slice_type));
+        }
+        if let Some(export) = &object.export {
+            let expv_path = format!("{path}/EXPv");
+            mapped.push(self.write_export_options(export, &expv_path, &[]));
         }
         let children = self.splice_container(mapped, path);
         Ok(n_kids(*b"URLv", children))

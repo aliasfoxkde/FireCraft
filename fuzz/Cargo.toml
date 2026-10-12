@@ -96,3 +96,8 @@ required-features = ["fuzzer"]
 name = "gifanim"
 path = "fuzz_targets/gifanim.rs"
 required-features = ["fuzzer"]
+
+[[bin]]
+name = "expv"
+path = "fuzz_targets/expv.rs"
+required-features = ["fuzzer"]

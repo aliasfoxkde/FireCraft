@@ -76,6 +76,10 @@ pub struct Document {
     /// Editing state, never file content: the format has no selection
     /// node and the writer never reads this field.
     pub selection: Option<SelectionMask>,
+    /// `EXPv` — the document-level export defaults. `None` when the
+    /// file carries no document-level `EXPv`; the writer emits the node
+    /// only when settings exist.
+    pub export: Option<ExportOptions>,
 }
 
 /// The document's tile payload bank: `TIDi` → premultiplied RGBA8
@@ -281,6 +285,9 @@ pub struct Page {
     pub grid: Option<Grid>,
     /// Page guides (`GDSv`).
     pub guides: Guides,
+    /// `EXPv` — this page's export settings. Its `FNLv` frame
+    /// configurations are where `PageInfo::frame_durations` persists.
+    pub export: Option<ExportOptions>,
 }
 
 /// Page-level scalars. Pages carry the frame count twice (`FRCi` x2 —
@@ -309,7 +316,7 @@ pub struct PageInfo {
     /// Frame Duration unit — indexed by state. Entries past the vec
     /// (or an empty vec) mean "no explicit delay recorded"; consumers
     /// pick their own default (the GIF exporter documents its 10).
-    /// Persistence rides the document-level `EXPv`/`FNLv` mapping.
+    /// Persists through the page's `EXPv`/`FNLv` mapping.
     pub frame_durations: Vec<i64>,
 }
 
@@ -731,6 +738,58 @@ pub enum TileRef {
     Matte(i64),
 }
 
+/// `EXPv` — the export/optimization settings one target carries. The
+/// dictionary gives it three homes: document (`MKBv`), page (`PDCv`),
+/// and slice (`URLv`/`SLIv` — the per-slice override table behind
+/// selective JPEG quality). Every field is `Option`d: `None` means the
+/// file did not record it, and the writer emits only recorded fields —
+/// a mapping must never mint settings a document never had. Children
+/// the dictionary documents but this struct does not carry (the HTML
+/// family, `PALv`, `MCTi`, export-area `LR*i`, scale `X/YSZi`, …) stay
+/// preserved verbatim in the unknown bag under the `EXPv` path.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct ExportOptions {
+    /// `FMTi` — 0 gif, 1 jpeg, 2 png, 3 bitmap/pict/tiff/wbmp
+    /// (disambiguated by `MCTi`), 4 animated gif.
+    pub format: Option<i64>,
+    /// `FCLi` — matte color, ABGR raw (`0..=0xffff_fff`) for formats
+    /// that cannot carry alpha.
+    pub matte_raw: Option<i64>,
+    /// `JPQi` — JPEG quality 0..=100.
+    pub jpeg_quality: Option<i64>,
+    /// `JPSi` — JPEG smoothing 0..=100. Recorded; no smoothing stage
+    /// exists in the codec yet.
+    pub jpeg_smoothing: Option<i64>,
+    /// `JPOi` — JPEG color setting. Recorded; codec mapping unpinned
+    /// until corpus evidence.
+    pub jpeg_colour: Option<i64>,
+    /// `JPPb` — progressive JPEG scans.
+    pub jpeg_progressive: Option<bool>,
+    /// `GFIb` — interlaced output (PNG today; GIF interlace has no
+    /// codec path yet).
+    pub interlaced: Option<bool>,
+    /// `GLTi` — GIF loss 0..=128. Recorded; lossy GIF quantization is
+    /// not implemented.
+    pub gif_loss: Option<i64>,
+    /// `PLTi` — palette type (raw dictionary value).
+    pub palette_type: Option<i64>,
+    /// `PLDi` — palette dither level 0..=100; the animated-GIF
+    /// exporter's error-diffusion amount.
+    pub dither: Option<i64>,
+    /// `PLOb` — palette pruning.
+    pub palette_pruning: Option<bool>,
+    /// `PTNi` — palette transparency type.
+    pub transparency_type: Option<i64>,
+    /// `FLPi` — frame loop: `0` infinite, `-1` (the dictionary's
+    /// `4294967295`) never, `n` repeat n times.
+    pub frame_loop: Option<i64>,
+    /// `AACb` — crop animated frames to their ink bounding box.
+    pub anim_crop: Option<bool>,
+    /// `AADb` — animated inter-frame diff.
+    pub anim_diff: Option<bool>,
+}
+
 /// `URLv` — a slice or hotspot.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -747,6 +806,10 @@ pub struct SliceObject {
     pub name: Option<String>,
     /// `TSLi` — type of slice.
     pub slice_type: Option<i64>,
+    /// `EXPv` — this slice's export override (the selective-JPEG
+    /// quality table's home; every field `None` when the file carries
+    /// an `EXPv` with none of the mapped children).
+    pub export: Option<ExportOptions>,
 }
 
 /// `ALSv` — a symbol instance.

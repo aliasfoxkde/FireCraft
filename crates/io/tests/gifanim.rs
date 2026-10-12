@@ -163,6 +163,7 @@ fn state_document(
         },
         grid: None,
         guides: doc::Guides::default(),
+        export: None,
     });
     document
 }

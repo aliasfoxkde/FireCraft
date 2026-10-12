@@ -11,6 +11,7 @@
 //! states. See `docs/planning/firecraft/M8-import-export.md`.
 
 pub mod bmp;
+pub mod expv;
 pub mod gif;
 pub mod jpeg;
 pub mod png;
@@ -102,6 +103,9 @@ pub enum Matte {
     White,
     /// Flatten over opaque black.
     Black,
+    /// Flatten over an explicit color — the `EXPv` `FCLi` matte
+    /// (red, green, blue).
+    Rgb(u8, u8, u8),
 }
 
 impl Matte {
@@ -109,15 +113,24 @@ impl Matte {
         match self {
             Matte::White => 255,
             Matte::Black => 0,
+            Matte::Rgb(r, _, _) => r,
         }
     }
 
     fn green_channel(self) -> u8 {
-        self.red_channel()
+        match self {
+            Matte::White => 255,
+            Matte::Black => 0,
+            Matte::Rgb(_, g, _) => g,
+        }
     }
 
     fn blue_channel(self) -> u8 {
-        self.red_channel()
+        match self {
+            Matte::White => 255,
+            Matte::Black => 0,
+            Matte::Rgb(_, _, b) => b,
+        }
     }
 }
 

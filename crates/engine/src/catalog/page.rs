@@ -86,6 +86,7 @@ impl TypedCommand for AddPage {
             },
             grid: None,
             guides: Default::default(),
+            export: None,
         };
         document.pages.insert(at, page);
         Ok(Delta::Page {

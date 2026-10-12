@@ -138,8 +138,16 @@ pub fn anchor_vector_ops(data: &[u8]) {
     for distance in [vals[0], -vals[0].abs()] {
         let _ = vector::offset_path(&a, distance);
     }
-    for cap in [vector::CapKind::Butt, vector::CapKind::Square, vector::CapKind::Round] {
-        for join in [vector::JoinKind::Miter, vector::JoinKind::Bevel, vector::JoinKind::Round] {
+    for cap in [
+        vector::CapKind::Butt,
+        vector::CapKind::Square,
+        vector::CapKind::Round,
+    ] {
+        for join in [
+            vector::JoinKind::Miter,
+            vector::JoinKind::Bevel,
+            vector::JoinKind::Round,
+        ] {
             let _ = vector::expand_stroke(
                 &a,
                 &vector::StrokeStyle {
@@ -192,12 +200,56 @@ pub fn anchor_gifanim(data: &[u8]) {
         io::gif::GifOptions {
             crop: true,
             diff: true,
-            repeat: Some(3),
+            repeat: io::gif::Loop::Times(3),
+            dither: 0,
         },
     ];
     for option in &options {
         if let Ok(out) = io::gif::encode_animated(&imported.document, 0, option) {
             let _ = io::gif::decode_animated(&out);
+        }
+    }
+}
+
+/// Untrusted node-tree payload driven through the `EXPv` mapping: the
+/// export-options record and frame durations must survive
+/// read → write → re-read unchanged, and every codec-option derivation
+/// must stay in range for whatever the bytes mapped (totality is the
+/// contract; panic is the failure signal).
+pub fn anchor_expv(data: &[u8]) {
+    let Ok(nodes) = fwpng::nodetree::parse(data) else {
+        return;
+    };
+    let Ok((document, bag)) = doc::fwmap::read(&nodes) else {
+        return;
+    };
+    let doc = &document;
+    let export = io::expv::for_page(&document, 0).cloned();
+    let gif = io::expv::gif_options(export.as_ref());
+    assert!(gif.dither <= 100, "dither out of range: {}", gif.dither);
+    let jpeg = io::expv::jpeg_options(export.as_ref(), io::expv::StatedJpeg::default());
+    assert!(
+        (1..=100).contains(&jpeg.quality),
+        "jpeg quality out of range: {}",
+        jpeg.quality
+    );
+    let _ = io::expv::png_options(export.as_ref());
+
+    if let Ok((tree, _stats)) = doc::fwmap::write(&document, &bag) {
+        let bytes = fwpng::nodetree::serialize(&tree);
+        if let Ok(nodes2) = fwpng::nodetree::parse(&bytes)
+            && let Ok((doc2, _bag2)) = doc::fwmap::read(&nodes2)
+        {
+            assert_eq!(doc.export, doc2.export, "export options shifted on write");
+            let durations = doc
+                .pages
+                .first()
+                .map(|page| page.info.frame_durations.clone());
+            let durations2 = doc2
+                .pages
+                .first()
+                .map(|page| page.info.frame_durations.clone());
+            assert_eq!(durations, durations2, "frame durations shifted on write");
         }
     }
 }

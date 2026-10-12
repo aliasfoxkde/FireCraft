@@ -198,6 +198,7 @@ fn page_template(frame_count: i64, info: &DocumentInfo) -> Page {
         layers: LayerList::default(),
         grid: None,
         guides: Default::default(),
+        export: None,
     }
 }
 
@@ -341,6 +342,7 @@ fn random_slice(rng: &mut FuzzRng) -> ObjectData {
         fill_raw: 0,
         name: None,
         slice_type: None,
+        export: None,
     })
 }
 

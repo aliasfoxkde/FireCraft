@@ -85,6 +85,11 @@ fn anchors(seeds: &Seeds) -> AnchorSet {
             firecraft_fuzz::anchor_gifanim,
             vec![seeds.minimal_gif.clone()],
         ),
+        (
+            "expv",
+            firecraft_fuzz::anchor_expv,
+            vec![seeds.expv_tree.clone(), seeds.nested_tree.clone()],
+        ),
     ]
 }
 
@@ -192,6 +197,7 @@ struct Seeds {
     minimal_psd: Vec<u8>,
     minimal_psd_corrupt: Vec<u8>,
     minimal_gif: Vec<u8>,
+    expv_tree: Vec<u8>,
 }
 
 /// Seeds built in code so the driver needs no corpus files.
@@ -329,7 +335,17 @@ fn seeds() -> Seeds {
         }
     }
 
+    // A tree carrying EXPv at both the document and page level: the
+    // mapped export settings, an unknown child in the doc block, and a
+    // complete FNLv with an unknown FNMv child (the deep-path seed).
+    let expv_tree =
+        b"MKBv{FRCi{1}EXPv{FMTi{1}JPQi{82}JPPb{1}FCLi{00204080}OBNs{68 101 102}FLPi{3}}\
+PDCv{FRCi{2}FRCi{2}EXPv{FMTi{4}FNLv{FNMv{FNDi{a}}FNMv{FNDi{7}VISb{1}}}}\
+LYLv{LAYv{BKGb{0}DISb{1}CLLv{}}}}}"
+            .to_vec();
+
     Seeds {
+        expv_tree,
         empty: Vec::new(),
         minimal_png,
         canonical_tree,

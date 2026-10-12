@@ -343,6 +343,7 @@ mod tests {
             },
             grid: None,
             guides: Default::default(),
+            export: None,
         });
         (document, ids)
     }

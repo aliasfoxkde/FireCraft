@@ -387,6 +387,7 @@ mod tests {
             fill_raw: 0,
             name: None,
             slice_type: None,
+            export: None,
         }));
         for payload in [
             json!({ "id": slice, "name": "x" }),

@@ -14,5 +14,5 @@ that set it instead.
 | wasm-clean crates (compile) | 13 | M8 | `xtask wasm` |
 | web bundle builds (trunk) | 1 | M5 | `xtask wasm` (trunk build of `web/`) |
 | wasm smoke tests executed (fwpng) | 6 | M2 | `xtask wasm` (node + wasm-bindgen-test-runner) |
-| fuzz targets with 60s+ zero-crash campaign | 6 | M3 | `xtask fuzz` / `ci --full` |
+| fuzz targets with 60s+ zero-crash campaign | 10 | M8 | `xtask fuzz` / `ci --full` |
 | layer-table violations | 0 | M0 | `xtask layers` |

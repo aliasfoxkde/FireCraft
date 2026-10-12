@@ -744,6 +744,7 @@ fn build_model(
         grid: None,
         guides: Default::default(),
         layers: LayerList { layers },
+        export: None,
     });
     Ok(())
 }

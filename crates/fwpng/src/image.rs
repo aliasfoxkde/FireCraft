@@ -67,7 +67,9 @@ fn png_decode_err(err: png::DecodingError) -> FwPngError {
 
 /// Encodes straight-alpha RGBA8 pixels as a standard PNG (the write
 /// side of [`decode_standard_rgba8`]): 8-bit RGBA, no interlace — the
-/// export path for rasterized pages.
+/// export path for rasterized pages. (Interlaced *output* would need
+/// an Adam7 pass encoder the `png` crate does not provide; the flag is
+/// preserved in the model and the export path refuses it loudly.)
 ///
 /// # Errors
 /// [`FwPngError::PngEncode`] when the `png` crate rejects the write

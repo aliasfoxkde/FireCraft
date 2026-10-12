@@ -124,4 +124,30 @@ impl engine::platform::FileSystem for StdFs {
     fn exists(&self, path: &str) -> bool {
         std::path::Path::new(path).exists()
     }
+
+    fn read_dir(&self, path: &str) -> Result<Vec<String>, engine::EngineError> {
+        let mut names = Vec::new();
+        let entries = std::fs::read_dir(path).map_err(|error| engine::EngineError::Io {
+            path: path.to_owned(),
+            detail: error.to_string(),
+        })?;
+        for entry in entries {
+            let entry = entry.map_err(|error| engine::EngineError::Io {
+                path: path.to_owned(),
+                detail: error.to_string(),
+            })?;
+            if entry
+                .file_type()
+                .map_err(|error| engine::EngineError::Io {
+                    path: path.to_owned(),
+                    detail: error.to_string(),
+                })?
+                .is_file()
+            {
+                names.push(entry.file_name().to_string_lossy().into_owned());
+            }
+        }
+        names.sort();
+        Ok(names)
+    }
 }

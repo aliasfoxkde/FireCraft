@@ -42,6 +42,7 @@ fn page(width: f64, height: f64, layers: Vec<Layer>) -> Page {
         layers: LayerList { layers },
         grid: None,
         guides: doc::Guides::default(),
+        export: None,
     }
 }
 

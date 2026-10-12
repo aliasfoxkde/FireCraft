@@ -97,6 +97,7 @@ pub fn sample_document() -> (Document, Vec<doc::ObjectId>) {
             layers,
             grid: None,
             guides: Default::default(),
+            export: None,
         });
     }
     (document, ids)
@@ -165,6 +166,7 @@ pub fn sample_bitmap_document() -> (Document, doc::ObjectId) {
         layers,
         grid: None,
         guides: Default::default(),
+        export: None,
     });
     (document, image)
 }

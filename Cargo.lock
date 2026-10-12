@@ -89,6 +89,7 @@ dependencies = [
  "engine",
  "fwpng",
  "geom",
+ "io",
  "serde_json",
 ]
 
@@ -101,8 +102,10 @@ dependencies = [
  "engine",
  "flate2",
  "fwpng",
+ "geom",
  "gif 0.14.2",
  "io",
+ "raster",
  "serde_json",
 ]
 

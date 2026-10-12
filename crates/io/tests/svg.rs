@@ -98,6 +98,7 @@ fn document(objects: Vec<ObjectData>) -> Document {
         },
         grid: None,
         guides: Default::default(),
+        export: None,
     });
     document
 }

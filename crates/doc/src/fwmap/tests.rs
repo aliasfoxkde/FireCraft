@@ -276,6 +276,7 @@ fn sample_document() -> Document {
         fill_raw: 0x33_66_99,
         name: Some("Slice".into()),
         slice_type: Some(1),
+        export: None,
     }));
     let group_id = doc.registry.insert(ObjectData::Group(GroupObject {
         group_type: 1,
@@ -350,6 +351,7 @@ fn sample_document() -> Document {
             horizontal: vec![],
             vertical: vec![5.0],
         },
+        export: None,
     });
     doc.symbols.push(SymbolDefinition {
         name: "Sym 5".into(),
@@ -794,6 +796,7 @@ fn write_reports_dangling_ids() {
         },
         grid: None,
         guides: Guides::default(),
+        export: None,
     });
     let result = write(&doc, &UnknownBag::new());
     assert_eq!(
@@ -932,6 +935,7 @@ fn model_structs_are_fully_constructed() {
             horizontal: Vec::new(),
             vertical: Vec::new(),
         },
+        export: None,
     };
     let _layer = Layer {
         name: String::new(),
@@ -1054,6 +1058,7 @@ fn model_structs_are_fully_constructed() {
         fill_raw: 0,
         name: None,
         slice_type: None,
+        export: None,
     };
     let _instance = SymbolInstanceObject {
         symbol_number: 0,
@@ -1200,4 +1205,387 @@ fn text_on_path_round_trips_through_bytes() {
     assert!(bag2.iter().any(|(path, _, _)| path.ends_with("TAPv/PTHv")));
     let (bytes2, _doc3, _bag3) = round_trip_bytes(&doc2, &bag2);
     assert_eq!(bytes, bytes2);
+}
+
+// --- EXPv export options (M8 task 8) -------------------------------------
+
+/// A zeroed [`PageInfo`] (the model type carries no `Default` — its
+/// scalars are semantically required).
+fn page_info_default() -> PageInfo {
+    PageInfo {
+        version: None,
+        revision: None,
+        frame_count: 1,
+        frame_count_duplicate: 1,
+        request_id: 0,
+        canvas: Canvas::default(),
+        onion_before: 0,
+        onion_after: 0,
+        frame_durations: Vec::new(),
+    }
+}
+
+/// A doc-level `EXPv` carrying every mapped scalar plus two unknowns
+/// (`PALv` palette payload, `MCTi` bitmap-format discriminator) at
+/// recorded positions.
+fn export_tree() -> Vec<Node> {
+    vec![n_k(
+        b"MKBv",
+        vec![
+            n_i(b"FRCi", 1),
+            n_k(
+                b"EXPv",
+                vec![
+                    n_i(b"FMTi", 1),
+                    n_i(b"JPQi", 82),
+                    n_b(b"JPPb", true),
+                    n_s(b"OBNs", "palette"), // unknown
+                    n_i(b"FCLi", 0x00_20_40_80),
+                    n_i(b"MCTi", 2), // unknown
+                    n_i(b"FLPi", 3),
+                ],
+            ),
+        ],
+    )]
+}
+
+#[test]
+fn expv_document_level_maps_and_round_trips() {
+    let tree = export_tree();
+    let (doc, bag) = read(&tree).expect("read");
+    let export = doc.export.as_ref().expect("EXPv mapped");
+    assert_eq!(export.format, Some(1));
+    assert_eq!(export.jpeg_quality, Some(82));
+    assert_eq!(export.jpeg_progressive, Some(true));
+    assert_eq!(export.matte_raw, Some(0x00_20_40_80));
+    assert_eq!(export.frame_loop, Some(3));
+    // The two unmapped children ride in the bag at exact paths.
+    let unknowns: Vec<&str> = bag.iter().map(|(path, _, _)| path).collect();
+    assert_eq!(
+        unknowns,
+        vec!["/MKBv/EXPv", "/MKBv/EXPv"],
+        "both unknowns recorded under the EXPv container"
+    );
+
+    let (bytes, doc2, bag2) = round_trip_bytes(&doc, &bag);
+    assert_eq!(doc.export, doc2.export, "export block survives bytes");
+    assert_eq!(bag.iter().count(), bag2.iter().count());
+    let (bytes2, _doc3, _bag3) = round_trip_bytes(&doc2, &bag2);
+    assert_eq!(bytes, bytes2, "canonical emission is byte-stable");
+}
+
+#[test]
+fn expv_unknown_children_splice_back_at_recorded_indices() {
+    let (tree, _stats) = {
+        let (doc, bag) = read(&export_tree()).expect("read");
+        write(&doc, &bag).expect("write")
+    };
+    let mkbv = &tree[0];
+    let kids = children(mkbv);
+    let expv = kids
+        .iter()
+        .find(|node| node.fourcc == *b"EXPv")
+        .expect("EXPv re-emitted");
+    let fourccs: Vec<[u8; 4]> = children(expv).iter().map(|node| node.fourcc).collect();
+    assert_eq!(
+        fourccs,
+        vec![
+            *b"FMTi", *b"FCLi", *b"JPQi", *b"OBNs", *b"JPPb", *b"MCTi", *b"FLPi",
+        ],
+        "mapped slots in canonical order around unknowns at recorded indices"
+    );
+}
+
+#[test]
+fn expv_page_level_with_fnlv_maps_durations() {
+    let tree = vec![n_k(
+        b"PDCv",
+        vec![
+            n_i(b"FRCi", 2),
+            n_k(
+                b"EXPv",
+                vec![
+                    n_i(b"FMTi", 4),
+                    n_k(
+                        b"FNLv",
+                        vec![
+                            n_k(b"FNMv", vec![n_i(b"FNDi", 20), n_s(b"OBNs", "a")]),
+                            n_k(
+                                b"FNMv",
+                                vec![n_i(b"FNDi", 7), n_b(b"VISb", true), n_i(b"FNPi", 0)],
+                            ),
+                        ],
+                    ),
+                ],
+            ),
+            n_k(
+                b"LYLv",
+                vec![n_k(
+                    b"LAYv",
+                    vec![
+                        n_b(b"BKGb", false),
+                        n_b(b"URLb", false),
+                        n_s(b"LNMs", "L"),
+                        n_b(b"DISb", true),
+                        n_k(b"CLLv", vec![]),
+                    ],
+                )],
+            ),
+        ],
+    )];
+    let (doc, bag) = read(&tree).expect("read");
+    let page = &doc.pages[0];
+    assert_eq!(
+        page.info.frame_durations,
+        vec![20, 7],
+        "positional FNMv mapping"
+    );
+    let export = page.export.as_ref().expect("page EXPv mapped");
+    assert_eq!(export.format, Some(4));
+
+    let (bytes, doc2, bag2) = round_trip_bytes(&doc, &bag);
+    assert_eq!(
+        doc.pages[0].info.frame_durations,
+        doc2.pages[0].info.frame_durations
+    );
+    assert_eq!(doc.pages[0].export, doc2.pages[0].export);
+    // The OBNs/VISb/FNPi configuration scalars are bagged at their
+    // FNMv paths and splice back inside the regenerated FNLv.
+    assert!(
+        bag.iter()
+            .any(|(path, _, _)| path == "/PDCv[0]/EXPv/FNLv/FNMv[0]")
+    );
+    assert!(
+        bag.iter()
+            .any(|(path, _, _)| path == "/PDCv[0]/EXPv/FNLv/FNMv[1]")
+    );
+    let (bytes2, _doc3, _bag3) = round_trip_bytes(&doc2, &bag2);
+    assert_eq!(bytes, bytes2);
+}
+
+#[test]
+fn incomplete_fnlv_bags_whole_instead_of_shifting() {
+    // Second FNMv lacks FNDi: a positional mapping would make frame 2
+    // eat configuration 3's slot, so the entire FNLv is preserved.
+    let tree = vec![n_k(
+        b"PDCv",
+        vec![
+            n_i(b"FRCi", 3),
+            n_k(
+                b"EXPv",
+                vec![n_k(
+                    b"FNLv",
+                    vec![
+                        n_k(b"FNMv", vec![n_i(b"FNDi", 20)]),
+                        n_k(b"FNMv", vec![n_s(b"OBNs", "no duration")]),
+                    ],
+                )],
+            ),
+            n_k(
+                b"LYLv",
+                vec![n_k(
+                    b"LAYv",
+                    vec![
+                        n_b(b"BKGb", false),
+                        n_b(b"URLb", false),
+                        n_s(b"LNMs", "L"),
+                        n_b(b"DISb", true),
+                        n_k(b"CLLv", vec![]),
+                    ],
+                )],
+            ),
+        ],
+    )];
+    let (doc, bag) = read(&tree).expect("read");
+    assert!(
+        doc.pages[0].info.frame_durations.is_empty(),
+        "all-or-nothing: no partial durations"
+    );
+    assert!(
+        bag.iter()
+            .any(|(path, _, node)| path == "/PDCv[0]/EXPv" && node.fourcc == *b"FNLv"),
+        "the incomplete FNLv is preserved verbatim"
+    );
+
+    // Write and re-read: the verbatim FNLv rides along untouched.
+    let (bytes, doc2, bag2) = round_trip_bytes(&doc, &bag);
+    assert!(doc2.pages[0].info.frame_durations.is_empty());
+    assert!(
+        bag2.iter()
+            .any(|(path, _, node)| path == "/PDCv[0]/EXPv" && node.fourcc == *b"FNLv"),
+        "still preserved through the round trip"
+    );
+    let _ = bytes;
+}
+
+#[test]
+fn fresh_write_mints_expv_for_durations_only() {
+    let mut doc = Document::default();
+    doc.pages.push(Page {
+        info: PageInfo {
+            frame_count: 2,
+            frame_durations: vec![10, 50],
+            ..page_info_default()
+        },
+        name: None,
+        is_master: false,
+        is_linked: false,
+        page_id: None,
+        last_export_dir: None,
+        last_export_file: None,
+        layers: LayerList::default(),
+        grid: None,
+        guides: Guides::default(),
+        export: None,
+    });
+    let (tree, stats) = write(&doc, &UnknownBag::new()).expect("write");
+    assert_eq!(stats.unconsumed_unknown, 0);
+    let pdcv = tree
+        .iter()
+        .find(|node| node.fourcc == *b"PDCv")
+        .expect("page written");
+    let expv = children(pdcv)
+        .iter()
+        .find(|node| node.fourcc == *b"EXPv")
+        .expect("durations force an EXPv");
+    let fnlv = children(expv)
+        .iter()
+        .find(|node| node.fourcc == *b"FNLv")
+        .expect("FNLv written");
+    let fnmvs = children(fnlv);
+    assert_eq!(fnmvs.len(), 2);
+    assert_eq!(
+        children(&fnmvs[0])[0],
+        n_i(b"FNDi", 10),
+        "canonical FNMv shape: FNDi first"
+    );
+
+    // And it reads back into the same durations with no unknowns.
+    let bytes = serialize(&tree);
+    let parsed = parse(&bytes).expect("parse");
+    let (doc2, bag2) = read(&parsed).expect("read");
+    assert_eq!(doc2.pages[0].info.frame_durations, vec![10, 50]);
+    assert!(bag2.is_empty(), "self-produced tree maps cleanly");
+}
+
+#[test]
+fn no_expv_emitted_when_unset() {
+    let mut doc = Document::default();
+    doc.pages.push(Page {
+        info: page_info_default(),
+        name: None,
+        is_master: false,
+        is_linked: false,
+        page_id: None,
+        last_export_dir: None,
+        last_export_file: None,
+        layers: LayerList::default(),
+        grid: None,
+        guides: Guides::default(),
+        export: None,
+    });
+    let (tree, _stats) = write(&doc, &UnknownBag::new()).expect("write");
+    assert!(
+        !children(&tree[0])
+            .iter()
+            .any(|node| node.fourcc == *b"EXPv"),
+        "doc-level EXPv only when export is set"
+    );
+    assert!(
+        !children(&tree[0])
+            .iter()
+            .any(|node| node.fourcc == *b"PDCv"),
+        "default doc has no pages to write"
+    );
+}
+
+#[test]
+fn duplicate_expv_first_wins_second_bags() {
+    let tree = vec![n_k(
+        b"MKBv",
+        vec![
+            n_i(b"FRCi", 1),
+            n_k(b"EXPv", vec![n_i(b"JPQi", 10)]),
+            n_k(b"EXPv", vec![n_i(b"JPQi", 99)]),
+        ],
+    )];
+    let (doc, bag) = read(&tree).expect("read");
+    assert_eq!(doc.export.as_ref().and_then(|e| e.jpeg_quality), Some(10));
+    assert!(
+        bag.iter()
+            .any(|(path, index, node)| path == "/MKBv" && index == 2 && node.fourcc == *b"EXPv"),
+        "the losing EXPv is preserved verbatim"
+    );
+}
+
+#[test]
+fn expv_bad_payload_shape_is_an_error() {
+    let tree = vec![n_k(
+        b"MKBv",
+        vec![n_k(b"EXPv", vec![n_i(b"JPQi", 10), n_i(b"JPPb", 5)])],
+    )];
+    // JPPb is a bool slot holding an int: BadShape, not silent coercion.
+    assert!(matches!(read(&tree), Err(MapError::BadShape { .. })));
+}
+
+#[test]
+fn slice_expv_maps_selective_settings() {
+    let slice = n_k(
+        b"URLv",
+        vec![
+            n_s(b"INMs", "slice_0"),
+            n_i(b"TSLi", 0),
+            n_i(b"URSi", 0),
+            n_f(b"LFTf", 0.0),
+            n_f(b"TOPf", 0.0),
+            n_f(b"RITf", 100.0),
+            n_f(b"BOTf", 40.0),
+            n_k(b"EXPv", vec![n_i(b"FMTi", 1), n_i(b"JPQi", 55)]),
+        ],
+    );
+    let tree = vec![n_k(
+        b"MKBv",
+        vec![
+            n_i(b"FRCi", 1),
+            n_k(
+                b"LYLv",
+                vec![n_k(
+                    b"LAYv",
+                    vec![
+                        n_b(b"BKGb", false),
+                        n_b(b"URLb", false),
+                        n_s(b"LNMs", "L"),
+                        n_b(b"DISb", true),
+                        n_k(
+                            b"CLLv",
+                            vec![n_k(
+                                b"CELv",
+                                vec![
+                                    n_b(b"LCKb", false),
+                                    n_k(b"ELMv", vec![slice]),
+                                    n_b(b"VISb", true),
+                                ],
+                            )],
+                        ),
+                    ],
+                )],
+            ),
+        ],
+    )];
+    let (doc, bag) = read(&tree).expect("read");
+    let mut slices = Vec::new();
+    for (_, object) in doc.registry.iter() {
+        if let ObjectData::Slice(slice) = object {
+            slices.push(slice.clone());
+        }
+    }
+    assert_eq!(slices.len(), 1);
+    let export = slices[0].export.as_ref().expect("slice EXPv mapped");
+    assert_eq!(export.format, Some(1));
+    assert_eq!(
+        export.jpeg_quality,
+        Some(55),
+        "the selective JPEG quality slot"
+    );
+    assert!(bag.iter().all(|(path, _, _)| !path.contains("EXPv")));
 }

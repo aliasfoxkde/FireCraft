@@ -299,16 +299,40 @@ that was only compared against itself.
    stable anchor, in-code 3-frame seed, decode → render-all-states →
    re-encode both option paths → re-decode, 256 mutated iterations
    clean); io/compose/doc/engine suites green.
-8. **Optimization settings, batch, surfaces + gates** — `EXPv` mapped
-   both ways: `ExportOptions` children written under the dictionary's
-   node tags where semantics are known, unknown children preserved
-   exact-path (M3 rule); selective JPEG quality (per-slice `EXPv`
-   quality table). Batch: `app-cli batch <dir> --format <f>
-   --options <json>` over the registry. Shell: export dialog
-   (format, quality/palette/dither controls, 2-Up preview via two
-   compose renders). Floors raised where earned; fuzz arms; parity +
-   scorecard regenerated; devlog. **Stopping condition:** `xtask ci`
-   green; M8 scorecard row → done with gate evidence.
+8. **Optimization settings, batch, surfaces + gates** — **done.**
+   `EXPv` mapped both ways (`doc::ExportOptions`, 15 typed fields):
+   known children written in dictionary order (`FMTi`…`FLPi`, then
+   `FNLv`), unknown children preserved exact-path and spliced back at
+   recorded indices (M3 rule; splice order pinned by test), duplicate
+   `EXPv` first-wins-bag-rest, wrong payload shape = `BadShape`;
+   document `/MKBv/EXPv`, page `/PDCv[i]/EXPv`, slice
+   `{ELMv}[{i}]/EXPv` paths all mapped. `FNLv` all-or-nothing (any
+   `FNMv` without `FNDi` bags the whole node); `PageInfo.frame_durations`
+   carries `FNDi` hundredths verbatim. `FLPi` spellings: 0=Infinite,
+   -1/2^32=Never, n=Times(u16); **Never omits the NETSCAPE extension**
+   (writing count 0 would mean infinite — decision 0010 §3). Selective
+   JPEG quality: per-slice `JPQi` round-trips; consumer is the M11
+   slice exporter. Resolution order explicit > page > document >
+   codec default (`io::expv::for_page` + per-codec builders);
+   interlaced PNG refuses loudly (png 0.18 has no Adam7 encoder —
+   `ExportError::Unsupported`). Dither pin uses 320 unique colors
+   against a 256-slot palette (a fitting palette + zero error makes
+   dither a no-op — decision 0010 §6). Batch:
+   `app-cli batch <dir> --format <f> --options <json|file> --out
+   <dir>` over the injected `FileSystem` (`engine::platform::FileSystem::read_dir`
+   added, default unsupported — StdFs implements it); the overlay
+   stamps only `None` fields so per-file recorded settings survive;
+   per-file stderr diagnostics; first failure aborts, earlier outputs
+   persist. Shell: File→Export… dialog (format/quality/progressive/
+   matte/loop/crop/diff/dither, 2-Up preview via two compose renders,
+   settings hash re-renders only on change). Tests: `doc` EXPv battery
+   (9), `io/tests/expv.rs` (10), `app-cli/tests/batch.rs` (4); fuzz
+   arm `expv` (target + anchor seed with mapped `EXPv`+`FNLv`); 60 s
+   libfuzzer campaigns zero-crash: expv 3.26M, gifanim 2.15M,
+   psdimport 75k, svgimport 99k execs — **parity floor 6→10**;
+   scorecard + parity regenerated; decisions 0010; devlog.
+   **Stopping condition:** `xtask ci` green; M8 scorecard row → done
+   with gate evidence. ✅
 
 ## CI image constraint
 

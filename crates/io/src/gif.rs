@@ -228,6 +228,7 @@ pub fn decode_animated(input: &[u8]) -> Result<ImportedGif, ImportError> {
         },
         grid: None,
         guides: Default::default(),
+        export: None,
     });
     Ok(ImportedGif { document, report })
 }
@@ -291,8 +292,8 @@ fn clear_rect(canvas: &mut [u8], canvas_w: usize, left: usize, top: usize, w: us
     }
 }
 
-/// Animated-GIF export behaviors, matching the `EXPv` `AACb`/`AADb`
-/// flags (wired to the document in M8 task 8).
+/// Animated-GIF export behaviors, matching the `EXPv` `AACb`/`AADb`/
+/// `FLPi`/`PLDi` settings (wired to the document in M8 task 8).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct GifOptions {
     /// `AACb` — crop each frame to its ink bounding box (frame rect +
@@ -305,8 +306,29 @@ pub struct GifOptions {
     /// Keep means "leave what is there" — the same trade every
     /// diff-writing GIF exporter makes.
     pub diff: bool,
-    /// Loop count; `None` loops forever (the animated default).
-    pub repeat: Option<u16>,
+    /// `FLPi` — how the animation loops.
+    pub repeat: Loop,
+    /// `PLDi` — Floyd–Steinberg error-diffusion amount 0..=100
+    /// (percent of the quantization error carried to neighbor pixels;
+    /// 0 = plain nearest-color). Applies to the global-palette mode;
+    /// local palettes quantize internally and are already
+    /// full-fidelity.
+    pub dither: u8,
+}
+
+/// `FLPi` — frame loop. `0` loops forever, `-1` (the dictionary's
+/// `4294967295`) plays once with no loop extension at all (a NETSCAPE
+/// count of `0` *means* infinite, so "never" must omit it), `n`
+/// repeats `n` times.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Loop {
+    /// Loop forever (the animated default; NETSCAPE count 0).
+    #[default]
+    Infinite,
+    /// Play once, no NETSCAPE extension.
+    Never,
+    /// Repeat this many extra times (NETSCAPE count).
+    Times(u16),
 }
 
 /// Encodes a page's states as an animated GIF: one compose render per
@@ -372,9 +394,10 @@ pub fn encode_animated(
 
     let palette = global_palette(&states);
     let nearest = NearestPalette::new(&palette);
+    let amount = f32::from(options.dither.min(100)) / 100.0;
     let indexed: Vec<Vec<u8>> = states
         .iter()
-        .map(|state| quantize(state, &nearest))
+        .map(|state| quantize(state, &nearest, usize::from(width), amount))
         .collect();
     let global_fits = states
         .iter()
@@ -389,15 +412,19 @@ pub fn encode_animated(
             reason: error.to_string(),
         }
     })?;
-    encoder
-        .set_repeat(match options.repeat {
-            Some(count) => Repeat::Finite(count),
-            None => Repeat::Infinite,
-        })
-        .map_err(|error| ExportError::Encode {
-            format: "gif",
-            reason: error.to_string(),
-        })?;
+    // "Play once" omits the extension entirely — a written NETSCAPE
+    // count of 0 is the spec's spelling of *infinite*.
+    if options.repeat != Loop::Never {
+        encoder
+            .set_repeat(match options.repeat {
+                Loop::Times(count) => Repeat::Finite(count),
+                Loop::Infinite | Loop::Never => Repeat::Infinite,
+            })
+            .map_err(|error| ExportError::Encode {
+                format: "gif",
+                reason: error.to_string(),
+            })?;
+    }
 
     if global_fits {
         // Indexed state 0 seeds the diff walk; the diff space is the
@@ -406,7 +433,13 @@ pub fn encode_animated(
         for (frame, state_indices) in indexed.iter().enumerate() {
             let diffing = options.diff && frame > 0;
             let indices = if diffing {
-                quantize_diff(&states[frame], &nearest, &previous)
+                quantize_diff(
+                    &states[frame],
+                    &nearest,
+                    &previous,
+                    usize::from(width),
+                    amount,
+                )
             } else {
                 state_indices.clone()
             };
@@ -520,17 +553,75 @@ fn global_palette(states: &[Vec<u8>]) -> Vec<u8> {
 }
 
 /// Maps one state's straight RGBA onto the global palette (slot 0 is
-/// transparency, never matched).
-fn quantize(state: &[u8], nearest: &NearestPalette) -> Vec<u8> {
+/// transparency, never matched). With `amount` above zero the
+/// quantization error diffuses Floyd–Steinberg style, scaled by the
+/// amount — at `amount = 1.0` the classic weights (7/16, 3/16, 5/16,
+/// 1/16), at 0 plain nearest-color. Transparent pixels (the reserved
+/// slot) neither receive nor pass on error.
+fn quantize(state: &[u8], nearest: &NearestPalette, width: usize, amount: f32) -> Vec<u8> {
     let mut indexed = Vec::with_capacity(state.len() / 4);
-    let mut memo: HashMap<[u8; 4], u8> = HashMap::new();
-    for pixel in state.chunks_exact(4) {
+    if amount <= 0.0 {
+        let mut memo: HashMap<[u8; 4], u8> = HashMap::new();
+        for pixel in state.chunks_exact(4) {
+            if pixel[3] < 128 {
+                indexed.push(0);
+                continue;
+            }
+            let key = [pixel[0], pixel[1], pixel[2], 255];
+            indexed.push(*memo.entry(key).or_insert_with(|| nearest.index_of(pixel)));
+        }
+        return indexed;
+    }
+
+    // Running per-channel error, one slot per pixel (row-major; rows
+    // below accumulate into their own slots).
+    let height = state.len() / 4 / width.max(1);
+    let mut error = vec![0.0f32; state.len() / 4 * 3];
+    for (at, pixel) in state.chunks_exact(4).enumerate() {
         if pixel[3] < 128 {
             indexed.push(0);
             continue;
         }
-        let key = [pixel[0], pixel[1], pixel[2], 255];
-        indexed.push(*memo.entry(key).or_insert_with(|| nearest.index_of(pixel)));
+        let base = at * 3;
+        let want = [
+            (f32::from(pixel[0]) + error[base]).clamp(0.0, 255.0),
+            (f32::from(pixel[1]) + error[base + 1]).clamp(0.0, 255.0),
+            (f32::from(pixel[2]) + error[base + 2]).clamp(0.0, 255.0),
+        ];
+        let want_bytes = [
+            want[0].round() as u8,
+            want[1].round() as u8,
+            want[2].round() as u8,
+        ];
+        let index = nearest.index_of(&[want_bytes[0], want_bytes[1], want_bytes[2], 255]);
+        indexed.push(index);
+        let got = nearest.color_of(index);
+        let carry = [
+            (want[0] - f32::from(got[0])) * amount,
+            (want[1] - f32::from(got[1])) * amount,
+            (want[2] - f32::from(got[2])) * amount,
+        ];
+        // 7/16 right, 3/16 below-left, 5/16 below, 1/16 below-right.
+        let (x, y) = (at % width, at / width);
+        let mut give = |target: usize, share: f32| {
+            if target < error.len() {
+                for channel in 0..3 {
+                    error[target * 3 + channel] += carry[channel] * share;
+                }
+            }
+        };
+        if x + 1 < width {
+            give(at + 1, 7.0 / 16.0);
+        }
+        if y + 1 < height {
+            if x > 0 {
+                give(at + width - 1, 3.0 / 16.0);
+            }
+            give(at + width, 5.0 / 16.0);
+            if x + 1 < width {
+                give(at + width + 1, 1.0 / 16.0);
+            }
+        }
     }
     indexed
 }
@@ -538,8 +629,14 @@ fn quantize(state: &[u8], nearest: &NearestPalette) -> Vec<u8> {
 /// Maps onto the global palette, sending pixels whose index equals
 /// the previous frame's to transparent slot 0 — an indexed-space
 /// delta.
-fn quantize_diff(state: &[u8], nearest: &NearestPalette, previous: &[u8]) -> Vec<u8> {
-    let mut indexed = quantize(state, nearest);
+fn quantize_diff(
+    state: &[u8],
+    nearest: &NearestPalette,
+    previous: &[u8],
+    width: usize,
+    amount: f32,
+) -> Vec<u8> {
+    let mut indexed = quantize(state, nearest, width, amount);
     for (index, at) in indexed.iter_mut().enumerate() {
         if previous[index] != 0 && previous[index] == *at {
             *at = 0;
@@ -576,6 +673,16 @@ impl NearestPalette {
             }
         }
         u8::try_from(best).unwrap_or(u8::MAX)
+    }
+
+    /// The palette color behind `index` (black when out of range —
+    /// only reachable through a corrupt index, which the diffusers
+    /// never produce).
+    fn color_of(&self, index: u8) -> [u8; 3] {
+        self.entries
+            .get(usize::from(index))
+            .copied()
+            .unwrap_or([0, 0, 0])
     }
 }
 

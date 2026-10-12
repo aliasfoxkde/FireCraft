@@ -10,10 +10,10 @@
 use crate::fwmap::MapError;
 use crate::fwmap::unknown::UnknownBag;
 use crate::model::{
-    Canvas, Cell, Contour, Document, DocumentInfo, Effect, EffectProperty, EffectValue, Grid,
-    GroupObject, Guides, ImageObject, Layer, LayerList, Page, PageInfo, PaintStyle, PathObject,
-    PathPoint, PrimitiveSource, SliceObject, SymbolDefinition, SymbolInstanceObject, TextObject,
-    TextOnPath, TextRun, TextStyle, TileRef,
+    Canvas, Cell, Contour, Document, DocumentInfo, Effect, EffectProperty, EffectValue,
+    ExportOptions, Grid, GroupObject, Guides, ImageObject, Layer, LayerList, Page, PageInfo,
+    PaintStyle, PathObject, PathPoint, PrimitiveSource, SliceObject, SymbolDefinition,
+    SymbolInstanceObject, TextObject, TextOnPath, TextRun, TextStyle, TileRef,
 };
 use crate::registry::{ObjectData, ObjectId, Registry};
 use fwpng::nodetree::{Node, NodeValue};
@@ -184,6 +184,7 @@ impl Reader {
         let (mut resolution_unit, mut background_raw) = (None, None);
         let (mut onion_before, mut onion_after) = (None, None);
         let (mut name, mut grid, mut guides) = (None, None, None);
+        let mut export: Option<ExportOptions> = None;
 
         for (i, child) in children.iter().enumerate() {
             match &child.fourcc {
@@ -237,6 +238,19 @@ impl Reader {
                         guides = Some(self.read_guides(kids, &gds_path)?);
                     }
                 }
+                b"EXPv" => {
+                    // The document node carries the export *defaults*;
+                    // its `FNLv` has no model home (frame timing is
+                    // per-page) and stays preserved verbatim.
+                    if export.is_some() {
+                        self.bag_node(path, i, child);
+                    } else {
+                        let kids = children_of(child, path)?;
+                        let expv_path = format!("{path}/EXPv");
+                        let (options, _) = self.read_export(kids, &expv_path, false)?;
+                        export = Some(options);
+                    }
+                }
                 _ => self.bag_node(path, i, child),
             }
         }
@@ -266,6 +280,7 @@ impl Reader {
         if let Some(guides) = guides {
             document.guides = guides;
         }
+        document.export = export;
         Ok(())
     }
 
@@ -282,6 +297,7 @@ impl Reader {
         let (mut is_master, mut is_linked) = (None, None);
         let (mut page_id, mut last_export_dir, mut last_export_file) = (None, None, None);
         let mut layers = LayerList::default();
+        let (mut export, mut frame_durations) = (None, Vec::new());
 
         for (i, child) in children.iter().enumerate() {
             match &child.fourcc {
@@ -340,6 +356,20 @@ impl Reader {
                         grid = Some(self.read_grid(kids, &grd_path)?);
                     }
                 }
+                b"EXPv" => {
+                    // The page's `EXPv` is where `FNLv` frame
+                    // configurations live — the on-disk home of
+                    // `frame_durations`.
+                    if export.is_some() {
+                        self.bag_node(path, i, child);
+                    } else {
+                        let kids = children_of(child, path)?;
+                        let expv_path = format!("{path}/EXPv");
+                        let (options, frames) = self.read_export(kids, &expv_path, true)?;
+                        frame_durations = frames.unwrap_or_default();
+                        export = Some(options);
+                    }
+                }
                 _ => self.bag_node(path, i, child),
             }
         }
@@ -365,9 +395,7 @@ impl Reader {
                 canvas,
                 onion_before: onion_before.unwrap_or(0),
                 onion_after: onion_after.unwrap_or(0),
-                // `FNLv` frame durations land with the `EXPv` mapping
-                // (M8 task 8); until then every document reads empty.
-                frame_durations: Vec::new(),
+                frame_durations,
             },
             name,
             is_master: is_master.unwrap_or(false),
@@ -378,6 +406,7 @@ impl Reader {
             layers,
             grid,
             guides: guides.unwrap_or_default(),
+            export,
         })
     }
 
@@ -1408,6 +1437,7 @@ impl Reader {
         let (mut internal_name, mut name, mut slice_type) = (None, None, None);
         let (mut shape, mut fill_raw) = (None, None);
         let (mut left, mut top, mut right, mut bottom) = (None, None, None, None);
+        let mut export: Option<ExportOptions> = None;
 
         for (i, child) in children.iter().enumerate() {
             match &child.fourcc {
@@ -1420,7 +1450,20 @@ impl Reader {
                 b"TOPf" => self.slot_f64(child, path, i, &mut top)?,
                 b"RITf" => self.slot_f64(child, path, i, &mut right)?,
                 b"BOTf" => self.slot_f64(child, path, i, &mut bottom)?,
-                // A2Ts / ALTs / PBPv / DTAv / BEVv / MSNi / EXPv and
+                b"EXPv" => {
+                    // The per-slice export override — the selective
+                    // JPEG quality table's home. A slice's `FNLv` has
+                    // no model home and stays preserved.
+                    if export.is_some() {
+                        self.bag_node(path, i, child);
+                    } else {
+                        let kids = children_of(child, path)?;
+                        let expv_path = format!("{path}/EXPv");
+                        let (options, _) = self.read_export(kids, &expv_path, false)?;
+                        export = Some(options);
+                    }
+                }
+                // A2Ts / ALTs / PBPv / DTAv / BEVv / MSNi and
                 // anything else: preserved.
                 _ => self.bag_node(path, i, child),
             }
@@ -1438,6 +1481,7 @@ impl Reader {
             fill_raw: fill_raw.unwrap_or(0),
             name,
             slice_type,
+            export,
         }))
     }
 
@@ -1485,5 +1529,114 @@ impl Reader {
             locked: locked.unwrap_or(false),
             name,
         })))
+    }
+
+    /// `EXPv` children → ([`ExportOptions`], frame durations).
+    /// Dictionary-documented children slot into the struct (first
+    /// occurrence wins, duplicates bag); everything else — the HTML
+    /// family, `PALv`, `MCTi`, export-area `LR*i`, scale, color mode —
+    /// is preserved verbatim under `path`, the `EXPv` container's own
+    /// path. Frame configurations (`FNLv`) map positionally only when
+    /// `map_frames` is set (the page-level call, where `PageInfo::
+    /// frame_durations` is the home); the returned vec is `None` when
+    /// no mapped `FNLv` was found or its mapping had to stay preserved.
+    ///
+    /// # Errors
+    /// [`MapError::BadShape`] for known children carrying the wrong
+    /// payload kind, or an `FNLv` whose configurations are not
+    /// children lists.
+    fn read_export(
+        &mut self,
+        children: &[Node],
+        path: &str,
+        map_frames: bool,
+    ) -> Result<(ExportOptions, Option<Vec<i64>>), MapError> {
+        let mut options = ExportOptions::default();
+        let mut frames: Option<Vec<i64>> = None;
+        for (i, child) in children.iter().enumerate() {
+            match &child.fourcc {
+                b"FMTi" => self.slot_i64(child, path, i, &mut options.format)?,
+                b"FCLi" => self.slot_i64(child, path, i, &mut options.matte_raw)?,
+                b"JPQi" => self.slot_i64(child, path, i, &mut options.jpeg_quality)?,
+                b"JPSi" => self.slot_i64(child, path, i, &mut options.jpeg_smoothing)?,
+                b"JPOi" => self.slot_i64(child, path, i, &mut options.jpeg_colour)?,
+                b"JPPb" => self.slot_bool(child, path, i, &mut options.jpeg_progressive)?,
+                b"GFIb" => self.slot_bool(child, path, i, &mut options.interlaced)?,
+                b"GLTi" => self.slot_i64(child, path, i, &mut options.gif_loss)?,
+                b"PLTi" => self.slot_i64(child, path, i, &mut options.palette_type)?,
+                b"PLDi" => self.slot_i64(child, path, i, &mut options.dither)?,
+                b"PLOb" => self.slot_bool(child, path, i, &mut options.palette_pruning)?,
+                b"PTNi" => self.slot_i64(child, path, i, &mut options.transparency_type)?,
+                b"FLPi" => self.slot_i64(child, path, i, &mut options.frame_loop)?,
+                b"AACb" => self.slot_bool(child, path, i, &mut options.anim_crop)?,
+                b"AADb" => self.slot_bool(child, path, i, &mut options.anim_diff)?,
+                b"FNLv" => {
+                    // Frame configurations map only where the model has
+                    // a home for them (the page), and only once.
+                    if map_frames && frames.is_none() {
+                        let kids = children_of(child, path)?;
+                        let fnlv_path = format!("{path}/FNLv");
+                        match self.read_frame_configs(kids, &fnlv_path)? {
+                            Some(values) => frames = Some(values),
+                            None => {
+                                // A configuration without a duration
+                                // would shift the positional mapping;
+                                // the partial slots are subsumed by the
+                                // preserved whole node.
+                                self.bag.purge_under(&fnlv_path);
+                                self.bag_node(path, i, child);
+                            }
+                        }
+                    } else {
+                        self.bag_node(path, i, child);
+                    }
+                }
+                _ => self.bag_node(path, i, child),
+            }
+        }
+        Ok((options, frames))
+    }
+
+    /// `FNLv` children (`FNMv`* frame configurations) → per-frame
+    /// durations, positionally. `FNMv` children other than `FNDi`
+    /// (`FNPi`, `VISb`, `OBNs`) are bagged under their configuration's
+    /// path. Returns `None` when any configuration carries no `FNDi` —
+    /// a hole would shift every later frame — and the caller preserves
+    /// the whole `FNLv` instead.
+    ///
+    /// # Errors
+    /// [`MapError::BadShape`] for a configuration that is not a
+    /// children list.
+    fn read_frame_configs(
+        &mut self,
+        children: &[Node],
+        path: &str,
+    ) -> Result<Option<Vec<i64>>, MapError> {
+        let mut frames: Vec<Option<i64>> = Vec::new();
+        for (i, child) in children.iter().enumerate() {
+            if &child.fourcc != b"FNMv" {
+                self.bag_node(path, i, child);
+                continue;
+            }
+            let fnmv_path = format!("{path}/FNMv[{i}]");
+            let kids = children_of(child, &fnmv_path)?;
+            let mut duration = None;
+            for (j, cfg) in kids.iter().enumerate() {
+                if &cfg.fourcc == b"FNDi" {
+                    self.slot_i64(cfg, &fnmv_path, j, &mut duration)?;
+                } else {
+                    self.bag_node(&fnmv_path, j, cfg);
+                }
+            }
+            frames.push(duration);
+        }
+        let mut out = Vec::with_capacity(frames.len());
+        for duration in frames {
+            match duration {
+                Some(value) => out.push(value),
+                None => return Ok(None),
+            }
+        }
+        Ok(Some(out))
     }
 }
