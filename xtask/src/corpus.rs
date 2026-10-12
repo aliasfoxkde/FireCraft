@@ -229,7 +229,7 @@ pub fn gen_fixtures() -> Result<(), String> {
 
     /// One pending fixture: name, built bytes, manifest note.
     type Fixture = (&'static str, Result<Vec<u8>, String>, &'static str);
-    let fixtures: [Fixture; 9] = [
+    let fixtures: [Fixture; 10] = [
         (
             "minimal.fw.png",
             build_minimal(),
@@ -269,6 +269,11 @@ pub fn gen_fixtures() -> Result<(), String> {
             "textpath.fw.png",
             build_textpath(),
             "generated: 64x48 page, text attached to an arc guide through text.attachPath (M7 text-on-path golden pin; TFTi 2 + TAPv with TAMi rotate)",
+        ),
+        (
+            "rich.fw.png",
+            build_rich(),
+            "generated: 64x48 page, named rect+text become rich symbol \"btn\" — the definition carries a Widget script (JSVv under MSTv), the instance a parameter store (DTAv), and the opCode-2 re-derivation mutates the definition members through the M9 host drain (M10 rich-symbol golden pin)",
         ),
         (
             "plain.png",
@@ -460,6 +465,122 @@ fn build_scripted() -> Result<Vec<u8>, String> {
     if stats.unconsumed_unknown != 0 {
         return Err(format!(
             "scripted fixture: doc write left {} unknown node(s)",
+            stats.unconsumed_unknown
+        ));
+    }
+    let payload = fwpng::nodetree::serialize(&tree);
+    let standard = encode_rgba8(64, 48, |_, _| [255, 255, 255, 255])?;
+    insert_before_iend(
+        &standard,
+        &[(b"mkTS", zlib(&payload)?), (b"mkBS", zlib(&payload)?)],
+    )
+}
+
+/// Builds `rich.fw.png`: a rich symbol built entirely through the
+/// registry plus the M9 host — named rect + text become symbol "btn",
+/// the definition gains a Widget script, the instance a parameter
+/// store, and the opCode-2 re-derivation lands through the host drain
+/// (scripted ≡ direct ≡ replay is the scripting crate's contract; the
+/// fixture pins the wire shape that carries it).
+fn build_rich() -> Result<Vec<u8>, String> {
+    const WIDGET_SCRIPT: &str = r##"
+var defaults = [
+    { name: "label", type: "text", value: "Ready" },
+    { name: "color", type: "color", value: "#3465a4" }
+];
+var values = Widget.elem.customData["currentValues"];
+if (Widget.opCode === 1) {
+    values = defaults;
+    Widget.elem.customData["currentValues"] = defaults;
+}
+for (var i = 0; i < values.length; i++) {
+    var v = values[i];
+    if (v.name === "label") { Widget.GetObjectByName("label").textChars = v.value; }
+    if (v.name === "color") { Widget.GetObjectByName("plate").pathAttributes.fillColor = v.value; }
+}
+"##;
+    let mut registry = engine::CommandRegistry::new();
+    engine::catalog::install(&mut registry).map_err(|e| format!("catalog install: {e}"))?;
+    let mut session = engine::Session::with_registry(doc::Document::default(), registry);
+    // Direct applies (not a closure) so the document reads below can
+    // interleave with the mutations.
+    macro_rules! apply {
+        ($name:expr, $payload:expr $(,)?) => {
+            session
+                .apply($name, $payload)
+                .map_err(|e| format!("rich fixture: {}: {e}", $name))?
+        };
+    }
+    apply!("page.add", serde_json::json!({ "index": null }));
+    apply!(
+        "page.setCanvasSize",
+        serde_json::json!({ "page": 0, "width": 64.0, "height": 48.0 })
+    );
+    let placed = |mut object: serde_json::Value| -> serde_json::Value {
+        // No `name` here: the members must keep theirs (GetObjectByName
+        // looks them up by name).
+        let place = serde_json::json!({ "page": 0, "layer": 0, "cell": 0 });
+        if let (Some(fields), Some(place)) = (object.as_object_mut(), place.as_object()) {
+            for (key, value) in place {
+                fields.insert(key.clone(), value.clone());
+            }
+        }
+        object
+    };
+    apply!(
+        "object.createPath",
+        placed(serde_json::json!({
+            "kind": "rect",
+            "x": 8.0, "y": 8.0, "width": 32.0, "height": 14.0, "name": "plate",
+        })),
+    );
+    apply!(
+        "text.createText",
+        placed(serde_json::json!({
+            "x": 10.0, "y": 11.0, "width": 28.0, "height": 8.0,
+            "text": "label", "name": "label",
+        })),
+    );
+    let members = session.document().pages[0].layers.layers[0].cells[0]
+        .elements
+        .clone();
+    apply!(
+        "symbol.create",
+        serde_json::json!({
+            "ids": members, "name": "btn", "symbol_type": "graphic",
+        }),
+    );
+    apply!(
+        "symbol.setScript",
+        serde_json::json!({ "symbol": 0, "source": WIDGET_SCRIPT }),
+    );
+    let instance = session.document().pages[0].layers.layers[0].cells[0].elements[0];
+    apply!(
+        "symbol.setParam",
+        serde_json::json!({
+            "id": instance, "name": "label", "kind": "text", "value": "Ready",
+        }),
+    );
+    apply!(
+        "symbol.setParam",
+        serde_json::json!({
+            "id": instance, "name": "color", "kind": "color", "value": "#cc0000",
+        }),
+    );
+    // The re-derivation itself, through the M9 host — its drained
+    // commands are ordinary journal rows, so the fixture needs no JS
+    // to reload.
+    let mut script = scripting::ScriptEngine::new(scripting::Limits::default())
+        .map_err(|e| format!("rich fixture: engine: {e}"))?;
+    let report = scripting::rederive_symbol(&mut session, &mut script, instance, 2);
+    if !report.completed() {
+        return Err(format!("rich fixture re-derive: {:?}", report.message));
+    }
+    let (tree, stats) = doc::fwmap::write(session.document(), &doc::fwmap::UnknownBag::default())
+        .map_err(|e| format!("rich fixture: doc write: {e}"))?;
+    if stats.unconsumed_unknown != 0 {
+        return Err(format!(
+            "rich fixture: doc write left {} unknown node(s)",
             stats.unconsumed_unknown
         ));
     }

@@ -438,7 +438,7 @@ impl Reader {
         let (mut name, mut number, mut frame_count, mut background_raw) = (None, None, None, None);
         let (mut ox, mut oy) = (None, None);
         let (mut symbol_type, mut nine_slice) = (None, None);
-        let mut layers = LayerList::default();
+        let (mut op_code, mut layers) = (None, LayerList::default());
 
         for (i, child) in children.iter().enumerate() {
             match &child.fourcc {
@@ -452,6 +452,17 @@ impl Reader {
                     let mut raw = None;
                     self.slot_i64(child, path, i, &mut raw)?;
                     symbol_type = Some(SymbolType::from_raw(raw));
+                }
+                b"JSVv" => {
+                    if op_code.is_none() {
+                        let kids = children_of(child, path)?;
+                        match Self::read_script_source(kids) {
+                            Some(source) => op_code = Some(source),
+                            None => self.bag_node(path, i, child),
+                        }
+                    } else {
+                        self.bag_node(path, i, child);
+                    }
                 }
                 b"NGSv" => {
                     if nine_slice.is_none() {
@@ -484,7 +495,46 @@ impl Reader {
             background_raw: background_raw.unwrap_or(0xFF_FF_FF),
             symbol_type: symbol_type.unwrap_or(SymbolType::Graphic),
             nine_slice,
+            op_code,
         })
+    }
+
+    /// `JSVv` children → script source: the concatenated `JSSs`
+    /// string pieces (the format's answer to the 65535-byte string
+    /// limit). `None` leaves the whole node to the bag — a `JSVv`
+    /// carrying anything but `JSSs` strings is not ours to interpret.
+    fn read_script_source(children: &[Node]) -> Option<String> {
+        let mut source = String::new();
+        for child in children {
+            source.push_str(child.as_str()?);
+        }
+        Some(source)
+    }
+
+    /// `DTAv` children → custom data. Claimed only when every child
+    /// is a `DCEv` carrying `DCKs` + exactly one `DCVs` string — the
+    /// shape this model writes — and no key repeats. `GPLv`/`GDTv`
+    /// values or any other shape stay preserved whole in the bag, so
+    /// foreign nested data round-trips untouched.
+    fn read_custom_data(children: &[Node]) -> Option<std::collections::BTreeMap<String, String>> {
+        let mut entries = std::collections::BTreeMap::new();
+        for child in children {
+            if child.fourcc != *b"DCEv" {
+                return None;
+            }
+            let kids = child.as_children()?;
+            if kids.len() != 2 || kids[0].fourcc != *b"DCKs" || kids[1].fourcc != *b"DCVs" {
+                return None;
+            }
+            let key = kids[0].as_str()?;
+            let value = kids[1].as_str()?;
+            if entries.insert(key.to_owned(), value.to_owned()).is_some() {
+                // A repeated key would lose data on rewrite — refuse
+                // the claim instead.
+                return None;
+            }
+        }
+        Some(entries)
     }
 
     /// `NGSv` children → [`NineSliceGuides`]. Dictionary order:
@@ -1588,6 +1638,7 @@ impl Reader {
     ) -> Result<Option<ObjectData>, MapError> {
         let (mut number, mut locked, mut name) = (None, None, None);
         let mut transform: Option<Affine> = None;
+        let mut custom_data = std::collections::BTreeMap::new();
         // The animation family: presence keyed on `ANNi`; the optional
         // tail (`ANRi`/`ASOi`/`AEOi`) only models when the anchor is
         // present, so a stray tail node rides the bag.
@@ -1600,6 +1651,17 @@ impl Reader {
                 b"MSNi" => self.slot_i64(child, path, i, &mut number)?,
                 b"LCKb" => self.slot_bool(child, path, i, &mut locked)?,
                 b"OBNs" => self.slot_str(child, path, i, &mut name)?,
+                b"DTAv" => {
+                    if custom_data.is_empty() {
+                        let kids = children_of(child, path)?;
+                        match Self::read_custom_data(kids) {
+                            Some(entries) => custom_data = entries,
+                            None => self.bag_node(path, i, child),
+                        }
+                    } else {
+                        self.bag_node(path, i, child);
+                    }
+                }
                 b"ANNi" => self.slot_i64(child, path, i, &mut frames)?,
                 b"ANXf" => self.slot_f64(child, path, i, &mut x_shift)?,
                 b"ANYf" => self.slot_f64(child, path, i, &mut y_shift)?,
@@ -1645,6 +1707,7 @@ impl Reader {
             locked: locked.unwrap_or(false),
             name,
             animation,
+            custom_data,
         })))
     }
 

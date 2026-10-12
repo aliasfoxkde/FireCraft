@@ -376,8 +376,34 @@ impl Writer<'_> {
             let ngsv_path = format!("{path}/NGSv");
             mapped.push(self.write_nine_slice(guides, &ngsv_path)?);
         }
+        if let Some(source) = &symbol.op_code {
+            mapped.push(Self::write_script(source));
+        }
         let children = self.splice_container(mapped, path);
         Ok(n_kids(*b"MSTv", children))
+    }
+
+    /// `JSVv` — the rich-symbol script: `JSSs` string pieces, split
+    /// at the format's 65535-byte string limit on char boundaries (a
+    /// byte chunk could cleave a UTF-8 character).
+    fn write_script(source: &str) -> Node {
+        let mut pieces: Vec<&str> = Vec::new();
+        let mut start = 0usize;
+        for (i, ch) in source.char_indices() {
+            if i - start + ch.len_utf8() > 65_535 {
+                pieces.push(&source[start..i]);
+                start = i;
+            }
+        }
+        pieces.push(&source[start..]);
+        if pieces.is_empty() {
+            pieces.push("");
+        }
+        let kids = pieces
+            .into_iter()
+            .map(|piece| n_s(*b"JSSs", piece))
+            .collect();
+        n_kids(*b"JSVv", kids)
     }
 
     /// `NGSv` — dictionary order `NGLb NGKi NGCf`×4 `NGMv NGVv`.
@@ -930,6 +956,19 @@ impl Writer<'_> {
         }
         if let Some(name) = &object.name {
             mapped.push(n_s(*b"OBNs", name));
+        }
+        if !object.custom_data.is_empty() {
+            // Dictionary order puts `DTAv` between `OBNs` and the
+            // animation family; one `DCEv` (`DCKs` + `DCVs`) per
+            // entry, in the map's canonical order.
+            let entries: Vec<Node> = object
+                .custom_data
+                .iter()
+                .map(|(key, value)| {
+                    n_kids(*b"DCEv", vec![n_s(*b"DCKs", key), n_s(*b"DCVs", value)])
+                })
+                .collect();
+            mapped.push(n_kids(*b"DTAv", entries));
         }
         if let Some(anim) = &object.animation {
             mapped.push(n_i(*b"ANNi", anim.frames));

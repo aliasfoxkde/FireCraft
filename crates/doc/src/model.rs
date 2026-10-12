@@ -478,6 +478,11 @@ pub struct SymbolDefinition {
     pub symbol_type: SymbolType,
     /// `NGSv`? — nine-slice guides.
     pub nine_slice: Option<NineSliceGuides>,
+    /// Rich-symbol script source (`JSVv` under `MSTv`, split into
+    /// `JSSs` pieces on the wire). The instance re-derivation runs it
+    /// through the scripting host with `Widget.opCode` 1 (defaults)
+    /// or 2 (apply) — `None` for a plain symbol.
+    pub op_code: Option<String>,
 }
 
 /// Paint style carried by a path's `PATv`. M4 maps the two solid
@@ -913,6 +918,11 @@ pub struct SymbolInstanceObject {
     /// `ANNi` + family — animation parameters; `None` (and no nodes
     /// on the wire) for a plain instance.
     pub animation: Option<SymbolAnimation>,
+    /// `DTAv` — per-instance custom data: one `DCEv` (`DCKs` key +
+    /// `DCVs` string) per entry, canonical order. Rich-symbol
+    /// re-derivation keeps its parameter array (the corpus's
+    /// `customData["currentValues"]`, JSON-marshalled) here.
+    pub custom_data: std::collections::BTreeMap<String, String>,
 }
 
 #[cfg(test)]

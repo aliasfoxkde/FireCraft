@@ -1058,6 +1058,7 @@ fn symbol_definition(number: i64, symbol_type: SymbolType, cells: Vec<Cell>) -> 
         background_raw: 0,
         symbol_type,
         nine_slice: None,
+        op_code: None,
     }
 }
 
@@ -1072,6 +1073,7 @@ fn instance(
         locked: false,
         name: None,
         animation,
+        custom_data: std::collections::BTreeMap::new(),
     }
 }
 

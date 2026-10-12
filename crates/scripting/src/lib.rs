@@ -22,6 +22,7 @@ use boa_gc::{Gc, GcRefCell};
 pub mod dom;
 pub mod host;
 pub mod marshal;
+mod widget;
 
 use doc::ObjectId;
 use engine::{Delta, Session, delta::ObjectInverse, platform::FileSystem};
@@ -268,6 +269,63 @@ pub fn run_in_session(
     if let Err(error) = engine.attach_document(session.document()) {
         report.outcome = Outcome::Threw;
         report.message = Some(format!("{name}: post-run attach failed: {error}"));
+    }
+    report
+}
+
+/// Runs an instance's definition rich-symbol script: the `Widget`
+/// re-derivation contract. `op_code` 1 runs the script in
+/// set-defaults mode, 2 applies the instance's current values — the
+/// two codes CS6's Component panel sends (`Widget.opCode`).
+///
+/// Semantics match [`run_in_session`] exactly: attach, project the
+/// `Widget` global (`widget::project`), run the definition's script,
+/// and — only on completion — drain the queued mutations through the
+/// registry in queue order (decision 0011), then re-attach. A throw,
+/// a limit, or a drain failure applies nothing further and reports
+/// [`Outcome::Threw`]; what did apply rides the journal like any
+/// command chain, so the whole chain undoes and replays byte-exactly.
+///
+/// The `Widget` global stays installed on the engine until the next
+/// re-derivation replaces it; plain `run_in_session` scripts that
+/// don't touch `Widget` are unaffected.
+pub fn rederive_symbol(
+    session: &mut Session,
+    engine: &mut ScriptEngine,
+    instance: ObjectId,
+    op_code: u8,
+) -> ScriptReport {
+    const NAME: &str = "widget";
+    if let Err(error) = engine.attach_document(session.document()) {
+        return ScriptReport {
+            outcome: Outcome::Threw,
+            message: Some(format!("{NAME}: {error}")),
+            notes: Vec::new(),
+            host_calls: 0,
+        };
+    }
+    engine.reset_run_state();
+    let source = match widget::project(&mut engine.context, session.document(), instance, op_code) {
+        Ok(source) => source,
+        Err(refusal) => {
+            let _dropped = engine.take_intents();
+            return ScriptReport {
+                outcome: Outcome::Threw,
+                message: Some(format!("{NAME}: {refusal}")),
+                notes: Vec::new(),
+                host_calls: 0,
+            };
+        }
+    };
+    let mut report = engine.run(NAME, &source);
+    if report.completed() {
+        drain(session, engine, &mut report);
+    } else {
+        let _dropped = engine.take_intents();
+    }
+    if let Err(error) = engine.attach_document(session.document()) {
+        report.outcome = Outcome::Threw;
+        report.message = Some(format!("{NAME}: post-run attach failed: {error}"));
     }
     report
 }

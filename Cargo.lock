@@ -96,6 +96,7 @@ dependencies = [
  "fwpng",
  "geom",
  "io",
+ "scripting",
  "serde_json",
 ]
 

@@ -37,6 +37,9 @@ pub(crate) fn install(registry: &mut CommandRegistry) -> Result<(), EngineError>
     registry.register(BreakApart)?;
     registry.register(SetSymbolType)?;
     registry.register(SetSymbol9Slice)?;
+    registry.register(SetScript)?;
+    registry.register(SetParam)?;
+    registry.register(SetCustomData)?;
     registry.register(EditAttach)?;
     registry.register(EditDetach)?;
     registry.register(EditReorder)?;
@@ -365,6 +368,7 @@ impl TypedCommand for CreateSymbol {
             background_raw: 0,
             symbol_type: SymbolType::from(payload.symbol_type),
             nine_slice: None,
+            op_code: None,
         });
 
         let instance = document
@@ -375,6 +379,7 @@ impl TypedCommand for CreateSymbol {
                 locked: false,
                 name: None,
                 animation: None,
+                custom_data: std::collections::BTreeMap::new(),
             }));
         let placed = match anchor {
             Some(Owner::Cell {
@@ -501,6 +506,7 @@ impl TypedCommand for CreateInstance {
                 locked: false,
                 name: payload.name.clone(),
                 animation: None,
+                custom_data: std::collections::BTreeMap::new(),
             }));
         let placed = attach_cell(
             document,
@@ -784,6 +790,200 @@ impl TypedCommand for SetSymbol9Slice {
     }
 }
 
+/// `symbol.setScript` — installs or clears a definition's rich-symbol
+/// script (`JSVv` on the wire). The source is data here: running it is
+/// the scripting host's job (`scripting::rederive_symbol`), which
+/// queues its mutations through the same registry.
+struct SetScript;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct SetScriptPayload {
+    /// The definition, by `MSNi` number.
+    symbol: i64,
+    /// `Some` installs the script source, `None` clears it.
+    source: Option<String>,
+}
+
+impl TypedCommand for SetScript {
+    type Payload = SetScriptPayload;
+
+    fn name(&self) -> &'static str {
+        "symbol.setScript"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "symbol.setScript";
+        let position = definition_position(document, NAME, payload.symbol)?;
+        let before = document.symbols.clone();
+        document.symbols[position].op_code = payload.source.clone();
+        Ok(Delta::Library { before })
+    }
+}
+
+/// The `customData["currentValues"]` entry shape the corpus's rich
+/// symbols use: `{name, type, value}` triples in array order.
+fn set_current_value(
+    document: &mut Document,
+    command: &'static str,
+    id: doc::ObjectId,
+    entry: serde_json::Value,
+) -> Result<ObjectData, EngineError> {
+    let before = access::object(document, command, id)?.clone();
+    let Some(ObjectData::SymbolInstance(instance)) = document.registry.get_mut(id) else {
+        return Err(EngineError::InvalidState {
+            name: command.to_owned(),
+            detail: format!("object {} is not a symbol instance", id.index()),
+        });
+    };
+    let current = instance
+        .custom_data
+        .entry("currentValues".to_owned())
+        .or_insert_with(|| "[]".to_owned());
+    let mut values: Vec<serde_json::Value> =
+        serde_json::from_str(current).map_err(|_| EngineError::InvalidState {
+            name: command.to_owned(),
+            detail: "currentValues is not a JSON array".to_owned(),
+        })?;
+    let name = entry
+        .get("name")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or_default()
+        .to_owned();
+    if let Some(slot) = values
+        .iter_mut()
+        .find(|slot| slot.get("name").and_then(serde_json::Value::as_str) == Some(name.as_str()))
+    {
+        *slot = entry;
+    } else {
+        values.push(entry);
+    }
+    *current = serde_json::to_string(&values).map_err(|_| EngineError::InvalidState {
+        name: command.to_owned(),
+        detail: "currentValues does not serialize".to_owned(),
+    })?;
+    Ok(before)
+}
+
+/// `symbol.setParam` — create-or-update one `{name, type, value}`
+/// entry in an instance's `currentValues`. The re-derivation that
+/// consumes the change runs through the scripting host; the write
+/// itself is a plain journaled mutation.
+struct SetParam;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct SetParamPayload {
+    /// The instance.
+    id: doc::ObjectId,
+    /// Parameter name (matched against existing entries).
+    name: String,
+    /// Parameter value (the corpus keeps these strings).
+    value: String,
+    /// Parameter type tag (`"color"`, `"font"`, `"text"`, …).
+    kind: String,
+}
+
+impl TypedCommand for SetParam {
+    type Payload = SetParamPayload;
+
+    fn name(&self) -> &'static str {
+        "symbol.setParam"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "symbol.setParam";
+        if payload.name.is_empty() {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: "parameter name must not be empty".to_owned(),
+            });
+        }
+        let entry = serde_json::json!({
+            "name": payload.name,
+            "type": payload.kind,
+            "value": payload.value,
+        });
+        let before = set_current_value(document, NAME, payload.id, entry)?;
+        Ok(Delta::Object {
+            id: payload.id,
+            inverse: ObjectInverse::Mutated {
+                object: Box::new(before),
+            },
+        })
+    }
+}
+
+/// `symbol.setCustomData` — raw per-instance `DTAv` entry write (the
+/// scripting surface's `customData` store). `value: None` removes the
+/// key.
+struct SetCustomData;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct SetCustomDataPayload {
+    /// The instance.
+    id: doc::ObjectId,
+    /// `DCKs` key.
+    key: String,
+    /// `DCVs` value; `None` deletes the entry.
+    value: Option<String>,
+}
+
+impl TypedCommand for SetCustomData {
+    type Payload = SetCustomDataPayload;
+
+    fn name(&self) -> &'static str {
+        "symbol.setCustomData"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "symbol.setCustomData";
+        if payload.key.is_empty() {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: "custom-data key must not be empty".to_owned(),
+            });
+        }
+        let before = access::object(document, NAME, payload.id)?.clone();
+        let Some(ObjectData::SymbolInstance(instance)) = document.registry.get_mut(payload.id)
+        else {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: format!("object {} is not a symbol instance", payload.id.index()),
+            });
+        };
+        match &payload.value {
+            Some(value) => {
+                instance
+                    .custom_data
+                    .insert(payload.key.clone(), value.clone());
+            }
+            None => {
+                instance.custom_data.remove(&payload.key);
+            }
+        }
+        Ok(Delta::Object {
+            id: payload.id,
+            inverse: ObjectInverse::Mutated {
+                object: Box::new(before),
+            },
+        })
+    }
+}
+
 /// `symbol.editAttach` — moves an object into a definition cell. The
 /// one-owner invariant holds: a page-placed object detaches first (its
 /// container captures the change), a definition-placed object is lifted
@@ -1009,6 +1209,7 @@ impl TypedCommand for LibraryAdd {
             background_raw: 0,
             symbol_type: SymbolType::from(payload.symbol_type),
             nine_slice: None,
+            op_code: None,
         });
         Ok(Delta::Library { before })
     }
@@ -1203,6 +1404,7 @@ mod tests {
             background_raw: 0,
             symbol_type: SymbolType::Graphic,
             nine_slice: None,
+            op_code: None,
         });
         let original = serde_json::to_vec(&document).unwrap();
         let registry = registry();
@@ -1248,6 +1450,7 @@ mod tests {
             background_raw: 0,
             symbol_type: SymbolType::Graphic,
             nine_slice: None,
+            op_code: None,
         });
         let registry = registry();
         registry
@@ -1306,6 +1509,7 @@ mod tests {
             background_raw: 0,
             symbol_type: SymbolType::Graphic,
             nine_slice: None,
+            op_code: None,
         });
         let original = serde_json::to_vec(&document).unwrap();
         let registry = registry();
@@ -1385,6 +1589,7 @@ mod tests {
             background_raw: 0,
             symbol_type: SymbolType::Graphic,
             nine_slice: None,
+            op_code: None,
         });
         let instance = document
             .registry
@@ -1394,6 +1599,7 @@ mod tests {
                 locked: false,
                 name: None,
                 animation: None,
+                custom_data: std::collections::BTreeMap::new(),
             }));
         document.pages[0].layers.layers[0].cells[0].elements = vec![instance, ids[1]];
         let original = serde_json::to_vec(&document).unwrap();
@@ -1453,6 +1659,7 @@ mod tests {
             background_raw: 0,
             symbol_type: SymbolType::Button,
             nine_slice: None,
+            op_code: None,
         });
         let instance = document
             .registry
@@ -1462,6 +1669,7 @@ mod tests {
                 locked: false,
                 name: None,
                 animation: None,
+                custom_data: std::collections::BTreeMap::new(),
             }));
         document.pages[0].layers.layers[0].cells[0]
             .elements
@@ -1496,6 +1704,7 @@ mod tests {
             background_raw: 0,
             symbol_type: SymbolType::Graphic,
             nine_slice: None,
+            op_code: None,
         });
         let original = serde_json::to_vec(&document).unwrap();
         let registry = registry();
@@ -1582,6 +1791,7 @@ mod tests {
             background_raw: 0,
             symbol_type: SymbolType::Graphic,
             nine_slice: None,
+            op_code: None,
         });
         let original = serde_json::to_vec(&document).unwrap();
         let registry = registry();
@@ -1631,6 +1841,7 @@ mod tests {
             background_raw: 0,
             symbol_type: SymbolType::Graphic,
             nine_slice: None,
+            op_code: None,
         });
         // ids[1] is inside the definition AND (from the fixture) in the
         // page cell — a corrupted start. editAttach of ids[1] lifts it
@@ -1687,6 +1898,7 @@ mod tests {
             background_raw: 0,
             symbol_type: SymbolType::Graphic,
             nine_slice: None,
+            op_code: None,
         });
         // Both ids start page-placed too (fixture); lift them out so the
         // definition is their only owner, then exercise detach/reorder.
@@ -1800,6 +2012,7 @@ mod tests {
                 locked: false,
                 name: None,
                 animation: None,
+                custom_data: std::collections::BTreeMap::new(),
             }));
         document.pages[0].layers.layers[0].cells[0]
             .elements
@@ -1884,5 +2097,140 @@ mod tests {
             )
             .unwrap_err();
         assert!(matches!(error, EngineError::BadPayload { .. }));
+    }
+
+    #[test]
+    fn script_param_and_custom_data_undo_exactly() {
+        let (mut document, _) = testdoc::sample_document();
+        document.symbols.push(SymbolDefinition {
+            name: "rich".to_owned(),
+            symbol_number: 0,
+            origin: geom::Point::ZERO,
+            frame_count: 1,
+            layers: LayerList::default(),
+            background_raw: 0,
+            symbol_type: SymbolType::Graphic,
+            nine_slice: None,
+            op_code: None,
+        });
+        let registry = registry();
+
+        // setScript installs, then clears; each inverts exactly.
+        let empty = serde_json::to_vec(&document).unwrap();
+        let delta = registry
+            .execute(
+                &mut document,
+                "symbol.setScript",
+                json!({ "symbol": 0, "source": "// rich" }),
+            )
+            .unwrap();
+        assert_eq!(document.symbols[0].op_code.as_deref(), Some("// rich"));
+        delta.apply_inverse(&mut document).unwrap();
+        assert!(document.symbols[0].op_code.is_none());
+        assert_eq!(serde_json::to_vec(&document).unwrap(), empty);
+
+        // The data commands need an instance to carry them.
+        registry
+            .execute(
+                &mut document,
+                "symbol.createInstance",
+                json!({
+                    "symbol": 0, "page": 0, "layer": 0, "cell": 0,
+                    "index": null, "x": 5.0, "y": 6.0, "name": null,
+                }),
+            )
+            .unwrap();
+        let instance = document
+            .registry
+            .iter()
+            .find(|(_, object)| matches!(object, ObjectData::SymbolInstance(_)))
+            .map(|(id, _)| id)
+            .unwrap();
+        let before = serde_json::to_vec(&document).unwrap();
+
+        let delta = registry
+            .execute(
+                &mut document,
+                "symbol.setParam",
+                json!({
+                    "id": instance, "name": "Color",
+                    "value": "#009900", "kind": "color",
+                }),
+            )
+            .unwrap();
+        let read_current = |document: &Document| -> Vec<serde_json::Value> {
+            match document.registry.get(instance) {
+                Some(ObjectData::SymbolInstance(instance)) => serde_json::from_str(
+                    instance
+                        .custom_data
+                        .get("currentValues")
+                        .map(String::as_str)
+                        .unwrap_or("[]"),
+                )
+                .unwrap(),
+                _ => Vec::new(),
+            }
+        };
+        assert_eq!(read_current(&document).len(), 1);
+        delta.apply_inverse(&mut document).unwrap();
+        assert_eq!(serde_json::to_vec(&document).unwrap(), before);
+
+        // Create-or-update: a second entry lands, then the same name
+        // replaces in place.
+        for name in ["Label", "Color"] {
+            registry
+                .execute(
+                    &mut document,
+                    "symbol.setParam",
+                    json!({
+                        "id": instance, "name": name,
+                        "value": format!("v-{name}"), "kind": "text",
+                    }),
+                )
+                .unwrap();
+        }
+        let current = read_current(&document);
+        assert_eq!(current.len(), 2);
+        assert_eq!(current[1]["value"], "v-Color");
+
+        // Raw custom data: set, then the inverse drops the key.
+        let delta = registry
+            .execute(
+                &mut document,
+                "symbol.setCustomData",
+                json!({ "id": instance, "key": "shapeName", "value": "roundRect" }),
+            )
+            .unwrap();
+        let custom = |document: &Document| match document.registry.get(instance) {
+            Some(ObjectData::SymbolInstance(instance)) => instance.clone(),
+            _ => panic!("instance vanished"),
+        };
+        assert_eq!(
+            custom(&document)
+                .custom_data
+                .get("shapeName")
+                .map(String::as_str),
+            Some("roundRect")
+        );
+        delta.apply_inverse(&mut document).unwrap();
+        assert!(!custom(&document).custom_data.contains_key("shapeName"));
+
+        // A non-instance target is a typed refusal that mutates nothing.
+        let path = document
+            .registry
+            .iter()
+            .find(|(_, object)| matches!(object, ObjectData::Path(_)))
+            .map(|(id, _)| id)
+            .unwrap();
+        let refused = serde_json::to_vec(&document).unwrap();
+        let error = registry
+            .execute(
+                &mut document,
+                "symbol.setParam",
+                json!({ "id": path, "name": "x", "value": "y", "kind": "text" }),
+            )
+            .unwrap_err();
+        assert!(matches!(error, EngineError::InvalidState { .. }));
+        assert_eq!(serde_json::to_vec(&document).unwrap(), refused);
     }
 }

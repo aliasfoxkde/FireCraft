@@ -311,6 +311,7 @@ fn sample_document() -> Document {
                 start_opacity: Some(200),
                 end_opacity: Some(900),
             }),
+            custom_data: std::collections::BTreeMap::new(),
         }));
     let layer = Layer {
         name: "Layer 1".into(),
@@ -405,6 +406,7 @@ fn sample_document() -> Document {
                 y1: 20.0,
             },
         }),
+        op_code: None,
     });
     doc
 }
@@ -1176,6 +1178,7 @@ fn model_structs_are_fully_constructed() {
         background_raw: 0,
         symbol_type: SymbolType::Graphic,
         nine_slice: None,
+        op_code: None,
     };
     let _path = PathObject {
         contours: vec![Contour {
@@ -1282,6 +1285,7 @@ fn model_structs_are_fully_constructed() {
         locked: false,
         name: None,
         animation: None,
+        custom_data: std::collections::BTreeMap::new(),
     };
 }
 

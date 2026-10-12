@@ -106,6 +106,7 @@ pub fn random_document(rng: &mut FuzzRng) -> Document {
         background_raw: 0,
         symbol_type: SymbolType::Graphic,
         nine_slice: None,
+        op_code: None,
     });
 
     let page_count = 1 + rng.below(3);
@@ -412,6 +413,7 @@ fn random_symbol_instance(rng: &mut FuzzRng) -> ObjectData {
         locked: rng.chance(10),
         name: None,
         animation,
+        custom_data: std::collections::BTreeMap::new(),
     })
 }
 
@@ -485,6 +487,9 @@ pub const CALLS: &[&str] = &[
     "symbol.breakApart",
     "symbol.setType",
     "symbol.set9Slice",
+    "symbol.setScript",
+    "symbol.setParam",
+    "symbol.setCustomData",
     "symbol.editAttach",
     "symbol.editDetach",
     "symbol.editReorder",
@@ -1137,6 +1142,41 @@ pub fn random_call(rng: &mut FuzzRng, document: &Document) -> (String, serde_jso
                             "y1": rng.below(200) as f64,
                         },
                     },
+                })
+            }
+        }
+        "symbol.setScript" => {
+            let symbol = rng.below(3);
+            if rng.chance(25) {
+                serde_json::json!({ "symbol": symbol, "source": serde_json::Value::Null })
+            } else {
+                serde_json::json!({
+                    "symbol": symbol,
+                    "source": format!(
+                        "Widget.elem.customData['fuzz{}'] = 'x';",
+                        rng.below(10)
+                    ),
+                })
+            }
+        }
+        "symbol.setParam" => serde_json::json!({
+            "id": any_id(rng),
+            "name": format!("p-{}", rng.below(6)),
+            "value": format!("v-{}", rng.below(20)),
+            "kind": rng.pick(&["color", "font", "text"]).copied().unwrap_or("text"),
+        }),
+        "symbol.setCustomData" => {
+            if rng.chance(15) {
+                serde_json::json!({
+                    "id": any_id(rng),
+                    "key": format!("k-{}", rng.below(6)),
+                    "value": serde_json::Value::Null,
+                })
+            } else {
+                serde_json::json!({
+                    "id": any_id(rng),
+                    "key": format!("k-{}", rng.below(6)),
+                    "value": format!("v-{}", rng.below(20)),
                 })
             }
         }
