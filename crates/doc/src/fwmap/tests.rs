@@ -11,9 +11,9 @@ use super::unknown::UnknownBag;
 use super::writer::{mapped_indices, splice, write};
 use crate::model::{
     Canvas, Cell, Contour, Document, DocumentInfo, Effect, EffectProperty, EffectValue, Grid,
-    GroupObject, Guides, ImageObject, Layer, LayerList, Page, PageInfo, PaintStyle, PathObject,
-    PathPoint, PrimitiveSource, SliceObject, SymbolDefinition, SymbolInstanceObject, TextObject,
-    TextRun, TextStyle, TileRef,
+    GroupObject, Guides, ImageObject, Layer, LayerList, NineSliceGuides, Page, PageInfo,
+    PaintStyle, PathObject, PathPoint, PrimitiveSource, SliceObject, SymbolAnimation,
+    SymbolDefinition, SymbolInstanceObject, SymbolType, TextObject, TextRun, TextStyle, TileRef,
 };
 use crate::registry::{ObjectData, ObjectId, Registry};
 use fwpng::nodetree::{Node, NodeValue, parse, serialize};
@@ -300,6 +300,17 @@ fn sample_document() -> Document {
             transform: Affine::new([1.0, 0.0, 0.0, 1.0, 12.0, 0.0]),
             locked: false,
             name: None,
+            // The sample's instance animates across 12 frames so the
+            // full-spine round-trip covers the `ANNi` family.
+            animation: Some(SymbolAnimation {
+                frames: 12,
+                x_shift: 90.0,
+                y_shift: -20.0,
+                scaling: 140.0,
+                rotation: Some(-45),
+                start_opacity: Some(200),
+                end_opacity: Some(900),
+            }),
         }));
     let layer = Layer {
         name: "Layer 1".into(),
@@ -376,6 +387,24 @@ fn sample_document() -> Document {
             }],
         },
         background_raw: 0xFF_FF_FF,
+        symbol_type: SymbolType::Button,
+        nine_slice: Some(NineSliceGuides {
+            locked: true,
+            color_raw: 0x00_80_FF,
+            controls: [3.0, 5.0, 2.0, 7.0],
+            shape_bounds: Rect {
+                x0: 0.0,
+                y0: 0.0,
+                x1: 40.0,
+                y1: 16.0,
+            },
+            limits: Rect {
+                x0: -2.0,
+                y0: -2.0,
+                x1: 44.0,
+                y1: 20.0,
+            },
+        }),
     });
     doc
 }
@@ -413,6 +442,191 @@ fn full_spine_round_trips_losslessly() {
     let (bytes2, _doc3, bag3) = round_trip_bytes(&doc2, &bag2);
     assert_eq!(bytes, bytes2);
     assert!(bag3.is_empty());
+}
+
+// --- M10: symbol wire contract (MSYi / NGSv / ANNi family) --------------
+
+/// Collect references to every node carrying `fourcc`, at any depth.
+fn find_nodes<'a>(nodes: &'a [Node], fourcc: &[u8; 4], out: &mut Vec<&'a Node>) {
+    for node in nodes {
+        if &node.fourcc == fourcc {
+            out.push(node);
+        }
+        if let NodeValue::Children(kids) = &node.value {
+            find_nodes(kids, fourcc, out);
+        }
+    }
+}
+
+fn kids_of(node: &Node) -> &[Node] {
+    match &node.value {
+        NodeValue::Children(kids) => kids,
+        _ => panic!("expected a container node"),
+    }
+}
+
+#[test]
+fn symbol_definition_wire_shape_matches_dictionary() {
+    let doc = sample_document();
+    let (tree, _stats) = write(&doc, &UnknownBag::new()).expect("write");
+    let mut mstvs = Vec::new();
+    find_nodes(&tree, b"MSTv", &mut mstvs);
+    assert_eq!(mstvs.len(), 1, "the sample carries one definition");
+    let kids = kids_of(mstvs[0]);
+
+    // `MSYi` and `NGSv` sit at their dictionary slots: after `BGCi`,
+    // `MSYi` before `NGSv`.
+    let bgci = kids
+        .iter()
+        .position(|k| &k.fourcc == b"BGCi")
+        .expect("BGCi");
+    let msyi = kids
+        .iter()
+        .position(|k| &k.fourcc == b"MSYi")
+        .expect("MSYi");
+    let ngsv = kids
+        .iter()
+        .position(|k| &k.fourcc == b"NGSv")
+        .expect("NGSv");
+    assert!(
+        bgci < msyi && msyi < ngsv,
+        "dictionary order BGCi < MSYi < NGSv"
+    );
+    assert_eq!(
+        kids[msyi].as_int(),
+        Some(1),
+        "the sample symbol is a button"
+    );
+
+    // `NGSv` children in dictionary order: NGLb NGKi NGCf×4 NGMv NGVv.
+    let ngsv_kids = kids_of(&kids[ngsv]);
+    let codes: Vec<[u8; 4]> = ngsv_kids.iter().map(|k| k.fourcc).collect();
+    assert_eq!(
+        codes,
+        vec![
+            *b"NGLb", *b"NGKi", *b"NGCf", *b"NGCf", *b"NGCf", *b"NGCf", *b"NGMv", *b"NGVv",
+        ]
+    );
+    let controls: Vec<f64> = ngsv_kids[2..6]
+        .iter()
+        .map(|k| k.as_float().expect("NGCf float"))
+        .collect();
+    assert_eq!(controls, vec![3.0, 5.0, 2.0, 7.0]);
+    assert_eq!(ngsv_kids[0].as_bool(), Some(true), "NGLb");
+    assert_eq!(ngsv_kids[1].as_int(), Some(0x00_80_FF), "NGKi");
+
+    // `NGMv`/`NGVv` bounds: LFTf TOPf RITf BOTf.
+    let bounds = |container: &Node| -> Rect {
+        let kids = kids_of(container);
+        Rect {
+            x0: kids[0].as_float().expect("LFTf"),
+            y0: kids[1].as_float().expect("TOPf"),
+            x1: kids[2].as_float().expect("RITf"),
+            y1: kids[3].as_float().expect("BOTf"),
+        }
+    };
+    assert_eq!(
+        bounds(&ngsv_kids[6]),
+        Rect {
+            x0: 0.0,
+            y0: 0.0,
+            x1: 40.0,
+            y1: 16.0
+        }
+    );
+    assert_eq!(
+        bounds(&ngsv_kids[7]),
+        Rect {
+            x0: -2.0,
+            y0: -2.0,
+            x1: 44.0,
+            y1: 20.0
+        }
+    );
+}
+
+#[test]
+fn graphic_symbol_omits_type_and_guides() {
+    let mut doc = sample_document();
+    doc.symbols[0].symbol_type = SymbolType::Graphic;
+    doc.symbols[0].nine_slice = None;
+    let (bytes, doc2, bag2) = round_trip_bytes(&doc, &UnknownBag::new());
+    assert!(
+        bag2.is_empty(),
+        "MSYi/NGSv omission must not spawn bag entries"
+    );
+    assert_eq!(doc, doc2);
+    let parsed = parse(&bytes).expect("reparse");
+    let mut mstvs = Vec::new();
+    find_nodes(&parsed, b"MSTv", &mut mstvs);
+    assert_eq!(mstvs.len(), 1);
+    assert!(
+        kids_of(mstvs[0])
+            .iter()
+            .all(|k| &k.fourcc != b"MSYi" && &k.fourcc != b"NGSv"),
+        "graphic definitions omit MSYi/NGSv rather than storing zeros"
+    );
+}
+
+#[test]
+fn instance_animation_family_wire_shape() {
+    let doc = sample_document();
+    let (tree, _stats) = write(&doc, &UnknownBag::new()).expect("write");
+    let mut alsvs = Vec::new();
+    find_nodes(&tree, b"ALSv", &mut alsvs);
+    assert_eq!(alsvs.len(), 1, "the sample carries one instance");
+    let kids = kids_of(alsvs[0]);
+    let pos = |fourcc: &[u8; 4]| {
+        kids.iter()
+            .position(|k| &k.fourcc == fourcc)
+            .unwrap_or_else(|| panic!("missing {}", std::str::from_utf8(fourcc).unwrap_or("")))
+    };
+    let (anni, anxf, anyf, ascf) = (pos(b"ANNi"), pos(b"ANXf"), pos(b"ANYf"), pos(b"ASCf"));
+    let (anri, asoi, aeoi) = (pos(b"ANRi"), pos(b"ASOi"), pos(b"AEOi"));
+    assert!(
+        anni < anxf && anxf < anyf && anyf < ascf && ascf < anri && anri < asoi && asoi < aeoi,
+        "dictionary order ANNi ANXf ANYf ASCf ANRi ASOi AEOi"
+    );
+    assert_eq!(kids[anni].as_int(), Some(12));
+    assert_eq!(kids[anxf].as_float(), Some(90.0));
+    assert_eq!(kids[anyf].as_float(), Some(-20.0));
+    assert_eq!(kids[ascf].as_float(), Some(140.0));
+    assert_eq!(kids[anri].as_int(), Some(-45));
+    assert_eq!(kids[asoi].as_int(), Some(200));
+    assert_eq!(kids[aeoi].as_int(), Some(900));
+
+    // A static instance drops the whole family from the wire.
+    let mut doc = sample_document();
+    for (_id, data) in doc.registry.iter_mut() {
+        if let ObjectData::SymbolInstance(instance) = data {
+            instance.animation = None;
+        }
+    }
+    let (bytes, doc2, bag2) = round_trip_bytes(&doc, &UnknownBag::new());
+    assert!(bag2.is_empty());
+    assert_eq!(doc, doc2);
+    let parsed = parse(&bytes).expect("reparse");
+    let mut alsvs = Vec::new();
+    find_nodes(&parsed, b"ALSv", &mut alsvs);
+    assert_eq!(alsvs.len(), 1);
+    assert!(
+        kids_of(alsvs[0]).iter().all(|k| {
+            !matches!(
+                &k.fourcc,
+                b"ANNi" | b"ANXf" | b"ANYf" | b"ASCf" | b"ANRi" | b"ASOi" | b"AEOi"
+            )
+        }),
+        "static instances emit no animation nodes"
+    );
+}
+
+#[test]
+fn unknown_symbol_type_preserves_raw() {
+    let mut doc = sample_document();
+    doc.symbols[0].symbol_type = SymbolType::Other(7);
+    let (_, doc2, bag2) = round_trip_bytes(&doc, &UnknownBag::new());
+    assert!(bag2.is_empty());
+    assert_eq!(doc2.symbols[0].symbol_type, SymbolType::Other(7));
 }
 
 #[test]
@@ -960,6 +1174,8 @@ fn model_structs_are_fully_constructed() {
         frame_count: 1,
         layers: LayerList { layers: Vec::new() },
         background_raw: 0,
+        symbol_type: SymbolType::Graphic,
+        nine_slice: None,
     };
     let _path = PathObject {
         contours: vec![Contour {
@@ -1065,6 +1281,7 @@ fn model_structs_are_fully_constructed() {
         transform: Affine::IDENTITY,
         locked: false,
         name: None,
+        animation: None,
     };
 }
 

@@ -11,9 +11,10 @@ use crate::fwmap::MapError;
 use crate::fwmap::unknown::UnknownBag;
 use crate::model::{
     Canvas, Cell, Contour, Document, DocumentInfo, Effect, EffectProperty, EffectValue,
-    ExportOptions, Grid, GroupObject, Guides, ImageObject, Layer, LayerList, Page, PageInfo,
-    PaintStyle, PathObject, PathPoint, PrimitiveSource, SliceObject, SymbolDefinition,
-    SymbolInstanceObject, TextObject, TextOnPath, TextRun, TextStyle, TileRef,
+    ExportOptions, Grid, GroupObject, Guides, ImageObject, Layer, LayerList, NineSliceGuides, Page,
+    PageInfo, PaintStyle, PathObject, PathPoint, PrimitiveSource, SliceObject, SymbolAnimation,
+    SymbolDefinition, SymbolInstanceObject, SymbolType, TextObject, TextOnPath, TextRun, TextStyle,
+    TileRef,
 };
 use crate::registry::{ObjectData, ObjectId, Registry};
 use fwpng::nodetree::{Node, NodeValue};
@@ -436,6 +437,7 @@ impl Reader {
     ) -> Result<SymbolDefinition, MapError> {
         let (mut name, mut number, mut frame_count, mut background_raw) = (None, None, None, None);
         let (mut ox, mut oy) = (None, None);
+        let (mut symbol_type, mut nine_slice) = (None, None);
         let mut layers = LayerList::default();
 
         for (i, child) in children.iter().enumerate() {
@@ -446,6 +448,20 @@ impl Reader {
                 b"MOYf" => self.slot_f64(child, path, i, &mut oy)?,
                 b"FRCi" => self.slot_i64(child, path, i, &mut frame_count)?,
                 b"BGCi" => self.slot_i64(child, path, i, &mut background_raw)?,
+                b"MSYi" => {
+                    let mut raw = None;
+                    self.slot_i64(child, path, i, &mut raw)?;
+                    symbol_type = Some(SymbolType::from_raw(raw));
+                }
+                b"NGSv" => {
+                    if nine_slice.is_none() {
+                        let kids = children_of(child, path)?;
+                        let ngsv_path = format!("{path}/NGSv");
+                        nine_slice = Some(self.read_nine_slice(kids, &ngsv_path)?);
+                    } else {
+                        self.bag_node(path, i, child);
+                    }
+                }
                 b"LYLv" => {
                     if layers.layers.is_empty() {
                         let kids = children_of(child, path)?;
@@ -466,6 +482,84 @@ impl Reader {
             frame_count: frame_count.unwrap_or(1),
             layers,
             background_raw: background_raw.unwrap_or(0xFF_FF_FF),
+            symbol_type: symbol_type.unwrap_or(SymbolType::Graphic),
+            nine_slice,
+        })
+    }
+
+    /// `NGSv` children → [`NineSliceGuides`]. Dictionary order:
+    /// `NGLb`, `NGKi`, `NGCf`×4 (top, bottom, left, right), `NGMv`,
+    /// `NGVv`; anything else stays preserved.
+    fn read_nine_slice(
+        &mut self,
+        children: &[Node],
+        path: &str,
+    ) -> Result<NineSliceGuides, MapError> {
+        let (mut locked, mut color_raw) = (None, None);
+        let mut controls: Vec<f64> = Vec::new();
+        let (mut shape, mut limits) = (None, None);
+
+        for (i, child) in children.iter().enumerate() {
+            match &child.fourcc {
+                b"NGLb" => self.slot_bool(child, path, i, &mut locked)?,
+                b"NGKi" => self.slot_i64(child, path, i, &mut color_raw)?,
+                b"NGCf" => {
+                    let mut value = None;
+                    self.slot_f64(child, path, i, &mut value)?;
+                    controls.push(value.unwrap_or(0.0));
+                }
+                b"NGMv" => {
+                    if shape.is_none() {
+                        let kids = children_of(child, path)?;
+                        let ngmv_path = format!("{path}/NGMv");
+                        shape = Some(self.read_bounds(kids, &ngmv_path)?);
+                    } else {
+                        self.bag_node(path, i, child);
+                    }
+                }
+                b"NGVv" => {
+                    if limits.is_none() {
+                        let kids = children_of(child, path)?;
+                        let ngvv_path = format!("{path}/NGVv");
+                        limits = Some(self.read_bounds(kids, &ngvv_path)?);
+                    } else {
+                        self.bag_node(path, i, child);
+                    }
+                }
+                _ => self.bag_node(path, i, child),
+            }
+        }
+
+        let mut four = [0.0_f64; 4];
+        for (slot, value) in four.iter_mut().zip(controls.iter()) {
+            *slot = *value;
+        }
+        Ok(NineSliceGuides {
+            locked: locked.unwrap_or(false),
+            color_raw: color_raw.unwrap_or(0),
+            controls: four,
+            shape_bounds: shape.unwrap_or_default(),
+            limits: limits.unwrap_or_default(),
+        })
+    }
+
+    /// `LFTf`/`TOPf`/`RITf`/`BOTf` children → a bounds [`Rect`].
+    fn read_bounds(&mut self, children: &[Node], path: &str) -> Result<Rect, MapError> {
+        let (mut left, mut top, mut right, mut bottom) = (None, None, None, None);
+        for (i, child) in children.iter().enumerate() {
+            match &child.fourcc {
+                b"LFTf" => self.slot_f64(child, path, i, &mut left)?,
+                b"TOPf" => self.slot_f64(child, path, i, &mut top)?,
+                b"RITf" => self.slot_f64(child, path, i, &mut right)?,
+                b"BOTf" => self.slot_f64(child, path, i, &mut bottom)?,
+                _ => self.bag_node(path, i, child),
+            }
+        }
+        Ok(Rect {
+            x0: left.unwrap_or(0.0),
+            y0: top.unwrap_or(0.0),
+            x1: right.unwrap_or(0.0),
+            y1: bottom.unwrap_or(0.0),
         })
     }
 
@@ -1494,12 +1588,25 @@ impl Reader {
     ) -> Result<Option<ObjectData>, MapError> {
         let (mut number, mut locked, mut name) = (None, None, None);
         let mut transform: Option<Affine> = None;
+        // The animation family: presence keyed on `ANNi`; the optional
+        // tail (`ANRi`/`ASOi`/`AEOi`) only models when the anchor is
+        // present, so a stray tail node rides the bag.
+        let mut frames = None;
+        let (mut x_shift, mut y_shift, mut scaling) = (None, None, None);
+        let (mut rotation, mut start_opacity, mut end_opacity) = (None, None, None);
 
         for (i, child) in children.iter().enumerate() {
             match &child.fourcc {
                 b"MSNi" => self.slot_i64(child, path, i, &mut number)?,
                 b"LCKb" => self.slot_bool(child, path, i, &mut locked)?,
                 b"OBNs" => self.slot_str(child, path, i, &mut name)?,
+                b"ANNi" => self.slot_i64(child, path, i, &mut frames)?,
+                b"ANXf" => self.slot_f64(child, path, i, &mut x_shift)?,
+                b"ANYf" => self.slot_f64(child, path, i, &mut y_shift)?,
+                b"ASCf" => self.slot_f64(child, path, i, &mut scaling)?,
+                b"ANRi" => self.slot_i64(child, path, i, &mut rotation)?,
+                b"ASOi" => self.slot_i64(child, path, i, &mut start_opacity)?,
+                b"AEOi" => self.slot_i64(child, path, i, &mut end_opacity)?,
                 b"MTXv" => {
                     if transform.is_none() {
                         let mtxv_path = format!("{path}/MTXv");
@@ -1513,8 +1620,8 @@ impl Reader {
                         self.bag_node(path, i, child);
                     }
                 }
-                // XFMi / DTAv / animation fields and anything else:
-                // preserved.
+                // XFMi / DTAv / ATMv / ALNi / nested IMGv and anything
+                // else: preserved.
                 _ => self.bag_node(path, i, child),
             }
         }
@@ -1523,11 +1630,21 @@ impl Reader {
             Some(affine) => affine,
             None => return Ok(None),
         };
+        let animation = frames.map(|frames| SymbolAnimation {
+            frames,
+            x_shift: x_shift.unwrap_or(0.0),
+            y_shift: y_shift.unwrap_or(0.0),
+            scaling: scaling.unwrap_or(100.0),
+            rotation,
+            start_opacity,
+            end_opacity,
+        });
         Ok(Some(ObjectData::SymbolInstance(SymbolInstanceObject {
             symbol_number: number.unwrap_or(0),
             transform,
             locked: locked.unwrap_or(false),
             name,
+            animation,
         })))
     }
 

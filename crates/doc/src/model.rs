@@ -401,6 +401,61 @@ pub struct Guides {
     pub vertical: Vec<f64>,
 }
 
+/// `MSYi` — symbol type. Graphic symbols omit the node rather than
+/// storing a zero, so [`SymbolType::Graphic`] maps to absence on the
+/// wire; `1` is a button, `2` an animation. Unobserved values keep
+/// their raw int so a definition still round-trips byte-exactly.
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum SymbolType {
+    Graphic,
+    Button,
+    Animation,
+    /// An `MSYi` value outside the observed set, preserved verbatim.
+    Other(i64),
+}
+
+impl SymbolType {
+    /// Raw `MSYi` payload; `None` when the node is omitted (graphic).
+    pub fn raw(self) -> Option<i64> {
+        match self {
+            SymbolType::Graphic => None,
+            SymbolType::Button => Some(1),
+            SymbolType::Animation => Some(2),
+            SymbolType::Other(raw) => Some(raw),
+        }
+    }
+
+    /// Classifies an `MSYi` payload (absent node → [`SymbolType::Graphic`]).
+    pub fn from_raw(raw: Option<i64>) -> SymbolType {
+        match raw {
+            None => SymbolType::Graphic,
+            Some(1) => SymbolType::Button,
+            Some(2) => SymbolType::Animation,
+            Some(other) => SymbolType::Other(other),
+        }
+    }
+}
+
+/// `NGSv` — nine-slice guides on a symbol definition. Inset values
+/// are measured from the shape edges; `shape_bounds`/`limits` are
+/// relative to the symbol origin.
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct NineSliceGuides {
+    /// `NGLb` — guides locked to the shape.
+    pub locked: bool,
+    /// `NGKi` — guide-line colour, raw layout.
+    pub color_raw: i64,
+    /// `NGCf`* — control values in dictionary order: top, bottom,
+    /// left, right.
+    pub controls: [f64; 4],
+    /// `NGMv` — bounds of the symbol's content.
+    pub shape_bounds: Rect,
+    /// `NGVv` — bounds of the space the guides may move in.
+    pub limits: Rect,
+}
+
 /// A symbol definition (`MSTv`), referenced by `ALSv` instances via
 /// [`SymbolInstanceObject::symbol_number`].
 #[derive(Clone, Debug, PartialEq)]
@@ -418,6 +473,11 @@ pub struct SymbolDefinition {
     pub layers: LayerList,
     /// Symbol canvas background (`BGCi`, raw layout).
     pub background_raw: i64,
+    /// `MSYi`? — symbol type; [`SymbolType::Graphic`] when the node
+    /// is absent.
+    pub symbol_type: SymbolType,
+    /// `NGSv`? — nine-slice guides.
+    pub nine_slice: Option<NineSliceGuides>,
 }
 
 /// Paint style carried by a path's `PATv`. M4 maps the two solid
@@ -812,6 +872,32 @@ pub struct SliceObject {
     pub export: Option<ExportOptions>,
 }
 
+/// The animation parameter family carried by a symbol instance
+/// (`ALSv`): the span of frames the composer generates from the
+/// definition, and how the instance moves/scales/fades across it.
+/// Presence is keyed on `ANNi` — a graphic instance carries none of
+/// these nodes.
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct SymbolAnimation {
+    /// `ANNi` — number of frames to generate (smooth transition
+    /// through the parameters below).
+    pub frames: i64,
+    /// `ANXf` — x translation across the span (px).
+    pub x_shift: f64,
+    /// `ANYf` — y translation across the span (px).
+    pub y_shift: f64,
+    /// `ASCf` — scaling across the span (percent).
+    pub scaling: f64,
+    /// `ANRi`? — clockwise rotation across the span (degrees,
+    /// signed; negative counter-clockwise).
+    pub rotation: Option<i64>,
+    /// `ASOi`? — start opacity, per mille.
+    pub start_opacity: Option<i64>,
+    /// `AEOi`? — end opacity, per mille.
+    pub end_opacity: Option<i64>,
+}
+
 /// `ALSv` — a symbol instance.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -824,6 +910,9 @@ pub struct SymbolInstanceObject {
     pub locked: bool,
     /// `OBNs` — object name.
     pub name: Option<String>,
+    /// `ANNi` + family — animation parameters; `None` (and no nodes
+    /// on the wire) for a plain instance.
+    pub animation: Option<SymbolAnimation>,
 }
 
 #[cfg(test)]

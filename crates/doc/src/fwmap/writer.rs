@@ -13,13 +13,13 @@ use crate::fwmap::unknown::UnknownBag;
 use crate::fwmap::{FourCC, MapError};
 use crate::model::{
     Cell, Contour, Document, Effect, EffectProperty, EffectValue, ExportOptions, Grid, GroupObject,
-    Guides, ImageObject, Layer, LayerList, PaintStyle, PathObject, PathPoint, PrimitiveSource,
-    SliceObject, SymbolDefinition, SymbolInstanceObject, TextObject, TextOnPath, TextRun,
-    TextStyle, TileRef,
+    Guides, ImageObject, Layer, LayerList, NineSliceGuides, PaintStyle, PathObject, PathPoint,
+    PrimitiveSource, SliceObject, SymbolDefinition, SymbolInstanceObject, TextObject, TextOnPath,
+    TextRun, TextStyle, TileRef,
 };
 use crate::registry::{ObjectData, ObjectId};
 use fwpng::nodetree::{Node, NodeValue};
-use geom::Affine;
+use geom::{Affine, Rect};
 
 /// Side-channel of a write: how many bagged nodes had no container to be
 /// spliced back into (non-zero only for inputs whose structure the
@@ -358,6 +358,8 @@ impl Writer<'_> {
         path: &str,
     ) -> Result<Node, MapError> {
         // Dictionary order: UNMs MSNi MOXf MOYf … LYLv … FRCi … BGCi …
+        // MSYi? NGSv? — graphic symbols omit `MSYi` rather than
+        // storing a zero.
         let mut mapped = vec![
             n_s(*b"UNMs", &symbol.name),
             n_i(*b"MSNi", symbol.symbol_number),
@@ -367,8 +369,42 @@ impl Writer<'_> {
         mapped.push(self.write_layer_list(&symbol.layers, path)?);
         mapped.push(n_i(*b"FRCi", symbol.frame_count));
         mapped.push(n_i(*b"BGCi", symbol.background_raw));
+        if let Some(raw) = symbol.symbol_type.raw() {
+            mapped.push(n_i(*b"MSYi", raw));
+        }
+        if let Some(guides) = &symbol.nine_slice {
+            let ngsv_path = format!("{path}/NGSv");
+            mapped.push(self.write_nine_slice(guides, &ngsv_path)?);
+        }
         let children = self.splice_container(mapped, path);
         Ok(n_kids(*b"MSTv", children))
+    }
+
+    /// `NGSv` — dictionary order `NGLb NGKi NGCf`×4 `NGMv NGVv`.
+    fn write_nine_slice(&mut self, guides: &NineSliceGuides, path: &str) -> Result<Node, MapError> {
+        let mut mapped = vec![
+            n_b(*b"NGLb", guides.locked),
+            n_i(*b"NGKi", guides.color_raw),
+        ];
+        for value in guides.controls {
+            mapped.push(n_f(*b"NGCf", value));
+        }
+        mapped.push(self.write_bounds(&guides.shape_bounds, format!("{path}/NGMv"), *b"NGMv"));
+        mapped.push(self.write_bounds(&guides.limits, format!("{path}/NGVv"), *b"NGVv"));
+        let children = self.splice_container(mapped, path);
+        Ok(n_kids(*b"NGSv", children))
+    }
+
+    /// `NGMv`/`NGVv` — `LFTf TOPf RITf BOTf` bounds.
+    fn write_bounds(&mut self, rect: &Rect, path: String, fourcc: FourCC) -> Node {
+        let mapped = vec![
+            n_f(*b"LFTf", rect.x0),
+            n_f(*b"TOPf", rect.y0),
+            n_f(*b"RITf", rect.x1),
+            n_f(*b"BOTf", rect.y1),
+        ];
+        let children = self.splice_container(mapped, &path);
+        n_kids(fourcc, children)
     }
 
     fn write_layer_list(&mut self, list: &LayerList, parent_path: &str) -> Result<Node, MapError> {
@@ -883,7 +919,10 @@ impl Writer<'_> {
         object: &SymbolInstanceObject,
         path: &str,
     ) -> Result<Node, MapError> {
-        // Dictionary order: MSNi MTXv LCKb XFMi OBNs? …
+        // Dictionary order: MSNi MTXv LCKb XFMi OBNs? DTAv ANNi ANXf
+        // ANYf ASCf ATMv ALNi? ANRi? ASOi? AEOi? IMGv? — the animation
+        // family rides after the bagged `XFMi`/`DTAv`/`ATMv` slots and
+        // is emitted only when `ANNi` is present.
         let mut mapped = vec![n_i(*b"MSNi", object.symbol_number)];
         mapped.push(self.write_matrix(&object.transform, &format!("{path}/MTXv")));
         if object.locked {
@@ -891,6 +930,21 @@ impl Writer<'_> {
         }
         if let Some(name) = &object.name {
             mapped.push(n_s(*b"OBNs", name));
+        }
+        if let Some(anim) = &object.animation {
+            mapped.push(n_i(*b"ANNi", anim.frames));
+            mapped.push(n_f(*b"ANXf", anim.x_shift));
+            mapped.push(n_f(*b"ANYf", anim.y_shift));
+            mapped.push(n_f(*b"ASCf", anim.scaling));
+            if let Some(rotation) = anim.rotation {
+                mapped.push(n_i(*b"ANRi", rotation));
+            }
+            if let Some(opacity) = anim.start_opacity {
+                mapped.push(n_i(*b"ASOi", opacity));
+            }
+            if let Some(opacity) = anim.end_opacity {
+                mapped.push(n_i(*b"AEOi", opacity));
+            }
         }
         let children = self.splice_container(mapped, path);
         Ok(n_kids(*b"ALSv", children))

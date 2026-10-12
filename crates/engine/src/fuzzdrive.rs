@@ -15,7 +15,7 @@
 use doc::{
     Cell, Contour, Document, DocumentInfo, Effect, EffectProperty, EffectValue, GroupObject,
     ImageObject, Layer, LayerList, ObjectData, Page, PageInfo, PathObject, PathPoint, SliceObject,
-    SymbolInstanceObject, TextObject, TileRef,
+    SymbolAnimation, SymbolInstanceObject, TextObject, TileRef,
 };
 
 /// A seeded xorshift64* PRNG — small, fast, reproducible across
@@ -347,11 +347,39 @@ fn random_slice(rng: &mut FuzzRng) -> ObjectData {
 }
 
 fn random_symbol_instance(rng: &mut FuzzRng) -> ObjectData {
+    // Half of generated instances carry the animation family so the
+    // contract invariants cover the `ANNi` block too.
+    let animation = if rng.chance(50) {
+        Some(SymbolAnimation {
+            frames: rng.below(64) as i64 + 1,
+            x_shift: rng.below(200) as f64 - 100.0,
+            y_shift: rng.below(200) as f64 - 100.0,
+            scaling: rng.below(150) as f64 + 100.0,
+            rotation: if rng.chance(50) {
+                Some(rng.below(720) as i64 - 360)
+            } else {
+                None
+            },
+            start_opacity: if rng.chance(50) {
+                Some(rng.below(1001) as i64)
+            } else {
+                None
+            },
+            end_opacity: if rng.chance(50) {
+                Some(rng.below(1001) as i64)
+            } else {
+                None
+            },
+        })
+    } else {
+        None
+    };
     ObjectData::SymbolInstance(SymbolInstanceObject {
         symbol_number: 0,
         transform: geom::Affine::IDENTITY,
         locked: rng.chance(10),
         name: None,
+        animation,
     })
 }
 
