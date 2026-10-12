@@ -17,10 +17,12 @@
 #   both EPERM'd on fedora), so all compilation lands on the
 #   container-local overlay2 disk. Steps within a job share one
 #   container, so heavy steps are grouped to reuse the warm target dir.
-# - Containers run under a 4 GiB memory / 8 GiB memswap cgroup cap on
-#   a 20-core host: unbounded parallel builds of the heavier graphs
-#   (release boa + text stack) overshoot it and die silently mid-
-#   compile. Bound CARGO_BUILD_JOBS on such steps (see the fuzz job).
+# - Job containers run under a sandbox memory cgroup (runner default
+#   4 GiB; the fedora deployment raises it to 16 GiB via
+#   GITFORGE_SANDBOX_MEMORY_MB on the runner process). Unbounded
+#   parallel builds of the heavier graphs (release boa + text stack)
+#   overshoot the default and die silently mid-compile — keep heavy
+#   steps' CARGO_BUILD_JOBS bounded (see the fuzz job).
 # - Images must be pre-warmed on every runner host before a commit that
 #   needs them lands (60-second sandbox acquisition cap; the runner
 #   never pulls). Ship with:
@@ -95,16 +97,17 @@ jobs:
         #
         # Since M9 task 8 the release build also covers boa_engine and
         # the text stack (cosmic-text/harfrust/rustybuzz/resvg) plus
-        # re-fingerprinted workspace crates. Runners cap containers at
-        # 4 GiB memory + 8 GiB memswap, and an unbounded parallel
-        # release build of that graph overshoots the cgroup and the
-        # OOM killer takes cargo out mid-compile (silent death, exit
-        # 1, no rustc error — seen on run 8f434553). Two rustc jobs
-        # with single-codegen-unit release keeps the aggregate well
-        # under the cap; the target dir persists across runs, so the
-        # serial-ish cost is paid once per dependency change, not per
-        # run. The 90m wall absorbs the cold build on a loaded host.
-        run: CARGO_TARGET_DIR=/tmp/ci-target CARGO_BUILD_JOBS=2 CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1 cargo run --locked -p xtask -- fuzz-quick
+        # re-fingerprinted workspace crates. At the runner's default
+        # 4 GiB sandbox ceiling that graph overshot the cgroup and the
+        # OOM killer took cargo out mid-compile (silent death, exit 1,
+        # no rustc error — runs 8f434553 and 888afe79). The fedora
+        # runner now runs with GITFORGE_SANDBOX_MEMORY_MB=16384 (the
+        # operator knob gitforge-runner documents for exactly this),
+        # and the step caps rustc parallelism at 6 so the aggregate
+        # stays comfortably inside it. Containers are per-job, so this
+        # release build is cold every run; the 90m wall absorbs it on
+        # a loaded host.
+        run: CARGO_TARGET_DIR=/tmp/ci-target CARGO_BUILD_JOBS=6 CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1 cargo run --locked -p xtask -- fuzz-quick
     timeout: 90m
 
   - name: generated-docs
