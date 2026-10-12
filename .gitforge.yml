@@ -17,6 +17,10 @@
 #   both EPERM'd on fedora), so all compilation lands on the
 #   container-local overlay2 disk. Steps within a job share one
 #   container, so heavy steps are grouped to reuse the warm target dir.
+# - Containers run under a 4 GiB memory / 8 GiB memswap cgroup cap on
+#   a 20-core host: unbounded parallel builds of the heavier graphs
+#   (release boa + text stack) overshoot it and die silently mid-
+#   compile. Bound CARGO_BUILD_JOBS on such steps (see the fuzz job).
 # - Images must be pre-warmed on every runner host before a commit that
 #   needs them lands (60-second sandbox acquisition cap; the runner
 #   never pulls). Ship with:
@@ -84,12 +88,24 @@ jobs:
     image: firecraft-ci-rust:1
     needs: [corpus-golden]
     steps:
-      - name: Stable fuzz drivers (anchors + panic_hunt)
-        # The stable-toolchain driver pair from `xtask ci`; the
+      - name: Stable fuzz drivers (anchors + panic_hunt + scripting arms)
+        # The stable-toolchain driver set from `xtask ci`; the
         # libfuzzer compile check and the wide campaign stay local
         # (nightly + cargo-fuzz are not baked into the CI image).
-        run: CARGO_TARGET_DIR=/tmp/ci-target cargo run --locked -p xtask -- fuzz-quick
-    timeout: 30m
+        #
+        # Since M9 task 8 the release build also covers boa_engine and
+        # the text stack (cosmic-text/harfrust/rustybuzz/resvg) plus
+        # re-fingerprinted workspace crates. Runners cap containers at
+        # 4 GiB memory + 8 GiB memswap, and an unbounded parallel
+        # release build of that graph overshoots the cgroup and the
+        # OOM killer takes cargo out mid-compile (silent death, exit
+        # 1, no rustc error — seen on run 8f434553). Two rustc jobs
+        # with single-codegen-unit release keeps the aggregate well
+        # under the cap; the target dir persists across runs, so the
+        # serial-ish cost is paid once per dependency change, not per
+        # run. The 90m wall absorbs the cold build on a loaded host.
+        run: CARGO_TARGET_DIR=/tmp/ci-target CARGO_BUILD_JOBS=2 CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1 cargo run --locked -p xtask -- fuzz-quick
+    timeout: 90m
 
   - name: generated-docs
     image: firecraft-ci-rust:1
