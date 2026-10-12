@@ -50,20 +50,30 @@ silently wrong). The gate metric is corpus-run status, not API count.
 
 ## Tasks (atomic)
 
-1. **`scripting` crate scaffold + sandbox + prelude** — new L4 crate
-   `scripting`: `boa_engine` 0.20, `ScriptEngine::new()` with runtime
-   limits (instructions, stack depth, wall clock via periodic
-   checks), allocation ceiling; `run(source) -> ScriptReport`
-   (completed/failed/thrown + notes, no panics on hostile scripts —
-   workspace rule); host prelude: `fw`/`dom` global shells,
-   `Files` stub, host-array Proxy (`length++` materializes — the
-   decision-0001 semantic), value marshalling helpers
-   (`FromJsValue`/`ToJsValue` over the model's scalar types).
-   **Stopping condition:** the decision-0001 spike protocol (Rounded
-   Rectangle.jsf top-level executes to its insert handler) runs inside
-   the crate; hostile-script battery (infinite loop, deep recursion,
-   throw-in-host-call) returns typed reports; wasm32 build green;
-   `scripting` joins `WASM_CRATES`; clippy/fmt/layers green.
+1. **`scripting` crate scaffold + sandbox + prelude** — **done.**
+   New L4 crate `scripting` (`boa_engine` 0.20 + `boa_gc`); reusable
+   engine (one Context across runs). Sandbox: boa runtime limits
+   (loop 1M / recursion 512 / stack 1 MiB) + a **host-call budget**
+   (default 10 000/run) consumed by every native host fn — the
+   wall-clock stand-in (boa 0.20 has no timer hooks), so
+   `while(true){host()}` dies typed. Native functions register via
+   `from_copy_closure_with_captures` + `Gc` captures (the only
+   non-`unsafe` path); objects/Proxy live in a JS prelude string
+   (`host::PRELUDE`): `__hostArray(make)` grow-by-read Proxy, `fw`
+   (`__log`/`__budgetLeft` + typed not-implemented: getDocumentDOM,
+   setUpRevert, revert, runScript, runCommands, dispatchEvent), `dom`,
+   `smartShape` (`operation` + refusing handlers), `Files` stubs;
+   refusals name the owning M9 task. `prepare_source` strips BOM +
+   normalizes CRLF. Evidence: spike battery 5 (own-authored handler
+   with the shipped shape — operation switch, RegisterDragInsert,
+   4-point host array, materialization read-back, engine reuse, BOM)
+   + hostile battery 6 (loop limit, recursion limit, budget
+   exhaustion mid-loop, five typed refusals, syntax error, engine
+   survives a limit run); wasm32 green with
+   `getrandom 0.2 + js` target-dep; `scripting` in `WASM_CRATES`
+   (14), floor 13→14; layers L4; clippy/fmt green. **Lockfile moved
+   (70 new packages)** — image re-shipped before the carrying push.
+   **Stopping condition met.** ✅
 2. **Read-side DOM projection** — `fw.documents[]`,
    `fw.getDocumentDOM()`, page/layer/element trees as JS objects over
    `doc::Document` (selection read, `elements[]`, `width/height`,

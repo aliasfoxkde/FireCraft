@@ -20,8 +20,20 @@ use crate::util::cargo;
 /// `include_bytes!` fonts — no filesystem, no system font scan, no
 /// threads.
 const WASM_CRATES: &[&str] = &[
-    "fwpng", "geom", "color", "raster", "doc", "vector", "compose", "engine", "app-cli", "app",
-    "filters", "text", "io",
+    "fwpng",
+    "geom",
+    "color",
+    "raster",
+    "doc",
+    "vector",
+    "compose",
+    "engine",
+    "app-cli",
+    "app",
+    "filters",
+    "text",
+    "io",
+    "scripting",
 ];
 
 /// Integration-test target exercising fwpng under wasm.

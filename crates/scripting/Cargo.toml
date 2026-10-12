@@ -1,0 +1,25 @@
+[package]
+name = "scripting"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+license = "MIT OR Apache-2.0"
+authors = ["FireCraft contributors"]
+repository = "https://github.com/aliasfoxkde/FireCraft"
+homepage = "https://github.com/aliasfoxkde/FireCraft"
+description = "FireCraft scripting host: boa_engine embedding, sandbox limits, and the fw/dom host-object model. Clean-room implementation."
+
+[dependencies]
+boa_engine = "0.20"
+boa_gc = "0.20"
+doc = { path = "../doc" }
+engine = { path = "../engine" }
+serde_json = { version = "1", features = ["float_roundtrip"] }
+
+# wasm32-unknown-unknown needs getrandom's browser backend; boa pulls
+# getrandom 0.2 for RNG seeding (decision 0001's spike fix).
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom = { version = "0.2", features = ["js"] }
+
+[lints]
+workspace = true

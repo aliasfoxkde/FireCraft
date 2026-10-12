@@ -17,7 +17,7 @@ that set it instead.
 | fwpng round-trip byte-identical files | 8 | M7 | corpus gate |
 | corpus files with doc-model round-trip (equal + idempotent) | 9 | M7 | `xtask corpus` |
 | corpus fixtures with golden pins (deterministic + anchored) | 5 | M7 | `xtask golden` |
-| wasm-clean crates (compile) | 13 | M8 | `xtask wasm` |
+| wasm-clean crates (compile) | 14 | M9 | `xtask wasm` |
 | web bundle builds (trunk) | 1 | M5 | `xtask wasm` (trunk build of `web/`) |
 | wasm smoke tests executed (fwpng) | 6 | M2 | `xtask wasm` (node + wasm-bindgen-test-runner) |
 | fuzz targets with 60s+ zero-crash campaign | 10 | M8 | `xtask fuzz` / `ci --full` |

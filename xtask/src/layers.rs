@@ -28,6 +28,7 @@ const LAYERS: &[(&str, u8)] = &[
     ("gpu", 3),
     ("engine", 3),
     ("io", 4),
+    ("scripting", 4),
     ("app", 5),
     ("app-cli", 5),
     ("firecraft-web", 5),
