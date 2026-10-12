@@ -13,8 +13,12 @@
 use crate::cache::EffectCache;
 use crate::convert::{abgr, blend_mode, to_bezpath};
 use crate::effects;
-use doc::{Document, GroupObject, Layer, ObjectData, PathObject, TileRef};
+use doc::{
+    Document, GroupObject, Layer, NineSliceGuides, ObjectData, PathObject, SymbolInstanceObject,
+    SymbolType, TileRef,
+};
 use filters::Surface;
+use geom::{Affine, transform::map_rect};
 use std::fmt;
 use std::sync::Arc;
 use vello_cpu::kurbo::{Rect, Stroke};
@@ -79,6 +83,25 @@ pub enum ComposeError {
         /// What geometry was requested.
         detail: String,
     },
+    /// A symbol instance references a `MSNi` the document library does
+    /// not define — a document defect, never a silent hole.
+    MissingDefinition {
+        /// The symbol number the instance named.
+        symbol: i64,
+    },
+    /// A definition (transitively) instances itself.
+    SymbolCycle {
+        /// The symbol number re-entered during the walk.
+        symbol: i64,
+    },
+    /// The definition nesting exceeded [`MAX_SYMBOL_DEPTH`] without an
+    /// explicit cycle on the stack.
+    SymbolDepth {
+        /// The symbol number being entered.
+        symbol: i64,
+        /// The depth that was exceeded.
+        depth: usize,
+    },
 }
 
 impl fmt::Display for ComposeError {
@@ -106,11 +129,28 @@ impl fmt::Display for ComposeError {
                 write!(f, "image references tile {tile}, absent from the tile bank")
             }
             ComposeError::TileSource { detail } => write!(f, "image tiles unsupported: {detail}"),
+            ComposeError::MissingDefinition { symbol } => {
+                write!(
+                    f,
+                    "instance references symbol {symbol}, absent from the library"
+                )
+            }
+            ComposeError::SymbolCycle { symbol } => {
+                write!(f, "symbol {symbol} instances itself")
+            }
+            ComposeError::SymbolDepth { symbol, depth } => {
+                write!(f, "symbol {symbol} nests past the depth ceiling ({depth})")
+            }
         }
     }
 }
 
 impl std::error::Error for ComposeError {}
+
+/// The definition nesting ceiling. A library of finite definitions can
+/// only nest this deep by cycling, so hitting the ceiling is refused
+/// exactly like a cycle — the walk never recurses unboundedly.
+const MAX_SYMBOL_DEPTH: usize = 32;
 
 /// Composes one page in one state (frame) to pixels. The page canvas
 /// (`WIDf`/`HITf`, rounded) decides the output size; frames beyond a
@@ -159,12 +199,15 @@ pub fn render_with_cache(
     let mut text_engine = None;
     walk_layers(
         &page.layers.layers,
-        document,
-        frame,
-        (width, height),
-        cache,
-        &mut text_engine,
-        &mut ctx,
+        &mut Walk {
+            document,
+            frame,
+            canvas: (width, height),
+            cache,
+            text_engine: &mut text_engine,
+            ctx: &mut ctx,
+            stack: &[],
+        },
     )?;
     ctx.flush();
 
@@ -198,68 +241,137 @@ pub fn straight_alpha(premultiplied: &[u8]) -> Vec<u8> {
         .collect()
 }
 
+/// Everything the object walk carries: the per-render invariants plus
+/// the raster state. One struct keeps the recursive signatures short —
+/// symbol walks re-enter it for the definition's own layer list.
+struct Walk<'a> {
+    document: &'a Document,
+    /// The state being viewed.
+    frame: usize,
+    canvas: (u16, u16),
+    cache: &'a mut EffectCache,
+    text_engine: &'a mut Option<text::TextEngine>,
+    ctx: &'a mut RenderContext,
+    /// Symbol numbers currently being rendered — cycle/depth refusal.
+    stack: &'a [i64],
+}
+
 /// Paints a layer list in file order (bottom-first). A layer is
 /// skipped when its `DISb` display flag is off, its per-frame
 /// visibility override hides this frame, or this frame's cell is
 /// hidden or absent.
-fn walk_layers(
-    layers: &[Layer],
-    document: &Document,
-    frame: usize,
-    canvas: (u16, u16),
-    cache: &mut EffectCache,
-    text_engine: &mut Option<text::TextEngine>,
-    ctx: &mut RenderContext,
-) -> Result<(), ComposeError> {
+///
+/// Button and animation instances span forward from the cell that
+/// places them: a placement in cell *j* paints in every state
+/// *j..j+span*, so the walk also rescans earlier cells for spanning
+/// instances. The latest placement wins — an id re-placed in a later
+/// cell supersedes its earlier cells (and is rendered once).
+fn walk_layers(layers: &[Layer], walk: &mut Walk) -> Result<(), ComposeError> {
     for layer in layers {
         if !layer.display {
             continue;
         }
         if let Some(flags) = &layer.visibility_per_frame {
-            if !flags.get(frame).copied().unwrap_or(true) {
+            if !flags.get(walk.frame).copied().unwrap_or(true) {
                 continue;
             }
         }
-        let Some(cell) = layer.cells.get(frame) else {
-            continue;
-        };
-        if !cell.visible {
-            continue;
+        let placed: Vec<doc::ObjectId> = layer
+            .cells
+            .get(walk.frame)
+            .filter(|cell| cell.visible)
+            .map(|cell| cell.elements.clone())
+            .unwrap_or_default();
+        for id in &placed {
+            render_object(*id, walk)?;
         }
-        for id in &cell.elements {
-            render_object(document, *id, frame, canvas, cache, text_engine, ctx)?;
+        // Spanning instances from earlier placements, newest first.
+        let mut spanned: Vec<doc::ObjectId> = Vec::new();
+        for placed_at in (0..walk.frame).rev() {
+            let Some(cell) = layer.cells.get(placed_at) else {
+                continue;
+            };
+            if !cell.visible {
+                continue;
+            }
+            for id in &cell.elements {
+                if placed.contains(id) || spanned.contains(id) {
+                    continue;
+                }
+                if instance_span(walk.document, *id) <= (walk.frame - placed_at) as i64 {
+                    continue;
+                }
+                spanned.push(*id);
+                render_spanned(*id, placed_at, walk)?;
+            }
         }
     }
     Ok(())
 }
 
-fn render_object(
-    document: &Document,
-    id: doc::ObjectId,
-    frame: usize,
-    canvas: (u16, u16),
-    cache: &mut EffectCache,
-    text_engine: &mut Option<text::TextEngine>,
-    ctx: &mut RenderContext,
-) -> Result<(), ComposeError> {
-    let object = document.registry.get(id).ok_or(ComposeError::DanglingId {
-        index: id.index() as u32,
-        generation: id.generation(),
-    })?;
+/// The number of states an instance spans forward from its placement
+/// cell: animation instances their `ANNi` frame count, instances of a
+/// button definition the definition's state cells, plain instances
+/// just their own cell.
+fn instance_span(document: &Document, id: doc::ObjectId) -> i64 {
+    let Some(ObjectData::SymbolInstance(instance)) = document.registry.get(id) else {
+        return 1;
+    };
+    if let Some(anim) = &instance.animation {
+        return anim.frames.max(1);
+    }
+    match document
+        .symbols
+        .iter()
+        .find(|definition| definition.symbol_number == instance.symbol_number)
+    {
+        Some(definition) if definition.symbol_type == SymbolType::Button => {
+            definition.frame_count.max(1)
+        }
+        _ => 1,
+    }
+}
+
+fn render_object(id: doc::ObjectId, walk: &mut Walk) -> Result<(), ComposeError> {
+    let object = walk
+        .document
+        .registry
+        .get(id)
+        .ok_or(ComposeError::DanglingId {
+            index: id.index() as u32,
+            generation: id.generation(),
+        })?;
     match object {
-        ObjectData::Path(path) => render_path(path, canvas, cache, ctx),
-        ObjectData::Group(group) => {
-            render_group(document, group, frame, canvas, cache, text_engine, ctx)
-        }
+        ObjectData::Path(path) => render_path(path, walk.canvas, walk.cache, walk.ctx),
+        ObjectData::Group(group) => render_group(group, walk),
         ObjectData::Text(object) => {
-            let engine = text_engine.get_or_insert_with(text::TextEngine::default);
-            render_text(object, engine, canvas, cache, ctx)
+            let engine = walk
+                .text_engine
+                .get_or_insert_with(text::TextEngine::default);
+            render_text(object, engine, walk.canvas, walk.cache, walk.ctx)
         }
-        ObjectData::Image(image) => render_image(document, image, canvas, cache, ctx),
-        // Slices and symbol instances still render as nothing — the
-        // M4 plan's out-of-scope list (slices are export-time markers,
-        // symbol instances need the M10 symbol table).
-        ObjectData::Slice(_) | ObjectData::SymbolInstance(_) => Ok(()),
+        ObjectData::Image(image) => {
+            render_image(walk.document, image, walk.canvas, walk.cache, walk.ctx)
+        }
+        // Slices still render as nothing — export-time markers (the
+        // M4 plan's out-of-scope list).
+        ObjectData::Slice(_) => Ok(()),
+        ObjectData::SymbolInstance(instance) => render_instance(instance, walk.frame, walk),
+    }
+}
+
+/// Renders a spanning instance discovered in an earlier cell: placed
+/// in state `placed_at`, viewed in state [`Walk::frame`].
+fn render_spanned(
+    id: doc::ObjectId,
+    placed_at: usize,
+    walk: &mut Walk,
+) -> Result<(), ComposeError> {
+    match walk.document.registry.get(id) {
+        Some(ObjectData::SymbolInstance(instance)) => render_instance(instance, placed_at, walk),
+        // Non-instances never span; a dangling id in an earlier cell
+        // stays silent (only the placement cell's own walk reports it).
+        _ => Ok(()),
     }
 }
 
@@ -541,21 +653,13 @@ fn paint_stroke(color: i64, geometry: &vello_cpu::kurbo::BezPath, ctx: &mut Rend
     ctx.stroke_path(geometry);
 }
 
-fn render_group(
-    document: &Document,
-    group: &GroupObject,
-    frame: usize,
-    canvas: (u16, u16),
-    cache: &mut EffectCache,
-    text_engine: &mut Option<text::TextEngine>,
-    ctx: &mut RenderContext,
-) -> Result<(), ComposeError> {
+fn render_group(group: &GroupObject, walk: &mut Walk) -> Result<(), ComposeError> {
     if !group.visible {
         return Ok(());
     }
     let plan = effects::plan(&group.effects);
     if plan.ops.is_empty() {
-        ctx.push_layer(
+        walk.ctx.push_layer(
             None,
             Some(BlendMode::new(blend_mode(group.blend), Compose::SrcOver)),
             Some(group.opacity as f32 / 1000.0),
@@ -566,37 +670,300 @@ fn render_group(
         // milestone (masks as pixel content are M6/M7; `MNAb` is
         // carried by the model only).
         for id in &group.children {
-            render_object(document, *id, frame, canvas, cache, text_engine, ctx)?;
+            render_object(*id, walk)?;
         }
-        ctx.pop_layer();
+        walk.ctx.pop_layer();
         return Ok(());
     }
 
     // The group's filters see the composite of its children (each
     // child's own effects already applied); the group's blend/opacity
     // wrap the filtered image, as on the unfiltered path.
-    let mut offscreen = RenderContext::new(canvas.0, canvas.1);
+    let mut offscreen = RenderContext::new(walk.canvas.0, walk.canvas.1);
     for id in &group.children {
         render_object(
-            document,
             *id,
-            frame,
-            canvas,
-            cache,
-            text_engine,
-            &mut offscreen,
+            &mut Walk {
+                document: walk.document,
+                frame: walk.frame,
+                canvas: walk.canvas,
+                cache: &mut *walk.cache,
+                text_engine: &mut *walk.text_engine,
+                ctx: &mut offscreen,
+                stack: walk.stack,
+            },
         )?;
     }
     offscreen.flush();
-    let mut pixmap = Pixmap::new(canvas.0, canvas.1);
+    let mut pixmap = Pixmap::new(walk.canvas.0, walk.canvas.1);
     offscreen.render(pixmap.as_mut(), &mut Resources::new());
     let base = pixmap.data_as_u8_slice().to_vec();
-    let key = crate::cache::hash_pixels(&base, canvas, &plan);
-    let pixels = match cache.get(key).map(|entry| entry.pixels.clone()) {
+    let key = crate::cache::hash_pixels(&base, walk.canvas, &plan);
+    let pixels = match walk.cache.get(key).map(|entry| entry.pixels.clone()) {
         Some(pixels) => pixels,
-        None => apply_filtered(base, canvas, &plan, key, cache)?,
+        None => apply_filtered(base, walk.canvas, &plan, key, walk.cache)?,
     };
-    paint_surface(&pixels, canvas, group.blend, group.opacity, ctx)
+    paint_surface(&pixels, walk.canvas, group.blend, group.opacity, walk.ctx)
+}
+
+/// Renders one symbol instance viewed in state [`Walk::frame`], placed
+/// in state `placed_at` (equal when the walk is painting the
+/// instance's own cell).
+///
+/// The definition's layers compose to a full-canvas raster exactly
+/// like a page — definition content is authored in page coordinates
+/// (CS6 symbols are created from on-page selections), so the raster is
+/// canvas-anchored and the instance transform plus its animation
+/// offset place it on the page. Nine-slice definitions re-grid that
+/// raster by their guide insets instead of transforming it
+/// ([`nine_slice_grid`]). Definition nesting is refused past
+/// [`MAX_SYMBOL_DEPTH`]; a definition that instances itself is a
+/// typed refusal, never a recursion.
+fn render_instance(
+    instance: &SymbolInstanceObject,
+    placed_at: usize,
+    walk: &mut Walk,
+) -> Result<(), ComposeError> {
+    if walk.stack.len() >= MAX_SYMBOL_DEPTH {
+        return Err(ComposeError::SymbolDepth {
+            symbol: instance.symbol_number,
+            depth: walk.stack.len(),
+        });
+    }
+    if walk.stack.contains(&instance.symbol_number) {
+        return Err(ComposeError::SymbolCycle {
+            symbol: instance.symbol_number,
+        });
+    }
+    let definition = walk
+        .document
+        .symbols
+        .iter()
+        .find(|definition| definition.symbol_number == instance.symbol_number)
+        .ok_or(ComposeError::MissingDefinition {
+            symbol: instance.symbol_number,
+        })?;
+
+    // States beyond a definition's cells hold nothing; a button's
+    // last state sticks for later frames (clamped, not empty).
+    let max_cells = definition
+        .layers
+        .layers
+        .iter()
+        .map(|layer| layer.cells.len())
+        .max()
+        .unwrap_or(0);
+    let definition_frame = (walk.frame - placed_at).min(max_cells.saturating_sub(1));
+
+    let mut inner = walk.stack.to_vec();
+    inner.push(instance.symbol_number);
+    let mut offscreen = RenderContext::new(walk.canvas.0, walk.canvas.1);
+    walk_layers(
+        &definition.layers.layers,
+        &mut Walk {
+            document: walk.document,
+            frame: definition_frame,
+            canvas: walk.canvas,
+            cache: &mut *walk.cache,
+            text_engine: &mut *walk.text_engine,
+            ctx: &mut offscreen,
+            stack: &inner,
+        },
+    )?;
+    offscreen.flush();
+    let mut pixmap = Pixmap::new(walk.canvas.0, walk.canvas.1);
+    offscreen.render(pixmap.as_mut(), &mut Resources::new());
+    let base = pixmap.data_as_u8_slice().to_vec();
+
+    let (transform, opacity) = animation_at(instance, walk.frame - placed_at);
+    match &definition.nine_slice {
+        Some(guides) => {
+            let gridded = nine_slice_grid(&base, walk.canvas, guides, transform);
+            paint_surface(&gridded, walk.canvas, 0, opacity, walk.ctx)
+        }
+        None => paint_transformed(&base, walk.canvas, transform, opacity, walk.ctx),
+    }
+}
+
+/// The instance transform and opacity at animation step `step`
+/// (frames since placement): the `ANI*` parameters interpolate
+/// linearly across the span's `frames − 1` transitions — state 0 is
+/// the untouched instance, the last state carries the full
+/// shift/rotation/scale and the `AEOi` opacity. Rotation pivots on the
+/// canvas origin; opacity defaults to full when its endpoint is
+/// absent.
+fn animation_at(instance: &SymbolInstanceObject, step: usize) -> (Affine, i64) {
+    let Some(anim) = &instance.animation else {
+        return (instance.transform, 1000);
+    };
+    let transitions = (anim.frames.max(2) - 1) as f64;
+    let t = (step as f64 / transitions).clamp(0.0, 1.0);
+    let mut total = Affine::translate((anim.x_shift * t, anim.y_shift * t));
+    if let Some(degrees) = anim.rotation {
+        total *= Affine::rotate(degrees as f64 * t * std::f64::consts::PI / 180.0);
+    }
+    let scale = 1.0 + (anim.scaling / 100.0 - 1.0) * t;
+    total *= Affine::scale(scale);
+    let start = anim.start_opacity.unwrap_or(1000) as f64;
+    let end = anim.end_opacity.unwrap_or(1000) as f64;
+    (
+        total * instance.transform,
+        (start + (end - start) * t).round() as i64,
+    )
+}
+
+/// Composites the definition raster through the instance transform: a
+/// canvas-anchored image paint under `transform`, inside the
+/// instance's opacity layer. Nearest sampling keeps the output
+/// deterministic.
+fn paint_transformed(
+    base: &[u8],
+    canvas: (u16, u16),
+    transform: Affine,
+    opacity: i64,
+    ctx: &mut RenderContext,
+) -> Result<(), ComposeError> {
+    let mut pixmap = Pixmap::new(canvas.0, canvas.1);
+    let target = pixmap.data_as_u8_slice_mut();
+    if target.len() != base.len() {
+        return Err(ComposeError::FilterPipeline {
+            detail: format!(
+                "definition raster holds {} bytes, canvas takes {}",
+                base.len(),
+                target.len()
+            ),
+        });
+    }
+    target.copy_from_slice(base);
+    ctx.push_layer(
+        None,
+        Some(BlendMode::new(blend_mode(0), Compose::SrcOver)),
+        Some(opacity as f32 / 1000.0),
+        None,
+        None,
+    );
+    ctx.set_transform(transform);
+    ctx.set_paint(ImageBrush {
+        image: ImageSource::Pixmap(Arc::new(pixmap)),
+        sampler: ImageSampler::new().with_quality(ImageQuality::Low),
+    });
+    ctx.fill_rect(&Rect::new(
+        0.0,
+        0.0,
+        f64::from(canvas.0),
+        f64::from(canvas.1),
+    ));
+    ctx.reset_transform();
+    ctx.pop_layer();
+    Ok(())
+}
+
+/// Re-grids the definition raster through the nine-slice guides: the
+/// shape bounds cut the raster into nine regions; corners move 1:1,
+/// edges stretch along one axis, the center fills the rest. `NGCf`
+/// order is top, bottom, left, right (the dictionary's). The
+/// destination is the transform-mapped shape bounds; insets larger
+/// than their extent shrink so the middle pieces never go negative.
+/// Integer nearest-neighbor sampling — deterministic bytes.
+fn nine_slice_grid(
+    base: &[u8],
+    canvas: (u16, u16),
+    guides: &NineSliceGuides,
+    transform: Affine,
+) -> Vec<u8> {
+    let width = i64::from(canvas.0);
+    let height = i64::from(canvas.1);
+    let mut out = vec![0u8; (width * height * 4) as usize];
+    let bounds = guides.shape_bounds;
+    let sx = bounds.x0.round() as i64;
+    let sy = bounds.y0.round() as i64;
+    let sw = (bounds.x1 - bounds.x0).round() as i64;
+    let sh = (bounds.y1 - bounds.y0).round() as i64;
+    if sw <= 0 || sh <= 0 {
+        return out;
+    }
+    let mapped = map_rect(transform, bounds);
+    let dx = mapped.x0.round() as i64;
+    let dy = mapped.y0.round() as i64;
+    let dw = mapped.width().round() as i64;
+    let dh = mapped.height().round() as i64;
+    if dw <= 0 || dh <= 0 {
+        return out;
+    }
+
+    // Dictionary `NGCf` order: top, bottom, left, right.
+    let mut top = guides.controls[0].round() as i64;
+    let mut bottom = guides.controls[1].round() as i64;
+    let mut left = guides.controls[2].round() as i64;
+    let mut right = guides.controls[3].round() as i64;
+    top = top.clamp(0, sh);
+    bottom = bottom.clamp(0, sh - top);
+    left = left.clamp(0, sw);
+    right = right.clamp(0, sw - left);
+    // The destination keeps corners unscaled at the inset size; when
+    // the target is smaller than the corners, they shrink together.
+    let mut dst_left = left;
+    let mut dst_right = right;
+    if left + right > dw {
+        let factor = dw as f64 / (left + right) as f64;
+        dst_left = (left as f64 * factor).floor() as i64;
+        dst_right = dw - dst_left;
+    }
+    let mut dst_top = top;
+    let mut dst_bottom = bottom;
+    if top + bottom > dh {
+        let factor = dh as f64 / (top + bottom) as f64;
+        dst_top = (top as f64 * factor).floor() as i64;
+        dst_bottom = dh - dst_top;
+    }
+
+    let src_widths = [left, sw - left - right, right];
+    let src_heights = [top, sh - top - bottom, bottom];
+    let dst_widths = [dst_left, dw - dst_left - dst_right, dst_right];
+    let dst_heights = [dst_top, dh - dst_top - dst_bottom, dst_bottom];
+    let prefix = |sizes: [i64; 3]| [0, sizes[0], sizes[0] + sizes[1]];
+    let src_x = prefix(src_widths);
+    let src_y = prefix(src_heights);
+    let dst_x = prefix(dst_widths);
+    let dst_y = prefix(dst_heights);
+
+    for row in 0..3 {
+        for col in 0..3 {
+            let (piece_w, piece_h) = (src_widths[col], src_heights[row]);
+            let (draw_w, draw_h) = (dst_widths[col], dst_heights[row]);
+            if piece_w <= 0 || piece_h <= 0 || draw_w <= 0 || draw_h <= 0 {
+                continue;
+            }
+            let piece_x = sx + src_x[col];
+            let piece_y = sy + src_y[row];
+            let draw_x = dx + dst_x[col];
+            let draw_y = dy + dst_y[row];
+            for py in 0..draw_h {
+                let target_y = draw_y + py;
+                if target_y < 0 || target_y >= height {
+                    continue;
+                }
+                let sample_y = piece_y + (py * piece_h + piece_h / 2) / draw_h;
+                if sample_y < 0 || sample_y >= height {
+                    continue;
+                }
+                for px in 0..draw_w {
+                    let target_x = draw_x + px;
+                    if target_x < 0 || target_x >= width {
+                        continue;
+                    }
+                    let sample_x = piece_x + (px * piece_w + piece_w / 2) / draw_w;
+                    if sample_x < 0 || sample_x >= width {
+                        continue;
+                    }
+                    let source = ((sample_y * width + sample_x) * 4) as usize;
+                    let target = ((target_y * width + target_x) * 4) as usize;
+                    out[target..target + 4].copy_from_slice(&base[source..source + 4]);
+                }
+            }
+        }
+    }
+    out
 }
 
 /// Drives the rendered base through the kernel stack and stores the

@@ -15,7 +15,7 @@
 use doc::{
     Cell, Contour, Document, DocumentInfo, Effect, EffectProperty, EffectValue, GroupObject,
     ImageObject, Layer, LayerList, ObjectData, Page, PageInfo, PathObject, PathPoint, SliceObject,
-    SymbolAnimation, SymbolInstanceObject, TextObject, TileRef,
+    SymbolAnimation, SymbolDefinition, SymbolInstanceObject, SymbolType, TextObject, TileRef,
 };
 
 /// A seeded xorshift64* PRNG — small, fast, reproducible across
@@ -173,6 +173,32 @@ pub fn random_document(rng: &mut FuzzRng) -> Document {
             }
         }
     }
+
+    // One library definition so generated instances resolve during
+    // renders — compose refuses a dangling `MSNi` as a document
+    // defect. The content is a plain path (no instance inside), so no
+    // cycle can arise from the seed itself.
+    let definition_content = document.registry.insert(random_path(rng, 9_999));
+    document.symbols.push(SymbolDefinition {
+        name: "fuzz symbol".to_owned(),
+        symbol_number: 0,
+        origin: geom::Point::ZERO,
+        frame_count: 1,
+        layers: LayerList {
+            layers: vec![Layer {
+                name: "fuzz symbol layer".to_owned(),
+                cells: vec![Cell {
+                    elements: vec![definition_content],
+                    ..Cell::default()
+                }],
+                ..Layer::default()
+            }],
+        },
+        background_raw: 0,
+        symbol_type: SymbolType::Graphic,
+        nine_slice: None,
+    });
+
     document
 }
 

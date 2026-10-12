@@ -1029,3 +1029,355 @@ fn oversized_canvas_is_an_error() {
         })
     );
 }
+
+// --- symbol instances (M10 task 2) ----------------------------------------
+
+use doc::{NineSliceGuides, SymbolAnimation, SymbolDefinition, SymbolInstanceObject, SymbolType};
+use geom::{Affine, Rect};
+
+/// Opaque green ABGR (a=FF b=00 g=FF r=00).
+const GREEN: i64 = 0xFF_00_FF_00;
+/// Opaque magenta ABGR.
+const MAGENTA: i64 = 0xFF_FF_00_FF;
+/// Opaque yellow ABGR.
+const YELLOW: i64 = 0xFF_00_FF_FF;
+/// Opaque cyan ABGR.
+const CYAN: i64 = 0xFF_FF_FF_00;
+
+/// A library definition named after `number`, whose layer holds the
+/// given state cells.
+fn symbol_definition(number: i64, symbol_type: SymbolType, cells: Vec<Cell>) -> SymbolDefinition {
+    SymbolDefinition {
+        name: format!("symbol-{number}"),
+        symbol_number: number,
+        origin: Point::ZERO,
+        frame_count: cells.len() as i64,
+        layers: LayerList {
+            layers: vec![layer(cells)],
+        },
+        background_raw: 0,
+        symbol_type,
+        nine_slice: None,
+    }
+}
+
+fn instance(
+    number: i64,
+    transform: Affine,
+    animation: Option<SymbolAnimation>,
+) -> SymbolInstanceObject {
+    SymbolInstanceObject {
+        symbol_number: number,
+        transform,
+        locked: false,
+        name: None,
+        animation,
+    }
+}
+
+/// Transparent where nothing paints (the canvas carries no
+/// background fill — proofs paint their own ground).
+const CLEAR: [u8; 4] = [0, 0, 0, 0];
+/// Premultiplied opaque red.
+const PIXEL_RED: [u8; 4] = [255, 0, 0, 255];
+/// Premultiplied opaque blue.
+const PIXEL_BLUE: [u8; 4] = [0, 0, 255, 255];
+
+/// A graphic definition holding one red 4×4 rect at the page origin;
+/// an instance of it placed in the page's first cell.
+fn red_dot_document() -> (Document, doc::ObjectId) {
+    let mut doc = Document::default();
+    let content = rect_object(
+        &mut doc.registry,
+        rect_contour(0.0, 0.0, 4.0, 4.0),
+        RED,
+        1000,
+        0,
+    );
+    doc.symbols.push(symbol_definition(
+        7,
+        SymbolType::Graphic,
+        vec![cell(vec![content])],
+    ));
+    let placement = doc.registry.insert(ObjectData::SymbolInstance(instance(
+        7,
+        Affine::IDENTITY,
+        None,
+    )));
+    (doc, placement)
+}
+
+#[test]
+fn graphic_instance_renders_definition_through_its_transform() {
+    let (mut doc, placement) = red_dot_document();
+    doc.pages
+        .push(page(8.0, 4.0, vec![layer(vec![cell(vec![placement])])]));
+
+    // Identity placement: the definition raster lands where authored.
+    let placed = render(&doc, 0, 0).expect("render");
+    assert_eq!(pixel(&placed, 0, 1), PIXEL_RED);
+    assert_eq!(pixel(&placed, 3, 1), PIXEL_RED);
+    assert_eq!(pixel(&placed, 4, 1), CLEAR);
+
+    // Translate by 2: the same raster, shifted exactly.
+    let placement = doc.registry.insert(ObjectData::SymbolInstance(instance(
+        7,
+        Affine::translate((2.0, 0.0)),
+        None,
+    )));
+    doc.pages = vec![page(8.0, 4.0, vec![layer(vec![cell(vec![placement])])])];
+    let shifted = render(&doc, 0, 0).expect("render");
+    assert_eq!(pixel(&shifted, 1, 1), CLEAR);
+    assert_eq!(pixel(&shifted, 2, 1), PIXEL_RED);
+    assert_eq!(pixel(&shifted, 5, 1), PIXEL_RED);
+    assert_eq!(pixel(&shifted, 6, 1), CLEAR);
+
+    // Determinism: the same document renders identical bytes.
+    let again = render(&doc, 0, 0).expect("render again");
+    assert_eq!(shifted.pixels, again.pixels);
+}
+
+#[test]
+fn nine_slice_instance_scales_by_guide_insets_at_two_sizes() {
+    let mut doc = Document::default();
+    // Source 8×8: corners RED / BLUE / CYAN / BLACK, edges MAGENTA
+    // (top) and YELLOW (bottom), center GREEN. Integer-aligned
+    // pieces, so every source pixel is exact.
+    let pieces: [([f64; 4], i64); 9] = [
+        ([0.0, 0.0, 2.0, 2.0], RED),
+        ([2.0, 0.0, 6.0, 2.0], MAGENTA),
+        ([6.0, 0.0, 8.0, 2.0], BLUE),
+        ([0.0, 2.0, 2.0, 6.0], RED),
+        ([2.0, 2.0, 6.0, 6.0], GREEN),
+        ([6.0, 2.0, 8.0, 6.0], BLUE),
+        ([0.0, 6.0, 2.0, 8.0], CYAN),
+        ([2.0, 6.0, 6.0, 8.0], YELLOW),
+        ([6.0, 6.0, 8.0, 8.0], BLACK),
+    ];
+    let content: Vec<doc::ObjectId> = pieces
+        .iter()
+        .map(|([x0, y0, x1, y1], fill)| {
+            rect_object(
+                &mut doc.registry,
+                rect_contour(*x0, *y0, *x1, *y1),
+                *fill,
+                1000,
+                0,
+            )
+        })
+        .collect();
+    let mut definition = symbol_definition(9, SymbolType::Graphic, vec![cell(content)]);
+    definition.nine_slice = Some(NineSliceGuides {
+        locked: false,
+        color_raw: 0,
+        // Dictionary `NGCf` order: top, bottom, left, right.
+        controls: [2.0, 2.0, 2.0, 2.0],
+        shape_bounds: Rect::new(0.0, 0.0, 8.0, 8.0),
+        limits: Rect::new(-2.0, -2.0, 10.0, 10.0),
+    });
+    doc.symbols.push(definition);
+
+    // Two sizes side by side: 16×8 (stretched wide) and 8×16
+    // (stretched tall).
+    let wide = doc.registry.insert(ObjectData::SymbolInstance(instance(
+        9,
+        Affine::scale_non_uniform(2.0, 1.0),
+        None,
+    )));
+    let tall = doc.registry.insert(ObjectData::SymbolInstance(instance(
+        9,
+        Affine::translate((20.0, 0.0)) * Affine::scale_non_uniform(1.0, 2.0),
+        None,
+    )));
+    doc.pages
+        .push(page(28.0, 16.0, vec![layer(vec![cell(vec![wide, tall])])]));
+
+    let render = render(&doc, 0, 0).expect("render");
+    // Wide: corners 1:1, the center band stretches x 2..14. A plain
+    // 2× scale would paint the right (BLUE) column from x=12 — the
+    // GREEN at x=13 pins nine-slice behavior.
+    assert_eq!(pixel(&render, 1, 1), [255, 0, 0, 255], "red corner");
+    assert_eq!(pixel(&render, 8, 1), [255, 0, 255, 255], "magenta top edge");
+    assert_eq!(pixel(&render, 15, 1), PIXEL_BLUE, "blue corner");
+    assert_eq!(pixel(&render, 4, 4), [0, 255, 0, 255], "green center");
+    assert_eq!(pixel(&render, 13, 4), [0, 255, 0, 255], "stretched center");
+    assert_eq!(pixel(&render, 14, 4), PIXEL_BLUE, "right column at 14");
+    assert_eq!(
+        pixel(&render, 8, 7),
+        [255, 255, 0, 255],
+        "yellow bottom edge"
+    );
+    assert_eq!(pixel(&render, 15, 7), [0, 0, 0, 255], "black corner");
+    // Tall: columns 1:1, the center band stretches y 2..14. Plain
+    // scale(1,2) would sample the bottom band at y=13 — GREEN there
+    // pins the edge stretch.
+    assert_eq!(pixel(&render, 21, 1), PIXEL_RED);
+    assert_eq!(pixel(&render, 27, 1), PIXEL_BLUE);
+    assert_eq!(pixel(&render, 24, 8), [0, 255, 0, 255], "center");
+    assert_eq!(pixel(&render, 23, 13), [0, 255, 0, 255], "stretched center");
+    assert_eq!(pixel(&render, 21, 15), [0, 255, 255, 255], "cyan corner");
+    assert_eq!(pixel(&render, 24, 15), [255, 255, 0, 255], "yellow edge");
+    assert_eq!(pixel(&render, 27, 15), [0, 0, 0, 255], "black corner");
+}
+
+#[test]
+fn animation_instance_spans_states_with_shifted_placements() {
+    let (mut doc, placement) = red_dot_document();
+    let Some(ObjectData::SymbolInstance(animated)) = doc.registry.get_mut(placement) else {
+        panic!("inserted a symbol instance");
+    };
+    animated.animation = Some(SymbolAnimation {
+        frames: 3,
+        x_shift: 4.0,
+        y_shift: 0.0,
+        scaling: 100.0,
+        rotation: None,
+        start_opacity: None,
+        end_opacity: None,
+    });
+    // Four states; the span covers the first three.
+    doc.pages.push(page(
+        8.0,
+        4.0,
+        vec![layer(vec![
+            cell(vec![placement]),
+            cell(vec![]),
+            cell(vec![]),
+            cell(vec![]),
+        ])],
+    ));
+
+    // t = step/2 over x_shift 4: states land at x offsets 0, 2, 4,
+    // and the span ends — state 3 paints nothing.
+    let frame0 = render(&doc, 0, 0).expect("frame 0");
+    assert_eq!(pixel(&frame0, 0, 1), PIXEL_RED);
+    assert_eq!(pixel(&frame0, 4, 1), CLEAR);
+    let frame1 = render(&doc, 0, 1).expect("frame 1");
+    assert_eq!(pixel(&frame1, 1, 1), CLEAR);
+    assert_eq!(pixel(&frame1, 2, 1), PIXEL_RED);
+    assert_eq!(pixel(&frame1, 5, 1), PIXEL_RED);
+    assert_eq!(pixel(&frame1, 6, 1), CLEAR);
+    let frame2 = render(&doc, 0, 2).expect("frame 2");
+    assert_eq!(pixel(&frame2, 3, 1), CLEAR);
+    assert_eq!(pixel(&frame2, 4, 1), PIXEL_RED);
+    assert_eq!(pixel(&frame2, 7, 1), PIXEL_RED);
+    let frame3 = render(&doc, 0, 3).expect("frame 3");
+    assert_eq!(pixel(&frame3, 0, 1), CLEAR);
+    assert_eq!(pixel(&frame3, 7, 1), CLEAR);
+}
+
+#[test]
+fn button_instance_shows_definition_state_per_frame() {
+    let mut doc = Document::default();
+    let up = rect_object(
+        &mut doc.registry,
+        rect_contour(0.0, 0.0, 4.0, 4.0),
+        RED,
+        1000,
+        0,
+    );
+    let over = rect_object(
+        &mut doc.registry,
+        rect_contour(0.0, 0.0, 4.0, 4.0),
+        BLUE,
+        1000,
+        0,
+    );
+    doc.symbols.push(symbol_definition(
+        3,
+        SymbolType::Button,
+        vec![cell(vec![up]), cell(vec![over])],
+    ));
+    let placement = doc.registry.insert(ObjectData::SymbolInstance(instance(
+        3,
+        Affine::IDENTITY,
+        None,
+    )));
+    doc.pages.push(page(
+        8.0,
+        4.0,
+        vec![layer(vec![cell(vec![placement]), cell(vec![])])],
+    ));
+
+    // State 0 shows the Up art; state 1 shows Over even though the
+    // placement cell only names state 0.
+    let frame0 = render(&doc, 0, 0).expect("frame 0");
+    assert_eq!(pixel(&frame0, 1, 1), PIXEL_RED);
+    let frame1 = render(&doc, 0, 1).expect("frame 1");
+    assert_eq!(pixel(&frame1, 1, 1), PIXEL_BLUE);
+}
+
+#[test]
+fn dangling_instance_is_a_typed_refusal() {
+    let mut doc = Document::default();
+    let placement = doc.registry.insert(ObjectData::SymbolInstance(instance(
+        42,
+        Affine::IDENTITY,
+        None,
+    )));
+    doc.pages
+        .push(page(8.0, 4.0, vec![layer(vec![cell(vec![placement])])]));
+    assert_eq!(
+        render(&doc, 0, 0),
+        Err(ComposeError::MissingDefinition { symbol: 42 })
+    );
+}
+
+#[test]
+fn self_referential_definition_is_a_typed_refusal() {
+    let mut doc = Document::default();
+    let inner = doc.registry.insert(ObjectData::SymbolInstance(instance(
+        7,
+        Affine::IDENTITY,
+        None,
+    )));
+    doc.symbols.push(symbol_definition(
+        7,
+        SymbolType::Graphic,
+        vec![cell(vec![inner])],
+    ));
+    let placement = doc.registry.insert(ObjectData::SymbolInstance(instance(
+        7,
+        Affine::IDENTITY,
+        None,
+    )));
+    doc.pages
+        .push(page(8.0, 4.0, vec![layer(vec![cell(vec![placement])])]));
+    assert_eq!(
+        render(&doc, 0, 0),
+        Err(ComposeError::SymbolCycle { symbol: 7 })
+    );
+}
+
+#[test]
+fn nesting_past_the_depth_ceiling_is_a_typed_refusal() {
+    let mut doc = Document::default();
+    // 33 definitions in a chain: k instances k+1. Entering the 33rd
+    // exceeds the ceiling without any repeated symbol number.
+    for number in 0..=32i64 {
+        let next = doc.registry.insert(ObjectData::SymbolInstance(instance(
+            number + 1,
+            Affine::IDENTITY,
+            None,
+        )));
+        doc.symbols.push(symbol_definition(
+            number,
+            SymbolType::Graphic,
+            vec![cell(vec![next])],
+        ));
+    }
+    let placement = doc.registry.insert(ObjectData::SymbolInstance(instance(
+        0,
+        Affine::IDENTITY,
+        None,
+    )));
+    doc.pages
+        .push(page(8.0, 4.0, vec![layer(vec![cell(vec![placement])])]));
+    assert_eq!(
+        render(&doc, 0, 0),
+        Err(ComposeError::SymbolDepth {
+            symbol: 32,
+            depth: 32,
+        })
+    );
+}

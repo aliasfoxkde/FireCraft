@@ -12,6 +12,7 @@ description = "FireCraft deterministic CPU compositor: document pages to pixels.
 [dependencies]
 doc = { path = "../doc" }
 filters = { path = "../filters" }
+geom = { path = "../geom" }
 raster = { path = "../raster" }
 text = { path = "../text" }
 vello_cpu = { version = "0.3", default-features = false, features = ["std", "u8_pipeline"] }
@@ -20,7 +21,6 @@ vello_cpu = { version = "0.3", default-features = false, features = ["std", "u8_
 criterion = "0.7.0"
 flate2 = "1.1.10"
 fwpng = { path = "../fwpng" }
-geom = { path = "../geom" }
 
 [[bench]]
 name = "render"
