@@ -17,12 +17,11 @@
 #   both EPERM'd on fedora), so all compilation lands on the
 #   container-local overlay2 disk. Steps within a job share one
 #   container, so heavy steps are grouped to reuse the warm target dir.
-# - Job containers run under a sandbox memory cgroup (runner default
-#   4 GiB; the fedora deployment raises it to 16 GiB via
-#   GITFORGE_SANDBOX_MEMORY_MB on the runner process). Unbounded
-#   parallel builds of the heavier graphs (release boa + text stack)
-#   overshoot the default and die silently mid-compile — keep heavy
-#   steps' CARGO_BUILD_JOBS bounded (see the fuzz job).
+# - Job sandboxes build with CARGO_NET_OFFLINE=true: the image's
+#   registry cache is the only crate source. Rebuild + re-ship the
+#   image before pushing any commit that moves either lockfile — the
+#   failure mode of a stale cache is a fast, clean offline-refusal
+#   whose message lands only in the job log ledger.
 # - Images must be pre-warmed on every runner host before a commit that
 #   needs them lands (60-second sandbox acquisition cap; the runner
 #   never pulls). Ship with:
@@ -95,20 +94,15 @@ jobs:
         # libfuzzer compile check and the wide campaign stay local
         # (nightly + cargo-fuzz are not baked into the CI image).
         #
-        # Since M9 task 8 the release build also covers boa_engine and
-        # the text stack (cosmic-text/harfrust/rustybuzz/resvg) plus
-        # re-fingerprinted workspace crates. At the runner's default
-        # 4 GiB sandbox ceiling that graph overshot the cgroup and the
-        # OOM killer took cargo out mid-compile (silent death, exit 1,
-        # no rustc error — runs 8f434553 and 888afe79). The fedora
-        # runner now runs with GITFORGE_SANDBOX_MEMORY_MB=16384 (the
-        # operator knob gitforge-runner documents for exactly this),
-        # and the step caps rustc parallelism at 6 so the aggregate
-        # stays comfortably inside it. Containers are per-job, so this
-        # release build is cold every run; the 90m wall absorbs it on
-        # a loaded host.
-        run: CARGO_TARGET_DIR=/tmp/ci-target CARGO_BUILD_JOBS=6 CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1 cargo run --locked -p xtask -- fuzz-quick
-    timeout: 90m
+        # The sandbox builds with CARGO_NET_OFFLINE=true, so every
+        # fuzz/Cargo.lock crate must be in the image's registry cache
+        # — rebuilt and re-shipped whenever that lockfile moves (it
+        # did in M9 task 8: the boa family). A stale cache fails fast
+        # and clean ("attempting to make an HTTP request, but --offline
+        # was specified"); the full error only reaches the job log
+        # ledger, not the bounded receipt.
+        run: CARGO_TARGET_DIR=/tmp/ci-target cargo run --locked -p xtask -- fuzz-quick
+    timeout: 30m
 
   - name: generated-docs
     image: firecraft-ci-rust:1
