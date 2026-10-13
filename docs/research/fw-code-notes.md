@@ -318,6 +318,100 @@ Stamp, Torn Edges, Texturizer, Underpainting, Water Paper, Watercolor),
 the Eye Candy 4000 LE trio (Bevel Boss, Marble, Motion Trail), Alien
 Skin Splat LE (Edges). These are third-party plugins, not CS6 surface.
 
+## The tool surface (M15 enumeration, task 1)
+
+CS6's tool engines, enumerated from evidence already extracted (raw
+dumps stay in the scratch RE workspace): the RTTI class roster from the
+M13 Ghidra pass names every tool engine class; the `Fireworks.xml`
+keymap's `<tools>` section binds 34 one-key selects by tool GUID (9
+named by the M13 decode — `V`/`0` pointer, `A`/`1` subselection, `R`
+rectangle, `E` ellipse, `L` line, `T` text, `Z` zoom, `H` hand; the
+remaining GUID→name pairs await the tool-registry pass and are listed
+by vk only); the `RT_DIALOG` corpus carries the tool option layouts
+(`DIALOG 5964`: brush Shape/Size/Edge/Aspect/Angle/Square;
+`DIALOG 14060`: "Live marquee" + "Edge:"); the exe's DOM API strings
+name the scripting verbs that mirror each tool's semantics. The
+`Quad3`/`Quad4` class suffixes are the SIMD dispatch tiers (recorded
+M13 verdict: deliberately not re-reproduced). Status legend:
+**shipped** (shell + registry), **headless** (registry command only,
+no shell tool), **missing**.
+
+Vector and path tools:
+
+| Tool | RTTI class(es) | Keymap | Params / DOM verbs | Status |
+|---|---|---|---|---|
+| Pointer | (no dedicated class — the default handler) | `V`, `0` | — | shipped |
+| Subselection | `CSubSelectionTool` | `A`, `1` | — | shipped |
+| Rectangle | `CRectTool` (+Quad3/4) | `R` | — | shipped |
+| Ellipse | `COvalTool` | `E` | — | shipped |
+| Line | `CLineTool` (+Quad3/4) | `L` | — | shipped |
+| Auto Shape / Smart Shape | `CSmartShapeTool`, `CSmartShapeManager`, `CStarTool` | (flyout) | the `Auto Shape Tools/*.jsf` corpus (Arrow, Spiral, Star, Pie, Doughnut, Smart Polygon, …) | shipped (M6 library) |
+| Pen (Bézier) | `CBezPenTool`, `CPenToolQuad4` | `P` | point-edit already in M6 | missing (drag-create + curve edit) |
+| Text | `CTextTool` (+Quad3/4/6) | `T` | — | shipped |
+| Knife | `CKnifeTool` | — | `knifeElementsFromPoint`, `knifeElementsFromPoints` | missing |
+| Redraw path | (pen mode) | — | `redrawPath`, `redrawSmartShape` | missing |
+| Freeform | `CEditFreeFormTool`, `CFreeformToolQuad3` | `F` | pressure model | missing |
+| Reshape Area | `CReshapeTool` (+Quad3/4) | — | `reshapeArea` | missing |
+| Path Scrubber | — | — | `scrubPlus`, `scrubMinus` (variable width on strokes) | missing |
+
+Bitmap selection tools (the selection is a mask channel; the DOM verbs
+expose it: `getSelection`, `moveSelectionMaskBy`, `saveSelection` /
+`restoreSelection` / `deleteSavedSelection` / `savedSelections`,
+`convertMarqueeToPath` / `convertPathToMarquee`, `convolveSelection`,
+`magicWand`, `ovalMarquee`, `polygonLasso`, `cropSelection`):
+
+| Tool | RTTI class(es) | Keymap | Params | Status |
+|---|---|---|---|---|
+| Marquee | `CMarqueeTool` (+Quad3), `CMarqueeHandler`, `CMarqueeCursor` | (vk `M` slot, unnamed GUID) | `DIALOG 14060`: "Live marquee", "Edge:" (live edge softness) | headless (`bitmap.selectRect`) — no shell tool, no combine modes |
+| Oval Marquee | `COvalMarqueeTool` | — | same dialog | headless (`bitmap.selectEllipse`) |
+| Lasso | `CLassoTool` (+Quad3) | (second `L` slot) | edge softness | headless (`bitmap.selectLasso`) |
+| Polygon Lasso | `CPolyLassoTool` | — | DOM `polygonLasso` | missing |
+| Magic Wand | `CWandTool` (+Quad3) | — | DOM `magicWand` (tolerance/contiguous slots; defaults need the options pass) | headless (`bitmap.selectWand`) |
+| Crop | `CCropMarqueeTool`, `CCropDocumentTool`, `CCropImageTool`, `CCropExportTool` | (vk `C` slot) | DOM `cropSelection` | missing |
+
+Bitmap paint and retouch — all brush-based (the brush engine:
+`CBrush`, `CBrushBasedBitmapTool` + tracker, `CDbBrushMask` + factory,
+`CDbBrushRuntimeParms`, `CBrushToolQuad3/4`; the Edit Brush dialog
+family `CEditBrushDialog` + `CEditBrushOptionsTab` / `ShapeTab` /
+`SensitivityTab`; `DIALOG 5964` fields Shape/Size/Edge/Aspect/Angle/
+Square; DOM `brushColor` / `brushPlacement` / `brushTexture`):
+
+| Tool | RTTI class(es) | Status |
+|---|---|---|
+| Brush | `CBrushBasedBitmapTool` + the engine above | missing (M7 stamp kernels are the substrate) |
+| Pencil | `CPencilTool` (+Quad3) | missing |
+| Eraser | `CEraserTool` (+Quad3) | headless (`retouch.eraser`) |
+| Blur | `CBlurTool` (+Quad3) | headless (`retouch.blur`) |
+| Sharpen | `CSharpenTool` (+Quad3) | headless (kernel shared with filters) |
+| Dodge | `CDodgeTool` (+Quad3) | missing |
+| Burn | `CBurnTool` (+Quad3) | missing |
+| Smudge | `CSmudgeTool` (+Quad3) | headless (`retouch.smudge`) |
+| Rubber Stamp | `CStampTool` (+Quad3) | headless (`retouch.clone`) |
+| Replace Color | `CReplaceColorTool` + tracker | missing |
+| Red-eye | (class not surfaced in the RTTI roster) | headless (`retouch.redEye`) |
+
+Fill, view, and transform:
+
+| Tool | RTTI class(es) | Keymap | DOM verbs | Status |
+|---|---|---|---|---|
+| Gradient | `CGradientTool` (+Quad3/4), `CDbGradientLook`, `CEditGradientDialog`, `CPSGradient*` (Photoshop import strategies: `CPSLinearGradient`, `CPSRadialGradient`, `CPSRectangularGradient`) | (vk `G` slot) | `gradientFill`, `gradientForm`, `gradientType` | missing (`FPLv` passes through unrendered) |
+| Eyedropper | `CEyedropperTool`, `CHiddenEyedropperDialog` | (vk `I` slot) | — | missing |
+| Zoom / Hand | `CZoomTool`; hand pan is the default drag path | `Z` / `H` | — | shipped (M13) |
+| Slice / Hotspot | (web tool classes; M11 built the model) | — | — | shipped (M11) |
+| Skew | `CSkewTool` | — | — | registry transforms exist; interactive overlays missing |
+| Nine-slice transform | `C9ScaleTransformTool` | — | — | M10 nine-slice editing shipped; overlay parity open |
+
+Modifier arithmetic (task 2's spec): the DOM verbs take explicit
+combine/operation arguments; the interactive shift/alt reads are
+interaction-level behavior requiring the oracle hierarchy (corpus or
+Wine session) before pinning — the enumeration records the slots, the
+interaction suite pins the keys. Open questions carried forward, each
+needing one extraction pass: the GUID→tool-name map for the unnamed
+keymap slots (tool registration table), the wand tolerance/contiguous
+defaults (options persistence), the reshape pressure curve
+(`CReshapeTool` decompile — the M13 `decompile_vfts.java` script is
+filter-scoped today).
+
 ## Status of §5.5 passes
 
 | Pass | State | Committed output |
