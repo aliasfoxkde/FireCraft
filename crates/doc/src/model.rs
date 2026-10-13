@@ -80,6 +80,11 @@ pub struct Document {
     /// file carries no document-level `EXPv`; the writer emits the node
     /// only when settings exist.
     pub export: Option<ExportOptions>,
+    /// Document-level style library (`MKBv`'s `ZSLv`). Empty when the
+    /// file carries none; the writer emits the node only when styles
+    /// exist. A document that carries its styles on an embedded page
+    /// instead has them bagged with that page.
+    pub styles: Vec<StyleEntry>,
 }
 
 /// The document's tile payload bank: `TIDi` → premultiplied RGBA8
@@ -502,6 +507,112 @@ pub struct PaintStyle {
     /// the pattern carries no subtree (or one that could not be
     /// modeled — the whole subtree then rides the bag).
     pub fill: Option<Fill>,
+}
+
+/// One named style: a `ZSTv` record inside the style library list
+/// (`ZSLv`). A style is a property bundle over the same paint, fill
+/// handle, effect, and text-attribute slots an object carries — the
+/// CS6 Styles panel applies it by copying the bundle onto the
+/// selection. Grammar ground truth is the CS6 style-library corpus
+/// (15 `.stl` files, 1069 records, one fixed child spine with `EFLv`
+/// and `CFTs` optional). The two `IMGv` texture slots per record ride
+/// the unknown bag: pattern fills are unmodeled everywhere (task-5
+/// recorded gaps), and the slots splice back verbatim.
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct StyleEntry {
+    /// `ZSNs` — the style's panel name ("Pastels 001").
+    pub name: String,
+    /// `ZSFi` — record flags. Corpus-constant `0x1ff`; semantics
+    /// unverified, preserved as-is.
+    pub flags: i64,
+    /// `ZSOi` — record kind: `8` marks object styles, `0x1f` marks
+    /// text styles (across the CS6 library corpus the split is exact:
+    /// every `Text *` library carries `0x1f` exclusively, every other
+    /// library `8`).
+    pub kind: i64,
+    /// `PATv` — the paint bundle: brush/fill colours plus the `FPLv`
+    /// fill definition (see [`PaintStyle`]).
+    pub paint: PaintStyle,
+    /// `PSXf`/`PSYf` — the fill's start handle.
+    pub fill_start: Point,
+    /// `PEXf`/`PEYf` — the fill's end handle.
+    pub fill_end: Point,
+    /// `PFXf`/`PFYf` — the fill's third handle (elliptical squash).
+    pub fill_third: Point,
+    /// `BRPi` — brush placement (same slot as a path's).
+    pub brush_placement: i64,
+    /// `FOTb` — fill on top of the brush (same slot as a path's).
+    pub fill_on_top: bool,
+    /// `EFLv`* — live effects carried by the style, file order. The
+    /// CS6 libraries mostly carry a placeholder effect named
+    /// `UNUSED`/`Untitled` in this slot; it round-trips verbatim.
+    pub effects: Vec<Effect>,
+    /// The text-attribute block (`FALi`…`TOSi`): what a text style
+    /// applies onto a text selection. Object styles carry the slots
+    /// too (at defaults) — they are part of the record spine.
+    pub text: StyleText,
+}
+
+/// The text-attribute half of a [`StyleEntry`] — the fixed `FALi`
+/// `FATi` `FARi` `FABi` `FONs` [`CFTs`] `PTSf` `BOLb` `ITLb` `UNDb`
+/// `JSTi` `HSCf` `RKNf` `LEDf` `LDMi` `ATKb` `TIAb` `TAAi` `TA1i`
+/// `TA2i` `TOSi` spine in file order. Field semantics mirror the
+/// text-object slots of the same FourCC where those are decoded
+/// (`FONs`, `PTSf`, `BOLb`, `ITLb`, `UNDb`, `JSTi`, `HSCf`, `RKNf`,
+/// `LEDf`, `LDMi`); the rest are preserved raw with their corpus
+/// values recorded.
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct StyleText {
+    /// `FALi` — text-box left margin.
+    pub margin_left: i64,
+    /// `FATi` — text-box top margin.
+    pub margin_top: i64,
+    /// `FARi` — text-box right margin.
+    pub margin_right: i64,
+    /// `FABi` — text-box bottom margin.
+    pub margin_bottom: i64,
+    /// `FONs` — font family.
+    pub font: String,
+    /// `CFTs`? — font category. Absent in 30 of the 1069 corpus
+    /// records; `None` there.
+    pub font_category: Option<String>,
+    /// `PTSf` — font point size.
+    pub size: f64,
+    /// `BOLb` — bold.
+    pub bold: bool,
+    /// `ITLb` — italic.
+    pub italic: bool,
+    /// `UNDb` — underline.
+    pub underline: bool,
+    /// `JSTi` — justification.
+    pub justification: i64,
+    /// `HSCf` — horizontal scale.
+    pub horizontal_scale: f64,
+    /// `RKNf` — kerning.
+    pub kerning: f64,
+    /// `LEDf` — line height.
+    pub leading: f64,
+    /// `LDMi` — line-height unit.
+    pub leading_unit: i64,
+    /// `ATKb` — auto-kern.
+    pub auto_kern: bool,
+    /// `TIAb` — corpus-constant `1`; semantics unverified, preserved
+    /// as-is.
+    pub anti_alias_enabled: bool,
+    /// `TAAi` — anti-alias mode (same slot as a text object's):
+    /// corpus `0`, with `1`/`3` on a few text styles.
+    pub anti_alias: i64,
+    /// `TA1i` — unverified pair slot; corpus pairs with `TA2i` as
+    /// (`0xc0`, `0x40`) or (`0xff`, `0`). Preserved as-is.
+    pub attr_1: i64,
+    /// `TA2i` — unverified pair slot; see [`StyleText::attr_1`].
+    pub attr_2: i64,
+    /// `TOSi` — unverified slot; corpus `8` or `4` (8 alongside the
+    /// (`0xc0`, `0x40`) pair, 4 alongside (`0xff`, `0`)). Preserved
+    /// as-is.
+    pub tab_size: i64,
 }
 
 /// How a fill derives its pixels (`FSXi`; `FSHi` is the

@@ -14,7 +14,7 @@ use crate::fwmap::{FourCC, MapError};
 use crate::model::{
     Cell, Contour, Document, Effect, EffectProperty, EffectValue, ExportOptions, Fill, FillShape,
     Gradient, GradientStop, Grid, GroupObject, Guides, ImageObject, Layer, LayerList,
-    NineSliceGuides, PaintStyle, PathObject, PathPoint, PrimitiveSource, SliceObject,
+    NineSliceGuides, PaintStyle, PathObject, PathPoint, PrimitiveSource, SliceObject, StyleEntry,
     SymbolDefinition, SymbolInstanceObject, TextObject, TextOnPath, TextRun, TextStyle, TileRef,
 };
 use crate::registry::{ObjectData, ObjectId};
@@ -50,6 +50,29 @@ pub fn write(
     };
     let bagged = writer.bag.take_under("");
     Ok((splice(mapped, bagged), stats))
+}
+
+/// Writes a style library: named [`StyleEntry`] records plus the
+/// preserved-node bag back into the root node list a `.stl`
+/// container's `mkTS` chunk carries — the write counterpart of
+/// [`read_style_library`](crate::fwmap::read_style_library). Bagged
+/// nodes splice back at their recorded positions, so a library
+/// round-tripped through the read/write pair re-serializes
+/// byte-identically, model edits included.
+pub fn write_style_library(
+    entries: &[StyleEntry],
+    unknown: &UnknownBag,
+) -> Result<(Vec<Node>, WriteStats), MapError> {
+    let mut writer = Writer {
+        bag: unknown.clone(),
+        doc: &Document::default(),
+    };
+    let node = writer.write_style_list(entries, "")?;
+    let stats = WriteStats {
+        unconsumed_unknown: writer.bag.len(),
+    };
+    let bagged = writer.bag.take_under("");
+    Ok((splice(vec![node], bagged), stats))
 }
 
 fn n_i(fourcc: FourCC, value: i64) -> Node {
@@ -224,6 +247,13 @@ impl Writer<'_> {
             // and any bagged ones splice back verbatim.
             let expv_path = format!("{path}/EXPv");
             mapped.push(self.write_export_options(export, &expv_path, &[]));
+        }
+        if !doc.styles.is_empty() {
+            // The dictionary records `ZSLv` under `MKBv` but no corpus
+            // sample pins its position among the document children;
+            // after `EXPv` is FireCraft's canonical slot, pinned by the
+            // synthetic round-trip fixture.
+            mapped.push(self.write_style_list(&doc.styles, path)?);
         }
         let children = self.splice_container(mapped, path);
         Ok(n_kids(*b"MKBv", children))
@@ -721,6 +751,76 @@ impl Writer<'_> {
         }
         let children = self.splice_container(mapped, path);
         Ok(n_kids(*b"FGLv", children))
+    }
+
+    /// Style library list (`ZSLv`), mirroring `write_symbol_list`:
+    /// bagged list children keep their slots, so each record's path
+    /// index comes from [`mapped_indices`].
+    fn write_style_list(
+        &mut self,
+        entries: &[StyleEntry],
+        parent_path: &str,
+    ) -> Result<Node, MapError> {
+        let path = format!("{parent_path}/ZSLv");
+        let bagged = self.bag.take_under(&path);
+        let indices = mapped_indices(&bagged, entries.len());
+        let mut mapped = Vec::with_capacity(entries.len());
+        for (i, entry) in entries.iter().enumerate() {
+            let zstv_path = format!("{path}/ZSTv[{}]", indices[i]);
+            mapped.push(self.write_style_entry(entry, &zstv_path)?);
+        }
+        Ok(n_kids(*b"ZSLv", splice(mapped, bagged)))
+    }
+
+    /// One `ZSTv`, in the corpus's fixed child spine: `ZSNs ZSFi ZSOi
+    /// PATv PSXf PSYf PEXf PEYf PFXf PFYf BRPi FOTb FALi FATi FARi
+    /// FABi EFLv* FONs CFTs? PTSf BOLb ITLb UNDb JSTi HSCf RKNf LEDf
+    /// LDMi ATKb TIAb TAAi TA1i TA2i TOSi`. The two `IMGv` texture
+    /// slots and any unmodeled extra splice back from the bag.
+    #[allow(clippy::too_many_lines)]
+    fn write_style_entry(&mut self, entry: &StyleEntry, path: &str) -> Result<Node, MapError> {
+        let mut mapped = Vec::new();
+        mapped.push(n_s(*b"ZSNs", &entry.name));
+        mapped.push(n_i(*b"ZSFi", entry.flags));
+        mapped.push(n_i(*b"ZSOi", entry.kind));
+        mapped.push(self.write_paint(&entry.paint, &format!("{path}/PATv"))?);
+        mapped.push(n_f(*b"PSXf", entry.fill_start.x));
+        mapped.push(n_f(*b"PSYf", entry.fill_start.y));
+        mapped.push(n_f(*b"PEXf", entry.fill_end.x));
+        mapped.push(n_f(*b"PEYf", entry.fill_end.y));
+        mapped.push(n_f(*b"PFXf", entry.fill_third.x));
+        mapped.push(n_f(*b"PFYf", entry.fill_third.y));
+        mapped.push(n_i(*b"BRPi", entry.brush_placement));
+        // Every bool slot of the spine is present-as-false in the
+        // corpus (e.g. `FOTb` 0 in 1042 of 1069 records) — emit them
+        // unconditionally so read⇄write is identity.
+        mapped.push(n_b(*b"FOTb", entry.fill_on_top));
+        mapped.push(n_i(*b"FALi", entry.text.margin_left));
+        mapped.push(n_i(*b"FATi", entry.text.margin_top));
+        mapped.push(n_i(*b"FARi", entry.text.margin_right));
+        mapped.push(n_i(*b"FABi", entry.text.margin_bottom));
+        mapped.extend(self.write_effects(&entry.effects, path)?);
+        mapped.push(n_s(*b"FONs", &entry.text.font));
+        if let Some(category) = &entry.text.font_category {
+            mapped.push(n_s(*b"CFTs", category));
+        }
+        mapped.push(n_f(*b"PTSf", entry.text.size));
+        mapped.push(n_b(*b"BOLb", entry.text.bold));
+        mapped.push(n_b(*b"ITLb", entry.text.italic));
+        mapped.push(n_b(*b"UNDb", entry.text.underline));
+        mapped.push(n_i(*b"JSTi", entry.text.justification));
+        mapped.push(n_f(*b"HSCf", entry.text.horizontal_scale));
+        mapped.push(n_f(*b"RKNf", entry.text.kerning));
+        mapped.push(n_f(*b"LEDf", entry.text.leading));
+        mapped.push(n_i(*b"LDMi", entry.text.leading_unit));
+        mapped.push(n_b(*b"ATKb", entry.text.auto_kern));
+        mapped.push(n_b(*b"TIAb", entry.text.anti_alias_enabled));
+        mapped.push(n_i(*b"TAAi", entry.text.anti_alias));
+        mapped.push(n_i(*b"TA1i", entry.text.attr_1));
+        mapped.push(n_i(*b"TA2i", entry.text.attr_2));
+        mapped.push(n_i(*b"TOSi", entry.text.tab_size));
+        let children = self.splice_container(mapped, path);
+        Ok(n_kids(*b"ZSTv", children))
     }
 
     /// One ramp: `FNCi` count then one `FGIv` per stop (position +

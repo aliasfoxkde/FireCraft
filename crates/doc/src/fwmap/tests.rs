@@ -6,15 +6,15 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use super::MapError;
-use super::reader::read;
+use super::reader::{read, read_style_library};
 use super::unknown::UnknownBag;
-use super::writer::{mapped_indices, splice, write};
+use super::writer::{mapped_indices, splice, write, write_style_library};
 use crate::model::{
     Canvas, Cell, Contour, Document, DocumentInfo, Effect, EffectProperty, EffectValue,
     ExportOptions, Grid, GroupObject, Guides, ImageObject, Layer, LayerList, NineSliceGuides, Page,
     PageInfo, PaintStyle, PathObject, PathPoint, PrimitiveSource, SliceBackground, SliceBehavior,
-    SliceObject, SymbolAnimation, SymbolDefinition, SymbolInstanceObject, SymbolType, TextObject,
-    TextRun, TextStyle, TileRef,
+    SliceObject, StyleEntry, StyleText, SymbolAnimation, SymbolDefinition, SymbolInstanceObject,
+    SymbolType, TextObject, TextRun, TextStyle, TileRef,
 };
 use crate::registry::{ObjectData, ObjectId, Registry};
 use fwpng::nodetree::{Node, NodeValue, parse, serialize};
@@ -2367,4 +2367,294 @@ fn a_malformed_ramp_bags_the_whole_fill() {
     }
     let (tree2, _) = write(&doc2, &bag).expect("write");
     assert_eq!(serialize(&tree2), serialize(&tree));
+}
+
+// --- M15 task 6: the style model (ZSLv/ZSTv) ----------------------------
+
+/// The raw `ZSTv` of the CS6 library corpus's fixed child spine: names,
+/// flags, kind, the `PATv` paint (solid pair, modeled `FPLv` gradient,
+/// and the texture subtrees that ride the bag), the fill-handle trio,
+/// brush slots, one live effect, the text block (with `CFTs`), and the
+/// two `IMGv` texture slots last.
+fn zstv_node() -> Node {
+    n_k(
+        b"ZSTv",
+        vec![
+            n_s(b"ZSNs", "Pastels 001"),
+            n_i(b"ZSFi", 0x1ff),
+            n_i(b"ZSOi", 8),
+            n_k(
+                b"PATv",
+                vec![
+                    n_i(b"BCLi", 0xff_ff_ff_ff),
+                    n_i(b"FCLi", 0xff_f1_1c_06),
+                    n_k(b"FPLv", fplv_children()),
+                    // Texture subtrees: unmodeled everywhere, bagged
+                    // under the `PATv` path and spliced back whole.
+                    n_k(
+                        b"TXBv",
+                        vec![
+                            n_s(b"INMs", "DNA"),
+                            n_k(
+                                b"MSKv",
+                                vec![
+                                    n_i(b"WPXi", 96),
+                                    n_i(b"HPXi", 96),
+                                    n_i(b"TSZi", 256),
+                                    n_k(b"TILv", vec![n_i(b"TIDi", 0x7fa231)]),
+                                ],
+                            ),
+                        ],
+                    ),
+                    n_k(
+                        b"TXFv",
+                        vec![
+                            n_s(b"INMs", "4"),
+                            n_k(
+                                b"MSKv",
+                                vec![
+                                    n_i(b"WPXi", 60),
+                                    n_i(b"HPXi", 60),
+                                    n_i(b"TSZi", 256),
+                                    n_k(b"TILv", vec![n_i(b"TIDi", 0x7fa232)]),
+                                ],
+                            ),
+                        ],
+                    ),
+                ],
+            ),
+            n_f(b"PSXf", 74.0),
+            n_f(b"PSYf", 1792.0),
+            n_f(b"PEXf", 74.0),
+            n_f(b"PEYf", 1817.0),
+            n_f(b"PFXf", 124.0),
+            n_f(b"PFYf", 1792.0),
+            n_i(b"BRPi", 1),
+            n_b(b"FOTb", false),
+            n_i(b"FALi", 18),
+            n_i(b"FATi", 700),
+            n_i(b"FARi", 0x7c),
+            n_i(b"FABi", 719),
+            n_k(
+                b"EFLv",
+                vec![
+                    n_s(b"CATs", "Shadow and Glow"),
+                    n_s(b"INMs", "dropShadow"),
+                    n_k(
+                        b"EPSv",
+                        vec![n_k(
+                            b"DCEv",
+                            vec![n_s(b"DCKs", "gaussian_blur_radius"), n_s(b"DCVs", "5")],
+                        )],
+                    ),
+                ],
+            ),
+            n_s(b"FONs", "Arial"),
+            n_s(b"CFTs", "Arial-Regular"),
+            n_f(b"PTSf", 12.0),
+            n_b(b"BOLb", false),
+            n_b(b"ITLb", false),
+            n_b(b"UNDb", false),
+            n_i(b"JSTi", 0),
+            n_f(b"HSCf", 1.0),
+            n_f(b"RKNf", 0.0),
+            n_f(b"LEDf", 1.0),
+            n_i(b"LDMi", 0),
+            n_b(b"ATKb", true),
+            n_b(b"TIAb", true),
+            n_i(b"TAAi", 0),
+            n_i(b"TA1i", 0xc0),
+            n_i(b"TA2i", 0x40),
+            n_i(b"TOSi", 8),
+            // The two texture-image slots that end every record.
+            n_k(
+                b"IMGv",
+                vec![
+                    n_b(b"LCKb", false),
+                    n_f(b"XOFf", 0.0),
+                    n_f(b"YOFf", 0.0),
+                    n_f(b"XLCf", 0.0),
+                    n_f(b"YLCf", 0.0),
+                    n_i(b"WPXi", 45),
+                    n_i(b"HPXi", 45),
+                    n_i(b"TSZi", 80),
+                    n_k(b"TILv", vec![n_i(b"TIDi", 0x7fa241)]),
+                    n_k(b"DTAv", Vec::new()),
+                ],
+            ),
+            n_k(
+                b"IMGv",
+                vec![
+                    n_b(b"LCKb", false),
+                    n_f(b"XOFf", 0.0),
+                    n_f(b"YOFf", 0.0),
+                    n_f(b"XLCf", 0.0),
+                    n_f(b"YLCf", 0.0),
+                    n_i(b"WPXi", 21),
+                    n_i(b"HPXi", 21),
+                    n_i(b"TSZi", 80),
+                    n_k(b"TILv", vec![n_i(b"TIDi", 0x7fa242)]),
+                    n_k(b"DTAv", Vec::new()),
+                ],
+            ),
+        ],
+    )
+}
+
+/// What [`zstv_node`] must decode into — the model twin of the raw
+/// record (the gradient is [`expected_fill`]'s).
+fn expected_style() -> StyleEntry {
+    StyleEntry {
+        name: "Pastels 001".to_owned(),
+        flags: 0x1ff,
+        kind: 8,
+        paint: PaintStyle {
+            stroke_raw: 0xff_ff_ff_ff,
+            fill_raw: 0xff_f1_1c_06,
+            fill: Some(Fill {
+                shape: FillShape::Linear,
+                ..expected_fill()
+            }),
+        },
+        fill_start: Point::new(74.0, 1792.0),
+        fill_end: Point::new(74.0, 1817.0),
+        fill_third: Point::new(124.0, 1792.0),
+        brush_placement: 1,
+        fill_on_top: false,
+        effects: vec![Effect {
+            category: "Shadow and Glow".to_owned(),
+            internal_name: "dropShadow".to_owned(),
+            properties: vec![EffectProperty {
+                key: "gaussian_blur_radius".to_owned(),
+                value: EffectValue::Text("5".to_owned()),
+            }],
+        }],
+        text: StyleText {
+            margin_left: 18,
+            margin_top: 700,
+            margin_right: 0x7c,
+            margin_bottom: 719,
+            font: "Arial".to_owned(),
+            font_category: Some("Arial-Regular".to_owned()),
+            size: 12.0,
+            bold: false,
+            italic: false,
+            underline: false,
+            justification: 0,
+            horizontal_scale: 1.0,
+            kerning: 0.0,
+            leading: 1.0,
+            leading_unit: 0,
+            auto_kern: true,
+            anti_alias_enabled: true,
+            anti_alias: 0,
+            attr_1: 0xc0,
+            attr_2: 0x40,
+            tab_size: 8,
+        },
+    }
+}
+
+#[test]
+fn style_library_round_trips_byte_exact() {
+    let root = vec![n_k(b"ZSLv", vec![zstv_node()])];
+    let (styles, bag) = read_style_library(&root).expect("read");
+    assert_eq!(styles, vec![expected_style()], "model equality");
+    let (tree, stats) = write_style_library(&styles, &bag).expect("write");
+    assert_eq!(stats.unconsumed_unknown, 0, "bag fully consumed");
+    assert_eq!(
+        serialize(&tree),
+        serialize(&root),
+        "Adobe wire bytes reproduce exactly"
+    );
+    // Second generation is byte-stable.
+    let (styles2, bag2) = read_style_library(&tree).expect("re-read");
+    assert_eq!(styles2, styles);
+    let (tree2, stats2) = write_style_library(&styles2, &bag2).expect("re-write");
+    assert_eq!(serialize(&tree2), serialize(&root));
+    assert_eq!(stats2.unconsumed_unknown, 0);
+}
+
+#[test]
+fn style_record_keeps_texture_slots_verbatim() {
+    let root = vec![n_k(b"ZSLv", vec![zstv_node()])];
+    let (styles, bag) = read_style_library(&root).expect("read");
+    // The two `IMGv` slots and the `PATv` texture subtrees have no
+    // model home; they must ride the bag, not vanish.
+    let paths: Vec<&str> = bag.iter().map(|(path, _, _)| path).collect();
+    assert!(
+        paths.iter().any(|p| p.ends_with("/PATv")),
+        "PATv texture subtrees bag under the paint path"
+    );
+    assert!(
+        paths.iter().filter(|p| **p == "/ZSLv/ZSTv[0]").count() == 2,
+        "the two IMGv slots bag at the record level"
+    );
+    let (tree, stats) = write_style_library(&styles, &bag).expect("write");
+    assert_eq!(
+        stats.unconsumed_unknown, 0,
+        "every bagged node splices back"
+    );
+    let mut imgvs = Vec::new();
+    find_nodes(&tree, b"IMGv", &mut imgvs);
+    assert_eq!(
+        imgvs.len(),
+        3,
+        "both record texture slots splice back (plus the FPLv tile's)"
+    );
+    // TXBv survives inside the paint too.
+    let mut txbvs = Vec::new();
+    find_nodes(&tree, b"TXBv", &mut txbvs);
+    assert_eq!(txbvs.len(), 1);
+}
+
+#[test]
+fn style_record_wire_shape_matches_corpus_spine() {
+    let doc = Document {
+        styles: vec![expected_style()],
+        ..Document::default()
+    };
+    let (tree, _) = write(&doc, &UnknownBag::new()).expect("write");
+    let mut zstvs = Vec::new();
+    find_nodes(&tree, b"ZSTv", &mut zstvs);
+    assert_eq!(zstvs.len(), 1);
+    let fourccs: Vec<[u8; 4]> = kids_of(zstvs[0]).iter().map(|n| n.fourcc).collect();
+    assert_eq!(
+        fourccs,
+        vec![
+            *b"ZSNs", *b"ZSFi", *b"ZSOi", *b"PATv", *b"PSXf", *b"PSYf", *b"PEXf", *b"PEYf",
+            *b"PFXf", *b"PFYf", *b"BRPi", *b"FOTb", *b"FALi", *b"FATi", *b"FARi", *b"FABi",
+            *b"EFLv", *b"FONs", *b"CFTs", *b"PTSf", *b"BOLb", *b"ITLb", *b"UNDb", *b"JSTi",
+            *b"HSCf", *b"RKNf", *b"LEDf", *b"LDMi", *b"ATKb", *b"TIAb", *b"TAAi", *b"TA1i",
+            *b"TA2i", *b"TOSi",
+        ],
+        "the CS6 corpus's fixed record spine"
+    );
+}
+
+#[test]
+fn document_embedded_style_list_round_trips() {
+    let mut doc = sample_document();
+    doc.styles = vec![expected_style()];
+    let (bytes, doc2, bag2) = round_trip_bytes(&doc, &UnknownBag::new());
+    assert!(bag2.is_empty(), "nothing in the mapped spine may be bagged");
+    assert_eq!(doc, doc2, "styles survive the document round trip");
+    let (bytes2, _doc3, bag3) = round_trip_bytes(&doc2, &bag2);
+    assert_eq!(bytes, bytes2, "canonical emission is byte-stable");
+    assert!(bag3.is_empty());
+    // A document without styles emits no `ZSLv` at all.
+    let plain = sample_document();
+    let (tree, _) = write(&plain, &UnknownBag::new()).expect("write");
+    let mut zslvs = Vec::new();
+    find_nodes(&tree, b"ZSLv", &mut zslvs);
+    assert!(zslvs.is_empty());
+}
+
+#[test]
+fn style_library_refuses_non_style_payload() {
+    // A document's `mkTS` fed to the library reader is a type error,
+    // not an empty library.
+    let root = vec![n_k(b"MKBv", Vec::new())];
+    assert!(read_style_library(&root).is_err());
+    assert!(read_style_library(&[]).is_err());
 }

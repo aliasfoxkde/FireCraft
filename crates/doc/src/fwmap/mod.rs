@@ -18,9 +18,9 @@ mod writer;
 #[cfg(test)]
 mod tests;
 
-pub use reader::read;
+pub use reader::{read, read_style_library};
 pub use unknown::{UnknownBag, UnknownEntry};
-pub use writer::{WriteStats, write};
+pub use writer::{WriteStats, write, write_style_library};
 
 /// A Fireworks node FourCC (`PTHv`, `OPAi`, …).
 pub type FourCC = [u8; 4];

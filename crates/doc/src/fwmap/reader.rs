@@ -13,9 +13,9 @@ use crate::model::{
     Canvas, Cell, Contour, Dither, Document, DocumentInfo, Effect, EffectProperty, EffectValue,
     ExportOptions, Fill, FillShape, Gradient, GradientStop, Grid, GroupObject, Guides, ImageObject,
     Layer, LayerList, NineSliceGuides, Page, PageInfo, PaintStyle, PathObject, PathPoint,
-    PrimitiveSource, SliceBackground, SliceBehavior, SliceObject, SymbolAnimation,
-    SymbolDefinition, SymbolInstanceObject, SymbolType, TextObject, TextOnPath, TextRun, TextStyle,
-    TileRef,
+    PrimitiveSource, SliceBackground, SliceBehavior, SliceObject, StyleEntry, StyleText,
+    SymbolAnimation, SymbolDefinition, SymbolInstanceObject, SymbolType, TextObject, TextOnPath,
+    TextRun, TextStyle, TileRef,
 };
 use crate::registry::{ObjectData, ObjectId, Registry};
 use fwpng::nodetree::{Node, NodeValue};
@@ -54,6 +54,56 @@ pub fn read(nodes: &[Node]) -> Result<(Document, UnknownBag), MapError> {
     }
     document.registry = reader.registry;
     Ok((document, reader.bag))
+}
+
+/// Reads a style library: the `ZSLv` payload of a `.stl` container's
+/// `mkTS` chunk into named [`StyleEntry`] records plus the bag of
+/// everything the model does not interpret (the per-record `IMGv`
+/// texture slots, mostly). The library list is the whole `mkTS`
+/// payload in a style file — no `MKBv` wraps it — so this is the entry
+/// the style-library loader calls; the document path reaches the same
+/// records through [`read`]'s `ZSLv` branch. A payload with no style
+/// content at all is a type error, not an empty library: a document's
+/// `mkTS` fed here must refuse, not silently produce `[]`.
+///
+/// [`read_style_library`]: crate::fwmap::read_style_library
+pub fn read_style_library(nodes: &[Node]) -> Result<(Vec<StyleEntry>, UnknownBag), MapError> {
+    let mut styles = Vec::new();
+    let mut reader = Reader {
+        bag: UnknownBag::new(),
+        registry: Registry::new(),
+    };
+    let mut saw_library = false;
+    for (i, node) in nodes.iter().enumerate() {
+        match &node.fourcc {
+            b"ZSLv" => {
+                saw_library = true;
+                let children = children_of(node, "/ZSLv")?;
+                reader.read_style_list(children, "", &mut styles)?;
+            }
+            // A bare `ZSTv` list is accepted too; the corpus has only
+            // ever carried the `ZSLv` wrapper.
+            b"ZSTv" => {
+                saw_library = true;
+                let path = format!("/ZSTv[{i}]");
+                let children = children_of(node, &path)?;
+                styles.push(reader.read_style_entry(children, &path)?);
+            }
+            // Anything else preserves in the root-level bag; refusal
+            // is reserved for payloads with no style content at all.
+            _ => reader.bag.insert("", i, node.clone()),
+        }
+    }
+    if !saw_library {
+        let first = nodes.first().ok_or_else(|| MapError::BadShape {
+            path: "/ZSLv".to_owned(),
+            node: *b"\0\0\0\0",
+            expected: "ZSLv",
+            found: "nothing",
+        })?;
+        return Err(bad_shape(first, "/ZSLv", "ZSLv"));
+    }
+    Ok((styles, reader.bag))
 }
 
 fn value_kind(node: &Node) -> &'static str {
@@ -279,6 +329,15 @@ impl Reader {
                         let expv_path = format!("{path}/EXPv");
                         let (options, _) = self.read_export(kids, &expv_path, false)?;
                         export = Some(options);
+                    }
+                }
+                b"ZSLv" => {
+                    if document.styles.is_empty() {
+                        let kids = children_of(child, path)?;
+                        let zslv_path = format!("{path}/ZSLv");
+                        self.read_style_list(kids, &zslv_path, &mut document.styles)?;
+                    } else {
+                        self.bag_node(path, i, child);
                     }
                 }
                 _ => self.bag_node(path, i, child),
@@ -528,10 +587,136 @@ impl Reader {
         })
     }
 
+    /// Style library list (`ZSLv` children): `ZSTv` records in file
+    /// order; anything else bags in place (the corpus carries none).
+    /// `parent_path` is the container holding the list — the document
+    /// body (`/MKBv`) or the empty root of a bare library.
+    fn read_style_list(
+        &mut self,
+        children: &[Node],
+        parent_path: &str,
+        out: &mut Vec<StyleEntry>,
+    ) -> Result<(), MapError> {
+        let path = format!("{parent_path}/ZSLv");
+        for (i, child) in children.iter().enumerate() {
+            match &child.fourcc {
+                b"ZSTv" => {
+                    let kids = children_of(child, &path)?;
+                    let zstv_path = format!("{path}/ZSTv[{i}]");
+                    out.push(self.read_style_entry(kids, &zstv_path)?);
+                }
+                _ => self.bag_node(&path, i, child),
+            }
+        }
+        Ok(())
+    }
+
+    /// One `ZSTv` — the named-style record. The mapped spine is the
+    /// corpus's fixed child order; the two `IMGv` texture slots and
+    /// any unmodeled extra splice back verbatim (pattern fills are
+    /// unmodeled everywhere, so the slots have no model home yet).
+    fn read_style_entry(&mut self, children: &[Node], path: &str) -> Result<StyleEntry, MapError> {
+        let (mut name, mut flags, mut kind) = (None, None, None);
+        let mut paint = None;
+        let mut effects = Vec::new();
+        let (mut start_x, mut start_y, mut end_x, mut end_y) = (None, None, None, None);
+        let (mut third_x, mut third_y) = (None, None);
+        let (mut brush_placement, mut fill_on_top) = (None, None);
+        let mut text = StyleTextSlots::default();
+
+        for (i, child) in children.iter().enumerate() {
+            match &child.fourcc {
+                b"ZSNs" => self.slot_str(child, path, i, &mut name)?,
+                b"ZSFi" => self.slot_i64(child, path, i, &mut flags)?,
+                b"ZSOi" => self.slot_i64(child, path, i, &mut kind)?,
+                b"PATv" => {
+                    if paint.is_none() {
+                        let kids = children_of(child, path)?;
+                        let patv_path = format!("{path}/PATv");
+                        paint = Some(self.read_paint(kids, &patv_path)?);
+                    } else {
+                        self.bag_node(path, i, child);
+                    }
+                }
+                b"PSXf" => self.slot_f64(child, path, i, &mut start_x)?,
+                b"PSYf" => self.slot_f64(child, path, i, &mut start_y)?,
+                b"PEXf" => self.slot_f64(child, path, i, &mut end_x)?,
+                b"PEYf" => self.slot_f64(child, path, i, &mut end_y)?,
+                b"PFXf" => self.slot_f64(child, path, i, &mut third_x)?,
+                b"PFYf" => self.slot_f64(child, path, i, &mut third_y)?,
+                b"BRPi" => self.slot_i64(child, path, i, &mut brush_placement)?,
+                b"FOTb" => self.slot_bool(child, path, i, &mut fill_on_top)?,
+                b"EFLv" => {
+                    let eflv_path = format!("{path}/EFLv[{}]", effects.len());
+                    effects.push(self.read_effect(child, &eflv_path)?);
+                }
+                b"FALi" => self.slot_i64(child, path, i, &mut text.margin_left)?,
+                b"FATi" => self.slot_i64(child, path, i, &mut text.margin_top)?,
+                b"FARi" => self.slot_i64(child, path, i, &mut text.margin_right)?,
+                b"FABi" => self.slot_i64(child, path, i, &mut text.margin_bottom)?,
+                b"FONs" => self.slot_str(child, path, i, &mut text.font)?,
+                b"CFTs" => self.slot_str(child, path, i, &mut text.font_category)?,
+                b"PTSf" => self.slot_f64(child, path, i, &mut text.size)?,
+                b"BOLb" => self.slot_bool(child, path, i, &mut text.bold)?,
+                b"ITLb" => self.slot_bool(child, path, i, &mut text.italic)?,
+                b"UNDb" => self.slot_bool(child, path, i, &mut text.underline)?,
+                b"JSTi" => self.slot_i64(child, path, i, &mut text.justification)?,
+                b"HSCf" => self.slot_f64(child, path, i, &mut text.horizontal_scale)?,
+                b"RKNf" => self.slot_f64(child, path, i, &mut text.kerning)?,
+                b"LEDf" => self.slot_f64(child, path, i, &mut text.leading)?,
+                b"LDMi" => self.slot_i64(child, path, i, &mut text.leading_unit)?,
+                b"ATKb" => self.slot_bool(child, path, i, &mut text.auto_kern)?,
+                b"TIAb" => self.slot_bool(child, path, i, &mut text.anti_alias_enabled)?,
+                b"TAAi" => self.slot_i64(child, path, i, &mut text.anti_alias)?,
+                b"TA1i" => self.slot_i64(child, path, i, &mut text.attr_1)?,
+                b"TA2i" => self.slot_i64(child, path, i, &mut text.attr_2)?,
+                b"TOSi" => self.slot_i64(child, path, i, &mut text.tab_size)?,
+                _ => self.bag_node(path, i, child),
+            }
+        }
+
+        Ok(StyleEntry {
+            name: name.unwrap_or_default(),
+            flags: flags.unwrap_or(0x1ff),
+            kind: kind.unwrap_or(8),
+            paint: paint.unwrap_or(PaintStyle {
+                stroke_raw: 0,
+                fill_raw: 0,
+                fill: None,
+            }),
+            fill_start: Point::new(start_x.unwrap_or(0.0), start_y.unwrap_or(0.0)),
+            fill_end: Point::new(end_x.unwrap_or(0.0), end_y.unwrap_or(0.0)),
+            fill_third: Point::new(third_x.unwrap_or(0.0), third_y.unwrap_or(0.0)),
+            brush_placement: brush_placement.unwrap_or(0),
+            fill_on_top: fill_on_top.unwrap_or(false),
+            effects,
+            text: StyleText {
+                margin_left: text.margin_left.unwrap_or(0),
+                margin_top: text.margin_top.unwrap_or(0),
+                margin_right: text.margin_right.unwrap_or(0),
+                margin_bottom: text.margin_bottom.unwrap_or(0),
+                font: text.font.unwrap_or_default(),
+                font_category: text.font_category,
+                size: text.size.unwrap_or(12.0),
+                bold: text.bold.unwrap_or(false),
+                italic: text.italic.unwrap_or(false),
+                underline: text.underline.unwrap_or(false),
+                justification: text.justification.unwrap_or(0),
+                horizontal_scale: text.horizontal_scale.unwrap_or(100.0),
+                kerning: text.kerning.unwrap_or(0.0),
+                leading: text.leading.unwrap_or(1.0),
+                leading_unit: text.leading_unit.unwrap_or(0),
+                auto_kern: text.auto_kern.unwrap_or(true),
+                anti_alias_enabled: text.anti_alias_enabled.unwrap_or(true),
+                anti_alias: text.anti_alias.unwrap_or(0),
+                attr_1: text.attr_1.unwrap_or(0xc0),
+                attr_2: text.attr_2.unwrap_or(0x40),
+                tab_size: text.tab_size.unwrap_or(8),
+            },
+        })
+    }
+
     /// `JSVv` children → script source: the concatenated `JSSs`
-    /// string pieces (the format's answer to the 65535-byte string
-    /// limit). `None` leaves the whole node to the bag — a `JSVv`
-    /// carrying anything but `JSSs` strings is not ours to interpret.
     fn read_script_source(children: &[Node]) -> Option<String> {
         let mut source = String::new();
         for child in children {
@@ -2201,4 +2386,33 @@ impl Reader {
         }
         Ok(Some(out))
     }
+}
+
+/// Option slots gathered while walking one `ZSTv`'s text block, before
+/// they assemble into a [`StyleText`]. A plain struct of `Option`s —
+/// the record spine fixes every slot's type, so defaults only cover
+/// malformed records that omit slots.
+#[derive(Default)]
+struct StyleTextSlots {
+    margin_left: Option<i64>,
+    margin_top: Option<i64>,
+    margin_right: Option<i64>,
+    margin_bottom: Option<i64>,
+    font: Option<String>,
+    font_category: Option<String>,
+    size: Option<f64>,
+    bold: Option<bool>,
+    italic: Option<bool>,
+    underline: Option<bool>,
+    justification: Option<i64>,
+    horizontal_scale: Option<f64>,
+    kerning: Option<f64>,
+    leading: Option<f64>,
+    leading_unit: Option<i64>,
+    auto_kern: Option<bool>,
+    anti_alias_enabled: Option<bool>,
+    anti_alias: Option<i64>,
+    attr_1: Option<i64>,
+    attr_2: Option<i64>,
+    tab_size: Option<i64>,
 }
