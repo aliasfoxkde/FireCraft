@@ -478,15 +478,42 @@ impl SvgWriter<'_> {
                         "<feConvolveMatrix order=\"{side}\" kernelMatrix=\"{matrix}\" divisor=\"{cells}\" edgeMode=\"duplicate\" preserveAlpha=\"false\"/>\n"
                     ));
                 }
-                KernelOp::UnsharpMask { radius, amount } => {
+                KernelOp::UnsharpMask {
+                    radius,
+                    amount,
+                    threshold,
+                } if *threshold == 0 => {
                     // out = orig + amount% · (orig − blur), as an
-                    // arithmetic composite over the blurred input.
+                    // arithmetic composite over the blurred input. A
+                    // raised threshold cannot be expressed here — it
+                    // falls through to the poison arm below rather
+                    // than exporting a filter that overshoots flat
+                    // areas.
                     let a = f64::from((*amount).min(500)) / 100.0;
                     primitives.push_str(&format!(
                         "<feGaussianBlur stdDeviation=\"{}\" result=\"blur\"/><feComposite operator=\"arithmetic\" in=\"SourceGraphic\" in2=\"blur\" k1=\"0\" k2=\"{}\" k3=\"{}\" k4=\"0\"/>\n",
                         num(*radius),
                         num(1.0 + a),
                         num(-a),
+                    ));
+                }
+                KernelOp::Curves { knots } => {
+                    if let Some(transfer) =
+                        lut_transfer(|| ramp_lut(|surface| filters::curves(surface, knots)))
+                    {
+                        primitives.push_str(&transfer);
+                    } else {
+                        unmapped.push(kernel_name(op).to_owned());
+                    }
+                }
+                KernelOp::Sharpen | KernelOp::SharpenMore => {
+                    let matrix = if matches!(op, KernelOp::Sharpen) {
+                        "0 -1 0 -1 5 -1 0 -1 0"
+                    } else {
+                        "-1 -1 -1 -1 9 -1 -1 -1 -1"
+                    };
+                    primitives.push_str(&format!(
+                        "<feConvolveMatrix order=\"3\" kernelMatrix=\"{matrix}\" divisor=\"1\" edgeMode=\"duplicate\" preserveAlpha=\"false\"/>\n"
                     ));
                 }
                 other => unmapped.push(kernel_name(other).to_owned()),
@@ -597,6 +624,15 @@ fn kernel_name(op: &KernelOp) -> &'static str {
         KernelOp::GaussianBlur { .. } => "gaussian blur",
         KernelOp::BoxBlur { .. } => "blur",
         KernelOp::UnsharpMask { .. } => "unsharp mask",
+        KernelOp::Curves { .. } => "curves",
+        KernelOp::AutoLevels => "auto levels",
+        KernelOp::ColorFill { .. } => "color fill",
+        KernelOp::MotionBlur { .. } => "motion blur",
+        KernelOp::RadialBlur { .. } => "radial blur",
+        KernelOp::ZoomBlur { .. } => "zoom blur",
+        KernelOp::Sharpen => "sharpen",
+        KernelOp::SharpenMore => "sharpen more",
+        KernelOp::ConvertToAlpha => "convert to alpha",
         KernelOp::AddNoise { .. } => "add noise",
         KernelOp::FindEdges => "find edges",
     }

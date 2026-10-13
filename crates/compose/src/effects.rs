@@ -3,9 +3,11 @@
 //! Identity is the `EffectMoaID` GUID (the dictionary's `DCEv
 //! "EffectMoaID"` table); stacks written without a GUID — synthetic
 //! `filter.add` payloads — fall back to the internal name (`INMs`).
-//! Effects the kernel catalog cannot interpret — shadows, glows,
-//! bevels, per-channel levels, curves with raw grab points,
-//! motion/radial/zoom blur — are skipped, never approximated: the
+//! Every native CS6 live effect in the M14 enumeration
+//! (`docs/research/fw-code-notes.md`) is interpreted here; effects
+//! outside it — the Photoshop Live Effects container, third-party
+//! plugin GUIDs, Color Fill's exotic blend codes, shadow/glow/emboss
+//! until the composite pass — are skipped, never approximated: the
 //! object renders unfiltered through them. That keeps composition
 //! total and deterministic (the ADR 0002 oracle contract); widening
 //! the catalog is strictly additive.
@@ -15,8 +17,9 @@
 //! [`Plan::skipped`]) — CS6 writes every parameter of an effect it
 //! saved, so absence means a stack we would otherwise be guessing at.
 
-use doc::{Effect, EffectValue};
-use filters::Surface;
+use color::BlendMode;
+use doc::{Effect, EffectValue, NodeValue};
+use filters::{CurvesKnots, Surface};
 
 /// Brightness/Contrast (`EffectMoaID`, dictionary line 1497).
 const GUID_BRIGHTNESS_CONTRAST: &str = "3439b08c-1921-11d3-9bde00e02910d580";
@@ -38,6 +41,24 @@ const GUID_UNSHARP_MASK: &str = "f1cfce44-718e-11d1-8c8200a024cdc039";
 const GUID_ADD_NOISE: &str = "e4c0f4bc-c0a3-4cb3-b3513822027e4d9f";
 /// Find Edges (dictionary line 1562).
 const GUID_FIND_EDGES: &str = "fc7093f1-f95c-11d0-8be200a024cdc039";
+/// Curves (dictionary line 1499).
+const GUID_CURVES: &str = "3439b08e-1923-11d3-9bde00e02910d580";
+/// Auto Levels (dictionary line 1509).
+const GUID_AUTO_LEVELS: &str = "d04ef8c1-71b4-11d1-8c8200a024cdc039";
+/// Color Fill (dictionary line 1557).
+const GUID_COLOR_FILL: &str = "dd54adc0-a279-11d3-b92a000502f3fdbe";
+/// Motion Blur (dictionary line 1504).
+const GUID_MOTION_BLUR: &str = "538016b6-ffd6-418f-a10c590e6ee841ae";
+/// Radial Blur (dictionary line 1516).
+const GUID_RADIAL_BLUR: &str = "d1c33142-2ad8-4215-a39fc5d934c8fc0c";
+/// Zoom Blur (dictionary line 1506).
+const GUID_ZOOM_BLUR: &str = "94dbd663-9b2e-44bf-8064ab6efdd2d327";
+/// Sharpen (dictionary line 1494).
+const GUID_SHARPEN: &str = "c20952b1-fc76-11d0-8be700a024cdc039";
+/// Sharpen More (dictionary line 1493).
+const GUID_SHARPEN_MORE: &str = "1f2f2591-9db7-11d1-8cad00a024cdc039";
+/// Convert to Alpha (dictionary line 1495).
+const GUID_CONVERT_TO_ALPHA: &str = "2932d5a2-ca48-11d1-8561000502701850";
 
 /// One interpretable kernel step, in stack order.
 #[derive(Clone, Debug, PartialEq)]
@@ -84,14 +105,60 @@ pub enum KernelOp {
         /// Box radius.
         radius: u32,
     },
-    /// Unsharp Mask; a non-zero threshold skips the effect (the kernel
-    /// has no threshold step — recorded limitation).
+    /// Unsharp Mask with CS6's threshold step (channels whose delta
+    /// is at or below the threshold stay untouched).
     UnsharpMask {
         /// `unsharp_mask_radius`.
         radius: f64,
         /// `unsharp_mask_amount`, 0..=500.
         amount: u32,
+        /// `unsharp_mask_threshold` (absent = 0).
+        threshold: u8,
     },
+    /// Curves: knot lists per channel (`GPLv` grab points).
+    Curves {
+        /// The knots.
+        knots: CurvesKnots,
+    },
+    /// Auto Levels — per-channel histogram stretch, no parameters.
+    AutoLevels,
+    /// Color Fill: solid color at opacity in a blend mode.
+    ColorFill {
+        /// `Color` (`#rrggbb`).
+        fill: [u8; 3],
+        /// `Opacity`, 0..=100.
+        opacity: u32,
+        /// `Blendmode`, the dictionary's numeric code mapped onto the
+        /// kernel blend set.
+        mode: BlendMode,
+    },
+    /// Motion Blur.
+    MotionBlur {
+        /// `motion_blur_angle`, degrees.
+        angle_degrees: f64,
+        /// `motion_blur_distance`, 1..=100.
+        distance: u32,
+    },
+    /// Radial (spin) Blur.
+    RadialBlur {
+        /// `radial_blur_amount` (sweep degrees), 1..=100.
+        amount: u32,
+        /// `radial_blur_quality` (taps), 1..=100.
+        quality: u32,
+    },
+    /// Zoom Blur.
+    ZoomBlur {
+        /// `zoom_blur_amount` (% pinch), 1..=100.
+        amount: u32,
+        /// `zoom_blur_quality` (taps), 1..=100.
+        quality: u32,
+    },
+    /// Sharpen — fixed preset, no parameters.
+    Sharpen,
+    /// Sharpen More — fixed preset, no parameters.
+    SharpenMore,
+    /// Convert to Alpha — luma-to-opacity stencil, no parameters.
+    ConvertToAlpha,
     /// Add Noise with a stack-deterministic seed (no clocks, no
     /// randomness — the seed derives from the effect's own bytes, so
     /// journal replay and re-renders are bit-stable).
@@ -156,6 +223,30 @@ pub fn plan(stack: &[Effect]) -> Plan {
                 None => skipped += 1,
             },
             Some(id) if id == GUID_FIND_EDGES => ops.push(KernelOp::FindEdges),
+            Some(id) if id == GUID_CURVES => match curves(effect) {
+                Some(op) => ops.push(op),
+                None => skipped += 1,
+            },
+            Some(id) if id == GUID_AUTO_LEVELS => ops.push(KernelOp::AutoLevels),
+            Some(id) if id == GUID_COLOR_FILL => match color_fill(effect) {
+                Some(op) => ops.push(op),
+                None => skipped += 1,
+            },
+            Some(id) if id == GUID_MOTION_BLUR => match motion_blur(effect) {
+                Some(op) => ops.push(op),
+                None => skipped += 1,
+            },
+            Some(id) if id == GUID_RADIAL_BLUR => match radial_blur(effect) {
+                Some(op) => ops.push(op),
+                None => skipped += 1,
+            },
+            Some(id) if id == GUID_ZOOM_BLUR => match zoom_blur(effect) {
+                Some(op) => ops.push(op),
+                None => skipped += 1,
+            },
+            Some(id) if id == GUID_SHARPEN => ops.push(KernelOp::Sharpen),
+            Some(id) if id == GUID_SHARPEN_MORE => ops.push(KernelOp::SharpenMore),
+            Some(id) if id == GUID_CONVERT_TO_ALPHA => ops.push(KernelOp::ConvertToAlpha),
             // A GUID we do not recognize is never guessed at — CS6
             // files carry effect identities beyond our kernel catalog.
             Some(_) => skipped += 1,
@@ -195,15 +286,42 @@ pub fn apply_stack(mut surface: Surface, ops: &[KernelOp]) -> Surface {
             } => filters::hsl(&surface, *hue, *saturation, *lightness),
             KernelOp::GaussianBlur { radius } => filters::gaussian_blur(&surface, *radius),
             KernelOp::BoxBlur { radius } => filters::box_blur(&surface, *radius),
-            KernelOp::UnsharpMask { radius, amount } => {
-                filters::unsharp_mask(&surface, *radius, *amount)
-            }
+            KernelOp::UnsharpMask {
+                radius,
+                amount,
+                threshold,
+            } => filters::unsharp_mask_thresholded(&surface, *radius, *amount, *threshold),
             KernelOp::AddNoise {
                 seed,
                 amount,
                 monochrome,
             } => filters::add_noise(&surface, *seed, *amount, *monochrome),
             KernelOp::FindEdges => filters::find_edges(&surface),
+            KernelOp::Curves { knots } => filters::curves(&surface, knots),
+            KernelOp::AutoLevels => filters::auto_levels(&surface),
+            KernelOp::ColorFill {
+                fill,
+                opacity,
+                mode,
+            } => filters::solid_fill(
+                &surface,
+                color::Rgba8::new(fill[0], fill[1], fill[2], 255),
+                *opacity,
+                *mode,
+            ),
+            KernelOp::MotionBlur {
+                angle_degrees,
+                distance,
+            } => filters::motion_blur(&surface, *angle_degrees, *distance),
+            KernelOp::RadialBlur { amount, quality } => {
+                filters::radial_blur_spin(&surface, *amount, *quality)
+            }
+            KernelOp::ZoomBlur { amount, quality } => {
+                filters::zoom_blur(&surface, *amount, *quality)
+            }
+            KernelOp::Sharpen => filters::sharpen(&surface),
+            KernelOp::SharpenMore => filters::sharpen_more(&surface),
+            KernelOp::ConvertToAlpha => filters::convert_to_alpha(&surface),
         };
     }
     surface
@@ -256,8 +374,147 @@ fn by_name(effect: &Effect) -> Option<KernelOp> {
         "brightnesscontrast" => brightness_contrast(effect),
         "huesaturation" => hue_saturation(effect),
         "levels" => levels(effect),
+        "curves" => curves(effect),
+        "autolevels" => Some(KernelOp::AutoLevels),
+        "colorfill" => color_fill(effect),
+        "motionblur" => motion_blur(effect),
+        "radialblur" => radial_blur(effect),
+        "zoomblur" => zoom_blur(effect),
+        "sharpen" => Some(KernelOp::Sharpen),
+        "sharpenmore" => Some(KernelOp::SharpenMore),
+        "converttoalpha" => Some(KernelOp::ConvertToAlpha),
         _ => None,
     }
+}
+
+/// Curves knots: each `*_points` property carries a `GPLv` grab-point
+/// list node; every `GPTv` child holds `XLCf`/`YLCf` floats. A
+/// malformed list fails the whole effect (we would be misreading the
+/// tree, not reading a curve). An effect with no knot lists at all is
+/// skipped — it would change nothing.
+fn curves(effect: &Effect) -> Option<KernelOp> {
+    let knots = CurvesKnots {
+        rgb: grab_points(effect, "rgb_points")?,
+        red: grab_points(effect, "red_points")?,
+        green: grab_points(effect, "green_points")?,
+        blue: grab_points(effect, "blue_points")?,
+    };
+    if knots.is_empty() {
+        return None;
+    }
+    Some(KernelOp::Curves { knots })
+}
+
+/// Reads one `GPLv` list; an absent property is an empty channel
+/// (CS6 writes only the channels the user touched).
+fn grab_points(effect: &Effect, key: &str) -> Option<Vec<(f64, f64)>> {
+    let node = match prop(effect, key) {
+        Some(EffectValue::Raw(node)) => node,
+        Some(EffectValue::Text(_)) => return None,
+        None => return Some(Vec::new()),
+    };
+    if node.fourcc != *b"GPLv" {
+        return None;
+    }
+    let NodeValue::Children(points) = &node.value else {
+        return None;
+    };
+    let mut out = Vec::with_capacity(points.len());
+    for point in points {
+        if point.fourcc != *b"GPTv" {
+            return None;
+        }
+        let NodeValue::Children(coords) = &point.value else {
+            return None;
+        };
+        let mut x = None;
+        let mut y = None;
+        for coord in coords {
+            match (coord.fourcc, &coord.value) {
+                (f, NodeValue::Float(v)) if f == *b"XLCf" => x = Some(*v),
+                (f, NodeValue::Float(v)) if f == *b"YLCf" => y = Some(*v),
+                _ => {}
+            }
+        }
+        out.push((x?, y?));
+    }
+    Some(out)
+}
+
+fn color_fill(effect: &Effect) -> Option<KernelOp> {
+    let hex = prop_text(effect, "Color")?;
+    let hex = hex.trim().trim_start_matches('#');
+    if hex.len() != 6 || !hex.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return None;
+    }
+    let channel = |at: usize| u8::from_str_radix(&hex[at..at + 2], 16).ok();
+    let fill = [channel(0)?, channel(2)?, channel(4)?];
+    let opacity = prop_f64(effect, "Opacity")?;
+    let code = prop_f64(effect, "Blendmode")?;
+    Some(KernelOp::ColorFill {
+        fill,
+        opacity: opacity.clamp(0.0, 100.0) as u32,
+        mode: blend_mode_code(code)?,
+    })
+}
+
+/// The dictionary's `Blendmode` numeric codes mapped onto the kernel
+/// blend set. The codes with no kernel counterpart (reflect, glow,
+/// freeze, negation, xor, tint, …) return `None` — the effect skips
+/// rather than guessing what CS6's private mode table means.
+fn blend_mode_code(code: f64) -> Option<BlendMode> {
+    match code as i64 {
+        0 => Some(BlendMode::Normal),
+        2 => Some(BlendMode::ColorBurn),
+        3 => Some(BlendMode::Luminosity),
+        4 => Some(BlendMode::HardLight),
+        8 => Some(BlendMode::Lighten),
+        9 => Some(BlendMode::Multiply),
+        10 => Some(BlendMode::ColorDodge),
+        18 => Some(BlendMode::SoftLight),
+        21 => Some(BlendMode::Hue),
+        22 => Some(BlendMode::Saturation),
+        33 => Some(BlendMode::Exclusion),
+        35 => Some(BlendMode::Difference),
+        40 => Some(BlendMode::Overlay),
+        _ => None,
+    }
+}
+
+fn motion_blur(effect: &Effect) -> Option<KernelOp> {
+    let angle = prop_f64(effect, "motion_blur_angle")?;
+    let distance = prop_f64(effect, "motion_blur_distance")?;
+    if distance < 1.0 {
+        return None;
+    }
+    Some(KernelOp::MotionBlur {
+        angle_degrees: angle.clamp(0.0, 360.0),
+        distance: distance.clamp(1.0, 100.0) as u32,
+    })
+}
+
+fn radial_blur(effect: &Effect) -> Option<KernelOp> {
+    let amount = prop_f64(effect, "radial_blur_amount")?;
+    let quality = prop_f64(effect, "radial_blur_quality")?;
+    if amount < 1.0 || quality < 1.0 {
+        return None;
+    }
+    Some(KernelOp::RadialBlur {
+        amount: amount.clamp(1.0, 100.0) as u32,
+        quality: quality.clamp(1.0, 100.0) as u32,
+    })
+}
+
+fn zoom_blur(effect: &Effect) -> Option<KernelOp> {
+    let amount = prop_f64(effect, "zoom_blur_amount")?;
+    let quality = prop_f64(effect, "zoom_blur_quality")?;
+    if amount < 1.0 || quality < 1.0 {
+        return None;
+    }
+    Some(KernelOp::ZoomBlur {
+        amount: amount.clamp(1.0, 100.0) as u32,
+        quality: quality.clamp(1.0, 100.0) as u32,
+    })
 }
 
 fn brightness_contrast(effect: &Effect) -> Option<KernelOp> {
@@ -301,21 +558,20 @@ fn gaussian_blur(effect: &Effect) -> Option<KernelOp> {
 }
 
 fn unsharp_mask(effect: &Effect) -> Option<KernelOp> {
-    // The kernel has no threshold step; a threshold other than zero
-    // would silently change meaning, so the effect is skipped instead.
-    if let Some(EffectValue::Text(threshold)) = prop(effect, "unsharp_mask_threshold") {
-        if threshold.trim().parse::<f64>().is_ok_and(|t| t != 0.0) {
-            return None;
-        }
-    }
     let radius = prop_f64(effect, "unsharp_mask_radius")?;
     let amount = prop_f64(effect, "unsharp_mask_amount")?;
     if radius <= 0.0 {
         return None;
     }
+    // The threshold step is part of the kernel now (M14); an absent
+    // property reads as CS6's default 0.
+    let threshold = prop_f64(effect, "unsharp_mask_threshold")
+        .unwrap_or(0.0)
+        .clamp(0.0, 255.0) as u8;
     Some(KernelOp::UnsharpMask {
         radius: radius.clamp(0.1, 250.0),
         amount: amount.clamp(0.0, 500.0) as u32,
+        threshold,
     })
 }
 
@@ -351,6 +607,14 @@ fn prop_f64(effect: &Effect, key: &str) -> Option<f64> {
 
 fn prop_u8(effect: &Effect, key: &str) -> Option<u8> {
     prop_f64(effect, key).map(|value| value.round().clamp(0.0, 255.0) as u8)
+}
+
+/// Text property value, for the non-decimal encodings (`Color` hex).
+fn prop_text<'a>(effect: &'a Effect, key: &str) -> Option<&'a str> {
+    match prop(effect, key)? {
+        EffectValue::Text(text) => Some(text),
+        EffectValue::Raw(_) => None,
+    }
 }
 
 /// FNV-1a over the effect's own bytes: the internal name, then every
@@ -474,7 +738,7 @@ mod tests {
     }
 
     #[test]
-    fn unsharp_with_threshold_is_uninterpretable() {
+    fn unsharp_threshold_rides_through_to_the_kernel() {
         let kept = guid_effect(
             "unsharpMask",
             GUID_UNSHARP_MASK,
@@ -484,7 +748,7 @@ mod tests {
                 ("unsharp_mask_threshold", "0"),
             ],
         );
-        let skipped = guid_effect(
+        let raised = guid_effect(
             "unsharpMask",
             GUID_UNSHARP_MASK,
             &[
@@ -495,11 +759,280 @@ mod tests {
         );
         assert!(matches!(
             plan(&[kept]).ops[0],
-            KernelOp::UnsharpMask { amount: 80, .. }
+            KernelOp::UnsharpMask {
+                amount: 80,
+                threshold: 0,
+                ..
+            }
         ));
-        let plan = plan(&[skipped]);
-        assert!(plan.ops.is_empty());
-        assert_eq!(plan.skipped, 1);
+        // The threshold rides through to the kernel now (the M7-era
+        // skip is retired); an absent property reads as the CS6
+        // default 0.
+        assert!(matches!(
+            plan(&[raised]).ops[0],
+            KernelOp::UnsharpMask { threshold: 10, .. }
+        ));
+        let bare = guid_effect(
+            "unsharpMask",
+            GUID_UNSHARP_MASK,
+            &[("unsharp_mask_radius", "2"), ("unsharp_mask_amount", "80")],
+        );
+        assert!(matches!(
+            plan(&[bare]).ops[0],
+            KernelOp::UnsharpMask { threshold: 0, .. }
+        ));
+    }
+
+    #[test]
+    fn every_enumerated_native_guid_is_recognized() {
+        // The M14 floor: each effect CS6 ships natively maps to an op
+        // (with its required parameters present) — nothing rides
+        // through unfiltered.
+        let mut stack = Vec::new();
+        let mut curves = guid_effect("curves", GUID_CURVES, &[]);
+        curves.properties.push(EffectProperty {
+            key: "rgb_points".to_owned(),
+            value: EffectValue::Raw(grab_list(&[(0.0, 0.0), (255.0, 255.0)])),
+        });
+        stack.push(curves);
+        for (name, guid, props) in [
+            (
+                "brightnessContrast",
+                GUID_BRIGHTNESS_CONTRAST,
+                vec![("brightness_amount", "10"), ("contrast_amount", "0")],
+            ),
+            (
+                "hueSaturation",
+                GUID_HUE_SATURATION,
+                vec![
+                    ("hue_amount", "0"),
+                    ("saturation_amount", "0"),
+                    ("lightness_amount", "0"),
+                ],
+            ),
+            (
+                "levels",
+                GUID_LEVELS,
+                vec![
+                    ("source_low_rgb", "0"),
+                    ("source_high_rgb", "255"),
+                    ("gamma_rgb", "1"),
+                    ("dest_low_rgb", "0"),
+                    ("dest_high_rgb", "255"),
+                ],
+            ),
+            (
+                "gaussianBlur",
+                GUID_GAUSSIAN_BLUR,
+                vec![("gaussian_blur_radius", "4")],
+            ),
+            ("invert", GUID_INVERT, vec![]),
+            ("blur", GUID_BLUR, vec![]),
+            ("blurMore", GUID_BLUR_MORE, vec![]),
+            (
+                "unsharpMask",
+                GUID_UNSHARP_MASK,
+                vec![
+                    ("unsharp_mask_radius", "2"),
+                    ("unsharp_mask_amount", "50"),
+                    ("unsharp_mask_threshold", "3"),
+                ],
+            ),
+            (
+                "addNoise",
+                GUID_ADD_NOISE,
+                vec![("add_noise_amount", "15"), ("add_noise_use_color", "0")],
+            ),
+            ("findEdges", GUID_FIND_EDGES, vec![]),
+            ("autoLevels", GUID_AUTO_LEVELS, vec![]),
+            (
+                "colorFill",
+                GUID_COLOR_FILL,
+                vec![("Color", "#336699"), ("Opacity", "60"), ("Blendmode", "0")],
+            ),
+            (
+                "motionBlur",
+                GUID_MOTION_BLUR,
+                vec![("motion_blur_angle", "45"), ("motion_blur_distance", "10")],
+            ),
+            (
+                "radialBlur",
+                GUID_RADIAL_BLUR,
+                vec![("radial_blur_amount", "30"), ("radial_blur_quality", "5")],
+            ),
+            (
+                "zoomBlur",
+                GUID_ZOOM_BLUR,
+                vec![("zoom_blur_amount", "25"), ("zoom_blur_quality", "5")],
+            ),
+            ("sharpen", GUID_SHARPEN, vec![]),
+            ("sharpenMore", GUID_SHARPEN_MORE, vec![]),
+            ("convertToAlpha", GUID_CONVERT_TO_ALPHA, vec![]),
+        ] {
+            stack.push(guid_effect(name, guid, &props));
+        }
+        let plan = plan(&stack);
+        assert_eq!(plan.ops.len(), 19, "every enumerated effect interprets");
+        assert_eq!(plan.skipped, 0, "the native surface never rides through");
+    }
+
+    /// Builds a `GPLv` node with a `GPTv` per point (the CS6 shape:
+    /// `XLCf`/`YLCf` float coordinates per grab point).
+    fn grab_list(points: &[(f64, f64)]) -> Node {
+        Node {
+            fourcc: *b"GPLv",
+            value: NodeValue::Children(
+                points
+                    .iter()
+                    .map(|(x, y)| Node {
+                        fourcc: *b"GPTv",
+                        value: NodeValue::Children(vec![
+                            Node {
+                                fourcc: *b"XLCf",
+                                value: NodeValue::Float(*x),
+                            },
+                            Node {
+                                fourcc: *b"YLCf",
+                                value: NodeValue::Float(*y),
+                            },
+                        ]),
+                    })
+                    .collect(),
+            ),
+        }
+    }
+
+    #[test]
+    fn curves_knots_parse_from_grab_point_lists() {
+        let mut effect = guid_effect("curves", GUID_CURVES, &[]);
+        effect.properties.push(EffectProperty {
+            key: "rgb_points".to_owned(),
+            value: EffectValue::Raw(grab_list(&[(0.0, 0.0), (128.0, 64.0), (255.0, 255.0)])),
+        });
+        effect.properties.push(EffectProperty {
+            key: "red_points".to_owned(),
+            value: EffectValue::Raw(grab_list(&[(0.0, 0.0), (255.0, 255.0)])),
+        });
+        let mut parsed = plan(std::slice::from_ref(&effect));
+        assert_eq!(parsed.ops.len(), 1);
+        let KernelOp::Curves { knots } = parsed.ops.remove(0) else {
+            panic!("expected curves");
+        };
+        assert_eq!(knots.rgb, vec![(0.0, 0.0), (128.0, 64.0), (255.0, 255.0)]);
+        assert_eq!(knots.red, vec![(0.0, 0.0), (255.0, 255.0)]);
+        assert!(knots.green.is_empty() && knots.blue.is_empty());
+        // No lists at all: nothing to apply, skipped.
+        let bare = guid_effect("curves", GUID_CURVES, &[]);
+        let bare_plan = plan(&[bare]);
+        assert!(bare_plan.ops.is_empty());
+        assert_eq!(bare_plan.skipped, 1);
+        // A malformed list (wrong node type) skips the whole effect —
+        // a misread tree is not a curve.
+        let mut bad = guid_effect("curves", GUID_CURVES, &[]);
+        bad.properties.push(EffectProperty {
+            key: "rgb_points".to_owned(),
+            value: EffectValue::Raw(Node {
+                fourcc: *b"TXTv",
+                value: NodeValue::Children(Vec::new()),
+            }),
+        });
+        let bad_plan = plan(&[bad]);
+        assert!(bad_plan.ops.is_empty());
+        assert_eq!(bad_plan.skipped, 1);
+    }
+
+    #[test]
+    fn color_fill_parses_hex_opacity_and_blend_codes() {
+        let effect = guid_effect(
+            "colorFill",
+            GUID_COLOR_FILL,
+            &[
+                ("Color", "#336699"),
+                ("Opacity", "60.000000"),
+                ("Blendmode", "9"),
+            ],
+        );
+        let parsed = plan(std::slice::from_ref(&effect));
+        assert_eq!(
+            parsed.ops,
+            vec![KernelOp::ColorFill {
+                fill: [0x33, 0x66, 0x99],
+                opacity: 60,
+                mode: BlendMode::Multiply,
+            }]
+        );
+        // An exotic code with no kernel counterpart skips — never a
+        // guessed mode.
+        let exotic = guid_effect(
+            "colorFill",
+            GUID_COLOR_FILL,
+            &[
+                ("Color", "#000000"),
+                ("Opacity", "100"),
+                ("Blendmode", "13"),
+            ],
+        );
+        let exotic_plan = plan(&[exotic]);
+        assert!(exotic_plan.ops.is_empty());
+        assert_eq!(exotic_plan.skipped, 1);
+        // Missing any required property skips.
+        let partial = guid_effect(
+            "colorFill",
+            GUID_COLOR_FILL,
+            &[("Color", "#000000"), ("Opacity", "100")],
+        );
+        assert_eq!(plan(&[partial]).skipped, 1);
+    }
+
+    #[test]
+    fn directional_blur_parameters_parse() {
+        let motion = guid_effect(
+            "motionBlur",
+            GUID_MOTION_BLUR,
+            &[
+                ("motion_blur_angle", "45.000000"),
+                ("motion_blur_distance", "10"),
+            ],
+        );
+        assert_eq!(
+            plan(&[motion]).ops,
+            vec![KernelOp::MotionBlur {
+                angle_degrees: 45.0,
+                distance: 10
+            }]
+        );
+        // Distance below the observed range refuses (CS6 never writes
+        // it — a sub-1 distance is a misread, not a no-op blur).
+        let tiny = guid_effect(
+            "motionBlur",
+            GUID_MOTION_BLUR,
+            &[("motion_blur_angle", "45"), ("motion_blur_distance", "0")],
+        );
+        assert_eq!(plan(&[tiny]).skipped, 1);
+        let spin = guid_effect(
+            "radialBlur",
+            GUID_RADIAL_BLUR,
+            &[("radial_blur_amount", "30"), ("radial_blur_quality", "5")],
+        );
+        assert_eq!(
+            plan(&[spin]).ops,
+            vec![KernelOp::RadialBlur {
+                amount: 30,
+                quality: 5
+            }]
+        );
+        let zoom = guid_effect(
+            "zoomBlur",
+            GUID_ZOOM_BLUR,
+            &[("zoom_blur_amount", "25"), ("zoom_blur_quality", "5")],
+        );
+        assert_eq!(
+            plan(&[zoom]).ops,
+            vec![KernelOp::ZoomBlur {
+                amount: 25,
+                quality: 5
+            }]
+        );
     }
 
     #[test]

@@ -610,6 +610,7 @@ dependencies = [
 name = "compose"
 version = "0.1.0"
 dependencies = [
+ "color 0.1.0",
  "criterion",
  "doc",
  "filters",

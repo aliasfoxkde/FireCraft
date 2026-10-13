@@ -10,6 +10,7 @@ Current version: **0.1.0**.
 
 ### Features
 
+- **app**: live move, alt-clone, double-clicks (fa20ecb)
 - **app**: Auto Shape flyout with preview glyphs (92428e8)
 - **app**: per-tool cursors and space-drag pan (ebf5af8)
 - **app**: CS6 menu bar, keymap, shell chrome (495aff1)
@@ -89,6 +90,9 @@ Current version: **0.1.0**.
 
 ### Documentation
 
+- **planning**: sync generated scorecard (9bc9a9b)
+- **research**: enumerate CS6 live-filter surface (c7b7c74)
+- **planning**: add M14 ticket (7098149)
 - **research**: writer and pixel-kernel RE verdicts (bd25985)
 - **m13**: filter protocol and writer delta notes (a4a5e33)
 - **m13**: UI evidence sources and extraction recipe (b78338d)

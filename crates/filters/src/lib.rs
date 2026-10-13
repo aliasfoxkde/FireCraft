@@ -1,11 +1,14 @@
 //! Deterministic CPU image kernels (workspace layer 2).
 //!
-//! The catalog the M7 ticket pins: point ops (invert,
-//! brightness/contrast, levels, curves, posterize, threshold, HSL),
-//! convolutions (box/gaussian blur, unsharp, find edges, emboss), and
-//! seeded noise. Every kernel is a pure `&Surface -> Surface` function:
-//! same input bytes, same output bytes, every run — journal replay and
-//! the fuzzers depend on that.
+//! The catalog the M7 ticket pins, extended in M14 to the full CS6
+//! live-filter surface: point ops (invert, brightness/contrast,
+//! levels, curves, posterize, threshold, HSL, auto levels, color
+//! fill, convert to alpha), convolutions (box/gaussian blur, unsharp
+//! with threshold, sharpen presets, find edges, emboss), geometric
+//! resampling blurs (motion, zoom, radial spin), and seeded noise.
+//! Every kernel is a pure `&Surface -> Surface` function: same input
+//! bytes, same output bytes, every run — journal replay and the
+//! fuzzers depend on that.
 //!
 //! Buffers here are **premultiplied** RGBA8 (compose's native form), so
 //! a kernel result can flow back into the compositor without a second
@@ -15,12 +18,20 @@
 //! round-trip each pixel through [`color::unpremultiply`] first.
 
 mod convolve;
+mod geometric;
 mod noise;
 mod point;
 
-pub use convolve::{box_blur, emboss, find_edges, gaussian_blur, unsharp_mask};
+pub use convolve::{
+    box_blur, emboss, find_edges, gaussian_blur, sharpen, sharpen_more, unsharp_mask,
+    unsharp_mask_thresholded,
+};
+pub use geometric::{motion_blur, radial_blur_spin, zoom_blur};
 pub use noise::{SplitMix64, add_noise};
-pub use point::{apply_lut, brightness_contrast, hsl, invert, levels, posterize, threshold};
+pub use point::{
+    CurvesKnots, apply_lut, auto_levels, brightness_contrast, convert_to_alpha, curves, hsl,
+    invert, levels, posterize, solid_fill, threshold,
+};
 
 use color::Rgba8;
 use color::pixel::{premultiply, unpremultiply};

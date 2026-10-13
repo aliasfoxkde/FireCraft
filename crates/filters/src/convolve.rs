@@ -55,6 +55,20 @@ pub fn gaussian_blur(surface: &Surface, sigma: f64) -> Surface {
 /// (no round trip).
 #[must_use]
 pub fn unsharp_mask(surface: &Surface, sigma: f64, amount_percent: u32) -> Surface {
+    unsharp_mask_thresholded(surface, sigma, amount_percent, 0)
+}
+
+/// Unsharp mask with CS6's threshold step: a channel whose
+/// `|orig − blurred|` is at or below `threshold` is left untouched
+/// (flat areas stay flat), the rest sharpens as in [`unsharp_mask`].
+/// `threshold == 0` is exactly [`unsharp_mask`].
+#[must_use]
+pub fn unsharp_mask_thresholded(
+    surface: &Surface,
+    sigma: f64,
+    amount_percent: u32,
+    threshold: u8,
+) -> Surface {
     let amount = amount_percent.min(500) as i64;
     if amount == 0 {
         return surface.clone();
@@ -64,7 +78,52 @@ pub fn unsharp_mask(surface: &Surface, sigma: f64, amount_percent: u32) -> Surfa
     for (px, soft) in out.pixels.iter_mut().zip(&blurred.pixels) {
         let orig = i64::from(*px);
         let delta = orig - i64::from(*soft);
+        if delta.abs() <= i64::from(threshold) {
+            continue;
+        }
         *px = clamp255(orig + div_half(amount * delta, 100));
+    }
+    out
+}
+
+/// Sharpen: the fixed 3×3 unsharp stencil
+/// `[0 −1 0 / −1 5 −1 / 0 −1 0]` per premultiplied channel, alpha
+/// kept. A pinned preset — CS6's `Sharpen` menu item carries no
+/// parameters, and its exact matrix is not observable, so the
+/// classic constant-preserving stencil is the recorded substitution.
+#[must_use]
+pub fn sharpen(surface: &Surface) -> Surface {
+    convolve3(surface, [0, -1, 0, -1, 5, -1, 0, -1, 0])
+}
+
+/// Sharpen More: the stronger 3×3 stencil
+/// `[−1 −1 −1 / −1 9 −1 / −1 −1 −1]`. Pinned preset, same reasoning
+/// as [`sharpen`].
+#[must_use]
+pub fn sharpen_more(surface: &Surface) -> Surface {
+    convolve3(surface, [-1, -1, -1, -1, 9, -1, -1, -1, -1])
+}
+
+/// One 3×3 convolution over the color channels (alpha passes
+/// through), edge-clamped, weights in row-major order.
+fn convolve3(surface: &Surface, weights: [i64; 9]) -> Surface {
+    let (w, h) = (surface.width(), surface.height());
+    let mut out = surface.clone();
+    for y in 0..h {
+        for x in 0..w {
+            let at = surface.pixel_offset(x, y);
+            for ch in 0..3 {
+                let mut sum = 0i64;
+                for (i, weight) in weights.iter().enumerate() {
+                    let dy = (i / 3) as i64 - 1;
+                    let dx = (i % 3) as i64 - 1;
+                    let sx = (i64::from(x) + dx).clamp(0, i64::from(w) - 1) as u32;
+                    let sy = (i64::from(y) + dy).clamp(0, i64::from(h) - 1) as u32;
+                    sum += i64::from(surface.pixels[surface.pixel_offset(sx, sy) + ch]) * weight;
+                }
+                out.pixels[at + ch] = clamp255(sum);
+            }
+        }
     }
     out
 }
@@ -398,5 +457,92 @@ mod tests {
         // y=2 (a=255) → mean 128 with r=3 window; exact per-row values:
         assert_eq!(px(&out, 1, 1)[3], 170); // (0+255+255)/3 = 170
         assert_eq!(px(&out, 1, 0)[3], 85); // (0+0+255)/3 = 85
+    }
+
+    #[test]
+    fn sharpen_presets_keep_constants_and_raise_edge_contrast() {
+        // Both stencils are constant-preserving: weights sum to 1, so
+        // a flat field is a fixed point and alpha passes through.
+        let flat = Surface::from_straight(5, 5, &[90u8; 5 * 5 * 4]).unwrap();
+        assert_eq!(sharpen(&flat), flat);
+        assert_eq!(sharpen_more(&flat), flat);
+        // A soft vertical step 100|150: the 3×3 stencils steepen the
+        // boundary — the low side drops, the high side rises.
+        let mut s = Surface::new(4, 3).unwrap();
+        for y in 0..3u32 {
+            for x in 0..4u32 {
+                let v = if x < 2 { 100 } else { 150 };
+                s.set_straight(x, y, color::Rgba8::new(v, v, v, 255));
+            }
+        }
+        let out = sharpen(&s);
+        // Column 1 (100): 5·100 − (100 + 150 + 100 + 100) = 50.
+        assert_eq!(px(&out, 1, 1)[0], 50);
+        // Column 2 (150): 5·150 − (100 + 150 + 150 + 150) = 200.
+        assert_eq!(px(&out, 2, 1)[0], 200);
+        let more = sharpen_more(&s);
+        // (1,1): 9·100 − (950 across all eight neighbors) → clamps
+        // to 0; (2,1): 9·150 − 1050 = 300 → saturates at 255. Edge
+        // clamp doubles the corner weights, so (0,0): 9·100 − 800
+        // = 100, unchanged.
+        assert_eq!(px(&more, 1, 1)[0], 0);
+        assert_eq!(px(&more, 2, 1)[0], 255);
+        assert_eq!(px(&more, 0, 0)[0], 100);
+        assert_eq!(sharpen(&s), sharpen(&s), "deterministic");
+    }
+
+    #[test]
+    fn unsharp_threshold_leaves_flat_areas_alone() {
+        let s = ramp();
+        // Threshold above every |orig − blurred| delta on this input:
+        // exact copy, where plain unsharp moves pixels.
+        let blurred = gaussian_blur(&s, 1.0);
+        let max_delta = (0..6u32)
+            .flat_map(|x| (0..6u32).map(move |y| (x, y)))
+            .map(|(x, y)| i64::from(px(&s, x, y)[0]) - i64::from(px(&blurred, x, y)[0]))
+            .map(i64::abs)
+            .max()
+            .unwrap_or(0);
+        assert!(max_delta > 0, "test input must have deltas");
+        let threshold = max_delta as u8;
+        assert_eq!(
+            unsharp_mask_thresholded(&s, 1.0, 100, threshold),
+            s,
+            "threshold above all deltas is the identity"
+        );
+        // Zero threshold is exactly the legacy unsharp mask.
+        assert_eq!(
+            unsharp_mask_thresholded(&s, 1.0, 100, 0),
+            unsharp_mask(&s, 1.0, 100)
+        );
+        // A mid threshold keeps the flats but still sharpens the
+        // steepest pixel — the max-delta pixel moves at least as far
+        // as its own delta.
+        let mid = (max_delta / 2) as u8;
+        let out = unsharp_mask_thresholded(&s, 1.0, 100, mid);
+        let mut moved = false;
+        for x in 0..6u32 {
+            for y in 0..6u32 {
+                let delta = (i64::from(px(&s, x, y)[0]) - i64::from(px(&blurred, x, y)[0])).abs();
+                if delta > i64::from(mid) {
+                    let orig = i64::from(px(&s, x, y)[0]);
+                    let after = (orig - i64::from(px(&out, x, y)[0])).abs();
+                    if orig > 0 && orig < 255 {
+                        // Interior values must actually shift.
+                        assert!(after > 0, "pixel ({x},{y}) above threshold must move");
+                        moved = true;
+                    }
+                    // 0/255 sit at the clamp boundary: the sharpened
+                    // value may saturate back to the same byte.
+                } else {
+                    assert_eq!(
+                        px(&out, x, y),
+                        px(&s, x, y),
+                        "pixel ({x},{y}) below threshold must stay"
+                    );
+                }
+            }
+        }
+        assert!(moved);
     }
 }

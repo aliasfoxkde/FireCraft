@@ -173,11 +173,63 @@ fn hash_plan(h: &mut Hasher, plan: &Plan) {
                 h.tag(b"BB");
                 h.u32(*radius);
             }
-            KernelOp::UnsharpMask { radius, amount } => {
+            KernelOp::UnsharpMask {
+                radius,
+                amount,
+                threshold,
+            } => {
                 h.tag(b"UM");
                 h.f64(*radius);
                 h.u32(*amount);
+                h.bytes(&[*threshold]);
             }
+            KernelOp::Curves { knots } => {
+                h.tag(b"CV");
+                for channel in [
+                    knots.rgb.as_slice(),
+                    knots.red.as_slice(),
+                    knots.green.as_slice(),
+                    knots.blue.as_slice(),
+                ] {
+                    h.usize(channel.len());
+                    for (x, y) in channel {
+                        h.f64(*x);
+                        h.f64(*y);
+                    }
+                }
+            }
+            KernelOp::AutoLevels => h.tag(b"AL"),
+            KernelOp::ColorFill {
+                fill,
+                opacity,
+                mode,
+            } => {
+                h.tag(b"CF");
+                h.bytes(fill);
+                h.u32(*opacity);
+                h.u64((*mode) as u64);
+            }
+            KernelOp::MotionBlur {
+                angle_degrees,
+                distance,
+            } => {
+                h.tag(b"MB");
+                h.f64(*angle_degrees);
+                h.u32(*distance);
+            }
+            KernelOp::RadialBlur { amount, quality } => {
+                h.tag(b"RB");
+                h.u32(*amount);
+                h.u32(*quality);
+            }
+            KernelOp::ZoomBlur { amount, quality } => {
+                h.tag(b"ZB");
+                h.u32(*amount);
+                h.u32(*quality);
+            }
+            KernelOp::Sharpen => h.tag(b"SH"),
+            KernelOp::SharpenMore => h.tag(b"SM"),
+            KernelOp::ConvertToAlpha => h.tag(b"CA"),
             KernelOp::AddNoise {
                 seed,
                 amount,

@@ -172,11 +172,11 @@ Adjust Color family:
 | Effect | GUID | Parameters (dictionary names) | Status |
 |---|---|---|---|
 | Brightness/Contrast | `3439b08c-1921-11d3-…` | `brightness_amount`, `contrast_amount` (−100..100) | interpreted |
-| Levels | `d04ef8c2-71b5-11d1-…` | `source_low/high_rgb` + `gamma_rgb` + `dest_low/high_rgb`, and the per-channel twins (`*_red/green/blue`, incl. `red/green/blue_points`) | interpreted (master channel only) — M14: per-channel |
-| Curves | `3439b08e-1923-11d3-…` | `rgb_points`, `red_points`, `green_points`, `blue_points` (knot lists) + `gamma_*` | M14 |
+| Levels | `d04ef8c2-71b5-11d1-…` | `source_low/high_rgb` + `gamma_rgb` + `dest_low/high_rgb`, and the per-channel scalar twins (`*_red/green/blue`; the `*_points` knot lists belong to Curves above) | interpreted (master channel only) — M14: per-channel |
+| Curves | `3439b08e-1923-11d3-…` | `rgb_points`, `red_points`, `green_points`, `blue_points` (`GPLv`/`GPTv`/`XLCf`/`YLCf` knot lists) + `gamma_*` | interpreted (piecewise-linear knots; `gamma_*` unused — CS6 draws straight segments) — M14: golden |
 | Hue/Saturation | `3439b08d-1922-11d3-…` | `hue_amount` (deg), `saturation_amount`, `lightness_amount` (−100..100), `hls_colorize` | interpreted (`hls_colorize` unchecked — M14: verify) |
-| Auto Levels | `d04ef8c1-71b4-11d1-…` | histogram-derived per-channel stretch (the `StHistogramRGBProcessor` family) | M14 |
-| Color Fill | `dd54adc0-a279-11d3-…` | `color` + blend/opacity | M14 |
+| Auto Levels | `d04ef8c1-71b4-11d1-…` | histogram-derived per-channel stretch (the `StHistogramRGBProcessor` family) | interpreted (plain min/max stretch, no outlier clipping — pinned substitution) — M14: golden |
+| Color Fill | `dd54adc0-a279-11d3-…` | `Color` (`#rrggbb` text), `Opacity` (0..100), `Blendmode` (numeric code) | interpreted (13 of the dictionary's 33 blend codes map onto the kernel set; the rest skip) — M14: golden |
 | Invert | `d2541291-70d6-11d1-…` | none | interpreted (24-bit word op, alpha preserved — decoded above) |
 
 Blur family:
@@ -186,17 +186,17 @@ Blur family:
 | Blur | `f1cfce41-718e-11d1-…` | none (fixed radius 1) | interpreted |
 | Blur More | `f1cfce42-718e-11d1-…` | none (fixed radius 2) | interpreted |
 | Gaussian Blur | `d04ef8c0-71b3-11d1-…` | `gaussian_blur_radius` | interpreted |
-| Motion Blur | `538016b6-ffd6-418f-…` | `motion_blur_angle`, `motion_blur_distance` | M14 |
-| Radial Blur | `d1c33142-2ad8-4215-…` | `radial_blur_amount`, `radial_blur_quality` | M14 |
-| Zoom Blur | `94dbd663-9b2e-44bf-…` | `zoom_blur_amount`, `zoom_blur_quality` | M14 |
+| Motion Blur | `538016b6-ffd6-418f-…` | `motion_blur_angle` (0..360 deg), `motion_blur_distance` (1..100) | interpreted (one-sided taps `[0..=d]` along `(cos θ, −sin θ)` — pinned substitution) — M14: golden |
+| Radial Blur | `d1c33142-2ad8-4215-…` | `radial_blur_amount`, `radial_blur_quality` | interpreted (spin: sweep in **degrees** 0..360, arc uniform over `[0..=sweep]` — pinned substitution) — M14: golden |
+| Zoom Blur | `94dbd663-9b2e-44bf-…` | `zoom_blur_amount` (1..100), `zoom_blur_quality` (1..100) | interpreted (taps uniform in scale toward the center — pinned substitution) — M14: golden |
 
 Sharpen family:
 
 | Effect | GUID | Parameters | Status |
 |---|---|---|---|
-| Sharpen | `c20952b1-fc76-11d0-…` | none (preset) | M14 |
-| Sharpen More | `1f2f2591-9db7-11d1-…` | none (preset) | M14 |
-| Unsharp Mask | `f1cfce44-718e-11d1-…` | `unsharp_mask_radius`, `unsharp_mask_amount`, `unsharp_mask_threshold` | interpreted — M14: honor the threshold (today non-zero skips the effect, a recorded limitation) |
+| Sharpen | `c20952b1-fc76-11d0-…` | none (preset `[0 −1 0 / −1 5 −1 / 0 −1 0]`) | interpreted (pinned substitution) — M14: golden |
+| Sharpen More | `1f2f2591-9db7-11d1-…` | none (preset `[−1 −1 −1 / −1 9 −1 / −1 −1 −1]`) | interpreted (pinned substitution) — M14: golden |
+| Unsharp Mask | `f1cfce44-718e-11d1-…` | `unsharp_mask_radius`, `unsharp_mask_amount`, `unsharp_mask_threshold` (absent = 0) | interpreted — threshold honored since M14 (M7-era skip retired) |
 
 Stylize / other:
 
@@ -204,9 +204,23 @@ Stylize / other:
 |---|---|---|---|
 | Add Noise | `e4c0f4bc-c0a3-4cb3-…` | `add_noise_amount` (0..100), `add_noise_use_color` | interpreted (MINSTD decode above; seed substitution documented) |
 | Find Edges | `fc7093f1-f95c-11d0-…` | none | interpreted |
-| Convert to Alpha | `2932d5a2-ca48-11d1-…` | luminance → alpha; `EdgeThreshold` | M14 |
+| Convert to Alpha | `2932d5a2-ca48-11d1-…` | none documented (`CCreateAlphaFilter`; `EdgeThreshold` belongs to Glow/Bevel/Emboss, not here) | interpreted (house Rec.601 luma → opacity, color → black — pinned substitution) — M14: golden |
 | Clouds | `ff84d00c-4494-11d8-…` | `sky_color`, `cloud_color` | M14 |
 | Difference Clouds | `d2e7769c-6349-11d8-…` | `sky_color`, `cloud_color` | M14 |
+
+Pinned substitutions (M14 kernels whose exact CS6 arithmetic is not
+observable without a render oracle — each is a deliberate, recorded
+choice, revisited only on oracle evidence): auto levels stretches
+per-channel min/max with no outlier clipping; convert-to-alpha maps
+house Rec.601 luma `(299r+587g+114b)/1000` to opacity over black;
+the sharpen presets use the classic 5-point / 9-point kernels;
+motion blur taps one-sided `[0..=d]` along `(cos θ, −sin θ)` (UI
+counterclockwise, image y down); zoom blur averages taps uniform in
+scale toward the center; radial (spin) reads `radial_blur_amount` as
+sweep **degrees** (0..360) over an arc uniform in `[0..=sweep]`.
+All pixel math is integer-exact per decision 0004 — the only f64 is
+the one-time trig-table build (sin in thousandths over 4096 turn
+divisions), mirroring the boxes_for_gauss precedent.
 
 Shadow/glow/emboss — two encodings, one semantic family:
 

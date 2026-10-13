@@ -10,6 +10,7 @@ homepage.workspace = true
 description = "FireCraft deterministic CPU compositor: document pages to pixels."
 
 [dependencies]
+color = { path = "../color" }
 doc = { path = "../doc" }
 filters = { path = "../filters" }
 geom = { path = "../geom" }
