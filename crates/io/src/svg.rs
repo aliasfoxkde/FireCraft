@@ -117,6 +117,16 @@ pub fn encode(document: &Document, options: &SvgOptions) -> Result<SvgDocument, 
     writer.out.push_str(&format!(
         "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{width}\" height=\"{height}\" viewBox=\"0 0 {width} {height}\">\n"
     ));
+    // The canvas background (`BGCi`): the same matte compose paints,
+    // so a viewer's raster matches the renderer byte-for-byte at the
+    // bare pixels. Alpha byte ignored (unpinned; `bg_hex` precedent).
+    let bg = page.info.canvas.background_raw as u32;
+    writer.out.push_str(&format!(
+        "<rect x=\"0\" y=\"0\" width=\"{width}\" height=\"{height}\" fill=\"#{:02x}{:02x}{:02x}\"/>\n",
+        bg & 0xFF,
+        (bg >> 8) & 0xFF,
+        (bg >> 16) & 0xFF
+    ));
     writer.walk_layers(&page.layers.layers, options.frame);
     if !writer.defs.is_empty() {
         writer.out.push_str("<defs>\n");

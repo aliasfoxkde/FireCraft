@@ -1361,10 +1361,14 @@ fn flattened_record(
     let mut probe = document.clone();
     probe.pages.clear();
     crate::raster::build_single_object_page(&mut probe, canvas.clone(), vec![id]);
-    let rendered = compose::render(&probe, 0, 0).map_err(|error| ExportError::Unsupported {
-        format: FORMAT,
-        reason: format!("object flatten render failed: {error}"),
-    })?;
+    // `render_transparent`: the record is a PSD layer, which carries
+    // its own alpha — a baked matte would turn every layer into a
+    // white-backed box and bake its opacity into a white blend.
+    let rendered =
+        compose::render_transparent(&probe, 0, 0).map_err(|error| ExportError::Unsupported {
+            format: FORMAT,
+            reason: format!("object flatten render failed: {error}"),
+        })?;
     let rgba = compose::straight_alpha(&rendered.pixels);
     let name = object_name(object).unwrap_or_else(|| "Layer".to_owned());
     // Opacity is deliberately not read here — the render already baked

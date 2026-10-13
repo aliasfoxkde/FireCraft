@@ -292,56 +292,63 @@ fn anchor_gradient(name: &str, render: &Render) -> Result<(), String> {
         return Err(format!("{name}: radial corner is {corner}, want ≈ 176"));
     }
     // The veil (4,28)-(60,42): blue→yellow under a transparent→opaque
-    // coverage ramp. `Render` is premultiplied and the canvas colour is
-    // the host's to paint, so each pixel is the ramp colour scaled by
-    // its own coverage. Left (5,35): t = 1.5/56 = 0.027 → straight
-    // (7,7,248) at α7 → premultiplied (0,0,7) at 7. Mid (30,35):
-    // t = 0.473 → (121,121,134) at α121 → premul ≈ (57,57,64) at 120.
-    // Right (59,35): t = 0.991 → (253,253,2) at α253 → premul ≈ (250,
-    // 250,2) at 252. Bounds cover either rounding of the products.
+    // coverage ramp, composited over the opaque white matte. Left
+    // (5,35): t = 1.5/56 = 0.027 → straight (7,7,248) at α7 over
+    // white → (249,249,255) at α255. Mid (30,35): t = 0.473 →
+    // (121,121,134) at α121 → ≈ (191,191,198). Right (59,35):
+    // t = 0.991 → (253,253,2) at α253 → ≈ (253,253,4).
     let near = pixel(5, 35);
-    if near != [0, 0, 6, 6] {
+    if !(247..=251).contains(&near[0])
+        || !(247..=251).contains(&near[1])
+        || near[2] < 253
+        || near[3] != 255
+    {
         return Err(format!(
-            "{name}: veil left end is {near:?}, want premultiplied (0,0,6,6)"
+            "{name}: veil left end is {near:?}, want ≈ (249,249,255,255) over the matte"
         ));
     }
     let half = pixel(30, 35);
-    if !(54..=59).contains(&half[0])
-        || !(54..=59).contains(&half[1])
-        || !(62..=67).contains(&half[2])
-        || !(118..=122).contains(&half[3])
+    if !(188..=194).contains(&half[0])
+        || !(188..=194).contains(&half[1])
+        || !(195..=201).contains(&half[2])
+        || half[3] != 255
     {
         return Err(format!(
-            "{name}: veil middle is {half:?}, want premul ≈ (57,57,64,120)"
+            "{name}: veil middle is {half:?}, want ≈ (191,191,198,255) over the matte"
         ));
     }
     let saturated = pixel(59, 35);
-    if !(247..=252).contains(&saturated[0])
-        || !(247..=252).contains(&saturated[1])
-        || saturated[2] > 6
-        || !(250..=253).contains(&saturated[3])
+    if !(250..=255).contains(&saturated[0])
+        || !(250..=255).contains(&saturated[1])
+        || saturated[2] > 8
+        || saturated[3] != 255
     {
         return Err(format!(
-            "{name}: veil right end is {saturated:?}, want premul ≈ (250,250,2,252)"
+            "{name}: veil right end is {saturated:?}, want ≈ (253,253,4,255) over the matte"
         ));
     }
-    // Coverage rises left→right along the veil.
+    // Coverage rises left→right along the veil: the distance from the
+    // white matte grows as the ramp's own alpha pulls the pixel off
+    // white (the colour turns yellow, the blue channel dives first).
     let (mut early, mut late) = (0u32, 0u32);
     for (sample, slot) in [(20u32, &mut early), (40, &mut late)] {
         let index = ((35 * u32::from(render.width) + sample) as usize) * 4;
-        *slot = u32::from(render.pixels[index + 3]);
+        *slot = 765
+            - u32::from(render.pixels[index])
+            - u32::from(render.pixels[index + 1])
+            - u32::from(render.pixels[index + 2]);
     }
     if early >= late {
         return Err(format!(
             "{name}: coverage did not rise left→right ({early} → {late})"
         ));
     }
-    // Nothing painted above the rects: compose leaves the canvas
-    // transparent (the canvas colour is the host's to paint).
+    // Nothing painted above the rects: the bare pixel is the matte
+    // itself, fully opaque.
     let bare = pixel(32, 2);
-    if bare != [0, 0, 0, 0] {
+    if bare != [255, 255, 255, 255] {
         return Err(format!(
-            "{name}: unpainted canvas pixel is {bare:?}, want transparent"
+            "{name}: unpainted canvas pixel is {bare:?}, want the white matte"
         ));
     }
     Ok(())
@@ -382,8 +389,9 @@ fn anchor_composed(name: &str, render: &Render) -> Result<(), String> {
 
 /// The text golden: "FireCraft" set at 10px in frame (12,18,40,12),
 /// filled ABGR 0xFF00_0000 (opaque black), nothing else on the page.
-/// Every ink pixel must be premultiplied black (any channel value with
-/// alpha means a broken fill decode), must fall inside the frame (±1px
+/// Every ink pixel — anything off the white matte — must be achromatic
+/// (the composite of a black fill's coverage over white; chroma means
+/// a broken fill decode), must fall inside the frame (±1px
 /// antialiasing slack), and must exist — an empty render pins happily,
 /// so emptiness is asserted, not assumed.
 fn anchor_text(name: &str, render: &Render) -> Result<(), String> {
@@ -399,12 +407,12 @@ fn anchor_text(name: &str, render: &Render) -> Result<(), String> {
                 render.pixels[index + 2],
                 render.pixels[index + 3],
             );
-            if a == 0 {
-                continue;
+            if a == 255 && (r, g, b) == (255, 255, 255) {
+                continue; // the bare matte
             }
-            if r != 0 || g != 0 || b != 0 {
+            if r != g || g != b {
                 return Err(format!(
-                    "{name}: ink at ({x},{y}) is rgb({r},{g},{b}) — text fill must be black"
+                    "{name}: ink at ({x},{y}) is rgb({r},{g},{b}) — text fill must be achromatic"
                 ));
             }
             let (fx, fy, fw, fh) = FRAME;
@@ -438,8 +446,8 @@ fn anchor_text(name: &str, render: &Render) -> Result<(), String> {
 }
 
 /// The on-path golden: text must ride the arc. A linear-flow fallback
-/// would still render black ink — inside the frame's ~12px band — so
-/// the anchor demands a vertical span the rail's 24px rise makes
+/// would still render achromatic ink — inside the frame's ~12px band —
+/// so the anchor demands a vertical span the rail's 24px rise makes
 /// impossible without on-path lowering.
 fn anchor_textpath(name: &str, render: &Render) -> Result<(), String> {
     let mut ink = 0usize;
@@ -453,12 +461,12 @@ fn anchor_textpath(name: &str, render: &Render) -> Result<(), String> {
                 render.pixels[index + 2],
                 render.pixels[index + 3],
             );
-            if a == 0 {
-                continue;
+            if a == 255 && (r, g, b) == (255, 255, 255) {
+                continue; // the bare matte
             }
-            if r != 0 || g != 0 || b != 0 {
+            if r != g || g != b {
                 return Err(format!(
-                    "{name}: ink at ({x},{y}) is rgb({r},{g},{b}) — text fill must be black"
+                    "{name}: ink at ({x},{y}) is rgb({r},{g},{b}) — text fill must be achromatic"
                 ));
             }
             ink += 1;

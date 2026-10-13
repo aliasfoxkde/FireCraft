@@ -2045,13 +2045,14 @@ mod tests {
         assert_eq!((render.width, render.height), (64, 48));
         // A determinism pin of an empty canvas would pass forever while
         // proving nothing. The four autoshapes sit in the page's four
-        // quadrants with the default fill: their opaque pixels must
-        // span the whole canvas without flooding it.
+        // quadrants with the default fill: their ink pixels must span
+        // the whole canvas without flooding it — ink meaning "off the
+        // white matte" now that the canvas paints `BGCi`.
         let width = u32::from(render.width);
         let mut opaque = 0usize;
         let mut bounds = Option::<(u32, u32, u32, u32)>::None; // x0 y0 x1 y1
         for (index, pixel) in render.pixels.chunks_exact(4).enumerate() {
-            if pixel[3] == 0 {
+            if pixel == [255, 255, 255, 255] {
                 continue;
             }
             opaque += 1;
@@ -2062,12 +2063,12 @@ mod tests {
             });
         }
         let total = usize::from(render.width) * usize::from(render.height);
-        assert!(opaque > 200, "only {opaque} opaque pixel(s) rendered");
+        assert!(opaque > 200, "only {opaque} ink pixel(s) rendered");
         assert!(
             opaque * 2 < total,
             "{opaque}/{total} opaque: canvas flooded"
         );
-        let (x0, y0, x1, y1) = bounds.expect("no opaque pixels");
+        let (x0, y0, x1, y1) = bounds.expect("no ink pixels");
         // Exact corner pin (anti-aliasing reaches one pixel past the
         // pure geometry: star top y = 14−10 = 4, rasterized at 3;
         // engine-created paths carry no stroke, so the ring that once

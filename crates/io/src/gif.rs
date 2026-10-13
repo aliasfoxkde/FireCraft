@@ -383,12 +383,17 @@ pub fn encode_animated(
     // of them at once.
     let mut states: Vec<Vec<u8>> = Vec::with_capacity(count);
     for frame in 0..count {
-        let rendered = compose::render(document, page_index, frame).map_err(|error| {
-            ExportError::Unsupported {
-                format: "gif",
-                reason: error.to_string(),
-            }
-        })?;
+        // Ink-only frames (`render_transparent`): the animator's
+        // screen model — ink crop, empty-state placeholders, diff
+        // disposal — is built on transparency, and a baked matte
+        // would crop every frame to the full canvas.
+        let rendered =
+            compose::render_transparent(document, page_index, frame).map_err(|error| {
+                ExportError::Unsupported {
+                    format: "gif",
+                    reason: error.to_string(),
+                }
+            })?;
         states.push(compose::straight_alpha(&rendered.pixels));
     }
 

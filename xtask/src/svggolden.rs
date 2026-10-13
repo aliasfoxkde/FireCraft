@@ -32,16 +32,22 @@ const FIXTURE_PREFIX: &str = "corpus/fixtures/";
 /// divergence is at thin curved autoshape features (petal tips) and
 /// blurred alpha ramps, where tiny-skia's scanline AA and premultiplied
 /// filter arithmetic legitimately differ from vello_cpu's. Observed
-/// max 77; pinned at ~1.25×. A structural bug (wrong geometry, blend,
-/// or filter mapping) saturates to 255 over a region and cannot hide
-/// under this — the mean bound and the SVG sha pins catch the rest.
+/// max 77 transparent-canvas, 72 once the canvas background landed
+/// (the matte amplifies edge-AA disagreement in the straight channels
+/// instead of cancelling it against black); pinned at ~1.25×. A
+/// structural bug (wrong geometry, blend, or filter mapping) saturates
+/// to 255 over a region and cannot hide under this — the mean bound
+/// and the SVG sha pins catch the rest.
 pub const MAX_CHANNEL_DELTA: u8 = 96;
 
 /// Maximum mean absolute channel delta across the whole frame —
 /// guards against a systematically shifted (rather than edge-noisy)
 /// raster passing on the max alone. Observed worst mean 0.64
-/// (filtered.fw.png, 64×48); pinned at 0.9, a ~1.4× headroom.
-pub const MAX_MEAN_DELTA: f64 = 0.9;
+/// (filtered.fw.png, 64×48) transparent-canvas; 1.1506 (scripted's
+/// star/spiral edges) once the background landed — the same AA
+/// disagreement, each edge pixel's coverage delta now scaled by the
+/// 255-contrast matte. Pinned at 1.6, a ~1.4× headroom.
+pub const MAX_MEAN_DELTA: f64 = 1.6;
 
 /// Gate entry point.
 pub fn run() -> Result<(), String> {

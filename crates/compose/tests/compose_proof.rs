@@ -107,6 +107,10 @@ fn rect_object(
 }
 
 /// Opaque white ABGR.
+/// The default canvas matte (`BGCi` default white, painted opaque):
+/// what a bare pixel shows now that compose paints the background.
+const BACKGROUND: [u8; 4] = [255, 255, 255, 255];
+
 const WHITE: i64 = 0xFF_FF_FF_FF;
 /// Opaque black ABGR.
 const BLACK: i64 = 0xFF_00_00_00;
@@ -250,13 +254,13 @@ fn even_odd_leaves_overlaps_unfilled() {
         [255, 0, 0, 255],
         "single cover: filled"
     );
-    assert_eq!(pixel(&render, 3, 1), [0, 0, 0, 0], "double cover: hole");
+    assert_eq!(pixel(&render, 3, 1), BACKGROUND, "double cover: hole");
     assert_eq!(
         pixel(&render, 5, 1),
         [255, 0, 0, 255],
         "single cover: filled"
     );
-    assert_eq!(pixel(&render, 7, 1), [0, 0, 0, 0], "outside: empty");
+    assert_eq!(pixel(&render, 7, 1), BACKGROUND, "outside: empty");
 }
 
 /// Non-zero rule with the same winding fills the overlap.
@@ -283,7 +287,7 @@ fn non_zero_fills_the_overlap() {
         [255, 0, 0, 255],
         "double cover: filled"
     );
-    assert_eq!(pixel(&render, 7, 1), [0, 0, 0, 0], "outside: empty");
+    assert_eq!(pixel(&render, 7, 1), BACKGROUND, "outside: empty");
 }
 
 /// A group at 200‰ around an opaque blue child over opaque white: the
@@ -440,7 +444,7 @@ fn frame_past_cell_list_renders_empty() {
         vec![layer(vec![cell(vec![rect])])], // one cell only
     ));
     let render = render(&doc, 0, 5).expect("render");
-    assert_solid(&render, [0, 0, 0, 0]);
+    assert_solid(&render, BACKGROUND);
 }
 
 /// An empty document composes to a transparent canvas.
@@ -450,7 +454,7 @@ fn empty_document_is_transparent() {
     doc.pages.push(page(3.0, 2.0, Vec::new()));
     let render = render(&doc, 0, 0).expect("render");
     assert_eq!((render.width, render.height), (3, 2));
-    assert_solid(&render, [0, 0, 0, 0]);
+    assert_solid(&render, BACKGROUND);
 }
 
 /// Repeated renders are byte-identical (the determinism floor, at
@@ -537,8 +541,8 @@ fn stroke_paints_along_the_path() {
             pixel(&render, 1, y)[3] > 0 && pixel(&render, 2, y)[3] > 0,
             "stroke missing at y={y}"
         );
-        assert_eq!(pixel(&render, 0, y), [0, 0, 0, 0], "outside left");
-        assert_eq!(pixel(&render, 3, y), [0, 0, 0, 0], "outside right");
+        assert_eq!(pixel(&render, 0, y), BACKGROUND, "outside left");
+        assert_eq!(pixel(&render, 3, y), BACKGROUND, "outside right");
     }
 }
 
@@ -849,7 +853,7 @@ fn gaussian_blur_spreads_past_the_geometry() {
     let render = render(&doc, 0, 0).expect("render");
     assert!(pixel(&render, 12, 12)[3] > 200, "interior stays painted");
     assert!(pixel(&render, 5, 5)[3] > 0, "bleed lands beyond the bbox");
-    assert_eq!(pixel(&render, 0, 0), [0, 0, 0, 0], "far corner untouched");
+    assert_eq!(pixel(&render, 0, 0), BACKGROUND, "far corner untouched");
 }
 
 /// The content-hash cache: repeat renders hit identical bytes without
@@ -1081,7 +1085,7 @@ fn instance(
 
 /// Transparent where nothing paints (the canvas carries no
 /// background fill — proofs paint their own ground).
-const CLEAR: [u8; 4] = [0, 0, 0, 0];
+const CLEAR: [u8; 4] = BACKGROUND;
 /// Premultiplied opaque red.
 const PIXEL_RED: [u8; 4] = [255, 0, 0, 255];
 /// Premultiplied opaque blue.
@@ -1648,18 +1652,24 @@ fn an_alpha_ramp_sets_coverage_across_the_gradient() {
         .push(page(4.0, 4.0, vec![layer(vec![cell(vec![gradient])])]));
     let rendered = render(&doc, 0, 0).expect("render");
 
-    // Over the transparent canvas the coverage ramp (0 → 255) is the
-    // visible thing. The target is premultiplied: at x=0.125 the ramp
-    // samples grey 31 at coverage 31/255 → premultiplied 31×31/255 =
-    // 3.8 → 4; at x=0.875 grey 223 at 223/255 → 223×223/255 = 195.1 →
-    // 195. Colour and coverage ride the same position — the
-    // unpremultiplied stop interpolation keeps the grey hue (the
-    // premultiplied default would lerp the black end stop toward
-    // nothing and read (0,0,0,31)).
+    // Over the white matte the coverage ramp reads as an opacity fade:
+    // at x=0.125 the ramp samples grey 31 at coverage 31/255, so the
+    // composite is 31×31/255 + 255×224/255 = 227.8 → 228; at x=0.875
+    // grey 223 at 223/255 → 223×223/255 + 255×32/255 = 227.0 → 227.
+    // Colour and coverage ride the same position — the unpremultiplied
+    // stop interpolation keeps the grey hue (the premultiplied default
+    // would lerp the black end stop toward nothing and read darker
+    // than the matte at the left end).
     let left = pixel(&rendered, 0, 2);
     let right = pixel(&rendered, 3, 2);
-    assert_eq!(left[3], 31, "the alpha ramp sets coverage: {left:?}");
-    assert_eq!(left[0], 4, "the dark end rides the ramp: {left:?}");
-    assert_eq!(right[3], 223, "coverage rides the same ramp");
-    assert_eq!(right[0], 195, "the bright end rides it too: {right:?}");
+    assert_eq!(
+        left,
+        [228, 228, 228, 255],
+        "the dark end fades toward the matte: {left:?}"
+    );
+    assert_eq!(
+        right,
+        [227, 227, 227, 255],
+        "the bright end rides it too: {right:?}"
+    );
 }

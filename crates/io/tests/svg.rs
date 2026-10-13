@@ -452,7 +452,7 @@ fn images_embed_as_png_data_uris() {
 
 #[test]
 fn export_matches_compose_on_the_pinned_document() {
-    // The red square over transparent black: SVG text is not rendered
+    // The red square over the white matte: SVG text is not rendered
     // here, but the geometry+paint it describes must equal what compose
     // rasterizes — proven at the pixel level via the xtask golden
     // resvg loop; this test pins the cheap invariant (a non-empty,
@@ -461,16 +461,24 @@ fn export_matches_compose_on_the_pinned_document() {
     let (svg, _) = encode(&document);
     assert!(svg.starts_with("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"64\" height=\"32\" viewBox=\"0 0 64 32\">"));
     assert!(svg.ends_with("</svg>\n"));
-    // Well-formedness floor: opens balance closes at every level.
+    // Well-formedness floor: opens balance closes at every level (the
+    // canvas-matte `<rect>` is self-closing like every path).
     assert_eq!(svg.matches("<g").count(), svg.matches("</g>").count());
-    assert_eq!(svg.matches("<path").count(), svg.matches("/>").count());
+    assert_eq!(
+        svg.matches("<path").count() + svg.matches("<rect").count(),
+        svg.matches("/>").count()
+    );
     assert_eq!(svg.matches("<g id=\"layer-1\">").count(), 1);
     // Sanity: the compositor's own render of the same document is the
     // bytes the golden loop compares the SVG against.
     let render = compose::render(&document, 0, 0).expect("compose");
     let straight = straight_alpha(&render.pixels);
     assert_eq!(straight.len(), 64 * 32 * 4);
-    assert_ne!(straight[0..4], [0, 0, 0, 0], "square covers the origin");
+    assert_ne!(
+        straight[0..4],
+        [255, 255, 255, 255],
+        "square covers the origin (the matte would mean it drew nothing)"
+    );
 }
 
 #[test]

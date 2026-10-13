@@ -113,6 +113,9 @@ fn tile(color: [u8; 4], block: Option<(usize, usize)>) -> Tile {
     Tile::from_rgba8(pixels)
 }
 
+/// The default canvas matte (`BGCi` default white, painted opaque).
+const BACKGROUND: [u8; 4] = [255, 255, 255, 255];
+
 /// Opaque red, straight or premultiplied (identical at α=255).
 const RED: [u8; 4] = [255, 0, 0, 255];
 /// Opaque blue.
@@ -123,9 +126,10 @@ fn pixel(render: &compose::Render, x: u32, y: u32) -> [u8; 4] {
     render.pixels[index..index + 4].try_into().expect("pixel")
 }
 
-/// Asserts every pixel of the render is fully transparent.
-fn assert_all_transparent(render: &compose::Render) {
-    assert!(render.pixels.iter().all(|&b| b == 0));
+/// Asserts every pixel of the render is the bare canvas matte —
+/// "renders nothing" since the background landed (BGCi white).
+fn assert_all_matte(render: &compose::Render) {
+    assert!(render.pixels.chunks_exact(4).all(|px| px == BACKGROUND));
 }
 
 // --- proofs --------------------------------------------------------------
@@ -151,8 +155,8 @@ fn image_pixels_land_at_their_extent() {
     assert_eq!((render.width, render.height), (8, 8));
     assert_eq!(pixel(&render, 4, 6), RED, "top-left of the extent");
     assert_eq!(pixel(&render, 5, 7), RED, "bottom-right of the extent");
-    assert_eq!(pixel(&render, 6, 6), [0, 0, 0, 0], "right of the extent");
-    assert_eq!(pixel(&render, 4, 5), [0, 0, 0, 0], "above the extent");
+    assert_eq!(pixel(&render, 6, 6), BACKGROUND, "right of the extent");
+    assert_eq!(pixel(&render, 4, 5), BACKGROUND, "above the extent");
 }
 
 /// A 130-wide extent spans two bank tiles row-major: slot 0 covers
@@ -179,7 +183,7 @@ fn tile_grid_is_row_major_across_tiles() {
     assert_eq!(pixel(&render, 127, 1), RED, "slot 0, last full column");
     assert_eq!(pixel(&render, 128, 0), BLUE, "slot 1, first column");
     assert_eq!(pixel(&render, 129, 1), BLUE, "slot 1, extent-clipped end");
-    assert_eq!(pixel(&render, 130, 0), [0, 0, 0, 0], "past the extent");
+    assert_eq!(pixel(&render, 130, 0), BACKGROUND, "past the extent");
 }
 
 /// An image at a negative origin contributes only its on-canvas
@@ -202,8 +206,8 @@ fn canvas_clips_negative_origins() {
     let render = render(&doc, 0, 0).expect("render");
     assert_eq!(pixel(&render, 0, 0), RED, "extent (2,3)");
     assert_eq!(pixel(&render, 1, 0), RED, "extent (3,3)");
-    assert_eq!(pixel(&render, 2, 0), [0, 0, 0, 0], "extent (4,3): past");
-    assert_eq!(pixel(&render, 0, 1), [0, 0, 0, 0], "extent (2,4): past");
+    assert_eq!(pixel(&render, 2, 0), BACKGROUND, "extent (4,3): past");
+    assert_eq!(pixel(&render, 0, 1), BACKGROUND, "extent (2,4): past");
 }
 
 /// `TMCi` matte tiles substitute a flat color, decoded ARGB per the
@@ -226,7 +230,7 @@ fn matte_tiles_fill_solid_argb() {
     let render = render(&doc, 0, 0).expect("render");
     assert_eq!(pixel(&render, 0, 0), BLUE, "matte corner");
     assert_eq!(pixel(&render, 2, 2), BLUE, "matte far corner");
-    assert_eq!(pixel(&render, 3, 3), [0, 0, 0, 0], "past the extent");
+    assert_eq!(pixel(&render, 3, 3), BACKGROUND, "past the extent");
 }
 
 /// A dangling `TIDi` is a document defect: render refuses with
@@ -292,7 +296,7 @@ fn fully_offscreen_image_renders_nothing() {
         .push(page(4.0, 4.0, vec![layer(vec![cell(vec![image])])]));
 
     let render = render(&doc, 0, 0).expect("render");
-    assert_all_transparent(&render);
+    assert_all_matte(&render);
 }
 
 /// A hidden image contributes nothing.
@@ -315,7 +319,7 @@ fn hidden_image_renders_nothing() {
         .push(page(4.0, 4.0, vec![layer(vec![cell(vec![image])])]));
 
     let render = render(&doc, 0, 0).expect("render");
-    assert_all_transparent(&render);
+    assert_all_matte(&render);
 }
 
 /// Image opacity rides the same compositing math as path opacity:
@@ -419,7 +423,7 @@ fn image_effects_route_through_the_filter_stack() {
 
     let render = render(&doc, 0, 0).expect("render");
     assert_eq!(pixel(&render, 0, 0), [0, 255, 255, 255], "invert(red)");
-    assert_eq!(pixel(&render, 3, 3), [0, 0, 0, 0], "outside: untouched");
+    assert_eq!(pixel(&render, 3, 3), BACKGROUND, "outside: untouched");
 }
 
 /// States isolate images: cell 0's red image paints frame 0, cell 1's
@@ -455,5 +459,41 @@ fn each_state_shows_only_its_own_cell() {
     assert_eq!(pixel(&frame0, 0, 0), RED);
     let frame1 = render(&doc, 0, 1).expect("frame 1");
     assert_eq!(pixel(&frame1, 0, 0), BLUE);
-    assert_eq!(pixel(&frame1, 2, 2), [0, 0, 0, 0]);
+    assert_eq!(pixel(&frame1, 2, 2), BACKGROUND);
+}
+
+/// The matte-less render (`render_transparent`): bare pixels stay
+/// transparent — the contract the transparency-native exporters (the
+/// GIF animator's ink crop, the PSD layer records) build on — while
+/// the default render bakes the `BGCi` matte.
+#[test]
+fn render_transparent_leaves_bare_pixels_transparent() {
+    let mut doc = Document::default();
+    doc.tiles.insert(0, tile(RED, Some((2, 2))));
+    let image = image_object(
+        &mut doc.registry,
+        (0.0, 0.0),
+        (2, 2),
+        128,
+        vec![TileRef::Tile(0)],
+        1000,
+    );
+    doc.pages
+        .push(page(4.0, 4.0, vec![layer(vec![cell(vec![image])])]));
+
+    let inked = compose::render_transparent(&doc, 0, 0).expect("transparent render");
+    assert_eq!(pixel(&inked, 0, 0), RED, "ink is identical");
+    assert_eq!(
+        pixel(&inked, 3, 3),
+        [0, 0, 0, 0],
+        "bare pixels stay transparent"
+    );
+
+    let matted = render(&doc, 0, 0).expect("matte render");
+    assert_eq!(pixel(&matted, 0, 0), RED, "ink is identical");
+    assert_eq!(
+        pixel(&matted, 3, 3),
+        BACKGROUND,
+        "bare pixels are the matte"
+    );
 }

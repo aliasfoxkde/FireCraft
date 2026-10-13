@@ -358,11 +358,13 @@ fn flattened_path_carries_compose_pixels_and_blend() {
     assert_eq!(image.location, Point::ZERO);
     assert_eq!(image.pixels, (16, 16), "full-canvas flatten");
 
-    // Pixel oracle: the writer's probe render, un-premultiplied.
+    // Pixel oracle: the writer's probe render, un-premultiplied —
+    // the same matte-less render the writer uses, so a layer record
+    // keeps its own alpha instead of a white backing box.
     let mut probe = document.clone();
     probe.pages.clear();
     io::raster::build_single_object_page(&mut probe, document.info.canvas.clone(), vec![shape]);
-    let rendered = compose::render(&probe, 0, 0).expect("probe render");
+    let rendered = compose::render_transparent(&probe, 0, 0).expect("probe render");
     let straight = compose::straight_alpha(&rendered.pixels);
     let tile = imported.document.tiles.get(0).expect("flatten tile");
     for y in 0..16usize {

@@ -128,7 +128,21 @@ pub fn decode(bytes: &[u8]) -> Result<ImportedSvg, ImportError> {
     document.info.frame_count = 1;
     document.info.canvas.width = width;
     document.info.canvas.height = height;
-    let canvas = document.info.canvas.clone();
+    let mut canvas = document.info.canvas.clone();
+
+    // A leading full-canvas solid rect is the canvas matte our own
+    // serializer emits (`BGCi` ↔ background rect), not an object — it
+    // folds back into `background_raw` so the round trip carries no
+    // phantom full-page shape.
+    let root_children = tree.root().children();
+    let nodes = match canvas_matte(root_children.first(), width, height) {
+        Some(raw) => {
+            document.info.canvas.background_raw = raw;
+            canvas = document.info.canvas.clone();
+            &root_children[1..]
+        }
+        None => root_children,
+    };
 
     let (elements, report) = {
         let mut importer = Importer {
@@ -136,7 +150,7 @@ pub fn decode(bytes: &[u8]) -> Result<ImportedSvg, ImportError> {
             report: SvgImportReport::default(),
         };
         let mut elements = Vec::new();
-        importer.walk_group(tree.root(), TsTransform::identity(), &mut elements);
+        importer.walk_nodes(nodes, TsTransform::identity(), &mut elements);
         (elements, importer.report)
     };
     if elements.is_empty() {
@@ -167,7 +181,19 @@ impl Importer<'_> {
         extra: TsTransform,
         elements: &mut Vec<doc::ObjectId>,
     ) {
-        for node in group.children() {
+        self.walk_nodes(group.children(), extra, elements);
+    }
+
+    /// The group walk over an explicit node slice — the root call
+    /// peels the canvas matte (a full-canvas solid rect, below) before
+    /// handing usvg's children over.
+    fn walk_nodes(
+        &mut self,
+        nodes: &[usvg::Node],
+        extra: TsTransform,
+        elements: &mut Vec<doc::ObjectId>,
+    ) {
+        for node in nodes {
             match node {
                 usvg::Node::Group(group) => {
                     if group.clip_path().is_some() || group.mask().is_some() {
@@ -389,6 +415,42 @@ impl Importer<'_> {
         }
         Ok(id)
     }
+}
+
+/// Recognizes the canvas matte our own serializer emits: the first
+/// root child, a rect-covering path over the exact canvas with an
+/// opaque solid paint and no stroke. Returns the `BGCi`-style ABGR
+/// raw (alpha forced opaque — the same unpinned-alpha reading the
+/// renderer and `bg_hex` use) or `None` for any other geometry.
+fn canvas_matte(node: Option<&usvg::Node>, width: f64, height: f64) -> Option<i64> {
+    let usvg::Node::Path(path) = node? else {
+        return None;
+    };
+    if path.stroke().is_some() {
+        return None;
+    }
+    let fill = path.fill()?;
+    if f64::from(fill.opacity().get()) < 1.0 {
+        return None;
+    }
+    let usvg::Paint::Color(color) = &fill.paint() else {
+        return None;
+    };
+    let bounds = path.data().bounds();
+    let exact = |a: f64, b: f64| (a - b).abs() < 1e-9;
+    if !exact(f64::from(bounds.left()), 0.0)
+        || !exact(f64::from(bounds.top()), 0.0)
+        || !exact(f64::from(bounds.right()), width)
+        || !exact(f64::from(bounds.bottom()), height)
+    {
+        return None;
+    }
+    Some(
+        i64::from(0xFF00_0000u32)
+            | i64::from(u32::from(color.blue)) << 16
+            | i64::from(u32::from(color.green)) << 8
+            | i64::from(u32::from(color.red)),
+    )
 }
 
 /// The deepest element nesting in an SVG text, measured by a flat,

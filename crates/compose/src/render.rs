@@ -174,6 +174,21 @@ pub fn render(document: &Document, page: usize, frame: usize) -> Result<Render, 
     render_with_cache(document, page, frame, &mut EffectCache::new())
 }
 
+/// [`render`] with the canvas matte (`BGCi`) suppressed: bare pixels
+/// stay transparent where nothing paints. For the export surfaces
+/// whose own model is transparency-native — the GIF animator's
+/// ink-crop/disposal screen and the PSD layer records ("alpha against
+/// the empty backdrop") — where a baked matte would corrupt the
+/// semantics (an empty state is a 1×1 placeholder, not a white
+/// canvas; a layer record carries its own alpha, not a white box).
+pub fn render_transparent(
+    document: &Document,
+    page: usize,
+    frame: usize,
+) -> Result<Render, ComposeError> {
+    render_inner(document, page, frame, &mut EffectCache::new(), false)
+}
+
 /// [`render`] over a caller-owned effect cache: filtered object
 /// rasters survive between calls keyed on content, so unchanged
 /// objects skip their kernels on the next render.
@@ -182,6 +197,16 @@ pub fn render_with_cache(
     page: usize,
     frame: usize,
     cache: &mut EffectCache,
+) -> Result<Render, ComposeError> {
+    render_inner(document, page, frame, cache, true)
+}
+
+fn render_inner(
+    document: &Document,
+    page: usize,
+    frame: usize,
+    cache: &mut EffectCache,
+    matte: bool,
 ) -> Result<Render, ComposeError> {
     let page = document
         .pages
@@ -203,6 +228,22 @@ pub fn render_with_cache(
 
     let mut ctx = RenderContext::new(width, height);
     let mut resources = Resources::new();
+    // The canvas background (`BGCi`) paints under everything, before
+    // the layer walk — CS6's matte shows wherever no object covers.
+    // The raw is ABGR like every paint slot; its alpha byte rides
+    // unpinned (webexport's `bg_hex` ignores it too), so the fill is
+    // forced opaque. Transparency-native exports opt out via
+    // [`render_transparent`].
+    if matte {
+        let raw = canvas.background_raw as u32;
+        ctx.set_paint(Brush::Solid(AlphaColor::from_rgba8(
+            (raw & 0xFF) as u8,
+            ((raw >> 8) & 0xFF) as u8,
+            ((raw >> 16) & 0xFF) as u8,
+            255,
+        )));
+        ctx.fill_rect(&Rect::new(0.0, 0.0, f64::from(width), f64::from(height)));
+    }
     // The text shaping engine builds lazily — documents without text
     // never pay for the font database.
     let mut text_engine = None;

@@ -156,6 +156,42 @@ fn rendered(document: &Document) -> Vec<u8> {
     }
 }
 
+/// The canvas matte round-trips through the background slot, not the
+/// object list: a non-default `BGCi` exports as the full-canvas rect,
+/// imports back into `background_raw` with the exact color, and puts
+/// no phantom full-page shape on the layer.
+#[test]
+fn canvas_matte_round_trips_through_the_background_slot() {
+    let mut original = document(vec![ObjectData::Path(square())]);
+    // ABGR: a<<24 | b<<16 | g<<8 | r — a deep ink, not the default.
+    // The page's canvas is what the exporter reads.
+    original.pages[0].info.canvas.background_raw = 0xFF18_1F2B;
+    let imported = svgimport::decode(&encode(&original))
+        .expect("import")
+        .document;
+    assert_eq!(
+        imported.info.canvas.background_raw, 0xFF18_1F2B,
+        "the matte color lands in the background slot"
+    );
+    assert_eq!(paths(&imported).len(), 1, "only the square is an object");
+    // And the renders agree — the same matte, painted the same way.
+    assert_eq!(max_delta(&rendered(&original), &rendered(&imported)), 0);
+
+    // A foreign full-canvas rect folds in too, while anything short of
+    // the exact canvas stays an object.
+    let partial = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"32\" height=\"16\">\
+                   <rect x=\"0\" y=\"0\" width=\"30\" height=\"16\" fill=\"#336699\"/>\
+                   <rect x=\"0\" y=\"0\" width=\"4\" height=\"4\" fill=\"#ff0000\"/></svg>";
+    let imported = svgimport::decode(partial.as_bytes())
+        .expect("import")
+        .document;
+    assert_eq!(
+        imported.info.canvas.background_raw, 0xFF_FF_FF,
+        "a non-covering rect is not a matte"
+    );
+    assert_eq!(paths(&imported).len(), 2, "both rects stay objects");
+}
+
 #[test]
 fn square_round_trips_bit_exact() {
     let original = document(vec![ObjectData::Path(square())]);
@@ -388,7 +424,10 @@ fn text_flattens_to_glyph_paths_with_a_report_note() {
     // The glyphs actually rasterize (the fontdb bridge fed usvg our
     // bundled faces).
     let pixels = rendered(&imported.document);
-    assert!(pixels.chunks(4).any(|px| px[3] > 0), "glyphs are visible");
+    assert!(
+        pixels.chunks(4).any(|px| px != [255, 255, 255, 255]),
+        "glyphs are visible (some pixel leaves the matte)"
+    );
 }
 
 #[test]
