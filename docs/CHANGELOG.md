@@ -10,6 +10,7 @@ Current version: **0.1.0**.
 
 ### Features
 
+- **filters**: shadow and glow composites (fa49be3)
 - **filters**: full CS6 native filter surface (929345e)
 - **app**: live move, alt-clone, double-clicks (fa20ecb)
 - **app**: Auto Shape flyout with preview glyphs (92428e8)

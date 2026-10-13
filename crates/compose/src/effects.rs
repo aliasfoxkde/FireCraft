@@ -5,13 +5,14 @@
 //! `filter.add` payloads — fall back to the internal name (`INMs`).
 //! Every native CS6 live effect in the M14 enumeration
 //! (`docs/research/fw-code-notes.md`) is interpreted here — the
-//! shadow/glow family since the composite pass, via the MX-era scalar
-//! props and the Photoshop Live Effects container's packed strings.
-//! Effects still outside it — the bevel/emboss arm of the container,
-//! third-party plugin GUIDs, Color Fill's exotic blend codes — are
-//! skipped, never approximated: the object renders unfiltered through
-//! them. That keeps composition total and deterministic (the ADR 0002
-//! oracle contract); widening the catalog is strictly additive.
+//! shadow/glow family and the bevel/emboss family since the composite
+//! passes, via the MX-era scalar props and the Photoshop Live Effects
+//! container's packed strings. Effects still outside it — satin and
+//! the fill kinds of the container, third-party plugin GUIDs, Color
+//! Fill's exotic blend codes — are skipped, never approximated: the
+//! object renders unfiltered through them. That keeps composition
+//! total and deterministic (the ADR 0002 oracle contract); widening
+//! the catalog is strictly additive.
 //!
 //! Properties are the `EPSv` decimal strings. A required parameter
 //! that is absent or unparseable skips its effect (counted in
@@ -68,6 +69,9 @@ const GUID_INNER_SHADOW: &str = "5600f702-774c-11d3-baad0000861f4d01";
 const GUID_INNER_GLOW: &str = "2ba87123-8220-11d3-baad0000861f4d01";
 /// Solid Shadow, MX-era scalar props.
 const GUID_SOLID_SHADOW: &str = "b90c950e-64df-11d8-aaf2000a9582f7d4";
+/// Bevel / Emboss, MX-era scalar props — one GUID, `BevelType` picks
+/// the variant (dictionary line 1502).
+const GUID_BEVEL: &str = "7fe61102-6ce2-11d1-8c76000502701850";
 /// Photoshop Live Effects Special Fill — the CS6 unified panel; each
 /// kind (dropShadow, innerShadow, outerGlow, innerGlow, solidFill, …)
 /// arrives as one `&`-packed string property.
@@ -223,6 +227,29 @@ pub enum KernelOp {
         /// `EdgeThreshold` scaled to 0..255.
         edge_threshold: u8,
     },
+    /// Bevel / Emboss — the height-field rim family. `start` only
+    /// carries meaning for the Glow style; `face` only for the
+    /// emboss styles.
+    Bevel {
+        /// `BevelType` 0..=4 mapped onto the kernel's styles.
+        style: filters::BevelStyle,
+        /// `LightAngle`, degrees (where the light is).
+        angle_degrees: f64,
+        /// `BevelWidth` (glow: `GlowWidth`) in pixels.
+        width: u32,
+        /// `BevelContrast`, 0..=100.
+        contrast: u32,
+        /// `LightDistance` depth percent, 39..=200 observed.
+        depth: u32,
+        /// `GlowStartDistance`, 0..=35 (glow only).
+        start: u32,
+        /// `HiliteColor`.
+        hilite: Rgba8,
+        /// `OuterBevelColor` (the dark rim).
+        shadow: Rgba8,
+        /// `EmbossFaceColor` (raised/inset only, when present).
+        face: Option<Rgba8>,
+    },
     /// Add Noise with a stack-deterministic seed (no clocks, no
     /// randomness — the seed derives from the effect's own bytes, so
     /// journal replay and re-renders are bit-stable).
@@ -324,6 +351,10 @@ pub fn plan(stack: &[Effect]) -> Plan {
                 None => skipped += 1,
             },
             Some(id) if id == GUID_SOLID_SHADOW => match mx_solid_shadow(effect) {
+                Some(op) => ops.push(op),
+                None => skipped += 1,
+            },
+            Some(id) if id == GUID_BEVEL => match mx_bevel(effect) {
                 Some(op) => ops.push(op),
                 None => skipped += 1,
             },
@@ -439,6 +470,28 @@ pub fn apply_stack(mut surface: Surface, ops: &[KernelOp]) -> Surface {
                 blur,
                 edge_threshold,
             } => filters::inner_glow(&surface, *color, *blur, *edge_threshold),
+            KernelOp::Bevel {
+                style,
+                angle_degrees,
+                width,
+                contrast,
+                depth,
+                start,
+                hilite,
+                shadow,
+                face,
+            } => filters::bevel(
+                &surface,
+                *style,
+                *angle_degrees,
+                *width,
+                *contrast,
+                *depth,
+                *start,
+                *hilite,
+                *shadow,
+                *face,
+            ),
         };
     }
     surface
@@ -504,6 +557,8 @@ fn by_name(effect: &Effect) -> Option<KernelOp> {
         "innershadow" => mx_inner_shadow(effect),
         "innerglow" => mx_inner_glow(effect),
         "solidshadow" => mx_solid_shadow(effect),
+        "bevel" | "bevelemboss" | "innerbevel" | "outerbevel" | "raisedemboss" | "insetemboss"
+        | "glow" => mx_bevel(effect),
         _ => None,
     }
 }
@@ -666,20 +721,65 @@ fn mx_inner_glow(effect: &Effect) -> Option<KernelOp> {
     })
 }
 
+/// MX-era Bevel / Emboss: one GUID, `BevelType` picks the variant
+/// (0 inner bevel, 1 outer bevel, 2 raised emboss, 3 inset emboss,
+/// 4 the glow). The bevels read `BevelWidth`; the glow reads
+/// `GlowWidth` + `GlowStartDistance`. `LightDistance` is a depth
+/// percent (39..=200 observed) and defaults to 100; so does
+/// `BevelContrast`. `MaskSoftness` and `AngleSoftness` are pinned
+/// inert (the height-field blur already bounds the shading).
+fn mx_bevel(effect: &Effect) -> Option<KernelOp> {
+    let kind = prop_f64(effect, "BevelType")? as i64;
+    let angle_degrees = prop_f64(effect, "LightAngle")?.rem_euclid(360.0);
+    let hilite = prop_color(effect, "HiliteColor")?;
+    let shadow = prop_color(effect, "OuterBevelColor")?;
+    let contrast = prop_f64(effect, "BevelContrast")
+        .unwrap_or(100.0)
+        .round()
+        .clamp(0.0, 100.0) as u32;
+    let depth = prop_f64(effect, "LightDistance")
+        .unwrap_or(100.0)
+        .round()
+        .clamp(1.0, 1000.0) as u32;
+    let style = match kind {
+        0 => filters::BevelStyle::InnerBevel,
+        1 => filters::BevelStyle::OuterBevel,
+        2 => filters::BevelStyle::RaisedEmboss,
+        3 => filters::BevelStyle::InsetEmboss,
+        4 => filters::BevelStyle::Glow,
+        _ => return None,
+    };
+    let (width, start) = if style == filters::BevelStyle::Glow {
+        let width = prop_f64(effect, "GlowWidth")?;
+        let start = prop_f64(effect, "GlowStartDistance").unwrap_or(0.0);
+        (
+            width.round().clamp(0.0, 35.0) as u32,
+            start.round().clamp(0.0, 35.0) as u32,
+        )
+    } else {
+        let width = prop_f64(effect, "BevelWidth")?;
+        (width.round().clamp(0.0, 35.0) as u32, 0)
+    };
+    Some(KernelOp::Bevel {
+        style,
+        angle_degrees,
+        width,
+        contrast,
+        depth,
+        start,
+        hilite,
+        shadow,
+        face: prop_color(effect, "EmbossFaceColor"),
+    })
+}
+
 /// The Photoshop Live Effects container: one effect whose properties
 /// carry a `&`-packed string per enabled kind. All-or-nothing — a kind
-/// we cannot interpret (bevel/emboss, satin, gradient/pattern fill,
-/// stroke) skips the whole container rather than half-rendering the
-/// stack; a malformed packed string does the same (a misread is not a
-/// shadow).
+/// we cannot interpret (satin, gradient/pattern fill, stroke) skips
+/// the whole container rather than half-rendering the stack; a
+/// malformed packed string does the same (a misread is not a shadow).
 fn live_effects(effect: &Effect) -> Option<Vec<KernelOp>> {
-    const UNINTERPRETED: &[&str] = &[
-        "bevelEmboss",
-        "satin",
-        "gradientFill",
-        "patternFill",
-        "stroke",
-    ];
+    const UNINTERPRETED: &[&str] = &["satin", "gradientFill", "patternFill", "stroke"];
     for key in UNINTERPRETED {
         if prop(effect, key).is_some() {
             return None;
@@ -697,6 +797,9 @@ fn live_effects(effect: &Effect) -> Option<Vec<KernelOp>> {
     }
     if let Some(text) = prop_text(effect, "innerGlow") {
         ops.push(packed_inner_glow(text)?);
+    }
+    if let Some(text) = prop_text(effect, "bevelEmboss") {
+        ops.push(packed_bevel_emboss(text)?);
     }
     if let Some(text) = prop_text(effect, "solidFill") {
         ops.push(packed_solid_fill(text)?);
@@ -784,6 +887,46 @@ fn packed_glow_fields(text: &str) -> Option<(Rgba8, f64)> {
         Rgba8::new(r, g, b, (opacity * 255.0).round() as u8),
         *numbers.get(2)?,
     ))
+}
+
+/// `bevelEmboss` packed fields (1-based dictionary numbering): 8
+/// angle (−180..180), 10 depth (1..1000), 11 size (0..250), 14
+/// highlight `RGBColor`, 16 shadow `RGBColor`, 18 style token. The
+/// 75-twins (6, 7), the "always 30" field (9), soften (12), the
+/// blend tokens (13, 15), the matte token (17), and stampIn/stampOut
+/// (19) are pinned inert; the packed form carries no contrast
+/// (100) and no face color.
+fn packed_bevel_emboss(text: &str) -> Option<KernelOp> {
+    let fields: Vec<&str> = text.split('&').collect();
+    let number = |at: usize| fields.get(at)?.trim().parse::<f64>().ok();
+    let style = match token(fields.get(17)?)?.as_str() {
+        "innerbevel" => filters::BevelStyle::InnerBevel,
+        "outerbevel" => filters::BevelStyle::OuterBevel,
+        "emboss" => filters::BevelStyle::RaisedEmboss,
+        "pillowemboss" => filters::BevelStyle::InsetEmboss,
+        _ => return None, // strokeEmboss and anything unrecognized
+    };
+    Some(KernelOp::Bevel {
+        style,
+        angle_degrees: number(7)?.rem_euclid(360.0),
+        width: number(10)?.round().clamp(0.0, 250.0) as u32,
+        contrast: 100,
+        depth: number(9)?.round().clamp(1.0, 1000.0) as u32,
+        start: 0,
+        hilite: packed_color(fields.get(13)?)?,
+        shadow: packed_color(fields.get(15)?)?,
+        face: None,
+    })
+}
+
+/// A packed token, lowercased alphanumerics only.
+fn token(text: &str) -> Option<String> {
+    Some(
+        text.chars()
+            .filter(|c| c.is_ascii_alphanumeric())
+            .map(|c| c.to_ascii_lowercase())
+            .collect(),
+    )
 }
 
 /// `solidFill` (Photoshop Color Overlay): 2 opacity, 3 blend token,
@@ -1300,11 +1443,24 @@ mod tests {
                     ("EdgeThreshold", "1"),
                 ],
             ),
+            (
+                "innerBevel",
+                GUID_BEVEL,
+                vec![
+                    ("BevelType", "0"),
+                    ("BevelWidth", "6"),
+                    ("BevelContrast", "70"),
+                    ("LightAngle", "120"),
+                    ("LightDistance", "150"),
+                    ("HiliteColor", "#ffffcc"),
+                    ("OuterBevelColor", "#808000"),
+                ],
+            ),
         ] {
             stack.push(guid_effect(name, guid, &props));
         }
         // The unified panel's outer glow exists only as a packed kind
-        // inside the Live Effects container — one effect, three ops
+        // inside the Live Effects container — one effect, four ops
         // (the container carries the dictionary's own example strings).
         let mut live = guid_effect("liveEffects", GUID_LIVE_EFFECTS, &[]);
         live.properties.push(EffectProperty {
@@ -1326,6 +1482,16 @@ mod tests {
             ),
         });
         live.properties.push(EffectProperty {
+            key: "bevelEmboss".to_owned(),
+            value: EffectValue::Text(
+                "0&0&0&0&0&75.000000&75.000000&120.000000&30.000000&100.000000&5.000000&0.000000\
+                 &screen&RGBColor;255.000000;255.000000;255.000000\
+                 &multiply&RGBColor;0.000000;0.000000;0.000000&softMatte&innerBevel&stampIn\
+                 &2$$0.000000;0.000000;1$255.000000;255.000000;1&noshape&notexture"
+                    .to_owned(),
+            ),
+        });
+        live.properties.push(EffectProperty {
             key: "solidFill".to_owned(),
             value: EffectValue::Text(
                 "0&50.000000&normal&RGBColor;51.000000;102.000000;153.000000".to_owned(),
@@ -1333,7 +1499,7 @@ mod tests {
         });
         stack.push(live);
         let plan = plan(&stack);
-        assert_eq!(plan.ops.len(), 26, "every enumerated effect interprets");
+        assert_eq!(plan.ops.len(), 28, "every enumerated effect interprets");
         assert_eq!(plan.skipped, 0, "the native surface never rides through");
     }
 
@@ -1738,9 +1904,117 @@ mod tests {
     }
 
     #[test]
+    fn mx_bevel_parses_per_type() {
+        // Inner bevel (BevelType 0): width/contrast/angle/colors;
+        // defaults fill the absent contrast and depth.
+        let inner = guid_effect(
+            "innerBevel",
+            GUID_BEVEL,
+            &[
+                ("BevelType", "0"),
+                ("BevelWidth", "6"),
+                ("BevelContrast", "70"),
+                ("LightAngle", "120"),
+                ("LightDistance", "150"),
+                ("HiliteColor", "#ffffcc"),
+                ("OuterBevelColor", "#808000"),
+            ],
+        );
+        assert_eq!(
+            plan(std::slice::from_ref(&inner)).ops,
+            vec![KernelOp::Bevel {
+                style: filters::BevelStyle::InnerBevel,
+                angle_degrees: 120.0,
+                width: 6,
+                contrast: 70,
+                depth: 150,
+                start: 0,
+                hilite: Rgba8::new(255, 255, 204, 255),
+                shadow: Rgba8::new(128, 128, 0, 255),
+                face: None,
+            }]
+        );
+        // Raised emboss (2) carries the face color; a negative angle
+        // normalizes like the shadow family.
+        let raised = guid_effect(
+            "raisedEmboss",
+            GUID_BEVEL,
+            &[
+                ("BevelType", "2"),
+                ("BevelWidth", "4"),
+                ("LightAngle", "-135"),
+                ("HiliteColor", "#ffffff"),
+                ("OuterBevelColor", "#000000"),
+                ("EmbossFaceColor", "#4080c0ff"),
+            ],
+        );
+        assert_eq!(
+            plan(&[raised]).ops,
+            vec![KernelOp::Bevel {
+                style: filters::BevelStyle::RaisedEmboss,
+                angle_degrees: 225.0,
+                width: 4,
+                contrast: 100,
+                depth: 100,
+                start: 0,
+                hilite: Rgba8::new(255, 255, 255, 255),
+                shadow: Rgba8::new(0, 0, 0, 255),
+                face: Some(Rgba8::new(64, 128, 192, 255)),
+            }]
+        );
+        // The glow variant reads GlowWidth + GlowStartDistance.
+        let glow = guid_effect(
+            "glow",
+            GUID_BEVEL,
+            &[
+                ("BevelType", "4"),
+                ("GlowWidth", "8"),
+                ("GlowStartDistance", "3"),
+                ("LightAngle", "90"),
+                ("HiliteColor", "#ffffff"),
+                ("OuterBevelColor", "#000000"),
+            ],
+        );
+        assert!(matches!(
+            plan(&[glow]).ops[0],
+            KernelOp::Bevel {
+                style: filters::BevelStyle::Glow,
+                width: 8,
+                start: 3,
+                ..
+            }
+        ));
+        // An unknown BevelType and a missing BevelWidth both skip.
+        let unknown = guid_effect(
+            "bevel",
+            GUID_BEVEL,
+            &[
+                ("BevelType", "9"),
+                ("BevelWidth", "4"),
+                ("LightAngle", "0"),
+                ("HiliteColor", "#ffffff"),
+                ("OuterBevelColor", "#000000"),
+            ],
+        );
+        let starved = guid_effect(
+            "bevel",
+            GUID_BEVEL,
+            &[
+                ("BevelType", "0"),
+                ("LightAngle", "0"),
+                ("HiliteColor", "#ffffff"),
+                ("OuterBevelColor", "#000000"),
+            ],
+        );
+        let planned = plan(&[unknown, starved]);
+        assert!(planned.ops.is_empty());
+        assert_eq!(planned.skipped, 2);
+    }
+
+    #[test]
     fn packed_container_parses_kinds_and_skips_whole_on_exotics() {
-        // dropShadow + outerGlow + solidFill in one container: three
-        // ops, the dictionary's own example strings.
+        // dropShadow + outerGlow + bevelEmboss + solidFill in one
+        // container: four ops, the dictionary's own example strings.
         let mut live = guid_effect("liveEffects", GUID_LIVE_EFFECTS, &[]);
         let packed = [
             (
@@ -1750,6 +2024,10 @@ mod tests {
             (
                 "outerGlow",
                 "0&0&screen&75.000000:0.000000:5.000000:0.000000:0.000000:50.000000&softMatte&RGBColor;255.000000;255.000000;189.996109&nogradient&2$$0.000000;0.000000;1$255.000000;255.000000;1&edgeGlow",
+            ),
+            (
+                "bevelEmboss",
+                "0&0&0&0&0&75.000000&75.000000&120.000000&30.000000&100.000000&5.000000&0.000000&screen&RGBColor;255.000000;255.000000;255.000000&multiply&RGBColor;0.000000;0.000000;0.000000&softMatte&innerBevel&stampIn&2$$0.000000;0.000000;1$255.000000;255.000000;1&noshape&notexture",
             ),
             (
                 "solidFill",
@@ -1763,7 +2041,7 @@ mod tests {
             });
         }
         let ops = plan(&[live.clone()]).ops;
-        assert_eq!(ops.len(), 3, "three packed kinds → three ops");
+        assert_eq!(ops.len(), 4, "four packed kinds → four ops");
         // Packed opacity (75) fades the color; distance rides the
         // field the dictionary labels "always 0" but its example
         // carries 74 in.
@@ -1785,33 +2063,60 @@ mod tests {
                 edge_threshold: 0,
             }
         );
+        // The packed bevel lands between the glow and the fill (the
+        // parser reads kinds in the panel's own order, not property
+        // order).
+        assert_eq!(
+            ops[2],
+            KernelOp::Bevel {
+                style: filters::BevelStyle::InnerBevel,
+                angle_degrees: 120.0,
+                width: 5,
+                contrast: 100,
+                depth: 100,
+                start: 0,
+                hilite: Rgba8::new(255, 255, 255, 255),
+                shadow: Rgba8::new(0, 0, 0, 255),
+                face: None,
+            }
+        );
         // solidFill is the one packed kind whose blend is
         // representable — it lands on the existing ColorFill op.
         assert_eq!(
-            ops[2],
+            ops[3],
             KernelOp::ColorFill {
                 fill: [51, 102, 153],
                 opacity: 50,
                 mode: BlendMode::Normal,
             }
         );
-        // Any uninterpretable kind (bevel until task 3b, satin, the
-        // fills, stroke) skips the WHOLE container — never half a
-        // stack.
+        // Any uninterpretable kind (satin, the fills, stroke, a style
+        // token beyond the four we map) skips the WHOLE container —
+        // never half a stack.
         for exotic in [
-            "bevelEmboss",
-            "satin",
-            "gradientFill",
-            "patternFill",
-            "stroke",
+            ("satin", "0&0"),
+            ("gradientFill", "0&0"),
+            ("patternFill", "0&0"),
+            ("stroke", "0&0"),
+            (
+                "bevelEmboss",
+                "0&0&0&0&0&75.000000&75.000000&120.000000&30.000000&100.000000&5.000000&0.000000&screen&RGBColor;255.000000;255.000000;255.000000&multiply&RGBColor;0.000000;0.000000;0.000000&softMatte&strokeEmboss&stampIn&2$$0.000000;0.000000;1$255.000000;255.000000;1&noshape&notexture",
+            ),
         ] {
             let mut guarded = live.clone();
+            // An exotic REPLACES its same-key kind (the container
+            // carries one packed string per kind).
+            guarded.properties.retain(|p| p.key != exotic.0);
             guarded.properties.push(EffectProperty {
-                key: exotic.to_owned(),
-                value: EffectValue::Text("0&0".to_owned()),
+                key: exotic.0.to_owned(),
+                value: EffectValue::Text(exotic.1.to_owned()),
             });
             let planned = plan(&[guarded]);
-            assert!(planned.ops.is_empty(), "{exotic} must skip the container");
+            assert!(
+                planned.ops.is_empty(),
+                "{} must skip the container",
+                exotic.0
+            );
             assert_eq!(planned.skipped, 1);
         }
         // A malformed packed string does the same (a misread is not a

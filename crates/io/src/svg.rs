@@ -640,6 +640,7 @@ fn kernel_name(op: &KernelOp) -> &'static str {
         KernelOp::SolidShadow { .. } => "solid shadow",
         KernelOp::OuterGlow { .. } => "outer glow",
         KernelOp::InnerGlow { .. } => "inner glow",
+        KernelOp::Bevel { .. } => "bevel emboss",
     }
 }
 

@@ -252,23 +252,42 @@ Shadow/glow/emboss — two encodings, one semantic family:
   `ShowObject`. There is **no MX-era outer-glow effect** — outer glow
   exists only as a packed kind inside the unified panel.
 
-Interpreted since the M14 composite pass (compose `effects.rs` +
-`filters::shadow`): drop/inner shadow (MX-era scalars and packed
-strings both), solid shadow (`ShowObject` absent = shown), outer/inner
-glow (packed; `EdgeThreshold` defaults soft at 0 in the packed form,
-1 in the MX-era inner glow per the dictionary). Substitutions pinned
-in `filters/src/shadow.rs`: the silhouette blur is the proven box
-blur (CS6's shadow kernel unobserved); shadow angles point where the
-LIGHT is and offsets run `(−d·cos θ, +d·sin θ)` y-down; packed blend
-tokens (multiply/screen) are consumed but applied nowhere — mid-stack
-a shadow can only composite against its source; the packed spread
-field and the undocumented glow numbers are inert. The container is
-all-or-nothing: any uninterpreted kind (bevel/emboss until task 3b,
-satin, gradient/pattern fill, stroke) or a malformed packed string
+Interpreted since the M14 composite passes (compose `effects.rs` +
+`filters/src/shadow.rs` + `filters/src/bevel.rs`): drop/inner shadow
+(MX-era scalars and packed strings both), solid shadow (`ShowObject`
+absent = shown), outer/inner glow (packed; `EdgeThreshold` defaults
+soft at 0 in the packed form, 1 in the MX-era inner glow per the
+dictionary), and the bevel/emboss family — MX-era Bevel
+`7fe61102-6ce2-11d1-…` (one GUID, `BevelType` 0 inner bevel / 1 outer
+bevel / 2 raised emboss / 3 inset emboss / 4 glow) and the packed
+`bevelEmboss` kind (style tokens innerBevel/outerBevel observed;
+emboss → raised, pillowEmboss → inset, strokeEmboss uninterpreted —
+the dictionary marks those spellings as guesses, the mapping is the
+Photoshop-alignment pin). Shadow substitutions pinned in
+`filters/src/shadow.rs`: the silhouette blur is the proven box blur
+(CS6's shadow kernel unobserved); shadow angles point where the LIGHT
+is and offsets run `(−d·cos θ, +d·sin θ)` y-down; packed blend tokens
+(multiply/screen) are consumed but applied nowhere — mid-stack a
+shadow can only composite against its source; the packed spread field
+and the undocumented glow numbers are inert. Bevel substitutions
+pinned in `filters/src/bevel.rs`: the height field is
+`box_blur(silhouette, width)` and the shading its directional
+derivative against the light (light vector `(cos θ, −sin θ)` y-down,
+θ=90 lights the top rim); `SlopeType` pins flat (smooth/zigzag/ring/
+ruffle remaps unobserved); `SlopeMultiplier` (observed 1..1),
+`AngleSoftness`, `MaskSoftness`, the packed 75-twins, the packed
+"always 30" field, soften, matte token, and stampIn/stampOut are
+inert; `LightDistance` reads as a depth percent (39..=200 observed)
+scaling the shading response; `OuterBevelColor` is the dark rim
+everywhere (not outer-bevel-only); the glow's `GlowStartDistance`
+erodes the height field linearly over 0..35; the packed bevel carries
+no contrast (100) and no face color. The container is all-or-nothing:
+any uninterpreted kind (satin, gradient/pattern fill, stroke, a bevel
+style token beyond the four mapped) or a malformed packed string
 skips the whole container. `solidFill` is the one packed kind whose
 blend is representable and lands on the existing ColorFill op.
-Remaining **M14** in the family: Bevel `7fe61102-…` (task 3b —
-gradient-lighting math, `BevelType` 0..4 picks the variant).
+Remaining **M14** in the family: none — the enumeration's native
+effects all interpret.
 
 Plugin gallery (passed through by design, each recorded here so a
 future GUID hit is a lookup, not a puzzle): the Fireworks MX

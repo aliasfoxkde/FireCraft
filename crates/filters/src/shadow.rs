@@ -119,7 +119,7 @@ fn shadow_offset(angle_degrees: f64, distance: u32) -> (i64, i64) {
 /// The source's alpha as a black premultiplied surface; alpha below
 /// the `edge_threshold` (0..255) is cut. Threshold 0 keeps the soft
 /// alpha untouched.
-fn silhouette(surface: &Surface, edge_threshold: u8) -> Surface {
+pub(crate) fn silhouette(surface: &Surface, edge_threshold: u8) -> Surface {
     let threshold = i64::from(edge_threshold);
     let mut out = surface.clone();
     for at in (0..out.pixels.len()).step_by(4) {
@@ -135,7 +135,7 @@ fn silhouette(surface: &Surface, edge_threshold: u8) -> Surface {
 
 /// `255 − alpha` — the *outside* of the object as a black surface;
 /// pixels below the edge threshold count as fully outside.
-fn silhouette_inverted(surface: &Surface, edge_threshold: u8) -> Surface {
+pub(crate) fn silhouette_inverted(surface: &Surface, edge_threshold: u8) -> Surface {
     let threshold = i64::from(edge_threshold);
     let mut out = surface.clone();
     for at in (0..out.pixels.len()).step_by(4) {
@@ -175,7 +175,11 @@ fn colorize(silhouette: &Surface, color: Rgba8) -> Surface {
 
 /// Scales every channel of `subject` by `factor(src_a)/255` — the
 /// premultiplied-safe clip (alpha scaling drags color along).
-fn scale_alpha_against(subject: &Surface, source: &Surface, factor: impl Fn(u8) -> i64) -> Surface {
+pub(crate) fn scale_alpha_against(
+    subject: &Surface,
+    source: &Surface,
+    factor: impl Fn(u8) -> i64,
+) -> Surface {
     let mut out = subject.clone();
     for at in (0..out.pixels.len()).step_by(4) {
         let keep = factor(source.pixels[at + 3]);
@@ -212,7 +216,7 @@ fn translate(surface: &Surface, dx: i64, dy: i64) -> Surface {
 }
 
 /// Premultiplied source-over: `out = top + bottom·(1 − top_a)`.
-fn over(top: &Surface, bottom: &Surface) -> Surface {
+pub(crate) fn over(top: &Surface, bottom: &Surface) -> Surface {
     let mut out = top.clone();
     for at in (0..out.pixels.len()).step_by(4) {
         let keep = 255 - i64::from(top.pixels[at + 3]);

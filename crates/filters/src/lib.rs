@@ -17,12 +17,14 @@
 //! convolutions run on premultiplied channels directly, point ops
 //! round-trip each pixel through [`color::unpremultiply`] first.
 
+mod bevel;
 mod convolve;
 mod geometric;
 mod noise;
 mod point;
 mod shadow;
 
+pub use bevel::{BevelStyle, bevel};
 pub use convolve::{
     box_blur, emboss, find_edges, gaussian_blur, sharpen, sharpen_more, unsharp_mask,
     unsharp_mask_thresholded,

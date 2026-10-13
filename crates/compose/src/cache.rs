@@ -292,6 +292,34 @@ fn hash_plan(h: &mut Hasher, plan: &Plan) {
                 h.u32(*blur);
                 h.u8(*edge_threshold);
             }
+            KernelOp::Bevel {
+                style,
+                angle_degrees,
+                width,
+                contrast,
+                depth,
+                start,
+                hilite,
+                shadow,
+                face,
+            } => {
+                h.tag(b"BV");
+                h.u8(*style as u8);
+                h.f64(*angle_degrees);
+                h.u32(*width);
+                h.u32(*contrast);
+                h.u32(*depth);
+                h.u32(*start);
+                h.bytes(&[hilite.r, hilite.g, hilite.b, hilite.a]);
+                h.bytes(&[shadow.r, shadow.g, shadow.b, shadow.a]);
+                match face {
+                    Some(face) => {
+                        h.bool(true);
+                        h.bytes(&[face.r, face.g, face.b, face.a]);
+                    }
+                    None => h.bool(false),
+                }
+            }
         }
     }
 }
