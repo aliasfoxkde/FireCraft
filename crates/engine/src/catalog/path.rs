@@ -31,7 +31,10 @@ pub(crate) fn install(registry: &mut CommandRegistry) -> Result<(), EngineError>
     registry.register(PathMovePoints)?;
     registry.register(PathWarp)?;
     registry.register(PathReshapeArea)?;
-    registry.register(PathRedraw)
+    registry.register(PathRedraw)?;
+    registry.register(PathSetFill)?;
+    registry.register(PathSetFillColor)?;
+    registry.register(PathSetFillVector)
 }
 
 /// Maps a vector-pipeline failure to a command error. [`VectorError`]
@@ -728,6 +731,344 @@ impl TypedCommand for PathRedraw {
     }
 }
 
+/// One gradient stop on a fill payload: ramp position plus the ABGR
+/// colour (`FGPf` + `FGCi`).
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct FillStopPayload {
+    /// Ramp position, 0..=1.
+    position: f64,
+    /// Stop colour, ABGR layout.
+    color_raw: i64,
+}
+
+/// Which fill family a payload names (`FSXi`; the narrower `FSHi`
+/// compatibility slot never appears in commands — commands always
+/// write the extended slot).
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+enum FillShapeKind {
+    /// Flat `FCLi` colour.
+    Solid,
+    /// Linear ramp along the fill vector.
+    Linear,
+    /// Radial ramp from the vector start, radius to its end.
+    Radial,
+    /// Sweep around the vector start.
+    Conical,
+    /// Satin, pinch, folds, elliptical, rectangular, bars, ripple,
+    /// waves, pattern and web dither — modelled, rendered as the
+    /// solid colour until each family's math is pinned.
+    Satin,
+    Pinch,
+    Folds,
+    Elliptical,
+    Rectangular,
+    Bars,
+    Ripple,
+    Waves,
+    Pattern,
+    WebDither,
+    /// Contour (distance-band) ramp.
+    Contour,
+}
+
+impl From<FillShapeKind> for doc::FillShape {
+    fn from(kind: FillShapeKind) -> Self {
+        match kind {
+            FillShapeKind::Solid => doc::FillShape::Solid,
+            FillShapeKind::Linear => doc::FillShape::Linear,
+            FillShapeKind::Radial => doc::FillShape::Radial,
+            FillShapeKind::Conical => doc::FillShape::Conical,
+            FillShapeKind::Satin => doc::FillShape::Satin,
+            FillShapeKind::Pinch => doc::FillShape::Pinch,
+            FillShapeKind::Folds => doc::FillShape::Folds,
+            FillShapeKind::Elliptical => doc::FillShape::Elliptical,
+            FillShapeKind::Rectangular => doc::FillShape::Rectangular,
+            FillShapeKind::Bars => doc::FillShape::Bars,
+            FillShapeKind::Ripple => doc::FillShape::Ripple,
+            FillShapeKind::Waves => doc::FillShape::Waves,
+            FillShapeKind::Pattern => doc::FillShape::Pattern,
+            FillShapeKind::WebDither => doc::FillShape::WebDither,
+            FillShapeKind::Contour => doc::FillShape::Contour,
+        }
+    }
+}
+
+/// Builds a solid-fill `FPLv` definition from a payload's ramps.
+fn fill_from_payload(
+    shape: FillShapeKind,
+    stops: &[FillStopPayload],
+    alpha: &[FillStopPayload],
+) -> doc::Fill {
+    let gradient = if matches!(shape, FillShapeKind::Solid) {
+        None
+    } else {
+        let ramp = |stops: &[FillStopPayload]| {
+            stops
+                .iter()
+                .map(|stop| doc::GradientStop {
+                    position: stop.position,
+                    color_raw: stop.color_raw,
+                })
+                .collect()
+        };
+        Some(doc::Gradient {
+            vertices: Vec::new(),
+            rgb: ramp(stops),
+            alpha: ramp(alpha),
+        })
+    };
+    doc::Fill {
+        shape: shape.into(),
+        // Commands always write the extended `FSXi` slot; the
+        // compatibility `FSHi` slot is a reader-side concern.
+        shape_extended: true,
+        texture_blend: 0,
+        feather: 0,
+        stamping: None,
+        hard_edge: false,
+        gradient,
+        dither: None,
+    }
+}
+
+/// `path.setFill` — installs a whole fill definition (family plus
+/// ramps) on a path, replacing whatever definition was there. Named
+/// for the CS6 DOM verb; `path.setFillColor` and `path.setFillVector`
+/// are the narrow variants the Fill panel's colour well and the
+/// gradient tool's handle drag map to. `FCLi` rides the first RGB
+/// stop so the solid fallback paint stays representative (substitution
+/// pending corpus evidence).
+struct PathSetFill;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct PathSetFillPayload {
+    /// Target object.
+    id: doc::ObjectId,
+    /// Fill family.
+    shape: FillShapeKind,
+    /// RGB ramp (`FG0v`); at least one stop unless `shape` is solid.
+    #[serde(default)]
+    stops: Vec<FillStopPayload>,
+    /// Coverage ramp (`FG1v`); empty means fully opaque.
+    #[serde(default)]
+    alpha: Vec<FillStopPayload>,
+}
+
+impl TypedCommand for PathSetFill {
+    type Payload = PathSetFillPayload;
+
+    fn name(&self) -> &'static str {
+        "path.setFill"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "path.setFill";
+        if !matches!(payload.shape, FillShapeKind::Solid) && payload.stops.is_empty() {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: "a gradient fill needs at least one stop".to_owned(),
+            });
+        }
+        let before = access::object(document, NAME, payload.id)?.clone();
+        let fill = fill_from_payload(payload.shape, &payload.stops, &payload.alpha);
+        let applied = match document.registry.get_mut(payload.id) {
+            Some(ObjectData::Path(path)) => {
+                let first = payload.stops.first().map(|stop| stop.color_raw);
+                match &mut path.paint {
+                    Some(paint) => {
+                        if let Some(color_raw) = first {
+                            paint.fill_raw = color_raw;
+                        }
+                        paint.fill = Some(fill);
+                    }
+                    None => {
+                        path.paint = Some(doc::PaintStyle {
+                            stroke_raw: 0,
+                            fill_raw: first.unwrap_or(0),
+                            fill: Some(fill),
+                        });
+                    }
+                }
+                true
+            }
+            _ => false,
+        };
+        if !applied {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: format!("object {} is not a path", payload.id.index()),
+            });
+        }
+        Ok(Delta::Object {
+            id: payload.id,
+            inverse: ObjectInverse::Mutated {
+                object: Box::new(before),
+            },
+        })
+    }
+}
+
+/// `path.setFillColor` — applies a solid fill colour: `FCLi` moves and
+/// any gradient definition collapses to the solid family (the DOM
+/// verb installs a solid fill; pinned pending corpus playback — a
+/// counterexample surfaces as an encode diff).
+struct PathSetFillColor;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct PathSetFillColorPayload {
+    /// Target object.
+    id: doc::ObjectId,
+    /// Fill colour, ABGR layout.
+    color_raw: i64,
+}
+
+impl TypedCommand for PathSetFillColor {
+    type Payload = PathSetFillColorPayload;
+
+    fn name(&self) -> &'static str {
+        "path.setFillColor"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "path.setFillColor";
+        let before = access::object(document, NAME, payload.id)?.clone();
+        let applied = match document.registry.get_mut(payload.id) {
+            Some(ObjectData::Path(path)) => {
+                match &mut path.paint {
+                    Some(paint) => {
+                        paint.fill_raw = payload.color_raw;
+                        if let Some(fill) = &mut paint.fill {
+                            fill.shape = doc::FillShape::Solid;
+                            fill.gradient = None;
+                            fill.dither = None;
+                        }
+                    }
+                    None => {
+                        path.paint = Some(doc::PaintStyle {
+                            stroke_raw: 0,
+                            fill_raw: payload.color_raw,
+                            fill: None,
+                        });
+                    }
+                }
+                true
+            }
+            _ => false,
+        };
+        if !applied {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: format!("object {} is not a path", payload.id.index()),
+            });
+        }
+        Ok(Delta::Object {
+            id: payload.id,
+            inverse: ObjectInverse::Mutated {
+                object: Box::new(before),
+            },
+        })
+    }
+}
+
+/// One gradient handle in world coordinates (`fdct`'s start/end/third
+/// points live on the path, not inside the fill).
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct FillHandlePayload {
+    /// World x.
+    x: f64,
+    /// World y.
+    y: f64,
+}
+
+/// `path.setFillVector` — moves the gradient handles (`fdct` start,
+/// end and optional third point). Handles the payload omits stay
+/// where they are; linear fills use start→end, radial start=center
+/// with end on the rim, conical adds the third point for its zero
+/// angle.
+struct PathSetFillVector;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct PathSetFillVectorPayload {
+    /// Target object.
+    id: doc::ObjectId,
+    /// Ramp origin; `None` leaves it in place.
+    #[serde(default)]
+    start: Option<FillHandlePayload>,
+    /// Ramp rim/terminus; `None` leaves it in place.
+    #[serde(default)]
+    end: Option<FillHandlePayload>,
+    /// Conical reference point; `None` leaves it in place.
+    #[serde(default)]
+    third: Option<FillHandlePayload>,
+}
+
+impl TypedCommand for PathSetFillVector {
+    type Payload = PathSetFillVectorPayload;
+
+    fn name(&self) -> &'static str {
+        "path.setFillVector"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "path.setFillVector";
+        if payload.start.is_none() && payload.end.is_none() && payload.third.is_none() {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: "no fill handles".to_owned(),
+            });
+        }
+        let before = access::object(document, NAME, payload.id)?.clone();
+        let applied = match document.registry.get_mut(payload.id) {
+            Some(ObjectData::Path(path)) => {
+                let handle = |point: &Option<FillHandlePayload>| {
+                    point.map(|point| geom::Point::new(point.x, point.y))
+                };
+                if payload.start.is_some() {
+                    path.fill_start = handle(&payload.start);
+                }
+                if payload.end.is_some() {
+                    path.fill_end = handle(&payload.end);
+                }
+                if payload.third.is_some() {
+                    path.fill_third = handle(&payload.third);
+                }
+                true
+            }
+            _ => false,
+        };
+        if !applied {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: format!("object {} is not a path", payload.id.index()),
+            });
+        }
+        Ok(Delta::Object {
+            id: payload.id,
+            inverse: ObjectInverse::Mutated {
+                object: Box::new(before),
+            },
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
@@ -1407,5 +1748,196 @@ mod tests {
             )
             .unwrap_err();
         assert!(matches!(error, EngineError::UnknownCommand { .. }));
+    }
+
+    #[test]
+    fn set_fill_installs_a_gradient_and_inverts() {
+        let (mut document, ids) = document_with(vec![square(0.0, 0.0, 8.0, 8.0)]);
+        let before = document_bytes(&document);
+        let delta = apply_by_name(
+            &mut document,
+            "path.setFill",
+            json!({
+                "id": ids[0],
+                "shape": "linear",
+                "stops": [
+                    { "position": 0.0, "color_raw": 0xFF_00_00_FFi64 },
+                    { "position": 1.0, "color_raw": 0xFF_FF_FF_FFi64 },
+                ],
+                "alpha": [
+                    { "position": 0.0, "color_raw": 0 },
+                    { "position": 1.0, "color_raw": 0xFF00_0000i64 },
+                ],
+            }),
+        )
+        .unwrap();
+        let ObjectData::Path(path) = document.registry.get(ids[0]).unwrap() else {
+            panic!("square is a path");
+        };
+        let paint = path.paint.as_ref().unwrap();
+        let fill = paint.fill.as_ref().unwrap();
+        assert_eq!(fill.shape, doc::FillShape::Linear);
+        assert!(fill.shape_extended, "commands write the FSXi slot");
+        assert_eq!(
+            fill.gradient.as_ref().unwrap().rgb,
+            vec![
+                doc::GradientStop {
+                    position: 0.0,
+                    color_raw: 0xFF_00_00_FFi64
+                },
+                doc::GradientStop {
+                    position: 1.0,
+                    color_raw: 0xFF_FF_FF_FFi64
+                },
+            ]
+        );
+        assert_eq!(fill.gradient.as_ref().unwrap().alpha.len(), 2);
+        // FCLi rides the first ramp stop.
+        assert_eq!(paint.fill_raw, 0xFF_00_00_FFi64);
+        delta.apply_inverse(&mut document).unwrap();
+        assert_eq!(document_bytes(&document), before);
+    }
+
+    #[test]
+    fn set_fill_creates_the_paint_when_the_path_has_none() {
+        let (mut document, ids) = document_with(vec![ObjectData::Path(PathObject {
+            contours: vec![square_contour(0.0, 0.0, 8.0, 8.0)],
+            primitive: None,
+            even_odd: false,
+            paint: None,
+            fill_start: None,
+            fill_end: None,
+            fill_third: None,
+            brush_placement: None,
+            fill_on_top: None,
+            locked: false,
+            visible: true,
+            opacity: 1000,
+            blend: 0,
+            name: None,
+            effects: Vec::new(),
+        })]);
+        let before = document_bytes(&document);
+        let delta = apply_by_name(
+            &mut document,
+            "path.setFill",
+            json!({
+                "id": ids[0],
+                "shape": "radial",
+                "stops": [{ "position": 0.5, "color_raw": 0x12 }],
+            }),
+        )
+        .unwrap();
+        let ObjectData::Path(path) = document.registry.get(ids[0]).unwrap() else {
+            panic!("inserted a path");
+        };
+        let paint = path.paint.as_ref().unwrap();
+        assert_eq!(
+            paint.stroke_raw, 0,
+            "the untouched stroke channel stays empty"
+        );
+        assert_eq!(paint.fill_raw, 0x12);
+        assert_eq!(paint.fill.as_ref().unwrap().shape, doc::FillShape::Radial);
+        delta.apply_inverse(&mut document).unwrap();
+        assert_eq!(document_bytes(&document), before);
+    }
+
+    #[test]
+    fn set_fill_refuses_a_gradient_without_stops_untouched() {
+        let (mut document, ids) = document_with(vec![square(0.0, 0.0, 8.0, 8.0)]);
+        let before = document_bytes(&document);
+        let error = apply_by_name(
+            &mut document,
+            "path.setFill",
+            json!({ "id": ids[0], "shape": "linear", "stops": [] }),
+        )
+        .unwrap_err();
+        assert!(matches!(error, EngineError::InvalidState { .. }), "{error}");
+        assert_eq!(document_bytes(&document), before);
+    }
+
+    #[test]
+    fn set_fill_color_collapses_the_definition_and_inverts() {
+        let (mut document, ids) = document_with(vec![square(0.0, 0.0, 8.0, 8.0)]);
+        let before = document_bytes(&document);
+        let gradient_state = apply_by_name(
+            &mut document,
+            "path.setFill",
+            json!({
+                "id": ids[0],
+                "shape": "linear",
+                "stops": [{ "position": 0.0, "color_raw": 0x33 }],
+            }),
+        )
+        .unwrap();
+        let delta = apply_by_name(
+            &mut document,
+            "path.setFillColor",
+            json!({ "id": ids[0], "color_raw": 0xFF_00_00_FFi64 }),
+        )
+        .unwrap();
+        let ObjectData::Path(path) = document.registry.get(ids[0]).unwrap() else {
+            panic!("square is a path");
+        };
+        let paint = path.paint.as_ref().unwrap();
+        assert_eq!(paint.fill_raw, 0xFF_00_00_FFi64);
+        let fill = paint.fill.as_ref().unwrap();
+        assert_eq!(fill.shape, doc::FillShape::Solid);
+        assert!(fill.gradient.is_none(), "solid replaces the ramps");
+        delta.apply_inverse(&mut document).unwrap();
+        let ObjectData::Path(path) = document.registry.get(ids[0]).unwrap() else {
+            panic!("square is a path");
+        };
+        assert_eq!(
+            path.paint.as_ref().unwrap().fill.as_ref().unwrap().shape,
+            doc::FillShape::Linear,
+            "undo returns the gradient family"
+        );
+        gradient_state.apply_inverse(&mut document).unwrap();
+        assert_eq!(document_bytes(&document), before, "both undos compose");
+    }
+
+    #[test]
+    fn set_fill_vector_moves_handles_and_inverts() {
+        let (mut document, ids) = document_with(vec![square(0.0, 0.0, 8.0, 8.0)]);
+        let before = document_bytes(&document);
+        let delta = apply_by_name(
+            &mut document,
+            "path.setFillVector",
+            json!({
+                "id": ids[0],
+                "start": { "x": 1.0, "y": 2.0 },
+                "end": { "x": 7.0, "y": 6.0 },
+                "third": { "x": 4.0, "y": 4.0 },
+            }),
+        )
+        .unwrap();
+        let ObjectData::Path(path) = document.registry.get(ids[0]).unwrap() else {
+            panic!("square is a path");
+        };
+        assert_eq!(path.fill_start, Some(geom::Point::new(1.0, 2.0)));
+        assert_eq!(path.fill_end, Some(geom::Point::new(7.0, 6.0)));
+        assert_eq!(path.fill_third, Some(geom::Point::new(4.0, 4.0)));
+        delta.apply_inverse(&mut document).unwrap();
+        assert_eq!(document_bytes(&document), before);
+
+        // Omitted handles stay put; an empty payload is refused before
+        // touching the object.
+        apply_by_name(
+            &mut document,
+            "path.setFillVector",
+            json!({
+                "id": ids[0],
+                "start": { "x": 1.0, "y": 1.0 },
+            }),
+        )
+        .unwrap();
+        let ObjectData::Path(path) = document.registry.get(ids[0]).unwrap() else {
+            panic!("square is a path");
+        };
+        assert_eq!(path.fill_end, None, "omitted handle unchanged");
+        let error = apply_by_name(&mut document, "path.setFillVector", json!({ "id": ids[0] }))
+            .unwrap_err();
+        assert!(matches!(error, EngineError::InvalidState { .. }), "{error}");
     }
 }

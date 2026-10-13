@@ -239,6 +239,7 @@ impl TypedCommand for SetObjectFill {
                         path.paint = Some(PaintStyle {
                             stroke_raw: 0,
                             fill_raw: payload.color_raw,
+                            fill: None,
                         });
                     }
                 }
@@ -296,6 +297,7 @@ impl TypedCommand for SetObjectStroke {
                         path.paint = Some(PaintStyle {
                             stroke_raw: payload.color_raw,
                             fill_raw: 0,
+                            fill: None,
                         });
                     }
                 }
@@ -1143,6 +1145,7 @@ impl TypedCommand for CreatePath {
             paint: Some(PaintStyle {
                 stroke_raw: 0xFF00_0000, // transparent black — no stroke yet
                 fill_raw: 0xFF00_0000,   // transparent black — no fill yet
+                fill: None,
             }),
             fill_start: None,
             fill_end: None,

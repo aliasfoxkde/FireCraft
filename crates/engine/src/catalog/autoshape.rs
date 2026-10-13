@@ -113,6 +113,7 @@ fn insert_shape(
         paint: Some(PaintStyle {
             stroke_raw: 0xFF00_0000, // transparent black — no stroke yet
             fill_raw: 0xFF00_0000,   // transparent black — no fill yet
+            fill: None,
         }),
         fill_start: None,
         fill_end: None,

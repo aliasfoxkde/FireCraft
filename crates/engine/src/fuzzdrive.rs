@@ -463,6 +463,9 @@ pub const CALLS: &[&str] = &[
     "path.warp",
     "path.reshapeArea",
     "path.redrawPath",
+    "path.setFill",
+    "path.setFillColor",
+    "path.setFillVector",
     "filter.add",
     "filter.remove",
     "filter.setParam",
@@ -839,6 +842,58 @@ pub fn random_call(rng: &mut FuzzRng, document: &Document) -> (String, serde_jso
             "dx": -(rng.below(100) as f64) / 5.0,
             "dy": -(rng.below(100) as f64) / 5.0,
         }),
+        "path.setFill" => {
+            let mut payload = serde_json::json!({
+                "id": any_id(rng),
+                "shape": rng
+                    .pick(&[
+                        "solid",
+                        "linear",
+                        "radial",
+                        "conical",
+                        "elliptical",
+                        "contour",
+                        "unknownFamily",
+                    ])
+                    .copied()
+                    .unwrap_or("linear"),
+                "stops": [
+                    { "position": 0.0, "color_raw": rng.next_u64() as i64 },
+                    { "position": 1.0, "color_raw": rng.next_u64() as i64 },
+                ],
+            });
+            if rng.chance(50) {
+                payload["alpha"] = serde_json::json!([
+                    { "position": 0.0, "color_raw": 0 },
+                    { "position": 1.0, "color_raw": 0xFF00_0000u64 },
+                ]);
+            }
+            payload
+        }
+        "path.setFillColor" => serde_json::json!({
+            "id": any_id(rng),
+            "color_raw": rng.next_u64() as i64,
+        }),
+        "path.setFillVector" => {
+            let mut payload = serde_json::json!({
+                "id": any_id(rng),
+                "start": {
+                    "x": -(rng.below(200) as f64),
+                    "y": -(rng.below(200) as f64),
+                },
+                "end": {
+                    "x": rng.below(300) as f64,
+                    "y": rng.below(300) as f64,
+                },
+            });
+            if rng.chance(30) {
+                payload["third"] = serde_json::json!({
+                    "x": rng.below(300) as f64,
+                    "y": rng.below(300) as f64,
+                });
+            }
+            payload
+        }
         "path.reshapeArea" => serde_json::json!({
             "id": any_id(rng),
             "x0": -(rng.below(200) as f64),
