@@ -10,6 +10,7 @@ Current version: **0.1.0**.
 
 ### Features
 
+- **fill**: pattern fills end to end (f9d30d6)
 - **io**: import SVG gradient paint servers (93e0778)
 - **compose**: paint the canvas background (77f55af)
 - **xtask**: style set asset, styles fixture, M15 close (658134d)
@@ -111,6 +112,7 @@ Current version: **0.1.0**.
 
 ### Documentation
 
+- **planning**: DOM verb-surface parity matrix (bf1657d)
 - **engine**: resolve setFillColor collapse per evidence (fa29bbb)
 - **m15**: gradient status row + recorded task-5 gaps (d7f209a)
 - **research**: M15 tool-surface enumeration table (d972a02)

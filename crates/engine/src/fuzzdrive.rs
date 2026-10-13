@@ -536,6 +536,8 @@ pub const CALLS: &[&str] = &[
     "object.translate",
     "object.reorder",
     "object.moveToCell",
+    "object.group",
+    "object.ungroup",
     "object.createPath",
     "object.align",
     "object.distribute",
@@ -924,6 +926,12 @@ pub fn random_call(rng: &mut FuzzRng, document: &Document) -> (String, serde_jso
                 "axis": rng.pick(&["horizontal", "vertical"]).copied(),
             })
         }
+        "object.group" => {
+            let count = 2 + rng.below(3);
+            let ids: Vec<serde_json::Value> = (0..count).map(|_| any_id(rng)).collect();
+            serde_json::json!({ "ids": ids, "name": serde_json::Value::Null })
+        }
+        "object.ungroup" => serde_json::json!({ "id": any_id(rng) }),
         "path.movePoints" => {
             let edits: Vec<serde_json::Value> = (0..1 + rng.below(4))
                 .map(|_| {

@@ -30,6 +30,8 @@ pub(crate) fn install(registry: &mut CommandRegistry) -> Result<(), EngineError>
     registry.register(TranslateObject)?;
     registry.register(ReorderObject)?;
     registry.register(MoveObjectToCell)?;
+    registry.register(GroupObjects)?;
+    registry.register(UngroupObject)?;
     registry.register(CreatePath)
 }
 
@@ -1056,6 +1058,327 @@ impl TypedCommand for MoveObjectToCell {
     }
 }
 
+/// Does `owner` resolve to the same container as `reference`?
+fn same_container(owner: &Owner, reference: &Owner) -> bool {
+    match (owner, reference) {
+        (
+            Owner::Cell {
+                page: p,
+                layer: l,
+                cell: c,
+                ..
+            },
+            Owner::Cell {
+                page: rp,
+                layer: rl,
+                cell: rc,
+                ..
+            },
+        ) => (p, l, c) == (rp, rl, rc),
+        (Owner::Group { id, .. }, Owner::Group { id: rid, .. }) => id == rid,
+        _ => false,
+    }
+}
+
+/// The container-list position an `Owner` holds.
+fn owner_position(owner: &Owner) -> usize {
+    match owner {
+        Owner::Cell { position, .. } | Owner::Group { position, .. } => *position,
+    }
+}
+
+/// `object.group` — folds objects into one group at the topmost
+/// member's position (CS6's Modify > Group). Every id must be live and
+/// referenced by the *same* container — one cell, or one parent group;
+/// a selection spanning containers is the app's problem (move the
+/// objects together first, then group). Children keep the members'
+/// relative z-order (bottom-first), whatever order the payload lists.
+struct GroupObjects;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct GroupObjectsPayload {
+    /// Objects to fold into the group; at least two, no duplicates.
+    ids: Vec<ObjectId>,
+    /// `OBNs` name for the new group.
+    name: Option<String>,
+}
+
+impl TypedCommand for GroupObjects {
+    type Payload = GroupObjectsPayload;
+
+    fn name(&self) -> &'static str {
+        "object.group"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "object.group";
+        if payload.ids.len() < 2 {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: format!("need at least 2 objects, got {}", payload.ids.len()),
+            });
+        }
+        let mut seen = std::collections::HashSet::new();
+        let mut members: Vec<(ObjectId, Owner)> = Vec::with_capacity(payload.ids.len());
+        for id in &payload.ids {
+            if !seen.insert(*id) {
+                return Err(EngineError::InvalidState {
+                    name: NAME.to_owned(),
+                    detail: format!("object {} appears twice in the selection", id.index()),
+                });
+            }
+            ensure_detachable(document, NAME, *id)?;
+            let owner = find_owner(document, *id).ok_or_else(|| EngineError::MissingTarget {
+                name: NAME.to_owned(),
+                detail: format!(
+                    "object {} (generation {}) is referenced by no cell or group",
+                    id.index(),
+                    id.generation()
+                ),
+            })?;
+            members.push((*id, owner));
+        }
+        let first = members[0].1;
+        if members
+            .iter()
+            .any(|(_, owner)| !same_container(owner, &first))
+        {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: "a group must live in one container (move the objects together first)"
+                    .to_owned(),
+            });
+        }
+
+        // Bottom-first child order = ascending container positions;
+        // the group takes the topmost member's slot, which after the
+        // removals is `max - (count - 1)` — every other member sat
+        // below it.
+        members.sort_by_key(|(_, owner)| owner_position(owner));
+        let children: Vec<ObjectId> = members.iter().map(|(id, _)| *id).collect();
+        let insert_at = owner_position(&members[members.len() - 1].1) - (members.len() - 1);
+        let group_id = document
+            .registry
+            .insert(ObjectData::Group(doc::GroupObject {
+                group_type: 0,
+                name: payload.name.clone(),
+                children,
+                opacity: 1000,
+                blend: 0,
+                visible: true,
+                locked: false,
+                mask_hidden: false,
+                effects: Vec::new(),
+            }));
+        match first {
+            Owner::Cell {
+                page, layer, cell, ..
+            } => {
+                let (page, layer, cell) = (page, layer, cell);
+                let target = access::cell_mut(document, NAME, page, layer, cell)?;
+                let before = target.clone();
+                for position in members.iter().rev().map(|(_, owner)| owner_position(owner)) {
+                    target.elements.remove(position);
+                }
+                target.elements.insert(insert_at, group_id);
+                Ok(Delta::Group(vec![
+                    Delta::Cell {
+                        page,
+                        layer,
+                        cell,
+                        before: Box::new(before),
+                    },
+                    Delta::Object {
+                        id: group_id,
+                        inverse: ObjectInverse::Created,
+                    },
+                ]))
+            }
+            Owner::Group { id: parent, .. } => {
+                let before = match document.registry.get(parent) {
+                    Some(ObjectData::Group(group)) => group.clone(),
+                    _ => {
+                        return Err(EngineError::MissingTarget {
+                            name: NAME.to_owned(),
+                            detail: format!(
+                                "parent group {} (generation {}) is not live",
+                                parent.index(),
+                                parent.generation()
+                            ),
+                        });
+                    }
+                };
+                match document.registry.get_mut(parent) {
+                    Some(ObjectData::Group(group)) => {
+                        for position in members.iter().rev().map(|(_, owner)| owner_position(owner))
+                        {
+                            group.children.remove(position);
+                        }
+                        group.children.insert(insert_at, group_id);
+                    }
+                    _ => {
+                        return Err(EngineError::MissingTarget {
+                            name: NAME.to_owned(),
+                            detail: format!(
+                                "parent group {} (generation {}) is not live",
+                                parent.index(),
+                                parent.generation()
+                            ),
+                        });
+                    }
+                }
+                Ok(Delta::Group(vec![
+                    Delta::Object {
+                        id: parent,
+                        inverse: ObjectInverse::Mutated {
+                            object: Box::new(ObjectData::Group(before)),
+                        },
+                    },
+                    Delta::Object {
+                        id: group_id,
+                        inverse: ObjectInverse::Created,
+                    },
+                ]))
+            }
+        }
+    }
+}
+
+/// `object.ungroup` — splices a group's children back into the group's
+/// own container at its position and removes the group (CS6's
+/// Modify > Ungroup). Any group dissolves, mask-structured ones
+/// included — the mask family carries its own semantics later.
+struct UngroupObject;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct UngroupObjectPayload {
+    /// The group to dissolve.
+    id: doc::ObjectId,
+}
+
+impl TypedCommand for UngroupObject {
+    type Payload = UngroupObjectPayload;
+
+    fn name(&self) -> &'static str {
+        "object.ungroup"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "object.ungroup";
+        let group = match access::object(document, NAME, payload.id)? {
+            ObjectData::Group(group) => group.clone(),
+            _ => {
+                return Err(EngineError::InvalidState {
+                    name: NAME.to_owned(),
+                    detail: format!("object {} is not a group", payload.id.index()),
+                });
+            }
+        };
+        // Referenced-before-anything-mutates: the owner walk also
+        // proves the registry removal below cannot miss.
+        let owner = find_owner(document, payload.id).ok_or_else(|| EngineError::MissingTarget {
+            name: NAME.to_owned(),
+            detail: format!(
+                "object {} (generation {}) is referenced by no cell or group",
+                payload.id.index(),
+                payload.id.generation()
+            ),
+        })?;
+        let removed = ObjectData::Group(group.clone());
+        let mut deltas = Vec::new();
+        match owner {
+            Owner::Cell {
+                page,
+                layer,
+                cell,
+                position,
+            } => {
+                let target = access::cell_mut(document, NAME, page, layer, cell)?;
+                let before = target.clone();
+                target.elements.remove(position);
+                for (offset, child) in group.children.iter().enumerate() {
+                    target.elements.insert(position + offset, *child);
+                }
+                deltas.push(Delta::Cell {
+                    page,
+                    layer,
+                    cell,
+                    before: Box::new(before),
+                });
+            }
+            Owner::Group {
+                id: parent,
+                position,
+            } => {
+                let before = match document.registry.get(parent) {
+                    Some(ObjectData::Group(group)) => group.clone(),
+                    _ => {
+                        return Err(EngineError::MissingTarget {
+                            name: NAME.to_owned(),
+                            detail: format!(
+                                "parent group {} (generation {}) is not live",
+                                parent.index(),
+                                parent.generation()
+                            ),
+                        });
+                    }
+                };
+                match document.registry.get_mut(parent) {
+                    Some(ObjectData::Group(parent_group)) => {
+                        parent_group.children.remove(position);
+                        for (offset, child) in group.children.iter().enumerate() {
+                            parent_group.children.insert(position + offset, *child);
+                        }
+                    }
+                    _ => {
+                        return Err(EngineError::MissingTarget {
+                            name: NAME.to_owned(),
+                            detail: format!(
+                                "parent group {} (generation {}) is not live",
+                                parent.index(),
+                                parent.generation()
+                            ),
+                        });
+                    }
+                }
+                deltas.push(Delta::Object {
+                    id: parent,
+                    inverse: ObjectInverse::Mutated {
+                        object: Box::new(ObjectData::Group(before)),
+                    },
+                });
+            }
+        }
+        if document.registry.remove(payload.id).is_none() {
+            return Err(EngineError::MissingTarget {
+                name: NAME.to_owned(),
+                detail: format!(
+                    "object {} (generation {}) vanished between capture and removal",
+                    payload.id.index(),
+                    payload.id.generation()
+                ),
+            });
+        }
+        deltas.push(Delta::Object {
+            id: payload.id,
+            inverse: ObjectInverse::Removed {
+                object: Box::new(removed),
+            },
+        });
+        Ok(Delta::Group(deltas))
+    }
+}
+
 /// `object.createPath` — creates a primitive path (rect, ellipse, or
 /// line) from a world-space bounding box and appends it to a target
 /// cell. Rect/ellipse carry a `PRIv` primitive source, so they stay
@@ -1278,8 +1601,8 @@ mod tests {
     use super::*;
     use crate::command::Command;
     use doc::{
-        Cell, Contour, GroupObject, ImageObject, Layer, LayerList, Page, PageInfo, PathObject,
-        PathPoint, SliceObject, TileRef,
+        Cell, Contour, ImageObject, Layer, LayerList, Page, PageInfo, PathObject, PathPoint,
+        SliceObject, TileRef,
     };
     use serde_json::json;
 
@@ -1573,17 +1896,19 @@ mod tests {
     fn delete_from_a_group_captures_the_group() {
         // Child path inside a group; the group sits in the cell.
         let (mut document, ids) = document_with(vec![path_object(), path_object()]);
-        let group_id = document.registry.insert(ObjectData::Group(GroupObject {
-            group_type: 0,
-            name: None,
-            children: vec![ids[1]],
-            opacity: 1000,
-            blend: 0,
-            visible: true,
-            locked: false,
-            mask_hidden: false,
-            effects: Vec::new(),
-        }));
+        let group_id = document
+            .registry
+            .insert(ObjectData::Group(doc::GroupObject {
+                group_type: 0,
+                name: None,
+                children: vec![ids[1]],
+                opacity: 1000,
+                blend: 0,
+                visible: true,
+                locked: false,
+                mask_hidden: false,
+                effects: Vec::new(),
+            }));
         document.pages[0].layers.layers[0].cells[0].elements = vec![ids[0], group_id];
 
         let delta = DeleteObject
@@ -1634,17 +1959,19 @@ mod tests {
     #[test]
     fn reorder_inside_a_group_captures_the_group() {
         let (mut document, ids) = document_with(vec![path_object(), path_object()]);
-        let group_id = document.registry.insert(ObjectData::Group(GroupObject {
-            group_type: 0,
-            name: None,
-            children: vec![ids[0], ids[1]],
-            opacity: 1000,
-            blend: 0,
-            visible: true,
-            locked: false,
-            mask_hidden: false,
-            effects: Vec::new(),
-        }));
+        let group_id = document
+            .registry
+            .insert(ObjectData::Group(doc::GroupObject {
+                group_type: 0,
+                name: None,
+                children: vec![ids[0], ids[1]],
+                opacity: 1000,
+                blend: 0,
+                visible: true,
+                locked: false,
+                mask_hidden: false,
+                effects: Vec::new(),
+            }));
         document.pages[0].layers.layers[0].cells[0].elements = vec![group_id];
         let delta = ReorderObject
             .apply_json(&mut document, json!({ "id": ids[0], "to": 1 }))
@@ -1875,5 +2202,175 @@ mod tests {
             .unwrap_err();
         assert!(matches!(error, EngineError::BadPayload { .. }));
         assert_eq!(document.registry.len(), 1, "still just the fixture path");
+    }
+
+    fn group_of(document: &Document, id: ObjectId) -> doc::GroupObject {
+        match document.registry.get(id).unwrap() {
+            ObjectData::Group(group) => group.clone(),
+            other => panic!("not a group: {other:?}"),
+        }
+    }
+
+    fn cell_elements(document: &Document) -> Vec<ObjectId> {
+        document.pages[0].layers.layers[0].cells[0].elements.clone()
+    }
+
+    #[test]
+    fn group_folds_z_order_and_ungroup_restores() {
+        let (mut document, ids) = document_with(vec![
+            path_object(),
+            path_object(),
+            path_object(),
+            path_object(),
+        ]);
+        // Payload order deliberately differs from z-order.
+        let delta = GroupObjects
+            .apply_json(
+                &mut document,
+                json!({ "ids": [ids[2], ids[0], ids[3]], "name": null }),
+            )
+            .unwrap();
+        let elements = cell_elements(&document);
+        assert_eq!(elements.len(), 2, "three members folded into one slot");
+        let group_id = elements[1];
+        let group = group_of(&document, group_id);
+        assert_eq!(
+            group.children,
+            vec![ids[0], ids[2], ids[3]],
+            "children keep bottom-first z-order"
+        );
+        // Undo: members back at their slots, the group gone.
+        delta.apply_inverse(&mut document).unwrap();
+        assert_eq!(
+            cell_elements(&document),
+            vec![ids[0], ids[1], ids[2], ids[3]]
+        );
+        assert!(document.registry.get(group_id).is_none(), "retracted");
+        // Redo (a fresh application — and a fresh id), then ungroup
+        // dissolves it back to the flat list.
+        GroupObjects
+            .apply_json(
+                &mut document,
+                json!({ "ids": [ids[2], ids[0], ids[3]], "name": null }),
+            )
+            .unwrap();
+        let group_id = cell_elements(&document)[1];
+        let ungroup = UngroupObject
+            .apply_json(&mut document, json!({ "id": group_id }))
+            .unwrap();
+        assert_eq!(
+            cell_elements(&document),
+            vec![ids[1], ids[0], ids[2], ids[3]],
+            "children take the group's slot, z-order preserved"
+        );
+        assert!(document.registry.get(group_id).is_none());
+        // Undo of the ungroup revives the group at its slot, whole.
+        ungroup.apply_inverse(&mut document).unwrap();
+        assert_eq!(
+            cell_elements(&document),
+            vec![ids[1], group_id],
+            "the group returns to its slot"
+        );
+        assert_eq!(group_of(&document, group_id).children.len(), 3);
+    }
+
+    #[test]
+    fn group_refuses_cross_container_without_mutating() {
+        let (mut document, ids) = document_with(vec![path_object(), path_object()]);
+        // A second layer; move ids[1] there via the public command.
+        document.pages[0].layers.layers.push(Layer {
+            name: "Layer 1".to_owned(),
+            display: true,
+            cells: vec![Cell {
+                locked: false,
+                visible: true,
+                elements: Vec::new(),
+            }],
+            ..Layer::default()
+        });
+        MoveObjectToCell
+            .apply_json(
+                &mut document,
+                json!({ "id": ids[1], "page": 0, "layer": 1, "cell": 0, "index": null }),
+            )
+            .unwrap();
+        let before = serde_json::to_vec(&document).unwrap();
+        let error = GroupObjects
+            .apply_json(
+                &mut document,
+                json!({ "ids": [ids[0], ids[1]], "name": null }),
+            )
+            .unwrap_err();
+        assert!(matches!(error, EngineError::InvalidState { .. }));
+        assert_eq!(
+            serde_json::to_vec(&document).unwrap(),
+            before,
+            "a refused group must not detach anything"
+        );
+        // Singleton and duplicate selections refuse too.
+        assert!(matches!(
+            GroupObjects
+                .apply_json(&mut document, json!({ "ids": [ids[0]], "name": null }))
+                .unwrap_err(),
+            EngineError::InvalidState { .. }
+        ));
+        assert!(matches!(
+            GroupObjects
+                .apply_json(
+                    &mut document,
+                    json!({ "ids": [ids[0], ids[0]], "name": null })
+                )
+                .unwrap_err(),
+            EngineError::InvalidState { .. }
+        ));
+    }
+
+    #[test]
+    fn group_within_a_parent_group_makes_a_subgroup() {
+        let (mut document, ids) = document_with(vec![path_object(), path_object()]);
+        GroupObjects
+            .apply_json(
+                &mut document,
+                json!({ "ids": [ids[0], ids[1]], "name": null }),
+            )
+            .unwrap();
+        let outer_id = cell_elements(&document)[0];
+        // Re-group two members of the same parent: ids[0] and the outer
+        // group's OTHER child... use the outer group itself with a
+        // third object is cross-container; instead nest via ungrouped
+        // member order — group ids[0] with a fresh object inside outer.
+        let fresh = document.registry.insert(path_object());
+        // Place the fresh object inside the outer group (after its children).
+        match document.registry.get_mut(outer_id) {
+            Some(ObjectData::Group(group)) => group.children.push(fresh),
+            _ => panic!("outer group vanished"),
+        }
+        let inner = GroupObjects
+            .apply_json(
+                &mut document,
+                json!({ "ids": [ids[0], fresh], "name": null }),
+            )
+            .unwrap();
+        inner.apply_inverse(&mut document).unwrap();
+        let outer = group_of(&document, outer_id);
+        assert_eq!(
+            outer.children,
+            vec![ids[0], ids[1], fresh],
+            "undo restores the parent's children exactly"
+        );
+        // Ungroup the outer group: children (including the subgroup)
+        // splice into the cell.
+        let ungroup = UngroupObject
+            .apply_json(&mut document, json!({ "id": outer_id }))
+            .unwrap();
+        let elements = cell_elements(&document);
+        assert_eq!(elements, vec![ids[0], ids[1], fresh]);
+        ungroup.apply_inverse(&mut document).unwrap();
+        assert_eq!(
+            cell_elements(&document),
+            vec![outer_id],
+            "the outer group returns"
+        );
+        assert!(document.registry.get(outer_id).is_some());
     }
 }
