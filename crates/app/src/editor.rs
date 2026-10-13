@@ -198,12 +198,36 @@ impl AutoShape {
     }
 }
 
+/// The modifier constraint matrix for creation drags — one
+/// documented rule applied to the stored drag geometry (the rubber
+/// band and the created object share it, so the preview never lies):
+///
+/// | Tools | Shift | Alt |
+/// |---|---|---|
+/// | box-drag (rect/ellipse/text/slice/hotspot/auto shapes) | square | from center |
+/// | Line | snap to 45° | from center |
+/// | Pointer / Subselect / Zoom / Hand | — | — |
+///
+/// Shift+Alt combines (square, centered). CS6's reads: shift squares
+/// the drag or locks the line to the axis octants; alt drags the shape
+/// out from its center.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct DragConstraint {
+    /// Shift held.
+    pub shift: bool,
+    /// Alt held.
+    pub alt: bool,
+}
+
 /// A creation drag in progress: tool + world-space start point, or a
 /// pointer drag moving a captured selection.
 #[derive(Clone, Debug, PartialEq)]
+/// The drag a creation/constraint tool is doing.
 pub struct Drag {
     /// Tool the drag belongs to.
     pub tool: Tool,
+    /// The live modifier constraint (updated per step).
+    pub constraint: DragConstraint,
     /// World position where the press landed.
     pub start: geom::Point,
     /// Current world position.
@@ -213,6 +237,74 @@ pub struct Drag {
     /// `moved` records whether any translate applied — a click-sized
     /// drag commits nothing.
     pub moving: Option<MoveDrag>,
+}
+
+/// Which half of the constraint matrix a tool's creation drag obeys.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum DragClass {
+    /// Shift squares the drag; alt drags from center.
+    Box,
+    /// Shift snaps the endpoint to a 45° octant; alt drags from
+    /// center.
+    Line,
+    /// No constraint (view and selection tools).
+    None,
+}
+
+fn drag_class(tool: Tool) -> DragClass {
+    match tool {
+        Tool::Rect
+        | Tool::Ellipse
+        | Tool::Text
+        | Tool::Slice
+        | Tool::Hotspot
+        | Tool::AutoShape(_) => DragClass::Box,
+        Tool::Line => DragClass::Line,
+        Tool::Pointer | Tool::Subselect | Tool::Zoom | Tool::Hand => DragClass::None,
+    }
+}
+
+/// One place computes the constrained drag geometry — the
+/// [`DragConstraint`] doc comment holds the matrix. The move/clone
+/// drags pass through untouched (their tools are `DragClass::None`).
+fn constrain_geometry(
+    tool: Tool,
+    start: geom::Point,
+    current: geom::Point,
+    constraint: DragConstraint,
+) -> geom::Point {
+    let (dx, dy) = (current.x - start.x, current.y - start.y);
+    let mut out = current;
+    match drag_class(tool) {
+        DragClass::None => return out,
+        DragClass::Box => {
+            if constraint.shift {
+                // Square: the longer axis wins, sign kept per axis.
+                let side = dx.abs().max(dy.abs());
+                out.x = start.x + dx.signum() * side;
+                out.y = start.y + dy.signum() * side;
+            }
+        }
+        DragClass::Line => {
+            if constraint.shift && (dx != 0.0 || dy != 0.0) {
+                // Snap the endpoint onto the nearest 45° octant,
+                // keeping the pointer's length.
+                let len = (dx * dx + dy * dy).sqrt();
+                let octant = (dy.atan2(dx) / std::f64::consts::FRAC_PI_4).round()
+                    * std::f64::consts::FRAC_PI_4;
+                out.x = start.x + len * octant.cos();
+                out.y = start.y + len * octant.sin();
+            }
+        }
+    }
+    if constraint.alt {
+        // From center: the press point is the shape's center, so the
+        // endpoint mirrors through it (end_drag's `current − start`
+        // then reads as the half-extent).
+        out.x = start.x - (out.x - start.x);
+        out.y = start.y - (out.y - start.y);
+    }
+    out
 }
 
 /// The selection a pointer drag is moving.
@@ -787,6 +879,7 @@ impl Editor {
     pub fn begin_drag(&mut self, world: geom::Point) {
         self.drag = Some(Drag {
             tool: self.tool,
+            constraint: DragConstraint::default(),
             start: world,
             current: world,
             moving: None,
@@ -809,6 +902,7 @@ impl Editor {
         self.session.begin_transaction("Move")?;
         self.drag = Some(Drag {
             tool: self.tool,
+            constraint: DragConstraint::default(),
             start: world,
             current: world,
             moving: Some(MoveDrag { ids, moved: false }),
@@ -851,6 +945,7 @@ impl Editor {
         self.selection_set = created.clone();
         self.drag = Some(Drag {
             tool: self.tool,
+            constraint: DragConstraint::default(),
             start: world,
             current: world,
             moving: Some(MoveDrag {
@@ -865,6 +960,25 @@ impl Editor {
     /// `object.translate` per nonzero step; a refused step aborts the
     /// gesture (the transaction rolls back, the document is untouched).
     pub fn drag_to(&mut self, world: geom::Point) {
+        self.drag_to_with(world, DragConstraint::default());
+    }
+
+    /// The constrained form: the live modifier state folds into the
+    /// stored drag geometry per the [`DragConstraint`] matrix, so the
+    /// rubber band and the eventual object carry the same shape.
+    pub fn drag_to_with(&mut self, world: geom::Point, constraint: DragConstraint) {
+        if let Some(drag) = &mut self.drag {
+            drag.constraint = constraint;
+        }
+        let constrained = match &self.drag {
+            Some(drag) => constrain_geometry(drag.tool, drag.start, world, constraint),
+            None => return,
+        };
+        self.drag_step(constrained);
+    }
+
+    /// Applies one drag step (already constrained).
+    fn drag_step(&mut self, world: geom::Point) {
         let step = match &self.drag {
             Some(drag) => world - drag.current,
             None => return,
@@ -1316,6 +1430,115 @@ mod tests {
         // is setup history (the rect's creation + untitled()'s seed).
         editor.undo().unwrap();
         assert_eq!(first_anchor(&editor, id), (10.0, 10.0));
+        while editor.undo().is_ok() {}
+    }
+
+    #[test]
+    fn shift_squares_the_box_drag() {
+        let mut editor = Editor::untitled();
+        editor.tool = Tool::Rect;
+        editor.begin_drag(geom::Point::new(10.0, 10.0));
+        // The pointer says 40×20; shift says the longer axis wins.
+        editor.drag_to_with(
+            geom::Point::new(50.0, 30.0),
+            DragConstraint {
+                shift: true,
+                alt: false,
+            },
+        );
+        let drag = editor.drag.as_ref().unwrap();
+        assert_eq!(drag.current, geom::Point::new(50.0, 50.0));
+    }
+
+    #[test]
+    fn alt_drags_the_box_from_center() {
+        let mut editor = Editor::untitled();
+        editor.tool = Tool::Rect;
+        editor.begin_drag(geom::Point::new(10.0, 10.0));
+        // The press point is the center: the endpoint mirrors through
+        // it, so `current − start` reads as the half-extent.
+        editor.drag_to_with(
+            geom::Point::new(30.0, 25.0),
+            DragConstraint {
+                shift: false,
+                alt: true,
+            },
+        );
+        let drag = editor.drag.as_ref().unwrap();
+        assert_eq!(drag.current, geom::Point::new(-10.0, -5.0));
+    }
+
+    #[test]
+    fn shift_and_alt_combine_into_centered_squares() {
+        let mut editor = Editor::untitled();
+        editor.tool = Tool::Rect;
+        editor.begin_drag(geom::Point::new(10.0, 10.0));
+        editor.drag_to_with(
+            geom::Point::new(50.0, 30.0),
+            DragConstraint {
+                shift: true,
+                alt: true,
+            },
+        );
+        let drag = editor.drag.as_ref().unwrap();
+        // Square first (40 on a side), then mirrored through the
+        // center: the shape grows equally in all four directions.
+        assert_eq!(drag.current, geom::Point::new(-30.0, -30.0));
+    }
+
+    #[test]
+    fn shift_snaps_the_line_to_the_nearest_octant() {
+        let mut editor = Editor::untitled();
+        editor.tool = Tool::Line;
+        editor.begin_drag(geom::Point::new(0.0, 0.0));
+        // atan2(10, 30) ≈ 18.4° rounds down to 0° — horizontal, same
+        // length.
+        editor.drag_to_with(
+            geom::Point::new(30.0, 10.0),
+            DragConstraint {
+                shift: true,
+                alt: false,
+            },
+        );
+        let drag = editor.drag.as_ref().unwrap();
+        let length = (30.0f64 * 30.0 + 10.0 * 10.0).sqrt();
+        assert!((drag.current.x - length).abs() < 1e-9);
+        assert!(drag.current.y.abs() < 1e-9);
+
+        // Steeper than 63.4° rounds up to 90° — vertical.
+        editor.drag_to_with(
+            geom::Point::new(10.0, 30.0),
+            DragConstraint {
+                shift: true,
+                alt: false,
+            },
+        );
+        let drag = editor.drag.as_ref().unwrap();
+        assert!(drag.current.x.abs() < 1e-9);
+        assert!((drag.current.y - length).abs() < 1e-9);
+    }
+
+    #[test]
+    fn move_drags_pass_through_constraints_untouched() {
+        let mut editor = Editor::untitled();
+        let id = rect_at(&mut editor, 10.0, 10.0);
+        editor.selection = Some(id);
+        editor.selection_set = vec![id];
+        editor.tool = Tool::Pointer;
+        editor
+            .begin_move_drag(geom::Point::new(30.0, 20.0), vec![id])
+            .unwrap();
+        // Shift+alt must not square or mirror a move: the delta is
+        // verbatim.
+        editor.drag_to_with(
+            geom::Point::new(55.0, 45.0),
+            DragConstraint {
+                shift: true,
+                alt: true,
+            },
+        );
+        editor.end_drag().unwrap();
+        assert_eq!(first_anchor(&editor, id), (35.0, 35.0));
         while editor.undo().is_ok() {}
     }
 

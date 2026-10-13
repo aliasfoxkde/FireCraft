@@ -8,7 +8,7 @@ use doc::{ObjectData, PathObject, SymbolInstanceObject, SymbolType, TextObject};
 use egui::{Color32, ColorImage, Pos2, Rect, Sense, TextureHandle, TextureOptions, Vec2};
 
 use crate::canvas::View;
-use crate::editor::{AutoShape, Editor, NineSliceEdge, Tool};
+use crate::editor::{AutoShape, DragConstraint, Editor, NineSliceEdge, Tool};
 use crate::menus;
 
 /// The CS6 chrome look: near-black charcoal panels, square corners,
@@ -3201,7 +3201,9 @@ impl Shell {
                 if self.editor.guide_drag.is_some() {
                     self.editor.drag_guide_to(world);
                 } else if self.editor.drag.is_some() {
-                    self.editor.drag_to(world);
+                    let (shift, alt) = ui.input(|i| (i.modifiers.shift, i.modifiers.alt));
+                    self.editor
+                        .drag_to_with(world, DragConstraint { shift, alt });
                 } else if self.editor.tool == Tool::Hand
                     || space_held
                     || response.dragged_by(egui::PointerButton::Middle)
