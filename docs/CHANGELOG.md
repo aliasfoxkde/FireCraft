@@ -10,6 +10,7 @@ Current version: **0.1.0**.
 
 ### Features
 
+- **app**: live filters panel and Filters menu (25a2925)
 - **xtask**: families and composites golden fixtures (f1cc6a8)
 - **engine**: filter curve knot lists via points (0df97a2)
 - **compose**: clouds, per-channel levels, colorize hls (032e80b)
