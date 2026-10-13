@@ -32,6 +32,7 @@ eframe = { version = "0.36", default-features = false, features = [
     "x11",
 ] }
 serde_json = { version = "1", features = ["float_roundtrip"] }
+base64 = "0.22"
 
 # The rich-symbol golden drives re-derivation through the M9 host;
 # the editor itself stays pure (the shell never depends on L4).

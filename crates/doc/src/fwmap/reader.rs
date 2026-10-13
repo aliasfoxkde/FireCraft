@@ -13,9 +13,9 @@ use crate::model::{
     Canvas, Cell, Contour, Dither, Document, DocumentInfo, Effect, EffectProperty, EffectValue,
     ExportOptions, Fill, FillShape, Gradient, GradientStop, Grid, GroupObject, Guides, ImageObject,
     Layer, LayerList, NineSliceGuides, Page, PageInfo, PaintStyle, PathObject, PathPoint,
-    PrimitiveSource, SliceBackground, SliceBehavior, SliceObject, StyleEntry, StyleText,
-    SymbolAnimation, SymbolDefinition, SymbolInstanceObject, SymbolType, TextObject, TextOnPath,
-    TextRun, TextStyle, TileRef,
+    PatternTile, PrimitiveSource, SliceBackground, SliceBehavior, SliceObject, StyleEntry,
+    StyleText, SymbolAnimation, SymbolDefinition, SymbolInstanceObject, SymbolType, TextObject,
+    TextOnPath, TextRun, TextStyle, TileRef,
 };
 use crate::registry::{ObjectData, ObjectId, Registry};
 use fwpng::nodetree::{Node, NodeValue};
@@ -1203,15 +1203,15 @@ impl Reader {
     ///
     /// Mapped children: `FTBi` `FEFi` `FSMi` `FRDb`, the shape slot
     /// (`FSXi` preferred, `FSHi` fallback), `FGLv`, the dither colours
-    /// (`FD1i`..`FD4i`, `FDTb`). Everything else — names, `RDOb`,
-    /// `FETi`/`FRRi` flags, `FPTv` tile, a bagged-back `FSHi` when
-    /// `FSXi` carried the kind — splices from the bag.
+    /// (`FD1i`..`FD4i`, `FDTb`), the `FPTv` pattern tile. Everything
+    /// else — names, `RDOb`, `FETi`/`FRRi` flags, a bagged-back `FSHi`
+    /// when `FSXi` carried the kind — splices from the bag.
     fn read_fill(&mut self, node: &Node, path: &str) -> Result<Option<Fill>, MapError> {
         let children = children_of(node, path)?;
         let (mut texture_blend, mut feather, mut stamping, mut hard_edge) =
             (None, None, None, None);
         let (mut shape, mut shape_extended) = (None, false);
-        let (mut gradient, mut dither) = (None, None);
+        let (mut gradient, mut dither, mut pattern) = (None, None, None);
         let mut dither_slots: [Option<i64>; 4] = [None; 4];
         // The compatibility slot's node, held until the walk ends: an
         // `FSHi` seen before `FSXi` must not claim the kind.
@@ -1295,6 +1295,23 @@ impl Reader {
                         self.bag_node(path, i, child);
                     }
                 }
+                b"FPTv" => {
+                    if pattern.is_none() {
+                        let fptv_path = format!("{path}/FPTv");
+                        match self.read_pattern_tile(child, &fptv_path)? {
+                            Some(parsed) => pattern = Some(parsed),
+                            // Unmodelable tile: preserve the whole
+                            // subtree in the bag, subsuming the
+                            // partial entries the walk left behind.
+                            None => {
+                                self.bag.purge_under(&fptv_path);
+                                self.bag_node(path, i, child);
+                            }
+                        }
+                    } else {
+                        self.bag_node(path, i, child);
+                    }
+                }
                 _ => self.bag_node(path, i, child),
             }
         }
@@ -1333,7 +1350,78 @@ impl Reader {
             hard_edge: hard_edge.unwrap_or(false),
             gradient,
             dither,
+            pattern,
         }))
+    }
+
+    /// One `FPTv` pattern tile: `INMs` plus the `IMGv` raster bits
+    /// (`WPXi`/`HPXi` extent, `TSZi` tile side, `TILv` references).
+    /// `None` when the extent or the tile list cannot be modeled —
+    /// the caller bags the node so bytes stay verbatim.
+    fn read_pattern_tile(
+        &mut self,
+        node: &Node,
+        path: &str,
+    ) -> Result<Option<PatternTile>, MapError> {
+        let children = children_of(node, path)?;
+        let (mut name, mut pixels, mut tile_size, mut tiles) = (None, None, None, None);
+        for (i, child) in children.iter().enumerate() {
+            match &child.fourcc {
+                b"INMs" => self.slot_str(child, path, i, &mut name)?,
+                b"IMGv" => {
+                    if tiles.is_none() {
+                        let img_path = format!("{path}/IMGv");
+                        let kids = children_of(child, &img_path)?;
+                        let (mut wpx, mut hpx, mut tsz) = (None, None, None);
+                        let mut refs: Option<Vec<TileRef>> = None;
+                        for (j, grandchild) in kids.iter().enumerate() {
+                            match &grandchild.fourcc {
+                                b"WPXi" => self.slot_i64(grandchild, &img_path, j, &mut wpx)?,
+                                b"HPXi" => self.slot_i64(grandchild, &img_path, j, &mut hpx)?,
+                                b"TSZi" => self.slot_i64(grandchild, &img_path, j, &mut tsz)?,
+                                b"TILv" => {
+                                    if refs.is_none() {
+                                        let tilv_path = format!("{img_path}/TILv");
+                                        let tile_kids = children_of(grandchild, &tilv_path)?;
+                                        refs = Some(self.read_tiles(tile_kids, &tilv_path)?);
+                                    } else {
+                                        self.bag_node(&img_path, j, grandchild);
+                                    }
+                                }
+                                // DTAv and anything else: preserved.
+                                _ => self.bag_node(&img_path, j, grandchild),
+                            }
+                        }
+                        match (wpx, hpx, refs) {
+                            (Some(w), Some(h), Some(refs)) => {
+                                pixels = Some((w, h));
+                                tiles = Some(refs);
+                                tile_size = Some(tsz.unwrap_or(256));
+                            }
+                            // No extent or tile list: unmodelable —
+                            // the caller bags the whole `FPTv` and
+                            // purges whatever this walk bagged.
+                            _ => {
+                                return Ok(None);
+                            }
+                        }
+                    } else {
+                        self.bag_node(path, i, child);
+                    }
+                }
+                // UNMs and anything else: preserved.
+                _ => self.bag_node(path, i, child),
+            }
+        }
+        Ok(match (pixels, tiles) {
+            (Some(pixels), Some(tiles)) => Some(PatternTile {
+                name,
+                pixels,
+                tile_size: tile_size.unwrap_or(256),
+                tiles,
+            }),
+            _ => None,
+        })
     }
 
     /// One `FGLv` gradient: the legacy `FGVv` vertex list plus the

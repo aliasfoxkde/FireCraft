@@ -25,7 +25,10 @@
 use base64::Engine as _;
 
 use compose::{KernelOp, Mix, blend_mode, plan, straight_alpha};
-use doc::{Document, FillShape, Gradient, GradientStop, Layer, ObjectData, PathObject, TileRef};
+use doc::{
+    Document, FillShape, Gradient, GradientStop, Layer, ObjectData, PathObject, PatternTile,
+    TileRef,
+};
 use filters::Surface;
 
 use crate::{ExportError, Plane};
@@ -60,6 +63,10 @@ pub struct SvgReport {
     /// `FPLv` model, so export→import round trips carry the gradient
     /// rather than flattening it.
     pub gradient_fills: usize,
+    /// Paths painted from a modeled `FPTv` pattern def — a `<pattern>`
+    /// tile the importer folds back onto the `FPLv` model the same way
+    /// it folds gradient servers.
+    pub pattern_fills: usize,
 }
 
 /// The SVG text plus its report.
@@ -290,6 +297,9 @@ impl SvgWriter<'_> {
         let Some(style) = &paint.fill else {
             return solid;
         };
+        if style.shape == FillShape::Pattern {
+            return self.pattern_paint(path, style, &solid);
+        }
         let Some(gradient) = &style.gradient else {
             return solid;
         };
@@ -348,6 +358,143 @@ impl SvgWriter<'_> {
         self.defs.push_str(&format!("</{element}>\n"));
         self.report.gradient_fills += 1;
         format!("fill=\"url(#{id})\"")
+    }
+
+    /// The fill paint for a modeled `FPTv` pattern: the repeat-unit
+    /// raster becomes a `<pattern>` def (data-URI PNG at the tile's
+    /// native extent) plus a `url(#…)` reference, transformed by the
+    /// fill vector exactly as compose's pattern arm places it —
+    /// translate(start) · rotate(angle) · scale(length / native
+    /// width), and identity (no `patternTransform`) without both
+    /// handles. The svg-golden gate holds this against compose's
+    /// render the same way it does gradient servers.
+    fn pattern_paint(&mut self, path: &PathObject, style: &doc::Fill, solid: &str) -> String {
+        let Some(pattern) = &style.pattern else {
+            // Shape says pattern but no `FPTv` rode the fill: compose
+            // paints the solid colour too.
+            return solid.to_owned();
+        };
+        let png = match self.pattern_png(pattern) {
+            Ok(png) => png,
+            Err(error) => {
+                self.report
+                    .notes
+                    .push(format!("pattern fill dropped to the solid colour: {error}"));
+                return solid.to_owned();
+            }
+        };
+        let (width, height) = (
+            pattern.pixels.0.max(1) as f64,
+            pattern.pixels.1.max(1) as f64,
+        );
+        let transform = match (path.fill_start, path.fill_end) {
+            (Some(start), Some(end)) => {
+                let (dx, dy) = (end.x - start.x, end.y - start.y);
+                let length = (dx * dx + dy * dy).sqrt();
+                if length <= f64::EPSILON || !length.is_finite() {
+                    String::new()
+                } else {
+                    let angle = dy.atan2(dx).to_degrees();
+                    let scale = length / width;
+                    format!(
+                        " patternTransform=\"translate({},{}) rotate({}) scale({})\"",
+                        num(start.x),
+                        num(start.y),
+                        num(angle),
+                        num(scale)
+                    )
+                }
+            }
+            _ => String::new(),
+        };
+        self.gradient_seq += 1;
+        let id = format!("pat-{}", self.gradient_seq);
+        self.defs.push_str(&format!(
+            "<pattern id=\"{id}\" patternUnits=\"userSpaceOnUse\" width=\"{}\" height=\"{}\"{transform}>\n",
+            num(width),
+            num(height),
+        ));
+        self.defs.push_str(&format!(
+            "<image x=\"0\" y=\"0\" width=\"{}\" height=\"{}\" href=\"data:image/png;base64,{}\"/>\n",
+            num(width),
+            num(height),
+            base64::engine::general_purpose::STANDARD.encode(png),
+        ));
+        self.defs.push_str("</pattern>\n");
+        self.report.pattern_fills += 1;
+        format!("fill=\"url(#{id})\"")
+    }
+
+    /// Gathers a pattern's tiles into a straight-alpha RGBA plane and
+    /// encodes it as PNG — [`SvgWriter::image_png`]'s walk over the
+    /// pattern's own extent and `TILv` refs.
+    fn pattern_png(&self, pattern: &PatternTile) -> Result<Vec<u8>, ExportError> {
+        let width = pattern.pixels.0.max(0) as usize;
+        let height = pattern.pixels.1.max(0) as usize;
+        let tile_side = pattern.tile_size.max(1) as usize;
+        let expected = width
+            .checked_mul(height)
+            .and_then(|pixels| pixels.checked_mul(4))
+            .ok_or_else(|| ExportError::Encode {
+                format: "svg",
+                reason: "pattern size overflows usize".to_owned(),
+            })?;
+        let (cols, rows) = (width.div_ceil(tile_side), height.div_ceil(tile_side));
+        if width == 0 || height == 0 || pattern.tiles.len() != cols * rows {
+            return Err(ExportError::Encode {
+                format: "svg",
+                reason: format!(
+                    "pattern is {width}x{height} over {tile_side}px tiles but carries {} tile refs",
+                    pattern.tiles.len()
+                ),
+            });
+        }
+        let mut premultiplied = vec![0u8; expected];
+        for (index, tile_ref) in pattern.tiles.iter().enumerate() {
+            let (col, row) = (index % cols, index / cols);
+            let tile_bytes: Vec<u8> = match tile_ref {
+                TileRef::Tile(id) => {
+                    let Some(tile) = self.document.tiles.get(*id) else {
+                        return Err(ExportError::Encode {
+                            format: "svg",
+                            reason: format!("tile {id} is missing from the bank"),
+                        });
+                    };
+                    tile.pixels().to_vec()
+                }
+                TileRef::Matte(raw) => {
+                    let (r, g, b, a) = decode_abgr(*raw);
+                    let mut bytes = Vec::with_capacity(tile_side * tile_side * 4);
+                    for _ in 0..tile_side * tile_side {
+                        bytes.extend_from_slice(&[r, g, b, a]);
+                    }
+                    bytes
+                }
+            };
+            for py in 0..tile_side {
+                let y = row * tile_side + py;
+                if y >= height {
+                    break;
+                }
+                for px in 0..tile_side {
+                    let x = col * tile_side + px;
+                    if x >= width {
+                        break;
+                    }
+                    let src = (py * tile_side + px) * 4;
+                    let dst = (y * width + x) * 4;
+                    premultiplied[dst..dst + 4].copy_from_slice(&tile_bytes[src..src + 4]);
+                }
+            }
+        }
+        let straight = straight_alpha(&premultiplied);
+        let plane = Plane::new(width as u32, height as u32, &straight).map_err(|error| {
+            ExportError::Encode {
+                format: "svg",
+                reason: error.to_string(),
+            }
+        })?;
+        crate::png::encode(&plane)
     }
 
     fn write_text(&mut self, text: &doc::TextObject) {

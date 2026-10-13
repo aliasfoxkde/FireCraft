@@ -2154,6 +2154,9 @@ fn expected_fill() -> Fill {
             colors: [Some(0xFF_FF_FF_FF), Some(0x00_00_00_FF), None, None],
             transparent: Some(true),
         }),
+        // The fixture's `FPTv` wraps a raw payload the model cannot
+        // carry, so the whole tile node rides the bag.
+        pattern: None,
     }
 }
 
@@ -2209,6 +2212,120 @@ fn the_fplv_subtree_decodes_and_round_trips_byte_exactly() {
     assert_eq!(doc3, doc2);
     let (tree3, _) = write(&doc3, &bag3).expect("rewrite");
     assert_eq!(serialize(&tree3), serialize(&tree2));
+}
+
+/// A modelable `FPTv` tile: name, extent, tile side, `TILv` mixing
+/// a bank reference and a matte, plus an `UNMs` and an `IMGv` extra
+/// the model does not interpret (both must ride the bag).
+fn modelable_fptv() -> Node {
+    n_k(
+        b"FPTv",
+        vec![
+            n_s(b"INMs", "tile"),
+            n_s(b"UNMs", "Checker"),
+            n_k(
+                b"IMGv",
+                vec![
+                    n_i(b"WPXi", 256),
+                    n_i(b"HPXi", 128),
+                    n_i(b"TSZi", 128),
+                    n_k(b"TILv", vec![n_i(b"TIDi", 7), n_i(b"TMCi", 0xFF_00_FF_00)]),
+                    n_s(b"RAFs", "raw"),
+                ],
+            ),
+        ],
+    )
+}
+
+#[test]
+fn a_modelable_fptv_maps_and_round_trips_byte_exactly() {
+    let doc = sample_document();
+    let (mut tree, _stats) = write(&doc, &UnknownBag::new()).expect("write");
+    {
+        let pthv = first_path_object_mut(&mut tree);
+        let patv = &mut children_mut(pthv)[0];
+        children_mut(patv).insert(2, n_k(b"FPLv", fplv_children()));
+        let position = children_mut(patv)
+            .iter()
+            .position(|node| node.fourcc == *b"FPLv")
+            .expect("FPLv present");
+        let fplv = &mut children_mut(patv)[position];
+        let tile_position = children_mut(fplv)
+            .iter()
+            .position(|node| node.fourcc == *b"FPTv")
+            .expect("FPTv present");
+        children_mut(fplv)[tile_position] = modelable_fptv();
+    }
+
+    let bytes = serialize(&tree);
+    let (doc2, bag) = read(&parse(&bytes).expect("parse")).expect("read");
+    // The whole-tile entry goes away (the tile now models); `UNMs`
+    // and the `IMGv` extra take its place: 9 - 1 + 2.
+    assert_eq!(bag.iter().count(), 10, "UNMs + RAFs replace the tile");
+    let mut seen = 0;
+    for (_, object) in doc2.registry.iter() {
+        if let ObjectData::Path(path) = object {
+            if let Some(paint) = &path.paint {
+                if let Some(fill) = &paint.fill {
+                    let pattern = fill.pattern.as_ref().expect("pattern maps");
+                    assert_eq!(pattern.name.as_deref(), Some("tile"));
+                    assert_eq!(pattern.pixels, (256, 128));
+                    assert_eq!(pattern.tile_size, 128);
+                    assert_eq!(
+                        pattern.tiles,
+                        vec![TileRef::Tile(7), TileRef::Matte(0xFF_00_FF_00)]
+                    );
+                    seen += 1;
+                }
+            }
+        }
+    }
+    assert_eq!(seen, 1);
+
+    let (tree2, stats2) = write(&doc2, &bag).expect("write");
+    assert_eq!(stats2.unconsumed_unknown, 0);
+    assert_eq!(serialize(&tree2), bytes, "byte-exact round trip");
+}
+
+#[test]
+fn an_fptv_without_a_usable_imgv_bags_whole() {
+    let doc = sample_document();
+    let (mut tree, _stats) = write(&doc, &UnknownBag::new()).expect("write");
+    {
+        let pthv = first_path_object_mut(&mut tree);
+        let patv = &mut children_mut(pthv)[0];
+        children_mut(patv).insert(2, n_k(b"FPLv", fplv_children()));
+        let position = children_mut(patv)
+            .iter()
+            .position(|node| node.fourcc == *b"FPLv")
+            .expect("FPLv present");
+        let fplv = &mut children_mut(patv)[position];
+        // Strip the tile's `IMGv` down to a bare name: no extent, no
+        // tile list — the whole subtree rides the bag verbatim.
+        let tile_position = children_mut(fplv)
+            .iter()
+            .position(|node| node.fourcc == *b"FPTv")
+            .expect("FPTv present");
+        children_mut(fplv)[tile_position] = n_k(b"FPTv", vec![n_s(b"INMs", "tile")]);
+    }
+
+    let bytes = serialize(&tree);
+    let (doc2, bag) = read(&parse(&bytes).expect("parse")).expect("read");
+    let mut decoded = false;
+    for (_, object) in doc2.registry.iter() {
+        if let ObjectData::Path(path) = object {
+            if let Some(paint) = &path.paint {
+                if let Some(fill) = &paint.fill {
+                    assert!(fill.pattern.is_none(), "nothing decoded");
+                    decoded = true;
+                }
+            }
+        }
+    }
+    assert!(decoded, "the fill itself still decoded");
+    let (tree2, stats2) = write(&doc2, &bag).expect("write");
+    assert_eq!(stats2.unconsumed_unknown, 0);
+    assert_eq!(serialize(&tree2), bytes, "byte-exact round trip");
 }
 
 #[test]

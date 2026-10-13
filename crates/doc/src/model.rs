@@ -728,8 +728,8 @@ pub struct Dither {
 
 /// A `FPLv` fill definition. Named slots and identity metadata that
 /// the model does not interpret (`CATs`/`INMs`/`UNMs`, `RDOb`, `FETi`,
-/// `FRRi`, `FPTv`) ride the unknown bag under the `FPLv` path and
-/// splice back verbatim.
+/// `FRRi`) ride the unknown bag under the `FPLv` path and splice back
+/// verbatim.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Fill {
@@ -753,6 +753,25 @@ pub struct Fill {
     pub gradient: Option<Gradient>,
     /// `FD1i`..`FD4i`/`FDTb`? — web dither slots.
     pub dither: Option<Dither>,
+    /// `FPTv`? — the pattern tile (`INMs` + `IMGv`); `None` for fills
+    /// without a pattern subtree.
+    pub pattern: Option<PatternTile>,
+}
+
+/// `FPTv` — one pattern fill's tile: the name plus the `IMGv` raster
+/// (pixel extent, tile side, `TILv` references into the document's
+/// `mkBT` bank).
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct PatternTile {
+    /// `INMs` — internal name; user-facing `UNMs` rides the bag.
+    pub name: Option<String>,
+    /// `WPXi`/`HPXi` — the tile raster's pixel extent.
+    pub pixels: (i64, i64),
+    /// `TSZi` — tile side (128 or 256).
+    pub tile_size: i64,
+    /// `TILv` — tile references, left-to-right top-to-bottom.
+    pub tiles: Vec<TileRef>,
 }
 
 /// `PTHv` — a vector path.

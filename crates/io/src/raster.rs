@@ -12,7 +12,7 @@
 use std::io::Cursor;
 
 use doc::{Cell, Document, Layer, LayerList, ObjectData, Page, PageInfo, TileRef};
-use raster::{TILE_BYTES, TILE_SIDE, Tile};
+pub(crate) use raster::{TILE_BYTES, TILE_SIDE, Tile};
 
 use crate::{ImportError, Plane};
 

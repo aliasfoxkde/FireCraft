@@ -108,6 +108,7 @@ pub(crate) fn hash_path(path: &doc::PathObject, canvas: (u16, u16), plan: &Plan)
     }
     h.bool(path.even_odd);
     h.i64(path.paint.as_ref().map_or(0, |paint| paint.fill_raw));
+    hash_fill_model(&mut h, path);
     match path.paint.as_ref().map(|paint| paint.stroke_raw) {
         Some(stroke) => {
             h.bool(true);
@@ -129,6 +130,78 @@ pub(crate) fn hash_pixels(base: &[u8], canvas: (u16, u16), plan: &Plan) -> u64 {
     h.bytes(base);
     hash_plan(&mut h, plan);
     h.finish()
+}
+
+/// The fill definition and its placement handles — everything the
+/// brush painters read beyond `fill_raw`. A gradient/pattern fill and
+/// a same-`fill_raw` solid render differently, so the model rides the
+/// key; `brush_placement` (a stroke-path concern, not yet painted) is
+/// excluded until the stroke brush consumes it.
+fn hash_fill_model(h: &mut Hasher, path: &doc::PathObject) {
+    for point in [path.fill_start, path.fill_end, path.fill_third] {
+        h.opt_xy(point.map(|p| (p.x, p.y)));
+    }
+    match path.paint.as_ref().and_then(|paint| paint.fill.as_ref()) {
+        Some(fill) => {
+            h.bool(true);
+            h.bytes(&[fill.shape as u8]);
+            h.bool(fill.shape_extended);
+            h.i64(fill.texture_blend);
+            h.i64(fill.feather);
+            h.i64(fill.stamping.unwrap_or(0));
+            h.bool(fill.hard_edge);
+            for stops in [
+                fill.gradient.as_ref().map(|g| &g.vertices),
+                fill.gradient.as_ref().map(|g| &g.rgb),
+                fill.gradient.as_ref().map(|g| &g.alpha),
+            ] {
+                match stops {
+                    Some(stops) => {
+                        h.bool(true);
+                        h.usize(stops.len());
+                        for stop in stops {
+                            h.f64(stop.position);
+                            h.i64(stop.color_raw);
+                        }
+                    }
+                    None => h.bool(false),
+                }
+            }
+            match fill.dither {
+                Some(dither) => {
+                    h.bool(true);
+                    for color in dither.colors {
+                        h.i64(color.unwrap_or(0));
+                    }
+                    h.bool(dither.transparent.unwrap_or(false));
+                }
+                None => h.bool(false),
+            }
+            match fill.pattern.as_ref() {
+                Some(pattern) => {
+                    h.bool(true);
+                    h.i64(pattern.pixels.0);
+                    h.i64(pattern.pixels.1);
+                    h.i64(pattern.tile_size);
+                    h.usize(pattern.tiles.len());
+                    for tile in &pattern.tiles {
+                        match tile {
+                            doc::TileRef::Tile(id) => {
+                                h.bool(true);
+                                h.i64(i64::from(*id));
+                            }
+                            doc::TileRef::Matte(raw) => {
+                                h.bool(false);
+                                h.i64(*raw);
+                            }
+                        }
+                    }
+                }
+                None => h.bool(false),
+            }
+        }
+        None => h.bool(false),
+    }
 }
 
 fn hash_plan(h: &mut Hasher, plan: &Plan) {
@@ -531,6 +604,87 @@ mod tests {
             hash_path(&base, canvas, &plan),
             hash_path(&base, (32, 16), &plan),
             "canvas size is part of the key"
+        );
+    }
+
+    #[test]
+    fn fill_model_changes_change_the_key() {
+        // A gradient/pattern fill renders differently from a solid of
+        // the same `fill_raw`, and the placement handles steer the
+        // ramp — the model below the raw colour rides the key.
+        let canvas = (16u16, 16u16);
+        let plan = invert_plan();
+        let mut base = path_object(vec![square()]);
+        base.paint = Some(doc::PaintStyle {
+            stroke_raw: 0,
+            fill_raw: 0xFF_18_1F_2B,
+            fill: None,
+        });
+
+        let mut gradient = base.clone();
+        gradient.paint.as_mut().expect("paint").fill = Some(doc::Fill {
+            shape: doc::FillShape::Linear,
+            shape_extended: false,
+            texture_blend: 0,
+            feather: 0,
+            stamping: None,
+            hard_edge: false,
+            gradient: Some(doc::Gradient {
+                vertices: Vec::new(),
+                rgb: vec![doc::GradientStop {
+                    position: 0.0,
+                    color_raw: 0xFF_00_00_FF,
+                }],
+                alpha: Vec::new(),
+            }),
+            dither: None,
+            pattern: None,
+        });
+        assert_ne!(
+            hash_path(&base, canvas, &plan),
+            hash_path(&gradient, canvas, &plan),
+            "a gradient fill is not the solid it shares fill_raw with"
+        );
+
+        let mut placed = gradient.clone();
+        placed.fill_start = Some(geom::Point::new(0.0, 0.0));
+        placed.fill_end = Some(geom::Point::new(8.0, 0.0));
+        assert_ne!(
+            hash_path(&gradient, canvas, &plan),
+            hash_path(&placed, canvas, &plan),
+            "fill-vector placement steers the ramp"
+        );
+
+        let mut pattern = base.clone();
+        pattern.paint.as_mut().expect("paint").fill = Some(doc::Fill {
+            shape: doc::FillShape::Pattern,
+            shape_extended: true,
+            texture_blend: 0,
+            feather: 0,
+            stamping: None,
+            hard_edge: false,
+            gradient: None,
+            dither: None,
+            pattern: Some(doc::PatternTile {
+                name: None,
+                pixels: (128, 128),
+                tile_size: 128,
+                tiles: vec![doc::TileRef::Tile(3)],
+            }),
+        });
+        assert_ne!(
+            hash_path(&base, canvas, &plan),
+            hash_path(&pattern, canvas, &plan)
+        );
+        let mut matte = pattern.clone();
+        if let Some(fill) = matte.paint.as_mut().expect("paint").fill.as_mut() {
+            fill.pattern.as_mut().expect("pattern").tiles =
+                vec![doc::TileRef::Matte(0xFF_00_FF_00)];
+        }
+        assert_ne!(
+            hash_path(&pattern, canvas, &plan),
+            hash_path(&matte, canvas, &plan),
+            "tile references are content"
         );
     }
 

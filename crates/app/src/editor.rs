@@ -5,7 +5,8 @@
 //! use, so UI edits and scripted edits are indistinguishable in the
 //! journal. The egui layer ([`crate::shell`]) is a thin face on this.
 
-use doc::{Cell, Document, Layer, ObjectData, ObjectId};
+use base64::Engine as _;
+use doc::{Cell, Document, Layer, ObjectData, ObjectId, TileRef};
 use engine::catalog;
 use engine::error::EngineError;
 use engine::{CommandRegistry, Session};
@@ -537,17 +538,22 @@ impl Editor {
 
     /// Imports a CS6 style library (`.stl`): its `mkTS` node tree
     /// deserializes into entries appended to the document library
-    /// (`style.importLibrary`, so the import journals and undoes), and
-    /// each entry's preserved texture subtrees merge into the editor's
-    /// unknown bag under the entry's final `ZSTv` index. The library's
-    /// `mkBT` tile payloads do not merge — pattern fills are unmodeled
-    /// (the M15 recorded gaps) — the bagged `IMGv` slots still splice
-    /// byte-exactly on save, their `TIDi` references pointing into the
-    /// source library rather than this file.
+    /// (`style.importLibrary`), the library's `mkBT` rasters join the
+    /// document tile bank under fresh ids (`style.importLibraryTiles`),
+    /// and every `TIDi` the import carries — in the records' pattern
+    /// fills and their preserved texture subtrees — re-keys to the new
+    /// ids. Both applies fold into one undo step (a transaction); the
+    /// tiles themselves have no inverse — undoing the import leaves
+    /// orphaned bank tiles, which nothing reads. Each entry's preserved
+    /// texture subtrees also merge into the editor's unknown bag under
+    /// the entry's final `ZSTv` index, so the splices stay byte-exact
+    /// on save.
     ///
     /// # Errors
-    /// Whatever the chunk parse, the inflate, or the style reader
-    /// refuses; the document is untouched.
+    /// Whatever the chunk parse, the inflate, the style reader, or the
+    /// tile join refuses (a `TIDi` with no `mkBT` payload means a
+    /// corrupt library and refuses the import whole); the document is
+    /// untouched.
     pub fn import_styles(&mut self, bytes: &[u8]) -> Result<usize, EngineError> {
         fn detail(error: impl std::fmt::Display) -> EngineError {
             EngineError::Io {
@@ -567,12 +573,82 @@ impl Editor {
             .read_to_end(&mut inflated)
             .map_err(detail)?;
         let nodes = fwpng::nodetree::parse(&inflated).map_err(detail)?;
-        let (entries, bag) = doc::fwmap::read_style_library(&nodes).map_err(detail)?;
+        let (mut entries, bag) = doc::fwmap::read_style_library(&nodes).map_err(detail)?;
+        // Tile join: the library's `mkBT` rasters get fresh bank slots
+        // (bank-length base, import order), and the library→document
+        // id map re-keys every `TIDi` below — in the parsed records
+        // first, then in the bagged subtrees as they splice in. A
+        // `TIDi` with no `mkBT` payload means a corrupt library; the
+        // import refuses whole rather than land a dangling reference.
+        let images = fwpng::parse_mkbt_chunks(&chunks).map_err(detail)?;
+        let mut tile_map: std::collections::HashMap<u32, u32> = std::collections::HashMap::new();
+        let mut tiles = Vec::new();
+        if !images.is_empty() {
+            const NAME: &str = "style.importLibraryTiles";
+            let base = u32::try_from(self.session.document().tiles.len()).map_err(|_| {
+                EngineError::InvalidState {
+                    name: NAME.to_owned(),
+                    detail: "bank ids exceed the u32 tile id space".to_owned(),
+                }
+            })?;
+            for (rank, image) in images.iter().enumerate() {
+                let rank = u32::try_from(rank).map_err(|_| EngineError::InvalidState {
+                    name: NAME.to_owned(),
+                    detail: "more than u32::MAX tiles in one library".to_owned(),
+                })?;
+                if image.grayscale {
+                    return Err(detail(format!(
+                        "mkBT tile {} is 256×256 grayscale; style tiles are 128×128 ARGB",
+                        image.index
+                    )));
+                }
+                let id = base
+                    .checked_add(rank)
+                    .ok_or_else(|| EngineError::InvalidState {
+                        name: NAME.to_owned(),
+                        detail: "bank ids exceed the u32 tile id space".to_owned(),
+                    })?;
+                tile_map.insert(image.index, id);
+                tiles.push(serde_json::json!({
+                    "id": id,
+                    "rgba": base64::engine::general_purpose::STANDARD
+                        .encode(image.to_rgba8()),
+                }));
+            }
+            let rekey_tile = |id: &mut u32| -> Result<(), EngineError> {
+                match tile_map.get(id) {
+                    Some(fresh) => {
+                        *id = *fresh;
+                        Ok(())
+                    }
+                    None => Err(EngineError::Io {
+                        path: "<styles>".to_owned(),
+                        detail: format!("library references tile {id} with no mkBT payload"),
+                    }),
+                }
+            };
+            for entry in &mut entries {
+                let Some(pattern) = entry
+                    .paint
+                    .fill
+                    .as_mut()
+                    .and_then(|fill| fill.pattern.as_mut())
+                else {
+                    continue;
+                };
+                for tile in &mut pattern.tiles {
+                    if let TileRef::Tile(id) = tile {
+                        rekey_tile(id)?;
+                    }
+                }
+            }
+        }
         // Bag merge: library record k becomes document record
         // `styles.len() + k`, so its preserved nodes re-key to the
         // final index before joining the editor bag. Foreign roots
         // (bagged at "") have no document home; the library container
-        // itself is consumed by the import.
+        // itself is consumed by the import. `TIDi` slots inside the
+        // spliced subtrees ride the same tile map.
         let base = self.session.document().styles.len();
         let rekey = |path: &str| -> Option<String> {
             let rest = path.strip_prefix("/ZSLv/ZSTv[")?;
@@ -586,14 +662,35 @@ impl Editor {
         };
         for (path, index, node) in bag.iter() {
             if let Some(remapped) = rekey(path) {
-                self.unknown.insert(&remapped, index, node.clone());
+                let mut node = node.clone();
+                if !tile_map.is_empty() {
+                    rekey_tidi(&mut node, &tile_map)?;
+                }
+                self.unknown.insert(&remapped, index, node);
             }
         }
         let count = entries.len();
-        self.apply(
-            "style.importLibrary",
-            serde_json::json!({ "entries": entries }),
-        )?;
+        self.session.begin_transaction("Import Styles")?;
+        let outcome = (|| -> Result<(), EngineError> {
+            if !tiles.is_empty() {
+                self.session.apply(
+                    "style.importLibraryTiles",
+                    serde_json::json!({ "tiles": tiles }),
+                )?;
+            }
+            self.session.apply(
+                "style.importLibrary",
+                serde_json::json!({ "entries": entries }),
+            )?;
+            Ok(())
+        })();
+        match outcome {
+            Ok(()) => self.session.commit_transaction().map(|_| ())?,
+            Err(error) => {
+                self.session.abort_transaction()?;
+                return Err(error);
+            }
+        }
         Ok(count)
     }
 
@@ -1416,6 +1513,42 @@ fn collect_created(delta: &engine::Delta, out: &mut Vec<ObjectId>) {
         } => out.push(*id),
         _ => {}
     }
+}
+
+/// Rewrites every `TIDi` below `node` through the library→bank tile
+/// map — the bagged texture subtrees' tile references ride the same
+/// re-key the parsed records got. A referenced tile the library never
+/// shipped refuses the import: splicing it in would write a dangling
+/// id into every later save.
+fn rekey_tidi(
+    node: &mut fwpng::Node,
+    map: &std::collections::HashMap<u32, u32>,
+) -> Result<(), EngineError> {
+    if node.fourcc == *b"TIDi" {
+        let fwpng::NodeValue::Int(value) = &mut node.value else {
+            return Ok(());
+        };
+        let id = u32::try_from(*value).map_err(|_| EngineError::Io {
+            path: "<styles>".to_owned(),
+            detail: format!("`TIDi` {value} is outside the u32 tile id space"),
+        })?;
+        match map.get(&id) {
+            Some(fresh) => *value = i64::from(*fresh),
+            None => {
+                return Err(EngineError::Io {
+                    path: "<styles>".to_owned(),
+                    detail: format!("library references tile {id} with no mkBT payload"),
+                });
+            }
+        }
+        return Ok(());
+    }
+    if let fwpng::NodeValue::Children(children) = &mut node.value {
+        for child in children {
+            rekey_tidi(child, map)?;
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]

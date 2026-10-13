@@ -11,9 +11,12 @@
 //! - solid fills/strokes → `FCLi` paint raws; gradient fill servers
 //!   import onto the `FPLv` model (linear/radial onto
 //!   [`doc::FillShape`] with the ramp split into `FG0v`/`FG1v`);
-//!   pattern servers and SVG filters are dropped **with report
-//!   entries** (the model has no pattern spine and no
-//!   SVG-filter→`EFLv` mapping); strokes stay solid-only.
+//!   pattern servers whose tile is one embedded raster import onto the
+//!   `FPTv` model (the tile's pixels minted into the tile bank, the
+//!   placement vector onto the fill handles); pattern servers with
+//!   vector content and SVG filters are dropped **with report
+//!   entries** (no raster to mint, no SVG-filter→`EFLv` mapping);
+//!   strokes stay solid-only.
 //! - clip paths and masks: children import **unmasked** with a report
 //!   entry — compose's own group semantics (decision 0005 parity);
 //! - embedded rasters → `IMGv` objects over the shared tile bank
@@ -30,7 +33,7 @@
 use compose::{Mix, blend_value};
 use doc::{
     Contour, Document, Fill, FillShape, Gradient, GradientStop, GroupObject, ObjectData,
-    PaintStyle, PathObject, PathPoint,
+    PaintStyle, PathObject, PathPoint, TileRef,
 };
 use geom::Point;
 use usvg::tiny_skia_path::{Point as TsPoint, Transform as TsTransform};
@@ -50,6 +53,9 @@ pub struct SvgImportReport {
     pub gradients_dropped: usize,
     /// Gradient fill servers imported onto the `FPLv` model.
     pub gradients_imported: usize,
+    /// Pattern fill servers imported onto the `FPTv` model (single
+    /// raster tiles only).
+    pub patterns_imported: usize,
     /// Strokes whose width flattened to the model's 1px.
     pub strokes_flattened: usize,
     /// Groups carrying a clip path or mask, imported unmasked.
@@ -310,6 +316,23 @@ impl Importer<'_> {
                 usvg::Paint::Color(color) => {
                     fill_raw = paint_raw(color, fill.opacity());
                 }
+                usvg::Paint::Pattern(pattern) => match self.pattern_fill(pattern, transform) {
+                    Some((model, start, end)) => {
+                        // While the pattern carries, `FCLi` never paints;
+                        // opaque black (usvg's own default fill) keeps the
+                        // solid fallback honest if the tile ever drops.
+                        fill_raw = 0xFF00_0000;
+                        fill_model = Some(model);
+                        fill_handles = (Some(start), Some(end));
+                        self.report.patterns_imported += 1;
+                    }
+                    None => {
+                        self.report.gradients_dropped += 1;
+                        self.report
+                            .notes
+                            .push("fill dropped: pattern paint server".to_owned());
+                    }
+                },
                 other => match self.gradient_fill(other, transform) {
                     Some((edge_raw, model, start, end)) => {
                         // The edge colour doubles as the beyond-the-ramp
@@ -448,6 +471,122 @@ impl Importer<'_> {
     /// the renderer falls back to), the fill, and the start/end
     /// handles. `None` for servers the model can't carry (pattern)
     /// and stop-less gradients, which render nothing anyway.
+    /// A pattern paint server onto the fill model: the tile becomes a
+    /// single-raster `FPTv` — the tile's own pixels minted into the
+    /// shared tile bank — and the placement's origin→width vector
+    /// rides the fill handles exactly as the exporter wrote them.
+    /// Only single-`<image>` tiles carry: a pattern whose content is
+    /// vector shapes has no raster to mint, and returns `None` for the
+    /// caller's drop-with-report path. A skew in the placement
+    /// (unreachable from our own serializer) approximates by angle and
+    /// scale under a report note.
+    fn pattern_fill(
+        &mut self,
+        pattern: &usvg::Pattern,
+        transform: TsTransform,
+    ) -> Option<(Fill, Point, Point)> {
+        let mut images = collect_pattern_images(pattern.root()).into_iter();
+        let (Some(image), None) = (images.next(), images.next()) else {
+            return None;
+        };
+        let bytes = match image.kind() {
+            usvg::ImageKind::PNG(data)
+            | usvg::ImageKind::JPEG(data)
+            | usvg::ImageKind::GIF(data)
+            | usvg::ImageKind::WEBP(data) => data,
+            usvg::ImageKind::SVG(_) => return None,
+        };
+        let decoded = crate::raster::decode(bytes)
+            .map_err(|error| format!("pattern raster: {error}"))
+            .ok()?;
+        let tiles = self.mint_tiles(decoded.width, decoded.height, &decoded.rgba)?;
+        let rect = pattern.rect();
+        // usvg normalizes patternUnits and the `patternTransform` into
+        // the server's own transform, so the chain to canvas space is
+        // the path's absolute transform ∘ the server's — the same
+        // reading `gradient_fill` applies.
+        let space = compose_transform(transform, pattern.transform());
+        if space.kx != 0.0 || space.ky != 0.0 {
+            self.report
+                .notes
+                .push("pattern skew approximated by the angle/scale placement".to_owned());
+        }
+        let (x, y, width) = (
+            f64::from(rect.x()),
+            f64::from(rect.y()),
+            f64::from(rect.width()),
+        );
+        Some((
+            Fill {
+                shape: FillShape::Pattern,
+                shape_extended: true,
+                texture_blend: 0,
+                feather: 0,
+                stamping: None,
+                hard_edge: false,
+                gradient: None,
+                dither: None,
+                pattern: Some(doc::PatternTile {
+                    name: None,
+                    pixels: (i64::from(decoded.width), i64::from(decoded.height)),
+                    tile_size: raster::TILE_SIDE as i64,
+                    tiles,
+                }),
+            },
+            apply_ts(space, x, y),
+            apply_ts(space, x + width, y),
+        ))
+    }
+
+    /// Mints straight RGBA into premultiplied 128×128 bank tiles,
+    /// row-major — [`raster::attach_image`]'s tile loop without the
+    /// image object. `None` past the 4096-tile sanity cap (the
+    /// importer's drop-with-report path).
+    fn mint_tiles(&mut self, width: u32, height: u32, rgba: &[u8]) -> Option<Vec<TileRef>> {
+        const TILE_CAP: usize = 4096;
+        let (width, height) = (width as usize, height as usize);
+        let (cols, rows) = (
+            width.div_ceil(raster::TILE_SIDE),
+            height.div_ceil(raster::TILE_SIDE),
+        );
+        if width == 0 || height == 0 || cols * rows > TILE_CAP {
+            return None;
+        }
+        let base = self.document.tiles.len();
+        let mut tiles = Vec::with_capacity(cols * rows);
+        for row in 0..rows {
+            for col in 0..cols {
+                let id = u32::try_from(base + tiles.len()).ok()?;
+                let mut plane = [0u8; raster::TILE_BYTES];
+                for py in 0..raster::TILE_SIDE {
+                    let y = row * raster::TILE_SIDE + py;
+                    if y >= height {
+                        break;
+                    }
+                    for px in 0..raster::TILE_SIDE {
+                        let x = col * raster::TILE_SIDE + px;
+                        if x >= width {
+                            break;
+                        }
+                        let src = (y * width + x) * 4;
+                        let a = u32::from(rgba[src + 3]);
+                        let dst = (py * raster::TILE_SIDE + px) * 4;
+                        for channel in 0..3 {
+                            plane[dst + channel] =
+                                ((u32::from(rgba[src + channel]) * a + 127) / 255) as u8;
+                        }
+                        plane[dst + 3] = rgba[src + 3];
+                    }
+                }
+                self.document
+                    .tiles
+                    .insert(id, raster::Tile::from_rgba8(plane));
+                tiles.push(TileRef::Tile(id));
+            }
+        }
+        Some(tiles)
+    }
+
     fn gradient_fill(
         &mut self,
         paint: &usvg::Paint,
@@ -550,6 +689,7 @@ impl Importer<'_> {
                     alpha,
                 }),
                 dither: None,
+                pattern: None,
             },
             start,
             end,
@@ -564,6 +704,21 @@ fn apply_ts(transform: TsTransform, x: f64, y: f64) -> Point {
         f64::from(transform.sx) * x + f64::from(transform.kx) * y + f64::from(transform.tx),
         f64::from(transform.ky) * x + f64::from(transform.sy) * y + f64::from(transform.ty),
     )
+}
+
+/// The `<image>` nodes in a pattern's subtree, in document order —
+/// usvg wraps the tile content in its own group, so the direct
+/// children are not enough.
+fn collect_pattern_images(group: &usvg::Group) -> Vec<usvg::Image> {
+    let mut images = Vec::new();
+    for node in group.children() {
+        match node {
+            usvg::Node::Image(image) => images.push((**image).clone()),
+            usvg::Node::Group(inner) => images.extend(collect_pattern_images(inner)),
+            _ => {}
+        }
+    }
+    images
 }
 
 /// Recognizes the canvas matte our own serializer emits: the first

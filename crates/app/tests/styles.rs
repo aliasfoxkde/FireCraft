@@ -97,8 +97,8 @@ fn import_appends_rekeyed_and_survives_reopen() {
     );
     assert_eq!(
         editor.undo().unwrap(),
-        "style.importLibrary",
-        "one library = one undoable step"
+        "Import Styles",
+        "one library = one undoable step (tiles + entries fold)"
     );
     assert!(
         editor.document().styles.is_empty(),

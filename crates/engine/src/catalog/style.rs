@@ -16,6 +16,7 @@
 //! objects — that half waits on the M6 text engine's style surface and
 //! is a recorded follow-up.
 
+use base64::Engine as _;
 use doc::{Document, ObjectData, ObjectId, PaintStyle, StyleEntry, StyleText};
 
 use crate::access;
@@ -31,6 +32,7 @@ pub(crate) fn install(registry: &mut CommandRegistry) -> Result<(), EngineError>
     registry.register(StyleRedefineByName)?;
     registry.register(StyleRedefineFromSelection)?;
     registry.register(StyleImportLibrary)?;
+    registry.register(StyleImportLibraryTiles)?;
     registry.register(StyleScaleStyles)
 }
 
@@ -391,6 +393,97 @@ impl TypedCommand for StyleImportLibrary {
     }
 }
 
+/// `style.importLibraryTiles` — joins a style library's `mkBT` rasters
+/// to the document tile bank under explicit bank ids, so the imported
+/// records' pattern fills (and their bagged texture subtrees) point at
+/// tiles this document actually holds. The wire form is straight RGBA8
+/// (the `TileImage::to_rgba8` export); premultiplication happens here,
+/// where the bank's premultiplied contract lives. Ids are chosen
+/// host-side against the live bank; a colliding id is accepted only
+/// when the content matches — a journal replay of the same import is
+/// a no-op, a doctored one is refused.
+struct StyleImportLibraryTiles;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct StyleImportLibraryTilesPayload {
+    /// The library's tiles, already re-keyed to their final bank ids.
+    tiles: Vec<StyleLibraryTile>,
+}
+
+/// One `mkBT` raster on the import wire.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct StyleLibraryTile {
+    /// The bank id the entries' `TIDi` slots name.
+    id: u32,
+    /// 128×128 straight RGBA8, base64 (`TILE_BYTES` bytes decoded).
+    rgba: String,
+}
+
+impl TypedCommand for StyleImportLibraryTiles {
+    type Payload = StyleImportLibraryTilesPayload;
+
+    fn name(&self) -> &'static str {
+        "style.importLibraryTiles"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "style.importLibraryTiles";
+        // Validate every tile before mutating any — a refused call
+        // must leave the bank exactly as it was.
+        let mut fresh: Vec<(u32, [u8; raster::TILE_BYTES])> = Vec::new();
+        for tile in &payload.tiles {
+            let rgba = base64::engine::general_purpose::STANDARD
+                .decode(&tile.rgba)
+                .map_err(|error| EngineError::InvalidState {
+                    name: NAME.to_owned(),
+                    detail: format!("tile {} is not base64: {error}", tile.id),
+                })?;
+            let rgba: [u8; raster::TILE_BYTES] =
+                rgba.try_into()
+                    .map_err(|len: Vec<u8>| EngineError::InvalidState {
+                        name: NAME.to_owned(),
+                        detail: format!(
+                            "tile {} carries {} bytes, a tile is {}",
+                            tile.id,
+                            len.len(),
+                            raster::TILE_BYTES
+                        ),
+                    })?;
+            let mut premultiplied = rgba;
+            for px in premultiplied.chunks_exact_mut(4) {
+                let a = u32::from(px[3]);
+                for channel in px.iter_mut().take(3) {
+                    *channel = ((u32::from(*channel) * a + 127) / 255) as u8;
+                }
+            }
+            if let Some(existing) = document.tiles.get(tile.id) {
+                if existing.pixels()[..] == premultiplied[..] {
+                    continue; // journal replay of the same import
+                }
+                return Err(EngineError::InvalidState {
+                    name: NAME.to_owned(),
+                    detail: format!("bank slot {} already holds different pixels", tile.id),
+                });
+            }
+            fresh.push((tile.id, premultiplied));
+        }
+        for (tile_id, pixels) in &fresh {
+            document
+                .tiles
+                .insert(*tile_id, raster::Tile::from_rgba8(*pixels));
+        }
+        Ok(Delta::Bank {
+            added: fresh.into_iter().map(|(tile_id, _)| tile_id).collect(),
+        })
+    }
+}
+
 /// `style.scaleStyles` — the CS6 `scaleStyles` verb: multiplies every
 /// library entry's text size (`PTSf`) by the factor — the slot that
 /// follows object scaling. Effect parameters stay untouched (they are
@@ -555,6 +648,7 @@ mod tests {
                         hard_edge: false,
                         gradient: None,
                         dither: None,
+                        pattern: None,
                     }),
                 },
                 fill_start: geom::Point::new(0.0, 0.0),

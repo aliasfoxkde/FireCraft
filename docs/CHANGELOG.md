@@ -111,6 +111,7 @@ Current version: **0.1.0**.
 
 ### Documentation
 
+- **engine**: resolve setFillColor collapse per evidence (fa29bbb)
 - **m15**: gradient status row + recorded task-5 gaps (d7f209a)
 - **research**: M15 tool-surface enumeration table (d972a02)
 - **planning**: add M15 tool-surface ticket (aeee8a0)

@@ -87,6 +87,7 @@ name = "app"
 version = "0.1.0"
 dependencies = [
  "app-cli",
+ "base64",
  "color 0.1.0",
  "compose",
  "doc",
@@ -1046,6 +1047,7 @@ dependencies = [
 name = "engine"
 version = "0.1.0"
 dependencies = [
+ "base64",
  "doc",
  "geom",
  "raster",

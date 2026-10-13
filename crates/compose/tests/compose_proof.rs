@@ -1533,6 +1533,7 @@ fn black_white_fill(shape: FillShape) -> Fill {
             alpha: Vec::new(),
         }),
         dither: None,
+        pattern: None,
     }
 }
 

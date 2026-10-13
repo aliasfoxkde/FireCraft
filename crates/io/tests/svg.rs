@@ -505,7 +505,7 @@ fn hostile_documents_are_refused_cleanly() {
 // compose's `fill_brush` mapping transcribed; the svg-golden gate
 // holds the two rasters together, these tests pin the serializer.
 
-use doc::{Fill, FillShape, Gradient, GradientStop};
+use doc::{Fill, FillShape, Gradient, GradientStop, PatternTile};
 
 fn ramp(a: i64, b: i64) -> Vec<GradientStop> {
     vec![
@@ -545,6 +545,7 @@ fn gradient_path(
                 alpha,
             }),
             dither: None,
+            pattern: None,
         });
     }
     path
@@ -663,5 +664,100 @@ fn gradient_without_handles_exports_solid_like_compose() {
     let (svg, report) = encode(&document(vec![ObjectData::Path(path)]));
     assert!(!svg.contains("Gradient"), "no def without handles: {svg}");
     assert!(report.notes.is_empty());
+    assert!(svg.contains("fill=\"#ff0000\""), "solid `FCLi`: {svg}");
+}
+
+// --- `FPTv` pattern fills (post-roadmap gap): the def + reference
+// form is compose's pattern-arm placement transcribed; the svg-golden
+// gate holds the two rasters together, these tests pin the serializer.
+
+fn pattern_path(pattern: PatternTile, handles: Option<(Point, Point)>) -> PathObject {
+    let mut path = square();
+    if let Some((start, end)) = handles {
+        path.fill_start = Some(start);
+        path.fill_end = Some(end);
+    }
+    if let Some(paint) = path.paint.as_mut() {
+        paint.fill = Some(Fill {
+            shape: FillShape::Pattern,
+            shape_extended: true,
+            texture_blend: 0,
+            feather: 0,
+            stamping: None,
+            hard_edge: false,
+            gradient: None,
+            dither: None,
+            pattern: Some(pattern),
+        });
+    }
+    path
+}
+
+fn matte_pattern(raw: i64) -> PatternTile {
+    PatternTile {
+        name: None,
+        pixels: (2, 2),
+        tile_size: 128,
+        tiles: vec![TileRef::Matte(raw)],
+    }
+}
+
+#[test]
+fn pattern_fill_exports_a_def_and_reference() {
+    let path = pattern_path(matte_pattern(0xFF_00_FF_00), None);
+    let (svg, report) = encode(&document(vec![ObjectData::Path(path)]));
+    assert!(
+        svg.contains(
+            "<pattern id=\"pat-1\" patternUnits=\"userSpaceOnUse\" \
+             width=\"2\" height=\"2\">"
+        ),
+        "identity placement without handles: {svg}"
+    );
+    assert!(
+        svg.contains(
+            "<image x=\"0\" y=\"0\" width=\"2\" height=\"2\" \
+                      href=\"data:image/png;base64,"
+        ),
+        "the repeat unit embeds as a data-URI PNG: {svg}"
+    );
+    assert!(
+        svg.contains("fill=\"url(#pat-1)\""),
+        "the path references the def: {svg}"
+    );
+    assert!(report.notes.is_empty());
+    assert_eq!(report.pattern_fills, 1, "the def is counted");
+}
+
+#[test]
+fn pattern_fill_transform_rides_the_fill_vector() {
+    let path = pattern_path(
+        matte_pattern(0xFF_00_FF_00),
+        Some((Point::new(1.0, 2.0), Point::new(5.0, 2.0))),
+    );
+    let (svg, _) = encode(&document(vec![ObjectData::Path(path)]));
+    assert!(
+        svg.contains("patternTransform=\"translate(1,2) rotate(0) scale(2)\""),
+        "translate(start) rotate(angle) scale(length / native width): {svg}"
+    );
+}
+
+#[test]
+fn pattern_missing_tiles_drop_to_solid_with_a_note() {
+    let pattern = PatternTile {
+        name: None,
+        pixels: (2, 2),
+        tile_size: 128,
+        tiles: vec![TileRef::Tile(9)],
+    };
+    let path = pattern_path(pattern, None);
+    let (svg, report) = encode(&document(vec![ObjectData::Path(path)]));
+    assert!(!svg.contains("<pattern"), "no def on a bank miss: {svg}");
+    assert_eq!(report.pattern_fills, 0);
+    assert_eq!(report.notes.len(), 1, "the divergence is recorded");
+    assert!(
+        report.notes[0].contains("solid colour") && report.notes[0].contains("tile 9"),
+        "{}",
+        report.notes[0]
+    );
     assert!(svg.contains("fill=\"#ff0000\""), "solid `FCLi`: {svg}");
 }

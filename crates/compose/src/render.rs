@@ -15,7 +15,7 @@ use crate::convert::{abgr, blend_mode, to_bezpath};
 use crate::effects;
 use doc::{
     Document, FillShape, Gradient, GroupObject, Layer, NineSliceGuides, ObjectData, PathObject,
-    SymbolInstanceObject, SymbolType, TileRef,
+    SymbolInstanceObject, SymbolType, TileBank, TileRef,
 };
 use filters::Surface;
 use geom::{Affine, transform::map_rect};
@@ -392,13 +392,22 @@ fn render_object(id: doc::ObjectId, walk: &mut Walk) -> Result<(), ComposeError>
             generation: id.generation(),
         })?;
     match object {
-        ObjectData::Path(path) => render_path(path, walk.canvas, walk.cache, walk.ctx),
+        ObjectData::Path(path) => {
+            render_path(walk.document, path, walk.canvas, walk.cache, walk.ctx)
+        }
         ObjectData::Group(group) => render_group(group, walk),
         ObjectData::Text(object) => {
             let engine = walk
                 .text_engine
                 .get_or_insert_with(text::TextEngine::default);
-            render_text(object, engine, walk.canvas, walk.cache, walk.ctx)
+            render_text(
+                walk.document,
+                object,
+                engine,
+                walk.canvas,
+                walk.cache,
+                walk.ctx,
+            )
         }
         ObjectData::Image(image) => {
             render_image(walk.document, image, walk.canvas, walk.cache, walk.ctx)
@@ -573,6 +582,7 @@ fn matte_premultiplied(raw: i64) -> [u8; 4] {
 /// inheriting the fill paint, the blend/opacity layer, and the live
 /// effect stack.
 fn render_text(
+    document: &Document,
     object: &doc::TextObject,
     engine: &mut text::TextEngine,
     canvas: (u16, u16),
@@ -611,10 +621,11 @@ fn render_text(
         name: None,
         effects: object.effects.clone(),
     };
-    render_path(&synthetic, canvas, cache, ctx)
+    render_path(document, &synthetic, canvas, cache, ctx)
 }
 
 fn render_path(
+    document: &Document,
     path: &PathObject,
     canvas: (u16, u16),
     cache: &mut EffectCache,
@@ -628,8 +639,7 @@ fn render_path(
     };
     let plan = effects::plan(&path.effects);
     if plan.ops.is_empty() {
-        paint_path(path, paint, ctx);
-        return Ok(());
+        return paint_path(document, path, paint, ctx);
     }
 
     // Content-addressed: a cache hit skips both the offscreen render
@@ -640,7 +650,7 @@ fn render_path(
         return paint_surface(&pixels, canvas, path.blend, path.opacity, ctx);
     }
 
-    let base = rasterize_path(path, paint, canvas)?;
+    let base = rasterize_path(document, path, paint, canvas)?;
     let pixels = apply_filtered(base, canvas, &plan, key, cache)?;
     paint_surface(&pixels, canvas, path.blend, path.opacity, ctx)
 }
@@ -648,18 +658,24 @@ fn render_path(
 /// Rasterizes one path alone over transparent black — the filter
 /// input.
 fn rasterize_path(
+    document: &Document,
     path: &PathObject,
     paint: &doc::PaintStyle,
     canvas: (u16, u16),
 ) -> Result<Vec<u8>, ComposeError> {
     let mut offscreen = RenderContext::new(canvas.0, canvas.1);
-    paint_path(path, paint, &mut offscreen);
+    paint_path(document, path, paint, &mut offscreen)?;
     flush_offscreen(offscreen, canvas)
 }
 
 /// Paints one path through its own layer (fill/stroke order per
 /// `FOTb`). Runs against the live context or an offscreen one.
-fn paint_path(path: &PathObject, paint: &doc::PaintStyle, ctx: &mut RenderContext) {
+fn paint_path(
+    document: &Document,
+    path: &PathObject,
+    paint: &doc::PaintStyle,
+    ctx: &mut RenderContext,
+) -> Result<(), ComposeError> {
     let geometry = to_bezpath(&path.contours);
 
     // Every object paints through its own layer so opacity and blend
@@ -679,36 +695,159 @@ fn paint_path(path: &PathObject, paint: &doc::PaintStyle, ctx: &mut RenderContex
     });
     // `FOTb` — fill over stroke. Default (absent/false) paints the
     // fill first so the stroke lands on top.
+    let filled = paint_fill(document, path, paint, &geometry, ctx);
     if path.fill_on_top == Some(true) {
         paint_stroke(paint.stroke_raw, &geometry, ctx);
-        paint_fill(path, paint, &geometry, ctx);
+        filled?;
     } else {
-        paint_fill(path, paint, &geometry, ctx);
+        filled?;
         paint_stroke(paint.stroke_raw, &geometry, ctx);
     }
     ctx.pop_layer();
+    Ok(())
 }
 
 /// The fill paint: a modeled gradient rides its `FPLv` stops and the
-/// fill vector handles; every other kind paints the `FCLi` colour.
+/// fill vector handles, a modeled pattern tiles its `FPTv` raster,
+/// and every other kind paints the `FCLi` colour.
 fn paint_fill(
+    document: &Document,
     path: &PathObject,
     paint: &doc::PaintStyle,
     geometry: &vello_cpu::kurbo::BezPath,
     ctx: &mut RenderContext,
-) {
+) -> Result<(), ComposeError> {
+    let pattern = paint
+        .fill
+        .as_ref()
+        .filter(|fill| fill.shape == FillShape::Pattern)
+        .and_then(|fill| fill.pattern.as_ref());
+    if let Some(pattern) = pattern {
+        // The brush paints in pattern space: translate the geometry
+        // into it, fill, and put the world transform back.
+        let placement = pattern_placement(pattern, path);
+        let local = placement.inverse() * geometry.clone();
+        ctx.set_transform(placement);
+        ctx.set_paint(pattern_brush(pattern, &document.tiles)?);
+        ctx.fill_path(&local);
+        ctx.reset_transform();
+        return Ok(());
+    }
     ctx.set_paint(fill_brush(path, paint));
     ctx.fill_path(geometry);
+    Ok(())
+}
+
+/// The pattern placement from the fill vector handles (the same
+/// handles the Gradient tool drags — `fdct` sets "the angle and size"
+/// of gradient and pattern fills alike): the raster's width maps onto
+/// the start→end vector, rotated with it, anchored at the start. No
+/// handles: the raster sits at the canvas origin, unscaled.
+fn pattern_placement(pattern: &doc::PatternTile, path: &PathObject) -> Affine {
+    let (Some(start), Some(end)) = (path.fill_start, path.fill_end) else {
+        return Affine::IDENTITY;
+    };
+    let (dx, dy) = (end.x - start.x, end.y - start.y);
+    let length = (dx * dx + dy * dy).sqrt();
+    if !length.is_finite() || length <= f64::EPSILON {
+        return Affine::IDENTITY;
+    }
+    let native = pattern.pixels.0.max(1) as f64;
+    Affine::translate((start.x, start.y))
+        * Affine::rotate(dy.atan2(dx))
+        * Affine::scale(length / native)
+}
+
+/// One pattern repeat unit: the `TILv` grid assembled at the raster's
+/// native pixel size. Bank tiles are fixed 128×128 premultiplied
+/// planes (`TSZi` 256 has no bank bridge and refuses, same posture as
+/// `assemble_image`); matte slots fill their ARGB premultiplied.
+fn pattern_brush(pattern: &doc::PatternTile, tiles: &TileBank) -> Result<PaintBrush, ComposeError> {
+    let side = i64::from(raster::TILE_SIDE as u32);
+    if pattern.tile_size != side {
+        return Err(ComposeError::TileSource {
+            detail: format!(
+                "tile size {} has no tile-bank bridge yet (bank slots are {side})",
+                pattern.tile_size
+            ),
+        });
+    }
+    let (width, height) = pattern.pixels;
+    if width <= 0 || height <= 0 || width > 8192 || height > 8192 {
+        return Err(ComposeError::TileSource {
+            detail: format!("pattern extent {width}x{height} is not a usable raster"),
+        });
+    }
+    let (width, height) = (width as usize, height as usize);
+    let side = side as usize;
+    let cols = width.div_ceil(side);
+    let mut out = vec![0u8; width * height * 4];
+    for (slot, tile_ref) in pattern.tiles.iter().enumerate() {
+        let left = (slot % cols) * side;
+        let top = (slot / cols) * side;
+        let x = left.min(width)..(left + side).min(width);
+        let y = top.min(height)..(top + side).min(height);
+        if x.is_empty() || y.is_empty() {
+            continue;
+        }
+        match *tile_ref {
+            TileRef::Tile(id) => {
+                let tile = tiles
+                    .get(id)
+                    .ok_or(ComposeError::TileBankMiss { tile: id })?;
+                for py in y.clone() {
+                    let source_y = py - top;
+                    let source = (source_y * side + x.start - left) * 4;
+                    let target = (py * width + x.start) * 4;
+                    let span = (x.end - x.start) * 4;
+                    out[target..target + span]
+                        .copy_from_slice(&tile.pixels()[source..source + span]);
+                }
+            }
+            TileRef::Matte(raw) => {
+                let pixel = matte_premultiplied(raw);
+                for py in y.clone() {
+                    let target = (py * width + x.start) * 4;
+                    for px in x.clone() {
+                        out[target..target + 4].copy_from_slice(&pixel);
+                        let _ = px;
+                    }
+                }
+            }
+        }
+    }
+    let mut pixmap = Pixmap::new(
+        u16::try_from(width).unwrap_or(u16::MAX),
+        u16::try_from(height).unwrap_or(u16::MAX),
+    );
+    let target = pixmap.data_as_u8_slice_mut();
+    if target.len() != out.len() {
+        return Err(ComposeError::TileSource {
+            detail: format!(
+                "pattern raster holds {} bytes, the pixmap takes {}",
+                out.len(),
+                target.len()
+            ),
+        });
+    }
+    target.copy_from_slice(&out);
+    Ok(Brush::Image(ImageBrush {
+        image: ImageSource::Pixmap(Arc::new(pixmap)),
+        sampler: ImageSampler::new()
+            .with_x_extend(Extend::Repeat)
+            .with_y_extend(Extend::Repeat)
+            .with_quality(ImageQuality::Low),
+    }))
 }
 
 /// The fill brush for one path. Linear/radial/conical render natively
 /// through the fill vector handles; the remaining families fall back
 /// to the solid `FCLi` colour (recorded substitutions — CS6's math for
 /// satin, pinch, folds, bars, ripple, waves, contour, the rectangular
-/// rings and web dither is not observable from the format, and the
-/// pattern tile is not modeled). Elliptical renders as a circle: the
-/// third handle's squash needs an affine the radial brush does not
-/// carry (same recorded-substitution ledger).
+/// rings and web dither is not observable from the format). Modeled
+/// patterns take their own arm in [`paint_fill`]. Elliptical renders
+/// as a circle: the third handle's squash needs an affine the radial
+/// brush does not carry (same recorded-substitution ledger).
 fn fill_brush(path: &PathObject, paint: &doc::PaintStyle) -> PaintBrush {
     let solid = || Brush::Solid(abgr(paint.fill_raw));
     let Some(fill) = &paint.fill else {

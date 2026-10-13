@@ -830,6 +830,7 @@ fn fill_from_payload(
         hard_edge: false,
         gradient,
         dither: None,
+        pattern: None,
     }
 }
 

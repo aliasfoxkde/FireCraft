@@ -473,6 +473,12 @@ fn random_symbol_instance(rng: &mut FuzzRng) -> ObjectData {
 /// `fuzz style {index}` so the `style.redefineByName` builder usually
 /// resolves, and every third entry carries the text kind so `style.apply`
 /// draws both `ZSOi` values.
+/// Base64 for fuzz payloads (the tile wire format).
+fn b64(bytes: &[u8]) -> String {
+    use base64::Engine as _;
+    base64::engine::general_purpose::STANDARD.encode(bytes)
+}
+
 fn random_style(rng: &mut FuzzRng, index: usize) -> doc::StyleEntry {
     let effects = if rng.chance(40) {
         vec![doc::Effect {
@@ -502,6 +508,7 @@ fn random_style(rng: &mut FuzzRng, index: usize) -> doc::StyleEntry {
                 hard_edge: false,
                 gradient: None,
                 dither: None,
+                pattern: None,
             }),
         },
         fill_start: geom::Point::ZERO,
@@ -618,6 +625,7 @@ pub const CALLS: &[&str] = &[
     "style.redefineByName",
     "style.redefineFromSelection",
     "style.importLibrary",
+    "style.importLibraryTiles",
     "style.scaleStyles",
 ];
 
@@ -1624,6 +1632,22 @@ pub fn random_call(rng: &mut FuzzRng, document: &Document) -> (String, serde_jso
                 })
                 .collect();
             serde_json::json!({ "entries": entries })
+        }
+        "style.importLibraryTiles" => {
+            // One fresh bank slot past the live bank: valid payloads
+            // join the bank, colliding ones (deliberately, via
+            // `document.tiles.len()` twice) exercise the
+            // equal-content-replay / different-content-refuse guard.
+            let base = document.tiles.len();
+            let id = if rng.chance(85) {
+                base
+            } else {
+                base + 1 + rng.below(3)
+            };
+            let rgba: Vec<u8> = (0..raster::TILE_BYTES)
+                .map(|_| rng.next_u64() as u8)
+                .collect();
+            serde_json::json!({ "tiles": [{ "id": id, "rgba": b64(&rgba) }] })
         }
         "style.scaleStyles" => serde_json::json!({
             "scale": (1 + rng.below(300)) as f64 / 100.0,

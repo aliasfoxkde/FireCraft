@@ -10,6 +10,7 @@ homepage.workspace = true
 description = "FireCraft editor engine: command registry, inverse deltas, transactional history, journal."
 
 [dependencies]
+base64 = "0.22"
 doc = { path = "../doc", features = ["serde"] }
 geom = { path = "../geom" }
 raster = { path = "../raster", features = ["serde"] }

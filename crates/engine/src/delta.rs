@@ -132,6 +132,18 @@ pub enum Delta {
         /// The style list as it was before the command.
         before: Vec<StyleEntry>,
     },
+    /// Remove the bank slots the command created (the style-library
+    /// tile join): only fresh ids are inverse-expressible, and the
+    /// command only ever inserts into absent slots (a colliding id is
+    /// a refusal or a content-equal replay no-op), so undo is exactly
+    /// "drop these slots". Last-captured-first undo keeps this exact
+    /// even when a later command re-touched the same ids — that
+    /// command's own capture restores them first.
+    Bank {
+        /// The ids the command inserted into the (previously absent)
+        /// bank.
+        added: Vec<u32>,
+    },
     /// Several inverses, applied last-captured-first on undo. Commands
     /// push captures in the order they mutate, so a plain reverse walk
     /// un-mutates in exact reverse order.
@@ -255,6 +267,11 @@ impl Delta {
             }
             Delta::Library { before } => document.symbols = before.clone(),
             Delta::Styles { before } => document.styles = before.clone(),
+            Delta::Bank { added } => {
+                for tile_id in added {
+                    document.tiles.remove(*tile_id);
+                }
+            }
             Delta::Group(deltas) => {
                 for delta in deltas.iter().rev() {
                     delta.apply_inverse(document)?;

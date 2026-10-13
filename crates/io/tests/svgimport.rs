@@ -4,7 +4,7 @@
 //! so any delta is import loss), plus the limitation report and a
 //! hostile-stream arm.
 
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use compose::render;
 use doc::{
@@ -14,6 +14,7 @@ use doc::{
 use geom::Point;
 use io::svg::{self, SvgOptions};
 use io::svgimport::{self};
+use raster::Tile;
 
 fn point(x: f64, y: f64) -> PathPoint {
     PathPoint {
@@ -201,6 +202,7 @@ fn gradient_path(shape: FillShape, start: (f64, f64), end: (f64, f64)) -> PathOb
                     alpha: Vec::new(),
                 }),
                 dither: None,
+                pattern: None,
             }),
         }),
         fill_start: Some(Point::new(start.0, start.1)),
@@ -917,4 +919,143 @@ fn valid_hostile_document_imports_sane() {
         imported.report.notes
     );
     assert_eq!(paths(&imported.document).len(), 1, "only the group child");
+}
+
+// --- `FPTv` pattern fills: single-raster tiles round-trip (export's
+// `<pattern>` def imports back onto the model), vector-content tiles
+// drop with a report entry like every other un-carried server.
+
+/// An opaque red 128×128 bank tile seeded at slot 0 (the bank starts
+/// empty, so the first minted id is deterministic).
+fn red_tile() -> Tile {
+    let mut plane = [0u8; 128 * 128 * 4];
+    for px in plane.chunks_exact_mut(4) {
+        px.copy_from_slice(&[255, 0, 0, 255]);
+    }
+    Tile::from_rgba8(plane)
+}
+
+/// A 24×24 square filled entirely by the bank tile in slot 0.
+fn pattern_square() -> PathObject {
+    PathObject {
+        contours: vec![Contour {
+            closed: true,
+            point_count: 4,
+            points: vec![
+                point(4.0, 4.0),
+                point(28.0, 4.0),
+                point(28.0, 28.0),
+                point(4.0, 28.0),
+            ],
+        }],
+        primitive: None,
+        even_odd: false,
+        paint: Some(PaintStyle {
+            stroke_raw: 0,
+            fill_raw: 0xFF_00_00_FF,
+            fill: Some(Fill {
+                shape: FillShape::Pattern,
+                shape_extended: true,
+                texture_blend: 0,
+                feather: 0,
+                stamping: None,
+                hard_edge: false,
+                gradient: None,
+                dither: None,
+                pattern: Some(doc::PatternTile {
+                    name: None,
+                    pixels: (128, 128),
+                    tile_size: 128,
+                    tiles: vec![doc::TileRef::Tile(0)],
+                }),
+            }),
+        }),
+        fill_start: None,
+        fill_end: None,
+        fill_third: None,
+        brush_placement: None,
+        fill_on_top: None,
+        locked: false,
+        visible: true,
+        opacity: 1000,
+        blend: 0,
+        name: None,
+        effects: Vec::new(),
+    }
+}
+
+fn pattern_document() -> Document {
+    let mut doc = document(vec![ObjectData::Path(pattern_square())]);
+    doc.tiles.insert(0, red_tile());
+    doc
+}
+
+/// A pattern fill round-trips: the `<pattern>` def imports back onto
+/// the `FPTv` model with the tile re-minted into the fresh bank, the
+/// report counts one import, and the renders agree bit-exact.
+#[test]
+fn pattern_fill_round_trips_render_exact() {
+    let original = pattern_document();
+    let imported = svgimport::decode(&encode(&original)).expect("import");
+    assert_eq!(imported.report.patterns_imported, 1);
+    assert_eq!(imported.report.gradients_dropped, 0);
+    assert!(
+        imported.report.notes.is_empty(),
+        "{:?}",
+        imported.report.notes
+    );
+    let imported = imported.document;
+    let path = paths(&imported)[0];
+    let fill = path
+        .paint
+        .as_ref()
+        .expect("paint")
+        .fill
+        .as_ref()
+        .expect("fill");
+    let pattern = fill.pattern.as_ref().expect("pattern");
+    assert_eq!(fill.shape, FillShape::Pattern);
+    assert_eq!(pattern.pixels, (128, 128));
+    assert_eq!(pattern.tile_size, 128);
+    let doc::TileRef::Tile(id) = pattern.tiles[0] else {
+        panic!("expected a bank tile");
+    };
+    assert!(
+        imported.tiles.get(id).is_some(),
+        "the tile re-minted into the fresh bank"
+    );
+    let before = render(&original, 0, 0).expect("original render");
+    let after = render(&imported, 0, 0).expect("import render");
+    assert_eq!(before.pixels, after.pixels, "render-equal round trip");
+}
+
+/// A foreign pattern whose tile is vector content has no raster to
+/// mint: the fill drops with the report entry, the path keeps the
+/// solid colour.
+#[test]
+fn foreign_vector_pattern_drops_with_a_report_entry() {
+    let svg = r##"<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16">
+      <defs>
+        <pattern id="p" width="8" height="8" patternUnits="userSpaceOnUse">
+          <circle cx="4" cy="4" r="2" fill="#00ff00"/>
+        </pattern>
+      </defs>
+      <rect x="1" y="1" width="8" height="8" fill="url(#p)"/>
+      <rect x="9" y="1" width="4" height="4" fill="#ff0000"/>
+    </svg>"##;
+    let imported = svgimport::decode(svg.as_bytes()).expect("import");
+    assert_eq!(imported.report.patterns_imported, 0);
+    assert_eq!(imported.report.gradients_dropped, 1);
+    assert!(
+        imported
+            .report
+            .notes
+            .iter()
+            .any(|note| note.contains("pattern paint server")),
+        "{:?}",
+        imported.report.notes
+    );
+    // The unpainted pattern rect drops with its fill (compose parity:
+    // no model paint means nothing renders), the solid sibling lands.
+    assert_eq!(paths(&imported.document).len(), 1);
 }

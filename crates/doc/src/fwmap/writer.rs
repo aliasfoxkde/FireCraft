@@ -14,8 +14,9 @@ use crate::fwmap::{FourCC, MapError};
 use crate::model::{
     Cell, Contour, Document, Effect, EffectProperty, EffectValue, ExportOptions, Fill, FillShape,
     Gradient, GradientStop, Grid, GroupObject, Guides, ImageObject, Layer, LayerList,
-    NineSliceGuides, PaintStyle, PathObject, PathPoint, PrimitiveSource, SliceObject, StyleEntry,
-    SymbolDefinition, SymbolInstanceObject, TextObject, TextOnPath, TextRun, TextStyle, TileRef,
+    NineSliceGuides, PaintStyle, PathObject, PathPoint, PatternTile, PrimitiveSource, SliceObject,
+    StyleEntry, SymbolDefinition, SymbolInstanceObject, TextObject, TextOnPath, TextRun, TextStyle,
+    TileRef,
 };
 use crate::registry::{ObjectData, ObjectId};
 use fwpng::nodetree::{Node, NodeValue};
@@ -688,9 +689,10 @@ impl Writer<'_> {
 
     /// `FPLv` children in dictionary order (mapped subset): FTBi FEFi
     /// FSMi FRDb, the shape slot (`FSXi` when the file carried the
-    /// extended kind, else `FSHi`), `FGLv`, the dither colours. Names,
-    /// `RDOb`, `FETi`/`FRRi`, `FPTv` and a compatibility `FSHi` (when
-    /// `FSXi` carried the kind) splice back from the bag.
+    /// extended kind, else `FSHi`), `FGLv`, the dither colours, and
+    /// the `FPTv` pattern tile. Names, `RDOb`, `FETi`/`FRRi` and a
+    /// compatibility `FSHi` (when `FSXi` carried the kind) splice
+    /// back from the bag.
     fn write_fill(&mut self, fill: &Fill, path: &str) -> Result<Node, MapError> {
         let mut mapped = Vec::new();
         mapped.push(n_i(*b"FTBi", fill.texture_blend));
@@ -721,8 +723,32 @@ impl Writer<'_> {
                 mapped.push(n_b(*b"FDTb", transparent));
             }
         }
+        if let Some(pattern) = &fill.pattern {
+            let fptv_path = format!("{path}/FPTv");
+            mapped.push(self.write_pattern_tile(pattern, &fptv_path)?);
+        }
         let children = self.splice_container(mapped, path);
         Ok(n_kids(*b"FPLv", children))
+    }
+
+    /// `FPTv`: `INMs` then the `IMGv` raster (`WPXi` `HPXi` `TSZi`
+    /// `TILv`); `UNMs` and the `IMGv` extras splice back from the bag.
+    fn write_pattern_tile(&mut self, pattern: &PatternTile, path: &str) -> Result<Node, MapError> {
+        let mut mapped = Vec::new();
+        if let Some(name) = &pattern.name {
+            mapped.push(n_s(*b"INMs", name));
+        }
+        let img_path = format!("{path}/IMGv");
+        let img = vec![
+            n_i(*b"WPXi", pattern.pixels.0),
+            n_i(*b"HPXi", pattern.pixels.1),
+            n_i(*b"TSZi", pattern.tile_size),
+            self.write_tiles(&pattern.tiles, &img_path)?,
+        ];
+        let bagged = self.bag.take_under(&img_path);
+        mapped.push(n_kids(*b"IMGv", splice(img, bagged)));
+        let children = self.splice_container(mapped, path);
+        Ok(n_kids(*b"FPTv", children))
     }
 
     /// `FGLv`: the legacy `FGVv` vertex list first, then `FGYv` with
