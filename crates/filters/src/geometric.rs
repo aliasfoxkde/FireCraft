@@ -20,7 +20,7 @@ use std::sync::LazyLock;
 const TURNS: i64 = 4096;
 
 /// Sin in thousandths at `angle`/`TURNS` of a full turn.
-fn sin_fp(angle: i64) -> i64 {
+pub(crate) fn sin_fp(angle: i64) -> i64 {
     static SIN: LazyLock<Vec<i64>> = LazyLock::new(|| {
         (0..TURNS)
             .map(|i| {
@@ -33,8 +33,14 @@ fn sin_fp(angle: i64) -> i64 {
 }
 
 /// Cos in thousandths, a quarter turn ahead of sin.
-fn cos_fp(angle: i64) -> i64 {
+pub(crate) fn cos_fp(angle: i64) -> i64 {
     sin_fp(angle + TURNS / 4)
+}
+
+/// Degrees → trig-table units (the shared conversion for every
+/// angle-taking kernel).
+pub(crate) fn angle_units(degrees: f64) -> i64 {
+    (degrees * TURNS as f64 / 360.0).round() as i64
 }
 
 /// Motion blur: averages `distance + 1` one-sided taps stepping in the

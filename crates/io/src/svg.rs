@@ -635,6 +635,11 @@ fn kernel_name(op: &KernelOp) -> &'static str {
         KernelOp::ConvertToAlpha => "convert to alpha",
         KernelOp::AddNoise { .. } => "add noise",
         KernelOp::FindEdges => "find edges",
+        KernelOp::DropShadow { .. } => "drop shadow",
+        KernelOp::InnerShadow { .. } => "inner shadow",
+        KernelOp::SolidShadow { .. } => "solid shadow",
+        KernelOp::OuterGlow { .. } => "outer glow",
+        KernelOp::InnerGlow { .. } => "inner glow",
     }
 }
 

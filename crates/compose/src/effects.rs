@@ -4,20 +4,21 @@
 //! "EffectMoaID"` table); stacks written without a GUID — synthetic
 //! `filter.add` payloads — fall back to the internal name (`INMs`).
 //! Every native CS6 live effect in the M14 enumeration
-//! (`docs/research/fw-code-notes.md`) is interpreted here; effects
-//! outside it — the Photoshop Live Effects container, third-party
-//! plugin GUIDs, Color Fill's exotic blend codes, shadow/glow/emboss
-//! until the composite pass — are skipped, never approximated: the
-//! object renders unfiltered through them. That keeps composition
-//! total and deterministic (the ADR 0002 oracle contract); widening
-//! the catalog is strictly additive.
+//! (`docs/research/fw-code-notes.md`) is interpreted here — the
+//! shadow/glow family since the composite pass, via the MX-era scalar
+//! props and the Photoshop Live Effects container's packed strings.
+//! Effects still outside it — the bevel/emboss arm of the container,
+//! third-party plugin GUIDs, Color Fill's exotic blend codes — are
+//! skipped, never approximated: the object renders unfiltered through
+//! them. That keeps composition total and deterministic (the ADR 0002
+//! oracle contract); widening the catalog is strictly additive.
 //!
 //! Properties are the `EPSv` decimal strings. A required parameter
 //! that is absent or unparseable skips its effect (counted in
 //! [`Plan::skipped`]) — CS6 writes every parameter of an effect it
 //! saved, so absence means a stack we would otherwise be guessing at.
 
-use color::BlendMode;
+use color::{BlendMode, Rgba8};
 use doc::{Effect, EffectValue, NodeValue};
 use filters::{CurvesKnots, Surface};
 
@@ -59,6 +60,18 @@ const GUID_SHARPEN: &str = "c20952b1-fc76-11d0-8be700a024cdc039";
 const GUID_SHARPEN_MORE: &str = "1f2f2591-9db7-11d1-8cad00a024cdc039";
 /// Convert to Alpha (dictionary line 1495).
 const GUID_CONVERT_TO_ALPHA: &str = "2932d5a2-ca48-11d1-8561000502701850";
+/// Drop Shadow, MX-era scalar props (dictionary `EffectMoaID`).
+const GUID_DROP_SHADOW: &str = "a7944db8-6ce2-11d1-8c76000502701850";
+/// Inner Shadow, MX-era scalar props.
+const GUID_INNER_SHADOW: &str = "5600f702-774c-11d3-baad0000861f4d01";
+/// Inner Glow, MX-era scalar props.
+const GUID_INNER_GLOW: &str = "2ba87123-8220-11d3-baad0000861f4d01";
+/// Solid Shadow, MX-era scalar props.
+const GUID_SOLID_SHADOW: &str = "b90c950e-64df-11d8-aaf2000a9582f7d4";
+/// Photoshop Live Effects Special Fill — the CS6 unified panel; each
+/// kind (dropShadow, innerShadow, outerGlow, innerGlow, solidFill, …)
+/// arrives as one `&`-packed string property.
+const GUID_LIVE_EFFECTS: &str = "8eeadf50-9efe-11da-a7460800200c9a66";
 
 /// One interpretable kernel step, in stack order.
 #[derive(Clone, Debug, PartialEq)]
@@ -159,6 +172,57 @@ pub enum KernelOp {
     SharpenMore,
     /// Convert to Alpha — luma-to-opacity stencil, no parameters.
     ConvertToAlpha,
+    /// Drop Shadow — silhouette blurred, offset opposite the light,
+    /// drawn under the source.
+    DropShadow {
+        /// `ShadowColor` (`#rrggbb[aa]`).
+        color: Rgba8,
+        /// `ShadowAngle`, degrees (light direction).
+        angle_degrees: f64,
+        /// `ShadowDistance` in pixels.
+        distance: u32,
+        /// `ShadowBlur` radius.
+        blur: u32,
+        /// `ShadowType` = 1 (knockout).
+        knockout: bool,
+    },
+    /// Inner Shadow — inverted silhouette blurred, offset, clipped to
+    /// the object, drawn over it.
+    InnerShadow {
+        /// `ShadowColor`.
+        color: Rgba8,
+        /// `ShadowAngle`, degrees.
+        angle_degrees: f64,
+        /// `ShadowDistance` in pixels.
+        distance: u32,
+        /// `ShadowBlur` radius.
+        blur: u32,
+    },
+    /// Solid Shadow — the silhouette colorized flat.
+    SolidShadow {
+        /// `ShadowColor`.
+        color: Rgba8,
+        /// `ShowObject` (source stays visible on top).
+        show_object: bool,
+    },
+    /// Outer Glow — concentric silhouette halo.
+    OuterGlow {
+        /// `ShadowColor`.
+        color: Rgba8,
+        /// `GlowWidth` blur radius.
+        blur: u32,
+        /// `EdgeThreshold` scaled to 0..255 (Glow uses 1 → 255).
+        edge_threshold: u8,
+    },
+    /// Inner Glow — concentric interior halo.
+    InnerGlow {
+        /// `ShadowColor`.
+        color: Rgba8,
+        /// `GlowWidth` blur radius.
+        blur: u32,
+        /// `EdgeThreshold` scaled to 0..255.
+        edge_threshold: u8,
+    },
     /// Add Noise with a stack-deterministic seed (no clocks, no
     /// randomness — the seed derives from the effect's own bytes, so
     /// journal replay and re-renders are bit-stable).
@@ -247,6 +311,26 @@ pub fn plan(stack: &[Effect]) -> Plan {
             Some(id) if id == GUID_SHARPEN => ops.push(KernelOp::Sharpen),
             Some(id) if id == GUID_SHARPEN_MORE => ops.push(KernelOp::SharpenMore),
             Some(id) if id == GUID_CONVERT_TO_ALPHA => ops.push(KernelOp::ConvertToAlpha),
+            Some(id) if id == GUID_DROP_SHADOW => match mx_drop_shadow(effect) {
+                Some(op) => ops.push(op),
+                None => skipped += 1,
+            },
+            Some(id) if id == GUID_INNER_SHADOW => match mx_inner_shadow(effect) {
+                Some(op) => ops.push(op),
+                None => skipped += 1,
+            },
+            Some(id) if id == GUID_INNER_GLOW => match mx_inner_glow(effect) {
+                Some(op) => ops.push(op),
+                None => skipped += 1,
+            },
+            Some(id) if id == GUID_SOLID_SHADOW => match mx_solid_shadow(effect) {
+                Some(op) => ops.push(op),
+                None => skipped += 1,
+            },
+            Some(id) if id == GUID_LIVE_EFFECTS => match live_effects(effect) {
+                Some(parsed) => ops.extend(parsed),
+                None => skipped += 1,
+            },
             // A GUID we do not recognize is never guessed at — CS6
             // files carry effect identities beyond our kernel catalog.
             Some(_) => skipped += 1,
@@ -322,6 +406,39 @@ pub fn apply_stack(mut surface: Surface, ops: &[KernelOp]) -> Surface {
             KernelOp::Sharpen => filters::sharpen(&surface),
             KernelOp::SharpenMore => filters::sharpen_more(&surface),
             KernelOp::ConvertToAlpha => filters::convert_to_alpha(&surface),
+            KernelOp::DropShadow {
+                color,
+                angle_degrees,
+                distance,
+                blur,
+                knockout,
+            } => filters::drop_shadow(
+                &surface,
+                *color,
+                *angle_degrees,
+                *distance,
+                *blur,
+                *knockout,
+            ),
+            KernelOp::InnerShadow {
+                color,
+                angle_degrees,
+                distance,
+                blur,
+            } => filters::inner_shadow(&surface, *color, *angle_degrees, *distance, *blur),
+            KernelOp::SolidShadow { color, show_object } => {
+                filters::solid_shadow(&surface, *color, *show_object)
+            }
+            KernelOp::OuterGlow {
+                color,
+                blur,
+                edge_threshold,
+            } => filters::outer_glow(&surface, *color, *blur, *edge_threshold),
+            KernelOp::InnerGlow {
+                color,
+                blur,
+                edge_threshold,
+            } => filters::inner_glow(&surface, *color, *blur, *edge_threshold),
         };
     }
     surface
@@ -383,6 +500,10 @@ fn by_name(effect: &Effect) -> Option<KernelOp> {
         "sharpen" => Some(KernelOp::Sharpen),
         "sharpenmore" => Some(KernelOp::SharpenMore),
         "converttoalpha" => Some(KernelOp::ConvertToAlpha),
+        "dropshadow" => mx_drop_shadow(effect),
+        "innershadow" => mx_inner_shadow(effect),
+        "innerglow" => mx_inner_glow(effect),
+        "solidshadow" => mx_solid_shadow(effect),
         _ => None,
     }
 }
@@ -477,6 +598,282 @@ fn blend_mode_code(code: f64) -> Option<BlendMode> {
         33 => Some(BlendMode::Exclusion),
         35 => Some(BlendMode::Difference),
         40 => Some(BlendMode::Overlay),
+        _ => None,
+    }
+}
+
+/// MX-era Drop Shadow: `ShadowColor` (`#rrggbb[aa]`), `ShadowAngle`
+/// (degrees), `ShadowBlur`, `ShadowDistance`, `ShadowType`
+/// (0 normal, 1 knockout). Angles normalize into the MX-era 0..360
+/// domain — a file carrying −135 means 225 (the same light), not
+/// "clamped to above".
+fn mx_drop_shadow(effect: &Effect) -> Option<KernelOp> {
+    let (color, angle, blur, distance) = mx_shadow_params(effect)?;
+    Some(KernelOp::DropShadow {
+        color,
+        angle_degrees: angle.rem_euclid(360.0),
+        distance: distance.round().clamp(0.0, 250.0) as u32,
+        blur: blur.round().clamp(0.0, 250.0) as u32,
+        knockout: prop_f64(effect, "ShadowType").unwrap_or(0.0) as i64 == 1,
+    })
+}
+
+/// MX-era Inner Shadow: the same scalar props, no knockout switch
+/// (the effect only exists inside the object).
+fn mx_inner_shadow(effect: &Effect) -> Option<KernelOp> {
+    let (color, angle, blur, distance) = mx_shadow_params(effect)?;
+    Some(KernelOp::InnerShadow {
+        color,
+        angle_degrees: angle.rem_euclid(360.0),
+        distance: distance.round().clamp(0.0, 250.0) as u32,
+        blur: blur.round().clamp(0.0, 250.0) as u32,
+    })
+}
+
+/// `ShadowColor` + `ShadowAngle` + `ShadowBlur` + `ShadowDistance`.
+fn mx_shadow_params(effect: &Effect) -> Option<(Rgba8, f64, f64, f64)> {
+    Some((
+        prop_color(effect, "ShadowColor")?,
+        prop_f64(effect, "ShadowAngle")?,
+        prop_f64(effect, "ShadowBlur")?,
+        prop_f64(effect, "ShadowDistance")?,
+    ))
+}
+
+/// MX-era Solid Shadow: `ShadowColor` + `ShowObject` (absent = shown).
+fn mx_solid_shadow(effect: &Effect) -> Option<KernelOp> {
+    let color = prop_color(effect, "ShadowColor")?;
+    let show_object = match prop_text(effect, "ShowObject") {
+        Some(text) => {
+            let text = text.trim().to_ascii_lowercase();
+            !(text == "0" || text == "false")
+        }
+        None => true,
+    };
+    Some(KernelOp::SolidShadow { color, show_object })
+}
+
+/// MX-era Inner Glow: `ShadowColor`, `GlowWidth`, and `EdgeThreshold`
+/// (the dictionary records Glow's own value at 1).
+fn mx_inner_glow(effect: &Effect) -> Option<KernelOp> {
+    let color = prop_color(effect, "ShadowColor")?;
+    let width = prop_f64(effect, "GlowWidth")?;
+    let threshold = prop_f64(effect, "EdgeThreshold").unwrap_or(1.0);
+    Some(KernelOp::InnerGlow {
+        color,
+        blur: width.round().clamp(0.0, 250.0) as u32,
+        edge_threshold: (threshold.clamp(0.0, 1.0) * 255.0).round() as u8,
+    })
+}
+
+/// The Photoshop Live Effects container: one effect whose properties
+/// carry a `&`-packed string per enabled kind. All-or-nothing — a kind
+/// we cannot interpret (bevel/emboss, satin, gradient/pattern fill,
+/// stroke) skips the whole container rather than half-rendering the
+/// stack; a malformed packed string does the same (a misread is not a
+/// shadow).
+fn live_effects(effect: &Effect) -> Option<Vec<KernelOp>> {
+    const UNINTERPRETED: &[&str] = &[
+        "bevelEmboss",
+        "satin",
+        "gradientFill",
+        "patternFill",
+        "stroke",
+    ];
+    for key in UNINTERPRETED {
+        if prop(effect, key).is_some() {
+            return None;
+        }
+    }
+    let mut ops = Vec::new();
+    if let Some(text) = prop_text(effect, "dropShadow") {
+        ops.push(packed_drop_shadow(text)?);
+    }
+    if let Some(text) = prop_text(effect, "innerShadow") {
+        ops.push(packed_inner_shadow(text)?);
+    }
+    if let Some(text) = prop_text(effect, "outerGlow") {
+        ops.push(packed_outer_glow(text)?);
+    }
+    if let Some(text) = prop_text(effect, "innerGlow") {
+        ops.push(packed_inner_glow(text)?);
+    }
+    if let Some(text) = prop_text(effect, "solidFill") {
+        ops.push(packed_solid_fill(text)?);
+    }
+    if ops.is_empty() { None } else { Some(ops) }
+}
+
+/// `dropShadow`/`innerShadow` packed fields (1-based dictionary
+/// numbering over the `&` split): 2 opacity, 4 angle, 7 size,
+/// 8 distance, 12 `RGBColor;r;g;b`. The dictionary labels field 8
+/// "always `0`" but its own example carries `74.000000` there — the
+/// positional read (Photoshop field order: distance after size) wins.
+/// Opacity bakes into the shadow color's alpha; field 5 (spread) and
+/// the packed blend token have no action at this layer and are pinned
+/// inert (recorded in the shadow module docs).
+fn packed_drop_shadow(text: &str) -> Option<KernelOp> {
+    let (color, angle, size, distance) = packed_shadow_fields(text)?;
+    Some(KernelOp::DropShadow {
+        color,
+        angle_degrees: angle.clamp(-180.0, 360.0),
+        distance: distance.round().clamp(0.0, 250.0) as u32,
+        blur: size.round().clamp(0.0, 250.0) as u32,
+        knockout: false,
+    })
+}
+
+/// `innerShadow` shares the dropShadow field shape.
+fn packed_inner_shadow(text: &str) -> Option<KernelOp> {
+    let (color, angle, size, distance) = packed_shadow_fields(text)?;
+    Some(KernelOp::InnerShadow {
+        color,
+        angle_degrees: angle.clamp(-180.0, 360.0),
+        distance: distance.round().clamp(0.0, 250.0) as u32,
+        blur: size.round().clamp(0.0, 250.0) as u32,
+    })
+}
+
+fn packed_shadow_fields(text: &str) -> Option<(Rgba8, f64, f64, f64)> {
+    let fields: Vec<&str> = text.split('&').collect();
+    let number = |at: usize| fields.get(at)?.trim().parse::<f64>().ok();
+    let mut color = packed_color(fields.get(11)?)?;
+    // Opacity (field 2) is the packed shadow's only alpha carrier —
+    // the RGBColor triplet has none — so it fades the color here.
+    let opacity = number(1)?.clamp(0.0, 100.0) / 100.0;
+    color.a = (opacity * f64::from(color.a)).round() as u8;
+    Some((color, number(3)?, number(6)?, number(7)?))
+}
+
+/// `outerGlow`/`innerGlow` packed fields: 3 blend token, 4 a
+/// `:`-packed number list (1 opacity, 3 size), 6 `RGBColor;r;g;b`,
+/// 9 technique token. Opacity bakes into the color's alpha; the
+/// undocumented numbers and tokens are pinned inert; the edge
+/// threshold stays soft (0).
+fn packed_outer_glow(text: &str) -> Option<KernelOp> {
+    let (color, size) = packed_glow_fields(text)?;
+    Some(KernelOp::OuterGlow {
+        color,
+        blur: size.round().clamp(0.0, 250.0) as u32,
+        edge_threshold: 0,
+    })
+}
+
+/// `innerGlow` shares the outerGlow field shape.
+fn packed_inner_glow(text: &str) -> Option<KernelOp> {
+    let (color, size) = packed_glow_fields(text)?;
+    Some(KernelOp::InnerGlow {
+        color,
+        blur: size.round().clamp(0.0, 250.0) as u32,
+        edge_threshold: 0,
+    })
+}
+
+/// Returns the opacity-faded color and the size.
+fn packed_glow_fields(text: &str) -> Option<(Rgba8, f64)> {
+    let fields: Vec<&str> = text.split('&').collect();
+    let numbers: Vec<f64> = fields
+        .get(3)?
+        .split(':')
+        .map(|part| part.trim().parse::<f64>())
+        .collect::<Result<_, _>>()
+        .ok()?;
+    let [r, g, b] = packed_rgb(fields.get(5)?)?;
+    let opacity = numbers.first()?.clamp(0.0, 100.0) / 100.0;
+    Some((
+        Rgba8::new(r, g, b, (opacity * 255.0).round() as u8),
+        *numbers.get(2)?,
+    ))
+}
+
+/// `solidFill` (Photoshop Color Overlay): 2 opacity, 3 blend token,
+/// 4 `RGBColor;r;g;b` — the one packed kind whose blend is
+/// representable (it blends against the object itself).
+fn packed_solid_fill(text: &str) -> Option<KernelOp> {
+    let fields: Vec<&str> = text.split('&').collect();
+    let opacity = fields.get(1)?.trim().parse::<f64>().ok()?;
+    let mode = blend_name(fields.get(2)?)?;
+    Some(KernelOp::ColorFill {
+        fill: packed_rgb(fields.get(3)?)?,
+        opacity: opacity.clamp(0.0, 100.0) as u32,
+        mode,
+    })
+}
+
+/// `RGBColor;<r>;<g>;<b>` with float channels.
+fn packed_color(text: &str) -> Option<Rgba8> {
+    let (r, g, b) = packed_rgb_channels(text)?;
+    Some(Rgba8::new(r, g, b, 255))
+}
+
+/// The same shape as `[u8; 3]` for the ColorFill op.
+fn packed_rgb(text: &str) -> Option<[u8; 3]> {
+    let (r, g, b) = packed_rgb_channels(text)?;
+    Some([r, g, b])
+}
+
+fn packed_rgb_channels(text: &str) -> Option<(u8, u8, u8)> {
+    let rest = text.trim().strip_prefix("RGBColor;")?;
+    let channel = |value: &str| {
+        value
+            .trim()
+            .parse::<f64>()
+            .ok()
+            .map(|f| f.round().clamp(0.0, 255.0) as u8)
+    };
+    let mut parts = rest.split(';');
+    Some((
+        channel(parts.next()?)?,
+        channel(parts.next()?)?,
+        channel(parts.next()?)?,
+    ))
+}
+
+/// Blend mode by packed-string name (lowercased alphanumerics, the
+/// observed spellings being `normal`, `multiply`, `screen`).
+fn blend_name(text: &str) -> Option<BlendMode> {
+    let name: String = text
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric())
+        .map(|c| c.to_ascii_lowercase())
+        .collect();
+    match name.as_str() {
+        "normal" => Some(BlendMode::Normal),
+        "multiply" => Some(BlendMode::Multiply),
+        "screen" => Some(BlendMode::Screen),
+        "overlay" => Some(BlendMode::Overlay),
+        "darken" => Some(BlendMode::Darken),
+        "lighten" => Some(BlendMode::Lighten),
+        "hardlight" => Some(BlendMode::HardLight),
+        "softlight" => Some(BlendMode::SoftLight),
+        "colordodge" => Some(BlendMode::ColorDodge),
+        "colorburn" => Some(BlendMode::ColorBurn),
+        "difference" => Some(BlendMode::Difference),
+        "exclusion" => Some(BlendMode::Exclusion),
+        "hue" => Some(BlendMode::Hue),
+        "saturation" => Some(BlendMode::Saturation),
+        "color" => Some(BlendMode::Color),
+        "luminosity" => Some(BlendMode::Luminosity),
+        _ => None,
+    }
+}
+
+/// `#rrggbb` or `#rrggbbaa` → [`Rgba8`] (6-digit form is opaque).
+fn prop_color(effect: &Effect, key: &str) -> Option<Rgba8> {
+    let hex = prop_text(effect, key)?;
+    let hex = hex.trim().trim_start_matches('#');
+    if !hex.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return None;
+    }
+    let channel = |at: usize| u8::from_str_radix(&hex[at..at + 2], 16).ok();
+    match hex.len() {
+        6 => Some(Rgba8::new(channel(0)?, channel(2)?, channel(4)?, 255)),
+        8 => Some(Rgba8::new(
+            channel(0)?,
+            channel(2)?,
+            channel(4)?,
+            channel(6)?,
+        )),
         _ => None,
     }
 }
@@ -868,11 +1265,75 @@ mod tests {
             ("sharpen", GUID_SHARPEN, vec![]),
             ("sharpenMore", GUID_SHARPEN_MORE, vec![]),
             ("convertToAlpha", GUID_CONVERT_TO_ALPHA, vec![]),
+            (
+                "dropShadow",
+                GUID_DROP_SHADOW,
+                vec![
+                    ("ShadowColor", "#00000080"),
+                    ("ShadowAngle", "90"),
+                    ("ShadowBlur", "4"),
+                    ("ShadowDistance", "7"),
+                    ("ShadowType", "0"),
+                ],
+            ),
+            (
+                "innerShadow",
+                GUID_INNER_SHADOW,
+                vec![
+                    ("ShadowColor", "#000000"),
+                    ("ShadowAngle", "135"),
+                    ("ShadowBlur", "2"),
+                    ("ShadowDistance", "3"),
+                ],
+            ),
+            (
+                "solidShadow",
+                GUID_SOLID_SHADOW,
+                vec![("ShadowColor", "#804000"), ("ShowObject", "true")],
+            ),
+            (
+                "innerGlow",
+                GUID_INNER_GLOW,
+                vec![
+                    ("ShadowColor", "#ffcc00"),
+                    ("GlowWidth", "3"),
+                    ("EdgeThreshold", "1"),
+                ],
+            ),
         ] {
             stack.push(guid_effect(name, guid, &props));
         }
+        // The unified panel's outer glow exists only as a packed kind
+        // inside the Live Effects container — one effect, three ops
+        // (the container carries the dictionary's own example strings).
+        let mut live = guid_effect("liveEffects", GUID_LIVE_EFFECTS, &[]);
+        live.properties.push(EffectProperty {
+            key: "dropShadow".to_owned(),
+            value: EffectValue::Text(
+                "0&75.000000&0&120.000000&0.000000&5.000000&5.000000&74.000000&0&1&multiply\
+                 &RGBColor;0.000000;0.000000;0.000000\
+                 &2$$0.000000;0.000000;1$255.000000;255.000000;1"
+                    .to_owned(),
+            ),
+        });
+        live.properties.push(EffectProperty {
+            key: "outerGlow".to_owned(),
+            value: EffectValue::Text(
+                "0&0&screen&75.000000:0.000000:5.000000:0.000000:0.000000:50.000000\
+                 &softMatte&RGBColor;255.000000;255.000000;189.996109&nogradient\
+                 &2$$0.000000;0.000000;1$255.000000;255.000000;1&edgeGlow"
+                    .to_owned(),
+            ),
+        });
+        live.properties.push(EffectProperty {
+            key: "solidFill".to_owned(),
+            value: EffectValue::Text(
+                "0&50.000000&normal&RGBColor;51.000000;102.000000;153.000000".to_owned(),
+            ),
+        });
+        stack.push(live);
         let plan = plan(&stack);
-        assert_eq!(plan.ops.len(), 19, "every enumerated effect interprets");
+        assert_eq!(plan.ops.len(), 26, "every enumerated effect interprets");
         assert_eq!(plan.skipped, 0, "the native surface never rides through");
     }
 
@@ -1147,5 +1608,259 @@ mod tests {
             -10,
         ));
         assert_eq!(via_stack.into_pixels(), direct.into_pixels());
+    }
+
+    #[test]
+    fn mx_shadow_scalars_parse_from_dictionary_props() {
+        // Drop Shadow: color alpha, angle, blur, distance; ShadowType 1
+        // is the knockout variant.
+        let shadow = guid_effect(
+            "dropShadow",
+            GUID_DROP_SHADOW,
+            &[
+                ("ShadowColor", "#ff000080"),
+                ("ShadowAngle", "90"),
+                ("ShadowBlur", "4"),
+                ("ShadowDistance", "7"),
+            ],
+        );
+        assert_eq!(
+            plan(std::slice::from_ref(&shadow)).ops,
+            vec![KernelOp::DropShadow {
+                color: Rgba8::new(255, 0, 0, 128),
+                angle_degrees: 90.0,
+                distance: 7,
+                blur: 4,
+                knockout: false,
+            }]
+        );
+        let mut knockout = shadow.clone();
+        knockout.properties.push(EffectProperty {
+            key: "ShadowType".to_owned(),
+            value: EffectValue::Text("1".to_owned()),
+        });
+        assert!(matches!(
+            plan(&[knockout]).ops[0],
+            KernelOp::DropShadow { knockout: true, .. }
+        ));
+        // Inner shadow shares the scalar shape (no knockout).
+        let inner = guid_effect(
+            "innerShadow",
+            GUID_INNER_SHADOW,
+            &[
+                ("ShadowColor", "#000000"),
+                ("ShadowAngle", "-135"),
+                ("ShadowBlur", "2"),
+                ("ShadowDistance", "3"),
+            ],
+        );
+        assert_eq!(
+            plan(&[inner]).ops,
+            vec![KernelOp::InnerShadow {
+                color: Rgba8::new(0, 0, 0, 255),
+                angle_degrees: 225.0,
+                distance: 3,
+                blur: 2,
+            }]
+        );
+    }
+
+    #[test]
+    fn solid_shadow_show_object_toggles_replacement() {
+        let shown = guid_effect(
+            "solidShadow",
+            GUID_SOLID_SHADOW,
+            &[("ShadowColor", "#804000"), ("ShowObject", "true")],
+        );
+        let hidden = guid_effect(
+            "solidShadow",
+            GUID_SOLID_SHADOW,
+            &[("ShadowColor", "#804000"), ("ShowObject", "0")],
+        );
+        let absent = guid_effect(
+            "solidShadow",
+            GUID_SOLID_SHADOW,
+            &[("ShadowColor", "#804000")],
+        );
+        assert!(matches!(
+            plan(std::slice::from_ref(&shown)).ops[0],
+            KernelOp::SolidShadow {
+                show_object: true,
+                ..
+            }
+        ));
+        assert!(matches!(
+            plan(std::slice::from_ref(&hidden)).ops[0],
+            KernelOp::SolidShadow {
+                show_object: false,
+                ..
+            }
+        ));
+        // Absent means the object stays (the dictionary's default).
+        assert_eq!(
+            plan(std::slice::from_ref(&absent)).ops,
+            plan(std::slice::from_ref(&shown)).ops
+        );
+    }
+
+    #[test]
+    fn inner_glow_threshold_scales_to_alpha_units() {
+        let glow = guid_effect(
+            "innerGlow",
+            GUID_INNER_GLOW,
+            &[
+                ("ShadowColor", "#ffcc00"),
+                ("GlowWidth", "3"),
+                ("EdgeThreshold", "0.5"),
+            ],
+        );
+        assert_eq!(
+            plan(&[glow]).ops,
+            vec![KernelOp::InnerGlow {
+                color: Rgba8::new(255, 204, 0, 255),
+                blur: 3,
+                edge_threshold: 128,
+            }]
+        );
+        // The threshold is optional (the dictionary records Glow at 1).
+        let bare = guid_effect(
+            "innerGlow",
+            GUID_INNER_GLOW,
+            &[("ShadowColor", "#ffcc00"), ("GlowWidth", "3")],
+        );
+        assert!(matches!(
+            plan(&[bare]).ops[0],
+            KernelOp::InnerGlow {
+                edge_threshold: 255,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn packed_container_parses_kinds_and_skips_whole_on_exotics() {
+        // dropShadow + outerGlow + solidFill in one container: three
+        // ops, the dictionary's own example strings.
+        let mut live = guid_effect("liveEffects", GUID_LIVE_EFFECTS, &[]);
+        let packed = [
+            (
+                "dropShadow",
+                "0&75.000000&0&120.000000&0.000000&5.000000&5.000000&74.000000&0&1&multiply&RGBColor;0.000000;0.000000;0.000000&2$$0.000000;0.000000;1$255.000000;255.000000;1",
+            ),
+            (
+                "outerGlow",
+                "0&0&screen&75.000000:0.000000:5.000000:0.000000:0.000000:50.000000&softMatte&RGBColor;255.000000;255.000000;189.996109&nogradient&2$$0.000000;0.000000;1$255.000000;255.000000;1&edgeGlow",
+            ),
+            (
+                "solidFill",
+                "0&50.000000&normal&RGBColor;51.000000;102.000000;153.000000",
+            ),
+        ];
+        for (key, text) in packed {
+            live.properties.push(EffectProperty {
+                key: key.to_owned(),
+                value: EffectValue::Text(text.to_owned()),
+            });
+        }
+        let ops = plan(&[live.clone()]).ops;
+        assert_eq!(ops.len(), 3, "three packed kinds → three ops");
+        // Packed opacity (75) fades the color; distance rides the
+        // field the dictionary labels "always 0" but its example
+        // carries 74 in.
+        assert_eq!(
+            ops[0],
+            KernelOp::DropShadow {
+                color: Rgba8::new(0, 0, 0, 191),
+                angle_degrees: 120.0,
+                distance: 74,
+                blur: 5,
+                knockout: false,
+            }
+        );
+        assert_eq!(
+            ops[1],
+            KernelOp::OuterGlow {
+                color: Rgba8::new(255, 255, 190, 191),
+                blur: 5,
+                edge_threshold: 0,
+            }
+        );
+        // solidFill is the one packed kind whose blend is
+        // representable — it lands on the existing ColorFill op.
+        assert_eq!(
+            ops[2],
+            KernelOp::ColorFill {
+                fill: [51, 102, 153],
+                opacity: 50,
+                mode: BlendMode::Normal,
+            }
+        );
+        // Any uninterpretable kind (bevel until task 3b, satin, the
+        // fills, stroke) skips the WHOLE container — never half a
+        // stack.
+        for exotic in [
+            "bevelEmboss",
+            "satin",
+            "gradientFill",
+            "patternFill",
+            "stroke",
+        ] {
+            let mut guarded = live.clone();
+            guarded.properties.push(EffectProperty {
+                key: exotic.to_owned(),
+                value: EffectValue::Text("0&0".to_owned()),
+            });
+            let planned = plan(&[guarded]);
+            assert!(planned.ops.is_empty(), "{exotic} must skip the container");
+            assert_eq!(planned.skipped, 1);
+        }
+        // A malformed packed string does the same (a misread is not a
+        // shadow).
+        let mut broken = guid_effect("liveEffects", GUID_LIVE_EFFECTS, &[]);
+        broken.properties.push(EffectProperty {
+            key: "innerGlow".to_owned(),
+            value: EffectValue::Text("not&numbers".to_owned()),
+        });
+        let planned = plan(&[broken]);
+        assert!(planned.ops.is_empty());
+        assert_eq!(planned.skipped, 1);
+    }
+
+    #[test]
+    fn prop_color_reads_six_and_eight_digit_hex() {
+        let six = guid_effect(
+            "solidShadow",
+            GUID_SOLID_SHADOW,
+            &[("ShadowColor", "#804000")],
+        );
+        assert!(matches!(
+            plan(&[six]).ops[0],
+            KernelOp::SolidShadow {
+                color: Rgba8 {
+                    r: 128,
+                    g: 64,
+                    b: 0,
+                    a: 255
+                },
+                ..
+            }
+        ));
+        let eight = guid_effect(
+            "solidShadow",
+            GUID_SOLID_SHADOW,
+            &[("ShadowColor", "#10203040")],
+        );
+        assert!(matches!(
+            plan(&[eight]).ops[0],
+            KernelOp::SolidShadow {
+                color: Rgba8 {
+                    r: 16,
+                    g: 32,
+                    b: 48,
+                    a: 64
+                },
+                ..
+            }
+        ));
     }
 }

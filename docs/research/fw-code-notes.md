@@ -234,6 +234,13 @@ Shadow/glow/emboss — two encodings, one semantic family:
   bevel style/stamp variants); `innerShadow` shares the dropShadow
   shape, `innerGlow`/`outerGlow` the glow shape (glow width, start
   distance, matte, gradient flag, `edgeGlow`/`centerGlow`).
+  **Dictionary field lists are misaligned with the examples**: the
+  dropShadow list says field 8 is "always `0`" while its own example
+  carries `74.000000` there — the positional read (Photoshop field
+  order: distance after size) wins, and the interpretive layer
+  records this. Packed opacity (field 2; glow number 1) is the
+  packed color's only alpha carrier — `RGBColor` triplets have no
+  alpha — so it fades the color at parse time.
 - **MX-era native effects** (still shipped in CS6's menu): Drop Shadow
   `a7944db8-6ce2-11d1-…`, Inner Shadow `5600f702-774c-11d3-…`,
   Inner Glow `2ba87123-8220-11d3-…`, Bevel `7fe61102-6ce2-11d1-…`,
@@ -242,10 +249,26 @@ Shadow/glow/emboss — two encodings, one semantic family:
   `GlowWidth/GlowStartDistance`, `LightAngle/LightDistance`,
   `BevelWidth/BevelContrast/BevelType`, `EmbossFaceColor`,
   `HiliteColor`, `OuterBevelColor`, `SlopeMultiplier/SlopeType`,
-  `ShowObject`.
+  `ShowObject`. There is **no MX-era outer-glow effect** — outer glow
+  exists only as a packed kind inside the unified panel.
 
-All of the family is **M14** (compose currently skips every row), as
-composites over the proven blur/blend pieces — not new pixel math.
+Interpreted since the M14 composite pass (compose `effects.rs` +
+`filters::shadow`): drop/inner shadow (MX-era scalars and packed
+strings both), solid shadow (`ShowObject` absent = shown), outer/inner
+glow (packed; `EdgeThreshold` defaults soft at 0 in the packed form,
+1 in the MX-era inner glow per the dictionary). Substitutions pinned
+in `filters/src/shadow.rs`: the silhouette blur is the proven box
+blur (CS6's shadow kernel unobserved); shadow angles point where the
+LIGHT is and offsets run `(−d·cos θ, +d·sin θ)` y-down; packed blend
+tokens (multiply/screen) are consumed but applied nowhere — mid-stack
+a shadow can only composite against its source; the packed spread
+field and the undocumented glow numbers are inert. The container is
+all-or-nothing: any uninterpreted kind (bevel/emboss until task 3b,
+satin, gradient/pattern fill, stroke) or a malformed packed string
+skips the whole container. `solidFill` is the one packed kind whose
+blend is representable and lands on the existing ColorFill op.
+Remaining **M14** in the family: Bevel `7fe61102-…` (task 3b —
+gradient-lighting math, `BevelType` 0..4 picks the variant).
 
 Plugin gallery (passed through by design, each recorded here so a
 future GUID hit is a lookup, not a puzzle): the Fireworks MX

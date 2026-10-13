@@ -21,6 +21,7 @@ mod convolve;
 mod geometric;
 mod noise;
 mod point;
+mod shadow;
 
 pub use convolve::{
     box_blur, emboss, find_edges, gaussian_blur, sharpen, sharpen_more, unsharp_mask,
@@ -32,6 +33,7 @@ pub use point::{
     CurvesKnots, apply_lut, auto_levels, brightness_contrast, convert_to_alpha, curves, hsl,
     invert, levels, posterize, solid_fill, threshold,
 };
+pub use shadow::{drop_shadow, inner_glow, inner_shadow, outer_glow, solid_shadow};
 
 use color::Rgba8;
 use color::pixel::{premultiply, unpremultiply};

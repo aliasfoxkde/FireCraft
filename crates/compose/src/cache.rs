@@ -241,6 +241,57 @@ fn hash_plan(h: &mut Hasher, plan: &Plan) {
                 h.bool(*monochrome);
             }
             KernelOp::FindEdges => h.tag(b"FE"),
+            KernelOp::DropShadow {
+                color,
+                angle_degrees,
+                distance,
+                blur,
+                knockout,
+            } => {
+                h.tag(b"DS");
+                h.bytes(&[color.r, color.g, color.b, color.a]);
+                h.f64(*angle_degrees);
+                h.u32(*distance);
+                h.u32(*blur);
+                h.bool(*knockout);
+            }
+            KernelOp::InnerShadow {
+                color,
+                angle_degrees,
+                distance,
+                blur,
+            } => {
+                h.tag(b"IS");
+                h.bytes(&[color.r, color.g, color.b, color.a]);
+                h.f64(*angle_degrees);
+                h.u32(*distance);
+                h.u32(*blur);
+            }
+            KernelOp::SolidShadow { color, show_object } => {
+                h.tag(b"SS");
+                h.bytes(&[color.r, color.g, color.b, color.a]);
+                h.bool(*show_object);
+            }
+            KernelOp::OuterGlow {
+                color,
+                blur,
+                edge_threshold,
+            } => {
+                h.tag(b"OG");
+                h.bytes(&[color.r, color.g, color.b, color.a]);
+                h.u32(*blur);
+                h.u8(*edge_threshold);
+            }
+            KernelOp::InnerGlow {
+                color,
+                blur,
+                edge_threshold,
+            } => {
+                h.tag(b"IG");
+                h.bytes(&[color.r, color.g, color.b, color.a]);
+                h.u32(*blur);
+                h.u8(*edge_threshold);
+            }
         }
     }
 }
@@ -285,6 +336,10 @@ impl Hasher {
 
     fn u64(&mut self, value: u64) {
         self.bytes(&value.to_le_bytes());
+    }
+
+    fn u8(&mut self, value: u8) {
+        self.bytes(&[value]);
     }
 
     fn i32(&mut self, value: i32) {
