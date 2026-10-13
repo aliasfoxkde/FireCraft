@@ -198,6 +198,9 @@ below takes each subsystem from "works" to "matches the original" with
 the same gate discipline. Details stay unwritten until predecessors land.
 
 ## M14 — Live-filter parity
+
+Ticket: [M14-live-filters.md](M14-live-filters.md).
+
 Every CS6 live-filter family at parameter-exact behavior, grounded in the
 M13 filter-pipeline pass and Wine-oracle goldens (`.jsf` batch → golden
 renders): full Adjust Color set, complete blur family, shadow/glow/bevel
@@ -205,6 +208,9 @@ families, stylize, sharpen, noise. **Gate:** unknown-effect GUID
 passthrough floor falls to zero; per-filter goldens green.
 
 ## M15 — Tool-surface parity
+
+Ticket: [M15-tool-surface.md](M15-tool-surface.md).
+
 Complete tool semantics per the extracted tables: full marquee/lasso/wand
 selection model (modifier arithmetic, feather, edges), brush/eraser/
 retouch engine depth, path redraw/freeform/reshape/scrubber, gradients,
