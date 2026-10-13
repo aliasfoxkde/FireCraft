@@ -11,6 +11,7 @@
 
 use doc::{Document, ObjectData, ObjectId, SelectionMask};
 
+use super::retouch::{BrushOptionsPayload, brush_of, strength_of};
 use crate::access;
 use crate::bitmap::{gather, scatter, touched_tiles};
 use crate::command::TypedCommand;
@@ -33,6 +34,8 @@ pub(crate) fn install(registry: &mut CommandRegistry) -> Result<(), EngineError>
     registry.register(SelectNone)?;
     registry.register(Fill)?;
     registry.register(Erase)?;
+    registry.register(BrushPaint)?;
+    registry.register(Pencil)?;
     registry.register(MovePixels)
 }
 
@@ -582,6 +585,184 @@ impl TypedCommand for Erase {
     }
 }
 
+/// One paint dab's inputs: the validated stamp plus its strength,
+/// pressure, and straight-RGBA color.
+struct PaintDab {
+    brush: crate::brush::Brush,
+    strength: u32,
+    pressure: u32,
+    color: [u8; 4],
+}
+
+/// Shared paint fold: stamp the dab over the image, scaled by
+/// strength × pressure × mask coverage.
+fn paint_dab(
+    pixels: &mut [u8],
+    size: (u32, u32),
+    mask: &SelectionMask,
+    dab: &PaintDab,
+    name: &'static str,
+) -> Result<(), EngineError> {
+    for py in 0..size.1 {
+        for px in 0..size.0 {
+            let index = py as usize * size.0 as usize + px as usize;
+            let eff = dab
+                .brush
+                .effect(px, py, dab.strength, dab.pressure, mask.alpha[index]);
+            if eff == 0 {
+                continue;
+            }
+            let mut pixel: [u8; 4] = pixels[index * 4..index * 4 + 4].try_into().map_err(|_| {
+                EngineError::InvalidState {
+                    name: name.to_owned(),
+                    detail: "flat buffer shorter than its mask".to_owned(),
+                }
+            })?;
+            blend_pixel(&mut pixel, dab.color, eff);
+            pixels[index * 4..index * 4 + 4].copy_from_slice(&pixel);
+        }
+    }
+    Ok(())
+}
+
+/// Decodes the ARGB raw int the fill/paint payloads carry (the low 32
+/// bits are the color, however the file signed them).
+fn argb_color(color_raw: i64) -> [u8; 4] {
+    let argb = color_raw as u32;
+    [
+        ((argb >> 16) & 0xFF) as u8,
+        ((argb >> 8) & 0xFF) as u8,
+        (argb & 0xFF) as u8,
+        ((argb >> 24) & 0xFF) as u8,
+    ]
+}
+
+/// `bitmap.brush` — paint a brush dab: the Edit Brush dialog's slots
+/// (Size diameter, Edge softness, Shape round/square, Aspect, Angle)
+/// plus the per-dab Sensitivity pressure, over the M7 integer-exact
+/// stamp. A stroke is a journal of dabs.
+struct BrushPaint;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct BrushPaintPayload {
+    /// Target image.
+    id: ObjectId,
+    /// Brush center in image pixel coordinates.
+    x: f64,
+    y: f64,
+    /// Brush diameter in pixels (the dialog's Size slot), 1..=1024.
+    size: u32,
+    /// Paint color as ARGB raw int (same convention as
+    /// `bitmap.fill`).
+    color_raw: i64,
+    /// Effect strength percent (1..=100); default 100.
+    #[serde(default)]
+    strength: Option<u8>,
+    /// The dialog's Edge/Shape/Aspect/Angle/Pressure slots, all
+    /// defaulted.
+    #[serde(default)]
+    brush: BrushOptionsPayload,
+}
+
+impl TypedCommand for BrushPaint {
+    type Payload = BrushPaintPayload;
+
+    fn name(&self) -> &'static str {
+        "bitmap.brush"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "bitmap.brush";
+        let options = brush_of(NAME, payload.x, payload.y, payload.size, &payload.brush)?;
+        let strength = strength_of(NAME, payload.strength.unwrap_or(100))?;
+        let color = argb_color(payload.color_raw);
+        let dab = PaintDab {
+            brush: options.brush,
+            strength,
+            pressure: options.pressure,
+            color,
+        };
+        masked_pixel_edit(document, NAME, payload.id, |pixels, size, mask| {
+            paint_dab(pixels, size, mask, &dab, NAME)
+        })
+    }
+}
+
+/// `bitmap.pencil` — the hard one-pixel dab: no size/edge/shape slots
+/// (the pencil is definitionally a hard single-pixel stamp), only the
+/// per-dab pressure.
+struct Pencil;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct PencilPayload {
+    /// Target image.
+    id: ObjectId,
+    /// The dab point in image pixel coordinates.
+    x: f64,
+    y: f64,
+    /// Pencil color as ARGB raw int.
+    color_raw: i64,
+    /// Effect strength percent (1..=100); default 100.
+    #[serde(default)]
+    strength: Option<u8>,
+    /// Per-dab sensitivity percent 1..=100; default 100.
+    #[serde(default)]
+    pressure: Option<u8>,
+}
+
+impl TypedCommand for Pencil {
+    type Payload = PencilPayload;
+
+    fn name(&self) -> &'static str {
+        "bitmap.pencil"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "bitmap.pencil";
+        let options = brush_of(
+            NAME,
+            payload.x,
+            payload.y,
+            1,
+            &BrushOptionsPayload {
+                edge: Some(0),
+                ..BrushOptionsPayload::default()
+            },
+        )?;
+        let strength = strength_of(NAME, payload.strength.unwrap_or(100))?;
+        let pressure = match payload.pressure {
+            Some(0) => {
+                return Err(EngineError::BadPayload {
+                    name: NAME.to_owned(),
+                    detail: "brush pressure 0 would be a no-op".to_owned(),
+                });
+            }
+            Some(value) => u32::from(value),
+            None => 100,
+        };
+        let color = argb_color(payload.color_raw);
+        let dab = PaintDab {
+            brush: options.brush,
+            strength,
+            pressure,
+            color,
+        };
+        masked_pixel_edit(document, NAME, payload.id, |pixels, size, mask| {
+            paint_dab(pixels, size, mask, &dab, NAME)
+        })
+    }
+}
+
 /// `bitmap.movePixels` — translate the masked block by `(dx, dy)`;
 /// sources clear, destinations overwrite, edges clip. Coverage ≥ 128
 /// counts as moved (a feathered edge does not split a pixel in half).
@@ -858,6 +1039,230 @@ mod tests {
 
         delta.apply_inverse(&mut document).unwrap();
         assert!(document.selection.is_none(), "undo takes the polygon back");
+    }
+
+    #[test]
+    fn brush_paints_a_hard_dab_and_undo_is_byte_exact() {
+        let (mut document, image) = checker_document();
+        // Blank the checker so the dab reads clean.
+        let mut blank = document.tiles.get(0).cloned().unwrap();
+        blank
+            .pixels_mut()
+            .copy_from_slice(&[0u8; raster::TILE_BYTES]);
+        document.tiles.insert(0, blank);
+
+        let before = serde_json::to_vec(&document).unwrap();
+        let delta = BrushPaint
+            .apply_json(
+                &mut document,
+                json!({
+                    "id": image, "x": 2.0, "y": 2.0, "size": 4,
+                    "color_raw": 0xFFFF0000u64 as i64,
+                    "brush": { "edge": 0 }
+                }),
+            )
+            .unwrap();
+        // Center (2,1): distance 1.12 < radius 2 — full paint red
+        // (ARGB 0xFF0000FF = r 255 g 0 b 0 a 255).
+        assert_eq!(flat_pixel(&document, 2, 1), [255, 0, 0, 255]);
+        // Corner (0,0): offset (-1.5,-1.5), distance 2.12 > 2 —
+        // untouched.
+        assert_eq!(flat_pixel(&document, 0, 0), [0, 0, 0, 0]);
+        delta.apply_inverse(&mut document).unwrap();
+        assert_eq!(
+            serde_json::to_vec(&document).unwrap(),
+            before,
+            "undo restores the pre-dab bytes exactly"
+        );
+    }
+
+    #[test]
+    fn brush_edge_softens_and_square_reaches_the_corner() {
+        let (mut document, image) = checker_document();
+        // Center (1.3, 1.3), size 6 (radius 3): pixel (2,2) sits in
+        // the falloff band (offset 1.2,1.2 → d 0.57) and pixel (3,3)
+        // sits outside the circle (offset 2.2,2.2 → d 1.04) but
+        // inside the square's Chebyshev rim (0.73).
+        let mut blank = document.tiles.get(0).cloned().unwrap();
+        blank
+            .pixels_mut()
+            .copy_from_slice(&[0u8; raster::TILE_BYTES]);
+        document.tiles.insert(0, blank);
+        BrushPaint
+            .apply_json(
+                &mut document,
+                json!({
+                    "id": image, "x": 1.3, "y": 1.3, "size": 6,
+                    "color_raw": 0xFFFF0000u64 as i64,
+                    "brush": { "edge": 0 }
+                }),
+            )
+            .unwrap();
+        assert_eq!(
+            flat_pixel(&document, 2, 2),
+            [255, 0, 0, 255],
+            "edge 0 replaces"
+        );
+        assert_eq!(
+            flat_pixel(&document, 3, 3),
+            [0, 0, 0, 0],
+            "the round rim misses"
+        );
+
+        let mut blank = document.tiles.get(0).cloned().unwrap();
+        blank
+            .pixels_mut()
+            .copy_from_slice(&[0u8; raster::TILE_BYTES]);
+        document.tiles.insert(0, blank);
+        BrushPaint
+            .apply_json(
+                &mut document,
+                json!({
+                    "id": image, "x": 1.3, "y": 1.3, "size": 6,
+                    "color_raw": 0xFFFF0000u64 as i64,
+                    "brush": { "edge": 100 }
+                }),
+            )
+            .unwrap();
+        assert_ne!(
+            flat_pixel(&document, 2, 2),
+            [255, 0, 0, 255],
+            "edge 100 blends at the same pixel"
+        );
+
+        let mut blank = document.tiles.get(0).cloned().unwrap();
+        blank
+            .pixels_mut()
+            .copy_from_slice(&[0u8; raster::TILE_BYTES]);
+        document.tiles.insert(0, blank);
+        BrushPaint
+            .apply_json(
+                &mut document,
+                json!({
+                    "id": image, "x": 1.3, "y": 1.3, "size": 6,
+                    "color_raw": 0xFFFF0000u64 as i64,
+                    "brush": { "edge": 0, "shape": "square" }
+                }),
+            )
+            .unwrap();
+        assert_eq!(
+            flat_pixel(&document, 3, 3),
+            [255, 0, 0, 255],
+            "the square shape reaches the corner"
+        );
+    }
+
+    #[test]
+    fn brush_strength_pressure_and_aspect_scale_the_dab() {
+        let (mut document, image) = checker_document();
+        let mut blank = document.tiles.get(0).cloned().unwrap();
+        blank
+            .pixels_mut()
+            .copy_from_slice(&[0u8; raster::TILE_BYTES]);
+        document.tiles.insert(0, blank);
+        // Quarter effect: strength 50 x pressure 50 over full
+        // coverage — straight alpha 255 -> 64.
+        BrushPaint
+            .apply_json(
+                &mut document,
+                json!({
+                    "id": image, "x": 2.0, "y": 2.0, "size": 4,
+                    "color_raw": 0xFFFF0000u64 as i64,
+                    "strength": 50,
+                    "brush": { "edge": 0, "pressure": 50 }
+                }),
+            )
+            .unwrap();
+        // Premultiplied read: the tile keeps straight RGBA here, so
+        // the probe sees the blended alpha directly.
+        assert_eq!(flat_pixel(&document, 2, 1)[3], 64);
+
+        // Aspect 50 turns the same dab into a horizontal streak: the
+        // pixel one step up at half radius drops out.
+        let mut blank = document.tiles.get(0).cloned().unwrap();
+        blank
+            .pixels_mut()
+            .copy_from_slice(&[0u8; raster::TILE_BYTES]);
+        document.tiles.insert(0, blank);
+        BrushPaint
+            .apply_json(
+                &mut document,
+                json!({
+                    "id": image, "x": 2.0, "y": 2.0, "size": 4,
+                    "color_raw": 0xFFFF0000u64 as i64,
+                    "brush": { "edge": 0, "aspect": 50 }
+                }),
+            )
+            .unwrap();
+        assert_eq!(flat_pixel(&document, 2, 1)[3], 255, "the wide axis holds");
+        assert_eq!(flat_pixel(&document, 2, 3)[3], 0, "the squeezed axis drops");
+    }
+
+    #[test]
+    fn pencil_stamps_one_pixel() {
+        let (mut document, image) = checker_document();
+        let mut blank = document.tiles.get(0).cloned().unwrap();
+        blank
+            .pixels_mut()
+            .copy_from_slice(&[0u8; raster::TILE_BYTES]);
+        document.tiles.insert(0, blank);
+        Pencil
+            .apply_json(
+                &mut document,
+                json!({ "id": image, "x": 1.4, "y": 2.6, "color_raw": 0xFF00FF00u64 as i64 }),
+            )
+            .unwrap();
+        // Exactly the pixel containing the point; neighbors untouched.
+        assert_eq!(flat_pixel(&document, 1, 2), [0, 255, 0, 255]);
+        assert_eq!(flat_pixel(&document, 0, 2), [0, 0, 0, 0]);
+        assert_eq!(flat_pixel(&document, 2, 2), [0, 0, 0, 0]);
+        assert_eq!(flat_pixel(&document, 1, 1), [0, 0, 0, 0]);
+        assert_eq!(flat_pixel(&document, 1, 3), [0, 0, 0, 0]);
+    }
+
+    #[test]
+    fn paint_refusals_leave_pixels_untouched() {
+        let (mut document, image) = checker_document();
+        let before = serde_json::to_vec(&document).unwrap();
+        for payload in [
+            json!({ "id": image, "x": 2.0, "y": 2.0, "size": 0, "color_raw": 0 }),
+            json!({ "id": image, "x": 2.0, "y": 2.0, "size": 1025, "color_raw": 0 }),
+            json!({ "id": image, "x": 2.0, "y": 2.0, "size": 4, "color_raw": 0,
+                    "brush": { "edge": 101 } }),
+            json!({ "id": image, "x": 2.0, "y": 2.0, "size": 4, "color_raw": 0,
+                    "brush": { "aspect": 0 } }),
+            json!({ "id": image, "x": 2.0, "y": 2.0, "size": 4, "color_raw": 0,
+                    "brush": { "pressure": 0 } }),
+            json!({ "id": image, "x": 2.0, "y": 2.0, "size": 4, "color_raw": 0,
+                    "brush": { "shape": "tri" } }),
+            json!({ "id": image, "x": 2.0, "y": 2.0, "size": 4, "color_raw": 0,
+                    "strength": 0 }),
+            json!({ "id": image, "x": 1.0, "y": 2.0, "color_raw": 0, "pressure": 0 }),
+        ] {
+            let command = if payload.get("size").is_some() {
+                "bitmap.brush"
+            } else {
+                "bitmap.pencil"
+            };
+            let error = BrushPaint
+                .apply_json(&mut document, payload.clone())
+                .err()
+                .or_else(|| Pencil.apply_json(&mut document, payload.clone()).err());
+            let error = error.unwrap_or_else(|| panic!("{command} should refuse {payload}"));
+            assert!(
+                matches!(
+                    error,
+                    crate::error::EngineError::BadPayload { .. }
+                        | crate::error::EngineError::InvalidState { .. }
+                ),
+                "{error}"
+            );
+        }
+        assert_eq!(
+            serde_json::to_vec(&document).unwrap(),
+            before,
+            "refused dabs change nothing"
+        );
     }
 
     #[test]

@@ -362,10 +362,10 @@ expose it: `getSelection`, `moveSelectionMaskBy`, `saveSelection` /
 
 | Tool | RTTI class(es) | Keymap | Params | Status |
 |---|---|---|---|---|
-| Marquee | `CMarqueeTool` (+Quad3), `CMarqueeHandler`, `CMarqueeCursor` | (vk `M` slot, unnamed GUID) | `DIALOG 14060`: "Live marquee", "Edge:" (live edge softness) | headless (`bitmap.selectRect`) — no shell tool, no combine modes |
-| Oval Marquee | `COvalMarqueeTool` | — | same dialog | headless (`bitmap.selectEllipse`) |
-| Lasso | `CLassoTool` (+Quad3) | (second `L` slot) | edge softness | headless (`bitmap.selectLasso`) |
-| Polygon Lasso | `CPolyLassoTool` | — | DOM `polygonLasso` | missing |
+| Marquee | `CMarqueeTool` (+Quad3), `CMarqueeHandler`, `CMarqueeCursor` | (vk `M` slot, unnamed GUID) | `DIALOG 14060`: "Live marquee", "Edge:" (live edge softness) | headless (`bitmap.selectRect`, replace/add/subtract/intersect; no shell tool) |
+| Oval Marquee | `COvalMarqueeTool` | — | same dialog | headless (`bitmap.selectEllipse`, combine modes) |
+| Lasso | `CLassoTool` (+Quad3) | (second `L` slot) | edge softness | headless (`bitmap.selectLasso`, combine modes) |
+| Polygon Lasso | `CPolyLassoTool` | — | DOM `polygonLasso` | headless (`bitmap.selectPolygon`) |
 | Magic Wand | `CWandTool` (+Quad3) | — | DOM `magicWand` (tolerance/contiguous slots; defaults need the options pass) | headless (`bitmap.selectWand`) |
 | Crop | `CCropMarqueeTool`, `CCropDocumentTool`, `CCropImageTool`, `CCropExportTool` | (vk `C` slot) | DOM `cropSelection` | missing |
 
@@ -374,12 +374,17 @@ Bitmap paint and retouch — all brush-based (the brush engine:
 `CDbBrushRuntimeParms`, `CBrushToolQuad3/4`; the Edit Brush dialog
 family `CEditBrushDialog` + `CEditBrushOptionsTab` / `ShapeTab` /
 `SensitivityTab`; `DIALOG 5964` fields Shape/Size/Edge/Aspect/Angle/
-Square; DOM `brushColor` / `brushPlacement` / `brushTexture`):
+Square; DOM `brushColor` / `brushPlacement` / `brushTexture`). M15:
+the dialog slots are one payload bundle (`edge`/`shape`/`aspect`/
+`angle`/`pressure`, defaults = the M7 half-radius falloff) shared by
+every brush-based command, stamped through the integer-exact
+`engine/src/brush.rs` footprint — `bitmap.brush`/`bitmap.pencil`
+paint with it, the five `retouch.*` tools take it:
 
 | Tool | RTTI class(es) | Status |
 |---|---|---|
-| Brush | `CBrushBasedBitmapTool` + the engine above | missing (M7 stamp kernels are the substrate) |
-| Pencil | `CPencilTool` (+Quad3) | missing |
+| Brush | `CBrushBasedBitmapTool` + the engine above | headless (`bitmap.brush` — Size/Edge/Shape/Aspect/Angle/Pressure payload) |
+| Pencil | `CPencilTool` (+Quad3) | headless (`bitmap.pencil` — hard one-pixel dab, per-dab pressure) |
 | Eraser | `CEraserTool` (+Quad3) | headless (`retouch.eraser`) |
 | Blur | `CBlurTool` (+Quad3) | headless (`retouch.blur`) |
 | Sharpen | `CSharpenTool` (+Quad3) | headless (kernel shared with filters) |

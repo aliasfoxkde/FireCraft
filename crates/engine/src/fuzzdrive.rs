@@ -481,6 +481,8 @@ pub const CALLS: &[&str] = &[
     "bitmap.selectNone",
     "bitmap.fill",
     "bitmap.erase",
+    "bitmap.brush",
+    "bitmap.pencil",
     "bitmap.movePixels",
     "retouch.blur",
     "retouch.smudge",
@@ -966,6 +968,29 @@ pub fn random_call(rng: &mut FuzzRng, document: &Document) -> (String, serde_jso
         }),
         "bitmap.erase" => serde_json::json!({
             "id": any_id(rng),
+        }),
+        "bitmap.brush" => serde_json::json!({
+            "id": any_id(rng),
+            "x": -(rng.below(300) as f64),
+            "y": -(rng.below(300) as f64),
+            "size": rng.below(1030),
+            "color_raw": rng.next_u64() as i64,
+            "strength": rng.below(105),
+            "brush": {
+                "edge": rng.below(110),
+                "shape": if rng.below(2) == 0 { "round" } else { "square" },
+                "aspect": rng.below(110),
+                "angle": rng.below(360) as i16 - 180,
+                "pressure": rng.below(110),
+            },
+        }),
+        "bitmap.pencil" => serde_json::json!({
+            "id": any_id(rng),
+            "x": -(rng.below(300) as f64),
+            "y": -(rng.below(300) as f64),
+            "color_raw": rng.next_u64() as i64,
+            "strength": rng.below(105),
+            "pressure": rng.below(110),
         }),
         "bitmap.movePixels" => serde_json::json!({
             "id": any_id(rng),

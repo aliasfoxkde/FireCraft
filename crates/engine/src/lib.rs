@@ -13,6 +13,7 @@
 
 pub mod access;
 pub mod bitmap;
+pub mod brush;
 pub mod catalog;
 pub mod command;
 pub mod delta;

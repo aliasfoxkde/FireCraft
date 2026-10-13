@@ -13,12 +13,98 @@
 use doc::{Document, ObjectId};
 
 use super::bitmap::{blend_pixel, masked_pixel_edit};
+use crate::brush::{Brush, BrushOptions, BrushShape, MAX_ASPECT, MAX_EDGE};
 use crate::command::TypedCommand;
 use crate::delta::Delta;
 use crate::error::EngineError;
 
-/// Largest brush radius in pixels.
-const MAX_RADIUS: u32 = 512;
+/// The dialog's option slots beyond center/size, as payloads carry
+/// them: every field optional, every default the M7 behavior (edge 50,
+/// round, full aspect, no rotation, full pressure) so pre-M15
+/// payloads replay byte-identically.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct BrushOptionsPayload {
+    /// Softness percent 0..=100 (0 hard rim, 100 falloff from
+    /// center; default 50).
+    #[serde(default)]
+    pub(crate) edge: Option<u8>,
+    /// `"round"` (default) or `"square"`.
+    #[serde(default)]
+    pub(crate) shape: Option<String>,
+    /// Minor axis as a percent of the size, 1..=100 (default 100).
+    #[serde(default)]
+    pub(crate) aspect: Option<u8>,
+    /// Rotation in degrees (default 0).
+    #[serde(default)]
+    pub(crate) angle: Option<i16>,
+    /// Per-dab sensitivity percent 1..=100 (default 100).
+    #[serde(default)]
+    pub(crate) pressure: Option<u8>,
+}
+
+/// The payload options folded and validated; pressure is kept apart
+/// (it feeds the effect, not the footprint).
+pub(crate) struct BrushDab {
+    pub(crate) brush: Brush,
+    pub(crate) pressure: u32,
+}
+
+/// Validates center + size + the dialog slots under one refusal
+/// contract: `size` is the brush **diameter** in pixels (1..=1024).
+pub(crate) fn brush_of(
+    name: &'static str,
+    x: f64,
+    y: f64,
+    size: u32,
+    options: &BrushOptionsPayload,
+) -> Result<BrushDab, EngineError> {
+    let shape = match options.shape.as_deref() {
+        None | Some("round") => BrushShape::Round,
+        Some("square") => BrushShape::Square,
+        Some(other) => {
+            return Err(EngineError::BadPayload {
+                name: name.to_owned(),
+                detail: format!("brush shape {other:?} is not \"round\" or \"square\""),
+            });
+        }
+    };
+    if let Some(edge) = options.edge {
+        if edge > MAX_EDGE {
+            return Err(EngineError::BadPayload {
+                name: name.to_owned(),
+                detail: format!("brush edge {edge} is not in 0..={MAX_EDGE}"),
+            });
+        }
+    }
+    if let Some(aspect) = options.aspect {
+        if aspect == 0 || aspect > MAX_ASPECT {
+            return Err(EngineError::BadPayload {
+                name: name.to_owned(),
+                detail: format!("brush aspect {aspect} is not in 1..={MAX_ASPECT}"),
+            });
+        }
+    }
+    let pressure = options.pressure.unwrap_or(100);
+    if pressure == 0 {
+        return Err(EngineError::BadPayload {
+            name: name.to_owned(),
+            detail: "brush pressure 0 would be a no-op".to_owned(),
+        });
+    }
+    let slots = BrushOptions::new(
+        name,
+        options.edge.unwrap_or(50),
+        shape,
+        options.aspect.unwrap_or(100),
+        options.angle.unwrap_or(0),
+    )?;
+    let brush = Brush::new(name, x, y, size, slots)?;
+    Ok(BrushDab {
+        brush,
+        pressure: u32::from(pressure),
+    })
+}
 
 /// Registers the retouch commands.
 pub(crate) fn install(registry: &mut CommandRegistry) -> Result<(), EngineError> {
@@ -31,48 +117,8 @@ pub(crate) fn install(registry: &mut CommandRegistry) -> Result<(), EngineError>
 
 use crate::registry::CommandRegistry;
 
-/// Validates a payload brush and folds in the shared limits.
-struct Brush {
-    center_x: f64,
-    center_y: f64,
-    radius: f64,
-}
-
-fn brush_of(name: &'static str, x: f64, y: f64, radius: u32) -> Result<Brush, EngineError> {
-    if radius == 0 || radius > MAX_RADIUS {
-        return Err(EngineError::InvalidState {
-            name: name.to_owned(),
-            detail: format!("brush radius {radius} is not in 1..={MAX_RADIUS}"),
-        });
-    }
-    Ok(Brush {
-        center_x: x,
-        center_y: y,
-        radius: f64::from(radius),
-    })
-}
-
-impl Brush {
-    /// Coverage 0..=255 of the pixel at `px, py`: 255 inside half the
-    /// radius, linear falloff to the rim, 0 outside — computed in f64
-    /// from basic operations only, rounded half-up.
-    fn coverage(&self, px: u32, py: u32) -> u8 {
-        let dx = f64::from(px) + 0.5 - self.center_x;
-        let dy = f64::from(py) + 0.5 - self.center_y;
-        let distance = (dx * dx + dy * dy).sqrt();
-        let inner = self.radius / 2.0;
-        if distance <= inner {
-            return 255;
-        }
-        if distance >= self.radius {
-            return 0;
-        }
-        ((255.0 * (self.radius - distance) / inner) + 0.5) as u8
-    }
-}
-
 /// Scales a raw brush coverage by a percentage strength (1..=100).
-fn strength_of(name: &'static str, strength: u8) -> Result<u32, EngineError> {
+pub(crate) fn strength_of(name: &'static str, strength: u8) -> Result<u32, EngineError> {
     if strength == 0 {
         return Err(EngineError::InvalidState {
             name: name.to_owned(),
@@ -80,13 +126,6 @@ fn strength_of(name: &'static str, strength: u8) -> Result<u32, EngineError> {
         });
     }
     Ok(u32::from(strength))
-}
-
-/// The effect coverage for one pixel: brush × strength × selection.
-#[inline]
-fn effect(brush: u8, strength: u32, selection: u8) -> u8 {
-    let scaled = (u32::from(brush) * strength + 50) / 100;
-    ((scaled * u32::from(selection) + 127) / 255) as u8
 }
 
 /// One separable box average over a straight-alpha RGBA buffer —
@@ -185,6 +224,10 @@ struct RetouchBlurPayload {
     radius: u32,
     /// Effect strength percent (1..=100).
     strength: u8,
+    /// The Edit Brush dialog slots (edge/shape/aspect/angle/
+    /// pressure), all defaulted to the M7 behavior.
+    #[serde(default)]
+    brush: BrushOptionsPayload,
 }
 
 impl TypedCommand for RetouchBlur {
@@ -200,7 +243,14 @@ impl TypedCommand for RetouchBlur {
         payload: &Self::Payload,
     ) -> Result<Delta, EngineError> {
         const NAME: &str = "retouch.blur";
-        let brush = brush_of(NAME, payload.x, payload.y, payload.radius)?;
+        let options = brush_of(
+            NAME,
+            payload.x,
+            payload.y,
+            payload.radius * 2,
+            &payload.brush,
+        )?;
+        let (brush, pressure) = (options.brush, options.pressure);
         let strength = strength_of(NAME, payload.strength)?;
         let half = (payload.radius as usize / 2).max(1);
         masked_pixel_edit(document, NAME, payload.id, |pixels, size, mask| {
@@ -209,7 +259,7 @@ impl TypedCommand for RetouchBlur {
             for py in 0..size.1 {
                 for px in 0..size.0 {
                     let index = py as usize * size.0 as usize + px as usize;
-                    let eff = effect(brush.coverage(px, py), strength, mask.alpha[index]);
+                    let eff = brush.effect(px, py, strength, pressure, mask.alpha[index]);
                     if eff == 0 {
                         continue;
                     }
@@ -257,6 +307,10 @@ struct RetouchSmudgePayload {
     /// Smear direction in pixels; (0, 0) is refused.
     dx: i32,
     dy: i32,
+    /// The Edit Brush dialog slots (edge/shape/aspect/angle/
+    /// pressure), all defaulted to the M7 behavior.
+    #[serde(default)]
+    brush: BrushOptionsPayload,
 }
 
 impl TypedCommand for RetouchSmudge {
@@ -272,7 +326,14 @@ impl TypedCommand for RetouchSmudge {
         payload: &Self::Payload,
     ) -> Result<Delta, EngineError> {
         const NAME: &str = "retouch.smudge";
-        let brush = brush_of(NAME, payload.x, payload.y, payload.radius)?;
+        let options = brush_of(
+            NAME,
+            payload.x,
+            payload.y,
+            payload.radius * 2,
+            &payload.brush,
+        )?;
+        let (brush, pressure) = (options.brush, options.pressure);
         let strength = strength_of(NAME, payload.strength)?;
         if payload.dx == 0 && payload.dy == 0 {
             return Err(EngineError::InvalidState {
@@ -285,7 +346,7 @@ impl TypedCommand for RetouchSmudge {
             for py in 0..size.1 {
                 for px in 0..size.0 {
                     let index = py as usize * size.0 as usize + px as usize;
-                    let eff = effect(brush.coverage(px, py), strength, mask.alpha[index]);
+                    let eff = brush.effect(px, py, strength, pressure, mask.alpha[index]);
                     if eff == 0 {
                         continue;
                     }
@@ -331,6 +392,10 @@ struct RetouchClonePayload {
     target_y: f64,
     /// Brush radius in pixels (1..=512).
     radius: u32,
+    /// The Edit Brush dialog slots (edge/shape/aspect/angle/
+    /// pressure), all defaulted to the M7 behavior.
+    #[serde(default)]
+    brush: BrushOptionsPayload,
 }
 
 impl TypedCommand for RetouchClone {
@@ -346,7 +411,14 @@ impl TypedCommand for RetouchClone {
         payload: &Self::Payload,
     ) -> Result<Delta, EngineError> {
         const NAME: &str = "retouch.clone";
-        let brush = brush_of(NAME, payload.target_x, payload.target_y, payload.radius)?;
+        let options = brush_of(
+            NAME,
+            payload.target_x,
+            payload.target_y,
+            payload.radius * 2,
+            &payload.brush,
+        )?;
+        let (brush, pressure) = (options.brush, options.pressure);
         // Stamp offset: what a footprint pixel adds to reach its source.
         let offset_x = (payload.source_x - payload.target_x).round() as i64;
         let offset_y = (payload.source_y - payload.target_y).round() as i64;
@@ -355,7 +427,7 @@ impl TypedCommand for RetouchClone {
             for py in 0..size.1 {
                 for px in 0..size.0 {
                     let index = py as usize * size.0 as usize + px as usize;
-                    let eff = effect(brush.coverage(px, py), 100, mask.alpha[index]);
+                    let eff = brush.effect(px, py, 100, pressure, mask.alpha[index]);
                     if eff == 0 {
                         continue;
                     }
@@ -398,6 +470,10 @@ struct RetouchEraserPayload {
     radius: u32,
     /// Effect strength percent (1..=100).
     strength: u8,
+    /// The Edit Brush dialog slots (edge/shape/aspect/angle/
+    /// pressure), all defaulted to the M7 behavior.
+    #[serde(default)]
+    brush: BrushOptionsPayload,
 }
 
 impl TypedCommand for RetouchEraser {
@@ -413,13 +489,20 @@ impl TypedCommand for RetouchEraser {
         payload: &Self::Payload,
     ) -> Result<Delta, EngineError> {
         const NAME: &str = "retouch.eraser";
-        let brush = brush_of(NAME, payload.x, payload.y, payload.radius)?;
+        let options = brush_of(
+            NAME,
+            payload.x,
+            payload.y,
+            payload.radius * 2,
+            &payload.brush,
+        )?;
+        let (brush, pressure) = (options.brush, options.pressure);
         let strength = strength_of(NAME, payload.strength)?;
         masked_pixel_edit(document, NAME, payload.id, |pixels, size, mask| {
             for py in 0..size.1 {
                 for px in 0..size.0 {
                     let index = py as usize * size.0 as usize + px as usize;
-                    let eff = effect(brush.coverage(px, py), strength, mask.alpha[index]);
+                    let eff = brush.effect(px, py, strength, pressure, mask.alpha[index]);
                     if eff == 0 {
                         continue;
                     }
@@ -456,6 +539,10 @@ struct RetouchRedEyePayload {
     y: f64,
     /// Brush radius in pixels (1..=512).
     radius: u32,
+    /// The Edit Brush dialog slots (edge/shape/aspect/angle/
+    /// pressure), all defaulted to the M7 behavior.
+    #[serde(default)]
+    brush: BrushOptionsPayload,
 }
 
 impl TypedCommand for RetouchRedEye {
@@ -471,12 +558,19 @@ impl TypedCommand for RetouchRedEye {
         payload: &Self::Payload,
     ) -> Result<Delta, EngineError> {
         const NAME: &str = "retouch.redEye";
-        let brush = brush_of(NAME, payload.x, payload.y, payload.radius)?;
+        let options = brush_of(
+            NAME,
+            payload.x,
+            payload.y,
+            payload.radius * 2,
+            &payload.brush,
+        )?;
+        let (brush, pressure) = (options.brush, options.pressure);
         masked_pixel_edit(document, NAME, payload.id, |pixels, size, mask| {
             for py in 0..size.1 {
                 for px in 0..size.0 {
                     let index = py as usize * size.0 as usize + px as usize;
-                    let eff = effect(brush.coverage(px, py), 100, mask.alpha[index]);
+                    let eff = brush.effect(px, py, 100, pressure, mask.alpha[index]);
                     if eff == 0 {
                         continue;
                     }
@@ -683,6 +777,51 @@ mod tests {
             strip(&document, image),
             [[112, 80, 60, 255], [80, 80, 90, 255], [255, 255, 255, 255],]
         );
+    }
+
+    #[test]
+    fn the_dialog_slots_flow_through_the_retouch_dab() {
+        // Edge changes the footprint: a hard blur replaces the probe
+        // pixel outright, a fully soft one only pulls it partway.
+        let gray = [[0, 0, 0, 255], [128, 128, 128, 255], [255, 255, 255, 255]];
+        let (mut document, image) = strip_document(gray);
+        RetouchBlur
+            .apply_json(
+                &mut document,
+                json!({ "id": image, "x": 0.5, "y": 0.5, "radius": 3, "strength": 100,
+                        "brush": { "edge": 0 } }),
+            )
+            .unwrap();
+        let hard = strip(&document, image);
+        let (mut document, image) = strip_document(gray);
+        RetouchBlur
+            .apply_json(
+                &mut document,
+                json!({ "id": image, "x": 0.5, "y": 0.5, "radius": 3, "strength": 100,
+                        "brush": { "edge": 100 } }),
+            )
+            .unwrap();
+        let soft = strip(&document, image);
+        assert_ne!(hard, soft, "edge changes how far the dab reaches");
+
+        // Unknown slot shapes are refused with the payload contract.
+        let (mut document, image) = strip_document(gray);
+        let error = RetouchBlur
+            .apply_json(
+                &mut document,
+                json!({ "id": image, "x": 0.5, "y": 0.5, "radius": 3, "strength": 100,
+                        "brush": { "edge": 101 } }),
+            )
+            .expect_err("edge 101 refused");
+        assert!(error.to_string().contains("edge"), "{error}");
+        let error = RetouchEraser
+            .apply_json(
+                &mut document,
+                json!({ "id": image, "x": 0.5, "y": 0.5, "radius": 3, "strength": 100,
+                        "brush": { "shape": "tri" } }),
+            )
+            .expect_err("shape tri refused");
+        assert!(error.to_string().contains("shape"), "{error}");
     }
 
     #[test]
