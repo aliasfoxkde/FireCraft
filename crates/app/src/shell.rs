@@ -2172,6 +2172,25 @@ impl Shell {
         // canvas center of the last laid-out frame.
         self.canvas_rect = Some(rect);
 
+        // Per-tool cursor icons (CS6 semantics); space held anywhere
+        // switches to the temporary Hand (the CS6 space-drag pan).
+        let space_held = ui.input(|input| input.key_down(egui::Key::Space));
+        let cursor = if space_held {
+            egui::CursorIcon::Grab
+        } else {
+            match self.editor.tool {
+                Tool::Pointer | Tool::Subselect => egui::CursorIcon::Default,
+                Tool::Rect | Tool::Ellipse | Tool::Line | Tool::Slice | Tool::Hotspot => {
+                    egui::CursorIcon::Crosshair
+                }
+                Tool::Text => egui::CursorIcon::Text,
+                Tool::Zoom => egui::CursorIcon::ZoomIn,
+                Tool::Hand => egui::CursorIcon::Grab,
+                Tool::AutoShape(_) => egui::CursorIcon::Crosshair,
+            }
+        };
+        let response = response.on_hover_cursor(cursor);
+
         // First fit on a fresh raster keeps the document visible.
         if self.raster.is_none() {
             if let Some(page) = self.editor.document().pages.get(self.editor.page) {
@@ -2313,7 +2332,13 @@ impl Shell {
                             }
                         }
                     }
-                    None => self.editor.begin_drag(world),
+                    None => {
+                        // Space-drag pan: no tool drag begins while the
+                        // temporary Hand is active.
+                        if !space_held {
+                            self.editor.begin_drag(world);
+                        }
+                    }
                 }
             }
         }
@@ -2326,8 +2351,10 @@ impl Shell {
                 } else if self.editor.drag.is_some() {
                     self.editor.drag_to(world);
                 } else if self.editor.tool == Tool::Hand
+                    || space_held
                     || response.dragged_by(egui::PointerButton::Middle)
                 {
+                    // Hand tool, space-drag pan, or middle-button pan.
                     self.view.pan_by(response.drag_delta());
                 }
             }

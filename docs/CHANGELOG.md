@@ -10,6 +10,7 @@ Current version: **0.1.0**.
 
 ### Features
 
+- **app**: CS6 menu bar, keymap, shell chrome (495aff1)
 - **m13**: open deep-RE and shell-parity ticket (866f7ca)
 - **m12**: changelog gate, release checklist, m12 done (3c586ce)
 - **m12**: dist native archives + recipes (d3780b4)
