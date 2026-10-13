@@ -30,6 +30,7 @@ pub(crate) fn install(registry: &mut CommandRegistry) -> Result<(), EngineError>
     registry.register(StyleRedefineByIndex)?;
     registry.register(StyleRedefineByName)?;
     registry.register(StyleRedefineFromSelection)?;
+    registry.register(StyleImportLibrary)?;
     registry.register(StyleScaleStyles)
 }
 
@@ -354,6 +355,42 @@ impl TypedCommand for StyleRedefineFromSelection {
     }
 }
 
+/// `style.importLibrary` — appends whole entries to the library: the
+/// host path for opening a CS6 style library (`.stl`). The entries
+/// ride the payload (like `library.importSymbol`'s definition) so a
+/// journal replays the import; each entry's preserved texture
+/// subtrees stay host-side in the unknown bag, keyed under the entry's
+/// final `ZSTv` index.
+struct StyleImportLibrary;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct StyleImportLibraryPayload {
+    /// The entries to append, file order.
+    entries: Vec<StyleEntry>,
+}
+
+impl TypedCommand for StyleImportLibrary {
+    type Payload = StyleImportLibraryPayload;
+
+    fn name(&self) -> &'static str {
+        "style.importLibrary"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        if payload.entries.is_empty() {
+            return Ok(Delta::Noop);
+        }
+        let before = document.styles.clone();
+        document.styles.extend(payload.entries.iter().cloned());
+        Ok(Delta::Styles { before })
+    }
+}
+
 /// `style.scaleStyles` — the CS6 `scaleStyles` verb: multiplies every
 /// library entry's text size (`PTSf`) by the factor — the slot that
 /// follows object scaling. Effect parameters stay untouched (they are
@@ -361,7 +398,6 @@ impl TypedCommand for StyleRedefineFromSelection {
 /// pinned pending corpus playback; a counterexample surfaces as an
 /// encode diff.
 struct StyleScaleStyles;
-
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 #[serde(deny_unknown_fields)]
 struct StyleScaleStylesPayload {
@@ -853,6 +889,39 @@ mod tests {
             assert!(matches!(error, EngineError::InvalidState { .. }));
             assert_eq!(document_bytes(&document), before);
         }
+    }
+
+    #[test]
+    fn import_appends_and_undo_restores() {
+        let (mut document, _ids) = document_with(vec![]);
+        document.styles = library();
+        let before = document_bytes(&document);
+        let imported: Vec<StyleEntry> = (0..2)
+            .map(|index| StyleEntry {
+                name: format!("imported {index}"),
+                ..library()[0].clone()
+            })
+            .collect();
+
+        let delta = apply_by_name(
+            &mut document,
+            "style.importLibrary",
+            serde_json::json!({ "entries": imported }),
+        )
+        .unwrap();
+        assert_eq!(document.styles.len(), 4);
+        assert_eq!(document.styles[2].name, "imported 0", "appends in order");
+
+        delta.apply_inverse(&mut document).unwrap();
+        assert_eq!(document_bytes(&document), before);
+
+        let noop = apply_by_name(
+            &mut document,
+            "style.importLibrary",
+            serde_json::json!({ "entries": [] }),
+        )
+        .unwrap();
+        assert!(matches!(noop, Delta::Noop));
     }
 
     #[test]

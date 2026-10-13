@@ -1071,6 +1071,8 @@ pub struct Shell {
     close_requested: bool,
     /// The Auto Shape flyout is open (toggled by its tool button).
     autoshape_flyout: bool,
+    /// The Styles panel's new-style name field.
+    style_name: String,
 }
 
 impl Shell {
@@ -1102,6 +1104,7 @@ impl Shell {
             canvas_rect: None,
             close_requested: false,
             autoshape_flyout: false,
+            style_name: String::new(),
         }
     }
 
@@ -2021,6 +2024,9 @@ impl Shell {
             egui::CollapsingHeader::new("Layers")
                 .default_open(true)
                 .show(ui, |ui| self.layers_section(ui));
+            egui::CollapsingHeader::new("Styles")
+                .default_open(false)
+                .show(ui, |ui| self.styles_panel(ui));
             egui::CollapsingHeader::new("Document Library")
                 .default_open(false)
                 .show(ui, |ui| self.library_panel(ui));
@@ -2164,6 +2170,92 @@ impl Shell {
     /// field renames, the button removes (refused by the engine while
     /// instances remain). While a definition is entered, the banner
     /// says so and offers the way out.
+    /// The Styles panel: the document style library (`MKBv`'s `ZSLv`).
+    /// A row click applies the bundle onto the selection
+    /// (`style.apply` — the CS6 panel's apply), the name field defines
+    /// a new (or replaces a same-named) style from the selection's
+    /// appearance, and Import merges a CS6 `.stl` library through
+    /// [`Editor::import_styles`].
+    fn styles_panel(&mut self, ui: &mut egui::Ui) {
+        ui.heading("Styles");
+        // (index, label) — snapshotted so closures never borrow the
+        // document while the editor is mutable (the panel rule).
+        let rows: Vec<(usize, String)> = self
+            .editor
+            .document()
+            .styles
+            .iter()
+            .enumerate()
+            .map(|(index, entry)| {
+                let label = if entry.kind == 0x1f {
+                    format!("{} · text", entry.name)
+                } else {
+                    entry.name.clone()
+                };
+                (index, label)
+            })
+            .collect();
+        let targets: Vec<doc::ObjectId> = self.editor.selection_set.clone();
+        for (index, label) in &rows {
+            if ui
+                .selectable_label(false, label)
+                .on_hover_text("apply onto the selection")
+                .clicked()
+            {
+                self.run_command(
+                    "style.apply",
+                    serde_json::json!({ "index": index, "ids": targets }),
+                );
+            }
+        }
+        if rows.is_empty() {
+            ui.label("(empty — define one from a selection or import a library)");
+        }
+        ui.separator();
+        ui.horizontal(|ui| {
+            ui.label("name");
+            ui.add(egui::TextEdit::singleline(&mut self.style_name).desired_width(96.0));
+            if ui
+                .button("New From Selection")
+                .on_hover_text("redefines a style of this name, or defines a new one")
+                .clicked()
+                && let Some(source) = targets.last().copied()
+                && !self.style_name.is_empty()
+            {
+                self.run_command(
+                    "style.redefineFromSelection",
+                    serde_json::json!({ "name": self.style_name, "source": source }),
+                );
+            }
+        });
+        if ui.button("Import Style Library...").clicked() {
+            self.import_styles_dialog();
+        }
+    }
+
+    /// Styles panel ▸ Import: reads a CS6 style library (`.stl`)
+    /// through the injected traits; entries join the document library,
+    /// their preserved texture subtrees join the editor bag.
+    fn import_styles_dialog(&mut self) {
+        let Some(path) = self.dialogs.open_path(
+            "Import style library",
+            &[("Fireworks style library".to_owned(), vec!["stl".to_owned()])],
+        ) else {
+            return;
+        };
+        let bytes = match self.fs.read_file(&path) {
+            Ok(bytes) => bytes,
+            Err(error) => {
+                self.status = format!("import failed: {error}");
+                return;
+            }
+        };
+        match self.editor.import_styles(&bytes) {
+            Ok(count) => self.status = format!("imported {count} styles from {path}"),
+            Err(error) => self.status = format!("import failed: {error}"),
+        }
+    }
+
     fn library_panel(&mut self, ui: &mut egui::Ui) {
         ui.heading("Library");
         let editing = self.editor.editing_definition().map(|d| d.name.clone());

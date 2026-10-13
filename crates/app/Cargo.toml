@@ -21,6 +21,7 @@ doc = { path = "../doc" }
 engine = { path = "../engine" }
 fwpng = { path = "../fwpng" }
 io = { path = "../io" }
+flate2 = "1"
 webexport = { path = "../webexport" }
 geom = { path = "../geom" }
 egui = "0.36"

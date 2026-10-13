@@ -617,6 +617,7 @@ pub const CALLS: &[&str] = &[
     "style.redefineByIndex",
     "style.redefineByName",
     "style.redefineFromSelection",
+    "style.importLibrary",
     "style.scaleStyles",
 ];
 
@@ -1611,6 +1612,19 @@ pub fn random_call(rng: &mut FuzzRng, document: &Document) -> (String, serde_jso
             "name": format!("s-{}", rng.below(30)),
             "source": any_id(rng),
         }),
+        "style.importLibrary" => {
+            // A small library of fresh entries: names collide with the
+            // seed library sometimes — redefinition must not, since
+            // import appends unconditionally.
+            let entries: Vec<doc::StyleEntry> = (0..1 + rng.below(3))
+                .map(|index| {
+                    let mut entry = random_style(rng, 100 + index);
+                    entry.name = format!("imported {index}");
+                    entry
+                })
+                .collect();
+            serde_json::json!({ "entries": entries })
+        }
         "style.scaleStyles" => serde_json::json!({
             "scale": (1 + rng.below(300)) as f64 / 100.0,
         }),

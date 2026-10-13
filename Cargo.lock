@@ -93,6 +93,7 @@ dependencies = [
  "eframe",
  "egui",
  "engine",
+ "flate2",
  "fwpng",
  "geom",
  "io",

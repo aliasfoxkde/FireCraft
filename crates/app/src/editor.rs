@@ -9,6 +9,7 @@ use doc::{Cell, Document, Layer, ObjectData, ObjectId};
 use engine::catalog;
 use engine::error::EngineError;
 use engine::{CommandRegistry, Session};
+use std::io::Read as _;
 
 /// Which tool the pointer carries.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -532,6 +533,68 @@ impl Editor {
             }
         }
         Ok(numbers)
+    }
+
+    /// Imports a CS6 style library (`.stl`): its `mkTS` node tree
+    /// deserializes into entries appended to the document library
+    /// (`style.importLibrary`, so the import journals and undoes), and
+    /// each entry's preserved texture subtrees merge into the editor's
+    /// unknown bag under the entry's final `ZSTv` index. The library's
+    /// `mkBT` tile payloads do not merge — pattern fills are unmodeled
+    /// (the M15 recorded gaps) — the bagged `IMGv` slots still splice
+    /// byte-exactly on save, their `TIDi` references pointing into the
+    /// source library rather than this file.
+    ///
+    /// # Errors
+    /// Whatever the chunk parse, the inflate, or the style reader
+    /// refuses; the document is untouched.
+    pub fn import_styles(&mut self, bytes: &[u8]) -> Result<usize, EngineError> {
+        fn detail(error: impl std::fmt::Display) -> EngineError {
+            EngineError::Io {
+                path: "<styles>".to_owned(),
+                detail: error.to_string(),
+            }
+        }
+        let chunks = fwpng::chunk::parse_chunks(bytes).map_err(detail)?;
+        let Some(mkts) = chunks.iter().find(|chunk| &chunk.ctype == b"mkTS") else {
+            return Err(EngineError::Io {
+                path: "<styles>".to_owned(),
+                detail: "no mkTS chunk (not a Fireworks style library?)".to_owned(),
+            });
+        };
+        let mut inflated = Vec::new();
+        flate2::read::ZlibDecoder::new(&mkts.data[..])
+            .read_to_end(&mut inflated)
+            .map_err(detail)?;
+        let nodes = fwpng::nodetree::parse(&inflated).map_err(detail)?;
+        let (entries, bag) = doc::fwmap::read_style_library(&nodes).map_err(detail)?;
+        // Bag merge: library record k becomes document record
+        // `styles.len() + k`, so its preserved nodes re-key to the
+        // final index before joining the editor bag. Foreign roots
+        // (bagged at "") have no document home; the library container
+        // itself is consumed by the import.
+        let base = self.session.document().styles.len();
+        let rekey = |path: &str| -> Option<String> {
+            let rest = path.strip_prefix("/ZSLv/ZSTv[")?;
+            let close = rest.find(']')?;
+            let record: usize = rest[..close].parse().ok()?;
+            Some(format!(
+                "/ZSLv/ZSTv[{}]{}",
+                base + record,
+                &rest[close + 1..]
+            ))
+        };
+        for (path, index, node) in bag.iter() {
+            if let Some(remapped) = rekey(path) {
+                self.unknown.insert(&remapped, index, node.clone());
+            }
+        }
+        let count = entries.len();
+        self.apply(
+            "style.importLibrary",
+            serde_json::json!({ "entries": entries }),
+        )?;
+        Ok(count)
     }
 
     /// Applies a catalog command. The only mutation door in the app.
