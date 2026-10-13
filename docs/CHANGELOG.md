@@ -10,6 +10,8 @@ Current version: **0.1.0**.
 
 ### Features
 
+- **app**: drag constraint matrix (9604b2c)
+- **engine**: intersect mode and polygon select (1a5de88)
 - **app**: live filters panel and Filters menu (25a2925)
 - **xtask**: families and composites golden fixtures (f1cc6a8)
 - **engine**: filter curve knot lists via points (0df97a2)
@@ -139,6 +141,7 @@ Current version: **0.1.0**.
 
 ### Chores
 
+- regenerate changelog and scripts report (a99c044)
 - **m12**: refresh generated docs, close milestone (60e11b8)
 - **fuzz**: sync lockfile dependency list (ebdf043)
 - **ci**: retrigger after sandbox race (25fee78)
