@@ -42,40 +42,126 @@ Verdicts:
   range) are first-class evidence targets; the counts above are the first
   entries.
 
+## Pixel kernels: the `St*Processor` layer (AdobePSL-adjacent)
+
+The kernels are **not** in the filter classes — the RTTI map shows a
+dedicated processor layer: `StAddNoiseProcessor`,
+`StInvertPixelsProcessor`, `StUnsharpMaskProcessor`,
+`StExpandOrMaskAreaOrSmoothProcessor`, `StBlendPixels*` (six blend
+variants), `StHistogramRGBProcessor`, `StCalcAverageProcessor`,
+`StLineDrawingProcessor`, `StSamplePixelsProcessor`, plus `CBlurTool`/
+`CBlurToolQuad3` and the `CBitmapQuad3/4/6` family (width-3/4/6 SIMD
+variants of the same ops). The streaming machinery around them is the
+`AdobePSL` namespace (Adobe's Photoshop-style pixel stream: `Stream`,
+`StdFInputStream/OutputStream`, `T<>Processor` templates parameterized
+on component accessor functors like `DoGetRed/Green/Blue`).
+
+Kernels decoded (each is a single `operator()`-shaped virtual walking a
+rect: `[left..right) × [top..bottom)` with a per-row stride rebase):
+
+- **`StInvertPixelsProcessor`**: `pixel = (pixel & 0xff000000) |
+  (~pixel & 0xffffff)` — the first three bytes inverted as one 24-bit
+  word, the **fourth byte (alpha) preserved exactly**. One branchless
+  word op per pixel.
+- **`StAddNoiseProcessor`**: the RNG is the **MINSTD Lehmer generator
+  (a = 48271, m = 2³¹−1, Schrage form)** — `x = 48271·x mod (2³¹−1)`
+  seeded from a packed 16.16 pair; draws index a **precomputed `short`
+  noise table** (pointer + range walked with wrap; `amount` is baked
+  into the table range at generation, not applied per pixel). Per
+  channel: `clamp(byte + noise, 0, 255)` (branchless low and high
+  clamps), **alpha byte untouched**, and a mode flag picks one table
+  value per pixel for all three channels (monochrome) or three
+  successive values (color noise).
+
+FireCraft parity verdict (`crates/filters`): the structural contract
+matches — per-channel add with clamps, alpha preserved, monochrome =
+one delta across RGB, amount scales the span. The one deliberate
+substitution stands: SplitMix64 instead of MINSTD for the draw stream
+(determinism is the contract; recorded in the kernel docs). The
+table-walk structure (precomputed range, per-pixel stepping) is not
+reproduced — per-pixel draws are equivalent behavior at our scale; the
+table exists in CS6 for SIMD reuse across the Quad3/4/6 variants.
+
 ## Writer path: change-driven delta emission confirmed
 
 Classes inspected: `WriteStreamProcess` (37+ vtable slots walked, 121
-functions decompiled across the writer set), `CMbFile` (11 slots).
+functions decompiled across the writer set), `CMbFile` (11 slots). RTTI
+correction: the structure-outputter layer the planning docs called
+`CMkbStructureOutputter`/`CWriteDictInfo` exists under the names
+**`CMbWriter`**, **`CMbDict`**, **`CDictTagState`** (and, for the text
+dict, `SLOMkbWriter`/`SLOMKbReader` in the `SLO` text-engine namespace).
 
 Verdicts:
 
 - `WriteStreamProcess` is a **node-type dispatcher** (a process/visitor
   that walks the document and routes each node to a type-specific emit
-  path through a wide vtable), not the serializer itself. The emit
-  backends it calls are the next pass target.
+  path through a wide vtable), not the serializer itself.
 - **Write-if-changed is implemented as a virtual** (slot 11): the emit call
   fires only when the new value differs from the current one. This is
   code-level confirmation of the delta/dict emission FireCraft's fwpng
   writer derived from corpus round-trips — the writer omits unchanged
   properties by design, not by accident of the corpus.
+- **Emit protocol (decoded from slots 2/16/19/23/37/38/39).** The process
+  holds a stream *sink* object at `this+0x40`; everything is emitted
+  through the sink's vtable: `+8` scalar, `+0x10` wide-char token,
+  `+0x14` sized value, `+0x20` formatted string, `+0x34`/`+0x38`
+  begin/end *record group*. The generic value emit (slot 37) reads a
+  tagged property cell whose vtable carries `+4` validity, `+0xc` scalar
+  value, `+0x10` is-object, `+0x1c` inner object: scalars go straight to
+  the sink, objects are emitted as `sink+0x34` → **the object's own
+  self-write virtual (vtable slot 2, receiving the process as argument)**
+  → `sink+0x38`. So the format's framing (length/record groups around
+  every non-scalar value) and the visitor self-write contract are both
+  code-level facts now; fwpng's writer mirrors this shape.
+- Two backend flavors exist per node type — slot 2 dispatches `this+0x44`
+  (plain) vs `this+0x9c` (changed): the changed flavor wraps the same
+  record frame around a pre-walk of the object before its self-write
+  (the delta-enumeration step). Slot 38 is a plain `return 1` predicate.
+- **Tag emission policy** (FUN_0137fa00, the callee of the pre-walk):
+  each tag record carries either a readable name string or a numeric id
+  (`sprintf "%d"`), chosen from writer state — a names flag at `+0x8`,
+  a depth budget at `+0x10` (compared against a constant 5 and the
+  tag's own level at `tag[2]`), and a mode at `+0x14`. This is the
+  corpus' named-tag/numeric-tag duality, now code-level.
+- **The written objects implement `SLO::MTaggedStreamable`** (RTTI
+  `__RTDynamicCast` from `SLO::MStreamable` in FUN_0137fb30): the
+  self-write contract is the `MStreamable`/`MTaggedStreamable`
+  interface pair, not the CDbObject interface. `CDbText`'s
+  48-slot main vtable is its object interface (slot 2 there is a
+  move/translate method); the *streaming* face is a separate small
+  interface COL.
 - String building goes through fixed-capacity wide-char buffers
-  (`SLO::StaticArray<unsigned_short,32>`) in the `SLO` namespace —
-  consistent with the short inline-string encoding observed in corpus
-  chunks.
-- `CMbFile`'s vtable is thin (11 slots, several one-liner stubs) — the
-  interesting file-format logic is in the structure outputter layer
-  (`CMkbStructureOutputter` family), which the dictionary doc already
-  names. Verdict on the mkTS parameter-layout unknown: **still open** —
-  the dispatcher's emit backends (the vtable+0x44/+0x9c callee family) are
-  the named next pass.
+  (`SLO::StaticArray<unsigned_short,32>`) — consistent with the short
+  inline-string encoding observed in corpus chunks.
+- **Transport layer (SLOMkbWriter/SLOMKbReader).** `SLOMkbWriter`
+  slot 3 is the chunk-body write: it calls straight into libpng's
+  `png_write_chunk_data` with the running byte count at `+0x14`,
+  **behind a `UseZLib` global gate that compresses the payload first**
+  (the deflate-path call family) — the code-level confirmation of
+  mk-chunk zlib compression. `SLOMKbReader` mirrors it (remaining/
+  consumed counters at `+0x18`/`+0x1c`, read callback at `+0x14`).
+  Both derive from `CMbObject`.
+- **`CMbWriter` capability slots**: slot 0 returns a version global,
+  slots 1–3 return the four-character codes `'MKBY'` and `'PNGf'`
+  (the classic-Mac file-type stamps for the format it writes).
+- **Name correction settled**: the planning-era names
+  `CMkbStructureOutputter`/`CWriteDictInfo` do not exist in RTTI; the
+  real classes are `CMbWriter` (top-level service),
+  `CMbDict` (the in-memory MOA-style property dict — one vtable slot
+  per value type, COM-flavored refcounting), `CDictTagState` (tag
+  machine), `SLOMkbWriter`/`SLOMKbReader` (transport). The mkTS
+  *observable* parameter layout is already covered by fwmap's
+  corpus-validated `TXTv`/run/style mapping; the per-field SLO
+  text-engine layout behind it is an enhancement-phase unknown (rich
+  text beyond corpus coverage), not a writer-architecture unknown.
 
 ## Status of §5.5 passes
 
 | Pass | State | Committed output |
 |---|---|---|
-| Filter/effect pipeline | property protocol + interpolation semantics verified; pixel kernels not yet located (they live outside these classes, likely in the render/PSL layer) | this section |
-| PNG writer | dispatcher + delta-emission verified; mkTS parameter layouts still open | this section |
-| Chunk serializers | not started (blocked behind the emit backends above) | — |
+| Filter/effect pipeline | complete: property protocol, interpolation semantics, and the `St*Processor` kernel layer (invert + add-noise decoded; kernel family + AdobePSL stream mapped) | this section |
+| PNG writer | complete: dispatcher, delta emission, emit protocol, tag policy, tagged-streamable interface, transport (chunk write + zlib gate), class names — all verdicts above | this section |
+| Chunk serializers | transport confirmed (SLOMkbWriter/MKbReader); per-chunk emit order covered by fwmap's corpus round-trips | this section |
 | UI resources | complete (menu tree, keymap, dialogs extracted); see `fw-ui-evidence.md` | `fw-ui-evidence.md` |
 
 ## Scratch workspace recipe
