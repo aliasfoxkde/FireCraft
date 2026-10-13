@@ -167,6 +167,7 @@ fn semantic_anchor(name: &str, render: &Render) -> Result<(), String> {
         "text.fw.png" => anchor_text(name, render),
         "textpath.fw.png" => anchor_textpath(name, render),
         "families.fw.png" => anchor_families(name, render),
+        "gradient.fw.png" => anchor_gradient(name, render),
         _ => Ok(()),
     }
 }
@@ -231,6 +232,117 @@ fn anchor_families(name: &str, render: &Render) -> Result<(), String> {
                 "{name}: cell {cell} center is transparent — the effect erased its object"
             ));
         }
+    }
+    Ok(())
+}
+
+/// The gradient golden. Three rects on white: a black→white linear
+/// ramp along x (vector (4,14)→(28,14), length 24), a black→white
+/// radial from (48,14) with radius 20, and a blue→yellow linear whose
+/// coverage ramp goes transparent→opaque. Position-derived greys are
+/// asserted as bounds wide enough to cover either rounding of the
+/// exact product; ramp identity (grey channels equal), axis
+/// invariance and the unpainted (transparent) canvas are exact. The
+/// veil reads premultiplied: `Render` is premultiplied and compose
+/// leaves the canvas colour to the host, so a veil pixel is its ramp
+/// colour scaled by its own coverage.
+fn anchor_gradient(name: &str, render: &Render) -> Result<(), String> {
+    let pixel = |x: u32, y: u32| -> [u8; 4] {
+        let index = ((y * u32::from(render.width) + x) as usize) * 4;
+        [
+            render.pixels[index],
+            render.pixels[index + 1],
+            render.pixels[index + 2],
+            render.pixels[index + 3],
+        ]
+    };
+    let grey = |got: [u8; 4], label: &str| -> Result<u8, String> {
+        if got[0] != got[1] || got[1] != got[2] {
+            return Err(format!("{name}: {label} is not grey: {got:?}"));
+        }
+        Ok(got[0])
+    };
+    // Linear rect (4,6)-(28,22), ramp 0→255 along the 24-unit vector:
+    // the left edge samples t≈0.02, the right edge t≈0.98, the middle
+    // t≈0.52 → 132.9.
+    let left = grey(pixel(4, 14), "linear left edge")?;
+    if left > 8 {
+        return Err(format!("{name}: linear left edge is {left}, want ≤ 8"));
+    }
+    let right = grey(pixel(27, 14), "linear right edge")?;
+    if right < 248 {
+        return Err(format!("{name}: linear right edge is {right}, want ≥ 248"));
+    }
+    let mid = grey(pixel(16, 14), "linear middle")?;
+    if !(130..=136).contains(&mid) {
+        return Err(format!("{name}: linear middle is {mid}, want ≈ 133"));
+    }
+    // Axis invariance: a horizontal ramp is constant down a column.
+    if grey(pixel(10, 8), "linear row 8")? != grey(pixel(10, 19), "linear row 19")? {
+        return Err(format!("{name}: the linear ramp drifts across rows"));
+    }
+    // Radial rect (36,6)-(60,22): the start (48,14) samples ≈0.7/20;
+    // the far corner ≈13.7/20 → 175.5.
+    let center = grey(pixel(48, 14), "radial center")?;
+    if center > 12 {
+        return Err(format!("{name}: radial center is {center}, want ≤ 12"));
+    }
+    let corner = grey(pixel(59, 21), "radial corner")?;
+    if !(172..=179).contains(&corner) {
+        return Err(format!("{name}: radial corner is {corner}, want ≈ 176"));
+    }
+    // The veil (4,28)-(60,42): blue→yellow under a transparent→opaque
+    // coverage ramp. `Render` is premultiplied and the canvas colour is
+    // the host's to paint, so each pixel is the ramp colour scaled by
+    // its own coverage. Left (5,35): t = 1.5/56 = 0.027 → straight
+    // (7,7,248) at α7 → premultiplied (0,0,7) at 7. Mid (30,35):
+    // t = 0.473 → (121,121,134) at α121 → premul ≈ (57,57,64) at 120.
+    // Right (59,35): t = 0.991 → (253,253,2) at α253 → premul ≈ (250,
+    // 250,2) at 252. Bounds cover either rounding of the products.
+    let near = pixel(5, 35);
+    if near != [0, 0, 6, 6] {
+        return Err(format!(
+            "{name}: veil left end is {near:?}, want premultiplied (0,0,6,6)"
+        ));
+    }
+    let half = pixel(30, 35);
+    if !(54..=59).contains(&half[0])
+        || !(54..=59).contains(&half[1])
+        || !(62..=67).contains(&half[2])
+        || !(118..=122).contains(&half[3])
+    {
+        return Err(format!(
+            "{name}: veil middle is {half:?}, want premul ≈ (57,57,64,120)"
+        ));
+    }
+    let saturated = pixel(59, 35);
+    if !(247..=252).contains(&saturated[0])
+        || !(247..=252).contains(&saturated[1])
+        || saturated[2] > 6
+        || !(250..=253).contains(&saturated[3])
+    {
+        return Err(format!(
+            "{name}: veil right end is {saturated:?}, want premul ≈ (250,250,2,252)"
+        ));
+    }
+    // Coverage rises left→right along the veil.
+    let (mut early, mut late) = (0u32, 0u32);
+    for (sample, slot) in [(20u32, &mut early), (40, &mut late)] {
+        let index = ((35 * u32::from(render.width) + sample) as usize) * 4;
+        *slot = u32::from(render.pixels[index + 3]);
+    }
+    if early >= late {
+        return Err(format!(
+            "{name}: coverage did not rise left→right ({early} → {late})"
+        ));
+    }
+    // Nothing painted above the rects: compose leaves the canvas
+    // transparent (the canvas colour is the host's to paint).
+    let bare = pixel(32, 2);
+    if bare != [0, 0, 0, 0] {
+        return Err(format!(
+            "{name}: unpainted canvas pixel is {bare:?}, want transparent"
+        ));
     }
     Ok(())
 }

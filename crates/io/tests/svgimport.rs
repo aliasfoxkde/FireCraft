@@ -40,6 +40,7 @@ fn square() -> PathObject {
         paint: Some(PaintStyle {
             stroke_raw: 0,
             fill_raw: 0xFF_00_00_FF,
+            fill: None,
         }),
         fill_start: None,
         fill_end: None,
@@ -249,6 +250,7 @@ fn even_odd_and_fill_on_top_round_trip() {
     stroked.paint = Some(PaintStyle {
         stroke_raw: 0xFF_00_00_FF,
         fill_raw: 0xFF_00_00_FF,
+        fill: None,
     });
     stroked.fill_on_top = Some(true);
 
@@ -476,6 +478,33 @@ fn gradient_only_document_refuses() {
     assert!(
         matches!(error, io::ImportError::Unsupported { format: "svg", .. }),
         "{error:?}"
+    );
+}
+
+/// Regression: the depth guard counted every self-closing element as a
+/// permanently open one, so a long run of `<stop/>` — exactly what the
+/// exporter's densified gradient fills emit — tripped the 128-level
+/// ceiling on well-formed input.
+#[test]
+fn self_closing_siblings_do_not_accumulate_depth() {
+    let stops = "<stop offset=\"0\" stop-color=\"#000000\"/>".repeat(257);
+    let svg = format!(
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"64\" height=\"32\">\
+         <linearGradient id=\"g\" x1=\"0\" y1=\"0\" x2=\"8\" y2=\"0\">{stops}\
+         </linearGradient>\
+         <path d=\"M 0 0 L 4 0 L 4 4 L 0 4 Z\" fill=\"url(#g)\" stroke=\"#00ff00\"/>\
+         </svg>"
+    );
+    let imported =
+        svgimport::decode(svg.as_bytes()).expect("well-formed input clears the depth gate");
+    assert_eq!(
+        imported.report.gradients_dropped, 1,
+        "the recorded limitation holds"
+    );
+    assert_eq!(
+        paths(&imported.document).len(),
+        1,
+        "the path survives on its stroke"
     );
 }
 

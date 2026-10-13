@@ -10,6 +10,9 @@ Current version: **0.1.0**.
 
 ### Features
 
+- **m15**: path.setFill/setFillColor/setFillVector commands (495b340)
+- **m15**: fill model, gradient decode + render (87f36be)
+- **vector**: reshape-area and redraw-path commands (a8917fa)
 - **engine**: brush size/edge/pressure model (f1b2585)
 - **app**: drag constraint matrix (9604b2c)
 - **engine**: intersect mode and polygon select (1a5de88)
@@ -142,6 +145,7 @@ Current version: **0.1.0**.
 
 ### Chores
 
+- retrigger CI after runner sandbox race (b78180a)
 - regenerate changelog and scripts report (aa4dd70)
 - regenerate changelog and scripts report (a99c044)
 - **m12**: refresh generated docs, close milestone (60e11b8)

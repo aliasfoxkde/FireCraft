@@ -229,7 +229,7 @@ pub fn gen_fixtures() -> Result<(), String> {
 
     /// One pending fixture: name, built bytes, manifest note.
     type Fixture = (&'static str, Result<Vec<u8>, String>, &'static str);
-    let fixtures: [Fixture; 13] = [
+    let fixtures: [Fixture; 14] = [
         (
             "minimal.fw.png",
             build_minimal(),
@@ -294,6 +294,11 @@ pub fn gen_fixtures() -> Result<(), String> {
             "composites.fw.png",
             build_composites(),
             "generated: 128x96 page, 7 autoshape rects carrying the shadow/glow + bevel/emboss families incl. the packed unified panel outerGlow (M14; determinism-only)",
+        ),
+        (
+            "gradient.fw.png",
+            build_gradient(),
+            "generated: 64x48 page, linear/radial/alpha-ramp gradient fills built through path.setFill + path.setFillVector (M15 gradient golden pin; FSXi families with FG0v/FG1v ramps and fdct fill vectors)",
         ),
     ];
 
@@ -505,6 +510,138 @@ fn build_scripted() -> Result<Vec<u8>, String> {
     if stats.unconsumed_unknown != 0 {
         return Err(format!(
             "scripted fixture: doc write left {} unknown node(s)",
+            stats.unconsumed_unknown
+        ));
+    }
+    let payload = fwpng::nodetree::serialize(&tree);
+    let standard = encode_rgba8(64, 48, |_, _| [255, 255, 255, 255])?;
+    insert_before_iend(
+        &standard,
+        &[(b"mkTS", zlib(&payload)?), (b"mkBS", zlib(&payload)?)],
+    )
+}
+
+/// Builds `gradient.fw.png`: three gradient-filled rects built through
+/// the engine registry — a black→white linear ramp, a black→white
+/// radial, and a blue→yellow linear whose coverage ramp (`FG1v`) goes
+/// transparent→opaque over the white canvas (the M15 gradient golden
+/// pin: `path.setFill` writes the `FPLv` subtree, `path.setFillVector`
+/// the `fdct` handles; compose renders both ramps).
+fn build_gradient() -> Result<Vec<u8>, String> {
+    let mut registry = engine::CommandRegistry::new();
+    engine::catalog::install(&mut registry).map_err(|e| format!("catalog install: {e}"))?;
+    let mut session = engine::Session::with_registry(doc::Document::default(), registry);
+    fn apply(
+        session: &mut engine::Session,
+        name: &str,
+        payload: serde_json::Value,
+    ) -> Result<(), String> {
+        session
+            .apply(name, payload)
+            .map_err(|e| format!("gradient fixture: {name}: {e}"))
+    }
+    apply(
+        &mut session,
+        "page.add",
+        serde_json::json!({ "index": null }),
+    )?;
+    apply(
+        &mut session,
+        "page.setCanvasSize",
+        serde_json::json!({ "page": 0, "width": 64.0, "height": 48.0 }),
+    )?;
+    let placed = |mut object: serde_json::Value| -> serde_json::Value {
+        let place = serde_json::json!({ "page": 0, "layer": 0, "cell": 0, "name": null });
+        if let (Some(fields), Some(place)) = (object.as_object_mut(), place.as_object()) {
+            for (key, value) in place {
+                fields.insert(key.clone(), value.clone());
+            }
+        }
+        object
+    };
+    for (name, x, y, width, height) in [
+        ("linear", 4.0, 6.0, 24.0, 16.0),
+        ("radial", 36.0, 6.0, 24.0, 16.0),
+        ("veil", 4.0, 28.0, 56.0, 14.0),
+    ] {
+        apply(
+            &mut session,
+            "object.createPath",
+            placed(serde_json::json!({
+                "kind": "rect",
+                "x": x, "y": y, "width": width, "height": height, "name": name,
+            })),
+        )?;
+    }
+    let ids = session.document().pages[0].layers.layers[0].cells[0]
+        .elements
+        .clone();
+    let stops = |a: i64, b: i64| {
+        serde_json::json!([
+            { "position": 0.0, "color_raw": a },
+            { "position": 1.0, "color_raw": b },
+        ])
+    };
+    apply(
+        &mut session,
+        "path.setFill",
+        serde_json::json!({
+            "id": ids[0],
+            "shape": "linear",
+            "stops": stops(0xFF_00_00_00, 0xFF_FF_FF_FF),
+        }),
+    )?;
+    apply(
+        &mut session,
+        "path.setFillVector",
+        serde_json::json!({
+            "id": ids[0],
+            "start": { "x": 4.0, "y": 14.0 },
+            "end": { "x": 28.0, "y": 14.0 },
+        }),
+    )?;
+    apply(
+        &mut session,
+        "path.setFill",
+        serde_json::json!({
+            "id": ids[1],
+            "shape": "radial",
+            "stops": stops(0xFF_00_00_00, 0xFF_FF_FF_FF),
+        }),
+    )?;
+    apply(
+        &mut session,
+        "path.setFillVector",
+        serde_json::json!({
+            "id": ids[1],
+            "start": { "x": 48.0, "y": 14.0 },
+            "end": { "x": 48.0, "y": 34.0 },
+        }),
+    )?;
+    apply(
+        &mut session,
+        "path.setFill",
+        serde_json::json!({
+            "id": ids[2],
+            "shape": "linear",
+            "stops": stops(0xFF_FF_00_00, 0xFF_00_FF_FF),
+            "alpha": stops(0x00_00_00_00, 0xFF_00_00_00),
+        }),
+    )?;
+    apply(
+        &mut session,
+        "path.setFillVector",
+        serde_json::json!({
+            "id": ids[2],
+            "start": { "x": 4.0, "y": 35.0 },
+            "end": { "x": 60.0, "y": 35.0 },
+        }),
+    )?;
+    let (tree, stats) = doc::fwmap::write(session.document(), &doc::fwmap::UnknownBag::default())
+        .map_err(|e| format!("gradient fixture: doc write: {e}"))?;
+    if stats.unconsumed_unknown != 0 {
+        return Err(format!(
+            "gradient fixture: doc write left {} unknown node(s)",
             stats.unconsumed_unknown
         ));
     }
@@ -1674,10 +1811,12 @@ mod tests {
         );
         let (x0, y0, x1, y1) = bounds.expect("no opaque pixels");
         // Exact corner pin (anti-aliasing reaches one pixel past the
-        // pure geometry: star top y = 14−10 = 4, rasterized at 3).
+        // pure geometry: star top y = 14−10 = 4, rasterized at 3;
+        // engine-created paths carry no stroke, so the ring that once
+        // reached 3/45 is gone).
         assert_eq!(
             (x0, y0, x1, y1),
-            (7, 3, 54, 45),
+            (7, 4, 53, 44),
             "shapes must span all quadrants"
         );
     }

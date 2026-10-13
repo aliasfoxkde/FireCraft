@@ -1649,14 +1649,17 @@ fn an_alpha_ramp_sets_coverage_across_the_gradient() {
     let rendered = render(&doc, 0, 0).expect("render");
 
     // Over the transparent canvas the coverage ramp (0 → 255) is the
-    // visible thing: at x=0.125 both the ramp colour and the coverage
-    // sample 32/255 — but vello quantizes to 31 — and the target is
-    // straight alpha, so RGB and A read the same. At x=0.875 both
-    // read 223.
+    // visible thing. The target is premultiplied: at x=0.125 the ramp
+    // samples grey 31 at coverage 31/255 → premultiplied 31×31/255 =
+    // 3.8 → 4; at x=0.875 grey 223 at 223/255 → 223×223/255 = 195.1 →
+    // 195. Colour and coverage ride the same position — the
+    // unpremultiplied stop interpolation keeps the grey hue (the
+    // premultiplied default would lerp the black end stop toward
+    // nothing and read (0,0,0,31)).
     let left = pixel(&rendered, 0, 2);
     let right = pixel(&rendered, 3, 2);
     assert_eq!(left[3], 31, "the alpha ramp sets coverage: {left:?}");
-    assert_eq!(left[0], left[3], "the dark end rides the ramp: {left:?}");
+    assert_eq!(left[0], 4, "the dark end rides the ramp: {left:?}");
     assert_eq!(right[3], 223, "coverage rides the same ramp");
-    assert_eq!(right[0], right[3], "the bright end rides it too: {right:?}");
+    assert_eq!(right[0], 195, "the bright end rides it too: {right:?}");
 }

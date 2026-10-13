@@ -25,7 +25,7 @@
 use base64::Engine as _;
 
 use compose::{KernelOp, Mix, blend_mode, plan, straight_alpha};
-use doc::{Document, Layer, ObjectData, PathObject, TileRef};
+use doc::{Document, FillShape, Gradient, GradientStop, Layer, ObjectData, PathObject, TileRef};
 use filters::Surface;
 
 use crate::{ExportError, Plane};
@@ -54,6 +54,12 @@ pub struct SvgReport {
     pub image_objects: usize,
     /// Filters dropped whole because one op mapped to no primitive.
     pub dropped_filters: usize,
+    /// Paths painted from a modeled `FPLv` gradient def. compose
+    /// renders these (the svg-golden gate holds the two rasters
+    /// together); the importer drops gradient paint servers today, so
+    /// the round-trip gate skips such documents — recorded limitation,
+    /// not silent loss.
+    pub gradient_fills: usize,
 }
 
 /// The SVG text plus its report.
@@ -106,6 +112,7 @@ pub fn encode(document: &Document, options: &SvgOptions) -> Result<SvgDocument, 
         document,
         canvas: (f64::from(width), f64::from(height)),
         filter_seq: 0,
+        gradient_seq: 0,
     };
     writer.out.push_str(&format!(
         "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{width}\" height=\"{height}\" viewBox=\"0 0 {width} {height}\">\n"
@@ -130,6 +137,7 @@ struct SvgWriter<'a> {
     document: &'a Document,
     canvas: (f64, f64),
     filter_seq: usize,
+    gradient_seq: usize,
 }
 
 impl SvgWriter<'_> {
@@ -226,7 +234,7 @@ impl SvgWriter<'_> {
         let mode = mix_name(blend_mode(path.blend));
         let attrs = wrap_attrs(path.opacity, mode, filter.as_deref());
 
-        let fill = paint_attr("fill", paint.fill_raw);
+        let fill = self.fill_paint(path, paint);
         let stroke = paint_attr("stroke", paint.stroke_raw);
         let rule = if path.even_odd { "evenodd" } else { "nonzero" };
         let d = path_data(&path.contours);
@@ -253,6 +261,83 @@ impl SvgWriter<'_> {
         } else {
             self.out.push_str(&format!("<g{attrs}>\n{element}</g>\n"));
         }
+    }
+
+    /// The fill paint for one path: a modeled `FPLv` gradient becomes a
+    /// `linearGradient`/`radialGradient` def plus a `url(#…)` reference.
+    /// The kind mapping is compose's `fill_brush` verbatim — the
+    /// svg-golden gate rasters the two against each other, so both must
+    /// agree: linear rides the start→end fill vector, radial/elliptical
+    /// is a circle centered on the start handle (the third handle's
+    /// ellipse squash is a recorded substitution), and every family
+    /// compose substitutes to the solid `FCLi` colour exports solid too.
+    /// The conical sweep is the one asymmetry: compose renders it
+    /// natively, SVG has no sweep primitive, so it drops to the solid
+    /// colour under a recorded note (the encoder contract: nothing
+    /// diverges silently).
+    fn fill_paint(&mut self, path: &PathObject, paint: &doc::PaintStyle) -> String {
+        let solid = paint_attr("fill", paint.fill_raw);
+        let Some(style) = &paint.fill else {
+            return solid;
+        };
+        let Some(gradient) = &style.gradient else {
+            return solid;
+        };
+        let (Some(start), Some(end)) = (path.fill_start, path.fill_end) else {
+            // Without both handles compose paints the solid colour too.
+            return solid;
+        };
+        let (sx, sy, ex, ey) = (start.x, start.y, end.x, end.y);
+        let (element, geometry) = match style.shape {
+            FillShape::Linear => (
+                "linearGradient",
+                format!(
+                    "x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\"",
+                    num(sx),
+                    num(sy),
+                    num(ex),
+                    num(ey)
+                ),
+            ),
+            FillShape::Radial | FillShape::Elliptical => {
+                let radius = ((ex - sx) * (ex - sx) + (ey - sy) * (ey - sy)).sqrt();
+                (
+                    "radialGradient",
+                    format!(
+                        "cx=\"{}\" cy=\"{}\" r=\"{}\"",
+                        num(sx),
+                        num(sy),
+                        num(radius)
+                    ),
+                )
+            }
+            FillShape::Conical => {
+                self.report
+                    .notes
+                    .push("conical gradient exports as the solid colour (SVG has no sweep primitive; compose renders it)".to_owned());
+                return solid;
+            }
+            _ => return solid,
+        };
+        let Some(stops) = gradient_stops(gradient, paint.fill_raw) else {
+            return solid;
+        };
+        self.gradient_seq += 1;
+        let id = format!("grad-{}", self.gradient_seq);
+        self.defs.push_str(&format!(
+            "<{element} id=\"{id}\" gradientUnits=\"userSpaceOnUse\" {geometry} spreadMethod=\"pad\">\n"
+        ));
+        for (position, color_raw, alpha) in stops {
+            let (r, g, b, _) = decode_abgr(color_raw);
+            self.defs.push_str(&format!(
+                "<stop offset=\"{}\" stop-color=\"#{r:02x}{g:02x}{b:02x}\" stop-opacity=\"{}\"/>\n",
+                num(position),
+                num(alpha),
+            ));
+        }
+        self.defs.push_str(&format!("</{element}>\n"));
+        self.report.gradient_fills += 1;
+        format!("fill=\"url(#{id})\"")
     }
 
     fn write_text(&mut self, text: &doc::TextObject) {
@@ -591,6 +676,94 @@ fn decode_abgr(raw: i64) -> (u8, u8, u8, u8) {
         ((raw >> 16) & 0xFF) as u8,
         ((raw >> 24) & 0xFF) as u8,
     )
+}
+
+/// Stop density when a coverage ramp rides along (see
+/// [`gradient_stops`]).
+const GRADIENT_SAMPLES: usize = 256;
+
+/// Merges the `FG0v` RGB ramp and the `FG1v` coverage ramp into SVG
+/// `(offset, stop-color, stop-opacity)` triples, mirroring compose's
+/// `gradient_stops`: every sample point evaluates both ramps
+/// independently and coverage rides `stop-opacity`.
+///
+/// Sample points are the ramp knots when the gradient is opaque —
+/// straight and premultiplied stop interpolation agree there, so the
+/// sparse form is exact and the SVG stays small. With a coverage ramp
+/// the stops densify onto a uniform grid: SVG viewers interpolate
+/// stop pairs in different spaces (straight per SVG 1.1, premultiplied
+/// per CSS Images — resvg does the latter), and over long transparent
+/// stretches that choice visibly shifts colour, not just alpha. At
+/// 1/256 spacing any viewer reconstructs compose's independent-ramp
+/// values within the AA noise the svg-golden gate measures.
+fn gradient_stops(gradient: &Gradient, solid_raw: i64) -> Option<Vec<(f64, i64, f64)>> {
+    if gradient.rgb.is_empty() && gradient.alpha.is_empty() {
+        return None;
+    }
+    let mut positions: Vec<f64> = if gradient.alpha.is_empty() {
+        gradient.rgb.iter().map(|stop| stop.position).collect()
+    } else {
+        (0..=GRADIENT_SAMPLES)
+            .map(|step| f64::from(step as u32) / f64::from(GRADIENT_SAMPLES as u32))
+            .chain(
+                gradient
+                    .rgb
+                    .iter()
+                    .chain(gradient.alpha.iter())
+                    .map(|stop| stop.position),
+            )
+            .collect()
+    };
+    positions.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    positions.dedup();
+
+    let mut stops = Vec::with_capacity(positions.len());
+    for position in positions {
+        let color_raw = sample_ramp(&gradient.rgb, position, solid_raw);
+        // An empty coverage ramp is fully opaque; otherwise the `FGCi`
+        // alpha byte is the coverage.
+        let alpha = if gradient.alpha.is_empty() {
+            1.0
+        } else {
+            let (_, _, _, a) = decode_abgr(sample_ramp(&gradient.alpha, position, 0xFF00_0000));
+            f64::from(a) / 255.0
+        };
+        stops.push((position, color_raw, alpha));
+    }
+    Some(stops)
+}
+
+/// Piecewise-linear sample of one ramp at `position` in ABGR layout;
+/// outside the ends the nearest stop holds. Parity twin of compose's
+/// `sample_stop` — the svg-golden gate keeps the two honest.
+fn sample_ramp(ramp: &[GradientStop], position: f64, edge: i64) -> i64 {
+    let Some(first) = ramp.first() else {
+        return edge;
+    };
+    if position <= first.position {
+        return first.color_raw;
+    }
+    let Some(last) = ramp.last() else {
+        return edge;
+    };
+    if position >= last.position {
+        return last.color_raw;
+    }
+    for pair in ramp.windows(2) {
+        let (a, b) = (&pair[0], &pair[1]);
+        if position <= b.position && b.position > a.position {
+            let t = (position - a.position) / (b.position - a.position);
+            let mix = |x: i64, y: i64| -> i64 {
+                (f64::from(x as i32) * (1.0 - t) + f64::from(y as i32) * t + 0.5) as i64
+            };
+            let (ar, ag, ab, aa) = decode_abgr(a.color_raw);
+            let (br, bg, bb, ba) = decode_abgr(b.color_raw);
+            let (ar, ag, ab, aa) = (i64::from(ar), i64::from(ag), i64::from(ab), i64::from(aa));
+            let (br, bg, bb, ba) = (i64::from(br), i64::from(bg), i64::from(bb), i64::from(ba));
+            return mix(ar, br) | mix(ag, bg) << 8 | mix(ab, bb) << 16 | mix(aa, ba) << 24;
+        }
+    }
+    edge
 }
 
 /// Rasterizer mix → SVG mix-blend-mode name. The value table itself is

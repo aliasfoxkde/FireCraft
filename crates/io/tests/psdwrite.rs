@@ -92,6 +92,7 @@ fn path_object(name: &str, fill_raw: i64) -> ObjectData {
         paint: Some(PaintStyle {
             stroke_raw: 0,
             fill_raw,
+            fill: None,
         }),
         fill_start: None,
         fill_end: None,

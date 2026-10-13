@@ -305,7 +305,9 @@ fn bytes_digest(bytes: &[u8]) -> String {
 /// demands a re-measure before raising. The filtered fixture is
 /// skipped (SVG filters import unfiltered — the recorded both-directions
 /// limitation in `docs/decisions/0008-svg-filter-mapping.md`), as are
-/// the text fixtures.
+/// the text fixtures. Documents the exporter painted from gradient
+/// defs are skipped too: the importer drops gradient paint servers
+/// (recorded limitation), so the svg-golden gate owns their parity.
 pub const ROUNDTRIP_MAX_CHANNEL_DELTA: u8 = 0;
 
 /// Mean-delta bound for the round-trip gate (see
@@ -356,6 +358,17 @@ fn roundtrip_inner(measure: bool) -> Result<(), String> {
         let report = out.report;
         if ineligible(&report) {
             skipped.push(format!("{name} ({})", skip_reason(&report)));
+            continue;
+        }
+        if report.gradient_fills > 0 {
+            // The importer drops gradient paint servers (recorded
+            // limitation), so the bit-exact contract cannot even start
+            // — the svg-golden gate owns these renders' parity.
+            skipped.push(format!(
+                "{name} ({} gradient fill(s) drop on import; \
+                 svg-golden owns their parity)",
+                report.gradient_fills
+            ));
             continue;
         }
 

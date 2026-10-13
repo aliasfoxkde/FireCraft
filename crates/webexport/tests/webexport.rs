@@ -441,6 +441,7 @@ fn css_properties_describes_geometry_fill_and_effects() {
             paint: Some(doc::PaintStyle {
                 stroke_raw: 0,
                 fill_raw: 0x00_00_00_FF, // ABGR: red
+                fill: None,
             }),
             fill_start: None,
             fill_end: None,

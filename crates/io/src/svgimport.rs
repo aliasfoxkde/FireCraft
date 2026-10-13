@@ -332,6 +332,7 @@ impl Importer<'_> {
             paint: Some(PaintStyle {
                 stroke_raw,
                 fill_raw,
+                fill: None,
             }),
             fill_start: None,
             fill_end: None,
@@ -416,12 +417,18 @@ fn max_element_depth(text: &str) -> usize {
             Some(b'!') | Some(b'?') => {
                 i = skip_construct(bytes, i);
             }
-            // Element start: measure to the tag end so self-closing
-            // tags and quoted `>` attribute text are handled.
+            // Element start: measure to the tag end so quoted `>`
+            // attribute text is handled, and a self-closing tag opens
+            // and closes in one — it must not leave depth inflated
+            // (long runs of `<stop/>`, as in a densified gradient,
+            // otherwise trip the ceiling on well-formed input).
             Some(c) if c.is_ascii_alphabetic() || *c == b'_' || *c == b':' => {
-                depth += 1;
-                deepest = deepest.max(depth);
-                i = tag_end(bytes, i);
+                let (end, self_closing) = tag_end(bytes, i);
+                if !self_closing {
+                    depth += 1;
+                    deepest = deepest.max(depth);
+                }
+                i = end;
             }
             _ => i += 1,
         }
@@ -430,25 +437,31 @@ fn max_element_depth(text: &str) -> usize {
 }
 
 /// The index just past the `>` closing the tag that starts at `start`
-/// (which points at `<`). Quoted attribute values are honored; an
-/// unterminated tag consumes the rest of the input.
-fn tag_end(bytes: &[u8], start: usize) -> usize {
+/// (which points at `<`), and whether that tag is self-closing (`/>`).
+/// Quoted attribute values are honored; an unterminated tag consumes
+/// the rest of the input.
+fn tag_end(bytes: &[u8], start: usize) -> (usize, bool) {
     let mut i = start + 1;
     let mut quote = 0u8;
+    let mut prev = 0u8;
     while i < bytes.len() {
         let b = bytes[i];
         if quote != 0 {
             if b == quote {
                 quote = 0;
             }
+            prev = 0;
         } else if b == b'"' || b == b'\'' {
             quote = b;
+            prev = 0;
         } else if b == b'>' {
-            return i + 1;
+            return (i + 1, prev == b'/');
+        } else {
+            prev = b;
         }
         i += 1;
     }
-    bytes.len()
+    (bytes.len(), false)
 }
 
 /// Skips the XML construct starting at `start` (which points at `<`
@@ -484,7 +497,7 @@ fn skip_construct(bytes: &[u8], start: usize) -> usize {
         return bytes.len();
     }
     // `<?...?>` or unrecognized `<!...>`: skip to the first `>`.
-    tag_end(bytes, start)
+    tag_end(bytes, start).0
 }
 
 /// `extra ∘ node` — apply the node's absolute transform first, then the

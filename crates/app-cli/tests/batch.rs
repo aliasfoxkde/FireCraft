@@ -136,6 +136,7 @@ fn path_square(registry: &mut doc::Registry, x: f64, fill: i64) -> doc::ObjectId
         paint: Some(doc::PaintStyle {
             stroke_raw: 0,
             fill_raw: fill,
+            fill: None,
         }),
         fill_start: None,
         fill_end: None,

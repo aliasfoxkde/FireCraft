@@ -41,6 +41,7 @@ fn square() -> PathObject {
         paint: Some(PaintStyle {
             stroke_raw: 0,
             fill_raw: 0xFF_00_00_FF,
+            fill: None,
         }),
         fill_start: None,
         fill_end: None,
@@ -174,6 +175,7 @@ fn fill_on_top_orders_two_paths() {
     path.paint = Some(PaintStyle {
         stroke_raw: 0xFF_00_00_00,
         fill_raw: 0xFF_00_00_FF,
+        fill: None,
     });
     let (svg, _) = encode(&document(vec![ObjectData::Path(path)]));
     let d = "M 0 0 L 4 0 L 4 4 L 0 4 L 0 0 Z";
@@ -204,6 +206,7 @@ fn semi_transparent_paint_gets_a_paint_opacity() {
     path.paint = Some(PaintStyle {
         stroke_raw: 0,
         fill_raw: 0x80_00_00_FF, // alpha 128 red
+        fill: None,
     });
     let (svg, _) = encode(&document(vec![ObjectData::Path(path)]));
     assert!(
@@ -488,4 +491,169 @@ fn hostile_documents_are_refused_cleanly() {
         out,
         io::ExportError::Unsupported { format: "svg", .. }
     ));
+}
+
+// --- `FPLv` gradient fills (M15 task 5): the def + reference form is
+// compose's `fill_brush` mapping transcribed; the svg-golden gate
+// holds the two rasters together, these tests pin the serializer.
+
+use doc::{Fill, FillShape, Gradient, GradientStop};
+
+fn ramp(a: i64, b: i64) -> Vec<GradientStop> {
+    vec![
+        GradientStop {
+            position: 0.0,
+            color_raw: a,
+        },
+        GradientStop {
+            position: 1.0,
+            color_raw: b,
+        },
+    ]
+}
+
+fn gradient_path(
+    shape: FillShape,
+    rgb: Vec<GradientStop>,
+    alpha: Vec<GradientStop>,
+    handles: Option<(Point, Point)>,
+) -> PathObject {
+    let mut path = square();
+    if let Some((start, end)) = handles {
+        path.fill_start = Some(start);
+        path.fill_end = Some(end);
+    }
+    if let Some(paint) = path.paint.as_mut() {
+        paint.fill = Some(Fill {
+            shape,
+            shape_extended: true,
+            texture_blend: 0,
+            feather: 0,
+            stamping: None,
+            hard_edge: false,
+            gradient: Some(Gradient {
+                vertices: Vec::new(),
+                rgb,
+                alpha,
+            }),
+            dither: None,
+        });
+    }
+    path
+}
+
+#[test]
+fn linear_gradient_exports_a_def_and_reference() {
+    let path = gradient_path(
+        FillShape::Linear,
+        ramp(0xFF_00_00_00, 0xFF_FF_FF_FF),
+        Vec::new(),
+        Some((Point::new(0.0, 0.0), Point::new(8.0, 0.0))),
+    );
+    let (svg, report) = encode(&document(vec![ObjectData::Path(path)]));
+    assert!(
+        svg.contains(
+            "<linearGradient id=\"grad-1\" gradientUnits=\"userSpaceOnUse\" \
+             x1=\"0\" y1=\"0\" x2=\"8\" y2=\"0\" spreadMethod=\"pad\">\n\
+             <stop offset=\"0\" stop-color=\"#000000\" stop-opacity=\"1\"/>\n\
+             <stop offset=\"1\" stop-color=\"#ffffff\" stop-opacity=\"1\"/>\n\
+             </linearGradient>"
+        ),
+        "linear def rides the start→end vector: {svg}"
+    );
+    assert!(
+        svg.contains("<path d=\"M 0 0 L 4 0 L 4 4 L 0 4 L 0 0 Z\" fill=\"url(#grad-1)\""),
+        "the path references the def: {svg}"
+    );
+    assert!(report.notes.is_empty(), "opaque linear is exact, no notes");
+    assert_eq!(report.gradient_fills, 1, "the def is counted for the gates");
+}
+
+#[test]
+fn radial_gradient_centers_on_the_start_handle() {
+    let path = gradient_path(
+        FillShape::Radial,
+        ramp(0xFF_00_00_00, 0xFF_FF_FF_FF),
+        Vec::new(),
+        Some((Point::new(4.0, 4.0), Point::new(12.0, 4.0))),
+    );
+    let (svg, _) = encode(&document(vec![ObjectData::Path(path)]));
+    assert!(
+        svg.contains(
+            "<radialGradient id=\"grad-1\" gradientUnits=\"userSpaceOnUse\" \
+             cx=\"4\" cy=\"4\" r=\"8\" spreadMethod=\"pad\">"
+        ),
+        "radius is the start→end distance: {svg}"
+    );
+}
+
+/// The M15 regression pin: with a coverage ramp the stops densify and
+/// every interior stop must carry the straight-interpolated colour and
+/// the independent coverage. A channel-lane swap in the ramp sampler
+/// produced exactly the mirrored colours and zero opacities this
+/// assertion rejects (the monochrome fixtures hid it; the gate caught
+/// it on the veil).
+#[test]
+fn coverage_ramp_interpolates_straight_at_mid() {
+    let path = gradient_path(
+        FillShape::Linear,
+        // `FG0v`: blue → yellow.
+        ramp(0xFF_FF_00_00, 0xFF_00_FF_FF),
+        // `FG1v`: transparent → opaque.
+        ramp(0x00_00_00_00, 0xFF_00_00_00),
+        Some((Point::new(0.0, 0.0), Point::new(8.0, 0.0))),
+    );
+    let (svg, _) = encode(&document(vec![ObjectData::Path(path)]));
+    let stops = svg.matches("<stop ").count();
+    assert!(
+        stops > 128,
+        "a coverage ramp densifies the stops (got {stops})"
+    );
+    assert!(
+        svg.contains(
+            "<stop offset=\"0.5\" stop-color=\"#808080\" \
+             stop-opacity=\"0.5019607843137255\"/>"
+        ),
+        "mid-ramp: straight colour halfway blue→yellow, coverage halfway: {svg}"
+    );
+    assert!(
+        svg.contains("<stop offset=\"0\" stop-color=\"#0000ff\" stop-opacity=\"0\"/>")
+            && svg.contains("<stop offset=\"1\" stop-color=\"#ffff00\" stop-opacity=\"1\"/>"),
+        "endpoints hold the ramp ends: {svg}"
+    );
+}
+
+#[test]
+fn conical_gradient_records_the_divergence_and_exports_solid() {
+    let path = gradient_path(
+        FillShape::Conical,
+        ramp(0xFF_00_00_00, 0xFF_FF_FF_FF),
+        Vec::new(),
+        Some((Point::new(0.0, 0.0), Point::new(8.0, 0.0))),
+    );
+    let (svg, report) = encode(&document(vec![ObjectData::Path(path)]));
+    assert!(
+        !svg.contains("Gradient"),
+        "SVG has no sweep primitive: {svg}"
+    );
+    assert_eq!(report.notes.len(), 1, "the divergence is recorded");
+    assert!(report.notes[0].contains("conical"), "{}", report.notes[0]);
+    assert!(
+        svg.contains("fill=\"#ff0000\""),
+        "the solid `FCLi` colour rides instead: {svg}"
+    );
+}
+
+#[test]
+fn gradient_without_handles_exports_solid_like_compose() {
+    let path = gradient_path(
+        FillShape::Linear,
+        ramp(0xFF_00_00_00, 0xFF_FF_FF_FF),
+        Vec::new(),
+        None,
+    );
+    let (svg, report) = encode(&document(vec![ObjectData::Path(path)]));
+    assert!(!svg.contains("Gradient"), "no def without handles: {svg}");
+    assert!(report.notes.is_empty());
+    assert!(svg.contains("fill=\"#ff0000\""), "solid `FCLi`: {svg}");
 }

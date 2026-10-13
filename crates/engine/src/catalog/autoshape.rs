@@ -111,8 +111,8 @@ fn insert_shape(
         even_odd: generated.even_odd,
         primitive: None,
         paint: Some(PaintStyle {
-            stroke_raw: 0xFF00_0000, // transparent black — no stroke yet
-            fill_raw: 0xFF00_0000,   // transparent black — no fill yet
+            stroke_raw: 0,         // transparent black — no stroke yet
+            fill_raw: 0xFF00_0000, // ABGR opaque black — the CS6 new-path fill
             fill: None,
         }),
         fill_start: None,

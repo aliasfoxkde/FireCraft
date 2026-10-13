@@ -25,8 +25,8 @@ use vello_cpu::kurbo::{Rect, Stroke};
 use vello_cpu::peniko::color::{AlphaColor, Srgb};
 use vello_cpu::peniko::{
     BlendMode, Brush, Compose, Extend, Fill, Gradient as PenikoGradient, GradientKind, ImageBrush,
-    ImageQuality, ImageSampler, LinearGradientPosition, RadialGradientPosition,
-    SweepGradientPosition,
+    ImageQuality, ImageSampler, InterpolationAlphaSpace, LinearGradientPosition,
+    RadialGradientPosition, SweepGradientPosition,
 };
 use vello_cpu::{ImageSource, Pixmap, RenderContext, Resources};
 
@@ -716,6 +716,13 @@ fn fill_brush(path: &PathObject, paint: &doc::PaintStyle) -> PaintBrush {
         // Beyond the ramp ends the outer colours hold, as in CS6.
         extend: Extend::Pad,
         stops,
+        // `FG0v` (colour) and `FG1v` (coverage) are independent 1D
+        // ramps: the colour rides the position regardless of coverage,
+        // so stops interpolate unpremultiplied. The premultiplied
+        // default would drag a transparent end stop's colour toward
+        // black and shift the hue of every covered pixel (pinned by
+        // the corpus gradient fixture's veil).
+        interpolation_alpha_space: InterpolationAlphaSpace::Unpremultiplied,
         ..PenikoGradient::default()
     })
 }
