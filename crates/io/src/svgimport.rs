@@ -8,9 +8,12 @@
 //!   spine), quads raise to cubics on the way in;
 //! - groups → groups; opacity per-mille, blend values through
 //!   `compose::blend_value` (the inverse of the export's table);
-//! - solid fills/strokes → `FCLi` paint raws; gradient/pattern paint
-//!   servers and SVG filters are dropped **with report entries** (the
-//!   model has no gradient spine yet and no SVG-filter→`EFLv` mapping);
+//! - solid fills/strokes → `FCLi` paint raws; gradient fill servers
+//!   import onto the `FPLv` model (linear/radial onto
+//!   [`doc::FillShape`] with the ramp split into `FG0v`/`FG1v`);
+//!   pattern servers and SVG filters are dropped **with report
+//!   entries** (the model has no pattern spine and no
+//!   SVG-filter→`EFLv` mapping); strokes stay solid-only.
 //! - clip paths and masks: children import **unmasked** with a report
 //!   entry — compose's own group semantics (decision 0005 parity);
 //! - embedded rasters → `IMGv` objects over the shared tile bank
@@ -25,7 +28,11 @@
 //! entry** rather than being dropped or faked.
 
 use compose::{Mix, blend_value};
-use doc::{Contour, Document, GroupObject, ObjectData, PaintStyle, PathObject, PathPoint};
+use doc::{
+    Contour, Document, Fill, FillShape, Gradient, GradientStop, GroupObject, ObjectData,
+    PaintStyle, PathObject, PathPoint,
+};
+use geom::Point;
 use usvg::tiny_skia_path::{Point as TsPoint, Transform as TsTransform};
 
 use crate::{ImportError, raster};
@@ -41,6 +48,8 @@ pub struct SvgImportReport {
     pub texts_flattened: usize,
     /// Paint roles lost to gradient/pattern servers.
     pub gradients_dropped: usize,
+    /// Gradient fill servers imported onto the `FPLv` model.
+    pub gradients_imported: usize,
     /// Strokes whose width flattened to the model's 1px.
     pub strokes_flattened: usize,
     /// Groups carrying a clip path or mask, imported unmasked.
@@ -291,6 +300,8 @@ impl Importer<'_> {
         let data = path.data().clone().transform(transform)?;
 
         let mut fill_raw = 0;
+        let mut fill_model = None;
+        let mut fill_handles = (None, None);
         let mut stroke_raw = 0;
         let mut even_odd = false;
         let mut fill_on_top = None;
@@ -299,12 +310,22 @@ impl Importer<'_> {
                 usvg::Paint::Color(color) => {
                     fill_raw = paint_raw(color, fill.opacity());
                 }
-                other => {
-                    self.report.gradients_dropped += 1;
-                    self.report
-                        .notes
-                        .push(format!("fill dropped: {} paint server", paint_kind(other)));
-                }
+                other => match self.gradient_fill(other, transform) {
+                    Some((edge_raw, model, start, end)) => {
+                        // The edge colour doubles as the beyond-the-ramp
+                        // hold; a fully transparent first stop still
+                        // paints (the interior carries the coverage).
+                        fill_raw = edge_raw;
+                        fill_model = Some(model);
+                        fill_handles = (Some(start), Some(end));
+                    }
+                    None => {
+                        self.report.gradients_dropped += 1;
+                        self.report
+                            .notes
+                            .push(format!("fill dropped: {} paint server", paint_kind(other)));
+                    }
+                },
             }
             even_odd = fill.rule() == usvg::FillRule::EvenOdd;
         }
@@ -340,7 +361,7 @@ impl Importer<'_> {
                 fill_on_top = Some(true);
             }
         }
-        if fill_raw == 0 && stroke_raw == 0 {
+        if fill_raw == 0 && stroke_raw == 0 && fill_model.is_none() {
             self.report
                 .notes
                 .push("path without paint renders as nothing (compose parity)".to_owned());
@@ -358,10 +379,10 @@ impl Importer<'_> {
             paint: Some(PaintStyle {
                 stroke_raw,
                 fill_raw,
-                fill: None,
+                fill: fill_model,
             }),
-            fill_start: None,
-            fill_end: None,
+            fill_start: fill_handles.0,
+            fill_end: fill_handles.1,
             fill_third: None,
             brush_placement: None,
             fill_on_top,
@@ -415,6 +436,134 @@ impl Importer<'_> {
         }
         Ok(id)
     }
+}
+
+impl Importer<'_> {
+    /// A gradient paint server onto the fill model: the ramp split
+    /// into the `FG0v` colour and `FG1v` coverage lists, the fill
+    /// kind, and canvas-space control handles (usvg reports the
+    /// server in the element's user space, so the path's absolute
+    /// transform applies here exactly as it did to the geometry).
+    /// Returns the edge colour (`fill_raw` — the beyond-the-ramp hold
+    /// the renderer falls back to), the fill, and the start/end
+    /// handles. `None` for servers the model can't carry (pattern)
+    /// and stop-less gradients, which render nothing anyway.
+    fn gradient_fill(
+        &mut self,
+        paint: &usvg::Paint,
+        transform: TsTransform,
+    ) -> Option<(i64, Fill, Point, Point)> {
+        // usvg normalizes objectBoundingBox units and the
+        // `gradientTransform` into the server's own transform (raw
+        // coordinates stay unit-space), so the full chain to canvas
+        // space is the path's absolute transform ∘ the server's.
+        let (shape, start, end, stops, spread) = match paint {
+            usvg::Paint::LinearGradient(grad) => {
+                let space = compose_transform(transform, grad.transform());
+                (
+                    FillShape::Linear,
+                    apply_ts(space, f64::from(grad.x1()), f64::from(grad.y1())),
+                    apply_ts(space, f64::from(grad.x2()), f64::from(grad.y2())),
+                    grad.stops(),
+                    grad.spread_method(),
+                )
+            }
+            usvg::Paint::RadialGradient(grad) => {
+                let space = compose_transform(transform, grad.transform());
+                let center = apply_ts(space, f64::from(grad.cx()), f64::from(grad.cy()));
+                let radius = f64::from(grad.r().get());
+                // The rim along +x: compose reads the radius as the
+                // centre→end handle distance.
+                (
+                    FillShape::Radial,
+                    center,
+                    Point::new(center.x + radius, center.y),
+                    grad.stops(),
+                    grad.spread_method(),
+                )
+            }
+            _ => return None,
+        };
+        if stops.is_empty() {
+            return None;
+        }
+        // The model's ramps hold at the edges (`Extend::Pad` in the
+        // renderer); reflect/repeat approximates to that, noted.
+        if spread != usvg::SpreadMethod::Pad {
+            self.report.notes.push(format!(
+                "gradient spread {spread:?} imports padded (the model's ramps hold at the edges)"
+            ));
+        }
+
+        // SVG stops may arrive out of order; the ramps are positional.
+        let mut ordered: Vec<usvg::Stop> = stops.to_vec();
+        ordered.sort_by(|a, b| {
+            a.offset()
+                .get()
+                .partial_cmp(&b.offset().get())
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        let mut rgb = Vec::with_capacity(ordered.len());
+        let mut alpha = Vec::with_capacity(ordered.len());
+        let mut edge_raw = 0;
+        for (index, stop) in ordered.iter().enumerate() {
+            let position = f64::from(stop.offset().get());
+            let color = stop.color();
+            let coverage = (f64::from(stop.opacity().get()) * 255.0).round() as i64;
+            rgb.push(GradientStop {
+                position,
+                color_raw: 0xFF00_0000
+                    | (i64::from(color.blue) << 16)
+                    | (i64::from(color.green) << 8)
+                    | i64::from(color.red),
+            });
+            alpha.push(GradientStop {
+                position,
+                color_raw: coverage << 24,
+            });
+            if index == 0 {
+                edge_raw = paint_raw(&color, stop.opacity());
+            }
+        }
+        // A fully-opaque ramp needs no coverage list — the renderer
+        // treats a missing `FG1v` as opaque, and the file convention
+        // omits the slot (the writer emits exactly one shape then).
+        if alpha
+            .iter()
+            .all(|stop| (stop.color_raw >> 24) & 0xFF == 0xFF)
+        {
+            alpha.clear();
+        }
+        self.report.gradients_imported += 1;
+        Some((
+            edge_raw,
+            Fill {
+                shape,
+                shape_extended: true,
+                texture_blend: 0,
+                feather: 0,
+                stamping: None,
+                hard_edge: false,
+                gradient: Some(Gradient {
+                    vertices: Vec::new(),
+                    rgb,
+                    alpha,
+                }),
+                dither: None,
+            },
+            start,
+            end,
+        ))
+    }
+}
+
+/// Applies an affine transform to a point (the tiny-skia transform
+/// carries the row-major SVG matrix).
+fn apply_ts(transform: TsTransform, x: f64, y: f64) -> Point {
+    Point::new(
+        f64::from(transform.sx) * x + f64::from(transform.kx) * y + f64::from(transform.tx),
+        f64::from(transform.ky) * x + f64::from(transform.sy) * y + f64::from(transform.ty),
+    )
 }
 
 /// Recognizes the canvas matte our own serializer emits: the first

@@ -56,9 +56,9 @@ pub struct SvgReport {
     pub dropped_filters: usize,
     /// Paths painted from a modeled `FPLv` gradient def. compose
     /// renders these (the svg-golden gate holds the two rasters
-    /// together); the importer drops gradient paint servers today, so
-    /// the round-trip gate skips such documents — recorded limitation,
-    /// not silent loss.
+    /// together); the importer folds the same servers back onto the
+    /// `FPLv` model, so export→import round trips carry the gradient
+    /// rather than flattening it.
     pub gradient_fills: usize,
 }
 

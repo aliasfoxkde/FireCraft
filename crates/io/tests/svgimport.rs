@@ -7,7 +7,10 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use compose::render;
-use doc::{Contour, Document, GroupObject, ObjectData, PaintStyle, PathObject, PathPoint};
+use doc::{
+    Contour, Document, Fill, FillShape, Gradient, GradientStop, GroupObject, ObjectData,
+    PaintStyle, PathObject, PathPoint,
+};
 use geom::Point;
 use io::svg::{self, SvgOptions};
 use io::svgimport::{self};
@@ -154,6 +157,219 @@ fn rendered(document: &Document) -> Vec<u8> {
         Ok(r) => r.pixels,
         Err(_) => vec![0; width * height * 4],
     }
+}
+
+/// A gradient-painted rect over (8,8)-(56,24): the M15 `FPLv` model
+/// filled in by hand — two opaque stops, `shape_extended` like the
+/// engine commands write, both handles set.
+fn gradient_path(shape: FillShape, start: (f64, f64), end: (f64, f64)) -> PathObject {
+    PathObject {
+        contours: vec![Contour {
+            closed: true,
+            point_count: 4,
+            points: vec![
+                point(8.0, 8.0),
+                point(56.0, 8.0),
+                point(56.0, 24.0),
+                point(8.0, 24.0),
+            ],
+        }],
+        primitive: None,
+        even_odd: false,
+        paint: Some(PaintStyle {
+            stroke_raw: 0,
+            fill_raw: 0xFF18_1F2B,
+            fill: Some(Fill {
+                shape,
+                shape_extended: true,
+                texture_blend: 0,
+                feather: 0,
+                stamping: None,
+                hard_edge: false,
+                gradient: Some(Gradient {
+                    vertices: Vec::new(),
+                    rgb: vec![
+                        GradientStop {
+                            position: 0.0,
+                            color_raw: 0xFF18_1F2B,
+                        },
+                        GradientStop {
+                            position: 1.0,
+                            color_raw: 0xFFE8_9B2C,
+                        },
+                    ],
+                    alpha: Vec::new(),
+                }),
+                dither: None,
+            }),
+        }),
+        fill_start: Some(Point::new(start.0, start.1)),
+        fill_end: Some(Point::new(end.0, end.1)),
+        fill_third: None,
+        brush_placement: None,
+        fill_on_top: None,
+        locked: false,
+        visible: true,
+        opacity: 1000,
+        blend: 0,
+        name: None,
+        effects: Vec::new(),
+    }
+}
+
+/// A linear-gradient fill round-trips: the `FPLv` model reconstructs
+/// (ramp, handles, kind), the report counts one import and zero
+/// drops, and the renders agree bit-exact — export and import speak
+/// the same userSpaceOnUse/pad dialect.
+#[test]
+fn linear_gradient_fill_round_trips_render_exact() {
+    let original = document(vec![ObjectData::Path(gradient_path(
+        FillShape::Linear,
+        (12.0, 16.0),
+        (52.0, 16.0),
+    ))]);
+    let imported = svgimport::decode(&encode(&original)).expect("import");
+    assert_eq!(imported.report.gradients_imported, 1);
+    assert_eq!(imported.report.gradients_dropped, 0);
+    assert!(
+        imported.report.notes.is_empty(),
+        "{:?}",
+        imported.report.notes
+    );
+
+    let imported = imported.document;
+    let path = &paths(&imported)[0];
+    let paint = path.paint.as_ref().expect("paint survives");
+    let fill = paint.fill.as_ref().expect("the gradient model lands");
+    assert_eq!(fill.shape, FillShape::Linear);
+    assert!(fill.shape_extended, "imports write the FSXi slot");
+    let gradient = fill.gradient.as_ref().expect("the ramp lands");
+    assert!(
+        gradient.alpha.is_empty(),
+        "opaque stops omit the coverage ramp"
+    );
+    let knots: Vec<(f64, i64)> = gradient
+        .rgb
+        .iter()
+        .map(|stop| (stop.position, stop.color_raw))
+        .collect();
+    assert_eq!(knots.len(), 2, "both stops land");
+    // First stop = the ink, second = the amber; the low byte is red.
+    assert_eq!(
+        knots,
+        vec![(0.0, 0xFF18_1F2B), (1.0, 0xFFE8_9B2C)],
+        "ramp verbatim"
+    );
+    // Handles: the export's userSpaceOnUse vector, back verbatim.
+    assert_eq!(path.fill_start.map(|p| (p.x, p.y)), Some((12.0, 16.0)));
+    assert_eq!(path.fill_end.map(|p| (p.x, p.y)), Some((52.0, 16.0)));
+    assert_eq!(max_delta(&rendered(&original), &rendered(&imported)), 0);
+
+    // The imported gradient survives the file boundary: fwmap write →
+    // read keeps the fill model and the ramp verbatim.
+    let (nodes, stats) =
+        doc::fwmap::write(&imported, &doc::fwmap::UnknownBag::default()).expect("fwmap write");
+    assert_eq!(stats.unconsumed_unknown, 0, "the writer ate every node");
+    let (reread, _) = doc::fwmap::read(&nodes).expect("fwmap read");
+    let reopened = &paths(&reread)[0];
+    assert_eq!(
+        reopened
+            .paint
+            .as_ref()
+            .and_then(|paint| paint.fill.as_ref()),
+        path.paint.as_ref().and_then(|paint| paint.fill.as_ref()),
+        "the gradient model round-trips the file"
+    );
+    assert_eq!(
+        (reopened.fill_start, reopened.fill_end),
+        (path.fill_start, path.fill_end),
+        "the handles round-trip the file"
+    );
+}
+
+/// A radial fill round-trips through cx/cy/r: the centre handle and
+/// the rim-along-+x end reconstruct the same circle compose draws.
+#[test]
+fn radial_gradient_fill_round_trips_render_exact() {
+    let original = document(vec![ObjectData::Path(gradient_path(
+        FillShape::Radial,
+        (32.0, 16.0),
+        (52.0, 16.0),
+    ))]);
+    let imported = svgimport::decode(&encode(&original)).expect("import");
+    assert_eq!(imported.report.gradients_imported, 1);
+    let imported = imported.document;
+    let path = &paths(&imported)[0];
+    assert_eq!(
+        path.fill_start.map(|p| (p.x, p.y)),
+        Some((32.0, 16.0)),
+        "centre handle"
+    );
+    assert_eq!(
+        path.fill_end.map(|p| (p.x, p.y)),
+        Some((52.0, 16.0)),
+        "rim handle reconstructs the radius"
+    );
+    assert_eq!(max_delta(&rendered(&original), &rendered(&imported)), 0);
+}
+
+/// A foreign SVG's objectBoundingBox gradient (with a transform) is
+/// normalized by usvg to absolute user space; the import lands it on
+/// the model with the absolute handles and paints — the render leaves
+/// the matte at the ramp's ink end.
+#[test]
+fn foreign_object_bbox_gradient_imports_painted() {
+    let svg = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"32\" height=\"16\">\
+               <linearGradient id=\"g\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"0\">\
+               <stop offset=\"0\" stop-color=\"#000000\"/>\
+               <stop offset=\"1\" stop-color=\"#ffffff\"/></linearGradient>\
+               <rect x=\"4\" y=\"4\" width=\"24\" height=\"8\" fill=\"url(#g)\"/></svg>";
+    let imported = svgimport::decode(svg.as_bytes()).expect("import");
+    assert_eq!(imported.report.gradients_imported, 1);
+    assert_eq!(imported.report.gradients_dropped, 0);
+    let path = &paths(&imported.document)[0];
+    assert_eq!(
+        path.fill_start.map(|p| (p.x, p.y)),
+        Some((4.0, 4.0)),
+        "objectBoundingBox x1=0 resolves to the rect's left edge"
+    );
+    assert_eq!(
+        path.fill_end.map(|p| (p.x, p.y)),
+        Some((28.0, 4.0)),
+        "x2=1 resolves to the right edge"
+    );
+    // Ink at the black end, off the matte.
+    let pixels = rendered(&imported.document);
+    assert!(
+        pixels.chunks(4).any(|px| px != [255, 255, 255, 255]),
+        "the gradient paints"
+    );
+}
+
+/// A gradient STROKE still drops — the model's stroke is a raw colour
+/// only — while a gradient fill on the same path imports.
+#[test]
+fn gradient_stroke_still_drops_with_a_note() {
+    // Two stops — a single-stop gradient collapses to a solid colour
+    // in usvg, which would make the stroke importable.
+    let svg = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"32\" height=\"16\">\
+               <linearGradient id=\"g\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"0\">\
+               <stop offset=\"0\" stop-color=\"#000000\"/>\
+               <stop offset=\"1\" stop-color=\"#ffffff\"/></linearGradient>\
+               <rect x=\"4\" y=\"4\" width=\"24\" height=\"8\" fill=\"url(#g)\" \
+               stroke=\"url(#g)\" stroke-width=\"2\"/></svg>";
+    let imported = svgimport::decode(svg.as_bytes()).expect("import");
+    assert_eq!(imported.report.gradients_imported, 1, "the fill imports");
+    assert_eq!(imported.report.gradients_dropped, 1, "the stroke drops");
+    assert!(
+        imported
+            .report
+            .notes
+            .iter()
+            .any(|note| note.contains("stroke dropped: linear-gradient paint server")),
+        "{:?}",
+        imported.report.notes
+    );
 }
 
 /// The canvas matte round-trips through the background slot, not the
@@ -474,50 +690,52 @@ fn embedded_image_imports_into_the_tile_bank() {
 }
 
 #[test]
-fn gradient_paint_drops_with_a_report_note() {
+fn gradient_fill_imports_beside_a_solid_stroke() {
     // Two stops (a single-stop gradient collapses to a solid color in
-    // usvg) plus a solid stroke, so the path survives with its fill
-    // role dropped and reported.
+    // usvg) plus a solid stroke: the fill lands on the model, the
+    // stroke keeps its raw.
     let svg = b"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"64\" height=\"32\">\
                 <linearGradient id=\"g\"><stop offset=\"0\" stop-color=\"#ff0000\"/> \
                 <stop offset=\"1\" stop-color=\"#0000ff\"/></linearGradient>\
                 <path d=\"M 0 0 L 4 0 L 4 4 L 0 4 Z\" fill=\"url(#g)\" stroke=\"#00ff00\"/>\
                 </svg>";
     let imported = svgimport::decode(svg).expect("import");
-    assert_eq!(imported.report.gradients_dropped, 1);
+    assert_eq!(imported.report.gradients_imported, 1);
+    assert_eq!(imported.report.gradients_dropped, 0);
     assert!(
-        imported
-            .report
-            .notes
-            .iter()
-            .any(|note| note.contains("linear-gradient")),
+        imported.report.notes.is_empty(),
         "{:?}",
         imported.report.notes
     );
     let imported_paths = paths(&imported.document);
-    assert_eq!(imported_paths.len(), 1, "the path survives on its stroke");
+    assert_eq!(imported_paths.len(), 1);
     assert_eq!(
         imported_paths[0]
             .paint
             .as_ref()
             .map(|p| (p.stroke_raw, p.fill_raw)),
-        Some((0xFF_00_FF_00, 0)),
-        "gradient fill dropped, stroke kept"
+        Some((0xFF_00_FF_00, 0xFF_00_00_FF)),
+        "stroke kept; the fill edge holds the first stop (ABGR red)"
     );
+    let fill = imported_paths[0]
+        .paint
+        .as_ref()
+        .and_then(|paint| paint.fill.as_ref())
+        .expect("the gradient model lands");
+    let gradient = fill.gradient.as_ref().expect("the ramp lands");
+    assert_eq!(gradient.rgb.len(), 2, "both stops land");
 }
 
 #[test]
-fn gradient_only_document_refuses() {
+fn gradient_only_document_imports() {
     let svg = b"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"64\" height=\"32\">\
                 <linearGradient id=\"g\"><stop offset=\"0\" stop-color=\"#ff0000\"/> \
                 <stop offset=\"1\" stop-color=\"#0000ff\"/></linearGradient>\
                 <path d=\"M 0 0 L 4 0 L 4 4 L 0 4 Z\" fill=\"url(#g)\"/>\
                 </svg>";
-    let error = svgimport::decode(svg).expect_err("nothing importable");
-    assert!(
-        matches!(error, io::ImportError::Unsupported { format: "svg", .. }),
-        "{error:?}"
-    );
+    let imported = svgimport::decode(svg).expect("a painted path is importable");
+    assert_eq!(imported.report.gradients_imported, 1);
+    assert_eq!(paths(&imported.document).len(), 1);
 }
 
 /// Regression: the depth guard counted every self-closing element as a
@@ -537,8 +755,8 @@ fn self_closing_siblings_do_not_accumulate_depth() {
     let imported =
         svgimport::decode(svg.as_bytes()).expect("well-formed input clears the depth gate");
     assert_eq!(
-        imported.report.gradients_dropped, 1,
-        "the recorded limitation holds"
+        imported.report.gradients_imported, 1,
+        "the depth gate holds and the densified gradient imports"
     );
     assert_eq!(
         paths(&imported.document).len(),
