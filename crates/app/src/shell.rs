@@ -192,19 +192,137 @@ fn draw_tool_glyph(painter: &egui::Painter, rect: Rect, tool: Tool, color: Color
             painter.circle_filled(c, 5.5, Color32::from_rgb(0x4f, 0x7c, 0xc0));
             painter.circle_stroke(c, 5.5, (1.0, Color32::from_rgb(0x9c, 0xb8, 0xe0)));
         }
-        Tool::AutoShape(_) => {
+        Tool::AutoShape(shape) => draw_autoshape_glyph(painter, rect, shape, color),
+    }
+}
+
+/// Preview glyphs for the Auto Shape flyout: each of the ten
+/// generators' silhouette as a one-stroke vector sketch (original
+/// art — see `docs/ATTRIBUTION.md`).
+fn draw_autoshape_glyph(painter: &egui::Painter, rect: Rect, shape: AutoShape, color: Color32) {
+    let c = rect.center();
+    let stroke = (1.4, color);
+    let loop_points = |radii: &[f64]| -> Vec<Pos2> {
+        let mut points = Vec::with_capacity(radii.len() + 1);
+        for (index, radius) in radii.iter().enumerate() {
+            let angle = -std::f64::consts::FRAC_PI_2
+                + index as f64 * std::f64::consts::TAU / radii.len() as f64;
+            points.push(Pos2::new(
+                c.x + (radius * angle.cos()) as f32,
+                c.y + (radius * angle.sin()) as f32,
+            ));
+        }
+        points.push(points[0]);
+        points
+    };
+    match shape {
+        AutoShape::Star => {
+            painter.add(egui::Shape::line(
+                loop_points(&[6.5, 3.0, 6.5, 3.0, 6.5, 3.0, 6.5, 3.0, 6.5, 3.0]),
+                stroke,
+            ));
+        }
+        AutoShape::Polygon => {
+            painter.add(egui::Shape::line(
+                loop_points(&[6.5, 6.5, 6.5, 6.5, 6.5, 6.5]),
+                stroke,
+            ));
+        }
+        AutoShape::Spiral => {
             let mut points = Vec::new();
-            for index in 0..10 {
-                let radius = if index % 2 == 0 { 6.5 } else { 3.0 };
-                let angle =
-                    -std::f64::consts::FRAC_PI_2 + index as f64 * std::f64::consts::TAU / 10.0;
+            for step in 0..48 {
+                let t = step as f64 / 47.0;
+                let angle = t * 3.0 * std::f64::consts::TAU - std::f64::consts::FRAC_PI_2;
+                let radius = 1.0 + t * 5.5;
                 points.push(Pos2::new(
                     c.x + (radius * angle.cos()) as f32,
                     c.y + (radius * angle.sin()) as f32,
                 ));
             }
-            points.push(points[0]);
             painter.add(egui::Shape::line(points, stroke));
+        }
+        AutoShape::Pie => {
+            let center = Pos2::new(c.x - 1.5, c.y + 1.5);
+            let mut points = vec![center];
+            for step in 0..9 {
+                let angle =
+                    std::f64::consts::FRAC_PI_2 - step as f64 * std::f64::consts::TAU * 0.75 / 8.0;
+                points.push(Pos2::new(
+                    center.x + (6.0 * angle.cos()) as f32,
+                    center.y + (6.0 * angle.sin()) as f32,
+                ));
+            }
+            points.push(center);
+            painter.add(egui::Shape::line(points, stroke));
+        }
+        AutoShape::Doughnut => {
+            painter.circle_stroke(c, 6.0, stroke);
+            painter.circle_stroke(c, 2.5, stroke);
+        }
+        AutoShape::LShape => {
+            painter.add(egui::Shape::line(
+                vec![
+                    Pos2::new(c.x - 5.0, c.y - 6.0),
+                    Pos2::new(c.x - 5.0, c.y + 6.0),
+                    Pos2::new(c.x + 6.0, c.y + 6.0),
+                ],
+                stroke,
+            ));
+        }
+        AutoShape::Arrow => {
+            painter.add(egui::Shape::line(
+                vec![
+                    Pos2::new(c.x - 6.0, c.y - 2.5),
+                    Pos2::new(c.x + 0.5, c.y - 2.5),
+                    Pos2::new(c.x + 0.5, c.y - 5.5),
+                    Pos2::new(c.x + 6.0, c.y),
+                    Pos2::new(c.x + 0.5, c.y + 5.5),
+                    Pos2::new(c.x + 0.5, c.y + 2.5),
+                    Pos2::new(c.x - 6.0, c.y + 2.5),
+                    Pos2::new(c.x - 6.0, c.y - 2.5),
+                ],
+                stroke,
+            ));
+        }
+        AutoShape::ArrowLine => {
+            painter.line_segment(
+                [
+                    Pos2::new(c.x - 6.0, c.y + 4.0),
+                    Pos2::new(c.x + 4.5, c.y - 3.5),
+                ],
+                stroke,
+            );
+            painter.add(egui::Shape::line(
+                vec![
+                    Pos2::new(c.x + 6.0, c.y - 6.0),
+                    Pos2::new(c.x + 4.5, c.y - 3.5),
+                    Pos2::new(c.x + 1.0, c.y - 4.0),
+                ],
+                stroke,
+            ));
+        }
+        AutoShape::Measure => {
+            painter.line_segment(
+                [Pos2::new(c.x - 6.0, c.y), Pos2::new(c.x + 6.0, c.y)],
+                stroke,
+            );
+            for x in [-6.0, 6.0] {
+                painter.line_segment(
+                    [Pos2::new(c.x + x, c.y - 4.0), Pos2::new(c.x + x, c.y + 4.0)],
+                    stroke,
+                );
+            }
+        }
+        AutoShape::ConnectorLine => {
+            painter.add(egui::Shape::line(
+                vec![
+                    Pos2::new(c.x - 6.0, c.y - 5.0),
+                    Pos2::new(c.x + 1.5, c.y - 5.0),
+                    Pos2::new(c.x + 1.5, c.y + 5.0),
+                    Pos2::new(c.x + 6.0, c.y + 5.0),
+                ],
+                stroke,
+            ));
         }
     }
 }
@@ -424,6 +542,8 @@ pub struct Shell {
     canvas_rect: Option<Rect>,
     /// Set by the Exit action; the frame loop closes the viewport.
     close_requested: bool,
+    /// The Auto Shape flyout is open (toggled by its tool button).
+    autoshape_flyout: bool,
 }
 
 impl Shell {
@@ -454,6 +574,7 @@ impl Shell {
             doc_name: "untitled".to_owned(),
             canvas_rect: None,
             close_requested: false,
+            autoshape_flyout: false,
         }
     }
 
@@ -2076,9 +2197,9 @@ impl Shell {
         }
     }
 
-    /// The Auto Shape flyout stand-in: one star button; clicking
-    /// cycles through the shape set (the popup flyout lands with the
-    /// icons pass).
+    /// The Auto Shape flyout: the star button toggles a popup listing
+    /// every shape with its preview glyph; picking one selects the
+    /// tool and closes the flyout.
     fn autoshape_button(&mut self, ui: &mut egui::Ui) {
         let shapes = AutoShape::ALL;
         let current = match self.editor.tool {
@@ -2086,34 +2207,80 @@ impl Shell {
             _ => None,
         };
         let (rect, response) = ui.allocate_exact_size(egui::Vec2::splat(26.0), Sense::click());
+        let mut open = self.autoshape_flyout;
         if response.clicked() {
-            let next = match current {
-                Some(shape) => {
-                    let index = shapes.iter().position(|&s| s == shape).unwrap_or(0);
-                    shapes[(index + 1) % shapes.len()]
-                }
-                None => shapes[0],
-            };
-            self.editor.tool = Tool::AutoShape(next);
-            self.status = format!("tool: Auto Shape — {}", next.label());
+            open = !open;
+            if open && current.is_none() {
+                self.editor.tool = Tool::AutoShape(shapes[0]);
+            }
         }
         let painter = ui.painter();
-        if current.is_some() {
+        let active = current.is_some();
+        if active {
             painter.rect_filled(rect, 2.0, Color32::from_rgb(0x2f, 0x5d, 0x8a));
         } else if response.hovered() {
             painter.rect_filled(rect, 2.0, Color32::from_rgb(0x4a, 0x4a, 0x4a));
         }
-        let ink = if current.is_some() {
+        let ink = if active {
             Color32::from_rgb(0xe8, 0xe8, 0xe8)
         } else {
             Color32::from_rgb(0xc4, 0xc4, 0xc4)
         };
-        draw_tool_glyph(painter, rect, Tool::AutoShape(shapes[0]), ink);
+        let shown = current.unwrap_or(shapes[0]);
+        draw_tool_glyph(painter, rect, Tool::AutoShape(shown), ink);
         let tip = match current {
-            Some(shape) => format!("Auto Shape — {} (click to cycle)", shape.label()),
-            None => "Auto Shape (click to cycle)".to_owned(),
+            Some(shape) => format!("Auto Shape — {}", shape.label()),
+            None => "Auto Shape".to_owned(),
         };
-        response.on_hover_text(tip);
+        let response = response.on_hover_text(tip);
+
+        let mut picked: Option<AutoShape> = None;
+        egui::Popup::from_response(&response)
+            .open_bool(&mut open)
+            .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+            .show(|ui| {
+                for shape in shapes {
+                    let (row, row_response) =
+                        ui.allocate_exact_size(egui::Vec2::new(150.0, 20.0), Sense::click());
+                    let selected = current == Some(shape);
+                    let rp = ui.painter();
+                    if selected {
+                        rp.rect_filled(row, 2.0, Color32::from_rgb(0x2f, 0x5d, 0x8a));
+                    } else if row_response.hovered() {
+                        rp.rect_filled(row, 2.0, Color32::from_rgb(0x4a, 0x4a, 0x4a));
+                    }
+                    let ink = if selected || row_response.hovered() {
+                        Color32::from_rgb(0xe8, 0xe8, 0xe8)
+                    } else {
+                        Color32::from_rgb(0xd9, 0xd9, 0xd9)
+                    };
+                    draw_autoshape_glyph(
+                        rp,
+                        Rect::from_min_size(
+                            Pos2::new(row.left() + 4.0, row.center().y - 8.0),
+                            egui::Vec2::splat(16.0),
+                        ),
+                        shape,
+                        ink,
+                    );
+                    rp.text(
+                        Pos2::new(row.left() + 26.0, row.center().y),
+                        egui::Align2::LEFT_CENTER,
+                        shape.label(),
+                        egui::FontId::proportional(12.0),
+                        ink,
+                    );
+                    if row_response.clicked() {
+                        picked = Some(shape);
+                    }
+                }
+            });
+        self.autoshape_flyout = open;
+        if let Some(shape) = picked {
+            self.editor.tool = Tool::AutoShape(shape);
+            self.autoshape_flyout = false;
+            self.status = format!("tool: Auto Shape — {}", shape.label());
+        }
     }
 
     /// Canvas-local screen position of a world point.
