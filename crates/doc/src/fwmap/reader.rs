@@ -10,11 +10,12 @@
 use crate::fwmap::MapError;
 use crate::fwmap::unknown::UnknownBag;
 use crate::model::{
-    Canvas, Cell, Contour, Document, DocumentInfo, Effect, EffectProperty, EffectValue,
-    ExportOptions, Grid, GroupObject, Guides, ImageObject, Layer, LayerList, NineSliceGuides, Page,
-    PageInfo, PaintStyle, PathObject, PathPoint, PrimitiveSource, SliceBackground, SliceBehavior,
-    SliceObject, SymbolAnimation, SymbolDefinition, SymbolInstanceObject, SymbolType, TextObject,
-    TextOnPath, TextRun, TextStyle, TileRef,
+    Canvas, Cell, Contour, Dither, Document, DocumentInfo, Effect, EffectProperty, EffectValue,
+    ExportOptions, Fill, FillShape, Gradient, GradientStop, Grid, GroupObject, Guides, ImageObject,
+    Layer, LayerList, NineSliceGuides, Page, PageInfo, PaintStyle, PathObject, PathPoint,
+    PrimitiveSource, SliceBackground, SliceBehavior, SliceObject, SymbolAnimation,
+    SymbolDefinition, SymbolInstanceObject, SymbolType, TextObject, TextOnPath, TextRun, TextStyle,
+    TileRef,
 };
 use crate::registry::{ObjectData, ObjectId, Registry};
 use fwpng::nodetree::{Node, NodeValue};
@@ -77,6 +78,34 @@ fn bad_shape(node: &Node, path: &str, expected: &'static str) -> MapError {
 fn children_of<'a>(node: &'a Node, path: &str) -> Result<&'a [Node], MapError> {
     node.as_children()
         .ok_or_else(|| bad_shape(node, path, "children"))
+}
+
+/// Maps the fill's shape slot through its enumeration: `FSXi` when
+/// `extended`, else the narrower `FSHi` (same values minus contour;
+/// its 3 means "radial or contour" and reads as [`FillShape::Radial`]
+/// — recorded ambiguity, the extended file's `17` distinguishes).
+/// `None` for an absent or unknown value: the caller bags the whole
+/// `FPLv` so the subtree stays verbatim.
+fn fill_shape(raw: Option<i64>, extended: bool) -> Option<FillShape> {
+    let shape = match raw? {
+        0 => FillShape::Solid,
+        2 => FillShape::Linear,
+        3 => FillShape::Radial,
+        4 => FillShape::Conical,
+        5 => FillShape::Satin,
+        7 => FillShape::Pinch,
+        8 => FillShape::Folds,
+        9 => FillShape::Elliptical,
+        10 => FillShape::Rectangular,
+        12 => FillShape::Bars,
+        13 => FillShape::Ripple,
+        14 => FillShape::Waves,
+        15 => FillShape::Pattern,
+        16 => FillShape::WebDither,
+        17 if extended => FillShape::Contour,
+        _ => return None,
+    };
+    Some(shape)
 }
 
 struct Reader {
@@ -944,21 +973,269 @@ impl Reader {
         })))
     }
 
-    /// Reads a `PATv` paint: the two solid colours are modeled; the
-    /// gradient/pattern subtrees stay in the bag under the `PATv` path.
+    /// Reads a `PATv` paint: the two solid colours and the `FPLv`
+    /// fill subtree are modeled; the texture subtrees (`TXBv` `TXFv`
+    /// `BPLv`) and unmodeled fill nodes stay in the bag under the
+    /// `PATv` path.
     fn read_paint(&mut self, children: &[Node], path: &str) -> Result<PaintStyle, MapError> {
         let (mut brush, mut fill) = (None, None);
+        let mut fill_style = None;
         for (i, child) in children.iter().enumerate() {
             match &child.fourcc {
                 b"BCLi" => self.slot_i64(child, path, i, &mut brush)?,
                 b"FCLi" => self.slot_i64(child, path, i, &mut fill)?,
+                b"FPLv" => {
+                    if fill_style.is_none() {
+                        let fplv_path = format!("{path}/FPLv");
+                        match self.read_fill(child, &fplv_path)? {
+                            Some(parsed) => fill_style = Some(parsed),
+                            // Unmodelable fill: preserve the whole
+                            // subtree in the bag, subsuming the
+                            // partial entries the walk left behind.
+                            None => {
+                                self.bag.purge_under(&fplv_path);
+                                self.bag_node(path, i, child);
+                            }
+                        }
+                    } else {
+                        self.bag_node(path, i, child);
+                    }
+                }
                 _ => self.bag_node(path, i, child),
             }
         }
         Ok(PaintStyle {
             stroke_raw: brush.unwrap_or(0),
             fill_raw: fill.unwrap_or(0),
+            fill: fill_style,
         })
+    }
+
+    /// One `FPLv` fill definition, or `None` when the subtree cannot
+    /// be modeled faithfully (a shape value outside either
+    /// enumeration, a malformed gradient list — the caller bags the
+    /// whole node so bytes stay verbatim).
+    ///
+    /// Mapped children: `FTBi` `FEFi` `FSMi` `FRDb`, the shape slot
+    /// (`FSXi` preferred, `FSHi` fallback), `FGLv`, the dither colours
+    /// (`FD1i`..`FD4i`, `FDTb`). Everything else — names, `RDOb`,
+    /// `FETi`/`FRRi` flags, `FPTv` tile, a bagged-back `FSHi` when
+    /// `FSXi` carried the kind — splices from the bag.
+    fn read_fill(&mut self, node: &Node, path: &str) -> Result<Option<Fill>, MapError> {
+        let children = children_of(node, path)?;
+        let (mut texture_blend, mut feather, mut stamping, mut hard_edge) =
+            (None, None, None, None);
+        let (mut shape, mut shape_extended) = (None, false);
+        let (mut gradient, mut dither) = (None, None);
+        let mut dither_slots: [Option<i64>; 4] = [None; 4];
+        // The compatibility slot's node, held until the walk ends: an
+        // `FSHi` seen before `FSXi` must not claim the kind.
+        let mut compat: Option<(usize, Node)> = None;
+
+        for (i, child) in children.iter().enumerate() {
+            match &child.fourcc {
+                b"FTBi" => self.slot_i64(child, path, i, &mut texture_blend)?,
+                b"FEFi" => self.slot_i64(child, path, i, &mut feather)?,
+                b"FSMi" => self.slot_i64(child, path, i, &mut stamping)?,
+                b"FRDb" => self.slot_bool(child, path, i, &mut hard_edge)?,
+                b"FSXi" => {
+                    if shape_extended {
+                        self.bag_node(path, i, child);
+                    } else {
+                        match fill_shape(child.as_int(), true) {
+                            Some(parsed) => {
+                                shape = Some(parsed);
+                                shape_extended = true;
+                                // A compatibility node seen earlier
+                                // loses the slot and splices back.
+                                if let Some((j, held)) = compat.take() {
+                                    self.bag_node(path, j, &held);
+                                }
+                            }
+                            // Unknown kind: the whole subtree is
+                            // unmodelable.
+                            None => return Ok(None),
+                        }
+                    }
+                }
+                b"FSHi" => {
+                    if shape_extended {
+                        // The extended kind won; the compatibility
+                        // node splices back verbatim.
+                        self.bag_node(path, i, child);
+                    } else if shape.is_some() || compat.is_some() {
+                        // Duplicate compatibility slot.
+                        self.bag_node(path, i, child);
+                    } else {
+                        match fill_shape(child.as_int(), false) {
+                            Some(parsed) => {
+                                shape = Some(parsed);
+                                compat = Some((i, child.clone()));
+                            }
+                            // A compatibility value outside its own
+                            // enumeration is unmodelable too.
+                            None => return Ok(None),
+                        }
+                    }
+                }
+                b"FGLv" => {
+                    if gradient.is_none() {
+                        match self.read_gradient(child, &format!("{path}/FGLv"))? {
+                            Some(parsed) => gradient = Some(parsed),
+                            None => return Ok(None),
+                        }
+                    } else {
+                        self.bag_node(path, i, child);
+                    }
+                }
+                b"FD1i" | b"FD2i" | b"FD3i" | b"FD4i" => {
+                    let slot = (child.fourcc[2] - b'1') as usize;
+                    match (dither_slots[slot], child.as_int()) {
+                        (None, Some(color)) => dither_slots[slot] = Some(color),
+                        // Duplicate slot or a non-integer payload
+                        // splices back verbatim.
+                        _ => self.bag_node(path, i, child),
+                    }
+                }
+                b"FDTb" => {
+                    let mut transparent = None;
+                    self.slot_bool(child, path, i, &mut transparent)?;
+                    if dither.is_none() {
+                        dither = Some(Dither {
+                            colors: [None; 4],
+                            transparent,
+                        });
+                    } else {
+                        // A second flag splices back verbatim.
+                        self.bag_node(path, i, child);
+                    }
+                }
+                _ => self.bag_node(path, i, child),
+            }
+        }
+
+        // A held compatibility node needs no bag entry: when `FSXi`
+        // won, it was bagged at its index the moment it lost; when it
+        // itself carries the kind (`shape_extended == false`), the
+        // writer re-emits it as the mapped `FSHi` slot.
+        drop(compat);
+
+        // A fill without a shape slot has no kind to render from.
+        let shape = match shape {
+            Some(parsed) => parsed,
+            None => return Ok(None),
+        };
+        let dither = if dither_slots.iter().any(Option::is_some) {
+            Some(match dither.as_mut() {
+                Some(existing) => {
+                    existing.colors = dither_slots;
+                    *existing
+                }
+                None => Dither {
+                    colors: dither_slots,
+                    transparent: None,
+                },
+            })
+        } else {
+            dither
+        };
+        Ok(Some(Fill {
+            shape,
+            shape_extended,
+            texture_blend: texture_blend.unwrap_or(0),
+            feather: feather.unwrap_or(0),
+            stamping,
+            hard_edge: hard_edge.unwrap_or(false),
+            gradient,
+            dither,
+        }))
+    }
+
+    /// One `FGLv` gradient: the legacy `FGVv` vertex list plus the
+    /// `FGYv` ramps (`FG0v` RGB, `FG1v` alpha). Names ride the bag.
+    /// `None` when any list is malformed (count mismatch, unpaired
+    /// position/colour).
+    fn read_gradient(&mut self, node: &Node, path: &str) -> Result<Option<Gradient>, MapError> {
+        let children = children_of(node, path)?;
+        let mut gradient = Gradient::default();
+
+        for (i, child) in children.iter().enumerate() {
+            match &child.fourcc {
+                b"FGVv" => match self.read_ramp(child, &format!("{path}/FGVv"))? {
+                    Some(ramp) => gradient.vertices = ramp,
+                    None => return Ok(None),
+                },
+                b"FGYv" => {
+                    let fgyv_path = format!("{path}/FGYv");
+                    for (j, kid) in children_of(child, &fgyv_path)?.iter().enumerate() {
+                        match &kid.fourcc {
+                            b"FG0v" => match self.read_ramp(kid, &format!("{fgyv_path}/FG0v"))? {
+                                Some(ramp) => gradient.rgb = ramp,
+                                None => return Ok(None),
+                            },
+                            b"FG1v" => match self.read_ramp(kid, &format!("{fgyv_path}/FG1v"))? {
+                                Some(ramp) => gradient.alpha = ramp,
+                                None => return Ok(None),
+                            },
+                            _ => self.bag_node(&fgyv_path, j, kid),
+                        }
+                    }
+                }
+                _ => self.bag_node(path, i, child),
+            }
+        }
+        Ok(Some(gradient))
+    }
+
+    /// One ramp: `FNCi` count followed by `FNCi` many `FGIv`
+    /// (position + colour) pairs. Malformed lists return `None`.
+    fn read_ramp(
+        &mut self,
+        node: &Node,
+        path: &str,
+    ) -> Result<Option<Vec<GradientStop>>, MapError> {
+        let children = children_of(node, path)?;
+        let mut count: Option<i64> = None;
+        let mut stops: Vec<GradientStop> = Vec::new();
+
+        for child in children {
+            match &child.fourcc {
+                b"FNCi" => {
+                    if count.is_some() {
+                        return Ok(None);
+                    }
+                    count = child.as_int();
+                }
+                b"FGIv" => {
+                    let fgiv_path = format!("{path}/FGIv[{}]", stops.len());
+                    let (mut position, mut color) = (None, None);
+                    for (k, kid) in children_of(child, &fgiv_path)?.iter().enumerate() {
+                        match &kid.fourcc {
+                            b"FGPf" => position = kid.as_float(),
+                            b"FGCi" => color = kid.as_int(),
+                            _ => self.bag_node(&fgiv_path, k, kid),
+                        }
+                    }
+                    match (position, color) {
+                        (Some(position), Some(color)) => stops.push(GradientStop {
+                            position,
+                            color_raw: color,
+                        }),
+                        // Unpaired point: unmodelable.
+                        _ => return Ok(None),
+                    }
+                }
+                _ => return Ok(None),
+            }
+        }
+        let expected = usize::try_from(count.unwrap_or(0)).unwrap_or(usize::MAX);
+        // An empty ramp (`FNCi` 0) cannot be distinguished on write
+        // from a missing ramp — treat it as unmodelable (the
+        // dictionary's files carry x2+ points anyway).
+        if stops.len() != expected || stops.is_empty() {
+            return Ok(None);
+        }
+        Ok(Some(stops))
     }
 
     fn read_contours(&mut self, children: &[Node], path: &str) -> Result<Vec<Contour>, MapError> {

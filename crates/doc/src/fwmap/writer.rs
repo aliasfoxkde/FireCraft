@@ -12,10 +12,10 @@
 use crate::fwmap::unknown::UnknownBag;
 use crate::fwmap::{FourCC, MapError};
 use crate::model::{
-    Cell, Contour, Document, Effect, EffectProperty, EffectValue, ExportOptions, Grid, GroupObject,
-    Guides, ImageObject, Layer, LayerList, NineSliceGuides, PaintStyle, PathObject, PathPoint,
-    PrimitiveSource, SliceObject, SymbolDefinition, SymbolInstanceObject, TextObject, TextOnPath,
-    TextRun, TextStyle, TileRef,
+    Cell, Contour, Document, Effect, EffectProperty, EffectValue, ExportOptions, Fill, FillShape,
+    Gradient, GradientStop, Grid, GroupObject, Guides, ImageObject, Layer, LayerList,
+    NineSliceGuides, PaintStyle, PathObject, PathPoint, PrimitiveSource, SliceObject,
+    SymbolDefinition, SymbolInstanceObject, TextObject, TextOnPath, TextRun, TextStyle, TileRef,
 };
 use crate::registry::{ObjectData, ObjectId};
 use fwpng::nodetree::{Node, NodeValue};
@@ -103,6 +103,31 @@ fn effect_property_node(prop: &EffectProperty) -> Node {
 /// emission order. Bagged entries whose index cannot be honored (input
 /// tree was not canonically ordered) are appended — content stays
 /// lossless even when position does not.
+/// Inverse of the reader's `fill_shape`: the file value for a model
+/// shape. `Contour` writes `17` whichever slot the file uses (the
+/// compatibility `FSHi` enumeration has no 17 — a file that decodes
+/// to `Contour` always carried `FSXi`, and the writer honours that
+/// via `Fill::shape_extended`).
+fn shape_raw(shape: FillShape) -> i64 {
+    match shape {
+        FillShape::Solid => 0,
+        FillShape::Linear => 2,
+        FillShape::Radial => 3,
+        FillShape::Conical => 4,
+        FillShape::Satin => 5,
+        FillShape::Pinch => 7,
+        FillShape::Folds => 8,
+        FillShape::Elliptical => 9,
+        FillShape::Rectangular => 10,
+        FillShape::Bars => 12,
+        FillShape::Ripple => 13,
+        FillShape::Waves => 14,
+        FillShape::Pattern => 15,
+        FillShape::WebDither => 16,
+        FillShape::Contour => 17,
+    }
+}
+
 pub(crate) fn splice(mapped: Vec<Node>, bagged: Vec<(usize, Node)>) -> Vec<Node> {
     let mut out = Vec::with_capacity(mapped.len() + bagged.len());
     let mut mapped = mapped.into_iter();
@@ -616,15 +641,101 @@ impl Writer<'_> {
     }
 
     /// `PATv` children in dictionary order: BCLi FCLi, then the
-    /// gradient/texture subtrees (`FPLv` `TXBv` `TXFv` `BPLv`) splice
-    /// back from the bag.
+    /// modeled `FPLv` fill; the texture subtrees (`TXBv` `TXFv`
+    /// `BPLv`) splice back from the bag.
     fn write_paint(&mut self, paint: &PaintStyle, path: &str) -> Result<Node, MapError> {
-        let mapped = vec![
+        let mut mapped = vec![
             n_i(*b"BCLi", paint.stroke_raw),
             n_i(*b"FCLi", paint.fill_raw),
         ];
+        if let Some(fill) = &paint.fill {
+            let fplv_path = format!("{path}/FPLv");
+            mapped.push(self.write_fill(fill, &fplv_path)?);
+        }
         let children = self.splice_container(mapped, path);
         Ok(n_kids(*b"PATv", children))
+    }
+
+    /// `FPLv` children in dictionary order (mapped subset): FTBi FEFi
+    /// FSMi FRDb, the shape slot (`FSXi` when the file carried the
+    /// extended kind, else `FSHi`), `FGLv`, the dither colours. Names,
+    /// `RDOb`, `FETi`/`FRRi`, `FPTv` and a compatibility `FSHi` (when
+    /// `FSXi` carried the kind) splice back from the bag.
+    fn write_fill(&mut self, fill: &Fill, path: &str) -> Result<Node, MapError> {
+        let mut mapped = Vec::new();
+        mapped.push(n_i(*b"FTBi", fill.texture_blend));
+        mapped.push(n_i(*b"FEFi", fill.feather));
+        if let Some(stamping) = fill.stamping {
+            mapped.push(n_i(*b"FSMi", stamping));
+        }
+        if fill.hard_edge {
+            mapped.push(n_b(*b"FRDb", true));
+        }
+        if fill.shape_extended {
+            mapped.push(n_i(*b"FSXi", shape_raw(fill.shape)));
+        } else {
+            mapped.push(n_i(*b"FSHi", shape_raw(fill.shape)));
+        }
+        if let Some(gradient) = &fill.gradient {
+            let fglv_path = format!("{path}/FGLv");
+            mapped.push(self.write_gradient(gradient, &fglv_path)?);
+        }
+        if let Some(dither) = &fill.dither {
+            for (i, slot) in dither.colors.iter().enumerate() {
+                if let Some(color) = slot {
+                    let fourcc = [b'F', b'D', b'1' + i as u8, b'i'];
+                    mapped.push(n_i(fourcc, *color));
+                }
+            }
+            if let Some(transparent) = dither.transparent {
+                mapped.push(n_b(*b"FDTb", transparent));
+            }
+        }
+        let children = self.splice_container(mapped, path);
+        Ok(n_kids(*b"FPLv", children))
+    }
+
+    /// `FGLv`: the legacy `FGVv` vertex list first, then `FGYv` with
+    /// the `FG0v`/`FG1v` ramps; names splice back from the bag.
+    fn write_gradient(&mut self, gradient: &Gradient, path: &str) -> Result<Node, MapError> {
+        let mut mapped = Vec::new();
+        if !gradient.vertices.is_empty() {
+            let fgvv_path = format!("{path}/FGVv");
+            mapped.push(self.write_ramp(&gradient.vertices, *b"FGVv", &fgvv_path));
+        }
+        if !gradient.rgb.is_empty() || !gradient.alpha.is_empty() {
+            let fgyv_path = format!("{path}/FGYv");
+            let mut ramps = Vec::new();
+            if !gradient.rgb.is_empty() {
+                ramps.push(self.write_ramp(&gradient.rgb, *b"FG0v", &format!("{fgyv_path}/FG0v")));
+            }
+            if !gradient.alpha.is_empty() {
+                ramps.push(self.write_ramp(
+                    &gradient.alpha,
+                    *b"FG1v",
+                    &format!("{fgyv_path}/FG1v"),
+                ));
+            }
+            let bagged = self.bag.take_under(&fgyv_path);
+            mapped.push(n_kids(*b"FGYv", splice(ramps, bagged)));
+        }
+        let children = self.splice_container(mapped, path);
+        Ok(n_kids(*b"FGLv", children))
+    }
+
+    /// One ramp: `FNCi` count then one `FGIv` per stop (position +
+    /// colour); unknown point children splice back inside their `FGIv`.
+    fn write_ramp(&mut self, stops: &[GradientStop], fourcc: [u8; 4], path: &str) -> Node {
+        let mut mapped = Vec::with_capacity(1 + stops.len());
+        mapped.push(n_i(*b"FNCi", stops.len() as i64));
+        for (i, stop) in stops.iter().enumerate() {
+            let fgiv_path = format!("{path}/FGIv[{i}]");
+            let bagged = self.bag.take_under(&fgiv_path);
+            let point = vec![n_f(*b"FGPf", stop.position), n_i(*b"FGCi", stop.color_raw)];
+            mapped.push(n_kids(*b"FGIv", splice(point, bagged)));
+        }
+        let bagged = self.bag.take_under(path);
+        n_kids(fourcc, splice(mapped, bagged))
     }
 
     fn write_contours(

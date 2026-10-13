@@ -766,6 +766,7 @@ mod tests {
             paint: Some(doc::PaintStyle {
                 stroke_raw: 0x11,
                 fill_raw: 0x22,
+                fill: None,
             }),
             fill_start: None,
             fill_end: None,

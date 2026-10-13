@@ -361,6 +361,7 @@ fn image_opacity_composes_over_a_path() {
         paint: Some(doc::PaintStyle {
             stroke_raw: 0,
             fill_raw: 0xFF_FF_FF_FF,
+            fill: None,
         }),
         fill_start: None,
         fill_end: None,

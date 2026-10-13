@@ -151,6 +151,7 @@ fn sample_document() -> Document {
         paint: Some(PaintStyle {
             stroke_raw: 0x20_40_80_FF,
             fill_raw: 0xC0_80_40_FF,
+            fill: None,
         }),
         fill_start: Some(Point::new(0.0, 0.0)),
         fill_end: Some(Point::new(10.0, 20.0)),
@@ -1255,6 +1256,7 @@ fn model_structs_are_fully_constructed() {
         paint: Some(PaintStyle {
             stroke_raw: 0,
             fill_raw: 0,
+            fill: None,
         }),
         fill_start: None,
         fill_end: None,
@@ -2010,4 +2012,359 @@ fn bevv_behavior_payloads_survive_round_trips() {
         serialize(&tree2),
         "second write is stable"
     );
+}
+
+// --- M15: FPLv fill subtree ----------------------------------------------
+
+use crate::model::{Dither, Fill, FillShape, Gradient, GradientStop};
+
+/// An `FPLv` in dictionary order with modelable slots plus the nodes
+/// the model does not interpret: `RDOb`, the identity names, the
+/// observed-always `FETi`/`FRRi` flags, and a `FPTv` pattern tile
+/// wrapping an unknown image payload.
+fn fplv_children() -> Vec<Node> {
+    vec![
+        n_s(b"CATs", "Linear Gradient"),
+        n_s(b"INMs", "fw.grad.linear"),
+        n_s(b"UNMs", "Linear Gradient"),
+        n_b(b"RDOb", true),
+        n_i(b"FTBi", 0),
+        n_i(b"FEFi", 0),
+        n_i(b"FSMi", 1),
+        n_i(b"FETi", 1),
+        n_i(b"FRRi", 0),
+        n_i(b"FSXi", 2),
+        n_k(
+            b"FGLv",
+            vec![
+                n_s(b"CATs", "Custom"),
+                n_s(b"INMs", "fw.grad.custom"),
+                n_k(
+                    b"FGVv",
+                    vec![
+                        n_i(b"FNCi", 2),
+                        n_k(
+                            b"FGIv",
+                            vec![n_f(b"FGPf", 0.0), n_i(b"FGCi", 0x00_00_00_FF)],
+                        ),
+                        n_k(
+                            b"FGIv",
+                            vec![n_f(b"FGPf", 0.5), n_i(b"FGCi", 0xFF_FF_FF_FF)],
+                        ),
+                    ],
+                ),
+                n_k(
+                    b"FGYv",
+                    vec![
+                        n_k(
+                            b"FG0v",
+                            vec![
+                                n_i(b"FNCi", 3),
+                                n_k(
+                                    b"FGIv",
+                                    vec![n_f(b"FGPf", 0.0), n_i(b"FGCi", 0xFF_00_00_FF)],
+                                ),
+                                n_k(
+                                    b"FGIv",
+                                    vec![n_f(b"FGPf", 0.5), n_i(b"FGCi", 0x00_FF_00_FF)],
+                                ),
+                                n_k(
+                                    b"FGIv",
+                                    vec![n_f(b"FGPf", 1.0), n_i(b"FGCi", 0x00_00_FF_FF)],
+                                ),
+                            ],
+                        ),
+                        n_k(
+                            b"FG1v",
+                            vec![
+                                n_i(b"FNCi", 2),
+                                n_k(
+                                    b"FGIv",
+                                    vec![n_f(b"FGPf", 0.0), n_i(b"FGCi", 0xFF_00_00_00)],
+                                ),
+                                n_k(
+                                    b"FGIv",
+                                    vec![n_f(b"FGPf", 1.0), n_i(b"FGCi", 0x00_00_00_00)],
+                                ),
+                            ],
+                        ),
+                    ],
+                ),
+            ],
+        ),
+        n_i(b"FD1i", 0xFF_FF_FF_FF),
+        n_i(b"FD2i", 0x00_00_00_FF),
+        n_b(b"FDTb", true),
+        n_k(
+            b"FPTv",
+            vec![
+                n_s(b"INMs", "tile"),
+                n_k(b"IMGv", vec![n_s(b"RAFs", "raw")]),
+            ],
+        ),
+    ]
+}
+
+/// The `Fill` the reader must produce for [`fplv_children`].
+fn expected_fill() -> Fill {
+    Fill {
+        shape: FillShape::Linear,
+        shape_extended: true,
+        texture_blend: 0,
+        feather: 0,
+        stamping: Some(1),
+        hard_edge: false,
+        gradient: Some(Gradient {
+            vertices: vec![
+                GradientStop {
+                    position: 0.0,
+                    color_raw: 0x00_00_00_FF,
+                },
+                GradientStop {
+                    position: 0.5,
+                    color_raw: 0xFF_FF_FF_FF,
+                },
+            ],
+            rgb: vec![
+                GradientStop {
+                    position: 0.0,
+                    color_raw: 0xFF_00_00_FF,
+                },
+                GradientStop {
+                    position: 0.5,
+                    color_raw: 0x00_FF_00_FF,
+                },
+                GradientStop {
+                    position: 1.0,
+                    color_raw: 0x00_00_FF_FF,
+                },
+            ],
+            alpha: vec![
+                GradientStop {
+                    position: 0.0,
+                    color_raw: 0xFF_00_00_00,
+                },
+                GradientStop {
+                    position: 1.0,
+                    color_raw: 0x00_00_00_00,
+                },
+            ],
+        }),
+        dither: Some(Dither {
+            colors: [Some(0xFF_FF_FF_FF), Some(0x00_00_00_FF), None, None],
+            transparent: Some(true),
+        }),
+    }
+}
+
+#[test]
+fn the_fplv_subtree_decodes_and_round_trips_byte_exactly() {
+    // The sample's paint carries no fill: the injected subtree below
+    // is the model's only input.
+    let doc = sample_document();
+
+    // Inject the raw subtree into the first path's PATv after the
+    // colour slots, the way a real file lays it out.
+    let (mut tree, _stats) = write(&doc, &UnknownBag::new()).expect("write");
+    {
+        let pthv = first_path_object_mut(&mut tree);
+        let patv = &mut children_mut(pthv)[0];
+        children_mut(patv).insert(2, n_k(b"FPLv", fplv_children()));
+    }
+
+    let (doc2, bag) = {
+        let bytes = serialize(&tree);
+        read(&parse(&bytes).expect("parse")).expect("read")
+    };
+    assert_eq!(
+        bag.iter().count(),
+        9,
+        "names, RDOb/FETi/FRRi, FPTv and the two FGLv names ride the bag"
+    );
+    let mut decoded = 0;
+    for (_, object) in doc2.registry.iter() {
+        if let ObjectData::Path(path) = object {
+            if let Some(paint) = &path.paint {
+                if paint.fill.is_some() {
+                    decoded += 1;
+                    assert_eq!(paint.fill.as_ref(), Some(&expected_fill()));
+                }
+            }
+        }
+    }
+    assert_eq!(decoded, 1, "exactly the injected path decodes a fill");
+
+    // The byte round trip: write back and compare against the injected
+    // bytes — the fill re-emits at the recorded slot in dictionary
+    // order with nothing lost or reordered.
+    let (tree2, stats2) = write(&doc2, &bag).expect("write");
+    assert_eq!(stats2.unconsumed_unknown, 0);
+    assert_eq!(serialize(&tree2), serialize(&tree), "byte-exact round trip");
+
+    // Second generation is stable.
+    let (doc3, bag3) = {
+        let bytes = serialize(&tree2);
+        read(&parse(&bytes).expect("parse")).expect("re-read")
+    };
+    assert_eq!(doc3, doc2);
+    let (tree3, _) = write(&doc3, &bag3).expect("rewrite");
+    assert_eq!(serialize(&tree3), serialize(&tree2));
+}
+
+#[test]
+fn compatibility_fshi_decodes_when_fsxi_is_absent() {
+    // An old file carries only `FSHi`; the writer must re-emit `FSHi`
+    // (no invented `FSXi`) for byte-exactness.
+    let doc = sample_document();
+    let (mut tree, _stats) = write(&doc, &UnknownBag::new()).expect("write");
+    {
+        let pthv = first_path_object_mut(&mut tree);
+        let patv = &mut children_mut(pthv)[0];
+        let mut kids = fplv_children();
+        // Swap the extended slot for the compatibility one, keeping
+        // dictionary order (FSHi sits where FSXi sat).
+        let position = kids
+            .iter()
+            .position(|node| node.fourcc == *b"FSXi")
+            .expect("FSXi present");
+        kids[position] = n_i(b"FSHi", 3);
+        children_mut(patv).insert(2, n_k(b"FPLv", kids));
+    }
+
+    let bytes = serialize(&tree);
+    let (doc2, bag) = read(&parse(&bytes).expect("parse")).expect("read");
+    assert_eq!(bag.iter().count(), 9);
+    let mut decoded = 0;
+    for (_, object) in doc2.registry.iter() {
+        if let ObjectData::Path(path) = object {
+            if let Some(fill) = path.paint.as_ref().and_then(|p| p.fill.as_ref()) {
+                decoded += 1;
+                assert_eq!(fill.shape, FillShape::Radial);
+                assert!(!fill.shape_extended, "FSHi carried the kind");
+            }
+        }
+    }
+    assert_eq!(decoded, 1, "exactly the injected path decodes a fill");
+    let (tree2, _) = write(&doc2, &bag).expect("write");
+    assert_eq!(
+        serialize(&tree2),
+        serialize(&tree),
+        "FSHi re-emits, no FSXi invented"
+    );
+}
+
+#[test]
+fn fsxi_wins_and_the_compatibility_slot_splices_back() {
+    // A file carrying BOTH slots: the extended kind decodes, the
+    // compatibility node rides the bag and re-emits at its index.
+    let doc = sample_document();
+    let (mut tree, _stats) = write(&doc, &UnknownBag::new()).expect("write");
+    let mut raw_children = fplv_children();
+    // Dictionary order puts FSHi immediately before FSXi.
+    let position = raw_children
+        .iter()
+        .position(|node| node.fourcc == *b"FSXi")
+        .expect("FSXi present");
+    raw_children.insert(position, n_i(b"FSHi", 3));
+    {
+        let pthv = first_path_object_mut(&mut tree);
+        let patv = &mut children_mut(pthv)[0];
+        children_mut(patv).insert(2, n_k(b"FPLv", raw_children.clone()));
+    }
+
+    let bytes = serialize(&tree);
+    let (doc2, bag) = read(&parse(&bytes).expect("parse")).expect("read");
+    assert_eq!(
+        bag.iter().count(),
+        10,
+        "9 unmodeled slots + the bagged FSHi"
+    );
+    let mut decoded = 0;
+    for (_, object) in doc2.registry.iter() {
+        if let ObjectData::Path(path) = object {
+            if let Some(fill) = path.paint.as_ref().and_then(|p| p.fill.as_ref()) {
+                decoded += 1;
+                assert_eq!(fill.shape, FillShape::Linear, "FSXi carries the kind");
+            }
+        }
+    }
+    assert_eq!(decoded, 1, "exactly the injected path decodes a fill");
+    let (tree2, stats2) = write(&doc2, &bag).expect("write");
+    assert_eq!(stats2.unconsumed_unknown, 0);
+    assert_eq!(serialize(&tree2), serialize(&tree), "both slots survive");
+}
+
+#[test]
+fn an_unknown_shape_bags_the_whole_fill() {
+    // FSXi 11 is in neither enumeration: the subtree cannot be
+    // modeled, so it stays verbatim in the bag and `fill` stays None.
+    let doc = sample_document();
+    let (mut tree, _stats) = write(&doc, &UnknownBag::new()).expect("write");
+    {
+        let pthv = first_path_object_mut(&mut tree);
+        let patv = &mut children_mut(pthv)[0];
+        let mut kids = fplv_children();
+        let position = kids
+            .iter()
+            .position(|node| node.fourcc == *b"FSXi")
+            .expect("FSXi present");
+        kids[position] = n_i(b"FSXi", 11);
+        children_mut(patv).insert(2, n_k(b"FPLv", kids));
+    }
+
+    let bytes = serialize(&tree);
+    let (doc2, bag) = read(&parse(&bytes).expect("parse")).expect("read");
+    assert_eq!(bag.iter().count(), 1);
+    assert!(bag.iter().any(|(path, _, _)| path.ends_with("/PATv")));
+    for (_, object) in doc2.registry.iter() {
+        if let ObjectData::Path(path) = object {
+            assert!(path.paint.as_ref().and_then(|p| p.fill.as_ref()).is_none());
+        }
+    }
+    // Verbatim preservation through a modeled edit.
+    let (tree2, _) = write(&doc2, &bag).expect("write");
+    assert_eq!(serialize(&tree2), serialize(&tree));
+}
+
+#[test]
+fn a_malformed_ramp_bags_the_whole_fill() {
+    // FNCi promises three points, the ramp carries two: unmodelable.
+    let doc = sample_document();
+    let (mut tree, _stats) = write(&doc, &UnknownBag::new()).expect("write");
+    {
+        let pthv = first_path_object_mut(&mut tree);
+        let patv = &mut children_mut(pthv)[0];
+        let mut kids = fplv_children();
+        let position = kids
+            .iter()
+            .position(|node| node.fourcc == *b"FGLv")
+            .expect("FGLv present");
+        if let NodeValue::Children(fglv) = &mut kids[position].value {
+            let fgyv = fglv
+                .iter_mut()
+                .find(|node| node.fourcc == *b"FGYv")
+                .expect("FGYv present");
+            if let NodeValue::Children(fgyv_kids) = &mut fgyv.value {
+                let fg0 = fgyv_kids
+                    .iter_mut()
+                    .find(|node| node.fourcc == *b"FG0v")
+                    .expect("FG0v present");
+                if let NodeValue::Children(ramp) = &mut fg0.value {
+                    ramp.truncate(ramp.len() - 1);
+                }
+            }
+        }
+        children_mut(patv).insert(2, n_k(b"FPLv", kids));
+    }
+
+    let bytes = serialize(&tree);
+    let (doc2, bag) = read(&parse(&bytes).expect("parse")).expect("read");
+    assert_eq!(bag.iter().count(), 1, "the broken subtree stays whole");
+    for (_, object) in doc2.registry.iter() {
+        if let ObjectData::Path(path) = object {
+            assert!(path.paint.as_ref().and_then(|p| p.fill.as_ref()).is_none());
+        }
+    }
+    let (tree2, _) = write(&doc2, &bag).expect("write");
+    assert_eq!(serialize(&tree2), serialize(&tree));
 }

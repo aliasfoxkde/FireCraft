@@ -504,6 +504,7 @@ mod tests {
         recolored.paint = Some(doc::PaintStyle {
             stroke_raw: 0,
             fill_raw: 0xFF_00_00_FF,
+            fill: None,
         });
         assert_ne!(
             hash_path(&base, canvas, &plan),

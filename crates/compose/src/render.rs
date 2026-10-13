@@ -14,16 +14,25 @@ use crate::cache::EffectCache;
 use crate::convert::{abgr, blend_mode, to_bezpath};
 use crate::effects;
 use doc::{
-    Document, GroupObject, Layer, NineSliceGuides, ObjectData, PathObject, SymbolInstanceObject,
-    SymbolType, TileRef,
+    Document, FillShape, Gradient, GroupObject, Layer, NineSliceGuides, ObjectData, PathObject,
+    SymbolInstanceObject, SymbolType, TileRef,
 };
 use filters::Surface;
 use geom::{Affine, transform::map_rect};
 use std::fmt;
 use std::sync::Arc;
 use vello_cpu::kurbo::{Rect, Stroke};
-use vello_cpu::peniko::{BlendMode, Brush, Compose, Fill, ImageBrush, ImageQuality, ImageSampler};
+use vello_cpu::peniko::color::{AlphaColor, Srgb};
+use vello_cpu::peniko::{
+    BlendMode, Brush, Compose, Extend, Fill, Gradient as PenikoGradient, GradientKind, ImageBrush,
+    ImageQuality, ImageSampler, LinearGradientPosition, RadialGradientPosition,
+    SweepGradientPosition,
+};
 use vello_cpu::{ImageSource, Pixmap, RenderContext, Resources};
+
+/// The paint type the rasterizer's `set_paint` takes: the peniko
+/// brush over the CPU pipeline's own image source.
+type PaintBrush = Brush<ImageBrush<ImageSource>>;
 
 /// A finished composition: premultiplied sRGB RGBA8, row-major,
 /// top-left origin. Deterministic — the same document, page and frame
@@ -547,6 +556,7 @@ fn render_text(
         paint: Some(doc::PaintStyle {
             stroke_raw: 0, // ABGR alpha 0 — text never strokes
             fill_raw: fill,
+            fill: None,
         }),
         fill_start: None,
         fill_end: None,
@@ -630,17 +640,156 @@ fn paint_path(path: &PathObject, paint: &doc::PaintStyle, ctx: &mut RenderContex
     // fill first so the stroke lands on top.
     if path.fill_on_top == Some(true) {
         paint_stroke(paint.stroke_raw, &geometry, ctx);
-        paint_fill(paint.fill_raw, &geometry, ctx);
+        paint_fill(path, paint, &geometry, ctx);
     } else {
-        paint_fill(paint.fill_raw, &geometry, ctx);
+        paint_fill(path, paint, &geometry, ctx);
         paint_stroke(paint.stroke_raw, &geometry, ctx);
     }
     ctx.pop_layer();
 }
 
-fn paint_fill(color: i64, geometry: &vello_cpu::kurbo::BezPath, ctx: &mut RenderContext) {
-    ctx.set_paint(Brush::Solid(abgr(color)));
+/// The fill paint: a modeled gradient rides its `FPLv` stops and the
+/// fill vector handles; every other kind paints the `FCLi` colour.
+fn paint_fill(
+    path: &PathObject,
+    paint: &doc::PaintStyle,
+    geometry: &vello_cpu::kurbo::BezPath,
+    ctx: &mut RenderContext,
+) {
+    ctx.set_paint(fill_brush(path, paint));
     ctx.fill_path(geometry);
+}
+
+/// The fill brush for one path. Linear/radial/conical render natively
+/// through the fill vector handles; the remaining families fall back
+/// to the solid `FCLi` colour (recorded substitutions — CS6's math for
+/// satin, pinch, folds, bars, ripple, waves, contour, the rectangular
+/// rings and web dither is not observable from the format, and the
+/// pattern tile is not modeled). Elliptical renders as a circle: the
+/// third handle's squash needs an affine the radial brush does not
+/// carry (same recorded-substitution ledger).
+fn fill_brush(path: &PathObject, paint: &doc::PaintStyle) -> PaintBrush {
+    let solid = || Brush::Solid(abgr(paint.fill_raw));
+    let Some(fill) = &paint.fill else {
+        return solid();
+    };
+    let Some(gradient) = &fill.gradient else {
+        return solid();
+    };
+    let stops = gradient_stops(gradient, paint.fill_raw);
+    let (Some(start), Some(end)) = (path.fill_start, path.fill_end) else {
+        return solid();
+    };
+    let (sx, sy) = (start.x as f32, start.y as f32);
+    let (ex, ey) = (end.x as f32, end.y as f32);
+    let center = vello_cpu::kurbo::Point::new(start.x, start.y);
+    let kind = match fill.shape {
+        FillShape::Linear => GradientKind::Linear(LinearGradientPosition {
+            start: center,
+            end: vello_cpu::kurbo::Point::new(end.x, end.y),
+        }),
+        FillShape::Radial | FillShape::Elliptical => {
+            let radius = ((ex - sx) * (ex - sx) + (ey - sy) * (ey - sy)).sqrt();
+            GradientKind::Radial(RadialGradientPosition {
+                start_center: center,
+                start_radius: 0.0,
+                end_center: center,
+                end_radius: radius,
+            })
+        }
+        // The conical sweep starts along the fill vector — the handle
+        // the editor drags — and wraps a full turn (recorded
+        // interpretation: CS6's zero-angle basis is not observable
+        // from the format).
+        FillShape::Conical => {
+            let start_angle = (ey - sy).atan2(ex - sx);
+            GradientKind::Sweep(SweepGradientPosition {
+                center,
+                start_angle,
+                end_angle: start_angle + std::f32::consts::TAU,
+            })
+        }
+        _ => return solid(),
+    };
+    Brush::Gradient(PenikoGradient {
+        kind,
+        // Beyond the ramp ends the outer colours hold, as in CS6.
+        extend: Extend::Pad,
+        stops,
+        ..PenikoGradient::default()
+    })
+}
+
+/// Merges the `FG0v` RGB ramp and `FG1v` alpha ramp into one stop
+/// list: every distinct position samples both ramps, alpha setting
+/// coverage. An empty ramp contributes nothing on its axis (all
+/// opaque, or the solid colour when the RGB ramp is empty too).
+fn gradient_stops(gradient: &Gradient, solid_raw: i64) -> vello_cpu::peniko::ColorStops {
+    let mut positions: Vec<f64> = gradient
+        .rgb
+        .iter()
+        .chain(gradient.alpha.iter())
+        .map(|stop| stop.position)
+        .collect();
+    positions.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    positions.dedup();
+
+    let solid = abgr(solid_raw);
+    let mut stops = vello_cpu::peniko::ColorStops::new();
+    for position in positions {
+        let color = sample_stop(&gradient.rgb, position, solid);
+        // `sample_stop` yields normalized components: the alpha axis is
+        // already 0..1 coverage, exactly what `multiply_alpha` wants.
+        let alpha = if gradient.alpha.is_empty() {
+            1.0
+        } else {
+            let opaque = AlphaColor::from_rgba8(0, 0, 0, 255);
+            sample_stop(&gradient.alpha, position, opaque).components[3]
+        };
+        stops.push(vello_cpu::peniko::ColorStop {
+            offset: position as f32,
+            color: color.multiply_alpha(alpha).into(),
+        });
+    }
+    stops
+}
+
+/// Piecewise-linear sample of one ramp at `position` in ABGR layout;
+/// outside the ends the nearest stop holds (matching `Extend::Pad`).
+fn sample_stop(
+    ramp: &[doc::GradientStop],
+    position: f64,
+    edge: AlphaColor<Srgb>,
+) -> AlphaColor<Srgb> {
+    let Some(first) = ramp.first() else {
+        return edge;
+    };
+    if position <= first.position {
+        return abgr(first.color_raw);
+    }
+    let Some(last) = ramp.last() else {
+        return edge;
+    };
+    if position >= last.position {
+        return abgr(last.color_raw);
+    }
+    for pair in ramp.windows(2) {
+        let (a, b) = (pair[0], pair[1]);
+        if position >= a.position && position <= b.position {
+            let span = b.position - a.position;
+            let t = if span > 0.0 {
+                (position - a.position) / span
+            } else {
+                0.0
+            };
+            let (ca, cb) = (&abgr(a.color_raw).components, &abgr(b.color_raw).components);
+            let mix = |i: usize| -> u8 {
+                (ca[i] * (1.0 - t as f32) + cb[i] * t as f32).mul_add(255.0, 0.5) as u8
+            };
+            return AlphaColor::from_rgba8(mix(0), mix(1), mix(2), mix(3));
+        }
+    }
+    edge
 }
 
 fn paint_stroke(color: i64, geometry: &vello_cpu::kurbo::BezPath, ctx: &mut RenderContext) {

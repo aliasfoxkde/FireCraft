@@ -286,6 +286,7 @@ fn random_path(rng: &mut FuzzRng, index: usize) -> ObjectData {
             Some(doc::PaintStyle {
                 stroke_raw: rng.next_u64() as i64,
                 fill_raw: rng.next_u64() as i64,
+                fill: None,
             })
         } else {
             None

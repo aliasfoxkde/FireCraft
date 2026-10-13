@@ -90,6 +90,7 @@ fn rect_object(
         paint: Some(PaintStyle {
             stroke_raw: 0,
             fill_raw: fill_abgr,
+            fill: None,
         }),
         fill_start: None,
         fill_end: None,
@@ -511,6 +512,7 @@ fn stroke_paints_along_the_path() {
         paint: Some(PaintStyle {
             stroke_raw: BLACK,
             fill_raw: 0,
+            fill: None,
         }),
         fill_start: None,
         fill_end: None,
@@ -1465,4 +1467,196 @@ fn nesting_past_the_depth_ceiling_is_a_typed_refusal() {
             depth: 32,
         })
     );
+}
+
+// --- M15: gradient fills --------------------------------------------------
+
+use doc::{Dither, Fill, FillShape, Gradient, GradientStop};
+
+/// A path painting a modeled gradient through `fill` and the fill
+/// vector handles.
+fn gradient_object(
+    registry: &mut Registry,
+    contour: Contour,
+    fill: Fill,
+    start: (f64, f64),
+    end: (f64, f64),
+) -> doc::ObjectId {
+    registry.insert(ObjectData::Path(PathObject {
+        contours: vec![contour],
+        primitive: None,
+        even_odd: false,
+        paint: Some(PaintStyle {
+            stroke_raw: 0,
+            fill_raw: BLACK,
+            fill: Some(fill),
+        }),
+        fill_start: Some(Point::new(start.0, start.1)),
+        fill_end: Some(Point::new(end.0, end.1)),
+        fill_third: None,
+        brush_placement: None,
+        fill_on_top: None,
+        locked: false,
+        visible: true,
+        opacity: 1000,
+        blend: 0,
+        name: None,
+        effects: Vec::new(),
+    }))
+}
+
+/// An opaque-black → opaque-white linear ramp with stops at 0 and 1.
+fn black_white_fill(shape: FillShape) -> Fill {
+    Fill {
+        shape,
+        shape_extended: true,
+        texture_blend: 0,
+        feather: 0,
+        stamping: Some(1),
+        hard_edge: false,
+        gradient: Some(Gradient {
+            vertices: Vec::new(),
+            rgb: vec![
+                GradientStop {
+                    position: 0.0,
+                    color_raw: BLACK,
+                },
+                GradientStop {
+                    position: 1.0,
+                    color_raw: WHITE,
+                },
+            ],
+            alpha: Vec::new(),
+        }),
+        dither: None,
+    }
+}
+
+#[test]
+fn a_linear_gradient_runs_black_to_white_along_the_fill_vector() {
+    let mut doc = Document::default();
+    let gradient = gradient_object(
+        &mut doc.registry,
+        rect_contour(0.0, 0.0, 4.0, 4.0),
+        black_white_fill(FillShape::Linear),
+        (0.0, 2.0),
+        (4.0, 2.0),
+    );
+    doc.pages
+        .push(page(4.0, 4.0, vec![layer(vec![cell(vec![gradient])])]));
+    let render = render(&doc, 0, 0).expect("render");
+
+    // Pixel centers sample the ramp at x = 0.125, 0.375, 0.625, 0.875
+    // of the 0..4 span — 31, 95, 159, 223 exactly.
+    let columns: Vec<[u8; 4]> = (0..4).map(|x| pixel(&render, x, 2)).collect();
+    for (i, pixel_rgba) in columns.iter().enumerate() {
+        assert_eq!(
+            pixel_rgba[0], pixel_rgba[1],
+            "column {i}: a grey ramp moves all channels together"
+        );
+        assert_eq!(pixel_rgba[1], pixel_rgba[2], "column {i}");
+    }
+    let grey: Vec<u8> = columns.iter().map(|rgba| rgba[0]).collect();
+    assert_eq!(grey, [31, 95, 159, 223], "grey ramp by pixel center");
+}
+
+#[test]
+fn a_radial_gradient_runs_black_at_the_center_to_white_at_the_rim() {
+    let mut doc = Document::default();
+    let gradient = gradient_object(
+        &mut doc.registry,
+        rect_contour(0.0, 0.0, 4.0, 4.0),
+        black_white_fill(FillShape::Radial),
+        (2.0, 2.0),
+        (2.0, 6.0),
+    );
+    doc.pages
+        .push(page(4.0, 4.0, vec![layer(vec![cell(vec![gradient])])]));
+    let render = render(&doc, 0, 0).expect("render");
+
+    // Radius |start→end| = 4 from (2, 2). Pixel centers: (1,1) sits
+    // √0.5 out → position 0.177 → 45; the (0,0) corner center (0.5,
+    // 0.5) sits √4.5 ≈ 2.121 out → position 0.530 → 135.
+    let center = pixel(&render, 1, 1);
+    let corner = pixel(&render, 0, 0);
+    assert_eq!(center[0], 45, "√0.5 of radius 4 into a black-white ramp");
+    assert_eq!(corner[0], 135, "√4.5 of radius 4 into the ramp");
+}
+
+#[test]
+fn gradient_shapes_without_render_math_fall_back_to_the_solid_colour() {
+    // The substitution ledger: satin, pinch, folds, bars, ripple,
+    // waves, contour, rectangular, web dither and pattern all paint
+    // the FCLi colour until their math is pinned.
+    for shape in [
+        FillShape::Satin,
+        FillShape::Pinch,
+        FillShape::Folds,
+        FillShape::Bars,
+        FillShape::Ripple,
+        FillShape::Waves,
+        FillShape::Contour,
+        FillShape::Rectangular,
+        FillShape::WebDither,
+        FillShape::Pattern,
+    ] {
+        let mut doc = Document::default();
+        let mut fill = black_white_fill(shape);
+        fill.dither = Some(Dither {
+            colors: [None; 4],
+            transparent: None,
+        });
+        let gradient = gradient_object(
+            &mut doc.registry,
+            rect_contour(0.0, 0.0, 4.0, 4.0),
+            fill,
+            (0.0, 2.0),
+            (4.0, 2.0),
+        );
+        doc.pages
+            .push(page(4.0, 4.0, vec![layer(vec![cell(vec![gradient])])]));
+        let rendered = render(&doc, 0, 0).expect("render");
+        // Premultiplied opaque black.
+        assert_solid(&rendered, [0, 0, 0, 255]);
+    }
+}
+
+#[test]
+fn an_alpha_ramp_sets_coverage_across_the_gradient() {
+    let mut doc = Document::default();
+    let mut fill = black_white_fill(FillShape::Linear);
+    if let Some(gradient) = &mut fill.gradient {
+        gradient.alpha = vec![
+            GradientStop {
+                position: 0.0,
+                color_raw: 0x00_00_00_00,
+            },
+            GradientStop {
+                position: 1.0,
+                color_raw: 0xFF_00_00_00,
+            },
+        ];
+    }
+    let gradient = gradient_object(
+        &mut doc.registry,
+        rect_contour(0.0, 0.0, 4.0, 4.0),
+        fill,
+        (0.0, 2.0),
+        (4.0, 2.0),
+    );
+    doc.pages
+        .push(page(4.0, 4.0, vec![layer(vec![cell(vec![gradient])])]));
+    let rendered = render(&doc, 0, 0).expect("render");
+
+    // Over the transparent canvas the coverage ramp (0 → 255) is the
+    // visible thing: at x=0.125 both the ramp colour and the coverage
+    // sample 32/255 — but vello quantizes to 31 — and the target is
+    // straight alpha, so RGB and A read the same. At x=0.875 both
+    // read 223.
+    let left = pixel(&rendered, 0, 2);
+    let right = pixel(&rendered, 3, 2);
+    assert_eq!(left[3], 31, "the alpha ramp sets coverage: {left:?}");
+    assert_eq!(left[0], left[3], "the dark end rides the ramp: {left:?}");
+    assert_eq!(right[3], 223, "coverage rides the same ramp");
+    assert_eq!(right[0], right[3], "the bright end rides it too: {right:?}");
 }

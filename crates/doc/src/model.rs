@@ -486,8 +486,11 @@ pub struct SymbolDefinition {
 }
 
 /// Paint style carried by a path's `PATv`. M4 maps the two solid
-/// colours; the gradient/pattern subtrees (`FPLv`, `TXBv`, `TXFv`,
-/// `BPLv`) ride in the unknown bag.
+/// colours; M15 decodes the `FPLv` fill subtree (`FSXi`/`FSHi` kind,
+/// texture blend, feather, stamping, hard edge, `FGLv` gradient
+/// stops, dither colours). `TXBv`/`TXFv`/`BPLv` and the unmodeled
+/// `FPLv` children (`FPTv` tile, seed/hard-edge flags, names) ride in
+/// the unknown bag.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PaintStyle {
@@ -495,6 +498,117 @@ pub struct PaintStyle {
     pub stroke_raw: i64,
     /// `FCLi` — fill colour, ABGR layout.
     pub fill_raw: i64,
+    /// `FPLv`? — fill definition beyond the solid colour; `None` when
+    /// the pattern carries no subtree (or one that could not be
+    /// modeled — the whole subtree then rides the bag).
+    pub fill: Option<Fill>,
+}
+
+/// How a fill derives its pixels (`FSXi`; `FSHi` is the
+/// backwards-compatible narrower enumeration — value 3 means
+/// "radial or contour" there and reads as [`FillShape::Radial`],
+/// which the extended files disambiguate).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum FillShape {
+    /// `0` — one flat colour (the `FCLi` slot).
+    Solid,
+    /// `2` — ramp along the start→end fill vector.
+    Linear,
+    /// `3` — ramp out from a center point.
+    Radial,
+    /// `4` — ramp around the center's angle.
+    Conical,
+    /// `5` — satin sheen.
+    Satin,
+    /// `7` — pinched radial.
+    Pinch,
+    /// `8` — folded bands.
+    Folds,
+    /// `9` — squashed radial (the third fill handle sets the ellipse).
+    Elliptical,
+    /// `10` — rectangular rings.
+    Rectangular,
+    /// `12` — bar bands.
+    Bars,
+    /// `13` — ripple interference.
+    Ripple,
+    /// `14` — wave interference.
+    Waves,
+    /// `15` — tiled bitmap (`FPTv`).
+    Pattern,
+    /// `16` — four-colour web dither.
+    WebDither,
+    /// `17` — contour (concentric rings stepped from the ramp).
+    Contour,
+}
+
+/// One `FGIv` gradient control point: `FGPf` position 0..=1 plus
+/// `FGCi` colour (ABGR layout; the alpha byte is ignored on the RGB
+/// ramp — coverage is the alpha ramp's job, on `FG1v`).
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct GradientStop {
+    /// `FGPf` — normalized position along the ramp.
+    pub position: f64,
+    /// `FGCi` — ABGR colour.
+    pub color_raw: i64,
+}
+
+/// A `FGLv` fill gradient: the three control-point lists the format
+/// carries. `rgb`/`alpha` are the modern `FGYv` split (which ramp a
+/// file actually uses is not observable from the dictionary alone —
+/// the renderer merges both and lets `alpha` set coverage); `vertices`
+/// is the legacy `FGVv` list, carried verbatim. Names (`CATs`/`INMs`)
+/// ride the bag.
+#[derive(Clone, Debug, PartialEq, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Gradient {
+    /// `FGVv` — legacy vertex list.
+    pub vertices: Vec<GradientStop>,
+    /// `FG0v` — RGB ramp.
+    pub rgb: Vec<GradientStop>,
+    /// `FG1v` — alpha ramp (`FGCi` alpha byte is the coverage).
+    pub alpha: Vec<GradientStop>,
+}
+
+/// Web dither colours (`FD1i`..`FD4i`, `FDTb`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Dither {
+    /// The up-to-four dither colours; `None` when the slot is absent.
+    pub colors: [Option<i64>; 4],
+    /// `FDTb` — dither transparent.
+    pub transparent: Option<bool>,
+}
+
+/// A `FPLv` fill definition. Named slots and identity metadata that
+/// the model does not interpret (`CATs`/`INMs`/`UNMs`, `RDOb`, `FETi`,
+/// `FRRi`, `FPTv`) ride the unknown bag under the `FPLv` path and
+/// splice back verbatim.
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Fill {
+    /// `FSXi` (preferred) or `FSHi` — the fill kind.
+    pub shape: FillShape,
+    /// Which node carried `shape`: `true` writes `FSXi` (a bagged
+    /// `FSHi` splices back), `false` writes `FSHi` and no `FSXi` —
+    /// the file never carried the extended kind.
+    pub shape_extended: bool,
+    /// `FTBi` — texture blending, per mille 0..=1000.
+    pub texture_blend: i64,
+    /// `FEFi` — feather fill amount.
+    pub feather: i64,
+    /// `FSMi` — stamping mode: 1 blends transparent, 2 blends onto
+    /// white. `None` when the file carries no slot.
+    pub stamping: Option<i64>,
+    /// `FRDb` — hard (non-anti-aliased) edge.
+    pub hard_edge: bool,
+    /// `FGLv`? — gradient control points; `None` for fills without a
+    /// gradient subtree.
+    pub gradient: Option<Gradient>,
+    /// `FD1i`..`FD4i`/`FDTb`? — web dither slots.
+    pub dither: Option<Dither>,
 }
 
 /// `PTHv` — a vector path.
@@ -1042,6 +1156,7 @@ pub(crate) mod tests {
             paint: Some(PaintStyle {
                 stroke_raw: 0xFF_00_00_FF,
                 fill_raw: 0x00_FF_00_FF,
+                fill: None,
             }),
             fill_start: None,
             fill_end: None,
