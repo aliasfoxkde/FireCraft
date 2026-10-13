@@ -337,35 +337,562 @@ fn symbol_type_label(kind: &SymbolType) -> String {
     }
 }
 
-/// The quick-add list of the filter panel: internal name plus the
-/// `DCVs` defaults that make each kernel do something visible. All of
-/// these compose interprets by name (`dropShadow` is the deliberate
-/// pass-through control, exactly as in `filtered.fw.png`).
-const FILTER_PRESETS: &[(&str, &[(&str, &str)])] = &[
-    ("invert", &[]),
-    ("gaussianBlur", &[("gaussian_blur_radius", "2")]),
-    ("blur", &[]),
-    ("blurMore", &[]),
-    ("findEdges", &[]),
+/// One quick-add preset of the Live Filters panel: the engine's
+/// internal name — the registry id the Filters menu and this panel
+/// share — the CS6 display label, and the `DCVs` defaults that give
+/// each kernel its working shape (visible where a visible default
+/// exists; `levels` ships its identity master so the rows are
+/// editable from a known state, and `dropShadow` stays empty as the
+/// deliberate pass-through control, exactly as in `filtered.fw.png`).
+#[derive(Clone, Copy)]
+pub(crate) struct FilterPreset {
+    /// Engine internal name (`filter.add`'s `name`).
+    pub name: &'static str,
+    /// CS6 display label.
+    pub label: &'static str,
+    /// `DCVs` defaults: (key, decimal-text value).
+    pub params: &'static [(&'static str, &'static str)],
+    /// Curve knots for the `*_points` param — the engine's raw
+    /// `GPLv` encoding; `value` must stay empty when these ride along.
+    pub points: &'static [(f64, f64)],
+}
+
+/// The panel's quick-add registry, grouped the way the enumeration
+/// table groups it (`docs/research/fw-code-notes.md`, M14 task 1).
+/// CS6 builds its Filters menu at runtime from the same registry —
+/// the static menu resource carries only Repeat Filter — which is
+/// exactly the mirror `menus::FILTERS` casts.
+pub(crate) static FILTER_FAMILIES: &[(&str, &[FilterPreset])] = &[
     (
-        "brightnessContrast",
-        &[("brightness_amount", "10"), ("contrast_amount", "10")],
-    ),
-    (
-        "hueSaturation",
+        "Adjust Color",
         &[
-            ("hue_amount", "15"),
-            ("saturation_amount", "10"),
-            ("lightness_amount", "0"),
+            FilterPreset {
+                name: "invert",
+                label: "Invert",
+                params: &[],
+                points: &[],
+            },
+            FilterPreset {
+                name: "brightnessContrast",
+                label: "Brightness/Contrast",
+                params: &[("brightness_amount", "10"), ("contrast_amount", "10")],
+                points: &[],
+            },
+            FilterPreset {
+                name: "levels",
+                label: "Levels",
+                params: &[
+                    ("source_low_rgb", "0"),
+                    ("source_high_rgb", "255"),
+                    ("gamma_rgb", "1"),
+                    ("dest_low_rgb", "0"),
+                    ("dest_high_rgb", "255"),
+                ],
+                points: &[],
+            },
+            FilterPreset {
+                name: "curves",
+                label: "Curves",
+                params: &[("rgb_points", "")],
+                points: &[(0.0, 0.0), (128.0, 64.0), (255.0, 255.0)],
+            },
+            FilterPreset {
+                name: "hueSaturation",
+                label: "Hue/Saturation",
+                params: &[
+                    ("hue_amount", "15"),
+                    ("saturation_amount", "10"),
+                    ("lightness_amount", "0"),
+                ],
+                points: &[],
+            },
+            FilterPreset {
+                name: "autoLevels",
+                label: "Auto Levels",
+                params: &[],
+                points: &[],
+            },
+            FilterPreset {
+                name: "colorFill",
+                label: "Color Fill",
+                params: &[("Color", "#336699"), ("Opacity", "100"), ("Blendmode", "0")],
+                points: &[],
+            },
+            FilterPreset {
+                name: "convertToAlpha",
+                label: "Convert to Alpha",
+                params: &[],
+                points: &[],
+            },
         ],
     ),
     (
-        "unsharpMask",
-        &[("unsharp_mask_radius", "2"), ("unsharp_mask_amount", "50")],
+        "Blur",
+        &[
+            FilterPreset {
+                name: "blur",
+                label: "Blur",
+                params: &[],
+                points: &[],
+            },
+            FilterPreset {
+                name: "blurMore",
+                label: "Blur More",
+                params: &[],
+                points: &[],
+            },
+            FilterPreset {
+                name: "gaussianBlur",
+                label: "Gaussian Blur",
+                params: &[("gaussian_blur_radius", "2")],
+                points: &[],
+            },
+            FilterPreset {
+                name: "motionBlur",
+                label: "Motion Blur",
+                params: &[("motion_blur_angle", "0"), ("motion_blur_distance", "4")],
+                points: &[],
+            },
+            FilterPreset {
+                name: "radialBlur",
+                label: "Radial Blur",
+                params: &[("radial_blur_amount", "10"), ("radial_blur_quality", "3")],
+                points: &[],
+            },
+            FilterPreset {
+                name: "zoomBlur",
+                label: "Zoom Blur",
+                params: &[("zoom_blur_amount", "10"), ("zoom_blur_quality", "3")],
+                points: &[],
+            },
+        ],
     ),
-    ("addNoise", &[("add_noise_amount", "10")]),
-    ("dropShadow", &[]),
+    (
+        "Sharpen",
+        &[
+            FilterPreset {
+                name: "sharpen",
+                label: "Sharpen",
+                params: &[],
+                points: &[],
+            },
+            FilterPreset {
+                name: "sharpenMore",
+                label: "Sharpen More",
+                params: &[],
+                points: &[],
+            },
+            FilterPreset {
+                name: "unsharpMask",
+                label: "Unsharp Mask",
+                params: &[
+                    ("unsharp_mask_radius", "2"),
+                    ("unsharp_mask_amount", "50"),
+                    ("unsharp_mask_threshold", "0"),
+                ],
+                points: &[],
+            },
+        ],
+    ),
+    (
+        "Stylize",
+        &[
+            FilterPreset {
+                name: "addNoise",
+                label: "Add Noise",
+                params: &[("add_noise_amount", "10"), ("add_noise_use_color", "0")],
+                points: &[],
+            },
+            FilterPreset {
+                name: "findEdges",
+                label: "Find Edges",
+                params: &[],
+                points: &[],
+            },
+            FilterPreset {
+                name: "clouds",
+                label: "Clouds",
+                params: &[("sky_color", "#0000FF"), ("cloud_color", "#FFFFFF")],
+                points: &[],
+            },
+            FilterPreset {
+                name: "differenceClouds",
+                label: "Difference Clouds",
+                params: &[("sky_color", "#0000FF"), ("cloud_color", "#FFFFFF")],
+                points: &[],
+            },
+        ],
+    ),
+    (
+        "Shadow and Glow",
+        &[
+            FilterPreset {
+                name: "dropShadow",
+                label: "Drop Shadow",
+                params: &[],
+                points: &[],
+            },
+            FilterPreset {
+                name: "innerShadow",
+                label: "Inner Shadow",
+                params: &[
+                    ("ShadowColor", "#000000"),
+                    ("ShadowAngle", "135"),
+                    ("ShadowBlur", "2"),
+                    ("ShadowDistance", "3"),
+                ],
+                points: &[],
+            },
+            FilterPreset {
+                name: "solidShadow",
+                label: "Solid Shadow",
+                params: &[("ShadowColor", "#804000"), ("ShowObject", "1")],
+                points: &[],
+            },
+            FilterPreset {
+                name: "innerGlow",
+                label: "Inner Glow",
+                params: &[("ShadowColor", "#ffcc00"), ("GlowWidth", "3")],
+                points: &[],
+            },
+            FilterPreset {
+                name: "glow",
+                label: "Glow",
+                params: &[
+                    ("BevelType", "4"),
+                    ("GlowWidth", "5"),
+                    ("LightAngle", "120"),
+                    ("HiliteColor", "#ffffcc"),
+                    ("OuterBevelColor", "#804000"),
+                ],
+                points: &[],
+            },
+        ],
+    ),
+    (
+        "Bevel and Emboss",
+        &[
+            FilterPreset {
+                name: "innerBevel",
+                label: "Inner Bevel",
+                params: &[
+                    ("BevelType", "0"),
+                    ("BevelWidth", "6"),
+                    ("BevelContrast", "70"),
+                    ("LightAngle", "120"),
+                    ("LightDistance", "150"),
+                    ("HiliteColor", "#ffffcc"),
+                    ("OuterBevelColor", "#808000"),
+                ],
+                points: &[],
+            },
+            FilterPreset {
+                name: "outerBevel",
+                label: "Outer Bevel",
+                params: &[
+                    ("BevelType", "1"),
+                    ("BevelWidth", "6"),
+                    ("BevelContrast", "70"),
+                    ("LightAngle", "120"),
+                    ("LightDistance", "150"),
+                    ("HiliteColor", "#ffffcc"),
+                    ("OuterBevelColor", "#808000"),
+                ],
+                points: &[],
+            },
+            FilterPreset {
+                name: "emboss",
+                label: "Raised Emboss",
+                params: &[
+                    ("BevelType", "2"),
+                    ("BevelWidth", "6"),
+                    ("BevelContrast", "70"),
+                    ("LightAngle", "120"),
+                    ("LightDistance", "150"),
+                    ("HiliteColor", "#ffffcc"),
+                    ("OuterBevelColor", "#808000"),
+                ],
+                points: &[],
+            },
+            FilterPreset {
+                name: "pillowEmboss",
+                label: "Inset Emboss",
+                params: &[
+                    ("BevelType", "3"),
+                    ("BevelWidth", "6"),
+                    ("BevelContrast", "70"),
+                    ("LightAngle", "120"),
+                    ("LightDistance", "150"),
+                    ("HiliteColor", "#ffffcc"),
+                    ("OuterBevelColor", "#808000"),
+                ],
+                points: &[],
+            },
+        ],
+    ),
 ];
+
+/// Numeric edit-row metadata for applied effects: the documented
+/// range (the enumeration table) plus the neutral value the row's
+/// reset button restores. Keys absent here render as text rows; the
+/// boolean keys render as checkboxes and `*_points` as knot lists.
+struct FilterParamMeta {
+    key: &'static str,
+    /// Row label.
+    label: &'static str,
+    min: f64,
+    max: f64,
+    /// The reset value (the no-op where one exists).
+    default: f64,
+}
+
+const FILTER_PARAMS: &[FilterParamMeta] = &[
+    FilterParamMeta {
+        key: "brightness_amount",
+        label: "Brightness",
+        min: -100.0,
+        max: 100.0,
+        default: 0.0,
+    },
+    FilterParamMeta {
+        key: "contrast_amount",
+        label: "Contrast",
+        min: -100.0,
+        max: 100.0,
+        default: 0.0,
+    },
+    FilterParamMeta {
+        key: "source_low_rgb",
+        label: "In black",
+        min: 0.0,
+        max: 255.0,
+        default: 0.0,
+    },
+    FilterParamMeta {
+        key: "source_high_rgb",
+        label: "In white",
+        min: 0.0,
+        max: 255.0,
+        default: 255.0,
+    },
+    FilterParamMeta {
+        key: "gamma_rgb",
+        label: "Gamma",
+        min: 0.1,
+        max: 10.0,
+        default: 1.0,
+    },
+    FilterParamMeta {
+        key: "dest_low_rgb",
+        label: "Out black",
+        min: 0.0,
+        max: 255.0,
+        default: 0.0,
+    },
+    FilterParamMeta {
+        key: "dest_high_rgb",
+        label: "Out white",
+        min: 0.0,
+        max: 255.0,
+        default: 255.0,
+    },
+    // In colorize mode the hue is absolute 0..360 — the row clamps to
+    // the shift range; flipping the mode is one setParam away.
+    FilterParamMeta {
+        key: "hue_amount",
+        label: "Hue",
+        min: -180.0,
+        max: 180.0,
+        default: 0.0,
+    },
+    FilterParamMeta {
+        key: "saturation_amount",
+        label: "Saturation",
+        min: -100.0,
+        max: 100.0,
+        default: 0.0,
+    },
+    FilterParamMeta {
+        key: "lightness_amount",
+        label: "Lightness",
+        min: -100.0,
+        max: 100.0,
+        default: 0.0,
+    },
+    FilterParamMeta {
+        key: "gaussian_blur_radius",
+        label: "Radius",
+        min: 0.0,
+        max: 100.0,
+        default: 0.0,
+    },
+    FilterParamMeta {
+        key: "motion_blur_angle",
+        label: "Angle",
+        min: 0.0,
+        max: 360.0,
+        default: 0.0,
+    },
+    FilterParamMeta {
+        key: "motion_blur_distance",
+        label: "Distance",
+        min: 1.0,
+        max: 100.0,
+        default: 1.0,
+    },
+    FilterParamMeta {
+        key: "radial_blur_amount",
+        label: "Amount",
+        min: 1.0,
+        max: 100.0,
+        default: 1.0,
+    },
+    FilterParamMeta {
+        key: "radial_blur_quality",
+        label: "Quality",
+        min: 1.0,
+        max: 100.0,
+        default: 1.0,
+    },
+    FilterParamMeta {
+        key: "zoom_blur_amount",
+        label: "Amount",
+        min: 1.0,
+        max: 100.0,
+        default: 1.0,
+    },
+    FilterParamMeta {
+        key: "zoom_blur_quality",
+        label: "Quality",
+        min: 1.0,
+        max: 100.0,
+        default: 1.0,
+    },
+    FilterParamMeta {
+        key: "unsharp_mask_radius",
+        label: "Radius",
+        min: 0.0,
+        max: 100.0,
+        default: 0.0,
+    },
+    FilterParamMeta {
+        key: "unsharp_mask_amount",
+        label: "Amount",
+        min: 0.0,
+        max: 200.0,
+        default: 0.0,
+    },
+    FilterParamMeta {
+        key: "unsharp_mask_threshold",
+        label: "Threshold",
+        min: 0.0,
+        max: 255.0,
+        default: 0.0,
+    },
+    FilterParamMeta {
+        key: "add_noise_amount",
+        label: "Amount",
+        min: 0.0,
+        max: 100.0,
+        default: 0.0,
+    },
+    FilterParamMeta {
+        key: "Opacity",
+        label: "Opacity",
+        min: 0.0,
+        max: 100.0,
+        default: 100.0,
+    },
+    FilterParamMeta {
+        key: "ShadowAngle",
+        label: "Angle",
+        min: 0.0,
+        max: 360.0,
+        default: 135.0,
+    },
+    FilterParamMeta {
+        key: "ShadowBlur",
+        label: "Blur",
+        min: 0.0,
+        max: 250.0,
+        default: 2.0,
+    },
+    FilterParamMeta {
+        key: "ShadowDistance",
+        label: "Distance",
+        min: 0.0,
+        max: 250.0,
+        default: 3.0,
+    },
+    FilterParamMeta {
+        key: "GlowWidth",
+        label: "Width",
+        min: 0.0,
+        max: 35.0,
+        default: 3.0,
+    },
+    FilterParamMeta {
+        key: "GlowStartDistance",
+        label: "Start",
+        min: 0.0,
+        max: 35.0,
+        default: 0.0,
+    },
+    FilterParamMeta {
+        key: "EdgeThreshold",
+        label: "Edge threshold",
+        min: 0.0,
+        max: 1.0,
+        default: 1.0,
+    },
+    FilterParamMeta {
+        key: "BevelType",
+        label: "Type",
+        min: 0.0,
+        max: 4.0,
+        default: 0.0,
+    },
+    FilterParamMeta {
+        key: "BevelWidth",
+        label: "Width",
+        min: 0.0,
+        max: 35.0,
+        default: 6.0,
+    },
+    FilterParamMeta {
+        key: "BevelContrast",
+        label: "Contrast",
+        min: 0.0,
+        max: 100.0,
+        default: 70.0,
+    },
+    FilterParamMeta {
+        key: "LightAngle",
+        label: "Light angle",
+        min: 0.0,
+        max: 360.0,
+        default: 120.0,
+    },
+    FilterParamMeta {
+        key: "LightDistance",
+        label: "Depth",
+        min: 1.0,
+        max: 200.0,
+        default: 100.0,
+    },
+];
+
+/// Checkbox keys (truthy = not "0"/"false", the compose read rule).
+const FILTER_BOOL_KEYS: &[&str] = &["add_noise_use_color", "ShowObject"];
+
+/// The preset for an internal name — the shared lookup behind the
+/// panel's quick-add and the Filters menu's `Action::Filter`.
+pub(crate) fn filter_preset(name: &str) -> Option<&'static FilterPreset> {
+    FILTER_FAMILIES
+        .iter()
+        .flat_map(|(_, presets)| presets.iter())
+        .find(|preset| preset.name == name)
+}
 
 /// The display quartet plus name, captured read-only from any
 /// property-bearing kind.
@@ -1253,6 +1780,13 @@ impl Shell {
                     );
                 }
             }
+            menus::Action::Filter(name) => match self.editor.selection {
+                Some(id) => match filter_preset(name) {
+                    Some(preset) => self.apply_filter_preset(id, *preset),
+                    None => self.status = format!("no such filter: {name}"),
+                },
+                None => self.status = "pick an object to filter".to_owned(),
+            },
         }
     }
 
@@ -2085,50 +2619,162 @@ impl Shell {
         }
     }
 
-    /// The live effect list: one row per effect with a remove button,
-    /// plus a quick-add combo over the kernels compose interprets.
+    /// The live effect list: one collapsible row per effect (remove +
+    /// per-parameter edit rows), plus the family-grouped quick-add
+    /// menu over the shared preset registry. Live preview needs
+    /// nothing here — every command below invalidates the compose
+    /// stamp and the canvas re-renders through the live stack.
     fn filter_panel(&mut self, ui: &mut egui::Ui, id: doc::ObjectId, effects: &[doc::Effect]) {
         ui.heading("Filters");
         if effects.is_empty() {
             ui.label("(none)");
         }
         for (index, effect) in effects.iter().enumerate() {
-            ui.horizontal(|ui| {
-                let params = if effect.properties.is_empty() {
-                    String::new()
-                } else {
-                    format!(" ({})", effect.properties.len())
-                };
-                ui.label(format!("{}. {}{params}", index + 1, effect.internal_name));
-                if ui.small_button("remove").clicked() {
-                    let _ = self.editor.apply(
-                        "filter.remove",
-                        serde_json::json!({ "id": id, "index": index }),
-                    );
-                }
-            });
+            egui::CollapsingHeader::new(format!("{}. {}", index + 1, effect.internal_name))
+                .id_salt(("filter", id, index))
+                .show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        if ui.small_button("remove").clicked() {
+                            self.run_command(
+                                "filter.remove",
+                                serde_json::json!({ "id": id, "index": index }),
+                            );
+                        }
+                    });
+                    self.filter_param_rows(ui, id, index, effect);
+                });
         }
-        egui::ComboBox::from_label("add filter")
-            .selected_text("add…")
-            .show_ui(ui, |ui| {
-                for (name, params) in FILTER_PRESETS {
-                    if ui.selectable_label(false, *name).clicked() {
+        self.filter_add_menu(ui, id);
+    }
+
+    /// The family-grouped quick-add menu — the same table the Filters
+    /// menu submenu casts as `Action::Filter` entries.
+    fn filter_add_menu(&mut self, ui: &mut egui::Ui, id: doc::ObjectId) {
+        ui.menu_button("add filter", |ui| {
+            for (family, presets) in FILTER_FAMILIES {
+                ui.menu_button(*family, |ui| {
+                    for preset in *presets {
+                        if ui.selectable_label(false, preset.label).clicked() {
+                            self.apply_filter_preset(id, *preset);
+                        }
+                    }
+                });
+            }
+        });
+    }
+
+    /// One quick-add: `filter.add` with the preset's `DCVs` defaults
+    /// (curves ride the raw knot list — `value` stays empty there).
+    fn apply_filter_preset(&mut self, id: doc::ObjectId, preset: FilterPreset) {
+        let params: Vec<_> = preset
+            .params
+            .iter()
+            .map(|(key, value)| {
+                let mut entry = serde_json::json!({ "key": key, "value": value });
+                if !preset.points.is_empty() {
+                    entry["points"] = serde_json::json!(preset.points);
+                }
+                entry
+            })
+            .collect();
+        self.run_command(
+            "filter.add",
+            serde_json::json!({ "id": id, "name": preset.name, "params": params }),
+        );
+        self.status = format!("filter: {}", preset.label);
+    }
+
+    /// One parameter edit on an applied effect.
+    fn set_filter_param(&mut self, id: doc::ObjectId, index: usize, key: &str, value: &str) {
+        self.run_command(
+            "filter.setParam",
+            serde_json::json!({ "id": id, "index": index, "key": key, "value": value }),
+        );
+    }
+
+    /// The per-effect parameter rows: documented numeric keys get
+    /// range sliders with a reset, boolean keys checkboxes, knot lists
+    /// a read-only count with a reset-to-linear, everything else a
+    /// text row (colors keep their `#rrggbb` text shape — the same
+    /// form the file carries). Each edit is one `filter.setParam`
+    /// through the journal, so undo undoes it exactly.
+    fn filter_param_rows(
+        &mut self,
+        ui: &mut egui::Ui,
+        id: doc::ObjectId,
+        index: usize,
+        effect: &doc::Effect,
+    ) {
+        for property in &effect.properties {
+            let key = property.key.as_str();
+            if key == "EffectMoaID" {
+                continue;
+            }
+            if key.ends_with("_points") {
+                // Curve knots live as a raw `GPLv` node (or legacy
+                // text); the rows show the count and a reset to the
+                // identity line — full curve editing stays in the
+                // engine's `points` JSON until a curve canvas exists.
+                let knots = match &property.value {
+                    doc::EffectValue::Raw(node) => node.as_children().map_or(0, <[doc::Node]>::len),
+                    doc::EffectValue::Text(text) => text.split(';').count(),
+                };
+                ui.horizontal(|ui| {
+                    ui.label(format!("{key}: {knots} knots"));
+                    if ui.small_button("reset curve").clicked() {
                         let _ = self.editor.apply(
-                            "filter.add",
+                            "filter.setParam",
                             serde_json::json!({
-                                "id": id,
-                                "name": name,
-                                "params": params
-                                    .iter()
-                                    .map(|(key, value)| serde_json::json!({
-                                        "key": key, "value": value,
-                                    }))
-                                    .collect::<Vec<_>>(),
+                                "id": id, "index": index, "key": key,
+                                "value": "",
+                                "points": [[0.0, 0.0], [255.0, 255.0]],
                             }),
                         );
                     }
+                });
+                continue;
+            }
+            let doc::EffectValue::Text(text) = &property.value else {
+                // Raw nodes render read-only — a misread is not a value.
+                ui.label(format!("{key}: (raw node)"));
+                continue;
+            };
+            if FILTER_BOOL_KEYS.contains(&key) {
+                let mut on = !matches!(text.trim(), "0" | "false");
+                if ui.checkbox(&mut on, key).changed() {
+                    self.set_filter_param(id, index, key, if on { "1" } else { "0" });
+                }
+                continue;
+            }
+            let Some(meta) = FILTER_PARAMS.iter().find(|meta| meta.key == key) else {
+                // Text rows (colors, blend codes, file-borne keys):
+                // commit on enter/blur so a keystroke is not a journal
+                // entry.
+                let mut edit = text.clone();
+                let field = egui::TextEdit::singleline(&mut edit).desired_width(140.0);
+                let response = ui.add(field);
+                if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                    self.set_filter_param(id, index, key, &edit);
+                } else {
+                    ui.label(key);
+                }
+                continue;
+            };
+            let Ok(mut value) = text.trim().parse::<f64>() else {
+                ui.label(format!("{key}: {text}"));
+                continue;
+            };
+            ui.horizontal(|ui| {
+                let slider =
+                    ui.add(egui::Slider::new(&mut value, meta.min..=meta.max).text(meta.label));
+                if slider.changed() {
+                    self.set_filter_param(id, index, key, &format!("{value}"));
+                }
+                if ui.small_button("reset").clicked() {
+                    self.set_filter_param(id, index, key, &format!("{}", meta.default));
                 }
             });
+        }
     }
 
     /// World-space page bounds — the Fit All target.
@@ -2822,6 +3468,125 @@ mod tests {
             Tool::Pointer,
         )));
         assert_eq!(shell.editor.tool, Tool::Pointer);
+    }
+
+    /// The preset registry is internally consistent: names unique,
+    /// every numeric default parses inside its documented range, the
+    /// knot preset rides raw points with an empty value, and the
+    /// slider metadata's reset values stay in range.
+    #[test]
+    fn filter_preset_registry_is_consistent() {
+        let mut names = Vec::new();
+        for (family, presets) in FILTER_FAMILIES {
+            assert!(!presets.is_empty(), "{family} is empty");
+            for preset in *presets {
+                names.push(preset.name);
+                let points_preset = !preset.points.is_empty();
+                assert_eq!(
+                    points_preset,
+                    preset
+                        .params
+                        .iter()
+                        .any(|(key, _)| key.ends_with("_points")),
+                    "{}: points xor text",
+                    preset.name
+                );
+                for (key, value) in preset.params {
+                    if FILTER_BOOL_KEYS.contains(key) {
+                        assert!(matches!(*value, "0" | "1"), "{key}: {value}");
+                        continue;
+                    }
+                    if key.ends_with("_points") {
+                        assert!(value.is_empty(), "{key}: knots carry no text");
+                        continue;
+                    }
+                    if let Some(meta) = FILTER_PARAMS.iter().find(|meta| meta.key == *key) {
+                        let parsed: f64 =
+                            value.parse().unwrap_or_else(|_| panic!("{key}: {value}"));
+                        assert!(
+                            (meta.min..=meta.max).contains(&parsed),
+                            "{key}: {parsed} outside {}..{}",
+                            meta.min,
+                            meta.max
+                        );
+                    }
+                }
+            }
+        }
+        let before = names.len();
+        names.sort_unstable();
+        names.dedup();
+        assert_eq!(names.len(), before, "duplicate preset names");
+        for meta in FILTER_PARAMS {
+            assert!(
+                (meta.min..=meta.max).contains(&meta.default),
+                "{}: default outside range",
+                meta.key
+            );
+        }
+    }
+
+    /// The Filters menu dispatch and the panel preset path drive the
+    /// same commands: a menu pick adds the preset's `DCVs`, the curves
+    /// preset lands as the raw knot node, a param edit rides
+    /// `filter.setParam` through the journal (so undo restores
+    /// it), and a pick with nothing selected is a status line.
+    #[test]
+    fn filter_actions_flow_through_the_journal() {
+        let mut shell = gui_shell(gui_editor());
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::SelectAll));
+        let id = shell.editor.selection.unwrap();
+
+        shell.run_action(&menus::Action::Filter("gaussianBlur"));
+        let effects = shell_effect_list(&shell, id);
+        assert_eq!(effects.len(), 1);
+        assert_eq!(effects[0].internal_name, "gaussianBlur");
+
+        let curves = filter_preset("curves").unwrap();
+        shell.apply_filter_preset(id, *curves);
+        let effects = shell_effect_list(&shell, id);
+        assert_eq!(effects.len(), 2);
+        let doc::EffectValue::Raw(node) = &effects[1].properties[0].value else {
+            panic!("curves knots encode as a raw node");
+        };
+        assert_eq!(node.as_children().map_or(0, <[doc::Node]>::len), 3);
+
+        shell.set_filter_param(id, 0, "gaussian_blur_radius", "4");
+        let mut radius = shell_param(&shell, id, 0, "gaussian_blur_radius");
+        assert_eq!(radius, "4");
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::Undo));
+        radius = shell_param(&shell, id, 0, "gaussian_blur_radius");
+        assert_eq!(radius, "2", "undo restores the preset default");
+
+        let mut bare = gui_shell(gui_editor());
+        bare.run_action(&menus::Action::Filter("invert"));
+        assert!(bare.status.contains("pick an object"), "{}", bare.status);
+    }
+
+    /// The applied effects of an object, read the way the properties
+    /// panel reads them.
+    fn shell_effect_list(shell: &Shell, id: doc::ObjectId) -> Vec<doc::Effect> {
+        match shell.editor.document().registry.get(id) {
+            Some(ObjectData::Path(path)) => path.effects.clone(),
+            Some(ObjectData::Text(text)) => text.effects.clone(),
+            _ => Vec::new(),
+        }
+    }
+
+    /// One text param of one applied effect (the `DCVs` form the
+    /// panel's rows edit).
+    fn shell_param(shell: &Shell, id: doc::ObjectId, index: usize, key: &str) -> String {
+        let effects = shell_effect_list(shell, id);
+        let doc::EffectValue::Text(value) = &effects[index]
+            .properties
+            .iter()
+            .find(|property| property.key == key)
+            .unwrap_or_else(|| panic!("{key}: absent"))
+            .value
+        else {
+            panic!("{key}: not text");
+        };
+        value.clone()
     }
 
     #[test]

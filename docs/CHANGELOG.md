@@ -10,6 +10,9 @@ Current version: **0.1.0**.
 
 ### Features
 
+- **xtask**: families and composites golden fixtures (f1cc6a8)
+- **engine**: filter curve knot lists via points (0df97a2)
+- **compose**: clouds, per-channel levels, colorize hls (032e80b)
 - **xtask**: zero unknown-GUID effect floor (a99103b)
 - **filters**: bevel and emboss composites (f4089c3)
 - **filters**: shadow and glow composites (fa49be3)

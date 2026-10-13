@@ -38,6 +38,12 @@ pub enum Action {
     TextSize(f64),
     /// `text.setAttrs` boolean attribute (bold/italic/underline).
     TextFlag(&'static str),
+    /// `filter.add` from the Filters menu: the preset's internal name,
+    /// resolved through the same registry the Live Filters panel uses
+    /// (`shell::filter_preset`). CS6 builds this menu at runtime from
+    /// its filter registry — the static RT_MENU resource carries only
+    /// Repeat Filter — and FireCraft mirrors exactly that.
+    Filter(&'static str),
 }
 
 /// Shell-level behaviors — plumbing that never goes through the engine.
@@ -720,11 +726,91 @@ pub static COMMANDS: Menu = Menu {
     ],
 };
 
-/// Filters — one item in CS6; the filter set itself lives in the
-/// Properties inspector.
+/// Filters — the static resource carries only Repeat Filter; CS6
+/// builds the effect tree at runtime from its filter registry. The
+/// submenus below are the same preset table that drives the Live
+/// Filters panel (`shell::FILTER_FAMILIES`, pinned equal by test);
+/// runtime-built items carry no resource id (the popups' own 0
+/// convention), and the dispatch resolves each name through
+/// `shell::filter_preset`.
 pub static FILTERS: Menu = Menu {
     label: "Filters",
-    entries: &[item(35035, "Repeat Filter", "", Action::Inert), Entry::Sep],
+    entries: &[
+        item(35035, "Repeat Filter", "", Action::Inert),
+        Entry::Sep,
+        Entry::Sub(
+            "Adjust Color",
+            &[
+                item(0, "Invert", "", Action::Filter("invert")),
+                item(
+                    0,
+                    "Brightness/Contrast",
+                    "",
+                    Action::Filter("brightnessContrast"),
+                ),
+                item(0, "Levels", "", Action::Filter("levels")),
+                item(0, "Curves", "", Action::Filter("curves")),
+                item(0, "Hue/Saturation", "", Action::Filter("hueSaturation")),
+                item(0, "Auto Levels", "", Action::Filter("autoLevels")),
+                item(0, "Color Fill", "", Action::Filter("colorFill")),
+                item(0, "Convert to Alpha", "", Action::Filter("convertToAlpha")),
+            ],
+        ),
+        Entry::Sub(
+            "Blur",
+            &[
+                item(0, "Blur", "", Action::Filter("blur")),
+                item(0, "Blur More", "", Action::Filter("blurMore")),
+                item(0, "Gaussian Blur", "", Action::Filter("gaussianBlur")),
+                item(0, "Motion Blur", "", Action::Filter("motionBlur")),
+                item(0, "Radial Blur", "", Action::Filter("radialBlur")),
+                item(0, "Zoom Blur", "", Action::Filter("zoomBlur")),
+            ],
+        ),
+        Entry::Sub(
+            "Sharpen",
+            &[
+                item(0, "Sharpen", "", Action::Filter("sharpen")),
+                item(0, "Sharpen More", "", Action::Filter("sharpenMore")),
+                item(0, "Unsharp Mask", "", Action::Filter("unsharpMask")),
+            ],
+        ),
+        Entry::Sub(
+            "Stylize",
+            &[
+                item(0, "Add Noise", "", Action::Filter("addNoise")),
+                item(0, "Find Edges", "", Action::Filter("findEdges")),
+                item(0, "Clouds", "", Action::Filter("clouds")),
+                item(
+                    0,
+                    "Difference Clouds",
+                    "",
+                    Action::Filter("differenceClouds"),
+                ),
+            ],
+        ),
+        Entry::Sep,
+        Entry::Sub(
+            "Shadow and Glow",
+            &[
+                item(0, "Drop Shadow", "", Action::Filter("dropShadow")),
+                item(0, "Inner Shadow", "", Action::Filter("innerShadow")),
+                item(0, "Solid Shadow", "", Action::Filter("solidShadow")),
+                item(0, "Inner Glow", "", Action::Filter("innerGlow")),
+                item(0, "Glow", "", Action::Filter("glow")),
+            ],
+        ),
+        Entry::Sub(
+            "Bevel and Emboss",
+            &[
+                item(0, "Inner Bevel", "", Action::Filter("innerBevel")),
+                item(0, "Outer Bevel", "", Action::Filter("outerBevel")),
+                item(0, "Raised Emboss", "", Action::Filter("emboss")),
+                item(0, "Inset Emboss", "", Action::Filter("pillowEmboss")),
+            ],
+        ),
+        Entry::Sep,
+    ],
 };
 
 /// Window — the CS6 panel roster. Every name here is the authoritative
@@ -979,15 +1065,57 @@ mod tests {
     }
 
     /// Command ids are unique — a transcription slip that would
-    /// otherwise silently remap a CS6 command.
+    /// otherwise silently remap a CS6 command. Runtime-built items
+    /// (id 0, the submenu popups' own convention) are exempt: the
+    /// Filters effect tree has no resource ids by construction.
     #[test]
     fn command_ids_are_unique_per_menu() {
         for menu in MENUBAR {
-            let mut ids: Vec<u32> = walk(menu.entries).iter().map(|i| i.id).collect();
+            let mut ids: Vec<u32> = walk(menu.entries)
+                .iter()
+                .map(|i| i.id)
+                .filter(|id| *id != 0)
+                .collect();
             ids.sort_unstable();
             let before = ids.len();
             ids.dedup();
             assert_eq!(ids.len(), before, "duplicate ids in {}", menu.label);
+        }
+    }
+
+    /// The Filters menu's runtime-built tree is the panel registry
+    /// cast as menu items — same families, same presets, same order —
+    /// and every name resolves. Repeat Filter keeps its resource id.
+    #[test]
+    fn filters_submenu_is_the_panel_registry() {
+        assert_eq!(
+            FILTERS.entries[0],
+            item(35035, "Repeat Filter", "", Action::Inert)
+        );
+        let mut menu_names = Vec::new();
+        for entry in FILTERS.entries {
+            if let Entry::Sub(family, items) = entry {
+                for item in *items {
+                    let Entry::Item(item) = item else {
+                        panic!("non-item in {family}");
+                    };
+                    let Action::Filter(name) = item.action else {
+                        panic!("{} carries a non-filter action", item.label);
+                    };
+                    menu_names.push(name);
+                }
+            }
+        }
+        let panel_names: Vec<_> = crate::shell::FILTER_FAMILIES
+            .iter()
+            .flat_map(|(_, presets)| presets.iter().map(|p| p.name))
+            .collect();
+        assert_eq!(menu_names, panel_names, "menu and panel registries drift");
+        for name in &menu_names {
+            assert!(
+                crate::shell::filter_preset(name).is_some(),
+                "{name} does not resolve"
+            );
         }
     }
 
