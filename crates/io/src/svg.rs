@@ -440,17 +440,21 @@ impl SvgWriter<'_> {
                     }
                 }
                 KernelOp::Levels {
-                    in_black,
-                    in_white,
-                    gamma,
-                    out_black,
-                    out_white,
+                    master,
+                    red,
+                    green,
+                    blue,
                 } => {
+                    // The gray ramp hits each channel with its own
+                    // override-else-master LUT, so the three exported
+                    // tables carry the per-channel curves directly.
                     if let Some(transfer) = lut_transfer(|| {
                         ramp_lut(|surface| {
-                            filters::levels(
-                                surface, *in_black, *in_white, *gamma, *out_black, *out_white,
-                            )
+                            let pick = |over: &Option<filters::LevelsControls>| match over {
+                                Some(c) => *c,
+                                None => *master,
+                            };
+                            filters::levels_channels(surface, pick(red), pick(green), pick(blue))
                         })
                     }) {
                         primitives.push_str(&transfer);
@@ -641,6 +645,8 @@ fn kernel_name(op: &KernelOp) -> &'static str {
         KernelOp::OuterGlow { .. } => "outer glow",
         KernelOp::InnerGlow { .. } => "inner glow",
         KernelOp::Bevel { .. } => "bevel emboss",
+        KernelOp::Clouds { .. } => "clouds",
+        KernelOp::DifferenceClouds { .. } => "difference clouds",
     }
 }
 

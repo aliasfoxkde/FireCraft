@@ -66,42 +66,83 @@ pub fn brightness_contrast(surface: &Surface, brightness: i32, contrast: i32) ->
     apply_lut(surface, &lut)
 }
 
-/// Levels with the Photoshop-style five controls: remap
-/// `[in_black, in_white]` under `gamma` onto `[out_black, out_white]`.
-///
-/// `gamma == 1.0` takes the integer-exact path (the M4-compose
-/// discipline: this is the case journal replay must bit-match).
-/// `gamma != 1.0` computes in `f64` — deterministic IEEE math, but not
-/// claimed integer-exact; decision 0004 records the split.
-///
-/// Degenerate inputs are pinned: `in_white <= in_black` maps
-/// everything below `in_black` to `out_black` and the rest to
-/// `out_white` (span clamps to 1 so the division cannot trap).
-#[must_use]
-pub fn levels(
-    surface: &Surface,
-    in_black: u8,
-    in_white: u8,
-    gamma: f64,
-    out_black: u8,
-    out_white: u8,
-) -> Surface {
-    let lo = in_black.min(in_white);
-    let hi = in_black.max(in_white);
-    let span = (hi - lo).max(1) as i64;
-    let (ob, ow) = (out_black.min(out_white), out_black.max(out_white));
-    let mut lut = [0u8; 256];
-    for (i, v) in lut.iter_mut().enumerate() {
-        *v = if gamma == 1.0 {
-            let t = (i as i64 - lo as i64).clamp(0, span);
-            clamp255(div_half(t * (ow as i64 - ob as i64), span) + ob as i64)
-        } else {
-            let t = ((i as f64 - f64::from(lo)) / span as f64).clamp(0.0, 1.0);
-            let g = t.powf(1.0 / gamma);
-            clamp255((f64::from(ob) + f64::from(ow - ob) * g).round() as i64)
-        };
+/// The Levels five controls: remap `[in_black, in_white]` under
+/// `gamma` onto `[out_black, out_white]`.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct LevelsControls {
+    /// `source_low_*`.
+    pub in_black: u8,
+    /// `source_high_*`.
+    pub in_white: u8,
+    /// `gamma_*` (1.0 takes the integer-exact kernel path).
+    pub gamma: f64,
+    /// `dest_low_*`.
+    pub out_black: u8,
+    /// `dest_high_*`.
+    pub out_white: u8,
+}
+
+impl LevelsControls {
+    /// The 256-entry remap table. `gamma == 1.0` takes the
+    /// integer-exact path (the M4-compose discipline: this is the case
+    /// journal replay must bit-match). `gamma != 1.0` computes in
+    /// `f64` — deterministic IEEE math, but not claimed
+    /// integer-exact; decision 0004 records the split.
+    ///
+    /// Degenerate inputs are pinned: `in_white <= in_black` maps
+    /// everything below `in_black` to `out_black` and the rest to
+    /// `out_white` (span clamps to 1 so the division cannot trap).
+    #[must_use]
+    pub fn lut(&self) -> [u8; 256] {
+        let lo = self.in_black.min(self.in_white);
+        let hi = self.in_black.max(self.in_white);
+        let span = (hi - lo).max(1) as i64;
+        let (ob, ow) = (
+            self.out_black.min(self.out_white),
+            self.out_black.max(self.out_white),
+        );
+        let mut lut = [0u8; 256];
+        for (i, v) in lut.iter_mut().enumerate() {
+            *v = if self.gamma == 1.0 {
+                let t = (i as i64 - lo as i64).clamp(0, span);
+                clamp255(div_half(t * (ow as i64 - ob as i64), span) + ob as i64)
+            } else {
+                let t = ((i as f64 - f64::from(lo)) / span as f64).clamp(0.0, 1.0);
+                let g = t.powf(1.0 / self.gamma);
+                clamp255((f64::from(ob) + f64::from(ow - ob) * g).round() as i64)
+            };
+        }
+        lut
     }
-    apply_lut(surface, &lut)
+}
+
+/// Levels with the Photoshop-style five controls, applied to every
+/// channel: the master (`*_rgb`) form.
+#[must_use]
+pub fn levels(surface: &Surface, controls: LevelsControls) -> Surface {
+    levels_channels(surface, controls, controls, controls)
+}
+
+/// Levels with per-channel controls (the dictionary's
+/// `source_low_red`/`green`/`blue` family): each channel takes its own
+/// remap in one pass. A channel whose edit never landed rides the
+/// master controls at the call site — here all three always apply.
+#[must_use]
+pub fn levels_channels(
+    surface: &Surface,
+    red: LevelsControls,
+    green: LevelsControls,
+    blue: LevelsControls,
+) -> Surface {
+    let (lr, lg, lb) = (red.lut(), green.lut(), blue.lut());
+    surface.map_straight(|px| {
+        Rgba8::new(
+            lr[px.r as usize],
+            lg[px.g as usize],
+            lb[px.b as usize],
+            px.a,
+        )
+    })
 }
 
 /// Collapses each channel to `levels` evenly spaced values (2..=256,
@@ -136,22 +177,33 @@ pub fn threshold(surface: &Surface, threshold: u8) -> Surface {
     })
 }
 
-/// Hue/saturation/lightness shift. `hue_deg` is additive (any value;
-/// taken mod 360), `saturation` and `lightness` are deltas in
-/// −1..=1 (clamped; saturation scales, lightness adds).
+/// Hue/saturation/lightness shift. In adjust mode (`colorize ==
+/// false`) `hue_deg` is additive (any value; taken mod 360); in
+/// colorize mode it REPLACES the pixel hue (the dictionary's
+/// `hls_colorize`: "`1`: replace pixel hue / `false`: adjust existing
+/// pixel hue", and `hue_amount` reads 0..360 absolute there).
+/// `saturation` and `lightness` are deltas in −1..=1 in both modes
+/// (clamped; saturation scales, lightness adds).
 ///
 /// Runs in `f64` — the HSL round trip is not representable in integer
 /// math, and decision 0004 records that this op makes no
 /// integer-exactness claim, only a determinism claim plus a ≤1-LSB
 /// identity bound at zero adjustment.
 #[must_use]
-pub fn hsl(surface: &Surface, hue_deg: f64, saturation: f64, lightness: f64) -> Surface {
+pub fn hsl(
+    surface: &Surface,
+    hue_deg: f64,
+    saturation: f64,
+    lightness: f64,
+    colorize: bool,
+) -> Surface {
     let sat_scale = (1.0 + saturation.clamp(-1.0, 1.0)).clamp(0.0, 2.0);
     let light_add = lightness.clamp(-1.0, 1.0);
     surface.map_straight(|px| {
         let (h, s, l) = rgb_to_hsl(px);
+        let hue = if colorize { hue_deg } else { h + hue_deg };
         let (r, g, b) = hsl_to_rgb(
-            (h + hue_deg).rem_euclid(360.0),
+            hue.rem_euclid(360.0),
             (s * sat_scale).clamp(0.0, 1.0),
             (l + light_add).clamp(0.0, 1.0),
         );
@@ -545,21 +597,57 @@ mod tests {
         )
         .unwrap();
         // Remap [32, 64] → [0, 255]: 32→0, 63→round(31·255/32)=247, 64→255.
-        let out = levels(&s, 32, 64, 1.0, 0, 255);
+        let out = levels(&s, full_span(32, 64, 1.0, 0, 255));
         assert_eq!(px(&out, 0), [0, 0, 0, 255]); // below in_black clamps
         assert_eq!(px(&out, 1), [0, 0, 0, 255]); // 31 clamps to in_black
         assert_eq!(px(&out, 2), [0, 0, 0, 255]);
         assert_eq!(px(&out, 3), [247, 247, 247, 255]);
         assert_eq!(px(&out, 4), [255, 255, 255, 255]);
         // Identity when the range is already full.
-        assert_eq!(levels(&s, 0, 255, 1.0, 0, 255), s);
+        assert_eq!(levels(&s, full_span(0, 255, 1.0, 0, 255)), s);
+    }
+
+    /// Levels controls over `[in_black, in_white] → [out_black,
+    /// out_white]` at `gamma`.
+    fn full_span(
+        in_black: u8,
+        in_white: u8,
+        gamma: f64,
+        out_black: u8,
+        out_white: u8,
+    ) -> LevelsControls {
+        LevelsControls {
+            in_black,
+            in_white,
+            gamma,
+            out_black,
+            out_white,
+        }
+    }
+
+    #[test]
+    fn levels_channels_remap_each_channel_independently() {
+        // Red carries the edit ([0,128] → [0,255]); green and blue ride
+        // the identity. One pass, no cross-talk.
+        let s = Surface::from_straight(1, 1, &[128, 64, 255, 255]).unwrap();
+        let out = levels_channels(
+            &s,
+            full_span(0, 128, 1.0, 0, 255),
+            full_span(0, 255, 1.0, 0, 255),
+            full_span(0, 255, 1.0, 0, 255),
+        );
+        assert_eq!(px(&out, 0), [255, 64, 255, 255]);
+        // Channel semantics equal the master form applied three times:
+        // same controls on every channel ≡ levels().
+        let same = full_span(16, 240, 1.0, 0, 255);
+        assert_eq!(levels_channels(&s, same, same, same), levels(&s, same));
     }
 
     #[test]
     fn levels_gamma_two_brightens_midtones_photoshop_convention() {
         let s = strip();
-        let a = levels(&s, 0, 255, 2.0, 0, 255);
-        let b = levels(&s, 0, 255, 2.0, 0, 255);
+        let a = levels(&s, full_span(0, 255, 2.0, 0, 255));
+        let b = levels(&s, full_span(0, 255, 2.0, 0, 255));
         assert_eq!(a, b, "f64 path must still be byte-deterministic");
         // Photoshop levels convention: out = t^(1/gamma), so gamma 2
         // lifts midtones — t=0.5 → 0.5^0.5 ≈ 0.7071 → 181.
@@ -568,7 +656,10 @@ mod tests {
         assert_eq!(px(&a, 0), [0, 0, 0, 255]);
         assert_eq!(px(&a, 3), [255, 255, 255, 255]);
         // gamma 0.5 mirrors it: t=0.5 → 0.25 → 64.
-        assert_eq!(px(&levels(&s, 0, 255, 0.5, 0, 255), 1), [64, 64, 64, 255]);
+        assert_eq!(
+            px(&levels(&s, full_span(0, 255, 0.5, 0, 255)), 1),
+            [64, 64, 64, 255]
+        );
     }
 
     #[test]
@@ -627,7 +718,7 @@ mod tests {
                 .collect::<Vec<u8>>(),
         )
         .unwrap();
-        let out = hsl(&all, 0.0, 0.0, 0.0);
+        let out = hsl(&all, 0.0, 0.0, 0.0, false);
         for x in 0..256u32 {
             let (a, b) = (px(&all, x), px(&out, x));
             for ch in 0..3 {
@@ -644,11 +735,50 @@ mod tests {
     #[test]
     fn hsl_rotation_is_exact_on_primaries() {
         let red = Surface::from_straight(1, 1, &[255, 0, 0, 255]).unwrap();
-        let cyan = hsl(&red, 180.0, 0.0, 0.0);
+        let cyan = hsl(&red, 180.0, 0.0, 0.0, false);
         assert_eq!(px(&cyan, 0), [0, 255, 255, 255]);
         // Desaturating fully gives the luma-equivalent gray (l = 0.5 for red).
-        let gray = hsl(&red, 0.0, -1.0, 0.0);
+        let gray = hsl(&red, 0.0, -1.0, 0.0, false);
         assert_eq!(px(&gray, 0), [128, 128, 128, 255]);
+    }
+
+    #[test]
+    fn hsl_colorize_replaces_hue_instead_of_shifting() {
+        // The dictionary's `hls_colorize`: truthy REPLACES the pixel
+        // hue (`hue_amount` then absolute 0..360). Red colorized to
+        // 120° lands on green — adjust mode with the same amount would
+        // shift red by 120° instead (landing on green too, so the
+        // distinguishing case is a hue the shift cannot reach: red
+        // colorized to 45° is orange, while red+45° adjust is the same
+        // — use a NON-primary source).
+        let s = Surface::from_straight(1, 1, &[255, 0, 0, 255]).unwrap();
+        let colorized = hsl(&s, 240.0, 0.0, 0.0, true);
+        assert_eq!(px(&colorized, 0), [0, 0, 255, 255], "red → blue at 240°");
+        // Adjust mode with the same amount: 0 + 240 = 240 → also blue.
+        // The real distinction shows on a mid hue where absolute and
+        // additive disagree: colorize forces the value regardless of
+        // the source hue.
+        let teal = Surface::from_straight(1, 1, &[0, 128, 128, 255]).unwrap();
+        // Source hue ≈ 180. Colorize to 0 → red family; adjust by 0
+        // stays teal.
+        let to_red = hsl(&teal, 0.0, 0.0, 0.0, true);
+        let (r, g, b) = {
+            let p = px(&to_red, 0);
+            (p[0], p[1], p[2])
+        };
+        assert!(
+            r > 100 && r < 200 && g == 0 && b == 0,
+            "colorize to hue 0 must land in the red family, got ({r},{g},{b})"
+        );
+        let unchanged = hsl(&teal, 0.0, 0.0, 0.0, false);
+        let (r, g, b) = {
+            let p = px(&unchanged, 0);
+            (p[0], p[1], p[2])
+        };
+        assert!(
+            !(r > 200 && g < 20),
+            "adjust by 0 must not colorize, got ({r},{g},{b})"
+        );
     }
 
     #[test]
@@ -669,10 +799,10 @@ mod tests {
         for out in [
             invert(&s),
             brightness_contrast(&s, 20, -30),
-            levels(&s, 16, 240, 1.0, 0, 255),
+            levels(&s, full_span(16, 240, 1.0, 0, 255)),
             posterize(&s, 4),
             threshold(&s, 128),
-            hsl(&s, 30.0, 0.2, -0.1),
+            hsl(&s, 30.0, 0.2, -0.1, false),
         ] {
             assert_eq!((out.width(), out.height()), (3, 2));
             for x in 0..3u32 {
@@ -692,7 +822,10 @@ mod tests {
         // Noisy translucent pixels must keep rgb <= a after any op
         // (the premultiply invariant compose depends on).
         let s = Surface::from_straight(2, 1, &[255, 255, 255, 128, 10, 200, 30, 3]).unwrap();
-        for out in [brightness_contrast(&s, 100, 100), hsl(&s, 120.0, 1.0, 0.5)] {
+        for out in [
+            brightness_contrast(&s, 100, 100),
+            hsl(&s, 120.0, 1.0, 0.5, false),
+        ] {
             for x in 0..2u32 {
                 let p = out.get(x, 0).unwrap();
                 assert!(p[0] <= p[3] && p[1] <= p[3] && p[2] <= p[3]);

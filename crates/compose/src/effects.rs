@@ -29,7 +29,7 @@ const GUID_BRIGHTNESS_CONTRAST: &str = "3439b08c-1921-11d3-9bde00e02910d580";
 const GUID_HUE_SATURATION: &str = "3439b08d-1922-11d3-9bde00e02910d580";
 /// Gaussian Blur (dictionary line 1508).
 const GUID_GAUSSIAN_BLUR: &str = "d04ef8c0-71b3-11d1-8c8200a024cdc039";
-/// Levels (dictionary line 1510; the `_rgb` master controls only).
+/// Levels (dictionary line 1510; `*_rgb` master + per-channel sets).
 const GUID_LEVELS: &str = "d04ef8c2-71b5-11d1-8c8200a024cdc039";
 /// Invert (dictionary line 1512).
 const GUID_INVERT: &str = "d2541291-70d6-11d1-8c8000a024cdc039";
@@ -72,6 +72,10 @@ const GUID_SOLID_SHADOW: &str = "b90c950e-64df-11d8-aaf2000a9582f7d4";
 /// Bevel / Emboss, MX-era scalar props — one GUID, `BevelType` picks
 /// the variant (dictionary line 1502).
 const GUID_BEVEL: &str = "7fe61102-6ce2-11d1-8c76000502701850";
+/// Clouds (dictionary line 1496).
+const GUID_CLOUDS: &str = "ff84d00c-4494-11d8-a072000a9582f7d4";
+/// Difference Clouds (dictionary line 1497).
+const GUID_DIFFERENCE_CLOUDS: &str = "d2e7769c-6349-11d8-b0e9000a9595f34e";
 /// Photoshop Live Effects Special Fill — the CS6 unified panel; each
 /// kind (dropShadow, innerShadow, outerGlow, innerGlow, solidFill, …)
 /// arrives as one `&`-packed string property.
@@ -108,6 +112,8 @@ pub const RECOGNIZED_GUIDS: &[&str] = &[
     GUID_INNER_GLOW,
     GUID_SOLID_SHADOW,
     GUID_BEVEL,
+    GUID_CLOUDS,
+    GUID_DIFFERENCE_CLOUDS,
     GUID_LIVE_EFFECTS,
 ];
 
@@ -121,23 +127,27 @@ pub enum KernelOp {
         /// `contrast_amount`.
         contrast: i32,
     },
-    /// Levels, five-control Photoshop form, master (`_rgb`) channels.
+    /// Levels, five-control Photoshop form: the `*_rgb` master
+    /// controls, plus the per-channel overrides
+    /// (`source_low_red`/`green`/`blue` …) CS6 writes when a channel
+    /// was edited individually. Each channel rides its override when
+    /// present, the master otherwise.
     Levels {
-        /// `source_low_rgb`.
-        in_black: u8,
-        /// `source_high_rgb`.
-        in_white: u8,
-        /// `gamma_rgb` (1.0 takes the integer-exact kernel path).
-        gamma: f64,
-        /// `dest_low_rgb`.
-        out_black: u8,
-        /// `dest_high_rgb`.
-        out_white: u8,
+        /// The `*_rgb` master controls.
+        master: filters::LevelsControls,
+        /// The `*_red` controls, when the file carries a full set.
+        red: Option<filters::LevelsControls>,
+        /// The `*_green` controls, when the file carries a full set.
+        green: Option<filters::LevelsControls>,
+        /// The `*_blue` controls, when the file carries a full set.
+        blue: Option<filters::LevelsControls>,
     },
     /// Invert — alpha passes through.
     Invert,
     /// Hue/Saturation: degrees, then −100..=100 percents (kernel takes
-    /// fractions, so percents divide by 100 here).
+    /// fractions, so percents divide by 100 here). Colorize mode
+    /// (`hls_colorize`) REPLACES the pixel hue instead of shifting —
+    /// `hue` is then absolute 0..360.
     HueSaturation {
         /// `hue_amount`.
         hue: f64,
@@ -145,6 +155,8 @@ pub enum KernelOp {
         saturation: f64,
         /// `lightness_amount` / 100.
         lightness: f64,
+        /// `hls_colorize`.
+        colorize: bool,
     },
     /// Gaussian Blur, `gaussian_blur_radius` in pixels.
     GaussianBlur {
@@ -284,6 +296,26 @@ pub enum KernelOp {
         /// `EmbossFaceColor` (raised/inset only, when present).
         face: Option<Rgba8>,
     },
+    /// Clouds — the opaque value-noise fill across the object's
+    /// bounding box (kernel substitution pinned in `filters`).
+    Clouds {
+        /// Derived from the effect identity + parameters.
+        seed: u64,
+        /// `sky_color`.
+        sky: Rgba8,
+        /// `cloud_color`.
+        cloud: Rgba8,
+    },
+    /// Difference Clouds — the same texture subtracted inside the
+    /// object's own silhouette.
+    DifferenceClouds {
+        /// Derived from the effect identity + parameters.
+        seed: u64,
+        /// `sky_color`.
+        sky: Rgba8,
+        /// `cloud_color`.
+        cloud: Rgba8,
+    },
     /// Add Noise with a stack-deterministic seed (no clocks, no
     /// randomness — the seed derives from the effect's own bytes, so
     /// journal replay and re-renders are bit-stable).
@@ -392,6 +424,14 @@ pub fn plan(stack: &[Effect]) -> Plan {
                 Some(op) => ops.push(op),
                 None => skipped += 1,
             },
+            Some(id) if id == GUID_CLOUDS => match clouds(effect, false) {
+                Some(op) => ops.push(op),
+                None => skipped += 1,
+            },
+            Some(id) if id == GUID_DIFFERENCE_CLOUDS => match clouds(effect, true) {
+                Some(op) => ops.push(op),
+                None => skipped += 1,
+            },
             Some(id) if id == GUID_LIVE_EFFECTS => match live_effects(effect) {
                 Some(parsed) => ops.extend(parsed),
                 None => skipped += 1,
@@ -419,20 +459,31 @@ pub fn apply_stack(mut surface: Surface, ops: &[KernelOp]) -> Surface {
                 contrast,
             } => filters::brightness_contrast(&surface, *brightness, *contrast),
             KernelOp::Levels {
-                in_black,
-                in_white,
-                gamma,
-                out_black,
-                out_white,
-            } => filters::levels(
-                &surface, *in_black, *in_white, *gamma, *out_black, *out_white,
-            ),
+                master,
+                red,
+                green,
+                blue,
+            } => {
+                // A channel rides its override when the full five-prop
+                // group parsed, else the `*_rgb` master — the parse
+                // guarantees no partial group reaches here.
+                let pick = |over: &Option<filters::LevelsControls>| match over {
+                    Some(c) => *c,
+                    None => *master,
+                };
+                filters::levels_channels(&surface, pick(red), pick(green), pick(blue))
+            }
             KernelOp::Invert => filters::invert(&surface),
             KernelOp::HueSaturation {
                 hue,
                 saturation,
                 lightness,
-            } => filters::hsl(&surface, *hue, *saturation, *lightness),
+                colorize,
+            } => filters::hsl(&surface, *hue, *saturation, *lightness, *colorize),
+            KernelOp::Clouds { seed, sky, cloud } => filters::clouds(&surface, *seed, *sky, *cloud),
+            KernelOp::DifferenceClouds { seed, sky, cloud } => {
+                filters::difference_clouds(&surface, *seed, *sky, *cloud)
+            }
             KernelOp::GaussianBlur { radius } => filters::gaussian_blur(&surface, *radius),
             KernelOp::BoxBlur { radius } => filters::box_blur(&surface, *radius),
             KernelOp::UnsharpMask {
@@ -587,6 +638,8 @@ fn by_name(effect: &Effect) -> Option<KernelOp> {
         "sharpen" => Some(KernelOp::Sharpen),
         "sharpenmore" => Some(KernelOp::SharpenMore),
         "converttoalpha" => Some(KernelOp::ConvertToAlpha),
+        "clouds" => clouds(effect, false),
+        "differenceclouds" => clouds(effect, true),
         "dropshadow" => mx_drop_shadow(effect),
         "innershadow" => mx_inner_shadow(effect),
         "innerglow" => mx_inner_glow(effect),
@@ -1104,21 +1157,64 @@ fn hue_saturation(effect: &Effect) -> Option<KernelOp> {
     let hue = prop_f64(effect, "hue_amount")?;
     let saturation = prop_f64(effect, "saturation_amount")?;
     let lightness = prop_f64(effect, "lightness_amount")?;
+    // The dictionary's `hls_colorize`: truthy replaces the pixel hue
+    // (`hue_amount` then absolute 0..360), falsy adjusts it.
+    let colorize = prop_bool(effect, "hls_colorize");
     Some(KernelOp::HueSaturation {
-        hue: hue.clamp(-180.0, 180.0),
+        hue: if colorize {
+            hue.clamp(0.0, 360.0)
+        } else {
+            hue.clamp(-180.0, 180.0)
+        },
         saturation: saturation.clamp(-100.0, 100.0) / 100.0,
         lightness: lightness.clamp(-100.0, 100.0) / 100.0,
+        colorize,
+    })
+}
+
+/// One channel's Levels controls from the `*_rgb`-suffix family
+/// (`suffix` ∈ "rgb" | "red" | "green" | "blue").
+fn levels_controls(effect: &Effect, suffix: &str) -> Option<filters::LevelsControls> {
+    Some(filters::LevelsControls {
+        in_black: prop_u8(effect, &format!("source_low_{suffix}"))?,
+        in_white: prop_u8(effect, &format!("source_high_{suffix}"))?,
+        gamma: prop_f64(effect, &format!("gamma_{suffix}"))?,
+        out_black: prop_u8(effect, &format!("dest_low_{suffix}"))?,
+        out_white: prop_u8(effect, &format!("dest_high_{suffix}"))?,
     })
 }
 
 fn levels(effect: &Effect) -> Option<KernelOp> {
+    // The master set is required (CS6 always writes it); a channel
+    // override counts only when its whole five-prop group is present —
+    // a partial group is the UI mid-edit state, not a spec.
+    let master = levels_controls(effect, "rgb")?;
+    let channel = |suffix: &str| levels_controls(effect, suffix);
     Some(KernelOp::Levels {
-        in_black: prop_u8(effect, "source_low_rgb")?,
-        in_white: prop_u8(effect, "source_high_rgb")?,
-        gamma: prop_f64(effect, "gamma_rgb")?,
-        out_black: prop_u8(effect, "dest_low_rgb")?,
-        out_white: prop_u8(effect, "dest_high_rgb")?,
+        master,
+        red: channel("red"),
+        green: channel("green"),
+        blue: channel("blue"),
     })
+}
+
+fn clouds(effect: &Effect, difference: bool) -> Option<KernelOp> {
+    let sky = prop_color(effect, "sky_color")?;
+    let cloud = prop_color(effect, "cloud_color")?;
+    let op = if difference {
+        KernelOp::DifferenceClouds {
+            seed: noise_seed(effect),
+            sky,
+            cloud,
+        }
+    } else {
+        KernelOp::Clouds {
+            seed: noise_seed(effect),
+            sky,
+            cloud,
+        }
+    };
+    Some(op)
 }
 
 fn gaussian_blur(effect: &Effect) -> Option<KernelOp> {
@@ -1151,13 +1247,7 @@ fn unsharp_mask(effect: &Effect) -> Option<KernelOp> {
 
 fn add_noise(effect: &Effect) -> Option<KernelOp> {
     let amount = prop_f64(effect, "add_noise_amount")?;
-    let use_color = match prop(effect, "add_noise_use_color") {
-        Some(EffectValue::Text(text)) => {
-            let text = text.trim().to_ascii_lowercase();
-            text == "1" || text == "true"
-        }
-        Some(EffectValue::Raw(_)) | None => false,
-    };
+    let use_color = prop_bool(effect, "add_noise_use_color");
     Some(KernelOp::AddNoise {
         seed: noise_seed(effect),
         amount: amount.clamp(0.0, 100.0) as u32,
@@ -1181,6 +1271,18 @@ fn prop_f64(effect: &Effect, key: &str) -> Option<f64> {
 
 fn prop_u8(effect: &Effect, key: &str) -> Option<u8> {
     prop_f64(effect, key).map(|value| value.round().clamp(0.0, 255.0) as u8)
+}
+
+/// Truthy-text flag (`"1"`/`"true"`, any case). Absent or raw reads
+/// false — the CS6 scripts only ever write the flag when set.
+fn prop_bool(effect: &Effect, key: &str) -> bool {
+    match prop(effect, key) {
+        Some(EffectValue::Text(text)) => {
+            let text = text.trim().to_ascii_lowercase();
+            text == "1" || text == "true"
+        }
+        Some(EffectValue::Raw(_)) | None => false,
+    }
 }
 
 /// Text property value, for the non-decimal encodings (`Color` hex).
@@ -1443,6 +1545,16 @@ mod tests {
             ("sharpenMore", GUID_SHARPEN_MORE, vec![]),
             ("convertToAlpha", GUID_CONVERT_TO_ALPHA, vec![]),
             (
+                "clouds",
+                GUID_CLOUDS,
+                vec![("sky_color", "#6699cc"), ("cloud_color", "#ffffff")],
+            ),
+            (
+                "differenceClouds",
+                GUID_DIFFERENCE_CLOUDS,
+                vec![("sky_color", "#000000"), ("cloud_color", "#ffffff")],
+            ),
+            (
                 "dropShadow",
                 GUID_DROP_SHADOW,
                 vec![
@@ -1533,7 +1645,7 @@ mod tests {
         });
         stack.push(live);
         let plan = plan(&stack);
-        assert_eq!(plan.ops.len(), 28, "every enumerated effect interprets");
+        assert_eq!(plan.ops.len(), 30, "every enumerated effect interprets");
         assert_eq!(plan.skipped, 0, "the native surface never rides through");
         // The floor's authority list stays in lockstep: every GUID
         // const published as recognized was exercised above (the
@@ -2213,5 +2325,209 @@ mod tests {
                 ..
             }
         ));
+    }
+
+    /// The dictionary's full per-channel Levels prop set for one
+    /// channel: `master` rides `*_rgb`, overrides ride `*_red` etc.
+    fn levels_props(suffix: String, in_white: &str) -> Vec<(String, String)> {
+        vec![
+            (format!("source_low_{suffix}"), "0".to_owned()),
+            (format!("source_high_{suffix}"), in_white.to_owned()),
+            (format!("gamma_{suffix}"), "1".to_owned()),
+            (format!("dest_low_{suffix}"), "0".to_owned()),
+            (format!("dest_high_{suffix}"), "255".to_owned()),
+        ]
+    }
+
+    #[test]
+    fn levels_channel_overrides_replace_only_their_channel() {
+        let mut props: Vec<EffectProperty> = levels_props("rgb".to_owned(), "255")
+            .into_iter()
+            .map(|(key, value)| EffectProperty {
+                key,
+                value: EffectValue::Text(value),
+            })
+            .collect();
+        for (key, value) in levels_props("red".to_owned(), "128") {
+            props.push(EffectProperty {
+                key,
+                value: EffectValue::Text(value),
+            });
+        }
+        let parsed = Effect {
+            category: String::new(),
+            internal_name: "levels".to_owned(),
+            properties: props,
+        };
+        let KernelOp::Levels {
+            master,
+            red,
+            green,
+            blue,
+        } = plan(std::slice::from_ref(&parsed)).ops[0]
+        else {
+            panic!("expected levels");
+        };
+        assert_eq!(red.map(|c| c.in_white), Some(128), "red override rides");
+        assert_eq!(green.map(|c| c.in_white), None, "green has no override");
+        assert_eq!(blue.map(|c| c.in_white), None, "blue has no override");
+        assert_eq!(master.in_white, 255);
+    }
+
+    #[test]
+    fn levels_partial_channel_group_is_not_an_override() {
+        // A UI mid-edit state (two of five props) must not silently
+        // merge with the master — the channel falls back to it.
+        let mut props: Vec<EffectProperty> = levels_props("rgb".to_owned(), "255")
+            .into_iter()
+            .map(|(key, value)| EffectProperty {
+                key,
+                value: EffectValue::Text(value),
+            })
+            .collect();
+        for (key, value) in [("source_low_red", "10"), ("source_high_red", "200")] {
+            props.push(EffectProperty {
+                key: key.to_owned(),
+                value: EffectValue::Text(value.to_owned()),
+            });
+        }
+        let parsed = Effect {
+            category: String::new(),
+            internal_name: "levels".to_owned(),
+            properties: props,
+        };
+        let KernelOp::Levels { red, .. } = plan(std::slice::from_ref(&parsed)).ops[0] else {
+            panic!("expected levels");
+        };
+        assert_eq!(red, None, "partial group is not a spec");
+    }
+
+    #[test]
+    fn hls_colorize_switches_shift_to_replace() {
+        let shift = guid_effect(
+            "hueSaturation",
+            GUID_HUE_SATURATION,
+            &[
+                ("hue_amount", "180"),
+                ("saturation_amount", "0"),
+                ("lightness_amount", "0"),
+            ],
+        );
+        assert!(matches!(
+            plan(&[shift]).ops[0],
+            KernelOp::HueSaturation {
+                hue: 180.0,
+                colorize: false,
+                ..
+            }
+        ));
+        let colorize = guid_effect(
+            "hueSaturation",
+            GUID_HUE_SATURATION,
+            &[
+                ("hue_amount", "120"),
+                ("saturation_amount", "0"),
+                ("lightness_amount", "0"),
+                ("hls_colorize", "1"),
+            ],
+        );
+        assert!(matches!(
+            plan(&[colorize]).ops[0],
+            KernelOp::HueSaturation {
+                hue: 120.0,
+                colorize: true,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn clouds_parse_seed_colors_and_difference_split() {
+        let clouds_effect = guid_effect(
+            "clouds",
+            GUID_CLOUDS,
+            &[("sky_color", "#6699cc"), ("cloud_color", "#ffffff")],
+        );
+        let plain = plan(std::slice::from_ref(&clouds_effect));
+        assert_eq!(plain.ops.len(), 1, "no params missing, nothing skipped");
+        assert!(matches!(plain.ops[0], KernelOp::Clouds { .. }));
+
+        // Braced GUID spellings normalize to the same identity.
+        let difference = Effect {
+            category: String::new(),
+            internal_name: "differenceClouds".to_owned(),
+            properties: vec![
+                EffectProperty {
+                    key: "EffectMoaID".to_owned(),
+                    value: EffectValue::Text(format!("{{{GUID_DIFFERENCE_CLOUDS}}}")),
+                },
+                EffectProperty {
+                    key: "sky_color".to_owned(),
+                    value: EffectValue::Text("#000000".to_owned()),
+                },
+                EffectProperty {
+                    key: "cloud_color".to_owned(),
+                    value: EffectValue::Text("#ffffff".to_owned()),
+                },
+            ],
+        };
+        assert!(matches!(
+            plan(std::slice::from_ref(&difference)).ops[0],
+            KernelOp::DifferenceClouds { .. }
+        ));
+
+        // Same params, different internal names → different seeds: the
+        // seed feeds from the effect's own bytes, so the two renders
+        // are distinct textures.
+        let a = guid_effect(
+            "clouds",
+            GUID_CLOUDS,
+            &[("sky_color", "#000000"), ("cloud_color", "#ffffff")],
+        );
+        let b = guid_effect(
+            "differenceClouds",
+            GUID_DIFFERENCE_CLOUDS,
+            &[("sky_color", "#000000"), ("cloud_color", "#ffffff")],
+        );
+        let (KernelOp::Clouds { seed: sa, .. }, KernelOp::DifferenceClouds { seed: sb, .. }) =
+            (plan(&[a]).ops[0].clone(), plan(&[b]).ops[0].clone())
+        else {
+            panic!("expected clouds pair");
+        };
+        assert_ne!(sa, sb, "seed derives from the effect bytes");
+    }
+
+    #[test]
+    fn clouds_missing_color_param_skips() {
+        let bare = guid_effect("clouds", GUID_CLOUDS, &[("sky_color", "#6699cc")]);
+        let planned = plan(&[bare]);
+        assert!(planned.ops.is_empty());
+        assert_eq!(planned.skipped, 1);
+    }
+
+    #[test]
+    fn clouds_guid_stack_applies_through_the_kernels() {
+        // End-to-end through `apply_stack`: Clouds must fill the
+        // object's opaque box with the pinned texture (deterministic,
+        // sky↔cloud-bounded), Difference Clouds must keep the box.
+        let fill = guid_effect(
+            "clouds",
+            GUID_CLOUDS,
+            &[("sky_color", "#000000"), ("cloud_color", "#ffffff")],
+        );
+        let plan = plan(&[fill]);
+        let base =
+            filters::Surface::from_straight(8, 8, [255, 0, 0, 255].repeat(64).as_slice()).unwrap();
+        let out = apply_stack(base, &plan.ops);
+        let px = out.to_straight();
+        assert_eq!(px.len(), 8 * 8 * 4);
+        assert!(
+            px.chunks_exact(4).all(|p| p[3] == 255),
+            "clouds fills the box opaquely"
+        );
+        assert!(
+            px.chunks_exact(4).all(|p| p[0] == p[1] && p[1] == p[2]),
+            "gray sky↔cloud keeps the texture gray"
+        );
     }
 }

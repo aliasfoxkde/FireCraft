@@ -172,9 +172,9 @@ Adjust Color family:
 | Effect | GUID | Parameters (dictionary names) | Status |
 |---|---|---|---|
 | Brightness/Contrast | `3439b08c-1921-11d3-…` | `brightness_amount`, `contrast_amount` (−100..100) | interpreted |
-| Levels | `d04ef8c2-71b5-11d1-…` | `source_low/high_rgb` + `gamma_rgb` + `dest_low/high_rgb`, and the per-channel scalar twins (`*_red/green/blue`; the `*_points` knot lists belong to Curves above) | interpreted (master channel only) — M14: per-channel |
+| Levels | `d04ef8c2-71b5-11d1-…` | `source_low/high_rgb` + `gamma_rgb` + `dest_low/high_rgb`, and the per-channel scalar twins (`*_red/green/blue`; the `*_points` knot lists belong to Curves above) | interpreted (master `*_rgb` set required; a channel override counts only when its full five-prop group is present — a partial group is the UI mid-edit state, not a spec; per-channel since M14) |
 | Curves | `3439b08e-1923-11d3-…` | `rgb_points`, `red_points`, `green_points`, `blue_points` (`GPLv`/`GPTv`/`XLCf`/`YLCf` knot lists) + `gamma_*` | interpreted (piecewise-linear knots; `gamma_*` unused — CS6 draws straight segments) — M14: golden |
-| Hue/Saturation | `3439b08d-1922-11d3-…` | `hue_amount` (deg), `saturation_amount`, `lightness_amount` (−100..100), `hls_colorize` | interpreted (`hls_colorize` unchecked — M14: verify) |
+| Hue/Saturation | `3439b08d-1922-11d3-…` | `hue_amount` (deg), `saturation_amount`, `lightness_amount` (−100..100), `hls_colorize` | interpreted (verified from the dictionary's `hls_colorize`: truthy REPLACES the pixel hue — `hue_amount` is then absolute 0..360; falsy adjusts, −180..180 — pinned since M14) |
 | Auto Levels | `d04ef8c1-71b4-11d1-…` | histogram-derived per-channel stretch (the `StHistogramRGBProcessor` family) | interpreted (plain min/max stretch, no outlier clipping — pinned substitution) — M14: golden |
 | Color Fill | `dd54adc0-a279-11d3-…` | `Color` (`#rrggbb` text), `Opacity` (0..100), `Blendmode` (numeric code) | interpreted (13 of the dictionary's 33 blend codes map onto the kernel set; the rest skip) — M14: golden |
 | Invert | `d2541291-70d6-11d1-…` | none | interpreted (24-bit word op, alpha preserved — decoded above) |
@@ -205,8 +205,8 @@ Stylize / other:
 | Add Noise | `e4c0f4bc-c0a3-4cb3-…` | `add_noise_amount` (0..100), `add_noise_use_color` | interpreted (MINSTD decode above; seed substitution documented) |
 | Find Edges | `fc7093f1-f95c-11d0-…` | none | interpreted |
 | Convert to Alpha | `2932d5a2-ca48-11d1-…` | none documented (`CCreateAlphaFilter`; `EdgeThreshold` belongs to Glow/Bevel/Emboss, not here) | interpreted (house Rec.601 luma → opacity, color → black — pinned substitution) — M14: golden |
-| Clouds | `ff84d00c-4494-11d8-…` | `sky_color`, `cloud_color` | M14 |
-| Difference Clouds | `d2e7769c-6349-11d8-…` | `sky_color`, `cloud_color` | M14 |
+| Clouds | `ff84d00c-4494-11d8-…` | `sky_color`, `cloud_color` | interpreted (fills the alpha bbox opaquely with the pinned noise texture, clears outside; see substitutions) — M14: golden |
+| Difference Clouds | `d2e7769c-6349-11d8-…` | `sky_color`, `cloud_color` | interpreted (`out = \|src − tex\|` per channel inside the source silhouette, alpha untouched) — M14: golden |
 
 Pinned substitutions (M14 kernels whose exact CS6 arithmetic is not
 observable without a render oracle — each is a deliberate, recorded
@@ -214,6 +214,22 @@ choice, revisited only on oracle evidence): auto levels stretches
 per-channel min/max with no outlier clipping; convert-to-alpha maps
 house Rec.601 luma `(299r+587g+114b)/1000` to opacity over black;
 the sharpen presets use the classic 5-point / 9-point kernels;
+the Clouds/Difference Clouds texture is a pinned substitution (CS6's
+fractal-noise kernel unobserved): one-octave value noise on a 16px
+lattice, each lattice point the SplitMix64 final cascade over
+`(seed, x, y)` — position-independent, so the same world pixel carries
+the same texture in any bounding box — bilinearly interpolated in
+integer math with house rounding; the seed derives from the effect's
+own bytes (FNV-1a, the Add Noise rule), so files replay identically
+without a stored seed. Clouds FILLS the source's opaque bounding box
+(the filter reaches the selection box) and clears outside it;
+Difference Clouds keeps the source silhouette and subtracts per
+channel on straight colors. Golden coverage since M14: `families.fw.png`
+(twelve one-effect-per-cell rects — hand-computed center anchors for
+hue shift/colorize/levels/curves/auto-levels/color-fill/convert-to-
+alpha/sharpen/sharpen-more/motion-blur-angle-0, determinism-only for
+radial/zoom) and `composites.fw.png` (the shadow/glow + bevel/emboss
+families incl. the packed unified-panel outerGlow, determinism-only).
 motion blur taps one-sided `[0..=d]` along `(cos θ, −sin θ)` (UI
 counterclockwise, image y down); zoom blur averages taps uniform in
 scale toward the center; radial (spin) reads `radial_blur_amount` as

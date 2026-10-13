@@ -144,26 +144,47 @@ fn hash_plan(h: &mut Hasher, plan: &Plan) {
                 h.i32(*contrast);
             }
             KernelOp::Levels {
-                in_black,
-                in_white,
-                gamma,
-                out_black,
-                out_white,
+                master,
+                red,
+                green,
+                blue,
             } => {
                 h.tag(b"LV");
-                h.bytes(&[*in_black, *in_white, *out_black, *out_white]);
-                h.f64(*gamma);
+                for controls in [Some(*master), *red, *green, *blue] {
+                    match controls {
+                        Some(c) => {
+                            h.bool(true);
+                            h.bytes(&[c.in_black, c.in_white, c.out_black, c.out_white]);
+                            h.f64(c.gamma);
+                        }
+                        None => h.bool(false),
+                    }
+                }
             }
             KernelOp::Invert => h.tag(b"IV"),
             KernelOp::HueSaturation {
                 hue,
                 saturation,
                 lightness,
+                colorize,
             } => {
                 h.tag(b"HS");
                 h.f64(*hue);
                 h.f64(*saturation);
                 h.f64(*lightness);
+                h.bool(*colorize);
+            }
+            KernelOp::Clouds { seed, sky, cloud } => {
+                h.tag(b"CL");
+                h.u64(*seed);
+                h.bytes(&[sky.r, sky.g, sky.b, sky.a]);
+                h.bytes(&[cloud.r, cloud.g, cloud.b, cloud.a]);
+            }
+            KernelOp::DifferenceClouds { seed, sky, cloud } => {
+                h.tag(b"DC");
+                h.u64(*seed);
+                h.bytes(&[sky.r, sky.g, sky.b, sky.a]);
+                h.bytes(&[cloud.r, cloud.g, cloud.b, cloud.a]);
             }
             KernelOp::GaussianBlur { radius } => {
                 h.tag(b"GB");
