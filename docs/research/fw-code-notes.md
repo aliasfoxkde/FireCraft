@@ -155,6 +155,97 @@ Verdicts:
   text-engine layout behind it is an enhancement-phase unknown (rich
   text beyond corpus coverage), not a writer-architecture unknown.
 
+## The live-filter surface (M14 enumeration, task 1)
+
+Every live effect CS6 ships is identified by its `EPSv` `EffectMoaID`
+GUID (the observational dictionary's `DCEv "EffectMoaID"` table —
+complete, cross-checked against the `Configuration/` `.jsf` corpus and
+the RTTI filter classes from the pass above). This table is the M14
+completion checklist: an effect is done when its row carries a matching
+kernel, pinned parameters, and a golden. Status legend: **interpreted**
+(compose maps it to kernel ops today), **M14** (native CS6 effect to
+implement), **plugin** (third-party gallery — passed through by design,
+never guessed at).
+
+Adjust Color family:
+
+| Effect | GUID | Parameters (dictionary names) | Status |
+|---|---|---|---|
+| Brightness/Contrast | `3439b08c-1921-11d3-…` | `brightness_amount`, `contrast_amount` (−100..100) | interpreted |
+| Levels | `d04ef8c2-71b5-11d1-…` | `source_low/high_rgb` + `gamma_rgb` + `dest_low/high_rgb`, and the per-channel twins (`*_red/green/blue`, incl. `red/green/blue_points`) | interpreted (master channel only) — M14: per-channel |
+| Curves | `3439b08e-1923-11d3-…` | `rgb_points`, `red_points`, `green_points`, `blue_points` (knot lists) + `gamma_*` | M14 |
+| Hue/Saturation | `3439b08d-1922-11d3-…` | `hue_amount` (deg), `saturation_amount`, `lightness_amount` (−100..100), `hls_colorize` | interpreted (`hls_colorize` unchecked — M14: verify) |
+| Auto Levels | `d04ef8c1-71b4-11d1-…` | histogram-derived per-channel stretch (the `StHistogramRGBProcessor` family) | M14 |
+| Color Fill | `dd54adc0-a279-11d3-…` | `color` + blend/opacity | M14 |
+| Invert | `d2541291-70d6-11d1-…` | none | interpreted (24-bit word op, alpha preserved — decoded above) |
+
+Blur family:
+
+| Effect | GUID | Parameters | Status |
+|---|---|---|---|
+| Blur | `f1cfce41-718e-11d1-…` | none (fixed radius 1) | interpreted |
+| Blur More | `f1cfce42-718e-11d1-…` | none (fixed radius 2) | interpreted |
+| Gaussian Blur | `d04ef8c0-71b3-11d1-…` | `gaussian_blur_radius` | interpreted |
+| Motion Blur | `538016b6-ffd6-418f-…` | `motion_blur_angle`, `motion_blur_distance` | M14 |
+| Radial Blur | `d1c33142-2ad8-4215-…` | `radial_blur_amount`, `radial_blur_quality` | M14 |
+| Zoom Blur | `94dbd663-9b2e-44bf-…` | `zoom_blur_amount`, `zoom_blur_quality` | M14 |
+
+Sharpen family:
+
+| Effect | GUID | Parameters | Status |
+|---|---|---|---|
+| Sharpen | `c20952b1-fc76-11d0-…` | none (preset) | M14 |
+| Sharpen More | `1f2f2591-9db7-11d1-…` | none (preset) | M14 |
+| Unsharp Mask | `f1cfce44-718e-11d1-…` | `unsharp_mask_radius`, `unsharp_mask_amount`, `unsharp_mask_threshold` | interpreted — M14: honor the threshold (today non-zero skips the effect, a recorded limitation) |
+
+Stylize / other:
+
+| Effect | GUID | Parameters | Status |
+|---|---|---|---|
+| Add Noise | `e4c0f4bc-c0a3-4cb3-…` | `add_noise_amount` (0..100), `add_noise_use_color` | interpreted (MINSTD decode above; seed substitution documented) |
+| Find Edges | `fc7093f1-f95c-11d0-…` | none | interpreted |
+| Convert to Alpha | `2932d5a2-ca48-11d1-…` | luminance → alpha; `EdgeThreshold` | M14 |
+| Clouds | `ff84d00c-4494-11d8-…` | `sky_color`, `cloud_color` | M14 |
+| Difference Clouds | `d2e7769c-6349-11d8-…` | `sky_color`, `cloud_color` | M14 |
+
+Shadow/glow/emboss — two encodings, one semantic family:
+
+- **CS6 unified panel** ("Photoshop Live Effects Special Fill",
+  `8eeadf50-9efe-11da-…`): one EPSv effect whose payload carries
+  per-kind packed strings under `dropShadow`, `innerShadow`,
+  `outerGlow`, `innerGlow`, `bevelEmboss`, `satin`, `solidFill`,
+  `gradientFill`, `patternFill`, `stroke`. The dictionary documents
+  the `"&"`-separated fields for `dropShadow` and `bevelEmboss`
+  field-by-field (angle/size/distance/blend/`RGBColor;r;g;b` and the
+  bevel style/stamp variants); `innerShadow` shares the dropShadow
+  shape, `innerGlow`/`outerGlow` the glow shape (glow width, start
+  distance, matte, gradient flag, `edgeGlow`/`centerGlow`).
+- **MX-era native effects** (still shipped in CS6's menu): Drop Shadow
+  `a7944db8-6ce2-11d1-…`, Inner Shadow `5600f702-774c-11d3-…`,
+  Inner Glow `2ba87123-8220-11d3-…`, Bevel `7fe61102-6ce2-11d1-…`,
+  Solid Shadow `b90c950e-64df-11d8-…` — scalar props
+  `ShadowAngle/ShadowBlur/ShadowColor/ShadowDistance/ShadowType`,
+  `GlowWidth/GlowStartDistance`, `LightAngle/LightDistance`,
+  `BevelWidth/BevelContrast/BevelType`, `EmbossFaceColor`,
+  `HiliteColor`, `OuterBevelColor`, `SlopeMultiplier/SlopeType`,
+  `ShowObject`.
+
+All of the family is **M14** (compose currently skips every row), as
+composites over the proven blur/blend pieces — not new pixel math.
+
+Plugin gallery (passed through by design, each recorded here so a
+future GUID hit is a lookup, not a puzzle): the Fireworks MX
+gallery set (all sharing the `d810e821-f86b-11d0-…` prefix —
+Accented Edges, Angled Strokes, Bas Relief, Chalk & Charcoal, Chrome,
+Colored Pencil, Conté Crayon, Craquelure, Crosshatch, Diffuse Glow,
+Dark Strokes, Dry Brush, Film Grain, Glass, Glowing Edges, Grain,
+Ink Outlines, Neon Glow, Note Paper, Ocean Ripple, Photocopy, Plastic
+Wrap, Plaster, Palette Knife, Paint Daubs, Patchwork, Rough Pastels,
+Reticulation, Smudge Stick, Sumi-e, Sponge, Sprayed Strokes, Spatter,
+Stamp, Torn Edges, Texturizer, Underpainting, Water Paper, Watercolor),
+the Eye Candy 4000 LE trio (Bevel Boss, Marble, Motion Trail), Alien
+Skin Splat LE (Edges). These are third-party plugins, not CS6 surface.
+
 ## Status of §5.5 passes
 
 | Pass | State | Committed output |
