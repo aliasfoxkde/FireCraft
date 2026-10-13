@@ -9,6 +9,205 @@ use egui::{Color32, ColorImage, Pos2, Rect, Sense, TextureHandle, TextureOptions
 
 use crate::canvas::View;
 use crate::editor::{AutoShape, Editor, NineSliceEdge, Tool};
+use crate::menus;
+
+/// The CS6 chrome look: near-black charcoal panels, square corners,
+/// small type. Applied once at startup; `eww`-era Fireworks was dark
+/// graphite against a mid-gray canvas.
+fn apply_cs6_theme(ctx: &egui::Context) {
+    ctx.all_styles_mut(|style| {
+        let visuals = &mut style.visuals;
+        visuals.dark_mode = true;
+        visuals.panel_fill = Color32::from_rgb(0x3c, 0x3c, 0x3c);
+        visuals.window_fill = Color32::from_rgb(0x32, 0x32, 0x32);
+        visuals.extreme_bg_color = Color32::from_rgb(0x28, 0x28, 0x28);
+        visuals.faint_bg_color = Color32::from_rgb(0x44, 0x44, 0x44);
+        visuals.override_text_color = Some(Color32::from_rgb(0xd9, 0xd9, 0xd9));
+        visuals.selection.bg_fill = Color32::from_rgb(0x2f, 0x5d, 0x8a);
+        visuals.selection.stroke = (1.0, Color32::from_rgb(0x50, 0x7e, 0xab)).into();
+        visuals.window_corner_radius = egui::CornerRadius::ZERO;
+        visuals.menu_corner_radius = egui::CornerRadius::ZERO;
+        for widget in [
+            &mut visuals.widgets.noninteractive,
+            &mut visuals.widgets.inactive,
+            &mut visuals.widgets.hovered,
+            &mut visuals.widgets.active,
+            &mut visuals.widgets.open,
+        ] {
+            widget.corner_radius = egui::CornerRadius::ZERO;
+        }
+        style.spacing.menu_margin = egui::Margin::same(2);
+        style.spacing.button_padding = egui::Vec2::new(6.0, 2.0);
+        style.spacing.item_spacing = egui::Vec2::new(6.0, 3.0);
+    });
+}
+
+/// Display name for a tool (the CS6 tool names).
+fn tool_label(tool: Tool) -> &'static str {
+    match tool {
+        Tool::Pointer => "Pointer",
+        Tool::Subselect => "Subselection",
+        Tool::Rect => "Rectangle",
+        Tool::Ellipse => "Ellipse",
+        Tool::Line => "Line",
+        Tool::Text => "Text",
+        Tool::Zoom => "Zoom",
+        Tool::Hand => "Hand",
+        Tool::Slice => "Rectangle Slice",
+        Tool::Hotspot => "Web Hotspot",
+        Tool::AutoShape(_) => "Auto Shape",
+    }
+}
+
+/// The CS6 one-key select for a tool ("" when unbound here).
+fn tool_key(tool: Tool) -> &'static str {
+    match tool {
+        Tool::Pointer => "V",
+        Tool::Rect => "R",
+        Tool::Ellipse => "E",
+        Tool::Line => "L",
+        Tool::Text => "T",
+        Tool::Zoom => "Z",
+        Tool::Hand => "H",
+        _ => "",
+    }
+}
+
+/// Original glyph art for a tool, drawn from `Painter` primitives.
+/// Silhouettes are FireCraft's own — no Adobe icon bytes, no traces.
+fn draw_tool_glyph(painter: &egui::Painter, rect: Rect, tool: Tool, color: Color32) {
+    let c = rect.center();
+    let stroke = (1.4, color);
+    match tool {
+        Tool::Pointer => {
+            // filled head plus tail
+            painter.add(egui::Shape::convex_polygon(
+                vec![
+                    Pos2::new(c.x - 4.0, c.y - 6.0),
+                    Pos2::new(c.x + 2.5, c.y + 0.5),
+                    Pos2::new(c.x - 1.5, c.y + 1.0),
+                ],
+                color,
+                stroke,
+            ));
+            painter.line_segment(
+                [
+                    Pos2::new(c.x - 1.0, c.y + 2.0),
+                    Pos2::new(c.x + 1.0, c.y + 6.0),
+                ],
+                stroke,
+            );
+        }
+        Tool::Subselect => {
+            // the same arrow, outline only
+            let points = [
+                Pos2::new(c.x - 4.0, c.y - 6.0),
+                Pos2::new(c.x + 2.5, c.y + 0.5),
+                Pos2::new(c.x - 1.5, c.y + 1.0),
+                Pos2::new(c.x + 1.0, c.y + 6.0),
+                Pos2::new(c.x - 1.5, c.y + 1.5),
+                Pos2::new(c.x - 4.0, c.y + 3.5),
+                Pos2::new(c.x - 4.0, c.y - 6.0),
+            ];
+            painter.add(egui::Shape::line(points.to_vec(), stroke));
+        }
+        Tool::Rect => {
+            painter.rect_stroke(
+                Rect::from_center_size(c, egui::Vec2::new(11.0, 9.0)),
+                0.0,
+                stroke,
+                egui::StrokeKind::Inside,
+            );
+        }
+        Tool::Ellipse => {
+            painter.circle_stroke(c, 5.5, stroke);
+        }
+        Tool::Line => {
+            painter.line_segment(
+                [
+                    Pos2::new(c.x - 5.0, c.y + 5.0),
+                    Pos2::new(c.x + 5.0, c.y - 5.0),
+                ],
+                stroke,
+            );
+        }
+        Tool::Text => {
+            painter.text(
+                c,
+                egui::Align2::CENTER_CENTER,
+                "T",
+                egui::FontId::proportional(13.0),
+                color,
+            );
+        }
+        Tool::Zoom => {
+            painter.circle_stroke(Pos2::new(c.x - 1.5, c.y - 1.5), 4.0, stroke);
+            painter.line_segment(
+                [
+                    Pos2::new(c.x + 1.5, c.y + 1.5),
+                    Pos2::new(c.x + 6.0, c.y + 6.0),
+                ],
+                (2.0, color),
+            );
+        }
+        Tool::Hand => {
+            painter.rect_filled(
+                Rect::from_min_size(Pos2::new(c.x - 4.5, c.y - 1.5), egui::Vec2::new(9.0, 7.5)),
+                3.0,
+                color,
+            );
+            for (offset, height) in [(-3.0, 3.5), (0.0, 4.5), (3.0, 3.0)] {
+                painter.line_segment(
+                    [
+                        Pos2::new(c.x + offset, c.y - 1.5),
+                        Pos2::new(c.x + offset, c.y - 1.5 - height),
+                    ],
+                    stroke,
+                );
+            }
+        }
+        Tool::Slice => {
+            painter.rect_stroke(
+                Rect::from_center_size(c, egui::Vec2::splat(9.0)),
+                0.0,
+                stroke,
+                egui::StrokeKind::Inside,
+            );
+            painter.line_segment(
+                [
+                    Pos2::new(c.x - 6.5, c.y - 3.0),
+                    Pos2::new(c.x - 2.5, c.y - 3.0),
+                ],
+                stroke,
+            );
+            painter.line_segment(
+                [
+                    Pos2::new(c.x - 3.0, c.y - 6.5),
+                    Pos2::new(c.x - 3.0, c.y - 2.5),
+                ],
+                stroke,
+            );
+        }
+        Tool::Hotspot => {
+            painter.circle_filled(c, 5.5, Color32::from_rgb(0x4f, 0x7c, 0xc0));
+            painter.circle_stroke(c, 5.5, (1.0, Color32::from_rgb(0x9c, 0xb8, 0xe0)));
+        }
+        Tool::AutoShape(_) => {
+            let mut points = Vec::new();
+            for index in 0..10 {
+                let radius = if index % 2 == 0 { 6.5 } else { 3.0 };
+                let angle =
+                    -std::f64::consts::FRAC_PI_2 + index as f64 * std::f64::consts::TAU / 10.0;
+                points.push(Pos2::new(
+                    c.x + (radius * angle.cos()) as f32,
+                    c.y + (radius * angle.sin()) as f32,
+                ));
+            }
+            points.push(points[0]);
+            painter.add(egui::Shape::line(points, stroke));
+        }
+    }
+}
 
 /// UI label for a symbol type (`MSYi`).
 fn symbol_type_label(kind: &SymbolType) -> String {
@@ -218,11 +417,19 @@ pub struct Shell {
     pub status: String,
     /// Open export dialog, if any.
     export_dialog: Option<ExportDialog>,
+    /// Display name of the open document (tab strip).
+    doc_name: String,
+    /// Last canvas widget rect — the anchor for view commands that
+    /// arrive outside the canvas (menu/shortcut zoom and fit).
+    canvas_rect: Option<Rect>,
+    /// Set by the Exit action; the frame loop closes the viewport.
+    close_requested: bool,
 }
 
 impl Shell {
     /// Builds the shell with desktop platform defaults.
-    pub fn new(_cc: &eframe::CreationContext<'_>) -> Self {
+    pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
+        apply_cs6_theme(&cc.egui_ctx);
         Self::with_platform(
             Editor::untitled(),
             Box::new(app_cli::io::StdFs),
@@ -244,6 +451,9 @@ impl Shell {
             dialogs,
             status: "ready".to_owned(),
             export_dialog: None,
+            doc_name: "untitled".to_owned(),
+            canvas_rect: None,
+            close_requested: false,
         }
     }
 
@@ -291,6 +501,9 @@ impl Shell {
                 self.raster = None;
                 self.editor = editor;
                 self.view = View::default();
+                self.doc_name = std::path::Path::new(&path)
+                    .file_name()
+                    .map_or_else(|| path.clone(), |name| name.to_string_lossy().into_owned());
             }
             Err(error) => {
                 self.status = format!("open failed: {error}");
@@ -311,6 +524,9 @@ impl Shell {
             Ok(bytes) => match self.fs.write_file(&path, &bytes) {
                 Ok(()) => {
                     self.editor.session.mark_clean();
+                    self.doc_name = std::path::Path::new(&path)
+                        .file_name()
+                        .map_or_else(|| path.clone(), |name| name.to_string_lossy().into_owned());
                     self.status = format!("saved {path} ({} bytes)", bytes.len());
                 }
                 Err(error) => self.status = format!("save failed: {error}"),
@@ -826,120 +1042,205 @@ impl Shell {
         self.export_dialog = None;
     }
 
-    /// The menu bar: File/Edit/Tools/Path/Commands.
+    /// The CS6 menu bar: ten menus rendered from the [`crate::menus`]
+    /// table. Items whose action is [`menus::Action::Inert`] render
+    /// disabled — the bar shows the full CS6 surface while only the
+    /// wired subset is actionable.
     fn menu_bar(&mut self, ui: &mut egui::Ui) {
         egui::MenuBar::new().ui(ui, |ui| {
-            ui.menu_button("File", |ui| {
-                if ui.button("Open…").clicked() {
-                    self.open_document();
+            for menu in menus::MENUBAR {
+                ui.menu_button(menu.label, |ui| self.entries_ui(ui, menu.entries));
+            }
+        });
+    }
+
+    /// Renders one menu-tree level; submenus recurse.
+    fn entries_ui(&mut self, ui: &mut egui::Ui, entries: &'static [menus::Entry]) {
+        for entry in entries {
+            match entry {
+                menus::Entry::Sep => {
+                    ui.separator();
                 }
-                if ui.button("Save").clicked() {
-                    self.save_document();
+                menus::Entry::Sub(label, sub) => {
+                    ui.menu_button(*label, |ui| self.entries_ui(ui, sub));
                 }
-                if ui.button("Export…").clicked() {
-                    self.export_dialog = Some(ExportDialog::default());
-                }
-                if ui.button("Quit").clicked() {
-                    ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
-                }
-            });
-            ui.menu_button("Edit", |ui| {
-                if ui
-                    .add_enabled(
-                        self.editor.session.undo_len() > 0,
-                        egui::Button::new("Undo"),
-                    )
-                    .clicked()
-                {
-                    match self.editor.undo() {
-                        Ok(name) => self.status = format!("undid {name}"),
-                        Err(error) => self.status = format!("undo failed: {error}"),
+                menus::Entry::Item(item) => {
+                    let label = if item.accel.is_empty() {
+                        item.label.to_owned()
+                    } else {
+                        format!("{}\t{}", item.label, item.accel)
+                    };
+                    let wired = !matches!(item.action, menus::Action::Inert);
+                    if ui.add_enabled(wired, egui::Button::new(label)).clicked() {
+                        self.run_action(&item.action);
                     }
                 }
-                if ui
-                    .add_enabled(
-                        self.editor.session.redo_len() > 0,
-                        egui::Button::new("Redo"),
-                    )
-                    .clicked()
-                {
-                    match self.editor.redo() {
-                        Ok(name) => self.status = format!("redid {name}"),
-                        Err(error) => self.status = format!("redo failed: {error}"),
-                    }
+            }
+        }
+    }
+
+    /// Executes one menu/shortcut action. This is the only place an
+    /// [`menus::Action`] becomes behavior.
+    fn run_action(&mut self, action: &menus::Action) {
+        match *action {
+            menus::Action::Inert => {}
+            menus::Action::Shell(shell) => self.run_shell(shell),
+            menus::Action::Sel(sel) => self.run_sel(sel),
+            menus::Action::Align(mode) => {
+                let ids = self.editor.live_selection();
+                if ids.len() >= 2 {
+                    self.run_command(
+                        "object.align",
+                        serde_json::json!({ "ids": ids, "mode": mode }),
+                    );
+                } else {
+                    self.status = "align needs two or more objects".to_owned();
                 }
-            });
-            ui.menu_button("Tools", |ui| {
-                for (tool, label) in [
-                    (Tool::Pointer, "Pointer (V)"),
-                    (Tool::Subselect, "Subselect"),
-                    (Tool::Rect, "Rectangle (R)"),
-                    (Tool::Ellipse, "Ellipse (E)"),
-                    (Tool::Line, "Line (L)"),
-                    (Tool::Text, "Text (T)"),
-                    (Tool::Zoom, "Zoom (Z)"),
-                    (Tool::Hand, "Hand (H)"),
-                    (Tool::Slice, "Slice"),
-                    (Tool::Hotspot, "Hotspot"),
-                ] {
-                    if ui
-                        .selectable_label(self.editor.tool == tool, label)
-                        .clicked()
-                    {
-                        self.editor.tool = tool;
-                    }
+            }
+            menus::Action::Distribute(axis) => {
+                let ids = self.editor.live_selection();
+                if ids.len() >= 3 {
+                    self.run_command(
+                        "object.distribute",
+                        serde_json::json!({ "ids": ids, "axis": axis }),
+                    );
+                } else {
+                    self.status = "distribute needs three or more objects".to_owned();
                 }
-                // The Auto Shape group: same drag-to-create gesture,
-                // one pinned-default payload per shape.
-                ui.menu_button("Auto Shape", |ui| {
-                    for shape in AutoShape::ALL {
-                        let tool = Tool::AutoShape(shape);
-                        if ui
-                            .selectable_label(self.editor.tool == tool, shape.label())
-                            .clicked()
-                        {
-                            self.editor.tool = tool;
-                        }
-                    }
-                });
-            });
-            // Path ops on the current selection. Booleans need exactly
-            // two live paths; single-object ops need one.
-            ui.menu_button("Path", |ui| {
-                let pair = self.editor.boolean_pair();
-                for (op, label) in [
-                    ("union", "Union"),
-                    ("intersect", "Intersect"),
-                    ("punch", "Punch"),
-                    ("crop", "Crop"),
-                ] {
-                    if ui
-                        .add_enabled(pair.is_some(), egui::Button::new(label))
-                        .clicked()
-                    {
-                        if let Some((a, b)) = pair {
-                            self.run_command(
-                                "path.boolean",
-                                serde_json::json!({ "a": a, "b": b, "op": op }),
-                            );
-                        }
-                    }
+            }
+            menus::Action::Boolean(op) => match self.editor.boolean_pair() {
+                Some((a, b)) => self.run_command(
+                    "path.boolean",
+                    serde_json::json!({ "a": a, "b": b, "op": op }),
+                ),
+                None => self.status = "booleans need exactly two live paths".to_owned(),
+            },
+            menus::Action::Arrange(direction) => self.run_arrange(direction),
+            menus::Action::TextSize(size) => {
+                if let Some(id) = self.editor.selection {
+                    self.run_command(
+                        "text.setAttrs",
+                        serde_json::json!({ "id": id, "size": size }),
+                    );
                 }
-                ui.separator();
-                let id = self.editor.selected_live();
-                if ui
-                    .add_enabled(id.is_some(), egui::Button::new("Simplify (1px)"))
-                    .clicked()
-                {
+            }
+            menus::Action::TextFlag(flag) => {
+                if let Some(id) = self.editor.selection {
+                    self.run_command(
+                        "text.setAttrs",
+                        serde_json::json!({ "id": id, (flag): true }),
+                    );
+                }
+            }
+        }
+    }
+
+    /// Shell-level plumbing: file, history, selection, view.
+    fn run_shell(&mut self, action: menus::ShellAction) {
+        match action {
+            menus::ShellAction::New => {
+                self.editor = Editor::untitled();
+                self.view = View::default();
+                self.raster = None;
+                self.doc_name = "untitled".to_owned();
+                self.status = "new document".to_owned();
+            }
+            menus::ShellAction::Open => self.open_document(),
+            menus::ShellAction::Save | menus::ShellAction::SaveAs => self.save_document(),
+            menus::ShellAction::Export | menus::ShellAction::ExportPreview => {
+                self.export_dialog = Some(ExportDialog::default());
+            }
+            menus::ShellAction::Quit => self.close_requested = true,
+            menus::ShellAction::Undo => match self.editor.undo() {
+                Ok(name) => self.status = format!("undid {name}"),
+                Err(error) => self.status = format!("undo failed: {error}"),
+            },
+            menus::ShellAction::Redo => match self.editor.redo() {
+                Ok(name) => self.status = format!("redid {name}"),
+                Err(error) => self.status = format!("redo failed: {error}"),
+            },
+            menus::ShellAction::Deselect => {
+                self.editor.selection = None;
+                self.editor.selection_set.clear();
+                self.status = "deselected".to_owned();
+            }
+            menus::ShellAction::SelectAll => {
+                let ids = self
+                    .editor
+                    .current_cell()
+                    .map_or_else(Vec::new, |cell| cell.elements.clone());
+                self.editor.selection = ids.last().copied();
+                let picked = ids.len();
+                self.editor.selection_set = ids;
+                self.status = format!("selected {picked} object(s)");
+            }
+            menus::ShellAction::ZoomIn => {
+                let center = self
+                    .canvas_rect
+                    .map_or_else(|| Pos2::ZERO, |rect| rect.center());
+                self.view.zoom_about(center, 1.25);
+            }
+            menus::ShellAction::ZoomOut => {
+                let center = self
+                    .canvas_rect
+                    .map_or_else(|| Pos2::ZERO, |rect| rect.center());
+                self.view.zoom_about(center, 1.0 / 1.25);
+            }
+            menus::ShellAction::ZoomTo(target) => {
+                if self.view.zoom > 0.0 {
+                    let center = self
+                        .canvas_rect
+                        .map_or_else(|| Pos2::ZERO, |rect| rect.center());
+                    self.view.zoom_about(center, target / self.view.zoom);
+                }
+            }
+            menus::ShellAction::FitAll => {
+                let size = self
+                    .canvas_rect
+                    .map_or_else(|| egui::Vec2::ZERO, |rect| rect.size());
+                if let Some(world) = self.page_world() {
+                    self.view.fit(world, size);
+                }
+            }
+            menus::ShellAction::About => {
+                self.status = "FireCraft — a clean-room reimplementation of \
+                    Adobe Fireworks CS6 (Apache-2.0)"
+                    .to_owned();
+            }
+            menus::ShellAction::PickTool(tool) => {
+                self.editor.tool = tool;
+                self.status = format!("tool: {}", tool_label(tool));
+            }
+        }
+    }
+
+    /// Engine commands whose payload derives from the current
+    /// selection or document shape.
+    fn run_sel(&mut self, action: menus::SelAction) {
+        match action {
+            menus::SelAction::Delete => {
+                if let Some(id) = self.editor.selection {
+                    self.run_command("object.delete", serde_json::json!({ "id": id }));
+                }
+            }
+            menus::SelAction::Hide => {
+                if let Some(id) = self.editor.selection {
+                    self.run_command(
+                        "object.setVisible",
+                        serde_json::json!({ "id": id, "visible": false }),
+                    );
+                }
+            }
+            menus::SelAction::Simplify => {
+                if let Some(id) = self.editor.selected_live() {
                     self.run_command(
                         "path.simplify",
                         serde_json::json!({ "id": id, "tolerance": 1.0 }),
                     );
                 }
-                if ui
-                    .add_enabled(id.is_some(), egui::Button::new("Expand Stroke (2px)"))
-                    .clicked()
-                {
+            }
+            menus::SelAction::ExpandStroke => {
+                if let Some(id) = self.editor.selected_live() {
                     self.run_command(
                         "path.expandStroke",
                         serde_json::json!({
@@ -948,57 +1249,143 @@ impl Shell {
                         }),
                     );
                 }
-                if ui
-                    .add_enabled(id.is_some(), egui::Button::new("Inset 2px"))
-                    .clicked()
-                {
+            }
+            menus::SelAction::Inset(distance) => {
+                if let Some(id) = self.editor.selected_live() {
                     self.run_command(
                         "path.inset",
-                        serde_json::json!({ "id": id, "distance": 2.0 }),
+                        serde_json::json!({ "id": id, "distance": distance }),
                     );
                 }
-                if ui
-                    .add_enabled(id.is_some(), egui::Button::new("Outset 2px"))
-                    .clicked()
-                {
-                    self.run_command(
-                        "path.inset",
-                        serde_json::json!({ "id": id, "distance": -2.0 }),
-                    );
+            }
+            menus::SelAction::NewSymbol => {
+                let count = self.editor.document().symbols.len();
+                self.run_command(
+                    "library.add",
+                    serde_json::json!({
+                        "name": format!("Symbol {}", count + 1),
+                        "symbol_type": "graphic",
+                    }),
+                );
+            }
+            menus::SelAction::NewLayer => {
+                self.run_command("layer.add", serde_json::json!({ "page": self.editor.page }));
+            }
+            menus::SelAction::NewPage => {
+                self.run_command("page.add", serde_json::json!({ "index": null }));
+            }
+            menus::SelAction::BreakApart => {
+                if let Some(id) = self.editor.selection {
+                    self.run_command("symbol.breakApart", serde_json::json!({ "id": id }));
                 }
-            });
-            // Registry-driven commands: every catalog id, enabled only
-            // when this shell can build a sensible payload for it.
-            ui.menu_button("Commands", |ui| {
-                for name in self.editor.session.command_names() {
-                    let enabled = name == "page.add"
-                        || (name == "object.delete" && self.editor.selection.is_some());
-                    let payload = if name == "page.add" {
-                        serde_json::json!({ "index": null })
-                    } else if name == "object.delete" {
-                        serde_json::json!({ "id": self.editor.selection })
-                    } else {
-                        serde_json::Value::Null
-                    };
-                    if ui.add_enabled(enabled, egui::Button::new(name)).clicked() {
-                        if let Err(error) = self.editor.apply(name, payload) {
-                            self.status = format!("{name} failed: {error}");
-                        }
+            }
+        }
+    }
+
+    /// Modify ▸ Arrange: resolve the numeric `object.reorder` target
+    /// from the object's position in the current cell. Payload indexes
+    /// are post-removal, so "front" is `len - 2` of the pre-removal
+    /// list.
+    fn run_arrange(&mut self, direction: menus::Arrange) {
+        let Some(id) = self.editor.selection else {
+            self.status = "nothing selected".to_owned();
+            return;
+        };
+        let Some(cell) = self.editor.current_cell() else {
+            self.status = "no current cell".to_owned();
+            return;
+        };
+        let Some(position) = cell.elements.iter().position(|&element| element == id) else {
+            self.status = "selection is not in the current cell".to_owned();
+            return;
+        };
+        let last = cell.elements.len().saturating_sub(2);
+        let to = match direction {
+            menus::Arrange::Front => last,
+            menus::Arrange::Forward => (position + 1).min(last),
+            menus::Arrange::Backward => position.saturating_sub(1),
+            menus::Arrange::Back => 0,
+        };
+        if to == position {
+            self.status = "already at that stacking position".to_owned();
+            return;
+        }
+        self.run_command("object.reorder", serde_json::json!({ "id": id, "to": to }));
+    }
+
+    /// The Fireworks.xml keymap bindings: one-shot key events mapped
+    /// through the same [`Shell::run_action`] dispatch as the menus.
+    /// Plain (modifier-free) keys are ignored while a text field has
+    /// keyboard focus.
+    fn shortcuts(&mut self, ctx: &egui::Context) {
+        let text_focus = ctx.egui_wants_keyboard_input();
+        let mut fired: Vec<menus::Action> = Vec::new();
+        ctx.input(|input| {
+            for event in &input.events {
+                let egui::Event::Key {
+                    key,
+                    pressed: true,
+                    repeat: false,
+                    modifiers,
+                    ..
+                } = event
+                else {
+                    continue;
+                };
+                for shortcut in menus::SHORTCUTS {
+                    if shortcut.key != *key
+                        || shortcut.mods.ctrl != modifiers.ctrl
+                        || shortcut.mods.alt != modifiers.alt
+                        || shortcut.mods.shift != modifiers.shift
+                    {
+                        continue;
+                    }
+                    let plain = !shortcut.mods.ctrl && !shortcut.mods.alt && !shortcut.mods.shift;
+                    if !(plain && text_focus) {
+                        fired.push(shortcut.action);
                     }
                 }
-            });
+            }
+        });
+        for action in fired {
+            self.run_action(&action);
+        }
+    }
+
+    /// The right panel stack: the CS6 panel roster from the Window
+    /// menu, as collapsible sections (the fixed-layout stand-in for
+    /// CS6's floating docks).
+    fn right_panels(&mut self, ui: &mut egui::Ui) {
+        egui::ScrollArea::vertical().show(ui, |ui| {
+            egui::CollapsingHeader::new("Pages")
+                .default_open(true)
+                .show(ui, |ui| self.pages_section(ui));
+            egui::CollapsingHeader::new("States")
+                .default_open(true)
+                .show(ui, |ui| self.states_section(ui));
+            egui::CollapsingHeader::new("Layers")
+                .default_open(true)
+                .show(ui, |ui| self.layers_section(ui));
+            egui::CollapsingHeader::new("Document Library")
+                .default_open(false)
+                .show(ui, |ui| self.library_panel(ui));
+            egui::CollapsingHeader::new("History")
+                .default_open(false)
+                .show(ui, |ui| self.history_section(ui));
+            egui::CollapsingHeader::new("Web Layer")
+                .default_open(false)
+                .show(ui, |ui| self.web_panel(ui));
         });
     }
 
-    /// Left panel: pages, layers, states.
-    fn document_panel(&mut self, ui: &mut egui::Ui) {
-        ui.heading("Pages");
+    /// Pages section: one selectable row per page.
+    fn pages_section(&mut self, ui: &mut egui::Ui) {
         let pages = self.editor.document().pages.len();
         for index in 0..pages {
             let name = self.editor.document().pages[index]
                 .name
                 .clone()
-                .unwrap_or_else(|| format!("Page {index}"));
+                .unwrap_or_else(|| format!("Page {}", index + 1));
             if ui
                 .selectable_label(self.editor.page == index, &name)
                 .clicked()
@@ -1007,9 +1394,36 @@ impl Shell {
                 self.raster = None;
             }
         }
+    }
 
-        ui.separator();
-        ui.heading("Layers");
+    /// States section: one row per state of the tallest layer.
+    fn states_section(&mut self, ui: &mut egui::Ui) {
+        let states = self
+            .editor
+            .document()
+            .pages
+            .get(self.editor.page)
+            .map_or(1, |page| {
+                page.layers
+                    .layers
+                    .iter()
+                    .map(|layer| layer.cells.len())
+                    .max()
+                    .unwrap_or(1)
+            });
+        for frame in 0..states {
+            if ui
+                .selectable_label(self.editor.frame == frame, format!("State {}", frame + 1))
+                .clicked()
+            {
+                self.editor.frame = frame;
+                self.raster = None;
+            }
+        }
+    }
+
+    /// Layers section: name + display toggle per layer, bottom-first.
+    fn layers_section(&mut self, ui: &mut egui::Ui) {
         // Snapshot what the panel shows so closures never borrow the
         // document while the editor is mutable.
         let Some(page) = self.editor.document().pages.get(self.editor.page) else {
@@ -1022,20 +1436,13 @@ impl Shell {
             .enumerate()
             .map(|(index, layer)| {
                 let label = if layer.name.is_empty() {
-                    format!("Layer {index}")
+                    format!("Layer {}", index + 1)
                 } else {
                     layer.name.clone()
                 };
                 (label, layer.display)
             })
             .collect();
-        let states = page
-            .layers
-            .layers
-            .iter()
-            .map(|layer| layer.cells.len())
-            .max()
-            .unwrap_or(1);
         for (layer_index, (label, display)) in layers.iter().enumerate() {
             ui.horizontal(|ui| {
                 let eye = if *display { "👁" } else { "·" };
@@ -1056,24 +1463,10 @@ impl Shell {
                 ui.label(label);
             });
         }
+    }
 
-        ui.separator();
-        ui.heading("States");
-        for frame in 0..states {
-            if ui
-                .selectable_label(self.editor.frame == frame, format!("State {}", frame + 1))
-                .clicked()
-            {
-                self.editor.frame = frame;
-                self.raster = None;
-            }
-        }
-
-        ui.separator();
-        self.library_panel(ui);
-
-        ui.separator();
-        ui.heading("History");
+    /// History section: journal rows plus the steps save/replay pair.
+    fn history_section(&mut self, ui: &mut egui::Ui) {
         // Snapshot the rows so closures never borrow the session while
         // the editor is mutable (same rule as the layer list above).
         let rows: Vec<String> = self
@@ -1617,6 +2010,112 @@ impl Shell {
             });
     }
 
+    /// World-space page bounds — the Fit All target.
+    fn page_world(&self) -> Option<geom::Rect> {
+        self.editor
+            .document()
+            .pages
+            .get(self.editor.page)
+            .map(|page| {
+                geom::Rect::new(
+                    page.info.canvas.x,
+                    page.info.canvas.y,
+                    page.info.canvas.x + page.info.canvas.width,
+                    page.info.canvas.y + page.info.canvas.height,
+                )
+            })
+    }
+
+    /// The CS6 tool strip: vertical, grouped, glyph buttons painted
+    /// with `Painter` primitives (original art, never the Adobe icons).
+    fn tools_panel(&mut self, ui: &mut egui::Ui) {
+        let groups: &[&[Tool]] = &[
+            &[Tool::Pointer, Tool::Subselect],
+            &[Tool::Rect, Tool::Ellipse, Tool::Line, Tool::Text],
+            &[Tool::Slice, Tool::Hotspot],
+            &[Tool::Zoom, Tool::Hand],
+        ];
+        ui.add_space(4.0);
+        for (index, group) in groups.iter().enumerate() {
+            if index > 0 {
+                ui.separator();
+            }
+            for tool in *group {
+                self.tool_button(ui, *tool);
+            }
+        }
+        ui.separator();
+        self.autoshape_button(ui);
+    }
+
+    /// One painted tool button; clicking picks the tool.
+    fn tool_button(&mut self, ui: &mut egui::Ui, tool: Tool) {
+        let (rect, response) = ui.allocate_exact_size(egui::Vec2::splat(26.0), Sense::click());
+        let active = self.editor.tool == tool;
+        if response.clicked() {
+            self.editor.tool = tool;
+            self.status = format!("tool: {}", tool_label(tool));
+        }
+        let painter = ui.painter();
+        if active {
+            painter.rect_filled(rect, 2.0, Color32::from_rgb(0x2f, 0x5d, 0x8a));
+        } else if response.hovered() {
+            painter.rect_filled(rect, 2.0, Color32::from_rgb(0x4a, 0x4a, 0x4a));
+        }
+        let ink = if active {
+            Color32::from_rgb(0xe8, 0xe8, 0xe8)
+        } else {
+            Color32::from_rgb(0xc4, 0xc4, 0xc4)
+        };
+        draw_tool_glyph(painter, rect, tool, ink);
+        let key = tool_key(tool);
+        if key.is_empty() {
+            response.on_hover_text(tool_label(tool));
+        } else {
+            response.on_hover_text(format!("{} ({key})", tool_label(tool)));
+        }
+    }
+
+    /// The Auto Shape flyout stand-in: one star button; clicking
+    /// cycles through the shape set (the popup flyout lands with the
+    /// icons pass).
+    fn autoshape_button(&mut self, ui: &mut egui::Ui) {
+        let shapes = AutoShape::ALL;
+        let current = match self.editor.tool {
+            Tool::AutoShape(shape) => Some(shape),
+            _ => None,
+        };
+        let (rect, response) = ui.allocate_exact_size(egui::Vec2::splat(26.0), Sense::click());
+        if response.clicked() {
+            let next = match current {
+                Some(shape) => {
+                    let index = shapes.iter().position(|&s| s == shape).unwrap_or(0);
+                    shapes[(index + 1) % shapes.len()]
+                }
+                None => shapes[0],
+            };
+            self.editor.tool = Tool::AutoShape(next);
+            self.status = format!("tool: Auto Shape — {}", next.label());
+        }
+        let painter = ui.painter();
+        if current.is_some() {
+            painter.rect_filled(rect, 2.0, Color32::from_rgb(0x2f, 0x5d, 0x8a));
+        } else if response.hovered() {
+            painter.rect_filled(rect, 2.0, Color32::from_rgb(0x4a, 0x4a, 0x4a));
+        }
+        let ink = if current.is_some() {
+            Color32::from_rgb(0xe8, 0xe8, 0xe8)
+        } else {
+            Color32::from_rgb(0xc4, 0xc4, 0xc4)
+        };
+        draw_tool_glyph(painter, rect, Tool::AutoShape(shapes[0]), ink);
+        let tip = match current {
+            Some(shape) => format!("Auto Shape — {} (click to cycle)", shape.label()),
+            None => "Auto Shape (click to cycle)".to_owned(),
+        };
+        response.on_hover_text(tip);
+    }
+
     /// Canvas-local screen position of a world point.
     fn screen_of(&self, world: geom::Point) -> Pos2 {
         let screen = self.view.to_screen(world);
@@ -1668,6 +2167,10 @@ impl Shell {
             (size, (rect, response))
         };
         let (rect, response) = response_rect;
+        // Remembered for view commands that arrive outside the canvas
+        // (menu zoom/fit, keyboard shortcuts) — the anchor is the
+        // canvas center of the last laid-out frame.
+        self.canvas_rect = Some(rect);
 
         // First fit on a fresh raster keeps the document visible.
         if self.raster.is_none() {
@@ -1894,17 +2397,33 @@ impl Shell {
 
 impl eframe::App for Shell {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-        // Panels first, CentralPanel last (egui's required order).
+        // Menu/shortcut actions run before layout so their effects are
+        // visible the same frame.
+        self.shortcuts(ui.ctx());
+        // Panels first, CentralPanel last (egui's required order), in
+        // the CS6 arrangement: menu, tool strip, panel stack,
+        // bottom-docked Properties, status strip, document canvas.
         egui::Panel::top(egui::Id::new("menu")).show(ui, |ui| self.menu_bar(ui));
-        egui::Panel::left(egui::Id::new("document")).show(ui, |ui| self.document_panel(ui));
-        egui::Panel::right(egui::Id::new("properties")).show(ui, |ui| self.properties_panel(ui));
-        egui::Panel::right(egui::Id::new("weblayer")).show(ui, |ui| self.web_panel(ui));
+        egui::Panel::left(egui::Id::new("tools"))
+            .exact_size(34.0)
+            .show(ui, |ui| self.tools_panel(ui));
+        egui::Panel::right(egui::Id::new("panels"))
+            .default_size(230.0)
+            .size_range(160.0..=420.0)
+            .resizable(true)
+            .show(ui, |ui| self.right_panels(ui));
+        egui::Panel::bottom(egui::Id::new("properties"))
+            .default_size(210.0)
+            .size_range(120.0..=360.0)
+            .resizable(true)
+            .show(ui, |ui| self.properties_panel(ui));
         egui::Panel::bottom(egui::Id::new("status")).show(ui, |ui| {
             ui.horizontal(|ui| {
                 ui.label(&self.status);
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     ui.label(format!(
-                        "page {} · state {} · undo {} · redo {} · journal {}",
+                        "{} · page {} · state {} · undo {} · redo {} · journal {}",
+                        self.doc_name,
                         self.editor.page + 1,
                         self.editor.frame + 1,
                         self.editor.session.undo_len(),
@@ -1916,12 +2435,27 @@ impl eframe::App for Shell {
         });
         egui::CentralPanel::default()
             .frame(egui::Frame::NONE)
-            .show(ui, |ui| self.canvas(ui));
+            .show(ui, |ui| {
+                // The document tab strip: a single-document window, so
+                // the CS6 MDI tab strip reduced to its one member.
+                ui.horizontal(|ui| {
+                    ui.add(
+                        egui::Button::new(egui::RichText::new(&self.doc_name).size(11.0))
+                            .selected(true),
+                    );
+                    ui.weak("FireCraft");
+                });
+                self.canvas(ui);
+            });
         if self.export_dialog.is_some() {
             egui::Window::new("Export")
                 .resizable(false)
                 .collapsible(false)
                 .show(ui.ctx(), |ui| self.export_dialog_ui(ui));
+        }
+        if self.close_requested {
+            self.close_requested = false;
+            ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
         }
     }
 }
@@ -1977,6 +2511,62 @@ mod tests {
             )
             .unwrap();
         editor
+    }
+
+    /// A shell with scripted dialogs over a memory filesystem.
+    fn gui_shell(editor: Editor) -> Shell {
+        let dialogs = FixedDialogs {
+            steps: "/mem/steps.fwsteps".to_owned(),
+            doc: "/mem/doc.fw.png".to_owned(),
+        };
+        Shell::with_platform(editor, Box::new(MemoryFs::new()), Box::new(dialogs))
+    }
+
+    /// The action dispatch wiring: Select All picks up the cell's
+    /// objects, Delete removes through the registry, Arrange reorders
+    /// with a post-removal index, and Inert renders but does nothing.
+    #[test]
+    fn menu_actions_drive_the_editor() {
+        let mut shell = gui_shell(gui_editor());
+        let first = shell.editor.current_cell().unwrap().elements[0];
+
+        // Select All selects everything in the current cell.
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::SelectAll));
+        assert_eq!(shell.editor.selection_set.len(), 1);
+        assert_eq!(shell.editor.selection, Some(first));
+
+        // Arrange with a single object is a no-op with a status line,
+        // not a command.
+        shell.run_action(&menus::Action::Arrange(menus::Arrange::Front));
+        assert!(shell.status.contains("stacking position"));
+
+        // Inert actions are accepted by the table but change nothing.
+        let before = shell.editor.session.journal_len();
+        shell.run_action(&menus::Action::Inert);
+        assert_eq!(shell.editor.session.journal_len(), before);
+
+        // Delete drives object.delete and empties the cell.
+        shell.run_action(&menus::Action::Sel(menus::SelAction::Delete));
+        assert!(shell.editor.current_cell().unwrap().elements.is_empty());
+    }
+
+    /// The CS6 shortcut table fires through the same dispatch —
+    /// Ctrl+Z undoes, plain V picks the Pointer tool.
+    #[test]
+    fn shortcut_actions_share_the_dispatch() {
+        let mut shell = gui_shell(gui_editor());
+        let undoable = shell.editor.session.undo_len();
+        assert!(undoable >= 1, "the seeded session has history");
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::Undo));
+        assert_eq!(shell.editor.session.undo_len(), undoable - 1);
+        assert_eq!(shell.editor.session.redo_len(), 1);
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::Redo));
+        assert_eq!(shell.editor.session.undo_len(), undoable);
+        assert_eq!(shell.editor.session.redo_len(), 0);
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::PickTool(
+            Tool::Pointer,
+        )));
+        assert_eq!(shell.editor.tool, Tool::Pointer);
     }
 
     #[test]

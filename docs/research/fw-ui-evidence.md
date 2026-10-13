@@ -54,6 +54,31 @@ extended/numeric-pad variants), `4` = Ctrl, `5` = Ctrl+Alt,
 strings (which carry the same accelerators as display text) to confirm
 per-command assignments before implementing the M13 shortcut table.
 
+## Derived verdicts now implemented (M13 shell)
+
+Verified against both sources and encoded in
+`crates/app/src/menus.rs` (structure tests pin the transcription):
+
+- **Menu bar**: ten menus — File, Edit, View, Select, Modify, Text,
+  Commands, Filters, Window, Help — with the full RT_MENU 128 item tree
+  and resource command ids (`57600+` Win32 MDI standard, Fireworks
+  cluster `35000–43000`/`49000+`).
+- **Keymap semantics**: mods bitfield `4=Ctrl, 1=Alt, 2=Shift`
+  (observed values 0/2/4/5/6/7), vk codes are standard Windows
+  (`65='A'`, `70='F'`, `90='Z'`, `187='='`, `189='-'`, `33/34` PgUp/PgDn).
+- **Arrange** (keymap, not Adobe's docs): `cmd_ArrangeFront = Ctrl+F`,
+  `Forward = Ctrl+Shift+F`, `Backward = Ctrl+Shift+B`,
+  `Back = Ctrl+B` (entries `4 70`, `6 70`, `6 66`, `4 66`).
+- **Tool one-key selects**: V pointer, R rectangle, E ellipse, L line,
+  T text, Z zoom, H hand (the `one_tool` GUID section).
+- **Panel roster** (Window menu authority): Tools, Properties,
+  Optimize, Layers, Common Library, CSS Properties, Pages, States,
+  History, Auto Shapes, Styles, Document Library, URL, Color Mixer,
+  Swatches, Info, Behaviors, Find and Replace.
+- Not wired by design: the file's `Page_Next=33` (PgUp) entry
+  contradicts the documented Ctrl+PgDn binding — left unbound until a
+  corpus page-turn proves the direction.
+
 ## Clean-room statement
 
 Evidence extracted from the local `source/` install is used to

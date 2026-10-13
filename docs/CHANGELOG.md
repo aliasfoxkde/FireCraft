@@ -10,6 +10,8 @@ Current version: **0.1.0**.
 
 ### Features
 
+- **m13**: open deep-RE and shell-parity ticket (866f7ca)
+- **m12**: changelog gate, release checklist, m12 done (3c586ce)
 - **m12**: dist native archives + recipes (d3780b4)
 - **m12**: dist web with bridge smoke (cb60aaa)
 - **m12**: 2000-object stress ceiling in perf gate (9e10128)
@@ -84,6 +86,8 @@ Current version: **0.1.0**.
 
 ### Documentation
 
+- **m13**: filter protocol and writer delta notes (a4a5e33)
+- **m13**: UI evidence sources and extraction recipe (b78338d)
 - **m12**: webos embedding guide (f4b28d0)
 - **planning**: add M12 ticket (b7dcf6a)
 - **planning**: add M11 ticket (713203e)
@@ -116,6 +120,7 @@ Current version: **0.1.0**.
 
 ### Chores
 
+- **m12**: refresh generated docs, close milestone (60e11b8)
 - **fuzz**: sync lockfile dependency list (ebdf043)
 - **ci**: retrigger after sandbox race (25fee78)
 - **ci**: retrigger after sandbox race (a8effb5)
