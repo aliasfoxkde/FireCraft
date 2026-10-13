@@ -14,17 +14,17 @@ enforced == the fuzz call table).
 
 | class | meaning | count (of 356 dom verbs) |
 |---|---|---|
-| C | carried: a registry command implements the mutation | 127 |
-| P | partial: carried with a recorded model limitation | 44 |
-| M | missing: no command and no decision — work items | 104 |
+| C | carried: a registry command implements the mutation | 129 |
+| P | partial: carried with a recorded model limitation | 45 |
+| M | missing: no command and no decision — work items | 101 |
 | N | not applicable: non-document surface (accessor/UI/session/clipboard/export/OS) | 81 |
 
-Document-mutation coverage: **171 of 275** carried-or-partial
-(127 carried, 44 partial, 104 missing).
+Document-mutation coverage: **174 of 275** carried-or-partial
+(129 carried, 45 partial, 101 missing).
 
 ### Gap families (the Missing table, grouped)
 
-The 104 missing verbs collapse into eight families, largest first —
+The 101 missing verbs collapse into eight families, largest first —
 each family is one design decision plus a command batch:
 
 1. **Object transforms** (~9 verbs): scale/rotate/reflect/skew/
@@ -42,9 +42,9 @@ each family is one design decision plus a command batch:
 5. **Guides/grid/snap/onion** (~9 verbs): all carried by existing
    model fields (`page.guides`, `page.grid`, onion bits) with no
    commands — the cheapest family to close.
-6. **Group/flatten** (~6 verbs): group, ungroup, setGroupType,
-   mergeDown, flattenSelection, flattenDocument. Groups exist in the
-   model and via import; no creation command.
+6. **Group/flatten** (~3 verbs): mergeDown, flattenSelection,
+   flattenDocument. group/ungroup landed as object.group/
+   object.ungroup; setGroupType is partial (GRTi setter).
 7. **Selection tooling** (~9 verbs): select all/inverse/similar/
    parents/children/scope, saved (named) selections, marquee↔path
    conversion, attribute filter.
@@ -108,6 +108,7 @@ each family is one design decision plus a command batch:
 | `enableNineScale` | C | symbol.set9Slice |  |
 | `enableTextAntiAliasing` | C | text.setAttrs |  |
 | `fillSelectedPixels` | C | bitmap.fill |  |
+| `group` | C | object.group | same-container selection folds at the topmost member slot |
 | `hideSelection` | C | object.setVisible |  |
 | `importSymbol` | C | library.importSymbol |  |
 | `importSymbolButNotAsAlias` | C | library.importSymbol |  |
@@ -183,6 +184,7 @@ each family is one design decision plus a command batch:
 | `setTextLeading` | C | text.setAttrs |  |
 | `setTextOrientation` | C | text.setAttrs |  |
 | `showAllHidden` | C | object.setVisible |  |
+| `ungroup` | C | object.ungroup | children splice in at the group position, z-order preserved |
 | `updateSymbol` | C | library.add | replace the definition |
 
 ## Partial (P)
@@ -217,6 +219,7 @@ each family is one design decision plus a command batch:
 | `setDocumentCanvasSizeToSelection` | P | page.setCanvasSize | computed variant |
 | `setEffectName` | P | filter.add | rename = remove+add compose; no dedicated verb |
 | `setFillNColorNTexture` | P | path.setFillColor | texture component of the numbered form (texture_blend rides the fill model, no command surface) |
+| `setGroupType` | P | object.group | groups carry GRTi but no command sets the type; group/ungroup carried |
 | `setHotspotRectangle` | P | hotspot.create | recreate; no rect-edit command |
 | `setHotspotShape` | P | hotspot.create | recreate |
 | `setSliceAutonaming` | P | slice.setData | naming-policy field - payload coverage to verify |
@@ -275,7 +278,6 @@ each family is one design decision plus a command batch:
 | `flattenDocument` | M | - | no flatten-all |
 | `flattenSelection` | M | - | no flatten command |
 | `getPixelMask` | M | - | pixel-mask object feature unmodeled |
-| `group` | M | - | NO group command - groups arrive via import/symbol instance only |
 | `knifeElementsFromPoint` | M | - | no split/knife boolean op |
 | `knifeElementsFromPoints` | M | - | no split/knife boolean op |
 | `linkElementMask` | M | - | element-mask gap |
@@ -320,7 +322,6 @@ each family is one design decision plus a command batch:
 | `setGradientName` | M | - | gradient definitions carry no names in the model |
 | `setGridOrigin` | M | - | page.grid model exists; no command |
 | `setGridSize` | M | - | page.grid model exists; no command |
-| `setGroupType` | M | - | group creation/typing has no command family |
 | `setLayerLocked` | M | - | cell lock (cell.setLocked) exists; the layer-level lock is missing |
 | `setLayerSharing` | M | - | shared_layers model bit exists; no sharing commands |
 | `setMasterPage` | M | - | Page.is_master model bit exists; no command |
@@ -340,7 +341,6 @@ each family is one design decision plus a command batch:
 | `splitPaths` | M | - | no split/knife boolean op |
 | `transformSelection` | M | - | transform-command gap (free matrix) |
 | `tween` | M | - | instance tweening unmodeled |
-| `ungroup` | M | - | group-command gap |
 | `unsetMasterPage` | M | - | Page.is_master model bit exists; no command |
 
 ## Not applicable (N)
