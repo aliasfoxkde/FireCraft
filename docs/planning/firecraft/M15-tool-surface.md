@@ -131,8 +131,9 @@ stroke/effect model.
   first RGB stop; stop interpolation is unpremultiplied (`FG0v`/`FG1v`
   are independent 1-D ramps — the premultiplied default drags a
   transparent end stop black); `path.setFillColor` collapses an
-  existing gradient definition to solid (playback pending corpus
-  evidence).
+  existing gradient definition to solid (resolved from the documented
+  model in `docs/decisions/0018-setfillcolor-solid-collapse.md`; the
+  Wine-oracle playback remains the named falsifier).
 
 ## Verification
 

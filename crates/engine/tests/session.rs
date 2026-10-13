@@ -263,3 +263,83 @@ fn transaction_guard_aborts_on_failure() -> Result<(), Box<dyn std::error::Error
     );
     Ok(())
 }
+
+/// `path.setFillColor` over a gradient definition flattens it to the
+/// solid family (decision 0018): the colour verb applies a solid, the
+/// documented UI keeps gradients editable only per stop, and the
+/// colour slot renders "if any" — never through a ramp.
+#[test]
+fn set_fill_color_collapses_a_gradient_fill_to_solid() {
+    let (mut session, ids) = session();
+
+    session
+        .apply(
+            "path.setFill",
+            json!({
+                "id": ids[0],
+                "shape": "linear",
+                "stops": [
+                    { "position": 0.0, "color_raw": 0xFF18_1F2Bi64 },
+                    { "position": 1.0, "color_raw": 0xFFE8_9B2Ci64 },
+                ],
+            }),
+        )
+        .expect("gradient");
+    let gradient = match session.document().registry.get(ids[0]) {
+        Some(doc::ObjectData::Path(path)) => path
+            .paint
+            .as_ref()
+            .and_then(|paint| paint.fill.clone())
+            .expect("gradient definition"),
+        other => panic!("wrong kind: {other:?}"),
+    };
+    assert_eq!(gradient.shape, doc::FillShape::Linear);
+    assert!(gradient.gradient.is_some());
+
+    session
+        .apply(
+            "path.setFillColor",
+            json!({ "id": ids[0], "color_raw": 0xFF00_FF00i64 }),
+        )
+        .expect("solid colour");
+
+    {
+        let path = match session.document().registry.get(ids[0]) {
+            Some(doc::ObjectData::Path(path)) => path,
+            other => panic!("wrong kind: {other:?}"),
+        };
+        let paint = path.paint.as_ref().expect("paint stays");
+        assert_eq!(paint.fill_raw, 0xFF00_FF00);
+        let fill = paint.fill.as_ref().expect("solid definition stays");
+        assert_eq!(fill.shape, doc::FillShape::Solid);
+        assert!(fill.gradient.is_none(), "the ramp clears");
+        assert!(fill.dither.is_none());
+        assert!(fill.shape_extended, "commands write the FSXi slot");
+        assert!(
+            path.fill_start.is_none() && path.fill_end.is_none(),
+            "no handles were installed to begin with"
+        );
+    }
+
+    // One undo step restores the whole gradient definition.
+    session.undo().expect("undo");
+    let restored = match session.document().registry.get(ids[0]) {
+        Some(doc::ObjectData::Path(path)) => path.paint.clone().expect("paint"),
+        other => panic!("wrong kind: {other:?}"),
+    };
+    assert_eq!(restored.fill, Some(gradient));
+    assert_eq!(restored.fill_raw, 0xFF18_1F2B);
+
+    session.redo().expect("redo");
+    match session.document().registry.get(ids[0]) {
+        Some(doc::ObjectData::Path(path)) => {
+            let paint = path.paint.as_ref().expect("paint");
+            assert_eq!(paint.fill_raw, 0xFF00_FF00);
+            assert_eq!(
+                paint.fill.as_ref().map(|fill| fill.shape),
+                Some(doc::FillShape::Solid)
+            );
+        }
+        other => panic!("wrong kind: {other:?}"),
+    }
+}

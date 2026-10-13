@@ -917,8 +917,9 @@ impl TypedCommand for PathSetFill {
 
 /// `path.setFillColor` — applies a solid fill colour: `FCLi` moves and
 /// any gradient definition collapses to the solid family (the DOM
-/// verb installs a solid fill; pinned pending corpus playback — a
-/// counterexample surfaces as an encode diff).
+/// verb installs a solid fill; resolved against the documented model
+/// in `docs/decisions/0018-setfillcolor-solid-collapse.md` — a Wine
+/// oracle counterexample would surface as an encode diff).
 struct PathSetFillColor;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]

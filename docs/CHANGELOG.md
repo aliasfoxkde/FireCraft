@@ -10,6 +10,7 @@ Current version: **0.1.0**.
 
 ### Features
 
+- **io**: import SVG gradient paint servers (93e0778)
 - **compose**: paint the canvas background (77f55af)
 - **xtask**: style set asset, styles fixture, M15 close (658134d)
 - **app**: Styles panel + .stl import (d5f0cd7)
