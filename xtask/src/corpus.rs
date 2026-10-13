@@ -85,8 +85,13 @@ fn verify(verbose: bool) -> Result<(), String> {
             .and_then(|n| n.to_str())
             .unwrap_or(&rel);
         // The filename carries the detection contract: `*.fw.png` must be
-        // recognized as Fireworks, plain `.png` must not.
-        let checks = round_trip_checks(&bytes, rel.ends_with(".fw.png"));
+        // recognized as Fireworks, plain `.png` must not; `.stl` is a
+        // style library — its own battery over the style read/write pair.
+        let checks = if rel.ends_with(".stl") {
+            style_library_checks(&bytes)
+        } else {
+            round_trip_checks(&bytes, rel.ends_with(".fw.png"))
+        };
         let failed: Vec<&String> = checks
             .iter()
             .filter(|(_, ok)| !ok)
@@ -221,6 +226,84 @@ fn node_tree_checks(label: &str, inflated: &[u8], checks: &mut Vec<(String, bool
     }
 }
 
+/// Round-trip battery for a style library (`.stl`): the same floor the
+/// document battery enforces, over the style read/write pair — canonical
+/// re-emit, then read_style_library -> write_style_library -> re-read
+/// equal, re-write idempotent.
+fn style_library_checks(bytes: &[u8]) -> Vec<(String, bool)> {
+    let mut checks = Vec::new();
+    let chunks = match parse_chunks(bytes) {
+        Ok(c) => c,
+        Err(err) => {
+            checks.push((format!("parse_chunks: {err}"), false));
+            return checks;
+        }
+    };
+    checks.push((
+        "fireworks detection = true".to_owned(),
+        is_fireworks(&chunks),
+    ));
+    let Some(chunk) = chunks.iter().find(|c| &c.ctype == b"mkTS") else {
+        checks.push(("mkTS present".to_owned(), false));
+        return checks;
+    };
+    let inflated = match inflate(&chunk.data) {
+        Ok(raw) => raw,
+        Err(err) => {
+            checks.push((format!("mkTS inflate: {err}"), false));
+            return checks;
+        }
+    };
+    let nodes = match fwpng::nodetree::parse(&inflated) {
+        Ok(nodes) => nodes,
+        Err(err) => {
+            checks.push((format!("mkTS parse: {err}"), false));
+            return checks;
+        }
+    };
+    checks.push((
+        "mkTS canonical re-emit".to_owned(),
+        fwpng::nodetree::serialize(&nodes) == inflated,
+    ));
+    let (entries, bag) = match doc::fwmap::read_style_library(&nodes) {
+        Ok(pair) => pair,
+        Err(err) => {
+            checks.push((format!("style read: {err}"), false));
+            return checks;
+        }
+    };
+    checks.push(("style records nonempty".to_owned(), !entries.is_empty()));
+    let (tree, stats) = match doc::fwmap::write_style_library(&entries, &bag) {
+        Ok(pair) => pair,
+        Err(err) => {
+            checks.push((format!("style write: {err}"), false));
+            return checks;
+        }
+    };
+    checks.push((
+        "style write consumes bag".to_owned(),
+        stats.unconsumed_unknown == 0,
+    ));
+    let bytes2 = fwpng::nodetree::serialize(&tree);
+    match fwpng::nodetree::parse(&bytes2) {
+        Ok(nodes2) => match doc::fwmap::read_style_library(&nodes2) {
+            Ok((entries2, bag2)) => {
+                checks.push(("style round-trip equal".to_owned(), entries2 == entries));
+                checks.push((
+                    "style write idempotent".to_owned(),
+                    match doc::fwmap::write_style_library(&entries2, &bag2) {
+                        Ok((tree3, _)) => fwpng::nodetree::serialize(&tree3) == bytes2,
+                        Err(_) => false,
+                    },
+                ));
+            }
+            Err(err) => checks.push((format!("style re-read: {err}"), false)),
+        },
+        Err(err) => checks.push((format!("re-parse written tree: {err}"), false)),
+    }
+    checks
+}
+
 /// Regenerates every fixture deterministically and rewrites the manifest
 /// with fresh digests.
 pub fn gen_fixtures() -> Result<(), String> {
@@ -229,7 +312,7 @@ pub fn gen_fixtures() -> Result<(), String> {
 
     /// One pending fixture: name, built bytes, manifest note.
     type Fixture = (&'static str, Result<Vec<u8>, String>, &'static str);
-    let fixtures: [Fixture; 14] = [
+    let fixtures: [Fixture; 15] = [
         (
             "minimal.fw.png",
             build_minimal(),
@@ -300,6 +383,11 @@ pub fn gen_fixtures() -> Result<(), String> {
             build_gradient(),
             "generated: 64x48 page, linear/radial/alpha-ramp gradient fills built through path.setFill + path.setFillVector (M15 gradient golden pin; FSXi families with FG0v/FG1v ramps and fdct fill vectors)",
         ),
+        (
+            "styles.fw.png",
+            build_styles(),
+            "generated: 64x48 page, four painted rects whose appearances are lifted into three named styles + one style.apply (M15 style golden pin; the document carries ZSLv/ZSTv records incl. a gradient-backed FPLv)",
+        ),
     ];
 
     let mut manifest = String::from(
@@ -342,10 +430,34 @@ pub fn gen_fixtures() -> Result<(), String> {
         ));
         library_count += 1;
     }
+    // The re-created style library: generated deterministically by
+    // styles-gen, pinned + round-tripped through the style battery.
+    crate::styles::run()?;
+    let styles_dir = workspace_root().join(crate::styles::DIR);
+    let mut style_count = 0usize;
+    let mut names: Vec<String> = std::fs::read_dir(&styles_dir)
+        .map_err(|e| format!("read {}: {e}", styles_dir.display()))?
+        .filter_map(|entry| entry.ok())
+        .map(|entry| entry.file_name().to_string_lossy().to_string())
+        .filter(|name| name.ends_with(".stl"))
+        .collect();
+    names.sort();
+    for name in &names {
+        let bytes =
+            std::fs::read(styles_dir.join(name)).map_err(|e| format!("read {name}: {e}"))?;
+        manifest.push_str(&format!(
+            "{} {}/{} # re-created style set (original FireCraft work; see docs/ATTRIBUTION.md)\n",
+            sha256_hex(&bytes),
+            crate::styles::DIR,
+            name
+        ));
+        style_count += 1;
+    }
     std::fs::write(workspace_root().join(MANIFEST), manifest)
         .map_err(|e| format!("write manifest: {e}"))?;
     eprintln!(
-        "[xtask] corpus-gen: {fixture_count} fixture(s) + {library_count} library asset(s) pinned"
+        "[xtask] corpus-gen: {fixture_count} fixture(s) + {library_count} library asset(s) \
+         + {style_count} style set(s) pinned"
     );
     // Fresh fixtures need fresh goldens: re-render and re-pin. This also
     // re-checks the semantic anchors, so a generator that stops matching
@@ -657,6 +769,152 @@ fn build_gradient() -> Result<Vec<u8>, String> {
 /// registry plus the M9 host — named rect + text become symbol "btn",
 /// the definition gains a Widget script, the instance a parameter
 /// store, and the opCode-2 re-derivation lands through the host drain
+/// Builds `styles.fw.png`: four painted rects whose appearances are
+/// lifted into named styles — two solid, one backed by a live drop
+/// shadow, one by a linear gradient (`FPLv` rides the record) — plus
+/// one `style.apply` painting a fourth rect from the library (the M15
+/// style golden pin: the document carries `ZSLv`/`ZSTv` records and
+/// every record the writer emits re-reads equal).
+fn build_styles() -> Result<Vec<u8>, String> {
+    let mut registry = engine::CommandRegistry::new();
+    engine::catalog::install(&mut registry).map_err(|e| format!("catalog install: {e}"))?;
+    let mut session = engine::Session::with_registry(doc::Document::default(), registry);
+    fn apply(
+        session: &mut engine::Session,
+        name: &str,
+        payload: serde_json::Value,
+    ) -> Result<(), String> {
+        session
+            .apply(name, payload)
+            .map_err(|e| format!("styles fixture: {name}: {e}"))
+    }
+    apply(
+        &mut session,
+        "page.add",
+        serde_json::json!({ "index": null }),
+    )?;
+    apply(
+        &mut session,
+        "page.setCanvasSize",
+        serde_json::json!({ "page": 0, "width": 64.0, "height": 48.0 }),
+    )?;
+    for (x, y) in [(4.0, 6.0), (36.0, 6.0), (4.0, 28.0), (36.0, 28.0)] {
+        apply(
+            &mut session,
+            "object.createPath",
+            serde_json::json!({
+                "kind": "rect",
+                "x": x, "y": y, "width": 24.0, "height": 16.0,
+                "page": 0, "layer": 0, "cell": 0, "name": null,
+            }),
+        )?;
+    }
+    let ids = session.document().pages[0].layers.layers[0].cells[0]
+        .elements
+        .clone();
+    // The library's sources: two solids, a shadow-carrying record, a
+    // gradient-backed record.
+    apply(
+        &mut session,
+        "object.setFill",
+        serde_json::json!({ "id": ids[0], "color_raw": 0xFFB0_2030i64 }),
+    )?;
+    apply(
+        &mut session,
+        "object.setFill",
+        serde_json::json!({ "id": ids[1], "color_raw": 0xFF20_50B0i64 }),
+    )?;
+    apply(
+        &mut session,
+        "object.setFill",
+        serde_json::json!({ "id": ids[2], "color_raw": 0xFF3E_8A76i64 }),
+    )?;
+    apply(
+        &mut session,
+        "filter.add",
+        serde_json::json!({
+            "id": ids[2], "name": "dropShadow", "category": "Shadow and Glow",
+            "params": [
+                { "key": "EffectMoaID", "value": "{a7944db8-6ce2-11d1-8c76000502701850}" },
+                { "key": "gaussian_blur_radius", "value": "3.000000" },
+            ],
+        }),
+    )?;
+    apply(
+        &mut session,
+        "path.setFill",
+        serde_json::json!({
+            "id": ids[3], "shape": "linear",
+            "stops": [
+                { "position": 0.0, "color_raw": 0xFFD4_5A28i64 },
+                { "position": 1.0, "color_raw": 0xFF7A_2E10i64 },
+            ],
+        }),
+    )?;
+    apply(
+        &mut session,
+        "path.setFillVector",
+        serde_json::json!({
+            "id": ids[3],
+            "start": { "x": 36.0, "y": 36.0 },
+            "end": { "x": 60.0, "y": 36.0 },
+        }),
+    )?;
+    for (name, source) in [
+        ("Ember", ids[0]),
+        ("Cobalt", ids[1]),
+        ("Verdigris Shadow", ids[2]),
+        ("Ember Fade", ids[3]),
+    ] {
+        apply(
+            &mut session,
+            "style.redefineFromSelection",
+            serde_json::json!({ "name": name, "source": source }),
+        )?;
+    }
+    // The apply leg: a fifth rect painted from the library proves the
+    // records are live bundles, not just preserved subtrees.
+    apply(
+        &mut session,
+        "object.createPath",
+        serde_json::json!({
+            "kind": "rect",
+            "x": 28.0, "y": 20.0, "width": 8.0, "height": 10.0,
+            "page": 0, "layer": 0, "cell": 0, "name": "painted",
+        }),
+    )?;
+    let painted = session.document().pages[0].layers.layers[0].cells[0]
+        .elements
+        .get(4)
+        .copied()
+        .ok_or_else(|| "styles fixture: painted rect missing".to_owned())?;
+    apply(
+        &mut session,
+        "style.apply",
+        serde_json::json!({ "index": 1, "ids": [painted] }),
+    )?;
+    if session.document().styles.len() != 4 {
+        return Err(format!(
+            "styles fixture: {} record(s), expected 4",
+            session.document().styles.len()
+        ));
+    }
+    let (tree, stats) = doc::fwmap::write(session.document(), &doc::fwmap::UnknownBag::default())
+        .map_err(|e| format!("styles fixture: doc write: {e}"))?;
+    if stats.unconsumed_unknown != 0 {
+        return Err(format!(
+            "styles fixture: doc write left {} unknown node(s)",
+            stats.unconsumed_unknown
+        ));
+    }
+    let payload = fwpng::nodetree::serialize(&tree);
+    let standard = encode_rgba8(64, 48, |_, _| [255, 255, 255, 255])?;
+    insert_before_iend(
+        &standard,
+        &[(b"mkTS", zlib(&payload)?), (b"mkBS", zlib(&payload)?)],
+    )
+}
+
 /// (scripted ≡ direct ≡ replay is the scripting crate's contract; the
 /// fixture pins the wire shape that carries it).
 fn build_rich() -> Result<Vec<u8>, String> {

@@ -10,6 +10,7 @@ Current version: **0.1.0**.
 
 ### Features
 
+- **app**: Styles panel + .stl import (d5f0cd7)
 - **engine**: style verbs + wire-order fuzz docs (103f768)
 - **doc**: style model, ZSLv/ZSTv byte-exact (3042b13)
 - **m15**: gradient goldens + svg gradient export (7a35671)

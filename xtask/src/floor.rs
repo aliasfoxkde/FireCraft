@@ -27,9 +27,12 @@ use fwpng::chunk::parse_chunks;
 /// The gate: no unrecognized `EffectMoaID` in any scanned file.
 pub fn run() -> Result<(), String> {
     let root = workspace_root();
+    // Style libraries (`.stl`) carry effect records, not live object
+    // stacks — the floor is about rendered documents, so they skip.
     let mut files: Vec<String> = crate::corpus::manifest_entries()?
         .into_iter()
         .map(|(_, rel)| rel)
+        .filter(|rel| !rel.ends_with(".stl"))
         .collect();
     let incoming = root.join("corpus/incoming");
     if incoming.is_dir() {
