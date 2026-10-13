@@ -258,7 +258,7 @@ pub fn gen_fixtures() -> Result<(), String> {
         (
             "filtered.fw.png",
             build_filtered(),
-            "generated: 64x48 page, autoshapes carrying live effect stacks through filter.add (M7 filter golden pin; dropShadow is the unfiltered pass-through control)",
+            "generated: 64x48 page, autoshapes carrying live effect stacks through filter.add (M7 filter golden pin; every GUID rides the interpreted catalog since the M14 floor)",
         ),
         (
             "text.fw.png",
@@ -933,8 +933,9 @@ fn build_textpath() -> Result<Vec<u8>, String> {
 /// Builds `filtered.fw.png`: four Auto Shapes, each carrying a live
 /// effect stack added through `filter.add` — the M7 scripted-filter
 /// golden. One object per kernel family the compositor interprets
-/// (blur, point lift, invert) plus a dropShadow whose GUID is beyond
-/// the catalog, pinning unfiltered pass-through in the same image.
+/// (blur, point lift, invert, shadow): every GUID is inside the
+/// catalog, per the M14 zero-passthrough floor (the M7-era unknown
+/// control retired — an unrecognized GUID now fails the effect floor).
 /// Filter identity is the CS6 `EffectMoaID` GUID with `DCVs` decimal
 /// strings, exactly as the reader sees them in real files.
 fn build_filtered() -> Result<Vec<u8>, String> {
@@ -1057,8 +1058,11 @@ fn build_filtered() -> Result<Vec<u8>, String> {
         serde_json::json!({
             "name": "dropShadow", "category": "Shadow and Glow",
             "params": [
-                { "key": "EffectMoaID", "value": "{deadbeef-0000-11d1-8c8000a024cdc039}" },
-                { "key": "ShadowBlur", "value": "4.000000" },
+                { "key": "EffectMoaID", "value": "{a7944db8-6ce2-11d1-8c76000502701850}" },
+                { "key": "ShadowColor", "value": "#404040" },
+                { "key": "ShadowAngle", "value": "90.000000" },
+                { "key": "ShadowBlur", "value": "2.000000" },
+                { "key": "ShadowDistance", "value": "3.000000" },
             ],
         }),
     )?;
@@ -1228,11 +1232,12 @@ mod tests {
     }
 
     #[test]
-    fn filtered_fixture_filters_and_passes_unknown_through() {
+    fn filtered_fixture_filters_every_quadrant() {
         // Both fixtures place the same four shapes on the same canvas,
-        // so each quadrant pairs: filtered vs unfiltered. The three
-        // interpreted effects must change their quadrant; the
-        // dropShadow's unknown GUID must leave its quadrant untouched.
+        // so each quadrant pairs: filtered vs unfiltered. Every effect
+        // rides the interpreted catalog now (the M14 zero-passthrough
+        // floor retired the unknown-GUID control), so all four
+        // quadrants must change.
         let plain = build_scripted().unwrap();
         let filtered = build_filtered().unwrap();
         let plain = crate::golden::render_entry(&plain)
@@ -1247,9 +1252,9 @@ mod tests {
         );
         let width = u32::from(filtered.width);
         let height = u32::from(filtered.height);
-        // Inset 6px per side: the pie's bottom edge rasterizes into the
-        // doughnut's quadrant row, and its brightness lift must not
-        // contaminate the pass-through control.
+        // Inset 6px per side: neighboring shapes' rasters reach across
+        // quadrant rows, and one effect's output must not be read as
+        // another's.
         const INSET: u32 = 6;
         let quadrant = |render: &compose::Render, x0: u32, y0: u32| -> Vec<u8> {
             let mut pixels = Vec::new();
@@ -1261,21 +1266,17 @@ mod tests {
             }
             pixels
         };
-        for (name, x0, y0, must_differ) in [
-            ("star (gaussian blur)", 0, 0, true),
-            ("pie (brightness)", width / 2, 0, true),
-            ("spiral (invert)", 0, height / 2, true),
-            ("doughnut (unknown GUID)", width / 2, height / 2, false),
+        for (name, x0, y0) in [
+            ("star (gaussian blur)", 0, 0),
+            ("pie (brightness)", width / 2, 0),
+            ("spiral (invert)", 0, height / 2),
+            ("doughnut (drop shadow)", width / 2, height / 2),
         ] {
             let a = quadrant(&plain, x0, y0);
             let b = quadrant(&filtered, x0, y0);
             assert_eq!(a.is_empty(), b.is_empty(), "{name}: coverage changed");
             assert_ne!(a.len(), 0, "{name}: quadrant is empty");
-            if must_differ {
-                assert_ne!(a, b, "{name}: effect did not change the quadrant");
-            } else {
-                assert_eq!(a, b, "{name}: unknown effect must render unfiltered");
-            }
+            assert_ne!(a, b, "{name}: effect did not change the quadrant");
         }
     }
 

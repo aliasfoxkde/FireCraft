@@ -77,6 +77,40 @@ const GUID_BEVEL: &str = "7fe61102-6ce2-11d1-8c76000502701850";
 /// arrives as one `&`-packed string property.
 const GUID_LIVE_EFFECTS: &str = "8eeadf50-9efe-11da-a7460800200c9a66";
 
+/// Every `EffectMoaID` this crate interprets — the M14 floor's
+/// authority. The xtask effect floor holds every GUID observed in the
+/// corpus and in harvested files to this set: one outside it would
+/// ride through unfiltered, and the passthrough floor is zero. Keep
+/// in lockstep with the match arms above; the enumeration test fails
+/// the build when a recognized GUID escapes this list.
+pub const RECOGNIZED_GUIDS: &[&str] = &[
+    GUID_BRIGHTNESS_CONTRAST,
+    GUID_HUE_SATURATION,
+    GUID_LEVELS,
+    GUID_GAUSSIAN_BLUR,
+    GUID_INVERT,
+    GUID_BLUR,
+    GUID_BLUR_MORE,
+    GUID_UNSHARP_MASK,
+    GUID_ADD_NOISE,
+    GUID_FIND_EDGES,
+    GUID_CURVES,
+    GUID_AUTO_LEVELS,
+    GUID_COLOR_FILL,
+    GUID_MOTION_BLUR,
+    GUID_RADIAL_BLUR,
+    GUID_ZOOM_BLUR,
+    GUID_SHARPEN,
+    GUID_SHARPEN_MORE,
+    GUID_CONVERT_TO_ALPHA,
+    GUID_DROP_SHADOW,
+    GUID_INNER_SHADOW,
+    GUID_INNER_GLOW,
+    GUID_SOLID_SHADOW,
+    GUID_BEVEL,
+    GUID_LIVE_EFFECTS,
+];
+
 /// One interpretable kernel step, in stack order.
 #[derive(Clone, Debug, PartialEq)]
 pub enum KernelOp {
@@ -1501,6 +1535,18 @@ mod tests {
         let plan = plan(&stack);
         assert_eq!(plan.ops.len(), 28, "every enumerated effect interprets");
         assert_eq!(plan.skipped, 0, "the native surface never rides through");
+        // The floor's authority list stays in lockstep: every GUID
+        // const published as recognized was exercised above (the
+        // live-effects const through the container, the rest through
+        // the per-GUID rows).
+        let exercised: std::collections::HashSet<String> =
+            stack.iter().filter_map(effect_id).collect();
+        for guid in RECOGNIZED_GUIDS {
+            assert!(
+                exercised.contains(*guid),
+                "{guid} is listed as recognized but not exercised"
+            );
+        }
     }
 
     /// Builds a `GPLv` node with a `GPTv` per point (the CS6 shape:

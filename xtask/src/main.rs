@@ -15,6 +15,7 @@
 mod changelog;
 mod corpus;
 mod dist;
+mod floor;
 mod fuzz;
 mod golden;
 mod layers;
@@ -30,7 +31,7 @@ mod webgolden;
 
 use std::process::ExitCode;
 
-const USAGE: &str = "usage: cargo run -p xtask -- <ci [--full]|layers|wasm|corpus [--report]|corpus-gen|library-gen|scripts|golden [--bless]|svg-golden [--bless]|svg-roundtrip [--measure]|web-golden [--bless|--measure]|perf [--bless|--measure]|dist --web|--native|fuzz|fuzz-quick|panic-hunt|parity|scorecard>";
+const USAGE: &str = "usage: cargo run -p xtask -- <ci [--full]|layers|wasm|corpus [--report]|corpus-gen|library-gen|scripts|floor|golden [--bless]|svg-golden [--bless]|svg-roundtrip [--measure]|web-golden [--bless|--measure]|perf [--bless|--measure]|dist --web|--native|fuzz|fuzz-quick|panic-hunt|parity|scorecard>";
 
 fn main() -> ExitCode {
     match std::env::args().nth(1).as_deref() {
@@ -42,6 +43,7 @@ fn main() -> ExitCode {
             _ => finish("corpus", corpus::run()),
         },
         Some("corpus-gen") => finish("corpus-gen", corpus::gen_fixtures()),
+        Some("floor") => finish("floor", floor::run()),
         Some("library-gen") => finish("library-gen", library::run()),
         Some("scripts") => finish("scripts", scripts::run()),
         Some("golden") => match std::env::args().nth(2).as_deref() {
@@ -118,6 +120,7 @@ fn run_ci(full: Option<&str>) -> ExitCode {
         ("layers", layers::run),
         ("wasm", wasm::run),
         ("corpus", corpus::run),
+        ("floor", floor::run),
         ("scripts", scripts::run),
         ("golden", golden::run),
         ("svg-golden", svggolden::run),
