@@ -4,10 +4,14 @@
 //! The list itself is the model's `effects: Vec<Effect>` (the `EFLv`
 //! spine); these commands edit it with whole-object capture, so undo
 //! restores the exact list including any raw (`GPLv`/`GDTv`) file
-//! residue the reader preserved. Parameters here are string-valued
-//! (`DCVs`) — raw node values enter the model only through the reader.
+//! residue the reader preserved. Parameters are string-valued
+//! (`DCVs`); the one exception is curve knot lists, which CS6 files
+//! carry as raw `GPLv` grab-point nodes and the CS6 scripts author as
+//! JS arrays — the JSON `points` param is the equivalent, encoded to
+//! the same node shape on apply (and mirrored by compose's curves
+//! interpreter on the way back out).
 
-use doc::{Document, Effect, EffectProperty, EffectValue, ObjectData, ObjectId};
+use doc::{Document, Effect, EffectProperty, EffectValue, Node, NodeValue, ObjectData, ObjectId};
 
 use crate::access;
 use crate::command::TypedCommand;
@@ -20,6 +24,66 @@ pub(crate) fn install(registry: &mut CommandRegistry) -> Result<(), EngineError>
     registry.register(AddFilter)?;
     registry.register(RemoveFilter)?;
     registry.register(SetFilterParam)
+}
+
+/// The `GPLv` grab-point list for one `*_points` property: a `GPTv`
+/// child per knot with `XLCf`/`YLCf` float coordinates — the shape
+/// the reader preserves from files and compose's curves interpreter
+/// reads back.
+fn grab_list(points: &[[f64; 2]]) -> Node {
+    Node {
+        fourcc: *b"GPLv",
+        value: NodeValue::Children(
+            points
+                .iter()
+                .map(|[x, y]| Node {
+                    fourcc: *b"GPTv",
+                    value: NodeValue::Children(vec![
+                        Node {
+                            fourcc: *b"XLCf",
+                            value: NodeValue::Float(*x),
+                        },
+                        Node {
+                            fourcc: *b"YLCf",
+                            value: NodeValue::Float(*y),
+                        },
+                    ]),
+                })
+                .collect(),
+        ),
+    }
+}
+
+/// Validates one parameter's encoding (text xor knot list, knots
+/// non-empty and finite) and yields its `DCEv` value.
+fn param_value(
+    name: &'static str,
+    key: &str,
+    value: &str,
+    points: &Option<Vec<[f64; 2]>>,
+) -> Result<EffectValue, EngineError> {
+    if let Some(knots) = points {
+        if !value.is_empty() {
+            return Err(EngineError::InvalidState {
+                name: name.to_owned(),
+                detail: format!("parameter {key} takes a value or points, not both"),
+            });
+        }
+        if knots.is_empty() {
+            return Err(EngineError::InvalidState {
+                name: name.to_owned(),
+                detail: format!("parameter {key} needs at least one knot"),
+            });
+        }
+        if knots.iter().any(|[x, y]| !x.is_finite() || !y.is_finite()) {
+            return Err(EngineError::InvalidState {
+                name: name.to_owned(),
+                detail: format!("parameter {key} carries a non-finite knot"),
+            });
+        }
+        return Ok(EffectValue::Raw(grab_list(knots)));
+    }
+    Ok(EffectValue::Text(value.to_owned()))
 }
 
 /// Runs `edit` against the effect list of the object `id` names.
@@ -89,8 +153,15 @@ struct AddFilterPayload {
 struct FilterParamPayload {
     /// `DCKs` key, e.g. "gaussian_blur_radius".
     key: String,
-    /// `DCVs` value; effects carry decimals as decimal strings.
+    /// `DCVs` value; effects carry decimals as decimal strings. Must
+    /// stay empty when `points` is present — a parameter takes one
+    /// encoding or the other.
     value: String,
+    /// Curve knot list (`*_points`), as `[x, y]` pairs. Encoded to the
+    /// raw `GPLv`/`GPTv`/`XLCf`/`YLCf` node shape the reader preserves
+    /// from files — the JSON equivalent of the CS6 scripts' JS arrays.
+    #[serde(default)]
+    points: Option<Vec<[f64; 2]>>,
 }
 
 impl TypedCommand for AddFilter {
@@ -118,17 +189,17 @@ impl TypedCommand for AddFilter {
                 detail: "parameter keys must be non-empty".to_owned(),
             });
         }
+        let mut properties = Vec::with_capacity(payload.params.len());
+        for param in &payload.params {
+            properties.push(EffectProperty {
+                key: param.key.clone(),
+                value: param_value(NAME, &param.key, &param.value, &param.points)?,
+            });
+        }
         let effect = Effect {
             category: payload.category.clone(),
             internal_name: payload.name.clone(),
-            properties: payload
-                .params
-                .iter()
-                .map(|param| EffectProperty {
-                    key: param.key.clone(),
-                    value: EffectValue::Text(param.value.clone()),
-                })
-                .collect(),
+            properties,
         };
         // Slot check before the mutate: `Vec::insert` cannot be handed
         // an out-of-range slot, and the generic mutate error would
@@ -212,8 +283,12 @@ struct SetFilterParamPayload {
     index: usize,
     /// `DCKs` key, e.g. "brightness".
     key: String,
-    /// `DCVs` value as a decimal string where numeric.
+    /// `DCVs` value as a decimal string where numeric. Must stay empty
+    /// when `points` is present.
     value: String,
+    /// Curve knot list (`*_points`), encoded like `filter.add`'s.
+    #[serde(default)]
+    points: Option<Vec<[f64; 2]>>,
 }
 
 impl TypedCommand for SetFilterParam {
@@ -246,13 +321,14 @@ impl TypedCommand for SetFilterParam {
             });
         }
         let (key, value) = (payload.key.clone(), payload.value.clone());
+        let encoded = param_value(NAME, &key, &value, &payload.points)?;
         mutate_effects(document, NAME, payload.id, |effects| {
             let properties = &mut effects[payload.index].properties;
             match properties.iter_mut().find(|prop| prop.key == key) {
-                Some(prop) => prop.value = EffectValue::Text(value),
+                Some(prop) => prop.value = encoded.clone(),
                 None => properties.push(EffectProperty {
                     key,
-                    value: EffectValue::Text(value),
+                    value: encoded.clone(),
                 }),
             }
         })
@@ -445,8 +521,157 @@ mod tests {
     }
 
     #[test]
+    fn points_param_encodes_the_grab_point_node_shape() {
+        let (mut document, ids) = testdoc::sample_document();
+        let id = ids[0];
+        AddFilter
+            .apply_json(
+                &mut document,
+                json!({
+                    "id": id,
+                    "name": "curves",
+                    "category": "Adjust Color",
+                    "params": [
+                        { "key": "rgb_points", "value": "", "points":
+                          [[0.0, 0.0], [128.0, 64.0], [255.0, 255.0]] },
+                        { "key": "brightness", "value": "0" },
+                    ],
+                }),
+            )
+            .unwrap();
+        let ObjectData::Path(path) = document.registry.get(id).unwrap() else {
+            panic!("wrong kind");
+        };
+        let EffectValue::Raw(node) = &path.effects[0].properties[0].value else {
+            panic!("points must encode as the raw node");
+        };
+        assert_eq!(node.fourcc, *b"GPLv");
+        let NodeValue::Children(grab_points) = &node.value else {
+            panic!("GPLv carries GPTv children");
+        };
+        assert_eq!(grab_points.len(), 3);
+        let NodeValue::Children(coords) = &grab_points[1].value else {
+            panic!("GPTv carries XLCf/YLCf children");
+        };
+        assert_eq!(grab_points[1].fourcc, *b"GPTv");
+        assert_eq!((coords[0].fourcc, coords[1].fourcc), (*b"XLCf", *b"YLCf"));
+        assert_eq!(coords[0].value, NodeValue::Float(128.0));
+        assert_eq!(coords[1].value, NodeValue::Float(64.0));
+        // The text sibling stayed text.
+        assert_eq!(
+            path.effects[0].properties[1].value,
+            EffectValue::Text("0".to_owned())
+        );
+    }
+
+    #[test]
+    fn setparam_swaps_between_text_and_knot_encodings() {
+        let (mut document, ids) = testdoc::sample_document();
+        let id = ids[0];
+        AddFilter
+            .apply_json(
+                &mut document,
+                json!({ "id": id, "name": "curves", "params": [
+                    { "key": "rgb_points", "value": "" },
+                ]}),
+            )
+            .unwrap();
+        // Text → knots.
+        SetFilterParam
+            .apply_json(
+                &mut document,
+                json!({ "id": id, "index": 0, "key": "rgb_points", "value": "",
+                        "points": [[0.0, 0.0], [255.0, 255.0]] }),
+            )
+            .unwrap();
+        let ObjectData::Path(path) = document.registry.get(id).unwrap() else {
+            panic!("wrong kind");
+        };
+        assert!(matches!(
+            path.effects[0].properties[0].value,
+            EffectValue::Raw(_)
+        ));
+        // Knots → text.
+        SetFilterParam
+            .apply_json(
+                &mut document,
+                json!({ "id": id, "index": 0, "key": "rgb_points", "value": "0 0 255 255" }),
+            )
+            .unwrap();
+        let ObjectData::Path(path) = document.registry.get(id).unwrap() else {
+            panic!("wrong kind");
+        };
+        assert_eq!(
+            path.effects[0].properties[0].value,
+            EffectValue::Text("0 0 255 255".to_owned())
+        );
+    }
+
+    #[test]
+    fn bad_point_encodings_are_refused_without_mutation() {
+        let (mut document, ids) = testdoc::sample_document();
+        let id = ids[0];
+        // The add-side encoding refusals (both at once, empty list).
+        for params in [
+            json!([{ "key": "rgb_points", "value": "x", "points": [[0.0, 0.0]] }]),
+            json!([{ "key": "rgb_points", "value": "", "points": [] }]),
+        ] {
+            let error = AddFilter
+                .apply_json(
+                    &mut document,
+                    json!({ "id": id, "name": "curves", "params": params }),
+                )
+                .unwrap_err();
+            assert!(matches!(error, EngineError::InvalidState { .. }));
+        }
+        // A valid base effect so the setParam path has a slot to hit.
+        AddFilter
+            .apply_json(
+                &mut document,
+                json!({ "id": id, "name": "curves", "params": [
+                    { "key": "rgb_points", "value": "" },
+                ]}),
+            )
+            .unwrap();
+        let before = serde_json::to_vec(&document).unwrap();
+        for payload in [
+            // Both encodings at once.
+            json!({ "id": id, "index": 0, "key": "rgb_points", "value": "x",
+                    "points": [[0.0, 0.0]] }),
+            // An empty knot list.
+            json!({ "id": id, "index": 0, "key": "rgb_points", "value": "",
+                    "points": [] }),
+        ] {
+            let error = SetFilterParam
+                .apply_json(&mut document, payload)
+                .unwrap_err();
+            assert!(matches!(error, EngineError::InvalidState { .. }));
+        }
+        assert_eq!(
+            serde_json::to_vec(&document).unwrap(),
+            before,
+            "refused encodings leave the document untouched"
+        );
+        // Non-finite coordinates: JSON cannot carry NaN, so this
+        // exercises the typed entry the registry wraps.
+        let non_finite = param_value(
+            "filter.add",
+            "rgb_points",
+            "",
+            &Some(vec![[0.0, 0.0], [128.0, f64::NAN]]),
+        )
+        .unwrap_err();
+        assert!(matches!(non_finite, EngineError::InvalidState { .. }));
+        assert_eq!(
+            serde_json::to_vec(&document).unwrap(),
+            before,
+            "refused encodings leave the document untouched"
+        );
+    }
+
+    #[test]
     fn undo_preserves_raw_file_residue() {
-        // A raw node value (curve grab points) can only enter through
+        // A raw node value (curve grab points) can enter through the
         // the reader; a later setParam + undo must bring it back whole.
         let (mut document, ids) = testdoc::sample_document();
         let id = ids[0];
