@@ -29,7 +29,9 @@ pub(crate) fn install(registry: &mut CommandRegistry) -> Result<(), EngineError>
     registry.register(PathExpandStroke)?;
     registry.register(PathInset)?;
     registry.register(PathMovePoints)?;
-    registry.register(PathWarp)
+    registry.register(PathWarp)?;
+    registry.register(PathReshapeArea)?;
+    registry.register(PathRedraw)
 }
 
 /// Maps a vector-pipeline failure to a command error. [`VectorError`]
@@ -568,6 +570,164 @@ impl TypedCommand for PathWarp {
     }
 }
 
+/// `path.reshapeArea` — the reshape-area tool's primitive: drags the
+/// points inside a rectangle by the full delta, falling off linearly
+/// across the band outside it (handles ride along).
+struct PathReshapeArea;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct PathReshapeAreaPayload {
+    /// Target object.
+    id: doc::ObjectId,
+    /// Area rectangle, world coordinates.
+    x0: f64,
+    y0: f64,
+    x1: f64,
+    y1: f64,
+    /// Falloff band width outside the rect; 0 = hard edge.
+    falloff: f64,
+    /// Drag vector, world units.
+    dx: f64,
+    dy: f64,
+}
+
+impl TypedCommand for PathReshapeArea {
+    type Payload = PathReshapeAreaPayload;
+
+    fn name(&self) -> &'static str {
+        "path.reshapeArea"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "path.reshapeArea";
+        if !(payload.x0.is_finite()
+            && payload.y0.is_finite()
+            && payload.x1.is_finite()
+            && payload.y1.is_finite())
+        {
+            return Err(EngineError::BadPayload {
+                name: NAME.to_owned(),
+                detail: "area rectangle must be finite".to_owned(),
+            });
+        }
+        let before = access::object(document, NAME, payload.id)?.clone();
+        let shaped = {
+            let ObjectData::Path(path) = &before else {
+                return Err(EngineError::InvalidState {
+                    name: NAME.to_owned(),
+                    detail: format!("object {} is not a path", payload.id.index()),
+                });
+            };
+            vector::reshape_area(
+                path,
+                vector::Rect::new(payload.x0, payload.y0, payload.x1, payload.y1),
+                payload.falloff,
+                geom::Vec2::new(payload.dx, payload.dy),
+            )
+            .map_err(|error| vector_error(NAME, error))?
+        };
+        splice_geometry(document, NAME, payload.id, shaped)?;
+        Ok(Delta::Object {
+            id: payload.id,
+            inverse: ObjectInverse::Mutated {
+                object: Box::new(before),
+            },
+        })
+    }
+}
+
+/// One drawn point for `path.redrawPath`.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, PartialEq)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct DrawnPoint {
+    /// Anchor, world coordinates.
+    x: f64,
+    y: f64,
+    /// Primary (in) handle offset; `None` keeps the point a corner.
+    primary_x: Option<f64>,
+    primary_y: Option<f64>,
+    /// Secondary (out) handle offset.
+    secondary_x: Option<f64>,
+    secondary_y: Option<f64>,
+    /// The point is a curve point.
+    #[serde(default)]
+    is_curve: bool,
+}
+
+/// `path.redrawPath` — the redraw tool's commit: swaps the drawn span
+/// of points into one contour between two existing indices.
+struct PathRedraw;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct PathRedrawPayload {
+    /// Target object.
+    id: doc::ObjectId,
+    /// Contour index within the path.
+    contour: usize,
+    /// First replaced point index (inclusive).
+    from: usize,
+    /// Last replaced point index (exclusive).
+    to: usize,
+    /// The drawn replacement; at least one point.
+    points: Vec<DrawnPoint>,
+}
+
+impl TypedCommand for PathRedraw {
+    type Payload = PathRedrawPayload;
+
+    fn name(&self) -> &'static str {
+        "path.redrawPath"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "path.redrawPath";
+        let before = access::object(document, NAME, payload.id)?.clone();
+        let redrawn = {
+            let ObjectData::Path(path) = &before else {
+                return Err(EngineError::InvalidState {
+                    name: NAME.to_owned(),
+                    detail: format!("object {} is not a path", payload.id.index()),
+                });
+            };
+            let drawn: Vec<doc::PathPoint> = payload
+                .points
+                .iter()
+                .map(|d| doc::PathPoint {
+                    anchor: geom::Point::new(d.x, d.y),
+                    primary: match (d.primary_x, d.primary_y) {
+                        (Some(px), Some(py)) => Some(geom::Point::new(px, py)),
+                        _ => None,
+                    },
+                    secondary: match (d.secondary_x, d.secondary_y) {
+                        (Some(sx), Some(sy)) => Some(geom::Point::new(sx, sy)),
+                        _ => None,
+                    },
+                    is_curve: d.is_curve,
+                })
+                .collect();
+            vector::redraw_span(path, payload.contour, payload.from, payload.to, drawn)
+                .map_err(|error| vector_error(NAME, error))?
+        };
+        splice_geometry(document, NAME, payload.id, redrawn)?;
+        Ok(Delta::Object {
+            id: payload.id,
+            inverse: ObjectInverse::Mutated {
+                object: Box::new(before),
+            },
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
@@ -973,6 +1133,102 @@ mod tests {
         )
         .unwrap_err();
         assert!(matches!(error, EngineError::BadPayload { .. }), "{error}");
+    }
+
+    #[test]
+    fn reshape_area_drags_rigidly_and_inverts() {
+        let (mut document, ids) = document_with(vec![square(0.0, 0.0, 8.0, 8.0)]);
+        let before = document_bytes(&document);
+        let delta = apply_by_name(
+            &mut document,
+            "path.reshapeArea",
+            json!({
+                "id": ids[0],
+                "x0": -1.0, "y0": -1.0, "x1": 3.0, "y1": 9.0,
+                "falloff": 0.0,
+                "dx": 4.0, "dy": 2.0
+            }),
+        )
+        .unwrap();
+        let mut got = anchors(&document, ids[0]);
+        got.sort_unstable();
+        // Left corners (0,0)/(0,8) move by the full delta; right
+        // corners hold.
+        assert_eq!(got, vec![(4, 2), (4, 10), (8, 0), (8, 8)]);
+        delta.apply_inverse(&mut document).unwrap();
+        assert_eq!(document_bytes(&document), before);
+    }
+
+    #[test]
+    fn reshape_area_refuses_a_nonfinite_rect_untouched() {
+        let (mut document, ids) = document_with(vec![square(0.0, 0.0, 8.0, 8.0)]);
+        let before = document_bytes(&document);
+        for (x1, falloff) in [(f64::NAN, 0.0), (3.0, f64::NEG_INFINITY)] {
+            let error = apply_by_name(
+                &mut document,
+                "path.reshapeArea",
+                json!({
+                    "id": ids[0],
+                    "x0": 0.0, "y0": 0.0, "x1": x1, "y1": 3.0,
+                    "falloff": falloff,
+                    "dx": 1.0, "dy": 0.0
+                }),
+            )
+            .expect_err("non-finite refused");
+            assert!(matches!(
+                error,
+                EngineError::BadPayload { .. } | EngineError::InvalidState { .. }
+            ));
+        }
+        assert_eq!(document_bytes(&document), before);
+    }
+
+    #[test]
+    fn redraw_path_swaps_a_span_and_inverts() {
+        let (mut document, ids) = document_with(vec![square(0.0, 0.0, 8.0, 8.0)]);
+        let before = document_bytes(&document);
+        let delta = apply_by_name(
+            &mut document,
+            "path.redrawPath",
+            json!({
+                "id": ids[0],
+                "contour": 0,
+                "from": 0,
+                "to": 2,
+                "points": [
+                    { "x": 0.0, "y": 0.0 },
+                    { "x": 4.0, "y": -6.0 },
+                    { "x": 8.0, "y": 0.0 }
+                ]
+            }),
+        )
+        .unwrap();
+        let mut got = anchors(&document, ids[0]);
+        got.sort_unstable();
+        // The drawn bulge replaces the top edge wholesale.
+        assert_eq!(got, vec![(0, 0), (0, 8), (4, -6), (8, 0), (8, 8)]);
+        delta.apply_inverse(&mut document).unwrap();
+        assert_eq!(document_bytes(&document), before);
+    }
+
+    #[test]
+    fn redraw_path_refuses_bad_spans_untouched() {
+        let (mut document, ids) = document_with(vec![square(0.0, 0.0, 8.0, 8.0)]);
+        let before = document_bytes(&document);
+        for payload in [
+            json!({ "id": ids[0], "contour": 7, "from": 0, "to": 2,
+                    "points": [{ "x": 1.0, "y": 1.0 }] }),
+            json!({ "id": ids[0], "contour": 0, "from": 2, "to": 2,
+                    "points": [{ "x": 1.0, "y": 1.0 }] }),
+            json!({ "id": ids[0], "contour": 0, "from": 0, "to": 99,
+                    "points": [{ "x": 1.0, "y": 1.0 }] }),
+            json!({ "id": ids[0], "contour": 0, "from": 0, "to": 2, "points": [] }),
+        ] {
+            let error = apply_by_name(&mut document, "path.redrawPath", payload)
+                .expect_err("bad span refused");
+            assert!(matches!(error, EngineError::InvalidState { .. }));
+        }
+        assert_eq!(document_bytes(&document), before);
     }
 
     #[test]

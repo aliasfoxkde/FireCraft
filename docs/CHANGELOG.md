@@ -10,6 +10,7 @@ Current version: **0.1.0**.
 
 ### Features
 
+- **engine**: brush size/edge/pressure model (f1b2585)
 - **app**: drag constraint matrix (9604b2c)
 - **engine**: intersect mode and polygon select (1a5de88)
 - **app**: live filters panel and Filters menu (25a2925)
@@ -141,6 +142,7 @@ Current version: **0.1.0**.
 
 ### Chores
 
+- regenerate changelog and scripts report (aa4dd70)
 - regenerate changelog and scripts report (a99c044)
 - **m12**: refresh generated docs, close milestone (60e11b8)
 - **fuzz**: sync lockfile dependency list (ebdf043)

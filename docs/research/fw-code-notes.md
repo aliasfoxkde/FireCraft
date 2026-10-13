@@ -349,10 +349,10 @@ Vector and path tools:
 | Pen (Bézier) | `CBezPenTool`, `CPenToolQuad4` | `P` | point-edit already in M6 | missing (drag-create + curve edit) |
 | Text | `CTextTool` (+Quad3/4/6) | `T` | — | shipped |
 | Knife | `CKnifeTool` | — | `knifeElementsFromPoint`, `knifeElementsFromPoints` | missing |
-| Redraw path | (pen mode) | — | `redrawPath`, `redrawSmartShape` | missing |
-| Freeform | `CEditFreeFormTool`, `CFreeformToolQuad3` | `F` | pressure model | missing |
-| Reshape Area | `CReshapeTool` (+Quad3/4) | — | `reshapeArea` | missing |
-| Path Scrubber | — | — | `scrubPlus`, `scrubMinus` (variable width on strokes) | missing |
+| Redraw path | (pen mode) | — | `redrawPath`, `redrawSmartShape` | headless (`path.redrawPath` — span swap in one contour; `redrawSmartShape` unexposed) |
+| Freeform | `CEditFreeFormTool`, `CFreeformToolQuad3` | `F` | pressure model | headless (`path.warp` — circular push with linear falloff; pinned substitution: CS6 inserts points where the push ring crosses the path, warp moves existing points only) |
+| Reshape Area | `CReshapeTool` (+Quad3/4) | — | `reshapeArea` | headless (`path.reshapeArea` — rigid drag inside a rect, linear falloff band outside; recorded interpretation, no parameter-shape evidence for the DOM verb) |
+| Path Scrubber | — | — | `scrubPlus`, `scrubMinus` (variable width on strokes) | deferred (substitution recorded): neither the doc path model (`PathPoint`) nor the node dictionary carries a per-point stroke-width; needs format evidence before the profile can be stored round-trip-exact |
 
 Bitmap selection tools (the selection is a mask channel; the DOM verbs
 expose it: `getSelection`, `moveSelectionMaskBy`, `saveSelection` /

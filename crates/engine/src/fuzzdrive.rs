@@ -460,6 +460,8 @@ pub const CALLS: &[&str] = &[
     "path.inset",
     "path.movePoints",
     "path.warp",
+    "path.reshapeArea",
+    "path.redrawPath",
     "filter.add",
     "filter.remove",
     "filter.setParam",
@@ -836,6 +838,34 @@ pub fn random_call(rng: &mut FuzzRng, document: &Document) -> (String, serde_jso
             "dx": -(rng.below(100) as f64) / 5.0,
             "dy": -(rng.below(100) as f64) / 5.0,
         }),
+        "path.reshapeArea" => serde_json::json!({
+            "id": any_id(rng),
+            "x0": -(rng.below(200) as f64),
+            "y0": -(rng.below(200) as f64),
+            "x1": rng.below(300) as f64,
+            "y1": rng.below(300) as f64,
+            "falloff": rng.below(60) as f64,
+            "dx": -(rng.below(100) as f64) / 5.0,
+            "dy": -(rng.below(100) as f64) / 5.0,
+        }),
+        "path.redrawPath" => {
+            let points: Vec<serde_json::Value> = (0..1 + rng.below(4))
+                .map(|_| {
+                    serde_json::json!({
+                        "x": -(rng.below(200) as f64),
+                        "y": -(rng.below(200) as f64),
+                        "isCurve": rng.below(2) == 0,
+                    })
+                })
+                .collect();
+            serde_json::json!({
+                "id": any_id(rng),
+                "contour": rng.below(4),
+                "from": rng.below(12),
+                "to": rng.below(12),
+                "points": points,
+            })
+        }
         "path.boolean" => serde_json::json!({
             "a": any_id(rng),
             "b": any_id(rng),

@@ -32,8 +32,9 @@ pub use boolean::{BooleanOp, boolean};
 pub use bridge::{
     Seg, bezpath_to_contour, canonicalize_contour, contour_segments, contour_to_bezpath,
 };
-pub use edit::{translate_path, translate_points, warp};
+pub use edit::{redraw_span, reshape_area, translate_path, translate_points, warp};
 pub use flatten::{FLATTEN_MAX_CHORDS, FLATTEN_TOLERANCE, flatten_cubic};
+pub use geom::Rect;
 pub use offset::{CapKind, DEFAULT_MITER_LIMIT, JoinKind, StrokeStyle, expand_stroke, offset_path};
 pub use simplify::simplify;
 
