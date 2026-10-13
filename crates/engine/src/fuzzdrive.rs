@@ -436,6 +436,8 @@ pub const CALLS: &[&str] = &[
     "object.setStroke",
     "object.rename",
     "object.delete",
+    "object.duplicate",
+    "object.translate",
     "object.reorder",
     "object.moveToCell",
     "object.createPath",
@@ -616,6 +618,24 @@ pub fn random_call(rng: &mut FuzzRng, document: &Document) -> (String, serde_jso
             "key": format!("p-{}", rng.below(6)),
             "value": format!("{}", rng.below(200)),
         }),
+        "object.duplicate" => serde_json::json!({ "id": any_id(rng) }),
+        "object.translate" => {
+            // Either one id or a small spread of live ids: the group +
+            // descendant overlap is exactly the case the dedup guards.
+            let ids: Vec<serde_json::Value> = if live_ids.is_empty() || rng.chance(20) {
+                vec![any_id(rng)]
+            } else {
+                let count = 1 + rng.below(live_ids.len().min(4));
+                (0..count)
+                    .map(|_| serde_json::json!(rng.pick(&live_ids).copied()))
+                    .collect()
+            };
+            serde_json::json!({
+                "ids": ids,
+                "dx": rng.below(201) as f64 - 100.0,
+                "dy": rng.below(201) as f64 - 100.0,
+            })
+        }
         "object.reorder" => serde_json::json!({
             "id": any_id(rng),
             "to": rng.below(8),

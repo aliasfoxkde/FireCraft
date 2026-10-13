@@ -55,8 +55,9 @@ own assets in `docs/ATTRIBUTION.md`.
 1. **PNG-writer pass** — `CMkbStructureOutputter` / `CWriteDictInfo` /
    `CDbText` path: settle the mkTS known-unknowns (filter parameter
    layouts, color layouts) against the observational dictionary. Output:
-   `docs/research/fw-writer-notes.md` (derived spec), decisions where a
-   writer choice changes; corpus gates unchanged.
+   `docs/research/fw-code-notes.md` (derived spec — the writer section;
+   the planning-era class names were corrected by the pass itself),
+   decisions where a writer choice changes; corpus gates unchanged.
 2. **Chunk-serializer pass** — confirm our writer's byte-layout choices
    per chunk family; record confirmations and deltas in the same notes.
 3. **Filter/effect pipeline pass** — parameter semantics and order of
@@ -64,7 +65,7 @@ own assets in `docs/ATTRIBUTION.md`.
    deviation the evidence proves (corpus wins on conflict, recorded).
 4. **UI-resource pass** — menu tree, command ids, accelerators, tool
    grouping/order, panel set from the binary's resources + the readable
-   `Configuration/` tree. Output: `docs/research/fw-ui-tables.md`
+   `Configuration/` tree. Output: `docs/research/fw-ui-evidence.md`
    (derived tables only) — the authority for every shell task below.
 5. **Shell: chrome + layout** — theme the egui context (dark CS6-class
    palette, UI font sizing), rebuild the panel set to CS6 layout: left

@@ -2177,6 +2177,15 @@ impl Shell {
             self.editor.tool = tool;
             self.status = format!("tool: {}", tool_label(tool));
         }
+        // CS6's tool-button double-clicks: Zoom resets to 100%, Hand
+        // fits the page in the window.
+        if response.double_clicked() {
+            match tool {
+                Tool::Zoom => self.run_shell(menus::ShellAction::ZoomTo(1.0)),
+                Tool::Hand => self.run_shell(menus::ShellAction::FitAll),
+                _ => {}
+            }
+        }
         let painter = ui.painter();
         if active {
             painter.rect_filled(rect, 2.0, Color32::from_rgb(0x2f, 0x5d, 0x8a));
@@ -2468,7 +2477,7 @@ impl Shell {
         }
 
         // Rubber band for a creation drag.
-        if let Some(drag) = self.editor.drag {
+        if let Some(drag) = &self.editor.drag {
             let a = self.view.to_screen(drag.start);
             let b = self.view.to_screen(drag.current);
             let band = Rect::from_two_pos(
@@ -2503,7 +2512,37 @@ impl Shell {
                         // Space-drag pan: no tool drag begins while the
                         // temporary Hand is active.
                         if !space_held {
-                            self.editor.begin_drag(world);
+                            match self.editor.tool {
+                                Tool::Pointer | Tool::Subselect => {
+                                    // A press selects its target first,
+                                    // then moves the selection live —
+                                    // or (Alt) clones it, CS6 pointer
+                                    // semantics. Empty canvas starts a
+                                    // (no-op) rubber band.
+                                    if let Some(hit) = self.editor.hit_at(world) {
+                                        let ids = if self.editor.selection_set.contains(&hit) {
+                                            self.editor.live_selection()
+                                        } else {
+                                            self.editor.selection = Some(hit);
+                                            self.editor.selection_set = vec![hit];
+                                            vec![hit]
+                                        };
+                                        let outcome = if ui.input(|i| i.modifiers.alt) {
+                                            self.editor
+                                                .begin_clone_drag(world, ids)
+                                                .map(|_created| ())
+                                        } else {
+                                            self.editor.begin_move_drag(world, ids)
+                                        };
+                                        if let Err(error) = outcome {
+                                            self.status = format!("drag failed: {error}");
+                                        }
+                                    } else {
+                                        self.editor.begin_drag(world);
+                                    }
+                                }
+                                _ => self.editor.begin_drag(world),
+                            }
                         }
                     }
                 }
@@ -2573,6 +2612,28 @@ impl Shell {
                         self.view.zoom_about(local, factor);
                     }
                     _ => {}
+                }
+            }
+        }
+        // Double-click enters a symbol instance's definition (CS6's
+        // pointer double-click), like the inspector's Edit Definition.
+        if response.double_clicked()
+            && matches!(self.editor.tool, Tool::Pointer)
+            && let Some(pos) = response.interact_pointer_pos()
+        {
+            let world = self.view.to_world(pos - rect.left_top().to_vec2());
+            let entered = self.editor.hit_at(world).and_then(|id| {
+                self.editor
+                    .document()
+                    .registry
+                    .get(id)
+                    .map(|data| (id, data))
+            });
+            if let Some((_id, ObjectData::SymbolInstance(instance))) = entered {
+                let number = instance.symbol_number;
+                match self.editor.enter_symbol(number) {
+                    Ok(()) => self.status = format!("editing symbol {number}"),
+                    Err(error) => self.status = format!("enter symbol failed: {error}"),
                 }
             }
         }

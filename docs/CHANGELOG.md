@@ -10,6 +10,8 @@ Current version: **0.1.0**.
 
 ### Features
 
+- **app**: Auto Shape flyout with preview glyphs (92428e8)
+- **app**: per-tool cursors and space-drag pan (ebf5af8)
 - **app**: CS6 menu bar, keymap, shell chrome (495aff1)
 - **m13**: open deep-RE and shell-parity ticket (866f7ca)
 - **m12**: changelog gate, release checklist, m12 done (3c586ce)
@@ -87,6 +89,7 @@ Current version: **0.1.0**.
 
 ### Documentation
 
+- **research**: writer and pixel-kernel RE verdicts (bd25985)
 - **m13**: filter protocol and writer delta notes (a4a5e33)
 - **m13**: UI evidence sources and extraction recipe (b78338d)
 - **m12**: webos embedding guide (f4b28d0)

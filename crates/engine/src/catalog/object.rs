@@ -26,6 +26,8 @@ pub(crate) fn install(registry: &mut CommandRegistry) -> Result<(), EngineError>
     registry.register(SetObjectStroke)?;
     registry.register(RenameObject)?;
     registry.register(DeleteObject)?;
+    registry.register(DuplicateObject)?;
+    registry.register(TranslateObject)?;
     registry.register(ReorderObject)?;
     registry.register(MoveObjectToCell)?;
     registry.register(CreatePath)
@@ -606,6 +608,247 @@ impl TypedCommand for DeleteObject {
                 },
             },
         ]))
+    }
+}
+
+/// `object.duplicate` — clones an object into a fresh registry slot and
+/// inserts the copy into the source's own container, directly above it
+/// (z-order is list order, bottom-first). CS6's Edit > Clone places the
+/// copy on top of the original at the same spot; a following drag moves
+/// it. Works in cells and in groups.
+struct DuplicateObject;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct DuplicateObjectPayload {
+    /// Source object.
+    id: doc::ObjectId,
+}
+
+impl TypedCommand for DuplicateObject {
+    type Payload = DuplicateObjectPayload;
+
+    fn name(&self) -> &'static str {
+        "object.duplicate"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "object.duplicate";
+        let data = access::object(document, NAME, payload.id)?.clone();
+        let owner = find_owner(document, payload.id).ok_or_else(|| EngineError::MissingTarget {
+            name: NAME.to_owned(),
+            detail: format!(
+                "object {} (generation {}) is referenced by no cell or group",
+                payload.id.index(),
+                payload.id.generation()
+            ),
+        })?;
+        let copy = document.registry.insert(data);
+        match owner {
+            Owner::Cell {
+                page,
+                layer,
+                cell,
+                position,
+            } => {
+                let placed =
+                    attach_cell(document, NAME, page, layer, cell, copy, Some(position + 1))?;
+                Ok(Delta::Group(vec![
+                    placed,
+                    Delta::Object {
+                        id: copy,
+                        inverse: ObjectInverse::Created,
+                    },
+                ]))
+            }
+            Owner::Group {
+                id: parent,
+                position,
+            } => {
+                let before = match document.registry.get(parent) {
+                    Some(ObjectData::Group(group)) => group.clone(),
+                    _ => {
+                        return Err(EngineError::MissingTarget {
+                            name: NAME.to_owned(),
+                            detail: format!(
+                                "parent group {} (generation {}) is not live",
+                                parent.index(),
+                                parent.generation()
+                            ),
+                        });
+                    }
+                };
+                if let Some(ObjectData::Group(group)) = document.registry.get_mut(parent) {
+                    group.children.insert(position + 1, copy);
+                } else {
+                    return Err(EngineError::MissingTarget {
+                        name: NAME.to_owned(),
+                        detail: format!(
+                            "parent group {} (generation {}) vanished between capture and insert",
+                            parent.index(),
+                            parent.generation()
+                        ),
+                    });
+                }
+                Ok(Delta::Group(vec![
+                    Delta::Object {
+                        id: parent,
+                        inverse: ObjectInverse::Mutated {
+                            object: Box::new(ObjectData::Group(before)),
+                        },
+                    },
+                    Delta::Object {
+                        id: copy,
+                        inverse: ObjectInverse::Created,
+                    },
+                ]))
+            }
+        }
+    }
+}
+
+/// `object.translate` — moves objects in document space by `(dx, dy)`.
+/// Pointer-drag moves, arrow-key nudges, and Alt-drag clones all land
+/// here. Groups translate depth-first (each moved child carries its own
+/// captured inverse; the group records nothing — its children list is
+/// unchanged), and every position-bearing field of the moved kind comes
+/// along: path contours, gradient fill handles, the `PRIv` primitive
+/// rect, text and slice frames, slice polygon contours, image
+/// locations, and symbol instance transforms.
+struct TranslateObject;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct TranslateObjectPayload {
+    /// Objects to move (a shared descendant moves once, with its group).
+    ids: Vec<doc::ObjectId>,
+    /// Document-space delta.
+    dx: f64,
+    /// Document-space delta.
+    dy: f64,
+}
+
+impl TypedCommand for TranslateObject {
+    type Payload = TranslateObjectPayload;
+
+    fn name(&self) -> &'static str {
+        "object.translate"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "object.translate";
+        if payload.ids.is_empty() {
+            return Err(EngineError::MissingTarget {
+                name: NAME.to_owned(),
+                detail: "no objects given".to_owned(),
+            });
+        }
+        let delta = geom::Vec2::new(payload.dx, payload.dy);
+        // Deterministic delta order (registry slot order), and a
+        // group-plus-its-child selection moves the child once.
+        let mut ids = payload.ids.clone();
+        ids.sort_by_key(|id| id.index());
+        ids.dedup();
+        let mut moved = std::collections::HashSet::new();
+        let mut inverses = Vec::new();
+        for id in ids {
+            translate_object(document, NAME, id, delta, &mut moved, &mut inverses)?;
+        }
+        Ok(Delta::Group(inverses))
+    }
+}
+
+/// Translates one object (recursing into groups), pushing the captured
+/// inverse for every object whose data actually changed.
+fn translate_object(
+    document: &mut Document,
+    name: &'static str,
+    id: ObjectId,
+    delta: geom::Vec2,
+    moved: &mut std::collections::HashSet<ObjectId>,
+    inverses: &mut Vec<Delta>,
+) -> Result<(), EngineError> {
+    if !moved.insert(id) {
+        return Ok(());
+    }
+    let before = access::object(document, name, id)?.clone();
+    let data = document
+        .registry
+        .get_mut(id)
+        .ok_or_else(|| EngineError::MissingTarget {
+            name: name.to_owned(),
+            detail: format!(
+                "object {} (generation {}) is not live",
+                id.index(),
+                id.generation()
+            ),
+        })?;
+    match data {
+        ObjectData::Path(path) => {
+            for contour in &mut path.contours {
+                translate_contour(contour, delta);
+            }
+            for point in [
+                &mut path.fill_start,
+                &mut path.fill_end,
+                &mut path.fill_third,
+            ]
+            .into_iter()
+            .flatten()
+            {
+                *point += delta;
+            }
+            if let Some(primitive) = &mut path.primitive {
+                primitive.rect = primitive.rect + delta;
+            }
+        }
+        ObjectData::Text(text) => text.frame = text.frame + delta,
+        ObjectData::Group(group) => {
+            // The group is geometry-free; its children carry the move.
+            let children = group.children.clone();
+            for child in children {
+                translate_object(document, name, child, delta, moved, inverses)?;
+            }
+            return Ok(());
+        }
+        ObjectData::Image(image) => image.location += delta,
+        ObjectData::Slice(slice) => {
+            slice.frame = slice.frame + delta;
+            for contour in &mut slice.contours {
+                translate_contour(contour, delta);
+            }
+        }
+        ObjectData::SymbolInstance(instance) => {
+            instance.transform = geom::Affine::translate((delta.x, delta.y)) * instance.transform;
+        }
+    }
+    inverses.push(Delta::Object {
+        id,
+        inverse: ObjectInverse::Mutated {
+            object: Box::new(before),
+        },
+    });
+    Ok(())
+}
+
+/// Shifts every anchor and control handle of one contour.
+fn translate_contour(contour: &mut doc::Contour, delta: geom::Vec2) {
+    for point in &mut contour.points {
+        point.anchor += delta;
+        if let Some(primary) = &mut point.primary {
+            *primary += delta;
+        }
+        if let Some(secondary) = &mut point.secondary {
+            *secondary += delta;
+        }
     }
 }
 

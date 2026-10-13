@@ -198,8 +198,9 @@ impl AutoShape {
     }
 }
 
-/// A creation drag in progress: tool + world-space start point.
-#[derive(Clone, Copy, Debug, PartialEq)]
+/// A creation drag in progress: tool + world-space start point, or a
+/// pointer drag moving a captured selection.
+#[derive(Clone, Debug, PartialEq)]
 pub struct Drag {
     /// Tool the drag belongs to.
     pub tool: Tool,
@@ -207,6 +208,20 @@ pub struct Drag {
     pub start: geom::Point,
     /// Current world position.
     pub current: geom::Point,
+    /// `Some` while a pointer drag moves objects: the ids were fixed
+    /// at drag start (the press selects its target first), and
+    /// `moved` records whether any translate applied — a click-sized
+    /// drag commits nothing.
+    pub moving: Option<MoveDrag>,
+}
+
+/// The selection a pointer drag is moving.
+#[derive(Clone, Debug, PartialEq)]
+pub struct MoveDrag {
+    /// The objects being moved.
+    pub ids: Vec<ObjectId>,
+    /// Whether any `object.translate` applied so far.
+    pub moved: bool,
 }
 
 /// The four nine-slice inset edges, in `NGCf` dictionary order
@@ -433,6 +448,20 @@ impl Editor {
     /// Whatever the command refuses; the document is untouched.
     pub fn apply(&mut self, name: &str, payload: serde_json::Value) -> Result<(), EngineError> {
         self.session.apply(name, payload)
+    }
+
+    /// [`Editor::apply`] returning the captured delta — gestures that
+    /// create objects (the Alt-drag clone) read the created ids out of
+    /// it, exactly like the scripting host does.
+    ///
+    /// # Errors
+    /// Whatever the command refuses; the document is untouched.
+    pub fn apply_delta(
+        &mut self,
+        name: &str,
+        payload: serde_json::Value,
+    ) -> Result<engine::Delta, EngineError> {
+        self.session.apply_delta(name, payload)
     }
 
     /// The session journal as a steps-file body: the same JSON-lines
@@ -760,13 +789,121 @@ impl Editor {
             tool: self.tool,
             start: world,
             current: world,
+            moving: None,
         });
     }
 
-    /// Updates the in-progress drag.
+    /// Begins a pointer drag that moves `ids` live: one
+    /// `object.translate` per step, folded by a "Move" transaction into
+    /// a single undo step. The ids are fixed at drag start — the press
+    /// selects its target first (the shell owns that rule).
+    ///
+    /// # Errors
+    /// Opening the transaction was refused (a prior transaction could
+    /// not commit); nothing was mutated.
+    pub fn begin_move_drag(
+        &mut self,
+        world: geom::Point,
+        ids: Vec<ObjectId>,
+    ) -> Result<(), EngineError> {
+        self.session.begin_transaction("Move")?;
+        self.drag = Some(Drag {
+            tool: self.tool,
+            start: world,
+            current: world,
+            moving: Some(MoveDrag { ids, moved: false }),
+        });
+        Ok(())
+    }
+
+    /// Begins an Alt-drag clone: duplicates `ids` (the copies become
+    /// the selection), then drags the copies — duplicates and moves
+    /// inside ONE "Move" transaction, so undo takes the whole gesture
+    /// back at once, like CS6.
+    ///
+    /// # Errors
+    /// The transaction could not open, or any duplicate was refused
+    /// (the transaction aborts; the document is untouched).
+    pub fn begin_clone_drag(
+        &mut self,
+        world: geom::Point,
+        ids: Vec<ObjectId>,
+    ) -> Result<Vec<ObjectId>, EngineError> {
+        const NAME: &str = "object.duplicate";
+        self.session.begin_transaction("Move")?;
+        let mut created = Vec::new();
+        let result = (|| -> Result<(), EngineError> {
+            for id in &ids {
+                let delta = self
+                    .session
+                    .apply_delta(NAME, serde_json::json!({ "id": id }))?;
+                collect_created(&delta, &mut created);
+            }
+            Ok(())
+        })();
+        if let Err(error) = result {
+            let _ = self.session.abort_transaction();
+            return Err(error);
+        }
+        if let Some(last) = created.last().copied() {
+            self.selection = Some(last);
+        }
+        self.selection_set = created.clone();
+        self.drag = Some(Drag {
+            tool: self.tool,
+            start: world,
+            current: world,
+            moving: Some(MoveDrag {
+                ids: created.clone(),
+                moved: false,
+            }),
+        });
+        Ok(created)
+    }
+
+    /// Updates the in-progress drag. A move drag applies one
+    /// `object.translate` per nonzero step; a refused step aborts the
+    /// gesture (the transaction rolls back, the document is untouched).
     pub fn drag_to(&mut self, world: geom::Point) {
-        if let Some(drag) = &mut self.drag {
-            drag.current = world;
+        let step = match &self.drag {
+            Some(drag) => world - drag.current,
+            None => return,
+        };
+        let ids = match &self.drag {
+            Some(Drag {
+                moving: Some(move_drag),
+                ..
+            }) => move_drag.ids.clone(),
+            _ => {
+                if let Some(drag) = &mut self.drag {
+                    drag.current = world;
+                }
+                return;
+            }
+        };
+        if step.x == 0.0 && step.y == 0.0 {
+            return;
+        }
+        let payload = serde_json::json!({
+            "ids": ids,
+            "dx": step.x, "dy": step.y,
+        });
+        match self.apply("object.translate", payload) {
+            Ok(()) => {
+                if let Some(drag) = &mut self.drag {
+                    drag.current = world;
+                    if let Some(move_drag) = &mut drag.moving {
+                        move_drag.moved = true;
+                    }
+                }
+            }
+            Err(_) => {
+                // Nothing partial survives: the transaction rolls back.
+                let _ = self.session.abort_transaction();
+                if let Some(drag) = &mut self.drag {
+                    drag.moving = None;
+                }
+            }
         }
     }
 
@@ -782,6 +919,15 @@ impl Editor {
         let Some(drag) = self.drag.take() else {
             return Ok(());
         };
+        if let Some(move_drag) = drag.moving {
+            // A moved gesture folds into its one "Move" undo step; a
+            // click-sized drag commits nothing at all.
+            return if move_drag.moved {
+                self.session.commit_transaction().map(|_label| ())
+            } else {
+                self.session.abort_transaction()
+            };
+        }
         let (x, y) = (drag.start.x, drag.start.y);
         let (width, height) = (drag.current.x - drag.start.x, drag.current.y - drag.start.y);
         // A click is not a shape.
@@ -920,17 +1066,20 @@ impl Editor {
         true
     }
 
-    /// The topmost live path in the edited cell hit by `world` — the
+    /// The topmost live object in the edited cell hit by `world` — the
     /// definition's cell in symbol scope, the page cell otherwise.
+    /// Every geometry kind hits (paths by contours, text and slices by
+    /// frame, images by location, groups and symbol instances by their
+    /// content bounds); groups hit as wholes.
     #[must_use]
     pub fn hit_at(&self, world: geom::Point) -> Option<ObjectId> {
         let cell = self.editing_cell()?;
         let candidates: Vec<ObjectId> = cell.elements.iter().copied().rev().collect();
         candidates.into_iter().find(|id| {
-            matches!(
-                self.document().registry.get(*id),
-                Some(ObjectData::Path(path)) if bounds_of(path).contains(world)
-            )
+            self.document()
+                .registry
+                .get(*id)
+                .is_some_and(|data| object_bounds(self.document(), data, 0).contains(world))
         })
     }
 
@@ -1002,6 +1151,96 @@ pub fn bounds_of(path: &doc::PathObject) -> geom::Rect {
     bounds
 }
 
+/// World-space bounding box of any object: paths by contour points
+/// ([`bounds_of`]), text and slices by frame, images by location plus
+/// pixel size, groups by union over children, symbol instances by the
+/// definition's content bounds mapped through the instance transform.
+/// Depth-capped so a malformed (impossible-in-practice) group cycle
+/// cannot recurse forever; an unknown or empty kind gives a zero box
+/// that never hits.
+#[must_use]
+pub fn object_bounds(document: &Document, data: &ObjectData, depth: u8) -> geom::Rect {
+    const MAX_DEPTH: u8 = 32;
+    if depth > MAX_DEPTH {
+        return geom::Rect::ZERO;
+    }
+    match data {
+        ObjectData::Path(path) => bounds_of(path),
+        ObjectData::Text(text) => text.frame,
+        ObjectData::Group(group) => group
+            .children
+            .iter()
+            .filter_map(|id| {
+                document
+                    .registry
+                    .get(*id)
+                    .map(|child| object_bounds(document, child, depth + 1))
+            })
+            .fold(geom::Rect::ZERO, |acc, bounds| acc.union(bounds)),
+        ObjectData::Image(image) => geom::Rect::from_points(
+            image.location,
+            image.location
+                + geom::Vec2::new(
+                    f64::from(i32::try_from(image.pixels.0).unwrap_or(0)),
+                    f64::from(i32::try_from(image.pixels.1).unwrap_or(0)),
+                ),
+        ),
+        ObjectData::Slice(slice) => slice
+            .contours
+            .iter()
+            .filter_map(|contour| {
+                contour.points.first().map(|first| {
+                    let mut bounds = geom::Rect::from_points(first.anchor, first.anchor);
+                    for point in &contour.points {
+                        bounds = bounds.union_pt(point.anchor);
+                    }
+                    bounds
+                })
+            })
+            .fold(slice.frame, |acc, bounds| acc.union(bounds)),
+        ObjectData::SymbolInstance(instance) => {
+            let Some(definition) = document
+                .symbols
+                .iter()
+                .find(|definition| definition.symbol_number == instance.symbol_number)
+            else {
+                return geom::Rect::ZERO;
+            };
+            let content = definition
+                .layers
+                .layers
+                .iter()
+                .flat_map(|layer| &layer.cells)
+                .flat_map(|cell| &cell.elements)
+                .filter_map(|id| {
+                    document
+                        .registry
+                        .get(*id)
+                        .map(|child| object_bounds(document, child, depth + 1))
+                })
+                .fold(geom::Rect::ZERO, |acc, bounds| acc.union(bounds));
+            geom::transform::map_rect(instance.transform, content)
+        }
+    }
+}
+
+/// Fills `out` with every object a delta created (the clone gesture
+/// selects exactly those).
+fn collect_created(delta: &engine::Delta, out: &mut Vec<ObjectId>) {
+    match delta {
+        engine::Delta::Group(children) => {
+            for child in children {
+                collect_created(child, out);
+            }
+        }
+        engine::Delta::Object {
+            id,
+            inverse: engine::ObjectInverse::Created,
+        } => out.push(*id),
+        _ => {}
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
@@ -1036,6 +1275,115 @@ mod tests {
         editor.drag_to(geom::Point::new(5.2, 5.1));
         editor.end_drag().unwrap();
         assert_eq!(editor.current_cell().unwrap().elements.len(), 0);
+    }
+
+    fn rect_at(editor: &mut Editor, x: f64, y: f64) -> doc::ObjectId {
+        editor.tool = Tool::Rect;
+        editor.begin_drag(geom::Point::new(x, y));
+        editor.drag_to(geom::Point::new(x + 40.0, y + 20.0));
+        editor.end_drag().unwrap();
+        editor.current_cell().unwrap().elements[0]
+    }
+
+    fn first_anchor(editor: &Editor, id: doc::ObjectId) -> (f64, f64) {
+        match editor.document().registry.get(id) {
+            Some(ObjectData::Path(path)) => {
+                let anchor = path.contours[0].points[0].anchor;
+                (anchor.x, anchor.y)
+            }
+            other => panic!("wrong kind: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_move_drag_translates_live_and_is_one_undo_step() {
+        let mut editor = Editor::untitled();
+        let id = rect_at(&mut editor, 10.0, 10.0);
+        editor.selection = Some(id);
+        editor.selection_set = vec![id];
+
+        editor.tool = Tool::Pointer;
+        editor
+            .begin_move_drag(geom::Point::new(30.0, 20.0), vec![id])
+            .unwrap();
+        editor.drag_to(geom::Point::new(55.0, 45.0));
+        editor.drag_to(geom::Point::new(80.0, 45.0));
+        editor.end_drag().unwrap();
+
+        // The press at (30,20) + the two steps = +50,+25 total.
+        assert_eq!(first_anchor(&editor, id), (60.0, 35.0));
+        // ONE undo step covers the whole gesture; everything after it
+        // is setup history (the rect's creation + untitled()'s seed).
+        editor.undo().unwrap();
+        assert_eq!(first_anchor(&editor, id), (10.0, 10.0));
+        while editor.undo().is_ok() {}
+    }
+
+    #[test]
+    fn a_click_sized_move_drag_commits_nothing() {
+        let mut editor = Editor::untitled();
+        let id = rect_at(&mut editor, 10.0, 10.0);
+
+        editor.tool = Tool::Pointer;
+        editor
+            .begin_move_drag(geom::Point::new(20.0, 15.0), vec![id])
+            .unwrap();
+        editor.end_drag().unwrap();
+
+        assert_eq!(first_anchor(&editor, id), (10.0, 10.0));
+        // The next undo must be the rect's creation, not a move step;
+        // after that only untitled()'s seed history remains.
+        editor.undo().unwrap();
+        assert!(
+            editor.document().registry.get(id).is_none(),
+            "a click commits no undo step"
+        );
+        while editor.undo().is_ok() {}
+    }
+
+    #[test]
+    fn an_alt_clone_drag_copies_moves_and_is_one_undo_step() {
+        let mut editor = Editor::untitled();
+        let id = rect_at(&mut editor, 10.0, 10.0);
+
+        editor.tool = Tool::Pointer;
+        let created = editor
+            .begin_clone_drag(geom::Point::new(30.0, 20.0), vec![id])
+            .unwrap();
+        editor.drag_to(geom::Point::new(60.0, 40.0));
+        editor.end_drag().unwrap();
+
+        assert_eq!(created.len(), 1);
+        assert_ne!(created[0], id);
+        let cell = editor.current_cell().unwrap();
+        assert_eq!(cell.elements, vec![id, created[0]], "copy sits above");
+        assert_eq!(
+            editor.selection_set,
+            vec![created[0]],
+            "the copies become the selection"
+        );
+        // The copy moved off the source.
+        assert_eq!(first_anchor(&editor, created[0]), (40.0, 30.0));
+        assert_eq!(first_anchor(&editor, id), (10.0, 10.0), "source stays");
+        // One undo removes the copy and the move together.
+        editor.undo().unwrap();
+        assert_eq!(editor.current_cell().unwrap().elements, vec![id]);
+        assert!(
+            editor.document().registry.get(created[0]).is_none(),
+            "undo releases the clone's slot"
+        );
+        // Everything after the gesture is setup history.
+        while editor.undo().is_ok() {}
+    }
+
+    #[test]
+    fn hit_at_sees_every_geometry_kind() {
+        let mut editor = Editor::untitled();
+        // A rect creation drag makes a path; its frame spans
+        // (10,10)..(50,30).
+        let id = rect_at(&mut editor, 10.0, 10.0);
+        assert_eq!(editor.hit_at(geom::Point::new(30.0, 20.0)), Some(id));
+        assert_eq!(editor.hit_at(geom::Point::new(200.0, 200.0)), None);
     }
 
     #[test]

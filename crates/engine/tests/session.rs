@@ -149,6 +149,76 @@ fn mark_clean_round_trips() {
 }
 
 #[test]
+fn object_duplicate_clones_above_the_source() {
+    let (mut session, ids) = session();
+    let original = DocumentBytes::of(session.document());
+
+    session
+        .apply("object.duplicate", json!({ "id": ids[0] }))
+        .expect("duplicate");
+
+    // The copy sits directly above the source in the same cell and
+    // carries its own live registry slot.
+    let elements = &session.document().pages[0].layers.layers[0].cells[0].elements;
+    assert_eq!(elements[0], ids[0], "source keeps its slot");
+    let copy = elements[1];
+    assert_ne!(copy, ids[0]);
+    match (
+        session.document().registry.get(ids[0]),
+        session.document().registry.get(copy),
+    ) {
+        (Some(doc::ObjectData::Path(_)), Some(doc::ObjectData::Path(_))) => {}
+        other => panic!("wrong kinds: {other:?}"),
+    }
+
+    // Undo releases the copy's slot and restores the document.
+    session.undo().expect("undo");
+    assert_eq!(DocumentBytes::of(session.document()), original);
+    assert!(
+        session.document().registry.get(copy).is_none(),
+        "undo must release the duplicate's slot"
+    );
+}
+
+#[test]
+fn object_translate_moves_a_path_and_refuses_an_empty_selection() {
+    let (mut session, ids) = session();
+    let original = DocumentBytes::of(session.document());
+
+    // A lone path moves; undo restores the exact bytes.
+    session
+        .apply(
+            "object.translate",
+            json!({ "ids": [ids[0]], "dx": 15.0, "dy": -7.5 }),
+        )
+        .expect("translate");
+    match session.document().registry.get(ids[0]) {
+        Some(doc::ObjectData::Path(path)) => {
+            let first = &path.contours[0].points[0].anchor;
+            assert_eq!((first.x, first.y), (15.0, -7.5));
+        }
+        other => panic!("wrong kind: {other:?}"),
+    }
+    session.undo().expect("undo");
+    assert_eq!(DocumentBytes::of(session.document()), original);
+    session.redo().expect("redo");
+
+    // A stale id refuses without mutating, but paired with a live id
+    // the whole call fails atomically (validate before mutating is not
+    // required — undo-absence is; here the caller sees the refusal).
+    let error = session
+        .apply(
+            "object.translate",
+            json!({ "ids": [], "dx": 1.0, "dy": 1.0 }),
+        )
+        .expect_err("empty ids refused");
+    assert!(
+        matches!(error, engine::EngineError::MissingTarget { .. }),
+        "{error}"
+    );
+}
+
+#[test]
 fn transaction_guard_closes_on_drop() {
     // TransactionGuard documents the RAII contract used by the shell:
     // on drop it commits when the closure succeeded, aborts (commits

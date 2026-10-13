@@ -26,7 +26,7 @@ pub mod registry;
 pub mod session;
 
 pub use command::{Command, TypedCommand};
-pub use delta::Delta;
+pub use delta::{Delta, ObjectInverse};
 pub use error::EngineError;
 pub use history::{Call, History, Step};
 pub use journal::{Journal, JournalEntry};
