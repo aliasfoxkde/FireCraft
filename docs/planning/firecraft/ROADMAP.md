@@ -172,3 +172,54 @@ portable, CLI archives), **web bundle release** + WebOS embedding guide
 (fuzz corpus merge), 1.0 docs (book/).
 **Gate:** full release matrix produced by `cargo xtask release` in CI;
 zero known panic paths (fuzz long-run clean); scorecard parity floor met.
+
+## M13 — Deep RE evidence & CS6 shell parity
+The §5.5 binary-analysis passes the original request named and M0–M12
+never ran: Ghidra (headless, driven through REA) over `Fireworks.exe` —
+PNG-writer node semantics (the mkTS unknowns), chunk serializers, the
+filter/effect pipeline, and the menu/command/UI resource tables. Findings
+land as committed derived-spec notes; raw dumps stay uncommitted; corpus
+stays the gate. The editor shell then reaches CS6 parity: menu structure,
+vertical Tools panel with original icon art (ATTRIBUTION rows), Properties
+inspector bottom-docked, Pages/States/Layers/Library/History/Optimize
+stack, dark chrome, the CS6 accelerator map, and per-tool cursors, all
+pinned by structure tests. **Gate:** every §5.5 target carries a
+changed-or-confirmed verdict in a committed note; the shell implements
+the extracted tables; `xtask ci` green with the wasm bundle ceiling
+holding; scorecard M13 row done.
+
+## Post-M13 fidelity series (user-directed scope: full-featured CS6 parity)
+
+The standing scope is the *whole application* at parity with Fireworks
+CS6 — reverse-engineered behavior, open-source implementation, then
+enhancements over time (HEVC/AVIF and beyond). M0–M12 built functional
+coverage; M13 stands up the RE evidence layer and the shell; the series
+below takes each subsystem from "works" to "matches the original" with
+the same gate discipline. Details stay unwritten until predecessors land.
+
+## M14 — Live-filter parity
+Every CS6 live-filter family at parameter-exact behavior, grounded in the
+M13 filter-pipeline pass and Wine-oracle goldens (`.jsf` batch → golden
+renders): full Adjust Color set, complete blur family, shadow/glow/bevel
+families, stylize, sharpen, noise. **Gate:** unknown-effect GUID
+passthrough floor falls to zero; per-filter goldens green.
+
+## M15 — Tool-surface parity
+Complete tool semantics per the extracted tables: full marquee/lasso/wand
+selection model (modifier arithmetic, feather, edges), brush/eraser/
+retouch engine depth, path redraw/freeform/reshape/scrubber, gradients,
+style model. **Gate:** interaction suite + oracle diffs green.
+
+## M16 — Panel & document parity
+Complete panel set (Optimize, Color Mixer, Swatches, Styles, Info,
+Behaviors, Align, Auto Shape/Path panels, onion skinning) and document
+surfaces (shared layers, nested pages, state animation model).
+**Gate:** structure tests pin every panel against the extracted tables.
+
+## M17 — Automation parity
+89/89 shipped `.jsf` scripts headless (floor rises from 19), the full
+`fw`/`dom` API surface from the RE'd inventory, batch processing and the
+Project Log. **Gate:** script-corpus floor at 89, byte-exact DOM effects.
+
+Enhancements (HEVC, additional formats, performance) open after the
+parity series closes — enhancements on top of parity, never instead of.

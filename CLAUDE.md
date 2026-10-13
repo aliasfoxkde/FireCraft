@@ -6,13 +6,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 FireCraft: a clean-room reimplementation of Adobe Fireworks CS6 in pure Rust (MIT OR Apache-2.0 once M0 lands; Apache-2.0 today), modeled on the StoryTold/ArtCraft projects (github.com/storytold — photocraft et al.). Primary release target is a **WASM build for the user's WebOS**, plus a wide desktop/CLI release matrix. The reference application is Adobe Fireworks CS6 (v12.0).
 
-**Status: planned, not yet scaffolded.** There is no Cargo workspace yet. The complete strategy, format research, architecture, and milestone roadmap are done — read these before doing anything:
+**Status: M0–M12 complete and released (v0.1.0); M13 (deep RE evidence + CS6 shell parity) is the active milestone.** The workspace, gates, and release matrix are live. Read before doing anything:
 
-1. `docs/PLANNING.md` — master plan: clean-room policy, Fireworks PNG format spec (§6), crate architecture (§7), stack decisions (§7.6), tiers, risks, method, sourced research appendix
-2. `docs/planning/firecraft/ROADMAP.md` — canonical milestones M0–M12 with gates
-3. `docs/planning/firecraft/M0-bootstrap.md` — the first actionable ticket (atomic tasks with stopping conditions)
+1. `docs/PLANNING.md` — master plan: clean-room policy, Fireworks PNG format spec (§6), crate architecture (§7), stack decisions (§7.6), tiers, risks, method, RE tooling (§5.5), sourced research appendix
+2. `docs/planning/firecraft/ROADMAP.md` — canonical milestones M0–M13 with gates
+3. `docs/planning/firecraft/M13-deep-re-shell-parity.md` — the active ticket
 
-Session task lists should mirror the active milestone. Work proceeds milestone by milestone; details for milestones ≥ M4 are deliberately unwritten until predecessors land.
+Session task lists should mirror the active milestone. Work proceeds milestone by milestone. RE evidence work (Ghidra/REA over `source/` binaries) records derived specs only — raw Adobe-derived dumps stay uncommitted in scratch.
 
 The global harness commands (backend-fixed's cargo/just/local-ci) do not exist here. Once M0 creates the workspace, the project's own gate is `cargo run -p xtask -- ci` (fmt, clippy `-D warnings`, tests, layer enforcement, wasm build).
 
