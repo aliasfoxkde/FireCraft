@@ -615,6 +615,39 @@ pub struct StyleText {
     pub tab_size: i64,
 }
 
+impl Default for StyleText {
+    /// The modal corpus record: zero margins, no font, 12 pt at 100%
+    /// scale, single leading, and the unverified slots at their majority
+    /// values (`TIAb` 1, `TA1i`/`TA2i` (`0xc0`, `0x40`), `TOSi` 8).
+    /// This is what a newly defined style carries before the host
+    /// touches the text half.
+    fn default() -> Self {
+        Self {
+            margin_left: 0,
+            margin_top: 0,
+            margin_right: 0,
+            margin_bottom: 0,
+            font: String::new(),
+            font_category: None,
+            size: 12.0,
+            bold: false,
+            italic: false,
+            underline: false,
+            justification: 0,
+            horizontal_scale: 100.0,
+            kerning: 0.0,
+            leading: 1.0,
+            leading_unit: 0,
+            auto_kern: true,
+            anti_alias_enabled: true,
+            anti_alias: 0,
+            attr_1: 0xc0,
+            attr_2: 0x40,
+            tab_size: 8,
+        }
+    }
+}
+
 /// How a fill derives its pixels (`FSXi`; `FSHi` is the
 /// backwards-compatible narrower enumeration — value 3 means
 /// "radial or contour" there and reads as [`FillShape::Radial`],

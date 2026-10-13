@@ -109,6 +109,14 @@ pub fn random_document(rng: &mut FuzzRng) -> Document {
         op_code: None,
     });
 
+    // A small style library so the style verbs mostly draw live
+    // indices; `fuzz style {index}` names let `style.redefineByName`
+    // usually resolve.
+    let style_count = rng.below(4);
+    for index in 0..style_count {
+        document.styles.push(random_style(rng, index));
+    }
+
     let page_count = 1 + rng.below(3);
     for page_index in 0..page_count {
         let mut page = Page {
@@ -134,49 +142,59 @@ pub fn random_document(rng: &mut FuzzRng) -> Document {
         document.pages.push(page);
     }
 
-    // Objects: a mix of kinds; most are paths.
+    // Objects: a mix of kinds; most are paths. Leaf values are drawn
+    // at insertion, in wire order: the fwmap writer emits a page's
+    // cell elements cell-major (page, then layer, then cell) with a
+    // group's children inline inside its `GRPv`, the reader assigns
+    // ids in that encounter order, and a journal replayed over the
+    // re-read document renumbers every id when insertion order
+    // differs — the equivalence gate catches exactly that, so the
+    // registry order here must follow the wire, not the draw order.
     let object_count = 1 + rng.below(6);
-    let mut leaves: Vec<doc::ObjectId> = Vec::new();
-    for index in 0..object_count {
-        let object = match rng.below(10) {
+    fn draw_leaf(rng: &mut FuzzRng, index: usize) -> ObjectData {
+        match rng.below(10) {
             0..=4 => random_path(rng, index),
             5 => random_image(rng),
             6 => random_text(rng),
             7 => random_slice(rng),
             _ => random_symbol_instance(rng),
-        };
-        leaves.push(document.registry.insert(object));
+        }
     }
-
-    // Maybe one group claiming a random subset of the leaves; the
-    // group becomes a top-level object, its claimed leaves do not.
-    let mut tops = leaves.clone();
-    if leaves.len() >= 2 && rng.chance(50) {
+    #[derive(Clone)]
+    enum Top {
+        /// One leaf object; kind drawn when the wire reaches it.
+        Leaf,
+        /// A group over leaf slots; the claimed leaves hang off the
+        /// group and are drawn and inserted as the wire meets it.
+        Group {
+            children: Vec<usize>,
+            effects: Vec<Effect>,
+        },
+    }
+    let mut tops: Vec<Top> = vec![Top::Leaf; object_count];
+    if object_count >= 2 && rng.chance(50) {
         let mut children = Vec::new();
-        for leaf in &leaves {
+        for leaf in 0..object_count {
             if rng.chance(50) {
-                children.push(*leaf);
+                children.push(leaf);
             }
         }
         if children.len() >= 2 {
-            let group_id = document.registry.insert(ObjectData::Group(GroupObject {
-                group_type: 0,
-                name: Some("group".to_owned()),
-                children: children.clone(),
-                opacity: 1000,
-                blend: 0,
-                visible: true,
-                locked: false,
-                mask_hidden: false,
-                effects: random_effects(rng),
-            }));
-            tops.retain(|top| !children.contains(top));
-            tops.push(group_id);
+            let effects = random_effects(rng);
+            let mut kept = Vec::new();
+            for (slot, top) in tops.into_iter().enumerate() {
+                if !children.contains(&slot) {
+                    kept.push(top);
+                }
+            }
+            tops = kept;
+            tops.push(Top::Group { children, effects });
         }
     }
 
     // Distribute the top-level objects over the cells, each exactly
-    // once, bottom-first round-robin.
+    // once, bottom-first round-robin — then insert in wire order, so
+    // registry ids match the reader's encounter order.
     let total_cells: usize = document
         .pages
         .iter()
@@ -188,21 +206,46 @@ pub fn random_document(rng: &mut FuzzRng) -> Document {
                 .sum::<usize>()
         })
         .sum();
-    for (slot, id) in tops.into_iter().enumerate() {
-        if total_cells == 0 {
-            break;
-        }
-        let mut remaining = slot % total_cells;
-        'place: for page in &mut document.pages {
-            for layer in &mut page.layers.layers {
-                for cell in &mut layer.cells {
-                    if remaining == 0 {
-                        cell.elements.push(id);
-                        break 'place;
-                    }
-                    remaining -= 1;
+    if total_cells == 0 {
+        return document;
+    }
+    let mut slots: Vec<Vec<Top>> = vec![Vec::new(); total_cells];
+    for (slot, top) in tops.into_iter().enumerate() {
+        slots[slot % total_cells].push(top);
+    }
+    let cells = document
+        .pages
+        .iter_mut()
+        .flat_map(|page| page.layers.layers.iter_mut())
+        .flat_map(|layer| layer.cells.iter_mut());
+    let mut leaf_counter = 0usize;
+    for (cell, cell_tops) in cells.zip(slots) {
+        for top in cell_tops {
+            let id = match top {
+                Top::Leaf => {
+                    let id = document.registry.insert(draw_leaf(rng, leaf_counter));
+                    leaf_counter += 1;
+                    id
                 }
-            }
+                Top::Group { children, effects } => {
+                    let child_ids = children
+                        .iter()
+                        .map(|child| document.registry.insert(draw_leaf(rng, *child)))
+                        .collect();
+                    document.registry.insert(ObjectData::Group(GroupObject {
+                        group_type: 0,
+                        name: Some("group".to_owned()),
+                        children: child_ids,
+                        opacity: 1000,
+                        blend: 0,
+                        visible: true,
+                        locked: false,
+                        mask_hidden: false,
+                        effects,
+                    }))
+                }
+            };
+            cell.elements.push(id);
         }
     }
 
@@ -426,6 +469,51 @@ fn random_symbol_instance(rng: &mut FuzzRng) -> ObjectData {
     })
 }
 
+/// One seed entry for the fuzz document's style library: names are
+/// `fuzz style {index}` so the `style.redefineByName` builder usually
+/// resolves, and every third entry carries the text kind so `style.apply`
+/// draws both `ZSOi` values.
+fn random_style(rng: &mut FuzzRng, index: usize) -> doc::StyleEntry {
+    let effects = if rng.chance(40) {
+        vec![doc::Effect {
+            category: String::new(),
+            internal_name: format!("fx-{}", rng.below(6)),
+            properties: vec![doc::EffectProperty {
+                key: "p".to_owned(),
+                value: doc::EffectValue::Text(format!("{}", rng.below(20))),
+            }],
+        }]
+    } else {
+        Vec::new()
+    };
+    doc::StyleEntry {
+        name: format!("fuzz style {index}"),
+        flags: 0x1ff,
+        kind: if index % 3 == 2 { 0x1f } else { 8 },
+        paint: doc::PaintStyle {
+            stroke_raw: rng.next_u64() as i64,
+            fill_raw: rng.next_u64() as i64,
+            fill: Some(doc::Fill {
+                shape: doc::FillShape::Solid,
+                shape_extended: false,
+                texture_blend: 0,
+                feather: 0,
+                stamping: None,
+                hard_edge: false,
+                gradient: None,
+                dither: None,
+            }),
+        },
+        fill_start: geom::Point::ZERO,
+        fill_end: geom::Point::new(rng.below(64) as f64, rng.below(64) as f64),
+        fill_third: geom::Point::ZERO,
+        brush_placement: rng.below(3) as i64,
+        fill_on_top: rng.chance(50),
+        effects,
+        text: doc::StyleText::default(),
+    }
+}
+
 /// Every catalog id the call builder knows. Kept in lockstep with
 /// [`crate::catalog::install`] by a unit test.
 pub const CALLS: &[&str] = &[
@@ -525,6 +613,11 @@ pub const CALLS: &[&str] = &[
     "slice.addBehavior",
     "slice.removeBehavior",
     "slice.setData",
+    "style.apply",
+    "style.redefineByIndex",
+    "style.redefineByName",
+    "style.redefineFromSelection",
+    "style.scaleStyles",
 ];
 
 /// Builds a random call against `document`: a random catalog id and a
@@ -561,6 +654,7 @@ pub fn random_call(rng: &mut FuzzRng, document: &Document) -> (String, serde_jso
     };
 
     let pages = document.pages.len();
+    let styles = document.styles.len();
     let frames = 1 + rng.below(3);
     let payload = match name {
         "object.setOpacity" => serde_json::json!({
@@ -1487,6 +1581,39 @@ pub fn random_call(rng: &mut FuzzRng, document: &Document) -> (String, serde_jso
             };
             serde_json::to_value(&payload).unwrap_or_default()
         }
+        "style.apply" => {
+            let ids: Vec<serde_json::Value> = if live_ids.is_empty() || rng.chance(20) {
+                vec![any_id(rng)]
+            } else {
+                let count = 1 + rng.below(live_ids.len().min(3));
+                (0..count)
+                    .map(|_| serde_json::json!(rng.pick(&live_ids).copied()))
+                    .collect()
+            };
+            serde_json::json!({
+                "index": any_index(rng, styles),
+                "ids": ids,
+            })
+        }
+        "style.redefineByIndex" => serde_json::json!({
+            "index": any_index(rng, styles),
+            "source": any_id(rng),
+        }),
+        "style.redefineByName" => serde_json::json!({
+            "name": if styles > 0 && rng.chance(70) {
+                format!("fuzz style {}", rng.below(styles))
+            } else {
+                format!("s-{}", rng.below(30))
+            },
+            "source": any_id(rng),
+        }),
+        "style.redefineFromSelection" => serde_json::json!({
+            "name": format!("s-{}", rng.below(30)),
+            "source": any_id(rng),
+        }),
+        "style.scaleStyles" => serde_json::json!({
+            "scale": (1 + rng.below(300)) as f64 / 100.0,
+        }),
         other => {
             let _ = other;
             // A catalog command without a builder: an empty payload is
@@ -1526,6 +1653,9 @@ fn corrupt(rng: &mut FuzzRng, mut payload: serde_json::Value) -> serde_json::Val
             "name",
             "to",
             "index",
+            "ids",
+            "source",
+            "scale",
             "width",
             "height",
         ])

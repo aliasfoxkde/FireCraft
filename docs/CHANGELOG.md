@@ -10,6 +10,8 @@ Current version: **0.1.0**.
 
 ### Features
 
+- **doc**: style model, ZSLv/ZSTv byte-exact (3042b13)
+- **m15**: gradient goldens + svg gradient export (7a35671)
 - **m15**: path.setFill/setFillColor/setFillVector commands (495b340)
 - **m15**: fill model, gradient decode + render (87f36be)
 - **vector**: reshape-area and redraw-path commands (a8917fa)
@@ -104,6 +106,7 @@ Current version: **0.1.0**.
 
 ### Documentation
 
+- **m15**: gradient status row + recorded task-5 gaps (d7f209a)
 - **research**: M15 tool-surface enumeration table (d972a02)
 - **planning**: add M15 tool-surface ticket (aeee8a0)
 - **scorecard**: close M14 live-filter parity (a637f80)

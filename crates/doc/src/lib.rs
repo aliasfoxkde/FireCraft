@@ -21,9 +21,9 @@ pub use model::{
     Canvas, Cell, Contour, Dither, Document, DocumentInfo, Effect, EffectProperty, EffectValue,
     ExportOptions, Fill, FillShape, Gradient, GradientStop, Grid, GroupObject, Guides, ImageObject,
     Layer, LayerList, NineSliceGuides, Page, PageInfo, PaintStyle, PathObject, PathPoint,
-    PrimitiveSource, SelectionMask, SliceBackground, SliceBehavior, SliceObject, SymbolAnimation,
-    SymbolDefinition, SymbolInstanceObject, SymbolType, TextObject, TextOnPath, TextRun, TextStyle,
-    TileBank, TileRef,
+    PrimitiveSource, SelectionMask, SliceBackground, SliceBehavior, SliceObject, StyleEntry,
+    StyleText, SymbolAnimation, SymbolDefinition, SymbolInstanceObject, SymbolType, TextObject,
+    TextOnPath, TextRun, TextStyle, TileBank, TileRef,
 };
 pub use registry::{ObjectData, ObjectId, Registry};
 // `EffectValue::Raw` exposes the node type; re-export it so consumers

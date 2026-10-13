@@ -15,6 +15,7 @@ pub(crate) mod object;
 pub(crate) mod page;
 pub(crate) mod path;
 pub(crate) mod retouch;
+pub(crate) mod style;
 pub(crate) mod symbol;
 pub(crate) mod text;
 pub(crate) mod web;
@@ -36,7 +37,8 @@ pub fn install(registry: &mut CommandRegistry) -> Result<(), EngineError> {
     page::install(registry)?;
     text::install(registry)?;
     symbol::install(registry)?;
-    web::install(registry)
+    web::install(registry)?;
+    style::install(registry)
 }
 
 /// Every registered built-in, sorted (surfaces enumerate this).

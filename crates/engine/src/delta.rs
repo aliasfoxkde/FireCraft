@@ -7,7 +7,7 @@
 
 use doc::{
     Cell, Document, DocumentInfo, Layer, LayerList, ObjectData, ObjectId, Page, PageInfo,
-    SymbolDefinition,
+    StyleEntry, SymbolDefinition,
 };
 
 use crate::error::EngineError;
@@ -122,6 +122,15 @@ pub enum Delta {
     Library {
         /// The library as it was before the command.
         before: Vec<SymbolDefinition>,
+    },
+    /// Restore the document-level style library (`MKBv`'s `ZSLv`).
+    /// List-capturing like [`Delta::Library`]: a style entry is a
+    /// self-contained property bundle, so the pre-command `Vec` is the
+    /// exact inverse of any create / replace / scale the command
+    /// performed.
+    Styles {
+        /// The style list as it was before the command.
+        before: Vec<StyleEntry>,
     },
     /// Several inverses, applied last-captured-first on undo. Commands
     /// push captures in the order they mutate, so a plain reverse walk
@@ -245,6 +254,7 @@ impl Delta {
                 page_mut(document, *page)?.info = (**before).clone();
             }
             Delta::Library { before } => document.symbols = before.clone(),
+            Delta::Styles { before } => document.styles = before.clone(),
             Delta::Group(deltas) => {
                 for delta in deltas.iter().rev() {
                     delta.apply_inverse(document)?;
