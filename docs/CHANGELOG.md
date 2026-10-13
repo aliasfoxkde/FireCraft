@@ -98,6 +98,9 @@ Current version: **0.1.0**.
 
 ### Documentation
 
+- **research**: M15 tool-surface enumeration table (d972a02)
+- **planning**: add M15 tool-surface ticket (aeee8a0)
+- **scorecard**: close M14 live-filter parity (a637f80)
 - **planning**: sync generated scorecard (9bc9a9b)
 - **research**: enumerate CS6 live-filter surface (c7b7c74)
 - **planning**: add M14 ticket (7098149)
