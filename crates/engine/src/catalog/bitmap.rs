@@ -27,6 +27,7 @@ pub(crate) fn install(registry: &mut CommandRegistry) -> Result<(), EngineError>
     registry.register(SelectRect)?;
     registry.register(SelectEllipse)?;
     registry.register(SelectLasso)?;
+    registry.register(SelectPolygon)?;
     registry.register(SelectWand)?;
     registry.register(SelectFeather)?;
     registry.register(SelectNone)?;
@@ -77,7 +78,7 @@ fn mode_of(name: &'static str, mode: Option<&String>) -> Result<SelectMode, Engi
     SelectMode::parse(mode.map(String::as_str)).ok_or_else(|| EngineError::InvalidState {
         name: name.to_owned(),
         detail: format!(
-            "mode {:?} is not one of replace/add/subtract",
+            "mode {:?} is not one of replace/add/subtract/intersect",
             mode.unwrap_or(&String::new())
         ),
     })
@@ -94,7 +95,14 @@ fn stamped_selection(
     let mut fresh = SelectionMask::empty(size.0, size.1);
     stamp(&mut fresh);
     let active = document.selection.take();
-    document.selection = Some(fold(active.as_ref(), fresh, mode));
+    let folded = fold(active.as_ref(), fresh, mode);
+    // A mask that covers nothing is no selection (a collapsed marquee
+    // deselects, as in the original).
+    document.selection = if folded.alpha.iter().all(|&a| a == 0) {
+        None
+    } else {
+        Some(folded)
+    };
 }
 
 /// Capture for a selection-changing command.
@@ -196,7 +204,7 @@ struct SelectLasso;
 struct SelectLassoPayload {
     /// Target image.
     id: ObjectId,
-    /// Polygon vertices in image pixel coordinates.
+    /// Freehand trace vertices in image pixel coordinates (closed).
     points: Vec<[f64; 2]>,
     /// How to combine with the active selection.
     #[serde(default)]
@@ -216,6 +224,46 @@ impl TypedCommand for SelectLasso {
         payload: &Self::Payload,
     ) -> Result<Delta, EngineError> {
         const NAME: &str = "bitmap.selectLasso";
+        let mode = mode_of(NAME, payload.mode.as_ref())?;
+        let size = pixel_size(&image_of(document, NAME, payload.id)?, NAME)?;
+        let before = document.selection.clone();
+        let points = payload.points.clone();
+        stamped_selection(document, size, mode, |mask| {
+            let vertices: Vec<(f64, f64)> = points.iter().map(|p| (p[0], p[1])).collect();
+            stamp_polygon(mask, &vertices);
+        });
+        Ok(selection_delta(before))
+    }
+}
+
+/// `bitmap.selectPolygon` — polygon lasso over the image.
+struct SelectPolygon;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct SelectPolygonPayload {
+    /// Target image.
+    id: ObjectId,
+    /// Polygon vertices in image pixel coordinates.
+    points: Vec<[f64; 2]>,
+    /// How to combine with the active selection.
+    #[serde(default)]
+    mode: Option<String>,
+}
+
+impl TypedCommand for SelectPolygon {
+    type Payload = SelectPolygonPayload;
+
+    fn name(&self) -> &'static str {
+        "bitmap.selectPolygon"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "bitmap.selectPolygon";
         let mode = mode_of(NAME, payload.mode.as_ref())?;
         let size = pixel_size(&image_of(document, NAME, payload.id)?, NAME)?;
         let before = document.selection.clone();
@@ -711,6 +759,105 @@ mod tests {
         }
         // Selection survives the pixel undo (it was not part of it).
         assert!(document.selection.is_some());
+    }
+
+    #[test]
+    fn intersect_mode_keeps_the_overlap() {
+        let (mut document, image) = checker_document();
+        SelectRect
+            .apply_json(
+                &mut document,
+                json!({ "id": image, "x": 0, "y": 0, "width": 3, "height": 4, "mode": "add" }),
+            )
+            .unwrap();
+        SelectRect.apply_json(
+            &mut document,
+            json!({ "id": image, "x": 1, "y": 1, "width": 3, "height": 3, "mode": "intersect" }),
+        )
+        .unwrap();
+        let mask = document.selection.clone().unwrap();
+        let selected: Vec<usize> = mask
+            .alpha
+            .iter()
+            .enumerate()
+            .filter(|(_, value)| **value == 255)
+            .map(|(i, _)| i)
+            .collect();
+        // A 3-wide × 4-tall strip crossed with a 3×3 offset block
+        // keeps only the shared columns/rows.
+        assert_eq!(selected, vec![5, 6, 9, 10, 13, 14]);
+        // On a feathered mask intersect is the product: inside the
+        // fresh rect the feathered value survives unchanged, outside
+        // it zeroes — not the max an union would give.
+        SelectFeather
+            .apply_json(&mut document, json!({ "radius": 1 }))
+            .unwrap();
+        let feathered = document.selection.clone().unwrap();
+        SelectRect.apply_json(
+            &mut document,
+            json!({ "id": image, "x": 1, "y": 1, "width": 3, "height": 3, "mode": "intersect" }),
+        )
+        .unwrap();
+        let twice = document.selection.clone().unwrap();
+        for (index, value) in twice.alpha.iter().enumerate() {
+            let (px, py) = ((index as u32) % 4, (index as u32) / 4);
+            let inside = (1..4).contains(&px) && (1..4).contains(&py);
+            if inside {
+                assert_eq!(
+                    *value, feathered.alpha[index],
+                    "pixel {index}: the feathered value rides through"
+                );
+            } else {
+                assert_eq!(*value, 0, "pixel {index}: outside zeroes");
+            }
+        }
+    }
+
+    #[test]
+    fn unknown_modes_are_refused_everywhere() {
+        let (mut document, image) = checker_document();
+        let error = SelectRect
+            .apply_json(
+                &mut document,
+                json!({ "id": image, "x": 0.0, "y": 0.0, "width": 1.0, "height": 1.0, "mode": "xor" }),
+            )
+            .unwrap_err();
+        assert!(error.to_string().contains("replace/add/subtract/intersect"));
+        let error = SelectPolygon
+            .apply_json(
+                &mut document,
+                json!({ "id": image, "points": [[0.0, 0.0]], "mode": "xor" }),
+            )
+            .unwrap_err();
+        assert!(error.to_string().contains("replace/add/subtract/intersect"));
+    }
+
+    #[test]
+    fn polygon_select_stamps_and_undo_restores() {
+        let (mut document, image) = checker_document();
+        // Two vertices do not enclose an area; three do.
+        SelectPolygon
+            .apply_json(
+                &mut document,
+                json!({ "id": image, "points": [[0.0, 0.0], [4.0, 0.0]] }),
+            )
+            .unwrap();
+        assert!(
+            document.selection.is_none(),
+            "degenerate polygon selects nothing"
+        );
+
+        let delta = SelectPolygon
+            .apply_json(
+                &mut document,
+                json!({ "id": image, "points": [[1.0, 1.0], [3.0, 1.0], [2.0, 3.0]] }),
+            )
+            .unwrap();
+        let mask = document.selection.clone().unwrap();
+        assert!(mask.alpha.contains(&255), "the triangle has area");
+
+        delta.apply_inverse(&mut document).unwrap();
+        assert!(document.selection.is_none(), "undo takes the polygon back");
     }
 
     #[test]

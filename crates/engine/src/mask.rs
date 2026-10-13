@@ -18,6 +18,8 @@ pub(crate) enum SelectMode {
     Add,
     /// Cut out of the active selection (Fireworks alt-subtract).
     Subtract,
+    /// Keep only the overlap with the active selection.
+    Intersect,
 }
 
 impl SelectMode {
@@ -28,6 +30,7 @@ impl SelectMode {
             None | Some("replace") => Some(Self::Replace),
             Some("add") => Some(Self::Add),
             Some("subtract") => Some(Self::Subtract),
+            Some("intersect") => Some(Self::Intersect),
             Some(_) => None,
         }
     }
@@ -41,6 +44,9 @@ impl SelectMode {
             // form — hard masks (0/255) cut exactly, feathered edges
             // scale proportionally.
             Self::Subtract => ((u16::from(active) * (255 - u16::from(fresh))) / 255) as u8,
+            // Soft-mask intersection: the product — hard masks keep
+            // exactly the overlap, feathered edges multiply.
+            Self::Intersect => ((u16::from(active) * u16::from(fresh)) / 255) as u8,
         }
     }
 }

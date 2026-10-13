@@ -475,6 +475,7 @@ pub const CALLS: &[&str] = &[
     "bitmap.selectRect",
     "bitmap.selectEllipse",
     "bitmap.selectLasso",
+    "bitmap.selectPolygon",
     "bitmap.selectWand",
     "bitmap.feather",
     "bitmap.selectNone",
@@ -931,14 +932,21 @@ pub fn random_call(rng: &mut FuzzRng, document: &Document) -> (String, serde_jso
             "y": -(rng.below(300) as f64),
             "width": rng.below(600) as f64,
             "height": rng.below(600) as f64,
-            "mode": rng.pick(&["replace", "add", "subtract"]).copied(),
+            "mode": rng.pick(&["replace", "add", "subtract", "intersect"]).copied(),
         }),
         "bitmap.selectLasso" => serde_json::json!({
             "id": any_id(rng),
             "points": (0..2 + rng.below(5))
                 .map(|_| [-(rng.below(300) as f64), -(rng.below(300) as f64)])
                 .collect::<Vec<_>>(),
-            "mode": rng.pick(&["replace", "add", "subtract"]).copied(),
+            "mode": rng.pick(&["replace", "add", "subtract", "intersect"]).copied(),
+        }),
+        "bitmap.selectPolygon" => serde_json::json!({
+            "id": any_id(rng),
+            "points": (0..3 + rng.below(5))
+                .map(|_| [-(rng.below(300) as f64), -(rng.below(300) as f64)])
+                .collect::<Vec<_>>(),
+            "mode": rng.pick(&["replace", "add", "subtract", "intersect"]).copied(),
         }),
         "bitmap.selectWand" => serde_json::json!({
             "id": any_id(rng),
@@ -946,7 +954,7 @@ pub fn random_call(rng: &mut FuzzRng, document: &Document) -> (String, serde_jso
             "y": rng.below(300),
             "tolerance": rng.below(256),
             "contiguous": rng.chance(2),
-            "mode": rng.pick(&["replace", "add", "subtract"]).copied(),
+            "mode": rng.pick(&["replace", "add", "subtract", "intersect"]).copied(),
         }),
         "bitmap.feather" => serde_json::json!({
             "radius": rng.below(70),
