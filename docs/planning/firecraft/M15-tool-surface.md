@@ -107,6 +107,33 @@ stroke/effect model.
    corpus round-trips byte-exact; Common Library gains the CS6 style
    set only if permissively re-derivable (asset rule — never copied).
 
+## Recorded gaps (task-5 close, 2026-10-13)
+
+- **compose never paints the canvas background.** `canvas.background_raw`
+  rides the model and `webexport` emits it (`bg_hex`), but
+  `compose::render` leaves the canvas transparent — the bare pixel in
+  the gradient golden pins that. Painting it is a compose change with
+  golden re-bless + anchor rewrites (every fixture's bare pixel moves);
+  its own task, alongside the SVG `background` attribute.
+- **SVG import drops gradient paint servers** (`gradients_dropped`
+  counter + notes; the round-trip gate skips gradient-painted
+  documents on that recorded limitation). Import of
+  `linearGradient`/`radialGradient` back into the `FPLv` fill model
+  is open — the exporter side is exact (`svg-golden`: max Δ 2 on the
+  gradient fixture).
+- **Gradient fill substitutions are pinned, not observed**: elliptical
+  renders as a circle (the third handle's squash needs an affine the
+  radial brush does not carry); satin/pinch/folds/rectangular/bars/
+  ripple/waves/web-dither/pattern/contour render as the solid `FCLi`
+  colour; the conical sweep starts along the fill vector and wraps a
+  full turn (CS6's zero-angle basis is not observable); `FSHi` value 3
+  reads as Radial (ambiguous against the dictionary); `FCLi` rides the
+  first RGB stop; stop interpolation is unpremultiplied (`FG0v`/`FG1v`
+  are independent 1-D ramps — the premultiplied default drags a
+  transparent end stop black); `path.setFillColor` collapses an
+  existing gradient definition to solid (playback pending corpus
+  evidence).
+
 ## Verification
 
 - Enumeration: every tool row names its evidence (icon bin/keymap/

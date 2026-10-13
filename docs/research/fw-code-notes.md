@@ -399,7 +399,7 @@ Fill, view, and transform:
 
 | Tool | RTTI class(es) | Keymap | DOM verbs | Status |
 |---|---|---|---|---|
-| Gradient | `CGradientTool` (+Quad3/4), `CDbGradientLook`, `CEditGradientDialog`, `CPSGradient*` (Photoshop import strategies: `CPSLinearGradient`, `CPSRadialGradient`, `CPSRectangularGradient`) | (vk `G` slot) | `gradientFill`, `gradientForm`, `gradientType` | missing (`FPLv` passes through unrendered) |
+| Gradient | `CGradientTool` (+Quad3/4), `CDbGradientLook`, `CEditGradientDialog`, `CPSGradient*` (Photoshop import strategies: `CPSLinearGradient`, `CPSRadialGradient`, `CPSRectangularGradient`) | (vk `G` slot) | `setFill`, `setFillColor`, `setFillVector` (+ `gradientFill`, `gradientForm`, `gradientType`) | headless (`path.setFill`/`path.setFillColor`/`path.setFillVector` — M15; the `FPLv` model renders linear/radial natively and the SVG exporter emits matching defs) |
 | Eyedropper | `CEyedropperTool`, `CHiddenEyedropperDialog` | (vk `I` slot) | — | missing |
 | Zoom / Hand | `CZoomTool`; hand pan is the default drag path | `Z` / `H` | — | shipped (M13) |
 | Slice / Hotspot | (web tool classes; M11 built the model) | — | — | shipped (M11) |
