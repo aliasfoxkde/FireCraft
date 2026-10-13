@@ -10,6 +10,7 @@ Current version: **0.1.0**.
 
 ### Features
 
+- **xtask**: zero unknown-GUID effect floor (a99103b)
 - **filters**: bevel and emboss composites (f4089c3)
 - **filters**: shadow and glow composites (fa49be3)
 - **filters**: full CS6 native filter surface (929345e)

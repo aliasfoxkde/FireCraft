@@ -166,8 +166,73 @@ fn semantic_anchor(name: &str, render: &Render) -> Result<(), String> {
         "composed.fw.png" => anchor_composed(name, render),
         "text.fw.png" => anchor_text(name, render),
         "textpath.fw.png" => anchor_textpath(name, render),
+        "families.fw.png" => anchor_families(name, render),
         _ => Ok(()),
     }
+}
+
+/// The per-family golden: twelve 20×16 rects on a 4×3 grid at 32px
+/// pitch, each carrying exactly one live effect. Cells whose kernels
+/// are interior-exact (point ops, the interior-fixed-point sharpens,
+/// angle-0 motion blur at distance 4) check hand-computed pixels at
+/// the cell center; the radial/zoom blur cells tap across the raster
+/// and stay determinism-only. Straight colors here: interior pixels
+/// of opaque fills compose exactly.
+fn anchor_families(name: &str, render: &Render) -> Result<(), String> {
+    let pixel = |x: u32, y: u32| -> [u8; 4] {
+        let index = ((y * u32::from(render.width) + x) as usize) * 4;
+        [
+            render.pixels[index],
+            render.pixels[index + 1],
+            render.pixels[index + 2],
+            render.pixels[index + 3],
+        ]
+    };
+    // Cell centers: column c, row r → (c*32+16, r*32+16).
+    // (row 0) hue+180 shifts opaque red to cyan; colorize REPLACES the
+    // hue — red's L=.5/S=1 at hue 120 is pure green.
+    // (row 0/1) levels: the red-channel override [0,128]→[0,255] lifts
+    // 128→255, green/blue ride the identity master.
+    // curves: knots (0,0)(128,64)(255,255) at x=128 → 64 (red),
+    // x=64 → 32 (green), x=255 → 255 (blue).
+    // autoLevels on one flat value: the histogram collapses to one
+    // bin → identity. colorFill at 100% normal: the fill color.
+    // convertToAlpha: white's luma 255 becomes alpha, color goes black.
+    // sharpen/sharpenMore: a flat interior is a fixed point of both
+    // stencils. motionBlur at angle 0 distance 4 taps pixels whose
+    // neighborhood is the same fill → the fill itself.
+    for (cell, want, label) in [
+        (0usize, [0, 255, 255, 255], "hue shift 180 on red"),
+        (1, [0, 255, 0, 255], "colorize red to hue 120"),
+        (2, [255, 64, 255, 255], "per-channel levels lift"),
+        (3, [64, 32, 255, 255], "curves knots"),
+        (4, [255, 0, 0, 255], "auto levels on flat fill"),
+        (5, [51, 102, 153, 255], "color fill 100%"),
+        (6, [0, 0, 0, 255], "convert to alpha on white"),
+        (7, [200, 100, 50, 255], "sharpen fixed point"),
+        (8, [200, 100, 50, 255], "sharpen more fixed point"),
+        (9, [255, 0, 0, 255], "motion blur angle 0"),
+    ] {
+        let (c, r) = ((cell % 4) as u32, (cell / 4) as u32);
+        let got = pixel(c * 32 + 16, r * 32 + 16);
+        if got != want {
+            return Err(format!(
+                "{name}: cell {cell} ({label}) center is {got:?}, hand-computed {want:?}"
+            ));
+        }
+    }
+    // The determinism-only cells must still be painted (an effect that
+    // blanked its object would pin happily).
+    for cell in [10usize, 11] {
+        let (c, r) = ((cell % 4) as u32, (cell / 4) as u32);
+        let got = pixel(c * 32 + 16, r * 32 + 16);
+        if got[3] == 0 {
+            return Err(format!(
+                "{name}: cell {cell} center is transparent — the effect erased its object"
+            ));
+        }
+    }
+    Ok(())
 }
 
 fn anchor_composed(name: &str, render: &Render) -> Result<(), String> {

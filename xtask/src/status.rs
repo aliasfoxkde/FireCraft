@@ -13,10 +13,10 @@ that set it instead.
 
 | Metric | Floor | Set in | Enforced by |
 |---|---|---|---|
-| corpus files parsed without panic | 16 | M11 | `xtask corpus` |
-| fwpng round-trip byte-identical files | 15 | M11 | corpus gate |
-| corpus files with doc-model round-trip (equal + idempotent) | 15 | M11 | `xtask corpus` |
-| corpus fixtures with golden pins (deterministic + anchored) | 7 | M11 | `xtask golden` |
+| corpus files parsed without panic | 18 | M14 | `xtask corpus` |
+| fwpng round-trip byte-identical files | 17 | M14 | corpus gate |
+| corpus files with doc-model round-trip (equal + idempotent) | 17 | M14 | `xtask corpus` |
+| corpus fixtures with golden pins (deterministic + anchored) | 9 | M14 | `xtask golden` |
 | Common Library assets pinned + round-tripped | 5 | M10 | `xtask corpus` (assets/library in MANIFEST.tsv) |
 | web export fixtures with structural pins (distance 0) | 1 | M11 | `xtask web-golden` |
 | wasm-clean crates (compile) | 14 | M9 | `xtask wasm` |

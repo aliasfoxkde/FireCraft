@@ -229,7 +229,7 @@ pub fn gen_fixtures() -> Result<(), String> {
 
     /// One pending fixture: name, built bytes, manifest note.
     type Fixture = (&'static str, Result<Vec<u8>, String>, &'static str);
-    let fixtures: [Fixture; 11] = [
+    let fixtures: [Fixture; 13] = [
         (
             "minimal.fw.png",
             build_minimal(),
@@ -284,6 +284,16 @@ pub fn gen_fixtures() -> Result<(), String> {
             "plain.png",
             build_plain(),
             "generated: control, no private chunks (is_fireworks must be false)",
+        ),
+        (
+            "families.fw.png",
+            build_families(),
+            "generated: 128x96 page, 12 one-effect-per-cell autoshape rects — the per-filter-family golden (M14; hand-computable center anchors in golden.rs, blur/cloud cells determinism-only)",
+        ),
+        (
+            "composites.fw.png",
+            build_composites(),
+            "generated: 128x96 page, 7 autoshape rects carrying the shadow/glow + bevel/emboss families incl. the packed unified panel outerGlow (M14; determinism-only)",
         ),
     ];
 
@@ -1076,6 +1086,447 @@ fn build_filtered() -> Result<Vec<u8>, String> {
     }
     let payload = fwpng::nodetree::serialize(&tree);
     let standard = encode_rgba8(64, 48, |_, _| [255, 255, 255, 255])?;
+    insert_before_iend(
+        &standard,
+        &[(b"mkTS", zlib(&payload)?), (b"mkBS", zlib(&payload)?)],
+    )
+}
+
+/// The per-family golden: one autoshape rect per live-filter family,
+/// each cell carrying exactly one effect whose center pixel is either
+/// hand-computable (the M14 anchor) or determinism-only (the blur
+/// family's cross-cell taps, the clouds texture's self-testing hash).
+/// Grid: 4×3 cells at 32px pitch on a 128×96 canvas, 20×16 rects.
+fn build_families() -> Result<Vec<u8>, String> {
+    // ABGR layout (compose `abgr`): 0xAABBGGRR.
+    const RED: i64 = 0xFF00_00FF;
+    const VIOLET: i64 = 0xFFFF_4080; // rgb (128, 64, 255)
+    const SALMON: i64 = 0xFF32_64C8; // rgb (200, 100, 50)
+    const GRAY: i64 = 0xFFA0_A0A0;
+    const WHITE: i64 = 0xFFFF_FFFF;
+
+    fn apply(
+        session: &mut engine::Session,
+        name: &str,
+        payload: serde_json::Value,
+    ) -> Result<(), String> {
+        session
+            .apply(name, payload)
+            .map_err(|e| format!("families fixture: {name}: {e}"))
+    }
+
+    fn newest(session: &engine::Session) -> Result<serde_json::Value, String> {
+        let document = session.document();
+        let id = document.pages[0].layers.layers[0].cells[0]
+            .elements
+            .last()
+            .ok_or_else(|| "families fixture: no object in cell".to_owned())?;
+        Ok(serde_json::json!({
+            "index": id.index(),
+            "generation": id.generation(),
+        }))
+    }
+
+    // One cell: a square-cornered rect, an explicit fill, one effect.
+    fn cell(
+        session: &mut engine::Session,
+        column: usize,
+        row: usize,
+        fill: i64,
+        effect: serde_json::Value,
+    ) -> Result<(), String> {
+        apply(
+            session,
+            "autoshape.rect",
+            serde_json::json!({
+                "x": column as f64 * 32.0 + 6.0,
+                "y": row as f64 * 32.0 + 8.0,
+                "width": 20.0, "height": 16.0,
+                "corner": 0.0, "kind": "bevel",
+                "page": 0, "layer": 0, "cell": 0,
+                "name": null,
+            }),
+        )?;
+        apply(
+            session,
+            "object.setFill",
+            serde_json::json!({ "id": newest(session)?, "color_raw": fill }),
+        )?;
+        let mut payload = effect;
+        if let Some(fields) = payload.as_object_mut() {
+            fields.insert("id".to_owned(), newest(session)?);
+        }
+        apply(session, "filter.add", payload)
+    }
+
+    // The shared five-prop Levels master (identity).
+    let levels_master: Vec<serde_json::Value> = [
+        ("source_low_rgb", "0"),
+        ("source_high_rgb", "255"),
+        ("gamma_rgb", "1"),
+        ("dest_low_rgb", "0"),
+        ("dest_high_rgb", "255"),
+    ]
+    .iter()
+    .map(|(key, value)| serde_json::json!({ "key": key, "value": value }))
+    .collect();
+
+    let mut registry = engine::CommandRegistry::new();
+    engine::catalog::install(&mut registry).map_err(|e| format!("catalog install: {e}"))?;
+    let mut session = engine::Session::with_registry(doc::Document::default(), registry);
+    apply(
+        &mut session,
+        "page.add",
+        serde_json::json!({ "index": null }),
+    )?;
+    apply(
+        &mut session,
+        "page.setCanvasSize",
+        serde_json::json!({ "page": 0, "width": 128.0, "height": 96.0 }),
+    )?;
+
+    let rows: [(&'static str, &'static str, i64, Vec<serde_json::Value>); 12] = [
+        (
+            "hueSaturation",
+            "Adjust Color",
+            RED,
+            vec![
+                guid("3439b08d-1922-11d3-9bde00e02910d580"),
+                num("hue_amount", "180.000000"),
+                num("saturation_amount", "0.000000"),
+                num("lightness_amount", "0.000000"),
+            ],
+        ),
+        (
+            "hueSaturation",
+            "Adjust Color",
+            RED,
+            vec![
+                guid("3439b08d-1922-11d3-9bde00e02910d580"),
+                num("hue_amount", "120.000000"),
+                num("saturation_amount", "0.000000"),
+                num("lightness_amount", "0.000000"),
+                num("hls_colorize", "1"),
+            ],
+        ),
+        (
+            "levels",
+            "Adjust Color",
+            VIOLET,
+            [
+                levels_master,
+                [
+                    "source_low_red",
+                    "source_high_red",
+                    "gamma_red",
+                    "dest_low_red",
+                    "dest_high_red",
+                ]
+                .iter()
+                .zip(["0", "128", "1", "0", "255"])
+                .map(|(key, value)| serde_json::json!({ "key": key, "value": value }))
+                .collect::<Vec<_>>(),
+            ]
+            .concat(),
+        ),
+        (
+            "curves",
+            "Adjust Color",
+            VIOLET,
+            vec![
+                guid("3439b08e-1923-11d3-9bde00e02910d580"),
+                serde_json::json!({
+                    "key": "rgb_points", "value": "",
+                    "points": [[0.0, 0.0], [128.0, 64.0], [255.0, 255.0]],
+                }),
+            ],
+        ),
+        (
+            "autoLevels",
+            "Adjust Color",
+            RED,
+            vec![guid("d04ef8c1-71b4-11d1-8c8200a024cdc039")],
+        ),
+        (
+            "colorFill",
+            "Adjust Color",
+            GRAY,
+            vec![
+                guid("dd54adc0-a279-11d3-b92a000502f3fdbe"),
+                text("Color", "#336699"),
+                num("Opacity", "100.000000"),
+                num("Blendmode", "0"),
+            ],
+        ),
+        (
+            "convertToAlpha",
+            "Adjust Color",
+            WHITE,
+            vec![guid("2932d5a2-ca48-11d1-8561000502701850")],
+        ),
+        (
+            "sharpen",
+            "Sharpen",
+            SALMON,
+            vec![guid("c20952b1-fc76-11d0-8be700a024cdc039")],
+        ),
+        (
+            "sharpenMore",
+            "Sharpen",
+            SALMON,
+            vec![guid("1f2f2591-9db7-11d1-8cad00a024cdc039")],
+        ),
+        (
+            "motionBlur",
+            "Blur",
+            RED,
+            vec![
+                guid("538016b6-ffd6-418f-a10c590e6ee841ae"),
+                num("motion_blur_angle", "0.000000"),
+                num("motion_blur_distance", "4.000000"),
+            ],
+        ),
+        (
+            "radialBlur",
+            "Blur",
+            RED,
+            vec![
+                guid("d1c33142-2ad8-4215-a39fc5d934c8fc0c"),
+                num("radial_blur_amount", "10.000000"),
+                num("radial_blur_quality", "3"),
+            ],
+        ),
+        (
+            "zoomBlur",
+            "Blur",
+            RED,
+            vec![
+                guid("94dbd663-9b2e-44bf-8064ab6efdd2d327"),
+                num("zoom_blur_amount", "10.000000"),
+                num("zoom_blur_quality", "3"),
+            ],
+        ),
+    ];
+    for (index, (name, category, fill, params)) in rows.iter().enumerate() {
+        let effect = serde_json::json!({
+            "name": name,
+            "category": category,
+            "params": params,
+        });
+        cell(&mut session, index % 4, index / 4, *fill, effect)?;
+    }
+
+    finish(&mut session, "families", 128, 96)
+}
+
+/// The composite-family golden: the shadow/glow and bevel/emboss
+/// families — MX-era scalar props and one unified-panel packed
+/// container — whose gradients are determinism-only (the M14 anchor
+/// set covers the point-op families exactly in `build_families`).
+/// Grid: 4×2 cells at 32px pitch on a 128×96 canvas.
+fn build_composites() -> Result<Vec<u8>, String> {
+    const RED: i64 = 0xFF00_00FF;
+
+    fn apply(
+        session: &mut engine::Session,
+        name: &str,
+        payload: serde_json::Value,
+    ) -> Result<(), String> {
+        session
+            .apply(name, payload)
+            .map_err(|e| format!("composites fixture: {name}: {e}"))
+    }
+
+    fn newest(session: &engine::Session) -> Result<serde_json::Value, String> {
+        let document = session.document();
+        let id = document.pages[0].layers.layers[0].cells[0]
+            .elements
+            .last()
+            .ok_or_else(|| "composites fixture: no object in cell".to_owned())?;
+        Ok(serde_json::json!({
+            "index": id.index(),
+            "generation": id.generation(),
+        }))
+    }
+
+    fn cell(
+        session: &mut engine::Session,
+        column: usize,
+        row: usize,
+        effect: serde_json::Value,
+    ) -> Result<(), String> {
+        apply(
+            session,
+            "autoshape.rect",
+            serde_json::json!({
+                "x": column as f64 * 32.0 + 6.0,
+                "y": row as f64 * 32.0 + 8.0,
+                "width": 20.0, "height": 16.0,
+                "corner": 0.0, "kind": "bevel",
+                "page": 0, "layer": 0, "cell": 0,
+                "name": null,
+            }),
+        )?;
+        apply(
+            session,
+            "object.setFill",
+            serde_json::json!({ "id": newest(session)?, "color_raw": RED }),
+        )?;
+        let mut payload = effect;
+        if let Some(fields) = payload.as_object_mut() {
+            fields.insert("id".to_owned(), newest(session)?);
+        }
+        apply(session, "filter.add", payload)
+    }
+
+    // The unified panel's outer glow, packed exactly as the
+    // dictionary records the kind (compose's packed-container test
+    // carries the same string).
+    const PACKED_OUTER_GLOW: &str = "0&0&screen&75.000000:0.000000:5.000000:0.000000:\
+         0.000000:50.000000&softMatte&RGBColor;255.000000;255.000000;189.996109&nogradient\
+         &2$$0.000000;0.000000;1$255.000000;255.000000;1&edgeGlow";
+
+    let mut registry = engine::CommandRegistry::new();
+    engine::catalog::install(&mut registry).map_err(|e| format!("catalog install: {e}"))?;
+    let mut session = engine::Session::with_registry(doc::Document::default(), registry);
+    apply(
+        &mut session,
+        "page.add",
+        serde_json::json!({ "index": null }),
+    )?;
+    apply(
+        &mut session,
+        "page.setCanvasSize",
+        serde_json::json!({ "page": 0, "width": 128.0, "height": 96.0 }),
+    )?;
+
+    let rows: [(&'static str, &'static str, Vec<serde_json::Value>); 7] = [
+        (
+            "innerShadow",
+            "Shadow and Glow",
+            vec![
+                guid("5600f702-774c-11d3-baad0000861f4d01"),
+                text("ShadowColor", "#000000"),
+                num("ShadowAngle", "135.000000"),
+                num("ShadowBlur", "2.000000"),
+                num("ShadowDistance", "3.000000"),
+            ],
+        ),
+        (
+            "innerGlow",
+            "Shadow and Glow",
+            vec![
+                guid("2ba87123-8220-11d3-baad0000861f4d01"),
+                text("ShadowColor", "#ffcc00"),
+                num("GlowWidth", "3.000000"),
+            ],
+        ),
+        (
+            "liveEffects",
+            "Photoshop Live Effects",
+            vec![
+                guid("8eeadf50-9efe-11da-a7460800200c9a66"),
+                text("outerGlow", PACKED_OUTER_GLOW),
+            ],
+        ),
+        (
+            "solidShadow",
+            "Shadow and Glow",
+            vec![
+                guid("b90c950e-64df-11d8-aaf2000a9582f7d4"),
+                text("ShadowColor", "#804000"),
+                text("ShowObject", "true"),
+            ],
+        ),
+        (
+            "innerBevel",
+            "Eye Candy",
+            vec![
+                guid("7fe61102-6ce2-11d1-8c76000502701850"),
+                num("BevelType", "0"),
+                num("BevelWidth", "6.000000"),
+                num("BevelContrast", "70"),
+                num("LightAngle", "120.000000"),
+                num("LightDistance", "150"),
+                text("HiliteColor", "#ffffcc"),
+                text("OuterBevelColor", "#808000"),
+            ],
+        ),
+        (
+            "raisedEmboss",
+            "Eye Candy",
+            vec![
+                guid("7fe61102-6ce2-11d1-8c76000502701850"),
+                num("BevelType", "2"),
+                num("BevelWidth", "6.000000"),
+                num("BevelContrast", "70"),
+                num("LightAngle", "120.000000"),
+                num("LightDistance", "150"),
+                text("HiliteColor", "#ffffcc"),
+                text("OuterBevelColor", "#808000"),
+            ],
+        ),
+        (
+            "glow",
+            "Eye Candy",
+            vec![
+                guid("7fe61102-6ce2-11d1-8c76000502701850"),
+                num("BevelType", "4"),
+                num("GlowWidth", "5.000000"),
+                num("LightAngle", "120.000000"),
+                text("HiliteColor", "#ffffcc"),
+                text("OuterBevelColor", "#804000"),
+            ],
+        ),
+    ];
+    for (index, (name, category, params)) in rows.iter().enumerate() {
+        let effect = serde_json::json!({
+            "name": name,
+            "category": category,
+            "params": params,
+        });
+        cell(&mut session, index % 4, index / 4, effect)?;
+    }
+
+    finish(&mut session, "composites", 128, 96)
+}
+
+/// The `{...}`-wrapped `EffectMoaID` param every fixture effect
+/// carries (compose's identity beats the internal name).
+fn guid(id: &str) -> serde_json::Value {
+    let value = format!("{{{id}}}");
+    serde_json::json!({ "key": "EffectMoaID", "value": value })
+}
+
+/// A `DCVs` decimal parameter.
+fn num(key: &str, value: &str) -> serde_json::Value {
+    serde_json::json!({ "key": key, "value": value })
+}
+
+/// A text parameter (colors, flags, packed strings).
+fn text(key: &str, value: &str) -> serde_json::Value {
+    serde_json::json!({ "key": key, "value": value })
+}
+
+/// Writes the session's document into a standard RGBA PNG of
+/// `width`×`height` as `mkTS`+`mkBS` — the common tail of the
+/// engine-built fixtures.
+fn finish(
+    session: &mut engine::Session,
+    label: &str,
+    width: u32,
+    height: u32,
+) -> Result<Vec<u8>, String> {
+    let (tree, stats) = doc::fwmap::write(session.document(), &doc::fwmap::UnknownBag::default())
+        .map_err(|e| format!("{label} fixture: doc write: {e}"))?;
+    if stats.unconsumed_unknown != 0 {
+        return Err(format!(
+            "{label} fixture: doc write left {} unknown node(s)",
+            stats.unconsumed_unknown
+        ));
+    }
+    let payload = fwpng::nodetree::serialize(&tree);
+    let standard = encode_rgba8(width, height, |_, _| [255, 255, 255, 255])?;
     insert_before_iend(
         &standard,
         &[(b"mkTS", zlib(&payload)?), (b"mkBS", zlib(&payload)?)],
