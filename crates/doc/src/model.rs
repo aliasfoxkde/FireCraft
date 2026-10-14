@@ -90,6 +90,36 @@ pub struct Document {
     /// exist. A document that carries its styles on an embedded page
     /// instead has them bagged with that page.
     pub styles: Vec<StyleEntry>,
+    /// Shared-layer definitions (`MKBv`'s `LSMv` → `LSEv`*). Pages
+    /// reference them through [`Layer::shared_link`] links (`LSAv`).
+    /// Empty when the file shares nothing; the writer emits the node
+    /// only when definitions exist (decision 0022).
+    pub shared_layer_defs: Vec<SharedLayerDef>,
+}
+
+/// An `LSAv` layer-list entry: a reference to a shared-layer
+/// definition. Lives on [`Layer::shared_link`]; a link layer carries no
+/// cells — its content resolves through the `LSEv` its `UIDs` names
+/// (decision 0022).
+#[derive(Clone, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct SharedLayerLink {
+    /// `UIDs` — the referenced definition's unique id.
+    pub uid: String,
+    /// `ISPb` — always false on a link (`true` marks the definition).
+    pub is_primary: bool,
+}
+
+/// An `LSEv`: one shared-layer definition of `LSMv` (decision 0022).
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct SharedLayerDef {
+    /// `UIDs` — the unique id pages reference via `LSAv`.
+    pub uid: String,
+    /// `ISPb` — true: this is the primary definition.
+    pub is_primary: bool,
+    /// The `LAYv` layer body (the shared content, one cell per state).
+    pub layer: Layer,
 }
 
 /// The document's tile payload bank: `TIDi` → premultiplied RGBA8
@@ -357,10 +387,15 @@ pub struct Layer {
     pub display: bool,
     /// `LLLi` — nesting level.
     pub nesting_level: Option<i64>,
-    /// `CLLv` — one cell per state, in state order.
+    /// `CLLv` — one cell per state, in state order. Empty on a shared
+    /// link layer ([`Layer::shared_link`]): the definition owns the
+    /// content (decision 0022).
     pub cells: Vec<Cell>,
     /// `VIFv` — per-state visibility override, when present.
     pub visibility_per_frame: Option<Vec<bool>>,
+    /// `LSAv` payload when this slot references a shared-layer
+    /// definition instead of carrying a layer body (decision 0022).
+    pub shared_link: Option<SharedLayerLink>,
 }
 
 /// One animation cell (`CELv`): the element list of one state.

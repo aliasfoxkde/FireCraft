@@ -57,6 +57,7 @@ fn layer(cells: Vec<doc::Cell>) -> Layer {
         nesting_level: None,
         cells,
         visibility_per_frame: None,
+        shared_link: None,
     }
 }
 

@@ -13,9 +13,9 @@ use crate::model::{
     Canvas, Cell, Contour, Dither, Document, DocumentInfo, Effect, EffectProperty, EffectValue,
     ExportOptions, Fill, FillShape, Gradient, GradientStop, Grid, GroupObject, Guides, ImageObject,
     Layer, LayerList, NineSliceGuides, Page, PageInfo, PaintStyle, PathObject, PathPoint,
-    PatternTile, PrimitiveSource, SliceBackground, SliceBehavior, SliceObject, StyleEntry,
-    StyleText, SymbolAnimation, SymbolDefinition, SymbolInstanceObject, SymbolType, TextObject,
-    TextOnPath, TextRun, TextStyle, TileRef,
+    PatternTile, PrimitiveSource, SharedLayerDef, SharedLayerLink, SliceBackground, SliceBehavior,
+    SliceObject, StyleEntry, StyleText, SymbolAnimation, SymbolDefinition, SymbolInstanceObject,
+    SymbolType, TextObject, TextOnPath, TextRun, TextStyle, TileRef,
 };
 use crate::registry::{ObjectData, ObjectId, Registry};
 use fwpng::nodetree::{Node, NodeValue};
@@ -296,6 +296,18 @@ impl Reader {
                         let kids = children_of(child, path)?;
                         let lylv_path = format!("{path}/LYLv");
                         document.shared_layers = self.read_layer_list(kids, &lylv_path)?;
+                    } else {
+                        self.bag_node(path, i, child);
+                    }
+                }
+                b"LSMv" => {
+                    // Shared-layer definitions (decision 0022). The
+                    // node is also legal (and empty) under `PDCv`;
+                    // only the document-level one is typed.
+                    if document.shared_layer_defs.is_empty() {
+                        let kids = children_of(child, path)?;
+                        let lsmv_path = format!("{path}/LSMv");
+                        document.shared_layer_defs = self.read_shared_defs(kids, &lsmv_path)?;
                     } else {
                         self.bag_node(path, i, child);
                     }
@@ -905,7 +917,30 @@ impl Reader {
                     let layv_path = format!("{path}/LAYv[{i}]");
                     list.layers.push(self.read_layer(kids, &layv_path)?);
                 }
-                // LSAv / MPLv / anything else: preserved verbatim.
+                b"LSAv" => {
+                    // A shared-layer link (`UIDs` + `ISPb`, decision
+                    // 0022): a slot with no layer body.
+                    let kids = children_of(child, path)?;
+                    let lsav_path = format!("{path}/LSAv[{i}]");
+                    let (mut uid, mut is_primary) = (None, None);
+                    for (j, grandchild) in kids.iter().enumerate() {
+                        match &grandchild.fourcc {
+                            b"UIDs" => self.slot_str(grandchild, &lsav_path, j, &mut uid)?,
+                            b"ISPb" => {
+                                self.slot_bool(grandchild, &lsav_path, j, &mut is_primary)?
+                            }
+                            _ => self.bag_node(&lsav_path, j, grandchild),
+                        }
+                    }
+                    list.layers.push(Layer {
+                        shared_link: Some(SharedLayerLink {
+                            uid: uid.unwrap_or_default(),
+                            is_primary: is_primary.unwrap_or(false),
+                        }),
+                        ..Layer::default()
+                    });
+                }
+                // MPLv / anything else: preserved verbatim.
                 _ => self.bag_node(path, i, child),
             }
         }
@@ -959,7 +994,60 @@ impl Reader {
             nesting_level: nesting,
             cells,
             visibility_per_frame: visibility,
+            shared_link: None,
         })
+    }
+
+    /// One shared-layer definition (`LSEv` = `UIDs` + `ISPb` + `LAYv`,
+    /// decision 0022). Unexpected inner shapes stay bagged.
+    fn read_shared_def(
+        &mut self,
+        children: &[Node],
+        path: &str,
+    ) -> Result<SharedLayerDef, MapError> {
+        let (mut uid, mut is_primary, mut layer) = (None, None, None);
+        for (i, child) in children.iter().enumerate() {
+            match &child.fourcc {
+                b"UIDs" => self.slot_str(child, path, i, &mut uid)?,
+                b"ISPb" => self.slot_bool(child, path, i, &mut is_primary)?,
+                b"LAYv" => {
+                    if layer.is_some() {
+                        self.bag_node(path, i, child);
+                    } else {
+                        let kids = children_of(child, path)?;
+                        let layv_path = format!("{path}/LAYv[{i}]");
+                        layer = Some(self.read_layer(kids, &layv_path)?);
+                    }
+                }
+                _ => self.bag_node(path, i, child),
+            }
+        }
+        Ok(SharedLayerDef {
+            uid: uid.unwrap_or_default(),
+            is_primary: is_primary.unwrap_or(false),
+            layer: layer.unwrap_or_default(),
+        })
+    }
+
+    /// The shared-definitions node (`LSMv`, decision 0022): `LSEv`*
+    /// children, in order.
+    fn read_shared_defs(
+        &mut self,
+        children: &[Node],
+        path: &str,
+    ) -> Result<Vec<SharedLayerDef>, MapError> {
+        let mut defs = Vec::new();
+        for (i, child) in children.iter().enumerate() {
+            match &child.fourcc {
+                b"LSEv" => {
+                    let kids = children_of(child, path)?;
+                    let lsev_path = format!("{path}/LSEv[{i}]");
+                    defs.push(self.read_shared_def(kids, &lsev_path)?);
+                }
+                _ => self.bag_node(path, i, child),
+            }
+        }
+        Ok(defs)
     }
 
     fn read_visibility(&mut self, children: &[Node], path: &str) -> Result<Vec<bool>, MapError> {

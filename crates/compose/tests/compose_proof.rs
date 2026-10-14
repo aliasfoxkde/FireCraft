@@ -130,6 +130,7 @@ fn layer(cells: Vec<Cell>) -> Layer {
         nesting_level: None,
         cells,
         visibility_per_frame: None,
+        shared_link: None,
     }
 }
 

@@ -14,9 +14,9 @@ use crate::fwmap::{FourCC, MapError};
 use crate::model::{
     Cell, Contour, Document, Effect, EffectProperty, EffectValue, ExportOptions, Fill, FillShape,
     Gradient, GradientStop, Grid, GroupObject, Guides, ImageObject, Layer, LayerList,
-    NineSliceGuides, PaintStyle, PathObject, PathPoint, PatternTile, PrimitiveSource, SliceObject,
-    StyleEntry, SymbolDefinition, SymbolInstanceObject, TextObject, TextOnPath, TextRun, TextStyle,
-    TileRef,
+    NineSliceGuides, PaintStyle, PathObject, PathPoint, PatternTile, PrimitiveSource,
+    SharedLayerDef, SliceObject, StyleEntry, SymbolDefinition, SymbolInstanceObject, TextObject,
+    TextOnPath, TextRun, TextStyle, TileRef,
 };
 use crate::registry::{ObjectData, ObjectId};
 use fwpng::nodetree::{Node, NodeValue};
@@ -238,6 +238,11 @@ impl Writer<'_> {
             mapped.push(n_s(*b"PGNs", name));
         }
         mapped.push(self.write_layer_list(&doc.shared_layers, path)?);
+        if !doc.shared_layer_defs.is_empty() {
+            // `LSMv` (decision 0022) — emitted only when definitions
+            // exist, so documents that share nothing stay byte-stable.
+            mapped.push(self.write_shared_defs(&doc.shared_layer_defs, path)?);
+        }
         mapped.push(self.write_grid(&doc.grid, path)?);
         mapped.push(self.write_guides(&doc.guides, path)?);
         mapped.push(n_i(*b"OSBi", info.onion_before));
@@ -495,10 +500,49 @@ impl Writer<'_> {
         let indices = mapped_indices(&bagged, list.layers.len());
         let mut mapped = Vec::with_capacity(list.layers.len());
         for (i, layer) in list.layers.iter().enumerate() {
-            let layv_path = format!("{path}/LAYv[{}]", indices[i]);
-            mapped.push(self.write_layer(layer, &layv_path)?);
+            if let Some(link) = &layer.shared_link {
+                // A shared-layer link emits `LSAv`, not a layer body
+                // (decision 0022).
+                let lsav_path = format!("{path}/LSAv[{}]", indices[i]);
+                let children = self.splice_container(
+                    vec![n_s(*b"UIDs", &link.uid), n_b(*b"ISPb", link.is_primary)],
+                    &lsav_path,
+                );
+                mapped.push(n_kids(*b"LSAv", children));
+            } else {
+                let layv_path = format!("{path}/LAYv[{}]", indices[i]);
+                mapped.push(self.write_layer(layer, &layv_path)?);
+            }
         }
         Ok(n_kids(*b"LYLv", splice(mapped, bagged)))
+    }
+
+    /// The shared-definitions node (`LSMv`, decision 0022): one `LSEv`
+    /// (`UIDs` + `ISPb` + `LAYv`) per definition, in order.
+    fn write_shared_defs(
+        &mut self,
+        defs: &[SharedLayerDef],
+        parent_path: &str,
+    ) -> Result<Node, MapError> {
+        let path = format!("{parent_path}/LSMv");
+        let bagged = self.bag.take_under(&path);
+        let indices = mapped_indices(&bagged, defs.len());
+        let mut mapped = Vec::with_capacity(defs.len());
+        for (i, def) in defs.iter().enumerate() {
+            let lsev_path = format!("{path}/LSEv[{}]", indices[i]);
+            let layv_path = format!("{lsev_path}/LAYv");
+            let layer = self.write_layer(&def.layer, &layv_path)?;
+            let children = self.splice_container(
+                vec![
+                    n_s(*b"UIDs", &def.uid),
+                    n_b(*b"ISPb", def.is_primary),
+                    layer,
+                ],
+                &lsev_path,
+            );
+            mapped.push(n_kids(*b"LSEv", children));
+        }
+        Ok(n_kids(*b"LSMv", splice(mapped, bagged)))
     }
 
     fn write_layer(&mut self, layer: &Layer, path: &str) -> Result<Node, MapError> {

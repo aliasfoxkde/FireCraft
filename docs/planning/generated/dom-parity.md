@@ -7,24 +7,24 @@ regeneration recipe in docs/PLANNING.md §5.4). The DOM is stable
 CS4→CS6; CS6 additions the text lacks (e.g. 9-slice guides) are
 covered by the CS6 `.jsf` scripts and appear here via their verbs.
 
-FireCraft side: the 145-command registry (`engine::catalog::ids()`,
+FireCraft side: the 148-command registry (`engine::catalog::ids()`,
 enforced == the fuzz call table).
 
 ## Coverage classes
 
 | class | meaning | count (of 356 dom verbs) |
 |---|---|---|
-| C | carried: a registry command implements the mutation | 169 |
+| C | carried: a registry command implements the mutation | 172 |
 | P | partial: carried with a recorded model limitation | 45 |
-| M | missing: no command and no decision — work items | 60 |
+| M | missing: no command and no decision — work items | 57 |
 | N | not applicable: non-document surface (accessor/UI/session/clipboard/export/OS) | 82 |
 
-Document-mutation coverage: **214 of 274** carried-or-partial
-(169 carried, 45 partial, 60 missing).
+Document-mutation coverage: **217 of 274** carried-or-partial
+(172 carried, 45 partial, 57 missing).
 
 ### Gap families (the Missing table, grouped)
 
-The 60 missing verbs collapse into seven families, largest first —
+The 57 missing verbs collapse into six families, largest first —
 each family is one design decision plus a command batch:
 
 1. **Object transforms** (2 verbs remain): rotateDocument (canvas
@@ -32,11 +32,7 @@ each family is one design decision plus a command batch:
    (bitmap resample). The object transform family itself is
    carried by object.* per decision 0019 — images refuse
    transforms until the resample pass this family shares.
-2. **Layer sharing** (3 verbs): setLayerSharing / shareLayerToPages /
-   detachSharedLayer need the LSMv/LSEv/LSAv shared-layer model typed
-   (decision 0021); the reader bags both nodes verbatim today. The
-   structure rows (rename/reorder/lock/master) carried 2026-10-14.
-3. **Frames/states** (4 verbs remain): duplicateSelectionToFrames /
+2. **Frames/states** (4 verbs remain): duplicateSelectionToFrames /
    duplicateSelectionToFrameRange / distributeSelectionToFrames
    duplicate the SELECTION across frames — they need an
    object-selection surface (same blocker as the selection
@@ -48,13 +44,13 @@ each family is one design decision plus a command batch:
    of the view-prefs node. addGuide/changeGuide/removeGuide/
    removeAllGuides/setGridOrigin/setGridSize/setOnionSkinning
    landed as page.* commands (page-scoped overrides).
-5. **Group/flatten** (~3 verbs): mergeDown, flattenSelection,
+3. **Group/flatten** (~3 verbs): mergeDown, flattenSelection,
    flattenDocument. group/ungroup landed as object.group/
    object.ungroup; setGroupType is partial (GRTi setter).
-6. **Selection tooling** (~7 verbs): select all/inverse/similar/
+4. **Selection tooling** (~7 verbs): select all/inverse/similar/
    parents/children/scope, saved (named) selections,
    attribute filter.
-7. **Misc** (~14 verbs): place-image, crop, text-to-paths, tween,
+5. **Misc** (~14 verbs): place-image, crop, text-to-paths, tween,
    split/knife path ops, primitive param edits (roundness/sides/
    quadrangle), smart-shape param edits, fill-edge mode, gradient
    names, button-symbol state, web-object point append.
@@ -113,6 +109,7 @@ each family is one design decision plus a command batch:
 | `deleteSelection` | C | object.delete |  |
 | `deleteSymbol` | C | library.remove |  |
 | `detachInstanceFromSymbol` | C | symbol.editDetach |  |
+| `detachSharedLayer` | C | layer.detachShared | page link becomes a private copy; definition and other links stay (decision 0022) |
 | `detachTextFromPath` | C | text.detachPath |  |
 | `distribute` | C | object.distribute |  |
 | `distributeLayerToFrames` | C | frame.distributeLayer | grows frames when items outnumber them; single item is the documented no-op |
@@ -205,6 +202,7 @@ each family is one design decision plus a command batch:
 | `setHotspotText` | C | slice.setData |  |
 | `setLayerLocked` | C | layer.setLocked | per-frame lock = LCKb in CELv; bAllLayers sweeps the frame |
 | `setLayerName` | C | layer.rename |  |
+| `setLayerSharing` | C | layer.setSharing | document-wide share (LSMv+LSAv typed) / unshare with frame-fill flag (decision 0022) |
 | `setLayerVisible` | C | layer.setDisplay | the eye bit |
 | `setMasterPage` | C | page.setMaster | one master per document; exclusive flag |
 | `setOnionSkinning` | C | page.setOnionSkinning | OSBi/OSAi; 0/0 disables per CS6 |
@@ -227,6 +225,7 @@ each family is one design decision plus a command batch:
 | `setTextHorizontalScale` | C | text.setAttrs |  |
 | `setTextLeading` | C | text.setAttrs |  |
 | `setTextOrientation` | C | text.setAttrs |  |
+| `shareLayerToPages` | C | layer.shareToPages | per-page add/remove of the LSAv link; CS6 name-lists mapped to indices (decision 0022) |
 | `showAllHidden` | C | object.setVisible |  |
 | `transformSelection` | C | object.transform | free affine; the family primitive |
 | `ungroup` | C | object.ungroup | children splice in at the group position, z-order preserved |
@@ -301,7 +300,6 @@ each family is one design decision plus a command batch:
 | `cropSelection` | M | - | canvas crop; page.setCanvasSize carries resize but not the crop-to-content op |
 | `cuplicateSelectionToFrames` | M | - | needs an object-selection surface (same blocker as the selection family) |
 | `deleteSavedSelection` | M | - | named saved selections unmodeled |
-| `detachSharedLayer` | M | - | needs the LSMv/LSEv/LSAv shared-layer model typed (decision 0021) |
 | `distributeSelectionToFrames` | M | - | needs an object-selection surface (same blocker as the selection family) |
 | `duplicateSelectionToFrameRange` | M | - | needs an object-selection surface (same blocker as the selection family) |
 | `duplicateSelectionToFrames` | M | - | needs an object-selection surface (same blocker as the selection family) |
@@ -335,7 +333,6 @@ each family is one design decision plus a command batch:
 | `setDocumentResolution` | M | - | resolution metadata unmodeled |
 | `setFillEdgeMode` | M | - | fill edge (anti-alias/hard) mode unmodeled |
 | `setGradientName` | M | - | gradient definitions carry no names in the model |
-| `setLayerSharing` | M | - | needs the LSMv/LSEv/LSAv shared-layer model typed (decision 0021) |
 | `setQuadrangle` | M | - | primitive param-edit gap |
 | `setRectRoundness` | M | - | primitives are modeled (PathObject.primitive) but no param-edit command |
 | `setRectRoundnessMode` | M | - | primitive param-edit gap |
@@ -344,7 +341,6 @@ each family is one design decision plus a command batch:
 | `setShowGuides` | M | - | guides model exists; no command |
 | `setSnapToGrid` | M | - | page.grid model exists; no command |
 | `setSnapToGuides` | M | - | guides model exists; no command |
-| `shareLayerToPages` | M | - | needs the LSMv/LSEv/LSAv shared-layer model typed (decision 0021) |
 | `splitPaths` | M | - | no split/knife boolean op |
 | `tween` | M | - | instance tweening unmodeled |
 

@@ -7,7 +7,7 @@
 
 use doc::{
     Cell, Document, DocumentInfo, Layer, LayerList, ObjectData, ObjectId, Page, PageInfo,
-    StyleEntry, SymbolDefinition,
+    SharedLayerDef, StyleEntry, SymbolDefinition,
 };
 
 use crate::error::EngineError;
@@ -170,6 +170,15 @@ pub enum Delta {
         /// The style list as it was before the command.
         before: Vec<StyleEntry>,
     },
+    /// Restore the shared-layer definition list (`MKBv`'s `LSMv`,
+    /// decision 0022). List-capturing like [`Delta::Library`]: a
+    /// definition carries its whole layer body, so the pre-command
+    /// `Vec` is the exact inverse of any mint / removal the command
+    /// performed.
+    SharedLayers {
+        /// The definition list as it was before the command.
+        before: Vec<SharedLayerDef>,
+    },
     /// Remove the bank slots the command created (the style-library
     /// tile join): only fresh ids are inverse-expressible, and the
     /// command only ever inserts into absent slots (a colliding id is
@@ -320,6 +329,7 @@ impl Delta {
                 page_mut(document, *page)?.grid = before.as_deref().cloned();
             }
             Delta::Library { before } => document.symbols = before.clone(),
+            Delta::SharedLayers { before } => document.shared_layer_defs = before.clone(),
             Delta::Styles { before } => document.styles = before.clone(),
             Delta::Bank { added } => {
                 for tile_id in added {

@@ -12,9 +12,9 @@ use super::writer::{mapped_indices, splice, write, write_style_library};
 use crate::model::{
     Canvas, Cell, Contour, Document, DocumentInfo, Effect, EffectProperty, EffectValue,
     ExportOptions, Grid, GroupObject, Guides, ImageObject, Layer, LayerList, NineSliceGuides, Page,
-    PageInfo, PaintStyle, PathObject, PathPoint, PrimitiveSource, SliceBackground, SliceBehavior,
-    SliceObject, StyleEntry, StyleText, SymbolAnimation, SymbolDefinition, SymbolInstanceObject,
-    SymbolType, TextObject, TextRun, TextStyle, TileRef,
+    PageInfo, PaintStyle, PathObject, PathPoint, PrimitiveSource, SharedLayerDef, SharedLayerLink,
+    SliceBackground, SliceBehavior, SliceObject, StyleEntry, StyleText, SymbolAnimation,
+    SymbolDefinition, SymbolInstanceObject, SymbolType, TextObject, TextRun, TextStyle, TileRef,
 };
 use crate::registry::{ObjectData, ObjectId, Registry};
 use fwpng::nodetree::{Node, NodeValue, parse, serialize};
@@ -385,6 +385,7 @@ fn sample_document() -> Document {
             },
         ],
         visibility_per_frame: Some(vec![true, false]),
+        shared_link: None,
     };
     doc.pages.push(Page {
         info: PageInfo {
@@ -436,6 +437,7 @@ fn sample_document() -> Document {
                     elements: vec![symbol_path_id],
                 }],
                 visibility_per_frame: None,
+                shared_link: None,
             }],
         },
         background_raw: 0xFF_FF_FF,
@@ -1261,6 +1263,7 @@ fn model_structs_are_fully_constructed() {
         nesting_level: None,
         cells: Vec::new(),
         visibility_per_frame: None,
+        shared_link: None,
     };
     let _cell = Cell {
         locked: false,
@@ -2823,4 +2826,55 @@ fn style_library_refuses_non_style_payload() {
     let root = vec![n_k(b"MKBv", Vec::new())];
     assert!(read_style_library(&root).is_err());
     assert!(read_style_library(&[]).is_err());
+}
+
+#[test]
+fn shared_layers_round_trip_losslessly() {
+    let mut doc = sample_document();
+    // One `LSEv` definition and one page slot linked to it (`LSAv`).
+    doc.shared_layer_defs.push(SharedLayerDef {
+        uid: "fc00dead-beef-4000-8000-000000000001".into(),
+        is_primary: true,
+        layer: Layer {
+            name: "Shared header".into(),
+            display: true,
+            cells: vec![Cell {
+                locked: false,
+                visible: true,
+                elements: Vec::new(),
+            }],
+            ..Layer::default()
+        },
+    });
+    doc.pages[0].layers.layers.push(Layer {
+        shared_link: Some(SharedLayerLink {
+            uid: "fc00dead-beef-4000-8000-000000000001".into(),
+            is_primary: false,
+        }),
+        ..Layer::default()
+    });
+
+    let (bytes, doc2, bag2) = round_trip_bytes(&doc, &UnknownBag::new());
+    assert!(bag2.is_empty(), "typed shared-layer nodes may not bag");
+    assert_eq!(doc, doc2, "model equality through bytes");
+    let (bytes2, _doc3, bag3) = round_trip_bytes(&doc2, &bag2);
+    assert_eq!(bytes, bytes2, "canonical emission is byte-stable");
+    assert!(bag3.is_empty());
+
+    // The wire carries the nodes the dictionary names, in place: an
+    // `LSMv` under `MKBv` and an `LSAv` inside the page's `LYLv`.
+    let (tree, _) = write(&doc, &UnknownBag::new()).expect("write");
+    let mut lsmvs = Vec::new();
+    find_nodes(&tree, b"LSMv", &mut lsmvs);
+    assert_eq!(lsmvs.len(), 1);
+    let mut lsavs = Vec::new();
+    find_nodes(&tree, b"LSAv", &mut lsavs);
+    assert_eq!(lsavs.len(), 1);
+
+    // A document that shares nothing emits no `LSMv` at all.
+    let plain = sample_document();
+    let (tree, _) = write(&plain, &UnknownBag::new()).expect("write");
+    let mut lsmvs = Vec::new();
+    find_nodes(&tree, b"LSMv", &mut lsmvs);
+    assert!(lsmvs.is_empty());
 }

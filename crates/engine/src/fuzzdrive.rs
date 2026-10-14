@@ -671,6 +671,9 @@ pub const CALLS: &[&str] = &[
     "page.addMasterLayer",
     "layer.reorder",
     "layer.setLocked",
+    "layer.setSharing",
+    "layer.shareToPages",
+    "layer.detachShared",
 ];
 
 /// Builds a random call against `document`: a random catalog id and a
@@ -2050,6 +2053,22 @@ pub fn random_call(rng: &mut FuzzRng, document: &Document) -> (String, serde_jso
             "frame": any_index(rng, frames),
             "locked": rng.chance(2),
             "all_layers": rng.chance(30),
+        }),
+        "layer.setSharing" => serde_json::json!({
+            "page": any_index(rng, pages),
+            "layer": any_index(rng, 3),
+            "shared": rng.chance(2),
+            "unshare_copies_to_all_frames": rng.chance(30),
+        }),
+        "layer.shareToPages" => serde_json::json!({
+            "page": any_index(rng, pages),
+            "layer": any_index(rng, 3),
+            "add_to_pages": [any_index(rng, pages)],
+            "delete_from_pages": [any_index(rng, pages + 1)],
+        }),
+        "layer.detachShared" => serde_json::json!({
+            "page": any_index(rng, pages),
+            "layer": any_index(rng, 3),
         }),
         other => {
             let _ = other;
