@@ -233,6 +233,9 @@ pub enum KernelOp {
         angle_degrees: f64,
         /// `motion_blur_distance`, 1..=100.
         distance: u32,
+        /// Tap count: `distance + 1` from the effect carrier; the
+        /// dom verb's `samples` when it drives the bake.
+        taps: u32,
     },
     /// Radial (spin) Blur.
     RadialBlur {
@@ -247,6 +250,20 @@ pub enum KernelOp {
         amount: u32,
         /// `zoom_blur_quality` (taps), 1..=100.
         quality: u32,
+    },
+    /// Raw convolution — the `convolveSelection` dom verb's arbitrary
+    /// integer kernel (`kernelValues`), edge-clamped, anchor at the
+    /// kernel center. Coefficients are applied as-is: their scale is
+    /// the caller's contract, exactly as the dom documents it.
+    Convolve {
+        /// Kernel width in cells.
+        width: u32,
+        /// Kernel height in cells.
+        height: u32,
+        /// `width * height` row-major coefficients.
+        values: Vec<i64>,
+        /// Extend the pass to the alpha channel.
+        affects_alpha: bool,
     },
     /// Sharpen — fixed preset, no parameters.
     Sharpen,
@@ -544,13 +561,20 @@ pub fn apply_stack(mut surface: Surface, ops: &[KernelOp]) -> Surface {
             KernelOp::MotionBlur {
                 angle_degrees,
                 distance,
-            } => filters::motion_blur(&surface, *angle_degrees, *distance),
+                taps,
+            } => filters::motion_blur_taps(&surface, *angle_degrees, *distance, *taps),
             KernelOp::RadialBlur { amount, quality } => {
                 filters::radial_blur_spin(&surface, *amount, *quality)
             }
             KernelOp::ZoomBlur { amount, quality } => {
                 filters::zoom_blur(&surface, *amount, *quality)
             }
+            KernelOp::Convolve {
+                width,
+                height,
+                values,
+                affects_alpha,
+            } => filters::convolve(&surface, *width, *height, values, *affects_alpha),
             KernelOp::Sharpen => filters::sharpen(&surface),
             KernelOp::SharpenMore => filters::sharpen_more(&surface),
             KernelOp::ConvertToAlpha => filters::convert_to_alpha(&surface),
@@ -1149,6 +1173,7 @@ fn motion_blur(effect: &Effect) -> Option<KernelOp> {
     Some(KernelOp::MotionBlur {
         angle_degrees: angle.clamp(0.0, 360.0),
         distance: distance.clamp(1.0, 100.0) as u32,
+        taps: distance.clamp(1.0, 100.0) as u32 + 1,
     })
 }
 
@@ -1815,7 +1840,8 @@ mod tests {
             plan(&[motion]).ops,
             vec![KernelOp::MotionBlur {
                 angle_degrees: 45.0,
-                distance: 10
+                distance: 10,
+                taps: 11
             }]
         );
         // Distance below the observed range refuses (CS6 never writes

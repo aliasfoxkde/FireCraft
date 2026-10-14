@@ -55,7 +55,31 @@ pub(crate) fn angle_units(degrees: f64) -> i64 {
 /// self-inverse under angle+180°, only mirrored).
 #[must_use]
 pub fn motion_blur(surface: &Surface, angle_degrees: f64, distance: u32) -> Surface {
-    let taps = i64::from(distance) + 1;
+    motion_blur_taps(surface, angle_degrees, distance, distance + 1)
+}
+
+/// The same pass with an explicit tap count — the `motionBlurSelection`
+/// dom verb's `samples` ("the number of times the original image is
+/// cloned"). The effect-file carrier ([`motion_blur`]) taps
+/// `distance + 1`; the dom caller owns the clone count.
+#[must_use]
+pub fn motion_blur_taps(
+    surface: &Surface,
+    angle_degrees: f64,
+    distance: u32,
+    taps: u32,
+) -> Surface {
+    let taps = i64::from(taps.max(1));
+    let distance = i64::from(distance);
+    // Taps spread evenly over 0..=distance pixels; a single tap (or a
+    // zero distance) puts every sample on the pixel itself — an exact
+    // copy. With taps = distance + 1 the step is exactly one pixel,
+    // matching the effect carrier's historical geometry.
+    let step = if taps <= 1 || distance == 0 {
+        0
+    } else {
+        distance * 1000 / (taps - 1)
+    };
     let angle = (angle_degrees * TURNS as f64 / 360.0).round() as i64;
     let (cos, sin) = (cos_fp(angle), sin_fp(angle));
     let (w, h) = (surface.width(), surface.height());
@@ -66,10 +90,11 @@ pub fn motion_blur(surface: &Surface, angle_degrees: f64, distance: u32) -> Surf
             for ch in 0..4 {
                 let mut sum = 0u64;
                 for t in 0..taps {
-                    // Nearest sample at (x, y) + t·(cos, −sin)/1000,
+                    // Nearest sample at (x, y) + t·step·(cos, −sin)/1000,
                     // rounding each coordinate half-up in thousandths.
-                    let sx = (i64::from(x) * 1000 + cos * t + 500).div_euclid(1000);
-                    let sy = (i64::from(y) * 1000 - sin * t + 500).div_euclid(1000);
+                    let off = t * step / 1000;
+                    let sx = (i64::from(x) * 1000 + cos * off + 500).div_euclid(1000);
+                    let sy = (i64::from(y) * 1000 - sin * off + 500).div_euclid(1000);
                     let sx = sx.clamp(0, i64::from(w) - 1) as u32;
                     let sy = sy.clamp(0, i64::from(h) - 1) as u32;
                     sum += u64::from(surface.pixels[surface.pixel_offset(sx, sy) + ch]);

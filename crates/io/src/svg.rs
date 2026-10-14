@@ -962,6 +962,7 @@ fn kernel_name(op: &KernelOp) -> &'static str {
         KernelOp::AutoLevels => "auto levels",
         KernelOp::ColorFill { .. } => "color fill",
         KernelOp::MotionBlur { .. } => "motion blur",
+        KernelOp::Convolve { .. } => "convolve",
         KernelOp::RadialBlur { .. } => "radial blur",
         KernelOp::ZoomBlur { .. } => "zoom blur",
         KernelOp::Sharpen => "sharpen",

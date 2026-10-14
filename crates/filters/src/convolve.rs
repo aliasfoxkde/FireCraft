@@ -107,16 +107,38 @@ pub fn sharpen_more(surface: &Surface) -> Surface {
 /// One 3×3 convolution over the color channels (alpha passes
 /// through), edge-clamped, weights in row-major order.
 fn convolve3(surface: &Surface, weights: [i64; 9]) -> Surface {
+    convolve(surface, 3, 3, &weights, false)
+}
+
+/// One general `width × height` convolution — the engine behind the
+/// `convolveSelection` dom verb. Edge-clamped sampling, weights in
+/// row-major order, anchor at the geometric center, raw `i64`
+/// accumulation with `clamp255` output and **no normalization**: the
+/// dom passes raw integer coefficients ("kernelValues"), so their
+/// scale is the caller's contract (a zero-sum kernel is legal and
+/// produces black). `affects_alpha` extends the pass to the alpha
+/// channel; otherwise alpha passes through untouched.
+#[must_use]
+pub fn convolve(
+    surface: &Surface,
+    width: u32,
+    height: u32,
+    values: &[i64],
+    affects_alpha: bool,
+) -> Surface {
+    let (kw, kh) = (i64::from(width), i64::from(height));
+    let (cx, cy) = ((kw - 1) / 2, (kh - 1) / 2);
     let (w, h) = (surface.width(), surface.height());
+    let channels = if affects_alpha { 4 } else { 3 };
     let mut out = surface.clone();
     for y in 0..h {
         for x in 0..w {
             let at = surface.pixel_offset(x, y);
-            for ch in 0..3 {
+            for ch in 0..channels {
                 let mut sum = 0i64;
-                for (i, weight) in weights.iter().enumerate() {
-                    let dy = (i / 3) as i64 - 1;
-                    let dx = (i % 3) as i64 - 1;
+                for (i, weight) in values.iter().enumerate() {
+                    let dy = (i / width as usize) as i64 - cy;
+                    let dx = (i % width as usize) as i64 - cx;
                     let sx = (i64::from(x) + dx).clamp(0, i64::from(w) - 1) as u32;
                     let sy = (i64::from(y) + dy).clamp(0, i64::from(h) - 1) as u32;
                     sum += i64::from(surface.pixels[surface.pixel_offset(sx, sy) + ch]) * weight;

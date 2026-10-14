@@ -7,20 +7,20 @@ regeneration recipe in docs/PLANNING.md §5.4). The DOM is stable
 CS4→CS6; CS6 additions the text lacks (e.g. 9-slice guides) are
 covered by the CS6 `.jsf` scripts and appear here via their verbs.
 
-FireCraft side: the 199-command registry (`engine::catalog::ids()`,
+FireCraft side: the 201-command registry (`engine::catalog::ids()`,
 enforced == the fuzz call table).
 
 ## Coverage classes
 
 | class | meaning | count (of 356 dom verbs) |
 |---|---|---|
-| C | carried: a registry command implements the mutation | 226 |
-| P | partial: carried with a recorded model limitation | 45 |
+| C | carried: a registry command implements the mutation | 228 |
+| P | partial: carried with a recorded model limitation | 43 |
 | M | missing: no command and no decision — work items | 0 |
 | N | not applicable: non-document surface (accessor/UI/session/clipboard/export/OS) | 85 |
 
 Document-mutation coverage: **271 of 271** carried-or-partial
-(226 carried, 45 partial, 0 missing).
+(228 carried, 43 partial, 0 missing).
 
 ### Gap families (the Missing table, grouped)
 
@@ -91,6 +91,7 @@ partial rows and the recorded debts in docs/HANDOFF.md Phase 9.
 | `convertToPaths` | C | text.convertToPaths | glyph outlines frozen as in-place path (renderer synthetic-path contract; pixel-identical golden) |
 | `convertToSymbol` | C | symbol.create | selection folds into the definition |
 | `convetToAnimSymbol` | C | symbol.setType |  |
+| `convolveSelection` | C | filter.convolveSelection | decision 0042: raw integer kernel, no normalization, affectsAlpha gates alpha |
 | `cropSelection` | C | path.cropSelection | each selected path is cropped (intersected) by the rect; empty results remove the path |
 | `cuplicateSelectionToFrames` | C | selection.duplicateToFrames | all/previous/next/end; next past the last frame adds one (decision 0026) |
 | `deleteFrames` | C | frame.delete | guards: range, overrun, last frame |
@@ -140,6 +141,7 @@ partial rows and the recorded debts in docs/HANDOFF.md Phase 9.
 | `lockSelection` | C | object.setLocked |  |
 | `mergeDown` | C | flatten.mergeDown | bakes the selection into the bitmap directly below (compositor-backed; refuses unless a bitmap is immediately below) |
 | `modifyPointOnPath` | C | path.movePoints |  |
+| `motionBlurSelection` | C | filter.motionBlurSelection | decision 0042: samples = tap count; linear/radial/zoom per 0042 mapping |
 | `moveBezierHandleBy` | C | path.movePoints | handle (primary/secondary) edit |
 | `moveElementMaskBy` | C | mask.moveBy |  |
 | `moveFillVectorHandleBy` | C | path.setFillVector |  |
@@ -269,12 +271,10 @@ partial rows and the recorded debts in docs/HANDOFF.md Phase 9.
 | `addSwapImageBehaviorFromPoint` | P | slice.addBehavior | behaviors carry; the swap-image picker is UI |
 | `applyCharacterMarkup` | P | text.setAttrs | per-range markup unmodeled (single-run) |
 | `applyFontMarkup` | P | text.setFont | per-range markup unmodeled |
-| `convolveSelection` | P | filter.add | destructive convolve; the filters/kernel crate carries the kernels as live effects |
 | `copyToHotspot` | P | hotspot.create | from-selection wrapper computes the bbox |
 | `deleteAllInDocument` | P | object.delete | composes per object; no single clear verb (transaction folds) |
 | `duplicateSymbolForAlias` | P | library.add | alias linkage unmodeled |
 | `importFile` | P | io | io carries SVG/raster importers; no engine place-imported-file command |
-| `motionBlurSelection` | P | filter.add | kernel availability per effect; the live-effect stack is the carrier |
 | `moveSelectionMaskBy` | P | bitmap.movePixels | mask-only translate rides the pixel move |
 | `removeCharacterMarkup` | P | text.setAttrs |  |
 | `removeFontMarkup` | P | text.setFont |  |

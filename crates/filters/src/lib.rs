@@ -28,10 +28,10 @@ mod shadow;
 pub use bevel::{BevelStyle, bevel};
 pub use clouds::{clouds, difference_clouds};
 pub use convolve::{
-    box_blur, emboss, find_edges, gaussian_blur, sharpen, sharpen_more, unsharp_mask,
+    box_blur, convolve, emboss, find_edges, gaussian_blur, sharpen, sharpen_more, unsharp_mask,
     unsharp_mask_thresholded,
 };
-pub use geometric::{motion_blur, radial_blur_spin, zoom_blur};
+pub use geometric::{motion_blur, motion_blur_taps, radial_blur_spin, zoom_blur};
 pub use noise::{SplitMix64, add_noise};
 pub use point::{
     CurvesKnots, LevelsControls, apply_lut, auto_levels, brightness_contrast, convert_to_alpha,

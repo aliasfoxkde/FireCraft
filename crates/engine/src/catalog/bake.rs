@@ -1,18 +1,20 @@
-//! The filter bake family (decision 0040): CS6's
+//! The filter bake family (decisions 0040/0042): CS6's
 //! `filterSelection` / `filterSelectionByID` / `filterSelectionByName`
 //! verbs — "applies the specified pixel filter to the selection as a
-//! permanent action, not as a Live Effect".
+//! permanent action, not as a Live Effect" — plus the two parameter
+//! forms `convolveSelection` (arbitrary integer kernel) and
+//! `motionBlurSelection` (linear/radial/zoom with explicit samples).
 //!
-//! All three front doors resolve to the same core: build an `Effect`,
-//! interpret it through compose's kernel planner (the same interpreter
-//! the Live Effect stack and the flatten bakes use), run it over each
-//! selected image's assembled surface, and re-tile. The active pixel
-//! selection (`document.selection`) gates the result per pixel; CS6's
-//! scripts split on `getPixelMask()` exactly this way. Non-image
-//! members refuse whole-command — CS6 would rasterize them first,
-//! which is the recorded path→image debt. Every target resolution,
-//! identity check, and tile assembly happens before the first
-//! mutation (the 000557d ordering law).
+//! All five front doors resolve to the same core: interpret the filter
+//! through compose's kernel planner (the same interpreter the Live
+//! Effect stack and the flatten bakes use), run it over each selected
+//! image's assembled surface, and re-tile. The active pixel selection
+//! (`document.selection`) gates the result per pixel; CS6's scripts
+//! split on `getPixelMask()` exactly this way. Non-image members
+//! refuse whole-command — CS6 would rasterize them first, which is the
+//! recorded path→image debt. Every target resolution, identity check,
+//! and tile assembly happens before the first mutation (the 000557d
+//! ordering law).
 
 use compose::Surface;
 use doc::{Document, Effect, EffectProperty, EffectValue, ImageObject, ObjectData, SelectionMask};
@@ -29,7 +31,9 @@ use crate::registry::CommandRegistry;
 pub(crate) fn install(registry: &mut CommandRegistry) -> Result<(), EngineError> {
     registry.register(BakeSelection)?;
     registry.register(BakeSelectionByID)?;
-    registry.register(BakeSelectionByName)
+    registry.register(BakeSelectionByName)?;
+    registry.register(ConvolveSelection)?;
+    registry.register(MotionBlurSelection)
 }
 
 /// The bake payload's parameter list — the same encoding `filter.add`
@@ -89,7 +93,7 @@ fn catalog_guid(
 fn bake_core(
     document: &mut Document,
     name: &'static str,
-    effect: Effect,
+    plan: compose::Plan,
 ) -> Result<Delta, EngineError> {
     if document.object_selection.is_empty() {
         return Err(EngineError::InvalidState {
@@ -97,11 +101,9 @@ fn bake_core(
             detail: "nothing is selected".to_owned(),
         });
     }
-    // Identity first: the plan must resolve the effect completely —
-    // an unrecognized identity or a missing parameter skips, and the
-    // bake refuses rather than applying nothing (the no-passthrough
-    // floor law).
-    let plan = compose::plan(std::slice::from_ref(&effect));
+    // The plan must resolve completely — a skipped op or an empty op
+    // list bakes nothing, and the bake refuses rather than applying
+    // nothing (the no-passthrough floor law).
     if plan.skipped != 0 || plan.ops.is_empty() {
         return Err(EngineError::InvalidState {
             name: name.to_owned(),
@@ -257,7 +259,7 @@ impl TypedCommand for BakeSelection {
             None,
             &payload.params,
         )?;
-        bake_core(document, NAME, effect)
+        bake_core(document, NAME, compose::plan(std::slice::from_ref(&effect)))
     }
 }
 
@@ -295,7 +297,7 @@ impl TypedCommand for BakeSelectionByID {
             Some(&payload.id),
             &payload.params,
         )?;
-        bake_core(document, NAME, effect)
+        bake_core(document, NAME, compose::plan(std::slice::from_ref(&effect)))
     }
 }
 
@@ -337,7 +339,181 @@ impl TypedCommand for BakeSelectionByName {
             Some(guid),
             &payload.params,
         )?;
-        bake_core(document, NAME, effect)
+        bake_core(document, NAME, compose::plan(std::slice::from_ref(&effect)))
+    }
+}
+
+/// `filter.convolveSelection` — CS6
+/// `dom.convolveSelection(kernelWidth, kernelHeight, kernelValues,
+/// affectsAlpha)`: an arbitrary integer kernel baked through the same
+/// core. Coefficients apply as-is (no normalization — the dom passes
+/// raw values, so their scale is the caller's contract).
+struct ConvolveSelection;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct ConvolveSelectionPayload {
+    /// Kernel width in cells.
+    kernel_width: u32,
+    /// Kernel height in cells.
+    kernel_height: u32,
+    /// `kernel_width * kernel_height` row-major coefficients.
+    kernel_values: Vec<i64>,
+    /// Extend the pass to the alpha channel.
+    #[serde(default)]
+    affects_alpha: bool,
+}
+
+/// The largest kernel side accepted — a 31×31 kernel already samples a
+/// 15-pixel radius on every axis, far past the UI's 7×7; anything
+/// bigger is a payload bug, not a filter.
+const KERNEL_SIDE_CAP: u32 = 31;
+
+impl TypedCommand for ConvolveSelection {
+    type Payload = ConvolveSelectionPayload;
+
+    fn name(&self) -> &'static str {
+        "filter.convolveSelection"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "filter.convolveSelection";
+        if payload.kernel_width == 0
+            || payload.kernel_height == 0
+            || payload.kernel_width > KERNEL_SIDE_CAP
+            || payload.kernel_height > KERNEL_SIDE_CAP
+        {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: format!(
+                    "kernel {}x{} is outside 1..={KERNEL_SIDE_CAP} per side",
+                    payload.kernel_width, payload.kernel_height
+                ),
+            });
+        }
+        let cells = usize::try_from(payload.kernel_width)
+            .ok()
+            .zip(usize::try_from(payload.kernel_height).ok())
+            .and_then(|(w, h)| w.checked_mul(h));
+        let Some(cells) = cells else {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: "kernel dimensions overflow usize".to_owned(),
+            });
+        };
+        if payload.kernel_values.len() != cells {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: format!(
+                    "kernel_values holds {} entries for a {}x{} kernel (want {cells})",
+                    payload.kernel_values.len(),
+                    payload.kernel_width,
+                    payload.kernel_height
+                ),
+            });
+        }
+        let plan = compose::Plan {
+            ops: vec![compose::KernelOp::Convolve {
+                width: payload.kernel_width,
+                height: payload.kernel_height,
+                values: payload.kernel_values.clone(),
+                affects_alpha: payload.affects_alpha,
+            }],
+            skipped: 0,
+        };
+        bake_core(document, NAME, plan)
+    }
+}
+
+/// `filter.motionBlurSelection` — CS6
+/// `dom.motionBlurSelection(blurType, angle, distance, samples)`:
+/// `blurType` is "linear", "radial", or "zoom"; `angle` (degrees) and
+/// `distance` (pixels, 0..=400) drive the smear; `samples` is "the
+/// number of times the original image is cloned" — the kernel's tap
+/// count. Radial and zoom are center-based, so `angle` stands unused
+/// there; `distance` reaches their kernels as sweep degrees / pinch
+/// percent respectively (the recorded 0042 substitution).
+struct MotionBlurSelection;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct MotionBlurSelectionPayload {
+    /// "linear", "radial", or "zoom".
+    blur_type: String,
+    /// Smear direction, degrees (linear only).
+    angle: f64,
+    /// Smear length: pixels (linear), sweep degrees (radial), pinch
+    /// percent (zoom); 0..=400, 0 = no blur.
+    distance: u32,
+    /// Kernel tap count ("clones of the original"); 0 or 1 = original
+    /// only — an exact copy.
+    samples: u32,
+}
+
+impl TypedCommand for MotionBlurSelection {
+    type Payload = MotionBlurSelectionPayload;
+
+    fn name(&self) -> &'static str {
+        "filter.motionBlurSelection"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "filter.motionBlurSelection";
+        if !payload.angle.is_finite() || !(0.0..=360.0).contains(&payload.angle) {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: format!("angle {} is outside 0..=360 degrees", payload.angle),
+            });
+        }
+        if payload.distance > 400 {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: format!("distance {} is outside 0..=400", payload.distance),
+            });
+        }
+        if payload.samples > 100 {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: format!("samples {} is outside 0..=100", payload.samples),
+            });
+        }
+        // The kernels own the carrier-range clamps (radial sweep caps
+        // at 360, zoom pinch at 100, quality at 1..=100); the engine
+        // only gates the dom-documented ranges above.
+        let op = match payload.blur_type.as_str() {
+            "linear" => compose::KernelOp::MotionBlur {
+                angle_degrees: payload.angle,
+                distance: payload.distance,
+                taps: payload.samples.max(1),
+            },
+            "radial" => compose::KernelOp::RadialBlur {
+                amount: payload.distance,
+                quality: payload.samples.max(1),
+            },
+            "zoom" => compose::KernelOp::ZoomBlur {
+                amount: payload.distance,
+                quality: payload.samples.max(1),
+            },
+            other => {
+                return Err(EngineError::InvalidState {
+                    name: NAME.to_owned(),
+                    detail: format!("unknown blur_type {other:?} (want linear/radial/zoom)"),
+                });
+            }
+        };
+        let plan = compose::Plan {
+            ops: vec![op],
+            skipped: 0,
+        };
+        bake_core(document, NAME, plan)
     }
 }
 
@@ -605,5 +781,229 @@ mod tests {
                 .map(|(key, value)| serde_json::json!({"key": key, "value": value}))
                 .collect::<Vec<_>>()
         })
+    }
+
+    /// A fully-opaque solid-color 8×8 image (the strongest convolve
+    /// fixture: every sampled neighbor equals the pixel itself).
+    fn solid_image(document: &mut Document, color: [u8; 4]) -> ObjectId {
+        let (w, h) = (8i64, 8i64);
+        let pixels = vec![color; (w * h) as usize].concat();
+        let (tiles, _minted) = crate::bitmap::retile_rgba(document, &pixels, w, h);
+        document.registry.insert(ObjectData::Image(ImageObject {
+            location: geom::Point::ZERO,
+            offset: geom::Point::ZERO,
+            pixels: (w, h),
+            tile_size: i64::from(raster::TILE_SIDE as u32),
+            tiles,
+            name: None,
+            opacity: 1000,
+            blend: 0,
+            visible: true,
+            locked: false,
+            effects: Vec::new(),
+        }))
+    }
+
+    #[test]
+    fn convolve_identity_kernel_is_byte_equal_and_undoes() {
+        let mut document = Document::default();
+        let id = image_at(&mut document, 9);
+        document.object_selection = vec![id];
+        let before = pixel(&document, id, 5, 5);
+
+        let delta = ConvolveSelection
+            .apply_json(
+                &mut document,
+                json!({
+                    "kernel_width": 3,
+                    "kernel_height": 3,
+                    "kernel_values": [0, 0, 0, 0, 1, 0, 0, 0, 0],
+                }),
+            )
+            .expect("identity kernel applies");
+        assert_eq!(pixel(&document, id, 5, 5), before, "center 1 keeps bytes");
+
+        delta.apply_inverse(&mut document).expect("undo");
+        assert_eq!(pixel(&document, id, 5, 5), before);
+    }
+
+    #[test]
+    fn convolve_laplacian_zeros_a_solid() {
+        let mut document = Document::default();
+        let id = solid_image(&mut document, [200, 40, 30, 255]);
+        document.object_selection = vec![id];
+
+        // The classic edge kernel: a solid has no edges, so every
+        // channel sums to -255 → clamped black. Edge-clamped sampling
+        // reads the corner four times — same sum, same black.
+        ConvolveSelection
+            .apply_json(
+                &mut document,
+                json!({
+                    "kernel_width": 3,
+                    "kernel_height": 3,
+                    "kernel_values": [0, 1, 0, 1, -4, 1, 0, 1, 0],
+                }),
+            )
+            .expect("laplacian applies");
+        for (x, y) in [(0usize, 0usize), (4, 4), (7, 7), (7, 3)] {
+            assert_eq!(
+                pixel(&document, id, x, y),
+                [0, 0, 0, 255],
+                "({x},{y}) solid has no edges"
+            );
+        }
+    }
+
+    #[test]
+    fn convolve_affects_alpha_gate() {
+        let mut document = Document::default();
+        let id = solid_image(&mut document, [10, 20, 30, 100]);
+        document.object_selection = vec![id];
+        // A 1×1 ×2 kernel: doubles what it touches, clamped at 255.
+        ConvolveSelection
+            .apply_json(
+                &mut document,
+                json!({
+                    "kernel_width": 1,
+                    "kernel_height": 1,
+                    "kernel_values": [2],
+                }),
+            )
+            .expect("rgb pass");
+        assert_eq!(
+            pixel(&document, id, 2, 2),
+            [20, 40, 60, 100],
+            "alpha stands when affects_alpha is false"
+        );
+
+        ConvolveSelection
+            .apply_json(
+                &mut document,
+                json!({
+                    "kernel_width": 1,
+                    "kernel_height": 1,
+                    "kernel_values": [2],
+                    "affects_alpha": true,
+                }),
+            )
+            .expect("rgba pass");
+        assert_eq!(
+            pixel(&document, id, 2, 2),
+            [40, 80, 120, 200],
+            "alpha doubles too"
+        );
+    }
+
+    #[test]
+    fn motion_blur_samples_one_is_an_exact_copy() {
+        let mut document = Document::default();
+        let id = image_at(&mut document, 3);
+        document.object_selection = vec![id];
+        let before: Vec<[u8; 4]> = [(0usize, 0usize), (3, 5), (7, 7)]
+            .into_iter()
+            .map(|(x, y)| pixel(&document, id, x, y))
+            .collect();
+
+        // A single tap has no second sample to average, so the bake
+        // writes the pixels back unchanged (the tile bank still
+        // re-mints — pixels are the contract here).
+        for samples in [0u32, 1] {
+            MotionBlurSelection
+                .apply_json(
+                    &mut document,
+                    json!({"blur_type": "linear", "angle": 90.0, "distance": 4, "samples": samples}),
+                )
+                .expect("single tap applies");
+            for (slot, (x, y)) in before.iter().zip([(0usize, 0usize), (3, 5), (7, 7)]) {
+                assert_eq!(pixel(&document, id, x, y), *slot, "samples {samples}");
+            }
+        }
+    }
+
+    #[test]
+    fn motion_blur_linear_smears_and_undoes() {
+        let mut document = Document::default();
+        let id = image_at(&mut document, 0);
+        document.object_selection = vec![id];
+        let before = pixel(&document, id, 6, 2);
+
+        let delta = MotionBlurSelection
+            .apply_json(
+                &mut document,
+                json!({"blur_type": "linear", "angle": 0.0, "distance": 3, "samples": 4}),
+            )
+            .expect("linear blur applies");
+        match &delta {
+            Delta::Group(deltas) => assert_eq!(deltas.len(), 2, "one Mutated + one Bank"),
+            other => panic!("expected a group, got {other:?}"),
+        }
+        assert_ne!(pixel(&document, id, 6, 2), before, "the smear moves pixels");
+        delta.apply_inverse(&mut document).expect("undo");
+        assert_eq!(pixel(&document, id, 6, 2), before);
+    }
+
+    #[test]
+    fn motion_blur_radial_and_zoom_reach_their_kernels() {
+        let mut document = Document::default();
+        let id = image_at(&mut document, 77);
+        document.object_selection = vec![id];
+        let before = pixel(&document, id, 1, 6);
+
+        MotionBlurSelection
+            .apply_json(
+                &mut document,
+                json!({"blur_type": "radial", "angle": 0.0, "distance": 30, "samples": 8}),
+            )
+            .expect("radial applies");
+        assert_ne!(pixel(&document, id, 1, 6), before, "spin moved pixels");
+
+        MotionBlurSelection
+            .apply_json(
+                &mut document,
+                json!({"blur_type": "zoom", "angle": 0.0, "distance": 25, "samples": 8}),
+            )
+            .expect("zoom applies");
+        assert_ne!(pixel(&document, id, 1, 6), before, "zoom moved pixels");
+    }
+
+    #[test]
+    fn convolve_and_motion_blur_refusals_mutate_nothing() {
+        let mut document = Document::default();
+        let id = image_at(&mut document, 1);
+        document.object_selection = vec![id];
+        let snapshot = serde_json::to_vec(&document).unwrap();
+
+        let bad_convolve = [
+            json!({"kernel_width": 0, "kernel_height": 3, "kernel_values": []}),
+            json!({"kernel_width": 3, "kernel_height": 32, "kernel_values": []}),
+            json!({"kernel_width": 3, "kernel_height": 3, "kernel_values": [0, 1]}),
+        ];
+        for payload in bad_convolve {
+            let err = ConvolveSelection
+                .apply_json(&mut document, payload)
+                .expect_err("bad kernel refused");
+            assert!(matches!(err, EngineError::InvalidState { .. }));
+        }
+
+        let bad_blur = [
+            json!({"blur_type": "spiral", "angle": 0.0, "distance": 4, "samples": 2}),
+            json!({"blur_type": "linear", "angle": -0.5, "distance": 4, "samples": 2}),
+            json!({"blur_type": "linear", "angle": 361.0, "distance": 4, "samples": 2}),
+            json!({"blur_type": "linear", "angle": 45.0, "distance": 401, "samples": 2}),
+            json!({"blur_type": "linear", "angle": 45.0, "distance": 4, "samples": 101}),
+        ];
+        for payload in bad_blur {
+            let err = MotionBlurSelection
+                .apply_json(&mut document, payload)
+                .expect_err("bad blur payload refused");
+            assert!(matches!(err, EngineError::InvalidState { .. }));
+        }
+
+        assert_eq!(
+            serde_json::to_vec(&document).unwrap(),
+            snapshot,
+            "every refusal left the document untouched"
+        );
     }
 }

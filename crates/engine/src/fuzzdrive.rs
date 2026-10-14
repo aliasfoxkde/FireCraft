@@ -588,6 +588,8 @@ pub const CALLS: &[&str] = &[
     "filter.selection",
     "filter.selectionByID",
     "filter.selectionByName",
+    "filter.convolveSelection",
+    "filter.motionBlurSelection",
     "flatten.mergeDown",
     "flatten.selection",
     "flatten.document",
@@ -898,6 +900,43 @@ pub fn random_call(rng: &mut FuzzRng, document: &Document) -> (String, serde_jso
                 .pick(&["Adjust Color", "Blur", "Sharpen", "Other", "Fuzz"])
                 .copied(),
             "name": rng.pick(&["Invert", "Blur...", "Find Edges", "Bogus"]).copied(),
+        }),
+        // Arbitrary kernels: valid small ones, degenerate sizes, and
+        // value-count mismatches all ride the same call.
+        "filter.convolveSelection" => {
+            let kernel = rng
+                .pick(&[
+                    ("identity", 3u32, 3u32),
+                    ("laplacian", 3, 3),
+                    ("double", 1, 1),
+                    ("empty", 3, 3),
+                    ("zero-side", 0, 3),
+                    ("oversize", 3, 32),
+                ])
+                .unwrap_or(&("laplacian", 3, 3));
+            let (tag, kw, kh) = *kernel;
+            let values: Vec<serde_json::Value> = match (tag, kw, kh) {
+                (_, 1, 1) => vec![2],
+                ("identity", 3, 3) => vec![0, 0, 0, 0, 1, 0, 0, 0, 0],
+                (_, 3, 3) => vec![0, 1, 0, 1, -4, 1, 0, 1, 0],
+                // Degenerate sizes and value-count mismatches on purpose.
+                _ => vec![0, 1],
+            }
+            .into_iter()
+            .map(serde_json::Value::from)
+            .collect();
+            serde_json::json!({
+                "kernel_width": kw,
+                "kernel_height": kh,
+                "kernel_values": values,
+                "affects_alpha": rng.chance(4),
+            })
+        }
+        "filter.motionBlurSelection" => serde_json::json!({
+            "blur_type": rng.pick(&["linear", "radial", "zoom", "spiral"]).copied(),
+            "angle": rng.below(370) as f64 - 5.0,
+            "distance": rng.below(410),
+            "samples": rng.below(110),
         }),
         "object.duplicate" => serde_json::json!({ "id": any_id(rng) }),
         "object.translate" => {

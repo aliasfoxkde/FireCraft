@@ -8,11 +8,11 @@
 
 - **Released:** v0.1.0 (2026-10-13), repo public.
 - **Roadmap:** M0–M15 **all closed**.
-- **Registry:** 199 commands. **CI:** green 7/7 on `f668d85`; later
+- **Registry:** 201 commands. **CI:** green 7/7 on `f668d85`; later
   campaign pushes verified per batch (runbook: HANDOFF §6).
-- **CS6 DOM parity:** **226 C / 45 P / 0 M / 85 N** — **the M table is
+- **CS6 DOM parity:** **228 C / 43 P / 0 M / 85 N** — **the M table is
   empty** (2026-10-14): every CS6 dom mutation verb is carried or
-  partial. Remaining surface work is the 45 P rows and the recorded
+  partial. Remaining surface work is the 43 P rows and the recorded
   debts ([`HANDOFF.md`](HANDOFF.md) §4 Phase 9).
 
 ## Milestones
@@ -67,7 +67,8 @@
 | #108 | saved-selections trio (8.7, decision 0038) | f668d85 | **215 C / 45 P / 8 M / 88 N** |
 | #109 | clipboard surface: copy/cut/paste + paste-mask trio (8.6/6.6, decision 0039) | 1d1c8dc | **221 C / 45 P / 5 M / 85 N** |
 | #110 | filterSelection bake trio over compose kernels (8.8, decision 0040) | 3f67491 | **225 C / 45 P / 1 M / 85 N** |
-| #111 | document.setImageSize — bilinear resample, the last M row (5.4, decision 0041) | this batch | **226 C / 45 P / 0 M / 85 N** |
+| #111 | document.setImageSize — bilinear resample, the last M row (5.4, decision 0041) | a4455d6 | **226 C / 45 P / 0 M / 85 N** |
+| #112 | convolveSelection + motionBlurSelection bake commands (8.8 ext., decision 0042) | this batch | **228 C / 43 P / 0 M / 85 N** |
 
 **Campaign complete:** no remaining M families. Next: P-class partials
 and Phase 9 debts (HANDOFF §4).
@@ -105,5 +106,6 @@ and Phase 9 debts (HANDOFF §4).
 | 2026-10-14 | **221** | 45 | **5** | #109 clipboard surface (decision 0039) |
 | 2026-10-14 | **225** | 45 | **1** | #110 filter bake family (decision 0040) |
 | 2026-10-14 | **226** | 45 | **0** | #111 setImageSize — M table empty (decision 0041) |
+| 2026-10-14 | **228** | 43 | 0 | #112 convolve + motionBlur bakes (decision 0042) |
 
 (Pre-#91 counts are approximate; the matrix file is the authority.)

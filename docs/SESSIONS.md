@@ -212,3 +212,39 @@ format research, vendored node dictionary).
   Object×n]`, byte-exact undo retracting minted tiles. Parity
   **226C/45P/0M**, registry 199 — document-mutation coverage 271/271.
   Remaining surface work: 45 P rows + Phase 9 debts.
+
+## 2026-10-14 — convolve + motionBlur bake commands (#112, decision 0042)
+- Two P rows became real bake commands riding the 0040 core:
+  `filter.convolveSelection {kernel_width, kernel_height,
+  kernel_values, affects_alpha}` and `filter.motionBlurSelection
+  {blur_type: linear/radial/zoom, angle, distance, samples}` — both
+  build a one-op `compose::Plan` and call `bake_core` (empty-selection
+  refuse, per-image pre-flight, pixel-mask gating, byte-exact undo).
+- `compose::KernelOp::Convolve {width, height, values,
+  affects_alpha}` — the generic kernel behind the presets
+  (`convolve3` now delegates). Edge-clamped, center anchor, raw i64
+  accumulation, **no normalization**: the dom passes raw integer
+  coefficients, so their scale is the caller's contract (zero-sum
+  kernel → black, documented). `affects_alpha` extends the pass.
+- `filters::motion_blur_taps(surface, angle, distance, taps)` —
+  `samples` ("the number of times the original image is cloned") is
+  the tap count; taps spread evenly over 0..=distance px. The effect
+  carrier sets `taps = distance + 1`, whose step is exactly one
+  pixel — **Live Effect output byte-identical**; cache hash gained
+  the taps field. KernelOp gained `taps` on MotionBlur + the Convolve
+  variant (cache tag "CV", svg label "convolve").
+- Engine gates: kernel sides 1..=31, `values.len == w*h`, angle
+  finite 0..=360, distance 0..=400, samples 0..=100, blur_type one of
+  the three; everything refuses `InvalidState` before any mutation.
+  Radial/zoom take distance as sweep-degrees/pinch-percent through the
+  kernels' own carrier clamps (recorded substitution); angle stands
+  unused there.
+- Tests: identity kernel byte-equal + undo, laplacian zeros a solid
+  (incl. edge-clamped corners), 1×1 ×2 alpha gate, samples≤1 exact
+  copy, linear smear + undo, radial + zoom reach their kernels, nine
+  refusal shapes byte-stable. Fuzz: CALLS + arms (identity/laplacian/
+  double kernels + degenerate sizes/mismatched counts; blur_type
+  incl. "spiral", angle −5..365, distance 0..410, samples 0..110).
+- Parity flip: gen.py convolveSelection + motionBlurSelection P→C,
+  command surface refreshed → 201. dom-parity: **228C/43P/0M/85N**,
+  unresolved []. Registry 199→201.

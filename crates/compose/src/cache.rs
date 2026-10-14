@@ -306,10 +306,27 @@ fn hash_plan(h: &mut Hasher, plan: &Plan) {
             KernelOp::MotionBlur {
                 angle_degrees,
                 distance,
+                taps,
             } => {
                 h.tag(b"MB");
                 h.f64(*angle_degrees);
                 h.u32(*distance);
+                h.u32(*taps);
+            }
+            KernelOp::Convolve {
+                width,
+                height,
+                values,
+                affects_alpha,
+            } => {
+                h.tag(b"CV");
+                h.u32(*width);
+                h.u32(*height);
+                h.u32(*affects_alpha as u32);
+                h.u32(values.len() as u32);
+                for v in values {
+                    h.i64(*v);
+                }
             }
             KernelOp::RadialBlur { amount, quality } => {
                 h.tag(b"RB");
