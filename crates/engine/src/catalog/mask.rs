@@ -31,11 +31,11 @@ use crate::registry::CommandRegistry;
 
 /// `GRTi` — regular group. A disabled mask keeps its structure under
 /// this type (decision 0020's flagged design point, corpus-gated).
-const REGULAR_GROUP: i64 = 0;
+pub(crate) const REGULAR_GROUP: i64 = 0;
 /// `GRTi` — grayscale (bitmap) mask.
-const GRAYSCALE_MASK: i64 = 1;
+pub(crate) const GRAYSCALE_MASK: i64 = 1;
 /// `GRTi` — shape (vector) mask.
-const SHAPE_MASK: i64 = 2;
+pub(crate) const SHAPE_MASK: i64 = 2;
 
 /// Registers the mask commands (the pixel-mask plane rows ride with
 /// the family; `bitmap.select*` remains the select family's home).
@@ -60,9 +60,9 @@ pub(crate) fn install(registry: &mut CommandRegistry) -> Result<(), EngineError>
 // --- shared helpers -----------------------------------------------------
 
 /// A resolved mask group: its registry id and a clone of its data.
-struct MaskGroup {
-    id: ObjectId,
-    group: GroupObject,
+pub(crate) struct MaskGroup {
+    pub(crate) id: ObjectId,
+    pub(crate) group: GroupObject,
 }
 
 /// The `GRTi` a mask child's kind dictates: images rasterize as
@@ -80,7 +80,7 @@ fn group_type_of_mask(mask: &ObjectData) -> Option<i64> {
 /// when `id` is a live `GRTi` 1/2 group, else the group holding `id`
 /// in its content slot (`ELMv[1]`). Errors when no enabled mask group
 /// matches — CS6 throws the same way.
-fn owning_mask_group(
+pub(crate) fn owning_mask_group(
     document: &Document,
     name: &'static str,
     id: ObjectId,
@@ -525,7 +525,7 @@ enum RemoveMode {
 
 /// Attaches `id` back where `owner` was captured (the AddMask /
 /// RemoveMask splice step).
-fn attach_at(
+pub(crate) fn attach_at(
     document: &mut Document,
     name: &'static str,
     owner: Owner,

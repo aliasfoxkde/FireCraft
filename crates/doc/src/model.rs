@@ -3,7 +3,7 @@
 //! `docs/planning/firecraft/M3-doc-model.md`); fields whose byte layout
 //! is still unpinned (raw color ints) say so in their docs.
 
-use crate::registry::{ObjectId, Registry};
+use crate::registry::{ObjectData, ObjectId, Registry};
 use fwpng::nodetree::Node;
 use geom::{Affine, Point, Rect};
 
@@ -109,6 +109,30 @@ pub struct Document {
     /// exclusive in the UI, the model carries them independently).
     #[cfg_attr(feature = "serde", serde(default))]
     pub object_selection: Vec<ObjectId>,
+    /// The document clipboard (`dom.clipCopy` family): deep object
+    /// clones from the last copy/cut, group children captured after
+    /// their parents. Editing state, never file content: the format
+    /// has no node for it and the writer never reads this field.
+    /// Tile data rides by reference — copies share bank tile ids, and
+    /// the fresh-mint law keeps shared tiles pristine.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub clipboard: Option<Clipboard>,
+}
+
+/// The clipboard's cargo (decision 0039): deep object clones in
+/// capture order, ready for bottom-up re-minting on paste.
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Clipboard {
+    /// The captured objects, top-level items in selection order with
+    /// each group's subtree following its parent.
+    pub elements: Vec<ObjectData>,
+    /// The registry ids the clones came from, index-aligned with
+    /// `elements` — the old→new keys for paste's child rewrite.
+    pub ids: Vec<ObjectId>,
+    /// Indices into `elements` of the top-level captures (selection
+    /// order) — the only items paste attaches to a cell.
+    pub roots: Vec<usize>,
 }
 
 /// An `LSAv` layer-list entry: a reference to a shared-layer

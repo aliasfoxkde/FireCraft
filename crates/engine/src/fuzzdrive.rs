@@ -716,6 +716,12 @@ pub const CALLS: &[&str] = &[
     "selection.save",
     "selection.restore",
     "selection.deleteSaved",
+    "clipboard.copy",
+    "clipboard.cut",
+    "clipboard.paste",
+    "clipboard.pasteAsMask",
+    "clipboard.pasteInside",
+    "clipboard.pasteFromChannelToChannel",
     "bitmap.selectSimilar",
     "primitive.setRectRoundness",
     "primitive.setRectSides",
@@ -2479,6 +2485,23 @@ pub fn random_call(rng: &mut FuzzRng, document: &Document) -> (String, serde_jso
         }),
         "selection.deleteSaved" => serde_json::json!({
             "name": if rng.chance(50) { Some(rng.pick(&["a", "b", "c"]).copied().to_owned()) } else { None },
+        }),
+        "clipboard.copy" | "clipboard.cut" | "clipboard.pasteInside" => serde_json::json!({}),
+        "clipboard.paste" => serde_json::json!({
+            "page": any_index(rng, pages),
+            "layer": any_index(rng, 3),
+            "cell": any_index(rng, frames),
+        }),
+        "clipboard.pasteAsMask" => serde_json::json!({
+            "mask_type": rng.pick(&["image", "vector", "ask", "bogus"]).copied(),
+            "mask_replace_options": rng.pick(&["replace", "add", "ask", "bogus"]).copied(),
+        }),
+        "clipboard.pasteFromChannelToChannel" => serde_json::json!({
+            "from_channel": rng.pick(&["red", "green", "blue", "alpha", "bogus"]).copied(),
+            "to_channel": rng.pick(&["red", "green", "blue", "alpha", "bogus"]).copied(),
+            "page": if rng.chance(50) { Some(any_index(rng, pages)) } else { None },
+            "layer": if rng.chance(50) { Some(any_index(rng, 3)) } else { None },
+            "cell": if rng.chance(50) { Some(any_index(rng, frames)) } else { None },
         }),
         "bitmap.selectSimilar" => serde_json::json!({
             "id": any_id(rng),

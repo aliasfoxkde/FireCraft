@@ -138,6 +138,14 @@ pub enum Delta {
         /// The list as it was before the command.
         before: Vec<doc::SavedSelection>,
     },
+    /// Restore the document clipboard (`dom.clipCopy` family). The
+    /// whole clipboard rides the capture, mirroring
+    /// [`Delta::SavedSelections`]: `None` when the document carried no
+    /// clipboard.
+    Clipboard {
+        /// The clipboard as it was before the command.
+        before: Option<Box<doc::Clipboard>>,
+    },
     /// Restore one page's scalars and canvas.
     PageInfo {
         /// Page index.
@@ -335,6 +343,9 @@ impl Delta {
             }
             Delta::SavedSelections { before } => {
                 document.saved_selections = before.clone();
+            }
+            Delta::Clipboard { before } => {
+                document.clipboard = before.as_deref().cloned();
             }
             Delta::PageInfo { page, before } => {
                 page_mut(document, *page)?.info = (**before).clone();

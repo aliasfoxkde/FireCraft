@@ -8,6 +8,7 @@ pub(crate) mod arrange;
 pub(crate) mod autoshape;
 pub(crate) mod bitmap;
 pub(crate) mod cell;
+pub(crate) mod clipboard;
 pub(crate) mod display;
 pub(crate) mod document;
 pub(crate) mod filter;
@@ -33,6 +34,7 @@ pub fn install(registry: &mut CommandRegistry) -> Result<(), EngineError> {
     object::install(registry)?;
     arrange::install(registry)?;
     bitmap::install(registry)?;
+    clipboard::install(registry)?;
     retouch::install(registry)?;
     autoshape::install(registry)?;
     filter::install(registry)?;

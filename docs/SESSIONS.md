@@ -149,3 +149,20 @@ format research, vendored node dictionary).
   with an immutable `access::cell`/`layer` pre-flight before any
   minting, plus a bank+registry byte-equality regression test.
   Parity **215C/45P/8M**, registry 189.
+  #109 clipboard surface (decision 0039): `Document.clipboard`
+  (editing state — the writer never reads it) holds a subtree-closed
+  capture (`elements`/`ids`/`roots`; stale selection members skip).
+  `clipboard.copy` deep-captures; `clipboard.cut` captures then
+  deletes through the object.delete machinery; `clipboard.paste`
+  pre-flights the placement cell before minting, re-mints bottom-up
+  rewriting group children via the old→new map, and pushes Created
+  deltas in **chronological mint order** — the registry's
+  `retract_insert` only retracts the newest insertion, so a
+  LIFO-sorted undo mismatches generations and fails. `clipPasteAsMask`
+  keeps the CS6 exactly-one-selected throw, maps mask kind to the
+  `GRTi` type (image beats vector by kind, as the manual states),
+  and `replace` swaps the existing mask child in place;
+  `clipPasteInside` delegates with defaults. `clipPasteFromChannelTo`
+  `Channel` overlays a channel plane on a single selected image, or
+  mints a grayscale image (`RGB = byte`) when none is selected.
+  Parity **221C/45P/5M**, registry 195.

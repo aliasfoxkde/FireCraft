@@ -14,13 +14,13 @@
 - **Ship state:** v0.1.0 released, repo public. Roadmap M0–M15 all
   closed. 155+ commits, CI green on `3d74723` (7/7 jobs; the fuzz job
   on that commit caught the addImage minting leak — fixed in `000557d`).
-- **Engine registry:** 189 commands, pinned equal to the fuzz call
+- **Engine registry:** 195 commands, pinned equal to the fuzz call
   table by `the_call_table_covers_the_catalog`.
-- **CS6 DOM verb-surface parity:** **215 C / 45 P / 8 M / 88 N**
+- **CS6 DOM verb-surface parity:** **221 C / 45 P / 5 M / 85 N**
   (`docs/planning/generated/dom-parity.md`, regenerate per §5 below).
   (The CS6 verb list carries both case spellings of mergeDown and
   AddNewImage — those families flipped four rows each.)
-- **Active campaign:** close the 8 remaining M (missing) verbs in
+- **Active campaign:** close the 5 remaining M (missing) verbs in
   family batches — one decision doc + one command batch per family,
   exactly as #87–#93 did. The plan is §4 below.
 - **Clean-room invariants (never violate):** `source/` is Adobe's
@@ -261,8 +261,22 @@ mutations and refuses without a linked slice.
   selection as base (collapsed fold → no selection); `selection.deleteSaved`
   removes. Single-document (`toDocument`/`fromDocument` omitted);
   both "new or replace" and "replace" spellings accepted.
-- **8.6 Clipboard mask ops**: `clipPasteAsMask`, `clipPasteInside`,
-  `clipPasteFromChannelToChannel` — needs the clipboard surface (6.6).
+- **8.6/6.6 — DONE (decision 0039).** The full clipboard surface
+  landed 2026-10-14: `Document.clipboard: Option<Clipboard>`
+  (editing-state class; `elements`/`ids`/`roots`, subtree-closed).
+  `clipboard.copy` deep-captures the selection; `clipboard.cut`
+  captures then deletes through object.delete machinery (stale
+  members skipped); `clipboard.paste` pre-flights the placement cell,
+  re-mints bottom-up with child-id rewrite, attaches roots, and
+  pushes Created deltas in chronological mint order (registry
+  retraction is strictly newest-first). `clipPasteAsMask` keeps the
+  CS6 exactly-one-selected throw, maps mask kind to the `GRTi` type,
+  and `replace` swaps the existing mask child in place;
+  `clipPasteInside` delegates with defaults (the manual retires it in
+  Fireworks 4). `clipPasteFromChannelToChannel` overlays a channel
+  plane on a single selected image, or mints a grayscale image from
+  `RGB = byte` when none is selected — matching the manual's
+  "resulting in a grayscale image" clause.
 
 ### Phase 9 — Recorded debts (P-class limitations; no parity pressure)
 - **6.1-object-duplicate** deep-clone of groups (today shallow).
@@ -271,18 +285,19 @@ mutations and refuses without a linked slice.
 - **mkBT tile-bank WRITER** (reader-side bank exists; writer side
   missing — check `fwpng`/`doc::library`).
 - **Image resample pass** (feeds 5.4).
-- **Clipboard surface** (feeds 8.6).
+- **mask_replace_options "add"** (mask union fold) refused as debt.
+- **Path→image rasterizer hook** for `mask_type "image"` on vector
+  clipboard contents (refused today).
 - **Shared-layer link-resolution render** (decision 0022: link layers
   render empty today).
 
 ### Suggested order
 5.1 → 5.2 (quick wins, warm up the loop) → Phase 1 → Phase 2 → 6.1 →
 6.2 → 8.2 → 8.5 → Phase 3 → 8.3 → 8.4 → 5.3 → 4 (evidence) → 7
-(evidence) → 8.1 → 8.6/6.6 → 6.4 → 5.4. Progress through 2026-10-14:
-5.1–5.2, Phases 1–2, 6.1, 6.2, 8.2, 8.5, Phase 3, 8.3, 8.4, 5.3, 4,
-7, 8.1, 8.7 done — **next is 8.6/6.6** (the clipboard surface, feeding
-`clipPasteAsMask` / `clipPasteInside` / `clipPasteFromChannelToChannel`),
-then the filterSelection bake trio (4 M rows, one a CS6-typo duplicate;
+(evidence) → 8.1 → 8.7 → 8.6/6.6 → 6.4 → 5.4. Progress through
+2026-10-14: 5.1–5.2, Phases 1–2, 6.1, 6.2, 8.2, 8.5, Phase 3, 8.3,
+8.4, 5.3, 4, 7, 8.1, 8.7, 8.6/6.6 done — **next is the filterSelection
+bake trio** (4 M rows, one a CS6-typo duplicate `filterSelectonByName`;
 the `filters` kernel crate exists from `be98d4b`), then 6.4 (resample)
 and 5.4 (setDocumentImageSize, which rides 6.4).
 Re-derive from `dom-parity.md`'s M table if the matrix has moved; the

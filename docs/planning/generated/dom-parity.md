@@ -14,17 +14,17 @@ enforced == the fuzz call table).
 
 | class | meaning | count (of 356 dom verbs) |
 |---|---|---|
-| C | carried: a registry command implements the mutation | 215 |
+| C | carried: a registry command implements the mutation | 221 |
 | P | partial: carried with a recorded model limitation | 45 |
-| M | missing: no command and no decision — work items | 8 |
-| N | not applicable: non-document surface (accessor/UI/session/clipboard/export/OS) | 88 |
+| M | missing: no command and no decision — work items | 5 |
+| N | not applicable: non-document surface (accessor/UI/session/clipboard/export/OS) | 85 |
 
-Document-mutation coverage: **260 of 268** carried-or-partial
-(215 carried, 45 partial, 8 missing).
+Document-mutation coverage: **266 of 271** carried-or-partial
+(221 carried, 45 partial, 5 missing).
 
 ### Gap families (the Missing table, grouped)
 
-The 8 missing verbs collapse into six families, largest first —
+The 5 missing verbs collapse into six families, largest first —
 each family is one design decision plus a command batch:
 
 1. **Object transforms** (1 verb remains): setDocumentImageSize
@@ -102,6 +102,12 @@ each family is one design decision plus a command batch:
 | `changeGuide` | C | page.changeGuide | first guide at `current` moves; absent is a refusal |
 | `changeNineScaleGuide` | C | symbol.set9Slice | guide line positions ride the grid |
 | `clearJPEGMask` | C | mask.clearJPEG |  |
+| `clipCopy` | C | clipboard.copy |  |
+| `clipCut` | C | clipboard.cut |  |
+| `clipPaste` | C | clipboard.paste | no cross-document resample; OS bridge is shell territory |
+| `clipPasteAsMask` | C | clipboard.pasteAsMask |  |
+| `clipPasteFromChannelToChannel` | C | clipboard.pasteFromChannelToChannel |  |
+| `clipPasteInside` | C | clipboard.pasteInside |  |
 | `cloneSelection` | C | object.duplicate |  |
 | `converAnimSymbolToGraphicSymbol` | C | symbol.setType |  |
 | `convertAnimSymbolToGraphicSymbol` | C | symbol.setType |  |
@@ -330,9 +336,6 @@ each family is one design decision plus a command batch:
 
 | CS6 verb | class | FireCraft carrier | note |
 |---|---|---|---|
-| `clipPasteAsMask` | M | - | clipboard op (the mask model itself landed via mask.add) |
-| `clipPasteFromChannelToChannel` | M | - | pixel channel copy - bitmap domain, no command |
-| `clipPasteInside` | M | - | paste-inside = clipboard op (mask model landed) |
 | `filterSelection` | M | - | pixel-filter bake verb (permanent, not a Live Effect) — filter family; needs the bitmap bake pass (debt) |
 | `filterSelectionByID` | M | - | pixel-filter bake verb (permanent, not a Live Effect) — filter family; needs the bitmap bake pass (debt) |
 | `filterSelectionByName` | M | - | pixel-filter bake verb (permanent, not a Live Effect) — filter family; needs the bitmap bake pass (debt) |
@@ -348,12 +351,9 @@ each family is one design decision plus a command batch:
 | `adjustExportToSize` | N | export |  |
 | `changeCurrentPage` | N | session | active-page state, not a document mutation |
 | `changeSliceGuide` | N | ui | view chrome (slice guides are export-time overlays) |
-| `clipCopy` | N | clipboard | app session; object.duplicate carries in-document copies |
 | `clipCopyAsPaths` | N | clipboard |  |
 | `clipCopyFormats` | N | clipboard |  |
 | `clipCopyJsToExecute` | N | clipboard |  |
-| `clipCut` | N | clipboard | delete + session clipboard |
-| `clipPaste` | N | clipboard |  |
 | `clipPasteAttributes` | N | clipboard | paint-style copy - path.setFill/setStroke carry the model side |
 | `close` | N | session | document lifecycle |
 | `copyHtmlWizard` | N | export | HTML export wizard |
