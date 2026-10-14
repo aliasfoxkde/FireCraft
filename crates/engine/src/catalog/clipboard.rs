@@ -13,7 +13,10 @@ use std::collections::HashMap;
 
 use doc::{Clipboard, Document, GroupObject, ImageObject, ObjectData, ObjectId};
 
-use super::mask::{GRAYSCALE_MASK, SHAPE_MASK, attach_at, owning_mask_group};
+use super::mask::{
+    GRAYSCALE_MASK, SHAPE_MASK, attach_at, bounds_of, owning_mask_group, plane_mask_image,
+    stamp_path,
+};
 use super::object::{attach_cell, detach, find_owner};
 use crate::access;
 use crate::bitmap::{assemble_rgba, retile_rgba};
@@ -379,11 +382,10 @@ fn paste_as_mask_core(
         });
     }
     let target = document.object_selection[0];
-    let mask_data = single_root(document, name)?.clone();
-    // "ask" is a dialog — refused. "image" against a path has no
-    // rasterizer hook yet (deviation 4). The kind dictates the group
-    // type; the CS6 rule "a single image is pasted as an image mask
-    // even if you pass vector" falls out of the kind check.
+    let mut mask_data = single_root(document, name)?.clone();
+    // "ask" is a dialog — refused. The kind dictates the group type;
+    // the CS6 rule "a single image is pasted as an image mask even if
+    // you pass vector" falls out of the kind check.
     match mask_type {
         Some("ask") => {
             return Err(EngineError::InvalidState {
@@ -399,14 +401,38 @@ fn paste_as_mask_core(
             });
         }
     }
+    // A vector clipboard under mask_type "image" rasterizes into the
+    // mask image (decision 0057): binary path coverage over the
+    // target's bounds, the same `stamp_path` → `plane_mask_image`
+    // conversion `mask.setMode "mask to image"` uses.
+    let mut mask_tiles: Vec<u32> = Vec::new();
+    let mut raster: Option<(doc::SelectionMask, geom::Point)> = None;
+    if let (ObjectData::Path(path), Some("image")) = (&mask_data, mask_type) {
+        let bounds = bounds_of(document, name, target)?;
+        let width = u32::try_from(bounds.width().ceil() as i64)
+            .unwrap_or(1)
+            .max(1);
+        let height = u32::try_from(bounds.height().ceil() as i64)
+            .unwrap_or(1)
+            .max(1);
+        let mut plane = doc::SelectionMask::empty(width, height);
+        stamp_path(
+            &mut plane,
+            path,
+            geom::Vec2::new(-bounds.x0, -bounds.y0),
+            name,
+        )?;
+        raster = Some((plane, geom::Point::new(bounds.x0, bounds.y0)));
+    }
+    if let Some((plane, location)) = raster {
+        let mut next = document.tiles.ids().max().unwrap_or(0) + 1;
+        let mut minted = Vec::new();
+        let image = plane_mask_image(document, &plane, location, &mut next, &mut minted);
+        mask_tiles = minted;
+        mask_data = ObjectData::Image(image);
+    }
     let group_type = match (&mask_data, mask_type) {
         (ObjectData::Image(_), _) => GRAYSCALE_MASK,
-        (ObjectData::Path(_), Some("image")) => {
-            return Err(EngineError::InvalidState {
-                name: name.to_owned(),
-                detail: "mask_type \"image\" needs a rasterizer hook (not wired)".to_owned(),
-            });
-        }
         (ObjectData::Path(_), _) => SHAPE_MASK,
         _ => {
             return Err(EngineError::InvalidState {
@@ -489,6 +515,7 @@ fn paste_as_mask_core(
                     object: Box::new(removed_mask),
                 },
             },
+            Delta::Bank { added: mask_tiles },
         ]));
     }
 
@@ -524,6 +551,7 @@ fn paste_as_mask_core(
         id: group_id,
         inverse: ObjectInverse::Created,
     });
+    deltas.push(Delta::Bank { added: mask_tiles });
     Ok(Delta::Group(deltas))
 }
 
@@ -1231,6 +1259,63 @@ mod clipboard_tests {
         match document.registry.get(id) {
             Some(ObjectData::Image(image)) => image.clone(),
             _ => panic!("object {id:?} is an image"),
+        }
+    }
+
+    #[test]
+    fn paste_as_mask_rasterizes_a_vector_clipboard_under_image_type() {
+        let (mut document, ids) = testdoc::sample_document();
+        // Copy path ids[0]; mask ids[1] with it, rasterized.
+        document.object_selection = vec![ids[0]];
+        Copy.apply_json(&mut document, json!({})).expect("copy");
+        document.object_selection = vec![ids[1]];
+        let tiles_before = document.tiles.len();
+        let snapshot = serde_json::to_vec(&document).unwrap();
+
+        let delta = PasteAsMask
+            .apply_json(&mut document, json!({"mask_type": "image"}))
+            .expect("pasteAsMask applies");
+        let elements = document.pages[0].layers.layers[0].cells[0].elements.clone();
+        let Some(ObjectData::Group(group)) = document.registry.get(elements[1]) else {
+            panic!("the slot holds a mask group");
+        };
+        assert_eq!(group.group_type, 1, "a rasterized mask is a grayscale mask");
+        assert_eq!(group.children[1], ids[1], "the target is the content child");
+        let mask = image_of_test(&document, group.children[0]);
+        // The mask image spans the target's bounds; the path covers its
+        // own interior, so the plane is mostly opaque coverage.
+        assert!(mask.pixels.0 > 0 && mask.pixels.1 > 0, "real extent");
+        let plane = crate::bitmap::assemble_rgba(&document, &mask, "test").expect("assembled");
+        let covered = plane.chunks_exact(4).filter(|px| px[0] > 200).count();
+        let total = plane.len() / 4;
+        assert!(covered > total / 2, "the path covers its interior");
+        assert!(
+            document.tiles.len() > tiles_before,
+            "the rasterized mask mints bank tiles"
+        );
+
+        // Undo drops the minted tiles and restores the exact bytes.
+        delta.apply_inverse(&mut document).expect("undo");
+        assert_eq!(serde_json::to_vec(&document).unwrap(), snapshot);
+        assert_eq!(document.tiles.len(), tiles_before, "tiles retract");
+
+        // Passing "vector" for a path clipboard keeps the shape mask.
+        PasteAsMask
+            .apply_json(&mut document, json!({"mask_type": "vector"}))
+            .expect("pasteAsMask applies");
+        let elements = document.pages[0].layers.layers[0].cells[0].elements.clone();
+        match document.registry.get(elements[1]) {
+            Some(ObjectData::Group(group)) => {
+                assert_eq!(group.group_type, 2, "vector stays a shape mask");
+                assert!(
+                    matches!(
+                        document.registry.get(group.children[0]),
+                        Some(ObjectData::Path(_))
+                    ),
+                    "the mask child is still a path"
+                );
+            }
+            other => panic!("wrong slot: {other:?}"),
         }
     }
 }

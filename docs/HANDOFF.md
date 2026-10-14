@@ -490,8 +490,13 @@ mutations and refuses without a linked slice.
   in #111); the open remainder is bilinear *quality* on
   `bitmap.importFile` (nearest-neighbour today, decision 0054).
 - **mask_replace_options "add"** (mask union fold) refused as debt.
-- **Path→image rasterizer hook** for `mask_type "image"` on vector
-  clipboard contents (refused today).
+- ~~**Path→image rasterizer hook** (mask_type "image")~~ **DONE
+  2026-10-14 (decision 0057, #128):** `pasteAsMask` rasterizes a
+  vector clipboard into the grayscale mask image (the `mask.setMode`
+  conversion, `stamp_path` → `plane_mask_image`, over the target's
+  bounds); `Delta::Bank` rides undo. The bake-site half
+  (`filterSelection` rasterize-first, an object-kind conversion)
+  stays refused as its own decision.
 - **Shared-layer link-resolution render** (decision 0022: link layers
   render empty today).
 

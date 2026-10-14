@@ -10,6 +10,7 @@ Current version: **0.1.0**.
 
 ### Features
 
+- **object**: deep-clone groups on duplicate (8b06184)
 - **fwpng**: tile-bank load and write path (2a6abf6)
 - **bitmap**: importFile placement verb (fd828c0)
 - **symbol**: duplicateSymbolForAlias verb (074890b)

@@ -139,7 +139,7 @@ fn owning_mask_group_deep(
 }
 
 /// Union content bounds of one object (identity transform).
-fn bounds_of(
+pub(crate) fn bounds_of(
     document: &Document,
     name: &'static str,
     id: ObjectId,
@@ -186,7 +186,7 @@ fn uniform_mask_image(rect: geom::Rect, level: u8) -> ImageObject {
 /// pixel, stored in fresh tiles at `location`. Tile ids allocate
 /// sequentially from `next`; every id minted lands in `minted` so the
 /// caller can push a `Delta::Bank` inverse.
-fn plane_mask_image(
+pub(crate) fn plane_mask_image(
     document: &mut Document,
     plane: &SelectionMask,
     location: Point,
@@ -305,7 +305,7 @@ fn mask_gray_plane(
 /// exactly like the renderer's (`vector::flatten_cubic`), lines stay
 /// straight. Open contours close chord-wise (a mask from an open path
 /// is degenerate in CS6 too).
-fn stamp_path(
+pub(crate) fn stamp_path(
     mask: &mut SelectionMask,
     path: &PathObject,
     offset: Vec2,

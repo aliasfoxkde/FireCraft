@@ -698,3 +698,27 @@ Batch: Phase 9 debt (no new commands, no parity flip).
   on importFile).
 - Gates: engine suite green (381 lib + session), clippy -D warnings,
   fmt, 256-seed CI-base fuzz sweep clean.
+
+## #128 — 2026-10-14 — vector→image-mask rasterization (decision 0057)
+
+Batch: Phase 9 debt, half closed (no new commands, no parity flip).
+
+- `clipboard.pasteAsMask` no longer refuses `mask_type "image"` on a
+  path clipboard: the path rasterizes over the target's bounds
+  through the exact conversion `mask.setMode "mask to image"` already
+  uses (`stamp_path` binary coverage → `plane_mask_image` gray tile
+  grid, both widened to `pub(crate)`), and the group lands as a
+  grayscale mask with an image child. `Delta::Bank` rides undo in
+  both return paths (replace-existing and fresh-group).
+- Disjoint geometry is a valid all-zero mask (content hidden
+  everywhere) — the same render outcome a disjoint path mask gives
+  today; no special case.
+- The debt's other half stays refused with a narrowed row:
+  `filterSelection` on a non-image selection converts the OBJECT to a
+  bitmap in CS6 — an object-kind mutation that deserves its own
+  decision, not a rider here.
+- Tests: +1 (image-type lands a grayscale mask over the target's
+  bounds with majority-opaque coverage; undo byte-exact + tiles
+  retracted; vector-type still lands a shape mask with a path child).
+- Gates: engine suite green (382 lib), clippy -D warnings, fmt,
+  256-seed CI-base fuzz sweep clean.
