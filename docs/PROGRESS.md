@@ -21,6 +21,10 @@
   every tile) and writes (runtime-minted tiles serialize; original
   streams stay verbatim), and library export carries member rasters
   (#126, decision 0055) — Phase 9's tile-bank debt closed.
+- **Mask fidelity:** pasteAsMask rasterizes vector clipboards into
+  grayscale image masks (#128, decision 0057) and `mask_replace_options
+  "add"` unions coverages (#129, decision 0058) — Phase 9's mask debts
+  closed.
 
 ## Milestones
 
@@ -91,6 +95,7 @@
 | #126 | mkBT tile-bank load/write: open joins the bank, save merges fresh ids (`encode_mkbt` split law), library export carries rasters (Phase 9, decision 0055) | 2a6abf6 | 268 C (no surface change) |
 | #127 | object.duplicate deep-clones groups: `clone_subtree` mints a slot per live descendant, undo retracts all (Phase 9, decision 0056) | 8b06184 | 268 C (no surface change) |
 | #128 | pasteAsMask mask_type "image" rasterizes a vector clipboard into the mask bitmap (Phase 9, decision 0057) | this batch | 268 C (no surface change) |
+| #129 | pasteAsMask mask_replace_options "add" unions the coverages (mask_coverage max-fold, Phase 9, decision 0058) | this batch | 268 C (no surface change) |
 
 **Campaign complete:** no remaining M families. Next: P-class partials
 and Phase 9 debts (HANDOFF §4).
@@ -103,7 +108,7 @@ and Phase 9 debts (HANDOFF §4).
 | Pattern-authoring command | fills UX | #85 |
 | ~~mkBT tile-bank **writer**~~ **DONE** — landed as open-join + save-merge + extract-copy in #126 (decision 0055) | bitmap round-trip | M7 |
 | ~~Image resample pass~~ **DONE** — landed as `bitmap::resample_rgba` in #111 | setDocumentImageSize (closed, decision 0041) | M8 |
-| mask_replace_options "add" (mask union fold) | clipPasteAsMask variant | #109 (decision 0039) |
+| ~~mask_replace_options "add" (mask union fold)~~ **DONE** — landed in #129 (decision 0058) | clipPasteAsMask variant | #109 (decision 0039) |
 | ~~Path→image rasterizer (mask_type "image" on vector clipboard)~~ **DONE** — landed in #128 (decision 0057); bake-site half remains | clipPasteAsMask variant | #109 (decision 0039) |
 | Path→image rasterizer (filterSelection on non-image selection) | 8.8 bake family refuses whole | #110 (decision 0040) |
 | Out-of-bounds effect growth (bake clips to the image surface) | tile-bank growth parity | #110 (decision 0040) |
@@ -144,5 +149,6 @@ and Phase 9 debts (HANDOFF §4).
 | 2026-10-14 | 268 | 3 | 0 | #126 mkBT tile-bank load/write (decision 0055, no surface change) |
 | 2026-10-14 | 268 | 3 | 0 | #127 duplicate deep-clones groups (decision 0056, no surface change) |
 | 2026-10-14 | 268 | 3 | 0 | #128 vector→image-mask rasterization (decision 0057, no surface change) |
+| 2026-10-14 | 268 | 3 | 0 | #129 mask "add" union fold (decision 0058, no surface change) |
 
 (Pre-#91 counts are approximate; the matrix file is the authority.)

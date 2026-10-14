@@ -365,6 +365,55 @@ impl TypedCommand for Paste {
     }
 }
 
+/// One mask element's coverage as a gray plane spanning `dims` at
+/// document-space `origin` (decision 0058): paths stamp binary
+/// coverage; images must overlay exactly (extent and location) and
+/// contribute their red channel — the `mask_gray_plane` rules,
+/// bounds-keyed.
+fn mask_coverage(
+    document: &Document,
+    name: &'static str,
+    mask: &ObjectData,
+    dims: (u32, u32),
+    origin: geom::Point,
+) -> Result<doc::SelectionMask, EngineError> {
+    match mask {
+        ObjectData::Path(path) => {
+            let mut plane = doc::SelectionMask::empty(dims.0, dims.1);
+            stamp_path(
+                &mut plane,
+                path,
+                geom::Vec2::new(-origin.x, -origin.y),
+                name,
+            )?;
+            Ok(plane)
+        }
+        ObjectData::Image(image) => {
+            if (image.pixels.0, image.pixels.1) != (i64::from(dims.0), i64::from(dims.1))
+                || image.location != origin
+            {
+                return Err(EngineError::InvalidState {
+                    name: name.to_owned(),
+                    detail: format!(
+                        "mask image {}x{} does not overlay the {}x{} target at ({}, {})",
+                        image.pixels.0, image.pixels.1, dims.0, dims.1, origin.x, origin.y
+                    ),
+                });
+            }
+            let flat = assemble_rgba(document, image, name)?;
+            Ok(doc::SelectionMask {
+                width: dims.0,
+                height: dims.1,
+                alpha: flat.chunks_exact(4).map(|pixel| pixel[0]).collect(),
+            })
+        }
+        other => Err(EngineError::InvalidState {
+            name: name.to_owned(),
+            detail: format!("mask kind {other:?} carries no rasterizable coverage"),
+        }),
+    }
+}
+
 /// The pasteAsMask core (decision 0039): the clipboard's single
 /// element becomes the mask of the one selected element. Shared by
 /// `clipboard.pasteAsMask` and the retired `clipboard.pasteInside`.
@@ -443,12 +492,7 @@ fn paste_as_mask_core(
     };
     let replace = match mask_replace_options {
         None | Some("replace") => true,
-        Some("add") => {
-            return Err(EngineError::InvalidState {
-                name: name.to_owned(),
-                detail: "mask_replace_options \"add\" (mask union) is recorded debt".to_owned(),
-            });
-        }
+        Some("add") => false,
         Some("ask") => {
             return Err(EngineError::InvalidState {
                 name: name.to_owned(),
@@ -463,21 +507,49 @@ fn paste_as_mask_core(
         }
     };
 
-    // Replace-into-existing swaps the mask child; otherwise a fresh
-    // mask group takes the target's owner slot.
+    // Replace-into-existing swaps the mask child ("add" unions into
+    // it); otherwise a fresh mask group takes the target's owner slot
+    // ("add" to no mask is a plain paste).
     let existing = owning_mask_group(document, name, target).ok();
     if let Some(old) = existing {
-        if !replace {
-            return Err(EngineError::InvalidState {
-                name: name.to_owned(),
-                detail: "the target already carries a mask".to_owned(),
-            });
-        }
         let Some(removed_mask_id) = old.group.children.first().copied() else {
             return Err(EngineError::InvalidState {
                 name: name.to_owned(),
                 detail: "the mask group carries no mask child".to_owned(),
             });
+        };
+        let mask_data = if replace {
+            mask_data
+        } else {
+            // "add": the pasted mask unions into the existing one
+            // (decision 0058) — both coverages fold at max over the
+            // target's bounds and land as one grayscale image mask.
+            let bounds = bounds_of(document, name, target)?;
+            let dims = (
+                u32::try_from(bounds.width().ceil() as i64)
+                    .unwrap_or(1)
+                    .max(1),
+                u32::try_from(bounds.height().ceil() as i64)
+                    .unwrap_or(1)
+                    .max(1),
+            );
+            let origin = geom::Point::new(bounds.x0, bounds.y0);
+            let mut union = mask_coverage(
+                document,
+                name,
+                access::object(document, name, removed_mask_id)?,
+                dims,
+                origin,
+            )?;
+            let incoming = mask_coverage(document, name, &mask_data, dims, origin)?;
+            for (slot, &gray) in union.alpha.iter_mut().zip(&incoming.alpha) {
+                *slot = (*slot).max(gray);
+            }
+            let mut next = document.tiles.ids().max().unwrap_or(0) + 1;
+            let mut minted = Vec::new();
+            let image = plane_mask_image(document, &union, origin, &mut next, &mut minted);
+            mask_tiles.extend(minted);
+            ObjectData::Image(image)
         };
         // Mint the new mask first, then rewrite the group in place.
         let fresh = document.registry.insert(mask_data);
@@ -492,6 +564,9 @@ fn paste_as_mask_core(
             });
         };
         group.children[0] = fresh;
+        if !replace {
+            group.group_type = GRAYSCALE_MASK;
+        }
         let Some(removed_mask) = document.registry.remove(removed_mask_id) else {
             return Err(EngineError::MissingTarget {
                 name: name.to_owned(),
@@ -570,8 +645,8 @@ struct PasteAsMaskPayload {
     #[serde(default)]
     mask_type: Option<String>,
     /// "replace" (default) / "add" / "ask" — behavior when the target
-    /// already carries a mask; "add" is recorded debt, "ask" is a
-    /// shell dialog.
+    /// already carries a mask; "add" unions the coverages (decision
+    /// 0058), "ask" is a shell dialog.
     #[serde(default)]
     mask_replace_options: Option<String>,
 }
@@ -1082,7 +1157,6 @@ mod clipboard_tests {
         for payload in [
             json!({"mask_type": "ask"}),
             json!({"mask_type": "sideways"}),
-            json!({"mask_replace_options": "add"}),
             json!({"mask_replace_options": "ask"}),
             json!({"mask_replace_options": "maybe"}),
         ] {
@@ -1149,6 +1223,114 @@ mod clipboard_tests {
         delta.apply_inverse(&mut document).expect("undo");
         assert_eq!(serde_json::to_vec(&document).unwrap(), snapshot);
         assert!(document.registry.get(mask_id).is_some(), "old mask revived");
+    }
+
+    #[test]
+    fn paste_as_mask_add_unions_into_the_existing_mask() {
+        let (mut document, ids) = testdoc::sample_document();
+        // Target ids[1] (a path); an existing grayscale mask whose top
+        // band is opaque and the rest transparent, sized to the
+        // target's bounds so the union overlays.
+        let bounds = super::super::mask::bounds_of(&document, "test", ids[1]).expect("bounds");
+        let width = bounds.width().ceil() as i64;
+        let height = bounds.height().ceil() as i64;
+        let mut plane = vec![0u8; (width * height * 4) as usize];
+        for pixel in plane.chunks_exact_mut(4).take((width * 2) as usize) {
+            pixel.copy_from_slice(&[255, 255, 255, 255]);
+        }
+        let (tiles, _minted) = crate::bitmap::retile_rgba(&mut document, &plane, width, height);
+        let mask_id = document.registry.insert(ObjectData::Image(ImageObject {
+            location: geom::Point::new(bounds.x0, bounds.y0),
+            offset: geom::Point::ZERO,
+            pixels: (width, height),
+            tile_size: i64::from(raster::TILE_SIDE as u32),
+            tiles,
+            name: None,
+            opacity: 1000,
+            blend: 0,
+            visible: true,
+            locked: false,
+            effects: Vec::new(),
+        }));
+        let group_id = document.registry.insert(ObjectData::Group(GroupObject {
+            group_type: 1,
+            name: None,
+            children: vec![mask_id, ids[1]],
+            opacity: 1000,
+            blend: 0,
+            visible: true,
+            locked: false,
+            mask_hidden: false,
+            mask_linked: None,
+            effects: Vec::new(),
+        }));
+        document.pages[0].layers.layers[0].cells[0].elements = vec![ids[0], group_id];
+        document.object_selection = vec![ids[1]];
+        // The clipboard's narrower path (ids[0]) unions in.
+        let path = document.registry.get(ids[0]).cloned().expect("path");
+        document.clipboard = Some(Clipboard {
+            elements: vec![path],
+            ids: vec![ids[0]],
+            roots: vec![0],
+        });
+        let tiles_before = document.tiles.len();
+        let snapshot = serde_json::to_vec(&document).unwrap();
+
+        let delta = PasteAsMask
+            .apply_json(&mut document, json!({"mask_replace_options": "add"}))
+            .expect("add applies");
+        let Some(ObjectData::Group(group)) = document.registry.get(group_id) else {
+            panic!("group survives");
+        };
+        assert_eq!(group.group_type, 1, "the union lands grayscale");
+        assert_ne!(
+            group.children[0], mask_id,
+            "the mask child is a fresh union"
+        );
+        assert!(
+            document.registry.get(mask_id).is_none(),
+            "old mask folded away"
+        );
+        let union = image_of_test(&document, group.children[0]);
+        assert_eq!(union.pixels, (width, height), "the union spans the target");
+        let flat = crate::bitmap::assemble_rgba(&document, &union, "test").expect("assembled");
+        let gray = |x: i64, y: i64| flat[(y * width + x) as usize * 4];
+        // Top band right of the path: existing only → opaque.
+        assert_eq!(gray(width - 1, 1), 255, "the existing mask contributed");
+        // Bottom band right of the path: neither → transparent.
+        assert_eq!(gray(width - 1, height - 1), 0, "outside both stays clear");
+        // Inside the path: opaque whatever the band.
+        assert_eq!(gray(width / 2, height / 2), 255, "the path contributed");
+
+        delta.apply_inverse(&mut document).expect("undo");
+        assert_eq!(serde_json::to_vec(&document).unwrap(), snapshot);
+        assert!(document.registry.get(mask_id).is_some(), "old mask revived");
+        assert_eq!(document.tiles.len(), tiles_before, "union tiles retract");
+
+        // An image clipboard that does not overlay the target refuses.
+        let (other_tiles, _m) = crate::bitmap::retile_rgba(&mut document, &[255u8; 4 * 4], 2, 2);
+        let stray = document.registry.insert(ObjectData::Image(ImageObject {
+            location: geom::Point::new(50.0, 50.0),
+            offset: geom::Point::ZERO,
+            pixels: (2, 2),
+            tile_size: i64::from(raster::TILE_SIDE as u32),
+            tiles: other_tiles,
+            name: None,
+            opacity: 1000,
+            blend: 0,
+            visible: true,
+            locked: false,
+            effects: Vec::new(),
+        }));
+        document.clipboard = Some(Clipboard {
+            elements: vec![document.registry.get(stray).cloned().expect("image")],
+            ids: vec![stray],
+            roots: vec![0],
+        });
+        let err = PasteAsMask
+            .apply_json(&mut document, json!({"mask_replace_options": "add"}))
+            .expect_err("non-overlaying image mask refuses");
+        assert!(matches!(err, EngineError::InvalidState { .. }), "{err}");
     }
 
     #[test]

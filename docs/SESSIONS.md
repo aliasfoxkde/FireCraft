@@ -722,3 +722,27 @@ Batch: Phase 9 debt, half closed (no new commands, no parity flip).
   retracted; vector-type still lands a shape mask with a path child).
 - Gates: engine suite green (382 lib), clippy -D warnings, fmt,
   256-seed CI-base fuzz sweep clean.
+
+## #129 — 2026-10-14 — mask "add" union fold (decision 0058)
+
+Batch: Phase 9 debt closed (no new commands, no parity flip).
+
+- `clipboard.pasteAsMask` no longer refuses `mask_replace_options
+  "add"`: when the target already carries a mask, both operands reduce
+  to a coverage plane over the target's bounds through the new
+  `mask_coverage` helper (path → `stamp_path`; image → alpha channel,
+  refusing unless it overlays the target exactly — CS6's
+  `whatIfResolutionDifferent` resample stays unmodeled), max-fold
+  pointwise, and `plane_mask_image` mints the folded plane.
+- The result is always a grayscale image mask (`GRAYSCALE_MASK` +
+  image child) — after a union there is no vector geometry left to
+  keep a shape mask honest. `Delta::Bank` rides last in the
+  existing-mask return path so undo drops the tiles after the old
+  mask revives.
+- "add" with no existing mask falls through to the plain fresh-group
+  paste (CS6's "add" only means something when a mask is present).
+- Tests: +1 (top-band mask + path clipboard union: band survives, path
+  interior opaque, corner clear; undo byte-exact + tiles retracted +
+  old mask revived; mismatched overlay refuses whole).
+- Gates: engine suite green (383 lib), clippy -D warnings, fmt,
+  256-seed CI-base fuzz sweep clean.

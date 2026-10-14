@@ -25,8 +25,10 @@
 - **Active campaign:** COMPLETE (2026-10-14) — the M table is empty.
   Remaining surface work: the 3 P rows and Phase 9 debts, prioritized
   from `dom-parity.md`'s P table. Phase 9's mkBT tile-bank
-  load/write debt closed 2026-10-14 (decision 0055, #126). New
-  families follow the §3 loop.
+  load/write debt closed 2026-10-14 (decision 0055, #126), the
+  duplicate deep-clone closed (#127), the mask rasterize hook closed
+  (decision 0057, #128), and the mask "add" union fold closed
+  (decision 0058, #129). New families follow the §3 loop.
 - **Clean-room invariants (never violate):** `source/` is Adobe's
   copyrighted material — git-ignored, never committed, never copied
   from. Adobe-derived text extracts are uncommitted working notes under
@@ -489,7 +491,14 @@ mutations and refuses without a linked slice.
 - **Image resample pass** — **DONE** (landed as `bitmap::resample_rgba`
   in #111); the open remainder is bilinear *quality* on
   `bitmap.importFile` (nearest-neighbour today, decision 0054).
-- **mask_replace_options "add"** (mask union fold) refused as debt.
+- ~~**mask_replace_options "add"** (mask union fold)~~ **DONE
+  2026-10-14 (decision 0058, #129):** "add" unions the coverages —
+  `mask_coverage` reduces both operands (path or image) to a
+  `SelectionMask` over the target's bounds, max-fold, `plane_mask_image`
+  mints the grayscale result, the group flips to `GRAYSCALE_MASK`,
+  `Delta::Bank` rides undo; mismatched image masks refuse (CS6's
+  `whatIfResolutionDifferent` resample stays unmodeled); "add" with no
+  existing mask is a plain paste.
 - ~~**Path→image rasterizer hook** (mask_type "image")~~ **DONE
   2026-10-14 (decision 0057, #128):** `pasteAsMask` rasterizes a
   vector clipboard into the grayscale mask image (the `mask.setMode`
