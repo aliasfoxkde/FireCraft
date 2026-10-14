@@ -5,6 +5,21 @@ use doc::{Cell, Document, Layer, ObjectData, ObjectId, Page};
 
 use crate::error::EngineError;
 
+pub(crate) fn page<'a>(
+    document: &'a Document,
+    command: &'static str,
+    index: usize,
+) -> Result<&'a Page, EngineError> {
+    let len = document.pages.len();
+    document
+        .pages
+        .get(index)
+        .ok_or_else(|| EngineError::MissingTarget {
+            name: command.to_owned(),
+            detail: format!("page {index} out of range ({len} pages)"),
+        })
+}
+
 pub(crate) fn page_mut<'a>(
     document: &'a mut Document,
     command: &'static str,

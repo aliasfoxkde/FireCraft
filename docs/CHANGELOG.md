@@ -10,6 +10,7 @@ Current version: **0.1.0**.
 
 ### Features
 
+- **object**: group/ungroup commands (96aa656)
 - **fill**: pattern fills end to end (f9d30d6)
 - **io**: import SVG gradient paint servers (93e0778)
 - **compose**: paint the canvas background (77f55af)
@@ -112,6 +113,7 @@ Current version: **0.1.0**.
 
 ### Documentation
 
+- **planning**: group/ungroup carried in parity matrix (9f4ba8b)
 - **planning**: DOM verb-surface parity matrix (bf1657d)
 - **engine**: resolve setFillColor collapse per evidence (fa29bbb)
 - **m15**: gradient status row + recorded task-5 gaps (d7f209a)

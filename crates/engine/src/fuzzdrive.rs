@@ -575,6 +575,13 @@ pub const CALLS: &[&str] = &[
     "page.add",
     "page.delete",
     "page.setCanvasSize",
+    "page.addGuide",
+    "page.changeGuide",
+    "page.removeGuide",
+    "page.removeAllGuides",
+    "page.setGridOrigin",
+    "page.setGridSize",
+    "page.setOnionSkinning",
     "bitmap.selectRect",
     "bitmap.selectEllipse",
     "bitmap.selectLasso",
@@ -661,6 +668,15 @@ pub fn random_call(rng: &mut FuzzRng, document: &Document) -> (String, serde_jso
             serde_json::json!(rng.below(bound + 2))
         } else {
             serde_json::Value::Null
+        }
+    };
+    // Guide coordinates: mostly on-canvas, sometimes off-canvas
+    // (negative is legal — guides need not sit inside the canvas).
+    let guide_position = |rng: &mut FuzzRng| -> f64 {
+        if rng.chance(80) {
+            rng.below(600) as f64
+        } else {
+            -(rng.below(100) as f64)
         }
     };
 
@@ -1110,6 +1126,66 @@ pub fn random_call(rng: &mut FuzzRng, document: &Document) -> (String, serde_jso
         }),
         "page.add" => serde_json::json!({ "index": any_opt_index(rng, pages) }),
         "page.delete" => serde_json::json!({ "page": any_index(rng, pages) }),
+        "page.addGuide" => serde_json::json!({
+            "page": any_index(rng, pages),
+            "position": guide_position(rng),
+            "kind": rng.pick(&["horizontal", "vertical"]).copied(),
+        }),
+        "page.changeGuide" => serde_json::json!({
+            "page": any_index(rng, pages),
+            "current": guide_position(rng),
+            "new": guide_position(rng),
+            "kind": rng.pick(&["horizontal", "vertical"]).copied(),
+        }),
+        "page.removeGuide" => serde_json::json!({
+            "page": any_index(rng, pages),
+            "position": guide_position(rng),
+            "kind": rng.pick(&["horizontal", "vertical"]).copied(),
+        }),
+        "page.removeAllGuides" => serde_json::json!({
+            "page": any_index(rng, pages),
+            "kind": if rng.chance(60) {
+                serde_json::json!(rng.pick(&["horizontal", "vertical"]).copied())
+            } else {
+                serde_json::Value::Null
+            },
+        }),
+        "page.setGridOrigin" => serde_json::json!({
+            "page": any_index(rng, pages),
+            "x": guide_position(rng),
+            "y": guide_position(rng),
+        }),
+        "page.setGridSize" => {
+            let size = |rng: &mut FuzzRng| -> f64 {
+                if rng.chance(85) {
+                    1.0 + rng.below(200) as f64
+                } else {
+                    // Degenerate on purpose (zero, negative, non-finite
+                    // via a huge value that stays finite in JSON).
+                    -(rng.below(10) as f64)
+                }
+            };
+            serde_json::json!({
+                "page": any_index(rng, pages),
+                "x": size(rng),
+                "y": size(rng),
+            })
+        }
+        "page.setOnionSkinning" => {
+            let count = |rng: &mut FuzzRng| -> i64 {
+                if rng.chance(85) {
+                    rng.below(5) as i64
+                } else {
+                    // Negative on purpose.
+                    -(rng.below(3) as i64) - 1
+                }
+            };
+            serde_json::json!({
+                "page": any_index(rng, pages),
+                "before": count(rng),
+                "after": count(rng),
+            })
+        }
         "page.setCanvasSize" => {
             let size = |rng: &mut FuzzRng| -> f64 {
                 if rng.chance(90) {

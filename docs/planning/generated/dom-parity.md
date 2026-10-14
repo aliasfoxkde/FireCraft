@@ -14,17 +14,17 @@ enforced == the fuzz call table).
 
 | class | meaning | count (of 356 dom verbs) |
 |---|---|---|
-| C | carried: a registry command implements the mutation | 129 |
+| C | carried: a registry command implements the mutation | 136 |
 | P | partial: carried with a recorded model limitation | 45 |
-| M | missing: no command and no decision — work items | 101 |
+| M | missing: no command and no decision — work items | 94 |
 | N | not applicable: non-document surface (accessor/UI/session/clipboard/export/OS) | 81 |
 
-Document-mutation coverage: **174 of 275** carried-or-partial
-(129 carried, 45 partial, 101 missing).
+Document-mutation coverage: **181 of 275** carried-or-partial
+(136 carried, 45 partial, 94 missing).
 
 ### Gap families (the Missing table, grouped)
 
-The 101 missing verbs collapse into eight families, largest first —
+The 94 missing verbs collapse into eight families, largest first —
 each family is one design decision plus a command batch:
 
 1. **Object transforms** (~9 verbs): scale/rotate/reflect/skew/
@@ -39,9 +39,12 @@ each family is one design decision plus a command batch:
    Model bits exist for sharing and master; commands are missing.
 4. **Frames/states** (~8 verbs): add/delete/duplicate/reorder frames,
    distribute-to-frames. Cells exist per layer; nothing mints them.
-5. **Guides/grid/snap/onion** (~9 verbs): all carried by existing
-   model fields (`page.guides`, `page.grid`, onion bits) with no
-   commands — the cheapest family to close.
+5. **Guides/grid/snap/onion** (4 verbs remain): setShowGrid/
+   setShowGuides/setSnapToGrid/setSnapToGuides are view/session
+   flags with no decoded wire node — blocked on corpus evidence
+   of the view-prefs node. addGuide/changeGuide/removeGuide/
+   removeAllGuides/setGridOrigin/setGridSize/setOnionSkinning
+   landed as page.* commands (page-scoped overrides).
 6. **Group/flatten** (~3 verbs): mergeDown, flattenSelection,
    flattenDocument. group/ungroup landed as object.group/
    object.ungroup; setGroupType is partial (GRTi setter).
@@ -62,6 +65,7 @@ each family is one design decision plus a command batch:
 | `ApplyEffects` | C | filter.add |  |
 | `MovePointOnHotspotByWithFlags` | C | object.translate | generic object move; per-point web-geometry edit is the P-shaped remainder |
 | `addBehavior` | C | slice.addBehavior |  |
+| `addGuide` | C | page.addGuide | page-scoped guide line; duplicates append like CS6 |
 | `addNewHotspot` | C | hotspot.create |  |
 | `addNewLayer` | C | layer.add |  |
 | `addNewLine` | C | object.createPath | two-point path |
@@ -85,6 +89,7 @@ each family is one design decision plus a command batch:
 | `attachTextToPath` | C | text.attachPath |  |
 | `attachtTextToPath` | C | text.attachPath |  |
 | `breakLink` | C | symbol.editDetach |  |
+| `changeGuide` | C | page.changeGuide | first guide at `current` moves; absent is a refusal |
 | `changeNineScaleGuide` | C | symbol.set9Slice | guide line positions ride the grid |
 | `cloneSelection` | C | object.duplicate |  |
 | `converAnimSymbolToGraphicSymbol` | C | symbol.setType |  |
@@ -140,8 +145,10 @@ each family is one design decision plus a command batch:
 | `pathUnion` | C | path.boolean |  |
 | `placeTextInPath` | C | text.attachPath |  |
 | `redefineStyleByName` | C | style.redefineByName |  |
+| `removeAllGuides` | C | page.removeAllGuides | one axis or both (the no-arg form); empty is a no-op |
 | `removeBehavior` | C | slice.removeBehavior |  |
 | `removeFill` | C | path.setFill | none |
+| `removeGuide` | C | page.removeGuide | absent position is a documented CS6 no-op |
 | `removeNineScale` | C | symbol.set9Slice |  |
 | `replaceTextString` | C | text.setText | batch = per-object apply |
 | `resetNineScale` | C | symbol.set9Slice |  |
@@ -162,11 +169,14 @@ each family is one design decision plus a command batch:
 | `setFillPlacement` | C | path.setFillVector | same handle axis (pattern placement) |
 | `setFillVector` | C | path.setFillVector |  |
 | `setFillVectorStart` | C | path.setFillVector | handle pair |
+| `setGridOrigin` | C | page.setGridOrigin | writes the page override, seeded from the effective grid |
+| `setGridSize` | C | page.setGridSize | page override; extents must be finite and > 0 |
 | `setHotspotAltTag` | C | slice.setLink | alt rides the link payload |
 | `setHotspotTarget` | C | slice.setLink |  |
 | `setHotspotText` | C | slice.setData |  |
 | `setLayerName` | C | layer.rename |  |
 | `setLayerVisible` | C | layer.setDisplay | the eye bit |
+| `setOnionSkinning` | C | page.setOnionSkinning | OSBi/OSAi; 0/0 disables per CS6 |
 | `setOpacity` | C | object.setOpacity |  |
 | `setSelectionMask` | C | bitmap.select* | shape select family |
 | `setSliceExportOptions` | C | slice.setExport |  |
@@ -245,14 +255,12 @@ each family is one design decision plus a command batch:
 | `MergeDown` | M | - | no merge-down (object or bitmap flatten) |
 | `addElementMask` | M | - | object mask groups unmodeled (selection masks ARE carried; element masks are the gap) |
 | `addFrames` | M | - | no frame (state) add command; cells exist per layer but nothing mints them |
-| `addGuide` | M | - | page.guides model exists; no command |
 | `addMasterPageLayer` | M | - | master-page family gap |
 | `addNewImage` | M | - | no engine place-image command; io::raster::attach_image is the import-side path (SVG/raster import), app_cli carries file placement |
 | `addNewImageViaCopy` | M | - | same gap as addNewImage |
 | `addNewImageViaCut` | M | - | same gap as addNewImage |
 | `appendPointToHotspot` | M | - | no geometry-append for web objects (recreate via hotspot.create) |
 | `appendPointToSlice` | M | - | same gap |
-| `changeGuide` | M | - | page.guides model exists; no command |
 | `clearJPEGMask` | M | - | JPEG-mask gap |
 | `clipPasteAsMask` | M | - | element-mask gap (clipboard op) |
 | `clipPasteFromChannelToChannel` | M | - | pixel channel copy - bitmap domain, no command |
@@ -287,9 +295,7 @@ each family is one design decision plus a command batch:
 | `movePixelMaskBy` | M | - | pixel-mask gap |
 | `redrawSmartShape` | M | - | autoshape params set at creation only; no edit command |
 | `reflectSelection` | M | - | transform-command gap |
-| `removeAllGuides` | M | - | page.guides model exists; no command |
 | `removeElementMask` | M | - | element-mask gap |
-| `removeGuide` | M | - | page.guides model exists; no command |
 | `reorderFrame` | M | - | no frame reorder command |
 | `reorderLayer` | M | - | no layer reorder command (object z-order exists) |
 | `reorderPages` | M | - | no page reorder command |
@@ -320,12 +326,9 @@ each family is one design decision plus a command batch:
 | `setElementMaskShowAttrs` | M | - | element-mask gap |
 | `setFillEdgeMode` | M | - | fill edge (anti-alias/hard) mode unmodeled |
 | `setGradientName` | M | - | gradient definitions carry no names in the model |
-| `setGridOrigin` | M | - | page.grid model exists; no command |
-| `setGridSize` | M | - | page.grid model exists; no command |
 | `setLayerLocked` | M | - | cell lock (cell.setLocked) exists; the layer-level lock is missing |
 | `setLayerSharing` | M | - | shared_layers model bit exists; no sharing commands |
 | `setMasterPage` | M | - | Page.is_master model bit exists; no command |
-| `setOnionSkinning` | M | - | onion_before/onion_after model bits exist; no command |
 | `setPageName` | M | - | no page rename command (layer/object renames exist) |
 | `setPixelMask` | M | - | pixel-mask gap |
 | `setQuadrangle` | M | - | primitive param-edit gap |

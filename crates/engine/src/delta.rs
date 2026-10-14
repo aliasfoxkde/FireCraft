@@ -115,6 +115,21 @@ pub enum Delta {
         /// The info as it was before the command.
         before: Box<PageInfo>,
     },
+    /// Restore one page's guides (`GDSv`).
+    Guides {
+        /// Page index.
+        page: usize,
+        /// The guides as they were before the command.
+        before: doc::Guides,
+    },
+    /// Restore one page's grid override (`GRDv`; `None` means the page
+    /// inherits the document grid).
+    PageGrid {
+        /// Page index.
+        page: usize,
+        /// The override as it was before the command.
+        before: Option<Box<doc::Grid>>,
+    },
     /// Restore the whole document symbol library. Library mutations are
     /// list-capturing: a definition carries its layer lists and the
     /// cell references inside them, so the pre-command `Vec` is the
@@ -264,6 +279,12 @@ impl Delta {
             }
             Delta::PageInfo { page, before } => {
                 page_mut(document, *page)?.info = (**before).clone();
+            }
+            Delta::Guides { page, before } => {
+                page_mut(document, *page)?.guides = before.clone();
+            }
+            Delta::PageGrid { page, before } => {
+                page_mut(document, *page)?.grid = before.as_deref().cloned();
             }
             Delta::Library { before } => document.symbols = before.clone(),
             Delta::Styles { before } => document.styles = before.clone(),
