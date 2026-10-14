@@ -10,6 +10,7 @@ Current version: **0.1.0**.
 
 ### Features
 
+- **cell**: frame management commands (8187375)
 - **page**: guide, grid, and onion-skinning commands (32dd03a)
 - **object**: group/ungroup commands (96aa656)
 - **fill**: pattern fills end to end (f9d30d6)
@@ -114,6 +115,8 @@ Current version: **0.1.0**.
 
 ### Documentation
 
+- **decisions**: object transform family design (92a29f7)
+- **planning**: frame family carried in parity matrix (b4895c1)
 - **planning**: group/ungroup carried in parity matrix (9f4ba8b)
 - **planning**: DOM verb-surface parity matrix (bf1657d)
 - **engine**: resolve setFillColor collapse per evidence (fa29bbb)

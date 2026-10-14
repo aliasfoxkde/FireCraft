@@ -66,7 +66,7 @@ walk. Per variant:
 | Variant | Application |
 |---|---|
 | `Path` | matrix-map every contour anchor + handles, the fill handles, and — when a `PRIv` source exists — compose `primitive.transform = M ∘ old`, rect untouched |
-| `Text` | compose `style.transform` (creating a default style when absent); frame untouched (the `MTXv` carries the layout-box transform) |
+| `Text` | compose `transform` (the object-level `MTXv`; `None` = identity); frame untouched |
 | `Slice` | matrix-map frame via `map_rect` and every contour point |
 | `SymbolInstance` | compose `instance.transform` |
 | `Image` | **refused** (`InvalidState`) — pixel data is tile-banked (`TILv`/`WPXi`); any geometry rewrite desyncs the bank. Rotate/reflect of bitmaps needs the resample pass; recorded as the family's limitation |

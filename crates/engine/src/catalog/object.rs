@@ -32,7 +32,14 @@ pub(crate) fn install(registry: &mut CommandRegistry) -> Result<(), EngineError>
     registry.register(MoveObjectToCell)?;
     registry.register(GroupObjects)?;
     registry.register(UngroupObject)?;
-    registry.register(CreatePath)
+    registry.register(CreatePath)?;
+    registry.register(TransformObject)?;
+    registry.register(ScaleObject)?;
+    registry.register(RotateObject)?;
+    registry.register(SkewObject)?;
+    registry.register(ReflectObject)?;
+    registry.register(ResizeObject)?;
+    registry.register(SetBoundsObject)
 }
 
 /// The blend table is `color::BlendMode`'s 27 modes in UI order; `BLDi`
@@ -853,6 +860,717 @@ fn translate_contour(contour: &mut doc::Contour, delta: geom::Vec2) {
         if let Some(secondary) = &mut point.secondary {
             *secondary += delta;
         }
+    }
+}
+
+// The transform family — CS6's `scaleSelection` / `rotateSelection` /
+// `skewSelection` / `reflectSelection` / `resizeSelection` /
+// `transformSelection` / `setSelectionBounds` as seven commands over
+// one primitive (the free affine of `object.transform`) and one
+// variant walk. Per decision 0019: paths bake point-wise (the format
+// carries no path `MTXv`), `PRIv`/text/instance compose their live
+// matrices, and image targets refuse until the resample pass exists.
+
+/// Checks a transform closure before any mutation: every reached id is
+/// live and none is bitmap-backed (`TILv` tile banks desync under any
+/// geometry rewrite — the resample pass is the recorded dependency).
+fn precheck_transform_closure(
+    document: &Document,
+    name: &'static str,
+    id: ObjectId,
+    seen: &mut std::collections::HashSet<ObjectId>,
+) -> Result<(), EngineError> {
+    if !seen.insert(id) {
+        return Ok(());
+    }
+    match access::object(document, name, id)? {
+        ObjectData::Image(_) => Err(EngineError::InvalidState {
+            name: name.to_owned(),
+            detail: format!(
+                "object {} is bitmap-backed; transforms that rewrite geometry need the resample pass (decision 0019)",
+                id.index()
+            ),
+        }),
+        ObjectData::Group(group) => {
+            let children = group.children.clone();
+            for child in children {
+                precheck_transform_closure(document, name, child, seen)?;
+            }
+            Ok(())
+        }
+        _ => Ok(()),
+    }
+}
+
+/// A degenerate rect holding one point — the seed of a union walk.
+fn point_rect(point: geom::Point) -> geom::Rect {
+    geom::Rect::new(point.x, point.y, point.x, point.y)
+}
+
+/// Folds one rect into a running union.
+fn union_extend(out: &mut Option<geom::Rect>, rect: geom::Rect) {
+    *out = Some(match *out {
+        Some(acc) => acc.union(rect),
+        None => rect,
+    });
+}
+
+/// The content bounds of one object under `xform` (document space),
+/// folded into `out`. Groups recurse with their own transform; symbol
+/// instances contribute their definition's content under the instance
+/// transform (unit-square fallback for an unknown symbol number). The
+/// walk is depth-capped like `check_closure`.
+fn content_bounds(
+    document: &Document,
+    id: ObjectId,
+    xform: geom::Affine,
+    depth: usize,
+    seen: &mut std::collections::HashSet<ObjectId>,
+    out: &mut Option<geom::Rect>,
+) {
+    if depth > 64 || !seen.insert(id) {
+        return;
+    }
+    let Some(data) = document.registry.get(id) else {
+        return;
+    };
+    match data {
+        ObjectData::Path(path) => {
+            let mut local: Option<geom::Rect> = None;
+            for contour in &path.contours {
+                for point in &contour.points {
+                    for p in std::iter::once(point.anchor)
+                        .chain(point.primary)
+                        .chain(point.secondary)
+                    {
+                        union_extend(&mut local, point_rect(p));
+                    }
+                }
+            }
+            if let Some(local) = local {
+                union_extend(out, geom::map_rect(xform, local));
+            }
+        }
+        ObjectData::Text(text) => union_extend(out, geom::map_rect(xform, text.frame)),
+        ObjectData::Slice(slice) => union_extend(out, geom::map_rect(xform, slice.frame)),
+        ObjectData::Image(image) => {
+            let frame = geom::Rect::new(
+                image.location.x,
+                image.location.y,
+                image.location.x + image.pixels.0 as f64,
+                image.location.y + image.pixels.1 as f64,
+            );
+            union_extend(out, geom::map_rect(xform, frame));
+        }
+        ObjectData::Group(group) => {
+            for child in &group.children {
+                content_bounds(document, *child, xform, depth + 1, seen, out);
+            }
+        }
+        ObjectData::SymbolInstance(instance) => {
+            let composed = instance.transform * xform;
+            let definition = document
+                .symbols
+                .iter()
+                .find(|def| def.symbol_number == instance.symbol_number);
+            match definition {
+                Some(def) => {
+                    // Per-instance `seen`: two instances at different
+                    // transforms must each contribute their content.
+                    let mut inner = std::collections::HashSet::new();
+                    for layer in &def.layers.layers {
+                        for cell in &layer.cells {
+                            for child in &cell.elements {
+                                content_bounds(
+                                    document,
+                                    *child,
+                                    composed,
+                                    depth + 1,
+                                    &mut inner,
+                                    out,
+                                );
+                            }
+                        }
+                    }
+                }
+                None => union_extend(
+                    out,
+                    geom::map_rect(composed, geom::Rect::new(0.0, 0.0, 1.0, 1.0)),
+                ),
+            }
+        }
+    }
+}
+
+/// The union bounds of the target set — CS6's "selection bounds"
+/// without a selection surface. `None` when the targets carry no
+/// bounds at all (nothing live).
+fn union_bounds(document: &Document, ids: &[ObjectId]) -> Option<geom::Rect> {
+    let mut out: Option<geom::Rect> = None;
+    let mut seen = std::collections::HashSet::new();
+    for id in ids {
+        content_bounds(
+            document,
+            *id,
+            geom::Affine::IDENTITY,
+            0,
+            &mut seen,
+            &mut out,
+        );
+    }
+    out
+}
+
+/// Maps every anchor and control handle of one contour through
+/// `matrix`.
+fn transform_contour(contour: &mut doc::Contour, matrix: geom::Affine) {
+    for point in &mut contour.points {
+        point.anchor = matrix * point.anchor;
+        if let Some(primary) = &mut point.primary {
+            *primary = matrix * *primary;
+        }
+        if let Some(secondary) = &mut point.secondary {
+            *secondary = matrix * *secondary;
+        }
+    }
+}
+
+/// Applies `matrix` to one object (recursing into groups), pushing a
+/// captured inverse for every object whose data actually changed. The
+/// closure must be pre-validated (`precheck_transform_closure`).
+fn apply_matrix(
+    document: &mut Document,
+    name: &'static str,
+    id: ObjectId,
+    matrix: geom::Affine,
+    seen: &mut std::collections::HashSet<ObjectId>,
+    inverses: &mut Vec<Delta>,
+) -> Result<(), EngineError> {
+    if !seen.insert(id) {
+        return Ok(());
+    }
+    let before = access::object(document, name, id)?.clone();
+    let data = document
+        .registry
+        .get_mut(id)
+        .ok_or_else(|| EngineError::MissingTarget {
+            name: name.to_owned(),
+            detail: format!(
+                "object {} (generation {}) is not live",
+                id.index(),
+                id.generation()
+            ),
+        })?;
+    match data {
+        ObjectData::Path(path) => {
+            for contour in &mut path.contours {
+                transform_contour(contour, matrix);
+            }
+            for point in [
+                &mut path.fill_start,
+                &mut path.fill_end,
+                &mut path.fill_third,
+            ]
+            .into_iter()
+            .flatten()
+            {
+                *point = matrix * *point;
+            }
+            if let Some(primitive) = &mut path.primitive {
+                primitive.transform = matrix * primitive.transform;
+            }
+        }
+        ObjectData::Text(text) => {
+            // The object's `MTXv` carries the layout-box transform.
+            text.transform = Some(matrix * text.transform.unwrap_or(geom::Affine::IDENTITY));
+        }
+        ObjectData::Group(group) => {
+            // The group is geometry-free; its children carry the
+            // transform (each under the same caller matrix, so a
+            // shared descendant transforms once).
+            let children = group.children.clone();
+            for child in children {
+                apply_matrix(document, name, child, matrix, seen, inverses)?;
+            }
+            return Ok(());
+        }
+        ObjectData::Slice(slice) => {
+            slice.frame = geom::map_rect(matrix, slice.frame);
+            for contour in &mut slice.contours {
+                transform_contour(contour, matrix);
+            }
+        }
+        ObjectData::SymbolInstance(instance) => {
+            instance.transform = matrix * instance.transform;
+        }
+        // Precheck refused images; this arm keeps the match total
+        // without an unreachable.
+        ObjectData::Image(_) => return Ok(()),
+    }
+    inverses.push(Delta::Object {
+        id,
+        inverse: ObjectInverse::Mutated {
+            object: Box::new(before),
+        },
+    });
+    Ok(())
+}
+
+/// The family's common spine: validate and normalize ids, pre-check
+/// every closure, resolve the pivot (`None` = the union bounds center,
+/// CS6's selection-center default), compose the matrix, then walk.
+fn transform_core(
+    document: &mut Document,
+    name: &'static str,
+    ids: &[ObjectId],
+    pivot: Option<[f64; 2]>,
+    compose: impl FnOnce(geom::Point) -> Result<geom::Affine, EngineError>,
+) -> Result<Delta, EngineError> {
+    if ids.is_empty() {
+        return Err(EngineError::MissingTarget {
+            name: name.to_owned(),
+            detail: "no objects given".to_owned(),
+        });
+    }
+    let mut ids = ids.to_vec();
+    ids.sort_by_key(|id| id.index());
+    ids.dedup();
+    // Validate all targets before anything mutates — a refused call
+    // leaves the document untouched.
+    let mut seen = std::collections::HashSet::new();
+    for id in &ids {
+        precheck_transform_closure(document, name, *id, &mut seen)?;
+    }
+    let pivot = match pivot {
+        Some([x, y]) if x.is_finite() && y.is_finite() => geom::Point::new(x, y),
+        Some([x, y]) => {
+            return Err(EngineError::BadPayload {
+                name: name.to_owned(),
+                detail: format!("pivot ({x}, {y}) is not finite"),
+            });
+        }
+        None => {
+            let bounds = union_bounds(document, &ids).ok_or_else(|| EngineError::InvalidState {
+                name: name.to_owned(),
+                detail: "targets carry no bounds to pivot at".to_owned(),
+            })?;
+            bounds.center()
+        }
+    };
+    let matrix = compose(pivot)?;
+    if matrix.as_coeffs().iter().any(|coeff| !coeff.is_finite()) {
+        return Err(EngineError::BadPayload {
+            name: name.to_owned(),
+            detail: "the composed matrix is not finite".to_owned(),
+        });
+    }
+    let mut inverses = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    for id in &ids {
+        apply_matrix(document, name, *id, matrix, &mut seen, &mut inverses)?;
+    }
+    Ok(Delta::Group(inverses))
+}
+
+/// A pivot override ([x, y]) or CS6's default (`None` = union bounds
+/// center). Shared by the pivot-taking sugars.
+type Pivot = Option<[f64; 2]>;
+
+/// `object.transform` — CS6's `dom.transformSelection(matrix)`: applies
+/// a free affine (kurbo coefficient order) to the targets.
+struct TransformObject;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct TransformObjectPayload {
+    /// Objects to transform (a shared descendant moves once).
+    ids: Vec<ObjectId>,
+    /// The affine as `[a, b, c, d, tx, ty]` —
+    /// `(x, y) -> (a·x + c·y + tx, b·x + d·y + ty)`.
+    matrix: [f64; 6],
+}
+
+impl TypedCommand for TransformObject {
+    type Payload = TransformObjectPayload;
+
+    fn name(&self) -> &'static str {
+        "object.transform"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "object.transform";
+        transform_core(document, NAME, &payload.ids, None, |pivot| {
+            // The free matrix composes around the pivot: the pivot
+            // stays fixed under the caller's matrix.
+            Ok(geom::Affine::translate((pivot.x, pivot.y))
+                * geom::Affine::new(payload.matrix)
+                * geom::Affine::translate((-pivot.x, -pivot.y)))
+        })
+    }
+}
+
+/// `object.scale` — CS6's `dom.scaleSelection(xScaleAmount,
+/// yScaleAmount)`: scales about the pivot (default: the union bounds
+/// center). Factors are CS6's "0.0 or greater" — zero bakes a collapse.
+struct ScaleObject;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct ScaleObjectPayload {
+    /// Objects to scale.
+    ids: Vec<ObjectId>,
+    /// Horizontal factor (1 = 100%).
+    sx: f64,
+    /// Vertical factor (1 = 100%).
+    sy: f64,
+    /// Pivot override; `None` scales about the union bounds center.
+    pivot: Pivot,
+}
+
+impl TypedCommand for ScaleObject {
+    type Payload = ScaleObjectPayload;
+
+    fn name(&self) -> &'static str {
+        "object.scale"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "object.scale";
+        if !payload.sx.is_finite() || !payload.sy.is_finite() {
+            return Err(EngineError::BadPayload {
+                name: NAME.to_owned(),
+                detail: format!("scale ({}, {}) is not finite", payload.sx, payload.sy),
+            });
+        }
+        if payload.sx < 0.0 || payload.sy < 0.0 {
+            return Err(EngineError::BadPayload {
+                name: NAME.to_owned(),
+                detail: format!("scale ({}, {}) is negative", payload.sx, payload.sy),
+            });
+        }
+        transform_core(document, NAME, &payload.ids, payload.pivot, |pivot| {
+            Ok(geom::scale_about(
+                geom::Affine::IDENTITY,
+                payload.sx,
+                payload.sy,
+                pivot,
+            ))
+        })
+    }
+}
+
+/// `object.rotate` — CS6's `dom.rotateSelection(rotationDegrees)`:
+/// rotates clockwise by whole degrees about the pivot (default: the
+/// union bounds center). Positive is clockwise, matching the y-down
+/// document space the docs describe.
+struct RotateObject;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct RotateObjectPayload {
+    /// Objects to rotate.
+    ids: Vec<ObjectId>,
+    /// Degrees, clockwise.
+    degrees: f64,
+    /// Pivot override; `None` rotates about the union bounds center.
+    pivot: Pivot,
+}
+
+impl TypedCommand for RotateObject {
+    type Payload = RotateObjectPayload;
+
+    fn name(&self) -> &'static str {
+        "object.rotate"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "object.rotate";
+        if !payload.degrees.is_finite() {
+            return Err(EngineError::BadPayload {
+                name: NAME.to_owned(),
+                detail: format!("degrees {} is not finite", payload.degrees),
+            });
+        }
+        transform_core(document, NAME, &payload.ids, payload.pivot, |pivot| {
+            Ok(geom::Affine::translate((pivot.x, pivot.y))
+                * geom::Affine::rotate(payload.degrees.to_radians())
+                * geom::Affine::translate((-pivot.x, -pivot.y)))
+        })
+    }
+}
+
+/// `object.skew` — CS6's `dom.skewSelection` (CS6 API inventory; the
+/// CS4 help set has no entry): skews by two angles in degrees about the
+/// pivot (default: the union bounds center). A 90° angle composes a
+/// non-finite tangent and is refused by the spine's finite check.
+struct SkewObject;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct SkewObjectPayload {
+    /// Objects to skew.
+    ids: Vec<ObjectId>,
+    /// Horizontal skew (x leans by tan(angle)·y).
+    skew_x: f64,
+    /// Vertical skew (y leans by tan(angle)·x).
+    skew_y: f64,
+    /// Pivot override; `None` skews about the union bounds center.
+    pivot: Pivot,
+}
+
+impl TypedCommand for SkewObject {
+    type Payload = SkewObjectPayload;
+
+    fn name(&self) -> &'static str {
+        "object.skew"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "object.skew";
+        if !payload.skew_x.is_finite() || !payload.skew_y.is_finite() {
+            return Err(EngineError::BadPayload {
+                name: NAME.to_owned(),
+                detail: format!(
+                    "skew ({}, {}) is not finite",
+                    payload.skew_x, payload.skew_y
+                ),
+            });
+        }
+        transform_core(document, NAME, &payload.ids, payload.pivot, |pivot| {
+            // (x, y) -> (x + tan(ax)·y, tan(ay)·x + y) in kurbo's
+            // [a, b, c, d, tx, ty] layout.
+            let skew = geom::Affine::new([
+                1.0,
+                payload.skew_y.to_radians().tan(),
+                payload.skew_x.to_radians().tan(),
+                1.0,
+                0.0,
+                0.0,
+            ]);
+            Ok(geom::Affine::translate((pivot.x, pivot.y))
+                * skew
+                * geom::Affine::translate((-pivot.x, -pivot.y)))
+        })
+    }
+}
+
+/// `object.reflect` — CS6's `dom.reflectSelection(bHoriz, bVert)`:
+/// flips about the pivot (default: the union bounds center). Both
+/// flags false is CS6's documented no-op.
+struct ReflectObject;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct ReflectObjectPayload {
+    /// Objects to reflect.
+    ids: Vec<ObjectId>,
+    /// Flip horizontally (left-right).
+    horizontal: bool,
+    /// Flip vertically (top-bottom).
+    vertical: bool,
+    /// Pivot override; `None` reflects about the union bounds center.
+    pivot: Pivot,
+}
+
+impl TypedCommand for ReflectObject {
+    type Payload = ReflectObjectPayload;
+
+    fn name(&self) -> &'static str {
+        "object.reflect"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "object.reflect";
+        if !payload.horizontal && !payload.vertical {
+            return Ok(Delta::Noop);
+        }
+        transform_core(document, NAME, &payload.ids, payload.pivot, |pivot| {
+            Ok(geom::Affine::translate((pivot.x, pivot.y))
+                * geom::Affine::scale_non_uniform(
+                    if payload.horizontal { -1.0 } else { 1.0 },
+                    if payload.vertical { -1.0 } else { 1.0 },
+                )
+                * geom::Affine::translate((-pivot.x, -pivot.y)))
+        })
+    }
+}
+
+/// Resolves the union bounds or names what was missing. Shared by the
+/// fixed-origin sugars (`resize`, `setBounds`): an empty id list is the
+/// family's MissingTarget, a bounds-less set is InvalidState.
+fn union_bounds_or(
+    document: &Document,
+    name: &'static str,
+    ids: &[ObjectId],
+) -> Result<geom::Rect, EngineError> {
+    if ids.is_empty() {
+        return Err(EngineError::MissingTarget {
+            name: name.to_owned(),
+            detail: "no objects given".to_owned(),
+        });
+    }
+    union_bounds(document, ids).ok_or_else(|| EngineError::InvalidState {
+        name: name.to_owned(),
+        detail: "targets carry no bounds to resize".to_owned(),
+    })
+}
+
+/// `object.resize` — CS6's `dom.resizeSelection(width, height)`:
+/// resizes to an exact pixel box, "keeping the top-left corner of the
+/// selection in place".
+struct ResizeObject;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct ResizeObjectPayload {
+    /// Objects to resize.
+    ids: Vec<ObjectId>,
+    /// New selection width in pixels.
+    width: f64,
+    /// New selection height in pixels.
+    height: f64,
+}
+
+impl TypedCommand for ResizeObject {
+    type Payload = ResizeObjectPayload;
+
+    fn name(&self) -> &'static str {
+        "object.resize"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "object.resize";
+        if !(payload.width.is_finite() && payload.height.is_finite())
+            || payload.width <= 0.0
+            || payload.height <= 0.0
+        {
+            return Err(EngineError::BadPayload {
+                name: NAME.to_owned(),
+                detail: format!(
+                    "resize ({}, {}) is not a finite positive size",
+                    payload.width, payload.height
+                ),
+            });
+        }
+        let bounds = union_bounds_or(document, NAME, &payload.ids)?;
+        if bounds.width() <= 0.0 || bounds.height() <= 0.0 {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: "targets carry a degenerate selection box".to_owned(),
+            });
+        }
+        transform_core(
+            document,
+            NAME,
+            &payload.ids,
+            Some([bounds.x0, bounds.y0]),
+            |origin| {
+                Ok(geom::scale_about(
+                    geom::Affine::IDENTITY,
+                    payload.width / bounds.width(),
+                    payload.height / bounds.height(),
+                    origin,
+                ))
+            },
+        )
+    }
+}
+
+/// `object.setBounds` — CS6's `dom.setSelectionBounds(rect)`:
+/// "moves and resizes the selection in a single operation" — the union
+/// box lands exactly on the given rectangle.
+struct SetBoundsObject;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct SetBoundsObjectPayload {
+    /// Objects to move and resize.
+    ids: Vec<ObjectId>,
+    /// New left edge.
+    left: f64,
+    /// New top edge.
+    top: f64,
+    /// New width.
+    width: f64,
+    /// New height.
+    height: f64,
+}
+
+impl TypedCommand for SetBoundsObject {
+    type Payload = SetBoundsObjectPayload;
+
+    fn name(&self) -> &'static str {
+        "object.setBounds"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "object.setBounds";
+        if !(payload.width.is_finite() && payload.height.is_finite())
+            || payload.width <= 0.0
+            || payload.height <= 0.0
+            || !payload.left.is_finite()
+            || !payload.top.is_finite()
+        {
+            return Err(EngineError::BadPayload {
+                name: NAME.to_owned(),
+                detail: format!(
+                    "bounds ({}, {}, {}, {}) is not a finite positive box",
+                    payload.left, payload.top, payload.width, payload.height
+                ),
+            });
+        }
+        let bounds = union_bounds_or(document, NAME, &payload.ids)?;
+        if bounds.width() <= 0.0 || bounds.height() <= 0.0 {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: "targets carry a degenerate selection box".to_owned(),
+            });
+        }
+        transform_core(
+            document,
+            NAME,
+            &payload.ids,
+            Some([bounds.x0, bounds.y0]),
+            |origin| {
+                Ok(
+                    geom::Affine::translate((payload.left - bounds.x0, payload.top - bounds.y0))
+                        * geom::scale_about(
+                            geom::Affine::IDENTITY,
+                            payload.width / bounds.width(),
+                            payload.height / bounds.height(),
+                            origin,
+                        ),
+                )
+            },
+        )
     }
 }
 
@@ -2372,5 +3090,243 @@ mod tests {
             "the outer group returns"
         );
         assert!(document.registry.get(outer_id).is_some());
+    }
+
+    #[test]
+    fn scale_bakes_path_points_and_undo_is_exact() {
+        let (mut document, ids) = document_with(vec![path_object()]);
+        let before = serde_json::to_vec(&document).unwrap();
+        let delta = ScaleObject
+            .apply_json(
+                &mut document,
+                json!({ "ids": [ids[0]], "sx": 2.0, "sy": 2.0, "pivot": [4.0, 4.0] }),
+            )
+            .unwrap();
+        let path = match document.registry.get(ids[0]) {
+            Some(ObjectData::Path(path)) => path,
+            other => panic!("not a path: {other:?}"),
+        };
+        let anchors: Vec<(f64, f64)> = path.contours[0]
+            .points
+            .iter()
+            .map(|p| (p.anchor.x, p.anchor.y))
+            .collect();
+        assert_eq!(
+            anchors,
+            vec![(-4.0, -4.0), (12.0, -4.0), (12.0, 12.0), (-4.0, 12.0)],
+            "the box doubles about (4, 4)"
+        );
+        delta.apply_inverse(&mut document).unwrap();
+        assert_eq!(serde_json::to_vec(&document).unwrap(), before);
+    }
+
+    #[test]
+    fn rotate_90_moves_anchors_and_undo_is_exact() {
+        let (mut document, ids) = document_with(vec![path_object()]);
+        let before = serde_json::to_vec(&document).unwrap();
+        let delta = RotateObject
+            .apply_json(
+                &mut document,
+                json!({ "ids": [ids[0]], "degrees": 90.0, "pivot": [0.0, 0.0] }),
+            )
+            .unwrap();
+        let path = match document.registry.get(ids[0]) {
+            Some(ObjectData::Path(path)) => path,
+            other => panic!("not a path: {other:?}"),
+        };
+        let first = path.contours[0].points[0].anchor;
+        let edge = path.contours[0].points[1].anchor;
+        // (8, 0) rotates to (0, 8) under the y-down clockwise convention.
+        assert!((first.x - 0.0).abs() < 1e-9 && (first.y - 0.0).abs() < 1e-9);
+        assert!((edge.x - 0.0).abs() < 1e-9 && (edge.y - 8.0).abs() < 1e-9);
+        delta.apply_inverse(&mut document).unwrap();
+        assert_eq!(serde_json::to_vec(&document).unwrap(), before);
+    }
+
+    #[test]
+    fn free_matrix_composes_text_transform_and_undo_restores_none() {
+        let (mut document, ids) = document_with(vec![ObjectData::Text(doc::TextObject::new(
+            geom::Rect::new(0.0, 0.0, 10.0, 10.0),
+        ))]);
+        assert!(matches!(
+            document.registry.get(ids[0]),
+            Some(ObjectData::Text(text)) if text.transform.is_none()
+        ));
+        let delta = TransformObject
+            .apply_json(
+                &mut document,
+                json!({ "ids": [ids[0]], "matrix": [2.0, 0.0, 0.0, 2.0, 5.0, 5.0] }),
+            )
+            .unwrap();
+        let text = match document.registry.get(ids[0]) {
+            Some(ObjectData::Text(text)) => text,
+            other => panic!("not a text: {other:?}"),
+        };
+        let coeffs = text.transform.expect("matrix stored");
+        // The pivot defaulted to the frame center (5, 5): the stored
+        // matrix is exactly pivot ∘ payload ∘ pivot⁻¹.
+        let want = geom::Affine::translate((5.0, 5.0))
+            * geom::Affine::new([2.0, 0.0, 0.0, 2.0, 5.0, 5.0])
+            * geom::Affine::translate((-5.0, -5.0));
+        assert_eq!(coeffs.as_coeffs(), want.as_coeffs());
+        delta.apply_inverse(&mut document).unwrap();
+        assert!(matches!(
+            document.registry.get(ids[0]),
+            Some(ObjectData::Text(text)) if text.transform.is_none()
+        ));
+    }
+
+    #[test]
+    fn reflect_with_both_axes_false_is_the_documented_noop() {
+        let (mut document, ids) = document_with(vec![path_object()]);
+        let before = serde_json::to_vec(&document).unwrap();
+        let delta = ReflectObject
+            .apply_json(
+                &mut document,
+                json!({ "ids": [ids[0]], "horizontal": false, "vertical": false }),
+            )
+            .unwrap();
+        assert!(matches!(delta, Delta::Noop));
+        assert_eq!(serde_json::to_vec(&document).unwrap(), before);
+    }
+
+    #[test]
+    fn image_target_refuses_and_leaves_the_document_untouched() {
+        let (mut document, ids) = document_with(vec![image_object()]);
+        let before = serde_json::to_vec(&document).unwrap();
+        let error = ScaleObject
+            .apply_json(
+                &mut document,
+                json!({ "ids": [ids[0]], "sx": 2.0, "sy": 2.0, "pivot": null }),
+            )
+            .unwrap_err();
+        assert!(matches!(error, EngineError::InvalidState { .. }));
+        assert_eq!(serde_json::to_vec(&document).unwrap(), before);
+    }
+
+    #[test]
+    fn resize_keeps_the_top_left_corner() {
+        let (mut document, ids) = document_with(vec![path_object(), {
+            let mut p = match path_object() {
+                ObjectData::Path(p) => p,
+                other => panic!("not a path: {other:?}"),
+            };
+            for point in &mut p.contours[0].points {
+                point.anchor += geom::Vec2::new(20.0, 0.0);
+            }
+            ObjectData::Path(p)
+        }]);
+        let before = serde_json::to_vec(&document).unwrap();
+        // Union box (0, 0)..(28, 8); doubling moves only the far corner.
+        let delta = ResizeObject
+            .apply_json(
+                &mut document,
+                json!({ "ids": [ids[0], ids[1]], "width": 56.0, "height": 16.0 }),
+            )
+            .unwrap();
+        let bounds = union_bounds(&document, &ids[..]).expect("bounds");
+        assert_eq!(bounds, geom::Rect::new(0.0, 0.0, 56.0, 16.0));
+        // Undo restores the pair exactly.
+        delta.apply_inverse(&mut document).unwrap();
+        assert_eq!(serde_json::to_vec(&document).unwrap(), before);
+    }
+
+    #[test]
+    fn set_bounds_lands_the_selection_exactly() {
+        let (mut document, ids) = document_with(vec![path_object()]);
+        SetBoundsObject
+            .apply_json(
+                &mut document,
+                json!({ "ids": [ids[0]], "left": 10.0, "top": 20.0, "width": 40.0, "height": 80.0 }),
+            )
+            .unwrap();
+        let bounds = union_bounds(&document, &[ids[0]]).expect("bounds");
+        assert_eq!(bounds, geom::Rect::new(10.0, 20.0, 50.0, 100.0));
+    }
+
+    #[test]
+    fn shared_descendant_transforms_once_and_undo_is_exact() {
+        let (mut document, ids) = document_with(vec![path_object(), path_object()]);
+        let group_id = document
+            .registry
+            .insert(ObjectData::Group(doc::GroupObject {
+                group_type: 0,
+                name: None,
+                children: vec![ids[0], ids[1]],
+                opacity: 1000,
+                blend: 0,
+                visible: true,
+                locked: false,
+                mask_hidden: false,
+                effects: Vec::new(),
+            }));
+        // The child is reached through the group AND named directly.
+        ScaleObject
+            .apply_json(
+                &mut document,
+                json!({ "ids": [group_id, ids[0]], "sx": 2.0, "sy": 2.0, "pivot": [4.0, 4.0] }),
+            )
+            .unwrap();
+        let path = match document.registry.get(ids[0]) {
+            Some(ObjectData::Path(path)) => path,
+            other => panic!("not a path: {other:?}"),
+        };
+        let anchor = path.contours[0].points[0].anchor;
+        assert!(
+            (anchor.x + 4.0).abs() < 1e-9 && (anchor.y + 4.0).abs() < 1e-9,
+            "scaled once about (4, 4), not twice: {anchor:?}"
+        );
+        let document_before = serde_json::to_vec(&document).unwrap();
+        ScaleObject
+            .apply_json(
+                &mut document,
+                json!({ "ids": [group_id, ids[0]], "sx": 0.5, "sy": 0.5, "pivot": [4.0, 4.0] }),
+            )
+            .unwrap()
+            .apply_inverse(&mut document)
+            .unwrap();
+        assert_eq!(serde_json::to_vec(&document).unwrap(), document_before);
+    }
+
+    #[test]
+    fn non_finite_scalars_are_bad_payloads() {
+        let (mut document, ids) = document_with(vec![path_object()]);
+        let before = serde_json::to_vec(&document).unwrap();
+        let error = RotateObject
+            .apply_json(
+                &mut document,
+                json!({ "ids": [ids[0]], "degrees": f64::NAN, "pivot": null }),
+            )
+            .unwrap_err();
+        assert!(matches!(error, EngineError::BadPayload { .. }));
+        let error = ScaleObject
+            .apply_json(
+                &mut document,
+                json!({ "ids": [ids[0]], "sx": -1.0, "sy": 1.0, "pivot": null }),
+            )
+            .unwrap_err();
+        assert!(matches!(error, EngineError::BadPayload { .. }));
+        let error = SkewObject
+            .apply_json(
+                &mut document,
+                json!({ "ids": [ids[0]], "skew_x": f64::INFINITY, "skew_y": 0.0, "pivot": null }),
+            )
+            .unwrap_err();
+        assert!(matches!(error, EngineError::BadPayload { .. }));
+        let error = ResizeObject
+            .apply_json(
+                &mut document,
+                json!({ "ids": [ids[0]], "width": 0.0, "height": 8.0 }),
+            )
+            .unwrap_err();
+        assert!(matches!(error, EngineError::BadPayload { .. }));
+        let error = SetBoundsObject
+            .apply_json(
+                &mut document,
+                json!({ "ids": [], "left": 0.0, "top": 0.0, "width": 8.0, "height": 8.0 }),
+            )
+            .unwrap_err();
+        assert!(matches!(error, EngineError::MissingTarget { .. }));
+        assert_eq!(serde_json::to_vec(&document).unwrap(), before);
     }
 }

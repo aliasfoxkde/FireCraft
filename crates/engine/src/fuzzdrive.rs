@@ -538,6 +538,13 @@ pub const CALLS: &[&str] = &[
     "object.moveToCell",
     "object.group",
     "object.ungroup",
+    "object.transform",
+    "object.scale",
+    "object.rotate",
+    "object.skew",
+    "object.reflect",
+    "object.resize",
+    "object.setBounds",
     "object.createPath",
     "object.align",
     "object.distribute",
@@ -953,6 +960,126 @@ pub fn random_call(rng: &mut FuzzRng, document: &Document) -> (String, serde_jso
             serde_json::json!({ "ids": ids, "name": serde_json::Value::Null })
         }
         "object.ungroup" => serde_json::json!({ "id": any_id(rng) }),
+        // The transform family: ids follow the translate idiom (one id
+        // or a small spread; the dedup guard covers group+descendant).
+        // Singular and degenerate matrices are in-band values — they
+        // must still round-trip through undo byte-exactly.
+        "object.transform" => {
+            let ids: Vec<serde_json::Value> = if live_ids.is_empty() || rng.chance(20) {
+                vec![any_id(rng)]
+            } else {
+                let count = 1 + rng.below(live_ids.len().min(4));
+                (0..count)
+                    .map(|_| serde_json::json!(rng.pick(&live_ids).copied()))
+                    .collect()
+            };
+            serde_json::json!({
+                "ids": ids,
+                "matrix": [
+                    rng.below(401) as f64 / 100.0 - 2.0,
+                    rng.below(401) as f64 / 100.0 - 2.0,
+                    rng.below(401) as f64 / 100.0 - 2.0,
+                    rng.below(401) as f64 / 100.0 - 2.0,
+                    rng.below(201) as f64 - 100.0,
+                    rng.below(201) as f64 - 100.0,
+                ],
+            })
+        }
+        "object.scale" => {
+            let ids: Vec<serde_json::Value> = if live_ids.is_empty() || rng.chance(20) {
+                vec![any_id(rng)]
+            } else {
+                let count = 1 + rng.below(live_ids.len().min(4));
+                (0..count)
+                    .map(|_| serde_json::json!(rng.pick(&live_ids).copied()))
+                    .collect()
+            };
+            let pivot = if rng.chance(50) {
+                serde_json::json!([rng.below(600) as f64, rng.below(600) as f64])
+            } else {
+                serde_json::Value::Null
+            };
+            serde_json::json!({
+                "ids": ids,
+                "sx": rng.below(301) as f64 / 100.0,
+                "sy": rng.below(301) as f64 / 100.0,
+                "pivot": pivot,
+            })
+        }
+        "object.rotate" => {
+            let ids: Vec<serde_json::Value> = if live_ids.is_empty() || rng.chance(20) {
+                vec![any_id(rng)]
+            } else {
+                let count = 1 + rng.below(live_ids.len().min(4));
+                (0..count)
+                    .map(|_| serde_json::json!(rng.pick(&live_ids).copied()))
+                    .collect()
+            };
+            let pivot = if rng.chance(50) {
+                serde_json::json!([rng.below(600) as f64, rng.below(600) as f64])
+            } else {
+                serde_json::Value::Null
+            };
+            serde_json::json!({
+                "ids": ids,
+                "degrees": rng.below(3600) as f64 / 10.0 - 180.0,
+                "pivot": pivot,
+            })
+        }
+        "object.skew" => {
+            let ids: Vec<serde_json::Value> = if live_ids.is_empty() || rng.chance(20) {
+                vec![any_id(rng)]
+            } else {
+                let count = 1 + rng.below(live_ids.len().min(4));
+                (0..count)
+                    .map(|_| serde_json::json!(rng.pick(&live_ids).copied()))
+                    .collect()
+            };
+            let pivot = if rng.chance(50) {
+                serde_json::json!([rng.below(600) as f64, rng.below(600) as f64])
+            } else {
+                serde_json::Value::Null
+            };
+            serde_json::json!({
+                "ids": ids,
+                "skew_x": rng.below(1601) as f64 / 10.0 - 80.0,
+                "skew_y": rng.below(1601) as f64 / 10.0 - 80.0,
+                "pivot": pivot,
+            })
+        }
+        "object.reflect" => {
+            let ids: Vec<serde_json::Value> = if live_ids.is_empty() || rng.chance(20) {
+                vec![any_id(rng)]
+            } else {
+                let count = 1 + rng.below(live_ids.len().min(4));
+                (0..count)
+                    .map(|_| serde_json::json!(rng.pick(&live_ids).copied()))
+                    .collect()
+            };
+            let pivot = if rng.chance(50) {
+                serde_json::json!([rng.below(600) as f64, rng.below(600) as f64])
+            } else {
+                serde_json::Value::Null
+            };
+            serde_json::json!({
+                "ids": ids,
+                "horizontal": rng.chance(50),
+                "vertical": rng.chance(50),
+                "pivot": pivot,
+            })
+        }
+        "object.resize" => serde_json::json!({
+            "ids": [any_id(rng)],
+            "width": 1.0 + rng.below(600) as f64,
+            "height": 1.0 + rng.below(600) as f64,
+        }),
+        "object.setBounds" => serde_json::json!({
+            "ids": [any_id(rng)],
+            "left": -(rng.below(400) as f64),
+            "top": -(rng.below(400) as f64),
+            "width": 1.0 + rng.below(600) as f64,
+            "height": 1.0 + rng.below(600) as f64,
+        }),
         "path.movePoints" => {
             let edits: Vec<serde_json::Value> = (0..1 + rng.below(4))
                 .map(|_| {
