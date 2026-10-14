@@ -466,7 +466,12 @@ mutations and refuses without a linked slice.
   (no observed `TXFv` shape + no mintable rasters).
 
 ### Phase 9 — Recorded debts (P-class limitations; no parity pressure)
-- **6.1-object-duplicate** deep-clone of groups (today shallow).
+- ~~**6.1-object-duplicate** deep-clone of groups~~ **DONE 2026-10-14
+  (decision 0056, #127):** `clone_subtree` recurses through group
+  children — every live descendant mints its own slot, the copy
+  re-points, undo retracts every minted slot in one step. Dangling
+  child ids skip (walker rule); symbol instances stay one slot
+  (definitions are shared by number by design).
 - **Pattern-authoring command** (pattern fills landed; authoring UI
   command missing).
 - ~~**mkBT tile-bank WRITER**~~ **DONE 2026-10-14 (decision 0055,
@@ -481,7 +486,9 @@ mutations and refuses without a linked slice.
   path pattern fills) and refuses a dangling reference
   (`MissingTile`). Untouched files: tile-free byte-exact, foreign
   tiled files chunk-exact outside the re-canonicalized `mkTS`.
-- **Image resample pass** (feeds 5.4).
+- **Image resample pass** — **DONE** (landed as `bitmap::resample_rgba`
+  in #111); the open remainder is bilinear *quality* on
+  `bitmap.importFile` (nearest-neighbour today, decision 0054).
 - **mask_replace_options "add"** (mask union fold) refused as debt.
 - **Path→image rasterizer hook** for `mask_type "image"` on vector
   clipboard contents (refused today).

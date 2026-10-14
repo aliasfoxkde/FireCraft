@@ -181,6 +181,64 @@ fn object_duplicate_clones_above_the_source() {
 }
 
 #[test]
+fn object_duplicate_deep_clones_groups() {
+    let (mut session, ids) = session();
+    session
+        .apply(
+            "object.group",
+            json!({ "ids": [ids[0], ids[1]], "name": null }),
+        )
+        .expect("group");
+    let group = session.document().pages[0].layers.layers[0].cells[0].elements[0];
+    let original = DocumentBytes::of(session.document());
+
+    session
+        .apply("object.duplicate", json!({ "id": group }))
+        .expect("duplicate");
+
+    // The copy sits above the source, is a group, and owns fresh slots
+    // for its members — editing the clone never touches the original's
+    // children.
+    let elements = &session.document().pages[0].layers.layers[0].cells[0].elements;
+    assert_eq!(elements, &[group, elements[1]], "copy above source");
+    let copy = elements[1];
+    let (Some(doc::ObjectData::Group(source)), Some(doc::ObjectData::Group(clone))) = (
+        session.document().registry.get(group),
+        session.document().registry.get(copy),
+    ) else {
+        panic!("both sides are groups");
+    };
+    assert_eq!(
+        source.children,
+        vec![ids[0], ids[1]],
+        "original keeps its members"
+    );
+    assert_ne!(source.children, clone.children, "the clone re-pointed");
+    let cloned_children = clone.children.clone();
+    for child in &cloned_children {
+        assert!(matches!(
+            session.document().registry.get(*child),
+            Some(doc::ObjectData::Path(_))
+        ));
+        assert!(
+            *child != ids[0] && *child != ids[1],
+            "cloned children are fresh slots, not shared"
+        );
+    }
+
+    // Undo retracts every minted slot and restores the exact bytes.
+    session.undo().expect("undo");
+    assert_eq!(DocumentBytes::of(session.document()), original);
+    assert!(session.document().registry.get(copy).is_none());
+    for child in cloned_children {
+        assert!(
+            session.document().registry.get(child).is_none(),
+            "child slot {child:?} must retract with the group"
+        );
+    }
+}
+
+#[test]
 fn object_translate_moves_a_path_and_refuses_an_empty_selection() {
     let (mut session, ids) = session();
     let original = DocumentBytes::of(session.document());

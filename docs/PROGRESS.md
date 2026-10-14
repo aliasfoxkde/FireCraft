@@ -88,7 +88,8 @@
 | #123 | custom anti-alias dials: overSample {4,8,16} + sharpness/strength 0..=255; TA1i/TA2i/TOSi typed out of the bag (8.18, decision 0052) | this batch | **266 C / 5 P / 0 M / 85 N** |
 | #124 | duplicateSymbolForAlias: one duplicate per pointed-to MSNi, selected instances re-point (8.19, decision 0053) | this batch | **267 C / 4 P / 0 M / 85 N** |
 | #125 | importFile placement: decoded RGBA in the payload, degenerate/aspect/fill semantics, canvas crop (8.20, decision 0054) | this batch | **268 C / 3 P / 0 M / 85 N** |
-| #126 | mkBT tile-bank load/write: open joins the bank, save merges fresh ids (`encode_mkbt` split law), library export carries rasters (Phase 9, decision 0055) | this batch | 268 C (no surface change) |
+| #126 | mkBT tile-bank load/write: open joins the bank, save merges fresh ids (`encode_mkbt` split law), library export carries rasters (Phase 9, decision 0055) | 2a6abf6 | 268 C (no surface change) |
+| #127 | object.duplicate deep-clones groups: `clone_subtree` mints a slot per live descendant, undo retracts all (Phase 9, decision 0056) | this batch | 268 C (no surface change) |
 
 **Campaign complete:** no remaining M families. Next: P-class partials
 and Phase 9 debts (HANDOFF §4).
@@ -97,7 +98,7 @@ and Phase 9 debts (HANDOFF §4).
 
 | Debt | Blocks / feeds | Origin |
 |---|---|---|
-| object.duplicate shallow-clones groups | fidelity | pre-#91 |
+| ~~object.duplicate shallow-clones groups~~ **DONE** — deep clone landed in #127 (decision 0056) | fidelity | pre-#91 |
 | Pattern-authoring command | fills UX | #85 |
 | ~~mkBT tile-bank **writer**~~ **DONE** — landed as open-join + save-merge + extract-copy in #126 (decision 0055) | bitmap round-trip | M7 |
 | ~~Image resample pass~~ **DONE** — landed as `bitmap::resample_rgba` in #111 | setDocumentImageSize (closed, decision 0041) | M8 |
@@ -140,5 +141,6 @@ and Phase 9 debts (HANDOFF §4).
 | 2026-10-14 | **267** | 4 | 0 | #124 duplicateSymbolForAlias (decision 0053) |
 | 2026-10-14 | **268** | 3 | 0 | #125 importFile placement (decision 0054) |
 | 2026-10-14 | 268 | 3 | 0 | #126 mkBT tile-bank load/write (decision 0055, no surface change) |
+| 2026-10-14 | 268 | 3 | 0 | #127 duplicate deep-clones groups (decision 0056, no surface change) |
 
 (Pre-#91 counts are approximate; the matrix file is the authority.)

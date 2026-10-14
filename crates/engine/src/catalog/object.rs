@@ -696,11 +696,52 @@ impl TypedCommand for DeleteObject {
     }
 }
 
-/// `object.duplicate` — clones an object into a fresh registry slot and
+/// Deep-clones `source`'s subtree into fresh registry slots: group
+/// children recurse, every live descendant gets its own slot, and the
+/// copy's children list re-points at the fresh slots (a duplicated
+/// group shares nothing with the original). Dangling child references
+/// skip per the walker rule. Every minted id — the root copy last —
+/// appends to `created` so undo can retract them all.
+fn clone_subtree(
+    document: &mut Document,
+    source: doc::ObjectId,
+    created: &mut Vec<doc::ObjectId>,
+) -> Result<doc::ObjectId, EngineError> {
+    const NAME: &str = "object.duplicate";
+    let mut data =
+        document
+            .registry
+            .get(source)
+            .cloned()
+            .ok_or_else(|| EngineError::MissingTarget {
+                name: NAME.to_owned(),
+                detail: format!(
+                    "object {} (generation {}) is not live",
+                    source.index(),
+                    source.generation()
+                ),
+            })?;
+    if let ObjectData::Group(group) = &mut data {
+        let mut children = Vec::with_capacity(group.children.len());
+        for child in &group.children {
+            if document.registry.get(*child).is_some() {
+                children.push(clone_subtree(document, *child, created)?);
+            }
+        }
+        group.children = children;
+    }
+    let copy = document.registry.insert(data);
+    created.push(copy);
+    Ok(copy)
+}
+
+/// `object.duplicate` — clones an object into fresh registry slots and
 /// inserts the copy into the source's own container, directly above it
 /// (z-order is list order, bottom-first). CS6's Edit > Clone places the
 /// copy on top of the original at the same spot; a following drag moves
-/// it. Works in cells and in groups.
+/// it. Groups deep-clone: every descendant gets its own slot, so the
+/// copy edits independently of the original. Works in cells and in
+/// groups.
 struct DuplicateObject;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
@@ -723,7 +764,7 @@ impl TypedCommand for DuplicateObject {
         payload: &Self::Payload,
     ) -> Result<Delta, EngineError> {
         const NAME: &str = "object.duplicate";
-        let data = access::object(document, NAME, payload.id)?.clone();
+        access::object(document, NAME, payload.id)?;
         let owner = find_owner(document, payload.id).ok_or_else(|| EngineError::MissingTarget {
             name: NAME.to_owned(),
             detail: format!(
@@ -732,7 +773,15 @@ impl TypedCommand for DuplicateObject {
                 payload.id.generation()
             ),
         })?;
-        let copy = document.registry.insert(data);
+        let mut created = Vec::new();
+        let copy = clone_subtree(document, payload.id, &mut created)?;
+        let created_deltas = created
+            .into_iter()
+            .map(|id| Delta::Object {
+                id,
+                inverse: ObjectInverse::Created,
+            })
+            .collect::<Vec<_>>();
         match owner {
             Owner::Cell {
                 page,
@@ -742,13 +791,9 @@ impl TypedCommand for DuplicateObject {
             } => {
                 let placed =
                     attach_cell(document, NAME, page, layer, cell, copy, Some(position + 1))?;
-                Ok(Delta::Group(vec![
-                    placed,
-                    Delta::Object {
-                        id: copy,
-                        inverse: ObjectInverse::Created,
-                    },
-                ]))
+                let mut deltas = vec![placed];
+                deltas.extend(created_deltas);
+                Ok(Delta::Group(deltas))
             }
             Owner::Group {
                 id: parent,
@@ -779,18 +824,14 @@ impl TypedCommand for DuplicateObject {
                         ),
                     });
                 }
-                Ok(Delta::Group(vec![
-                    Delta::Object {
-                        id: parent,
-                        inverse: ObjectInverse::Mutated {
-                            object: Box::new(ObjectData::Group(before)),
-                        },
+                let mut deltas = vec![Delta::Object {
+                    id: parent,
+                    inverse: ObjectInverse::Mutated {
+                        object: Box::new(ObjectData::Group(before)),
                     },
-                    Delta::Object {
-                        id: copy,
-                        inverse: ObjectInverse::Created,
-                    },
-                ]))
+                }];
+                deltas.extend(created_deltas);
+                Ok(Delta::Group(deltas))
             }
         }
     }

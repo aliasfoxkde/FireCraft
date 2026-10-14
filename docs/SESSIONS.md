@@ -673,3 +673,28 @@ Batch: Phase 9 debt (no new commands, no parity flip).
   taught this; doc updated).
 - Gates: fwpng/doc/app-cli/engine suites green, clippy -D warnings,
   fmt, 256-seed CI-base fuzz sweep clean, xtask ci all gates.
+
+## #127 — 2026-10-14 — duplicate deep-clones groups (decision 0056)
+
+Batch: Phase 9 debt (no new commands, no parity flip).
+
+- `object.duplicate` no longer shares group members with the source:
+  `clone_subtree` recurses through group children, every live
+  descendant mints its own registry slot, and the copy's children
+  list re-points at the fresh slots — the original keeps its member
+  ids, so both sides edit independently. Dangling child ids skip
+  (walker rule); symbol instances stay one slot (definitions are
+  shared by MSNi by design — the alias model).
+- Delta shape: container attach keeps its captured inverse, then one
+  `Created` per minted id, root last — the reversed group fold
+  retracts the root slot first, and one undo step restores exact
+  bytes with every clone slot emptied.
+- Tests: +1 session test (group two members → duplicate → clone owns
+  fresh live slots, originals kept, undo byte-exact and
+  slot-retracting); the existing leaf test pins the unchanged
+  single-slot shape.
+- Also: HANDOFF §4's stale "Image resample pass" debt note corrected
+  (resample landed in #111; the open remainder is bilinear quality
+  on importFile).
+- Gates: engine suite green (381 lib + session), clippy -D warnings,
+  fmt, 256-seed CI-base fuzz sweep clean.
