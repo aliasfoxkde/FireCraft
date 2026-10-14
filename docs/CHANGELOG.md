@@ -10,6 +10,7 @@ Current version: **0.1.0**.
 
 ### Features
 
+- **page**: guide, grid, and onion-skinning commands (32dd03a)
 - **object**: group/ungroup commands (96aa656)
 - **fill**: pattern fills end to end (f9d30d6)
 - **io**: import SVG gradient paint servers (93e0778)

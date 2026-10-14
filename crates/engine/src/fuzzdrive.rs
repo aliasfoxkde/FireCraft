@@ -582,6 +582,11 @@ pub const CALLS: &[&str] = &[
     "page.setGridOrigin",
     "page.setGridSize",
     "page.setOnionSkinning",
+    "frame.add",
+    "frame.delete",
+    "frame.duplicate",
+    "frame.reorder",
+    "frame.distributeLayer",
     "bitmap.selectRect",
     "bitmap.selectEllipse",
     "bitmap.selectLasso",
@@ -1186,6 +1191,48 @@ pub fn random_call(rng: &mut FuzzRng, document: &Document) -> (String, serde_jso
                 "after": count(rng),
             })
         }
+        "frame.add" => {
+            let location = if rng.chance(70) {
+                serde_json::json!(
+                    rng.pick(&["beginning", "before current", "after current", "end"])
+                        .copied()
+                )
+            } else {
+                // Missing `current` for a current-relative location is a
+                // refusal the grammar should reach.
+                serde_json::Value::Null
+            };
+            serde_json::json!({
+                "page": any_index(rng, pages),
+                "how_many": 1 + rng.below(3),
+                "location": location,
+                "current": any_opt_index(rng, 3),
+            })
+        }
+        "frame.delete" => serde_json::json!({
+            "page": any_index(rng, pages),
+            "index": any_index(rng, frames + 1),
+            "how_many": 1 + rng.below(2),
+        }),
+        "frame.duplicate" => serde_json::json!({
+            "page": any_index(rng, pages),
+            "index": any_index(rng, frames + 1),
+            "how_many": 1 + rng.below(2),
+            "location": rng.pick(&["beginning", "before current", "after current", "end"]).copied(),
+            "current": any_opt_index(rng, 3),
+            "selection_only": rng.chance(90),
+        }),
+        "frame.reorder" => serde_json::json!({
+            "page": any_index(rng, pages),
+            "from": any_index(rng, frames + 1),
+            "before": any_index(rng, frames + 2),
+            "make_copy": rng.chance(50),
+        }),
+        "frame.distributeLayer" => serde_json::json!({
+            "page": any_index(rng, pages),
+            "layer": any_index(rng, 3),
+            "cell": any_index(rng, frames),
+        }),
         "page.setCanvasSize" => {
             let size = |rng: &mut FuzzRng| -> f64 {
                 if rng.chance(90) {
