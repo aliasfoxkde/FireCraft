@@ -627,6 +627,7 @@ pub const CALLS: &[&str] = &[
     "text.setFont",
     "text.attachPath",
     "text.detachPath",
+    "text.convertToPaths",
     "symbol.create",
     "symbol.createInstance",
     "symbol.breakApart",
@@ -1876,6 +1877,10 @@ pub fn random_call(rng: &mut FuzzRng, document: &Document) -> (String, serde_jso
             payload
         }
         "text.detachPath" => serde_json::json!({ "id": any_id(rng) }),
+        // Selection-driven: whatever earlier calls left selected is
+        // the conversion target, so arms land in the no-op, convert,
+        // and refusal paths alike.
+        "text.convertToPaths" => serde_json::json!({}),
         "symbol.create" => {
             let count = 1 + rng.below(3);
             let mut ids = Vec::with_capacity(count);

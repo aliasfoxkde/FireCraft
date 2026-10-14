@@ -407,6 +407,7 @@ dependencies = [
  "raster",
  "serde",
  "serde_json",
+ "text",
  "vector",
 ]
 

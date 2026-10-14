@@ -14,17 +14,17 @@ enforced == the fuzz call table).
 
 | class | meaning | count (of 356 dom verbs) |
 |---|---|---|
-| C | carried: a registry command implements the mutation | 201 |
+| C | carried: a registry command implements the mutation | 202 |
 | P | partial: carried with a recorded model limitation | 45 |
-| M | missing: no command and no decision — work items | 26 |
+| M | missing: no command and no decision — work items | 25 |
 | N | not applicable: non-document surface (accessor/UI/session/clipboard/export/OS) | 84 |
 
-Document-mutation coverage: **246 of 272** carried-or-partial
-(201 carried, 45 partial, 26 missing).
+Document-mutation coverage: **247 of 272** carried-or-partial
+(202 carried, 45 partial, 25 missing).
 
 ### Gap families (the Missing table, grouped)
 
-The 26 missing verbs collapse into six families, largest first —
+The 25 missing verbs collapse into six families, largest first —
 each family is one design decision plus a command batch:
 
 1. **Object transforms** (2 verbs remain): rotateDocument (canvas
@@ -101,6 +101,7 @@ each family is one design decision plus a command batch:
 | `convertMarqueeToPath` | C | mask.marqueeToPath | traces the pixel plane with marching squares |
 | `convertPathToMarquee` | C | mask.pathToMarquee | hard/antialias/feather edge modes |
 | `convertToAnimSymbol` | C | symbol.setType | create then type to anim |
+| `convertToPaths` | C | text.convertToPaths | glyph outlines frozen as in-place path (renderer synthetic-path contract; pixel-identical golden) |
 | `convertToSymbol` | C | symbol.create | selection folds into the definition |
 | `convetToAnimSymbol` | C | symbol.setType |  |
 | `cropSelection` | C | path.cropSelection | each selected path is cropped (intersected) by the rect; empty results remove the path |
@@ -320,7 +321,6 @@ each family is one design decision plus a command batch:
 | `clipPasteAsMask` | M | - | clipboard op (the mask model itself landed via mask.add) |
 | `clipPasteFromChannelToChannel` | M | - | pixel channel copy - bitmap domain, no command |
 | `clipPasteInside` | M | - | paste-inside = clipboard op (mask model landed) |
-| `convertToPaths` | M | - | text-to-paths has no command (render flattens glyphs; editable conversion missing) |
 | `deleteSavedSelection` | M | - | named saved selections unmodeled |
 | `filterSelection` | M | - | pixel-filter bake verb (permanent, not a Live Effect) — filter family; needs the bitmap bake pass (debt) |
 | `filterSelectionByID` | M | - | pixel-filter bake verb (permanent, not a Live Effect) — filter family; needs the bitmap bake pass (debt) |

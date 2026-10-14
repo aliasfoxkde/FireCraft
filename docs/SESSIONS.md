@@ -110,3 +110,5 @@ format research, vendored node dictionary).
 - Infra: t5500 runner offline since 2026-10-11 (no route to host);
   fedora-docker carries the CI image; re-shipped on lockfile moves per
   the lockfile-bytes rule.
+  (continued) #102 landed 3baf178, CI 7/7; #103 convertToPaths with a
+  pixel-identity golden (decision 0033).

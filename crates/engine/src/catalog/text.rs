@@ -11,7 +11,7 @@ use doc::{Contour, Document, ObjectData, PathPoint, TextObject, TextOnPath, Text
 use geom::{Point, Rect};
 
 use crate::access;
-use crate::catalog::object::attach_cell;
+use crate::catalog::object::{attach_cell, detach, ensure_detachable};
 use crate::command::TypedCommand;
 use crate::delta::{Delta, ObjectInverse};
 use crate::error::EngineError;
@@ -24,7 +24,8 @@ pub(crate) fn install(registry: &mut CommandRegistry) -> Result<(), EngineError>
     registry.register(SetAttrs)?;
     registry.register(SetFont)?;
     registry.register(AttachPath)?;
-    registry.register(DetachPath)
+    registry.register(DetachPath)?;
+    registry.register(ConvertToPaths)
 }
 
 /// Edits the text object `id` names, capturing it for the inverse.
@@ -600,6 +601,123 @@ impl TypedCommand for DetachPath {
     }
 }
 
+/// `text.convertToPaths` — CS6 `dom.convertToPaths()`: "Converts the
+/// selected text items into editable paths." Each selected text object
+/// becomes a path in place (same registry id, same z-position): the
+/// glyph outlines the renderer would draw, frozen as true contours,
+/// with the text fill riding the path paint (the renderer's synthetic
+/// path is the contract) and the display fields kept. A text item with
+/// no ink (empty runs) leaves nothing behind and is removed, the way
+/// an empty boolean result is.
+struct ConvertToPaths;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct ConvertToPathsPayload {}
+
+impl TypedCommand for ConvertToPaths {
+    type Payload = ConvertToPathsPayload;
+
+    fn name(&self) -> &'static str {
+        "text.convertToPaths"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        _payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "text.convertToPaths";
+        if document.object_selection.is_empty() {
+            return Ok(Delta::Noop);
+        }
+        // Compute every conversion before any mutation: one non-text
+        // member refuses the whole command.
+        let mut engine = text::TextEngine::new();
+        let mut converted = Vec::new();
+        for id in &document.object_selection {
+            let Some(ObjectData::Text(object)) = document.registry.get(*id) else {
+                return Err(EngineError::InvalidState {
+                    name: NAME.to_owned(),
+                    detail: format!(
+                        "selected object {} is not a text object; only text converts",
+                        id.index()
+                    ),
+                });
+            };
+            let geometry = engine.glyph_contours(object);
+            // Fireworks' default text fill is opaque black; `FCLi`
+            // overrides (the renderer's rule, mirrored here so the
+            // converted path paints identically).
+            const DEFAULT_FILL: i64 = 0xFF00_0000; // ABGR: alpha 255, black
+            let fill = object
+                .style
+                .as_ref()
+                .and_then(|style| style.fill_raw)
+                .unwrap_or(DEFAULT_FILL);
+            let path = doc::PathObject {
+                contours: geometry.contours,
+                even_odd: false,
+                primitive: None,
+                paint: Some(doc::PaintStyle {
+                    stroke_raw: 0, // ABGR alpha 0 — text never strokes
+                    fill_raw: fill,
+                    fill: None,
+                }),
+                fill_start: None,
+                fill_end: None,
+                fill_third: None,
+                brush_placement: None,
+                fill_on_top: None,
+                locked: object.locked,
+                visible: object.visible,
+                opacity: object.opacity,
+                blend: object.blend,
+                name: object.name.clone(),
+                effects: object.effects.clone(),
+            };
+            converted.push((*id, path));
+        }
+        // Pre-flight the removals: an ink-less member must refuse
+        // before the first conversion lands.
+        for (id, path) in &converted {
+            if path.contours.is_empty() {
+                ensure_detachable(document, NAME, *id)?;
+            }
+        }
+        let mut deltas = Vec::new();
+        for (id, path) in converted {
+            let before = access::object(document, NAME, id)?.clone();
+            if path.contours.is_empty() {
+                deltas.push(detach(document, NAME, id)?);
+                if document.registry.remove(id).is_none() {
+                    return Err(EngineError::MissingTarget {
+                        name: NAME.to_owned(),
+                        detail: format!("object {} vanished mid-conversion", id.index()),
+                    });
+                }
+                deltas.push(Delta::Object {
+                    id,
+                    inverse: ObjectInverse::Removed {
+                        object: Box::new(before),
+                    },
+                });
+            } else {
+                if let Some(slot) = document.registry.get_mut(id) {
+                    *slot = ObjectData::Path(path);
+                }
+                deltas.push(Delta::Object {
+                    id,
+                    inverse: ObjectInverse::Mutated {
+                        object: Box::new(before),
+                    },
+                });
+            }
+        }
+        Ok(Delta::Group(deltas))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
@@ -1117,5 +1235,116 @@ mod tests {
         assert_eq!(text_object(&document, id).opacity, 250);
         delta.apply_inverse(&mut document).unwrap();
         assert_eq!(text_object(&document, id).opacity, 1000);
+    }
+
+    fn document_bytes(document: &Document) -> Vec<u8> {
+        serde_json::to_vec(document).unwrap()
+    }
+
+    #[test]
+    fn convert_to_paths_freezes_glyph_outlines() {
+        let mut document = document();
+        let (_, id) = create(&mut document, "FireCraft");
+        document.object_selection = vec![id];
+        let before = document_bytes(&document);
+        let delta = registry()
+            .execute(&mut document, "text.convertToPaths", json!({}))
+            .unwrap();
+
+        // Same id, same z-slot: the text became a path in place.
+        assert_eq!(
+            document.pages[0].layers.layers[0].cells[0].elements,
+            vec![id]
+        );
+        let path = match document.registry.get(id).unwrap() {
+            ObjectData::Path(path) => path,
+            other => panic!("wrong object kind: {other:?}"),
+        };
+        assert!(path.primitive.is_none(), "outlines are derived geometry");
+        assert!(!path.even_odd, "font outlines fill nonzero");
+        assert!(path.contours.len() > 1, "glyphs plus counters");
+        assert!(path.contours.iter().all(|contour| contour.closed));
+        assert!(
+            path.contours
+                .iter()
+                .any(|contour| { contour.points.iter().any(|point| point.is_curve) }),
+            "glyph outlines carry bezier handles"
+        );
+        // The text fill rides the path paint; text never strokes.
+        let paint = path.paint.as_ref().unwrap();
+        assert_eq!(paint.fill_raw, 0xFF00_0000, "default text fill");
+        assert_eq!(paint.stroke_raw, 0);
+        // Display fields survive the conversion.
+        assert_eq!(path.name.as_deref(), Some("caption"));
+        assert_eq!(path.opacity, 1000);
+        assert!(path.visible && !path.locked);
+        assert_eq!(document.object_selection, vec![id]);
+
+        delta.apply_inverse(&mut document).unwrap();
+        assert_eq!(document_bytes(&document), before, "undo restores the text");
+    }
+
+    #[test]
+    fn convert_to_paths_paints_like_the_text_did() {
+        // The renderer's synthetic path is the conversion contract:
+        // before and after must rasterize identically.
+        let mut document = document();
+        let (_, id) = create(&mut document, "Ag");
+        document.pages[0].info.canvas = doc::Canvas {
+            width: 64.0,
+            height: 48.0,
+            ..doc::Canvas::default()
+        };
+        document.object_selection = vec![id];
+        let text_pixels = compose::render_subset(&document, 0, 0, &[id]).unwrap();
+        registry()
+            .execute(&mut document, "text.convertToPaths", json!({}))
+            .unwrap();
+        let path_pixels = compose::render_subset(&document, 0, 0, &[id]).unwrap();
+        assert_eq!(text_pixels.pixels, path_pixels.pixels);
+    }
+
+    #[test]
+    fn convert_to_paths_empty_selection_is_a_noop() {
+        let mut document = document();
+        assert!(matches!(
+            registry()
+                .execute(&mut document, "text.convertToPaths", json!({}))
+                .unwrap(),
+            Delta::Noop
+        ));
+    }
+
+    #[test]
+    fn convert_to_paths_refuses_non_text_untouched() {
+        let mut document = document();
+        let path_id = document.registry.insert(path_fixture());
+        document.pages[0].layers.layers[0].cells[0].elements = vec![path_id];
+        document.object_selection = vec![path_id];
+        let before = document_bytes(&document);
+        let error = registry()
+            .execute(&mut document, "text.convertToPaths", json!({}))
+            .unwrap_err();
+        assert!(matches!(error, EngineError::InvalidState { .. }), "{error}");
+        assert_eq!(document_bytes(&document), before);
+    }
+
+    #[test]
+    fn convert_to_paths_removes_inkless_text_and_undo_revives() {
+        let mut document = document();
+        let (_, id) = create(&mut document, "");
+        document.object_selection = vec![id];
+        let before = document_bytes(&document);
+        let delta = registry()
+            .execute(&mut document, "text.convertToPaths", json!({}))
+            .unwrap();
+        assert!(document.registry.get(id).is_none());
+        assert!(
+            document.pages[0].layers.layers[0].cells[0]
+                .elements
+                .is_empty()
+        );
+        delta.apply_inverse(&mut document).unwrap();
+        assert_eq!(document_bytes(&document), before);
     }
 }

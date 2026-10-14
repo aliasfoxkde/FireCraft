@@ -10,6 +10,7 @@ Current version: **0.1.0**.
 
 ### Features
 
+- **vector**: knife cuts + splitPaths commands (3baf178)
 - **engine**: flatten family via compositor bakes (235e4d4)
 - **engine**: fill edge, crop, tween (df8fe42)
 - **engine**: web-object point append (3516d89)

@@ -13,13 +13,13 @@
 
 - **Ship state:** v0.1.0 released, repo public. Roadmap M0–M15 all
   closed. 153+ commits, CI green on `25fedbc` (7/7 jobs).
-- **Engine registry:** 176 commands, pinned equal to the fuzz call
+- **Engine registry:** 177 commands, pinned equal to the fuzz call
   table by `the_call_table_covers_the_catalog`.
-- **CS6 DOM verb-surface parity:** **201 C / 45 P / 26 M / 84 N**
+- **CS6 DOM verb-surface parity:** **202 C / 45 P / 25 M / 84 N**
   (`docs/planning/generated/dom-parity.md`, regenerate per §5 below).
   (The CS6 verb list carries both case spellings of mergeDown — the
   three-command flatten family flipped four rows.)
-- **Active campaign:** close the 26 remaining M (missing) verbs in
+- **Active campaign:** close the 25 remaining M (missing) verbs in
   family batches — one decision doc + one command batch per family,
   exactly as #87–#93 did. The plan is §4 below.
 - **Clean-room invariants (never violate):** `source/` is Adobe's
@@ -36,7 +36,7 @@
 | `AGENTS.md` | Operating manual: commands, gates, commit rules, day-to-day method |
 | `docs/PLANNING.md` | Master plan: format spec (§6), architecture (§7), method |
 | `docs/planning/firecraft/` | `ROADMAP.md` + tickets M0–M15 (all closed; reference for how tickets are written) |
-| `docs/decisions/` | Decision records 0001–0032 — **write one per family/batch** |
+| `docs/decisions/` | Decision records 0001–0033 — **write one per family/batch** |
 | `docs/planning/generated/` | `parity.md`, `scorecard.md` (xtask-owned) + `dom-parity.md` (generator-owned, see §5) |
 | `docs/research/fireworks-png-nodes.md` | The node dictionary — the format Rosetta stone (observational; corpus wins on conflict) |
 | `log/devlog.md` | Detailed session log (gitignored) — **append an entry to close every task** |
@@ -225,9 +225,14 @@ carry default weight (the render already applied paint/weight/effects).
   `subsegment` output, ring rotation at the first cut, sliver-drop
   with marker ride-along). Selection-driven like the tool; non-path
   and group-nested members refuse whole-command.
-- **8.4 `convertToPaths`** (text-to-paths) — glyph outline extraction
-  into PathObjects; the text render already flattens glyphs, so the
-  outline source exists.
+- **8.4 — DONE (decision 0033).** `text.convertToPaths` landed
+  2026-10-14: each selected text object swaps to a `PathObject` in
+  place (same id, z-order kept; the renderer's synthetic-path contract
+  — default black fill, nonzero winding, display fields inherited).
+  The `text::TextEngine::glyph_contours` world-space outlines are the
+  geometry; a golden test proves `render_subset` pixels are
+  byte-identical before/after. Ink-less text removes the object
+  (empty-result contract). Engine gained the `text` dependency.
 - **8.6 Clipboard mask ops**: `clipPasteAsMask`, `clipPasteInside`,
   `clipPasteFromChannelToChannel` — needs the clipboard surface (6.6).
 
@@ -246,9 +251,9 @@ carry default weight (the render already applied paint/weight/effects).
 5.1 → 5.2 (quick wins, warm up the loop) → Phase 1 → Phase 2 → 6.1 →
 6.2 → 8.2 → 8.5 → Phase 3 → 8.3 → 8.4 → 5.3 → 4 (evidence) → 7
 (evidence) → 8.1 → 8.6/6.6 → 6.4 → 5.4. Progress through 2026-10-14:
-5.1–5.2, Phases 1–2, 6.1, 6.2, 8.2, 8.5, Phase 3, 8.3 done — **next
-is 8.4** (`convertToPaths`: text-to-paths via glyph outlines; the
-text render already flattens glyphs, so the outline source exists).
+5.1–5.2, Phases 1–2, 6.1, 6.2, 8.2, 8.5, Phase 3, 8.3, 8.4 done —
+**next is 5.3** (`rotateDocument`: 90°-step canvas rotation with a
+geometry re-bake; decide multi-page semantics in the decision doc).
 Re-derive from `dom-parity.md`'s M table if the matrix has moved; the
 plan follows the matrix, not the reverse.
 
