@@ -10,6 +10,7 @@ Current version: **0.1.0**.
 
 ### Features
 
+- **mask**: pasteAsMask add unions masks (6df4903)
 - **mask**: rasterize vector clipboards as image masks (420fd66)
 - **object**: deep-clone groups on duplicate (8b06184)
 - **fwpng**: tile-bank load and write path (2a6abf6)

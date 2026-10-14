@@ -25,6 +25,9 @@
   grayscale image masks (#128, decision 0057) and `mask_replace_options
   "add"` unions coverages (#129, decision 0058) — Phase 9's mask debts
   closed.
+- **Filter bakes convert:** the whole bake family rasterizes
+  non-image selections in place through the compositor (decision 0059)
+  — the bake-site rasterize debt closed alongside the mask-site one.
 
 ## Milestones
 
@@ -96,6 +99,7 @@
 | #127 | object.duplicate deep-clones groups: `clone_subtree` mints a slot per live descendant, undo retracts all (Phase 9, decision 0056) | 8b06184 | 268 C (no surface change) |
 | #128 | pasteAsMask mask_type "image" rasterizes a vector clipboard into the mask bitmap (Phase 9, decision 0057) | this batch | 268 C (no surface change) |
 | #129 | pasteAsMask mask_replace_options "add" unions the coverages (mask_coverage max-fold, Phase 9, decision 0058) | this batch | 268 C (no surface change) |
+| #130 | bake family rasterizes non-image selections in place (render_subset → slot swap, Phase 9, decision 0059) | this batch | 268 C (no surface change) |
 
 **Campaign complete:** no remaining M families. Next: P-class partials
 and Phase 9 debts (HANDOFF §4).
@@ -110,7 +114,7 @@ and Phase 9 debts (HANDOFF §4).
 | ~~Image resample pass~~ **DONE** — landed as `bitmap::resample_rgba` in #111 | setDocumentImageSize (closed, decision 0041) | M8 |
 | ~~mask_replace_options "add" (mask union fold)~~ **DONE** — landed in #129 (decision 0058) | clipPasteAsMask variant | #109 (decision 0039) |
 | ~~Path→image rasterizer (mask_type "image" on vector clipboard)~~ **DONE** — landed in #128 (decision 0057); bake-site half remains | clipPasteAsMask variant | #109 (decision 0039) |
-| Path→image rasterizer (filterSelection on non-image selection) | 8.8 bake family refuses whole | #110 (decision 0040) |
+| ~~Path→image rasterizer (filterSelection on non-image selection)~~ **DONE** — landed in #130 (decision 0059) | 8.8 bake family | #110 (decision 0040) |
 | Out-of-bounds effect growth (bake clips to the image surface) | tile-bank growth parity | #110 (decision 0040) |
 | Shared-layer link-resolution render | shared layers render empty | #93 (decision 0022) |
 
@@ -150,5 +154,6 @@ and Phase 9 debts (HANDOFF §4).
 | 2026-10-14 | 268 | 3 | 0 | #127 duplicate deep-clones groups (decision 0056, no surface change) |
 | 2026-10-14 | 268 | 3 | 0 | #128 vector→image-mask rasterization (decision 0057, no surface change) |
 | 2026-10-14 | 268 | 3 | 0 | #129 mask "add" union fold (decision 0058, no surface change) |
+| 2026-10-14 | 268 | 3 | 0 | #130 bake rasterize-first (decision 0059, no surface change) |
 
 (Pre-#91 counts are approximate; the matrix file is the authority.)

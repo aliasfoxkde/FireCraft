@@ -10,16 +10,20 @@
 //! Effect stack and the flatten bakes use), run it over each selected
 //! image's assembled surface, and re-tile. The active pixel selection
 //! (`document.selection`) gates the result per pixel; CS6's scripts
-//! split on `getPixelMask()` exactly this way. Non-image members
-//! refuse whole-command — CS6 would rasterize them first, which is the
-//! recorded path→image debt. Every target resolution, identity check,
-//! and tile assembly happens before the first mutation (the 000557d
-//! ordering law).
+//! split on `getPixelMask()` exactly this way. A non-image member
+//! rasterizes first (decision 0059): CS6 converts the object to a
+//! bitmap, then filters it — the slot mutates in place to a
+//! canvas-spanning image, the flatten family's bake posture (decision
+//! 0031). Slices refuse: they are web annotations, not rasterizable
+//! content. Every target resolution, identity check, and tile assembly
+//! happens before the first mutation (the 000557d ordering law).
 
 use compose::Surface;
 use doc::{Document, Effect, EffectProperty, EffectValue, ImageObject, ObjectData, SelectionMask};
+use raster::TILE_SIDE;
 
 use super::filter::{FilterParamPayload, build_effect};
+use super::object::find_owner;
 use crate::access;
 use crate::bitmap::{assemble_rgba, retile_rgba};
 use crate::command::TypedCommand;
@@ -88,6 +92,53 @@ fn catalog_guid(
     })
 }
 
+/// One selected object's resolved bake input. Images carry their
+/// assembled surface and canvas location (the mask gate maps through
+/// it); every other rasterizable kind carries its canvas-space render
+/// (decision 0059's rasterize-first) — the conversion lands
+/// canvas-spanning at the origin, the flatten family's bake posture.
+enum BakeTarget {
+    Image {
+        assembled: Vec<u8>,
+        location: geom::Point,
+    },
+    Convert {
+        rendered: Vec<u8>,
+        extent: (i64, i64),
+    },
+}
+
+/// Walks up the ownership chain to the cell holding `id` — the page a
+/// nested object renders on (the walker rule: an unplaced id carries
+/// no page and refuses).
+fn owning_page(
+    document: &Document,
+    name: &'static str,
+    id: doc::ObjectId,
+) -> Result<usize, EngineError> {
+    let mut current = id;
+    for _ in 0..64 {
+        match find_owner(document, current) {
+            None => {
+                return Err(EngineError::InvalidState {
+                    name: name.to_owned(),
+                    detail: format!(
+                        "object {} (generation {}) is not attached to any cell or group",
+                        id.index(),
+                        id.generation()
+                    ),
+                });
+            }
+            Some(super::object::Owner::Cell { page, .. }) => return Ok(page),
+            Some(super::object::Owner::Group { id, .. }) => current = id,
+        }
+    }
+    Err(EngineError::InvalidState {
+        name: name.to_owned(),
+        detail: "the ownership chain is cyclic".to_owned(),
+    })
+}
+
 /// The shared bake: interpret the effect, then transform every image
 /// in the object selection, gated by the active pixel mask.
 fn bake_core(
@@ -112,36 +163,74 @@ fn bake_core(
         });
     }
     // Resolve every target before any mutation (000557d): existence,
-    // image kind, and editability (assembly is read-only).
+    // editability, and — for conversions (decision 0059) — the
+    // read-only render of the object's own pixels.
     let mut targets = Vec::with_capacity(document.object_selection.len());
     for id in document.object_selection.clone() {
         let before = access::object(document, name, id)?;
-        match before {
+        match &before {
             ObjectData::Image(image) => {
                 let assembled = assemble_rgba(document, image, name)?;
-                targets.push((id, before.clone(), assembled));
+                let location = image.location;
+                targets.push((
+                    id,
+                    before.clone(),
+                    BakeTarget::Image {
+                        assembled,
+                        location,
+                    },
+                ));
             }
-            _ => {
+            ObjectData::Slice(_) => {
                 return Err(EngineError::InvalidState {
                     name: name.to_owned(),
-                    detail: format!(
-                        "object {} is not an image — CS6 would rasterize it first (recorded debt)",
-                        id.index()
-                    ),
+                    detail: "slice objects are not rasterizable content".to_owned(),
                 });
+            }
+            _ => {
+                let page = owning_page(document, name, id)?;
+                let rendered = compose::render_subset(document, page, 0, &[id]).map_err(|err| {
+                    EngineError::InvalidState {
+                        name: name.to_owned(),
+                        detail: format!("object {} does not render: {err}", id.index()),
+                    }
+                })?;
+                let extent = (i64::from(rendered.width), i64::from(rendered.height));
+                targets.push((
+                    id,
+                    before.clone(),
+                    BakeTarget::Convert {
+                        rendered: rendered.pixels,
+                        extent,
+                    },
+                ));
             }
         }
     }
-    // Transform and re-tile each image, capturing per-object deltas in
+    // Transform and re-tile each target, capturing per-object deltas in
     // mutation order; the pixel mask (canvas space) gates the result.
     let mask = document.selection.clone();
     let mut deltas = Vec::with_capacity(targets.len() + 1);
     let mut minted_all = Vec::new();
-    for (id, before, assembled) in targets {
-        let ObjectData::Image(image) = &before else {
-            continue;
+    for (id, before, target) in targets {
+        let converting = matches!(target, BakeTarget::Convert { .. });
+        let (width, height, assembled, location) = match target {
+            BakeTarget::Image {
+                assembled,
+                location,
+            } => {
+                let ObjectData::Image(image) = &before else {
+                    return Err(EngineError::InvalidState {
+                        name: name.to_owned(),
+                        detail: format!("object {} vanished mid-bake", id.index()),
+                    });
+                };
+                (image.pixels.0, image.pixels.1, assembled, location)
+            }
+            BakeTarget::Convert { rendered, extent } => {
+                (extent.0, extent.1, rendered, geom::Point::ZERO)
+            }
         };
-        let (width, height) = image.pixels;
         let surface = Surface::from_premultiplied(
             usize::try_from(width).unwrap_or(0) as u32,
             usize::try_from(height).unwrap_or(0) as u32,
@@ -154,12 +243,29 @@ fn bake_core(
         let filtered = compose::apply_stack(surface, &plan.ops);
         let mut pixels = filtered.pixels().to_vec();
         if let Some(mask) = &mask {
-            blend_through_mask(&mut pixels, &assembled, width, height, image, mask);
+            blend_through_mask(&mut pixels, &assembled, width, height, location, mask);
         }
         let (tiles, minted) = retile_rgba(document, &pixels, width, height);
         minted_all.extend(minted);
         match document.registry.get_mut(id) {
-            Some(ObjectData::Image(slot)) => slot.tiles = tiles,
+            Some(ObjectData::Image(image)) => image.tiles = tiles,
+            Some(slot) if converting => {
+                *slot = ObjectData::Image(ImageObject {
+                    location: geom::Point::ZERO,
+                    offset: geom::Point::ZERO,
+                    pixels: (width, height),
+                    tile_size: i64::from(TILE_SIDE as u32),
+                    tiles,
+                    name: None,
+                    // The render carries the old weight already — the
+                    // flatten family's bake posture (decision 0031).
+                    opacity: 1000,
+                    blend: 0,
+                    visible: true,
+                    locked: false,
+                    effects: Vec::new(),
+                });
+            }
             _ => {
                 return Err(EngineError::InvalidState {
                     name: name.to_owned(),
@@ -188,11 +294,11 @@ fn blend_through_mask(
     original: &[u8],
     width: i64,
     height: i64,
-    image: &ImageObject,
+    location: geom::Point,
     mask: &SelectionMask,
 ) {
-    let left = image.location.x.round() as i64;
-    let top = image.location.y.round() as i64;
+    let left = location.x.round() as i64;
+    let top = location.y.round() as i64;
     for y in 0..height.max(0) {
         for x in 0..width.max(0) {
             let cx = left + x;
@@ -1004,6 +1110,187 @@ mod tests {
             serde_json::to_vec(&document).unwrap(),
             snapshot,
             "every refusal left the document untouched"
+        );
+    }
+
+    /// One page, one layer, one cell: `object` placed on a 24×24
+    /// canvas and selected. The conversion tests need a real render
+    /// target (the sample document's default canvas is zero-extent).
+    fn render_document(object: ObjectData) -> (Document, doc::ObjectId) {
+        use doc::{Canvas, Cell, Layer, Page, PageInfo};
+        let mut document = Document::default();
+        let id = document.registry.insert(object);
+        let layer = Layer {
+            name: "Layer 0".to_owned(),
+            display: true,
+            cells: vec![
+                Cell {
+                    locked: false,
+                    visible: true,
+                    elements: vec![id],
+                },
+                Cell {
+                    locked: false,
+                    visible: true,
+                    elements: Vec::new(),
+                },
+            ],
+            ..Layer::default()
+        };
+        document.pages.push(Page {
+            info: PageInfo {
+                version: None,
+                revision: None,
+                frame_count: 2,
+                frame_count_duplicate: 2,
+                request_id: 0,
+                canvas: Canvas {
+                    width: 24.0,
+                    height: 24.0,
+                    ..Canvas::default()
+                },
+                onion_before: 0,
+                onion_after: 0,
+                frame_durations: Vec::new(),
+            },
+            name: Some("Page 0".to_owned()),
+            is_master: false,
+            is_linked: false,
+            page_id: None,
+            last_export_dir: None,
+            last_export_file: None,
+            layers: doc::LayerList {
+                layers: vec![layer],
+            },
+            grid: None,
+            export: None,
+            guides: Default::default(),
+        });
+        document.object_selection = vec![id];
+        (document, id)
+    }
+
+    /// An 8×9 square path at (4,4) with an opaque half-red fill —
+    /// renders 81 opaque pixels inside the 24×24 canvas.
+    fn filled_square() -> ObjectData {
+        let mut path = match testdoc::path_object(1) {
+            ObjectData::Path(path) => path,
+            other => panic!("expected a path, got {other:?}"),
+        };
+        path.paint = Some(doc::PaintStyle {
+            stroke_raw: 0,
+            fill_raw: 0xFF_00_00_80, // ABGR: alpha 255, red 128
+            fill: None,
+        });
+        // testdoc's square spans 0..9; shove it inside the canvas
+        // instead of hugging the edge.
+        for contour in &mut path.contours {
+            for point in &mut contour.points {
+                point.anchor.x += 4.0;
+                point.anchor.y += 4.0;
+            }
+        }
+        ObjectData::Path(path)
+    }
+
+    #[test]
+    fn bake_rasterizes_a_path_then_filters_it() {
+        let (mut document, id) = render_document(filled_square());
+        let bank_before = document.tiles.len();
+
+        let delta = BakeSelectionByID
+            .apply_json(&mut document, json_onsel(GUID_INVERT, &[]))
+            .expect("bake applies");
+
+        // The slot converted in place: same id, image kind, spanning
+        // the canvas at the origin (the flatten bake posture).
+        let ObjectData::Image(image) = document.registry.get(id).expect("live") else {
+            panic!("the path converted to an image");
+        };
+        assert_eq!(image.pixels, (24, 24));
+        assert_eq!(image.location, geom::Point::ZERO);
+        assert_eq!(image.opacity, 1000, "the render carries the weight");
+        assert!(image.effects.is_empty());
+
+        // Inside the square the fill inverted; outside it is blank.
+        let assembled = crate::bitmap::assemble_rgba(&document, image, "test").expect("assembles");
+        let at = |x: usize, y: usize| -> [u8; 4] {
+            assembled[((y * 24 + x) * 4)..][..4]
+                .try_into()
+                .expect("four channels")
+        };
+        assert_eq!(at(6, 6), [127, 255, 255, 255], "fill inverted");
+        assert_eq!(at(1, 1), [0, 0, 0, 0], "outside stays transparent");
+
+        // Undo restores the path and retracts the minted tiles.
+        delta.apply_inverse(&mut document).expect("undo");
+        assert!(matches!(
+            document.registry.get(id),
+            Some(ObjectData::Path(_))
+        ));
+        assert_eq!(document.tiles.len(), bank_before, "tiles retracted");
+    }
+
+    #[test]
+    fn bake_rasterizes_through_groups_and_refuses_slices() {
+        use doc::GroupObject;
+        // A group wrapping the filled square: the selection is the
+        // group, so the conversion resolves the page through the
+        // ownership walk and converts the group's slot.
+        let (mut document, child) = render_document(filled_square());
+        let group = document.registry.insert(ObjectData::Group(GroupObject {
+            group_type: 0,
+            name: None,
+            children: vec![child],
+            opacity: 1000,
+            blend: 0,
+            visible: true,
+            locked: false,
+            mask_hidden: false,
+            mask_linked: None,
+            effects: Vec::new(),
+        }));
+        document.pages[0].layers.layers[0].cells[0].elements = vec![group];
+        document.object_selection = vec![group];
+
+        BakeSelectionByID
+            .apply_json(&mut document, json_onsel(GUID_INVERT, &[]))
+            .expect("group bakes");
+        assert!(matches!(
+            document.registry.get(group),
+            Some(ObjectData::Image(_))
+        ));
+
+        // A slice refuses whole: not rasterizable content.
+        let slice = document
+            .registry
+            .insert(ObjectData::Slice(doc::SliceObject {
+                internal_name: None,
+                frame: geom::Rect::new(0.0, 0.0, 4.0, 4.0),
+                shape: 0,
+                fill_raw: 0,
+                name: None,
+                slice_type: None,
+                link: None,
+                alt: None,
+                label: None,
+                td_text: None,
+                symbol_number: None,
+                contours: Vec::new(),
+                background: None,
+                behaviors: Vec::new(),
+                custom_data: std::collections::BTreeMap::new(),
+                export: None,
+            }));
+        document.pages[0].layers.layers[0].cells[1].elements = vec![slice];
+        document.object_selection = vec![slice];
+        let err = BakeSelectionByID
+            .apply_json(&mut document, json_onsel(GUID_INVERT, &[]))
+            .expect_err("slices refuse");
+        assert!(matches!(err, EngineError::InvalidState { .. }));
+        assert!(
+            matches!(document.registry.get(slice), Some(ObjectData::Slice(_))),
+            "the refusal mutated nothing"
         );
     }
 }

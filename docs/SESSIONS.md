@@ -746,3 +746,30 @@ Batch: Phase 9 debt closed (no new commands, no parity flip).
   old mask revived; mismatched overlay refuses whole).
 - Gates: engine suite green (383 lib), clippy -D warnings, fmt,
   256-seed CI-base fuzz sweep clean.
+
+## #130 — 2026-10-14 — bake rasterize-first (decision 0059)
+
+Batch: Phase 9 debt closed (no new commands, no parity flip).
+
+- The whole bake family (`filterSelection` trio, `convolveSelection`,
+  `motionBlurSelection` — all five doors route through `bake_core`)
+  converts non-image selections in place: `render_subset` renders the
+  object's own pixels in the read-only resolve pass, the filter runs
+  over that render like any assembled image, and the slot swaps to a
+  canvas-spanning image (same id, same parent position) — the flatten
+  family's bake posture, baked pixels carrying the old weight.
+- Undo is `ObjectInverse::Mutated` — one step restores the original
+  object and retracts the minted tiles. Slices refuse whole (web
+  annotations, not rasterizable content).
+- `owning_page` walks `find_owner` up group links for the render
+  page, so group-nested selections convert; unplaced ids refuse (the
+  orphan posture). `blend_through_mask` now takes the location, so
+  the conversion's mask gate maps canvas-space coordinates through
+  the origin image unchanged.
+- The converted image spans the canvas (posture deviation from CS6's
+  object-bounds crop, recorded in the decision: pixels outside the
+  object are transparent, so renders are identical).
+- Tests: +2 (filled path converts + inverts + undoes byte-exact with
+  tile retraction; group-wrapped conversion + slice refusal).
+- Gates: engine suite green (385 lib), clippy -D warnings, fmt,
+  256-seed CI-base fuzz sweep clean, xtask ci green.

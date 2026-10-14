@@ -503,9 +503,16 @@ mutations and refuses without a linked slice.
   2026-10-14 (decision 0057, #128):** `pasteAsMask` rasterizes a
   vector clipboard into the grayscale mask image (the `mask.setMode`
   conversion, `stamp_path` → `plane_mask_image`, over the target's
-  bounds); `Delta::Bank` rides undo. The bake-site half
-  (`filterSelection` rasterize-first, an object-kind conversion)
-  stays refused as its own decision.
+  bounds); `Delta::Bank` rides undo.
+- ~~**Path→image rasterizer, bake site** (`filterSelection`
+  rasterize-first)~~ **DONE 2026-10-14 (decision 0059, #130):** the
+  whole bake family converts non-image selections in place through
+  `compose::render_subset` (same id, same parent position,
+  canvas-spanning at the origin — the flatten bake posture; baked
+  pixels carry the old weight), then filters; undo restores the
+  original object; slices refuse (not rasterizable content); the page
+  resolves through the ownership walk, so group-nested selections
+  convert.
 - **Shared-layer link-resolution render** (decision 0022: link layers
   render empty today).
 
