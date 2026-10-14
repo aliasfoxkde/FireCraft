@@ -248,3 +248,31 @@ format research, vendored node dictionary).
 - Parity flip: gen.py convolveSelection + motionBlurSelection P→C,
   command surface refreshed → 201. dom-parity: **228C/43P/0M/85N**,
   unresolved []. Registry 199→201.
+
+## 2026-10-14 — web/group setter batch (#113, decision 0043) + setImageSize preflight fix
+- Five P rows became commands: `hotspot.setRectangle` (frame rewrite,
+  contours ride the 0041 old-frame→new-rect affine; copy mode inserts
+  a duplicate after the original and selects it), `hotspot.setShape`
+  (rectangle/oval/polyline filtered by hotspots/slices/both; unknown
+  strings refuse, filter mismatches skip, empty result `Noop`),
+  `hotspot.copyToHotspot` (single-union or per-object areas from
+  `content_bounds`; `makeRectangular: false` donates polygon contours
+  from slice/path sources; `whatIfMultipleSelected "ask user"`
+  refuses — no headless answer), `object.setGroupType` ("normal" (or
+  empty) normalizes `GRTi` mask groups to regular; mask-to-image/path
+  spellings refuse — `mask.*` owns masks), `page.setWebObjectsVisibility`
+  (lazy Web Layer provision; one `Layer` delta flips `display`).
+- Shared-geometry law from 0041 extended: `content_bounds`,
+  `map_contours`, `map_point` now `pub(crate)` catalog-wide.
+- **CI catch (run eee56916):** the batch's fuzz CALLS shift exposed a
+  latent `document.setImageSize` 000557d violation — its pre-flight
+  loop called `scale_image` per page, minting bank tiles for page N
+  before page N+1's resample cap refused ("failed call … mutated the
+  document", CI seed 15305450055185247510, local seed
+  11436121107453012762). Fix: `scale_image` now takes the assembled
+  buffer; pre-flight validates cap + assembly for EVERY affected page
+  (buffers held, the `bake_core` pattern) before the first bake runs.
+  Regression pinned by
+  `image_size_refusal_after_another_page_bakes_touches_nothing`.
+  Local sweep 256×48 clean; the 8eae611 batch itself was sound.
+- Registry 201→206. dom-parity: **233C/38P/0M/85N**, unresolved [].

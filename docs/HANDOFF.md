@@ -14,17 +14,17 @@
 - **Ship state:** v0.1.0 released, repo public. Roadmap M0–M15 all
   closed. 155+ commits, CI green on `3d74723` (7/7 jobs; the fuzz job
   on that commit caught the addImage minting leak — fixed in `000557d`).
-- **Engine registry:** 201 commands, pinned equal to the fuzz call
+- **Engine registry:** 206 commands, pinned equal to the fuzz call
   table by `the_call_table_covers_the_catalog`.
-- **CS6 DOM verb-surface parity:** **228 C / 43 P / 0 M / 85 N** —
+- **CS6 DOM verb-surface parity:** **233 C / 38 P / 0 M / 85 N** —
   the missing table is empty (2026-10-14, decision 0041); every dom
   mutation verb is carried or partial. Remaining surface work is the
-  43 P rows and Phase 9 debts.
+  38 P rows and Phase 9 debts.
   (`docs/planning/generated/dom-parity.md`, regenerate per §5 below).
   (The CS6 verb list carries both case spellings of mergeDown and
   AddNewImage — those families flipped four rows each.)
 - **Active campaign:** COMPLETE (2026-10-14) — the M table is empty.
-  Remaining surface work: the 43 P rows and Phase 9 debts, prioritized
+  Remaining surface work: the 38 P rows and Phase 9 debts, prioritized
   from `dom-parity.md`'s P table. New families follow the §3 loop.
 - **Clean-room invariants (never violate):** `source/` is Adobe's
   copyrighted material — git-ignored, never committed, never copied
@@ -40,7 +40,7 @@
 | `AGENTS.md` | Operating manual: commands, gates, commit rules, day-to-day method |
 | `docs/PLANNING.md` | Master plan: format spec (§6), architecture (§7), method |
 | `docs/planning/firecraft/` | `ROADMAP.md` + tickets M0–M15 (all closed; reference for how tickets are written) |
-| `docs/decisions/` | Decision records 0001–0042 — **write one per family/batch** |
+| `docs/decisions/` | Decision records 0001–0043 — **write one per family/batch** |
 | `docs/planning/generated/` | `parity.md`, `scorecard.md` (xtask-owned) + `dom-parity.md` (generator-owned, see §5) |
 | `docs/research/fireworks-png-nodes.md` | The node dictionary — the format Rosetta stone (observational; corpus wins on conflict) |
 | `log/devlog.md` | Detailed session log (gitignored) — **append an entry to close every task** |
@@ -313,6 +313,24 @@ mutations and refuses without a linked slice.
   `filters::motion_blur_taps`; Live Effect output byte-identical at
   `taps = distance + 1`) build one-op plans and ride the same
   `bake_core`.
+- **8.9 — DONE (decision 0043).** The web/group setter batch landed
+  2026-10-14: `hotspot.setRectangle` (frame rewrite with
+  contour-mapping rescale; copy mode inserts + selects a duplicate
+  after the original), `hotspot.setShape` (rectangle/oval/polyline
+  filtered by hotspots/slices/both; junk strings refuse, mismatches
+  skip, empty result is `Noop`), `hotspot.copyToHotspot`
+  (single-union or per-object areas from `content_bounds`;
+  `makeRectangular: false` donates polygon contours from the source;
+  `"ask user"` refuses headless), `object.setGroupType` (normalizes
+  `GRTi` mask groups to regular; the FW4 mask-to-image/path
+  spellings refuse — mask.* owns masks), and
+  `page.setWebObjectsVisibility` (provisions the Web Layer lazily,
+  one `Layer` delta flips `display`). The batch's fuzz-call shift
+  exposed a latent `document.setImageSize` 000557d violation (its
+  pre-flight baked page N before page N+1's cap refused, stranding
+  minted tiles) — fixed by holding every page's assembled buffer
+  until all pages resolve (the `bake_core` pattern), pinned by
+  `image_size_refusal_after_another_page_bakes_touches_nothing`.
 
 ### Phase 9 — Recorded debts (P-class limitations; no parity pressure)
 - **6.1-object-duplicate** deep-clone of groups (today shallow).

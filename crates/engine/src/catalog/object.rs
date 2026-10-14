@@ -40,7 +40,8 @@ pub(crate) fn install(registry: &mut CommandRegistry) -> Result<(), EngineError>
     registry.register(ReflectObject)?;
     registry.register(ResizeObject)?;
     registry.register(SetBoundsObject)?;
-    registry.register(SetQuadrangle)
+    registry.register(SetQuadrangle)?;
+    registry.register(SetGroupType)
 }
 
 /// The blend table is `color::BlendMode`'s 27 modes in UI order; `BLDi`
@@ -571,6 +572,78 @@ pub(crate) fn attach_cell(
         cell,
         before: Box::new(before),
     })
+}
+
+/// `object.setGroupType` — CS6 `dom.setGroupType({type})`: retypes the
+/// selected groups. "normal" (the default when the argument is
+/// omitted) sets `GRTi` 0; the two FW4-deprecated mask spellings
+/// refuse — a mask group's [mask, masked] child layout is built by
+/// `mask.add`, not by retyping (the restructure is unmodeled).
+struct SetGroupType;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct SetGroupTypePayload {
+    /// "normal" (default), or the deprecated mask spellings.
+    #[serde(default)]
+    group_type: String,
+}
+
+impl TypedCommand for SetGroupType {
+    type Payload = SetGroupTypePayload;
+
+    fn name(&self) -> &'static str {
+        "object.setGroupType"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "object.setGroupType";
+        match payload.group_type.as_str() {
+            "normal" | "" => {}
+            other => {
+                return Err(EngineError::InvalidState {
+                    name: NAME.to_owned(),
+                    detail: format!(
+                        "group type {other:?} is the FW4-deprecated mask restructure; build mask groups through mask.add"
+                    ),
+                });
+            }
+        }
+        if document.object_selection.is_empty() {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: "nothing is selected".to_owned(),
+            });
+        }
+        let mut deltas = Vec::new();
+        for id in document.object_selection.clone() {
+            let before = match document.registry.get(id) {
+                // Non-groups are skipped — the verb addresses "the
+                // currently selected groups".
+                Some(ObjectData::Group(group)) if group.group_type != 0 => {
+                    ObjectData::Group(group.clone())
+                }
+                _ => continue,
+            };
+            if let Some(ObjectData::Group(slot)) = document.registry.get_mut(id) {
+                slot.group_type = 0;
+            }
+            deltas.push(Delta::Object {
+                id,
+                inverse: ObjectInverse::Mutated {
+                    object: Box::new(before),
+                },
+            });
+        }
+        if deltas.is_empty() {
+            return Ok(Delta::Noop);
+        }
+        Ok(Delta::Group(deltas))
+    }
 }
 
 /// `object.delete` — removes an object from its container and the
@@ -3548,5 +3621,61 @@ mod tests {
             .unwrap_err();
         assert!(matches!(error, EngineError::InvalidState { .. }));
         assert!(document.registry.get(ids[0]).is_some());
+    }
+
+    #[test]
+    fn set_group_type_normalizes_and_refuses_mask_spellings() {
+        let (mut document, ids) = document_with(vec![path_object(), path_object()]);
+        GroupObjects
+            .apply_json(
+                &mut document,
+                json!({ "ids": [ids[0], ids[1]], "name": null }),
+            )
+            .unwrap();
+        let group_id = cell_elements(&document)
+            .iter()
+            .copied()
+            .find(|id| matches!(document.registry.get(*id), Some(ObjectData::Group(_))))
+            .expect("a group was created");
+        document.object_selection = vec![group_id];
+
+        // Already-normal: a validated no-op.
+        let noop = SetGroupType.apply_json(&mut document, json!({})).unwrap();
+        assert!(matches!(noop, Delta::Noop));
+
+        // Force the shape-mask type, normalize, undo — byte-exact.
+        match document.registry.get_mut(group_id) {
+            Some(ObjectData::Group(group)) => group.group_type = 2,
+            _ => panic!("group vanished"),
+        }
+        let snapshot = serde_json::to_vec(&document).unwrap();
+        let delta = SetGroupType.apply_json(&mut document, json!({})).unwrap();
+        let group = group_of(&document, group_id);
+        assert_eq!(group.group_type, 0, "normalized");
+        delta.apply_inverse(&mut document).unwrap();
+        assert_eq!(serde_json::to_vec(&document).unwrap(), snapshot);
+
+        // The deprecated mask spellings refuse untouched.
+        for spelling in ["mask to image", "mask to path", "spiral"] {
+            let error = SetGroupType
+                .apply_json(&mut document, json!({ "group_type": spelling }))
+                .unwrap_err();
+            assert!(matches!(error, EngineError::InvalidState { .. }));
+            assert_eq!(
+                serde_json::to_vec(&document).unwrap(),
+                snapshot,
+                "{spelling} refusal mutates nothing"
+            );
+        }
+
+        // Non-group selections are a no-op; empty selections refuse.
+        document.object_selection = vec![ids[0]];
+        let noop = SetGroupType.apply_json(&mut document, json!({})).unwrap();
+        assert!(matches!(noop, Delta::Noop));
+        document.object_selection.clear();
+        let error = SetGroupType
+            .apply_json(&mut document, json!({}))
+            .unwrap_err();
+        assert!(matches!(error, EngineError::InvalidState { .. }));
     }
 }

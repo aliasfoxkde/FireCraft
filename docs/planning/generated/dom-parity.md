@@ -7,20 +7,20 @@ regeneration recipe in docs/PLANNING.md §5.4). The DOM is stable
 CS4→CS6; CS6 additions the text lacks (e.g. 9-slice guides) are
 covered by the CS6 `.jsf` scripts and appear here via their verbs.
 
-FireCraft side: the 201-command registry (`engine::catalog::ids()`,
+FireCraft side: the 206-command registry (`engine::catalog::ids()`,
 enforced == the fuzz call table).
 
 ## Coverage classes
 
 | class | meaning | count (of 356 dom verbs) |
 |---|---|---|
-| C | carried: a registry command implements the mutation | 228 |
-| P | partial: carried with a recorded model limitation | 43 |
+| C | carried: a registry command implements the mutation | 233 |
+| P | partial: carried with a recorded model limitation | 38 |
 | M | missing: no command and no decision — work items | 0 |
 | N | not applicable: non-document surface (accessor/UI/session/clipboard/export/OS) | 85 |
 
 Document-mutation coverage: **271 of 271** carried-or-partial
-(228 carried, 43 partial, 0 missing).
+(233 carried, 38 partial, 0 missing).
 
 ### Gap families (the Missing table, grouped)
 
@@ -92,6 +92,7 @@ partial rows and the recorded debts in docs/HANDOFF.md Phase 9.
 | `convertToSymbol` | C | symbol.create | selection folds into the definition |
 | `convetToAnimSymbol` | C | symbol.setType |  |
 | `convolveSelection` | C | filter.convolveSelection | decision 0042: raw integer kernel, no normalization, affectsAlpha gates alpha |
+| `copyToHotspot` | C | hotspot.copyToHotspot | decision 0043: single=union rect / multiple=per-item; makeRectangular=false donates polygon contours; ask-user refuses headless |
 | `cropSelection` | C | path.cropSelection | each selected path is cropped (intersected) by the rect; empty results remove the path |
 | `cuplicateSelectionToFrames` | C | selection.duplicateToFrames | all/previous/next/end; next past the last frame adds one (decision 0026) |
 | `deleteFrames` | C | frame.delete | guards: range, overrun, last frame |
@@ -223,7 +224,10 @@ partial rows and the recorded debts in docs/HANDOFF.md Phase 9.
 | `setFillVectorStart` | C | path.setFillVector | handle pair |
 | `setGridOrigin` | C | page.setGridOrigin | writes the page override, seeded from the effective grid |
 | `setGridSize` | C | page.setGridSize | page override; extents must be finite and > 0 |
+| `setGroupType` | C | object.setGroupType | decision 0043: normal (GRTi 0); the FW4-deprecated mask spellings refuse — mask groups come from mask.add |
 | `setHotspotAltTag` | C | slice.setLink | alt rides the link payload |
+| `setHotspotRectangle` | C | hotspot.setRectangle | decision 0043: move-or-copy to the rect; contours map through T·S (the 0041 mapper) |
+| `setHotspotShape` | C | hotspot.setShape | decision 0043: whatToSet filters hotspots/slices; URSi rectangle/oval/polyline |
 | `setHotspotTarget` | C | slice.setLink |  |
 | `setHotspotText` | C | slice.setData |  |
 | `setLayerLocked` | C | layer.setLocked | per-frame lock = LCKb in CELv; bAllLayers sweeps the frame |
@@ -254,6 +258,7 @@ partial rows and the recorded debts in docs/HANDOFF.md Phase 9.
 | `setTextHorizontalScale` | C | text.setAttrs |  |
 | `setTextLeading` | C | text.setAttrs |  |
 | `setTextOrientation` | C | text.setAttrs |  |
+| `setWebObjectsVisibility` | C | page.setWebObjectsVisibility | decision 0043: the Web Layer eye bit per page; the layer provisions like any first web touch |
 | `shareLayerToPages` | C | layer.shareToPages | per-page add/remove of the LSAv link; CS6 name-lists mapped to indices (decision 0022) |
 | `showAllHidden` | C | object.setVisible |  |
 | `splitPaths` | C | path.splitPaths | compound paths become one path per contour; identity keeps the first contour |
@@ -271,7 +276,6 @@ partial rows and the recorded debts in docs/HANDOFF.md Phase 9.
 | `addSwapImageBehaviorFromPoint` | P | slice.addBehavior | behaviors carry; the swap-image picker is UI |
 | `applyCharacterMarkup` | P | text.setAttrs | per-range markup unmodeled (single-run) |
 | `applyFontMarkup` | P | text.setFont | per-range markup unmodeled |
-| `copyToHotspot` | P | hotspot.create | from-selection wrapper computes the bbox |
 | `deleteAllInDocument` | P | object.delete | composes per object; no single clear verb (transaction folds) |
 | `duplicateSymbolForAlias` | P | library.add | alias linkage unmodeled |
 | `importFile` | P | io | io carries SVG/raster importers; no engine place-imported-file command |
@@ -293,9 +297,6 @@ partial rows and the recorded debts in docs/HANDOFF.md Phase 9.
 | `setDocumentCanvasSizeToSelection` | P | page.setCanvasSize | computed variant |
 | `setEffectName` | P | filter.add | rename = remove+add compose; no dedicated verb |
 | `setFillNColorNTexture` | P | path.setFillColor | texture component of the numbered form (texture_blend rides the fill model, no command surface) |
-| `setGroupType` | P | object.group | groups carry GRTi but no command sets the type; group/ungroup carried |
-| `setHotspotRectangle` | P | hotspot.create | recreate; no rect-edit command |
-| `setHotspotShape` | P | hotspot.create | recreate |
 | `setSliceAutonaming` | P | slice.setData | naming-policy field - payload coverage to verify |
 | `setTextCustomAntiAliasOverSample` | P | text.setAttrs | custom-AA tuning is renderer-side |
 | `setTextCustomAntiAliasSharpness` | P | text.setAttrs | renderer-side |
@@ -309,7 +310,6 @@ partial rows and the recorded debts in docs/HANDOFF.md Phase 9.
 | `setTextRectangleAuto` | P | text.setText | auto-fit variant |
 | `setTextRectangleAutoFromPoint` | P | text.setText | auto-fit variant |
 | `setTextRuns` | P | text.setText | multi-run styled text; the model carries single runs (ZSOi 0x1f text-style application is a recorded M15 gap) |
-| `setWebObjectsVisibility` | P | layer.setDisplay | the Web Layer eye bit |
 
 ## Missing (M) — work items
 

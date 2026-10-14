@@ -552,6 +552,7 @@ pub const CALLS: &[&str] = &[
     "object.resize",
     "object.setBounds",
     "object.createPath",
+    "object.setGroupType",
     "object.align",
     "object.distribute",
     "autoshape.rect",
@@ -673,6 +674,10 @@ pub const CALLS: &[&str] = &[
     "slice.addBehavior",
     "slice.removeBehavior",
     "slice.setData",
+    "hotspot.setRectangle",
+    "hotspot.setShape",
+    "hotspot.copyToHotspot",
+    "page.setWebObjectsVisibility",
     "style.apply",
     "style.redefineByIndex",
     "style.redefineByName",
@@ -2224,6 +2229,50 @@ pub fn random_call(rng: &mut FuzzRng, document: &Document) -> (String, serde_jso
         // The point-append verbs are selection-driven; the fuzzer
         // leaves the object selection to whatever earlier calls made,
         // so arms land in both branches (append vs fresh polygon).
+        // The web/group setters ride whatever the sequence selected;
+        // malformed enums and out-of-range rects refuse by design.
+        "hotspot.setRectangle" => {
+            let left = rng.below(40) as f64 - 10.0;
+            let top = rng.below(40) as f64 - 10.0;
+            serde_json::json!({
+                "rect": {
+                    "left": left,
+                    "top": top,
+                    "right": left + rng.below(60) as f64,
+                    "bottom": top + rng.below(60) as f64,
+                },
+                "make_copy": rng.chance(3),
+            })
+        }
+        "hotspot.setShape" => serde_json::json!({
+            "what": rng
+                .pick(&["hotspots", "slices", "hotspots and slices", "areas"])
+                .copied(),
+            "shape": rng
+                .pick(&["rectangle", "oval", "polyline", "round"])
+                .copied(),
+        }),
+        "hotspot.copyToHotspot" => {
+            let mut payload = serde_json::json!({
+                "page": any_index(rng, pages),
+                "hotspot_type": rng.pick(&["hotspot", "slice", "area"]).copied(),
+                "make_rectangular": rng.chance(2),
+            });
+            if rng.chance(5) {
+                payload["what_if_multiple"] =
+                    serde_json::json!(rng.pick(&["single", "multiple", "ask user"]).copied());
+            }
+            payload
+        }
+        "page.setWebObjectsVisibility" => serde_json::json!({
+            "page": any_index(rng, pages),
+            "value": rng.chance(2),
+        }),
+        "object.setGroupType" => serde_json::json!({
+            "group_type": rng
+                .pick(&["normal", "", "mask to image", "mask to path", "spiral"])
+                .copied(),
+        }),
         "slice.appendPoint" | "hotspot.appendPoint" => serde_json::json!({
             "x": rng.below(64) as f64,
             "y": rng.below(64) as f64,

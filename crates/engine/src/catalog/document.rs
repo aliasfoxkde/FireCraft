@@ -270,7 +270,7 @@ fn preflight_page_images(
 }
 
 /// Maps one curve point (anchor plus optional handles) through `map`.
-fn map_point(point: &mut doc::PathPoint, map: geom::Affine) {
+pub(crate) fn map_point(point: &mut doc::PathPoint, map: geom::Affine) {
     point.anchor = map * point.anchor;
     if let Some(primary) = &mut point.primary {
         *primary = map * *primary;
@@ -280,7 +280,7 @@ fn map_point(point: &mut doc::PathPoint, map: geom::Affine) {
     }
 }
 
-fn map_contours(contours: &mut [doc::Contour], map: geom::Affine) {
+pub(crate) fn map_contours(contours: &mut [doc::Contour], map: geom::Affine) {
     for contour in contours {
         for point in &mut contour.points {
             map_point(point, map);

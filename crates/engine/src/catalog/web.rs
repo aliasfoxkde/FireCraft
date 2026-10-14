@@ -9,7 +9,8 @@
 //! byte-identical to pre-M11 output.
 
 use crate::access;
-use crate::catalog::object::attach_cell;
+use crate::catalog::document::map_contours;
+use crate::catalog::object::{attach_cell, content_bounds};
 use crate::command::TypedCommand;
 use crate::delta::{Delta, ObjectInverse};
 use crate::error::EngineError;
@@ -899,6 +900,509 @@ fn append_point(
     Ok(Delta::Group(deltas))
 }
 
+/// `hotspot.setRectangle` — CS6
+/// `dom.setHotspotRectangle(boundingRectangle, bMakeCopy)`: the single
+/// selected hotspot or slice moves (or copies, `bMakeCopy`) to the
+/// rect; polygon contours map through `T(new.origin)·S(sx, sy)` so a
+/// polyline stays glued to its frame (the 0041 mapper).
+struct SetHotspotRectangle;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct HotspotRectPayload {
+    /// The new bounds.
+    rect: HotspotRect,
+    /// Copy-then-resize instead of move-and-resize; the selection
+    /// lands on the copy.
+    #[serde(default)]
+    make_copy: bool,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct HotspotRect {
+    left: f64,
+    top: f64,
+    right: f64,
+    bottom: f64,
+}
+
+impl TypedCommand for SetHotspotRectangle {
+    type Payload = HotspotRectPayload;
+
+    fn name(&self) -> &'static str {
+        "hotspot.setRectangle"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "hotspot.setRectangle";
+        let rect = &payload.rect;
+        if !rect.left.is_finite()
+            || !rect.top.is_finite()
+            || !rect.right.is_finite()
+            || !rect.bottom.is_finite()
+            || rect.right <= rect.left
+            || rect.bottom <= rect.top
+        {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: "rect must be finite with positive extents".to_owned(),
+            });
+        }
+        if document.object_selection.len() != 1 {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: format!(
+                    "the selection must be a single hotspot or slice (got {})",
+                    document.object_selection.len()
+                ),
+            });
+        }
+        let id = document.object_selection[0];
+        let before = access::object(document, NAME, id)?.clone();
+        let ObjectData::Slice(slice) = &before else {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: format!("object {} is not a slice or hotspot", id.index()),
+            });
+        };
+        if slice.frame.width() <= 0.0 || slice.frame.height() <= 0.0 {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: "the current frame is degenerate; recreate the hotspot instead".to_owned(),
+            });
+        }
+        // p ↦ new.origin + s·(p − old.origin), as T(t)·S(s).
+        let (new_w, new_h) = (rect.right - rect.left, rect.bottom - rect.top);
+        let (sx, sy) = (new_w / slice.frame.width(), new_h / slice.frame.height());
+        let map = geom::Affine::translate(geom::Vec2::new(
+            rect.left - slice.frame.x0 * sx,
+            rect.top - slice.frame.y0 * sy,
+        )) * geom::Affine::new([sx, 0.0, 0.0, sy, 0.0, 0.0]);
+        if !payload.make_copy {
+            let slot = match document.registry.get_mut(id) {
+                Some(ObjectData::Slice(slot)) => slot,
+                _ => {
+                    return Err(EngineError::InvalidState {
+                        name: NAME.to_owned(),
+                        detail: format!("object {} vanished mid-command", id.index()),
+                    });
+                }
+            };
+            slot.frame = geom::Rect::new(rect.left, rect.top, rect.right, rect.bottom);
+            map_contours(&mut slot.contours, map);
+            return Ok(Delta::Object {
+                id,
+                inverse: ObjectInverse::Mutated {
+                    object: Box::new(before),
+                },
+            });
+        }
+        // Copy mode: the clone lands next to the original in the same
+        // cell; the selection moves to it (CS6 "copied and resized").
+        let Some(super::object::Owner::Cell {
+            page,
+            layer,
+            cell,
+            position,
+        }) = super::object::find_owner(document, id)
+        else {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: "the hotspot is not attached to a cell".to_owned(),
+            });
+        };
+        let mut copy = slice.clone();
+        copy.frame = geom::Rect::new(rect.left, rect.top, rect.right, rect.bottom);
+        map_contours(&mut copy.contours, map);
+        let copy_id = document.registry.insert(ObjectData::Slice(copy));
+        let placed = attach_cell(
+            document,
+            NAME,
+            page,
+            layer,
+            cell,
+            copy_id,
+            Some(position + 1),
+        )?;
+        let selection_before = std::mem::take(&mut document.object_selection);
+        document.object_selection.push(copy_id);
+        Ok(Delta::Group(vec![
+            Delta::ObjectSelection {
+                before: selection_before,
+            },
+            placed,
+            Delta::Object {
+                id: copy_id,
+                inverse: ObjectInverse::Created,
+            },
+        ]))
+    }
+}
+
+/// `hotspot.setShape` — CS6
+/// `dom.setHotspotShape(whatToSet, shape)`: sets the `URSi` shape on
+/// the selected slices, hotspots, or both. `polyline` needs no
+/// contours on the wire (the frame carries bounds either way).
+struct SetHotspotShape;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct SetHotspotShapePayload {
+    /// "hotspots", "slices", or "hotspots and slices".
+    what: String,
+    /// "rectangle", "oval", or "polyline".
+    shape: String,
+}
+
+impl TypedCommand for SetHotspotShape {
+    type Payload = SetHotspotShapePayload;
+
+    fn name(&self) -> &'static str {
+        "hotspot.setShape"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "hotspot.setShape";
+        let shape = match payload.shape.as_str() {
+            "rectangle" => 0i64,
+            "oval" => 1,
+            "polyline" => 2,
+            other => {
+                return Err(EngineError::InvalidState {
+                    name: NAME.to_owned(),
+                    detail: format!("unknown shape {other:?} (want rectangle/oval/polyline)"),
+                });
+            }
+        };
+        // Which class the verb touches: `None` = both.
+        let class = match payload.what.as_str() {
+            "hotspots" => Some(false),
+            "slices" => Some(true),
+            "hotspots and slices" => None,
+            other => {
+                return Err(EngineError::InvalidState {
+                    name: NAME.to_owned(),
+                    detail: format!(
+                        "unknown whatToSet {other:?} (want hotspots/slices/hotspots and slices)"
+                    ),
+                });
+            }
+        };
+        if document.object_selection.is_empty() {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: "nothing is selected".to_owned(),
+            });
+        }
+        let mut deltas = Vec::new();
+        for id in document.object_selection.clone() {
+            let before = match document.registry.get(id) {
+                Some(ObjectData::Slice(slice))
+                    if class.is_none_or(|want_slice| slice.slice_type.is_some() == want_slice) =>
+                {
+                    if slice.shape == shape {
+                        continue;
+                    }
+                    slice.clone()
+                }
+                // Non-web objects and off-class slices are skipped —
+                // the verb addresses "the hotspots and slices in the
+                // selection".
+                _ => continue,
+            };
+            if let Some(ObjectData::Slice(slot)) = document.registry.get_mut(id) {
+                slot.shape = shape;
+            }
+            deltas.push(Delta::Object {
+                id,
+                inverse: ObjectInverse::Mutated {
+                    object: Box::new(ObjectData::Slice(before)),
+                },
+            });
+        }
+        if deltas.is_empty() {
+            return Ok(Delta::Noop);
+        }
+        Ok(Delta::Group(deltas))
+    }
+}
+
+/// `hotspot.copyToHotspot` — CS6
+/// `dom.copyToHotspot(hotspotType, whatIfMultipleSelected,
+/// makeRectangular)`: creates hotspots (or slices) covering the
+/// selection — one union shape for "single", one per item for
+/// "multiple". Omitted `whatIfMultipleSelected` is CS6's "ask user",
+/// which has no headless answer and refuses. With
+/// `make_rectangular` (the default) every shape is a rectangle;
+/// otherwise a polygon source donates its contours.
+struct CopyToHotspot;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct CopyToHotspotPayload {
+    page: usize,
+    /// "hotspot" or "slice".
+    hotspot_type: String,
+    /// "single" or "multiple"; `None` is "ask user" and refuses
+    /// headless.
+    #[serde(default)]
+    what_if_multiple: Option<String>,
+    /// Rectangle unless the source is a polygon and this is false.
+    #[serde(default = "default_make_rectangular")]
+    make_rectangular: bool,
+}
+
+fn default_make_rectangular() -> bool {
+    true
+}
+
+/// The anchor bounds of a contour list (handles never extend the
+/// frame on the wire).
+fn contour_bounds(contours: &[Contour]) -> Option<geom::Rect> {
+    let mut bounds: Option<geom::Rect> = None;
+    for contour in contours {
+        for point in &contour.points {
+            let (x, y) = (point.anchor.x, point.anchor.y);
+            bounds = Some(match bounds {
+                Some(rect) => geom::Rect::new(
+                    rect.x0.min(x),
+                    rect.y0.min(y),
+                    rect.x1.max(x),
+                    rect.y1.max(y),
+                ),
+                None => geom::Rect::new(x, y, x, y),
+            });
+        }
+    }
+    bounds
+}
+
+impl TypedCommand for CopyToHotspot {
+    type Payload = CopyToHotspotPayload;
+
+    fn name(&self) -> &'static str {
+        "hotspot.copyToHotspot"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "hotspot.copyToHotspot";
+        let slice_type = match payload.hotspot_type.as_str() {
+            "hotspot" => None,
+            "slice" => Some(0i64),
+            other => {
+                return Err(EngineError::InvalidState {
+                    name: NAME.to_owned(),
+                    detail: format!("unknown hotspotType {other:?} (want hotspot/slice)"),
+                });
+            }
+        };
+        let multiple = match payload.what_if_multiple.as_deref() {
+            Some("single") => false,
+            Some("multiple") => true,
+            // CS6 shows a dialog; headless has no one to ask.
+            _ => {
+                return Err(EngineError::InvalidState {
+                    name: NAME.to_owned(),
+                    detail: "what_if_multiple must be \"single\" or \"multiple\" (CS6's \"ask user\" has no headless answer)"
+                        .to_owned(),
+                });
+            }
+        };
+        if document.object_selection.is_empty() {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: "nothing is selected".to_owned(),
+            });
+        }
+        // Resolve every source shape before anything mutates
+        // (000557d): bounds for the frame, contours when a polygon
+        // source donates them.
+        let mut shapes = Vec::with_capacity(if multiple {
+            document.object_selection.len()
+        } else {
+            1
+        });
+        if !multiple {
+            let mut bounds = None;
+            let mut seen = std::collections::HashSet::new();
+            for id in &document.object_selection {
+                content_bounds(
+                    document,
+                    *id,
+                    geom::Affine::IDENTITY,
+                    0,
+                    &mut seen,
+                    &mut bounds,
+                );
+            }
+            let Some(bounds) = bounds else {
+                return Err(EngineError::InvalidState {
+                    name: NAME.to_owned(),
+                    detail: "the selection carries no bounds to cover".to_owned(),
+                });
+            };
+            shapes.push((bounds, 0i64, Vec::new()));
+        } else {
+            for id in document.object_selection.clone() {
+                // A polygon source donates its contours when
+                // make_rectangular is false; everything else takes a
+                // rectangular frame over its content bounds.
+                let donated = if payload.make_rectangular {
+                    None
+                } else {
+                    match document.registry.get(id) {
+                        Some(ObjectData::Slice(slice))
+                            if slice.shape == 2 && !slice.contours.is_empty() =>
+                        {
+                            Some(slice.contours.clone())
+                        }
+                        Some(ObjectData::Path(path)) if !path.contours.is_empty() => {
+                            Some(path.contours.clone())
+                        }
+                        _ => None,
+                    }
+                };
+                if let Some(contours) = donated {
+                    let Some(bounds) = contour_bounds(&contours) else {
+                        return Err(EngineError::InvalidState {
+                            name: NAME.to_owned(),
+                            detail: "polygon contours carry no anchors".to_owned(),
+                        });
+                    };
+                    shapes.push((bounds, 2, contours));
+                    continue;
+                }
+                let mut bounds = None;
+                let mut seen = std::collections::HashSet::new();
+                content_bounds(
+                    document,
+                    id,
+                    geom::Affine::IDENTITY,
+                    0,
+                    &mut seen,
+                    &mut bounds,
+                );
+                let Some(bounds) = bounds else {
+                    return Err(EngineError::InvalidState {
+                        name: NAME.to_owned(),
+                        detail: format!("object {} carries no bounds to cover", id.index()),
+                    });
+                };
+                shapes.push((bounds, 0, Vec::new()));
+            }
+        }
+        // Provision + validate the destination first.
+        let (layer, layers_before) = ensure_web_layer(document, NAME, payload.page)?;
+        access::cell_mut(document, NAME, payload.page, layer, 0)?;
+        let mut deltas = Vec::new();
+        if let Some(layers) = layers_before {
+            deltas.push(Delta::Layers {
+                page: payload.page,
+                layers,
+            });
+        }
+        let selection_before = std::mem::take(&mut document.object_selection);
+        let mut created = Vec::with_capacity(shapes.len());
+        for (bounds, shape, contours) in shapes {
+            let object = ObjectData::Slice(SliceObject {
+                internal_name: None,
+                frame: bounds,
+                shape,
+                fill_raw: 0,
+                name: None,
+                slice_type,
+                link: None,
+                alt: None,
+                label: None,
+                td_text: None,
+                symbol_number: None,
+                contours,
+                background: None,
+                behaviors: Vec::new(),
+                custom_data: std::collections::BTreeMap::new(),
+                export: None,
+            });
+            let id = document.registry.insert(object);
+            deltas.push(attach_cell(
+                document,
+                NAME,
+                payload.page,
+                layer,
+                0,
+                id,
+                None,
+            )?);
+            deltas.push(Delta::Object {
+                id,
+                inverse: ObjectInverse::Created,
+            });
+            created.push(id);
+        }
+        document.object_selection = created;
+        deltas.push(Delta::ObjectSelection {
+            before: selection_before,
+        });
+        Ok(Delta::Group(deltas))
+    }
+}
+
+/// `page.setWebObjectsVisibility` — CS3
+/// `dom.setWebObjectsVisibility(value)`: the Web Layer eye bit on the
+/// page (the layer provisions like any other first web touch).
+struct SetWebObjectsVisibility;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct SetWebObjectsVisibilityPayload {
+    page: usize,
+    value: bool,
+}
+
+impl TypedCommand for SetWebObjectsVisibility {
+    type Payload = SetWebObjectsVisibilityPayload;
+
+    fn name(&self) -> &'static str {
+        "page.setWebObjectsVisibility"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "page.setWebObjectsVisibility";
+        let (layer, layers_before) = ensure_web_layer(document, NAME, payload.page)?;
+        let before = Box::new(document.pages[payload.page].layers.layers[layer].clone());
+        document.pages[payload.page].layers.layers[layer].display = payload.value;
+        let mut deltas = Vec::new();
+        if let Some(layers) = layers_before {
+            deltas.push(Delta::Layers {
+                page: payload.page,
+                layers,
+            });
+        }
+        deltas.push(Delta::Layer {
+            page: payload.page,
+            layer,
+            before,
+        });
+        Ok(Delta::Group(deltas))
+    }
+}
+
 /// Registers the web-layer commands.
 pub fn install(registry: &mut crate::registry::CommandRegistry) -> Result<(), EngineError> {
     registry.register(CreateSlice)?;
@@ -911,7 +1415,11 @@ pub fn install(registry: &mut crate::registry::CommandRegistry) -> Result<(), En
     registry.register(SetSliceExport)?;
     registry.register(AddBehavior)?;
     registry.register(RemoveBehavior)?;
-    registry.register(SetSliceData)
+    registry.register(SetSliceData)?;
+    registry.register(SetHotspotRectangle)?;
+    registry.register(SetHotspotShape)?;
+    registry.register(CopyToHotspot)?;
+    registry.register(SetWebObjectsVisibility)
 }
 
 #[cfg(test)]
@@ -1463,5 +1971,376 @@ mod tests {
                 "a refused append must leave the document untouched"
             );
         }
+    }
+
+    fn slice_at(document: &Document, id: doc::ObjectId) -> &SliceObject {
+        match document.registry.get(id) {
+            Some(ObjectData::Slice(slice)) => slice,
+            _ => panic!("object {id:?} is not a slice"),
+        }
+    }
+
+    fn make_polygon_hotspot(document: &mut Document) -> doc::ObjectId {
+        registry()
+            .execute(
+                document,
+                "hotspot.create",
+                json!({
+                    "shape": "polygon", "x": 0.0, "y": 0.0,
+                    "width": 10.0, "height": 10.0,
+                    "points": [
+                        {"x": 0.0, "y": 0.0},
+                        {"x": 10.0, "y": 0.0},
+                        {"x": 10.0, "y": 10.0},
+                    ],
+                    "page": 0,
+                }),
+            )
+            .unwrap();
+        the_slice(document).0
+    }
+
+    #[test]
+    fn set_rectangle_moves_and_maps_polygon_contours() {
+        let (mut document, _ids) = testdoc::sample_document();
+        let id = make_polygon_hotspot(&mut document);
+        document.object_selection = vec![id];
+        let before = serde_json::to_vec(&document).unwrap();
+
+        let delta = registry()
+            .execute(
+                &mut document,
+                "hotspot.setRectangle",
+                json!({"rect": {"left": 10.0, "top": 10.0, "right": 30.0, "bottom": 30.0}}),
+            )
+            .unwrap();
+        let slice = slice_at(&document, id);
+        assert_eq!(
+            (
+                slice.frame.x0,
+                slice.frame.y0,
+                slice.frame.x1,
+                slice.frame.y1
+            ),
+            (10.0, 10.0, 30.0, 30.0)
+        );
+        let anchors: Vec<(f64, f64)> = slice.contours[0]
+            .points
+            .iter()
+            .map(|p| (p.anchor.x, p.anchor.y))
+            .collect();
+        assert_eq!(
+            anchors,
+            vec![(10.0, 10.0), (30.0, 10.0), (30.0, 30.0)],
+            "contours ride the same map as the frame"
+        );
+        delta.apply_inverse(&mut document).unwrap();
+        assert_eq!(serde_json::to_vec(&document).unwrap(), before, "undo");
+    }
+
+    #[test]
+    fn set_rectangle_copy_mode_keeps_the_original() {
+        let (mut document, _ids) = testdoc::sample_document();
+        let original = make_polygon_hotspot(&mut document);
+        document.object_selection = vec![original];
+
+        registry()
+            .execute(
+                &mut document,
+                "hotspot.setRectangle",
+                json!({
+                    "rect": {"left": 5.0, "top": 5.0, "right": 15.0, "bottom": 15.0},
+                    "make_copy": true,
+                }),
+            )
+            .unwrap();
+        assert_eq!(
+            slice_at(&document, original).frame,
+            geom::Rect::new(0.0, 0.0, 10.0, 10.0),
+            "the original stands"
+        );
+        let copy_id = document.object_selection[0];
+        assert_ne!(copy_id, original, "the selection lands on the copy");
+        assert_eq!(
+            slice_at(&document, copy_id).frame,
+            geom::Rect::new(5.0, 5.0, 15.0, 15.0)
+        );
+        assert_eq!(
+            slice_at(&document, copy_id).contours[0].points.len(),
+            slice_at(&document, original).contours[0].points.len(),
+            "the copy carries the donor's contours"
+        );
+
+        // The second copy undoes cleanly too (fresh ids each time).
+        let delta = registry()
+            .execute(
+                &mut document,
+                "hotspot.setRectangle",
+                json!({
+                    "rect": {"left": 5.0, "top": 5.0, "right": 15.0, "bottom": 15.0},
+                    "make_copy": true,
+                }),
+            )
+            .unwrap();
+        delta.apply_inverse(&mut document).unwrap();
+        assert!(
+            document
+                .registry
+                .get(document.object_selection[0])
+                .is_some()
+        );
+    }
+
+    #[test]
+    fn set_rectangle_copy_undo_is_byte_exact() {
+        let (mut document, _ids) = testdoc::sample_document();
+        let original = make_polygon_hotspot(&mut document);
+        document.object_selection = vec![original];
+        let before = serde_json::to_vec(&document).unwrap();
+        let delta = registry()
+            .execute(
+                &mut document,
+                "hotspot.setRectangle",
+                json!({
+                    "rect": {"left": 5.0, "top": 5.0, "right": 15.0, "bottom": 15.0},
+                    "make_copy": true,
+                }),
+            )
+            .unwrap();
+        delta.apply_inverse(&mut document).unwrap();
+        assert_eq!(
+            serde_json::to_vec(&document).unwrap(),
+            before,
+            "undo retracts the copy at its generation"
+        );
+    }
+
+    #[test]
+    fn set_shape_filters_by_class_and_refuses_junk() {
+        let (mut document, _ids) = testdoc::sample_document();
+        let registry = registry();
+        registry
+            .execute(
+                &mut document,
+                "slice.create",
+                json!({
+                    "shape": "rect", "x": 0.0, "y": 0.0,
+                    "width": 16.0, "height": 16.0, "page": 0,
+                }),
+            )
+            .unwrap();
+        let (slice_id, _) = the_slice(&document);
+        registry
+            .execute(
+                &mut document,
+                "hotspot.create",
+                json!({
+                    "shape": "rect", "x": 20.0, "y": 20.0,
+                    "width": 8.0, "height": 8.0, "page": 0,
+                }),
+            )
+            .unwrap();
+        // the_slice returns the first; collect both web ids.
+        let mut web_ids = Vec::new();
+        for (id, object) in document.registry.iter() {
+            if matches!(object, ObjectData::Slice(_)) {
+                web_ids.push(id);
+            }
+        }
+        web_ids.retain(|id| *id != slice_id);
+        let hotspot_id = web_ids[0];
+        document.object_selection = vec![slice_id, hotspot_id];
+
+        // "slices" touches the slice only; "hotspots" the hotspot only.
+        registry
+            .execute(
+                &mut document,
+                "hotspot.setShape",
+                json!({"what": "slices", "shape": "oval"}),
+            )
+            .unwrap();
+        assert_eq!(slice_at(&document, slice_id).shape, 1);
+        assert_eq!(slice_at(&document, hotspot_id).shape, 0);
+        registry
+            .execute(
+                &mut document,
+                "hotspot.setShape",
+                json!({"what": "hotspots", "shape": "polyline"}),
+            )
+            .unwrap();
+        assert_eq!(slice_at(&document, hotspot_id).shape, 2);
+        assert_eq!(slice_at(&document, slice_id).shape, 1);
+        let snapshot = serde_json::to_vec(&document).unwrap();
+
+        for bad in [
+            json!({"what": "areas", "shape": "oval"}),
+            json!({"what": "slices", "shape": "round"}),
+        ] {
+            let err = registry
+                .execute(&mut document, "hotspot.setShape", bad)
+                .unwrap_err();
+            assert!(matches!(err, EngineError::InvalidState { .. }));
+            assert_eq!(
+                serde_json::to_vec(&document).unwrap(),
+                snapshot,
+                "refusals mutate nothing"
+            );
+        }
+    }
+
+    #[test]
+    fn copy_to_hotspot_covers_selects_and_undoes() {
+        let (mut document, _ids) = testdoc::sample_document();
+        let registry = registry();
+        registry
+            .execute(
+                &mut document,
+                "slice.create",
+                json!({
+                    "shape": "rect", "x": 4.0, "y": 4.0,
+                    "width": 16.0, "height": 16.0, "page": 0,
+                }),
+            )
+            .unwrap();
+        let (source_id, _) = the_slice(&document);
+        document.object_selection = vec![source_id];
+        let before = serde_json::to_vec(&document).unwrap();
+
+        let delta = registry
+            .execute(
+                &mut document,
+                "hotspot.copyToHotspot",
+                json!({"page": 0, "hotspot_type": "hotspot", "what_if_multiple": "multiple"}),
+            )
+            .unwrap();
+        let hotspot_id = document.object_selection[0];
+        assert_ne!(hotspot_id, source_id, "the hotspot is selected");
+        let hotspot = slice_at(&document, hotspot_id);
+        assert_eq!(hotspot.slice_type, None, "map-only");
+        assert_eq!(hotspot.shape, 0, "rectangular by default");
+        assert_eq!(hotspot.frame, geom::Rect::new(4.0, 4.0, 20.0, 20.0));
+        assert!(document.registry.get(source_id).is_some());
+
+        // Undo the create: the hotspot is gone, the selection is back.
+        delta.apply_inverse(&mut document).unwrap();
+        assert!(document.registry.get(hotspot_id).is_none());
+        assert_eq!(document.object_selection, vec![source_id]);
+        assert_eq!(
+            serde_json::to_vec(&document).unwrap(),
+            before,
+            "undo restores the pre-create bytes"
+        );
+
+        // CS6's "ask user" default has no headless answer.
+        let err = registry
+            .execute(
+                &mut document,
+                "hotspot.copyToHotspot",
+                json!({"page": 0, "hotspot_type": "hotspot"}),
+            )
+            .unwrap_err();
+        assert!(matches!(err, EngineError::InvalidState { .. }));
+        let err = registry
+            .execute(
+                &mut document,
+                "hotspot.copyToHotspot",
+                json!({"page": 0, "hotspot_type": "area", "what_if_multiple": "single"}),
+            )
+            .unwrap_err();
+        assert!(matches!(err, EngineError::InvalidState { .. }));
+        assert_eq!(
+            serde_json::to_vec(&document).unwrap(),
+            before,
+            "the refusals mutated nothing"
+        );
+    }
+
+    #[test]
+    fn copy_to_hotspot_donates_polygons_and_unions() {
+        let (mut document, _ids) = testdoc::sample_document();
+        let registry = registry();
+        let id = make_polygon_hotspot(&mut document);
+        document.object_selection = vec![id];
+
+        // "single" covers the union as a rectangle.
+        registry
+            .execute(
+                &mut document,
+                "hotspot.copyToHotspot",
+                json!({
+                    "page": 0, "hotspot_type": "slice",
+                    "what_if_multiple": "single", "make_rectangular": false,
+                }),
+            )
+            .unwrap();
+        let union_id = document.object_selection[0];
+        let union = slice_at(&document, union_id);
+        assert_eq!(union.shape, 0, "the union has no single source shape");
+        assert_eq!(union.slice_type, Some(0), "hotspot_type slice");
+        assert_eq!(union.frame, geom::Rect::new(0.0, 0.0, 10.0, 10.0));
+
+        // "multiple" with make_rectangular false donates the contours.
+        document.object_selection = vec![id];
+        registry
+            .execute(
+                &mut document,
+                "hotspot.copyToHotspot",
+                json!({
+                    "page": 0, "hotspot_type": "slice",
+                    "what_if_multiple": "multiple", "make_rectangular": false,
+                }),
+            )
+            .unwrap();
+        let polygon = slice_at(&document, document.object_selection[0]);
+        assert_eq!(polygon.shape, 2);
+        let anchors: Vec<(f64, f64)> = polygon.contours[0]
+            .points
+            .iter()
+            .map(|p| (p.anchor.x, p.anchor.y))
+            .collect();
+        assert_eq!(anchors, vec![(0.0, 0.0), (10.0, 0.0), (10.0, 10.0)]);
+    }
+
+    #[test]
+    fn web_objects_visibility_provisions_and_undoes() {
+        let (mut document, _ids) = testdoc::sample_document();
+        let before = serde_json::to_vec(&document).unwrap();
+        let registry = registry();
+
+        let delta = registry
+            .execute(
+                &mut document,
+                "page.setWebObjectsVisibility",
+                json!({"page": 1, "value": false}),
+            )
+            .unwrap();
+        assert!(web_layer_index(&document, 1).is_some());
+        let layer = &document.pages[1].layers.layers[web_layer_index(&document, 1).unwrap()];
+        assert!(!layer.display, "the eye is off");
+        assert!(web_layer_index(&document, 0).is_none(), "page 0 untouched");
+
+        delta.apply_inverse(&mut document).unwrap();
+        assert_eq!(
+            serde_json::to_vec(&document).unwrap(),
+            before,
+            "undo retracts the provisioning"
+        );
+
+        let err = registry
+            .execute(
+                &mut document,
+                "page.setWebObjectsVisibility",
+                json!({"page": 9, "value": true}),
+            )
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            EngineError::InvalidState { .. } | EngineError::MissingTarget { .. }
+        ));
+        assert_eq!(
+            serde_json::to_vec(&document).unwrap(),
+            before,
+            "the refused page mutated nothing"
+        );
     }
 }
