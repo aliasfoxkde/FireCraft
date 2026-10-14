@@ -21,7 +21,10 @@ pub(crate) fn install(registry: &mut CommandRegistry) -> Result<(), EngineError>
     registry.register(SetDocumentCanvasColor)?;
     registry.register(SetDocumentResolution)?;
     registry.register(DocumentRotate)?;
-    registry.register(SetDocumentImageSize)
+    registry.register(SetDocumentImageSize)?;
+    registry.register(SetDocumentCanvasSizeToDocumentExtents)?;
+    registry.register(SetDocumentCanvasSizeToSelection)?;
+    registry.register(DeleteAllInDocument)
 }
 
 /// `document.setCanvasColor` — CS6's
@@ -877,6 +880,224 @@ impl TypedCommand for SetDocumentImageSize {
     }
 }
 
+/// `document.setDocumentCanvasSizeToDocumentExtents` — CS6's
+/// `dom.setDocumentCanvasSizeToDocumentExtents(bGrowCanvas)` (Fireworks
+/// 3, Modify > Trim Canvas): the canvas rect moves to hug the extents
+/// of every item on the page — `XLCf`/`YLCf` take the union bounds'
+/// origin, `WIDf`/`HITf` its size. Objects are not moved; the canvas
+/// moves over them (the wire fields exist for exactly this). FW3 had
+/// one page per document, so "all the items in the document" carries
+/// to the addressed page. `bGrowCanvas` false means the canvas "only
+/// shrinks": each dimension clamps to the current size. Bounds floor
+/// at one pixel per side and must stay within the 1..=65535 gate like
+/// `page.setCanvasSize`; a page with no items is the documented no-op.
+struct SetDocumentCanvasSizeToDocumentExtents;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct SetDocumentCanvasSizeToDocumentExtentsPayload {
+    /// Page to trim.
+    page: usize,
+    /// CS6's `bGrowCanvas`: false clamps each dimension to the current
+    /// canvas size.
+    grow: bool,
+}
+
+/// `document.setDocumentCanvasSizeToSelection` — CS6's
+/// `dom.setDocumentCanvasSizeToSelection()`: the canvas rect hugs the
+/// extents of the selection. No `bGrowCanvas` argument exists, so the
+/// canvas may grow or shrink. An empty selection refuses — CS6 has
+/// nothing to calculate from.
+struct SetDocumentCanvasSizeToSelection;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct SetDocumentCanvasSizeToSelectionPayload {
+    /// Page whose canvas is trimmed.
+    page: usize,
+}
+
+/// The union bounds of every element on one page (top-level walk;
+/// `content_bounds` recurses into groups and instances).
+fn page_extents(document: &Document, page: usize) -> Option<geom::Rect> {
+    let mut out: Option<geom::Rect> = None;
+    let mut seen = std::collections::HashSet::new();
+    for layer in &document.pages.get(page)?.layers.layers {
+        for cell in &layer.cells {
+            for id in &cell.elements {
+                crate::catalog::object::content_bounds(
+                    document,
+                    *id,
+                    geom::Affine::IDENTITY,
+                    0,
+                    &mut seen,
+                    &mut out,
+                );
+            }
+        }
+    }
+    out
+}
+
+/// Shared trim tail: moves the page canvas rect onto `bounds`. Zero-
+/// extent bounds floor at one pixel (a single-point path trims to a
+/// 1x1 canvas, the setCanvasSize minimum); sizes beyond 65535 refuse.
+fn trim_canvas(
+    document: &mut Document,
+    name: &'static str,
+    page: usize,
+    bounds: geom::Rect,
+    grow: bool,
+) -> Result<Delta, EngineError> {
+    const BOUND: f64 = 65535.0;
+    let mut width = bounds.width().max(1.0);
+    let mut height = bounds.height().max(1.0);
+    if !width.is_finite() || !height.is_finite() {
+        return Err(EngineError::InvalidState {
+            name: name.to_owned(),
+            detail: "extents are not finite".to_owned(),
+        });
+    }
+    let target = access::page_mut(document, name, page)?;
+    if !grow {
+        width = width.min(target.info.canvas.width);
+        height = height.min(target.info.canvas.height);
+    }
+    if width > BOUND || height > BOUND {
+        return Err(EngineError::InvalidState {
+            name: name.to_owned(),
+            detail: format!("canvas {width}x{height} outside 1..=65535"),
+        });
+    }
+    let before = target.info.clone();
+    target.info.canvas.x = bounds.x0;
+    target.info.canvas.y = bounds.y0;
+    target.info.canvas.width = width;
+    target.info.canvas.height = height;
+    Ok(Delta::PageInfo {
+        page,
+        before: Box::new(before),
+    })
+}
+
+impl TypedCommand for SetDocumentCanvasSizeToDocumentExtents {
+    type Payload = SetDocumentCanvasSizeToDocumentExtentsPayload;
+
+    fn name(&self) -> &'static str {
+        "document.setDocumentCanvasSizeToDocumentExtents"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "document.setDocumentCanvasSizeToDocumentExtents";
+        access::page(document, NAME, payload.page)?;
+        let Some(bounds) = page_extents(document, payload.page) else {
+            return Ok(Delta::Noop);
+        };
+        trim_canvas(document, NAME, payload.page, bounds, payload.grow)
+    }
+}
+
+impl TypedCommand for SetDocumentCanvasSizeToSelection {
+    type Payload = SetDocumentCanvasSizeToSelectionPayload;
+
+    fn name(&self) -> &'static str {
+        "document.setDocumentCanvasSizeToSelection"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "document.setDocumentCanvasSizeToSelection";
+        access::page(document, NAME, payload.page)?;
+        let Some(bounds) =
+            crate::catalog::object::union_bounds(document, &document.object_selection)
+        else {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: "nothing is selected".to_owned(),
+            });
+        };
+        trim_canvas(document, NAME, payload.page, bounds, true)
+    }
+}
+
+/// `document.deleteAllInDocument` — CS6's `dom.deleteAllInDocument()`
+/// (Fireworks MX): every top-level element of every cell on every page
+/// is deleted, each through the exact `object.delete` semantics
+/// (detach + registry removal + `Removed` inverse), folded into one
+/// transaction. Group children ride the standing group-delete
+/// contract (the shell is removed; children stay registered until
+/// their own delete — the deep-clone debt covers the walk). A
+/// document with no elements is the no-op.
+struct DeleteAllInDocument;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct DeleteAllInDocumentPayload {}
+
+impl TypedCommand for DeleteAllInDocument {
+    type Payload = DeleteAllInDocumentPayload;
+
+    fn name(&self) -> &'static str {
+        "document.deleteAllInDocument"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        _payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "document.deleteAllInDocument";
+        // Pre-flight: collect every top-level element id before the
+        // first removal (000557d). The ids come from the cells, so
+        // each is live and owned — nothing below can refuse.
+        let mut targets = Vec::new();
+        for page in &document.pages {
+            for layer in &page.layers.layers {
+                for cell in &layer.cells {
+                    for id in &cell.elements {
+                        targets.push(*id);
+                    }
+                }
+            }
+        }
+        if targets.is_empty() {
+            return Ok(Delta::Noop);
+        }
+        let mut deltas = Vec::with_capacity(targets.len());
+        for id in targets {
+            let object = crate::access::object(document, NAME, id)?.clone();
+            let container = crate::catalog::object::detach(document, NAME, id)?;
+            if document.registry.remove(id).is_none() {
+                return Err(EngineError::MissingTarget {
+                    name: NAME.to_owned(),
+                    detail: format!(
+                        "object {} (generation {}) vanished between capture and removal",
+                        id.index(),
+                        id.generation()
+                    ),
+                });
+            }
+            deltas.push(Delta::Group(vec![
+                container,
+                Delta::Object {
+                    id,
+                    inverse: ObjectInverse::Removed {
+                        object: Box::new(object),
+                    },
+                },
+            ]));
+        }
+        Ok(Delta::Group(deltas))
+    }
+}
+
 #[cfg(test)]
 mod document_tests {
     #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
@@ -1640,5 +1861,197 @@ mod document_tests {
             crate::error::EngineError::InvalidState { .. }
         ));
         assert_eq!(document_bytes(&document), after_grid_fix);
+    }
+
+    #[test]
+    fn canvas_extents_hug_page_content_and_undo() {
+        let (mut document, ids) = testdoc::sample_document();
+        document.pages[0].info.canvas = canvas(64.0, 48.0);
+        document.pages[1].info.canvas = canvas(64.0, 48.0);
+        // Drag ids[0] into negative space so the union origin moves.
+        if let Some(doc::ObjectData::Path(path)) = document.registry.get_mut(ids[0]) {
+            for (index, point) in path.contours[0].points.iter_mut().enumerate() {
+                point.anchor = geom::Point::new(-5.0 + index as f64 * 2.0, -4.0);
+            }
+        }
+        let before = document_bytes(&document);
+
+        let delta = SetDocumentCanvasSizeToDocumentExtents
+            .apply_json(&mut document, serde_json::json!({"page": 0, "grow": true}))
+            .expect("applies");
+        // Page 0 paths (seeds 1..4, x 0..12) plus the dragged one:
+        // union x -5..12, y -4..8.
+        assert_eq!(document.pages[0].info.canvas.x, -5.0);
+        assert_eq!(document.pages[0].info.canvas.y, -4.0);
+        assert_eq!(document.pages[0].info.canvas.width, 17.0);
+        assert_eq!(document.pages[0].info.canvas.height, 12.0);
+        // The other page is untouched.
+        assert_eq!(document.pages[1].info.canvas.width, 64.0);
+        assert_eq!(document.pages[1].info.canvas.x, 0.0);
+        delta.apply_inverse(&mut document).expect("inverse applies");
+        assert_eq!(document_bytes(&document), before);
+
+        // grow=false clamps to the current size (a shrink case would
+        // land on the extents either way).
+        let delta = SetDocumentCanvasSizeToDocumentExtents
+            .apply_json(&mut document, serde_json::json!({"page": 0, "grow": false}))
+            .expect("applies");
+        assert_eq!(document.pages[0].info.canvas.width, 17.0);
+        assert_eq!(document.pages[0].info.canvas.height, 12.0);
+        delta.apply_inverse(&mut document).expect("inverse applies");
+    }
+
+    #[test]
+    fn canvas_extents_grow_false_never_enlarges() {
+        let (mut document, _) = testdoc::sample_document();
+        document.pages[0].info.canvas = canvas(4.0, 4.0);
+        SetDocumentCanvasSizeToDocumentExtents
+            .apply_json(&mut document, serde_json::json!({"page": 0, "grow": false}))
+            .expect("applies");
+        // Extents are 12x8; only-shrink keeps 4x4 (origin still moves).
+        assert_eq!(document.pages[0].info.canvas.width, 4.0);
+        assert_eq!(document.pages[0].info.canvas.height, 4.0);
+    }
+
+    #[test]
+    fn canvas_extents_noop_and_refusals() {
+        let (mut document, ids) = testdoc::sample_document();
+        document.pages[0].info.canvas = canvas(64.0, 48.0);
+        // Empty page trims to nothing — the documented no-op.
+        for layer in &mut document.pages[1].layers.layers {
+            for cell in &mut layer.cells {
+                cell.elements.clear();
+            }
+        }
+        let delta = SetDocumentCanvasSizeToDocumentExtents
+            .apply_json(&mut document, serde_json::json!({"page": 1, "grow": true}))
+            .expect("applies");
+        assert!(matches!(delta, crate::delta::Delta::Noop));
+
+        // Extents wider than the pixel bound refuse, untouched.
+        if let Some(doc::ObjectData::Path(path)) = document.registry.get_mut(ids[1]) {
+            for point in &mut path.contours[0].points {
+                point.anchor.x += 70000.0;
+            }
+        }
+        let before = document_bytes(&document);
+        let err = SetDocumentCanvasSizeToDocumentExtents
+            .apply_json(&mut document, serde_json::json!({"page": 0, "grow": true}))
+            .expect_err("an out-of-range canvas is refused");
+        assert!(matches!(
+            err,
+            crate::error::EngineError::InvalidState { .. }
+        ));
+        let err = SetDocumentCanvasSizeToDocumentExtents
+            .apply_json(&mut document, serde_json::json!({"page": 9, "grow": true}))
+            .expect_err("a missing page is refused");
+        assert!(matches!(
+            err,
+            crate::error::EngineError::MissingTarget { .. }
+        ));
+        assert_eq!(document_bytes(&document), before);
+    }
+
+    #[test]
+    fn canvas_selection_trim_and_refusals() {
+        let (mut document, ids) = testdoc::sample_document();
+        document.pages[0].info.canvas = canvas(64.0, 48.0);
+        // The selection is editing state: snapshot after it is set.
+        document.object_selection = vec![ids[0]];
+        let before = document_bytes(&document);
+
+        let delta = SetDocumentCanvasSizeToSelection
+            .apply_json(&mut document, serde_json::json!({"page": 0}))
+            .expect("applies");
+        // ids[0] (seed 1) spans 0..9 across, 0..8 down.
+        assert_eq!(document.pages[0].info.canvas.width, 9.0);
+        assert_eq!(document.pages[0].info.canvas.height, 8.0);
+        assert_eq!(document.pages[0].info.canvas.x, 0.0);
+        delta.apply_inverse(&mut document).expect("inverse applies");
+        assert_eq!(document_bytes(&document), before);
+
+        document.object_selection = Vec::new();
+        let err = SetDocumentCanvasSizeToSelection
+            .apply_json(&mut document, serde_json::json!({"page": 0}))
+            .expect_err("an empty selection is refused");
+        assert!(matches!(
+            err,
+            crate::error::EngineError::InvalidState { .. }
+        ));
+        document.object_selection = vec![ids[0]];
+        let err = SetDocumentCanvasSizeToSelection
+            .apply_json(&mut document, serde_json::json!({"page": 5}))
+            .expect_err("a missing page is refused");
+        assert!(matches!(
+            err,
+            crate::error::EngineError::MissingTarget { .. }
+        ));
+    }
+
+    #[test]
+    fn delete_all_clears_every_cell_and_undoes() {
+        let (mut document, ids) = testdoc::sample_document();
+        assert_eq!(ids.len(), 8);
+        document.object_selection = vec![ids[0]];
+        let before = document_bytes(&document);
+
+        let delta = DeleteAllInDocument
+            .apply_json(&mut document, serde_json::json!({}))
+            .expect("applies");
+        for page in &document.pages {
+            for layer in &page.layers.layers {
+                for cell in &layer.cells {
+                    assert!(cell.elements.is_empty());
+                }
+            }
+        }
+        // Every id is gone from the registry.
+        for id in &ids {
+            assert!(document.registry.get(*id).is_none());
+        }
+        delta.apply_inverse(&mut document).expect("inverse applies");
+        assert_eq!(document_bytes(&document), before);
+
+        // A pass over the emptied document finds nothing — the no-op.
+        DeleteAllInDocument
+            .apply_json(&mut document, serde_json::json!({}))
+            .expect("applies");
+        let delta = DeleteAllInDocument
+            .apply_json(&mut document, serde_json::json!({}))
+            .expect("applies");
+        assert!(matches!(delta, crate::delta::Delta::Noop));
+    }
+
+    #[test]
+    fn delete_all_removes_nested_groups_with_their_cells() {
+        let (mut document, ids) = testdoc::sample_document();
+        let group_id = document
+            .registry
+            .insert(doc::ObjectData::Group(doc::GroupObject {
+                group_type: 0,
+                name: None,
+                children: vec![ids[0], ids[1]],
+                opacity: 1000,
+                blend: 0,
+                visible: true,
+                locked: false,
+                mask_hidden: false,
+                mask_linked: None,
+                effects: Vec::new(),
+            }));
+        let free = document.registry.insert(testdoc::path_object(50));
+        document.pages[0].layers.layers[0].cells[0].elements = vec![group_id, free];
+        let before = document_bytes(&document);
+
+        let delta = DeleteAllInDocument
+            .apply_json(&mut document, serde_json::json!({}))
+            .expect("applies");
+        // The walk deletes top-level members only: the group shell and
+        // the free path are gone; group children ride the standing
+        // group-delete contract.
+        assert!(document.registry.get(group_id).is_none());
+        assert!(document.registry.get(free).is_none());
+        delta.apply_inverse(&mut document).expect("inverse applies");
+        assert_eq!(document_bytes(&document), before);
     }
 }

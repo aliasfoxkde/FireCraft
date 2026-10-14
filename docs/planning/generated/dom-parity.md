@@ -7,20 +7,20 @@ regeneration recipe in docs/PLANNING.md §5.4). The DOM is stable
 CS4→CS6; CS6 additions the text lacks (e.g. 9-slice guides) are
 covered by the CS6 `.jsf` scripts and appear here via their verbs.
 
-FireCraft side: the 215-command registry (`engine::catalog::ids()`,
+FireCraft side: the 218-command registry (`engine::catalog::ids()`,
 enforced == the fuzz call table).
 
 ## Coverage classes
 
 | class | meaning | count (of 356 dom verbs) |
 |---|---|---|
-| C | carried: a registry command implements the mutation | 242 |
-| P | partial: carried with a recorded model limitation | 29 |
+| C | carried: a registry command implements the mutation | 245 |
+| P | partial: carried with a recorded model limitation | 26 |
 | M | missing: no command and no decision — work items | 0 |
 | N | not applicable: non-document surface (accessor/UI/session/clipboard/export/OS) | 85 |
 
 Document-mutation coverage: **271 of 271** carried-or-partial
-(242 carried, 29 partial, 0 missing).
+(245 carried, 26 partial, 0 missing).
 
 ### Gap families (the Missing table, grouped)
 
@@ -95,6 +95,7 @@ partial rows and the recorded debts in docs/HANDOFF.md Phase 9.
 | `copyToHotspot` | C | hotspot.copyToHotspot | decision 0043: single=union rect / multiple=per-item; makeRectangular=false donates polygon contours; ask-user refuses headless |
 | `cropSelection` | C | path.cropSelection | each selected path is cropped (intersected) by the rect; empty results remove the path |
 | `cuplicateSelectionToFrames` | C | selection.duplicateToFrames | all/previous/next/end; next past the last frame adds one (decision 0026) |
+| `deleteAllInDocument` | C | document.deleteAllInDocument | carried (0046): object.delete semantics per top-level element, folded into one transaction; empty document = no-op |
 | `deleteFrames` | C | frame.delete | guards: range, overrun, last frame |
 | `deleteLayer` | C | layer.delete |  |
 | `deletePageAt` | C | page.delete |  |
@@ -211,6 +212,8 @@ partial rows and the recorded debts in docs/HANDOFF.md Phase 9.
 | `setButtonShowDownOnLoad` | C | symbol.setButtonShowDownOnLoad |  |
 | `setDocumentCanvasColor` | C | document.setCanvasColor | BGCi document-wide; scripting maps the color string to the raw (dec 0023) |
 | `setDocumentCanvasSize` | C | page.setCanvasSize |  |
+| `setDocumentCanvasSizeToDocumentExtents` | C | document.setDocumentCanvasSizeToDocumentExtents | carried (0046): canvas rect hugs the page extents (XLCf/YLCf origin move, objects untouched); bGrowCanvas=false clamps to current size; empty page = no-op |
+| `setDocumentCanvasSizeToSelection` | C | document.setDocumentCanvasSizeToSelection | carried (0046): canvas rect hugs the selection bounds; empty selection refuses (CS6 has nothing to calculate from) |
 | `setDocumentImageSize` | C | document.setImageSize | decision 0041: rect = new canvas bounds, bilinear resample |
 | `setDocumentResolution` | C | document.setResolution | RESf/RSUi document-wide, per-page copies kept in sync (dec 0023) |
 | `setElementLocked` | C | object.setLocked |  |
@@ -285,7 +288,6 @@ partial rows and the recorded debts in docs/HANDOFF.md Phase 9.
 | `addSwapImageBehaviorFromPoint` | P | slice.addBehavior | behaviors carry; the swap-image picker is UI |
 | `applyCharacterMarkup` | P | text.setAttrs | per-range markup unmodeled (single-run) |
 | `applyFontMarkup` | P | text.setFont | per-range markup unmodeled |
-| `deleteAllInDocument` | P | object.delete | composes per object; no single clear verb (transaction folds) |
 | `duplicateSymbolForAlias` | P | library.add | alias linkage unmodeled |
 | `importFile` | P | io | io carries SVG/raster importers; no engine place-imported-file command |
 | `moveSelectionMaskBy` | P | bitmap.movePixels | mask-only translate rides the pixel move |
@@ -296,8 +298,6 @@ partial rows and the recorded debts in docs/HANDOFF.md Phase 9.
 | `reversePathTextDirection` | P | text.attachPath | same |
 | `selectAdjustPixelSel` | P | bitmap.select* | pixel-precision refine unmodeled; shape stamps carry |
 | `setAnimInstanceStartFrame` | P | symbol.setParam | FW4 dropped the start-frame field from the format; refuses pointing at instance placement (the documented FW4 substitute) |
-| `setDocumentCanvasSizeToDocumentExtents` | P | page.setCanvasSize | computed variant - app computes, command applies |
-| `setDocumentCanvasSizeToSelection` | P | page.setCanvasSize | computed variant |
 | `setEffectName` | P | filter.add | rename = remove+add compose; no dedicated verb |
 | `setFillNColorNTexture` | P | path.setFillColor | texture component of the numbered form (texture_blend rides the fill model, no command surface) |
 | `setSliceAutonaming` | P | slice.setData | naming-policy field - payload coverage to verify |

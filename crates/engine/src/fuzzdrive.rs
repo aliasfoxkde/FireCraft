@@ -645,6 +645,9 @@ pub const CALLS: &[&str] = &[
     "text.setTextRectangle",
     "text.setTextRectangleAuto",
     "text.setTextRectangleAutoFromPoint",
+    "document.setDocumentCanvasSizeToDocumentExtents",
+    "document.setDocumentCanvasSizeToSelection",
+    "document.deleteAllInDocument",
     "symbol.create",
     "symbol.createInstance",
     "symbol.breakApart",
@@ -2645,6 +2648,16 @@ pub fn random_call(rng: &mut FuzzRng, document: &Document) -> (String, serde_jso
                 "page": any_index(rng, pages),
             })
         }
+        // Trim verbs: page wanders over live indices; grow flips.
+        // deleteAll is empty — it sweeps every page either way.
+        "document.setDocumentCanvasSizeToDocumentExtents" => serde_json::json!({
+            "page": rng.below(3),
+            "grow": rng.below(2) == 0,
+        }),
+        "document.setDocumentCanvasSizeToSelection" => {
+            serde_json::json!({ "page": rng.below(3) })
+        }
+        "document.deleteAllInDocument" => serde_json::json!({}),
         "document.setImageSize" => {
             let width = 8.0 + rng.below(64) as f64;
             let height = 8.0 + rng.below(64) as f64;

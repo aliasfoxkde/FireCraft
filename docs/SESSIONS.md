@@ -330,3 +330,36 @@ text-frame verbs (8.11).
   via real `text.setAttrs` deltas; refusal byte-stability across
   two-selected / path-selected / zero-extent / inverted / empty-text.
 - Registry 212→215. dom-parity: **242C/29P/0M/85N**, unresolved [].
+
+## 2026-10-14 — canvas trim + delete-all (#116, decision 0046)
+
+Batch: `document.setDocumentCanvasSizeToDocumentExtents`,
+`document.setDocumentCanvasSizeToSelection`,
+`document.deleteAllInDocument` (8.12).
+
+- Trim semantics: the canvas rect (XLCf/YLCf origin + WIDf/HITf size)
+  moves to hug the content bounds; objects keep their world
+  coordinates (nothing scales — that is setImageSize's job). The
+  whole PageInfo is captured for undo.
+- FW3's "document" is one page: both verbs take an explicit page
+  index and compute that page's extents via `content_bounds` (group
+  and instance recursion included). `union_bounds` became pub(crate).
+- `bGrowCanvas` false clamps width/height per dimension to the
+  current size; the origin still moves. Selection trim always fits.
+- Hygiene: zero-extent bounds floor at 1px/side; >65535 refuses;
+  empty page = `Delta::Noop` (documented no-op); empty selection
+  refuses.
+- `deleteAllInDocument`: one pre-flight sweep collects every
+  top-level element id (000557d), then each goes through exact
+  `object.delete` semantics (detach + registry remove + `Removed`
+  inverse), folded into one `Delta::Group`. Group children ride the
+  standing group-delete contract. Empty document = no-op.
+- Tests: extents hug + origin move + undo byte-exact; grow=false
+  clamp; empty-page Noop; oversize/missing-page refusals untouched;
+  selection trim + empty-selection refuse; delete-all across pages +
+  undo byte-exact + double-apply Noop; nested-group fold + undo.
+- Registry 215→218. dom-parity: **245C/26P/0M/85N**, unresolved [].
+- CI note: 12b5e40/d98764b perf-budgets failures were infra (fleet
+  load 1.48× over a 3×-headroom ceiling; runner_lost_while_running) —
+  8f2919d verified 7/7 green on the same code paths, local
+  `xtask perf` 12/12 budgets ok.

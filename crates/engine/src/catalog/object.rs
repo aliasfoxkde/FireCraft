@@ -1079,7 +1079,7 @@ pub(crate) fn content_bounds(
 /// The union bounds of the target set — CS6's "selection bounds"
 /// without a selection surface. `None` when the targets carry no
 /// bounds at all (nothing live).
-fn union_bounds(document: &Document, ids: &[ObjectId]) -> Option<geom::Rect> {
+pub(crate) fn union_bounds(document: &Document, ids: &[ObjectId]) -> Option<geom::Rect> {
     let mut out: Option<geom::Rect> = None;
     let mut seen = std::collections::HashSet::new();
     for id in ids {

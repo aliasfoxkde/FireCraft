@@ -84,7 +84,7 @@ pub(crate) mod testdoc {
         }
     }
 
-    fn path_object(seed: u64) -> ObjectData {
+    pub(crate) fn path_object(seed: u64) -> ObjectData {
         ObjectData::Path(PathObject {
             contours: vec![Contour {
                 closed: true,

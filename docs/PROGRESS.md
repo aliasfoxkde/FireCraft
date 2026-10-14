@@ -8,11 +8,11 @@
 
 - **Released:** v0.1.0 (2026-10-13), repo public.
 - **Roadmap:** M0–M15 **all closed**.
-- **Registry:** 215 commands. **CI:** green 7/7 on `f668d85`; later
+- **Registry:** 218 commands. **CI:** green 7/7 on `f668d85`; later
   campaign pushes verified per batch (runbook: HANDOFF §6).
-- **CS6 DOM parity:** **242 C / 29 P / 0 M / 85 N** — **the M table is
+- **CS6 DOM parity:** **245 C / 26 P / 0 M / 85 N** — **the M table is
   empty** (2026-10-14): every CS6 dom mutation verb is carried or
-  partial. Remaining surface work is the 29 P rows and the recorded
+  partial. Remaining surface work is the 26 P rows and the recorded
   debts ([`HANDOFF.md`](HANDOFF.md) §4 Phase 9).
 
 ## Milestones
@@ -71,7 +71,8 @@
 | #112 | convolveSelection + motionBlurSelection bake commands (8.8 ext., decision 0042) | 8eae611 | **228 C / 43 P / 0 M / 85 N** |
 | #113 | web/group setter batch: setRectangle/setShape/copyToHotspot/setGroupType/setWebObjectsVisibility (8.9, decision 0043) + setImageSize preflight fix (000557d) | 12b5e40 | **233 C / 38 P / 0 M / 85 N** |
 | #114 | anim instance parameter family: 6x setAnimInstance* over the ANNi carrier (8.10, decision 0044) | d98764b | **239 C / 32 P / 0 M / 85 N** |
-| #115 | text rectangle trio: setTextRectangle / Auto / AutoFromPoint via TextEngine::auto_block (8.11, decision 0045) | this batch | **242 C / 29 P / 0 M / 85 N** |
+| #115 | text rectangle trio: setTextRectangle / Auto / AutoFromPoint via TextEngine::auto_block (8.11, decision 0045) | 8f2919d | **242 C / 29 P / 0 M / 85 N** |
+| #116 | canvas trim pair + deleteAllInDocument: extents/selection trim over XLCf/YLCf, per-element delete fold (8.12, decision 0046) | this batch | **245 C / 26 P / 0 M / 85 N** |
 
 **Campaign complete:** no remaining M families. Next: P-class partials
 and Phase 9 debts (HANDOFF §4).
@@ -113,5 +114,6 @@ and Phase 9 debts (HANDOFF §4).
 | 2026-10-14 | **233** | 38 | 0 | #113 web/group setters + setImageSize preflight fix (decision 0043) |
 | 2026-10-14 | **239** | 32 | 0 | #114 anim instance params over ANNi (decision 0044) |
 | 2026-10-14 | **242** | 29 | 0 | #115 text rectangle fits (decision 0045) |
+| 2026-10-14 | **245** | 26 | 0 | #116 canvas trim + delete-all (decision 0046) |
 
 (Pre-#91 counts are approximate; the matrix file is the authority.)
