@@ -7,20 +7,20 @@ regeneration recipe in docs/PLANNING.md §5.4). The DOM is stable
 CS4→CS6; CS6 additions the text lacks (e.g. 9-slice guides) are
 covered by the CS6 `.jsf` scripts and appear here via their verbs.
 
-FireCraft side: the 222-command registry (`engine::catalog::ids()`,
+FireCraft side: the 225-command registry (`engine::catalog::ids()`,
 enforced == the fuzz call table).
 
 ## Coverage classes
 
 | class | meaning | count (of 356 dom verbs) |
 |---|---|---|
-| C | carried: a registry command implements the mutation | 250 |
-| P | partial: carried with a recorded model limitation | 21 |
+| C | carried: a registry command implements the mutation | 253 |
+| P | partial: carried with a recorded model limitation | 18 |
 | M | missing: no command and no decision — work items | 0 |
 | N | not applicable: non-document surface (accessor/UI/session/clipboard/export/OS) | 85 |
 
 Document-mutation coverage: **271 of 271** carried-or-partial
-(250 carried, 21 partial, 0 missing).
+(253 carried, 18 partial, 0 missing).
 
 ### Gap families (the Missing table, grouped)
 
@@ -187,6 +187,7 @@ partial rows and the recorded debts in docs/HANDOFF.md Phase 9.
 | `resizeSelection` | C | object.resize | keeps the top-left corner of the selection in place |
 | `restoreJPEGMask` | C | mask.restoreJPEG |  |
 | `restoreSelection` | C | selection.restore |  |
+| `reversePathTextDirection` | C | text.reversePathTextDirection | carried (0048): rail points reverse, handles swap - curve preserved |
 | `rotateDocument` | C | document.rotate | page-scoped 90/180/270 with a full geometry re-bake (decision 0034) |
 | `rotateSelection` | C | object.rotate | degrees, clockwise in the y-down space |
 | `saveJPEGMask` | C | mask.saveJPEG | second plane slot (Document.jpeg_mask), editing state |
@@ -271,6 +272,8 @@ partial rows and the recorded debts in docs/HANDOFF.md Phase 9.
 | `setTextFlow` | C | text.setAttrs |  |
 | `setTextHorizontalScale` | C | text.setAttrs |  |
 | `setTextLeading` | C | text.setAttrs |  |
+| `setTextOnPathMode` | C | text.setTextOnPathMode | carried (0048): selection walk sets TAMi 0..3 on every guided item |
+| `setTextOnPathOffset` | C | text.setTextOnPathOffset | carried (0048): selection walk writes CHOf; finite gate |
 | `setTextOrientation` | C | text.setAttrs |  |
 | `setTextRectangle` | C | text.setTextRectangle | carried (0045): frame write only, reflow happens at layout; not scaled or transformed |
 | `setTextRectangleAuto` | C | text.setTextRectangleAuto | carried (0045): one-shot smallest-box fit via TextEngine::auto_block, left/top anchored |
@@ -296,7 +299,6 @@ partial rows and the recorded debts in docs/HANDOFF.md Phase 9.
 | `moveSelectionMaskBy` | P | bitmap.movePixels | mask-only translate rides the pixel move |
 | `removeCharacterMarkup` | P | text.setAttrs |  |
 | `removeFontMarkup` | P | text.setFont |  |
-| `reversePathTextDirection` | P | text.attachPath | same |
 | `selectAdjustPixelSel` | P | bitmap.select* | pixel-precision refine unmodeled; shape stamps carry |
 | `setAnimInstanceStartFrame` | P | symbol.setParam | FW4 dropped the start-frame field from the format; refuses pointing at instance placement (the documented FW4 substitute) |
 | `setFillNColorNTexture` | P | path.setFillColor | texture component of the numbered form (texture_blend rides the fill model, no command surface) |
@@ -304,8 +306,6 @@ partial rows and the recorded debts in docs/HANDOFF.md Phase 9.
 | `setTextCustomAntiAliasOverSample` | P | text.setAttrs | custom-AA tuning is renderer-side |
 | `setTextCustomAntiAliasSharpness` | P | text.setAttrs | renderer-side |
 | `setTextCustomAntiAliasStrength` | P | text.setAttrs | renderer-side |
-| `setTextOnPathMode` | P | text.attachPath | mode/offset/direction params to verify against the attach payload; attach itself carries |
-| `setTextOnPathOffset` | P | text.attachPath | same |
 | `setTextParaIndent` | P | text.setAttrs | paragraph runs - single-run attr model |
 | `setTextParaSpacingAfter` | P | text.setAttrs | paragraph runs |
 | `setTextParaSpacingBefore` | P | text.setAttrs | paragraph runs |

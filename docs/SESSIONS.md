@@ -408,3 +408,30 @@ Batch: `filter.setEffectName`,
 - `setSliceAutonaming` stays P: the autonaming flag has no wire node
   (FILs carries only the naming label); fabricating one would
   violate no-format-fabrication.
+
+## #118 — 2026-10-14 — on-path setters (decision 0048)
+
+Batch: `text.setTextOnPathMode`, `text.setTextOnPathOffset`,
+`text.reversePathTextDirection` (8.14).
+
+- All three are CS6 selection verbs ("the selected text-on-a-path
+  items", plural) over state the model already carries (TAMi / CHOf /
+  PTHv — decision 0013's attach payload accepted both since the
+  start). The P rows were model debt, not format debt.
+- Shared `on_path_selection_walk`: guided text items participate;
+  non-text, guide-less, stale skip; edit closures
+  compare-before-write so re-applying current state is `Delta::Noop`;
+  empty selection refuses.
+- Mode gates 0..=3 (wire is the integer; the CS6 words map at the UI
+  layer). Offset gates finiteness; negatives legal (glyphs drop off
+  the rail end).
+- Reverse rewrites the rail: contour points reverse, each point's
+  primary/secondary swap — curve preserved exactly, travel flipped.
+  Offset untouched (CS6 documents no compensation; the reversed
+  start IS the effect).
+- Tests: 3 (setters + undo byte-exact + same-state Noop; reverse
+  anchors/handles asserted + undo; gates: empty selection, no-guide
+  Noop + byte-stability, mode 7 refusal, direct NaN payload).
+- fuzzdrive: 3 CALLS + arms (mode 0..5 crosses the legal range into
+  refusal; offset ±100; reverse empty). Local fuzz 256×48 clean.
+- Registry 222→225. dom-parity: **253C/18P/0M/85N**, unresolved [].

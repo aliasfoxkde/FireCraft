@@ -8,11 +8,11 @@
 
 - **Released:** v0.1.0 (2026-10-13), repo public.
 - **Roadmap:** M0–M15 **all closed**.
-- **Registry:** 222 commands. **CI:** green 7/7 on `f668d85`; later
+- **Registry:** 225 commands. **CI:** green 7/7 on `f668d85`; later
   campaign pushes verified per batch (runbook: HANDOFF §6).
-- **CS6 DOM parity:** **250 C / 21 P / 0 M / 85 N** — **the M table is
+- **CS6 DOM parity:** **253 C / 18 P / 0 M / 85 N** — **the M table is
   empty** (2026-10-14): every CS6 dom mutation verb is carried or
-  partial. Remaining surface work is the 21 P rows and the recorded
+  partial. Remaining surface work is the 18 P rows and the recorded
   debts ([`HANDOFF.md`](HANDOFF.md) §4 Phase 9).
 
 ## Milestones
@@ -73,7 +73,8 @@
 | #114 | anim instance parameter family: 6x setAnimInstance* over the ANNi carrier (8.10, decision 0044) | d98764b | **239 C / 32 P / 0 M / 85 N** |
 | #115 | text rectangle trio: setTextRectangle / Auto / AutoFromPoint via TextEngine::auto_block (8.11, decision 0045) | 8f2919d | **242 C / 29 P / 0 M / 85 N** |
 | #116 | canvas trim pair + deleteAllInDocument: extents/selection trim over XLCf/YLCf, per-element delete fold (8.12, decision 0046) | 51a3c3e | **245 C / 26 P / 0 M / 85 N** |
-| #117 | loose-ends setters: setEffectName walker, addSwapImageBehaviorFromPoint (even-odd polygon hit, kind 2 + swapTarget), button-text replacement pair (8.13, decision 0047) | this batch | **250 C / 21 P / 0 M / 85 N** |
+| #117 | loose-ends setters: setEffectName walker, addSwapImageBehaviorFromPoint (even-odd polygon hit, kind 2 + swapTarget), button-text replacement pair (8.13, decision 0047) | d482b5d | **250 C / 21 P / 0 M / 85 N** |
+| #118 | on-path setters: setTextOnPathMode/Offset + reversePathTextDirection over a shared selection walk (8.14, decision 0048) | this batch | **253 C / 18 P / 0 M / 85 N** |
 
 **Campaign complete:** no remaining M families. Next: P-class partials
 and Phase 9 debts (HANDOFF §4).
@@ -117,5 +118,6 @@ and Phase 9 debts (HANDOFF §4).
 | 2026-10-14 | **242** | 29 | 0 | #115 text rectangle fits (decision 0045) |
 | 2026-10-14 | **245** | 26 | 0 | #116 canvas trim + delete-all (decision 0046) |
 | 2026-10-14 | **250** | 21 | 0 | #117 loose-ends setters (decision 0047) |
+| 2026-10-14 | **253** | 18 | 0 | #118 on-path setters (decision 0048) |
 
 (Pre-#91 counts are approximate; the matrix file is the authority.)

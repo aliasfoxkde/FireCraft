@@ -647,6 +647,9 @@ pub const CALLS: &[&str] = &[
     "text.setTextRectangleAutoFromPoint",
     "text.replaceButtonTextStrings",
     "text.replaceButtonTextStringsInInstances",
+    "text.setTextOnPathMode",
+    "text.setTextOnPathOffset",
+    "text.reversePathTextDirection",
     "document.setDocumentCanvasSizeToDocumentExtents",
     "document.setDocumentCanvasSizeToSelection",
     "document.deleteAllInDocument",
@@ -2081,6 +2084,16 @@ pub fn random_call(rng: &mut FuzzRng, document: &Document) -> (String, serde_jso
             };
             serde_json::json!({ "text": text, "uniform_attrs": rng.chance(30) })
         }
+        // On-path setters walk the selection: modes wander past the
+        // legal range into the refusal, offsets go negative, reverse
+        // has no payload. All land in no-op/refusal/rewrite paths.
+        "text.setTextOnPathMode" => serde_json::json!({
+            "mode": rng.below(6) as i64,
+        }),
+        "text.setTextOnPathOffset" => serde_json::json!({
+            "offset": rng.below(200) as f64 - 100.0,
+        }),
+        "text.reversePathTextDirection" => serde_json::json!({}),
         // Renames wander over categories and names so most calls miss
         // (the no-op); hits rename every matching effect on whatever
         // the selection holds.

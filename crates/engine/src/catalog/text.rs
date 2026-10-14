@@ -25,6 +25,9 @@ pub(crate) fn install(registry: &mut CommandRegistry) -> Result<(), EngineError>
     registry.register(SetFont)?;
     registry.register(AttachPath)?;
     registry.register(DetachPath)?;
+    registry.register(SetTextOnPathMode)?;
+    registry.register(SetTextOnPathOffset)?;
+    registry.register(ReversePathTextDirection)?;
     registry.register(ConvertToPaths)?;
     registry.register(SetTextRectangle)?;
     registry.register(SetTextRectangleAuto)?;
@@ -604,6 +607,182 @@ impl TypedCommand for DetachPath {
     }
 }
 
+/// Shared walk for the on-path setters (`text.setTextOnPathMode`,
+/// `text.setTextOnPathOffset`, `text.reversePathTextDirection`): CS6
+/// applies each to "the selected text-on-a-path items", plural. Every
+/// selected text item carrying a guide participates; non-text,
+/// spine-less, and stale members skip (the setEffectName walker's
+/// rule). The empty selection refuses. `edit` returns false when the
+/// guide is already in the requested state, which skips the delta —
+/// a sweep that changes nothing is the no-op.
+fn on_path_selection_walk(
+    document: &mut Document,
+    name: &'static str,
+    edit: &mut dyn FnMut(&mut doc::TextOnPath) -> bool,
+) -> Result<Delta, EngineError> {
+    if document.object_selection.is_empty() {
+        return Err(EngineError::InvalidState {
+            name: name.to_owned(),
+            detail: "nothing is selected".to_owned(),
+        });
+    }
+    let mut deltas = Vec::new();
+    for id in document.object_selection.clone() {
+        let Some(before) = document.registry.get(id).cloned() else {
+            continue;
+        };
+        let ObjectData::Text(object) = &before else {
+            continue;
+        };
+        let Some(mut updated) = object.on_path.clone() else {
+            continue;
+        };
+        if !edit(&mut updated) {
+            continue;
+        }
+        if let Some(ObjectData::Text(slot)) = document.registry.get_mut(id) {
+            slot.on_path = Some(updated);
+        }
+        deltas.push(Delta::Object {
+            id,
+            inverse: ObjectInverse::Mutated {
+                object: Box::new(before),
+            },
+        });
+    }
+    if deltas.is_empty() {
+        return Ok(Delta::Noop);
+    }
+    Ok(Delta::Group(deltas))
+}
+
+/// `text.setTextOnPathMode` — CS6 `dom.setTextOnPathMode(mode)`:
+/// "Determines how the selected text-on-a-path items are displayed."
+/// The wire value is `TAMi` (0 rotate, 1 vertical, 2 skew vertical,
+/// 3 skew horizontal); the mode words map at the UI layer.
+struct SetTextOnPathMode;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct SetTextOnPathModePayload {
+    /// `TAMi` 0..=3.
+    mode: i64,
+}
+
+impl TypedCommand for SetTextOnPathMode {
+    type Payload = SetTextOnPathModePayload;
+
+    fn name(&self) -> &'static str {
+        "text.setTextOnPathMode"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "text.setTextOnPathMode";
+        if !(0..=3).contains(&payload.mode) {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: format!("mode {} outside 0..3", payload.mode),
+            });
+        }
+        on_path_selection_walk(document, NAME, &mut |on_path| {
+            if on_path.alignment == Some(payload.mode) {
+                return false;
+            }
+            on_path.alignment = Some(payload.mode);
+            true
+        })
+    }
+}
+
+/// `text.setTextOnPathOffset` — CS6 `dom.setTextOnPathOffset(offset)`:
+/// "Sets the offset value between the items in the selected
+/// text-on-a-path" — `CHOf`, pixels along the rail where the text
+/// starts. Negative offsets drop leading glyphs off the rail end.
+struct SetTextOnPathOffset;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct SetTextOnPathOffsetPayload {
+    /// `CHOf` in pixels; may be negative.
+    offset: f64,
+}
+
+impl TypedCommand for SetTextOnPathOffset {
+    type Payload = SetTextOnPathOffsetPayload;
+
+    fn name(&self) -> &'static str {
+        "text.setTextOnPathOffset"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "text.setTextOnPathOffset";
+        if !payload.offset.is_finite() {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: "offset must be finite".to_owned(),
+            });
+        }
+        on_path_selection_walk(document, NAME, &mut |on_path| {
+            if on_path.offset == payload.offset {
+                return false;
+            }
+            on_path.offset = payload.offset;
+            true
+        })
+    }
+}
+
+/// `text.reversePathTextDirection` — CS6
+/// `dom.reversePathTextDirection()`: "For all text-on-a-path items in
+/// the selection, it reverses the direction of the text along the
+/// path." The rail runs in contour order, so reversal rewrites the
+/// guide geometry: each contour's points reverse and each point's
+/// handles swap (incoming becomes outgoing), which preserves the
+/// curve exactly while flipping the travel direction. The `CHOf`
+/// offset is left alone — CS6 documents no compensation, and the
+/// reversed rail's start is where the text now begins.
+struct ReversePathTextDirection;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct ReversePathTextDirectionPayload {}
+
+impl TypedCommand for ReversePathTextDirection {
+    type Payload = ReversePathTextDirectionPayload;
+
+    fn name(&self) -> &'static str {
+        "text.reversePathTextDirection"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        _payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "text.reversePathTextDirection";
+        on_path_selection_walk(document, NAME, &mut |on_path| {
+            if on_path.path.is_empty() {
+                return false;
+            }
+            for contour in &mut on_path.path {
+                contour.points.reverse();
+                for point in &mut contour.points {
+                    std::mem::swap(&mut point.primary, &mut point.secondary);
+                }
+            }
+            true
+        })
+    }
+}
+
 /// `text.convertToPaths` — CS6 `dom.convertToPaths()`: "Converts the
 /// selected text items into editable paths." Each selected text object
 /// becomes a path in place (same registry id, same z-position): the
@@ -972,6 +1151,7 @@ fn fit_frame(
 mod tests {
     #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
     use super::*;
+    use crate::command::Command;
     use crate::registry::CommandRegistry;
     use doc::{Cell, Contour, Layer, LayerList, Page, PageInfo, PathObject, PathPoint};
     use serde_json::json;
@@ -1792,5 +1972,155 @@ mod tests {
             .unwrap_err();
         assert!(matches!(error, EngineError::InvalidState { .. }));
         assert_eq!(serde_json::to_vec(&document).unwrap(), emptied);
+    }
+
+    #[test]
+    fn on_path_setters_write_the_rail_and_undo_is_exact() {
+        let mut document = document();
+        let (_, id) = create(&mut document, "rail");
+        registry()
+            .execute(
+                &mut document,
+                "text.attachPath",
+                json!({ "id": id, "path": guide_json(), "alignment": 0, "offset": 0.0 }),
+            )
+            .unwrap();
+        document.object_selection = vec![id];
+        let mode = SetTextOnPathMode
+            .apply_json(&mut document, json!({ "mode": 2 }))
+            .unwrap();
+        assert_eq!(
+            text_object(&document, id)
+                .on_path
+                .as_ref()
+                .unwrap()
+                .alignment,
+            Some(2)
+        );
+        mode.apply_inverse(&mut document).unwrap();
+        assert_eq!(
+            text_object(&document, id)
+                .on_path
+                .as_ref()
+                .unwrap()
+                .alignment,
+            Some(0)
+        );
+
+        let offset = SetTextOnPathOffset
+            .apply_json(&mut document, json!({ "offset": 12.5 }))
+            .unwrap();
+        assert_eq!(
+            text_object(&document, id).on_path.as_ref().unwrap().offset,
+            12.5
+        );
+        offset.apply_inverse(&mut document).unwrap();
+        assert_eq!(
+            text_object(&document, id).on_path.as_ref().unwrap().offset,
+            0.0
+        );
+
+        // Re-applying the current state is the no-op.
+        document.object_selection = vec![id];
+        assert!(matches!(
+            SetTextOnPathOffset
+                .apply_json(&mut document, json!({ "offset": 0.0 }))
+                .unwrap(),
+            Delta::Noop
+        ));
+    }
+
+    #[test]
+    fn reverse_direction_flips_the_rail_and_preserves_the_curve() {
+        let mut document = document();
+        let (_, id) = create(&mut document, "rail");
+        registry()
+            .execute(
+                &mut document,
+                "text.attachPath",
+                json!({ "id": id, "path": guide_json(), "alignment": 0, "offset": 0.0 }),
+            )
+            .unwrap();
+        document.object_selection = vec![id];
+        let before = serde_json::to_vec(&document).unwrap();
+        let delta = ReversePathTextDirection
+            .apply_json(&mut document, json!({}))
+            .unwrap();
+
+        let guide = text_object(&document, id).on_path.as_ref().unwrap();
+        let points = &guide.path[0].points;
+        assert_eq!(points.len(), 3);
+        // Anchors read tail-first; handles swapped (the outgoing
+        // handle of the old first point is now the incoming one).
+        assert_eq!(points[0].anchor, Point::new(30.0, 60.0));
+        assert_eq!(points[1].anchor, Point::new(30.0, 40.0));
+        assert_eq!(points[2].anchor, Point::new(10.0, 40.0));
+        // Old p1's outgoing handle becomes the incoming one; old p0's
+        // incoming handle becomes the outgoing one.
+        assert_eq!(points[1].primary, None);
+        assert_eq!(
+            points[1].secondary.as_ref().map(|p| (p.x, p.y)),
+            Some((22.0, 40.0))
+        );
+        assert_eq!(
+            points[2].primary.as_ref().map(|p| (p.x, p.y)),
+            Some((18.0, 40.0))
+        );
+        assert_eq!(points[2].secondary, None);
+
+        delta.apply_inverse(&mut document).unwrap();
+        assert_eq!(
+            serde_json::to_vec(&document).unwrap(),
+            before,
+            "undo is byte-exact"
+        );
+    }
+
+    #[test]
+    fn on_path_setter_gates() {
+        let mut document = document();
+        let (_, id) = create(&mut document, "rail");
+
+        // Empty selection refuses before anything else.
+        let error = SetTextOnPathMode
+            .apply_json(&mut document, json!({ "mode": 1 }))
+            .unwrap_err();
+        assert!(error.to_string().contains("nothing is selected"));
+
+        document.object_selection = vec![id];
+
+        // A text item with no guide skips: the walk is the no-op.
+        let before = serde_json::to_vec(&document).unwrap();
+        assert!(matches!(
+            ReversePathTextDirection
+                .apply_json(&mut document, json!({}))
+                .unwrap(),
+            Delta::Noop
+        ));
+        assert_eq!(serde_json::to_vec(&document).unwrap(), before);
+
+        registry()
+            .execute(
+                &mut document,
+                "text.attachPath",
+                json!({ "id": id, "path": guide_json() }),
+            )
+            .unwrap();
+
+        // Out-of-range mode refuses.
+        let error = SetTextOnPathMode
+            .apply_json(&mut document, json!({ "mode": 7 }))
+            .unwrap_err();
+        assert!(error.to_string().contains("outside 0..3"));
+
+        // Non-finite offsets cannot survive JSON (null fails decode
+        // first); the finite gate is exercised directly.
+        let error = SetTextOnPathOffset
+            .apply(
+                &mut document,
+                &SetTextOnPathOffsetPayload { offset: f64::NAN },
+            )
+            .unwrap_err();
+        assert!(error.to_string().contains("offset must be finite"));
     }
 }
