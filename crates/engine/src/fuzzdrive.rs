@@ -636,6 +636,8 @@ pub const CALLS: &[&str] = &[
     "library.rename",
     "slice.create",
     "hotspot.create",
+    "slice.appendPoint",
+    "hotspot.appendPoint",
     "slice.setLink",
     "slice.setType",
     "slice.setBackground",
@@ -1991,6 +1993,19 @@ pub fn random_call(rng: &mut FuzzRng, document: &Document) -> (String, serde_jso
                 "alt": rng.chance(30).then(|| "alt".to_owned()),
             })
         }
+        // The point-append verbs are selection-driven; the fuzzer
+        // leaves the object selection to whatever earlier calls made,
+        // so arms land in both branches (append vs fresh polygon).
+        "slice.appendPoint" | "hotspot.appendPoint" => serde_json::json!({
+            "x": rng.below(64) as f64,
+            "y": rng.below(64) as f64,
+            "tolerance": if rng.chance(10) {
+                -(rng.below(5) as f64)
+            } else {
+                rng.below(12) as f64
+            },
+            "page": any_index(rng, pages),
+        }),
         "slice.setLink" => serde_json::json!({
             "id": any_id(rng),
             "link": rng.chance(70).then(|| format!("https://example.invalid/{}", rng.below(9))),

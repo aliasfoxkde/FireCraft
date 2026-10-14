@@ -710,10 +710,199 @@ impl TypedCommand for SetSliceData {
     }
 }
 
+/// `slice.appendPoint` / `hotspot.appendPoint` — CS6
+/// `dom.appendPointToSlice(pt, tolerance)` /
+/// `dom.appendPointToHotspot(pt, tolerance)` (the slice form is
+/// listed under deprecated arguments, but the verb remains): "Appends
+/// a point to the selected unclosed polygon [slice | hotspot]. If an
+/// unclosed polygon [slice | hotspot] is not selected, a new polygon
+/// [slice | hotspot] is created with the single point that passed
+/// in." The polyline closes once the new point lands within
+/// `tolerance` of its starting point.
+///
+/// Selection-driven, like the original: the scan walks
+/// [`Document::object_selection`] for the topmost polygon of the
+/// command's class whose outline is still open. Class is `TSLi`
+/// presence (decision 0017): a slice command matches slices only, a
+/// hotspot command matches hotspots only, and rect/ellipse shapes
+/// never count. The create branch needs a page — the engine has no
+/// active-page state, so it rides the payload (`page`, the
+/// `frame.add` precedent).
+struct AppendPointToSlice;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct AppendPointPayload {
+    /// The point to append, world coordinates.
+    x: f64,
+    y: f64,
+    /// Closing tolerance (>= 0) between the new point and the
+    /// polyline's starting point.
+    tolerance: f64,
+    /// Page the create branch starts a new object on.
+    page: usize,
+}
+
+impl TypedCommand for AppendPointToSlice {
+    type Payload = AppendPointPayload;
+
+    fn name(&self) -> &'static str {
+        "slice.appendPoint"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        append_point(document, self.name(), payload, true)
+    }
+}
+
+/// `hotspot.appendPoint` — the hotspot twin of `slice.appendPoint`.
+struct AppendPointToHotspot;
+
+impl TypedCommand for AppendPointToHotspot {
+    type Payload = AppendPointPayload;
+
+    fn name(&self) -> &'static str {
+        "hotspot.appendPoint"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        append_point(document, self.name(), payload, false)
+    }
+}
+
+/// The shared point-append state machine; `as_slice` selects the
+/// matched and created class (`TSLi` presence).
+fn append_point(
+    document: &mut Document,
+    name: &'static str,
+    payload: &AppendPointPayload,
+    as_slice: bool,
+) -> Result<Delta, EngineError> {
+    const SHAPE_POLYGON: i64 = 2;
+    if !payload.x.is_finite() || !payload.y.is_finite() {
+        return Err(EngineError::BadPayload {
+            name: name.to_owned(),
+            detail: "point is not finite".to_owned(),
+        });
+    }
+    if !payload.tolerance.is_finite() || payload.tolerance < 0.0 {
+        return Err(EngineError::BadPayload {
+            name: name.to_owned(),
+            detail: format!("tolerance {} is negative or not finite", payload.tolerance),
+        });
+    }
+    // The selected target: topmost matching polygon of the class with
+    // an open outline.
+    let target = document.object_selection.iter().rev().copied().find(|id| {
+        match document.registry.get(*id) {
+            Some(ObjectData::Slice(slice)) => {
+                slice.shape == SHAPE_POLYGON
+                    && slice.slice_type.is_some() == as_slice
+                    && slice.contours.last().is_some_and(|contour| !contour.closed)
+            }
+            _ => false,
+        }
+    });
+    if let Some(id) = target {
+        let Some(ObjectData::Slice(slice)) = document.registry.get_mut(id) else {
+            return Err(EngineError::InvalidState {
+                name: name.to_owned(),
+                detail: format!("object {} vanished mid-command", id.index()),
+            });
+        };
+        let before = slice.clone();
+        let Some(contour) = slice.contours.last_mut() else {
+            return Err(EngineError::InvalidState {
+                name: name.to_owned(),
+                detail: format!("polygon {} carries no outline", id.index()),
+            });
+        };
+        let start = contour.points[0].anchor;
+        contour.points.push(PathPoint {
+            anchor: geom::Point::new(payload.x, payload.y),
+            primary: None,
+            secondary: None,
+            is_curve: false,
+        });
+        contour.point_count += 1;
+        if ((payload.x - start.x).powi(2) + (payload.y - start.y).powi(2)).sqrt()
+            <= payload.tolerance
+        {
+            contour.closed = true;
+        }
+        slice.frame.x0 = slice.frame.x0.min(payload.x);
+        slice.frame.y0 = slice.frame.y0.min(payload.y);
+        slice.frame.x1 = slice.frame.x1.max(payload.x);
+        slice.frame.y1 = slice.frame.y1.max(payload.y);
+        return Ok(Delta::Object {
+            id,
+            inverse: ObjectInverse::Mutated {
+                object: Box::new(ObjectData::Slice(before)),
+            },
+        });
+    }
+    // No open polygon of the class selected: start a fresh one with
+    // the single point (an open one-point polyline — the in-progress
+    // marker the next append extends).
+    let (layer, layers_before) = ensure_web_layer(document, name, payload.page)?;
+    access::cell_mut(document, name, payload.page, layer, 0)?;
+    let object = ObjectData::Slice(SliceObject {
+        internal_name: None,
+        frame: geom::Rect::new(payload.x, payload.y, payload.x, payload.y),
+        shape: SHAPE_POLYGON,
+        fill_raw: 0,
+        name: None,
+        slice_type: if as_slice { Some(0) } else { None },
+        link: None,
+        alt: None,
+        label: None,
+        td_text: None,
+        contours: vec![Contour {
+            closed: false,
+            point_count: 1,
+            points: vec![PathPoint {
+                anchor: geom::Point::new(payload.x, payload.y),
+                primary: None,
+                secondary: None,
+                is_curve: false,
+            }],
+        }],
+        background: None,
+        behaviors: Vec::new(),
+        custom_data: std::collections::BTreeMap::new(),
+        export: None,
+    });
+    let id = document.registry.insert(object);
+    let placed = attach_cell(document, name, payload.page, layer, 0, id, None)?;
+    let mut deltas = Vec::new();
+    if let Some(layers) = layers_before {
+        deltas.push(Delta::Layers {
+            page: payload.page,
+            layers,
+        });
+    }
+    deltas.push(placed);
+    deltas.push(Delta::Object {
+        id,
+        inverse: ObjectInverse::Created,
+    });
+    Ok(Delta::Group(deltas))
+}
+
 /// Registers the web-layer commands.
 pub fn install(registry: &mut crate::registry::CommandRegistry) -> Result<(), EngineError> {
     registry.register(CreateSlice)?;
     registry.register(CreateHotspot)?;
+    registry.register(AppendPointToSlice)?;
+    registry.register(AppendPointToHotspot)?;
     registry.register(SetLink)?;
     registry.register(SetSliceType)?;
     registry.register(SetBackground)?;
@@ -1093,5 +1282,184 @@ mod tests {
             )
             .unwrap_err();
         assert!(matches!(err, EngineError::InvalidState { .. }));
+    }
+
+    /// Every slice/hotspot id, in registry order.
+    fn slice_ids(document: &Document) -> Vec<doc::ObjectId> {
+        document
+            .registry
+            .iter()
+            .filter(|(_, object)| matches!(object, ObjectData::Slice(_)))
+            .map(|(id, _)| id)
+            .collect()
+    }
+
+    #[test]
+    fn append_point_starts_a_polygon_and_closes_it() {
+        let (mut document, _) = testdoc::sample_document();
+        let registry = registry();
+        // Nothing selected: the verb starts a fresh polygon slice —
+        // an open one-point polyline.
+        let delta = registry
+            .execute(
+                &mut document,
+                "slice.appendPoint",
+                json!({"x": 0.0, "y": 0.0, "tolerance": 0.0, "page": 0}),
+            )
+            .unwrap();
+        let id = slice_ids(&document)[0];
+        let ObjectData::Slice(slice) = document.registry.get(id).unwrap() else {
+            panic!("expected a slice");
+        };
+        assert_eq!(slice.shape, 2);
+        assert_eq!(slice.slice_type, Some(0), "a slice, not a hotspot");
+        assert!(!slice.contours[0].closed);
+        assert_eq!(slice.contours[0].point_count, 1);
+
+        // Selected: subsequent appends extend the polyline...
+        document.object_selection = vec![id];
+        for point in [[10.0, 0.0], [10.0, 10.0], [0.0, 10.0]] {
+            registry
+                .execute(
+                    &mut document,
+                    "slice.appendPoint",
+                    json!({
+                        "x": point[0], "y": point[1],
+                        "tolerance": 0.0, "page": 0,
+                    }),
+                )
+                .unwrap();
+        }
+        let ObjectData::Slice(slice) = document.registry.get(id).unwrap() else {
+            panic!("expected a slice");
+        };
+        assert_eq!(slice.contours[0].point_count, 4, "start + three appends");
+        assert!(!slice.contours[0].closed);
+        assert_eq!(slice.frame, geom::Rect::new(0.0, 0.0, 10.0, 10.0));
+
+        // ...and landing on the start point closes it (tolerance 0 is
+        // an exact-match close).
+        let delta2 = registry
+            .execute(
+                &mut document,
+                "slice.appendPoint",
+                json!({"x": 0.0, "y": 0.0, "tolerance": 0.0, "page": 0}),
+            )
+            .unwrap();
+        let ObjectData::Slice(slice) = document.registry.get(id).unwrap() else {
+            panic!("expected a slice");
+        };
+        assert!(slice.contours[0].closed, "within tolerance of the start");
+        // ...but the point still lands (5 anchors).
+        assert_eq!(slice.contours[0].point_count, 5);
+
+        // Undo peels back to the fresh polygon, then to no slice.
+        delta2.apply_inverse(&mut document).unwrap();
+        let ObjectData::Slice(slice) = document.registry.get(id).unwrap() else {
+            panic!("expected a slice");
+        };
+        assert!(!slice.contours[0].closed);
+        assert_eq!(slice.contours[0].point_count, 4);
+        delta.apply_inverse(&mut document).unwrap();
+        assert!(slice_ids(&document).is_empty(), "undo removes the slice");
+    }
+
+    #[test]
+    fn append_point_honors_class_and_shape() {
+        let (mut document, _) = testdoc::sample_document();
+        let registry = registry();
+        // A rectangle slice cannot take points; a selected rect slice
+        // is invisible to the verb, which starts a new polygon.
+        registry
+            .execute(
+                &mut document,
+                "slice.create",
+                json!({
+                    "shape": "rect", "x": 0.0, "y": 0.0,
+                    "width": 40.0, "height": 30.0,
+                    "points": null, "page": 0,
+                    "name": null, "link": null, "alt": null,
+                }),
+            )
+            .unwrap();
+        let rect_id = slice_ids(&document)[0];
+        document.object_selection = vec![rect_id];
+        registry
+            .execute(
+                &mut document,
+                "slice.appendPoint",
+                json!({"x": 5.0, "y": 5.0, "tolerance": 0.0, "page": 0}),
+            )
+            .unwrap();
+        let ids = slice_ids(&document);
+        assert_eq!(ids.len(), 2, "a fresh polygon, not the rect");
+        let ObjectData::Slice(rect) = document.registry.get(rect_id).unwrap() else {
+            panic!("expected a slice");
+        };
+        assert!(
+            rect.contours.iter().all(|contour| contour.point_count == 0),
+            "the rect is untouched (it carries one empty contour)"
+        );
+        let ObjectData::Slice(fresh) = document.registry.get(ids[1]).unwrap() else {
+            panic!("expected a slice");
+        };
+        assert_eq!(fresh.slice_type, Some(0));
+
+        // Class matters too: a selected open hotspot is invisible to
+        // the slice verb. Select the fresh slice's twin by making it a
+        // hotspot first.
+        registry
+            .execute(
+                &mut document,
+                "slice.setType",
+                json!({"id": ids[1], "slice_type": null}),
+            )
+            .unwrap();
+        document.object_selection = vec![ids[1]];
+        registry
+            .execute(
+                &mut document,
+                "slice.appendPoint",
+                json!({"x": 6.0, "y": 6.0, "tolerance": 0.0, "page": 0}),
+            )
+            .unwrap();
+        assert_eq!(slice_ids(&document).len(), 3, "class mismatch -> create");
+        // The hotspot verb matches the open hotspot.
+        document.object_selection = vec![ids[1]];
+        registry
+            .execute(
+                &mut document,
+                "hotspot.appendPoint",
+                json!({"x": 7.0, "y": 7.0, "tolerance": 0.0, "page": 0}),
+            )
+            .unwrap();
+        let count = slice_ids(&document).len();
+        assert_eq!(count, 3, "the hotspot extended in place");
+        let ObjectData::Slice(hotspot) = document.registry.get(ids[1]).unwrap() else {
+            panic!("expected a slice");
+        };
+        assert_eq!(hotspot.contours[0].point_count, 2, "one append landed");
+        assert_eq!(hotspot.slice_type, None, "still a hotspot");
+    }
+
+    #[test]
+    fn append_point_refusals_leave_the_document_untouched() {
+        let (mut document, _) = testdoc::sample_document();
+        let registry = registry();
+        let before = serde_json::to_vec(&document).unwrap();
+        for payload in [
+            json!({"x": 0.0, "y": 0.0, "tolerance": -1.0, "page": 0}),
+            json!({"x": 0.0, "y": null, "tolerance": 1.0, "page": 0}),
+        ] {
+            let err = registry
+                .execute(&mut document, "slice.appendPoint", payload)
+                .unwrap_err();
+            assert!(matches!(err, EngineError::BadPayload { .. }));
+            assert_eq!(
+                serde_json::to_vec(&document).unwrap(),
+                before,
+                "a refused append must leave the document untouched"
+            );
+        }
     }
 }

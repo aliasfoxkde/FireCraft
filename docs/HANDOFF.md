@@ -13,11 +13,11 @@
 
 - **Ship state:** v0.1.0 released, repo public. Roadmap M0–M15 all
   closed. 153+ commits, CI green on `25fedbc` (7/7 jobs).
-- **Engine registry:** 165 commands, pinned equal to the fuzz call
+- **Engine registry:** 167 commands, pinned equal to the fuzz call
   table by `the_call_table_covers_the_catalog`.
-- **CS6 DOM verb-surface parity:** **189 C / 45 P / 39 M / 83 N**
+- **CS6 DOM verb-surface parity:** **191 C / 45 P / 37 M / 83 N**
   (`docs/planning/generated/dom-parity.md`, regenerate per §5 below).
-- **Active campaign:** close the 39 remaining M (missing) verbs in
+- **Active campaign:** close the 37 remaining M (missing) verbs in
   family batches — one decision doc + one command batch per family,
   exactly as #87–#93 did. The plan is §4 below.
 - **Clean-room invariants (never violate):** `source/` is Adobe's
@@ -34,7 +34,7 @@
 | `AGENTS.md` | Operating manual: commands, gates, commit rules, day-to-day method |
 | `docs/PLANNING.md` | Master plan: format spec (§6), architecture (§7), method |
 | `docs/planning/firecraft/` | `ROADMAP.md` + tickets M0–M15 (all closed; reference for how tickets are written) |
-| `docs/decisions/` | Decision records 0001–0028 — **write one per family/batch** |
+| `docs/decisions/` | Decision records 0001–0029 — **write one per family/batch** |
 | `docs/planning/generated/` | `parity.md`, `scorecard.md` (xtask-owned) + `dom-parity.md` (generator-owned, see §5) |
 | `docs/research/fireworks-png-nodes.md` | The node dictionary — the format Rosetta stone (observational; corpus wins on conflict) |
 | `log/devlog.md` | Detailed session log (gitignored) — **append an entry to close every task** |
@@ -191,6 +191,12 @@ are recorded in the decision doc.
   9-slice work (decision 0014 territory).
 
 ### Phase 8 — Misc singles (independent; any order)
+- **8.2 — DONE (decision 0029).** `slice.appendPoint` /
+  `hotspot.appendPoint` landed 2026-10-14: CS6's selection-driven
+  point-append state machine (append to the selected open polygon of
+  the command's class, else start a fresh one on the Web Layer;
+  tolerance closes the polyline). The closing point itself still
+  lands; rect/ellipse selections fall through to the create branch.
 - **8.1 Place-image trio**: `addNewImage` / `…ViaCopy` / `…ViaCut` —
   `io::raster::attach_image` is the import path; the command wraps it
   with placement + registry insert. ViaCopy/ViaCut differ in clipboard

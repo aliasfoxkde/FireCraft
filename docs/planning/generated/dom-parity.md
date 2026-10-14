@@ -14,17 +14,17 @@ enforced == the fuzz call table).
 
 | class | meaning | count (of 356 dom verbs) |
 |---|---|---|
-| C | carried: a registry command implements the mutation | 189 |
+| C | carried: a registry command implements the mutation | 191 |
 | P | partial: carried with a recorded model limitation | 45 |
-| M | missing: no command and no decision — work items | 39 |
+| M | missing: no command and no decision — work items | 37 |
 | N | not applicable: non-document surface (accessor/UI/session/clipboard/export/OS) | 83 |
 
-Document-mutation coverage: **234 of 273** carried-or-partial
-(189 carried, 45 partial, 39 missing).
+Document-mutation coverage: **236 of 273** carried-or-partial
+(191 carried, 45 partial, 37 missing).
 
 ### Gap families (the Missing table, grouped)
 
-The 39 missing verbs collapse into six families, largest first —
+The 37 missing verbs collapse into six families, largest first —
 each family is one design decision plus a command batch:
 
 1. **Object transforms** (2 verbs remain): rotateDocument (canvas
@@ -81,7 +81,9 @@ each family is one design decision plus a command batch:
 | `addNewText` | C | text.createText |  |
 | `adjustFontSize` | C | text.setAttrs |  |
 | `align` | C | object.align |  |
+| `appendPointToHotspot` | C | hotspot.appendPoint | selection-driven polyline append with closing tolerance (decision 0029) |
 | `appendPointToPath` | C | path.redrawPath | geometry rewrite carries point add |
+| `appendPointToSlice` | C | slice.appendPoint | same state machine, slice class (decision 0029) |
 | `appendPointtoPath` | C | path.redrawPath | geometry rewrite carries point add |
 | `applyCurrentFill` | C | path.setFill |  |
 | `applyEffects` | C | filter.add |  |
@@ -307,8 +309,6 @@ each family is one design decision plus a command batch:
 | `addNewImage` | M | - | no engine place-image command; io::raster::attach_image is the import-side path (SVG/raster import), app_cli carries file placement |
 | `addNewImageViaCopy` | M | - | same gap as addNewImage |
 | `addNewImageViaCut` | M | - | same gap as addNewImage |
-| `appendPointToHotspot` | M | - | no geometry-append for web objects (recreate via hotspot.create) |
-| `appendPointToSlice` | M | - | same gap |
 | `clipPasteAsMask` | M | - | clipboard op (the mask model itself landed via mask.add) |
 | `clipPasteFromChannelToChannel` | M | - | pixel channel copy - bitmap domain, no command |
 | `clipPasteInside` | M | - | paste-inside = clipboard op (mask model landed) |
