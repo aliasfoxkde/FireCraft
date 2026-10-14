@@ -14,13 +14,13 @@ enforced == the fuzz call table).
 
 | class | meaning | count (of 356 dom verbs) |
 |---|---|---|
-| C | carried: a registry command implements the mutation | 263 |
-| P | partial: carried with a recorded model limitation | 8 |
+| C | carried: a registry command implements the mutation | 266 |
+| P | partial: carried with a recorded model limitation | 5 |
 | M | missing: no command and no decision — work items | 0 |
 | N | not applicable: non-document surface (accessor/UI/session/clipboard/export/OS) | 85 |
 
 Document-mutation coverage: **271 of 271** carried-or-partial
-(263 carried, 8 partial, 0 missing).
+(266 carried, 5 partial, 0 missing).
 
 ### Gap families (the Missing table, grouped)
 
@@ -275,6 +275,9 @@ partial rows and the recorded debts in docs/HANDOFF.md Phase 9.
 | `setTextAntiAliasing` | C | text.setAttrs |  |
 | `setTextAutoKern` | C | text.setAttrs |  |
 | `setTextCharSpacing` | C | text.setAttrs |  |
+| `setTextCustomAntiAliasOverSample` | C | text.setTextCustomAntiAliasOverSample | decision 0052 |
+| `setTextCustomAntiAliasSharpness` | C | text.setTextCustomAntiAliasSharpness | decision 0052 |
+| `setTextCustomAntiAliasStrength` | C | text.setTextCustomAntiAliasStrength | decision 0052 |
 | `setTextFlow` | C | text.setAttrs |  |
 | `setTextHorizontalScale` | C | text.setAttrs |  |
 | `setTextLeading` | C | text.setAttrs |  |
@@ -307,9 +310,6 @@ partial rows and the recorded debts in docs/HANDOFF.md Phase 9.
 | `setAnimInstanceStartFrame` | P | symbol.setParam | FW4 dropped the start-frame field from the format; refuses pointing at instance placement (the documented FW4 substitute) |
 | `setFillNColorNTexture` | P | path.setFillColor | texture component of the numbered form (texture_blend rides the fill model, no command surface) |
 | `setSliceAutonaming` | P | slice.setData | no wire node for the toggle - FILs carries the naming label; the flag is UI state |
-| `setTextCustomAntiAliasOverSample` | P | text.setAttrs | custom-AA tuning is renderer-side |
-| `setTextCustomAntiAliasSharpness` | P | text.setAttrs | renderer-side |
-| `setTextCustomAntiAliasStrength` | P | text.setAttrs | renderer-side |
 
 ## Missing (M) — work items
 

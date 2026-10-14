@@ -10,6 +10,7 @@ Current version: **0.1.0**.
 
 ### Features
 
+- **text**: multi-run model and markup verbs (55de409)
 - **text**: paragraph attribute setter trio (ab9e1fb)
 - **bitmap**: pixel-mask move and adjust commands (d4f6b3d)
 - **text**: on-path mode/offset/reverse commands (a0304d4)

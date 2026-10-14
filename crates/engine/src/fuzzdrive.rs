@@ -404,6 +404,9 @@ fn random_text(rng: &mut FuzzRng) -> ObjectData {
         flow: rng.chance(2).then(|| rng.below(4) as i64),
         on_path: None,
         anti_alias: rng.chance(2).then(|| rng.below(5) as i64),
+        anti_alias_sharpness: None,
+        anti_alias_strength: None,
+        anti_alias_oversample: None,
         auto_enlarge: rng.chance(2).then(|| rng.chance(2)),
         auto_kern: rng.chance(2).then(|| rng.chance(2)),
         name: None,
@@ -659,6 +662,9 @@ pub const CALLS: &[&str] = &[
     "text.removeCharacterMarkup",
     "text.applyFontMarkup",
     "text.removeFontMarkup",
+    "text.setTextCustomAntiAliasOverSample",
+    "text.setTextCustomAntiAliasSharpness",
+    "text.setTextCustomAntiAliasStrength",
     "document.setDocumentCanvasSizeToDocumentExtents",
     "document.setDocumentCanvasSizeToSelection",
     "document.deleteAllInDocument",
@@ -2179,6 +2185,20 @@ pub fn random_call(rng: &mut FuzzRng, document: &Document) -> (String, serde_jso
         "text.removeFontMarkup" => serde_json::json!({
             "id": any_id(rng),
             "font_attribute": rng.pick(&["size", "color", "face", "weight"]).copied(),
+        }),
+        // Custom anti-alias dials: values cross the gates (oversample
+        // set {4, 8, 16}; dials 0..=255).
+        "text.setTextCustomAntiAliasOverSample" => serde_json::json!({
+            "id": any_id(rng),
+            "over_sample": rng.pick(&[4i64, 8, 16, 0, 5, 32]).copied().unwrap_or(4),
+        }),
+        "text.setTextCustomAntiAliasSharpness" => serde_json::json!({
+            "id": any_id(rng),
+            "sharpness": rng.below(300) as i64 - 20,
+        }),
+        "text.setTextCustomAntiAliasStrength" => serde_json::json!({
+            "id": any_id(rng),
+            "strength": rng.below(300) as i64 - 20,
         }),
         // Renames wander over categories and names so most calls miss
         // (the no-op); hits rename every matching effect on whatever

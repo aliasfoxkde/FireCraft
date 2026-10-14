@@ -1821,6 +1821,7 @@ impl Reader {
     fn read_text(&mut self, children: &[Node], path: &str) -> Result<ObjectData, MapError> {
         let (mut left, mut top, mut right, mut bottom) = (None, None, None, None);
         let (mut flow, mut anti_alias, mut auto_enlarge, mut auto_kern) = (None, None, None, None);
+        let (mut sharpness, mut strength, mut oversample) = (None, None, None);
         let (mut locked, mut visible, mut opacity, mut blend, mut name) =
             (None, None, None, None, None);
         let mut style: Option<TextStyle> = None;
@@ -1849,6 +1850,9 @@ impl Reader {
                     }
                 }
                 b"TAAi" => self.slot_i64(child, path, i, &mut anti_alias)?,
+                b"TA1i" => self.slot_i64(child, path, i, &mut sharpness)?,
+                b"TA2i" => self.slot_i64(child, path, i, &mut strength)?,
+                b"TOSi" => self.slot_i64(child, path, i, &mut oversample)?,
                 b"ATEb" => self.slot_bool(child, path, i, &mut auto_enlarge)?,
                 b"ATKb" => self.slot_bool(child, path, i, &mut auto_kern)?,
                 b"LCKb" => self.slot_bool(child, path, i, &mut locked)?,
@@ -1908,6 +1912,9 @@ impl Reader {
             flow,
             on_path,
             anti_alias,
+            anti_alias_sharpness: sharpness,
+            anti_alias_strength: strength,
+            anti_alias_oversample: oversample,
             auto_enlarge,
             auto_kern,
             name,

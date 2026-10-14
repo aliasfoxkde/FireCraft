@@ -1085,6 +1085,12 @@ pub struct TextObject {
     pub on_path: Option<TextOnPath>,
     /// `TAAi` — anti-alias preset (0 none/smooth .. 3 system, 4 custom).
     pub anti_alias: Option<i64>,
+    /// `TA1i` — custom anti-alias sharpness, 0..=255 (MX 2004).
+    pub anti_alias_sharpness: Option<i64>,
+    /// `TA2i` — custom anti-alias strength, 0..=255 (MX 2004).
+    pub anti_alias_strength: Option<i64>,
+    /// `TOSi` — custom anti-alias oversampling: 4, 8, or 16 (MX 2004).
+    pub anti_alias_oversample: Option<i64>,
     /// `ATEb` — auto-enlarge.
     pub auto_enlarge: Option<bool>,
     /// `ATKb` — auto-kern.
@@ -1116,6 +1122,9 @@ impl TextObject {
             flow: None,
             on_path: None,
             anti_alias: None,
+            anti_alias_sharpness: None,
+            anti_alias_strength: None,
+            anti_alias_oversample: None,
             auto_enlarge: None,
             auto_kern: None,
             name: None,

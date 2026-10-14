@@ -30,6 +30,9 @@ pub(crate) fn install(registry: &mut CommandRegistry) -> Result<(), EngineError>
     registry.register(RemoveCharacterMarkup)?;
     registry.register(ApplyFontMarkup)?;
     registry.register(RemoveFontMarkup)?;
+    registry.register(SetTextCustomAntiAliasOverSample)?;
+    registry.register(SetTextCustomAntiAliasSharpness)?;
+    registry.register(SetTextCustomAntiAliasStrength)?;
     registry.register(SetFont)?;
     registry.register(AttachPath)?;
     registry.register(DetachPath)?;
@@ -1024,6 +1027,103 @@ impl TypedCommand for SetTextRuns {
         })
     }
 }
+
+/// `text.setTextCustomAntiAliasOverSample` — the custom-mode
+/// oversampling (MX 2004): only 4, 8, or 16.
+struct SetTextCustomAntiAliasOverSample;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct SetTextCustomAntiAliasOverSamplePayload {
+    /// Target text object.
+    id: doc::ObjectId,
+    /// `TOSi` — 4, 8, or 16.
+    over_sample: i64,
+}
+
+impl TypedCommand for SetTextCustomAntiAliasOverSample {
+    type Payload = SetTextCustomAntiAliasOverSamplePayload;
+
+    fn name(&self) -> &'static str {
+        "text.setTextCustomAntiAliasOverSample"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "text.setTextCustomAntiAliasOverSample";
+        if !matches!(payload.over_sample, 4 | 8 | 16) {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: format!("overSample {} outside {{4, 8, 16}}", payload.over_sample),
+            });
+        }
+        mutate_text(document, NAME, payload.id, |object| {
+            object.anti_alias_oversample = Some(payload.over_sample);
+        })
+    }
+}
+
+/// One macro for the two 0..=255 custom anti-alias dials (MX 2004):
+/// sharpness (`TA1i`) and strength (`TA2i`).
+macro_rules! aa_dial_setter {
+    ($verb:literal, $struct_name:ident, $payload:ident, $field:ident, $style_field:ident, $arg:literal) => {
+        #[doc = concat!("`", $verb, "` — write one custom anti-alias dial.")]
+        struct $struct_name;
+
+        #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+        #[serde(deny_unknown_fields)]
+        struct $payload {
+            /// Target text object.
+            id: doc::ObjectId,
+            #[doc = concat!("`", $arg, "` — 0..=255.")]
+            $field: i64,
+        }
+
+        impl TypedCommand for $struct_name {
+            type Payload = $payload;
+
+            fn name(&self) -> &'static str {
+                $verb
+            }
+
+            fn apply(
+                &self,
+                document: &mut Document,
+                payload: &Self::Payload,
+            ) -> Result<Delta, EngineError> {
+                if !(0..=255).contains(&payload.$field) {
+                    return Err(EngineError::InvalidState {
+                        name: $verb.to_owned(),
+                        detail: format!("{} outside 0..=255", $arg),
+                    });
+                }
+                mutate_text(document, $verb, payload.id, |object| {
+                    object.$style_field = Some(payload.$field);
+                })
+            }
+        }
+    };
+}
+
+aa_dial_setter!(
+    "text.setTextCustomAntiAliasSharpness",
+    SetTextCustomAntiAliasSharpness,
+    SetTextCustomAntiAliasSharpnessPayload,
+    sharpness,
+    anti_alias_sharpness,
+    "sharpness"
+);
+aa_dial_setter!(
+    "text.setTextCustomAntiAliasStrength",
+    SetTextCustomAntiAliasStrength,
+    SetTextCustomAntiAliasStrengthPayload,
+    strength,
+    anti_alias_strength,
+    "strength"
+);
 
 /// `text.setFont` — set the family name (`FONs`). The name round-trips
 /// verbatim; unknown families render in the bundled sans.
@@ -2059,6 +2159,73 @@ mod tests {
         let object = text_object(&document, id);
         assert!(object.style.is_none());
         assert_eq!(object.anti_alias, None);
+    }
+
+    #[test]
+    fn custom_aa_dials_write_and_gate() {
+        let mut document = document();
+        let (_, id) = create(&mut document, "custom aa");
+        let registry = registry();
+        for (verb, field, value) in [
+            ("text.setTextCustomAntiAliasSharpness", "sharpness", 200i64),
+            ("text.setTextCustomAntiAliasStrength", "strength", 64),
+            ("text.setTextCustomAntiAliasOverSample", "over_sample", 16),
+        ] {
+            let delta = registry
+                .execute(&mut document, verb, json!({ "id": id, field: value }))
+                .unwrap();
+            let object = text_object(&document, id);
+            assert_eq!(
+                object.anti_alias_sharpness,
+                if field == "sharpness" {
+                    Some(200)
+                } else {
+                    None
+                },
+                "{verb}"
+            );
+            assert_eq!(
+                object.anti_alias_strength,
+                if field == "strength" { Some(64) } else { None },
+                "{verb}"
+            );
+            assert_eq!(
+                object.anti_alias_oversample,
+                if field == "over_sample" {
+                    Some(16)
+                } else {
+                    None
+                },
+                "{verb}"
+            );
+            delta.apply_inverse(&mut document).unwrap();
+        }
+        // Gates: dials clamp nothing — out-of-range refuses; the
+        // oversample set is exactly {4, 8, 16}.
+        let mut refused = |payload: serde_json::Value, label: &str| {
+            let error = registry
+                .execute(
+                    &mut document,
+                    "text.setTextCustomAntiAliasSharpness",
+                    payload,
+                )
+                .unwrap_err();
+            assert!(matches!(error, EngineError::InvalidState { .. }), "{label}");
+        };
+        refused(json!({ "id": id, "sharpness": 256 }), "sharpness high");
+        refused(json!({ "id": id, "sharpness": -1 }), "sharpness low");
+        let error = registry
+            .execute(
+                &mut document,
+                "text.setTextCustomAntiAliasOverSample",
+                json!({ "id": id, "over_sample": 5 }),
+            )
+            .unwrap_err();
+        assert!(matches!(error, EngineError::InvalidState { .. }));
+        // Nothing mutated through any refusal.
+        let object = text_object(&document, id);
+        assert_eq!(object.anti_alias_sharpness, None);
+        assert_eq!(object.anti_alias_oversample, None);
     }
 
     #[test]

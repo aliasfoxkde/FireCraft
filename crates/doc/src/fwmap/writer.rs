@@ -1095,6 +1095,15 @@ impl Writer<'_> {
         if let Some(anti_alias) = object.anti_alias {
             mapped.push(n_i(*b"TAAi", anti_alias));
         }
+        if let Some(sharpness) = object.anti_alias_sharpness {
+            mapped.push(n_i(*b"TA1i", sharpness));
+        }
+        if let Some(strength) = object.anti_alias_strength {
+            mapped.push(n_i(*b"TA2i", strength));
+        }
+        if let Some(oversample) = object.anti_alias_oversample {
+            mapped.push(n_i(*b"TOSi", oversample));
+        }
         if let Some(auto_enlarge) = object.auto_enlarge {
             mapped.push(n_b(*b"ATEb", auto_enlarge));
         }

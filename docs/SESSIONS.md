@@ -566,3 +566,28 @@ Batch: `text.setTextRuns`, `text.applyCharacterMarkup`,
 - Registry 230→235. dom-parity: **263C/8P/0M/85N**, unresolved [].
   `xtask ci` all gates green locally; xtask also restamped the
   changelog (186 commits).
+
+## #123 — 2026-10-14 — custom anti-alias dials (decision 0052)
+
+Batch: `text.setTextCustomAntiAliasOverSample`,
+`text.setTextCustomAntiAliasSharpness`,
+`text.setTextCustomAntiAliasStrength` (8.18).
+
+- The wire already recorded the dials: `TA1i` (sharpness), `TA2i`
+  (strength), `TOSi` (oversample) sat in the reader's bag as
+  untyped leftovers. `TextObject` gained the three fields as
+  `Option<i64>`; the reader promotes them, the writer emits each
+  only when `Some`, right after `TAAi`. Files carrying the nodes
+  stop silently dropping them; marker-free files stay byte-exact.
+- Gates from the CS6 panel: overSample ∈ {4, 8, 16} (refuses
+  otherwise — a coerced value would write a node CS6's UI cannot
+  produce), sharpness/strength 0..=255 (8-bit sliders). One
+  `aa_dial_setter!` macro generates both dial setters; unset stays
+  unset (no defaults invented).
+- Tests: +1 engine (three verbs write+invert on a text object;
+  refuses 256/-1 sharpness and over_sample 5; asserts nothing
+  mutated on refusal). fuzzdrive: +3 CALLS + arms (oversample picks
+  in-set and gate-crossing values; dials range -20..=279).
+- Registry 235→238. dom-parity: **266C/5P/0M/85N**, unresolved [].
+  Gates: engine + doc suites green, clippy -D warnings, fmt,
+  256-seed CI-base fuzz sweep clean.
