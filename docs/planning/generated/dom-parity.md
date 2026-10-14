@@ -7,24 +7,24 @@ regeneration recipe in docs/PLANNING.md §5.4). The DOM is stable
 CS4→CS6; CS6 additions the text lacks (e.g. 9-slice guides) are
 covered by the CS6 `.jsf` scripts and appear here via their verbs.
 
-FireCraft side: the 148-command registry (`engine::catalog::ids()`,
+FireCraft side: the 150-command registry (`engine::catalog::ids()`,
 enforced == the fuzz call table).
 
 ## Coverage classes
 
 | class | meaning | count (of 356 dom verbs) |
 |---|---|---|
-| C | carried: a registry command implements the mutation | 172 |
+| C | carried: a registry command implements the mutation | 174 |
 | P | partial: carried with a recorded model limitation | 45 |
-| M | missing: no command and no decision — work items | 57 |
+| M | missing: no command and no decision — work items | 55 |
 | N | not applicable: non-document surface (accessor/UI/session/clipboard/export/OS) | 82 |
 
-Document-mutation coverage: **217 of 274** carried-or-partial
-(172 carried, 45 partial, 57 missing).
+Document-mutation coverage: **219 of 274** carried-or-partial
+(174 carried, 45 partial, 55 missing).
 
 ### Gap families (the Missing table, grouped)
 
-The 57 missing verbs collapse into six families, largest first —
+The 55 missing verbs collapse into six families, largest first —
 each family is one design decision plus a command batch:
 
 1. **Object transforms** (2 verbs remain): rotateDocument (canvas
@@ -180,7 +180,9 @@ each family is one design decision plus a command batch:
 | `selectFeather` | C | bitmap.feather |  |
 | `selectNone` | C | bitmap.selectNone |  |
 | `setBlendMode` | C | object.setBlend |  |
+| `setDocumentCanvasColor` | C | document.setCanvasColor | BGCi document-wide; scripting maps the color string to the raw (dec 0023) |
 | `setDocumentCanvasSize` | C | page.setCanvasSize |  |
+| `setDocumentResolution` | C | document.setResolution | RESf/RSUi document-wide, per-page copies kept in sync (dec 0023) |
 | `setElementLocked` | C | object.setLocked |  |
 | `setElementLockedByName` | C | object.setLocked | by-name resolution is an app lookup |
 | `setElementMaskMode` | C | mask.setMode | bidirectional: path rasterizes, image traces to path |
@@ -328,9 +330,7 @@ each family is one design decision plus a command batch:
 | `setButtonIncludeOverWhileDownState` | M | - | button symbol gap |
 | `setButtonOptions` | M | - | button symbol gap |
 | `setButtonShowDownOnLoad` | M | - | button symbol gap |
-| `setDocumentCanvasColor` | M | - | background_raw model carried (77f55af); no command sets it |
 | `setDocumentImageSize` | M | - | no resample command |
-| `setDocumentResolution` | M | - | resolution metadata unmodeled |
 | `setFillEdgeMode` | M | - | fill edge (anti-alias/hard) mode unmodeled |
 | `setGradientName` | M | - | gradient definitions carry no names in the model |
 | `setQuadrangle` | M | - | primitive param-edit gap |

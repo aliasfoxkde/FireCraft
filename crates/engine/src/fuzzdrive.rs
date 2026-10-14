@@ -674,6 +674,8 @@ pub const CALLS: &[&str] = &[
     "layer.setSharing",
     "layer.shareToPages",
     "layer.detachShared",
+    "document.setCanvasColor",
+    "document.setResolution",
 ];
 
 /// Builds a random call against `document`: a random catalog id and a
@@ -2069,6 +2071,13 @@ pub fn random_call(rng: &mut FuzzRng, document: &Document) -> (String, serde_jso
         "layer.detachShared" => serde_json::json!({
             "page": any_index(rng, pages),
             "layer": any_index(rng, 3),
+        }),
+        "document.setCanvasColor" => serde_json::json!({
+            "color_raw": rng.below(0x100_0000),
+        }),
+        "document.setResolution" => serde_json::json!({
+            "resolution": rng.below(2400) as f64 + 1.0,
+            "unit": if rng.chance(2) { "inch" } else { "cm" },
         }),
         other => {
             let _ = other;

@@ -9,6 +9,7 @@ pub(crate) mod autoshape;
 pub(crate) mod bitmap;
 pub(crate) mod cell;
 pub(crate) mod display;
+pub(crate) mod document;
 pub(crate) mod filter;
 pub(crate) mod layer;
 pub(crate) mod mask;
@@ -36,6 +37,7 @@ pub fn install(registry: &mut CommandRegistry) -> Result<(), EngineError> {
     cell::install(registry)?;
     layer::install(registry)?;
     page::install(registry)?;
+    document::install(registry)?;
     text::install(registry)?;
     symbol::install(registry)?;
     web::install(registry)?;
