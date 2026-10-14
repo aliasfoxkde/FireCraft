@@ -161,21 +161,78 @@ fn symbol_journal_replays_identically_through_the_cli() {
 
         // Surface-style session; every second step is forced to a
         // symbol or library call so the journal cannot dodge the
-        // definition wire path.
+        // definition wire path. Even steps draw until a symbol call
+        // LANDS — the journal only records applied calls, and which
+        // symbol calls a seed draws is RNG luck that shifts whenever
+        // the catalog grows (a name match alone once left seed 31
+        // with every drawn symbol call refused).
         let mut session = Session::with_registry(seed_document.clone(), registry());
+
+        // Seed deterministic symbol state first: a 1-definition,
+        // instance-less document has too thin a landable symbol surface
+        // for a fixed RNG stream to guarantee a landing — the generator
+        // deliberately over-draws symbol indices and injects junk
+        // fields for refusal coverage. One real conversion plus one
+        // placement make property edits, break-apart, and instance
+        // calls landable for any stream, and both seed calls join the
+        // journal as the definition wire-path legs.
+        let seed_id = session
+            .document()
+            .pages
+            .iter()
+            .flat_map(|page| page.layers.layers.iter())
+            .flat_map(|layer| layer.cells.iter())
+            .flat_map(|cell| cell.elements.iter())
+            .copied()
+            .next()
+            .expect("fixture document carries a cell element");
+        session
+            .apply(
+                "symbol.create",
+                serde_json::json!({
+                    "ids": [seed_id],
+                    "name": "seed symbol",
+                    "symbol_type": "graphic",
+                }),
+            )
+            .expect("seed symbol.create lands");
+        session
+            .apply(
+                "symbol.createInstance",
+                serde_json::json!({
+                    "symbol": 0,
+                    "page": 0,
+                    "layer": 0,
+                    "cell": 0,
+                    "index": null,
+                    "x": 10.0,
+                    "y": 10.0,
+                    "name": "seed instance",
+                }),
+            )
+            .expect("seed symbol.createInstance lands");
+
         let mut applied = 0;
         let mut symbol_applied = 0;
         for step in 0..30 {
+            let want_symbol = step % 2 == 0;
+            let mut drawn = 0;
             loop {
+                drawn += 1;
+                assert!(drawn <= 200, "no landable call in 200 draws");
                 let (name, payload) = random_call(&mut rng, session.document());
-                if (step % 2 == 0) == is_symbol(&name) {
-                    if session.apply(&name, payload).is_ok() {
-                        applied += 1;
-                        if is_symbol(&name) {
-                            symbol_applied += 1;
-                        }
+                if want_symbol != is_symbol(&name) {
+                    continue;
+                }
+                if session.apply(&name, payload).is_ok() {
+                    applied += 1;
+                    if want_symbol {
+                        symbol_applied += 1;
                     }
                     break;
+                }
+                if !want_symbol {
+                    break; // odd steps tolerate refusals: journal diversity
                 }
             }
         }
