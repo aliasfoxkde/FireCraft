@@ -17,7 +17,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use doc::{
     Cell, Document, ExportOptions, Layer, LayerList, NineSliceGuides, ObjectData, ObjectId,
-    SymbolDefinition, SymbolInstanceObject, SymbolType,
+    SymbolAnimation, SymbolDefinition, SymbolInstanceObject, SymbolType,
 };
 
 use crate::access;
@@ -55,6 +55,12 @@ pub(crate) fn install(registry: &mut CommandRegistry) -> Result<(), EngineError>
     registry.register(SetScript)?;
     registry.register(SetParam)?;
     registry.register(SetCustomData)?;
+    registry.register(SetAnimInstanceNumFrames)?;
+    registry.register(SetAnimInstanceLoopCount)?;
+    registry.register(SetAnimInstanceOffsetDist)?;
+    registry.register(SetAnimInstanceRotationAmount)?;
+    registry.register(SetAnimInstanceScaleAmount)?;
+    registry.register(SetAnimInstanceStartEndOpacity)?;
     registry.register(EditAttach)?;
     registry.register(EditDetach)?;
     registry.register(EditReorder)?;
@@ -1088,6 +1094,308 @@ impl TypedCommand for SetParam {
             inverse: ObjectInverse::Mutated {
                 object: Box::new(before),
             },
+        })
+    }
+}
+
+/// The animation verbs (`symbol.setAnimInstance*`) — one write per
+/// field of the `ANNi` family. Each walks the selection's symbol
+/// instances, handing the animation carrier to `edit` — materializing
+/// the carrier (the Objects-panel defaults: one frame, no shift,
+/// 100% scale, no rotation or opacity ramp) when the instance is
+/// plain. Non-instance members skip — the verbs address "the selected
+/// instances of multi-frame image symbols"; an empty selection
+/// refuses, and a selection without instances is a `Noop`. Payload
+/// validation happened in `apply`, before any capture.
+fn edit_animation_instances(
+    document: &mut Document,
+    name: &'static str,
+    edit: impl Fn(&mut SymbolAnimation),
+) -> Result<Delta, EngineError> {
+    if document.object_selection.is_empty() {
+        return Err(EngineError::InvalidState {
+            name: name.to_owned(),
+            detail: "nothing is selected".to_owned(),
+        });
+    }
+    let mut deltas = Vec::new();
+    for id in document.object_selection.clone() {
+        let ObjectData::SymbolInstance(_) = access::object(document, name, id)? else {
+            continue;
+        };
+        let Some(before) = document.registry.get(id).cloned() else {
+            continue; // the read above settled existence
+        };
+        let Some(ObjectData::SymbolInstance(instance)) = document.registry.get_mut(id) else {
+            continue; // the read above settled existence and kind
+        };
+        let animation = instance.animation.get_or_insert(SymbolAnimation {
+            frames: 1,
+            x_shift: 0.0,
+            y_shift: 0.0,
+            scaling: 100.0,
+            rotation: None,
+            start_opacity: None,
+            end_opacity: None,
+        });
+        edit(animation);
+        deltas.push(Delta::Object {
+            id,
+            inverse: ObjectInverse::Mutated {
+                object: Box::new(before),
+            },
+        });
+    }
+    if deltas.is_empty() {
+        Ok(Delta::Noop)
+    } else {
+        Ok(Delta::Group(deltas))
+    }
+}
+
+/// Guards the fields the dom documents as counts: a zero or negative
+/// frame/loop count animates nothing.
+fn positive_count(value: i64, field: &str, name: &'static str) -> Result<(), EngineError> {
+    if value < 1 {
+        return Err(EngineError::InvalidState {
+            name: name.to_owned(),
+            detail: format!("{field} {value} must be at least 1"),
+        });
+    }
+    Ok(())
+}
+
+/// `symbol.setAnimInstanceNumFrames` — CS6's
+/// `dom.setAnimInstanceNumFrames(numFrames)` (Fireworks 4): "the
+/// number of frames through which the symbol animates" — the `ANNi`
+/// anchor.
+struct SetAnimInstanceNumFrames;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct SetAnimInstanceNumFramesPayload {
+    /// Frames to generate.
+    frames: i64,
+}
+
+impl TypedCommand for SetAnimInstanceNumFrames {
+    type Payload = SetAnimInstanceNumFramesPayload;
+
+    fn name(&self) -> &'static str {
+        "symbol.setAnimInstanceNumFrames"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "symbol.setAnimInstanceNumFrames";
+        positive_count(payload.frames, "frames", NAME)?;
+        edit_animation_instances(document, NAME, |animation| {
+            animation.frames = payload.frames;
+        })
+    }
+}
+
+/// `symbol.setAnimInstanceLoopCount` — CS6's
+/// `dom.setAnimInstanceLoopCount(loopCount)` (Fireworks 3, deprecated
+/// in 4 "in favor of `dom.setAnimInstanceNumFrames`"): Adobe's own
+/// substitution is the mapping — the count writes `ANNi`.
+struct SetAnimInstanceLoopCount;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct SetAnimInstanceLoopCountPayload {
+    /// The loop count; the FW4 format folds it into the frame count.
+    loop_count: i64,
+}
+
+impl TypedCommand for SetAnimInstanceLoopCount {
+    type Payload = SetAnimInstanceLoopCountPayload;
+
+    fn name(&self) -> &'static str {
+        "symbol.setAnimInstanceLoopCount"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "symbol.setAnimInstanceLoopCount";
+        positive_count(payload.loop_count, "loop count", NAME)?;
+        edit_animation_instances(document, NAME, |animation| {
+            animation.frames = payload.loop_count;
+        })
+    }
+}
+
+/// `symbol.setAnimInstanceOffsetDist` — CS6's
+/// `dom.setAnimInstanceOffsetDist(offsetDistPt)`: "a point that
+/// specifies the distance the animation moves in pixels" — the
+/// `ANXf`/`ANYf` pair.
+struct SetAnimInstanceOffsetDist;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct OffsetPoint {
+    x: f64,
+    y: f64,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct SetAnimInstanceOffsetDistPayload {
+    /// Translation across the animation span.
+    offset: OffsetPoint,
+}
+
+impl TypedCommand for SetAnimInstanceOffsetDist {
+    type Payload = SetAnimInstanceOffsetDistPayload;
+
+    fn name(&self) -> &'static str {
+        "symbol.setAnimInstanceOffsetDist"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "symbol.setAnimInstanceOffsetDist";
+        if !payload.offset.x.is_finite() || !payload.offset.y.is_finite() {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: "the offset point must be finite".to_owned(),
+            });
+        }
+        edit_animation_instances(document, NAME, |animation| {
+            animation.x_shift = payload.offset.x;
+            animation.y_shift = payload.offset.y;
+        })
+    }
+}
+
+/// `symbol.setAnimInstanceRotationAmount` — CS6's
+/// `dom.setAnimInstanceRotationAmount(rotationAmount)`: clockwise
+/// degrees across the span ("720 does two complete clockwise
+/// rotations; negative rotates counter-clockwise"). The wire field
+/// `ANRi` is integral, so fractional degrees round (recorded
+/// substitution).
+struct SetAnimInstanceRotationAmount;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct SetAnimInstanceRotationAmountPayload {
+    /// Clockwise degrees across the span; negative is counter.
+    rotation: f64,
+}
+
+impl TypedCommand for SetAnimInstanceRotationAmount {
+    type Payload = SetAnimInstanceRotationAmountPayload;
+
+    fn name(&self) -> &'static str {
+        "symbol.setAnimInstanceRotationAmount"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "symbol.setAnimInstanceRotationAmount";
+        if !payload.rotation.is_finite() {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: "rotation must be finite".to_owned(),
+            });
+        }
+        let rounded = payload.rotation.round() as i64;
+        edit_animation_instances(document, NAME, |animation| {
+            animation.rotation = Some(rounded);
+        })
+    }
+}
+
+/// `symbol.setAnimInstanceScaleAmount` — CS6's
+/// `dom.setAnimInstanceScaleAmount(scaleAmount)`: "a positive
+/// floating-point value… pass 100 for no scaling" — `ASCf`.
+struct SetAnimInstanceScaleAmount;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct SetAnimInstanceScaleAmountPayload {
+    /// Percent-of-size at the span's end; 100 = no scaling.
+    scale: f64,
+}
+
+impl TypedCommand for SetAnimInstanceScaleAmount {
+    type Payload = SetAnimInstanceScaleAmountPayload;
+
+    fn name(&self) -> &'static str {
+        "symbol.setAnimInstanceScaleAmount"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "symbol.setAnimInstanceScaleAmount";
+        if !payload.scale.is_finite() || payload.scale <= 0.0 {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: format!("scale {} must be finite and positive", payload.scale),
+            });
+        }
+        edit_animation_instances(document, NAME, |animation| {
+            animation.scaling = payload.scale;
+        })
+    }
+}
+
+/// `symbol.setAnimInstanceStartEndOpacity` — CS6's
+/// `dom.setAnimInstanceStartEndOpacity(startOpacity, endOpacity)`:
+/// "float values between 0 and 100" — the `ASOi`/`AEOi` pair (the
+/// model stores per-mille like every opacity slot).
+struct SetAnimInstanceStartEndOpacity;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct SetAnimInstanceStartEndOpacityPayload {
+    /// Opacity at the span's start, 0–100.
+    start: f64,
+    /// Opacity at the span's end, 0–100.
+    end: f64,
+}
+
+impl TypedCommand for SetAnimInstanceStartEndOpacity {
+    type Payload = SetAnimInstanceStartEndOpacityPayload;
+
+    fn name(&self) -> &'static str {
+        "symbol.setAnimInstanceStartEndOpacity"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "symbol.setAnimInstanceStartEndOpacity";
+        for (field, value) in [("start", payload.start), ("end", payload.end)] {
+            if !value.is_finite() || !(0.0..=100.0).contains(&value) {
+                return Err(EngineError::InvalidState {
+                    name: NAME.to_owned(),
+                    detail: format!("{field} opacity {value} must be finite within 0..=100"),
+                });
+            }
+        }
+        let start = (payload.start * 10.0).round() as i64;
+        let end = (payload.end * 10.0).round() as i64;
+        edit_animation_instances(document, NAME, |animation| {
+            animation.start_opacity = Some(start);
+            animation.end_opacity = Some(end);
         })
     }
 }
@@ -3476,5 +3784,211 @@ mod tests {
             .unwrap_err();
         assert!(matches!(error, EngineError::InvalidState { .. }), "{error}");
         assert_eq!(serde_json::to_vec(&document).unwrap(), before);
+    }
+
+    /// Places a plain instance of a scratch definition and selects it.
+    fn placed_instance(document: &mut Document) -> ObjectId {
+        document.symbols.push(SymbolDefinition {
+            name: "dot".to_owned(),
+            symbol_number: 7,
+            origin: geom::Point::ZERO,
+            frame_count: 1,
+            layers: LayerList::default(),
+            background_raw: 0,
+            symbol_type: SymbolType::Graphic,
+            nine_slice: None,
+            auto_slice: Some(true),
+            include_down_state: Some(false),
+            show_down_on_load: Some(false),
+            include_over_while_down: Some(false),
+            op_code: None,
+        });
+        let registry = registry();
+        registry
+            .execute(
+                document,
+                "symbol.createInstance",
+                json!({
+                    "symbol": 7, "page": 0, "layer": 1, "cell": 1,
+                    "index": 0, "x": 0.0, "y": 0.0,
+                }),
+            )
+            .unwrap();
+        let (instance, _) = instance_of(document);
+        document.object_selection = vec![instance];
+        instance
+    }
+
+    fn animation_of(document: &Document, id: ObjectId) -> &SymbolAnimation {
+        match document.registry.get(id).unwrap() {
+            ObjectData::SymbolInstance(instance) => instance.animation.as_ref().unwrap(),
+            other => panic!("wrong object kind: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn anim_params_write_every_field_and_undo() {
+        let (mut document, _) = testdoc::sample_document();
+        let instance = placed_instance(&mut document);
+        // The plain instance carries no animation block until the
+        // first anim verb materializes it.
+        assert!(matches!(
+            document.registry.get(instance).unwrap(),
+            ObjectData::SymbolInstance(SymbolInstanceObject {
+                animation: None,
+                ..
+            })
+        ));
+        let original = serde_json::to_vec(&document).unwrap();
+        let registry = registry();
+        let mut deltas = Vec::new();
+        for (name, payload) in [
+            ("symbol.setAnimInstanceNumFrames", json!({ "frames": 12 })),
+            (
+                "symbol.setAnimInstanceOffsetDist",
+                json!({ "offset": {"x": 100.0, "y": 25.0} }),
+            ),
+            (
+                "symbol.setAnimInstanceRotationAmount",
+                json!({ "rotation": 720.5 }),
+            ),
+            (
+                "symbol.setAnimInstanceScaleAmount",
+                json!({ "scale": 200.0 }),
+            ),
+            (
+                "symbol.setAnimInstanceStartEndOpacity",
+                json!({ "start": 40.0, "end": 12.34 }),
+            ),
+            // The FW3 spelling lands on the same ANNi anchor as the
+            // FW4 verb it was deprecated in favor of.
+            (
+                "symbol.setAnimInstanceLoopCount",
+                json!({ "loop_count": 6 }),
+            ),
+        ] {
+            deltas.push(registry.execute(&mut document, name, payload).unwrap());
+        }
+        let animation = animation_of(&document, instance);
+        assert_eq!(animation.frames, 6);
+        assert_eq!(animation.x_shift, 100.0);
+        assert_eq!(animation.y_shift, 25.0);
+        // Fractional degrees round onto the integral ANRi field.
+        assert_eq!(animation.rotation, Some(721));
+        assert_eq!(animation.scaling, 200.0);
+        // Opacities are per-mille in the model.
+        assert_eq!(animation.start_opacity, Some(400));
+        assert_eq!(animation.end_opacity, Some(123));
+
+        for delta in deltas.into_iter().rev() {
+            delta.apply_inverse(&mut document).unwrap();
+        }
+        assert_eq!(serde_json::to_vec(&document).unwrap(), original);
+        assert!(matches!(
+            document.registry.get(instance).unwrap(),
+            ObjectData::SymbolInstance(SymbolInstanceObject {
+                animation: None,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn anim_params_refuse_garbage_and_touch_nothing() {
+        let (mut document, _) = testdoc::sample_document();
+        let _ = placed_instance(&mut document);
+        let original = serde_json::to_vec(&document).unwrap();
+        let registry = registry();
+        for (name, payload) in [
+            ("symbol.setAnimInstanceNumFrames", json!({ "frames": 0 })),
+            ("symbol.setAnimInstanceNumFrames", json!({ "frames": -3 })),
+            (
+                "symbol.setAnimInstanceLoopCount",
+                json!({ "loop_count": 0 }),
+            ),
+            (
+                "symbol.setAnimInstanceOffsetDist",
+                json!({ "offset": {"x": 1.0, "y": "x"} }),
+            ),
+            (
+                "symbol.setAnimInstanceRotationAmount",
+                json!({ "rotation": "spin" }),
+            ),
+            ("symbol.setAnimInstanceScaleAmount", json!({ "scale": 0.0 })),
+            (
+                "symbol.setAnimInstanceScaleAmount",
+                json!({ "scale": -5.0 }),
+            ),
+            (
+                "symbol.setAnimInstanceStartEndOpacity",
+                json!({ "start": 101.0, "end": 0.0 }),
+            ),
+            (
+                "symbol.setAnimInstanceStartEndOpacity",
+                json!({ "start": 0.0, "end": -1.0 }),
+            ),
+            (
+                "symbol.setAnimInstanceNumFrames",
+                json!({ "loop_count": 5 }),
+            ),
+        ] {
+            let error = registry.execute(&mut document, name, payload).unwrap_err();
+            assert!(
+                matches!(error, EngineError::InvalidState { .. })
+                    || matches!(error, EngineError::BadPayload { .. }),
+                "{name}: unexpected error shape {error:?}"
+            );
+            assert_eq!(
+                serde_json::to_vec(&document).unwrap(),
+                original,
+                "{name} mutated on refusal"
+            );
+        }
+    }
+
+    #[test]
+    fn anim_params_skip_non_instances_and_refuse_empty_selection() {
+        let (mut document, ids) = testdoc::sample_document();
+        let instance = placed_instance(&mut document);
+        let registry = registry();
+        // A path in the selection rides along; only the instance
+        // mutates. A selection with no instances at all is a Noop.
+        document.object_selection = vec![ids[0], instance];
+        let delta = registry
+            .execute(
+                &mut document,
+                "symbol.setAnimInstanceScaleAmount",
+                json!({ "scale": 50.0 }),
+            )
+            .unwrap();
+        assert_eq!(animation_of(&document, instance).scaling, 50.0);
+        delta.apply_inverse(&mut document).unwrap();
+        assert!(matches!(
+            document.registry.get(instance).unwrap(),
+            ObjectData::SymbolInstance(SymbolInstanceObject {
+                animation: None,
+                ..
+            })
+        ));
+
+        document.object_selection = vec![ids[0]];
+        let delta = registry
+            .execute(
+                &mut document,
+                "symbol.setAnimInstanceScaleAmount",
+                json!({ "scale": 50.0 }),
+            )
+            .unwrap();
+        assert!(matches!(delta, Delta::Noop));
+
+        document.object_selection.clear();
+        let error = registry
+            .execute(
+                &mut document,
+                "symbol.setAnimInstanceScaleAmount",
+                json!({ "scale": 50.0 }),
+            )
+            .unwrap_err();
+        assert!(matches!(error, EngineError::InvalidState { .. }));
     }
 }

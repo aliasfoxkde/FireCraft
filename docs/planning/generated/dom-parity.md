@@ -7,20 +7,20 @@ regeneration recipe in docs/PLANNING.md §5.4). The DOM is stable
 CS4→CS6; CS6 additions the text lacks (e.g. 9-slice guides) are
 covered by the CS6 `.jsf` scripts and appear here via their verbs.
 
-FireCraft side: the 206-command registry (`engine::catalog::ids()`,
+FireCraft side: the 212-command registry (`engine::catalog::ids()`,
 enforced == the fuzz call table).
 
 ## Coverage classes
 
 | class | meaning | count (of 356 dom verbs) |
 |---|---|---|
-| C | carried: a registry command implements the mutation | 233 |
-| P | partial: carried with a recorded model limitation | 38 |
+| C | carried: a registry command implements the mutation | 239 |
+| P | partial: carried with a recorded model limitation | 32 |
 | M | missing: no command and no decision — work items | 0 |
 | N | not applicable: non-document surface (accessor/UI/session/clipboard/export/OS) | 85 |
 
 Document-mutation coverage: **271 of 271** carried-or-partial
-(233 carried, 38 partial, 0 missing).
+(239 carried, 32 partial, 0 missing).
 
 ### Gap families (the Missing table, grouped)
 
@@ -197,6 +197,12 @@ partial rows and the recorded debts in docs/HANDOFF.md Phase 9.
 | `selectParents` | C | selection.selectParents | collapses a group when every member is selected (dec 0025) |
 | `selectSimilar` | C | bitmap.selectSimilar | pixel-mode verb: matches the selection average color (dec 0025) |
 | `selectSimilarFromPoint` | C | bitmap.selectWand | pixel-mode wand from a point; contiguous:false is the global match |
+| `setAnimInstanceLoopCount` | C | symbol.setAnimInstanceLoopCount | carried (0044): FW3 spelling writes ANNi per Adobe's own deprecation note ("in favor of dom.setAnimInstanceNumFrames") |
+| `setAnimInstanceNumFrames` | C | symbol.setAnimInstanceNumFrames | carried (0044): writes the ANNi anchor |
+| `setAnimInstanceOffsetDist` | C | symbol.setAnimInstanceOffsetDist | carried (0044): offsetDistPt -> ANXf/ANYf |
+| `setAnimInstanceRotationAmount` | C | symbol.setAnimInstanceRotationAmount | carried (0044): clockwise degrees -> ANRi; fractional rounds (the field is integral) |
+| `setAnimInstanceScaleAmount` | C | symbol.setAnimInstanceScaleAmount | carried (0044): positive percent -> ASCf (100 = none) |
+| `setAnimInstanceStartEndOpacity` | C | symbol.setAnimInstanceStartEndOpacity | carried (0044): 0..100 -> ASOi/AEOi per-mille |
 | `setBlendMode` | C | object.setBlend |  |
 | `setButtonAutoSlice` | C | symbol.setButtonAutoSlice |  |
 | `setButtonIncludeDownState` | C | symbol.setButtonIncludeDownState |  |
@@ -286,13 +292,7 @@ partial rows and the recorded debts in docs/HANDOFF.md Phase 9.
 | `replaceButtonTextStringsInInstances` | P | text.setText | batch wrapper |
 | `reversePathTextDirection` | P | text.attachPath | same |
 | `selectAdjustPixelSel` | P | bitmap.select* | pixel-precision refine unmodeled; shape stamps carry |
-| `setAnimInstanceLoopCount` | P | symbol.setParam | instance params carry; anim-specific typed fields unmodeled |
-| `setAnimInstanceNumFrames` | P | symbol.setParam |  |
-| `setAnimInstanceOffsetDist` | P | symbol.setParam |  |
-| `setAnimInstanceRotationAmount` | P | symbol.setParam |  |
-| `setAnimInstanceScaleAmount` | P | symbol.setParam |  |
-| `setAnimInstanceStartEndOpacity` | P | symbol.setParam |  |
-| `setAnimInstanceStartFrame` | P | symbol.setParam |  |
+| `setAnimInstanceStartFrame` | P | symbol.setParam | FW4 dropped the start-frame field from the format; refuses pointing at instance placement (the documented FW4 substitute) |
 | `setDocumentCanvasSizeToDocumentExtents` | P | page.setCanvasSize | computed variant - app computes, command applies |
 | `setDocumentCanvasSizeToSelection` | P | page.setCanvasSize | computed variant |
 | `setEffectName` | P | filter.add | rename = remove+add compose; no dedicated verb |

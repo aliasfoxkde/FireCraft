@@ -655,6 +655,12 @@ pub const CALLS: &[&str] = &[
     "symbol.setScript",
     "symbol.setParam",
     "symbol.setCustomData",
+    "symbol.setAnimInstanceNumFrames",
+    "symbol.setAnimInstanceLoopCount",
+    "symbol.setAnimInstanceOffsetDist",
+    "symbol.setAnimInstanceRotationAmount",
+    "symbol.setAnimInstanceScaleAmount",
+    "symbol.setAnimInstanceStartEndOpacity",
     "symbol.editAttach",
     "symbol.editDetach",
     "symbol.editReorder",
@@ -2160,6 +2166,34 @@ pub fn random_call(rng: &mut FuzzRng, document: &Document) -> (String, serde_jso
                 })
             }
         }
+        // Selection-driven anim verbs (decision 0044): payloads bias
+        // past the documented ranges so the refusal gates fire.
+        "symbol.setAnimInstanceNumFrames" => {
+            serde_json::json!({ "frames": rng.below(80) as i64 - 5 })
+        }
+        "symbol.setAnimInstanceLoopCount" => {
+            serde_json::json!({ "loop_count": rng.below(80) as i64 - 5 })
+        }
+        "symbol.setAnimInstanceOffsetDist" => serde_json::json!({
+            "offset": {
+                "x": rng.below(400) as f64 - 200.0,
+                "y": rng.below(400) as f64 - 200.0,
+            }
+        }),
+        "symbol.setAnimInstanceRotationAmount" => {
+            serde_json::json!({ "rotation": rng.below(800) as f64 - 400.0 })
+        }
+        "symbol.setAnimInstanceScaleAmount" => {
+            if rng.chance(10) {
+                serde_json::json!({ "scale": -(rng.below(50) as f64) })
+            } else {
+                serde_json::json!({ "scale": rng.below(300) as f64 + 0.5 })
+            }
+        }
+        "symbol.setAnimInstanceStartEndOpacity" => serde_json::json!({
+            "start": rng.below(120) as f64 - 10.0,
+            "end": rng.below(120) as f64 - 10.0,
+        }),
         "symbol.editAttach" => serde_json::json!({
             "symbol": rng.below(3),
             "id": any_id(rng),

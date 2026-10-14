@@ -276,3 +276,25 @@ format research, vendored node dictionary).
   `image_size_refusal_after_another_page_bakes_touches_nothing`.
   Local sweep 256×48 clean; the 8eae611 batch itself was sound.
 - Registry 201→206. dom-parity: **233C/38P/0M/85N**, unresolved [].
+
+## 2026-10-14 — anim instance parameter family (#114, decision 0044)
+- Six `symbol.setAnimInstance*` verbs over the already-round-tripping
+  `ANNi` carrier: NumFrames (anchor), LoopCount (FW3 spelling → same
+  field per Adobe's own deprecation note), OffsetDist (ANXf/ANYf),
+  RotationAmount (ANRi; fractional degrees round — the field is
+  integral), ScaleAmount (ASCf, finite > 0), StartEndOpacity (0–100 →
+  per-mille ASOi/AEOi).
+- One selection walker serves all six (`edit_animation_instances`):
+  non-instance members skip ("the selected instances of multi-frame
+  image symbols"), plain instances materialize the carrier with
+  Objects-panel defaults (1 frame, no shift, 100%, no rotation/ramp —
+  the setFillEdgeMode materialize-when-absent precedent), empty
+  selection refuses, instance-less selection `Noop`.
+- `setAnimInstanceStartFrame` stays P: the FW4 format has no
+  start-frame node (the dictionary's ANNi family is complete) — the
+  verb refuses pointing at the documented substitute (instance
+  placement). Inventing a wire node would fabricate format.
+- Tests: six-field write + reverse-undo byte-exact (incl. carrier
+  materialization + retraction), ten refusal shapes byte-stable,
+  non-instance skip + Noop + empty-selection refuse.
+- Registry 206→212. dom-parity: **239C/32P/0M/85N**, unresolved [].
