@@ -43,7 +43,8 @@ pub(crate) fn install(registry: &mut CommandRegistry) -> Result<(), EngineError>
     registry.register(MovePixels)?;
     registry.register(AddImage)?;
     registry.register(AddImageViaCopy)?;
-    registry.register(AddImageViaCut)
+    registry.register(AddImageViaCut)?;
+    registry.register(ImportFile)
 }
 
 /// The image object named by `id`, cloned out of the registry so
@@ -1279,6 +1280,230 @@ impl TypedCommand for AddImage {
     }
 }
 
+/// `bitmap.importFile` — CS6 `dom.importFile(fileURL,
+/// boundingRectangle, bMaintainAspectRatio)` (Fireworks 3): place an
+/// imported file's raster at a rectangle. The `file://` read and the
+/// decode are shell work — the `library.importSymbol` law (content in
+/// the payload, IO at the boundary) — so the command carries the
+/// decoded RGBA plane plus its source dimensions and performs the
+/// documented placement: a rectangle with `left == right` and
+/// `top == bottom` brings the file in unscaled with its top-left
+/// corner at that point (the ratio argument ignored); otherwise
+/// `maintain_aspect_ratio` scales to the largest fit inside the
+/// rectangle that keeps the source ratio (centered), and `false`
+/// stretches to fill. Like every pixel-object placement the scaled
+/// extent intersects the page canvas, an empty intersection refuses,
+/// and fresh zero tiles back the grid. Resampling is nearest-neighbour
+/// — the quality bar for foreign resampling is the recorded HANDOFF
+/// §4 debt.
+struct ImportFile;
+
+/// CS6's `boundingRectangle` argument shape.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct BoundsRect {
+    left: f64,
+    top: f64,
+    right: f64,
+    bottom: f64,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct ImportFilePayload {
+    /// Source plane width in pixels.
+    width: i64,
+    /// Source plane height in pixels.
+    height: i64,
+    /// The decoded plane: `width * height * 4` RGBA bytes, row-major,
+    /// straight from the shell's importer.
+    pixels: Vec<u8>,
+    /// CS6's `boundingRectangle`.
+    bounds: BoundsRect,
+    /// CS6's `bMaintainAspectRatio`.
+    maintain_aspect_ratio: bool,
+    /// Placement.
+    page: usize,
+    layer: usize,
+    cell: usize,
+    /// `OBNs` — object name.
+    name: Option<String>,
+}
+
+/// Nearest-neighbour sample of `source` (`sw` x `sh`) into the
+/// `crop` window of a `scaled_w` x `scaled_h` plane: destination
+/// pixel (x0+ix, y0+iy) takes the source pixel under the scaled
+/// plane's centre point. Products run in `u128` — the scaled extent
+/// is unbounded float arithmetic away from the canvas-bounded crop.
+fn resample_crop(
+    source: &[u8],
+    sw: usize,
+    sh: usize,
+    scaled: (i64, i64),
+    crop: (i64, i64, i64, i64),
+) -> Vec<u8> {
+    let (x0, y0, crop_w, crop_h) = crop;
+    let (scaled_w, scaled_h) = (scaled.0.max(1) as u128, scaled.1.max(1) as u128);
+    let mut out = vec![0u8; (crop_w * crop_h * 4) as usize];
+    for iy in 0..crop_h {
+        let sy = ((((2 * (y0 + iy) + 1) as u128) * sh as u128) / (2 * scaled_h)) as usize;
+        let sy = sy.min(sh - 1);
+        for ix in 0..crop_w {
+            let sx = ((((2 * (x0 + ix) + 1) as u128) * sw as u128) / (2 * scaled_w)) as usize;
+            let sx = sx.min(sw - 1);
+            let dst = ((iy * crop_w + ix) * 4) as usize;
+            out[dst..dst + 4].copy_from_slice(&source[(sy * sw + sx) * 4..(sy * sw + sx) * 4 + 4]);
+        }
+    }
+    out
+}
+
+impl TypedCommand for ImportFile {
+    type Payload = ImportFilePayload;
+
+    fn name(&self) -> &'static str {
+        "bitmap.importFile"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "bitmap.importFile";
+        let rect = &payload.bounds;
+        if ![rect.left, rect.top, rect.right, rect.bottom]
+            .iter()
+            .all(|value| value.is_finite())
+        {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: "bounds are not finite".to_owned(),
+            });
+        }
+        if payload.width <= 0 || payload.height <= 0 {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: format!(
+                    "source extent {} x {} has no pixels",
+                    payload.width, payload.height
+                ),
+            });
+        }
+        let plane_len = payload
+            .width
+            .checked_mul(payload.height)
+            .and_then(|area| area.checked_mul(4))
+            .ok_or_else(|| EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: "source extent overflows the plane".to_owned(),
+            })?;
+        if plane_len != payload.pixels.len() as i64 {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: format!(
+                    "plane holds {} bytes, extent {} x {} x 4 needs {}",
+                    payload.pixels.len(),
+                    payload.width,
+                    payload.height,
+                    plane_len
+                ),
+            });
+        }
+        // The scaled extent: degenerate rectangles place unscaled at
+        // the corner; otherwise fit (aspect kept, centered) or fill.
+        let (rect_w, rect_h) = (rect.right - rect.left, rect.bottom - rect.top);
+        let (scaled_w, scaled_h, origin_x, origin_y);
+        if rect.right == rect.left && rect.bottom == rect.top {
+            (scaled_w, scaled_h) = (payload.width, payload.height);
+            (origin_x, origin_y) = (rect.left, rect.top);
+        } else {
+            if rect_w <= 0.0 || rect_h <= 0.0 {
+                return Err(EngineError::InvalidState {
+                    name: NAME.to_owned(),
+                    detail: format!("bounds extent {rect_w} x {rect_h} has no area"),
+                });
+            }
+            if payload.maintain_aspect_ratio {
+                let scale = (rect_w / payload.width as f64).min(rect_h / payload.height as f64);
+                scaled_w = ((payload.width as f64 * scale).round() as i64).max(1);
+                scaled_h = ((payload.height as f64 * scale).round() as i64).max(1);
+                origin_x = rect.left + (rect_w - scaled_w as f64) / 2.0;
+                origin_y = rect.top + (rect_h - scaled_h as f64) / 2.0;
+            } else {
+                scaled_w = ((rect_w).round() as i64).max(1);
+                scaled_h = ((rect_h).round() as i64).max(1);
+                origin_x = rect.left;
+                origin_y = rect.top;
+            }
+        }
+        // CS6 constrains oversized rectangles to the document: the
+        // canvas intersection, rounded to the pixel grid.
+        let canvas = &access::page(document, NAME, payload.page)?.info.canvas;
+        let x0 = origin_x.max(canvas.x);
+        let y0 = origin_y.max(canvas.y);
+        let x1 = (origin_x + scaled_w as f64).min(canvas.x + canvas.width);
+        let y1 = (origin_y + scaled_h as f64).min(canvas.y + canvas.height);
+        let (left, top) = (x0.round() as i64, y0.round() as i64);
+        let (right, bottom) = (x1.round() as i64, y1.round() as i64);
+        if right <= left || bottom <= top {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: "bounds do not intersect the document canvas".to_owned(),
+            });
+        }
+        // Pre-flight the placement cell before minting anything.
+        access::cell(document, NAME, payload.page, payload.layer, payload.cell)?;
+        let plane = resample_crop(
+            &payload.pixels,
+            payload.width as usize,
+            payload.height as usize,
+            (scaled_w, scaled_h),
+            (
+                left - origin_x.round() as i64,
+                top - origin_y.round() as i64,
+                right - left,
+                bottom - top,
+            ),
+        );
+        let (tiles, minted) =
+            crate::bitmap::retile_rgba(document, &plane, right - left, bottom - top);
+        let id = document.registry.insert(ObjectData::Image(ImageObject {
+            location: geom::Point {
+                x: left as f64,
+                y: top as f64,
+            },
+            offset: geom::Point::ZERO,
+            pixels: (right - left, bottom - top),
+            tile_size: i64::from(raster::TILE_SIDE as u32),
+            tiles,
+            name: payload.name.clone(),
+            opacity: 1000,
+            blend: 0,
+            visible: true,
+            locked: false,
+            effects: Vec::new(),
+        }));
+        let placed = attach_cell(
+            document,
+            NAME,
+            payload.page,
+            payload.layer,
+            payload.cell,
+            id,
+            None,
+        )?;
+        Ok(Delta::Group(vec![
+            placed,
+            Delta::Object {
+                id,
+                inverse: ObjectInverse::Created,
+            },
+            Delta::Bank { added: minted },
+        ]))
+    }
+}
+
 /// `bitmap.addImageViaCopy` — CS6 `dom.addNewImageViaCopy()`: the
 /// paint-mode selection becomes a new image placed directly above the
 /// active bitmap. The selection plane must span the source's pixel
@@ -2363,6 +2588,186 @@ mod tests {
             serde_json::to_vec(&document).unwrap(),
             before,
             "refused placement cells mint nothing"
+        );
+    }
+
+    /// A 2×1 red/blue source plane for the import tests.
+    fn import_plane() -> Vec<u8> {
+        vec![255, 0, 0, 255, 0, 0, 255, 255]
+    }
+
+    #[test]
+    fn import_file_places_unscaled_at_a_degenerate_rectangle() {
+        let (mut document, _) = placed_image_document();
+        let before = serde_json::to_vec(&document).unwrap();
+        // left == right and top == bottom: unscaled at the corner, the
+        // ratio argument ignored.
+        let delta = ImportFile
+            .apply_json(
+                &mut document,
+                json!({
+                    "width": 2, "height": 1, "pixels": import_plane(),
+                    "bounds": {"left": 10.0, "top": 6.0, "right": 10.0, "bottom": 6.0},
+                    "maintain_aspect_ratio": true,
+                    "page": 0, "layer": 0, "cell": 0,
+                    "name": "imported",
+                }),
+            )
+            .unwrap();
+        let elements = document.pages[0].layers.layers[0].cells[0].elements.clone();
+        let doc::ObjectData::Image(image) = document.registry.get(elements[3]).unwrap() else {
+            panic!("new object is an image")
+        };
+        assert_eq!(image.pixels, (2, 1), "unscaled keeps the source extent");
+        assert_eq!((image.location.x, image.location.y), (10.0, 6.0));
+        assert_eq!(image.name.as_deref(), Some("imported"));
+        let doc::TileRef::Tile(tile_id) = image.tiles[0] else {
+            panic!("fresh bank tiles, not mattes")
+        };
+        let side = raster::TILE_SIDE;
+        let at = |x: usize, y: usize| {
+            let base = (y * side + x) * 4;
+            document.tiles.get(tile_id).unwrap().pixels()[base..base + 4].to_vec()
+        };
+        assert_eq!(at(0, 0), vec![255, 0, 0, 255], "left pixel is red");
+        assert_eq!(at(1, 0), vec![0, 0, 255, 255], "right pixel is blue");
+        delta.apply_inverse(&mut document).unwrap();
+        assert_eq!(serde_json::to_vec(&document).unwrap(), before);
+    }
+
+    #[test]
+    fn import_file_scales_to_fill_and_aspect_fits() {
+        let (mut document, _) = placed_image_document();
+        // Stretch to fill: the 2×1 plane lands on the full 8×4
+        // rectangle, left half red / right half blue.
+        ImportFile
+            .apply_json(
+                &mut document,
+                json!({
+                    "width": 2, "height": 1, "pixels": import_plane(),
+                    "bounds": {"left": 0.0, "top": 0.0, "right": 8.0, "bottom": 4.0},
+                    "maintain_aspect_ratio": false,
+                    "page": 0, "layer": 0, "cell": 0, "name": null,
+                }),
+            )
+            .unwrap();
+        let elements = document.pages[0].layers.layers[0].cells[0].elements.clone();
+        let doc::ObjectData::Image(image) = document.registry.get(elements[3]).unwrap() else {
+            panic!("new object is an image")
+        };
+        assert_eq!(image.pixels, (8, 4));
+        let doc::TileRef::Tile(tile_id) = image.tiles[0] else {
+            panic!("fresh bank tiles")
+        };
+        let side = raster::TILE_SIDE;
+        let at = |x: usize, y: usize| {
+            let base = (y * side + x) * 4;
+            document.tiles.get(tile_id).unwrap().pixels()[base..base + 4].to_vec()
+        };
+        assert_eq!(at(0, 0), vec![255, 0, 0, 255]);
+        assert_eq!(at(3, 3), vec![255, 0, 0, 255]);
+        assert_eq!(at(4, 0), vec![0, 0, 255, 255]);
+        assert_eq!(at(7, 2), vec![0, 0, 255, 255]);
+
+        // Aspect-kept fit: 2×1 into 8×2 scales by 2 to 4×2, centered
+        // two pixels in from the rectangle's left edge.
+        ImportFile
+            .apply_json(
+                &mut document,
+                json!({
+                    "width": 2, "height": 1, "pixels": import_plane(),
+                    "bounds": {"left": 0.0, "top": 0.0, "right": 8.0, "bottom": 2.0},
+                    "maintain_aspect_ratio": true,
+                    "page": 0, "layer": 0, "cell": 0, "name": null,
+                }),
+            )
+            .unwrap();
+        let elements = document.pages[0].layers.layers[0].cells[0].elements.clone();
+        let doc::ObjectData::Image(image) = document.registry.get(elements[4]).unwrap() else {
+            panic!("new object is an image")
+        };
+        assert_eq!(image.pixels, (4, 2), "largest fit keeping the ratio");
+        assert_eq!((image.location.x, image.location.y), (2.0, 0.0), "centered");
+    }
+
+    #[test]
+    fn import_file_gates_and_crops_to_the_canvas() {
+        let (mut document, _) = placed_image_document();
+        // A corner placement hanging off the canvas crops to it.
+        ImportFile
+            .apply_json(
+                &mut document,
+                json!({
+                    "width": 2, "height": 1, "pixels": import_plane(),
+                    "bounds": {"left": 63.0, "top": 47.0, "right": 63.0, "bottom": 47.0},
+                    "maintain_aspect_ratio": false,
+                    "page": 0, "layer": 0, "cell": 0, "name": null,
+                }),
+            )
+            .unwrap();
+        let elements = document.pages[0].layers.layers[0].cells[0].elements.clone();
+        let doc::ObjectData::Image(image) = document.registry.get(elements[3]).unwrap() else {
+            panic!("new object is an image")
+        };
+        assert_eq!(image.pixels, (1, 1), "cropped to the 64×48 canvas");
+        assert_eq!((image.location.x, image.location.y), (63.0, 47.0));
+
+        let before = serde_json::to_vec(&document).unwrap();
+        let base = json!({
+            "width": 2, "height": 1, "pixels": import_plane(),
+            "bounds": {"left": 0.0, "top": 0.0, "right": 8.0, "bottom": 4.0},
+            "maintain_aspect_ratio": true,
+            "page": 0, "layer": 0, "cell": 0, "name": null,
+        });
+        let mut payload = base.clone();
+        payload["pixels"] = json!([255, 0, 0, 255]);
+        let error = ImportFile.apply_json(&mut document, payload).unwrap_err();
+        assert!(matches!(error, EngineError::InvalidState { .. }), "{error}");
+        // JSON cannot carry a NaN — the typed surface feeds one.
+        let error = ImportFile
+            .apply(
+                &mut document,
+                &ImportFilePayload {
+                    width: 2,
+                    height: 1,
+                    pixels: import_plane(),
+                    bounds: BoundsRect {
+                        left: 0.0,
+                        top: 0.0,
+                        right: f64::NAN,
+                        bottom: 4.0,
+                    },
+                    maintain_aspect_ratio: true,
+                    page: 0,
+                    layer: 0,
+                    cell: 0,
+                    name: None,
+                },
+            )
+            .unwrap_err();
+        assert!(matches!(error, EngineError::InvalidState { .. }), "{error}");
+        // left == right with top != bottom is a zero-area rectangle,
+        // not the unscaled corner form.
+        let mut payload = base.clone();
+        payload["bounds"] = json!({"left": 4.0, "top": 0.0, "right": 4.0, "bottom": 4.0});
+        let error = ImportFile.apply_json(&mut document, payload).unwrap_err();
+        assert!(matches!(error, EngineError::InvalidState { .. }), "{error}");
+        // Fully off-canvas and out-of-range cells refuse.
+        let mut payload = base.clone();
+        payload["bounds"] = json!({"left": 200.0, "top": 0.0, "right": 208.0, "bottom": 4.0});
+        let error = ImportFile.apply_json(&mut document, payload).unwrap_err();
+        assert!(matches!(error, EngineError::InvalidState { .. }), "{error}");
+        payload = base;
+        payload["layer"] = json!(9);
+        let error = ImportFile.apply_json(&mut document, payload).unwrap_err();
+        assert!(
+            matches!(error, EngineError::MissingTarget { .. }),
+            "{error}"
+        );
+        assert_eq!(
+            serde_json::to_vec(&document).unwrap(),
+            before,
+            "refused imports change nothing"
         );
     }
 

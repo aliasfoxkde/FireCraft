@@ -13,12 +13,12 @@
 
 - **Ship state:** v0.1.0 released, repo public. Roadmap M0–M15 all
   closed. CI green 7/7 per batch since `55de409` (runbook §6).
-- **Engine registry:** 239 commands, pinned equal to the fuzz call
+- **Engine registry:** 240 commands, pinned equal to the fuzz call
   table by `the_call_table_covers_the_catalog`.
-- **CS6 DOM verb-surface parity:** **267 C / 4 P / 0 M / 85 N** —
+- **CS6 DOM verb-surface parity:** **268 C / 3 P / 0 M / 85 N** —
   the missing table is empty (2026-10-14, decision 0041); every dom
   mutation verb is carried or partial. Remaining surface work is the
-  4 P rows and Phase 9 debts.
+  3 P rows and Phase 9 debts.
   (`docs/planning/generated/dom-parity.md`, regenerate per §5 below).
   (The CS6 verb list carries both case spellings of mergeDown and
   AddNewImage — those families flipped four rows each.)
@@ -450,6 +450,18 @@ mutations and refuses without a linked slice.
   instances keep the master. Empty selection refuses; instance-less
   or all-dangling selections no-op; non-instance members skip.
   `Delta::Library` + per-instance `Delta::Object` folded in a group.
+
+- **8.20 — DONE (decision 0054).** `bitmap.importFile` landed
+  2026-10-14: the `library.importSymbol` law (content in the
+  payload, IO at the boundary) — the shell decodes, the command
+  places. Degenerate rectangles place unscaled at the corner;
+  aspect-kept fit rounds to the largest ≥1-px fit and centers;
+  stretch-to-fill takes the rect extents; the scaled extent crops
+  to the canvas (empty intersection refuses) and lands on fresh
+  zero tiles. Nearest-neighbour resampling (u128 sampling math);
+  bilinear quality stays the §4 resample debt. With this, every
+  non-permanent P row is closed except `setFillNColorNTexture`
+  (no observed `TXFv` shape + no mintable rasters).
 
 ### Phase 9 — Recorded debts (P-class limitations; no parity pressure)
 - **6.1-object-duplicate** deep-clone of groups (today shallow).

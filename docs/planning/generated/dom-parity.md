@@ -14,13 +14,13 @@ enforced == the fuzz call table).
 
 | class | meaning | count (of 356 dom verbs) |
 |---|---|---|
-| C | carried: a registry command implements the mutation | 267 |
-| P | partial: carried with a recorded model limitation | 4 |
+| C | carried: a registry command implements the mutation | 268 |
+| P | partial: carried with a recorded model limitation | 3 |
 | M | missing: no command and no decision — work items | 0 |
 | N | not applicable: non-document surface (accessor/UI/session/clipboard/export/OS) | 85 |
 
 Document-mutation coverage: **271 of 271** carried-or-partial
-(267 carried, 4 partial, 0 missing).
+(268 carried, 3 partial, 0 missing).
 
 ### Gap families (the Missing table, grouped)
 
@@ -134,6 +134,7 @@ partial rows and the recorded debts in docs/HANDOFF.md Phase 9.
 | `flattenSelection` | C | flatten.selection | Merge Images: canvas-sized bitmap via render_subset, placed at the topmost member's z-position |
 | `group` | C | object.group | same-container selection folds at the topmost member slot |
 | `hideSelection` | C | object.setVisible |  |
+| `importFile` | C | bitmap.importFile | decision 0054 |
 | `importSymbol` | C | library.importSymbol |  |
 | `importSymbolButNotAsAlias` | C | library.importSymbol |  |
 | `insertPointInPath` | C | path.redrawPath |  |
@@ -306,7 +307,6 @@ partial rows and the recorded debts in docs/HANDOFF.md Phase 9.
 
 | CS6 verb | class | FireCraft carrier | note |
 |---|---|---|---|
-| `importFile` | P | io | io carries SVG/raster importers; no engine place-imported-file command |
 | `setAnimInstanceStartFrame` | P | symbol.setParam | FW4 dropped the start-frame field from the format; refuses pointing at instance placement (the documented FW4 substitute) |
 | `setFillNColorNTexture` | P | path.setFillColor | texture component of the numbered form (texture_blend rides the fill model, no command surface) |
 | `setSliceAutonaming` | P | slice.setData | no wire node for the toggle - FILs carries the naming label; the flag is UI state |

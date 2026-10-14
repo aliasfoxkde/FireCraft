@@ -632,6 +632,7 @@ pub const CALLS: &[&str] = &[
     "bitmap.pencil",
     "bitmap.movePixels",
     "bitmap.addImage",
+    "bitmap.importFile",
     "bitmap.addImageViaCopy",
     "bitmap.addImageViaCut",
     "retouch.blur",
@@ -1906,6 +1907,32 @@ pub fn random_call(rng: &mut FuzzRng, document: &Document) -> (String, serde_jso
                 serde_json::json!("fuzz image")
             },
         }),
+        // Import placement: a small 2x1 plane with the rect crossing
+        // the canvas edges (degenerate corners, off-canvas, crops).
+        "bitmap.importFile" => {
+            let left = -(rng.below(500) as f64) + 40.0;
+            let top = -(rng.below(400) as f64) + 30.0;
+            let degenerate = rng.chance(6);
+            let (right, bottom) = if degenerate {
+                (left, top)
+            } else {
+                (left + rng.below(200) as f64, top + rng.below(200) as f64)
+            };
+            serde_json::json!({
+                "width": 2, "height": 1,
+                "pixels": [255, 0, 0, 255, 0, 0, 255, 255],
+                "bounds": {"left": left, "top": top, "right": right, "bottom": bottom},
+                "maintain_aspect_ratio": rng.chance(2),
+                "page": any_index(rng, pages),
+                "layer": any_index(rng, 3),
+                "cell": any_index(rng, frames),
+                "name": if rng.chance(50) {
+                    serde_json::Value::Null
+                } else {
+                    serde_json::json!("fuzz import")
+                },
+            })
+        }
         "bitmap.addImageViaCopy" | "bitmap.addImageViaCut" => serde_json::json!({
             "source": any_id(rng),
         }),

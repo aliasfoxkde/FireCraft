@@ -614,3 +614,30 @@ Batch: `symbol.duplicateSymbolForAlias` (8.19).
 - Registry 238→239. dom-parity: **267C/4P/0M/85N**, unresolved [].
   Gates: engine suite green, clippy -D warnings, fmt, 256-seed
   CI-base fuzz sweep clean.
+
+## #125 — 2026-10-14 — importFile placement (decision 0054)
+
+Batch: `bitmap.importFile` (8.20).
+
+- The `library.importSymbol` law applied to the last IO-shaped dom
+  verb: the shell decodes (io crate), the engine places. The command
+  carries the decoded RGBA plane + source dims; the dom's rect and
+  ratio semantics are implemented exactly — degenerate rect (both
+  pairs equal) places unscaled at the corner and ignores the ratio;
+  aspect-kept fit rounds to the largest ≥1-px fit and centers;
+  otherwise stretch-to-fill.
+- Placement rides the pixel-object law (decision 0037): scaled
+  extent intersects the canvas, empty intersection refuses, fresh
+  zero tiles back the grid, cell pre-flighted before anything mints.
+  Resampling is nearest-neighbour with u128 sampling products (the
+  scaled extent is unbounded away from the canvas-bounded crop);
+  bilinear quality stays the recorded §4 debt.
+- Tests: +3 (unscaled corner + pixel readback + undo; fill and
+  aspect-fit extents/centering; gates + corner crop + nothing-mutated
+  NaN rides the typed surface — the JSON-null trap again).
+  fuzzdrive: +1 CALLS + arm (degenerate corners, off-canvas rects,
+  rect crossings).
+- Registry 239→240. dom-parity: **268C/3P/0M/85N**, unresolved [].
+  Every remaining non-permanent P row is now closed or debt-recorded.
+  Gates: engine suite green, clippy -D warnings, fmt, 256-seed
+  CI-base fuzz sweep clean.
