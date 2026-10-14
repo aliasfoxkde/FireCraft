@@ -136,3 +136,16 @@ format research, vendored node dictionary).
   scaling in the premultiplied domain; cut rebuilds the source over
   fresh tile ids. `AddNewImage` rides both case spellings — four
   parity rows flipped. Parity **212C/45P/12M**, registry 186.
+  #108 saved selections (decision 0038): `selection.save` /
+  `restore` / `deleteSaved` over `Document.saved_selections`
+  (editing state, never file content — the `selection`/`jpeg_mask`
+  class). Save requires an active pixel selection and folds into an
+  existing name (base = stored); restore inverts on request then
+  folds with the active selection as base, a collapsed fold leaving
+  no selection; CS6's "new or replace" spelling accepted alongside
+  "replace". The CI fuzz campaign on 7ea2288 caught a real defect
+  first — a refused `bitmap.addImage` (placement cell out of range)
+  leaked its minted bank tiles and registry slot; fixed in 000557d
+  with an immutable `access::cell`/`layer` pre-flight before any
+  minting, plus a bank+registry byte-equality regression test.
+  Parity **215C/45P/8M**, registry 189.

@@ -14,17 +14,17 @@ enforced == the fuzz call table).
 
 | class | meaning | count (of 356 dom verbs) |
 |---|---|---|
-| C | carried: a registry command implements the mutation | 212 |
+| C | carried: a registry command implements the mutation | 215 |
 | P | partial: carried with a recorded model limitation | 45 |
-| M | missing: no command and no decision — work items | 11 |
+| M | missing: no command and no decision — work items | 8 |
 | N | not applicable: non-document surface (accessor/UI/session/clipboard/export/OS) | 88 |
 
-Document-mutation coverage: **257 of 268** carried-or-partial
-(212 carried, 45 partial, 11 missing).
+Document-mutation coverage: **260 of 268** carried-or-partial
+(215 carried, 45 partial, 8 missing).
 
 ### Gap families (the Missing table, grouped)
 
-The 11 missing verbs collapse into six families, largest first —
+The 8 missing verbs collapse into six families, largest first —
 each family is one design decision plus a command batch:
 
 1. **Object transforms** (1 verb remains): setDocumentImageSize
@@ -117,6 +117,7 @@ each family is one design decision plus a command batch:
 | `deleteLayer` | C | layer.delete |  |
 | `deletePageAt` | C | page.delete |  |
 | `deletePointOnPath` | C | path.redrawPath |  |
+| `deleteSavedSelection` | C | selection.deleteSaved |  |
 | `deleteSelection` | C | object.delete |  |
 | `deleteSymbol` | C | library.remove |  |
 | `detachInstanceFromSymbol` | C | symbol.editDetach |  |
@@ -193,9 +194,11 @@ each family is one design decision plus a command batch:
 | `resetNineScale` | C | symbol.set9Slice |  |
 | `resizeSelection` | C | object.resize | keeps the top-left corner of the selection in place |
 | `restoreJPEGMask` | C | mask.restoreJPEG |  |
+| `restoreSelection` | C | selection.restore |  |
 | `rotateDocument` | C | document.rotate | page-scoped 90/180/270 with a full geometry re-bake (decision 0034) |
 | `rotateSelection` | C | object.rotate | degrees, clockwise in the y-down space |
 | `saveJPEGMask` | C | mask.saveJPEG | second plane slot (Document.jpeg_mask), editing state |
+| `saveSelection` | C | selection.save |  |
 | `scaleSelection` | C | object.scale | pivot defaults to the union bounds center (decision 0019) |
 | `scalingGridRect` | C | symbol.set9Slice | the grid rect IS the payload |
 | `selectAll` | C | selection.selectAll | object-selection model + commands (dec 0024) |
@@ -330,13 +333,10 @@ each family is one design decision plus a command batch:
 | `clipPasteAsMask` | M | - | clipboard op (the mask model itself landed via mask.add) |
 | `clipPasteFromChannelToChannel` | M | - | pixel channel copy - bitmap domain, no command |
 | `clipPasteInside` | M | - | paste-inside = clipboard op (mask model landed) |
-| `deleteSavedSelection` | M | - | named saved selections unmodeled |
 | `filterSelection` | M | - | pixel-filter bake verb (permanent, not a Live Effect) — filter family; needs the bitmap bake pass (debt) |
 | `filterSelectionByID` | M | - | pixel-filter bake verb (permanent, not a Live Effect) — filter family; needs the bitmap bake pass (debt) |
 | `filterSelectionByName` | M | - | pixel-filter bake verb (permanent, not a Live Effect) — filter family; needs the bitmap bake pass (debt) |
 | `filterSelectonByName` | M | - | pixel-filter bake verb (permanent, not a Live Effect) — filter family; needs the bitmap bake pass (debt) |
-| `restoreSelection` | M | - | named saved selections unmodeled |
-| `saveSelection` | M | - | named saved selections unmodeled |
 | `setDocumentImageSize` | M | - | no resample command |
 
 ## Not applicable (N)

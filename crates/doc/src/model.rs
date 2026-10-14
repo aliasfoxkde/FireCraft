@@ -81,6 +81,11 @@ pub struct Document {
     /// state, never file content: the format has no node for it and
     /// the writer never reads this field.
     pub jpeg_mask: Option<SelectionMask>,
+    /// Named saved bitmap selections (`dom.saveSelection` family).
+    /// Editing state, never file content: the format has no node for
+    /// it and the writer never reads this field.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub saved_selections: Vec<SavedSelection>,
     /// `EXPv` — the document-level export defaults. `None` when the
     /// file carries no document-level `EXPv`; the writer emits the node
     /// only when settings exist.
@@ -234,6 +239,18 @@ impl SelectionMask {
         }
         usize::try_from(u64::from(y) * u64::from(self.width) + u64::from(x)).ok()
     }
+}
+
+/// A named saved bitmap selection (`dom.saveSelection` /
+/// `dom.restoreSelection`). Editing state, never file content: the
+/// format has no node for it and the writer never reads this struct.
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct SavedSelection {
+    /// The user-chosen name (CS6 default: "default").
+    pub name: String,
+    /// The stored coverage plane.
+    pub mask: SelectionMask,
 }
 
 /// Scalars shared by the document node and pages.

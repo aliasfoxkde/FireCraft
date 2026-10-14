@@ -268,6 +268,17 @@ fn transpose(plane: &[u8], width: usize, height: usize) -> Vec<u8> {
     out
 }
 
+/// The complement coverage of `mask` (`255 - coverage` per pixel) —
+/// the `restoreSelection {invert}` operand.
+pub(crate) fn inverted(mask: &SelectionMask) -> SelectionMask {
+    let alpha = mask.alpha.iter().map(|byte| 255 - *byte).collect();
+    SelectionMask {
+        width: mask.width,
+        height: mask.height,
+        alpha,
+    }
+}
+
 /// Applies a builder's fresh stamp through `mode`, storing the result
 /// back as the document selection.
 pub(crate) fn fold(

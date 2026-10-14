@@ -131,6 +131,13 @@ pub enum Delta {
         /// document carried none.
         before: Option<Box<doc::SelectionMask>>,
     },
+    /// Restore the named saved-selection list (`dom.saveSelection`
+    /// family). The whole list rides the capture — the state is small
+    /// and the restore is trivially byte-exact.
+    SavedSelections {
+        /// The list as it was before the command.
+        before: Vec<doc::SavedSelection>,
+    },
     /// Restore one page's scalars and canvas.
     PageInfo {
         /// Page index.
@@ -325,6 +332,9 @@ impl Delta {
             }
             Delta::JpegMask { before } => {
                 document.jpeg_mask = before.as_deref().cloned();
+            }
+            Delta::SavedSelections { before } => {
+                document.saved_selections = before.clone();
             }
             Delta::PageInfo { page, before } => {
                 page_mut(document, *page)?.info = (**before).clone();

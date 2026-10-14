@@ -8,9 +8,9 @@
 
 - **Released:** v0.1.0 (2026-10-13), repo public.
 - **Roadmap:** M0–M15 **all closed**.
-- **Registry:** 186 commands. **CI:** green 7/7 on `3d74723`; later
+- **Registry:** 189 commands. **CI:** green 7/7 on `3d74723`; later
   campaign pushes verified per batch (runbook: HANDOFF §6).
-- **CS6 DOM parity:** **212 C / 45 P / 12 M / 88 N** — the 12 M verbs
+- **CS6 DOM parity:** **215 C / 45 P / 8 M / 88 N** — the 8 M verbs
   are the active campaign; the phased plan is [`HANDOFF.md`](HANDOFF.md) §4.
 
 ## Milestones
@@ -61,10 +61,12 @@
 | #104 | document.rotate — page rotation re-bake (5.3, decision 0034) | 48ec811 | 203 C / 45 P / 24 M |
 | #105 | view flags → session state, rows → N (Phase 4, decision 0035) | a363f0f | 203 C / 45 P / 20 M / 88 N |
 | #106 | button symbols: 4 behavior booleans + slice options (Phase 7, decision 0036) | 3d74723 | **208 C / 45 P / 15 M / 88 N** |
-| #107 | place-image trio + shared assemble/retile helpers (8.1, decision 0037) | this batch | **212 C / 45 P / 12 M / 88 N** |
+| #107 | place-image trio + shared assemble/retile helpers (8.1, decision 0037) | 7ea2288 | **212 C / 45 P / 12 M / 88 N** |
+| #108 | saved-selections trio (8.7, decision 0038) | this batch | **215 C / 45 P / 8 M / 88 N** |
 
 Remaining families (HANDOFF §4 order): 8.6 clipboard masks/6.6
-clipboard surface → 6.4 resample → 5.4 setDocumentImageSize.
+clipboard surface → filterSelection bake trio → 6.4 resample →
+5.4 setDocumentImageSize.
 
 ## Recorded debts (open)
 
@@ -92,5 +94,6 @@ clipboard surface → 6.4 resample → 5.4 setDocumentImageSize.
 | 2026-10-14 | 203 | 45 | **20** | #105 view flags → N (session state) |
 | 2026-10-14 | **208** | 45 | **15** | #106 button symbols (decision 0036) |
 | 2026-10-14 | **212** | 45 | **12** | #107 place-image trio (decision 0037) |
+| 2026-10-14 | **215** | 45 | **8** | #108 saved selections (decision 0038) |
 
 (Pre-#91 counts are approximate; the matrix file is the authority.)

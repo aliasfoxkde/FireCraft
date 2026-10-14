@@ -7,7 +7,7 @@
 //! canonicalize by registry slot (documented deviation, decision
 //! 0024).
 
-use doc::{Document, ObjectId};
+use doc::{Document, ObjectId, SavedSelection};
 
 use super::cell::{append_frames, check_closure, clone_element};
 use super::object::{Owner, find_owner};
@@ -15,6 +15,7 @@ use crate::access;
 use crate::command::TypedCommand;
 use crate::delta::Delta;
 use crate::error::EngineError;
+use crate::mask::{SelectMode, fold, inverted};
 use crate::registry::CommandRegistry;
 
 /// Registers the selection commands.
@@ -28,7 +29,10 @@ pub(crate) fn install(registry: &mut CommandRegistry) -> Result<(), EngineError>
     registry.register(SelectNone)?;
     registry.register(DuplicateToFrames)?;
     registry.register(DuplicateToFrameRange)?;
-    registry.register(DistributeToFrames)
+    registry.register(DistributeToFrames)?;
+    registry.register(SaveSelection)?;
+    registry.register(RestoreSelection)?;
+    registry.register(DeleteSavedSelection)
 }
 
 /// Validates every id and returns them deduplicated in canonical
@@ -463,6 +467,206 @@ impl TypedCommand for SelectNone {
         Ok(Delta::ObjectSelection {
             before: std::mem::take(&mut document.object_selection),
         })
+    }
+}
+
+/// `selection.save` — CS6 `dom.saveSelection({selectionName},
+/// {toDocument}, {operation})`: stores the active pixel selection
+/// under a name (default "default"), folding into an existing saved
+/// selection through `operation` (decision 0038). `toDocument` is a
+/// single-document deviation (omitted).
+struct SaveSelection;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct SaveSelectionPayload {
+    /// CS6 default: "default".
+    #[serde(default)]
+    name: Option<String>,
+    /// Fold with an existing saved selection under the same name;
+    /// CS6 also spells replace as "new or replace".
+    #[serde(default)]
+    operation: Option<String>,
+}
+
+/// Parses CS6's saved-selection `operation` vocabulary (both the
+/// "new or replace" and plain "replace" spellings).
+fn operation_of(name: &'static str, value: Option<&String>) -> Result<SelectMode, EngineError> {
+    SelectMode::parse(value.map(String::as_str))
+        .or_else(|| {
+            if value.map(String::as_str) == Some("new or replace") {
+                Some(SelectMode::Replace)
+            } else {
+                None
+            }
+        })
+        .ok_or_else(|| EngineError::InvalidState {
+            name: name.to_owned(),
+            detail: format!(
+                "operation {:?} is not one of new or replace/add/subtract/intersect",
+                value.unwrap_or(&String::new())
+            ),
+        })
+}
+
+impl TypedCommand for SaveSelection {
+    type Payload = SaveSelectionPayload;
+
+    fn name(&self) -> &'static str {
+        "selection.save"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "selection.save";
+        let mode = operation_of(NAME, payload.operation.as_ref())?;
+        let active = document
+            .selection
+            .clone()
+            .ok_or_else(|| EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: "there is no pixel selection to save".to_owned(),
+            })?;
+        // Capture before mutating (the standing law).
+        let before = document.saved_selections.clone();
+        let name = payload.name.clone().unwrap_or_else(|| "default".to_owned());
+        let stored = match document
+            .saved_selections
+            .iter()
+            .position(|saved| saved.name == name)
+        {
+            Some(index) => {
+                let stored = fold(Some(&document.saved_selections[index].mask), active, mode);
+                if stored.alpha.iter().all(|&a| a == 0) {
+                    return Err(EngineError::InvalidState {
+                        name: NAME.to_owned(),
+                        detail: "the folded selection covers nothing".to_owned(),
+                    });
+                }
+                stored
+            }
+            None => active,
+        };
+        match document
+            .saved_selections
+            .iter_mut()
+            .position(|saved| saved.name == name)
+        {
+            Some(index) => document.saved_selections[index].mask = stored,
+            None => document
+                .saved_selections
+                .push(SavedSelection { name, mask: stored }),
+        }
+        Ok(Delta::SavedSelections { before })
+    }
+}
+
+/// `selection.restore` — CS6 `dom.restoreSelection(selectionName,
+/// fromDocument, {operation}, {invert})`: the named saved selection
+/// (inverted first when asked) folds with the active selection;
+/// `fromDocument` is a single-document deviation (omitted). CS6's
+/// boolean return (was it inverted) has no command channel.
+struct RestoreSelection;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct RestoreSelectionPayload {
+    /// CS6 default: "default".
+    #[serde(default)]
+    name: Option<String>,
+    /// Fold with the active selection (the base).
+    #[serde(default)]
+    operation: Option<String>,
+    /// Invert the saved mask before the fold.
+    #[serde(default)]
+    invert: Option<bool>,
+}
+
+impl TypedCommand for RestoreSelection {
+    type Payload = RestoreSelectionPayload;
+
+    fn name(&self) -> &'static str {
+        "selection.restore"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "selection.restore";
+        let mode = operation_of(NAME, payload.operation.as_ref())?;
+        let name = payload.name.clone().unwrap_or_else(|| "default".to_owned());
+        let index = document
+            .saved_selections
+            .iter()
+            .position(|saved| saved.name == name)
+            .ok_or_else(|| EngineError::MissingTarget {
+                name: NAME.to_owned(),
+                detail: format!("no saved selection named {name:?}"),
+            })?;
+        let saved = if payload.invert == Some(true) {
+            inverted(&document.saved_selections[index].mask)
+        } else {
+            document.saved_selections[index].mask.clone()
+        };
+        // Capture before mutating (the standing law).
+        let before = document.selection.clone();
+        let folded = fold(before.as_ref(), saved, mode);
+        // A fold that covers nothing is no selection (the
+        // collapsed-marquee law).
+        document.selection = if folded.alpha.iter().all(|&a| a == 0) {
+            None
+        } else {
+            Some(folded)
+        };
+        Ok(Delta::Selection {
+            before: before.map(Box::new),
+        })
+    }
+}
+
+/// `selection.deleteSaved` — CS6 `dom.deleteSavedSelection(selection)`:
+/// removes the named saved selection.
+struct DeleteSavedSelection;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct DeleteSavedSelectionPayload {
+    /// CS6 default: "default".
+    #[serde(default)]
+    name: Option<String>,
+}
+
+impl TypedCommand for DeleteSavedSelection {
+    type Payload = DeleteSavedSelectionPayload;
+
+    fn name(&self) -> &'static str {
+        "selection.deleteSaved"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "selection.deleteSaved";
+        let name = payload.name.clone().unwrap_or_else(|| "default".to_owned());
+        // Capture before mutating (the standing law).
+        let before = document.saved_selections.clone();
+        let index = document
+            .saved_selections
+            .iter()
+            .position(|saved| saved.name == name)
+            .ok_or_else(|| EngineError::MissingTarget {
+                name: NAME.to_owned(),
+                detail: format!("no saved selection named {name:?}"),
+            })?;
+        document.saved_selections.remove(index);
+        Ok(Delta::SavedSelections { before })
     }
 }
 
@@ -1378,5 +1582,185 @@ mod selection_tests {
             .apply_json(&mut document, serde_json::json!({"page": 0, "frame": 0}))
             .expect("distribute applies");
         assert_eq!(delta, Delta::Noop);
+    }
+
+    /// A 4×1 plane whose left half is selected.
+    fn half_plane() -> doc::SelectionMask {
+        let mut plane = doc::SelectionMask::empty(4, 1);
+        plane.alpha.copy_from_slice(&[255, 255, 0, 0]);
+        plane
+    }
+
+    #[test]
+    fn save_stores_by_name_and_undoes_byte_exactly() {
+        let mut document = Document {
+            selection: Some(half_plane()),
+            ..Document::default()
+        };
+        let delta = SaveSelection
+            .apply_json(&mut document, serde_json::json!({}))
+            .expect("save applies");
+        // Default name, stored verbatim.
+        assert_eq!(document.saved_selections.len(), 1);
+        assert_eq!(document.saved_selections[0].name, "default");
+        assert_eq!(document.saved_selections[0].mask, half_plane());
+        delta.apply_inverse(&mut document).expect("undo");
+        assert!(document.saved_selections.is_empty());
+        assert_eq!(document.selection.as_ref(), Some(&half_plane()));
+
+        // No active selection is a refusal.
+        document.selection = None;
+        let err = SaveSelection
+            .apply_json(&mut document, serde_json::json!({}))
+            .expect_err("empty save is refused");
+        assert!(matches!(
+            err,
+            crate::error::EngineError::InvalidState { .. }
+        ));
+
+        // An unknown operation spelling is a refusal.
+        document.selection = Some(half_plane());
+        let err = SaveSelection
+            .apply_json(&mut document, serde_json::json!({"operation": "xor"}))
+            .expect_err("bad operation is refused");
+        assert!(matches!(
+            err,
+            crate::error::EngineError::InvalidState { .. }
+        ));
+    }
+
+    #[test]
+    fn save_folds_into_an_existing_name() {
+        let mut document = Document {
+            selection: Some(half_plane()),
+            ..Document::default()
+        };
+        SaveSelection
+            .apply_json(&mut document, serde_json::json!({"name": "a"}))
+            .expect("first save applies");
+        // Shift the active selection right two pixels, then save-add.
+        let mut right = doc::SelectionMask::empty(4, 1);
+        right.alpha.copy_from_slice(&[0, 0, 255, 255]);
+        document.selection = Some(right);
+        SaveSelection
+            .apply_json(
+                &mut document,
+                serde_json::json!({"name": "a", "operation": "add"}),
+            )
+            .expect("second save applies");
+        assert_eq!(
+            document.saved_selections[0].mask.alpha,
+            vec![255, 255, 255, 255]
+        );
+        // CS6's "new or replace" spelling replaces.
+        let mut other = doc::SelectionMask::empty(4, 1);
+        other.alpha.copy_from_slice(&[0, 0, 0, 255]);
+        document.selection = Some(other);
+        SaveSelection
+            .apply_json(
+                &mut document,
+                serde_json::json!({"name": "a", "operation": "new or replace"}),
+            )
+            .expect("replace save applies");
+        assert_eq!(document.saved_selections[0].mask.alpha, vec![0, 0, 0, 255]);
+    }
+
+    #[test]
+    fn restore_folds_inverts_and_refuses_unknown() {
+        let mut document = Document::default();
+        document.saved_selections.push(doc::SavedSelection {
+            name: "a".to_owned(),
+            mask: half_plane(),
+        });
+        // Restore over an active selection that overlaps pixel 1.
+        let mut active = doc::SelectionMask::empty(4, 1);
+        active.alpha.copy_from_slice(&[0, 255, 255, 0]);
+        document.selection = Some(active);
+        let delta = RestoreSelection
+            .apply_json(
+                &mut document,
+                serde_json::json!({"name": "a", "operation": "intersect"}),
+            )
+            .expect("restore applies");
+        assert_eq!(
+            document.selection.as_ref().expect("kept").alpha,
+            vec![0, 255, 0, 0]
+        );
+        delta.apply_inverse(&mut document).expect("undo");
+        assert_eq!(
+            document.selection.as_ref().expect("restored").alpha,
+            vec![0, 255, 255, 0]
+        );
+
+        // Invert the saved mask first, then subtract it from a full
+        // active selection: subtracting everything-but-the-left-half
+        // leaves the left half.
+        let mut active = doc::SelectionMask::empty(4, 1);
+        active.alpha.copy_from_slice(&[255, 255, 255, 255]);
+        document.selection = Some(active);
+        RestoreSelection
+            .apply_json(
+                &mut document,
+                serde_json::json!({"name": "a", "operation": "subtract", "invert": true}),
+            )
+            .expect("inverted restore applies");
+        assert_eq!(
+            document.selection.as_ref().expect("kept").alpha,
+            vec![255, 255, 0, 0]
+        );
+
+        // A fold that covers nothing leaves no selection.
+        document.saved_selections[0].mask = half_plane();
+        let mut active = doc::SelectionMask::empty(4, 1);
+        active.alpha.copy_from_slice(&[0, 0, 255, 255]);
+        document.selection = Some(active);
+        let delta = RestoreSelection
+            .apply_json(
+                &mut document,
+                serde_json::json!({"name": "a", "operation": "intersect"}),
+            )
+            .expect("collapsed restore applies");
+        assert!(document.selection.is_none());
+        delta.apply_inverse(&mut document).expect("undo");
+        assert!(document.selection.is_some());
+
+        // Unknown names refuse.
+        document.selection = None;
+        let err = RestoreSelection
+            .apply_json(&mut document, serde_json::json!({"name": "zz"}))
+            .expect_err("unknown name is refused");
+        assert!(matches!(
+            err,
+            crate::error::EngineError::MissingTarget { .. }
+        ));
+    }
+
+    #[test]
+    fn delete_saved_removes_and_refuses_unknown() {
+        let mut document = Document::default();
+        document.saved_selections.push(doc::SavedSelection {
+            name: "a".to_owned(),
+            mask: half_plane(),
+        });
+        let delta = DeleteSavedSelection
+            .apply_json(&mut document, serde_json::json!({"name": "a"}))
+            .expect("delete applies");
+        assert!(document.saved_selections.is_empty());
+        delta.apply_inverse(&mut document).expect("undo");
+        assert_eq!(document.saved_selections[0].name, "a");
+
+        // Delete again with the entry back: it succeeds and empties.
+        DeleteSavedSelection
+            .apply_json(&mut document, serde_json::json!({"name": "a"}))
+            .expect("second delete applies");
+        assert!(document.saved_selections.is_empty());
+        // With nothing left, the name is a refusal.
+        let err = DeleteSavedSelection
+            .apply_json(&mut document, serde_json::json!({"name": "a"}))
+            .expect_err("deleting the emptied list is refused");
+        assert!(matches!(
+            err,
+            crate::error::EngineError::MissingTarget { .. }
+        ));
     }
 }

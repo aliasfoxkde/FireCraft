@@ -713,6 +713,9 @@ pub const CALLS: &[&str] = &[
     "selection.duplicateToFrames",
     "selection.duplicateToFrameRange",
     "selection.distributeToFrames",
+    "selection.save",
+    "selection.restore",
+    "selection.deleteSaved",
     "bitmap.selectSimilar",
     "primitive.setRectRoundness",
     "primitive.setRectSides",
@@ -2464,6 +2467,18 @@ pub fn random_call(rng: &mut FuzzRng, document: &Document) -> (String, serde_jso
         "selection.distributeToFrames" => serde_json::json!({
             "page": any_index(rng, pages),
             "frame": any_index(rng, frames),
+        }),
+        "selection.save" => serde_json::json!({
+            "name": if rng.chance(50) { Some(rng.pick(&["a", "b", "c"]).copied().to_owned()) } else { None },
+            "operation": rng.pick(&["new or replace", "replace", "add", "subtract", "intersect"]).copied(),
+        }),
+        "selection.restore" => serde_json::json!({
+            "name": if rng.chance(50) { Some(rng.pick(&["a", "b", "c"]).copied().to_owned()) } else { None },
+            "operation": rng.pick(&["new or replace", "replace", "add", "subtract", "intersect"]).copied(),
+            "invert": if rng.chance(25) { Some(true) } else { None },
+        }),
+        "selection.deleteSaved" => serde_json::json!({
+            "name": if rng.chance(50) { Some(rng.pick(&["a", "b", "c"]).copied().to_owned()) } else { None },
         }),
         "bitmap.selectSimilar" => serde_json::json!({
             "id": any_id(rng),

@@ -12,14 +12,15 @@
 ## 1. State snapshot (2026-10-14)
 
 - **Ship state:** v0.1.0 released, repo public. Roadmap M0–M15 all
-  closed. 153+ commits, CI green on `3d74723` (7/7 jobs).
-- **Engine registry:** 186 commands, pinned equal to the fuzz call
+  closed. 155+ commits, CI green on `3d74723` (7/7 jobs; the fuzz job
+  on that commit caught the addImage minting leak — fixed in `000557d`).
+- **Engine registry:** 189 commands, pinned equal to the fuzz call
   table by `the_call_table_covers_the_catalog`.
-- **CS6 DOM verb-surface parity:** **212 C / 45 P / 12 M / 88 N**
+- **CS6 DOM verb-surface parity:** **215 C / 45 P / 8 M / 88 N**
   (`docs/planning/generated/dom-parity.md`, regenerate per §5 below).
   (The CS6 verb list carries both case spellings of mergeDown and
   AddNewImage — those families flipped four rows each.)
-- **Active campaign:** close the 12 remaining M (missing) verbs in
+- **Active campaign:** close the 8 remaining M (missing) verbs in
   family batches — one decision doc + one command batch per family,
   exactly as #87–#93 did. The plan is §4 below.
 - **Clean-room invariants (never violate):** `source/` is Adobe's
@@ -251,6 +252,15 @@ mutations and refuses without a linked slice.
   geometry; a golden test proves `render_subset` pixels are
   byte-identical before/after. Ink-less text removes the object
   (empty-result contract). Engine gained the `text` dependency.
+- **8.7 — DONE (decision 0038).** The saved-selections trio landed
+  2026-10-14: `Document.saved_selections: Vec<SavedSelection>` joins
+  the editing-state-not-file-content class (`selection`, `jpeg_mask`);
+  `selection.save` requires an active pixel selection and folds into
+  an existing name through the operation (base = stored);
+  `selection.restore` inverts on request then folds with the active
+  selection as base (collapsed fold → no selection); `selection.deleteSaved`
+  removes. Single-document (`toDocument`/`fromDocument` omitted);
+  both "new or replace" and "replace" spellings accepted.
 - **8.6 Clipboard mask ops**: `clipPasteAsMask`, `clipPasteInside`,
   `clipPasteFromChannelToChannel` — needs the clipboard surface (6.6).
 
@@ -270,9 +280,11 @@ mutations and refuses without a linked slice.
 6.2 → 8.2 → 8.5 → Phase 3 → 8.3 → 8.4 → 5.3 → 4 (evidence) → 7
 (evidence) → 8.1 → 8.6/6.6 → 6.4 → 5.4. Progress through 2026-10-14:
 5.1–5.2, Phases 1–2, 6.1, 6.2, 8.2, 8.5, Phase 3, 8.3, 8.4, 5.3, 4,
-7, 8.1 done — **next is 8.6/6.6** (the clipboard surface, feeding
+7, 8.1, 8.7 done — **next is 8.6/6.6** (the clipboard surface, feeding
 `clipPasteAsMask` / `clipPasteInside` / `clipPasteFromChannelToChannel`),
-then 6.4 (resample) and 5.4 (setDocumentImageSize, which rides 6.4).
+then the filterSelection bake trio (4 M rows, one a CS6-typo duplicate;
+the `filters` kernel crate exists from `be98d4b`), then 6.4 (resample)
+and 5.4 (setDocumentImageSize, which rides 6.4).
 Re-derive from `dom-parity.md`'s M table if the matrix has moved; the
 plan follows the matrix, not the reverse.
 
