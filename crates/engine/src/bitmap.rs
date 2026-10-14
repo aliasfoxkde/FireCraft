@@ -319,6 +319,61 @@ fn premultiply_all(pixels: &mut [u8]) {
     }
 }
 
+/// Resamples a premultiplied RGBA buffer (row-major, `old_w` ×
+/// `old_h`) to `new_w` × `new_h` with edge-clamped bilinear filtering
+/// in the premultiplied domain. Pure integer math on 1/256 weights
+/// keeps the pass deterministic and bit-exact across platforms; edges
+/// clamp to the border pixel (no transparent bleed-in). This is the
+/// resample pass behind `document.setImageSize` (decision 0041).
+pub(crate) fn resample_rgba(
+    pixels: &[u8],
+    old_w: i64,
+    old_h: i64,
+    new_w: i64,
+    new_h: i64,
+) -> Vec<u8> {
+    let (old_w, old_h) = (old_w as usize, old_h as usize);
+    let (new_w, new_h) = (new_w as usize, new_h as usize);
+    let mut out = vec![0u8; new_w * new_h * 4];
+    let (last_x, last_y) = ((old_w - 1) as f64, (old_h - 1) as f64);
+    let sx = old_w as f64 / new_w as f64;
+    let sy = old_h as f64 / new_h as f64;
+    // Per-destination-column source pair and 1/256 weight, computed
+    // once and reused for every row.
+    let mut columns = Vec::with_capacity(new_w * 3);
+    for x in 0..new_w {
+        let source = ((x as f64 + 0.5) * sx - 0.5).clamp(0.0, last_x);
+        let x0 = source.floor() as usize;
+        columns.push(x0);
+        columns.push((x0 + 1).min(old_w - 1));
+        columns.push(((source - source.floor()) * 256.0).round() as usize); // 0..=256
+    }
+    for y in 0..new_h {
+        let source = ((y as f64 + 0.5) * sy - 0.5).clamp(0.0, last_y);
+        let y0 = source.floor() as usize;
+        let y1 = (y0 + 1).min(old_h - 1);
+        let fy = (((source - source.floor()) * 256.0).round()) as u64; // 0..=256
+        let gy = 256 - fy;
+        for x in 0..new_w {
+            let x0 = columns[x * 3];
+            let x1 = columns[x * 3 + 1];
+            let fx = columns[x * 3 + 2] as u64;
+            let gx = 256 - fx;
+            for channel in 0..4 {
+                let p00 = u64::from(pixels[(y0 * old_w + x0) * 4 + channel]);
+                let p10 = u64::from(pixels[(y0 * old_w + x1) * 4 + channel]);
+                let p01 = u64::from(pixels[(y1 * old_w + x0) * 4 + channel]);
+                let p11 = u64::from(pixels[(y1 * old_w + x1) * 4 + channel]);
+                let top = p00 * gx + p10 * fx;
+                let bottom = p01 * gx + p11 * fx;
+                let mixed = top * gy + bottom * fy; // ≤ 255·256²
+                out[(y * new_w + x) * 4 + channel] = ((mixed + 32_768) / 65_536) as u8;
+            }
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
@@ -453,5 +508,60 @@ mod tests {
         // TILv slots: 0 = (0,0), 1 = (1,0), 2 = (0,1), 3 = (1,1); the
         // mask covers columns 128.. → slots 1 and 3 → ids 1 and 0.
         assert_eq!(touched_tiles(&image, &mask), vec![1, 0]);
+    }
+
+    #[test]
+    fn resample_identity_is_byte_exact() {
+        let pixels: Vec<u8> = (0..8 * 4 * 4).map(|byte| (byte * 37 % 256) as u8).collect();
+        assert_eq!(resample_rgba(&pixels, 4, 8, 4, 8), pixels);
+    }
+
+    #[test]
+    fn resample_solid_color_stays_exact_at_any_scale() {
+        let pixels = [12u8, 200, 30, 255].repeat(6 * 3);
+        for (width, height) in [(12usize, 6usize), (3, 1), (48, 24), (7, 5)] {
+            let out = resample_rgba(&pixels, 6, 3, width as i64, height as i64);
+            assert_eq!(out.len(), width * height * 4);
+            for pixel in out.chunks_exact(4) {
+                assert_eq!(pixel, &[12, 200, 30, 255]);
+            }
+        }
+    }
+
+    #[test]
+    fn resample_upscale_interpolates_the_midpoint() {
+        // Two opaque pixels [0, 0, 0, 255] [200, 0, 0, 255] upscaled
+        // 2→4: sample centers land at source x = 0, 0.25, 0.75, 1
+        // (edges clamp), so the middle columns mix at ¼ and ¾.
+        let pixels = vec![0u8, 0, 0, 255, 200, 0, 0, 255];
+        let out = resample_rgba(&pixels, 2, 1, 4, 1);
+        let reds: Vec<u8> = out.chunks_exact(4).map(|pixel| pixel[0]).collect();
+        assert_eq!(reds, vec![0, 50, 150, 200]);
+    }
+
+    #[test]
+    fn resample_edges_clamp_instead_of_bleeding() {
+        // One red pixel upscaled 1→3: every sample center clamps to
+        // the border pixel, so nothing transparent or black bleeds in.
+        let out = resample_rgba(&[255u8, 0, 0, 255], 1, 1, 3, 1);
+        for pixel in out.chunks_exact(4) {
+            assert_eq!(pixel, &[255, 0, 0, 255]);
+        }
+    }
+
+    #[test]
+    fn resample_premultiplied_colors_stay_premultiplied() {
+        // Premultiplied (128, 0, 0, 128) solid: any resample keeps
+        // channels ≤ alpha (the domain never leaves premultiplied).
+        let pixels = [128u8, 0, 0, 128].repeat(4 * 4);
+        let out = resample_rgba(&pixels, 4, 4, 9, 3);
+        for pixel in out.chunks_exact(4) {
+            assert!(
+                pixel[0] <= pixel[3],
+                "red {} over alpha {}",
+                pixel[0],
+                pixel[3]
+            );
+        }
     }
 }

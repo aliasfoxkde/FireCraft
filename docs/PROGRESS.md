@@ -8,11 +8,12 @@
 
 - **Released:** v0.1.0 (2026-10-13), repo public.
 - **Roadmap:** M0–M15 **all closed**.
-- **Registry:** 198 commands. **CI:** green 7/7 on `f668d85`; later
+- **Registry:** 199 commands. **CI:** green 7/7 on `f668d85`; later
   campaign pushes verified per batch (runbook: HANDOFF §6).
-- **CS6 DOM parity:** **225 C / 45 P / 1 M / 85 N** — the last M verb
-  (`setDocumentImageSize`) rides the 6.4 resample debt; the phased
-  plan is [`HANDOFF.md`](HANDOFF.md) §4.
+- **CS6 DOM parity:** **226 C / 45 P / 0 M / 85 N** — **the M table is
+  empty** (2026-10-14): every CS6 dom mutation verb is carried or
+  partial. Remaining surface work is the 45 P rows and the recorded
+  debts ([`HANDOFF.md`](HANDOFF.md) §4 Phase 9).
 
 ## Milestones
 
@@ -65,10 +66,11 @@
 | #107 | place-image trio + shared assemble/retile helpers (8.1, decision 0037) | 7ea2288 | **212 C / 45 P / 12 M / 88 N** |
 | #108 | saved-selections trio (8.7, decision 0038) | f668d85 | **215 C / 45 P / 8 M / 88 N** |
 | #109 | clipboard surface: copy/cut/paste + paste-mask trio (8.6/6.6, decision 0039) | 1d1c8dc | **221 C / 45 P / 5 M / 85 N** |
-| #110 | filterSelection bake trio over compose kernels (8.8, decision 0040) | this batch | **225 C / 45 P / 1 M / 85 N** |
+| #110 | filterSelection bake trio over compose kernels (8.8, decision 0040) | 3f67491 | **225 C / 45 P / 1 M / 85 N** |
+| #111 | document.setImageSize — bilinear resample, the last M row (5.4, decision 0041) | this batch | **226 C / 45 P / 0 M / 85 N** |
 
-Remaining families (HANDOFF §4 order): 6.4 resample →
-5.4 setDocumentImageSize (the last M row).
+**Campaign complete:** no remaining M families. Next: P-class partials
+and Phase 9 debts (HANDOFF §4).
 
 ## Recorded debts (open)
 
@@ -77,7 +79,7 @@ Remaining families (HANDOFF §4 order): 6.4 resample →
 | object.duplicate shallow-clones groups | fidelity | pre-#91 |
 | Pattern-authoring command | fills UX | #85 |
 | mkBT tile-bank **writer** | bitmap round-trip out | M7 |
-| Image resample pass | setDocumentImageSize | M8 |
+| ~~Image resample pass~~ **DONE** — landed as `bitmap::resample_rgba` in #111 | setDocumentImageSize (closed, decision 0041) | M8 |
 | mask_replace_options "add" (mask union fold) | clipPasteAsMask variant | #109 (decision 0039) |
 | Path→image rasterizer (mask_type "image" on vector clipboard) | clipPasteAsMask variant | #109 (decision 0039) |
 | Path→image rasterizer (filterSelection on non-image selection) | 8.8 bake family refuses whole | #110 (decision 0040) |
@@ -102,5 +104,6 @@ Remaining families (HANDOFF §4 order): 6.4 resample →
 | 2026-10-14 | **215** | 45 | **8** | #108 saved selections (decision 0038) |
 | 2026-10-14 | **221** | 45 | **5** | #109 clipboard surface (decision 0039) |
 | 2026-10-14 | **225** | 45 | **1** | #110 filter bake family (decision 0040) |
+| 2026-10-14 | **226** | 45 | **0** | #111 setImageSize — M table empty (decision 0041) |
 
 (Pre-#91 counts are approximate; the matrix file is the authority.)

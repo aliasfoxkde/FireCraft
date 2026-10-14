@@ -706,6 +706,7 @@ pub const CALLS: &[&str] = &[
     "document.setCanvasColor",
     "document.setResolution",
     "document.rotate",
+    "document.setImageSize",
     "selection.set",
     "selection.selectAll",
     "selection.selectInverse",
@@ -2498,6 +2499,17 @@ pub fn random_call(rng: &mut FuzzRng, document: &Document) -> (String, serde_jso
             serde_json::json!({
                 "rotation": rotation,
                 "page": any_index(rng, pages),
+            })
+        }
+        "document.setImageSize" => {
+            let width = 8.0 + rng.below(64) as f64;
+            let height = 8.0 + rng.below(64) as f64;
+            serde_json::json!({
+                "rect": {"left": 0.0, "top": 0.0, "right": width, "bottom": height},
+                "resolution": rng.below(2400) as f64 + 1.0,
+                "unit": if rng.chance(2) { "inch" } else { "cm" },
+                "page": any_index(rng, pages),
+                "current_page_only": rng.chance(4),
             })
         }
         "selection.set" => serde_json::json!({

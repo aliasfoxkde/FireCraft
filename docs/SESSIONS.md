@@ -195,3 +195,20 @@ format research, vendored node dictionary).
   premultiply rounding breaks invert involution on semi-transparent
   pixels (exactness requires alpha 255). Parity **225C/45P/1M**,
   registry 198.
+  #111 `document.setImageSize` (decision 0041) — **the M table is
+  empty**. Corpus authority first: BatchTemplate.jst's Scale workflow
+  passes a left/top-anchored rect holding exact target dimensions, so
+  the rect is the new document bounds (the manual's "fit in" is loose
+  prose), and resolution rides `{pixelsPerUnit, units}` unchanged.
+  Content maps through `T(rect.origin)·S(sx, sy)`; the 6.4 resample
+  debt landed inside this batch as `bitmap::resample_rgba` — bilinear,
+  edge-clamped, 1/256 fixed-point weights, premultiplied domain — with
+  the rotate machinery renamed to the affine-generic
+  `map_point`/`map_contours` and its inline image preflight factored
+  into `preflight_page_images`. Resample output is capped at the
+  editable 1..=8192 grid so minted tiles stay gatherable;
+  `currentPageOnly` defaults true (CS3 spelling), false scales every
+  page by its own canvas ratio; deltas `[Info, PageBody×pages, Bank,
+  Object×n]`, byte-exact undo retracting minted tiles. Parity
+  **226C/45P/0M**, registry 199 — document-mutation coverage 271/271.
+  Remaining surface work: 45 P rows + Phase 9 debts.

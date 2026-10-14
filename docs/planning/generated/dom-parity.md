@@ -7,54 +7,28 @@ regeneration recipe in docs/PLANNING.md §5.4). The DOM is stable
 CS4→CS6; CS6 additions the text lacks (e.g. 9-slice guides) are
 covered by the CS6 `.jsf` scripts and appear here via their verbs.
 
-FireCraft side: the 150-command registry (`engine::catalog::ids()`,
+FireCraft side: the 199-command registry (`engine::catalog::ids()`,
 enforced == the fuzz call table).
 
 ## Coverage classes
 
 | class | meaning | count (of 356 dom verbs) |
 |---|---|---|
-| C | carried: a registry command implements the mutation | 225 |
+| C | carried: a registry command implements the mutation | 226 |
 | P | partial: carried with a recorded model limitation | 45 |
-| M | missing: no command and no decision — work items | 1 |
+| M | missing: no command and no decision — work items | 0 |
 | N | not applicable: non-document surface (accessor/UI/session/clipboard/export/OS) | 85 |
 
-Document-mutation coverage: **270 of 271** carried-or-partial
-(225 carried, 45 partial, 1 missing).
+Document-mutation coverage: **271 of 271** carried-or-partial
+(226 carried, 45 partial, 0 missing).
 
 ### Gap families (the Missing table, grouped)
 
-The 1 missing verbs collapse into six families, largest first —
-each family is one design decision plus a command batch:
+No missing verbs remain: every M row has landed as a command
+batch with a decision record (0039 clipboard, 0040 filter
+bake, 0041 image size). Remaining surface work is the P-class
+partial rows and the recorded debts in docs/HANDOFF.md Phase 9.
 
-1. **Object transforms** (1 verb remains): setDocumentImageSize
-   (bitmap resample; rotateDocument landed as
-   document.rotate, decision 0034). The object transform family
-   itself is
-   carried by object.* per decision 0019 — images refuse
-   transforms until the resample pass this family shares.
-2. **Frames/states**: add/delete/duplicate/reorder/
-   distribute-layer are carried by frame.* (task 89); the
-   selection fans landed as selection.duplicateToFrames /
-   selection.duplicateToFrameRange / selection.distributeToFrames
-   (decision 0026 — source frame is an explicit payload field).
-4. **Guides/grid/snap/onion**: setShowGrid/setShowGuides/
-   setSnapToGrid/setSnapToGuides went N (decision 0035): the
-   exhaustive dictionary has no view-prefs node (GRDv = geometry+
-   colour; GDSv = locked/colour/positions; MKBv/PDCv child lists
-   complete) and no CS6 .jsf uses them — app-preferences session
-   state, hosted in the scripting session. addGuide/changeGuide/removeGuide/
-   removeAllGuides/setGridOrigin/setGridSize/setOnionSkinning
-   landed as page.* commands (page-scoped overrides).
-3. **Group/flatten** (~3 verbs): mergeDown, flattenSelection,
-   flattenDocument — landed as flatten.mergeDown / flatten.selection /
-   flatten.document (decision 0031, compositor-backed bakes).
-   object.ungroup; setGroupType is partial (GRTi setter).
-4. **Selection tooling** (~7 verbs): select all/inverse/similar/
-   parents/children/scope, saved (named) selections,
-   attribute filter.
-5. **Misc** (~11 verbs): place-image, crop, text-to-paths,
-   split/knife path ops, button-symbol state.
 
 ## Carried (C)
 
@@ -228,6 +202,7 @@ each family is one design decision plus a command batch:
 | `setButtonShowDownOnLoad` | C | symbol.setButtonShowDownOnLoad |  |
 | `setDocumentCanvasColor` | C | document.setCanvasColor | BGCi document-wide; scripting maps the color string to the raw (dec 0023) |
 | `setDocumentCanvasSize` | C | page.setCanvasSize |  |
+| `setDocumentImageSize` | C | document.setImageSize | decision 0041: rect = new canvas bounds, bilinear resample |
 | `setDocumentResolution` | C | document.setResolution | RESf/RSUi document-wide, per-page copies kept in sync (dec 0023) |
 | `setElementLocked` | C | object.setLocked |  |
 | `setElementLockedByName` | C | object.setLocked | by-name resolution is an app lookup |
@@ -340,7 +315,6 @@ each family is one design decision plus a command batch:
 
 | CS6 verb | class | FireCraft carrier | note |
 |---|---|---|---|
-| `setDocumentImageSize` | M | - | no resample command |
 
 ## Not applicable (N)
 

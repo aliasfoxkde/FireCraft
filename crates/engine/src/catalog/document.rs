@@ -20,7 +20,8 @@ use crate::registry::CommandRegistry;
 pub(crate) fn install(registry: &mut CommandRegistry) -> Result<(), EngineError> {
     registry.register(SetDocumentCanvasColor)?;
     registry.register(SetDocumentResolution)?;
-    registry.register(DocumentRotate)
+    registry.register(DocumentRotate)?;
+    registry.register(SetDocumentImageSize)
 }
 
 /// `document.setCanvasColor` — CS6's
@@ -224,8 +225,52 @@ fn page_object_ids(document: &Document, page: usize) -> Vec<doc::ObjectId> {
     ids
 }
 
+/// Content refusals run before any capture, so a refused re-bake
+/// leaves the document byte-identical: every image on the page must
+/// use the editable 128 px `mkBT` grid and reference loaded tiles.
+/// `verb` names the operation for the error text ("rotates",
+/// "resamples").
+fn preflight_page_images(
+    document: &Document,
+    name: &'static str,
+    ids: &[doc::ObjectId],
+    verb: &str,
+) -> Result<(), EngineError> {
+    for id in ids {
+        if let doc::ObjectData::Image(image) = access::object(document, name, *id)? {
+            if image.tile_size != i64::from(raster::TILE_SIDE as u32) {
+                return Err(EngineError::InvalidState {
+                    name: name.to_owned(),
+                    detail: format!(
+                        "image {} uses a {} px tile grid; only the {} px mkBT grid {}",
+                        id.index(),
+                        image.tile_size,
+                        raster::TILE_SIDE,
+                        verb
+                    ),
+                });
+            }
+            for tile_ref in &image.tiles {
+                if let TileRef::Tile(tile_id) = tile_ref {
+                    if document.tiles.get(*tile_id).is_none() {
+                        return Err(EngineError::InvalidState {
+                            name: name.to_owned(),
+                            detail: format!(
+                                "image {} references missing tile {}",
+                                id.index(),
+                                tile_id
+                            ),
+                        });
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Maps one curve point (anchor plus optional handles) through `map`.
-fn rotate_point(point: &mut doc::PathPoint, map: geom::Affine) {
+fn map_point(point: &mut doc::PathPoint, map: geom::Affine) {
     point.anchor = map * point.anchor;
     if let Some(primary) = &mut point.primary {
         *primary = map * *primary;
@@ -235,10 +280,10 @@ fn rotate_point(point: &mut doc::PathPoint, map: geom::Affine) {
     }
 }
 
-fn rotate_contours(contours: &mut [doc::Contour], map: geom::Affine) {
+fn map_contours(contours: &mut [doc::Contour], map: geom::Affine) {
     for contour in contours {
         for point in &mut contour.points {
-            rotate_point(point, map);
+            map_point(point, map);
         }
     }
 }
@@ -328,35 +373,7 @@ impl TypedCommand for DocumentRotate {
         // Content refusals run before any capture, so a refused
         // rotation leaves the document byte-identical.
         let ids = page_object_ids(document, payload.page);
-        for id in &ids {
-            if let doc::ObjectData::Image(image) = access::object(document, NAME, *id)? {
-                if image.tile_size != i64::from(raster::TILE_SIDE as u32) {
-                    return Err(EngineError::InvalidState {
-                        name: NAME.to_owned(),
-                        detail: format!(
-                            "image {} uses a {} px tile grid; only the {} px mkBT grid rotates",
-                            id.index(),
-                            image.tile_size,
-                            raster::TILE_SIDE
-                        ),
-                    });
-                }
-                for tile_ref in &image.tiles {
-                    if let TileRef::Tile(tile_id) = tile_ref {
-                        if document.tiles.get(*tile_id).is_none() {
-                            return Err(EngineError::InvalidState {
-                                name: NAME.to_owned(),
-                                detail: format!(
-                                    "image {} references missing tile {}",
-                                    id.index(),
-                                    tile_id
-                                ),
-                            });
-                        }
-                    }
-                }
-            }
-        }
+        preflight_page_images(document, NAME, &ids, "rotates")?;
         // The canvas rect drives the whole map; a degenerate canvas has
         // nothing to rotate (CS6 always has a real one).
         let old_canvas = document.pages[payload.page].info.canvas.clone();
@@ -438,7 +455,7 @@ impl TypedCommand for DocumentRotate {
                 // Images baked above; their delta rides with the rest.
                 doc::ObjectData::Image(_) => {}
                 doc::ObjectData::Path(object) => {
-                    rotate_contours(&mut object.contours, map);
+                    map_contours(&mut object.contours, map);
                     if let Some(primitive) = &mut object.primitive {
                         // 90-degree steps keep rects axis-aligned, so
                         // the mapped bounds are the rotated rect.
@@ -455,7 +472,7 @@ impl TypedCommand for DocumentRotate {
                 }
                 doc::ObjectData::Slice(object) => {
                     object.frame = geom::transform::map_rect(map, object.frame);
-                    rotate_contours(&mut object.contours, map);
+                    map_contours(&mut object.contours, map);
                 }
                 doc::ObjectData::SymbolInstance(object) => {
                     object.transform = map * object.transform;
@@ -502,6 +519,332 @@ impl TypedCommand for DocumentRotate {
             page.guides = guides;
             if let Some(grid) = &mut page.grid {
                 grid.offset = map * grid.offset;
+            }
+        }
+        Ok(Delta::Group(deltas))
+    }
+}
+
+/// `document.setImageSize` — CS6's
+/// `dom.setDocumentImageSize(boundingRectangle, resolution,
+/// currentPageOnly)` (decision 0041): scales the document so it
+/// occupies the rectangle — every object's geometry rides the
+/// canvas→rect affine, images resample their pixel grid through the
+/// bilinear pass (`bitmap::resample_rgba`) — and sets the document
+/// resolution. The corpus batch template (BatchTemplate.jst) passes a
+/// left/top-anchored rect holding the exact target dimensions, so the
+/// rect is the new document bounds, not a fit-inside box; anisotropic
+/// rect shapes are admitted by the API and scale x and y
+/// independently. `currentPageOnly` defaults to true; the page itself
+/// is an explicit payload field (no current-page state — the
+/// `document.rotate` precedent).
+struct SetDocumentImageSize;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct ImageSizeRect {
+    left: f64,
+    top: f64,
+    right: f64,
+    bottom: f64,
+}
+
+fn default_current_page_only() -> bool {
+    true
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct SetDocumentImageSizePayload {
+    /// The rectangle the document is scaled into; its extents are the
+    /// new canvas dimensions.
+    rect: ImageSizeRect,
+    /// Pixels per unit; set across the document like
+    /// `document.setResolution`.
+    resolution: f64,
+    /// Unit the resolution is expressed in.
+    unit: ResolutionUnit,
+    /// Page index (used when `current_page_only`).
+    page: usize,
+    /// CS6's `currentPageOnly` (default true): scale one page or all.
+    #[serde(default = "default_current_page_only")]
+    current_page_only: bool,
+}
+
+/// The scaled pixel dimensions for one resample — the pixel grid
+/// scales with the canvas. Guards the bank: the result must stay
+/// within the editable working space (`bitmap::check_editable` rules),
+/// or the resample would mint tiles no later command can re-gather.
+fn scaled_pixels(
+    old: (i64, i64),
+    scale: (f64, f64),
+    name: &'static str,
+    id: doc::ObjectId,
+) -> Result<(i64, i64), EngineError> {
+    let (sx, sy) = scale;
+    let new_w = (old.0 as f64 * sx).round() as i64;
+    let new_h = (old.1 as f64 * sy).round() as i64;
+    if new_w < 1 || new_h < 1 || new_w > 8192 || new_h > 8192 {
+        return Err(EngineError::InvalidState {
+            name: name.to_owned(),
+            detail: format!(
+                "image {} resamples {}x{} to {new_w}x{new_h}; the editable grid is 1..=8192 per side",
+                id.index(),
+                old.0,
+                old.1
+            ),
+        });
+    }
+    Ok((new_w, new_h))
+}
+
+/// Assembles the image's tile grid, resamples the buffer, and re-tiles
+/// over fresh bank slots — the rotate bake with the bilinear pass in
+/// place of the permutation. Callers preflight the tile bank, so the
+/// assembly cannot miss.
+#[allow(clippy::too_many_arguments)]
+fn scale_image(
+    document: &mut Document,
+    image: &doc::ImageObject,
+    map: geom::Affine,
+    new_pixels: (i64, i64),
+) -> Result<(doc::ImageObject, Vec<u32>), EngineError> {
+    let (old_width, old_height) = image.pixels;
+    let flat = crate::bitmap::assemble_rgba(document, image, "document.setImageSize")?;
+    let resampled =
+        crate::bitmap::resample_rgba(&flat, old_width, old_height, new_pixels.0, new_pixels.1);
+    let (tiles, minted) =
+        crate::bitmap::retile_rgba(document, &resampled, new_pixels.0, new_pixels.1);
+    Ok((
+        doc::ImageObject {
+            location: map * image.location,
+            offset: map * image.offset,
+            pixels: new_pixels,
+            tile_size: image.tile_size,
+            tiles,
+            name: image.name.clone(),
+            opacity: image.opacity,
+            blend: image.blend,
+            visible: image.visible,
+            locked: image.locked,
+            effects: image.effects.clone(),
+        },
+        minted,
+    ))
+}
+
+impl TypedCommand for SetDocumentImageSize {
+    type Payload = SetDocumentImageSizePayload;
+
+    fn name(&self) -> &'static str {
+        "document.setImageSize"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "document.setImageSize";
+        if !payload.rect.left.is_finite()
+            || !payload.rect.top.is_finite()
+            || !payload.rect.right.is_finite()
+            || !payload.rect.bottom.is_finite()
+        {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: "the target rectangle must be finite".to_owned(),
+            });
+        }
+        let new_width = payload.rect.right - payload.rect.left;
+        let new_height = payload.rect.bottom - payload.rect.top;
+        if !new_width.is_finite()
+            || !new_height.is_finite()
+            || new_width <= 0.0
+            || new_height <= 0.0
+        {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: format!(
+                    "rectangle extents {new_width}x{new_height} must be finite and positive"
+                ),
+            });
+        }
+        if !payload.resolution.is_finite() || payload.resolution <= 0.0 {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: format!(
+                    "resolution {} must be finite and positive",
+                    payload.resolution
+                ),
+            });
+        }
+        let affected: Vec<usize> = if payload.current_page_only {
+            vec![payload.page]
+        } else {
+            (0..document.pages.len()).collect()
+        };
+        for page in &affected {
+            access::page(document, NAME, *page)?;
+            let canvas = &document.pages[*page].info.canvas;
+            if !canvas.width.is_finite()
+                || !canvas.height.is_finite()
+                || canvas.width <= 0.0
+                || canvas.height <= 0.0
+            {
+                return Err(EngineError::InvalidState {
+                    name: NAME.to_owned(),
+                    detail: format!("canvas {}x{} cannot scale", canvas.width, canvas.height),
+                });
+            }
+        }
+        // Everything fallible resolves before any mutation: per-page
+        // preflights (editable grids, loaded tiles, resample caps) and
+        // the scale maps.
+        struct PagePlan {
+            page: usize,
+            before_page: Box<doc::Page>,
+            /// Guide positions captured up front — `before_page` moves
+            /// into its delta before the guides are written.
+            old_guides: (Vec<f64>, Vec<f64>),
+            map: geom::Affine,
+            befores: Vec<(doc::ObjectId, doc::ObjectData)>,
+            bakes: Vec<(doc::ObjectId, doc::ImageObject)>,
+            minted: Vec<u32>,
+        }
+        let mut plans = Vec::with_capacity(affected.len());
+        for page in &affected {
+            let ids = page_object_ids(document, *page);
+            preflight_page_images(document, NAME, &ids, "resamples")?;
+            let old = document.pages[*page].info.canvas.clone();
+            let sx = new_width / old.width;
+            let sy = new_height / old.height;
+            let map = geom::Affine::translate(geom::Vec2::new(
+                payload.rect.left - old.x * sx,
+                payload.rect.top - old.y * sy,
+            )) * geom::Affine::new([sx, 0.0, 0.0, sy, 0.0, 0.0]);
+            let mut befores = Vec::with_capacity(ids.len());
+            for id in &ids {
+                befores.push((*id, access::object(document, NAME, *id)?.clone()));
+            }
+            let mut bakes = Vec::new();
+            let mut minted = Vec::new();
+            for (id, before) in &befores {
+                if let doc::ObjectData::Image(image) = before {
+                    let new_pixels = scaled_pixels(image.pixels, (sx, sy), NAME, *id)?;
+                    let (scaled, added) = scale_image(document, image, map, new_pixels)?;
+                    bakes.push((*id, scaled));
+                    minted.extend(added);
+                }
+            }
+            plans.push(PagePlan {
+                page: *page,
+                before_page: Box::new(document.pages[*page].clone()),
+                old_guides: (
+                    document.pages[*page].guides.horizontal.clone(),
+                    document.pages[*page].guides.vertical.clone(),
+                ),
+                map,
+                befores,
+                bakes,
+                minted,
+            });
+        }
+        // Mutations, all post-validation: resolution rides the root
+        // canvas plus each scaled page (the setResolution law, scoped
+        // to the affected pages), then each page's canvas, objects,
+        // guides, and grid. The whole-page `before` covers every page
+        // mutation in one delta — no separate PageInfo entries.
+        let mut deltas = vec![Delta::Info {
+            before: Box::new(document.info.clone()),
+        }];
+        document.info.canvas.resolution = payload.resolution;
+        document.info.canvas.resolution_unit = payload.unit.raw();
+        for plan in plans {
+            let old_canvas = plan.before_page.info.canvas.clone();
+            deltas.push(Delta::PageBody {
+                page: plan.page,
+                before: plan.before_page,
+            });
+            deltas.push(Delta::Bank { added: plan.minted });
+            for (id, scaled) in plan.bakes {
+                let Some(doc::ObjectData::Image(slot)) = document.registry.get_mut(id) else {
+                    return Err(EngineError::MissingTarget {
+                        name: NAME.to_owned(),
+                        detail: format!("image {} vanished mid-command", id.index()),
+                    });
+                };
+                *slot = scaled;
+            }
+            for (id, before) in plan.befores {
+                let Some(slot) = document.registry.get_mut(id) else {
+                    return Err(EngineError::MissingTarget {
+                        name: NAME.to_owned(),
+                        detail: format!("object {} vanished mid-command", id.index()),
+                    });
+                };
+                match slot {
+                    // Images baked above; their delta rides with the rest.
+                    doc::ObjectData::Image(_) => {}
+                    doc::ObjectData::Path(object) => {
+                        map_contours(&mut object.contours, plan.map);
+                        if let Some(primitive) = &mut object.primitive {
+                            // Axis-aligned rects stay axis-aligned
+                            // under scale+translate, so the mapped
+                            // bounds are the scaled rect.
+                            primitive.rect = geom::transform::map_rect(plan.map, primitive.rect);
+                            primitive.transform = plan.map * primitive.transform;
+                        }
+                    }
+                    doc::ObjectData::Text(object) => {
+                        // Transform-only: re-wrapping at the scaled
+                        // frame would move the glyphs.
+                        let base = object.transform.unwrap_or(geom::Affine::IDENTITY);
+                        object.transform = Some(plan.map * base);
+                    }
+                    doc::ObjectData::Slice(object) => {
+                        object.frame = geom::transform::map_rect(plan.map, object.frame);
+                        map_contours(&mut object.contours, plan.map);
+                    }
+                    doc::ObjectData::SymbolInstance(object) => {
+                        object.transform = plan.map * object.transform;
+                    }
+                    doc::ObjectData::Group(_) => {}
+                }
+                deltas.push(Delta::Object {
+                    id,
+                    inverse: ObjectInverse::Mutated {
+                        object: Box::new(before),
+                    },
+                });
+            }
+            {
+                let page = &mut document.pages[plan.page];
+                page.info.canvas.x = payload.rect.left;
+                page.info.canvas.y = payload.rect.top;
+                page.info.canvas.width = new_width;
+                page.info.canvas.height = new_height;
+                page.info.canvas.resolution = payload.resolution;
+                page.info.canvas.resolution_unit = payload.unit.raw();
+                // Guides are canvas-space lines: read the mapped
+                // position off one point of each old line.
+                let mut guides = std::mem::take(&mut page.guides);
+                guides.horizontal = plan
+                    .old_guides
+                    .0
+                    .iter()
+                    .map(|y| (plan.map * geom::Point::new(old_canvas.x, *y)).y)
+                    .collect();
+                guides.vertical = plan
+                    .old_guides
+                    .1
+                    .iter()
+                    .map(|x| (plan.map * geom::Point::new(*x, old_canvas.y)).x)
+                    .collect();
+                page.guides = guides;
+                if let Some(grid) = &mut page.grid {
+                    grid.offset = plan.map * grid.offset;
+                }
             }
         }
         Ok(Delta::Group(deltas))
@@ -641,6 +984,219 @@ mod document_tests {
             .iter()
             .map(|point| (point.anchor.x, point.anchor.y))
             .collect()
+    }
+
+    #[test]
+    fn image_size_scales_geometry_resolution_and_undoes() {
+        let (mut document, ids) = testdoc::sample_document();
+        document.pages[0].info.canvas = canvas(64.0, 48.0);
+        document.pages[0].guides.horizontal.push(12.0);
+        document.pages[0].guides.vertical.push(8.0);
+        let before_anchors = anchors(&document, ids[0]);
+        let before = document_bytes(&document);
+
+        let delta = SetDocumentImageSize
+            .apply_json(
+                &mut document,
+                serde_json::json!({
+                    "rect": {"left": 0.0, "top": 0.0, "right": 128.0, "bottom": 96.0},
+                    "resolution": 200.0,
+                    "unit": "cm",
+                    "page": 0,
+                }),
+            )
+            .expect("applies");
+        assert_eq!(document.pages[0].info.canvas.width, 128.0);
+        assert_eq!(document.pages[0].info.canvas.height, 96.0);
+        assert_eq!(document.info.canvas.resolution, 200.0);
+        assert_eq!(document.pages[0].info.canvas.resolution, 200.0);
+        assert_eq!(document.info.canvas.resolution_unit, 1);
+        // Geometry rides the 2x map exactly.
+        let after_anchors = anchors(&document, ids[0]);
+        assert_eq!(
+            after_anchors,
+            before_anchors
+                .iter()
+                .map(|(x, y)| (x * 2.0, y * 2.0))
+                .collect::<Vec<_>>()
+        );
+        // Guides scale with the canvas.
+        assert_eq!(document.pages[0].guides.horizontal, vec![24.0]);
+        assert_eq!(document.pages[0].guides.vertical, vec![16.0]);
+
+        delta.apply_inverse(&mut document).expect("inverse applies");
+        assert_eq!(document_bytes(&document), before);
+    }
+
+    #[test]
+    fn image_size_resamples_image_pixels_and_undoes() {
+        let (mut document, _) = testdoc::sample_document();
+        document.pages[0].info.canvas = canvas(16.0, 12.0);
+        let mut tile = [0u8; raster::TILE_BYTES];
+        for pixel in tile.chunks_exact_mut(4) {
+            pixel.copy_from_slice(&[30, 90, 150, 255]);
+        }
+        let tile_id = next_tile_id(&document);
+        document
+            .tiles
+            .insert(tile_id, raster::Tile::from_rgba8(tile));
+        let image_id = document
+            .registry
+            .insert(doc::ObjectData::Image(doc::ImageObject {
+                location: geom::Point::new(2.0, 4.0),
+                offset: geom::Point::ZERO,
+                pixels: (8, 6),
+                tile_size: i64::from(raster::TILE_SIDE as u32),
+                tiles: vec![doc::TileRef::Tile(tile_id)],
+                name: Some("photo".into()),
+                opacity: 1000,
+                blend: 0,
+                visible: true,
+                locked: false,
+                effects: Vec::new(),
+            }));
+        document.pages[0].layers.layers[0].cells[0]
+            .elements
+            .push(image_id);
+        let before = document_bytes(&document);
+
+        let delta = SetDocumentImageSize
+            .apply_json(
+                &mut document,
+                serde_json::json!({
+                    "rect": {"left": 0.0, "top": 0.0, "right": 32.0, "bottom": 24.0},
+                    "resolution": 72.0,
+                    "unit": "inch",
+                    "page": 0,
+                }),
+            )
+            .expect("applies");
+        let doc::ObjectData::Image(image) = document.registry.get(image_id).unwrap() else {
+            panic!("image stays an image")
+        };
+        // The pixel grid scales with the canvas: 2x both ways.
+        assert_eq!(image.pixels, (16, 12));
+        assert_eq!(image.location, geom::Point::new(4.0, 8.0));
+        assert_eq!(image.tiles.len(), 1);
+        let doc::TileRef::Tile(new_tile) = image.tiles[0] else {
+            panic!("a real tile rides the bake")
+        };
+        assert_ne!(new_tile, tile_id);
+        // A solid color survives resampling byte-exact.
+        let pixels = document.tiles.get(new_tile).unwrap().pixels();
+        assert_eq!(&pixels[..4], &[30, 90, 150, 255]);
+
+        delta.apply_inverse(&mut document).expect("inverse applies");
+        assert_eq!(document_bytes(&document), before);
+        assert!(document.tiles.get(new_tile).is_none(), "undo retracts");
+    }
+
+    #[test]
+    fn image_size_current_page_only_scopes_the_scale() {
+        let (mut document, _) = testdoc::sample_document();
+        document.pages[0].info.canvas = canvas(64.0, 48.0);
+        document.pages[1].info.canvas = canvas(64.0, 48.0);
+        SetDocumentImageSize
+            .apply_json(
+                &mut document,
+                serde_json::json!({
+                    "rect": {"left": 0.0, "top": 0.0, "right": 128.0, "bottom": 96.0},
+                    "resolution": 96.0,
+                    "unit": "inch",
+                    "page": 0,
+                    "current_page_only": true,
+                }),
+            )
+            .expect("applies");
+        assert_eq!(document.pages[0].info.canvas.width, 128.0);
+        assert_eq!(
+            document.pages[1].info.canvas.width, 64.0,
+            "the sibling page keeps its size"
+        );
+
+        SetDocumentImageSize
+            .apply_json(
+                &mut document,
+                serde_json::json!({
+                    "rect": {"left": 0.0, "top": 0.0, "right": 16.0, "bottom": 12.0},
+                    "resolution": 300.0,
+                    "unit": "inch",
+                    "page": 1,
+                    "current_page_only": false,
+                }),
+            )
+            .expect("applies");
+        assert_eq!(document.pages[0].info.canvas.width, 16.0);
+        assert_eq!(document.pages[1].info.canvas.width, 16.0);
+        assert_eq!(document.info.canvas.resolution, 300.0);
+    }
+
+    #[test]
+    fn image_size_refusals_touch_nothing() {
+        let (mut document, _) = testdoc::sample_document();
+        document.pages[0].info.canvas = canvas(64.0, 48.0);
+        // An 8x6 image gives the resample cap something to bite on.
+        let tile_id = next_tile_id(&document);
+        document
+            .tiles
+            .insert(tile_id, raster::Tile::from_rgba8([0u8; raster::TILE_BYTES]));
+        let image_id = document
+            .registry
+            .insert(doc::ObjectData::Image(doc::ImageObject {
+                location: geom::Point::ZERO,
+                offset: geom::Point::ZERO,
+                pixels: (8, 6),
+                tile_size: i64::from(raster::TILE_SIDE as u32),
+                tiles: vec![doc::TileRef::Tile(tile_id)],
+                name: None,
+                opacity: 1000,
+                blend: 0,
+                visible: true,
+                locked: false,
+                effects: Vec::new(),
+            }));
+        document.pages[0].layers.layers[0].cells[0]
+            .elements
+            .push(image_id);
+        let before = document_bytes(&document);
+        for payload in [
+            // Inverted rectangle.
+            serde_json::json!({
+                "rect": {"left": 10.0, "top": 0.0, "right": 5.0, "bottom": 96.0},
+                "resolution": 72.0, "unit": "inch", "page": 0,
+            }),
+            // Zero resolution.
+            serde_json::json!({
+                "rect": {"left": 0.0, "top": 0.0, "right": 128.0, "bottom": 96.0},
+                "resolution": 0.0, "unit": "inch", "page": 0,
+            }),
+            // Resample cap: the 8x6 image would scale past 8192 wide.
+            serde_json::json!({
+                "rect": {"left": 0.0, "top": 0.0, "right": 655_360.0, "bottom": 96.0},
+                "resolution": 72.0, "unit": "inch", "page": 0,
+            }),
+            // Out-of-range page.
+            serde_json::json!({
+                "rect": {"left": 0.0, "top": 0.0, "right": 128.0, "bottom": 96.0},
+                "resolution": 72.0, "unit": "inch", "page": 9,
+            }),
+        ] {
+            let error = SetDocumentImageSize
+                .apply_json(&mut document, payload)
+                .expect_err("refuses");
+            assert!(
+                matches!(
+                    error,
+                    EngineError::InvalidState { .. } | EngineError::MissingTarget { .. }
+                ),
+                "unexpected error shape: {error:?}"
+            );
+            assert_eq!(
+                document_bytes(&document),
+                before,
+                "refused image size mutated nothing"
+            );
+        }
     }
 
     #[test]
