@@ -13,11 +13,11 @@
 
 - **Ship state:** v0.1.0 released, repo public. Roadmap M0–M15 all
   closed. 153+ commits, CI green on `25fedbc` (7/7 jobs).
-- **Engine registry:** 148 commands, pinned equal to the fuzz call
+- **Engine registry:** 165 commands, pinned equal to the fuzz call
   table by `the_call_table_covers_the_catalog`.
-- **CS6 DOM verb-surface parity:** **172 C / 45 P / 57 M / 82 N**
+- **CS6 DOM verb-surface parity:** **189 C / 45 P / 39 M / 83 N**
   (`docs/planning/generated/dom-parity.md`, regenerate per §5 below).
-- **Active campaign:** close the 57 remaining M (missing) verbs in
+- **Active campaign:** close the 39 remaining M (missing) verbs in
   family batches — one decision doc + one command batch per family,
   exactly as #87–#93 did. The plan is §4 below.
 - **Clean-room invariants (never violate):** `source/` is Adobe's
@@ -34,7 +34,7 @@
 | `AGENTS.md` | Operating manual: commands, gates, commit rules, day-to-day method |
 | `docs/PLANNING.md` | Master plan: format spec (§6), architecture (§7), method |
 | `docs/planning/firecraft/` | `ROADMAP.md` + tickets M0–M15 (all closed; reference for how tickets are written) |
-| `docs/decisions/` | Decision records 0001–0022 — **write one per family/batch** |
+| `docs/decisions/` | Decision records 0001–0028 — **write one per family/batch** |
 | `docs/planning/generated/` | `parity.md`, `scorecard.md` (xtask-owned) + `dom-parity.md` (generator-owned, see §5) |
 | `docs/research/fireworks-png-nodes.md` | The node dictionary — the format Rosetta stone (observational; corpus wins on conflict) |
 | `log/devlog.md` | Detailed session log (gitignored) — **append an entry to close every task** |
@@ -173,10 +173,14 @@ are recorded in the decision doc.
   invented for it. Percent roundness scales the shorter side; the
   quadrangle maps the bounds rect onto a parallelogram-only quad
   (affine `MTXv`).
-- **6.2** `redrawSmartShape` — autoshape params are creation-only today
-  (decision: autoshape.* family). Add the param-edit command over the
-  Auto Shape library's sources. Stopping: edited autoshape re-renders;
-  golden gate.
+- **6.2 — DONE (decision 0028).** `autoshape.redraw {id, kind,
+  params}` landed 2026-10-14: the Auto Shape library's generators
+  re-run over explicit parameters (CS6 re-runs each shape's embedded
+  JSF, which has no clean-room equivalent — no script interpreter, no
+  wire node), swapping contours + `even_odd` behind one captured
+  mutation. Golden gate: redrawn contours == freshly created contours
+  for the same parameters. Cross-kind redraw is allowed (CS6 could
+  not); recorded as a deviation.
 
 ### Phase 7 — Button symbols (5 verbs) — wire-evidence-gated
 - **7.1** Evidence pass: where do button states live on the wire?

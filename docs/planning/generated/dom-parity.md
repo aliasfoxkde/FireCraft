@@ -14,17 +14,17 @@ enforced == the fuzz call table).
 
 | class | meaning | count (of 356 dom verbs) |
 |---|---|---|
-| C | carried: a registry command implements the mutation | 188 |
+| C | carried: a registry command implements the mutation | 189 |
 | P | partial: carried with a recorded model limitation | 45 |
-| M | missing: no command and no decision — work items | 40 |
+| M | missing: no command and no decision — work items | 39 |
 | N | not applicable: non-document surface (accessor/UI/session/clipboard/export/OS) | 83 |
 
-Document-mutation coverage: **233 of 273** carried-or-partial
-(188 carried, 45 partial, 40 missing).
+Document-mutation coverage: **234 of 273** carried-or-partial
+(189 carried, 45 partial, 39 missing).
 
 ### Gap families (the Missing table, grouped)
 
-The 40 missing verbs collapse into six families, largest first —
+The 39 missing verbs collapse into six families, largest first —
 each family is one design decision plus a command batch:
 
 1. **Object transforms** (2 verbs remain): rotateDocument (canvas
@@ -162,6 +162,7 @@ each family is one design decision plus a command batch:
 | `pathUnion` | C | path.boolean |  |
 | `placeTextInPath` | C | text.attachPath |  |
 | `redefineStyleByName` | C | style.redefineByName |  |
+| `redrawSmartShape` | C | autoshape.redraw | one path re-generates from explicit kind+params (no embedded JSF; decision 0028) |
 | `reflectSelection` | C | object.reflect | bHoriz/bVert; both false is the documented no-op |
 | `removeAllGuides` | C | page.removeAllGuides | one axis or both (the no-arg form); empty is a no-op |
 | `removeBehavior` | C | slice.removeBehavior |  |
@@ -323,7 +324,6 @@ each family is one design decision plus a command batch:
 | `knifeElementsFromPoint` | M | - | no split/knife boolean op |
 | `knifeElementsFromPoints` | M | - | no split/knife boolean op |
 | `mergeDown` | M | - | no merge-down (object or bitmap flatten) |
-| `redrawSmartShape` | M | - | autoshape params set at creation only; no edit command |
 | `restoreSelection` | M | - | named saved selections unmodeled |
 | `rotateDocument` | M | - | canvas rotation (90-degree steps + re-bake) |
 | `saveSelection` | M | - | named saved selections unmodeled |

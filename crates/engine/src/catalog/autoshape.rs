@@ -17,7 +17,7 @@
 //! payloads before anything mutates, and doubles as a tripwire against
 //! a generator producing NaN on finite input.
 
-use doc::{Document, ObjectData, PaintStyle, PathObject};
+use doc::{Document, ObjectData, ObjectId, PaintStyle, PathObject};
 use geom::Point;
 use vector::{
     ArrowHead, ArrowLineParams, ArrowParams, ConnectorParams, CornerKind, LShapeParams,
@@ -44,6 +44,7 @@ pub(crate) fn install(registry: &mut CommandRegistry) -> Result<(), EngineError>
     registry.register(CreateArrowLine)?;
     registry.register(CreateMeasure)?;
     registry.register(CreateConnectorLine)?;
+    registry.register(RedrawSmartShape)?;
     Ok(())
 }
 
@@ -832,6 +833,378 @@ impl Placed for CreateConnectorLinePayload {
     }
 }
 
+/// Which Auto Shape library entry `autoshape.redraw` re-generates
+/// with. The strings match the `autoshape.*` command-id suffixes.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+enum SmartKind {
+    Rect,
+    Star,
+    Polygon,
+    Spiral,
+    Pie,
+    Doughnut,
+    LShape,
+    Arrow,
+    #[serde(rename = "arrowLine")]
+    ArrowLine,
+    Measure,
+    #[serde(rename = "connectorLine")]
+    ConnectorLine,
+}
+
+impl SmartKind {
+    /// The library name, for error messages.
+    fn label(self) -> &'static str {
+        match self {
+            SmartKind::Rect => "rect",
+            SmartKind::Star => "star",
+            SmartKind::Polygon => "polygon",
+            SmartKind::Spiral => "spiral",
+            SmartKind::Pie => "pie",
+            SmartKind::Doughnut => "doughnut",
+            SmartKind::LShape => "lshape",
+            SmartKind::Arrow => "arrow",
+            SmartKind::ArrowLine => "arrowLine",
+            SmartKind::Measure => "measure",
+            SmartKind::ConnectorLine => "connectorLine",
+        }
+    }
+}
+
+/// Parameter surfaces for `autoshape.redraw` — geometry only. The
+/// create payloads carry placement (page/layer/cell/name), which a
+/// redraw has no use for: the object already sits in its cell.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct RedrawRect {
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+    corner: f64,
+    kind: RectCorner,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct RedrawStar {
+    center_x: f64,
+    center_y: f64,
+    outer: f64,
+    inner: f64,
+    outer_round: f64,
+    inner_round: f64,
+    points: u32,
+    start_angle: f64,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct RedrawPolygon {
+    center_x: f64,
+    center_y: f64,
+    outer: f64,
+    inner: f64,
+    points: u32,
+    sections: u32,
+    start_angle: f64,
+    split: bool,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct RedrawSpiral {
+    center_x: f64,
+    center_y: f64,
+    radius: f64,
+    tightness_deg: f64,
+    clockwise: bool,
+    closed: bool,
+}
+
+/// Shared by the `pie` and `doughnut` kinds, as at creation.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct RedrawPie {
+    center_x: f64,
+    center_y: f64,
+    outer: f64,
+    inner: f64,
+    start: f64,
+    end: f64,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct RedrawLShape {
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+    thickness: f64,
+    roundness: f64,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct RedrawArrow {
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+    thickness: f64,
+    roundness: f64,
+    arrow_width: f64,
+    arrow_length: f64,
+    arrow_tip: f64,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct RedrawArrowLine {
+    start_x: f64,
+    start_y: f64,
+    end_x: f64,
+    end_y: f64,
+    start_head: HeadStyle,
+    end_head: HeadStyle,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct RedrawMeasure {
+    start_x: f64,
+    start_y: f64,
+    end_x: f64,
+    end_y: f64,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct RedrawConnectorLine {
+    start_x: f64,
+    start_y: f64,
+    end_x: f64,
+    end_y: f64,
+    elbow_x: f64,
+    elbow_y: f64,
+    corner1: f64,
+    corner2: f64,
+    vertical: bool,
+}
+
+/// Deserializes `value` against the kind's parameter surface.
+fn params<T: serde::de::DeserializeOwned>(
+    kind: SmartKind,
+    value: &serde_json::Value,
+) -> Result<T, EngineError> {
+    serde_json::from_value(value.clone()).map_err(|error| EngineError::BadPayload {
+        name: "autoshape.redraw".to_owned(),
+        detail: format!("{} params do not fit their shape: {error}", kind.label()),
+    })
+}
+
+/// Re-runs a library generator from redraw parameters. Each arm is the
+/// create mapping minus placement.
+fn redraw_rect(p: &RedrawRect) -> PathObject {
+    vector::rectangle(RectParams {
+        origin: Point::new(p.x, p.y),
+        width: p.width,
+        height: p.height,
+        corner: p.corner,
+        kind: p.kind.into(),
+    })
+}
+
+fn redraw_star(p: &RedrawStar) -> PathObject {
+    vector::star(StarParams {
+        center: Point::new(p.center_x, p.center_y),
+        outer: p.outer,
+        inner: p.inner,
+        outer_round: p.outer_round,
+        inner_round: p.inner_round,
+        points: p.points,
+        start_angle: p.start_angle,
+    })
+}
+
+fn redraw_polygon(p: &RedrawPolygon) -> PathObject {
+    vector::smart_polygon(PolygonParams {
+        center: Point::new(p.center_x, p.center_y),
+        outer: p.outer,
+        inner: p.inner,
+        points: p.points,
+        sections: p.sections,
+        start_angle: p.start_angle,
+        split: p.split,
+    })
+}
+
+fn redraw_spiral(p: &RedrawSpiral) -> PathObject {
+    vector::spiral(SpiralParams {
+        center: Point::new(p.center_x, p.center_y),
+        radius: p.radius,
+        tightness_deg: p.tightness_deg,
+        clockwise: p.clockwise,
+        closed: p.closed,
+    })
+}
+
+fn redraw_pie(p: &RedrawPie) -> PathObject {
+    vector::pie(PieParams {
+        center: Point::new(p.center_x, p.center_y),
+        outer: p.outer,
+        inner: p.inner,
+        start: p.start,
+        end: p.end,
+        is_pie: true,
+    })
+}
+
+fn redraw_doughnut(p: &RedrawPie) -> PathObject {
+    vector::doughnut(PieParams {
+        center: Point::new(p.center_x, p.center_y),
+        outer: p.outer,
+        inner: p.inner,
+        start: p.start,
+        end: p.end,
+        is_pie: false,
+    })
+}
+
+fn redraw_l_shape(p: &RedrawLShape) -> PathObject {
+    vector::lshape(LShapeParams {
+        origin: Point::new(p.x, p.y),
+        width: p.width,
+        height: p.height,
+        thickness: p.thickness,
+        roundness: p.roundness,
+    })
+}
+
+fn redraw_arrow(p: &RedrawArrow) -> PathObject {
+    vector::arrow(ArrowParams {
+        origin: Point::new(p.x, p.y),
+        width: p.width,
+        height: p.height,
+        thickness: p.thickness,
+        roundness: p.roundness,
+        arrow_width: p.arrow_width,
+        arrow_length: p.arrow_length,
+        arrow_tip: p.arrow_tip,
+    })
+}
+
+fn redraw_arrow_line(p: &RedrawArrowLine) -> PathObject {
+    vector::arrow_line(ArrowLineParams {
+        start: Point::new(p.start_x, p.start_y),
+        end: Point::new(p.end_x, p.end_y),
+        start_head: p.start_head.into(),
+        end_head: p.end_head.into(),
+    })
+}
+
+fn redraw_measure(p: &RedrawMeasure) -> PathObject {
+    vector::measure(MeasureParams {
+        start: Point::new(p.start_x, p.start_y),
+        end: Point::new(p.end_x, p.end_y),
+    })
+}
+
+fn redraw_connector_line(p: &RedrawConnectorLine) -> PathObject {
+    vector::connector_line(ConnectorParams {
+        start: Point::new(p.start_x, p.start_y),
+        end: Point::new(p.end_x, p.end_y),
+        elbow: Point::new(p.elbow_x, p.elbow_y),
+        corner1: p.corner1,
+        corner2: p.corner2,
+        vertical: p.vertical,
+    })
+}
+
+/// `autoshape.redraw` — CS6 `dom.redrawSmartShape()`: "Forces the Auto
+/// Shapes in the document to redraw... useful when modifying a Auto
+/// Shape outside a tool." CS6 re-runs each shape's embedded generator
+/// script; FireCraft's library bakes geometry at insert (no script
+/// interpreter, no wire node for script state), so the redraw carries
+/// its parameters explicitly and regenerates one path's contours.
+/// Styling, name, and effects are untouched — this re-parameterizes,
+/// it does not restyle.
+struct RedrawSmartShape;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct RedrawSmartShapePayload {
+    /// Target path object.
+    id: ObjectId,
+    /// Which library entry re-generates the geometry.
+    kind: SmartKind,
+    /// That entry's parameter surface (geometry only).
+    params: serde_json::Value,
+}
+
+impl TypedCommand for RedrawSmartShape {
+    type Payload = RedrawSmartShapePayload;
+
+    fn name(&self) -> &'static str {
+        "autoshape.redraw"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "autoshape.redraw";
+        // Capture before the first mutation; nothing below mutates on
+        // the refusal paths.
+        let before = match access::object(document, NAME, payload.id)? {
+            ObjectData::Path(path) => path.clone(),
+            _ => {
+                return Err(EngineError::InvalidState {
+                    name: NAME.to_owned(),
+                    detail: format!("object {} is not a vector path", payload.id.index()),
+                });
+            }
+        };
+        let generated = match payload.kind {
+            SmartKind::Rect => redraw_rect(&params(payload.kind, &payload.params)?),
+            SmartKind::Star => redraw_star(&params(payload.kind, &payload.params)?),
+            SmartKind::Polygon => redraw_polygon(&params(payload.kind, &payload.params)?),
+            SmartKind::Spiral => redraw_spiral(&params(payload.kind, &payload.params)?),
+            SmartKind::Pie => redraw_pie(&params(payload.kind, &payload.params)?),
+            SmartKind::Doughnut => redraw_doughnut(&params(payload.kind, &payload.params)?),
+            SmartKind::LShape => redraw_l_shape(&params(payload.kind, &payload.params)?),
+            SmartKind::Arrow => redraw_arrow(&params(payload.kind, &payload.params)?),
+            SmartKind::ArrowLine => redraw_arrow_line(&params(payload.kind, &payload.params)?),
+            SmartKind::Measure => redraw_measure(&params(payload.kind, &payload.params)?),
+            SmartKind::ConnectorLine => {
+                redraw_connector_line(&params(payload.kind, &payload.params)?)
+            }
+        };
+        if !finite_geometry(&generated) {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: format!(
+                    "{} parameters must be finite (generated geometry is not)",
+                    payload.kind.label()
+                ),
+            });
+        }
+        if let Some(ObjectData::Path(path)) = document.registry.get_mut(payload.id) {
+            path.contours = generated.contours;
+            path.even_odd = generated.even_odd;
+        }
+        Ok(Delta::Object {
+            id: payload.id,
+            inverse: ObjectInverse::Mutated {
+                object: Box::new(ObjectData::Path(before)),
+            },
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
@@ -1006,5 +1379,165 @@ mod tests {
             }
         ));
         assert_eq!(cell_objects(&document).len(), before.len() + 1);
+    }
+
+    /// A five-point star inserted into the fixture's first cell.
+    fn star_document() -> (Document, ObjectId) {
+        let (mut document, _) = testdoc::sample_document();
+        apply_by_name(
+            &mut document,
+            "autoshape.star",
+            json!({
+                "centerX": 0.0, "centerY": 0.0,
+                "outer": 100.0, "inner": 50.0,
+                "outerRound": 100.0, "innerRound": 50.0,
+                "points": 5, "startAngle": -std::f64::consts::FRAC_PI_2,
+                "page": 0, "layer": 0, "cell": 0, "name": "star",
+            }),
+        )
+        .unwrap();
+        let id = *cell_objects(&document).last().unwrap();
+        (document, id)
+    }
+
+    #[test]
+    fn redraw_reparameterizes_and_undo_restores() {
+        let (mut document, id) = star_document();
+        let before = match document.registry.get(id).unwrap() {
+            ObjectData::Path(path) => path.clone(),
+            other => panic!("expected a path, got {other:?}"),
+        };
+        assert_eq!(before.contours[0].point_count, 10);
+
+        let delta = apply_by_name(
+            &mut document,
+            "autoshape.redraw",
+            json!({
+                "id": id, "kind": "star",
+                "params": {
+                    "centerX": 0.0, "centerY": 0.0,
+                    "outer": 100.0, "inner": 50.0,
+                    "outerRound": 100.0, "innerRound": 50.0,
+                    "points": 6, "startAngle": -std::f64::consts::FRAC_PI_2,
+                },
+            }),
+        )
+        .unwrap();
+        let redrawn = match document.registry.get(id).unwrap() {
+            ObjectData::Path(path) => path,
+            other => panic!("expected a path, got {other:?}"),
+        };
+        assert_eq!(redrawn.contours[0].point_count, 12, "one point pair more");
+        // Re-parameterization only: paint, name, and flags survive.
+        assert_eq!(redrawn.name.as_deref(), Some("star"));
+        assert_eq!(redrawn.paint, before.paint);
+        assert_eq!(redrawn.even_odd, before.even_odd);
+
+        delta.apply_inverse(&mut document).unwrap();
+        let restored = match document.registry.get(id).unwrap() {
+            ObjectData::Path(path) => path,
+            other => panic!("expected a path, got {other:?}"),
+        };
+        assert_eq!(*restored, before, "undo restores the exact path");
+    }
+
+    #[test]
+    fn redraw_matches_a_fresh_create() {
+        // The golden gate: a redrawn shape is indistinguishable from
+        // one created with the same parameters.
+        let (mut document, _) = testdoc::sample_document();
+        let star = |points: u32| {
+            json!({
+                "centerX": 4.0, "centerY": -7.0,
+                "outer": 90.0, "inner": 45.0,
+                "outerRound": 80.0, "innerRound": 40.0,
+                "points": points, "startAngle": 0.25,
+                "page": 0, "layer": 0, "cell": 0, "name": null,
+            })
+        };
+        apply_by_name(&mut document, "autoshape.star", star(5)).unwrap();
+        apply_by_name(&mut document, "autoshape.star", star(8)).unwrap();
+        let elements = cell_objects(&document);
+        let (five, eight) = (elements[elements.len() - 2], elements[elements.len() - 1]);
+        let contours_of =
+            |document: &Document, id: ObjectId| match document.registry.get(id).unwrap() {
+                ObjectData::Path(path) => path.contours.clone(),
+                other => panic!("expected a path, got {other:?}"),
+            };
+        assert_ne!(contours_of(&document, five), contours_of(&document, eight));
+
+        apply_by_name(
+            &mut document,
+            "autoshape.redraw",
+            json!({
+                "id": eight, "kind": "star",
+                "params": {
+                    "centerX": 4.0, "centerY": -7.0,
+                    "outer": 90.0, "inner": 45.0,
+                    "outerRound": 80.0, "innerRound": 40.0,
+                    "points": 5, "startAngle": 0.25,
+                },
+            }),
+        )
+        .unwrap();
+        assert_eq!(contours_of(&document, five), contours_of(&document, eight));
+    }
+
+    #[test]
+    fn redraw_swaps_the_even_odd_flag() {
+        let (mut document, id) = star_document();
+        apply_by_name(
+            &mut document,
+            "autoshape.redraw",
+            json!({
+                "id": id, "kind": "doughnut",
+                "params": {
+                    "centerX": 0.0, "centerY": 0.0,
+                    "outer": 100.0, "inner": 40.0,
+                    "start": 0.0, "end": 0.0,
+                },
+            }),
+        )
+        .unwrap();
+        let ObjectData::Path(path) = document.registry.get(id).unwrap() else {
+            panic!("expected a path");
+        };
+        assert!(path.even_odd, "the annulus reads through the hole");
+        assert_eq!(path.name.as_deref(), Some("star"), "name survives");
+    }
+
+    #[test]
+    fn redraw_refusals_leave_the_document_untouched() {
+        let (mut document, id) = star_document();
+        let before = serde_json::to_vec(&document).unwrap();
+        let star = json!({
+            "centerX": 0.0, "centerY": 0.0,
+            "outer": 100.0, "inner": 50.0,
+            "outerRound": 100.0, "innerRound": 50.0,
+            "points": 6, "startAngle": 0.0,
+        });
+
+        // Unknown kind, star params against the polygon surface, and
+        // an id that is not in the registry.
+        for payload in [
+            json!({"id": id, "kind": "hexagon", "params": star}),
+            json!({
+                "id": id, "kind": "polygon",
+                "params": {"centerX": 0.0, "centerY": 0.0, "outer": 90.0},
+            }),
+            json!({"id": doc::ObjectId::from_parts(999, 0), "kind": "star", "params": star}),
+        ] {
+            let error = apply_by_name(&mut document, "autoshape.redraw", payload)
+                .expect_err("redraw must refuse");
+            assert!(matches!(
+                error,
+                EngineError::BadPayload { .. } | EngineError::MissingTarget { .. }
+            ));
+            assert_eq!(
+                serde_json::to_vec(&document).unwrap(),
+                before,
+                "a refused redraw must leave the document untouched"
+            );
+        }
     }
 }

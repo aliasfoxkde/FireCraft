@@ -560,6 +560,7 @@ pub const CALLS: &[&str] = &[
     "autoshape.arrowLine",
     "autoshape.measure",
     "autoshape.connectorLine",
+    "autoshape.redraw",
     "path.boolean",
     "path.simplify",
     "path.expandStroke",
@@ -978,6 +979,151 @@ pub fn random_call(rng: &mut FuzzRng, document: &Document) -> (String, serde_jso
             "cell": any_index(rng, frames),
             "name": serde_json::Value::Null,
         }),
+        "autoshape.redraw" => {
+            let id = any_id(rng);
+            let (kind, params) = match rng.below(11) {
+                0 => (
+                    "rect",
+                    serde_json::json!({
+                        "x": -(rng.below(400) as f64),
+                        "y": -(rng.below(400) as f64),
+                        "width": rng.below(400) as f64,
+                        "height": rng.below(400) as f64,
+                        "corner": rng.below(100) as f64,
+                        "kind": rng.pick(&["bevel", "round", "chamfer"]).copied(),
+                    }),
+                ),
+                1 => (
+                    "star",
+                    serde_json::json!({
+                        "centerX": -(rng.below(400) as f64),
+                        "centerY": -(rng.below(400) as f64),
+                        "outer": rng.below(300) as f64,
+                        "inner": rng.below(150) as f64,
+                        "outerRound": rng.below(300) as f64,
+                        "innerRound": rng.below(150) as f64,
+                        "points": 3 + rng.below(20),
+                        "startAngle": (rng.below(628) as f64) / 100.0
+                            - std::f64::consts::PI,
+                    }),
+                ),
+                2 => (
+                    "polygon",
+                    serde_json::json!({
+                        "centerX": -(rng.below(400) as f64),
+                        "centerY": -(rng.below(400) as f64),
+                        "outer": rng.below(300) as f64,
+                        "inner": rng.below(150) as f64,
+                        "points": 3 + rng.below(20),
+                        "sections": 1 + rng.below(20),
+                        "startAngle": (rng.below(628) as f64) / 100.0
+                            - std::f64::consts::PI,
+                        "split": rng.chance(2),
+                    }),
+                ),
+                3 => (
+                    "spiral",
+                    serde_json::json!({
+                        "centerX": -(rng.below(400) as f64),
+                        "centerY": -(rng.below(400) as f64),
+                        "radius": rng.below(300) as f64,
+                        "tightnessDeg": 50.0 + (rng.below(39) as f64),
+                        "clockwise": rng.chance(2),
+                        "closed": rng.chance(5),
+                    }),
+                ),
+                4 => (
+                    "pie",
+                    serde_json::json!({
+                        "centerX": -(rng.below(400) as f64),
+                        "centerY": -(rng.below(400) as f64),
+                        "outer": rng.below(300) as f64,
+                        "inner": rng.below(150) as f64,
+                        "start": (rng.below(628) as f64) / 100.0
+                            - std::f64::consts::PI,
+                        "end": (rng.below(628) as f64) / 100.0
+                            - std::f64::consts::PI,
+                    }),
+                ),
+                5 => (
+                    "doughnut",
+                    serde_json::json!({
+                        "centerX": -(rng.below(400) as f64),
+                        "centerY": -(rng.below(400) as f64),
+                        "outer": rng.below(300) as f64,
+                        "inner": rng.below(150) as f64,
+                        "start": (rng.below(628) as f64) / 100.0
+                            - std::f64::consts::PI,
+                        "end": (rng.below(628) as f64) / 100.0
+                            - std::f64::consts::PI,
+                    }),
+                ),
+                6 => (
+                    "lshape",
+                    serde_json::json!({
+                        "x": -(rng.below(400) as f64),
+                        "y": -(rng.below(400) as f64),
+                        "width": rng.below(400) as f64,
+                        "height": rng.below(400) as f64,
+                        "thickness": rng.below(200) as f64,
+                        "roundness": rng.below(200) as f64,
+                    }),
+                ),
+                7 => (
+                    "arrow",
+                    serde_json::json!({
+                        "x": -(rng.below(400) as f64),
+                        "y": -(rng.below(400) as f64),
+                        "width": rng.below(400) as f64,
+                        "height": rng.below(400) as f64,
+                        "thickness": rng.below(200) as f64,
+                        "roundness": rng.below(200) as f64,
+                        "arrowWidth": rng.below(300) as f64,
+                        "arrowLength": rng.below(100) as f64,
+                        "arrowTip": rng.below(200) as f64,
+                    }),
+                ),
+                8 => (
+                    "arrowLine",
+                    serde_json::json!({
+                        "startX": -(rng.below(400) as f64),
+                        "startY": -(rng.below(400) as f64),
+                        "endX": rng.below(400) as f64,
+                        "endY": rng.below(400) as f64,
+                        "startHead": rng
+                            .pick(&["none", "open", "solid", "tail", "box"])
+                            .copied(),
+                        "endHead": rng
+                            .pick(&["none", "open", "solid", "tail", "box"])
+                            .copied(),
+                    }),
+                ),
+                9 => (
+                    "measure",
+                    serde_json::json!({
+                        "startX": -(rng.below(400) as f64),
+                        "startY": -(rng.below(400) as f64),
+                        "endX": rng.below(400) as f64,
+                        "endY": rng.below(400) as f64,
+                    }),
+                ),
+                _ => (
+                    "connectorLine",
+                    serde_json::json!({
+                        "startX": -(rng.below(400) as f64),
+                        "startY": -(rng.below(400) as f64),
+                        "endX": rng.below(400) as f64,
+                        "endY": rng.below(400) as f64,
+                        "elbowX": -(rng.below(200) as f64),
+                        "elbowY": -(rng.below(200) as f64),
+                        "corner1": rng.below(80) as f64,
+                        "corner2": rng.below(80) as f64,
+                        "vertical": rng.chance(2),
+                    }),
+                ),
+            };
+            serde_json::json!({ "id": id, "kind": kind, "params": params })
+        }
         "object.align" => {
             let count = 2 + rng.below(3);
             let ids: Vec<serde_json::Value> = (0..count).map(|_| any_id(rng)).collect();
