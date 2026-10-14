@@ -32,7 +32,7 @@ each family is one design decision plus a command batch:
    (bitmap resample). The object transform family itself is
    carried by object.* per decision 0019 — images refuse
    transforms until the resample pass this family shares.
-3. **Layer/page structure** (~11 verbs): page rename, layer lock and
+2. **Layer/page structure** (~11 verbs): page rename, layer lock and
    reorder, page reorder, layer sharing to pages, master pages.
    Model bits exist for sharing and master; commands are missing.
 3. **Frames/states** (4 verbs remain): duplicateSelectionToFrames /
