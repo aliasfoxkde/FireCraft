@@ -33,6 +33,8 @@ pub(crate) fn install(registry: &mut CommandRegistry) -> Result<(), EngineError>
     registry.register(SelectWand)?;
     registry.register(SelectSimilar)?;
     registry.register(SelectFeather)?;
+    registry.register(MoveSelectionMaskBy)?;
+    registry.register(AdjustPixelSel)?;
     registry.register(SelectNone)?;
     registry.register(Fill)?;
     registry.register(Erase)?;
@@ -487,6 +489,241 @@ impl TypedCommand for SelectFeather {
         feather_mask(&mut feathered, u32::from(payload.radius));
         document.selection = Some(feathered);
         Ok(selection_delta(Some(active)))
+    }
+}
+
+/// Chamfer distance field (3-4 weights, ×3 an axial step): every
+/// pixel's distance to the nearest pixel where `present` holds.
+/// Out-of-image neighbors contribute nothing — the image edge is not
+/// a selection boundary, so a full plane has no unselected pixels to
+/// contract from. Two passes, O(pixels), radius-independent.
+fn distance_field(mask: &SelectionMask, present: bool) -> Vec<u64> {
+    const INF: u64 = u64::MAX / 4;
+    let (w, h) = (mask.width as usize, mask.height as usize);
+    let mut dist = vec![INF; w * h];
+    for (index, &coverage) in mask.alpha.iter().enumerate() {
+        if (coverage != 0) == present {
+            dist[index] = 0;
+        }
+    }
+    let relax = |dist: &mut Vec<u64>, x: usize, y: usize, neighbors: &[(isize, isize, u64)]| {
+        let index = y * w + x;
+        if dist[index] == 0 {
+            return;
+        }
+        let mut best = dist[index];
+        for (dx, dy, cost) in neighbors {
+            let nx = x as isize + dx;
+            let ny = y as isize + dy;
+            if nx < 0 || ny < 0 || nx >= w as isize || ny >= h as isize {
+                continue;
+            }
+            let nd = dist[ny as usize * w + nx as usize];
+            if nd < INF {
+                best = best.min(nd + cost);
+            }
+        }
+        dist[index] = best;
+    };
+    const FORWARD: [(isize, isize, u64); 4] = [(-1, 0, 3), (0, -1, 3), (-1, -1, 4), (1, -1, 4)];
+    const BACKWARD: [(isize, isize, u64); 4] = [(1, 0, 3), (0, 1, 3), (1, 1, 4), (-1, 1, 4)];
+    for y in 0..h {
+        for x in 0..w {
+            relax(&mut dist, x, y, &FORWARD);
+        }
+    }
+    for y in (0..h).rev() {
+        for x in (0..w).rev() {
+            relax(&mut dist, x, y, &BACKWARD);
+        }
+    }
+    dist
+}
+
+/// Chamfer radius for a pixel radius: an axial step is 3 field units.
+fn chamfer(radius: u64) -> u64 {
+    radius * 3
+}
+
+fn expand_mask(mask: &SelectionMask, radius: u64) -> SelectionMask {
+    let dist = distance_field(mask, true);
+    let mut out = mask.clone();
+    for (index, d) in dist.iter().enumerate() {
+        out.alpha[index] = if *d <= chamfer(radius) { 255 } else { 0 };
+    }
+    out
+}
+
+fn contract_mask(mask: &SelectionMask, radius: u64) -> SelectionMask {
+    let dist = distance_field(mask, false);
+    let mut out = mask.clone();
+    for (index, d) in dist.iter().enumerate() {
+        out.alpha[index] = if mask.alpha[index] != 0 && *d > chamfer(radius) {
+            255
+        } else {
+            0
+        };
+    }
+    out
+}
+
+fn border_mask(mask: &SelectionMask, radius: u64) -> SelectionMask {
+    let dist = distance_field(mask, false);
+    let mut out = mask.clone();
+    for (index, d) in dist.iter().enumerate() {
+        out.alpha[index] = if mask.alpha[index] != 0 && *d <= chamfer(radius) {
+            255
+        } else {
+            0
+        };
+    }
+    out
+}
+
+/// Morphological smooth: opening (contract then expand) removes
+/// specks, closing (expand then contract) fills pinholes — the same
+/// radius all four passes.
+fn smooth_mask(mask: &SelectionMask, radius: u64) -> SelectionMask {
+    let opened = expand_mask(&contract_mask(mask, radius), radius);
+    contract_mask(&expand_mask(&opened, radius), radius)
+}
+
+/// `bitmap.moveSelectionMaskBy` — CS6 `dom.moveSelectionMaskBy(delta)`:
+/// "Moves the current pixel mask by the specified amount. If there is
+/// no pixel selection, an exception is thrown." Only the coverage
+/// plane moves; image pixels are untouched (`bitmap.movePixels` moves
+/// the pixels under it).
+struct MoveSelectionMaskBy;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct MoveSelectionMaskByPayload {
+    /// Coverage-plane shift; positive moves right/down.
+    delta: MoveDeltaPayload,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct MoveDeltaPayload {
+    x: i64,
+    y: i64,
+}
+
+impl TypedCommand for MoveSelectionMaskBy {
+    type Payload = MoveSelectionMaskByPayload;
+
+    fn name(&self) -> &'static str {
+        "bitmap.moveSelectionMaskBy"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "bitmap.moveSelectionMaskBy";
+        let Some(active) = document.selection.clone() else {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: "there is no pixel selection".to_owned(),
+            });
+        };
+        let (dx, dy) = (payload.delta.x, payload.delta.y);
+        if dx == 0 && dy == 0 {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: "a zero delta moves nothing".to_owned(),
+            });
+        }
+        if dx.abs() > 65535 || dy.abs() > 65535 {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: "delta exceeds the 65535-plane bound".to_owned(),
+            });
+        }
+        let (w, h) = (active.width as usize, active.height as usize);
+        let mut moved = SelectionMask::empty(active.width, active.height);
+        for y in 0..h {
+            let source_y = y as i64 - dy;
+            if source_y < 0 || source_y >= h as i64 {
+                continue;
+            }
+            for x in 0..w {
+                let source_x = x as i64 - dx;
+                if source_x < 0 || source_x >= w as i64 {
+                    continue;
+                }
+                moved.alpha[y * w + x] = active.alpha[source_y as usize * w + source_x as usize];
+            }
+        }
+        let before = document.selection.replace(moved);
+        Ok(selection_delta(before))
+    }
+}
+
+/// `bitmap.adjustPixelSel` — CS6
+/// `dom.selectAdjustPixelSel(whatToDo, amount)`: "Expands or reduces
+/// the pixel selection by the specified number of pixels, selects a
+/// border of pixels, or smooths the edge of the pixel selection."
+/// Morphology over the coverage plane with a 3-4 chamfer distance
+/// field: expand/contract are threshold moves of the selected/unselected
+/// boundary, border keeps the edge band, smooth is an opening then a
+/// closing. The binary projection (`alpha != 0`) is what adjusts —
+/// feather softness collapses to hard coverage (recorded).
+struct AdjustPixelSel;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct AdjustPixelSelPayload {
+    /// The CS6 `whatToDo` words.
+    what: AdjustKind,
+    /// Pixels to adjust by; 1..=65535.
+    amount: i64,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+enum AdjustKind {
+    Expand,
+    Contract,
+    Border,
+    Smooth,
+}
+
+impl TypedCommand for AdjustPixelSel {
+    type Payload = AdjustPixelSelPayload;
+
+    fn name(&self) -> &'static str {
+        "bitmap.adjustPixelSel"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "bitmap.adjustPixelSel";
+        let Some(active) = document.selection.clone() else {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: "there is no pixel selection".to_owned(),
+            });
+        };
+        if !(1..=65535).contains(&payload.amount) {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: format!("amount {} outside 1..=65535", payload.amount),
+            });
+        }
+        let radius = u64::try_from(payload.amount).unwrap_or(0);
+        let adjusted = match payload.what {
+            AdjustKind::Expand => expand_mask(&active, radius),
+            AdjustKind::Contract => contract_mask(&active, radius),
+            AdjustKind::Border => border_mask(&active, radius),
+            AdjustKind::Smooth => smooth_mask(&active, radius),
+        };
+        let before = document.selection.replace(adjusted);
+        Ok(selection_delta(before))
     }
 }
 
@@ -2293,5 +2530,187 @@ mod tests {
             before,
             "refused copies and cuts change nothing"
         );
+    }
+
+    #[test]
+    fn move_mask_translates_coverage_and_undo_is_exact() {
+        let (mut document, image) = checker_document();
+        SelectRect
+            .apply_json(
+                &mut document,
+                json!({ "id": image, "x": 0, "y": 0, "width": 2, "height": 2 }),
+            )
+            .unwrap();
+        let before = document.selection.clone().unwrap();
+
+        let delta = MoveSelectionMaskBy
+            .apply_json(&mut document, json!({ "delta": { "x": 2, "y": 1 } }))
+            .unwrap();
+        let mask = document.selection.as_ref().unwrap();
+        assert_eq!(mask.get(0, 0), Some(0), "the old corner vacated");
+        assert_eq!(mask.get(2, 1), Some(255));
+        assert_eq!(mask.get(3, 2), Some(255));
+        assert_eq!(mask.get(3, 3), Some(0), "the shift clipped at the edge");
+
+        delta.apply_inverse(&mut document).unwrap();
+        assert_eq!(document.selection.as_ref().unwrap(), &before);
+    }
+
+    #[test]
+    fn move_mask_gates() {
+        let (mut document, image) = checker_document();
+        // No plane yet: CS6 throws.
+        let error = MoveSelectionMaskBy
+            .apply_json(&mut document, json!({ "delta": { "x": 1, "y": 0 } }))
+            .unwrap_err();
+        assert!(error.to_string().contains("there is no pixel selection"));
+
+        SelectRect
+            .apply_json(
+                &mut document,
+                json!({ "id": image, "x": 0, "y": 0, "width": 2, "height": 2 }),
+            )
+            .unwrap();
+        let before = serde_json::to_vec(&document).unwrap();
+
+        let error = MoveSelectionMaskBy
+            .apply_json(&mut document, json!({ "delta": { "x": 0, "y": 0 } }))
+            .unwrap_err();
+        assert!(error.to_string().contains("zero delta"));
+
+        let error = MoveSelectionMaskBy
+            .apply_json(&mut document, json!({ "delta": { "x": 70000, "y": 0 } }))
+            .unwrap_err();
+        assert!(error.to_string().contains("65535"));
+
+        assert_eq!(serde_json::to_vec(&document).unwrap(), before);
+    }
+
+    #[test]
+    fn adjust_expand_contract_round_trips_and_undo_is_exact() {
+        let (mut document, image) = checker_document();
+        SelectRect
+            .apply_json(
+                &mut document,
+                json!({ "id": image, "x": 1, "y": 1, "width": 2, "height": 2 }),
+            )
+            .unwrap();
+        let before = document.selection.clone().unwrap();
+
+        let delta = AdjustPixelSel
+            .apply_json(&mut document, json!({ "what": "expand", "amount": 1 }))
+            .unwrap();
+        let mask = document.selection.as_ref().unwrap();
+        // A 1px ring around the 2x2 block: the chamfer threshold is
+        // the axial distance, so the diagonal corners of the 4x4 stay
+        // out ((0,0) is 2 axial steps from (1,1)).
+        assert_eq!(mask.get(0, 1), Some(255));
+        assert_eq!(mask.get(3, 2), Some(255));
+        assert_eq!(mask.get(0, 0), Some(0));
+
+        delta.apply_inverse(&mut document).unwrap();
+        assert_eq!(document.selection.as_ref().unwrap(), &before);
+
+        // Contract past the plane edge leaves the inner pixel only.
+        AdjustPixelSel
+            .apply_json(&mut document, json!({ "what": "contract", "amount": 1 }))
+            .unwrap();
+        let mask = document.selection.as_ref().unwrap();
+        assert_eq!(
+            mask.get(1, 1),
+            Some(0),
+            "1px from the unselected ring contracts away"
+        );
+        assert!(mask.alpha.iter().all(|&c| c == 0));
+    }
+
+    #[test]
+    fn adjust_border_smooth_and_gates() {
+        let (mut document, image) = checker_document();
+        SelectRect
+            .apply_json(
+                &mut document,
+                json!({ "id": image, "x": 0, "y": 0, "width": 4, "height": 4 }),
+            )
+            .unwrap();
+        let before = document.selection.clone().unwrap();
+
+        // Border 1 of a full-plane selection: the whole plane is edge
+        // (every pixel is 1 step from outside... no — outside is not a
+        // boundary; there are no unselected pixels, so the border is
+        // empty).
+        AdjustPixelSel
+            .apply_json(&mut document, json!({ "what": "border", "amount": 1 }))
+            .unwrap();
+        assert!(
+            document
+                .selection
+                .as_ref()
+                .unwrap()
+                .alpha
+                .iter()
+                .all(|&c| c == 0)
+        );
+
+        // Smooth is closing(opening): on the full plane there are no
+        // in-plane unselected pixels, so opening is the identity and
+        // the smooth is too.
+        SelectRect
+            .apply_json(
+                &mut document,
+                json!({ "id": image, "x": 0, "y": 0, "width": 4, "height": 4 }),
+            )
+            .unwrap();
+        AdjustPixelSel
+            .apply_json(&mut document, json!({ "what": "smooth", "amount": 2 }))
+            .unwrap();
+        assert!(
+            document
+                .selection
+                .as_ref()
+                .unwrap()
+                .alpha
+                .iter()
+                .all(|&c| c == 255)
+        );
+
+        // A pinhole in the plane: closing fills it back.
+        SelectRect
+            .apply_json(
+                &mut document,
+                json!({ "id": image, "x": 0, "y": 0, "width": 4, "height": 4 }),
+            )
+            .unwrap();
+        let mut holed = document.selection.clone().unwrap();
+        holed.set(1, 1, 0);
+        document.selection = Some(holed);
+        AdjustPixelSel
+            .apply_json(&mut document, json!({ "what": "smooth", "amount": 1 }))
+            .unwrap();
+        assert_eq!(
+            document.selection.as_ref().unwrap().get(1, 1),
+            Some(255),
+            "closing fills the pinhole"
+        );
+
+        // Gates: bad kind fails payload decode; amount 0 and
+        // out-of-range refuse; refusals mutate nothing.
+        assert!(
+            AdjustPixelSel
+                .apply_json(&mut document, json!({ "what": "feather", "amount": 1 }))
+                .is_err()
+        );
+        for amount in [0, -1, 65536] {
+            let error = AdjustPixelSel
+                .apply_json(&mut document, json!({ "what": "expand", "amount": amount }))
+                .unwrap_err();
+            assert!(error.to_string().contains("1..=65535"));
+        }
+        document.selection = None;
+        let error = AdjustPixelSel
+            .apply_json(&mut document, json!({ "what": "expand", "amount": 1 }))
+            .unwrap_err();
+        assert!(error.to_string().contains("there is no pixel selection"));
+        let _ = before;
     }
 }

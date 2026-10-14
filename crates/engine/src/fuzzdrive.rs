@@ -692,6 +692,8 @@ pub const CALLS: &[&str] = &[
     "slice.addBehavior",
     "slice.removeBehavior",
     "slice.addSwapImageBehaviorFromPoint",
+    "bitmap.moveSelectionMaskBy",
+    "bitmap.adjustPixelSel",
     "slice.setData",
     "hotspot.setRectangle",
     "hotspot.setShape",
@@ -2422,6 +2424,25 @@ pub fn random_call(rng: &mut FuzzRng, document: &Document) -> (String, serde_jso
             "id": any_id(rng),
             "index": any_index(rng, 3),
         }),
+        // Mask moves wander small (real translations) with a rare
+        // huge one into the 65535 refusal; adjustments cycle the four
+        // CS6 kinds with amounts crossing the 1..=65535 gate.
+        "bitmap.moveSelectionMaskBy" => serde_json::json!({
+            "delta": {
+                "x": rng.below(128) as i64 - 64,
+                "y": rng.below(128) as i64 - 64,
+            }
+        }),
+        "bitmap.adjustPixelSel" => {
+            let what = ["expand", "contract", "border", "smooth"][rng.below(4)];
+            let amount = match rng.below(10) {
+                0 => 0i64,
+                1 => -1,
+                2 => 70000,
+                _ => rng.below(24) as i64 + 1,
+            };
+            serde_json::json!({ "what": what, "amount": amount })
+        }
         // The swap-image source point wanders over (and off) the slice
         // field; the selected slice takes the behavior when a source
         // resolves.

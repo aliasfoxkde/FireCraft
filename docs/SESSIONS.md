@@ -435,3 +435,34 @@ Batch: `text.setTextOnPathMode`, `text.setTextOnPathOffset`,
 - fuzzdrive: 3 CALLS + arms (mode 0..5 crosses the legal range into
   refusal; offset ±100; reverse empty). Local fuzz 256×48 clean.
 - Registry 222→225. dom-parity: **253C/18P/0M/85N**, unresolved [].
+
+## #119 — 2026-10-14 — pixel-mask pair (decision 0049)
+
+Batch: `bitmap.moveSelectionMaskBy`, `bitmap.adjustPixelSel` (8.15).
+
+- Both verbs are pure `SelectionMask` plane ops — no image pixels
+  move, no tiles load, undo rides `selection_delta` like the other
+  `bitmap.select*` commands.
+- `moveSelectionMaskBy`: byte re-read from (x−dx, y−dy), vacated area
+  clears. Gates: no plane refuses (CS6 throws), zero delta refuses,
+  |d| > 65535 refuses.
+- `adjustPixelSel`: 3-4 chamfer distance field (two passes,
+  O(pixels), radius-independent thresholding at 3×amount).
+  expand/contract/border are threshold moves; smooth = opening then
+  closing (specks go, pinholes fill). `whatToDo` is a serde enum of
+  the four CS6 words (junk fails decode). Amount gates 1..=65535.
+- Recorded choices: the image edge is NOT a selection boundary (a
+  plane with no unselected pixels is contract's identity); the binary
+  projection (`alpha != 0`) is what adjusts, so feather softness
+  collapses to hard coverage.
+- Test trap: the checker fixture is a 4×4 image and SelectRect spans
+  the whole plane — a full plane has NO in-plane unselected pixels,
+  so contract-1 is the identity (my first "ring" premise was wrong;
+  probed, then rebuilt the smooth test around the identity + pinhole
+  fill).
+- Tests: 4 (translate + undo; move gates; expand/contract roundtrip
+  + undo with chamfer-diagonal corner assert; border-empty-on-full
+  plane + smooth identity + pinhole fill + kind/amount/no-plane
+  gates). fuzzdrive: 2 CALLS + arms (kinds cycled, amounts cross the
+  gate). Local fuzz 256×48 clean.
+- Registry 225→227. dom-parity: **255C/16P/0M/85N**, unresolved [].

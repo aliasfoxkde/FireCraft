@@ -7,20 +7,20 @@ regeneration recipe in docs/PLANNING.md §5.4). The DOM is stable
 CS4→CS6; CS6 additions the text lacks (e.g. 9-slice guides) are
 covered by the CS6 `.jsf` scripts and appear here via their verbs.
 
-FireCraft side: the 225-command registry (`engine::catalog::ids()`,
+FireCraft side: the 227-command registry (`engine::catalog::ids()`,
 enforced == the fuzz call table).
 
 ## Coverage classes
 
 | class | meaning | count (of 356 dom verbs) |
 |---|---|---|
-| C | carried: a registry command implements the mutation | 253 |
-| P | partial: carried with a recorded model limitation | 18 |
+| C | carried: a registry command implements the mutation | 255 |
+| P | partial: carried with a recorded model limitation | 16 |
 | M | missing: no command and no decision — work items | 0 |
 | N | not applicable: non-document surface (accessor/UI/session/clipboard/export/OS) | 85 |
 
 Document-mutation coverage: **271 of 271** carried-or-partial
-(253 carried, 18 partial, 0 missing).
+(255 carried, 16 partial, 0 missing).
 
 ### Gap families (the Missing table, grouped)
 
@@ -156,6 +156,7 @@ partial rows and the recorded debts in docs/HANDOFF.md Phase 9.
 | `movePointOnHotspotByWithFlags` | C | object.translate | flagged variant of the same move |
 | `moveSelectedBezierPointsBy` | C | path.movePoints |  |
 | `moveSelectionBy` | C | object.translate |  |
+| `moveSelectionMaskBy` | C | bitmap.moveSelectionMaskBy | carried (0049): coverage-plane translate; no plane throws (CS6) |
 | `moveSelectionTo` | C | object.translate | absolute form of the same delta |
 | `moveSelectionToFrame` | C | object.moveToCell | cell = state; the cross-state move is the same axis |
 | `moveSelectionToLayer` | C | object.moveToCell | payload carries destination page AND layer |
@@ -194,6 +195,7 @@ partial rows and the recorded debts in docs/HANDOFF.md Phase 9.
 | `saveSelection` | C | selection.save |  |
 | `scaleSelection` | C | object.scale | pivot defaults to the union bounds center (decision 0019) |
 | `scalingGridRect` | C | symbol.set9Slice | the grid rect IS the payload |
+| `selectAdjustPixelSel` | C | bitmap.adjustPixelSel | carried (0049): expand/contract/border/smooth over a 3-4 chamfer distance field |
 | `selectAll` | C | selection.selectAll | object-selection model + commands (dec 0024) |
 | `selectAllOnLayer` | C | selection.selectAllOnLayer | remember/toggle flags mapped (dec 0024) |
 | `selectChildren` | C | selection.selectChildren | one level per invocation, per CS6 text (dec 0025) |
@@ -296,10 +298,8 @@ partial rows and the recorded debts in docs/HANDOFF.md Phase 9.
 | `applyFontMarkup` | P | text.setFont | per-range markup unmodeled |
 | `duplicateSymbolForAlias` | P | library.add | alias linkage unmodeled |
 | `importFile` | P | io | io carries SVG/raster importers; no engine place-imported-file command |
-| `moveSelectionMaskBy` | P | bitmap.movePixels | mask-only translate rides the pixel move |
 | `removeCharacterMarkup` | P | text.setAttrs |  |
 | `removeFontMarkup` | P | text.setFont |  |
-| `selectAdjustPixelSel` | P | bitmap.select* | pixel-precision refine unmodeled; shape stamps carry |
 | `setAnimInstanceStartFrame` | P | symbol.setParam | FW4 dropped the start-frame field from the format; refuses pointing at instance placement (the documented FW4 substitute) |
 | `setFillNColorNTexture` | P | path.setFillColor | texture component of the numbered form (texture_blend rides the fill model, no command surface) |
 | `setSliceAutonaming` | P | slice.setData | no wire node for the toggle - FILs carries the naming label; the flag is UI state |
