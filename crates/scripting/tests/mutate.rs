@@ -466,6 +466,68 @@ fn change_current_page_is_validated_and_persisted() {
 }
 
 #[test]
+fn view_flags_are_session_state_and_persist() {
+    let mut session = Session::new(base_document());
+    let mut script = engine();
+    let report = run_in_session(
+        &mut session,
+        &mut script,
+        "flags.jsf",
+        "var dom = fw.getDocumentDOM(); dom.setShowGrid(true); dom.setSnapToGuides(false);
+         fw.__log('readback ' + dom.showGrid + ' ' + dom.snapToGuides);",
+    );
+    assert!(report.completed(), "{:?}", report.message);
+    // The projection updates in place, so the same run reads back true.
+    assert_eq!(report.notes, vec!["readback true false"]);
+    // View state: no journal rows (no document delta was queued).
+    assert_eq!(session.journal_len(), 0);
+
+    // Persisted across attaches: the next run projects the same flags.
+    let report = run_in_session(
+        &mut session,
+        &mut script,
+        "again.jsf",
+        "var dom = fw.getDocumentDOM();
+         fw.__log('again ' + dom.showGrid + ' ' + dom.showGuides + ' ' + dom.snapToGrid + ' ' + dom.snapToGuides);",
+    );
+    assert!(report.completed(), "{:?}", report.message);
+    assert_eq!(report.notes, vec!["again true false false false"]);
+}
+
+#[test]
+fn view_flags_default_off_and_throw_on_non_boolean() {
+    let mut session = Session::new(base_document());
+    let mut script = engine();
+    let report = run_in_session(
+        &mut session,
+        &mut script,
+        "defaults.jsf",
+        "var dom = fw.getDocumentDOM();
+         fw.__log('defaults ' + dom.showGrid + ' ' + dom.showGuides + ' ' + dom.snapToGrid + ' ' + dom.snapToGuides);",
+    );
+    assert!(report.completed(), "{:?}", report.message);
+    assert_eq!(report.notes, vec!["defaults false false false false"]);
+
+    // Non-boolean: typed throw, nothing queued (document untouched).
+    let before = serde_json::to_vec(session.document()).unwrap();
+    let report = run_in_session(
+        &mut session,
+        &mut script,
+        "bad.jsf",
+        "fw.getDocumentDOM().setShowGrid(1);",
+    );
+    assert_eq!(report.outcome, Outcome::Threw);
+    assert!(
+        report
+            .message
+            .expect("message")
+            .contains("expected a boolean")
+    );
+    assert_eq!(serde_json::to_vec(session.document()).unwrap(), before);
+    assert_eq!(session.journal_len(), 0);
+}
+
+#[test]
 fn created_element_becomes_the_selection() {
     let mut session = Session::new(base_document());
     let mut script = engine();

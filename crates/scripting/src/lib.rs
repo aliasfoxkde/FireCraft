@@ -96,8 +96,9 @@ struct Intent {
 
 /// Shared host state the native functions see: remaining call budget,
 /// the note log, the queued intents, the revert mark, the host-side
-/// selection (object ids as `"index:generation"`), and the current
-/// page (view state; `changeCurrentPage`). `Gc` because boa native
+/// selection (object ids as `"index:generation"`), the current page
+/// (`changeCurrentPage`), and the four canvas view flags (all view
+/// state — the wire has no home for them, decision 0035). `Gc` because boa native
 /// closures capture `Trace` types (`from_copy_closure` needs `Copy`
 /// captures; `from_closure` is `unsafe`, which the workspace forbids).
 #[derive(Debug, Default, boa_gc::Finalize, boa_gc::Trace)]
@@ -107,6 +108,10 @@ struct HostState {
     intents: Vec<Intent>,
     selection: Vec<String>,
     current_page: u32,
+    show_grid: bool,
+    show_guides: bool,
+    snap_to_grid: bool,
+    snap_to_guides: bool,
 }
 
 /// A prepared scripting context: sandbox limits applied, host prelude
@@ -137,6 +142,10 @@ impl ScriptEngine {
             intents: Vec::new(),
             selection: Vec::new(),
             current_page: 0,
+            show_grid: false,
+            show_guides: false,
+            snap_to_grid: false,
+            snap_to_guides: false,
         }));
         install_prelude(&mut context, state.clone())
             .map_err(|error| format!("host prelude install failed: {error}"))?;
@@ -158,9 +167,16 @@ impl ScriptEngine {
     /// defect; document data that cannot project is skipped in-place
     /// by the projection itself).
     pub fn attach_document(&mut self, document: &doc::Document) -> Result<(), String> {
-        let (selection, current_page) = {
+        let (selection, current_page, show_grid, show_guides, snap_to_grid, snap_to_guides) = {
             let state = self.state.borrow();
-            (state.selection.clone(), state.current_page)
+            (
+                state.selection.clone(),
+                state.current_page,
+                state.show_grid,
+                state.show_guides,
+                state.snap_to_grid,
+                state.snap_to_guides,
+            )
         };
         dom::attach(
             &mut self.context,
@@ -168,6 +184,10 @@ impl ScriptEngine {
             &dom::AttachView {
                 selection,
                 current_page: current_page as usize,
+                show_grid,
+                show_guides,
+                snap_to_grid,
+                snap_to_guides,
             },
         )
         .map_err(|error| format!("dom projection failed: {error}"))
@@ -343,6 +363,8 @@ fn drain(session: &mut Session, engine: &mut ScriptEngine, report: &mut ScriptRe
     let mut survivors: Vec<Intent> = Vec::new();
     let mut mark = 0usize;
     let mut page_change: Option<usize> = None;
+    let (mut show_grid, mut show_guides, mut snap_to_grid, mut snap_to_guides) =
+        (None, None, None, None);
     for intent in intents {
         match intent.id.as_str() {
             host::control::MARK => mark = survivors.len(),
@@ -351,7 +373,33 @@ fn drain(session: &mut Session, engine: &mut ScriptEngine, report: &mut ScriptRe
                 engine.set_selection(Vec::new());
             }
             host::control::PAGE => page_change = Some(payload_usize(&intent.payload)),
+            host::control::SHOW_GRID => show_grid = Some(intent.payload == "true"),
+            host::control::SHOW_GUIDES => show_guides = Some(intent.payload == "true"),
+            host::control::SNAP_TO_GRID => snap_to_grid = Some(intent.payload == "true"),
+            host::control::SNAP_TO_GUIDES => snap_to_guides = Some(intent.payload == "true"),
             _ => survivors.push(intent),
+        }
+    }
+
+    // View flags persist like the page change: session state, no
+    // document delta (decision 0035).
+    if show_grid.is_some()
+        || show_guides.is_some()
+        || snap_to_grid.is_some()
+        || snap_to_guides.is_some()
+    {
+        let mut state = engine.state.borrow_mut();
+        if let Some(value) = show_grid {
+            state.show_grid = value;
+        }
+        if let Some(value) = show_guides {
+            state.show_guides = value;
+        }
+        if let Some(value) = snap_to_grid {
+            state.snap_to_grid = value;
+        }
+        if let Some(value) = snap_to_guides {
+            state.snap_to_guides = value;
         }
     }
 

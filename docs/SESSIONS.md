@@ -116,4 +116,7 @@ format research, vendored node dictionary).
   full geometry re-bake — integer linear part (trig fails exactness),
   image assemble→permutate→re-tile via compose::matte_premultiplied +
   flatten::next_tile_id made shared, guides/grid swap, byte-exact
-  undo. Parity **203C/45P/24M**, registry 178.
+  undo. Parity **203C/45P/24M**, registry 178. #105 view flags
+  (decision 0035): no wire node exists (dictionary + .jsf evidence);
+  setShowGrid family hosted as scripting-session state
+  (changeCurrentPage pattern), rows flipped to N — **20M/88N** left.

@@ -20,6 +20,15 @@ pub mod control {
     /// `dom.changeCurrentPage` — validated and persisted as view
     /// state (no document delta).
     pub const PAGE: &str = "__fw.page";
+    /// `dom.setShowGrid` — view state, no document delta (the wire
+    /// has no node; decision 0035).
+    pub const SHOW_GRID: &str = "__fw.showGrid";
+    /// `dom.setShowGuides` — view state (decision 0035).
+    pub const SHOW_GUIDES: &str = "__fw.showGuides";
+    /// `dom.setSnapToGrid` — view state (decision 0035).
+    pub const SNAP_TO_GRID: &str = "__fw.snapToGrid";
+    /// `dom.setSnapToGuides` — view state (decision 0035).
+    pub const SNAP_TO_GUIDES: &str = "__fw.snapToGuides";
 }
 
 /// The JS prelude source, evaluated once per [`ScriptEngine`].
@@ -376,6 +385,32 @@ __fwDom.changeCurrentPage = function (index) {
     __fwDom.currentPageNum = index;
     // Persisted so the next attach projects the same page.
     __fwQueue("__fw.page", String(index));
+};
+
+// Canvas view flags (decision 0035): session state — the four verbs
+// queue a control intent and write the projection in place, so a read
+// in the same run agrees; no document delta is ever queued.
+function __requireBoolean(name, value) {
+    if (typeof value !== "boolean") {
+        throw new Error(name + ": expected a boolean, got " + typeof value);
+    }
+}
+function __viewFlag(queueId, propName, fnName, value) {
+    __requireBoolean(fnName, value);
+    __fwDom[propName] = value;
+    __fwQueue(queueId, String(value));
+}
+__fwDom.setShowGrid = function (bShow) {
+    __viewFlag("__fw.showGrid", "showGrid", "setShowGrid", bShow);
+};
+__fwDom.setShowGuides = function (bShow) {
+    __viewFlag("__fw.showGuides", "showGuides", "setShowGuides", bShow);
+};
+__fwDom.setSnapToGrid = function (bSnap) {
+    __viewFlag("__fw.snapToGrid", "snapToGrid", "setSnapToGrid", bSnap);
+};
+__fwDom.setSnapToGuides = function (bSnap) {
+    __viewFlag("__fw.snapToGuides", "snapToGuides", "setSnapToGuides", bSnap);
 };
 
 function __isMasterPageLayer() {

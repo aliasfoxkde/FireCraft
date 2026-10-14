@@ -16,15 +16,15 @@ enforced == the fuzz call table).
 |---|---|---|
 | C | carried: a registry command implements the mutation | 203 |
 | P | partial: carried with a recorded model limitation | 45 |
-| M | missing: no command and no decision — work items | 24 |
-| N | not applicable: non-document surface (accessor/UI/session/clipboard/export/OS) | 84 |
+| M | missing: no command and no decision — work items | 20 |
+| N | not applicable: non-document surface (accessor/UI/session/clipboard/export/OS) | 88 |
 
-Document-mutation coverage: **248 of 272** carried-or-partial
-(203 carried, 45 partial, 24 missing).
+Document-mutation coverage: **248 of 268** carried-or-partial
+(203 carried, 45 partial, 20 missing).
 
 ### Gap families (the Missing table, grouped)
 
-The 24 missing verbs collapse into six families, largest first —
+The 20 missing verbs collapse into six families, largest first —
 each family is one design decision plus a command batch:
 
 1. **Object transforms** (1 verb remains): setDocumentImageSize
@@ -38,10 +38,12 @@ each family is one design decision plus a command batch:
    selection fans landed as selection.duplicateToFrames /
    selection.duplicateToFrameRange / selection.distributeToFrames
    (decision 0026 — source frame is an explicit payload field).
-4. **Guides/grid/snap/onion** (4 verbs remain): setShowGrid/
-   setShowGuides/setSnapToGrid/setSnapToGuides are view/session
-   flags with no decoded wire node — blocked on corpus evidence
-   of the view-prefs node. addGuide/changeGuide/removeGuide/
+4. **Guides/grid/snap/onion**: setShowGrid/setShowGuides/
+   setSnapToGrid/setSnapToGuides went N (decision 0035): the
+   exhaustive dictionary has no view-prefs node (GRDv = geometry+
+   colour; GDSv = locked/colour/positions; MKBv/PDCv child lists
+   complete) and no CS6 .jsf uses them — app-preferences session
+   state, hosted in the scripting session. addGuide/changeGuide/removeGuide/
    removeAllGuides/setGridOrigin/setGridSize/setOnionSkinning
    landed as page.* commands (page-scoped overrides).
 3. **Group/flatten** (~3 verbs): mergeDown, flattenSelection,
@@ -336,10 +338,6 @@ each family is one design decision plus a command batch:
 | `setButtonOptions` | M | - | button symbol gap |
 | `setButtonShowDownOnLoad` | M | - | button symbol gap |
 | `setDocumentImageSize` | M | - | no resample command |
-| `setShowGrid` | M | - | page.grid model exists; no command |
-| `setShowGuides` | M | - | guides model exists; no command |
-| `setSnapToGrid` | M | - | page.grid model exists; no command |
-| `setSnapToGuides` | M | - | guides model exists; no command |
 
 ## Not applicable (N)
 
@@ -421,10 +419,14 @@ each family is one design decision plus a command batch:
 | `setRectRoundnessMode` | N | - | UI unit toggle; the exhaustive PRIv dictionary carries no mode node — session state (decision 0027) |
 | `setShowEdges` | N | ui | view chrome |
 | `setShowGammaPreview` | N | ui | view chrome |
+| `setShowGrid` | N | - | view/session state — no wire node exists (GRDv carries geometry+colour only; MKBv/PDCv have no view node; zero .jsf usage). Hosted in the scripting session (decision 0035) |
+| `setShowGuides` | N | - | view/session state — no wire node: GDSv carries locked/colour/positions only (decision 0035); scripting-session flag |
 | `setShowRulers` | N | ui | view chrome |
 | `setShowSliceGuides` | N | ui | web-layer view chrome |
 | `setShowSliceOverlay` | N | ui | web-layer view chrome |
 | `setSliceGuideColor` | N | ui | web-layer view chrome |
+| `setSnapToGrid` | N | - | view/session state — no wire node (decision 0035); scripting-session flag |
+| `setSnapToGuides` | N | - | view/session state — no wire node (decision 0035); scripting-session flag |
 | `setTransformMode` | N | ui | tool state |
 | `setUseAGMRenderingForSelection` | N | ui | renderer setting, not document state |
 | `swapBrushAndFillColors` | N | session | current-paint session state |

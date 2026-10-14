@@ -10,7 +10,7 @@
 - **Roadmap:** M0–M15 **all closed**.
 - **Registry:** 178 commands. **CI:** green 7/7 on `25fedbc`; later
   campaign pushes verified per batch (runbook: HANDOFF §6).
-- **CS6 DOM parity:** **203 C / 45 P / 24 M / 84 N** — the 24 M verbs
+- **CS6 DOM parity:** **203 C / 45 P / 20 M / 88 N** — the 20 M verbs
   are the active campaign; the phased plan is [`HANDOFF.md`](HANDOFF.md) §4.
 
 ## Milestones
@@ -58,11 +58,12 @@
 | #101 | flatten family via compositor bakes (Phase 3, decision 0031) | 235e4d4 | 198 C (4 rows, mergeDown case pair) |
 | #102 | knife + splitPaths (8.3, decision 0032) | 3baf178 | 201 C / 45 P / 26 M |
 | #103 | text.convertToPaths (8.4, decision 0033) | 56c6f2f | **202 C / 45 P / 25 M** |
-| #104 | document.rotate — page rotation re-bake (5.3, decision 0034) | this batch | **203 C / 45 P / 24 M** |
+| #104 | document.rotate — page rotation re-bake (5.3, decision 0034) | 48ec811 | 203 C / 45 P / 24 M |
+| #105 | view flags → session state, rows → N (Phase 4, decision 0035) | this batch | **203 C / 45 P / 20 M / 88 N** |
 
-Remaining families (HANDOFF §4 order): view flags (4, evidence-gated)
-→ button symbols (5, evidence-gated) → 8.1 place-image trio →
-8.6 clipboard masks/6.6 → 6.4 resample → 5.4 setDocumentImageSize.
+Remaining families (HANDOFF §4 order): button symbols (5,
+evidence-gated) → 8.1 place-image trio → 8.6 clipboard masks/6.6 →
+6.4 resample → 5.4 setDocumentImageSize.
 
 ## Recorded debts (open)
 
@@ -87,5 +88,6 @@ Remaining families (HANDOFF §4 order): view flags (4, evidence-gated)
 | 2026-10-14 | 201 | 45 | 26 | #101 flatten + #102 knife/split |
 | 2026-10-14 | **202** | 45 | **25** | #103 convertToPaths |
 | 2026-10-14 | **203** | 45 | **24** | #104 rotateDocument |
+| 2026-10-14 | 203 | 45 | **20** | #105 view flags → N (session state) |
 
 (Pre-#91 counts are approximate; the matrix file is the authority.)

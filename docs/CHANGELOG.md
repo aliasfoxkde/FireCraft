@@ -10,6 +10,7 @@ Current version: **0.1.0**.
 
 ### Features
 
+- **engine**: page rotation with geometry re-bake (48ec811)
 - **engine**: convertToPaths freezes glyph outlines (56c6f2f)
 - **vector**: knife cuts + splitPaths commands (3baf178)
 - **engine**: flatten family via compositor bakes (235e4d4)

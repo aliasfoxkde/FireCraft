@@ -15,7 +15,7 @@
   closed. 153+ commits, CI green on `25fedbc` (7/7 jobs).
 - **Engine registry:** 178 commands, pinned equal to the fuzz call
   table by `the_call_table_covers_the_catalog`.
-- **CS6 DOM verb-surface parity:** **203 C / 45 P / 24 M / 84 N**
+- **CS6 DOM verb-surface parity:** **203 C / 45 P / 20 M / 88 N**
   (`docs/planning/generated/dom-parity.md`, regenerate per §5 below).
   (The CS6 verb list carries both case spellings of mergeDown — the
   three-command flatten family flipped four rows.)
@@ -36,7 +36,7 @@
 | `AGENTS.md` | Operating manual: commands, gates, commit rules, day-to-day method |
 | `docs/PLANNING.md` | Master plan: format spec (§6), architecture (§7), method |
 | `docs/planning/firecraft/` | `ROADMAP.md` + tickets M0–M15 (all closed; reference for how tickets are written) |
-| `docs/decisions/` | Decision records 0001–0034 — **write one per family/batch** |
+| `docs/decisions/` | Decision records 0001–0035 — **write one per family/batch** |
 | `docs/planning/generated/` | `parity.md`, `scorecard.md` (xtask-owned) + `dom-parity.md` (generator-owned, see §5) |
 | `docs/research/fireworks-png-nodes.md` | The node dictionary — the format Rosetta stone (observational; corpus wins on conflict) |
 | `log/devlog.md` | Detailed session log (gitignored) — **append an entry to close every task** |
@@ -146,16 +146,15 @@ one bottom layer with web layers preserved and refuses multi-state
 pages (state-0-only bakes are the recorded deviation). Baked pixels
 carry default weight (the render already applied paint/weight/effects).
 
-### Phase 4 — View flags (4 verbs) — evidence-gated
-- **4.1 Corpus hunt:** prove or refute a wire home for
-  show/snap flags (`setShowGrid/setShowGuides/setSnapToGrid/`
-  `setSnapToGuides`) — sweep the dictionary + corpus + CS6 `.jsf`
-  Configuration tree for a view-prefs node. Stopping: a written
-  finding (decision doc section) either way.
-- **4.2** If a node exists: model + commands (page-scoped, like the
-  guide/grid family). If not: host-session state — implement at the
-  app/scripting layer only and flip the rows to `N` with the evidence
-  note. **Do not invent a wire node.**
+### Phase 4 — View flags (4 verbs) — DONE (decision 0035)
+Resolved 2026-10-14: no wire home exists — proven by the exhaustive
+dictionary (`GRDv` = geometry+colour, `GDSv` = locked/colour/
+positions, complete `MKBv`/`PDCv` child lists have no view node) and
+zero `.jsf` usage across the CS6 Configuration tree. The four verbs
+are app-preferences session state: hosted in the scripting session
+(`HostState` flags + `AttachView` projection + control intents, the
+`changeCurrentPage` pattern), rows flipped to `N`. No wire node was
+invented.
 
 ### Phase 5 — Document/image ops (4 verbs)
 - **5.1 `setDocumentCanvasColor`** — DONE.
@@ -255,10 +254,11 @@ carry default weight (the render already applied paint/weight/effects).
 5.1 → 5.2 (quick wins, warm up the loop) → Phase 1 → Phase 2 → 6.1 →
 6.2 → 8.2 → 8.5 → Phase 3 → 8.3 → 8.4 → 5.3 → 4 (evidence) → 7
 (evidence) → 8.1 → 8.6/6.6 → 6.4 → 5.4. Progress through 2026-10-14:
-5.1–5.2, Phases 1–2, 6.1, 6.2, 8.2, 8.5, Phase 3, 8.3, 8.4, 5.3 done —
-**next is Phase 4** (view-flag evidence: prove or refute a wire home
-for the show/snap flags, then implement or flip the four rows to `N`
-with the evidence note).
+5.1–5.2, Phases 1–2, 6.1, 6.2, 8.2, 8.5, Phase 3, 8.3, 8.4, 5.3, 4
+done — **next is Phase 7** (button symbols: first the wire-evidence
+pass for button-state nodes — dictionary `MSTv`/`MSYi` + corpus +
+`.jsf` button samples — then the five setters, or the evidence-based
+resolution if the wire has no home).
 Re-derive from `dom-parity.md`'s M table if the matrix has moved; the
 plan follows the matrix, not the reverse.
 

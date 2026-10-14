@@ -35,6 +35,13 @@ pub struct AttachView {
     /// Page index to project as current (out of range falls back to
     /// the first page).
     pub current_page: usize,
+    /// Canvas view flags — pure session state (decision 0035): the
+    /// wire has no node for them and CS6 keeps them in app
+    /// preferences, not in the document.
+    pub show_grid: bool,
+    pub show_guides: bool,
+    pub snap_to_grid: bool,
+    pub snap_to_guides: bool,
 }
 
 /// Projects `document` and installs the read + mutate surface:
@@ -129,6 +136,12 @@ fn project_document(
     set_number(context, &dom, "pagesCount", document.pages.len() as f64)?;
     set_number(context, &dom, "currentPageNum", page_index as f64)?;
     set_number(context, &dom, "currentFrameNum", 0.0)?;
+    // View flags (session state — decision 0035): the `setShowGrid`
+    // family writes back here so reads in the same run agree.
+    set_bool(context, &dom, "showGrid", view.show_grid)?;
+    set_bool(context, &dom, "showGuides", view.show_guides)?;
+    set_bool(context, &dom, "snapToGrid", view.snap_to_grid)?;
+    set_bool(context, &dom, "snapToGuides", view.snap_to_guides)?;
 
     // The master page (first flagged `is_master`), or -1 when none —
     // `isMasterPageLayer` reads it.
@@ -437,6 +450,12 @@ fn set_number(
     property: &str,
     value: f64,
 ) -> JsResult<()> {
+    object
+        .set(js_string!(property), JsValue::from(value), false, context)
+        .map(|_replaced| ())
+}
+
+fn set_bool(context: &mut Context, object: &JsObject, property: &str, value: bool) -> JsResult<()> {
     object
         .set(js_string!(property), JsValue::from(value), false, context)
         .map(|_replaced| ())
