@@ -111,4 +111,9 @@ format research, vendored node dictionary).
   fedora-docker carries the CI image; re-shipped on lockfile moves per
   the lockfile-bytes rule.
   (continued) #102 landed 3baf178, CI 7/7; #103 convertToPaths with a
-  pixel-identity golden (decision 0033).
+  pixel-identity golden (decision 0033), 56c6f2f, CI 7/7.
+  #104 document.rotate (decision 0034): page-scoped 90/180/270 with a
+  full geometry re-bake — integer linear part (trig fails exactness),
+  image assemble→permutate→re-tile via compose::matte_premultiplied +
+  flatten::next_tile_id made shared, guides/grid swap, byte-exact
+  undo. Parity **203C/45P/24M**, registry 178.

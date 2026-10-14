@@ -13,9 +13,9 @@
 
 - **Ship state:** v0.1.0 released, repo public. Roadmap M0–M15 all
   closed. 153+ commits, CI green on `25fedbc` (7/7 jobs).
-- **Engine registry:** 177 commands, pinned equal to the fuzz call
+- **Engine registry:** 178 commands, pinned equal to the fuzz call
   table by `the_call_table_covers_the_catalog`.
-- **CS6 DOM verb-surface parity:** **202 C / 45 P / 25 M / 84 N**
+- **CS6 DOM verb-surface parity:** **203 C / 45 P / 24 M / 84 N**
   (`docs/planning/generated/dom-parity.md`, regenerate per §5 below).
   (The CS6 verb list carries both case spellings of mergeDown — the
   three-command flatten family flipped four rows.)
@@ -36,7 +36,7 @@
 | `AGENTS.md` | Operating manual: commands, gates, commit rules, day-to-day method |
 | `docs/PLANNING.md` | Master plan: format spec (§6), architecture (§7), method |
 | `docs/planning/firecraft/` | `ROADMAP.md` + tickets M0–M15 (all closed; reference for how tickets are written) |
-| `docs/decisions/` | Decision records 0001–0033 — **write one per family/batch** |
+| `docs/decisions/` | Decision records 0001–0034 — **write one per family/batch** |
 | `docs/planning/generated/` | `parity.md`, `scorecard.md` (xtask-owned) + `dom-parity.md` (generator-owned, see §5) |
 | `docs/research/fireworks-png-nodes.md` | The node dictionary — the format Rosetta stone (observational; corpus wins on conflict) |
 | `log/devlog.md` | Detailed session log (gitignored) — **append an entry to close every task** |
@@ -158,14 +158,18 @@ carry default weight (the render already applied paint/weight/effects).
   note. **Do not invent a wire node.**
 
 ### Phase 5 — Document/image ops (4 verbs)
-- **5.1 `setDocumentCanvasColor`** — `background_raw` is already
-  modeled and rendered (77f55af); this is a one-command batch. Do it
-  first: cheapest win in the matrix.
-- **5.2 `setDocumentResolution`** — `RESf`/`RSUi` are parsed; add the
-  setter command.
-- **5.3 `rotateDocument`** — 90°-step canvas rotation with a geometry
-  re-bake (transforms + canvas swap). Decide multi-page semantics
-  (CS6 rotates the current page's canvas) in the decision doc.
+- **5.1 `setDocumentCanvasColor`** — DONE.
+- **5.2 `setDocumentResolution`** — DONE.
+- **5.3 — DONE (decision 0034).** `document.rotate {rotation, page}`
+  landed 2026-10-14: one page's canvas rotates 90/180/270 clockwise
+  with a full geometry re-bake — paths/slices map point-for-point,
+  text/symbol transforms compose the rotation, images assemble their
+  tile grid, rotate the buffer by permutation, and re-tile over fresh
+  bank slots (matte slots bake — flatten debt). Guides swap, the grid
+  origin rides the map, deltas are `[PageBody, Bank, Mutated × n]`
+  with byte-exact undo. The rotation linear part is built from
+  integers (trig smears `cos(pi/2)` into every coordinate — caught by
+  the corner-anchor test).
 - **5.4 `setDocumentImageSize`** — bitmap resample pass (shares the
   resample debt 6.4). Largest task in the phase; schedule after 6.4's
   design.
@@ -251,9 +255,10 @@ carry default weight (the render already applied paint/weight/effects).
 5.1 → 5.2 (quick wins, warm up the loop) → Phase 1 → Phase 2 → 6.1 →
 6.2 → 8.2 → 8.5 → Phase 3 → 8.3 → 8.4 → 5.3 → 4 (evidence) → 7
 (evidence) → 8.1 → 8.6/6.6 → 6.4 → 5.4. Progress through 2026-10-14:
-5.1–5.2, Phases 1–2, 6.1, 6.2, 8.2, 8.5, Phase 3, 8.3, 8.4 done —
-**next is 5.3** (`rotateDocument`: 90°-step canvas rotation with a
-geometry re-bake; decide multi-page semantics in the decision doc).
+5.1–5.2, Phases 1–2, 6.1, 6.2, 8.2, 8.5, Phase 3, 8.3, 8.4, 5.3 done —
+**next is Phase 4** (view-flag evidence: prove or refute a wire home
+for the show/snap flags, then implement or flip the four rows to `N`
+with the evidence note).
 Re-derive from `dom-parity.md`'s M table if the matrix has moved; the
 plan follows the matrix, not the reverse.
 

@@ -689,6 +689,7 @@ pub const CALLS: &[&str] = &[
     "layer.detachShared",
     "document.setCanvasColor",
     "document.setResolution",
+    "document.rotate",
     "selection.set",
     "selection.selectAll",
     "selection.selectInverse",
@@ -2359,6 +2360,13 @@ pub fn random_call(rng: &mut FuzzRng, document: &Document) -> (String, serde_jso
             "resolution": rng.below(2400) as f64 + 1.0,
             "unit": if rng.chance(2) { "inch" } else { "cm" },
         }),
+        "document.rotate" => {
+            let rotation = [90, 180, 270][rng.below(3)];
+            serde_json::json!({
+                "rotation": rotation,
+                "page": any_index(rng, pages),
+            })
+        }
         "selection.set" => serde_json::json!({
             "ids": [any_id(rng), any_id(rng)],
         }),

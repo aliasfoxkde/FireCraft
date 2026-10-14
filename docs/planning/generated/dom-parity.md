@@ -14,22 +14,23 @@ enforced == the fuzz call table).
 
 | class | meaning | count (of 356 dom verbs) |
 |---|---|---|
-| C | carried: a registry command implements the mutation | 202 |
+| C | carried: a registry command implements the mutation | 203 |
 | P | partial: carried with a recorded model limitation | 45 |
-| M | missing: no command and no decision — work items | 25 |
+| M | missing: no command and no decision — work items | 24 |
 | N | not applicable: non-document surface (accessor/UI/session/clipboard/export/OS) | 84 |
 
-Document-mutation coverage: **247 of 272** carried-or-partial
-(202 carried, 45 partial, 25 missing).
+Document-mutation coverage: **248 of 272** carried-or-partial
+(203 carried, 45 partial, 24 missing).
 
 ### Gap families (the Missing table, grouped)
 
-The 25 missing verbs collapse into six families, largest first —
+The 24 missing verbs collapse into six families, largest first —
 each family is one design decision plus a command batch:
 
-1. **Object transforms** (2 verbs remain): rotateDocument (canvas
-   rotation with a geometry re-bake) and setDocumentImageSize
-   (bitmap resample). The object transform family itself is
+1. **Object transforms** (1 verb remains): setDocumentImageSize
+   (bitmap resample; rotateDocument landed as
+   document.rotate, decision 0034). The object transform family
+   itself is
    carried by object.* per decision 0019 — images refuse
    transforms until the resample pass this family shares.
 2. **Frames/states**: add/delete/duplicate/reorder/
@@ -186,6 +187,7 @@ each family is one design decision plus a command batch:
 | `resetNineScale` | C | symbol.set9Slice |  |
 | `resizeSelection` | C | object.resize | keeps the top-left corner of the selection in place |
 | `restoreJPEGMask` | C | mask.restoreJPEG |  |
+| `rotateDocument` | C | document.rotate | page-scoped 90/180/270 with a full geometry re-bake (decision 0034) |
 | `rotateSelection` | C | object.rotate | degrees, clockwise in the y-down space |
 | `saveJPEGMask` | C | mask.saveJPEG | second plane slot (Document.jpeg_mask), editing state |
 | `scaleSelection` | C | object.scale | pivot defaults to the union bounds center (decision 0019) |
@@ -327,7 +329,6 @@ each family is one design decision plus a command batch:
 | `filterSelectionByName` | M | - | pixel-filter bake verb (permanent, not a Live Effect) — filter family; needs the bitmap bake pass (debt) |
 | `filterSelectonByName` | M | - | pixel-filter bake verb (permanent, not a Live Effect) — filter family; needs the bitmap bake pass (debt) |
 | `restoreSelection` | M | - | named saved selections unmodeled |
-| `rotateDocument` | M | - | canvas rotation (90-degree steps + re-bake) |
 | `saveSelection` | M | - | named saved selections unmodeled |
 | `setButtonAutoSlice` | M | - | button-specific symbol state unmodeled |
 | `setButtonIncludeDownState` | M | - | button symbol gap |

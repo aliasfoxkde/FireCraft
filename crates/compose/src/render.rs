@@ -611,8 +611,10 @@ fn blit_tile(
 }
 
 /// `TMCi` decodes ARGB per the dictionary, then premultiplies for the
-/// canvas buffer.
-fn matte_premultiplied(raw: i64) -> [u8; 4] {
+/// canvas buffer. Public so bake paths outside the compositor (canvas
+/// rotation re-tiles images the same way the renderer reads them) can
+/// materialize matte slots to the exact bytes this renderer blits.
+pub fn matte_premultiplied(raw: i64) -> [u8; 4] {
     let raw = raw as u32;
     let (r, g, b, a) = (
         ((raw >> 16) & 0xFF) as u8,

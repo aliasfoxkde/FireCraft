@@ -31,7 +31,7 @@ pub(crate) fn install(registry: &mut CommandRegistry) -> Result<(), EngineError>
 
 /// The next free bank slot: one above the highest live id (0 for an
 /// empty bank) — the same replay-stable law as symbol numbers.
-fn next_tile_id(document: &Document) -> u32 {
+pub(crate) fn next_tile_id(document: &Document) -> u32 {
     document.tiles.ids().max().map_or(0, |id| id + 1)
 }
 

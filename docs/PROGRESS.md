@@ -8,9 +8,9 @@
 
 - **Released:** v0.1.0 (2026-10-13), repo public.
 - **Roadmap:** M0–M15 **all closed**.
-- **Registry:** 177 commands. **CI:** green 7/7 on `25fedbc`; later
+- **Registry:** 178 commands. **CI:** green 7/7 on `25fedbc`; later
   campaign pushes verified per batch (runbook: HANDOFF §6).
-- **CS6 DOM parity:** **202 C / 45 P / 25 M / 84 N** — the 25 M verbs
+- **CS6 DOM parity:** **203 C / 45 P / 24 M / 84 N** — the 24 M verbs
   are the active campaign; the phased plan is [`HANDOFF.md`](HANDOFF.md) §4.
 
 ## Milestones
@@ -57,12 +57,12 @@
 | #100b | cropSelection, fill-edge mode, symbol tween (8.5, decision 0030) | df8fe42 | 195 C |
 | #101 | flatten family via compositor bakes (Phase 3, decision 0031) | 235e4d4 | 198 C (4 rows, mergeDown case pair) |
 | #102 | knife + splitPaths (8.3, decision 0032) | 3baf178 | 201 C / 45 P / 26 M |
-| #103 | text.convertToPaths (8.4, decision 0033) | this batch | **202 C / 45 P / 25 M** |
+| #103 | text.convertToPaths (8.4, decision 0033) | 56c6f2f | **202 C / 45 P / 25 M** |
+| #104 | document.rotate — page rotation re-bake (5.3, decision 0034) | this batch | **203 C / 45 P / 24 M** |
 
-Remaining families (HANDOFF §4 order): 5.3 rotateDocument → view
-flags (4, evidence-gated) → button symbols (5, evidence-gated) →
-8.1 place-image trio → 8.6 clipboard masks/6.6 → 6.4 resample →
-5.4 setDocumentImageSize.
+Remaining families (HANDOFF §4 order): view flags (4, evidence-gated)
+→ button symbols (5, evidence-gated) → 8.1 place-image trio →
+8.6 clipboard masks/6.6 → 6.4 resample → 5.4 setDocumentImageSize.
 
 ## Recorded debts (open)
 
@@ -86,5 +86,6 @@ flags (4, evidence-gated) → button symbols (5, evidence-gated) →
 | 2026-10-14 | 195 | 45 | 34 | #95–#100b (selection, frames, primitives, misc) |
 | 2026-10-14 | 201 | 45 | 26 | #101 flatten + #102 knife/split |
 | 2026-10-14 | **202** | 45 | **25** | #103 convertToPaths |
+| 2026-10-14 | **203** | 45 | **24** | #104 rotateDocument |
 
 (Pre-#91 counts are approximate; the matrix file is the authority.)
