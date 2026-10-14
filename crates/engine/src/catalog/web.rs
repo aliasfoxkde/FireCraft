@@ -623,6 +623,135 @@ impl TypedCommand for AddBehavior {
     }
 }
 
+/// `slice.addSwapImageBehaviorFromPoint` — CS6's
+/// `dom.addSwapImageBehaviorFromPoint(where)`: "If a single hotspot or
+/// slice is selected, this function adds to it a swap image behavior
+/// from the hotspot or slice located at `where`." The selected slice
+/// gains behavior kind 2 (swap image — the webexport hook constant)
+/// and `DTAv` `swapTarget` = the resolved slice's object name (falling
+/// back to its internal name; a target-less swap emits no hook).
+/// CS6's `false` return ("no suitable hotspot at the location")
+/// carries as a refusal. Polygon slices hit-test their outline; the
+/// rest hit-test their frame. Nothing mutates before the source
+/// resolves (000557d).
+struct AddSwapImageBehaviorFromPoint;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct AddSwapImageBehaviorFromPointPayload {
+    /// Document point naming the swap-image source slice.
+    #[serde(rename = "where")]
+    at: geom::Point,
+}
+
+/// Even-odd point-in-polygon over a slice's `PBPv` outline.
+fn polygon_contains(slice: &SliceObject, at: geom::Point) -> bool {
+    let mut inside = false;
+    for contour in &slice.contours {
+        let mut previous = contour.points.last().map(|point| point.anchor);
+        for point in &contour.points {
+            let Some(a) = previous else { break };
+            let b = point.anchor;
+            previous = Some(b);
+            if (a.y > at.y) == (b.y > at.y) {
+                continue;
+            }
+            if at.x < (b.x - a.x) * (at.y - a.y) / (b.y - a.y) + a.x {
+                inside = !inside;
+            }
+        }
+    }
+    inside
+}
+
+/// The slice containing `at`, scanning every cell of every layer of
+/// every page topmost-last (z-order is list order, bottom-first).
+fn slice_at(document: &Document, at: geom::Point) -> Option<doc::ObjectId> {
+    let mut found = None;
+    for page in &document.pages {
+        for layer in &page.layers.layers {
+            for cell in &layer.cells {
+                for id in &cell.elements {
+                    let Some(ObjectData::Slice(slice)) = document.registry.get(*id) else {
+                        continue;
+                    };
+                    let hit = match slice.shape {
+                        // 2 polygon: the outline; the frame is the
+                        // bounding box, not the shape.
+                        2 => polygon_contains(slice, at),
+                        _ => slice.frame.contains(at),
+                    };
+                    if hit {
+                        found = Some(*id);
+                    }
+                }
+            }
+        }
+    }
+    found
+}
+
+impl TypedCommand for AddSwapImageBehaviorFromPoint {
+    type Payload = AddSwapImageBehaviorFromPointPayload;
+
+    fn name(&self) -> &'static str {
+        "slice.addSwapImageBehaviorFromPoint"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "slice.addSwapImageBehaviorFromPoint";
+        if !payload.at.x.is_finite() || !payload.at.y.is_finite() {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: "where must be finite".to_owned(),
+            });
+        }
+        let mut selected = document.object_selection.clone();
+        selected.retain(|id| matches!(document.registry.get(*id), Some(ObjectData::Slice(_))));
+        if selected.len() != 1 {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: format!(
+                    "exactly one selected slice or hotspot is required ({} selected)",
+                    selected.len()
+                ),
+            });
+        }
+        // Resolve the source before any capture or mutation.
+        let Some(source) = slice_at(document, payload.at) else {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: "no slice or hotspot at the given point".to_owned(),
+            });
+        };
+        let target = match document.registry.get(source) {
+            Some(ObjectData::Slice(slice)) => slice
+                .name
+                .clone()
+                .or_else(|| slice.internal_name.clone())
+                .unwrap_or_default(),
+            _ => String::new(),
+        };
+        let id = selected[0];
+        let before = access::object(document, NAME, id)?.clone();
+        let slice = slice_mut(document, NAME, id)?;
+        slice.behaviors.push(SliceBehavior { kind: 2 });
+        if !target.is_empty() {
+            slice.custom_data.insert("swapTarget".to_owned(), target);
+        }
+        Ok(Delta::Object {
+            id,
+            inverse: ObjectInverse::Mutated {
+                object: Box::new(before),
+            },
+        })
+    }
+}
+
 /// `slice.removeBehavior` — drops the behavior at `index`.
 struct RemoveBehavior;
 
@@ -1415,6 +1544,7 @@ pub fn install(registry: &mut crate::registry::CommandRegistry) -> Result<(), En
     registry.register(SetSliceExport)?;
     registry.register(AddBehavior)?;
     registry.register(RemoveBehavior)?;
+    registry.register(AddSwapImageBehaviorFromPoint)?;
     registry.register(SetSliceData)?;
     registry.register(SetHotspotRectangle)?;
     registry.register(SetHotspotShape)?;
@@ -1427,6 +1557,7 @@ mod tests {
     #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
     use super::super::testdoc;
     use super::*;
+    use crate::command::Command;
     use crate::registry::CommandRegistry;
     use serde_json::json;
 
@@ -2341,6 +2472,143 @@ mod tests {
             serde_json::to_vec(&document).unwrap(),
             before,
             "the refused page mutated nothing"
+        );
+    }
+
+    #[test]
+    fn from_point_resolves_the_source_slice_and_undo_is_exact() {
+        let (mut document, _ids) = testdoc::sample_document();
+        let registry = registry();
+        registry
+            .execute(
+                &mut document,
+                "slice.create",
+                json!({
+                    "shape": "rect", "x": 0.0, "y": 0.0,
+                    "width": 10.0, "height": 10.0,
+                    "name": "hero_f2", "page": 0,
+                }),
+            )
+            .unwrap();
+        registry
+            .execute(
+                &mut document,
+                "slice.create",
+                json!({
+                    "shape": "rect", "x": 20.0, "y": 20.0,
+                    "width": 10.0, "height": 10.0,
+                    "page": 0,
+                }),
+            )
+            .unwrap();
+        let (source, _) = the_slice(&document);
+        let (target, _) = document
+            .registry
+            .iter()
+            .find(|(id, object)| matches!(object, ObjectData::Slice(_)) && *id != source)
+            .unwrap();
+        document.object_selection = vec![target];
+        let before = serde_json::to_vec(&document).unwrap();
+
+        let delta = AddSwapImageBehaviorFromPoint
+            .apply_json(&mut document, json!({ "where": { "x": 5.0, "y": 5.0 } }))
+            .unwrap();
+        let slice = slice_at(&document, target);
+        assert_eq!(
+            slice.behaviors.last().map(|behavior| behavior.kind),
+            Some(2),
+            "kind 2 is the swap-image behavior"
+        );
+        assert_eq!(
+            slice.custom_data.get("swapTarget").map(String::as_str),
+            Some("hero_f2"),
+            "the swap target is the resolved slice's name"
+        );
+        assert!(slice_at(&document, source).behaviors.is_empty());
+
+        delta.apply_inverse(&mut document).unwrap();
+        assert_eq!(
+            serde_json::to_vec(&document).unwrap(),
+            before,
+            "undo is byte-exact"
+        );
+    }
+
+    #[test]
+    fn from_point_walks_polygon_contours_and_gates() {
+        let (mut document, _ids) = testdoc::sample_document();
+        let polygon = make_polygon_hotspot(&mut document);
+        assert_eq!(the_slice(&document).1.shape, 2, "fixture is a polygon");
+        document.object_selection = vec![polygon];
+
+        // Outside the triangle but inside its bounding box: no source.
+        let error = AddSwapImageBehaviorFromPoint
+            .apply_json(&mut document, json!({ "where": { "x": 1.0, "y": 9.0 } }))
+            .unwrap_err();
+        assert!(error.to_string().contains("no slice or hotspot"));
+
+        // Inside the triangle: resolves (the name is empty, so no
+        // swapTarget key is written).
+        AddSwapImageBehaviorFromPoint
+            .apply_json(&mut document, json!({ "where": { "x": 5.0, "y": 4.0 } }))
+            .unwrap();
+        assert_eq!(
+            slice_at(&document, polygon)
+                .behaviors
+                .last()
+                .map(|b| b.kind),
+            Some(2)
+        );
+        assert!(
+            !slice_at(&document, polygon)
+                .custom_data
+                .contains_key("swapTarget")
+        );
+
+        // Non-finite points cannot survive JSON (null fails decode
+        // first); the finite gate is exercised directly.
+        let error = AddSwapImageBehaviorFromPoint
+            .apply(
+                &mut document,
+                &AddSwapImageBehaviorFromPointPayload {
+                    at: geom::Point::new(f64::NAN, 0.0),
+                },
+            )
+            .unwrap_err();
+        assert!(error.to_string().contains("where must be finite"));
+
+        // Two selected slices refuse before any resolution.
+        let (mut document, _ids) = testdoc::sample_document();
+        let registry = registry();
+        for (x, y) in [(0.0, 0.0), (40.0, 40.0)] {
+            registry
+                .execute(
+                    &mut document,
+                    "slice.create",
+                    json!({
+                        "shape": "rect", "x": x, "y": y,
+                        "width": 10.0, "height": 10.0, "page": 0,
+                    }),
+                )
+                .unwrap();
+        }
+        let ids: Vec<doc::ObjectId> = document
+            .registry
+            .iter()
+            .filter(|(_, object)| matches!(object, ObjectData::Slice(_)))
+            .map(|(id, _)| id)
+            .collect();
+        assert_eq!(ids.len(), 2);
+        document.object_selection = ids;
+        let before = serde_json::to_vec(&document).unwrap();
+        let error = AddSwapImageBehaviorFromPoint
+            .apply_json(&mut document, json!({ "where": { "x": 5.0, "y": 5.0 } }))
+            .unwrap_err();
+        assert!(error.to_string().contains("exactly one selected slice"));
+        assert_eq!(
+            serde_json::to_vec(&document).unwrap(),
+            before,
+            "refusals mutate nothing"
         );
     }
 }

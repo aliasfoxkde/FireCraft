@@ -7,20 +7,20 @@ regeneration recipe in docs/PLANNING.md §5.4). The DOM is stable
 CS4→CS6; CS6 additions the text lacks (e.g. 9-slice guides) are
 covered by the CS6 `.jsf` scripts and appear here via their verbs.
 
-FireCraft side: the 218-command registry (`engine::catalog::ids()`,
+FireCraft side: the 222-command registry (`engine::catalog::ids()`,
 enforced == the fuzz call table).
 
 ## Coverage classes
 
 | class | meaning | count (of 356 dom verbs) |
 |---|---|---|
-| C | carried: a registry command implements the mutation | 245 |
-| P | partial: carried with a recorded model limitation | 26 |
+| C | carried: a registry command implements the mutation | 250 |
+| P | partial: carried with a recorded model limitation | 21 |
 | M | missing: no command and no decision — work items | 0 |
 | N | not applicable: non-document surface (accessor/UI/session/clipboard/export/OS) | 85 |
 
 Document-mutation coverage: **271 of 271** carried-or-partial
-(245 carried, 26 partial, 0 missing).
+(250 carried, 21 partial, 0 missing).
 
 ### Gap families (the Missing table, grouped)
 
@@ -37,6 +37,7 @@ partial rows and the recorded debts in docs/HANDOFF.md Phase 9.
 | `AddNewImage` | C | bitmap.addImage | empty transparent image; bounds larger than the document constrain to the canvas; fresh zero bank tiles so the bitmap is paintable (decision 0037) |
 | `AddNewStar` | C | autoshape.star |  |
 | `AddNewText` | C | text.createText |  |
+| `AddSwapImageBehaviorFromPoint` | C | slice.addSwapImageBehaviorFromPoint | carried (0047): point-resolved source slice -> kind 2 behavior + DTAv swapTarget |
 | `ApplyEffects` | C | filter.add |  |
 | `MergeDown` | C | flatten.mergeDown | bakes the selection into the bitmap directly below (compositor-backed; refuses unless a bitmap is immediately below) |
 | `MovePointOnHotspotByWithFlags` | C | object.translate | generic object move; per-point web-geometry edit is the P-shaped remainder |
@@ -60,6 +61,7 @@ partial rows and the recorded debts in docs/HANDOFF.md Phase 9.
 | `addNewSubLayer` | C | layer.add | CS6 layers are flat; insert position rides layer order |
 | `addNewSymbol` | C | symbol.create |  |
 | `addNewText` | C | text.createText |  |
+| `addSwapImageBehaviorFromPoint` | C | slice.addSwapImageBehaviorFromPoint | carried (0047): point-resolved source slice -> kind 2 behavior + DTAv swapTarget |
 | `adjustFontSize` | C | text.setAttrs |  |
 | `align` | C | object.align |  |
 | `appendPointToHotspot` | C | hotspot.appendPoint | selection-driven polyline append with closing tolerance (decision 0029) |
@@ -178,6 +180,8 @@ partial rows and the recorded debts in docs/HANDOFF.md Phase 9.
 | `reorderFrame` | C | frame.reorder | move onto own slot is the documented no-op |
 | `reorderLayer` | C | layer.reorder | move or clone (fresh slots); into-as-sub-layer refused, flat list |
 | `reorderPages` | C | page.reorder |  |
+| `replaceButtonTextStrings` | C | text.replaceButtonTextStrings | carried (0047): rewrites the topmost text item on every Button definition frame |
+| `replaceButtonTextStringsInInstances` | C | text.replaceButtonTextStringsInInstances | carried (0047): selection-scoped — numbers from selected instances only |
 | `replaceTextString` | C | text.setText | batch = per-object apply |
 | `resetNineScale` | C | symbol.set9Slice |  |
 | `resizeSelection` | C | object.resize | keeps the top-left corner of the selection in place |
@@ -216,6 +220,7 @@ partial rows and the recorded debts in docs/HANDOFF.md Phase 9.
 | `setDocumentCanvasSizeToSelection` | C | document.setDocumentCanvasSizeToSelection | carried (0046): canvas rect hugs the selection bounds; empty selection refuses (CS6 has nothing to calculate from) |
 | `setDocumentImageSize` | C | document.setImageSize | decision 0041: rect = new canvas bounds, bilinear resample |
 | `setDocumentResolution` | C | document.setResolution | RESf/RSUi document-wide, per-page copies kept in sync (dec 0023) |
+| `setEffectName` | C | filter.setEffectName | carried (0047): selection walker renames CATs+INMs matches; no match = no-op |
 | `setElementLocked` | C | object.setLocked |  |
 | `setElementLockedByName` | C | object.setLocked | by-name resolution is an app lookup |
 | `setElementMaskMode` | C | mask.setMode | bidirectional: path rasterizes, image traces to path |
@@ -284,8 +289,6 @@ partial rows and the recorded debts in docs/HANDOFF.md Phase 9.
 
 | CS6 verb | class | FireCraft carrier | note |
 |---|---|---|---|
-| `AddSwapImageBehaviorFromPoint` | P | slice.addBehavior | behaviors carry; the swap-image picker is UI |
-| `addSwapImageBehaviorFromPoint` | P | slice.addBehavior | behaviors carry; the swap-image picker is UI |
 | `applyCharacterMarkup` | P | text.setAttrs | per-range markup unmodeled (single-run) |
 | `applyFontMarkup` | P | text.setFont | per-range markup unmodeled |
 | `duplicateSymbolForAlias` | P | library.add | alias linkage unmodeled |
@@ -293,14 +296,11 @@ partial rows and the recorded debts in docs/HANDOFF.md Phase 9.
 | `moveSelectionMaskBy` | P | bitmap.movePixels | mask-only translate rides the pixel move |
 | `removeCharacterMarkup` | P | text.setAttrs |  |
 | `removeFontMarkup` | P | text.setFont |  |
-| `replaceButtonTextStrings` | P | text.setText | button instances - batch wrapper |
-| `replaceButtonTextStringsInInstances` | P | text.setText | batch wrapper |
 | `reversePathTextDirection` | P | text.attachPath | same |
 | `selectAdjustPixelSel` | P | bitmap.select* | pixel-precision refine unmodeled; shape stamps carry |
 | `setAnimInstanceStartFrame` | P | symbol.setParam | FW4 dropped the start-frame field from the format; refuses pointing at instance placement (the documented FW4 substitute) |
-| `setEffectName` | P | filter.add | rename = remove+add compose; no dedicated verb |
 | `setFillNColorNTexture` | P | path.setFillColor | texture component of the numbered form (texture_blend rides the fill model, no command surface) |
-| `setSliceAutonaming` | P | slice.setData | naming-policy field - payload coverage to verify |
+| `setSliceAutonaming` | P | slice.setData | no wire node for the toggle - FILs carries the naming label; the flag is UI state |
 | `setTextCustomAntiAliasOverSample` | P | text.setAttrs | custom-AA tuning is renderer-side |
 | `setTextCustomAntiAliasSharpness` | P | text.setAttrs | renderer-side |
 | `setTextCustomAntiAliasStrength` | P | text.setAttrs | renderer-side |

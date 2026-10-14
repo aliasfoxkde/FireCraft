@@ -363,3 +363,48 @@ Batch: `document.setDocumentCanvasSizeToDocumentExtents`,
   load 1.48× over a 3×-headroom ceiling; runner_lost_while_running) —
   8f2919d verified 7/7 green on the same code paths, local
   `xtask perf` 12/12 budgets ok.
+
+## #117 — 2026-10-14 — loose-ends setters (decision 0047)
+
+Batch: `filter.setEffectName`,
+`slice.addSwapImageBehaviorFromPoint`,
+`text.replaceButtonTextStrings`,
+`text.replaceButtonTextStringsInInstances` (8.13).
+
+- `setEffectName`: selection walker over `(CATs, INMs)` exact
+  matches. Stale ids skip (animation-walker rule), spine-less kinds
+  skip, non-matching skip — only real renames produce deltas, so a
+  sweep matching nothing is `Delta::Noop`, not an error. Empty
+  `new_name` refuses before any capture (000557d). New shared
+  `object_effects` spine accessor.
+- `addSwapImageBehaviorFromPoint`: gates in order — finite `where`,
+  exactly one selected slice/hotspot, then the point hit. Hit test
+  is topmost across all pages/layers/cells; rect/ellipse use the
+  frame, polygon gets a real even-odd contour test (the frame is
+  only its bounding box). A miss refuses — CS6's documented `false`
+  return. The hit writes kind 2 (swap image, decision 0017 wire
+  shape) plus `DTAv swapTarget` = source name (internal_name
+  fallback; unnamed source writes the behavior with no key).
+- Button-text pair: shared tail filters `SymbolType::Button` in the
+  tail so both variants are safe by construction (a graphic instance
+  in the selection never mutates its symbol's text). Walk = topmost
+  text per definition frame (cells in order, elements reversed).
+  Rewrite collapses runs to one run (single-run model —
+  `uniformAttrs` recorded no-op, mirroring `text.setText`); empty
+  text empties runs. All-variant sweeps `document.symbols`;
+  instances variant reads `symbol_number` from the selection (empty
+  selection refuses). Test fixture: button 7 / graphic 8 defs with
+  one text each.
+- Test-writing note: `instance_of` returns the FIRST instance in the
+  registry — when two instances exist, select by scanning for the
+  wanted `symbol_number`, not by helper order.
+- fuzzdrive: 4 CALLS entries + arms (text rewrites mostly-set text
+  with `uniform_attrs` flips, empty-string tail; filter rename wanders
+  cat/old/new so most calls miss; swap point wanders on/off the
+  field). Local fuzz 256×48 clean.
+- Registry 218→222. dom-parity: **250C/21P/0M/85N**, unresolved []
+  (five flips — the `AddSwapImageBehaviorFromPoint` CS6 alias carries
+  with the lowercase verb).
+- `setSliceAutonaming` stays P: the autonaming flag has no wire node
+  (FILs carries only the naming label); fabricating one would
+  violate no-format-fabrication.

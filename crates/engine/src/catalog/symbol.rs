@@ -17,7 +17,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use doc::{
     Cell, Document, ExportOptions, Layer, LayerList, NineSliceGuides, ObjectData, ObjectId,
-    SymbolAnimation, SymbolDefinition, SymbolInstanceObject, SymbolType,
+    SymbolAnimation, SymbolDefinition, SymbolInstanceObject, SymbolType, TextRun,
 };
 
 use crate::access;
@@ -68,7 +68,9 @@ pub(crate) fn install(registry: &mut CommandRegistry) -> Result<(), EngineError>
     registry.register(LibraryRemove)?;
     registry.register(LibraryRename)?;
     registry.register(LibraryImport)?;
-    registry.register(Tween)
+    registry.register(Tween)?;
+    registry.register(ReplaceButtonTextStrings)?;
+    registry.register(ReplaceButtonTextStringsInInstances)
 }
 
 /// The settable symbol types. `Other(raw)` definitions stay readable
@@ -1107,6 +1109,166 @@ impl TypedCommand for SetParam {
 /// instances of multi-frame image symbols"; an empty selection
 /// refuses, and a selection without instances is a `Noop`. Payload
 /// validation happened in `apply`, before any capture.
+/// The topmost text item of each of `definition`'s frames — CS6's
+/// "Button Text items are defined as the topmost text items on each
+/// frame". Z-order is list order (bottom-first), so the scan runs from
+/// the cell's tail. Frames are the cells of every layer.
+fn button_text_items(
+    document: &Document,
+    definition: &doc::SymbolDefinition,
+) -> Vec<doc::ObjectId> {
+    let mut found = Vec::new();
+    for layer in &definition.layers.layers {
+        for cell in &layer.cells {
+            for id in cell.elements.iter().rev() {
+                if matches!(document.registry.get(*id), Some(doc::ObjectData::Text(_))) {
+                    found.push(*id);
+                    break;
+                }
+            }
+        }
+    }
+    found
+}
+
+/// `text.replaceButtonTextStrings` — CS6's
+/// `dom.replaceButtonTextStrings(newString, uniformAttrs)`: replaces
+/// the button text of every button-symbol definition in the library
+/// with one run of `text`. `uniformAttrs` distinguishes per-character
+/// attribute handling CS6's multi-run text model implements; the
+/// single-run model has one style per object, so both spellings write
+/// the same shape (recorded non-equivalence). An empty library or a
+/// library without buttons is the no-op.
+struct ReplaceButtonTextStrings;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct ReplaceButtonTextStringsPayload {
+    /// The replacement characters.
+    text: String,
+    /// CS6's `uniformAttrs` (no observable difference under the
+    /// single-run text model).
+    #[serde(default)]
+    uniform_attrs: bool,
+}
+
+/// `text.replaceButtonTextStringsInInstances` — CS6's
+/// `dom.replaceButtonTextStringsInInstances(newString, uniformAttrs)`:
+/// the same replacement scoped to the definitions the selected
+/// instances reference. An empty selection refuses; a selection with
+/// no instances is the no-op.
+struct ReplaceButtonTextStringsInInstances;
+
+impl TypedCommand for ReplaceButtonTextStrings {
+    type Payload = ReplaceButtonTextStringsPayload;
+
+    fn name(&self) -> &'static str {
+        "text.replaceButtonTextStrings"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        let numbers: Vec<i64> = document
+            .symbols
+            .iter()
+            .filter(|definition| definition.symbol_type == doc::SymbolType::Button)
+            .map(|definition| definition.symbol_number)
+            .collect();
+        replace_button_text(document, payload, &numbers)
+    }
+}
+
+impl TypedCommand for ReplaceButtonTextStringsInInstances {
+    type Payload = ReplaceButtonTextStringsPayload;
+
+    fn name(&self) -> &'static str {
+        "text.replaceButtonTextStringsInInstances"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        if document.object_selection.is_empty() {
+            return Err(EngineError::InvalidState {
+                name: self.name().to_owned(),
+                detail: "nothing is selected".to_owned(),
+            });
+        }
+        let mut numbers: Vec<i64> = Vec::new();
+        for id in &document.object_selection {
+            if let Some(doc::ObjectData::SymbolInstance(instance)) = document.registry.get(*id) {
+                numbers.push(instance.symbol_number);
+            }
+        }
+        replace_button_text(document, payload, &numbers)
+    }
+}
+
+/// Shared replacement tail: the button text items of `numbers`'
+/// definitions (duplicates skipped) get one run of the payload text.
+/// Definition structure is untouched — the edits are plain object
+/// mutations, so `Delta::Library` stays out of the transaction.
+fn replace_button_text(
+    document: &mut Document,
+    payload: &ReplaceButtonTextStringsPayload,
+    numbers: &[i64],
+) -> Result<Delta, EngineError> {
+    let mut targets: Vec<doc::ObjectId> = Vec::new();
+    let mut seen = std::collections::BTreeSet::new();
+    for symbol in numbers {
+        if !seen.insert(*symbol) {
+            continue;
+        }
+        let Some(position) = document
+            .symbols
+            .iter()
+            .position(|definition| definition.symbol_number == *symbol)
+        else {
+            continue;
+        };
+        // Only button definitions carry button text; the
+        // instances-scoped caller can hand us any definition number.
+        if document.symbols[position].symbol_type != doc::SymbolType::Button {
+            continue;
+        }
+        // Clone the cell contents out before mutating the registry —
+        // the definition borrow ends where the edit begins.
+        let definition = document.symbols[position].clone();
+        targets.extend(button_text_items(document, &definition));
+    }
+    let mut deltas = Vec::new();
+    for id in targets {
+        let Some(before) = document.registry.get(id).cloned() else {
+            continue;
+        };
+        let Some(doc::ObjectData::Text(slot)) = document.registry.get_mut(id) else {
+            continue;
+        };
+        slot.runs = if payload.text.is_empty() {
+            Vec::new()
+        } else {
+            vec![TextRun {
+                text: payload.text.clone(),
+            }]
+        };
+        deltas.push(Delta::Object {
+            id,
+            inverse: ObjectInverse::Mutated {
+                object: Box::new(before),
+            },
+        });
+    }
+    if deltas.is_empty() {
+        return Ok(Delta::Noop);
+    }
+    Ok(Delta::Group(deltas))
+}
+
 fn edit_animation_instances(
     document: &mut Document,
     name: &'static str,
@@ -2132,6 +2294,7 @@ mod tests {
     #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
     use super::super::testdoc;
     use super::*;
+    use crate::command::Command;
     use serde_json::json;
 
     fn registry() -> CommandRegistry {
@@ -3817,6 +3980,155 @@ mod tests {
         let (instance, _) = instance_of(document);
         document.object_selection = vec![instance];
         instance
+    }
+
+    /// A two-definition library: button (7) and graphic (8), each
+    /// holding one text item in its single frame. Returns the text ids.
+    fn button_library(document: &mut Document) -> (ObjectId, ObjectId) {
+        let make_definition = |number: i64, kind: SymbolType, text_id: ObjectId| {
+            let mut layer = Layer {
+                name: "content".to_owned(),
+                display: true,
+                ..Layer::default()
+            };
+            layer.cells.push(Cell {
+                locked: false,
+                visible: true,
+                elements: vec![text_id],
+            });
+            let mut layers = LayerList::default();
+            layers.layers.push(layer);
+            SymbolDefinition {
+                name: format!("def {number}"),
+                symbol_number: number,
+                origin: geom::Point::ZERO,
+                frame_count: 1,
+                layers,
+                background_raw: 0,
+                symbol_type: kind,
+                nine_slice: None,
+                auto_slice: None,
+                include_down_state: None,
+                show_down_on_load: None,
+                include_over_while_down: None,
+                op_code: None,
+            }
+        };
+        let button_text = document
+            .registry
+            .insert(ObjectData::Text(doc::TextObject::new(geom::Rect::new(
+                0.0, 0.0, 40.0, 12.0,
+            ))));
+        let graphic_text = document
+            .registry
+            .insert(ObjectData::Text(doc::TextObject::new(geom::Rect::new(
+                0.0, 0.0, 40.0, 12.0,
+            ))));
+        let button = make_definition(7, SymbolType::Button, button_text);
+        let graphic = make_definition(8, SymbolType::Graphic, graphic_text);
+        document.symbols.push(button);
+        document.symbols.push(graphic);
+        (button_text, graphic_text)
+    }
+
+    fn runs_of(document: &Document, id: ObjectId) -> Vec<String> {
+        match document.registry.get(id).unwrap() {
+            ObjectData::Text(text) => text.runs.iter().map(|r| r.text.clone()).collect(),
+            other => panic!("wrong object kind: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn replace_button_text_targets_button_definitions_only() {
+        let (mut document, _) = testdoc::sample_document();
+        let (button_text, graphic_text) = button_library(&mut document);
+        let before = serde_json::to_vec(&document).unwrap();
+
+        let delta = ReplaceButtonTextStrings
+            .apply_json(
+                &mut document,
+                json!({"text": "Buy now", "uniform_attrs": true}),
+            )
+            .expect("applies");
+        assert_eq!(runs_of(&document, button_text), vec!["Buy now"]);
+        assert_eq!(runs_of(&document, graphic_text), Vec::<String>::new());
+        delta.apply_inverse(&mut document).expect("inverse applies");
+        assert_eq!(serde_json::to_vec(&document).unwrap(), before);
+
+        // The no-buttons library is the no-op.
+        document.symbols.clear();
+        let delta = ReplaceButtonTextStrings
+            .apply_json(&mut document, json!({"text": "x"}))
+            .expect("applies");
+        assert!(matches!(delta, crate::delta::Delta::Noop));
+    }
+
+    #[test]
+    fn replace_button_text_in_instances_scopes_to_selection() {
+        let (mut document, _) = testdoc::sample_document();
+        let (button_text, _) = button_library(&mut document);
+        // Instance of the graphic definition (8).
+        let registry = registry();
+        registry
+            .execute(
+                &mut document,
+                "symbol.createInstance",
+                json!({
+                    "symbol": 8, "page": 0, "layer": 1, "cell": 1,
+                    "index": 0, "x": 0.0, "y": 0.0,
+                }),
+            )
+            .unwrap();
+        let (graphic_instance, _) = instance_of(&document);
+        document.object_selection = vec![graphic_instance];
+        let delta = ReplaceButtonTextStringsInInstances
+            .apply_json(&mut document, json!({"text": "x"}))
+            .expect("applies");
+        assert!(matches!(delta, crate::delta::Delta::Noop));
+
+        // Selecting the button's text instead — the definition edit
+        // flows through the instance lookup only for instances; a text
+        // selection is the no-instance no-op too.
+        document.object_selection = vec![button_text];
+        let delta = ReplaceButtonTextStringsInInstances
+            .apply_json(&mut document, json!({"text": "x"}))
+            .expect("applies");
+        assert!(matches!(delta, crate::delta::Delta::Noop));
+
+        // An instance of the button definition is the real target.
+        registry
+            .execute(
+                &mut document,
+                "symbol.createInstance",
+                json!({
+                    "symbol": 7, "page": 0, "layer": 1, "cell": 1,
+                    "index": 0, "x": 4.0, "y": 0.0,
+                }),
+            )
+            .unwrap();
+        let button_instance = document
+            .registry
+            .iter()
+            .find_map(|(id, object)| match object {
+                ObjectData::SymbolInstance(instance) if instance.symbol_number == 7 => Some(id),
+                _ => None,
+            })
+            .unwrap();
+        document.object_selection = vec![button_instance];
+        ReplaceButtonTextStringsInInstances
+            .apply_json(&mut document, json!({"text": "Click"}))
+            .expect("applies");
+        assert_eq!(runs_of(&document, button_text), vec!["Click"]);
+
+        // Empty selection refuses.
+        document.object_selection = Vec::new();
+        let err = ReplaceButtonTextStringsInInstances
+            .apply_json(&mut document, json!({"text": "x"}))
+            .expect_err("empty selection is refused");
+        assert!(matches!(
+            err,
+            crate::error::EngineError::InvalidState { .. }
+        ));
     }
 
     fn animation_of(document: &Document, id: ObjectId) -> &SymbolAnimation {

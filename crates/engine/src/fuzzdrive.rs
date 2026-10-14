@@ -645,9 +645,12 @@ pub const CALLS: &[&str] = &[
     "text.setTextRectangle",
     "text.setTextRectangleAuto",
     "text.setTextRectangleAutoFromPoint",
+    "text.replaceButtonTextStrings",
+    "text.replaceButtonTextStringsInInstances",
     "document.setDocumentCanvasSizeToDocumentExtents",
     "document.setDocumentCanvasSizeToSelection",
     "document.deleteAllInDocument",
+    "filter.setEffectName",
     "symbol.create",
     "symbol.createInstance",
     "symbol.breakApart",
@@ -685,6 +688,7 @@ pub const CALLS: &[&str] = &[
     "slice.setExport",
     "slice.addBehavior",
     "slice.removeBehavior",
+    "slice.addSwapImageBehaviorFromPoint",
     "slice.setData",
     "hotspot.setRectangle",
     "hotspot.setShape",
@@ -2057,6 +2061,34 @@ pub fn random_call(rng: &mut FuzzRng, document: &Document) -> (String, serde_jso
                 "y": rng.below(200) as f64 - 50.0,
             }
         }),
+        // Button-text rewrites are selection/library-driven: the empty
+        // form sweeps every button definition, the instance form reads
+        // the selection; both land in rewrite, no-op, and refusal
+        // paths.
+        "text.replaceButtonTextStrings" => {
+            let text = if rng.chance(70) {
+                format!("btn-{}", rng.below(6))
+            } else {
+                String::new()
+            };
+            serde_json::json!({ "text": text, "uniform_attrs": rng.chance(30) })
+        }
+        "text.replaceButtonTextStringsInInstances" => {
+            let text = if rng.chance(70) {
+                format!("btn-{}", rng.below(6))
+            } else {
+                String::new()
+            };
+            serde_json::json!({ "text": text, "uniform_attrs": rng.chance(30) })
+        }
+        // Renames wander over categories and names so most calls miss
+        // (the no-op); hits rename every matching effect on whatever
+        // the selection holds.
+        "filter.setEffectName" => serde_json::json!({
+            "category": format!("cat-{}", rng.below(3)),
+            "old_name": format!("old-{}", rng.below(3)),
+            "new_name": format!("new-{}", rng.below(4)),
+        }),
         "symbol.create" => {
             let count = 1 + rng.below(3);
             let mut ids = Vec::with_capacity(count);
@@ -2376,6 +2408,15 @@ pub fn random_call(rng: &mut FuzzRng, document: &Document) -> (String, serde_jso
         "slice.removeBehavior" => serde_json::json!({
             "id": any_id(rng),
             "index": any_index(rng, 3),
+        }),
+        // The swap-image source point wanders over (and off) the slice
+        // field; the selected slice takes the behavior when a source
+        // resolves.
+        "slice.addSwapImageBehaviorFromPoint" => serde_json::json!({
+            "where": {
+                "x": rng.below(200) as f64 - 50.0,
+                "y": rng.below(200) as f64 - 50.0,
+            }
         }),
         "slice.setData" => serde_json::json!({
             "id": any_id(rng),

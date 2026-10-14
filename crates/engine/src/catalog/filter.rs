@@ -23,7 +23,8 @@ use crate::registry::CommandRegistry;
 pub(crate) fn install(registry: &mut CommandRegistry) -> Result<(), EngineError> {
     registry.register(AddFilter)?;
     registry.register(RemoveFilter)?;
-    registry.register(SetFilterParam)
+    registry.register(SetFilterParam)?;
+    registry.register(SetEffectName)
 }
 
 /// The `GPLv` grab-point list for one `*_points` property: a `GPTv`
@@ -350,6 +351,99 @@ impl TypedCommand for SetFilterParam {
                 }),
             }
         })
+    }
+}
+
+/// `filter.setEffectName` — CS6's
+/// `dom.setEffectName(category, oldName, newName)` (Fireworks MX):
+/// renames every effect on the selected objects whose `CATs` equals
+/// `category` and whose `INMs` equals `old_name`. Both names are wire
+/// fields, so the rename is a plain slot write; CS6's "current effect"
+/// (the Effects-panel selection) carries to the selected objects, the
+/// `setFill` walker's rule. Members with no match skip; no match
+/// anywhere is the no-op.
+struct SetEffectName;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct SetEffectNamePayload {
+    /// `CATs` the effect lives under (exact match).
+    category: String,
+    /// The `INMs` to rename.
+    old_name: String,
+    /// The replacement `INMs`.
+    new_name: String,
+}
+
+impl TypedCommand for SetEffectName {
+    type Payload = SetEffectNamePayload;
+
+    fn name(&self) -> &'static str {
+        "filter.setEffectName"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "filter.setEffectName";
+        if payload.new_name.is_empty() {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: "new_name is empty".to_owned(),
+            });
+        }
+        let ids = document.object_selection.clone();
+        if ids.is_empty() {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: "nothing is selected".to_owned(),
+            });
+        }
+        let matches = |effect: &Effect| {
+            effect.category == payload.category && effect.internal_name == payload.old_name
+        };
+        let mut deltas = Vec::new();
+        for id in ids {
+            // Stale ids skip (the animation-instance walker's rule);
+            // capture only objects that will actually change.
+            let Some(before) = document.registry.get(id).cloned() else {
+                continue;
+            };
+            let Some(effects) = object_effects(&before) else {
+                continue;
+            };
+            if !effects.iter().any(matches) {
+                continue;
+            }
+            with_effects(document, id, |effects| {
+                for effect in effects.iter_mut().filter(|effect| matches(effect)) {
+                    effect.internal_name = payload.new_name.clone();
+                }
+            });
+            deltas.push(Delta::Object {
+                id,
+                inverse: ObjectInverse::Mutated {
+                    object: Box::new(before),
+                },
+            });
+        }
+        if deltas.is_empty() {
+            return Ok(Delta::Noop);
+        }
+        Ok(Delta::Group(deltas))
+    }
+}
+
+/// Effect list of `object`, `None` for kinds without a spine.
+fn object_effects(object: &ObjectData) -> Option<&Vec<Effect>> {
+    match object {
+        ObjectData::Path(path) => Some(&path.effects),
+        ObjectData::Text(text) => Some(&text.effects),
+        ObjectData::Group(group) => Some(&group.effects),
+        ObjectData::Image(image) => Some(&image.effects),
+        _ => None,
     }
 }
 
@@ -742,5 +836,113 @@ mod tests {
             EffectValue::Raw(raw),
             "raw grab points ride through the delta byte-exact"
         );
+    }
+
+    #[test]
+    fn set_effect_name_renames_matching_effects_and_undo_is_exact() {
+        let (mut document, ids) = testdoc::sample_document();
+        AddFilter
+            .apply_json(
+                &mut document,
+                json!({ "id": ids[0], "name": "dropShadow", "category": "Shadow and Glow" }),
+            )
+            .unwrap();
+        AddFilter
+            .apply_json(
+                &mut document,
+                json!({ "id": ids[0], "name": "gaussianBlur", "category": "Blur" }),
+            )
+            .unwrap();
+        AddFilter
+            .apply_json(
+                &mut document,
+                json!({ "id": ids[1], "name": "dropShadow", "category": "Shadow and Glow" }),
+            )
+            .unwrap();
+        document.object_selection = vec![ids[0], ids[1]];
+        let before = serde_json::to_vec(&document).unwrap();
+
+        let delta = SetEffectName
+            .apply_json(
+                &mut document,
+                json!({
+                    "category": "Shadow and Glow",
+                    "old_name": "dropShadow",
+                    "new_name": "innerShadow",
+                }),
+            )
+            .unwrap();
+        for id in [ids[0], ids[1]] {
+            let ObjectData::Path(path) = document.registry.get(id).unwrap() else {
+                panic!("wrong kind");
+            };
+            let names: Vec<&str> = path
+                .effects
+                .iter()
+                .map(|effect| effect.internal_name.as_str())
+                .collect();
+            if id == ids[0] {
+                assert_eq!(
+                    names,
+                    ["innerShadow", "gaussianBlur"],
+                    "only the match renames"
+                );
+            } else {
+                assert_eq!(names, ["innerShadow"]);
+            }
+        }
+        delta.apply_inverse(&mut document).unwrap();
+        assert_eq!(
+            serde_json::to_vec(&document).unwrap(),
+            before,
+            "undo is byte-exact"
+        );
+    }
+
+    #[test]
+    fn set_effect_name_gates() {
+        let (mut document, ids) = testdoc::sample_document();
+        AddFilter
+            .apply_json(
+                &mut document,
+                json!({ "id": ids[0], "name": "dropShadow", "category": "Shadow and Glow" }),
+            )
+            .unwrap();
+
+        // Empty replacement name refuses.
+        let error = SetEffectName
+            .apply_json(
+                &mut document,
+                json!({ "category": "Shadow and Glow", "old_name": "dropShadow", "new_name": "" }),
+            )
+            .unwrap_err();
+        assert!(error.to_string().contains("new_name is empty"));
+
+        // Empty selection refuses.
+        let error = SetEffectName
+            .apply_json(
+                &mut document,
+                json!({ "category": "Shadow and Glow", "old_name": "dropShadow", "new_name": "x" }),
+            )
+            .unwrap_err();
+        assert!(error.to_string().contains("nothing is selected"));
+
+        // A category miss is the no-op, not a rename of the wrong row.
+        document.object_selection = vec![ids[0]];
+        let before = serde_json::to_vec(&document).unwrap();
+        assert!(matches!(
+            SetEffectName
+                .apply_json(
+                    &mut document,
+                    json!({
+                        "category": "Blur",
+                        "old_name": "dropShadow",
+                        "new_name": "x",
+                    }),
+                )
+                .unwrap(),
+            Delta::Noop
+        ));
+        assert_eq!(serde_json::to_vec(&document).unwrap(), before);
     }
 }

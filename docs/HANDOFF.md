@@ -14,17 +14,17 @@
 - **Ship state:** v0.1.0 released, repo public. Roadmap M0–M15 all
   closed. 155+ commits, CI green on `3d74723` (7/7 jobs; the fuzz job
   on that commit caught the addImage minting leak — fixed in `000557d`).
-- **Engine registry:** 218 commands, pinned equal to the fuzz call
+- **Engine registry:** 222 commands, pinned equal to the fuzz call
   table by `the_call_table_covers_the_catalog`.
-- **CS6 DOM verb-surface parity:** **245 C / 26 P / 0 M / 85 N** —
+- **CS6 DOM verb-surface parity:** **250 C / 21 P / 0 M / 85 N** —
   the missing table is empty (2026-10-14, decision 0041); every dom
   mutation verb is carried or partial. Remaining surface work is the
-  26 P rows and Phase 9 debts.
+  21 P rows and Phase 9 debts.
   (`docs/planning/generated/dom-parity.md`, regenerate per §5 below).
   (The CS6 verb list carries both case spellings of mergeDown and
   AddNewImage — those families flipped four rows each.)
 - **Active campaign:** COMPLETE (2026-10-14) — the M table is empty.
-  Remaining surface work: the 26 P rows and Phase 9 debts, prioritized
+  Remaining surface work: the 21 P rows and Phase 9 debts, prioritized
   from `dom-parity.md`'s P table. New families follow the §3 loop.
 - **Clean-room invariants (never violate):** `source/` is Adobe's
   copyrighted material — git-ignored, never committed, never copied
@@ -40,7 +40,7 @@
 | `AGENTS.md` | Operating manual: commands, gates, commit rules, day-to-day method |
 | `docs/PLANNING.md` | Master plan: format spec (§6), architecture (§7), method |
 | `docs/planning/firecraft/` | `ROADMAP.md` + tickets M0–M15 (all closed; reference for how tickets are written) |
-| `docs/decisions/` | Decision records 0001–0046 — **write one per family/batch** |
+| `docs/decisions/` | Decision records 0001–0047 — **write one per family/batch** |
 | `docs/planning/generated/` | `parity.md`, `scorecard.md` (xtask-owned) + `dom-parity.md` (generator-owned, see §5) |
 | `docs/research/fireworks-png-nodes.md` | The node dictionary — the format Rosetta stone (observational; corpus wins on conflict) |
 | `log/devlog.md` | Detailed session log (gitignored) — **append an entry to close every task** |
@@ -368,6 +368,21 @@ mutations and refuses without a linked slice.
   top-level element through exact `object.delete` semantics folded
   into one transaction; empty document = no-op). Extents floor at
   1px/side, refuse beyond 65535 like `page.setCanvasSize`.
+- **8.13 — DONE (decision 0047).** The loose-ends setters landed
+  2026-10-14: `filter.setEffectName` (selection walker renames every
+  matching `(CATs, INMs)` pair; stale/spine-less/no-match objects skip,
+  empty sweep = no-op), `slice.addSwapImageBehaviorFromPoint`
+  (point-resolved source slice — rect/ellipse by frame, polygon by
+  real even-odd contour test; miss = refusal (CS6's `false` return);
+  writes the kind-2 behavior + `DTAv swapTarget` from the source's
+  name, decision 0017's wire shape),
+  `text.replaceButtonTextStrings` /
+  `text.replaceButtonTextStringsInInstances` (rewrites the topmost
+  text item on every `SymbolType::Button` definition frame; the
+  instances variant scopes to the selection's instances; empty
+  selection refuses; `uniformAttrs` a no-op under the single-run
+  text model). `setSliceAutonaming` stays P — the autonaming flag has
+  no wire node (FILs carries only the label).
 
 ### Phase 9 — Recorded debts (P-class limitations; no parity pressure)
 - **6.1-object-duplicate** deep-clone of groups (today shallow).
