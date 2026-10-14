@@ -664,6 +664,13 @@ pub const CALLS: &[&str] = &[
     "mask.clearJPEG",
     "bitmap.movePixelMaskBy",
     "bitmap.setPixelMask",
+    "page.setName",
+    "page.reorder",
+    "page.setMaster",
+    "page.unsetMaster",
+    "page.addMasterLayer",
+    "layer.reorder",
+    "layer.setLocked",
 ];
 
 /// Builds a random call against `document`: a random catalog id and a
@@ -2014,6 +2021,36 @@ pub fn random_call(rng: &mut FuzzRng, document: &Document) -> (String, serde_jso
                 },
             })
         }
+        // The layer/page structure family (decision 0021): order and
+        // flag flips over existing model bits, list-capturing undo.
+        "page.setName" => serde_json::json!({
+            "page": any_index(rng, pages),
+            "name": rng.pick(&["Cover", "Page A", ""]).copied(),
+        }),
+        "page.reorder" => serde_json::json!({
+            "from": any_index(rng, pages),
+            "before": any_index(rng, pages + 1),
+        }),
+        "page.setMaster" => serde_json::json!({
+            "page": any_index(rng, pages),
+        }),
+        "page.unsetMaster" => serde_json::json!({}),
+        "page.addMasterLayer" => serde_json::json!({
+            "index": any_opt_index(rng, 3),
+        }),
+        "layer.reorder" => serde_json::json!({
+            "page": any_index(rng, pages),
+            "from": any_index(rng, 3),
+            "before": any_index(rng, 4),
+            "make_copy": rng.chance(50),
+        }),
+        "layer.setLocked" => serde_json::json!({
+            "page": any_index(rng, pages),
+            "layer": any_index(rng, 3),
+            "frame": any_index(rng, frames),
+            "locked": rng.chance(2),
+            "all_layers": rng.chance(30),
+        }),
         other => {
             let _ = other;
             // A catalog command without a builder: an empty payload is

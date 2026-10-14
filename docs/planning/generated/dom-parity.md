@@ -7,24 +7,24 @@ regeneration recipe in docs/PLANNING.md §5.4). The DOM is stable
 CS4→CS6; CS6 additions the text lacks (e.g. 9-slice guides) are
 covered by the CS6 `.jsf` scripts and appear here via their verbs.
 
-FireCraft side: the 138-command registry (`engine::catalog::ids()`,
+FireCraft side: the 145-command registry (`engine::catalog::ids()`,
 enforced == the fuzz call table).
 
 ## Coverage classes
 
 | class | meaning | count (of 356 dom verbs) |
 |---|---|---|
-| C | carried: a registry command implements the mutation | 162 |
+| C | carried: a registry command implements the mutation | 169 |
 | P | partial: carried with a recorded model limitation | 45 |
-| M | missing: no command and no decision — work items | 67 |
+| M | missing: no command and no decision — work items | 60 |
 | N | not applicable: non-document surface (accessor/UI/session/clipboard/export/OS) | 82 |
 
-Document-mutation coverage: **207 of 274** carried-or-partial
-(162 carried, 45 partial, 67 missing).
+Document-mutation coverage: **214 of 274** carried-or-partial
+(169 carried, 45 partial, 60 missing).
 
 ### Gap families (the Missing table, grouped)
 
-The 67 missing verbs collapse into seven families, largest first —
+The 60 missing verbs collapse into seven families, largest first —
 each family is one design decision plus a command batch:
 
 1. **Object transforms** (2 verbs remain): rotateDocument (canvas
@@ -32,9 +32,10 @@ each family is one design decision plus a command batch:
    (bitmap resample). The object transform family itself is
    carried by object.* per decision 0019 — images refuse
    transforms until the resample pass this family shares.
-2. **Layer/page structure** (~11 verbs): page rename, layer lock and
-   reorder, page reorder, layer sharing to pages, master pages.
-   Model bits exist for sharing and master; commands are missing.
+2. **Layer sharing** (3 verbs): setLayerSharing / shareLayerToPages /
+   detachSharedLayer need the LSMv/LSEv/LSAv shared-layer model typed
+   (decision 0021); the reader bags both nodes verbatim today. The
+   structure rows (rename/reorder/lock/master) carried 2026-10-14.
 3. **Frames/states** (4 verbs remain): duplicateSelectionToFrames /
    duplicateSelectionToFrameRange / distributeSelectionToFrames
    duplicate the SELECTION across frames — they need an
@@ -70,6 +71,7 @@ each family is one design decision plus a command batch:
 | `addElementMask` | C | mask.add | reveal-all/hide-all/reveal-selection/hide-selection; no plane degrades to reveal-all |
 | `addFrames` | C | frame.add | where strings verbatim; FRCi pair bumps together |
 | `addGuide` | C | page.addGuide | page-scoped guide line; duplicates append like CS6 |
+| `addMasterPageLayer` | C | page.addMasterLayer | refuses without a master page (CS6 precondition) |
 | `addNewHotspot` | C | hotspot.create |  |
 | `addNewLayer` | C | layer.add |  |
 | `addNewLine` | C | object.createPath | two-point path |
@@ -168,6 +170,8 @@ each family is one design decision plus a command batch:
 | `removeGuide` | C | page.removeGuide | absent position is a documented CS6 no-op |
 | `removeNineScale` | C | symbol.set9Slice |  |
 | `reorderFrame` | C | frame.reorder | move onto own slot is the documented no-op |
+| `reorderLayer` | C | layer.reorder | move or clone (fresh slots); into-as-sub-layer refused, flat list |
+| `reorderPages` | C | page.reorder |  |
 | `replaceTextString` | C | text.setText | batch = per-object apply |
 | `resetNineScale` | C | symbol.set9Slice |  |
 | `resizeSelection` | C | object.resize | keeps the top-left corner of the selection in place |
@@ -199,10 +203,13 @@ each family is one design decision plus a command batch:
 | `setHotspotAltTag` | C | slice.setLink | alt rides the link payload |
 | `setHotspotTarget` | C | slice.setLink |  |
 | `setHotspotText` | C | slice.setData |  |
+| `setLayerLocked` | C | layer.setLocked | per-frame lock = LCKb in CELv; bAllLayers sweeps the frame |
 | `setLayerName` | C | layer.rename |  |
 | `setLayerVisible` | C | layer.setDisplay | the eye bit |
+| `setMasterPage` | C | page.setMaster | one master per document; exclusive flag |
 | `setOnionSkinning` | C | page.setOnionSkinning | OSBi/OSAi; 0/0 disables per CS6 |
 | `setOpacity` | C | object.setOpacity |  |
+| `setPageName` | C | page.setName |  |
 | `setPixelMask` | C | bitmap.setPixelMask | replace/add/subtract modes over the live plane |
 | `setSelectionBounds` | C | object.setBounds | move + resize in one op |
 | `setSelectionMask` | C | bitmap.select* | shape select family |
@@ -223,6 +230,7 @@ each family is one design decision plus a command batch:
 | `showAllHidden` | C | object.setVisible |  |
 | `transformSelection` | C | object.transform | free affine; the family primitive |
 | `ungroup` | C | object.ungroup | children splice in at the group position, z-order preserved |
+| `unsetMasterPage` | C | page.unsetMaster |  |
 | `updateSymbol` | C | library.add | replace the definition |
 
 ## Partial (P)
@@ -281,7 +289,6 @@ each family is one design decision plus a command batch:
 |---|---|---|---|
 | `AddNewImage` | M | - | no engine place-image command; io::raster::attach_image is the import-side path (SVG/raster import), app_cli carries file placement |
 | `MergeDown` | M | - | no merge-down (object or bitmap flatten) |
-| `addMasterPageLayer` | M | - | master-page family gap |
 | `addNewImage` | M | - | no engine place-image command; io::raster::attach_image is the import-side path (SVG/raster import), app_cli carries file placement |
 | `addNewImageViaCopy` | M | - | same gap as addNewImage |
 | `addNewImageViaCut` | M | - | same gap as addNewImage |
@@ -294,7 +301,7 @@ each family is one design decision plus a command batch:
 | `cropSelection` | M | - | canvas crop; page.setCanvasSize carries resize but not the crop-to-content op |
 | `cuplicateSelectionToFrames` | M | - | needs an object-selection surface (same blocker as the selection family) |
 | `deleteSavedSelection` | M | - | named saved selections unmodeled |
-| `detachSharedLayer` | M | - | shared_layers model bit exists; no sharing commands |
+| `detachSharedLayer` | M | - | needs the LSMv/LSEv/LSAv shared-layer model typed (decision 0021) |
 | `distributeSelectionToFrames` | M | - | needs an object-selection surface (same blocker as the selection family) |
 | `duplicateSelectionToFrameRange` | M | - | needs an object-selection surface (same blocker as the selection family) |
 | `duplicateSelectionToFrames` | M | - | needs an object-selection surface (same blocker as the selection family) |
@@ -308,8 +315,6 @@ each family is one design decision plus a command batch:
 | `knifeElementsFromPoints` | M | - | no split/knife boolean op |
 | `mergeDown` | M | - | no merge-down (object or bitmap flatten) |
 | `redrawSmartShape` | M | - | autoshape params set at creation only; no edit command |
-| `reorderLayer` | M | - | no layer reorder command (object z-order exists) |
-| `reorderPages` | M | - | no page reorder command |
 | `restoreSelection` | M | - | named saved selections unmodeled |
 | `rotateDocument` | M | - | canvas rotation (90-degree steps + re-bake) |
 | `saveSelection` | M | - | named saved selections unmodeled |
@@ -330,10 +335,7 @@ each family is one design decision plus a command batch:
 | `setDocumentResolution` | M | - | resolution metadata unmodeled |
 | `setFillEdgeMode` | M | - | fill edge (anti-alias/hard) mode unmodeled |
 | `setGradientName` | M | - | gradient definitions carry no names in the model |
-| `setLayerLocked` | M | - | cell lock (cell.setLocked) exists; the layer-level lock is missing |
-| `setLayerSharing` | M | - | shared_layers model bit exists; no sharing commands |
-| `setMasterPage` | M | - | Page.is_master model bit exists; no command |
-| `setPageName` | M | - | no page rename command (layer/object renames exist) |
+| `setLayerSharing` | M | - | needs the LSMv/LSEv/LSAv shared-layer model typed (decision 0021) |
 | `setQuadrangle` | M | - | primitive param-edit gap |
 | `setRectRoundness` | M | - | primitives are modeled (PathObject.primitive) but no param-edit command |
 | `setRectRoundnessMode` | M | - | primitive param-edit gap |
@@ -342,10 +344,9 @@ each family is one design decision plus a command batch:
 | `setShowGuides` | M | - | guides model exists; no command |
 | `setSnapToGrid` | M | - | page.grid model exists; no command |
 | `setSnapToGuides` | M | - | guides model exists; no command |
-| `shareLayerToPages` | M | - | shared_layers model bit exists; no sharing commands |
+| `shareLayerToPages` | M | - | needs the LSMv/LSEv/LSAv shared-layer model typed (decision 0021) |
 | `splitPaths` | M | - | no split/knife boolean op |
 | `tween` | M | - | instance tweening unmodeled |
-| `unsetMasterPage` | M | - | Page.is_master model bit exists; no command |
 
 ## Not applicable (N)
 

@@ -20,7 +20,12 @@ pub(crate) fn install(registry: &mut CommandRegistry) -> Result<(), EngineError>
     registry.register(RemoveAllGuides)?;
     registry.register(SetGridOrigin)?;
     registry.register(SetGridSize)?;
-    registry.register(SetOnionSkinning)
+    registry.register(SetOnionSkinning)?;
+    registry.register(SetPageName)?;
+    registry.register(ReorderPages)?;
+    registry.register(SetMasterPage)?;
+    registry.register(UnsetMasterPage)?;
+    registry.register(AddMasterLayer)
 }
 
 /// Which axis a guide runs along (CS6's `guidekind` string).
@@ -584,6 +589,264 @@ impl TypedCommand for SetOnionSkinning {
     }
 }
 
+/// `page.setName` — CS6's `dom.setPageName(index, name)`: sets the
+/// page's `PGNs` name. `Page.name` is `Option<String>` on the wire
+/// (absent `PGNs`); a rename always carries a string.
+struct SetPageName;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct SetPageNamePayload {
+    /// Page index.
+    page: usize,
+    /// New name.
+    name: String,
+}
+
+impl TypedCommand for SetPageName {
+    type Payload = SetPageNamePayload;
+
+    fn name(&self) -> &'static str {
+        "page.setName"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "page.setName";
+        let target = access::page_mut(document, NAME, payload.page)?;
+        let before = target.clone();
+        target.name = Some(payload.name.clone());
+        Ok(Delta::PageBody {
+            page: payload.page,
+            before: Box::new(before),
+        })
+    }
+}
+
+/// `page.reorder` — CS6's `dom.reorderPages(origPos, newPos)`: moves
+/// the page at `from` to sit before `before` (move — CS6 carries no
+/// copy flag for pages). A move onto its own current slot is the
+/// documented no-op. Undo captures the whole page list: pages are
+/// self-contained, so the pre-command `Vec` is the exact inverse.
+struct ReorderPages;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct ReorderPagesPayload {
+    /// Page to move.
+    from: usize,
+    /// Insert before this page index (may equal the page count for
+    /// "move to end").
+    before: usize,
+}
+
+impl TypedCommand for ReorderPages {
+    type Payload = ReorderPagesPayload;
+
+    fn name(&self) -> &'static str {
+        "page.reorder"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "page.reorder";
+        let len = document.pages.len();
+        if payload.from >= len {
+            return Err(EngineError::MissingTarget {
+                name: NAME.to_owned(),
+                detail: format!("page {} out of range ({len} pages)", payload.from),
+            });
+        }
+        if payload.before > len {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: format!("insert-before {} beyond {len} pages", payload.before),
+            });
+        }
+        if payload.before == payload.from || payload.before == payload.from + 1 {
+            return Ok(Delta::Noop);
+        }
+        let before = document.pages.clone();
+        let moved = document.pages.remove(payload.from);
+        let at = if payload.before > payload.from {
+            payload.before - 1
+        } else {
+            payload.before
+        };
+        document.pages.insert(at, moved);
+        Ok(Delta::Pages { before })
+    }
+}
+
+/// The index of the document's master page, when one is set.
+fn master_index(document: &Document) -> Option<usize> {
+    document.pages.iter().position(|page| page.is_master)
+}
+
+/// `page.setMaster` — CS6's `dom.setMasterPage(PageNum)`: designates
+/// the page as the document's master (`IMPb`). One master per
+/// document, so every other page's flag clears; designating the
+/// already-master page is a no-op. Undo captures each changed page.
+struct SetMasterPage;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct SetMasterPagePayload {
+    /// Page index.
+    page: usize,
+}
+
+impl TypedCommand for SetMasterPage {
+    type Payload = SetMasterPagePayload;
+
+    fn name(&self) -> &'static str {
+        "page.setMaster"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "page.setMaster";
+        let target = access::page_mut(document, NAME, payload.page)?;
+        if target.is_master {
+            return Ok(Delta::Noop);
+        }
+        // Capture BEFORE mutating: the delta holds the prior state.
+        let mut deltas = vec![Delta::PageBody {
+            page: payload.page,
+            before: Box::new(target.clone()),
+        }];
+        target.is_master = true;
+        let mut current = master_index(document);
+        while let Some(index) = current {
+            if index == payload.page {
+                break;
+            }
+            let page = access::page_mut(document, NAME, index)?;
+            deltas.push(Delta::PageBody {
+                page: index,
+                before: Box::new(page.clone()),
+            });
+            page.is_master = false;
+            current = master_index(document);
+        }
+        Ok(if deltas.len() == 1 {
+            deltas.pop().unwrap_or(Delta::Noop)
+        } else {
+            Delta::Group(deltas)
+        })
+    }
+}
+
+/// `page.unsetMaster` — CS6's `dom.unsetMasterPage()`: the current
+/// master page becomes a normal page. Absent master is a no-op.
+struct UnsetMasterPage;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Default)]
+#[serde(deny_unknown_fields)]
+struct UnsetMasterPagePayload {}
+
+impl TypedCommand for UnsetMasterPage {
+    type Payload = UnsetMasterPagePayload;
+
+    fn name(&self) -> &'static str {
+        "page.unsetMaster"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        _payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "page.unsetMaster";
+        let Some(index) = master_index(document) else {
+            return Ok(Delta::Noop);
+        };
+        let page = access::page_mut(document, NAME, index)?;
+        let before = page.clone();
+        page.is_master = false;
+        Ok(Delta::PageBody {
+            page: index,
+            before: Box::new(before),
+        })
+    }
+}
+
+/// `page.addMasterLayer` — CS6's `dom.addMasterPageLayer()`: inserts a
+/// fresh empty layer into the master page's layer list at the bottom
+/// of the hierarchy (CS6's `-1` level); `index` allows another
+/// position. Refuses when the document has no master page — CS6's
+/// documented precondition.
+struct AddMasterLayer;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct AddMasterLayerPayload {
+    /// Insert position in the master's layer list, bottom-first;
+    /// absent inserts at the bottom.
+    index: Option<usize>,
+}
+
+impl TypedCommand for AddMasterLayer {
+    type Payload = AddMasterLayerPayload;
+
+    fn name(&self) -> &'static str {
+        "page.addMasterLayer"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "page.addMasterLayer";
+        let Some(master) = master_index(document) else {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: "the document has no master page".to_owned(),
+            });
+        };
+        let page = access::page(document, NAME, master)?;
+        let len = page.layers.layers.len();
+        let at = payload.index.unwrap_or(0);
+        if at > len {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: format!("insert index {at} beyond {len} layers"),
+            });
+        }
+        // One unlocked, visible cell per frame, mirroring `layer.add`.
+        let frame_count = page.info.frame_count.max(1);
+        let cells = (0..frame_count)
+            .map(|_| Cell {
+                locked: false,
+                visible: true,
+                elements: Vec::new(),
+            })
+            .collect();
+        let mut layer = Layer {
+            cells,
+            ..Layer::default()
+        };
+        layer.name = format!("Layer {}", at + 1);
+        let before = page.layers.clone();
+        let page = access::page_mut(document, NAME, master)?;
+        page.layers.layers.insert(at, layer);
+        Ok(Delta::Layers {
+            page: master,
+            layers: before,
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
@@ -870,5 +1133,120 @@ mod tests {
             .unwrap_err();
         assert!(matches!(error, EngineError::InvalidState { .. }));
         assert_eq!(serde_json::to_vec(&document).unwrap(), before);
+    }
+}
+
+#[cfg(test)]
+mod structure_tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+    use super::super::testdoc;
+    use super::*;
+    use crate::command::Command;
+    use serde_json::json;
+
+    #[test]
+    fn set_name_round_trips() {
+        let (mut document, _) = testdoc::sample_document();
+        let delta = SetPageName
+            .apply_json(&mut document, json!({ "page": 0, "name": "Cover" }))
+            .unwrap();
+        assert_eq!(document.pages[0].name.as_deref(), Some("Cover"));
+        delta.apply_inverse(&mut document).unwrap();
+        assert_eq!(document.pages[0].name.as_deref(), Some("Page 0"));
+    }
+
+    #[test]
+    fn reorder_moves_and_undoes() {
+        let (mut document, _) = testdoc::sample_document();
+        let first = document.pages[0].name.clone();
+        let delta = ReorderPages
+            .apply_json(&mut document, json!({ "from": 0, "before": 2 }))
+            .unwrap();
+        assert_eq!(document.pages[1].name, first, "moved page sits last");
+        delta.apply_inverse(&mut document).unwrap();
+        assert_eq!(document.pages[0].name, first);
+
+        // Own-slot and next-slot moves are the documented no-op.
+        let noop = ReorderPages
+            .apply_json(&mut document, json!({ "from": 1, "before": 1 }))
+            .unwrap();
+        assert!(matches!(noop, Delta::Noop));
+    }
+
+    #[test]
+    fn set_master_is_exclusive_and_undoes() {
+        let (mut document, _) = testdoc::sample_document();
+        SetMasterPage
+            .apply_json(&mut document, json!({ "page": 0 }))
+            .unwrap();
+        assert!(document.pages[0].is_master);
+        assert!(!document.pages[1].is_master);
+
+        let delta = SetMasterPage
+            .apply_json(&mut document, json!({ "page": 1 }))
+            .unwrap();
+        assert!(document.pages[1].is_master);
+        assert!(!document.pages[0].is_master, "one master per document");
+        // Two pages changed: a Group of two PageBody captures.
+        assert!(matches!(delta, Delta::Group(ref d) if d.len() == 2));
+        delta.apply_inverse(&mut document).unwrap();
+        assert!(document.pages[0].is_master);
+        assert!(!document.pages[1].is_master);
+
+        // Master on the already-master page is a no-op.
+        let noop = SetMasterPage
+            .apply_json(&mut document, json!({ "page": 0 }))
+            .unwrap();
+        assert!(matches!(noop, Delta::Noop));
+    }
+
+    #[test]
+    fn unset_master_round_trips_and_noops() {
+        let (mut document, _) = testdoc::sample_document();
+        let noop = UnsetMasterPage
+            .apply_json(&mut document, json!({}))
+            .unwrap();
+        assert!(matches!(noop, Delta::Noop), "absent master is a no-op");
+
+        SetMasterPage
+            .apply_json(&mut document, json!({ "page": 1 }))
+            .unwrap();
+        let delta = UnsetMasterPage
+            .apply_json(&mut document, json!({}))
+            .unwrap();
+        assert!(!document.pages[1].is_master);
+        delta.apply_inverse(&mut document).unwrap();
+        assert!(document.pages[1].is_master);
+    }
+
+    #[test]
+    fn add_master_layer_refuses_without_a_master() {
+        let (mut document, _) = testdoc::sample_document();
+        let error = AddMasterLayer
+            .apply_json(&mut document, json!({}))
+            .unwrap_err();
+        assert!(matches!(error, EngineError::InvalidState { .. }));
+    }
+
+    #[test]
+    fn add_master_layer_inserts_at_the_bottom() {
+        let (mut document, _) = testdoc::sample_document();
+        SetMasterPage
+            .apply_json(&mut document, json!({ "page": 0 }))
+            .unwrap();
+        let states = document.pages[0].layers.layers[0].cells.len();
+        let delta = AddMasterLayer.apply_json(&mut document, json!({})).unwrap();
+        let layers = &document.pages[0].layers.layers;
+        assert_eq!(layers.len(), 3);
+        assert_eq!(layers[0].name, "Layer 1", "bottom of the hierarchy");
+        assert_eq!(layers[0].cells.len(), states);
+        assert!(
+            layers[0]
+                .cells
+                .iter()
+                .all(|cell| cell.visible && !cell.locked)
+        );
+        delta.apply_inverse(&mut document).unwrap();
+        assert_eq!(document.pages[0].layers.layers.len(), 2);
     }
 }

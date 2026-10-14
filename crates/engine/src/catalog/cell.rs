@@ -93,7 +93,7 @@ type IdKey = (usize, u32);
 /// ceiling mirroring `symbol.rs`'s (a cycle would otherwise hang the
 /// walk). Run before any mint so a refused duplicate leaves nothing
 /// behind.
-fn check_closure(
+pub(crate) fn check_closure(
     document: &Document,
     command: &'static str,
     id: ObjectId,
@@ -130,7 +130,7 @@ fn check_closure(
 /// copies). The closure must be live (`check_closure` ran first). Every
 /// fresh slot is appended to `minted` in insertion order — retraction
 /// is LIFO, so undo must walk that list backwards.
-fn clone_element(
+pub(crate) fn clone_element(
     document: &mut Document,
     id: ObjectId,
     remap: &mut std::collections::HashMap<IdKey, ObjectId>,

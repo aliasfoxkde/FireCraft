@@ -59,6 +59,23 @@ pub enum Delta {
         /// command inserted it.
         before: Option<Box<Page>>,
     },
+    /// Restore one page's body in place (decision 0021): rename,
+    /// master flips. The page count is unchanged, so undo is exactly
+    /// "write this page back over the live slot".
+    PageBody {
+        /// Page index in document order.
+        page: usize,
+        /// The page as it was before the command.
+        before: Box<Page>,
+    },
+    /// Restore the whole page list (decision 0021): page reorder.
+    /// List-capturing like [`Delta::Library`]: pages are
+    /// self-contained (their `PageInfo` rides along), so the
+    /// pre-command `Vec` is the exact inverse of any reorder.
+    Pages {
+        /// The list as it was before the command.
+        before: Vec<Page>,
+    },
     /// Restore a page's whole layer list.
     Layers {
         /// Page index.
@@ -235,6 +252,13 @@ impl Delta {
             },
             Delta::Layers { page, layers } => {
                 page_mut(document, *page)?.layers = layers.clone();
+            }
+            Delta::PageBody { page, before } => {
+                let slot = page_mut(document, *page)?;
+                *slot = (**before).clone();
+            }
+            Delta::Pages { before } => {
+                document.pages = before.clone();
             }
             Delta::Layer {
                 page,
