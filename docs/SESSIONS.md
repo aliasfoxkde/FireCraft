@@ -496,3 +496,30 @@ CI's).
   sweeps must use base 1242750446 to cover CI's space.
 - Verification: 1024-seed CI-base sweep clean (both repro seeds
   included); engine suite green; clippy -D warnings clean; fmt clean.
+
+## #121 — 2026-10-14 — paragraph setter trio (decision 0050)
+
+Batch: `text.setTextParaIndent`, `text.setTextParaSpacingBefore`,
+`text.setTextParaSpacingAfter` (8.16).
+
+- The three dom verbs are pure model debt: `PINf`/`PSBf`/`PSAf`
+  already map into the `TFSv` `TextStyle` on both sides (reader folds,
+  writer emits in dictionary order); the `TXTv`-level mirrors stay
+  bagged verbatim like the `FONs`/`PTSf` copies.
+- One `paragraph_setter!` macro generates all three commands
+  (id-addressed like `text.setAttrs`; `MissingTarget` for stale,
+  `InvalidState` for non-text). Gate is finiteness only — negative
+  (outdent/overlap) and zero (clear) are expressible pixels, recorded
+  in decision 0050. Style slot materializes on first write; undo rides
+  the whole-object capture.
+- Test traps: JSON cannot carry NaN/inf (null slot = `BadPayload`) so
+  the finite gate asserts on the typed surface (`Apply::apply` direct);
+  a stale id raises `MissingTarget`; and `create()` reports
+  `elements[0]` — the second create's id must be read off the cell
+  tail before removing it.
+- rustfmt oscillated on the multi-line `concat!` doc inside the macro
+  (indent drifts every run) — collapsed to a single line.
+- Tests: 2 (write+invert across all three; typed NaN/inf gate, not-
+  text + stale refusals, negative/zero accepted). fuzzdrive: 3 CALLS
+  + arms (pixel range straddles negative/zero/positive).
+- Registry 227→230. dom-parity: **258C/13P/0M/85N**, unresolved [].

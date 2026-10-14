@@ -650,6 +650,9 @@ pub const CALLS: &[&str] = &[
     "text.setTextOnPathMode",
     "text.setTextOnPathOffset",
     "text.reversePathTextDirection",
+    "text.setTextParaIndent",
+    "text.setTextParaSpacingBefore",
+    "text.setTextParaSpacingAfter",
     "document.setDocumentCanvasSizeToDocumentExtents",
     "document.setDocumentCanvasSizeToSelection",
     "document.deleteAllInDocument",
@@ -2096,6 +2099,21 @@ pub fn random_call(rng: &mut FuzzRng, document: &Document) -> (String, serde_jso
             "offset": rng.below(200) as f64 - 100.0,
         }),
         "text.reversePathTextDirection" => serde_json::json!({}),
+        // Paragraph setters: the pixel range straddles negative, zero
+        // and positive (only non-finite refuses, and JSON cannot carry
+        // those).
+        "text.setTextParaIndent" => serde_json::json!({
+            "id": any_id(rng),
+            "para_indent": (rng.below(300) as f64) - 100.0,
+        }),
+        "text.setTextParaSpacingBefore" => serde_json::json!({
+            "id": any_id(rng),
+            "para_space_before": (rng.below(300) as f64) - 100.0,
+        }),
+        "text.setTextParaSpacingAfter" => serde_json::json!({
+            "id": any_id(rng),
+            "para_space_after": (rng.below(300) as f64) - 100.0,
+        }),
         // Renames wander over categories and names so most calls miss
         // (the no-op); hits rename every matching effect on whatever
         // the selection holds.

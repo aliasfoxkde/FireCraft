@@ -22,6 +22,9 @@ pub(crate) fn install(registry: &mut CommandRegistry) -> Result<(), EngineError>
     registry.register(CreateText)?;
     registry.register(SetText)?;
     registry.register(SetAttrs)?;
+    registry.register(SetTextParaIndent)?;
+    registry.register(SetTextParaSpacingBefore)?;
+    registry.register(SetTextParaSpacingAfter)?;
     registry.register(SetFont)?;
     registry.register(AttachPath)?;
     registry.register(DetachPath)?;
@@ -367,6 +370,81 @@ impl TypedCommand for SetAttrs {
         })
     }
 }
+
+/// The paragraph setters' only gate: the dom types the argument as
+/// pixels and records no range, so negative (an outdent, an overlap)
+/// and zero (the clear) are expressible — only non-finite values would
+/// poison an `f` node.
+fn finite_paragraph(name: &'static str, field: &str, value: f64) -> Result<(), EngineError> {
+    if value.is_finite() {
+        Ok(())
+    } else {
+        Err(EngineError::InvalidState {
+            name: name.to_owned(),
+            detail: format!("{field} must be finite"),
+        })
+    }
+}
+
+macro_rules! paragraph_setter {
+    ($verb:literal, $struct_name:ident, $payload:ident, $field:ident, $style_field:ident, $arg:literal) => {
+        #[doc = concat!("`", $verb, "` — write one `TFSv` paragraph attribute.")]
+        struct $struct_name;
+
+        #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+        #[serde(deny_unknown_fields)]
+        struct $payload {
+            /// Target text object.
+            id: doc::ObjectId,
+            #[doc = concat!("`", $arg, "` — pixels.")]
+            $field: f64,
+        }
+
+        impl TypedCommand for $struct_name {
+            type Payload = $payload;
+
+            fn name(&self) -> &'static str {
+                $verb
+            }
+
+            fn apply(
+                &self,
+                document: &mut Document,
+                payload: &Self::Payload,
+            ) -> Result<Delta, EngineError> {
+                finite_paragraph($verb, $arg, payload.$field)?;
+                mutate_text(document, $verb, payload.id, |object| {
+                    style_of(object).$style_field = Some(payload.$field);
+                })
+            }
+        }
+    };
+}
+
+paragraph_setter!(
+    "text.setTextParaIndent",
+    SetTextParaIndent,
+    SetTextParaIndentPayload,
+    para_indent,
+    paragraph_indent,
+    "paraIndent"
+);
+paragraph_setter!(
+    "text.setTextParaSpacingBefore",
+    SetTextParaSpacingBefore,
+    SetTextParaSpacingBeforePayload,
+    para_space_before,
+    space_before,
+    "paraSpaceBefore"
+);
+paragraph_setter!(
+    "text.setTextParaSpacingAfter",
+    SetTextParaSpacingAfter,
+    SetTextParaSpacingAfterPayload,
+    para_space_after,
+    space_after,
+    "paraSpaceAfter"
+);
 
 /// `text.setFont` — set the family name (`FONs`). The name round-trips
 /// verbatim; unknown families render in the bundled sans.
@@ -1402,6 +1480,119 @@ mod tests {
         let object = text_object(&document, id);
         assert!(object.style.is_none());
         assert_eq!(object.anti_alias, None);
+    }
+
+    #[test]
+    fn para_setters_write_the_style_slot_and_invert() {
+        let mut document = document();
+        let (_, id) = create(&mut document, "paragraph");
+        let registry = registry();
+        for (verb, field, value) in [
+            ("text.setTextParaIndent", "para_indent", 18.0),
+            ("text.setTextParaSpacingBefore", "para_space_before", -6.0),
+            ("text.setTextParaSpacingAfter", "para_space_after", 0.0),
+        ] {
+            let delta = registry
+                .execute(&mut document, verb, json!({ "id": id, field: value }))
+                .unwrap();
+            let style = text_object(&document, id).style.as_ref().unwrap();
+            assert_eq!(
+                style.paragraph_indent,
+                if field == "para_indent" {
+                    Some(18.0)
+                } else {
+                    None
+                },
+                "{verb}"
+            );
+            assert_eq!(
+                style.space_before,
+                if field == "para_space_before" {
+                    Some(-6.0)
+                } else {
+                    None
+                },
+                "{verb}"
+            );
+            assert_eq!(
+                style.space_after,
+                if field == "para_space_after" {
+                    Some(0.0)
+                } else {
+                    None
+                },
+                "{verb}"
+            );
+            delta.apply_inverse(&mut document).unwrap();
+        }
+        // Every inverse reverted its write; the last one took the
+        // style slot with it.
+        assert!(text_object(&document, id).style.is_none());
+    }
+
+    #[test]
+    fn para_setters_gate_nonfinite_and_bad_targets() {
+        let mut document = document();
+        let (_, id) = create(&mut document, "checked");
+        let path_id = document.registry.insert(path_fixture());
+        // A stale id: insert a second text and remove it; its id no
+        // longer resolves (`create` reports elements[0], so read the
+        // appended element off the cell).
+        let _ = create(&mut document, "gone");
+        let gone = *document.pages[0].layers.layers[0].cells[0]
+            .elements
+            .last()
+            .unwrap();
+        document.registry.remove(gone);
+        let registry = registry();
+        // JSON cannot carry NaN (the null slot fails payload decode);
+        // the typed surface hits the finiteness gate directly.
+        let typed = SetTextParaIndentPayload {
+            id,
+            para_indent: f64::NAN,
+        };
+        let error = SetTextParaIndent.apply(&mut document, &typed).unwrap_err();
+        assert!(matches!(error, EngineError::InvalidState { .. }));
+        let typed = SetTextParaIndentPayload {
+            id,
+            para_indent: f64::INFINITY,
+        };
+        let error = SetTextParaIndent.apply(&mut document, &typed).unwrap_err();
+        assert!(matches!(error, EngineError::InvalidState { .. },));
+        let mut refused = |payload: serde_json::Value, label: &str| {
+            let error = registry
+                .execute(&mut document, "text.setTextParaIndent", payload)
+                .unwrap_err();
+            assert!(matches!(error, EngineError::InvalidState { .. }), "{label}");
+        };
+        refused(json!({ "id": path_id, "para_indent": 4.0 }), "not text");
+        // A stale id is a MissingTarget, not a state refusal.
+        let error = registry
+            .execute(
+                &mut document,
+                "text.setTextParaIndent",
+                json!({ "id": gone, "para_indent": 4.0 }),
+            )
+            .unwrap_err();
+        assert!(matches!(error, EngineError::MissingTarget { .. }));
+        // Negative and zero are expressible values, not refusals.
+        for value in [-12.5, 0.0] {
+            registry
+                .execute(
+                    &mut document,
+                    "text.setTextParaIndent",
+                    json!({ "id": id, "para_indent": value }),
+                )
+                .unwrap();
+        }
+        assert_eq!(
+            text_object(&document, id)
+                .style
+                .as_ref()
+                .unwrap()
+                .paragraph_indent,
+            Some(0.0)
+        );
     }
 
     #[test]
