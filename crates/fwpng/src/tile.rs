@@ -2,7 +2,7 @@
 
 use crate::chunk::RawChunk;
 use crate::error::FwPngError;
-use std::io::Read;
+use std::io::{Read, Write};
 
 /// Magic at the start of a `mkBT` chunk payload.
 const MAGIC: [u8; 4] = [0xFA, 0xCE, 0xCA, 0xFE];
@@ -178,6 +178,56 @@ impl TileImage {
     }
 }
 
+/// One `mkBT` chunk's payload cap (64 KiB; longer compressed streams
+/// split across consecutive same-index chunks — the reader-side split
+/// law mirrored).
+const MAX_MKBT_PAYLOAD: usize = 64 * 1024;
+
+/// Encodes one 128×128 RGBA8 tile (`exactly 65536` bytes, row-major)
+/// into `mkBT` chunk payloads: the 76-byte header (magic, BE index in
+/// the top three bytes, reserved, grayscale flag 0, reserved) over the
+/// zlib-compressed ARGB stream, split at the 64 KiB payload cap — the
+/// first payload carries the header, continuations are raw spans of
+/// the stream, exactly the shape [`parse_mkbt_chunks`] reassembles.
+///
+/// # Errors
+/// [`FwPngError::BadPayload`] when `rgba8` is not exactly
+/// [`TILE_STREAM_BYTES`] long.
+pub fn encode_mkbt(index: u32, rgba8: &[u8]) -> Result<Vec<Vec<u8>>, FwPngError> {
+    if rgba8.len() != TILE_STREAM_BYTES {
+        return Err(FwPngError::BadPayload {
+            chunk: *b"mkBT",
+            offset: 0,
+            reason: "tile plane must be exactly 65536 RGBA8 bytes",
+        });
+    }
+    let argb: Vec<u8> = rgba8
+        .chunks_exact(4)
+        .flat_map(|px| [px[3], px[0], px[1], px[2]])
+        .collect();
+    let mut stream = Vec::new();
+    flate2::write::ZlibEncoder::new(&mut stream, flate2::Compression::default())
+        .write_all(&argb)
+        .map_err(|_| FwPngError::Inflate {
+            offset: 0,
+            reason: "zlib stream failed to deflate",
+        })?;
+    let first_span = stream.len().min(MAX_MKBT_PAYLOAD - MKBT_HEADER_LEN);
+    let mut payloads = Vec::new();
+    let mut head = Vec::with_capacity(MKBT_HEADER_LEN + first_span);
+    head.extend_from_slice(&MAGIC);
+    head.extend_from_slice(&(index << 8).to_be_bytes());
+    head.extend_from_slice(&[0, 0, 0]); // reserved
+    head.push(0); // grayscale flag
+    head.extend_from_slice(&[0u8; 64]); // reserved
+    head.extend_from_slice(&stream[..first_span]);
+    payloads.push(head);
+    for span in stream[first_span..].chunks(MAX_MKBT_PAYLOAD) {
+        payloads.push(span.to_vec());
+    }
+    Ok(payloads)
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used, clippy::expect_used)]
@@ -334,6 +384,60 @@ mod tests {
             parse_mkbt_stream(&[&big, &half]),
             Err(FwPngError::BadPayload {
                 reason: "tile stream exceeds the compressed-size cap",
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn encode_round_trips_through_parse() {
+        let mut rgba = vec![0u8; TILE_STREAM_BYTES];
+        rgba[0..4].copy_from_slice(&[0x11, 0x22, 0x33, 0xAA]);
+        rgba[4..8].copy_from_slice(&[0, 0, 0, 0]);
+        for payload in encode_mkbt(42, &rgba).expect("encodes") {
+            assert!(payload.len() <= 64 * 1024, "payload cap holds");
+        }
+        let payloads = encode_mkbt(42, &rgba).expect("encodes");
+        let joined: Vec<u8> = payloads.iter().flatten().copied().collect();
+        let tile = parse_mkbt(&joined).expect("parses");
+        assert_eq!(tile.index, 42);
+        assert!(!tile.grayscale);
+        assert_eq!(tile.to_rgba8(), rgba, "RGBA plane survives the ARGB hop");
+    }
+
+    #[test]
+    fn encode_splits_high_entropy_streams() {
+        // A deterministic LCG noise plane: incompressible, so the
+        // compressed stream exceeds one 64 KiB payload and must split.
+        let mut state = 0x1234_5678_u32;
+        let mut rgba = vec![0u8; TILE_STREAM_BYTES];
+        for byte in &mut rgba {
+            state = state.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+            *byte = (state >> 24) as u8;
+        }
+        let payloads = encode_mkbt(7, &rgba).expect("encodes");
+        assert!(payloads.len() > 1, "noise forces a split");
+        // Reassemble through the chunk-list reader: header payload +
+        // raw continuations decode to one tile.
+        let mut file = Vec::from(PNG_SIGNATURE);
+        write_chunk(&mut file, b"mkTS", b"MKBv{FRCi{1}}");
+        for payload in &payloads {
+            write_chunk(&mut file, b"mkBT", payload);
+        }
+        write_chunk(&mut file, b"IEND", &[]);
+        let chunks = parse_chunks(&file).expect("parses");
+        let tiles = parse_mkbt_chunks(&chunks).expect("reassembles");
+        assert_eq!(tiles.len(), 1);
+        assert_eq!(tiles[0].index, 7);
+        assert_eq!(tiles[0].to_rgba8(), rgba);
+    }
+
+    #[test]
+    fn encode_rejects_a_short_plane() {
+        assert!(matches!(
+            encode_mkbt(0, &[0u8; 100]),
+            Err(FwPngError::BadPayload {
+                reason: "tile plane must be exactly 65536 RGBA8 bytes",
                 ..
             })
         ));

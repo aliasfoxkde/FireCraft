@@ -31,7 +31,7 @@ pub use error::FwPngError;
 pub use image::{StandardImage, decode_standard_rgba8};
 pub use nodetree::{Node, NodeValue};
 pub use thumbnail::Thumbnail;
-pub use tile::{TileImage, parse_mkbt_chunks, parse_mkbt_stream};
+pub use tile::{TileImage, encode_mkbt, parse_mkbt_chunks, parse_mkbt_stream};
 
 #[cfg(test)]
 mod tests {

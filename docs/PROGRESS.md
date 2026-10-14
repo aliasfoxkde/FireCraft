@@ -17,6 +17,10 @@
   surface work is the 3 P rows (setFillNColorNTexture + two
   permanent) and the recorded debts
   ([`HANDOFF.md`](HANDOFF.md) §4 Phase 9).
+- **Bitmap round-trip:** the mkBT tile bank now loads (open joins
+  every tile) and writes (runtime-minted tiles serialize; original
+  streams stay verbatim), and library export carries member rasters
+  (#126, decision 0055) — Phase 9's tile-bank debt closed.
 
 ## Milestones
 
@@ -84,6 +88,7 @@
 | #123 | custom anti-alias dials: overSample {4,8,16} + sharpness/strength 0..=255; TA1i/TA2i/TOSi typed out of the bag (8.18, decision 0052) | this batch | **266 C / 5 P / 0 M / 85 N** |
 | #124 | duplicateSymbolForAlias: one duplicate per pointed-to MSNi, selected instances re-point (8.19, decision 0053) | this batch | **267 C / 4 P / 0 M / 85 N** |
 | #125 | importFile placement: decoded RGBA in the payload, degenerate/aspect/fill semantics, canvas crop (8.20, decision 0054) | this batch | **268 C / 3 P / 0 M / 85 N** |
+| #126 | mkBT tile-bank load/write: open joins the bank, save merges fresh ids (`encode_mkbt` split law), library export carries rasters (Phase 9, decision 0055) | this batch | 268 C (no surface change) |
 
 **Campaign complete:** no remaining M families. Next: P-class partials
 and Phase 9 debts (HANDOFF §4).
@@ -94,7 +99,7 @@ and Phase 9 debts (HANDOFF §4).
 |---|---|---|
 | object.duplicate shallow-clones groups | fidelity | pre-#91 |
 | Pattern-authoring command | fills UX | #85 |
-| mkBT tile-bank **writer** | bitmap round-trip out | M7 |
+| ~~mkBT tile-bank **writer**~~ **DONE** — landed as open-join + save-merge + extract-copy in #126 (decision 0055) | bitmap round-trip | M7 |
 | ~~Image resample pass~~ **DONE** — landed as `bitmap::resample_rgba` in #111 | setDocumentImageSize (closed, decision 0041) | M8 |
 | mask_replace_options "add" (mask union fold) | clipPasteAsMask variant | #109 (decision 0039) |
 | Path→image rasterizer (mask_type "image" on vector clipboard) | clipPasteAsMask variant | #109 (decision 0039) |
@@ -134,5 +139,6 @@ and Phase 9 debts (HANDOFF §4).
 | 2026-10-14 | **266** | 5 | 0 | #123 custom anti-alias dials (decision 0052) |
 | 2026-10-14 | **267** | 4 | 0 | #124 duplicateSymbolForAlias (decision 0053) |
 | 2026-10-14 | **268** | 3 | 0 | #125 importFile placement (decision 0054) |
+| 2026-10-14 | 268 | 3 | 0 | #126 mkBT tile-bank load/write (decision 0055, no surface change) |
 
 (Pre-#91 counts are approximate; the matrix file is the authority.)

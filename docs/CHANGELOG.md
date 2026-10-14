@@ -10,6 +10,7 @@ Current version: **0.1.0**.
 
 ### Features
 
+- **bitmap**: importFile placement verb (fd828c0)
 - **symbol**: duplicateSymbolForAlias verb (074890b)
 - **text**: custom anti-alias dial setters (cdeeea5)
 - **text**: multi-run model and markup verbs (55de409)

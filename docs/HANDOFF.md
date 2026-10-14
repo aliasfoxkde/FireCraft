@@ -23,8 +23,10 @@
   (The CS6 verb list carries both case spellings of mergeDown and
   AddNewImage — those families flipped four rows each.)
 - **Active campaign:** COMPLETE (2026-10-14) — the M table is empty.
-  Remaining surface work: the 8 P rows and Phase 9 debts, prioritized
-  from `dom-parity.md`'s P table. New families follow the §3 loop.
+  Remaining surface work: the 3 P rows and Phase 9 debts, prioritized
+  from `dom-parity.md`'s P table. Phase 9's mkBT tile-bank
+  load/write debt closed 2026-10-14 (decision 0055, #126). New
+  families follow the §3 loop.
 - **Clean-room invariants (never violate):** `source/` is Adobe's
   copyrighted material — git-ignored, never committed, never copied
   from. Adobe-derived text extracts are uncommitted working notes under
@@ -467,8 +469,18 @@ mutations and refuses without a linked slice.
 - **6.1-object-duplicate** deep-clone of groups (today shallow).
 - **Pattern-authoring command** (pattern fills landed; authoring UI
   command missing).
-- **mkBT tile-bank WRITER** (reader-side bank exists; writer side
-  missing — check `fwpng`/`doc::library`).
+- ~~**mkBT tile-bank WRITER**~~ **DONE 2026-10-14 (decision 0055,
+  #126):** open now joins every `mkBT` tile into `document.tiles`
+  (`app_cli::io::join_tiles`; malformed stream refuses; grayscale
+  256×256 skips and fails at render only if referenced); save merges
+  — original-stream tiles stay verbatim, runtime-minted ids
+  (`flatten`/place-image/`retouch`) serialize before `IEND` via
+  `fwpng::encode_mkbt` (76-byte header + zlib ARGB split at the
+  64 KiB payload cap, the reader's split law mirrored); library
+  export copies the member closure's referenced tiles (image grids +
+  path pattern fills) and refuses a dangling reference
+  (`MissingTile`). Untouched files: tile-free byte-exact, foreign
+  tiled files chunk-exact outside the re-canonicalized `mkTS`.
 - **Image resample pass** (feeds 5.4).
 - **mask_replace_options "add"** (mask union fold) refused as debt.
 - **Path→image rasterizer hook** for `mask_type "image"` on vector

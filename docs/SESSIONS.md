@@ -641,3 +641,35 @@ Batch: `bitmap.importFile` (8.20).
   Every remaining non-permanent P row is now closed or debt-recorded.
   Gates: engine suite green, clippy -D warnings, fmt, 256-seed
   CI-base fuzz sweep clean.
+
+## #126 — 2026-10-14 — mkBT tile-bank load/write (decision 0055)
+
+Batch: Phase 9 debt (no new commands, no parity flip).
+
+- Three seams, one landing. **Open:** `app_cli::io::open` parses every
+  `mkBT` chunk (`parse_mkbt_chunks` split-stream reassembly) and joins
+  each ARGB tile into `document.tiles` — corpus files with raster
+  imagery no longer `TileBankMiss` at render; a malformed tile stream
+  refuses the open. Grayscale 256×256 tiles skip (no RGBA bank slot)
+  and fail at render only when referenced. **Save:** the original
+  stream's tile ids are computed first (malformed → refuse); tiles
+  already on disk stay verbatim (byte-exact round-trips), only fresh
+  runtime-minted ids serialize before `IEND`, via the new
+  `fwpng::encode_mkbt` — RGBA→ARGB, zlib, 76-byte header, split at the
+  64 KiB payload cap exactly the way the reader reassembles. **Library
+  export:** `library::extract` copies the member closure's referenced
+  tiles (image grids + path pattern fills) under their source ids and
+  refuses a dangling reference (`ExtractError::MissingTile`).
+- Tests: fwpng +3 (round-trip through parse, LCG-noise split
+  reassembled through the chunk reader, short-plane refusal); app-cli
+  `tests/tiles.rs` +3 (minted tiles reach file + rejoin + re-save
+  stably; tile-free byte-exact + both tiled fixtures chunk-exact
+  outside `mkTS` with equal banks across open→save→open; truncated
+  `mkBT` refuses at open); doc +2 (referenced tiles carry, matte refs
+  pull nothing, dangling refuses).
+- Foreign tiled files are NOT byte-stable under save — `mkTS`
+  re-canonicalizes by design; the pinned invariant is chunk-exactness
+  outside `mkTS` plus bank equality (the first byte-exactness assert
+  taught this; doc updated).
+- Gates: fwpng/doc/app-cli/engine suites green, clippy -D warnings,
+  fmt, 256-seed CI-base fuzz sweep clean, xtask ci all gates.

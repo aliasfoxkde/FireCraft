@@ -1,16 +1,20 @@
 //! The full `.fw.png` read/write path plus the desktop
 //! [`engine::platform::FileSystem`] implementation.
 //!
-//! Open: PNG chunks → `mkTS` node tree → typed document + unknown bag.
-//! Save: document + bag → canonical tree → zlib → `mkTS` re-embedded
-//! into the original chunk stream (everything else rides along
-//! verbatim — `prVW`, `mkBT` tiles, the legacy `mkBS` copy — the same
-//! preservation posture as the model's unknown bag).
+//! Open: PNG chunks → `mkTS` node tree → typed document + unknown bag,
+//! with the file's `mkBT` tiles joined into the document's raster bank
+//! (`TIDi` → tile, ARGB converted). Save: document + bag → canonical
+//! tree → zlib → `mkTS` re-embedded into the original chunk stream
+//! (everything else rides along verbatim — `prVW`, the legacy `mkBS`
+//! copy — the same preservation posture as the model's unknown bag);
+//! bank tiles the original stream does not carry (minted at runtime)
+//! are appended before `IEND`.
 
 use doc::{Document, fwmap};
 use fwpng::chunk::{PNG_SIGNATURE, RawChunk, parse_chunks, write_chunk};
 use fwpng::document::parse_mkts;
 use fwpng::nodetree;
+use std::collections::BTreeSet;
 use std::io::Write as _;
 
 use crate::CliError;
@@ -25,6 +29,32 @@ pub struct Loaded {
     pub chunks: Vec<RawChunk>,
 }
 
+/// Joins a file's `mkBT` tiles into `document`'s raster bank (`TIDi`
+/// → tile, ARGB → RGBA8). A 256×256 grayscale tile has no 128×128
+/// RGBA bank slot — skipped here; a `TILv` that references one fails
+/// loudly at render ([`compose::ComposeError::TileBankMiss`]) rather
+/// than at load, so unreferenced strays stay harmless.
+fn join_tiles(document: &mut Document, chunks: &[RawChunk]) -> Result<(), CliError> {
+    if !chunks.iter().any(|chunk| &chunk.ctype == b"mkBT") {
+        return Ok(());
+    }
+    let images =
+        fwpng::parse_mkbt_chunks(chunks).map_err(|error| CliError(format!("mkBT: {error}")))?;
+    for image in images {
+        if image.grayscale {
+            continue;
+        }
+        let plane: [u8; raster::TILE_BYTES] = image
+            .to_rgba8()
+            .try_into()
+            .map_err(|_| CliError(format!("mkBT tile {} is not 128×128", image.index)))?;
+        document
+            .tiles
+            .insert(image.index, raster::Tile::from_rgba8(plane));
+    }
+    Ok(())
+}
+
 /// Parses a `.fw.png` byte stream into its document.
 pub fn open(bytes: &[u8]) -> Result<Loaded, CliError> {
     let chunks = parse_chunks(bytes).map_err(|error| CliError(format!("parse: {error}")))?;
@@ -34,8 +64,9 @@ pub fn open(bytes: &[u8]) -> Result<Loaded, CliError> {
             "no mkTS node tree in file (not a Fireworks document?)".to_owned(),
         ));
     };
-    let (document, unknown) =
+    let (mut document, unknown) =
         fwmap::read(&nodes).map_err(|error| CliError(format!("model: {error}")))?;
+    join_tiles(&mut document, &chunks)?;
     Ok(Loaded {
         document,
         unknown,
@@ -78,11 +109,26 @@ pub fn save(
         ihdr.extend_from_slice(&[8, 6, 0, 0, 0]);
         write_chunk(&mut out, b"IHDR", &ihdr);
         write_chunk(&mut out, b"mkTS", &compressed);
+        write_new_tiles(&mut out, document, &BTreeSet::new())?;
         write_chunk(&mut out, b"IEND", &[]);
         return Ok(out);
     }
+    // The original stream's tile ids: bank tiles already on disk stay
+    // verbatim (byte-exact round-trips); only runtime-minted ids —
+    // ones flatten/retouch/place-image added since open — serialize.
+    // A malformed tile stream refuses: the id set cannot be known, so
+    // neither a verbatim nor a merged re-emit is honest.
+    let original_ids = original_tile_ids(original)?;
+    let fresh: BTreeSet<u32> = document
+        .tiles
+        .ids()
+        .filter(|id| !original_ids.contains(id))
+        .collect();
     let mut tree_written = false;
     for chunk in original {
+        if &chunk.ctype == b"IEND" {
+            write_new_tiles(&mut out, document, &fresh)?;
+        }
         if &chunk.ctype == b"mkTS" {
             if tree_written {
                 continue; // one canonical tree, not the split originals
@@ -99,6 +145,42 @@ pub fn save(
         ));
     }
     Ok(out)
+}
+
+/// The tile ids one original chunk stream carries. A malformed tile
+/// stream refuses — the id set cannot be known, so neither a verbatim
+/// nor a merged re-emit is honest.
+fn original_tile_ids(original: &[RawChunk]) -> Result<BTreeSet<u32>, CliError> {
+    if !original.iter().any(|chunk| &chunk.ctype == b"mkBT") {
+        return Ok(BTreeSet::new());
+    }
+    Ok(fwpng::parse_mkbt_chunks(original)
+        .map_err(|error| CliError(format!("mkBT: {error}")))?
+        .into_iter()
+        .map(|tile| tile.index)
+        .collect())
+}
+
+/// Serializes the document bank's `fresh` tile ids into `mkBT` chunks
+/// (bank order, lowest id first). A high-entropy tile's compressed
+/// stream exceeds one 64 KiB chunk; [`fwpng::encode_mkbt`] splits it
+/// into the header-carrying first payload plus raw continuations.
+fn write_new_tiles(
+    out: &mut Vec<u8>,
+    document: &Document,
+    fresh: &BTreeSet<u32>,
+) -> Result<(), CliError> {
+    for id in fresh {
+        let Some(tile) = document.tiles.get(*id) else {
+            continue;
+        };
+        for payload in fwpng::encode_mkbt(*id, tile.pixels())
+            .map_err(|error| CliError(format!("mkBT encode: {error}")))?
+        {
+            write_chunk(out, b"mkBT", &payload);
+        }
+    }
+    Ok(())
 }
 
 /// The desktop file system, injected into engine services. Lives here
