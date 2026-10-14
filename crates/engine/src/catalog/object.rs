@@ -39,7 +39,8 @@ pub(crate) fn install(registry: &mut CommandRegistry) -> Result<(), EngineError>
     registry.register(SkewObject)?;
     registry.register(ReflectObject)?;
     registry.register(ResizeObject)?;
-    registry.register(SetBoundsObject)
+    registry.register(SetBoundsObject)?;
+    registry.register(SetQuadrangle)
 }
 
 /// The blend table is `color::BlendMode`'s 27 modes in UI order; `BLDi`
@@ -1370,6 +1371,111 @@ impl TypedCommand for SkewObject {
     }
 }
 
+/// `object.setQuadrangle` — CS6
+/// `dom.setQuadrangle(pTopLeft, pTopRight, pBottomRight, pBottomLeft)`:
+/// "the same as performing a transform operation" — the unit square
+/// maps onto the given quadrangle, expressed in percentages of the
+/// selection bounds (corner = bounds origin + percent × bounds size),
+/// and the whole selection takes the resulting affine. Only
+/// parallelogram quads are accepted: the affine `MTXv` cannot carry a
+/// projective one (CS6's `autoTrimImages` option is bitmap-side and
+/// the transform path refuses bitmaps regardless).
+struct SetQuadrangle;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct SetQuadranglePayload {
+    /// Objects to transform.
+    ids: Vec<ObjectId>,
+    /// Unit-square corner percentages, one per quadrangle corner.
+    top_left: [f64; 2],
+    /// Unit-square corner percentages, one per quadrangle corner.
+    top_right: [f64; 2],
+    /// Unit-square corner percentages, one per quadrangle corner.
+    bottom_right: [f64; 2],
+    /// Unit-square corner percentages, one per quadrangle corner.
+    bottom_left: [f64; 2],
+}
+
+impl TypedCommand for SetQuadrangle {
+    type Payload = SetQuadranglePayload;
+
+    fn name(&self) -> &'static str {
+        "object.setQuadrangle"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "object.setQuadrangle";
+        for corner in [
+            payload.top_left,
+            payload.top_right,
+            payload.bottom_right,
+            payload.bottom_left,
+        ] {
+            if corner.iter().any(|value| !value.is_finite()) {
+                return Err(EngineError::BadPayload {
+                    name: NAME.to_owned(),
+                    detail: "quadrangle percentages are not finite".to_owned(),
+                });
+            }
+        }
+        // Capture the pre-command bounds: the quadrangle's reference
+        // square (transform_core re-validates the targets itself).
+        let bounds =
+            union_bounds(document, &payload.ids).ok_or_else(|| EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: "targets carry no bounds to quadrangle within".to_owned(),
+            })?;
+        if bounds.width() <= 0.0 || bounds.height() <= 0.0 {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: "target bounds are degenerate".to_owned(),
+            });
+        }
+        let to_world = |percent: [f64; 2]| {
+            geom::Point::new(
+                bounds.x0 + percent[0] * bounds.width(),
+                bounds.y0 + percent[1] * bounds.height(),
+            )
+        };
+        let (tl, tr, br, bl) = (
+            to_world(payload.top_left),
+            to_world(payload.top_right),
+            to_world(payload.bottom_right),
+            to_world(payload.bottom_left),
+        );
+        // An affine maps the unit square onto a parallelogram exactly;
+        // anything else needs a projective matrix `MTXv` cannot hold.
+        let tolerance = 1e-6 * bounds.width().max(bounds.height()).max(1.0);
+        let expected = geom::Point::new(tr.x + bl.x - tl.x, tr.y + bl.y - tl.y);
+        if (br.x - expected.x).abs() > tolerance || (br.y - expected.y).abs() > tolerance {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: "the quadrangle is not a parallelogram (affine MTXv only)".to_owned(),
+            });
+        }
+        // The affine maps the bounds rectangle onto the quad — the
+        // selection fills the quadrangle — so each edge vector scales
+        // by the reciprocal of the bounds size it replaces.
+        let matrix = geom::Affine::new([
+            (tr.x - tl.x) / bounds.width(),
+            (tr.y - tl.y) / bounds.width(),
+            (bl.x - tl.x) / bounds.height(),
+            (bl.y - tl.y) / bounds.height(),
+            tl.x,
+            tl.y,
+        ]);
+        // Pivot (0, 0) leaves the composed matrix untouched.
+        transform_core(document, NAME, &payload.ids, Some([0.0, 0.0]), |_| {
+            Ok(matrix)
+        })
+    }
+}
+
 /// `object.reflect` — CS6's `dom.reflectSelection(bHoriz, bVert)`:
 /// flips about the pivot (default: the union bounds center). Both
 /// flags false is CS6's documented no-op.
@@ -2294,6 +2400,59 @@ fn line_contour(rect: geom::Rect) -> Vec<doc::Contour> {
     }]
 }
 
+/// One closed 8-anchor rounded-rectangle contour: straight-edge
+/// anchors joined by quarter-circle bezier arcs (`kappa` handles).
+/// `radius` clamps to half the shorter side. Radius zero is the sharp
+/// [`rect_contour`].
+pub(crate) fn rounded_rect_contour(rect: geom::Rect, radius: f64) -> Vec<doc::Contour> {
+    let r = radius
+        .max(0.0)
+        .min(rect.width().abs().min(rect.height().abs()) / 2.0);
+    if r <= 0.0 {
+        return rect_contour(rect);
+    }
+    let k = r * ELLIPSE_KAPPA;
+    // Anchors walk clockwise from the top edge's left end. Each corner
+    // arc spans two anchors: the straight-edge point leaving it (its
+    // forward handle aims along the tangent into the corner) and the
+    // next edge's entry point (its backward handle comes back out).
+    // `primary` is the forward handle — the ellipse derivation's
+    // working convention.
+    let arc_in = |x: f64, y: f64, handle: geom::Point| doc::PathPoint {
+        anchor: geom::Point::new(x, y),
+        primary: Some(handle),
+        secondary: None,
+        is_curve: true,
+    };
+    let arc_out = |x: f64, y: f64, handle: geom::Point| doc::PathPoint {
+        anchor: geom::Point::new(x, y),
+        primary: None,
+        secondary: Some(handle),
+        is_curve: true,
+    };
+    let (x0, y0, x1, y1) = (rect.x0, rect.y0, rect.x1, rect.y1);
+    let points = vec![
+        // TL arc lands here from the left edge.
+        arc_out(x0 + r, y0, geom::Point::new(x0 + r - k, y0)),
+        // TR arc leaves along the top edge.
+        arc_in(x1 - r, y0, geom::Point::new(x1 - r + k, y0)),
+        arc_out(x1, y0 + r, geom::Point::new(x1, y0 + r - k)),
+        // BR arc.
+        arc_in(x1, y1 - r, geom::Point::new(x1, y1 - r + k)),
+        arc_out(x1 - r, y1, geom::Point::new(x1 - r + k, y1)),
+        // BL arc.
+        arc_in(x0 + r, y1, geom::Point::new(x0 + r - k, y1)),
+        arc_out(x0, y1 - r, geom::Point::new(x0, y1 - r + k)),
+        // TL arc leaves up the left edge (closes back to the start).
+        arc_in(x0, y0 + r, geom::Point::new(x0, y0 + r - k)),
+    ];
+    vec![doc::Contour {
+        closed: true,
+        point_count: points.len() as i64,
+        points,
+    }]
+}
+
 /// A straight corner point.
 fn corner(x: f64, y: f64) -> doc::PathPoint {
     doc::PathPoint {
@@ -2318,6 +2477,7 @@ fn rect_primitive(rect: geom::Rect) -> doc::PrimitiveSource {
 mod tests {
     #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
     use super::*;
+    use crate::catalog::testdoc;
     use crate::command::Command;
     use doc::{
         Cell, Contour, ImageObject, Layer, LayerList, Page, PageInfo, PathObject, PathPoint,
@@ -3332,5 +3492,60 @@ mod tests {
             .unwrap_err();
         assert!(matches!(error, EngineError::MissingTarget { .. }));
         assert_eq!(serde_json::to_vec(&document).unwrap(), before);
+    }
+
+    #[test]
+    fn set_quadrangle_maps_the_bounds_onto_a_parallelogram() {
+        let (mut document, ids) = testdoc::sample_document();
+        // The fixture path spans (0,0)..(9,8); percentages double the
+        // width and keep the height, so anchors map x -> 2x.
+        let delta = SetQuadrangle
+            .apply_json(
+                &mut document,
+                serde_json::json!({
+                    "ids": [ids[0]],
+                    "top_left": [0, 0],
+                    "top_right": [2, 0],
+                    "bottom_right": [2, 1],
+                    "bottom_left": [0, 1],
+                }),
+            )
+            .expect("quadrangle applies");
+        let path = match document.registry.get(ids[0]) {
+            Some(ObjectData::Path(path)) => path.clone(),
+            other => panic!("expected a path, got {other:?}"),
+        };
+        let anchors: Vec<(f64, f64)> = path.contours[0]
+            .points
+            .iter()
+            .map(|point| (point.anchor.x, point.anchor.y))
+            .collect();
+        assert_eq!(
+            anchors,
+            vec![(0.0, 0.0), (18.0, 0.0), (18.0, 8.0), (0.0, 8.0)]
+        );
+        delta.apply_inverse(&mut document).expect("undo");
+        let path = match document.registry.get(ids[0]) {
+            Some(ObjectData::Path(path)) => path.clone(),
+            other => panic!("expected a path, got {other:?}"),
+        };
+        assert_eq!(path.contours[0].points[1].anchor.x, 9.0);
+
+        // A projective corner (bottom-right off the parallelogram)
+        // refuses: `MTXv` is affine-only.
+        let error = SetQuadrangle
+            .apply_json(
+                &mut document,
+                serde_json::json!({
+                    "ids": [ids[0]],
+                    "top_left": [0, 0],
+                    "top_right": [2, 0],
+                    "bottom_right": [3, 1],
+                    "bottom_left": [0, 1],
+                }),
+            )
+            .unwrap_err();
+        assert!(matches!(error, EngineError::InvalidState { .. }));
+        assert!(document.registry.get(ids[0]).is_some());
     }
 }

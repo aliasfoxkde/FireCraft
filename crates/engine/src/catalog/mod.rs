@@ -16,6 +16,7 @@ pub(crate) mod mask;
 pub(crate) mod object;
 pub(crate) mod page;
 pub(crate) mod path;
+pub(crate) mod primitive;
 pub(crate) mod retouch;
 pub(crate) mod selection;
 pub(crate) mod style;
@@ -38,6 +39,7 @@ pub fn install(registry: &mut CommandRegistry) -> Result<(), EngineError> {
     cell::install(registry)?;
     layer::install(registry)?;
     page::install(registry)?;
+    primitive::install(registry)?;
     document::install(registry)?;
     selection::install(registry)?;
     text::install(registry)?;

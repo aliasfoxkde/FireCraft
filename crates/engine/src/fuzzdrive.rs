@@ -687,6 +687,9 @@ pub const CALLS: &[&str] = &[
     "selection.duplicateToFrameRange",
     "selection.distributeToFrames",
     "bitmap.selectSimilar",
+    "primitive.setRectRoundness",
+    "primitive.setRectSides",
+    "object.setQuadrangle",
 ];
 
 /// Builds a random call against `document`: a random catalog id and a
@@ -1086,6 +1089,53 @@ pub fn random_call(rng: &mut FuzzRng, document: &Document) -> (String, serde_jso
                 "pivot": pivot,
             })
         }
+        "object.setQuadrangle" => {
+            let ids: Vec<serde_json::Value> = if live_ids.is_empty() || rng.chance(20) {
+                vec![any_id(rng)]
+            } else {
+                let count = 1 + rng.below(live_ids.len().min(4));
+                (0..count)
+                    .map(|_| serde_json::json!(rng.pick(&live_ids).copied()))
+                    .collect()
+            };
+            // Mostly parallelogram-friendly quads (two shared edges),
+            // with the off-diagonal corner free.
+            let (tl, tr, bl) = (
+                [rng.below(11) as f64 / 10.0, rng.below(11) as f64 / 10.0],
+                [rng.below(11) as f64 / 10.0, rng.below(11) as f64 / 10.0],
+                [rng.below(11) as f64 / 10.0, rng.below(11) as f64 / 10.0],
+            );
+            let br = if rng.chance(5) {
+                [rng.below(11) as f64 / 10.0, rng.below(11) as f64 / 10.0]
+            } else {
+                [tr[0] + bl[0] - tl[0], tr[1] + bl[1] - tl[1]]
+            };
+            serde_json::json!({
+                "ids": ids,
+                "top_left": tl,
+                "top_right": tr,
+                "bottom_right": br,
+                "bottom_left": bl,
+            })
+        }
+        "primitive.setRectRoundness" => serde_json::json!({
+            "id": any_id(rng),
+            "roundness": if rng.chance(2) {
+                rng.below(101) as f64 / 100.0
+            } else {
+                rng.below(120) as f64
+            },
+            "mode": rng.pick(&["percent", "pixels"]).copied(),
+        }),
+        "primitive.setRectSides" => serde_json::json!({
+            "id": any_id(rng),
+            "rect": [
+                rng.below(200) as f64,
+                rng.below(200) as f64,
+                rng.below(200) as f64 + 200.0,
+                rng.below(200) as f64 + 200.0,
+            ],
+        }),
         "object.reflect" => {
             let ids: Vec<serde_json::Value> = if live_ids.is_empty() || rng.chance(20) {
                 vec![any_id(rng)]

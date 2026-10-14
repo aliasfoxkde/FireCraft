@@ -14,17 +14,17 @@ enforced == the fuzz call table).
 
 | class | meaning | count (of 356 dom verbs) |
 |---|---|---|
-| C | carried: a registry command implements the mutation | 185 |
+| C | carried: a registry command implements the mutation | 188 |
 | P | partial: carried with a recorded model limitation | 45 |
-| M | missing: no command and no decision — work items | 44 |
-| N | not applicable: non-document surface (accessor/UI/session/clipboard/export/OS) | 82 |
+| M | missing: no command and no decision — work items | 40 |
+| N | not applicable: non-document surface (accessor/UI/session/clipboard/export/OS) | 83 |
 
-Document-mutation coverage: **230 of 274** carried-or-partial
-(185 carried, 45 partial, 44 missing).
+Document-mutation coverage: **233 of 273** carried-or-partial
+(188 carried, 45 partial, 40 missing).
 
 ### Gap families (the Missing table, grouped)
 
-The 44 missing verbs collapse into six families, largest first —
+The 40 missing verbs collapse into six families, largest first —
 each family is one design decision plus a command batch:
 
 1. **Object transforms** (2 verbs remain): rotateDocument (canvas
@@ -221,6 +221,9 @@ each family is one design decision plus a command batch:
 | `setOpacity` | C | object.setOpacity |  |
 | `setPageName` | C | page.setName |  |
 | `setPixelMask` | C | bitmap.setPixelMask | replace/add/subtract modes over the live plane |
+| `setQuadrangle` | C | object.setQuadrangle | bounds rect mapped onto the quad; parallelogram-only (affine MTXv), per the text a replayed transform (decision 0027) |
+| `setRectRoundness` | C | primitive.setRectRoundness | percent scales the shorter side (1 = stadium), pixels store raw and clamp at derivation (decision 0027) |
+| `setRectSides` | C | primitive.setRectSides | untransformed sides; the live MTXv keeps the transform (decision 0027) |
 | `setSelectionBounds` | C | object.setBounds | move + resize in one op |
 | `setSelectionMask` | C | bitmap.select* | shape select family |
 | `setSliceExportOptions` | C | slice.setExport |  |
@@ -332,10 +335,6 @@ each family is one design decision plus a command batch:
 | `setDocumentImageSize` | M | - | no resample command |
 | `setFillEdgeMode` | M | - | fill edge (anti-alias/hard) mode unmodeled |
 | `setGradientName` | M | - | gradient definitions carry no names in the model |
-| `setQuadrangle` | M | - | primitive param-edit gap |
-| `setRectRoundness` | M | - | primitives are modeled (PathObject.primitive) but no param-edit command |
-| `setRectRoundnessMode` | M | - | primitive param-edit gap |
-| `setRectSides` | M | - | primitive param-edit gap |
 | `setShowGrid` | M | - | page.grid model exists; no command |
 | `setShowGuides` | M | - | guides model exists; no command |
 | `setSnapToGrid` | M | - | page.grid model exists; no command |
@@ -419,6 +418,7 @@ each family is one design decision plus a command batch:
 | `setLayerDisclosure` | N | ui | panel disclosure state |
 | `setMatteColor` | N | export | export matte (canvas matte is background_raw, decision 77f55af) |
 | `setNineScaleGuideColor` | N | ui | render tint |
+| `setRectRoundnessMode` | N | - | UI unit toggle; the exhaustive PRIv dictionary carries no mode node — session state (decision 0027) |
 | `setShowEdges` | N | ui | view chrome |
 | `setShowGammaPreview` | N | ui | view chrome |
 | `setShowRulers` | N | ui | view chrome |

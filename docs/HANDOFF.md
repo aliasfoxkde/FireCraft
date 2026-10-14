@@ -166,9 +166,13 @@ are recorded in the decision doc.
   design.
 
 ### Phase 6 — Primitives / smart shapes (5 verbs)
-- **6.1** `setRectRoundness`, `setRectRoundnessMode`, `setRectSides`,
-  `setQuadrangle` — `PathObject.primitive` is modeled; these are param
-  setters that re-derive the contours. One command batch.
+- **6.1 — DONE (decision 0027).** `primitive.setRectRoundness` /
+  `primitive.setRectSides` / `object.setQuadrangle` landed 2026-10-14;
+  `setRectRoundnessMode` went `N` — the exhaustive `PRIv` dictionary
+  has no mode node (session-state unit toggle), so no command was
+  invented for it. Percent roundness scales the shorter side; the
+  quadrangle maps the bounds rect onto a parallelogram-only quad
+  (affine `MTXv`).
 - **6.2** `redrawSmartShape` — autoshape params are creation-only today
   (decision: autoshape.* family). Add the param-edit command over the
   Auto Shape library's sources. Stopping: edited autoshape re-renders;
