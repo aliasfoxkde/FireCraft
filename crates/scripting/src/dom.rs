@@ -6,11 +6,14 @@
 //!
 //! The projection is a snapshot: the host re-attaches after mutations
 //! ([`crate::run_in_session`] does), so reads always see fresh state
-//! without re-entrant accessors. Element selection is UI/view state
-//! the model does not carry (its `selection` field is a pixel-space
-//! mask, not the corpus's element list), so `fw.selection` projects
-//! from the host-side selection list and mutates as a plain JS
-//! property.
+//! without re-entrant accessors. The object selection (`fw.selection`,
+//! decision 0024) is carried by the model
+//! ([`Document::object_selection`]) as command truth; the projection
+//! reads the host-side session list, seeding it from the model when
+//! the session has none — so a selection set through commands before
+//! the run is visible to the script. `fw.selection = [...]`
+//! assignments remain plain JS view state (the `selection.*` commands
+//! are the durable, undoable path).
 
 use boa_engine::{
     Context, JsObject, JsResult, JsValue, Source, js_string, object::builtins::JsArray,
@@ -22,11 +25,12 @@ use geom::Point;
 use crate::host;
 
 /// What the projection needs from the host state beyond the document:
-/// the persistent selection (object ids as `"index:generation"`) and
-/// the current page.
+/// the persistent selection (object ids as `"index:generation"`;
+/// seeded from the model's when empty) and the current page.
 pub struct AttachView {
     /// Object ids (`"index:generation"`) selected across the session;
-    /// dangling entries are dropped.
+    /// dangling entries are dropped. Empty means "seed from
+    /// `document.object_selection`" (decision 0024).
     pub selection: Vec<String>,
     /// Page index to project as current (out of range falls back to
     /// the first page).
@@ -53,17 +57,24 @@ pub fn attach(context: &mut Context, document: &Document, view: &AttachView) -> 
 
 /// Projects `fw.selection` from the host-side selection list (each
 /// entry `"index:generation"`; dangling ids are dropped silently —
-/// deleted objects stop being selected).
+/// deleted objects stop being selected). An empty session list seeds
+/// from the model's `object_selection` (decision 0024): a selection
+/// set through `selection.*` commands before the run is visible.
 fn project_selection(
     context: &mut Context,
     document: &Document,
     view: &AttachView,
 ) -> JsResult<()> {
     let selection = JsArray::new(context);
-    for key in &view.selection {
-        let Some(id) = parse_id(key) else {
-            continue;
-        };
+    let ids: Vec<ObjectId> = if view.selection.is_empty() {
+        document.object_selection.clone()
+    } else {
+        view.selection
+            .iter()
+            .filter_map(|key| parse_id(key))
+            .collect()
+    };
+    for id in ids {
         let Some(data) = document.registry.get(id) else {
             continue;
         };

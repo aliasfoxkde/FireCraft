@@ -212,8 +212,18 @@ fn move_selection_to_layer_is_direct_and_replay_equivalent() {
         "var dom = fw.getDocumentDOM(); dom.selectAllOnLayer(0); dom.moveSelectionToLayer(1, false, 'none', -1);",
     );
 
-    // Direct: the two squares move bottom → top by id.
+    // Direct: the same selection command the script queues, then the
+    // two squares move bottom → top by id.
     let mut direct = Session::new(two_square_document());
+    direct
+        .apply(
+            "selection.selectAllOnLayer",
+            serde_json::json!({
+                "page": 0, "layer": 0, "frame": 0,
+                "remember_selection": false, "toggle_selection": false,
+            }),
+        )
+        .expect("selectAllOnLayer");
     for id in direct.document().pages[0].layers.layers[0].cells[0]
         .elements
         .clone()
@@ -250,8 +260,18 @@ fn path_union_folds_the_selection() {
         "var dom = fw.getDocumentDOM(); dom.selectAllOnLayer(0); dom.pathUnion();",
     );
 
-    // Direct: the same fold through the registry.
+    // Direct: the same selection command the script queues, then the
+    // same fold through the registry.
     let mut direct = Session::new(two_square_document());
+    direct
+        .apply(
+            "selection.selectAllOnLayer",
+            serde_json::json!({
+                "page": 0, "layer": 0, "frame": 0,
+                "remember_selection": false, "toggle_selection": false,
+            }),
+        )
+        .expect("selectAllOnLayer");
     let ids = direct.document().pages[0].layers.layers[0].cells[0]
         .elements
         .clone();
@@ -296,6 +316,15 @@ fn set_text_auto_expand_maps_to_text_set_attrs() {
     );
 
     let mut direct = Session::new(base);
+    direct
+        .apply(
+            "selection.selectAllOnLayer",
+            serde_json::json!({
+                "page": 0, "layer": 0, "frame": 0,
+                "remember_selection": false, "toggle_selection": false,
+            }),
+        )
+        .expect("selectAllOnLayer");
     let id = direct.document().pages[0].layers.layers[0].cells[0].elements[0];
     direct
         .apply(

@@ -14,17 +14,17 @@ enforced == the fuzz call table).
 
 | class | meaning | count (of 356 dom verbs) |
 |---|---|---|
-| C | carried: a registry command implements the mutation | 174 |
+| C | carried: a registry command implements the mutation | 177 |
 | P | partial: carried with a recorded model limitation | 45 |
-| M | missing: no command and no decision — work items | 55 |
+| M | missing: no command and no decision — work items | 52 |
 | N | not applicable: non-document surface (accessor/UI/session/clipboard/export/OS) | 82 |
 
-Document-mutation coverage: **219 of 274** carried-or-partial
-(174 carried, 45 partial, 55 missing).
+Document-mutation coverage: **222 of 274** carried-or-partial
+(177 carried, 45 partial, 52 missing).
 
 ### Gap families (the Missing table, grouped)
 
-The 55 missing verbs collapse into six families, largest first —
+The 52 missing verbs collapse into six families, largest first —
 each family is one design decision plus a command batch:
 
 1. **Object transforms** (2 verbs remain): rotateDocument (canvas
@@ -177,8 +177,11 @@ each family is one design decision plus a command batch:
 | `saveJPEGMask` | C | mask.saveJPEG | second plane slot (Document.jpeg_mask), editing state |
 | `scaleSelection` | C | object.scale | pivot defaults to the union bounds center (decision 0019) |
 | `scalingGridRect` | C | symbol.set9Slice | the grid rect IS the payload |
+| `selectAll` | C | selection.selectAll | object-selection model + commands (dec 0024) |
+| `selectAllOnLayer` | C | selection.selectAllOnLayer | remember/toggle flags mapped (dec 0024) |
 | `selectFeather` | C | bitmap.feather |  |
-| `selectNone` | C | bitmap.selectNone |  |
+| `selectInverse` | C | selection.selectInverse | object-mode complement in page+frame scope (dec 0024) |
+| `selectNone` | C | bitmap.selectNone / selection.selectNone | pixel mask and object selection are separate modes |
 | `setBlendMode` | C | object.setBlend |  |
 | `setDocumentCanvasColor` | C | document.setCanvasColor | BGCi document-wide; scripting maps the color string to the raw (dec 0023) |
 | `setDocumentCanvasSize` | C | page.setCanvasSize |  |
@@ -318,10 +321,7 @@ each family is one design decision plus a command batch:
 | `restoreSelection` | M | - | named saved selections unmodeled |
 | `rotateDocument` | M | - | canvas rotation (90-degree steps + re-bake) |
 | `saveSelection` | M | - | named saved selections unmodeled |
-| `selectAll` | M | - | no compound-selection command (shape selects via bitmap.select*) |
-| `selectAllOnLayer` | M | - | scope select |
 | `selectChildren` | M | - | hierarchy select |
-| `selectInverse` | M | - | no compound-selection command |
 | `selectParents` | M | - | hierarchy select |
 | `selectSimilar` | M | - | attribute-based select |
 | `selectSimilarFromPoint` | M | - | attribute-based select |

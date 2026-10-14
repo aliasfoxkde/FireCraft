@@ -676,6 +676,11 @@ pub const CALLS: &[&str] = &[
     "layer.detachShared",
     "document.setCanvasColor",
     "document.setResolution",
+    "selection.set",
+    "selection.selectAll",
+    "selection.selectInverse",
+    "selection.selectAllOnLayer",
+    "selection.selectNone",
 ];
 
 /// Builds a random call against `document`: a random catalog id and a
@@ -2079,6 +2084,25 @@ pub fn random_call(rng: &mut FuzzRng, document: &Document) -> (String, serde_jso
             "resolution": rng.below(2400) as f64 + 1.0,
             "unit": if rng.chance(2) { "inch" } else { "cm" },
         }),
+        "selection.set" => serde_json::json!({
+            "ids": [any_id(rng), any_id(rng)],
+        }),
+        "selection.selectAll" => serde_json::json!({
+            "page": any_index(rng, pages),
+            "frame": any_index(rng, frames),
+        }),
+        "selection.selectInverse" => serde_json::json!({
+            "page": any_index(rng, pages),
+            "frame": any_index(rng, frames),
+        }),
+        "selection.selectAllOnLayer" => serde_json::json!({
+            "page": any_index(rng, pages),
+            "layer": any_index(rng, 3),
+            "frame": any_index(rng, frames),
+            "remember_selection": rng.chance(3),
+            "toggle_selection": rng.chance(3),
+        }),
+        "selection.selectNone" => serde_json::json!({}),
         other => {
             let _ = other;
             // A catalog command without a builder: an empty payload is

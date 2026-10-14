@@ -367,6 +367,7 @@ fn drain(session: &mut Session, engine: &mut ScriptEngine, report: &mut ScriptRe
         engine.state.borrow_mut().current_page = target as u32;
     }
 
+    let mut pending_model_selection = false;
     for intent in survivors {
         let payload = match serde_json::from_str(&intent.payload) {
             Ok(payload) => payload,
@@ -383,7 +384,16 @@ fn drain(session: &mut Session, engine: &mut ScriptEngine, report: &mut ScriptRe
             Ok(delta) => {
                 let created = delta_created_ids(&delta);
                 if !created.is_empty() {
+                    // addNew* semantics: what the command made becomes
+                    // the selection — and it outranks any earlier
+                    // selection command's model state at drain end.
                     engine.set_selection(created.iter().map(|id| id_key(*id)).collect());
+                    pending_model_selection = false;
+                }
+                if intent.id.starts_with("selection.") {
+                    // The model now carries the truth (decision 0024);
+                    // reconcile unless a later creation re-selects.
+                    pending_model_selection = true;
                 }
             }
             Err(error) => {
@@ -391,6 +401,16 @@ fn drain(session: &mut Session, engine: &mut ScriptEngine, report: &mut ScriptRe
                 return;
             }
         }
+    }
+    if pending_model_selection {
+        engine.set_selection(
+            session
+                .document()
+                .object_selection
+                .iter()
+                .map(|id| id_key(*id))
+                .collect(),
+        );
     }
 }
 

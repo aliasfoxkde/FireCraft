@@ -17,6 +17,7 @@ pub(crate) mod object;
 pub(crate) mod page;
 pub(crate) mod path;
 pub(crate) mod retouch;
+pub(crate) mod selection;
 pub(crate) mod style;
 pub(crate) mod symbol;
 pub(crate) mod text;
@@ -38,6 +39,7 @@ pub fn install(registry: &mut CommandRegistry) -> Result<(), EngineError> {
     layer::install(registry)?;
     page::install(registry)?;
     document::install(registry)?;
+    selection::install(registry)?;
     text::install(registry)?;
     symbol::install(registry)?;
     web::install(registry)?;

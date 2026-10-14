@@ -95,6 +95,15 @@ pub struct Document {
     /// Empty when the file shares nothing; the writer emits the node
     /// only when definitions exist (decision 0022).
     pub shared_layer_defs: Vec<SharedLayerDef>,
+    /// The object (vector/element) selection — CS6's `fw.selection`.
+    /// Editing state, never file content: the format has no node for
+    /// it and the writer never reads this field. Order is canonical
+    /// document walk order (page, layer, cell, element position —
+    /// decision 0024), not pick order. Distinct from [`Document::selection`]
+    /// (the bitmap-mode pixel mask; CS6 keeps the two modes mutually
+    /// exclusive in the UI, the model carries them independently).
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub object_selection: Vec<ObjectId>,
 }
 
 /// An `LSAv` layer-list entry: a reference to a shared-layer

@@ -179,6 +179,13 @@ pub enum Delta {
         /// The definition list as it was before the command.
         before: Vec<SharedLayerDef>,
     },
+    /// Restore the object selection (CS6's `fw.selection`; decision
+    /// 0024). Editing state — never file content — so the capture is
+    /// the id list only.
+    ObjectSelection {
+        /// The selection as it was before the command.
+        before: Vec<ObjectId>,
+    },
     /// Remove the bank slots the command created (the style-library
     /// tile join): only fresh ids are inverse-expressible, and the
     /// command only ever inserts into absent slots (a colliding id is
@@ -330,6 +337,7 @@ impl Delta {
             }
             Delta::Library { before } => document.symbols = before.clone(),
             Delta::SharedLayers { before } => document.shared_layer_defs = before.clone(),
+            Delta::ObjectSelection { before } => document.object_selection = before.clone(),
             Delta::Styles { before } => document.styles = before.clone(),
             Delta::Bank { added } => {
                 for tile_id in added {

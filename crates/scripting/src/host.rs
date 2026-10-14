@@ -248,20 +248,74 @@ __fwDom.deleteLayer = function (index) {
     }));
 };
 
-// --- selection (view state; commands are truth) --------------------------
-// selectAllOnLayer / selectNone resolve against the current projection
-// immediately — the same state every other read in the run sees.
+// --- selection (commands are truth; the view mirrors immediately) --------
+// The model carries the object selection (decision 0024). Each verb
+// queues its command (applied at drain, undoable) AND resolves against
+// the current projection so mid-run reads agree with the queued truth.
+// `fw.selection = [...]` assignments stay plain view state (documented
+// deviation; the command surface is the durable path).
+function __selectionMirrorLayer(index, frameNum) {
+    var layer = __fwDom.layers[index];
+    if (!layer) {
+        throw new Error("selectAllOnLayer: layer " + index + " is not on this page");
+    }
+    var frame = layer.frames[frameNum] || layer.frames[0];
+    return frame ? frame.elements.slice() : [];
+}
+
+__fwDom.selectAll = function () {
+    __requireInt("selectAll", __fwDom.currentFrameNum);
+    __fwQueue("selection.selectAll", JSON.stringify({
+        page: __fwDom.currentPageNum,
+        frame: __fwDom.currentFrameNum,
+    }));
+    var all = [];
+    for (var i = 0; i < __fwDom.layers.length; i++) {
+        all = all.concat(__selectionMirrorLayer(i, __fwDom.currentFrameNum));
+    }
+    fw.selection = all;
+};
+
 __fwDom.selectAllOnLayer = function (index) {
     var i = (index === undefined) ? __fwDom.currentLayerNum : index;
     __requireInt("selectAllOnLayer", i);
-    var layer = __fwDom.layers[i];
-    if (!layer) {
-        throw new Error("selectAllOnLayer: layer " + i + " is not on this page");
+    __fwQueue("selection.selectAllOnLayer", JSON.stringify({
+        page: __fwDom.currentPageNum,
+        layer: i,
+        frame: __fwDom.currentFrameNum,
+        remember_selection: false,
+        toggle_selection: false,
+    }));
+    fw.selection = __selectionMirrorLayer(i, __fwDom.currentFrameNum);
+};
+
+__fwDom.selectInverse = function () {
+    __fwQueue("selection.selectInverse", JSON.stringify({
+        page: __fwDom.currentPageNum,
+        frame: __fwDom.currentFrameNum,
+    }));
+    var selected = {};
+    for (var i = 0; i < fw.selection.length; i++) {
+        var id = fw.selection[i] && fw.selection[i].__fwId;
+        if (id) {
+            selected[id.index + ":" + id.generation] = true;
+        }
     }
-    fw.selection = layer.frames[0].elements.slice();
+    var inverse = [];
+    for (var i = 0; i < __fwDom.layers.length; i++) {
+        var candidates = __selectionMirrorLayer(i, __fwDom.currentFrameNum);
+        for (var j = 0; j < candidates.length; j++) {
+            var id = candidates[j] && candidates[j].__fwId;
+            if (id && !selected[id.index + ":" + id.generation]) {
+                inverse.push(candidates[j]);
+            }
+        }
+    }
+    fw.selection = inverse;
 };
 
 __fwDom.selectNone = function () {
+    __fwQueue("selection.selectNone", "{}");
     fw.selection = [];
 };
 
