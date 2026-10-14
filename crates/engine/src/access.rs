@@ -53,6 +53,42 @@ pub(crate) fn layer_mut<'a>(
         })
 }
 
+pub(crate) fn layer<'a>(
+    document: &'a Document,
+    command: &'static str,
+    page: usize,
+    layer: usize,
+) -> Result<&'a Layer, EngineError> {
+    let target = crate::access::page(document, command, page)?;
+    let count = target.layers.layers.len();
+    target
+        .layers
+        .layers
+        .get(layer)
+        .ok_or_else(|| EngineError::MissingTarget {
+            name: command.to_owned(),
+            detail: format!("layer {layer} out of range ({count} layers on page {page})"),
+        })
+}
+
+pub(crate) fn cell<'a>(
+    document: &'a Document,
+    command: &'static str,
+    page: usize,
+    layer: usize,
+    cell: usize,
+) -> Result<&'a Cell, EngineError> {
+    let target = crate::access::layer(document, command, page, layer)?;
+    let count = target.cells.len();
+    target
+        .cells
+        .get(cell)
+        .ok_or_else(|| EngineError::MissingTarget {
+            name: command.to_owned(),
+            detail: format!("cell {cell} out of range ({count} cells on layer {layer})"),
+        })
+}
+
 pub(crate) fn cell_mut<'a>(
     document: &'a mut Document,
     command: &'static str,

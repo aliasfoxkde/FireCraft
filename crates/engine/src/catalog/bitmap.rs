@@ -996,6 +996,10 @@ impl TypedCommand for AddImage {
                 detail: "bounds do not intersect the document canvas".to_owned(),
             });
         }
+        // Pre-flight the placement cell before minting anything: a
+        // refusal must leave the document untouched, and the attach
+        // below runs after tiles and the registry slot exist.
+        access::cell(document, NAME, payload.page, payload.layer, payload.cell)?;
         let (width, height) = (right - left, bottom - top);
         let empty = vec![0u8; (width * height * 4) as usize];
         // Fresh zero tiles, not matte slots: a matte-only grid is
@@ -2092,6 +2096,36 @@ mod tests {
             serde_json::to_vec(&document).unwrap(),
             before,
             "refused placements change nothing"
+        );
+
+        // A placement cell out of range refuses AFTER the bounds pass
+        // — the pre-flight must still leave bank and registry
+        // untouched (the fuzz-caught minting leak).
+        let before = serde_json::to_vec(&document).unwrap();
+        let error = AddImage
+            .apply_json(
+                &mut document,
+                json!({
+                    "x": 0.0, "y": 0.0, "width": 8.0, "height": 8.0,
+                    "page": 0, "layer": 9, "cell": 0, "name": null,
+                }),
+            )
+            .unwrap_err();
+        assert!(matches!(error, EngineError::MissingTarget { .. }));
+        let error = AddImage
+            .apply_json(
+                &mut document,
+                json!({
+                    "x": 0.0, "y": 0.0, "width": 8.0, "height": 8.0,
+                    "page": 0, "layer": 0, "cell": 9, "name": null,
+                }),
+            )
+            .unwrap_err();
+        assert!(matches!(error, EngineError::MissingTarget { .. }));
+        assert_eq!(
+            serde_json::to_vec(&document).unwrap(),
+            before,
+            "refused placement cells mint nothing"
         );
     }
 
