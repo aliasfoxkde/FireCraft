@@ -227,6 +227,7 @@ fn scripted_document_round_trips_semantically() {
         visible: true,
         locked: false,
         mask_hidden: false,
+        mask_linked: None,
         effects: Vec::new(),
     }));
     let ghost = image_object(
@@ -410,6 +411,7 @@ fn nested_groups_nest_through_the_pair_walk() {
         visible: true,
         locked: false,
         mask_hidden: false,
+        mask_linked: None,
         effects: Vec::new(),
     }));
     let outer = document.registry.insert(ObjectData::Group(GroupObject {
@@ -421,6 +423,7 @@ fn nested_groups_nest_through_the_pair_walk() {
         visible: true,
         locked: false,
         mask_hidden: false,
+        mask_linked: None,
         effects: Vec::new(),
     }));
     document.pages[0].layers.layers[0].cells[0]
@@ -491,6 +494,7 @@ fn structural_gates_refuse_with_reasons() {
         visible: true,
         locked: false,
         mask_hidden: false,
+        mask_linked: None,
         effects: Vec::new(),
     }));
     broken.pages[0].layers.layers[0].cells[0]
@@ -521,6 +525,7 @@ fn structural_gates_refuse_with_reasons() {
             visible: true,
             locked: false,
             mask_hidden: false,
+            mask_linked: None,
             effects: Vec::new(),
         }));
     }

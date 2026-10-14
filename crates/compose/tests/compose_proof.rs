@@ -319,6 +319,7 @@ fn group_opacity_composes_over_its_children() {
         visible: true,
         locked: false,
         mask_hidden: false,
+        mask_linked: None,
         effects: Vec::new(),
     }));
     doc.pages.push(page(
@@ -485,6 +486,7 @@ fn repeated_renders_are_byte_identical() {
         visible: true,
         locked: false,
         mask_hidden: false,
+        mask_linked: None,
         effects: Vec::new(),
     }));
     doc.pages.push(page(
@@ -933,6 +935,7 @@ fn group_filters_apply_to_the_child_composite() {
         visible: true,
         locked: false,
         mask_hidden: false,
+        mask_linked: None,
         effects: vec![effect("invert", &[("EffectMoaID", GUID_INVERT)])],
     }));
     doc.pages
@@ -969,6 +972,7 @@ fn nested_inverts_cancel_exactly() {
             visible: true,
             locked: false,
             mask_hidden: false,
+            mask_linked: None,
             effects: if effects_on_group {
                 vec![effect("invert", &[])]
             } else {

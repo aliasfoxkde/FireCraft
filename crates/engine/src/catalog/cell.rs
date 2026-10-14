@@ -1056,6 +1056,7 @@ mod tests {
                 visible: true,
                 locked: false,
                 mask_hidden: false,
+                mask_linked: None,
                 effects: Vec::new(),
             }));
         document.pages[0].layers.layers[0].cells[0].elements = vec![group_id];

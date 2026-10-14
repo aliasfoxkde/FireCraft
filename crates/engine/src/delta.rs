@@ -108,6 +108,12 @@ pub enum Delta {
         /// was selected.
         before: Option<Box<doc::SelectionMask>>,
     },
+    /// Restore the "Selective JPEG mask" stash (or its absence).
+    JpegMask {
+        /// The stash as it was before the command, `None` when the
+        /// document carried none.
+        before: Option<Box<doc::SelectionMask>>,
+    },
     /// Restore one page's scalars and canvas.
     PageInfo {
         /// Page index.
@@ -276,6 +282,9 @@ impl Delta {
             }
             Delta::Selection { before } => {
                 document.selection = before.as_deref().cloned();
+            }
+            Delta::JpegMask { before } => {
+                document.jpeg_mask = before.as_deref().cloned();
             }
             Delta::PageInfo { page, before } => {
                 page_mut(document, *page)?.info = (**before).clone();

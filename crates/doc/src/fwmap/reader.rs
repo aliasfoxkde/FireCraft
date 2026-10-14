@@ -2008,7 +2008,7 @@ impl Reader {
     fn read_group(&mut self, children: &[Node], path: &str) -> Result<ObjectData, MapError> {
         let (mut group_type, mut opacity, mut blend) = (None, None, None);
         let (mut visible, mut locked, mut mask_hidden) = (None, None, None);
-        let (mut name, mut element_ids) = (None, None);
+        let (mut name, mut element_ids, mut mask_linked) = (None, None, None);
         let mut effects = Vec::new();
 
         for (i, child) in children.iter().enumerate() {
@@ -2020,6 +2020,9 @@ impl Reader {
                 b"VISb" => self.slot_bool(child, path, i, &mut visible)?,
                 b"LCKb" => self.slot_bool(child, path, i, &mut locked)?,
                 b"MNAb" => self.slot_bool(child, path, i, &mut mask_hidden)?,
+                // The dictionary never writes LNKb `true`; the node is
+                // present only as `false` (unlinked).
+                b"LNKb" => self.slot_bool(child, path, i, &mut mask_linked)?,
                 b"ELMv" => {
                     if element_ids.is_none() {
                         let kids = children_of(child, path)?;
@@ -2029,7 +2032,7 @@ impl Reader {
                         self.bag_node(path, i, child);
                     }
                 }
-                // DTAv / IMGv / MRMv / LNKb / ISSv and anything else:
+                // DTAv / IMGv / MRMv / ISSv and anything else:
                 // preserved (EFLv maps below).
                 b"EFLv" => {
                     let eflv_path = format!("{path}/EFLv[{}]", effects.len());
@@ -2048,6 +2051,10 @@ impl Reader {
             visible: visible.unwrap_or(true),
             locked: locked.unwrap_or(false),
             mask_hidden: mask_hidden.unwrap_or(false),
+            // `LNKb` is only ever written as `false`; a hostile `true`
+            // canonicalizes to the absent (= linked) form so the model
+            // never carries a value the writer cannot emit.
+            mask_linked: (mask_linked == Some(false)).then_some(false),
             effects,
         }))
     }

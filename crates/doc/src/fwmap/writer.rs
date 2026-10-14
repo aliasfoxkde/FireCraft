@@ -1089,8 +1089,9 @@ impl Writer<'_> {
     }
 
     fn write_group_object(&mut self, object: &GroupObject, path: &str) -> Result<Node, MapError> {
-        // Dictionary order: LCKb? GRTi ELMv OBNs? … MNAb? … VISb? OPAi? BLDi?
-        // MNAb is never present with the value `false` (dictionary).
+        // Dictionary order: LCKb? GRTi ELMv OBNs? … MNAb? … LNKb? … VISb? OPAi? BLDi?
+        // MNAb is never present with the value `false` (dictionary);
+        // LNKb is never present with the value `true` (dictionary).
         let mut mapped = Vec::new();
         if object.locked {
             mapped.push(n_b(*b"LCKb", true));
@@ -1103,6 +1104,9 @@ impl Writer<'_> {
         mapped.extend(self.write_effects(&object.effects, path)?);
         if object.mask_hidden {
             mapped.push(n_b(*b"MNAb", true));
+        }
+        if object.mask_linked == Some(false) {
+            mapped.push(n_b(*b"LNKb", false));
         }
         mapped.push(n_b(*b"VISb", object.visible));
         mapped.push(n_i(*b"OPAi", object.opacity));

@@ -11,6 +11,7 @@ pub(crate) mod cell;
 pub(crate) mod display;
 pub(crate) mod filter;
 pub(crate) mod layer;
+pub(crate) mod mask;
 pub(crate) mod object;
 pub(crate) mod page;
 pub(crate) mod path;
@@ -38,6 +39,7 @@ pub fn install(registry: &mut CommandRegistry) -> Result<(), EngineError> {
     text::install(registry)?;
     symbol::install(registry)?;
     web::install(registry)?;
+    mask::install(registry)?;
     style::install(registry)
 }
 

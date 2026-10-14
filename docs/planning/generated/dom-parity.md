@@ -7,24 +7,24 @@ regeneration recipe in docs/PLANNING.md §5.4). The DOM is stable
 CS4→CS6; CS6 additions the text lacks (e.g. 9-slice guides) are
 covered by the CS6 `.jsf` scripts and appear here via their verbs.
 
-FireCraft side: the 103-command registry (`engine::catalog::ids()`,
+FireCraft side: the 138-command registry (`engine::catalog::ids()`,
 enforced == the fuzz call table).
 
 ## Coverage classes
 
 | class | meaning | count (of 356 dom verbs) |
 |---|---|---|
-| C | carried: a registry command implements the mutation | 147 |
+| C | carried: a registry command implements the mutation | 162 |
 | P | partial: carried with a recorded model limitation | 45 |
-| M | missing: no command and no decision — work items | 83 |
-| N | not applicable: non-document surface (accessor/UI/session/clipboard/export/OS) | 81 |
+| M | missing: no command and no decision — work items | 67 |
+| N | not applicable: non-document surface (accessor/UI/session/clipboard/export/OS) | 82 |
 
-Document-mutation coverage: **192 of 275** carried-or-partial
-(147 carried, 45 partial, 83 missing).
+Document-mutation coverage: **207 of 274** carried-or-partial
+(162 carried, 45 partial, 67 missing).
 
 ### Gap families (the Missing table, grouped)
 
-The 83 missing verbs collapse into eight families, largest first —
+The 67 missing verbs collapse into seven families, largest first —
 each family is one design decision plus a command batch:
 
 1. **Object transforms** (2 verbs remain): rotateDocument (canvas
@@ -32,31 +32,28 @@ each family is one design decision plus a command batch:
    (bitmap resample). The object transform family itself is
    carried by object.* per decision 0019 — images refuse
    transforms until the resample pass this family shares.
-2. **Element / pixel / JPEG masks** (~14 verbs): object mask groups
-   (paste-inside included), pixel masks, JPEG masks. Selection
-   masks ARE carried — the *object* mask is the gap.
 3. **Layer/page structure** (~11 verbs): page rename, layer lock and
    reorder, page reorder, layer sharing to pages, master pages.
    Model bits exist for sharing and master; commands are missing.
-4. **Frames/states** (4 verbs remain): duplicateSelectionToFrames /
+3. **Frames/states** (4 verbs remain): duplicateSelectionToFrames /
    duplicateSelectionToFrameRange / distributeSelectionToFrames
    duplicate the SELECTION across frames — they need an
    object-selection surface (same blocker as the selection
    family). add/delete/duplicate/reorder/distribute-layer are
    carried by frame.* (task 89).
-5. **Guides/grid/snap/onion** (4 verbs remain): setShowGrid/
+4. **Guides/grid/snap/onion** (4 verbs remain): setShowGrid/
    setShowGuides/setSnapToGrid/setSnapToGuides are view/session
    flags with no decoded wire node — blocked on corpus evidence
    of the view-prefs node. addGuide/changeGuide/removeGuide/
    removeAllGuides/setGridOrigin/setGridSize/setOnionSkinning
    landed as page.* commands (page-scoped overrides).
-6. **Group/flatten** (~3 verbs): mergeDown, flattenSelection,
+5. **Group/flatten** (~3 verbs): mergeDown, flattenSelection,
    flattenDocument. group/ungroup landed as object.group/
    object.ungroup; setGroupType is partial (GRTi setter).
-7. **Selection tooling** (~9 verbs): select all/inverse/similar/
-   parents/children/scope, saved (named) selections, marquee↔path
-   conversion, attribute filter.
-8. **Misc** (~14 verbs): place-image, crop, text-to-paths, tween,
+6. **Selection tooling** (~7 verbs): select all/inverse/similar/
+   parents/children/scope, saved (named) selections,
+   attribute filter.
+7. **Misc** (~14 verbs): place-image, crop, text-to-paths, tween,
    split/knife path ops, primitive param edits (roundness/sides/
    quadrangle), smart-shape param edits, fill-edge mode, gradient
    names, button-symbol state, web-object point append.
@@ -70,6 +67,7 @@ each family is one design decision plus a command batch:
 | `ApplyEffects` | C | filter.add |  |
 | `MovePointOnHotspotByWithFlags` | C | object.translate | generic object move; per-point web-geometry edit is the P-shaped remainder |
 | `addBehavior` | C | slice.addBehavior |  |
+| `addElementMask` | C | mask.add | reveal-all/hide-all/reveal-selection/hide-selection; no plane degrades to reveal-all |
 | `addFrames` | C | frame.add | where strings verbatim; FRCi pair bumps together |
 | `addGuide` | C | page.addGuide | page-scoped guide line; duplicates append like CS6 |
 | `addNewHotspot` | C | hotspot.create |  |
@@ -97,9 +95,12 @@ each family is one design decision plus a command batch:
 | `breakLink` | C | symbol.editDetach |  |
 | `changeGuide` | C | page.changeGuide | first guide at `current` moves; absent is a refusal |
 | `changeNineScaleGuide` | C | symbol.set9Slice | guide line positions ride the grid |
+| `clearJPEGMask` | C | mask.clearJPEG |  |
 | `cloneSelection` | C | object.duplicate |  |
 | `converAnimSymbolToGraphicSymbol` | C | symbol.setType |  |
 | `convertAnimSymbolToGraphicSymbol` | C | symbol.setType |  |
+| `convertMarqueeToPath` | C | mask.marqueeToPath | traces the pixel plane with marching squares |
+| `convertPathToMarquee` | C | mask.pathToMarquee | hard/antialias/feather edge modes |
 | `convertToAnimSymbol` | C | symbol.setType | create then type to anim |
 | `convertToSymbol` | C | symbol.create | selection folds into the definition |
 | `convetToAnimSymbol` | C | symbol.setType |  |
@@ -119,6 +120,7 @@ each family is one design decision plus a command batch:
 | `duplicatePage` | C | page.add | same shape as duplicateLayer |
 | `duplicateSelection` | C | object.duplicate |  |
 | `duplicateSymbol` | C | library.add |  |
+| `enableElementMask` | C | mask.enable | disabled masks keep their structure under GRTi 0 (decision 0020) |
 | `enableNineScale` | C | symbol.set9Slice |  |
 | `enableTextAntiAliasing` | C | text.setAttrs |  |
 | `fillSelectedPixels` | C | bitmap.fill |  |
@@ -131,12 +133,16 @@ each family is one design decision plus a command batch:
 | `insertSymbolAt` | C | symbol.createInstance |  |
 | `insertText` | C | text.setText | CS6 inserts into the active text object; our payload replaces the string |
 | `joinPaths` | C | path.boolean | union |
+| `linkElementMask` | C | mask.link | LNKb absent = linked, false = unlinked |
 | `lockNineScale` | C | symbol.set9Slice | grid lock rides the 9-slice payload |
 | `lockSelection` | C | object.setLocked |  |
 | `modifyPointOnPath` | C | path.movePoints |  |
 | `moveBezierHandleBy` | C | path.movePoints | handle (primary/secondary) edit |
+| `moveElementMaskBy` | C | mask.moveBy |  |
 | `moveFillVectorHandleBy` | C | path.setFillVector |  |
+| `moveMaskGroupContentsBy` | C | mask.moveContentsBy | moves the content child, mask anchored |
 | `moveNineScaleGuide` | C | symbol.set9Slice |  |
+| `movePixelMaskBy` | C | bitmap.movePixelMaskBy | coverage leaving the image clips away |
 | `movePointOnHotspotBy` | C | object.translate | generic object move; per-point web-geometry edit is the P-shaped remainder |
 | `movePointOnHotspotByWithFlags` | C | object.translate | flagged variant of the same move |
 | `moveSelectedBezierPointsBy` | C | path.movePoints |  |
@@ -157,6 +163,7 @@ each family is one design decision plus a command batch:
 | `reflectSelection` | C | object.reflect | bHoriz/bVert; both false is the documented no-op |
 | `removeAllGuides` | C | page.removeAllGuides | one axis or both (the no-arg form); empty is a no-op |
 | `removeBehavior` | C | slice.removeBehavior |  |
+| `removeElementMask` | C | mask.remove | apply bakes coverage into the image, discard drops it |
 | `removeFill` | C | path.setFill | none |
 | `removeGuide` | C | page.removeGuide | absent position is a documented CS6 no-op |
 | `removeNineScale` | C | symbol.set9Slice |  |
@@ -164,7 +171,9 @@ each family is one design decision plus a command batch:
 | `replaceTextString` | C | text.setText | batch = per-object apply |
 | `resetNineScale` | C | symbol.set9Slice |  |
 | `resizeSelection` | C | object.resize | keeps the top-left corner of the selection in place |
+| `restoreJPEGMask` | C | mask.restoreJPEG |  |
 | `rotateSelection` | C | object.rotate | degrees, clockwise in the y-down space |
+| `saveJPEGMask` | C | mask.saveJPEG | second plane slot (Document.jpeg_mask), editing state |
 | `scaleSelection` | C | object.scale | pivot defaults to the union bounds center (decision 0019) |
 | `scalingGridRect` | C | symbol.set9Slice | the grid rect IS the payload |
 | `selectFeather` | C | bitmap.feather |  |
@@ -173,6 +182,8 @@ each family is one design decision plus a command batch:
 | `setDocumentCanvasSize` | C | page.setCanvasSize |  |
 | `setElementLocked` | C | object.setLocked |  |
 | `setElementLockedByName` | C | object.setLocked | by-name resolution is an app lookup |
+| `setElementMaskMode` | C | mask.setMode | bidirectional: path rasterizes, image traces to path |
+| `setElementMaskShowAttrs` | C | mask.setShowAttrs | MNAb |
 | `setElementName` | C | object.rename |  |
 | `setElementVisible` | C | object.setVisible |  |
 | `setElementVisibleByName` | C | object.setVisible |  |
@@ -192,6 +203,7 @@ each family is one design decision plus a command batch:
 | `setLayerVisible` | C | layer.setDisplay | the eye bit |
 | `setOnionSkinning` | C | page.setOnionSkinning | OSBi/OSAi; 0/0 disables per CS6 |
 | `setOpacity` | C | object.setOpacity |  |
+| `setPixelMask` | C | bitmap.setPixelMask | replace/add/subtract modes over the live plane |
 | `setSelectionBounds` | C | object.setBounds | move + resize in one op |
 | `setSelectionMask` | C | bitmap.select* | shape select family |
 | `setSliceExportOptions` | C | slice.setExport |  |
@@ -269,19 +281,15 @@ each family is one design decision plus a command batch:
 |---|---|---|---|
 | `AddNewImage` | M | - | no engine place-image command; io::raster::attach_image is the import-side path (SVG/raster import), app_cli carries file placement |
 | `MergeDown` | M | - | no merge-down (object or bitmap flatten) |
-| `addElementMask` | M | - | object mask groups unmodeled (selection masks ARE carried; element masks are the gap) |
 | `addMasterPageLayer` | M | - | master-page family gap |
 | `addNewImage` | M | - | no engine place-image command; io::raster::attach_image is the import-side path (SVG/raster import), app_cli carries file placement |
 | `addNewImageViaCopy` | M | - | same gap as addNewImage |
 | `addNewImageViaCut` | M | - | same gap as addNewImage |
 | `appendPointToHotspot` | M | - | no geometry-append for web objects (recreate via hotspot.create) |
 | `appendPointToSlice` | M | - | same gap |
-| `clearJPEGMask` | M | - | JPEG-mask gap |
-| `clipPasteAsMask` | M | - | element-mask gap (clipboard op) |
+| `clipPasteAsMask` | M | - | clipboard op (the mask model itself landed via mask.add) |
 | `clipPasteFromChannelToChannel` | M | - | pixel channel copy - bitmap domain, no command |
-| `clipPasteInside` | M | - | paste-inside = element mask gap |
-| `convertMarqueeToPath` | M | - | selection mask to path object |
-| `convertPathToMarquee` | M | - | path to selection mask |
+| `clipPasteInside` | M | - | paste-inside = clipboard op (mask model landed) |
 | `convertToPaths` | M | - | text-to-paths has no command (render flattens glyphs; editable conversion missing) |
 | `cropSelection` | M | - | canvas crop; page.setCanvasSize carries resize but not the crop-to-content op |
 | `cuplicateSelectionToFrames` | M | - | needs an object-selection surface (same blocker as the selection family) |
@@ -290,29 +298,20 @@ each family is one design decision plus a command batch:
 | `distributeSelectionToFrames` | M | - | needs an object-selection surface (same blocker as the selection family) |
 | `duplicateSelectionToFrameRange` | M | - | needs an object-selection surface (same blocker as the selection family) |
 | `duplicateSelectionToFrames` | M | - | needs an object-selection surface (same blocker as the selection family) |
-| `enableElementMask` | M | - | element-mask gap |
 | `filterSelection` | M | - | attribute filter select |
 | `filterSelectionByID` | M | - | attribute filter select |
 | `filterSelectionByName` | M | - | attribute filter select |
 | `filterSelectonByName` | M | - | attribute filter select |
 | `flattenDocument` | M | - | no flatten-all |
 | `flattenSelection` | M | - | no flatten command |
-| `getPixelMask` | M | - | pixel-mask object feature unmodeled |
 | `knifeElementsFromPoint` | M | - | no split/knife boolean op |
 | `knifeElementsFromPoints` | M | - | no split/knife boolean op |
-| `linkElementMask` | M | - | element-mask gap |
 | `mergeDown` | M | - | no merge-down (object or bitmap flatten) |
-| `moveElementMaskBy` | M | - | element-mask gap |
-| `moveMaskGroupContentsBy` | M | - | element-mask family gap |
-| `movePixelMaskBy` | M | - | pixel-mask gap |
 | `redrawSmartShape` | M | - | autoshape params set at creation only; no edit command |
-| `removeElementMask` | M | - | element-mask gap |
 | `reorderLayer` | M | - | no layer reorder command (object z-order exists) |
 | `reorderPages` | M | - | no page reorder command |
-| `restoreJPEGMask` | M | - | JPEG-mask gap |
 | `restoreSelection` | M | - | named saved selections unmodeled |
 | `rotateDocument` | M | - | canvas rotation (90-degree steps + re-bake) |
-| `saveJPEGMask` | M | - | JPEG-mask family unmodeled |
 | `saveSelection` | M | - | named saved selections unmodeled |
 | `selectAll` | M | - | no compound-selection command (shape selects via bitmap.select*) |
 | `selectAllOnLayer` | M | - | scope select |
@@ -329,15 +328,12 @@ each family is one design decision plus a command batch:
 | `setDocumentCanvasColor` | M | - | background_raw model carried (77f55af); no command sets it |
 | `setDocumentImageSize` | M | - | no resample command |
 | `setDocumentResolution` | M | - | resolution metadata unmodeled |
-| `setElementMaskMode` | M | - | element-mask gap |
-| `setElementMaskShowAttrs` | M | - | element-mask gap |
 | `setFillEdgeMode` | M | - | fill edge (anti-alias/hard) mode unmodeled |
 | `setGradientName` | M | - | gradient definitions carry no names in the model |
 | `setLayerLocked` | M | - | cell lock (cell.setLocked) exists; the layer-level lock is missing |
 | `setLayerSharing` | M | - | shared_layers model bit exists; no sharing commands |
 | `setMasterPage` | M | - | Page.is_master model bit exists; no command |
 | `setPageName` | M | - | no page rename command (layer/object renames exist) |
-| `setPixelMask` | M | - | pixel-mask gap |
 | `setQuadrangle` | M | - | primitive param-edit gap |
 | `setRectRoundness` | M | - | primitives are modeled (PathObject.primitive) but no param-edit command |
 | `setRectRoundnessMode` | M | - | primitive param-edit gap |
@@ -382,6 +378,7 @@ each family is one design decision plus a command batch:
 | `getLockGuides` | N | accessor | read-only query |
 | `getPageSetter` | N | accessor |  |
 | `getParentLayerNum` | N | accessor | read-only query |
+| `getPixelMask` | N | ui | scripting readout of the selection plane |
 | `getSelectionBounds` | N | accessor | read-only query (app queries carry it) |
 | `getShowGrid` | N | accessor | read-only query |
 | `getShowGuides` | N | accessor | read-only query |

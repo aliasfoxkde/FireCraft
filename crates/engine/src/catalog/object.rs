@@ -779,7 +779,7 @@ impl TypedCommand for TranslateObject {
 
 /// Translates one object (recursing into groups), pushing the captured
 /// inverse for every object whose data actually changed.
-fn translate_object(
+pub(crate) fn translate_object(
     document: &mut Document,
     name: &'static str,
     id: ObjectId,
@@ -920,7 +920,7 @@ fn union_extend(out: &mut Option<geom::Rect>, rect: geom::Rect) {
 /// instances contribute their definition's content under the instance
 /// transform (unit-square fallback for an unknown symbol number). The
 /// walk is depth-capped like `check_closure`.
-fn content_bounds(
+pub(crate) fn content_bounds(
     document: &Document,
     id: ObjectId,
     xform: geom::Affine,
@@ -1891,6 +1891,7 @@ impl TypedCommand for GroupObjects {
                 visible: true,
                 locked: false,
                 mask_hidden: false,
+                mask_linked: None,
                 effects: Vec::new(),
             }));
         match first {
@@ -2625,6 +2626,7 @@ mod tests {
                 visible: true,
                 locked: false,
                 mask_hidden: false,
+                mask_linked: None,
                 effects: Vec::new(),
             }));
         document.pages[0].layers.layers[0].cells[0].elements = vec![ids[0], group_id];
@@ -2688,6 +2690,7 @@ mod tests {
                 visible: true,
                 locked: false,
                 mask_hidden: false,
+                mask_linked: None,
                 effects: Vec::new(),
             }));
         document.pages[0].layers.layers[0].cells[0].elements = vec![group_id];
@@ -3258,6 +3261,7 @@ mod tests {
                 visible: true,
                 locked: false,
                 mask_hidden: false,
+                mask_linked: None,
                 effects: Vec::new(),
             }));
         // The child is reached through the group AND named directly.

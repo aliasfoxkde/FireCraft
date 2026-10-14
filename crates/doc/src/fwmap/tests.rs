@@ -337,6 +337,7 @@ fn sample_document() -> Document {
         visible: true,
         locked: false,
         mask_hidden: false,
+        mask_linked: None,
         effects: vec![Effect {
             category: "Adjust Color".into(),
             internal_name: "autoLevels".into(),
@@ -494,6 +495,53 @@ fn full_spine_round_trips_losslessly() {
     let (bytes2, _doc3, bag3) = round_trip_bytes(&doc2, &bag2);
     assert_eq!(bytes, bytes2);
     assert!(bag3.is_empty());
+}
+
+#[test]
+fn lnkb_writes_only_when_unlinked_and_round_trips() {
+    // The dictionary: `LNKb` appears only as `false` (unlinked); the
+    // linked form is the node's absence.
+    let mut doc = sample_document();
+    let group_id = doc
+        .registry
+        .iter()
+        .find(|(_, o)| matches!(o, ObjectData::Group(_)))
+        .map(|(id, _)| id)
+        .expect("sample carries a group");
+
+    // Unlinked: the node is written and survives bytes.
+    if let Some(ObjectData::Group(slot)) = doc.registry.get_mut(group_id) {
+        slot.mask_linked = Some(false);
+    }
+    let (_bytes, doc2, _bag2) = round_trip_bytes(&doc, &UnknownBag::new());
+    let read_back = match doc2.registry.get(group_id) {
+        Some(ObjectData::Group(g)) => g.mask_linked,
+        other => panic!("group vanished through bytes: {other:?}"),
+    };
+    assert_eq!(read_back, Some(false), "unlinked survives bytes");
+    let (tree, _stats) = write(&doc, &UnknownBag::new()).expect("write");
+    let mut hits = Vec::new();
+    find_nodes(&tree, b"LNKb", &mut hits);
+    assert_eq!(hits.len(), 1, "the unlinked group carries one LNKb");
+
+    // Linked: the node's absence, and no `LNKb` in the bytes.
+    if let Some(ObjectData::Group(slot)) = doc.registry.get_mut(group_id) {
+        slot.mask_linked = None;
+    }
+    let (bytes, doc3, _bag3) = round_trip_bytes(&doc, &UnknownBag::new());
+    assert_eq!(
+        match doc3.registry.get(group_id) {
+            Some(ObjectData::Group(g)) => g.mask_linked,
+            _ => panic!("group vanished through bytes"),
+        },
+        None,
+        "linked survives bytes"
+    );
+    let (tree, _stats) = write(&doc, &UnknownBag::new()).expect("write");
+    let mut hits = Vec::new();
+    find_nodes(&tree, b"LNKb", &mut hits);
+    assert!(hits.is_empty(), "linked groups write no LNKb");
+    assert!(!bytes.is_empty());
 }
 
 // --- M10: symbol wire contract (MSYi / NGSv / ANNi family) --------------
@@ -1301,6 +1349,7 @@ fn model_structs_are_fully_constructed() {
         visible: true,
         locked: false,
         mask_hidden: false,
+        mask_linked: None,
         effects: Vec::new(),
     };
     let _image = ImageObject {

@@ -245,6 +245,7 @@ fn groups_nest_their_children() {
         visible: true,
         locked: false,
         mask_hidden: false,
+        mask_linked: None,
         effects: Vec::new(),
     };
     let mut document = document(Vec::new());

@@ -241,6 +241,7 @@ pub fn random_document(rng: &mut FuzzRng) -> Document {
                         visible: true,
                         locked: false,
                         mask_hidden: false,
+                        mask_linked: None,
                         effects,
                     }))
                 }
@@ -648,6 +649,21 @@ pub const CALLS: &[&str] = &[
     "style.importLibrary",
     "style.importLibraryTiles",
     "style.scaleStyles",
+    "mask.add",
+    "mask.enable",
+    "mask.link",
+    "mask.moveBy",
+    "mask.moveContentsBy",
+    "mask.remove",
+    "mask.setMode",
+    "mask.setShowAttrs",
+    "mask.pathToMarquee",
+    "mask.marqueeToPath",
+    "mask.saveJPEG",
+    "mask.restoreJPEG",
+    "mask.clearJPEG",
+    "bitmap.movePixelMaskBy",
+    "bitmap.setPixelMask",
 ];
 
 /// Builds a random call against `document`: a random catalog id and a
@@ -1811,6 +1827,7 @@ pub fn random_call(rng: &mut FuzzRng, document: &Document) -> (String, serde_jso
                 visible: true,
                 locked: false,
                 mask_hidden: false,
+                mask_linked: None,
                 effects: Vec::new(),
             }));
             library.symbols.push(SymbolDefinition {
@@ -1910,6 +1927,93 @@ pub fn random_call(rng: &mut FuzzRng, document: &Document) -> (String, serde_jso
         "style.scaleStyles" => serde_json::json!({
             "scale": (1 + rng.below(300)) as f64 / 100.0,
         }),
+        // The element-mask family (decision 0020): structure minting
+        // (add/remove/setMode/converters) rides the same generic loop
+        // as every other minting command — refusals must not mutate,
+        // and every delta must undo byte-exactly, mint order included.
+        "mask.add" => serde_json::json!({
+            "id": any_id(rng),
+            "mode": rng.pick(&["reveal all", "hide all", "reveal selection", "hide selection"]).copied(),
+            "enter_edit_mode": if rng.chance(50) { serde_json::json!(rng.chance(2)) } else { serde_json::Value::Null },
+        }),
+        "mask.enable" => serde_json::json!({
+            "id": any_id(rng),
+            "enable": rng.chance(2),
+        }),
+        "mask.link" => serde_json::json!({
+            "id": any_id(rng),
+            "linked": rng.chance(2),
+        }),
+        "mask.moveBy" => {
+            let ids: Vec<serde_json::Value> = (0..1 + rng.below(3)).map(|_| any_id(rng)).collect();
+            serde_json::json!({
+                "ids": ids,
+                "dx": rng.below(64) as f64 - 32.0,
+                "dy": rng.below(64) as f64 - 32.0,
+            })
+        }
+        "mask.moveContentsBy" => {
+            let ids: Vec<serde_json::Value> = (0..1 + rng.below(3)).map(|_| any_id(rng)).collect();
+            serde_json::json!({
+                "ids": ids,
+                "dx": rng.below(64) as f64 - 32.0,
+                "dy": rng.below(64) as f64 - 32.0,
+            })
+        }
+        "mask.remove" => serde_json::json!({
+            "id": any_id(rng),
+            "what_if_image": if rng.chance(60) {
+                serde_json::json!(rng.pick(&["apply", "discard"]).copied())
+            } else {
+                serde_json::Value::Null
+            },
+        }),
+        "mask.setMode" => serde_json::json!({
+            "id": any_id(rng),
+            "mode": rng.pick(&["mask to image", "mask to path"]).copied(),
+        }),
+        "mask.setShowAttrs" => serde_json::json!({
+            "id": any_id(rng),
+            "show": rng.chance(2),
+        }),
+        "mask.pathToMarquee" => serde_json::json!({
+            "id": any_id(rng),
+            "image": any_id(rng),
+            "mode": rng.pick(&["hard edge", "antialias", "feather"]).copied(),
+            "feather_amount": if rng.chance(50) { serde_json::json!(1.0 + rng.below(8) as f64) } else { serde_json::Value::Null },
+        }),
+        "mask.marqueeToPath" => serde_json::json!({
+            "image": any_id(rng),
+        }),
+        "mask.saveJPEG" | "mask.restoreJPEG" | "mask.clearJPEG" => serde_json::json!({}),
+        "bitmap.movePixelMaskBy" => serde_json::json!({
+            "id": any_id(rng),
+            "dx": rng.below(64) as i64 - 32,
+            "dy": rng.below(64) as i64 - 32,
+        }),
+        "bitmap.setPixelMask" => {
+            // Mostly a null mask (clear); otherwise a small plane the
+            // dims gate will usually refuse — refusals are grammar.
+            let mask = if rng.chance(60) {
+                serde_json::Value::Null
+            } else {
+                let width = 1 + rng.below(8);
+                let height = 1 + rng.below(8);
+                let alpha: Vec<serde_json::Value> = (0..width * height)
+                    .map(|_| serde_json::json!(rng.below(256) as u8))
+                    .collect();
+                serde_json::json!({ "width": width, "height": height, "alpha": alpha })
+            };
+            serde_json::json!({
+                "id": any_id(rng),
+                "mask": mask,
+                "mode": if rng.chance(70) {
+                    serde_json::json!(rng.pick(&["replace", "add", "subtract", "intersect"]).copied())
+                } else {
+                    serde_json::Value::Null
+                },
+            })
+        }
         other => {
             let _ = other;
             // A catalog command without a builder: an empty payload is

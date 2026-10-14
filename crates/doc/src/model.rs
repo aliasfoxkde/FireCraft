@@ -76,6 +76,11 @@ pub struct Document {
     /// Editing state, never file content: the format has no selection
     /// node and the writer never reads this field.
     pub selection: Option<SelectionMask>,
+    /// The "Selective JPEG mask" — a named stash of the bitmap-mode
+    /// selection (`mask.saveJPEG` / `mask.restoreJPEG`). Editing
+    /// state, never file content: the format has no node for it and
+    /// the writer never reads this field.
+    pub jpeg_mask: Option<SelectionMask>,
     /// `EXPv` — the document-level export defaults. `None` when the
     /// file carries no document-level `EXPv`; the writer emits the node
     /// only when settings exist.
@@ -1035,6 +1040,10 @@ pub struct GroupObject {
     pub locked: bool,
     /// `MNAb` — mask group with the mask image itself hidden.
     pub mask_hidden: bool,
+    /// `LNKb` — mask-group link. `None` = node absent, which the
+    /// dictionary defines as linked (`true` is never written);
+    /// `Some(false)` = the content moves independently of the mask.
+    pub mask_linked: Option<bool>,
     /// `EFLv`* — live effects, file order.
     pub effects: Vec<Effect>,
 }

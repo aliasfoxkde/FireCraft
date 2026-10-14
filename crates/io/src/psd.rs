@@ -693,6 +693,7 @@ fn build_model(
                         visible: shell.visible,
                         locked: false,
                         mask_hidden: false,
+                        mask_linked: None,
                         effects: Vec::new(),
                     }));
                 attach_to_scope(

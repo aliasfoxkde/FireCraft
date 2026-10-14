@@ -450,6 +450,7 @@ fn opacity_and_blend_wrapper_round_trips() {
         visible: true,
         locked: false,
         mask_hidden: false,
+        mask_linked: None,
         effects: Vec::new(),
     };
     let original = document(vec![ObjectData::Path(square()), ObjectData::Group(group)]);

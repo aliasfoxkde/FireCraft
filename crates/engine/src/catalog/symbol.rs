@@ -2450,6 +2450,7 @@ mod tests {
             visible: true,
             locked: false,
             mask_hidden: false,
+            mask_linked: None,
             effects: Vec::new(),
         })
     }
