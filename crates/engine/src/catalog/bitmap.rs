@@ -9,13 +9,14 @@
 //! plus the prior mask, so undo is byte-exact even under feathered
 //! coverage.
 
-use doc::{Document, ObjectData, ObjectId, SelectionMask};
+use doc::{Document, ImageObject, ObjectData, ObjectId, SelectionMask};
 
+use super::object::{Owner, attach_cell, find_owner};
 use super::retouch::{BrushOptionsPayload, brush_of, strength_of};
 use crate::access;
-use crate::bitmap::{gather, scatter, touched_tiles};
+use crate::bitmap::{assemble_rgba, gather, retile_rgba, scatter, touched_tiles};
 use crate::command::TypedCommand;
-use crate::delta::Delta;
+use crate::delta::{Delta, ObjectInverse};
 use crate::error::EngineError;
 use crate::mask::{
     SelectMode, WandColor, feather as feather_mask, fold, stamp_ellipse, stamp_polygon, stamp_rect,
@@ -37,7 +38,10 @@ pub(crate) fn install(registry: &mut CommandRegistry) -> Result<(), EngineError>
     registry.register(Erase)?;
     registry.register(BrushPaint)?;
     registry.register(Pencil)?;
-    registry.register(MovePixels)
+    registry.register(MovePixels)?;
+    registry.register(AddImage)?;
+    registry.register(AddImageViaCopy)?;
+    registry.register(AddImageViaCut)
 }
 
 /// The image object named by `id`, cloned out of the registry so
@@ -922,6 +926,357 @@ impl TypedCommand for MovePixels {
     }
 }
 
+/// `bitmap.addImage` — CS6 `dom.AddNewImage(boundRectangle,
+/// bEnterPaintMode)`: a new empty (transparent) image. Bounds larger
+/// than the document constrain to it (the payload rectangle is
+/// intersected with the page canvas); paint-mode posture is UI state
+/// the engine does not carry (decision 0037, deviation 1).
+struct AddImage;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct AddImagePayload {
+    /// Bounds origin.
+    x: f64,
+    y: f64,
+    /// Bounds extent.
+    width: f64,
+    height: f64,
+    /// Placement.
+    page: usize,
+    layer: usize,
+    cell: usize,
+    /// `OBNs` — object name.
+    name: Option<String>,
+}
+
+impl TypedCommand for AddImage {
+    type Payload = AddImagePayload;
+
+    fn name(&self) -> &'static str {
+        "bitmap.addImage"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "bitmap.addImage";
+        if ![payload.x, payload.y, payload.width, payload.height]
+            .iter()
+            .all(|value| value.is_finite())
+        {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: "bounds are not finite".to_owned(),
+            });
+        }
+        if payload.width <= 0.0 || payload.height <= 0.0 {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: format!(
+                    "bounds extent {:?} x {:?} has no area",
+                    payload.width, payload.height
+                ),
+            });
+        }
+        let canvas = &access::page(document, NAME, payload.page)?.info.canvas;
+        // CS6: a rectangle larger than the document is constrained to
+        // the document size — the intersection with the canvas.
+        let x0 = payload.x.max(canvas.x);
+        let y0 = payload.y.max(canvas.y);
+        let x1 = (payload.x + payload.width).min(canvas.x + canvas.width);
+        let y1 = (payload.y + payload.height).min(canvas.y + canvas.height);
+        let (left, top) = (x0.round() as i64, y0.round() as i64);
+        let (right, bottom) = (x1.round() as i64, y1.round() as i64);
+        if right <= left || bottom <= top {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: "bounds do not intersect the document canvas".to_owned(),
+            });
+        }
+        let (width, height) = (right - left, bottom - top);
+        let empty = vec![0u8; (width * height * 4) as usize];
+        // Fresh zero tiles, not matte slots: a matte-only grid is
+        // invisible to gather/scatter, so the bitmap could never be
+        // painted (decision 0037).
+        let (tiles, minted) = crate::bitmap::retile_rgba(document, &empty, width, height);
+        let id = document.registry.insert(ObjectData::Image(ImageObject {
+            location: geom::Point {
+                x: left as f64,
+                y: top as f64,
+            },
+            offset: geom::Point::ZERO,
+            pixels: (width, height),
+            tile_size: i64::from(raster::TILE_SIDE as u32),
+            tiles,
+            name: payload.name.clone(),
+            opacity: 1000,
+            blend: 0,
+            visible: true,
+            locked: false,
+            effects: Vec::new(),
+        }));
+        let placed = attach_cell(
+            document,
+            NAME,
+            payload.page,
+            payload.layer,
+            payload.cell,
+            id,
+            None,
+        )?;
+        Ok(Delta::Group(vec![
+            placed,
+            Delta::Object {
+                id,
+                inverse: ObjectInverse::Created,
+            },
+            Delta::Bank { added: minted },
+        ]))
+    }
+}
+
+/// `bitmap.addImageViaCopy` — CS6 `dom.addNewImageViaCopy()`: the
+/// paint-mode selection becomes a new image placed directly above the
+/// active bitmap. The selection plane must span the source's pixel
+/// grid (the marquee contract of every `bitmap.*` pixel command).
+struct AddImageViaCopy;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct AddImageViaSourcePayload {
+    /// The active bitmap the selection reads from.
+    source: ObjectId,
+}
+
+impl TypedCommand for AddImageViaCopy {
+    type Payload = AddImageViaSourcePayload;
+
+    fn name(&self) -> &'static str {
+        "bitmap.addImageViaCopy"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "bitmap.addImageViaCopy";
+        let image = image_of(document, NAME, payload.source)?;
+        let mask = spanning_selection(document, &image, NAME)?;
+        let mut scaled = assemble_rgba(document, &image, NAME)?;
+        scale_by_coverage(&mut scaled, &mask);
+        let owner = above_source(document, payload.source, NAME)?;
+        let (tiles, minted) = retile_rgba(document, &scaled, image.pixels.0, image.pixels.1);
+        // A new bitmap: the source's geometry, default paint state
+        // (decision 0037).
+        let id = document.registry.insert(ObjectData::Image(ImageObject {
+            location: image.location,
+            offset: image.offset,
+            pixels: image.pixels,
+            tile_size: image.tile_size,
+            tiles,
+            name: None,
+            opacity: 1000,
+            blend: 0,
+            visible: true,
+            locked: false,
+            effects: Vec::new(),
+        }));
+        let placed = attach_cell(
+            document,
+            NAME,
+            owner.0,
+            owner.1,
+            owner.2,
+            id,
+            Some(owner.3 + 1),
+        )?;
+        Ok(Delta::Group(vec![
+            placed,
+            Delta::Object {
+                id,
+                inverse: ObjectInverse::Created,
+            },
+            Delta::Bank { added: minted },
+        ]))
+    }
+}
+
+/// `bitmap.addImageViaCut` — CS6 `dom.addNewImageViaCut()`: the
+/// selection also clears from the source bitmap, over fresh tile ids
+/// (shared bank slots are never edited in place — decision 0037); the
+/// orphaned originals are the recorded bank-GC debt.
+struct AddImageViaCut;
+
+impl TypedCommand for AddImageViaCut {
+    type Payload = AddImageViaSourcePayload;
+
+    fn name(&self) -> &'static str {
+        "bitmap.addImageViaCut"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "bitmap.addImageViaCut";
+        let image = image_of(document, NAME, payload.source)?;
+        let mask = spanning_selection(document, &image, NAME)?;
+        // Capture before mutating (the standing law): the source's
+        // registry slot rides the delta whole.
+        let before = access::object(document, NAME, payload.source)?.clone();
+        let assembled = assemble_rgba(document, &image, NAME)?;
+        let mut scaled = assembled.clone();
+        scale_by_coverage(&mut scaled, &mask);
+        let mut cleared = assembled;
+        clear_by_coverage(&mut cleared, &mask);
+        let owner = above_source(document, payload.source, NAME)?;
+        let (source_tiles, mut minted) =
+            retile_rgba(document, &cleared, image.pixels.0, image.pixels.1);
+        let (tiles, new_minted) = retile_rgba(document, &scaled, image.pixels.0, image.pixels.1);
+        minted.extend(new_minted);
+        let id = document.registry.insert(ObjectData::Image(ImageObject {
+            location: image.location,
+            offset: image.offset,
+            pixels: image.pixels,
+            tile_size: image.tile_size,
+            tiles,
+            name: None,
+            opacity: 1000,
+            blend: 0,
+            visible: true,
+            locked: false,
+            effects: Vec::new(),
+        }));
+        let Some(ObjectData::Image(slot)) = document.registry.get_mut(payload.source) else {
+            return Err(EngineError::MissingTarget {
+                name: NAME.to_owned(),
+                detail: format!(
+                    "source {} (generation {}) vanished mid-command",
+                    payload.source.index(),
+                    payload.source.generation()
+                ),
+            });
+        };
+        slot.tiles = source_tiles;
+        let placed = attach_cell(
+            document,
+            NAME,
+            owner.0,
+            owner.1,
+            owner.2,
+            id,
+            Some(owner.3 + 1),
+        )?;
+        Ok(Delta::Group(vec![
+            placed,
+            Delta::Object {
+                id: payload.source,
+                inverse: ObjectInverse::Mutated {
+                    object: Box::new(before),
+                },
+            },
+            Delta::Object {
+                id,
+                inverse: ObjectInverse::Created,
+            },
+            Delta::Bank { added: minted },
+        ]))
+    }
+}
+
+/// The pixel selection a ViaCopy/ViaCut needs: present, and spanning
+/// the source image's grid (the `bitmap.*` marquee contract).
+fn spanning_selection(
+    document: &Document,
+    image: &ImageObject,
+    name: &'static str,
+) -> Result<SelectionMask, EngineError> {
+    let Some(mask) = document.selection.as_ref() else {
+        return Err(EngineError::InvalidState {
+            name: name.to_owned(),
+            detail: "there is no pixel selection".to_owned(),
+        });
+    };
+    if (i64::from(mask.width), i64::from(mask.height)) != image.pixels {
+        return Err(EngineError::InvalidState {
+            name: name.to_owned(),
+            detail: format!(
+                "the selection plane spans {}x{}, the bitmap is {:?}",
+                mask.width, mask.height, image.pixels
+            ),
+        });
+    }
+    Ok(mask.clone())
+}
+
+/// The cell placement "directly above the active bitmap": the
+/// source's `(page, layer, cell, position)`. Group-nested sources
+/// refuse — a group has no cell to sit above in.
+fn above_source(
+    document: &Document,
+    source: ObjectId,
+    name: &'static str,
+) -> Result<(usize, usize, usize, usize), EngineError> {
+    match find_owner(document, source) {
+        Some(Owner::Cell {
+            page,
+            layer,
+            cell,
+            position,
+        }) => Ok((page, layer, cell, position)),
+        Some(Owner::Group { id, .. }) => Err(EngineError::InvalidState {
+            name: name.to_owned(),
+            detail: format!(
+                "source {} is nested in group {} (generation {}); there is no cell to sit above",
+                source.index(),
+                id.index(),
+                id.generation()
+            ),
+        }),
+        None => Err(EngineError::MissingTarget {
+            name: name.to_owned(),
+            detail: format!(
+                "object {} (generation {}) is referenced by no cell or group",
+                source.index(),
+                source.generation()
+            ),
+        }),
+    }
+}
+
+/// Scales every pixel's channels by the mask coverage — compositing's
+/// source-scale in the premultiplied domain (decision 0037).
+fn scale_by_coverage(pixels: &mut [u8], mask: &SelectionMask) {
+    for (index, pixel) in pixels.chunks_exact_mut(4).enumerate() {
+        let coverage = u32::from(mask.alpha[index]);
+        if coverage == 255 {
+            continue;
+        }
+        if coverage == 0 {
+            pixel.fill(0);
+            continue;
+        }
+        for channel in pixel.iter_mut() {
+            *channel = ((u32::from(*channel) * coverage + 127) / 255) as u8;
+        }
+    }
+}
+
+/// Clears every pixel under any nonzero coverage (the cut is binary
+/// at the selection edge, as in the original).
+fn clear_by_coverage(pixels: &mut [u8], mask: &SelectionMask) {
+    for (index, pixel) in pixels.chunks_exact_mut(4).enumerate() {
+        if mask.alpha[index] > 0 {
+            pixel.fill(0);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
@@ -1610,5 +1965,299 @@ mod tests {
             .unwrap_err();
         assert!(matches!(error, EngineError::InvalidState { .. }));
         assert_eq!(serde_json::to_vec(&document).unwrap(), before);
+    }
+
+    /// A sample document (2 pages, 2 layers, 2 cells each) whose page
+    /// 0 canvas is 64×48 and whose cell (0, 0, 0) holds two paths plus
+    /// a 4×4 opaque-red bitmap at position 2 (one tile, bank slot 0).
+    fn placed_image_document() -> (Document, ObjectId) {
+        let (mut document, ids) = crate::catalog::testdoc::sample_document();
+        document.pages[0].info.canvas.width = 64.0;
+        document.pages[0].info.canvas.height = 48.0;
+        let mut buffer = [0u8; raster::TILE_BYTES];
+        for pixel in buffer.chunks_exact_mut(4) {
+            pixel.copy_from_slice(&[255, 0, 0, 255]);
+        }
+        document.tiles.insert(0, raster::Tile::from_rgba8(buffer));
+        let image = document
+            .registry
+            .insert(ObjectData::Image(doc::ImageObject {
+                location: geom::Point::ZERO,
+                offset: geom::Point::ZERO,
+                pixels: (4, 4),
+                tile_size: 128,
+                tiles: vec![doc::TileRef::Tile(0)],
+                name: None,
+                opacity: 1000,
+                blend: 0,
+                visible: true,
+                locked: false,
+                effects: Vec::new(),
+            }));
+        document.pages[0].layers.layers[0].cells[0]
+            .elements
+            .push(image);
+        let _ = ids;
+        (document, image)
+    }
+
+    /// The first pixel of the tile behind `tiles[0]` of the image at
+    /// `id`, premultiplied.
+    fn tile_pixel(document: &Document, id: ObjectId) -> [u8; 4] {
+        let doc::ObjectData::Image(image) = document.registry.get(id).unwrap() else {
+            panic!("not an image")
+        };
+        let doc::TileRef::Tile(tile_id) = image.tiles[0] else {
+            panic!("expected a bank tile")
+        };
+        document.tiles.get(tile_id).unwrap().pixels()[0..4]
+            .try_into()
+            .unwrap()
+    }
+
+    #[test]
+    fn add_image_places_paintable_empty_tiles_and_undoes() {
+        let (mut document, _) = placed_image_document();
+        let before = serde_json::to_vec(&document).unwrap();
+        let delta = AddImage
+            .apply_json(
+                &mut document,
+                json!({
+                    "x": 8.0, "y": 4.0, "width": 16.0, "height": 8.0,
+                    "page": 0, "layer": 0, "cell": 0,
+                    "name": "spot",
+                }),
+            )
+            .unwrap();
+        let elements = &document.pages[0].layers.layers[0].cells[0].elements;
+        assert_eq!(elements.len(), 4, "appended after paths + the 4×4 bitmap");
+        let id = elements[3];
+        let doc::ObjectData::Image(image) = document.registry.get(id).unwrap() else {
+            panic!("new object is an image")
+        };
+        assert_eq!(image.pixels, (16, 8));
+        assert_eq!((image.location.x, image.location.y), (8.0, 4.0));
+        assert_eq!(image.name.as_deref(), Some("spot"));
+        let doc::TileRef::Tile(tile_id) = image.tiles[0] else {
+            panic!("fresh bank tiles, not mattes")
+        };
+        assert_eq!(
+            &document.tiles.get(tile_id).unwrap().pixels()[0..4],
+            &[0, 0, 0, 0],
+            "an empty image is transparent but paintable"
+        );
+
+        delta.apply_inverse(&mut document).unwrap();
+        assert_eq!(
+            serde_json::to_vec(&document).unwrap(),
+            before,
+            "byte-exact undo"
+        );
+    }
+
+    #[test]
+    fn add_image_constrains_to_canvas_and_refuses_outside() {
+        let (mut document, _) = placed_image_document();
+        // CS6: larger-than-document bounds constrain to the document.
+        AddImage
+            .apply_json(
+                &mut document,
+                json!({
+                    "x": 40.0, "y": 40.0, "width": 100.0, "height": 100.0,
+                    "page": 0, "layer": 0, "cell": 0, "name": null,
+                }),
+            )
+            .unwrap();
+        let elements = &document.pages[0].layers.layers[0].cells[0].elements;
+        let doc::ObjectData::Image(image) = document.registry.get(elements[3]).unwrap() else {
+            panic!("new object is an image")
+        };
+        assert_eq!(image.pixels, (24, 8), "clipped to the 64×48 canvas");
+        assert_eq!((image.location.x, image.location.y), (40.0, 40.0));
+
+        let before = serde_json::to_vec(&document).unwrap();
+        for bounds in [
+            json!({ "x": 100.0, "y": 0.0, "width": 10.0, "height": 10.0 }),
+            json!({ "x": 0.0, "y": 0.0, "width": 0.0, "height": 8.0 }),
+            json!({ "x": 0.0, "y": 0.0, "width": 8.0, "height": -1.0 }),
+        ] {
+            let mut payload = bounds;
+            payload["page"] = json!(0);
+            payload["layer"] = json!(0);
+            payload["cell"] = json!(0);
+            let error = AddImage.apply_json(&mut document, payload).unwrap_err();
+            assert!(matches!(error, EngineError::InvalidState { .. }));
+        }
+        assert_eq!(
+            serde_json::to_vec(&document).unwrap(),
+            before,
+            "refused placements change nothing"
+        );
+    }
+
+    #[test]
+    fn via_copy_copies_the_selection_above_the_source_and_undoes() {
+        let (mut document, image) = placed_image_document();
+        let mut mask = SelectionMask::empty(4, 4);
+        mask.set(0, 0, 128);
+        document.selection = Some(mask);
+        let before = serde_json::to_vec(&document).unwrap();
+
+        let delta = AddImageViaCopy
+            .apply_json(&mut document, json!({ "source": image }))
+            .unwrap();
+        let elements = &document.pages[0].layers.layers[0].cells[0].elements;
+        assert_eq!(elements.len(), 4);
+        let copy = elements[3];
+        let doc::ObjectData::Image(new_image) = document.registry.get(copy).unwrap() else {
+            panic!("the copy is an image")
+        };
+        assert_eq!((new_image.location.x, new_image.location.y), (0.0, 0.0));
+        let doc::TileRef::Tile(copy_tile) = new_image.tiles[0] else {
+            panic!("fresh bank tiles")
+        };
+        let pixels = document.tiles.get(copy_tile).unwrap().pixels();
+        assert_eq!(
+            &pixels[0..4],
+            &[128, 0, 0, 128],
+            "coverage 128 scales the premultiplied red"
+        );
+        assert_eq!(&pixels[4..8], &[0, 0, 0, 0], "outside the mask");
+        assert_eq!(
+            tile_pixel(&document, image),
+            [255, 0, 0, 255],
+            "the source bitmap is untouched"
+        );
+
+        delta.apply_inverse(&mut document).unwrap();
+        assert_eq!(
+            serde_json::to_vec(&document).unwrap(),
+            before,
+            "byte-exact undo"
+        );
+    }
+
+    #[test]
+    fn via_cut_clears_the_source_over_fresh_tiles_and_undoes() {
+        let (mut document, image) = placed_image_document();
+        let mut mask = SelectionMask::empty(4, 4);
+        for y in 0..2 {
+            for x in 0..2 {
+                mask.set(x, y, 255);
+            }
+        }
+        document.selection = Some(mask);
+        let before = serde_json::to_vec(&document).unwrap();
+
+        let delta = AddImageViaCut
+            .apply_json(&mut document, json!({ "source": image }))
+            .unwrap();
+        // The source rebuild: fresh slot, cleared under the cut.
+        let doc::ObjectData::Image(cut) = document.registry.get(image).unwrap() else {
+            panic!("source stays an image")
+        };
+        let doc::TileRef::Tile(cut_tile) = cut.tiles[0] else {
+            panic!("source was re-tiled over fresh slots")
+        };
+        assert_ne!(cut_tile, 0, "shared bank slots are never edited in place");
+        let cut_pixels = document.tiles.get(cut_tile).unwrap().pixels();
+        assert_eq!(&cut_pixels[0..4], &[0, 0, 0, 0]);
+        assert_eq!(
+            &cut_pixels[8..12],
+            &[255, 0, 0, 255],
+            "index (2,0) survives"
+        );
+        assert_eq!(
+            &cut_pixels[(128 * 2) * 4..(128 * 2) * 4 + 4],
+            &[255, 0, 0, 255]
+        );
+        assert_eq!(
+            document.tiles.get(0).unwrap().pixels()[0..4],
+            [255, 0, 0, 255],
+            "the orphaned original tile keeps its bytes"
+        );
+        // The copy: the cut pixels moved.
+        let elements = &document.pages[0].layers.layers[0].cells[0].elements;
+        let doc::ObjectData::Image(new_image) = document.registry.get(elements[3]).unwrap() else {
+            panic!("the copy is an image")
+        };
+        let doc::TileRef::Tile(new_tile) = new_image.tiles[0] else {
+            panic!("fresh bank tiles")
+        };
+        let new_pixels = document.tiles.get(new_tile).unwrap().pixels();
+        assert_eq!(&new_pixels[0..4], &[255, 0, 0, 255]);
+        assert_eq!(&new_pixels[8..12], &[0, 0, 0, 0]);
+
+        delta.apply_inverse(&mut document).unwrap();
+        assert_eq!(
+            serde_json::to_vec(&document).unwrap(),
+            before,
+            "byte-exact undo restores the shared tile reference"
+        );
+    }
+
+    #[test]
+    fn via_copy_and_cut_refuse_without_a_spanning_selection() {
+        let (mut document, image) = placed_image_document();
+        let (mut no_mask, path) = crate::catalog::testdoc::sample_document();
+        let _ = &mut no_mask;
+        let stale = doc::ObjectId::from_parts(999, 0);
+        let before = serde_json::to_vec(&document).unwrap();
+
+        // No selection at all (a stale source refuses even earlier).
+        for payload in [json!({ "source": image }), json!({ "source": stale })] {
+            let error = AddImageViaCopy
+                .apply_json(&mut document, payload.clone())
+                .unwrap_err();
+            assert!(matches!(
+                error,
+                EngineError::InvalidState { .. } | EngineError::MissingTarget { .. }
+            ));
+            let error = AddImageViaCut
+                .apply_json(&mut document, payload)
+                .unwrap_err();
+            assert!(matches!(
+                error,
+                EngineError::InvalidState { .. } | EngineError::MissingTarget { .. }
+            ));
+        }
+        // A plane sized for another image.
+        document.selection = Some(SelectionMask::empty(8, 8));
+        let error = AddImageViaCopy
+            .apply_json(&mut document, json!({ "source": image }))
+            .unwrap_err();
+        assert!(matches!(error, EngineError::InvalidState { .. }));
+        let error = AddImageViaCut
+            .apply_json(&mut document, json!({ "source": image }))
+            .unwrap_err();
+        assert!(matches!(error, EngineError::InvalidState { .. }));
+        // Not a bitmap; not a live object.
+        document.selection = Some(SelectionMask::empty(4, 4));
+        for source in [path[0], stale] {
+            for error in [
+                AddImageViaCopy
+                    .apply_json(&mut document, json!({ "source": source }))
+                    .unwrap_err(),
+                AddImageViaCut
+                    .apply_json(&mut document, json!({ "source": source }))
+                    .unwrap_err(),
+            ] {
+                assert!(
+                    matches!(
+                        error,
+                        EngineError::InvalidState { .. } | EngineError::MissingTarget { .. }
+                    ),
+                    "non-image and stale sources refuse"
+                );
+            }
+        }
+        // The probes set selections (their own observable state); drop
+        // them so the compare covers the refused commands only.
+        document.selection = None;
+        assert_eq!(
+            serde_json::to_vec(&document).unwrap(),
+            before,
+            "refused copies and cuts change nothing"
+        );
     }
 }

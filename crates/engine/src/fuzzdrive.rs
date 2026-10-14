@@ -621,6 +621,9 @@ pub const CALLS: &[&str] = &[
     "bitmap.brush",
     "bitmap.pencil",
     "bitmap.movePixels",
+    "bitmap.addImage",
+    "bitmap.addImageViaCopy",
+    "bitmap.addImageViaCut",
     "retouch.blur",
     "retouch.smudge",
     "retouch.clone",
@@ -1737,6 +1740,23 @@ pub fn random_call(rng: &mut FuzzRng, document: &Document) -> (String, serde_jso
             "id": any_id(rng),
             "dx": rng.below(600) as i64 - 300,
             "dy": rng.below(600) as i64 - 300,
+        }),
+        "bitmap.addImage" => serde_json::json!({
+            "x": -(rng.below(400) as f64),
+            "y": -(rng.below(400) as f64),
+            "width": rng.below(400) as f64,
+            "height": rng.below(400) as f64,
+            "page": any_index(rng, pages),
+            "layer": any_index(rng, 3),
+            "cell": any_index(rng, frames),
+            "name": if rng.chance(50) {
+                serde_json::Value::Null
+            } else {
+                serde_json::json!("fuzz image")
+            },
+        }),
+        "bitmap.addImageViaCopy" | "bitmap.addImageViaCut" => serde_json::json!({
+            "source": any_id(rng),
         }),
         "retouch.blur" | "retouch.eraser" => serde_json::json!({
             "id": any_id(rng),

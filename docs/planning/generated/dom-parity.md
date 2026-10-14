@@ -14,17 +14,17 @@ enforced == the fuzz call table).
 
 | class | meaning | count (of 356 dom verbs) |
 |---|---|---|
-| C | carried: a registry command implements the mutation | 208 |
+| C | carried: a registry command implements the mutation | 212 |
 | P | partial: carried with a recorded model limitation | 45 |
-| M | missing: no command and no decision — work items | 15 |
+| M | missing: no command and no decision — work items | 11 |
 | N | not applicable: non-document surface (accessor/UI/session/clipboard/export/OS) | 88 |
 
-Document-mutation coverage: **253 of 268** carried-or-partial
-(208 carried, 45 partial, 15 missing).
+Document-mutation coverage: **257 of 268** carried-or-partial
+(212 carried, 45 partial, 11 missing).
 
 ### Gap families (the Missing table, grouped)
 
-The 15 missing verbs collapse into six families, largest first —
+The 11 missing verbs collapse into six families, largest first —
 each family is one design decision plus a command batch:
 
 1. **Object transforms** (1 verb remains): setDocumentImageSize
@@ -60,6 +60,7 @@ each family is one design decision plus a command batch:
 
 | CS6 verb | class | FireCraft carrier | note |
 |---|---|---|---|
+| `AddNewImage` | C | bitmap.addImage | empty transparent image; bounds larger than the document constrain to the canvas; fresh zero bank tiles so the bitmap is paintable (decision 0037) |
 | `AddNewStar` | C | autoshape.star |  |
 | `AddNewText` | C | text.createText |  |
 | `ApplyEffects` | C | filter.add |  |
@@ -71,6 +72,9 @@ each family is one design decision plus a command batch:
 | `addGuide` | C | page.addGuide | page-scoped guide line; duplicates append like CS6 |
 | `addMasterPageLayer` | C | page.addMasterLayer | refuses without a master page (CS6 precondition) |
 | `addNewHotspot` | C | hotspot.create |  |
+| `addNewImage` | C | bitmap.addImage | empty transparent image; bounds larger than the document constrain to the canvas; fresh zero bank tiles so the bitmap is paintable (decision 0037) |
+| `addNewImageViaCopy` | C | bitmap.addImageViaCopy | the paint-mode selection becomes a new image directly above the active bitmap; selection plane must span the source grid |
+| `addNewImageViaCut` | C | bitmap.addImageViaCut | as ViaCopy, plus the selection clears from the source over fresh tile ids (shared slots never edited in place) |
 | `addNewLayer` | C | layer.add |  |
 | `addNewLine` | C | object.createPath | two-point path |
 | `addNewOval` | C | object.createPath | oval contour geometry |
@@ -323,10 +327,6 @@ each family is one design decision plus a command batch:
 
 | CS6 verb | class | FireCraft carrier | note |
 |---|---|---|---|
-| `AddNewImage` | M | - | no engine place-image command; io::raster::attach_image is the import-side path (SVG/raster import), app_cli carries file placement |
-| `addNewImage` | M | - | no engine place-image command; io::raster::attach_image is the import-side path (SVG/raster import), app_cli carries file placement |
-| `addNewImageViaCopy` | M | - | same gap as addNewImage |
-| `addNewImageViaCut` | M | - | same gap as addNewImage |
 | `clipPasteAsMask` | M | - | clipboard op (the mask model itself landed via mask.add) |
 | `clipPasteFromChannelToChannel` | M | - | pixel channel copy - bitmap domain, no command |
 | `clipPasteInside` | M | - | paste-inside = clipboard op (mask model landed) |

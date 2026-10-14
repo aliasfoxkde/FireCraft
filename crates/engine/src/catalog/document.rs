@@ -11,7 +11,6 @@
 use doc::{Document, TileRef};
 
 use crate::access;
-use crate::catalog::flatten::next_tile_id;
 use crate::command::TypedCommand;
 use crate::delta::{Delta, ObjectInverse};
 use crate::error::EngineError;
@@ -275,42 +274,10 @@ fn rotate_image(
     image: &doc::ImageObject,
     rotation: i64,
     map: geom::Affine,
-) -> (doc::ImageObject, Vec<u32>) {
-    const SIDE: i64 = raster::TILE_SIDE as i64;
+) -> Result<(doc::ImageObject, Vec<u32>), EngineError> {
     let (old_width, old_height) = image.pixels;
-    let cols = (old_width / SIDE + i64::from(old_width % SIDE != 0)).max(1);
     // 1. Assemble: every slot becomes premultiplied RGBA bytes.
-    let mut flat = vec![0u8; (old_width * old_height * 4) as usize];
-    for (slot, tile_ref) in image.tiles.iter().enumerate() {
-        let base_x = (slot as i64 % cols) * SIDE;
-        let base_y = (slot as i64 / cols) * SIDE;
-        let copy_w = (old_width - base_x).clamp(0, SIDE) as usize;
-        let copy_h = (old_height - base_y).clamp(0, SIDE) as usize;
-        let solid = match tile_ref {
-            TileRef::Tile(tile_id) => {
-                let Some(tile) = document.tiles.get(*tile_id) else {
-                    continue; // preflighted: the bank holds every referenced tile
-                };
-                for line in 0..copy_h {
-                    let src = line * raster::TILE_SIDE * 4;
-                    let dst = ((base_y + line as i64) as usize * old_width as usize
-                        + base_x as usize)
-                        * 4;
-                    flat[dst..dst + copy_w * 4]
-                        .copy_from_slice(&tile.pixels()[src..src + copy_w * 4]);
-                }
-                continue;
-            }
-            TileRef::Matte(raw) => Some(compose::matte_premultiplied(*raw)),
-        };
-        let Some(pixel) = solid else { continue };
-        for line in 0..copy_h {
-            let dst = ((base_y + line as i64) as usize * old_width as usize + base_x as usize) * 4;
-            for column in 0..copy_w {
-                flat[dst + column * 4..dst + column * 4 + 4].copy_from_slice(&pixel);
-            }
-        }
-    }
+    let flat = crate::bitmap::assemble_rgba(document, image, "document.rotate")?;
     // 2. Rotate the buffer.
     let (new_width, new_height) = if rotation == 180 {
         (old_width, old_height)
@@ -319,29 +286,8 @@ fn rotate_image(
     };
     let rotated = rotate_pixels(&flat, old_width, old_height, rotation);
     // 3. Re-tile over fresh slots (the flatten minting law).
-    let new_cols = (new_width / SIDE + i64::from(new_width % SIDE != 0)).max(1);
-    let new_rows = (new_height / SIDE + i64::from(new_height % SIDE != 0)).max(1);
-    let mut minted = Vec::new();
-    let mut tiles = Vec::with_capacity((new_cols * new_rows) as usize);
-    for row in 0..new_rows {
-        for col in 0..new_cols {
-            let mut pixels = [0u8; raster::TILE_BYTES];
-            let (base_x, base_y) = (col * SIDE, row * SIDE);
-            let copy_w = (new_width - base_x).clamp(0, SIDE) as usize;
-            let copy_h = (new_height - base_y).clamp(0, SIDE) as usize;
-            for line in 0..copy_h {
-                let src =
-                    ((base_y + line as i64) as usize * new_width as usize + base_x as usize) * 4;
-                let dst = line * raster::TILE_SIDE * 4;
-                pixels[dst..dst + copy_w * 4].copy_from_slice(&rotated[src..src + copy_w * 4]);
-            }
-            let id = next_tile_id(document);
-            document.tiles.insert(id, raster::Tile::from_rgba8(pixels));
-            minted.push(id);
-            tiles.push(TileRef::Tile(id));
-        }
-    }
-    (
+    let (tiles, minted) = crate::bitmap::retile_rgba(document, &rotated, new_width, new_height);
+    Ok((
         doc::ImageObject {
             location: map * image.location,
             offset: map * image.offset,
@@ -356,7 +302,7 @@ fn rotate_image(
             effects: image.effects.clone(),
         },
         minted,
-    )
+    ))
 }
 
 impl TypedCommand for DocumentRotate {
@@ -460,7 +406,7 @@ impl TypedCommand for DocumentRotate {
         let mut minted = Vec::new();
         for (id, before) in &befores {
             if let doc::ObjectData::Image(image) = before {
-                let (rotated, added) = rotate_image(document, image, payload.rotation, map);
+                let (rotated, added) = rotate_image(document, image, payload.rotation, map)?;
                 bakes.push((*id, rotated));
                 minted.extend(added);
             }
@@ -567,6 +513,7 @@ mod document_tests {
     #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
     use super::*;
+    use crate::catalog::flatten::next_tile_id;
     use crate::catalog::testdoc;
     use crate::command::Command;
 

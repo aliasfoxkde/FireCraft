@@ -127,4 +127,12 @@ format research, vendored node dictionary).
   typed (`SliceObject::symbol_number`); five `symbol.setButton*`
   commands; no corpus fixture carries the nodes — synthetic
   byte-equal + wire-order round-trip gate. Parity **208C/45P/15M**,
-  registry 183.
+  registry 183. CI 7/7 on 3d74723.
+  #107 place-image trio (decision 0037): `bitmap.addImage` /
+  `addImageViaCopy` / `addImageViaCut` over the rotate machinery's
+  loops, now factored as shared `engine::bitmap::{assemble_rgba,
+  retile_rgba}` helpers (rotate_image deduplicated onto them); fresh
+  zero tiles (not mattes) so placed bitmaps are paintable; coverage
+  scaling in the premultiplied domain; cut rebuilds the source over
+  fresh tile ids. `AddNewImage` rides both case spellings — four
+  parity rows flipped. Parity **212C/45P/12M**, registry 186.

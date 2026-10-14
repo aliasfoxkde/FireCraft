@@ -12,14 +12,14 @@
 ## 1. State snapshot (2026-10-14)
 
 - **Ship state:** v0.1.0 released, repo public. Roadmap M0–M15 all
-  closed. 153+ commits, CI green on `25fedbc` (7/7 jobs).
-- **Engine registry:** 183 commands, pinned equal to the fuzz call
+  closed. 153+ commits, CI green on `3d74723` (7/7 jobs).
+- **Engine registry:** 186 commands, pinned equal to the fuzz call
   table by `the_call_table_covers_the_catalog`.
-- **CS6 DOM verb-surface parity:** **208 C / 45 P / 15 M / 88 N**
+- **CS6 DOM verb-surface parity:** **212 C / 45 P / 12 M / 88 N**
   (`docs/planning/generated/dom-parity.md`, regenerate per §5 below).
-  (The CS6 verb list carries both case spellings of mergeDown — the
-  three-command flatten family flipped four rows.)
-- **Active campaign:** close the 15 remaining M (missing) verbs in
+  (The CS6 verb list carries both case spellings of mergeDown and
+  AddNewImage — those families flipped four rows each.)
+- **Active campaign:** close the 12 remaining M (missing) verbs in
   family batches — one decision doc + one command batch per family,
   exactly as #87–#93 did. The plan is §4 below.
 - **Clean-room invariants (never violate):** `source/` is Adobe's
@@ -223,10 +223,17 @@ mutations and refuses without a linked slice.
   transform-only — instance opacity/animation params are debt),
   `setGradientName` → **N** (gradient library is preferences state;
   no document-level node — same rule as setRectRoundnessMode).
-- **8.1 Place-image trio**: `addNewImage` / `…ViaCopy` / `…ViaCut` —
-  `io::raster::attach_image` is the import path; the command wraps it
-  with placement + registry insert. ViaCopy/ViaCut differ in clipboard
-  interaction — coordinate with 6.6.
+- **8.1 — DONE (decision 0037).** The place-image trio landed
+  2026-10-14 over the rotate machinery's assemble→re-tile helpers
+  (now factored as `engine::bitmap::{assemble_rgba, retile_rgba}`;
+  the originally-planned `io::raster::attach_image` is io-internal
+  and import-shaped). `bitmap.addImage` places an empty image with
+  bounds constrained to the canvas — fresh zero bank tiles, not
+  mattes, so the bitmap is paintable; `…ViaCopy` turns the pixel
+  selection into a new image directly above the source (coverage
+  scaling in the premultiplied domain); `…ViaCut` also clears the
+  source over fresh tile ids. No clipboard interaction (the CS6 text
+  names none); no paint-mode posture (deviation 1).
 - **8.3 — DONE (decision 0032).** `path.splitPaths` (compound paths
   become one path per contour; identity keeps the first),
   `path.knifeElementsFromPoint` (click cut within tolerance opens/cuts
@@ -263,10 +270,9 @@ mutations and refuses without a linked slice.
 6.2 → 8.2 → 8.5 → Phase 3 → 8.3 → 8.4 → 5.3 → 4 (evidence) → 7
 (evidence) → 8.1 → 8.6/6.6 → 6.4 → 5.4. Progress through 2026-10-14:
 5.1–5.2, Phases 1–2, 6.1, 6.2, 8.2, 8.5, Phase 3, 8.3, 8.4, 5.3, 4,
-7 done — **next is 8.1** (place-image trio: `addNewImage` /
-`…ViaCopy` / `…ViaCut` over `io::raster::attach_image`; ViaCopy/ViaCut
-differ in clipboard interaction — coordinate with 8.6/6.6, which may
-pull the clipboard surface forward).
+7, 8.1 done — **next is 8.6/6.6** (the clipboard surface, feeding
+`clipPasteAsMask` / `clipPasteInside` / `clipPasteFromChannelToChannel`),
+then 6.4 (resample) and 5.4 (setDocumentImageSize, which rides 6.4).
 Re-derive from `dom-parity.md`'s M table if the matrix has moved; the
 plan follows the matrix, not the reverse.
 

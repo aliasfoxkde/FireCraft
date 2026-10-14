@@ -10,7 +10,7 @@
 //! grids are editable in M7 — the 256 variant is the grayscale mkBT
 //! layout and stays an M8 import concern.
 
-use doc::{ImageObject, TileBank, TileRef};
+use doc::{Document, ImageObject, TileBank, TileRef};
 
 use crate::error::EngineError;
 
@@ -205,6 +205,90 @@ pub(crate) fn touched_tiles(image: &ImageObject, mask: &doc::SelectionMask) -> V
         }
     }
     touched
+}
+
+/// Assembles an image's `TILv` grid into one premultiplied RGBA
+/// buffer, row-major in image space. Unlike [`gather`] this is the
+/// *tile-domain* view (no straight-alpha round-trip) and matte slots
+/// bake to the renderer's premultiplied fill — the decision-0034 law
+/// shared by `document.rotate` and the place-image family. A missing
+/// referenced tile is a refusal, not silent transparency.
+pub(crate) fn assemble_rgba(
+    document: &Document,
+    image: &ImageObject,
+    name: &'static str,
+) -> Result<Vec<u8>, EngineError> {
+    let (width, height) = check_editable(image, name)?;
+    let side = raster::TILE_SIDE as u64;
+    let cols = width.div_ceil(side);
+    let mut flat = vec![0u8; (width * height * 4) as usize];
+    for (slot, tile_ref) in image.tiles.iter().enumerate() {
+        let (base_x, base_y) = ((slot as u64 % cols) * side, (slot as u64 / cols) * side);
+        let copy_w = (width - base_x).min(side) as usize;
+        let copy_h = (height - base_y).min(side) as usize;
+        let solid = match tile_ref {
+            TileRef::Tile(tile_id) => {
+                let Some(tile) = document.tiles.get(*tile_id) else {
+                    return Err(EngineError::InvalidState {
+                        name: name.to_owned(),
+                        detail: format!("tile {tile_id} is referenced but not loaded"),
+                    });
+                };
+                for line in 0..copy_h {
+                    let source = line * raster::TILE_SIDE * 4;
+                    let target = ((base_y + line as u64) * width + base_x) as usize * 4;
+                    flat[target..target + copy_w * 4]
+                        .copy_from_slice(&tile.pixels()[source..source + copy_w * 4]);
+                }
+                continue;
+            }
+            TileRef::Matte(raw) => Some(compose::matte_premultiplied(*raw)),
+        };
+        let Some(pixel) = solid else { continue };
+        for line in 0..copy_h {
+            let target = ((base_y + line as u64) * width + base_x) as usize * 4;
+            for column in 0..copy_w {
+                flat[target + column * 4..target + column * 4 + 4].copy_from_slice(&pixel);
+            }
+        }
+    }
+    Ok(flat)
+}
+
+/// Tiles a premultiplied RGBA buffer (row-major, `width` × `height`)
+/// over fresh `mkBT` bank slots — the flatten minting law (`flatten::
+/// next_tile_id`). Returns the `TILv` list and the minted ids in slot
+/// order; the caller captures them in a [`crate::delta::Delta::Bank`].
+pub(crate) fn retile_rgba(
+    document: &mut Document,
+    pixels: &[u8],
+    width: i64,
+    height: i64,
+) -> (Vec<TileRef>, Vec<u32>) {
+    let side = raster::TILE_SIDE as i64;
+    let cols = (width / side + i64::from(width % side != 0)).max(1);
+    let rows = (height / side + i64::from(height % side != 0)).max(1);
+    let mut minted = Vec::new();
+    let mut tiles = Vec::with_capacity((cols * rows) as usize);
+    for row in 0..rows {
+        for col in 0..cols {
+            let mut buffer = [0u8; raster::TILE_BYTES];
+            let (base_x, base_y) = (col * side, row * side);
+            let copy_w = (width - base_x).clamp(0, side) as usize;
+            let copy_h = (height - base_y).clamp(0, side) as usize;
+            for line in 0..copy_h {
+                let source = ((base_y + line as i64) * width + base_x) as usize * 4;
+                let target = line * raster::TILE_SIDE * 4;
+                buffer[target..target + copy_w * 4]
+                    .copy_from_slice(&pixels[source..source + copy_w * 4]);
+            }
+            let id = crate::catalog::flatten::next_tile_id(document);
+            document.tiles.insert(id, raster::Tile::from_rgba8(buffer));
+            minted.push(id);
+            tiles.push(TileRef::Tile(id));
+        }
+    }
+    (tiles, minted)
 }
 
 fn unpremultiply_all(pixels: &mut [u8]) {
