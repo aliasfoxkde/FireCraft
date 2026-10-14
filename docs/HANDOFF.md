@@ -13,13 +13,13 @@
 
 - **Ship state:** v0.1.0 released, repo public. Roadmap M0–M15 all
   closed. 153+ commits, CI green on `25fedbc` (7/7 jobs).
-- **Engine registry:** 178 commands, pinned equal to the fuzz call
+- **Engine registry:** 183 commands, pinned equal to the fuzz call
   table by `the_call_table_covers_the_catalog`.
-- **CS6 DOM verb-surface parity:** **203 C / 45 P / 20 M / 88 N**
+- **CS6 DOM verb-surface parity:** **208 C / 45 P / 15 M / 88 N**
   (`docs/planning/generated/dom-parity.md`, regenerate per §5 below).
   (The CS6 verb list carries both case spellings of mergeDown — the
   three-command flatten family flipped four rows.)
-- **Active campaign:** close the 25 remaining M (missing) verbs in
+- **Active campaign:** close the 15 remaining M (missing) verbs in
   family batches — one decision doc + one command batch per family,
   exactly as #87–#93 did. The plan is §4 below.
 - **Clean-room invariants (never violate):** `source/` is Adobe's
@@ -36,7 +36,7 @@
 | `AGENTS.md` | Operating manual: commands, gates, commit rules, day-to-day method |
 | `docs/PLANNING.md` | Master plan: format spec (§6), architecture (§7), method |
 | `docs/planning/firecraft/` | `ROADMAP.md` + tickets M0–M15 (all closed; reference for how tickets are written) |
-| `docs/decisions/` | Decision records 0001–0035 — **write one per family/batch** |
+| `docs/decisions/` | Decision records 0001–0036 — **write one per family/batch** |
 | `docs/planning/generated/` | `parity.md`, `scorecard.md` (xtask-owned) + `dom-parity.md` (generator-owned, see §5) |
 | `docs/research/fireworks-png-nodes.md` | The node dictionary — the format Rosetta stone (observational; corpus wins on conflict) |
 | `log/devlog.md` | Detailed session log (gitignored) — **append an entry to close every task** |
@@ -190,13 +190,21 @@ invented.
   for the same parameters. Cross-kind redraw is allowed (CS6 could
   not); recorded as a deviation.
 
-### Phase 7 — Button symbols (5 verbs) — wire-evidence-gated
-- **7.1** Evidence pass: where do button states live on the wire?
-  (dictionary `MSTv`/symbol nodes + corpus + `.jsf` button samples.)
-- **7.2** Model + commands: `setButtonOptions`,
-  `setButtonIncludeDownState`, `setButtonIncludeOverWhileDownState`,
-  `setButtonShowDownOnLoad`, `setButtonAutoSlice`. Same shape as the
-  9-slice work (decision 0014 territory).
+### Phase 7 — Button symbols (5 verbs) — DONE (decision 0036)
+Landed 2026-10-14. The four behaviors are the four previously-unknown
+`MSTv` child booleans (`ATSb`=auto-slice, `IDSb`=include-Down,
+`DVLb`=show-Down-on-load, `IODb`=include-Over-While-Down — three
+fourccs spell their behavior; the fourth pinned by elimination), typed
+as presence-tracked `Option<bool>` on `SymbolDefinition` (no corpus
+fixture carries them — the synthetic byte-equal round-trip +
+wire-order check is the gate). `setButtonOptions` mutates the button's
+auto-slice, found through the newly-typed slice→definition `MSNi`
+link (`SliceObject::symbol_number`): link/alt/slice name/export
+override; `targetTagString`/`statusMessage` have no wire home
+(deviation 1). No `.jsf` usage exists for any of the five. Commands
+`symbol.setButton*` follow the `SetSymbolType` shape
+(`Delta::Library`); options produces a `Delta::Group` of slice
+mutations and refuses without a linked slice.
 
 ### Phase 8 — Misc singles (independent; any order)
 - **8.2 — DONE (decision 0029).** `slice.appendPoint` /
@@ -254,11 +262,11 @@ invented.
 5.1 → 5.2 (quick wins, warm up the loop) → Phase 1 → Phase 2 → 6.1 →
 6.2 → 8.2 → 8.5 → Phase 3 → 8.3 → 8.4 → 5.3 → 4 (evidence) → 7
 (evidence) → 8.1 → 8.6/6.6 → 6.4 → 5.4. Progress through 2026-10-14:
-5.1–5.2, Phases 1–2, 6.1, 6.2, 8.2, 8.5, Phase 3, 8.3, 8.4, 5.3, 4
-done — **next is Phase 7** (button symbols: first the wire-evidence
-pass for button-state nodes — dictionary `MSTv`/`MSYi` + corpus +
-`.jsf` button samples — then the five setters, or the evidence-based
-resolution if the wire has no home).
+5.1–5.2, Phases 1–2, 6.1, 6.2, 8.2, 8.5, Phase 3, 8.3, 8.4, 5.3, 4,
+7 done — **next is 8.1** (place-image trio: `addNewImage` /
+`…ViaCopy` / `…ViaCut` over `io::raster::attach_image`; ViaCopy/ViaCut
+differ in clipboard interaction — coordinate with 8.6/6.6, which may
+pull the clipboard surface forward).
 Re-derive from `dom-parity.md`'s M table if the matrix has moved; the
 plan follows the matrix, not the reverse.
 

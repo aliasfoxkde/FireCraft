@@ -8,9 +8,9 @@
 
 - **Released:** v0.1.0 (2026-10-13), repo public.
 - **Roadmap:** M0–M15 **all closed**.
-- **Registry:** 178 commands. **CI:** green 7/7 on `25fedbc`; later
+- **Registry:** 183 commands. **CI:** green 7/7 on `a363f0f`; later
   campaign pushes verified per batch (runbook: HANDOFF §6).
-- **CS6 DOM parity:** **203 C / 45 P / 20 M / 88 N** — the 20 M verbs
+- **CS6 DOM parity:** **208 C / 45 P / 15 M / 88 N** — the 15 M verbs
   are the active campaign; the phased plan is [`HANDOFF.md`](HANDOFF.md) §4.
 
 ## Milestones
@@ -59,11 +59,11 @@
 | #102 | knife + splitPaths (8.3, decision 0032) | 3baf178 | 201 C / 45 P / 26 M |
 | #103 | text.convertToPaths (8.4, decision 0033) | 56c6f2f | **202 C / 45 P / 25 M** |
 | #104 | document.rotate — page rotation re-bake (5.3, decision 0034) | 48ec811 | 203 C / 45 P / 24 M |
-| #105 | view flags → session state, rows → N (Phase 4, decision 0035) | this batch | **203 C / 45 P / 20 M / 88 N** |
+| #105 | view flags → session state, rows → N (Phase 4, decision 0035) | a363f0f | 203 C / 45 P / 20 M / 88 N |
+| #106 | button symbols: 4 behavior booleans + slice options (Phase 7, decision 0036) | this batch | **208 C / 45 P / 15 M / 88 N** |
 
-Remaining families (HANDOFF §4 order): button symbols (5,
-evidence-gated) → 8.1 place-image trio → 8.6 clipboard masks/6.6 →
-6.4 resample → 5.4 setDocumentImageSize.
+Remaining families (HANDOFF §4 order): 8.1 place-image trio →
+8.6 clipboard masks/6.6 → 6.4 resample → 5.4 setDocumentImageSize.
 
 ## Recorded debts (open)
 
@@ -89,5 +89,6 @@ evidence-gated) → 8.1 place-image trio → 8.6 clipboard masks/6.6 →
 | 2026-10-14 | **202** | 45 | **25** | #103 convertToPaths |
 | 2026-10-14 | **203** | 45 | **24** | #104 rotateDocument |
 | 2026-10-14 | 203 | 45 | **20** | #105 view flags → N (session state) |
+| 2026-10-14 | **208** | 45 | **15** | #106 button symbols (decision 0036) |
 
 (Pre-#91 counts are approximate; the matrix file is the authority.)

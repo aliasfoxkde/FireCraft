@@ -90,6 +90,7 @@ fn fixture() -> Document {
         alt: None,
         label: None,
         td_text: None,
+        symbol_number: None,
         contours: Vec::new(),
         background: None,
         behaviors: Vec::new(),

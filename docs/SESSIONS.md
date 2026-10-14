@@ -119,4 +119,12 @@ format research, vendored node dictionary).
   undo. Parity **203C/45P/24M**, registry 178. #105 view flags
   (decision 0035): no wire node exists (dictionary + .jsf evidence);
   setShowGrid family hosted as scripting-session state
-  (changeCurrentPage pattern), rows flipped to N — **20M/88N** left.
+  (changeCurrentPage pattern), rows flipped to N, a363f0f CI 7/7.
+  #106 button symbols (decision 0036): the four `MSTv` booleans
+  ATSb/IDSb/DVLb/IODb typed (auto-slice, include-Down,
+  show-Down-on-load, include-Over-While-Down — the first three fourccs
+  spell their behavior, the fourth by elimination); slice `MSNi` link
+  typed (`SliceObject::symbol_number`); five `symbol.setButton*`
+  commands; no corpus fixture carries the nodes — synthetic
+  byte-equal + wire-order round-trip gate. Parity **208C/45P/15M**,
+  registry 183.

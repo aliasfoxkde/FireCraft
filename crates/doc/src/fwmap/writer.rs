@@ -418,9 +418,10 @@ impl Writer<'_> {
         symbol: &SymbolDefinition,
         path: &str,
     ) -> Result<Node, MapError> {
-        // Dictionary order: UNMs MSNi MOXf MOYf … LYLv … FRCi … BGCi …
-        // MSYi? NGSv? — graphic symbols omit `MSYi` rather than
-        // storing a zero.
+        // Dictionary order: UNMs MSNi MOXf MOYf … LYLv … FRCi … BGCi
+        // ATSb? IDSb? DVLb? IODb? MSYi? NGSv? — graphic symbols omit
+        // `MSYi` rather than storing a zero; the four button-behavior
+        // booleans are presence-tracked (decision 0036).
         let mut mapped = vec![
             n_s(*b"UNMs", &symbol.name),
             n_i(*b"MSNi", symbol.symbol_number),
@@ -430,6 +431,18 @@ impl Writer<'_> {
         mapped.push(self.write_layer_list(&symbol.layers, path)?);
         mapped.push(n_i(*b"FRCi", symbol.frame_count));
         mapped.push(n_i(*b"BGCi", symbol.background_raw));
+        if let Some(value) = symbol.auto_slice {
+            mapped.push(n_b(*b"ATSb", value));
+        }
+        if let Some(value) = symbol.include_down_state {
+            mapped.push(n_b(*b"IDSb", value));
+        }
+        if let Some(value) = symbol.show_down_on_load {
+            mapped.push(n_b(*b"DVLb", value));
+        }
+        if let Some(value) = symbol.include_over_while_down {
+            mapped.push(n_b(*b"IODb", value));
+        }
         if let Some(raw) = symbol.symbol_type.raw() {
             mapped.push(n_i(*b"MSYi", raw));
         }
@@ -1265,6 +1278,9 @@ impl Writer<'_> {
         }
         if let Some(slice_type) = object.slice_type {
             mapped.push(n_i(*b"TSLi", slice_type));
+        }
+        if let Some(symbol_number) = object.symbol_number {
+            mapped.push(n_i(*b"MSNi", symbol_number));
         }
         if let Some(background) = &object.background {
             if let Some(is_background) = background.is_background {

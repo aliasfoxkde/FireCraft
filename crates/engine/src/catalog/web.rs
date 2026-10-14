@@ -118,6 +118,7 @@ fn create_slice(
         alt: spec.alt.clone(),
         label: None,
         td_text: None,
+        symbol_number: None,
         contours: polygon_contour(&spec.points),
         background: None,
         behaviors: Vec::new(),
@@ -865,6 +866,7 @@ fn append_point(
         alt: None,
         label: None,
         td_text: None,
+        symbol_number: None,
         contours: vec![Contour {
             closed: false,
             point_count: 1,

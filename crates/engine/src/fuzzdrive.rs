@@ -106,6 +106,10 @@ pub fn random_document(rng: &mut FuzzRng) -> Document {
         background_raw: 0,
         symbol_type: SymbolType::Graphic,
         nine_slice: None,
+        auto_slice: Some(true),
+        include_down_state: Some(false),
+        show_down_on_load: Some(false),
+        include_over_while_down: Some(false),
         op_code: None,
     });
 
@@ -424,6 +428,7 @@ fn random_slice(rng: &mut FuzzRng) -> ObjectData {
         alt: None,
         label: None,
         td_text: None,
+        symbol_number: None,
         contours: Vec::new(),
         background: None,
         behaviors: Vec::new(),
@@ -633,6 +638,11 @@ pub const CALLS: &[&str] = &[
     "symbol.breakApart",
     "symbol.setType",
     "symbol.set9Slice",
+    "symbol.setButtonAutoSlice",
+    "symbol.setButtonIncludeDownState",
+    "symbol.setButtonShowDownOnLoad",
+    "symbol.setButtonIncludeOverWhileDownState",
+    "symbol.setButtonOptions",
     "symbol.setScript",
     "symbol.setParam",
     "symbol.setCustomData",
@@ -1951,6 +1961,36 @@ pub fn random_call(rng: &mut FuzzRng, document: &Document) -> (String, serde_jso
                 })
             }
         }
+        "symbol.setButtonAutoSlice"
+        | "symbol.setButtonIncludeDownState"
+        | "symbol.setButtonShowDownOnLoad"
+        | "symbol.setButtonIncludeOverWhileDownState" => {
+            serde_json::json!({ "symbol": rng.below(3), "value": rng.chance(50) })
+        }
+        "symbol.setButtonOptions" => {
+            let symbol = rng.below(3);
+            let link = if rng.chance(50) {
+                serde_json::json!(format!("https://fuzz.example/b{}.html", rng.below(10)))
+            } else {
+                serde_json::Value::Null
+            };
+            let alt = if rng.chance(50) {
+                serde_json::json!(format!("fuzz alt {}", rng.below(10)))
+            } else {
+                serde_json::Value::Null
+            };
+            let slice_name = if rng.chance(50) {
+                serde_json::json!(format!("fuzz slice {}", rng.below(10)))
+            } else {
+                serde_json::Value::Null
+            };
+            serde_json::json!({
+                "symbol": symbol,
+                "link": link,
+                "alt": alt,
+                "slice_name": slice_name,
+            })
+        }
         "symbol.setScript" => {
             let symbol = rng.below(3);
             if rng.chance(25) {
@@ -2143,6 +2183,10 @@ pub fn random_call(rng: &mut FuzzRng, document: &Document) -> (String, serde_jso
                 background_raw: 0,
                 symbol_type: SymbolType::Graphic,
                 nine_slice: None,
+                auto_slice: Some(true),
+                include_down_state: Some(false),
+                show_down_on_load: Some(false),
+                include_over_while_down: Some(false),
                 op_code: None,
             });
             let payload = crate::catalog::symbol::LibraryImportPayload {

@@ -48,6 +48,26 @@ pub fn path_object(seed: u64) -> ObjectData {
     })
 }
 
+/// A graphic definition numbered `number`, carrying the CS6
+/// button-behavior defaults (decision 0036) and no content.
+pub fn definition(number: i64) -> doc::SymbolDefinition {
+    doc::SymbolDefinition {
+        name: format!("definition {number}"),
+        symbol_number: number,
+        origin: geom::Point::ZERO,
+        frame_count: 1,
+        layers: doc::LayerList::default(),
+        background_raw: 0,
+        symbol_type: doc::SymbolType::Graphic,
+        nine_slice: None,
+        auto_slice: Some(true),
+        include_down_state: Some(false),
+        show_down_on_load: Some(false),
+        include_over_while_down: Some(false),
+        op_code: None,
+    }
+}
+
 /// Two pages, two layers per page (two cells each — two states), two
 /// path objects per cell: page/layer/cell indices are all live.
 pub fn sample_document() -> (Document, Vec<doc::ObjectId>) {

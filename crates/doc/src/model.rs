@@ -532,6 +532,19 @@ pub struct SymbolDefinition {
     pub symbol_type: SymbolType,
     /// `NGSv`? — nine-slice guides.
     pub nine_slice: Option<NineSliceGuides>,
+    /// `ATSb`? — auto-slice the button (`setButtonAutoSlice`).
+    /// Presence-tracked like [`SymbolDefinition::nine_slice`]: `None`
+    /// records that the file carried no node; the booleans mean the
+    /// same thing on graphic definitions, which carry the defaults.
+    pub auto_slice: Option<bool>,
+    /// `IDSb`? — include the Down state (`setButtonIncludeDownState`).
+    pub include_down_state: Option<bool>,
+    /// `DVLb`? — show the Down state on load
+    /// (`setButtonShowDownOnLoad`).
+    pub show_down_on_load: Option<bool>,
+    /// `IODb`? — include the Over-While-Down state
+    /// (`setButtonIncludeOverWhileDownState`).
+    pub include_over_while_down: Option<bool>,
     /// Rich-symbol script source (`JSVv` under `MSTv`, split into
     /// `JSSs` pieces on the wire). The instance re-derivation runs it
     /// through the scripting host with `Widget.opCode` 1 (defaults)
@@ -1219,6 +1232,10 @@ pub struct SliceObject {
     /// `PBPv` — polygon outline (same layout as path contours).
     /// Empty for rectangle/ellipse slices, which carry only `frame`.
     pub contours: Vec<Contour>,
+    /// `MSNi`? — the symbol definition this slice belongs to (a
+    /// button's auto-slice points back at its definition; decision
+    /// 0036). `None` when the file carried no node.
+    pub symbol_number: Option<i64>,
     /// `CBTb` + the cell-background family — the background-slice
     /// export knobs. `None` (and no nodes on the wire) for foreground
     /// slices.

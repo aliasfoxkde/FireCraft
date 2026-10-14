@@ -284,6 +284,7 @@ fn sample_document() -> Document {
         alt: Some("a slice".into()),
         label: Some("hero".into()),
         td_text: Some("cell text".into()),
+        symbol_number: Some(5),
         contours: vec![Contour {
             closed: true,
             point_count: 3,
@@ -442,6 +443,10 @@ fn sample_document() -> Document {
         },
         background_raw: 0xFF_FF_FF,
         symbol_type: SymbolType::Button,
+        auto_slice: Some(true),
+        include_down_state: Some(true),
+        show_down_on_load: Some(false),
+        include_over_while_down: Some(true),
         nine_slice: Some(NineSliceGuides {
             locked: true,
             color_raw: 0x00_80_FF,
@@ -668,6 +673,58 @@ fn graphic_symbol_omits_type_and_guides() {
             .all(|k| &k.fourcc != b"MSYi" && &k.fourcc != b"NGSv"),
         "graphic definitions omit MSYi/NGSv rather than storing zeros"
     );
+}
+
+#[test]
+fn button_booleans_and_slice_link_round_trip() {
+    // The sample definition carries the button-behavior booleans
+    // (ATSb true, IDSb true, DVLb false, IODb true — decision 0036)
+    // and its slice carries the MSNi link. No corpus oracle carries
+    // either yet: the synthetic byte-equal round-trip is the gate.
+    let doc = sample_document();
+    let (bytes, doc2, bag2) = round_trip_bytes(&doc, &UnknownBag::new());
+    assert!(
+        bag2.is_empty(),
+        "mapped booleans must not spawn bag entries"
+    );
+    assert_eq!(doc, doc2);
+
+    let parsed = parse(&bytes).expect("reparse");
+    let mut mstvs = Vec::new();
+    find_nodes(&parsed, b"MSTv", &mut mstvs);
+    let kids = kids_of(mstvs[0]);
+    let slot = |fourcc: &[u8; 4]| {
+        kids.iter()
+            .position(|k| &k.fourcc == fourcc)
+            .unwrap_or_else(|| panic!("{} on the wire", String::from_utf8_lossy(fourcc)))
+    };
+    let (bgci, atsb, idsb, dvlb, iodb, msyi) = (
+        slot(b"BGCi"),
+        slot(b"ATSb"),
+        slot(b"IDSb"),
+        slot(b"DVLb"),
+        slot(b"IODb"),
+        slot(b"MSYi"),
+    );
+    assert!(
+        bgci < atsb && atsb < idsb && idsb < dvlb && dvlb < iodb && iodb < msyi,
+        "dictionary order BGCi < ATSb < IDSb < DVLb < IODb < MSYi"
+    );
+    assert_eq!(kids[atsb].as_bool(), Some(true), "ATSb");
+    assert_eq!(kids[idsb].as_bool(), Some(true), "IDSb");
+    assert_eq!(kids[dvlb].as_bool(), Some(false), "DVLb");
+    assert_eq!(kids[iodb].as_bool(), Some(true), "IODb");
+
+    // The button's slice points back at the definition (`MSNi` under
+    // `URLv`).
+    let mut urlvs = Vec::new();
+    find_nodes(&parsed, b"URLv", &mut urlvs);
+    assert_eq!(urlvs.len(), 1, "the sample carries one slice");
+    let msni = kids_of(urlvs[0])
+        .iter()
+        .find(|k| &k.fourcc == b"MSNi")
+        .expect("slice MSNi");
+    assert_eq!(msni.as_int(), Some(5), "slice → definition 5");
 }
 
 #[test]
@@ -1279,6 +1336,10 @@ fn model_structs_are_fully_constructed() {
         background_raw: 0,
         symbol_type: SymbolType::Graphic,
         nine_slice: None,
+        auto_slice: None,
+        include_down_state: None,
+        show_down_on_load: None,
+        include_over_while_down: None,
         op_code: None,
     };
     let _path = PathObject {
@@ -1384,6 +1445,7 @@ fn model_structs_are_fully_constructed() {
         alt: None,
         label: None,
         td_text: None,
+        symbol_number: None,
         contours: Vec::new(),
         background: None,
         behaviors: Vec::new(),

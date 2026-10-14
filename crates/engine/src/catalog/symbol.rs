@@ -16,8 +16,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use doc::{
-    Cell, Document, Layer, LayerList, NineSliceGuides, ObjectData, ObjectId, SymbolDefinition,
-    SymbolInstanceObject, SymbolType,
+    Cell, Document, ExportOptions, Layer, LayerList, NineSliceGuides, ObjectData, ObjectId,
+    SymbolDefinition, SymbolInstanceObject, SymbolType,
 };
 
 use crate::access;
@@ -39,6 +39,19 @@ pub(crate) fn install(registry: &mut CommandRegistry) -> Result<(), EngineError>
     registry.register(BreakApart)?;
     registry.register(SetSymbolType)?;
     registry.register(SetSymbol9Slice)?;
+    registry.register(SetButtonFlag {
+        slot: ButtonSlot::AutoSlice,
+    })?;
+    registry.register(SetButtonFlag {
+        slot: ButtonSlot::IncludeDownState,
+    })?;
+    registry.register(SetButtonFlag {
+        slot: ButtonSlot::ShowDownOnLoad,
+    })?;
+    registry.register(SetButtonFlag {
+        slot: ButtonSlot::IncludeOverWhileDown,
+    })?;
+    registry.register(SetButtonOptions)?;
     registry.register(SetScript)?;
     registry.register(SetParam)?;
     registry.register(SetCustomData)?;
@@ -372,6 +385,13 @@ impl TypedCommand for CreateSymbol {
             background_raw: 0,
             symbol_type: SymbolType::from(payload.symbol_type),
             nine_slice: None,
+            // CS6 writes the button-behavior defaults on every
+            // definition (decision 0036): auto-slice on, the three
+            // state boxes off.
+            auto_slice: Some(true),
+            include_down_state: Some(false),
+            show_down_on_load: Some(false),
+            include_over_while_down: Some(false),
             op_code: None,
         });
 
@@ -794,6 +814,152 @@ impl TypedCommand for SetSymbol9Slice {
     }
 }
 
+/// The button-behavior booleans (`ATSb`/`IDSb`/`DVLb`/`IODb` on `MSTv`,
+/// decision 0036). One command per CS6 verb — `setButtonOptions` is the
+/// only compound one, and it mutates slices, not the definition.
+struct SetButtonFlag {
+    slot: ButtonSlot,
+}
+
+#[derive(Clone, Copy, Debug)]
+enum ButtonSlot {
+    AutoSlice,
+    IncludeDownState,
+    ShowDownOnLoad,
+    IncludeOverWhileDown,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct SetButtonFlagPayload {
+    /// The definition, by `MSNi` number.
+    symbol: i64,
+    /// The new value.
+    value: bool,
+}
+
+impl TypedCommand for SetButtonFlag {
+    type Payload = SetButtonFlagPayload;
+
+    fn name(&self) -> &'static str {
+        match self.slot {
+            ButtonSlot::AutoSlice => "symbol.setButtonAutoSlice",
+            ButtonSlot::IncludeDownState => "symbol.setButtonIncludeDownState",
+            ButtonSlot::ShowDownOnLoad => "symbol.setButtonShowDownOnLoad",
+            ButtonSlot::IncludeOverWhileDown => "symbol.setButtonIncludeOverWhileDownState",
+        }
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        let position = definition_position(document, self.name(), payload.symbol)?;
+        let before = document.symbols.clone();
+        let definition = &mut document.symbols[position];
+        let slot = match self.slot {
+            ButtonSlot::AutoSlice => &mut definition.auto_slice,
+            ButtonSlot::IncludeDownState => &mut definition.include_down_state,
+            ButtonSlot::ShowDownOnLoad => &mut definition.show_down_on_load,
+            ButtonSlot::IncludeOverWhileDown => &mut definition.include_over_while_down,
+        };
+        *slot = Some(payload.value);
+        Ok(Delta::Library { before })
+    }
+}
+
+/// `symbol.setButtonOptions` — the button's export options (CS6
+/// `dom.setButtonOptions`): the URL, alt tag, slice name and export
+/// override live on the button's auto-slice, found through the
+/// slice→definition `MSNi` link (decision 0036). Every present payload
+/// field is applied to every linked slice; absent fields stay
+/// untouched. `targetTagString`/`statusMessage` have no wire home
+/// (decision 0036, deviation 1) and are not carried.
+struct SetButtonOptions;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Default)]
+#[serde(deny_unknown_fields)]
+struct SetButtonOptionsPayload {
+    /// The definition, by `MSNi` number.
+    symbol: i64,
+    /// The anchor link URL (`A2Ts`).
+    link: Option<String>,
+    /// The alt tag (`ALTs`).
+    alt: Option<String>,
+    /// The slice name (`OBNs`); `None` leaves the name (CS6's null
+    /// means auto-named).
+    slice_name: Option<String>,
+    /// The per-slice export override (`EXPv`).
+    export: Option<ExportOptions>,
+}
+
+impl TypedCommand for SetButtonOptions {
+    type Payload = SetButtonOptionsPayload;
+
+    fn name(&self) -> &'static str {
+        "symbol.setButtonOptions"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "symbol.setButtonOptions";
+        definition_position(document, NAME, payload.symbol)?;
+        // Capture every linked slice's before-state in one pass, then
+        // mutate — the delta holds prior state, so the capture may not
+        // interleave with the writes.
+        let touched: Vec<(ObjectId, ObjectData)> = document
+            .registry
+            .iter()
+            .filter_map(|(id, data)| match data {
+                ObjectData::Slice(slice) if slice.symbol_number == Some(payload.symbol) => {
+                    Some((id, data.clone()))
+                }
+                _ => None,
+            })
+            .collect();
+        if touched.is_empty() {
+            return Err(EngineError::MissingTarget {
+                name: NAME.to_owned(),
+                detail: format!(
+                    "no slice linked to symbol {} (CS6 auto-slices its buttons; \
+                     create one with web.addSlice and set its MSNi)",
+                    payload.symbol
+                ),
+            });
+        }
+        for (id, _) in &touched {
+            if let Some(ObjectData::Slice(slice)) = document.registry.get_mut(*id) {
+                if let Some(link) = &payload.link {
+                    slice.link = Some(link.clone());
+                }
+                if let Some(alt) = &payload.alt {
+                    slice.alt = Some(alt.clone());
+                }
+                if let Some(name) = &payload.slice_name {
+                    slice.name = Some(name.clone());
+                }
+                if let Some(export) = &payload.export {
+                    slice.export = Some(export.clone());
+                }
+            }
+        }
+        let deltas = touched
+            .into_iter()
+            .map(|(id, before)| Delta::Object {
+                id,
+                inverse: ObjectInverse::Mutated {
+                    object: Box::new(before),
+                },
+            })
+            .collect::<Vec<_>>();
+        Ok(Delta::Group(deltas))
+    }
+}
+
 /// `symbol.setScript` — installs or clears a definition's rich-symbol
 /// script (`JSVv` on the wire). The source is data here: running it is
 /// the scripting host's job (`scripting::rederive_symbol`), which
@@ -1213,6 +1379,10 @@ impl TypedCommand for LibraryAdd {
             background_raw: 0,
             symbol_type: SymbolType::from(payload.symbol_type),
             nine_slice: None,
+            auto_slice: Some(true),
+            include_down_state: Some(false),
+            show_down_on_load: Some(false),
+            include_over_while_down: Some(false),
             op_code: None,
         });
         Ok(Delta::Library { before })
@@ -1764,6 +1934,10 @@ mod tests {
             background_raw: 0,
             symbol_type: SymbolType::Graphic,
             nine_slice: None,
+            auto_slice: Some(true),
+            include_down_state: Some(false),
+            show_down_on_load: Some(false),
+            include_over_while_down: Some(false),
             op_code: None,
         });
         let original = serde_json::to_vec(&document).unwrap();
@@ -1810,6 +1984,10 @@ mod tests {
             background_raw: 0,
             symbol_type: SymbolType::Graphic,
             nine_slice: None,
+            auto_slice: Some(true),
+            include_down_state: Some(false),
+            show_down_on_load: Some(false),
+            include_over_while_down: Some(false),
             op_code: None,
         });
         let registry = registry();
@@ -1869,6 +2047,10 @@ mod tests {
             background_raw: 0,
             symbol_type: SymbolType::Graphic,
             nine_slice: None,
+            auto_slice: Some(true),
+            include_down_state: Some(false),
+            show_down_on_load: Some(false),
+            include_over_while_down: Some(false),
             op_code: None,
         });
         let original = serde_json::to_vec(&document).unwrap();
@@ -1949,6 +2131,10 @@ mod tests {
             background_raw: 0,
             symbol_type: SymbolType::Graphic,
             nine_slice: None,
+            auto_slice: Some(true),
+            include_down_state: Some(false),
+            show_down_on_load: Some(false),
+            include_over_while_down: Some(false),
             op_code: None,
         });
         let instance = document
@@ -2019,6 +2205,10 @@ mod tests {
             background_raw: 0,
             symbol_type: SymbolType::Button,
             nine_slice: None,
+            auto_slice: Some(true),
+            include_down_state: Some(false),
+            show_down_on_load: Some(false),
+            include_over_while_down: Some(false),
             op_code: None,
         });
         let instance = document
@@ -2064,6 +2254,10 @@ mod tests {
             background_raw: 0,
             symbol_type: SymbolType::Graphic,
             nine_slice: None,
+            auto_slice: Some(true),
+            include_down_state: Some(false),
+            show_down_on_load: Some(false),
+            include_over_while_down: Some(false),
             op_code: None,
         });
         let original = serde_json::to_vec(&document).unwrap();
@@ -2129,6 +2323,166 @@ mod tests {
     }
 
     #[test]
+    fn button_flags_capture_and_undo() {
+        let (mut document, _) = testdoc::sample_document();
+        document.symbols.push(testdoc::definition(0));
+        let original = serde_json::to_vec(&document).unwrap();
+        let registry = registry();
+
+        // Each setter flips its slot (the fixture carries the CS6
+        // defaults — auto-slice on, the three state boxes off — so the
+        // command writes the opposite value); undo restores the
+        // default exactly.
+        let defaults = [
+            ("symbol.setButtonAutoSlice", false),
+            ("symbol.setButtonIncludeDownState", true),
+            ("symbol.setButtonShowDownOnLoad", true),
+            ("symbol.setButtonIncludeOverWhileDownState", true),
+        ];
+        for (name, value) in defaults {
+            let read = |document: &Document| match name {
+                "symbol.setButtonAutoSlice" => document.symbols[0].auto_slice,
+                "symbol.setButtonIncludeDownState" => document.symbols[0].include_down_state,
+                "symbol.setButtonShowDownOnLoad" => document.symbols[0].show_down_on_load,
+                _ => document.symbols[0].include_over_while_down,
+            };
+            let delta = registry
+                .execute(&mut document, name, json!({ "symbol": 0, "value": value }))
+                .unwrap();
+            assert_eq!(read(&document), Some(value), "{name}");
+            delta.apply_inverse(&mut document).unwrap();
+            assert_eq!(read(&document), Some(!value), "{name} undo");
+        }
+        assert_eq!(serde_json::to_vec(&document).unwrap(), original);
+
+        // Unknown definitions refuse whole-command.
+        let error = registry
+            .execute(
+                &mut document,
+                "symbol.setButtonAutoSlice",
+                json!({ "symbol": 7, "value": true }),
+            )
+            .unwrap_err();
+        assert!(matches!(error, EngineError::MissingTarget { .. }));
+        assert_eq!(serde_json::to_vec(&document).unwrap(), original);
+    }
+
+    #[test]
+    fn set_button_options_updates_linked_slices_and_undoes() {
+        let (mut document, _) = testdoc::sample_document();
+        document.symbols.push(testdoc::definition(3));
+        let owned_a = document
+            .registry
+            .insert(ObjectData::Slice(doc::SliceObject {
+                internal_name: None,
+                frame: geom::Rect::new(0.0, 0.0, 8.0, 8.0),
+                shape: 0,
+                fill_raw: 0,
+                name: None,
+                slice_type: Some(0),
+                link: None,
+                alt: None,
+                label: None,
+                td_text: None,
+                symbol_number: Some(3),
+                contours: Vec::new(),
+                background: None,
+                behaviors: Vec::new(),
+                custom_data: std::collections::BTreeMap::new(),
+                export: None,
+            }));
+        let owned_b = document
+            .registry
+            .insert(ObjectData::Slice(doc::SliceObject {
+                internal_name: None,
+                frame: geom::Rect::new(8.0, 0.0, 16.0, 8.0),
+                shape: 0,
+                fill_raw: 0,
+                name: None,
+                slice_type: Some(0),
+                link: None,
+                alt: None,
+                label: None,
+                td_text: None,
+                symbol_number: Some(3),
+                contours: Vec::new(),
+                background: None,
+                behaviors: Vec::new(),
+                custom_data: std::collections::BTreeMap::new(),
+                export: None,
+            }));
+        let unlinked = document
+            .registry
+            .insert(ObjectData::Slice(doc::SliceObject {
+                internal_name: None,
+                frame: geom::Rect::new(0.0, 8.0, 8.0, 16.0),
+                shape: 0,
+                fill_raw: 0,
+                name: None,
+                slice_type: Some(0),
+                link: None,
+                alt: None,
+                label: None,
+                td_text: None,
+                symbol_number: None,
+                contours: Vec::new(),
+                background: None,
+                behaviors: Vec::new(),
+                custom_data: std::collections::BTreeMap::new(),
+                export: None,
+            }));
+        let original = serde_json::to_vec(&document).unwrap();
+        let registry = registry();
+
+        // Every present field lands on both linked slices; the
+        // unlinked slice and absent fields stay untouched.
+        let delta = registry
+            .execute(
+                &mut document,
+                "symbol.setButtonOptions",
+                json!({
+                    "symbol": 3,
+                    "link": "https://firecraft.example/",
+                    "alt": "fuzz button",
+                    "slice_name": "btn_home",
+                    "export": { "format": 2 },
+                }),
+            )
+            .unwrap();
+        for id in [owned_a, owned_b] {
+            let Some(ObjectData::Slice(slice)) = document.registry.get(id) else {
+                panic!("slice {id:?} vanished");
+            };
+            assert_eq!(slice.link.as_deref(), Some("https://firecraft.example/"));
+            assert_eq!(slice.alt.as_deref(), Some("fuzz button"));
+            assert_eq!(slice.name.as_deref(), Some("btn_home"));
+            assert_eq!(slice.export.as_ref().and_then(|e| e.format), Some(2));
+        }
+        let Some(ObjectData::Slice(slice)) = document.registry.get(unlinked) else {
+            panic!("unlinked slice vanished");
+        };
+        assert!(slice.link.is_none() && slice.alt.is_none());
+        assert!(slice.name.is_none() && slice.export.is_none());
+        delta.apply_inverse(&mut document).unwrap();
+        assert_eq!(serde_json::to_vec(&document).unwrap(), original);
+
+        // A definition with no linked slice refuses (CS6's auto-slice
+        // invariant means a real button always has one). Definition 4
+        // exists to have no slices pointing at it.
+        document.symbols.push(testdoc::definition(4));
+        let extended = serde_json::to_vec(&document).unwrap();
+        let error = registry
+            .execute(
+                &mut document,
+                "symbol.setButtonOptions",
+                json!({ "symbol": 4, "link": "https://firecraft.example/" }),
+            )
+            .unwrap_err();
+        assert!(matches!(error, EngineError::MissingTarget { .. }));
+        assert_eq!(serde_json::to_vec(&document).unwrap(), extended);
+    }
+
+    #[test]
     fn edit_attach_moves_an_object_into_the_definition() {
         let (mut document, ids) = testdoc::sample_document();
         document.symbols.push(SymbolDefinition {
@@ -2151,6 +2505,10 @@ mod tests {
             background_raw: 0,
             symbol_type: SymbolType::Graphic,
             nine_slice: None,
+            auto_slice: Some(true),
+            include_down_state: Some(false),
+            show_down_on_load: Some(false),
+            include_over_while_down: Some(false),
             op_code: None,
         });
         let original = serde_json::to_vec(&document).unwrap();
@@ -2201,6 +2559,10 @@ mod tests {
             background_raw: 0,
             symbol_type: SymbolType::Graphic,
             nine_slice: None,
+            auto_slice: Some(true),
+            include_down_state: Some(false),
+            show_down_on_load: Some(false),
+            include_over_while_down: Some(false),
             op_code: None,
         });
         // ids[1] is inside the definition AND (from the fixture) in the
@@ -2258,6 +2620,10 @@ mod tests {
             background_raw: 0,
             symbol_type: SymbolType::Graphic,
             nine_slice: None,
+            auto_slice: Some(true),
+            include_down_state: Some(false),
+            show_down_on_load: Some(false),
+            include_over_while_down: Some(false),
             op_code: None,
         });
         // Both ids start page-placed too (fixture); lift them out so the
@@ -2471,6 +2837,10 @@ mod tests {
             background_raw: 0,
             symbol_type: SymbolType::Graphic,
             nine_slice: None,
+            auto_slice: Some(true),
+            include_down_state: Some(false),
+            show_down_on_load: Some(false),
+            include_over_while_down: Some(false),
             op_code: None,
         });
         let registry = registry();
@@ -2678,6 +3048,10 @@ mod tests {
             background_raw: 0,
             symbol_type: SymbolType::Graphic,
             nine_slice: None,
+            auto_slice: Some(true),
+            include_down_state: Some(false),
+            show_down_on_load: Some(false),
+            include_over_while_down: Some(false),
             op_code: None,
         });
         doc::library::extract(&source, &["btn"]).unwrap()
@@ -3049,6 +3423,10 @@ mod tests {
             background_raw: 0,
             symbol_type: SymbolType::Graphic,
             nine_slice: None,
+            auto_slice: Some(true),
+            include_down_state: Some(false),
+            show_down_on_load: Some(false),
+            include_over_while_down: Some(false),
             op_code: None,
         });
         registry

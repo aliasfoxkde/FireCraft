@@ -14,17 +14,17 @@ enforced == the fuzz call table).
 
 | class | meaning | count (of 356 dom verbs) |
 |---|---|---|
-| C | carried: a registry command implements the mutation | 203 |
+| C | carried: a registry command implements the mutation | 208 |
 | P | partial: carried with a recorded model limitation | 45 |
-| M | missing: no command and no decision — work items | 20 |
+| M | missing: no command and no decision — work items | 15 |
 | N | not applicable: non-document surface (accessor/UI/session/clipboard/export/OS) | 88 |
 
-Document-mutation coverage: **248 of 268** carried-or-partial
-(203 carried, 45 partial, 20 missing).
+Document-mutation coverage: **253 of 268** carried-or-partial
+(208 carried, 45 partial, 15 missing).
 
 ### Gap families (the Missing table, grouped)
 
-The 20 missing verbs collapse into six families, largest first —
+The 15 missing verbs collapse into six families, largest first —
 each family is one design decision plus a command batch:
 
 1. **Object transforms** (1 verb remains): setDocumentImageSize
@@ -204,6 +204,11 @@ each family is one design decision plus a command batch:
 | `selectSimilar` | C | bitmap.selectSimilar | pixel-mode verb: matches the selection average color (dec 0025) |
 | `selectSimilarFromPoint` | C | bitmap.selectWand | pixel-mode wand from a point; contiguous:false is the global match |
 | `setBlendMode` | C | object.setBlend |  |
+| `setButtonAutoSlice` | C | symbol.setButtonAutoSlice |  |
+| `setButtonIncludeDownState` | C | symbol.setButtonIncludeDownState |  |
+| `setButtonIncludeOverWhileDownState` | C | symbol.setButtonIncludeOverWhileDownState |  |
+| `setButtonOptions` | C | symbol.setButtonOptions | target/status tags have no wire home (decision 0036) |
+| `setButtonShowDownOnLoad` | C | symbol.setButtonShowDownOnLoad |  |
 | `setDocumentCanvasColor` | C | document.setCanvasColor | BGCi document-wide; scripting maps the color string to the raw (dec 0023) |
 | `setDocumentCanvasSize` | C | page.setCanvasSize |  |
 | `setDocumentResolution` | C | document.setResolution | RESf/RSUi document-wide, per-page copies kept in sync (dec 0023) |
@@ -332,11 +337,6 @@ each family is one design decision plus a command batch:
 | `filterSelectonByName` | M | - | pixel-filter bake verb (permanent, not a Live Effect) — filter family; needs the bitmap bake pass (debt) |
 | `restoreSelection` | M | - | named saved selections unmodeled |
 | `saveSelection` | M | - | named saved selections unmodeled |
-| `setButtonAutoSlice` | M | - | button-specific symbol state unmodeled |
-| `setButtonIncludeDownState` | M | - | button symbol gap |
-| `setButtonIncludeOverWhileDownState` | M | - | button symbol gap |
-| `setButtonOptions` | M | - | button symbol gap |
-| `setButtonShowDownOnLoad` | M | - | button symbol gap |
 | `setDocumentImageSize` | M | - | no resample command |
 
 ## Not applicable (N)

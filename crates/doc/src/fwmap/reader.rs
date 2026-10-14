@@ -539,6 +539,8 @@ impl Reader {
         let (mut ox, mut oy) = (None, None);
         let (mut symbol_type, mut nine_slice) = (None, None);
         let (mut op_code, mut layers) = (None, LayerList::default());
+        let (mut auto_slice, mut include_down) = (None, None);
+        let (mut show_down, mut include_over_down) = (None, None);
 
         for (i, child) in children.iter().enumerate() {
             match &child.fourcc {
@@ -548,6 +550,13 @@ impl Reader {
                 b"MOYf" => self.slot_f64(child, path, i, &mut oy)?,
                 b"FRCi" => self.slot_i64(child, path, i, &mut frame_count)?,
                 b"BGCi" => self.slot_i64(child, path, i, &mut background_raw)?,
+                // The button-behavior booleans (decision 0036):
+                // auto-slice, include Down, show Down on load,
+                // include Over-While-Down — presence-tracked.
+                b"ATSb" => self.slot_bool(child, path, i, &mut auto_slice)?,
+                b"IDSb" => self.slot_bool(child, path, i, &mut include_down)?,
+                b"DVLb" => self.slot_bool(child, path, i, &mut show_down)?,
+                b"IODb" => self.slot_bool(child, path, i, &mut include_over_down)?,
                 b"MSYi" => {
                     let mut raw = None;
                     self.slot_i64(child, path, i, &mut raw)?;
@@ -595,6 +604,10 @@ impl Reader {
             background_raw: background_raw.unwrap_or(0xFF_FF_FF),
             symbol_type: symbol_type.unwrap_or(SymbolType::Graphic),
             nine_slice,
+            auto_slice,
+            include_down_state: include_down,
+            show_down_on_load: show_down,
+            include_over_while_down: include_over_down,
             op_code,
         })
     }
@@ -2227,6 +2240,7 @@ impl Reader {
         let (mut shape, mut fill_raw) = (None, None);
         let (mut left, mut top, mut right, mut bottom) = (None, None, None, None);
         let (mut link, mut alt, mut label, mut td_text) = (None, None, None, None);
+        let mut symbol_number: Option<i64> = None;
         let mut contours: Vec<Contour> = Vec::new();
         let (mut cbt, mut cbr, mut cba, mut cbh, mut chv, mut cbv, mut cvv) =
             (None, None, None, None, None, None, None);
@@ -2319,7 +2333,10 @@ impl Reader {
                         export = Some(options);
                     }
                 }
-                // MSNi and anything else: preserved.
+                // The owning symbol (a button's auto-slice points at
+                // its definition, decision 0036); anything else:
+                // preserved.
+                b"MSNi" => self.slot_i64(child, path, i, &mut symbol_number)?,
                 _ => self.bag_node(path, i, child),
             }
         }
@@ -2359,6 +2376,7 @@ impl Reader {
             alt,
             label,
             td_text,
+            symbol_number,
             contours,
             background,
             behaviors,

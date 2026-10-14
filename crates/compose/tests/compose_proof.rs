@@ -1069,6 +1069,10 @@ fn symbol_definition(number: i64, symbol_type: SymbolType, cells: Vec<Cell>) -> 
         background_raw: 0,
         symbol_type,
         nine_slice: None,
+        auto_slice: Some(true),
+        include_down_state: Some(false),
+        show_down_on_load: Some(false),
+        include_over_while_down: Some(false),
         op_code: None,
     }
 }
