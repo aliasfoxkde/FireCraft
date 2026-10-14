@@ -14,17 +14,17 @@ enforced == the fuzz call table).
 
 | class | meaning | count (of 356 dom verbs) |
 |---|---|---|
-| C | carried: a registry command implements the mutation | 136 |
+| C | carried: a registry command implements the mutation | 141 |
 | P | partial: carried with a recorded model limitation | 45 |
-| M | missing: no command and no decision — work items | 94 |
+| M | missing: no command and no decision — work items | 89 |
 | N | not applicable: non-document surface (accessor/UI/session/clipboard/export/OS) | 81 |
 
-Document-mutation coverage: **181 of 275** carried-or-partial
-(136 carried, 45 partial, 94 missing).
+Document-mutation coverage: **186 of 275** carried-or-partial
+(141 carried, 45 partial, 89 missing).
 
 ### Gap families (the Missing table, grouped)
 
-The 94 missing verbs collapse into eight families, largest first —
+The 89 missing verbs collapse into eight families, largest first —
 each family is one design decision plus a command batch:
 
 1. **Object transforms** (~9 verbs): scale/rotate/reflect/skew/
@@ -37,8 +37,12 @@ each family is one design decision plus a command batch:
 3. **Layer/page structure** (~11 verbs): page rename, layer lock and
    reorder, page reorder, layer sharing to pages, master pages.
    Model bits exist for sharing and master; commands are missing.
-4. **Frames/states** (~8 verbs): add/delete/duplicate/reorder frames,
-   distribute-to-frames. Cells exist per layer; nothing mints them.
+4. **Frames/states** (4 verbs remain): duplicateSelectionToFrames /
+   duplicateSelectionToFrameRange / distributeSelectionToFrames
+   duplicate the SELECTION across frames — they need an
+   object-selection surface (same blocker as the selection
+   family). add/delete/duplicate/reorder/distribute-layer are
+   carried by frame.* (task 89).
 5. **Guides/grid/snap/onion** (4 verbs remain): setShowGrid/
    setShowGuides/setSnapToGrid/setSnapToGuides are view/session
    flags with no decoded wire node — blocked on corpus evidence
@@ -65,6 +69,7 @@ each family is one design decision plus a command batch:
 | `ApplyEffects` | C | filter.add |  |
 | `MovePointOnHotspotByWithFlags` | C | object.translate | generic object move; per-point web-geometry edit is the P-shaped remainder |
 | `addBehavior` | C | slice.addBehavior |  |
+| `addFrames` | C | frame.add | where strings verbatim; FRCi pair bumps together |
 | `addGuide` | C | page.addGuide | page-scoped guide line; duplicates append like CS6 |
 | `addNewHotspot` | C | hotspot.create |  |
 | `addNewLayer` | C | layer.add |  |
@@ -97,6 +102,7 @@ each family is one design decision plus a command batch:
 | `convertToAnimSymbol` | C | symbol.setType | create then type to anim |
 | `convertToSymbol` | C | symbol.create | selection folds into the definition |
 | `convetToAnimSymbol` | C | symbol.setType |  |
+| `deleteFrames` | C | frame.delete | guards: range, overrun, last frame |
 | `deleteLayer` | C | layer.delete |  |
 | `deletePageAt` | C | page.delete |  |
 | `deletePointOnPath` | C | path.redrawPath |  |
@@ -105,7 +111,9 @@ each family is one design decision plus a command batch:
 | `detachInstanceFromSymbol` | C | symbol.editDetach |  |
 | `detachTextFromPath` | C | text.detachPath |  |
 | `distribute` | C | object.distribute |  |
+| `distributeLayerToFrames` | C | frame.distributeLayer | grows frames when items outnumber them; single item is the documented no-op |
 | `dragControlPoint` | C | path.movePoints |  |
+| `duplicateFrame` | C | frame.duplicate | deep-copies closures to fresh slots; bDupeSelectionOnly refused (no selection) |
 | `duplicateLayer` | C | layer.add | add with copied payload; no dedicated duplicate verb |
 | `duplicatePage` | C | page.add | same shape as duplicateLayer |
 | `duplicateSelection` | C | object.duplicate |  |
@@ -150,6 +158,7 @@ each family is one design decision plus a command batch:
 | `removeFill` | C | path.setFill | none |
 | `removeGuide` | C | page.removeGuide | absent position is a documented CS6 no-op |
 | `removeNineScale` | C | symbol.set9Slice |  |
+| `reorderFrame` | C | frame.reorder | move onto own slot is the documented no-op |
 | `replaceTextString` | C | text.setText | batch = per-object apply |
 | `resetNineScale` | C | symbol.set9Slice |  |
 | `scalingGridRect` | C | symbol.set9Slice | the grid rect IS the payload |
@@ -254,7 +263,6 @@ each family is one design decision plus a command batch:
 | `AddNewImage` | M | - | no engine place-image command; io::raster::attach_image is the import-side path (SVG/raster import), app_cli carries file placement |
 | `MergeDown` | M | - | no merge-down (object or bitmap flatten) |
 | `addElementMask` | M | - | object mask groups unmodeled (selection masks ARE carried; element masks are the gap) |
-| `addFrames` | M | - | no frame (state) add command; cells exist per layer but nothing mints them |
 | `addMasterPageLayer` | M | - | master-page family gap |
 | `addNewImage` | M | - | no engine place-image command; io::raster::attach_image is the import-side path (SVG/raster import), app_cli carries file placement |
 | `addNewImageViaCopy` | M | - | same gap as addNewImage |
@@ -269,15 +277,12 @@ each family is one design decision plus a command batch:
 | `convertPathToMarquee` | M | - | path to selection mask |
 | `convertToPaths` | M | - | text-to-paths has no command (render flattens glyphs; editable conversion missing) |
 | `cropSelection` | M | - | canvas crop; page.setCanvasSize carries resize but not the crop-to-content op |
-| `cuplicateSelectionToFrames` | M | - | frame-family gap |
-| `deleteFrames` | M | - | no frame delete command |
+| `cuplicateSelectionToFrames` | M | - | needs an object-selection surface (same blocker as the selection family) |
 | `deleteSavedSelection` | M | - | named saved selections unmodeled |
 | `detachSharedLayer` | M | - | shared_layers model bit exists; no sharing commands |
-| `distributeLayerToFrames` | M | - | frame-family gap |
-| `distributeSelectionToFrames` | M | - | frame-family gap |
-| `duplicateFrame` | M | - | no frame duplicate command |
-| `duplicateSelectionToFrameRange` | M | - | frame-family gap |
-| `duplicateSelectionToFrames` | M | - | frame-family gap |
+| `distributeSelectionToFrames` | M | - | needs an object-selection surface (same blocker as the selection family) |
+| `duplicateSelectionToFrameRange` | M | - | needs an object-selection surface (same blocker as the selection family) |
+| `duplicateSelectionToFrames` | M | - | needs an object-selection surface (same blocker as the selection family) |
 | `enableElementMask` | M | - | element-mask gap |
 | `filterSelection` | M | - | attribute filter select |
 | `filterSelectionByID` | M | - | attribute filter select |
@@ -296,7 +301,6 @@ each family is one design decision plus a command batch:
 | `redrawSmartShape` | M | - | autoshape params set at creation only; no edit command |
 | `reflectSelection` | M | - | transform-command gap |
 | `removeElementMask` | M | - | element-mask gap |
-| `reorderFrame` | M | - | no frame reorder command |
 | `reorderLayer` | M | - | no layer reorder command (object z-order exists) |
 | `reorderPages` | M | - | no page reorder command |
 | `resizeSelection` | M | - | transform-command gap |
