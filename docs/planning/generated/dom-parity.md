@@ -14,23 +14,24 @@ enforced == the fuzz call table).
 
 | class | meaning | count (of 356 dom verbs) |
 |---|---|---|
-| C | carried: a registry command implements the mutation | 141 |
+| C | carried: a registry command implements the mutation | 147 |
 | P | partial: carried with a recorded model limitation | 45 |
-| M | missing: no command and no decision — work items | 89 |
+| M | missing: no command and no decision — work items | 83 |
 | N | not applicable: non-document surface (accessor/UI/session/clipboard/export/OS) | 81 |
 
-Document-mutation coverage: **186 of 275** carried-or-partial
-(141 carried, 45 partial, 89 missing).
+Document-mutation coverage: **192 of 275** carried-or-partial
+(147 carried, 45 partial, 83 missing).
 
 ### Gap families (the Missing table, grouped)
 
-The 89 missing verbs collapse into eight families, largest first —
+The 83 missing verbs collapse into eight families, largest first —
 each family is one design decision plus a command batch:
 
-1. **Object transforms** (~9 verbs): scale/rotate/reflect/skew/
-   resize/free-transform, numeric `setSelectionBounds`, canvas
-   rotation, image resample. The single biggest gap: the model bakes
-   geometry, so this needs a bake-on-apply command family.
+1. **Object transforms** (2 verbs remain): rotateDocument (canvas
+   rotation with a geometry re-bake) and setDocumentImageSize
+   (bitmap resample). The object transform family itself is
+   carried by object.* per decision 0019 — images refuse
+   transforms until the resample pass this family shares.
 2. **Element / pixel / JPEG masks** (~14 verbs): object mask groups
    (paste-inside included), pixel masks, JPEG masks. Selection
    masks ARE carried — the *object* mask is the gap.
@@ -153,6 +154,7 @@ each family is one design decision plus a command batch:
 | `pathUnion` | C | path.boolean |  |
 | `placeTextInPath` | C | text.attachPath |  |
 | `redefineStyleByName` | C | style.redefineByName |  |
+| `reflectSelection` | C | object.reflect | bHoriz/bVert; both false is the documented no-op |
 | `removeAllGuides` | C | page.removeAllGuides | one axis or both (the no-arg form); empty is a no-op |
 | `removeBehavior` | C | slice.removeBehavior |  |
 | `removeFill` | C | path.setFill | none |
@@ -161,6 +163,9 @@ each family is one design decision plus a command batch:
 | `reorderFrame` | C | frame.reorder | move onto own slot is the documented no-op |
 | `replaceTextString` | C | text.setText | batch = per-object apply |
 | `resetNineScale` | C | symbol.set9Slice |  |
+| `resizeSelection` | C | object.resize | keeps the top-left corner of the selection in place |
+| `rotateSelection` | C | object.rotate | degrees, clockwise in the y-down space |
+| `scaleSelection` | C | object.scale | pivot defaults to the union bounds center (decision 0019) |
 | `scalingGridRect` | C | symbol.set9Slice | the grid rect IS the payload |
 | `selectFeather` | C | bitmap.feather |  |
 | `selectNone` | C | bitmap.selectNone |  |
@@ -187,6 +192,7 @@ each family is one design decision plus a command batch:
 | `setLayerVisible` | C | layer.setDisplay | the eye bit |
 | `setOnionSkinning` | C | page.setOnionSkinning | OSBi/OSAi; 0/0 disables per CS6 |
 | `setOpacity` | C | object.setOpacity |  |
+| `setSelectionBounds` | C | object.setBounds | move + resize in one op |
 | `setSelectionMask` | C | bitmap.select* | shape select family |
 | `setSliceExportOptions` | C | slice.setExport |  |
 | `setSliceFilename` | C | slice.setData |  |
@@ -203,6 +209,7 @@ each family is one design decision plus a command batch:
 | `setTextLeading` | C | text.setAttrs |  |
 | `setTextOrientation` | C | text.setAttrs |  |
 | `showAllHidden` | C | object.setVisible |  |
+| `transformSelection` | C | object.transform | free affine; the family primitive |
 | `ungroup` | C | object.ungroup | children splice in at the group position, z-order preserved |
 | `updateSymbol` | C | library.add | replace the definition |
 
@@ -299,18 +306,14 @@ each family is one design decision plus a command batch:
 | `moveMaskGroupContentsBy` | M | - | element-mask family gap |
 | `movePixelMaskBy` | M | - | pixel-mask gap |
 | `redrawSmartShape` | M | - | autoshape params set at creation only; no edit command |
-| `reflectSelection` | M | - | transform-command gap |
 | `removeElementMask` | M | - | element-mask gap |
 | `reorderLayer` | M | - | no layer reorder command (object z-order exists) |
 | `reorderPages` | M | - | no page reorder command |
-| `resizeSelection` | M | - | transform-command gap |
 | `restoreJPEGMask` | M | - | JPEG-mask gap |
 | `restoreSelection` | M | - | named saved selections unmodeled |
 | `rotateDocument` | M | - | canvas rotation (90-degree steps + re-bake) |
-| `rotateSelection` | M | - | transform-command gap |
 | `saveJPEGMask` | M | - | JPEG-mask family unmodeled |
 | `saveSelection` | M | - | named saved selections unmodeled |
-| `scaleSelection` | M | - | NO object transform commands (scale/rotate/reflect/skew) - the biggest single parity gap |
 | `selectAll` | M | - | no compound-selection command (shape selects via bitmap.select*) |
 | `selectAllOnLayer` | M | - | scope select |
 | `selectChildren` | M | - | hierarchy select |
@@ -339,14 +342,12 @@ each family is one design decision plus a command batch:
 | `setRectRoundness` | M | - | primitives are modeled (PathObject.primitive) but no param-edit command |
 | `setRectRoundnessMode` | M | - | primitive param-edit gap |
 | `setRectSides` | M | - | primitive param-edit gap |
-| `setSelectionBounds` | M | - | transform-command gap (numeric box) |
 | `setShowGrid` | M | - | page.grid model exists; no command |
 | `setShowGuides` | M | - | guides model exists; no command |
 | `setSnapToGrid` | M | - | page.grid model exists; no command |
 | `setSnapToGuides` | M | - | guides model exists; no command |
 | `shareLayerToPages` | M | - | shared_layers model bit exists; no sharing commands |
 | `splitPaths` | M | - | no split/knife boolean op |
-| `transformSelection` | M | - | transform-command gap (free matrix) |
 | `tween` | M | - | instance tweening unmodeled |
 | `unsetMasterPage` | M | - | Page.is_master model bit exists; no command |
 
