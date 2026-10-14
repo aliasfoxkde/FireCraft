@@ -6,20 +6,25 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 FireCraft: a clean-room reimplementation of Adobe Fireworks CS6 in pure Rust (MIT OR Apache-2.0 once M0 lands; Apache-2.0 today), modeled on the StoryTold/ArtCraft projects (github.com/storytold — photocraft et al.). Primary release target is a **WASM build for the user's WebOS**, plus a wide desktop/CLI release matrix. The reference application is Adobe Fireworks CS6 (v12.0).
 
-**Status: M0–M12 complete and released (v0.1.0); M13 (deep RE evidence + CS6 shell parity) is the active milestone.** The workspace, gates, and release matrix are live. Read before doing anything:
+**Status: M0–M15 complete; v0.1.0 released. Active work = the CS6 DOM verb-surface parity campaign (closing the 57 missing verbs in family batches).** Start at `docs/HANDOFF.md` — it holds the state snapshot, the phased/atomic plan, and the runbooks. Read before doing anything:
 
-1. `docs/PLANNING.md` — master plan: clean-room policy, Fireworks PNG format spec (§6), crate architecture (§7), stack decisions (§7.6), tiers, risks, method, RE tooling (§5.5), sourced research appendix
-2. `docs/planning/firecraft/ROADMAP.md` — canonical milestones M0–M13 with gates
-3. `docs/planning/firecraft/M13-deep-re-shell-parity.md` — the active ticket
+1. `docs/HANDOFF.md` — agent handoff: state, phased plan, CI runbook, lessons (START HERE)
+2. `docs/PLANNING.md` — master plan: clean-room policy, Fireworks PNG format spec (§6), crate architecture (§7), stack decisions (§7.6), tiers, risks, method, RE tooling (§5.5), sourced research appendix
+3. `docs/PROGRESS.md` — live status board; `docs/SESSIONS.md` — session log; `docs/HISTORY.md` — arc, decisions, lessons
+4. `AGENTS.md` — day-to-day operating manual (commands, gates, commit rules)
 
-Session task lists should mirror the active milestone. Work proceeds milestone by milestone. RE evidence work (Ghidra/REA over `source/` binaries) records derived specs only — raw Adobe-derived dumps stay uncommitted in scratch.
+Session task lists should mirror the active phase in HANDOFF.md §4. RE evidence work (Ghidra/REA over `source/` binaries) records derived specs only — raw Adobe-derived dumps stay uncommitted in scratch.
 
 The global harness commands (backend-fixed's cargo/just/local-ci) do not exist here. Once M0 creates the workspace, the project's own gate is `cargo run -p xtask -- ci` (fmt, clippy `-D warnings`, tests, layer enforcement, wasm build).
 
 ## Repository layout
 
+- `docs/HANDOFF.md` — agent handoff: state snapshot, phased/atomic plan, CI runbook
+- `docs/PROGRESS.md` — live status board · `docs/SESSIONS.md` — session log · `docs/HISTORY.md` — arc, decisions, lessons
 - `docs/PLANNING.md` — master planning document (see above)
 - `docs/planning/firecraft/` — ROADMAP.md + per-milestone tickets (objective / inputs / authority / stopping condition / verification)
+- `docs/planning/generated/` — `parity.md` / `scorecard.md` (xtask-owned) + `dom-parity.md` (CS6 verb-surface matrix; regen recipe in HANDOFF §5)
+- `docs/decisions/` — decision records 0001–0022; write one per family/batch
 - `docs/research/fireworks-png-nodes.md` — vendored MIT reverse-engineering dictionary of the Fireworks PNG node system (from davidje13/png-analyser) — the format Rosetta stone
 - `docs/ATTRIBUTION.md` — asset-attribution ledger; **add a row in the same change as any non-code asset**
 - `source/` — proprietary Adobe reference material. **Analysis input only — never commit.**

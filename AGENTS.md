@@ -1,8 +1,10 @@
 # AGENTS.md — FireCraft operating manual
 
-How any agent (or human) works in this repo. The plan lives in
-`docs/PLANNING.md` (master) and `docs/planning/firecraft/` (milestone
-tickets `M0`-`M12`). Read those before your first change; this file is
+How any agent (or human) works in this repo. Start at
+`docs/HANDOFF.md` (state snapshot + the active phased plan + runbooks);
+the master plan is `docs/PLANNING.md`, roadmap and closed milestone
+tickets live in `docs/planning/firecraft/`, live status in
+`docs/PROGRESS.md`. Read those before your first change; this file is
 the day-to-day rules.
 
 ## What FireCraft is
