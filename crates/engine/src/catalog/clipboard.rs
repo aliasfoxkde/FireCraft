@@ -68,8 +68,14 @@ fn capture_selection_with(selection: &[ObjectId], document: &Document) -> Clipbo
         roots: Vec::new(),
     };
     for id in selection {
-        clip.roots.push(clip.elements.len());
+        let first = clip.elements.len();
         capture_into(document, *id, &mut clip);
+        // A stale id captures nothing (the walker rule); a root slot
+        // only exists when its element does, so roots and elements
+        // stay index-aligned.
+        if clip.elements.len() > first {
+            clip.roots.push(first);
+        }
     }
     clip
 }
@@ -102,8 +108,14 @@ fn single_root<'a>(
         });
     }
     let index = clip.roots[0];
-    // A root is always its own element slot.
-    Ok(&clip.elements[index])
+    // A root is always its own element slot; a captured-anyway
+    // out-of-range root refuses instead of panicking.
+    clip.elements
+        .get(index)
+        .ok_or_else(|| EngineError::InvalidState {
+            name: name.to_owned(),
+            detail: "the clipboard root is not in the element list".to_owned(),
+        })
 }
 
 /// `clipboard.copy` — CS6's `dom.clipCopy()`: deep-copies the object

@@ -36,8 +36,8 @@ fn main() -> ExitCode {
                 .unwrap_or_else(|| "opaque panic".to_owned());
             eprintln!("[panic_hunt] FAILED seed {seed}: {detail}");
             eprintln!(
-                "[panic_hunt] repro: cargo run --release --bin panic_hunt -- <seeds> \
-                 <steps> {seed}"
+                "[panic_hunt] repro: cargo run --release --bin panic_hunt -- \
+                 1 {seed} (args: [seeds] [base-seed]; seed = base ^ i*0x9E37...)"
             );
             return ExitCode::FAILURE;
         }

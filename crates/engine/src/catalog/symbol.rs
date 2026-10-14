@@ -1282,11 +1282,15 @@ fn edit_animation_instances(
     }
     let mut deltas = Vec::new();
     for id in document.object_selection.clone() {
-        let ObjectData::SymbolInstance(_) = access::object(document, name, id)? else {
+        // Resolution reads only: a stale id skips (the walker rule),
+        // never an error — a refusal after an earlier member mutated
+        // would break the refused-calls-mutate-nothing law (fuzz seed
+        // 5846161706420016621).
+        let Some(before) = document.registry.get(id).cloned() else {
             continue;
         };
-        let Some(before) = document.registry.get(id).cloned() else {
-            continue; // the read above settled existence
+        let ObjectData::SymbolInstance(_) = &before else {
+            continue;
         };
         let Some(ObjectData::SymbolInstance(instance)) = document.registry.get_mut(id) else {
             continue; // the read above settled existence and kind

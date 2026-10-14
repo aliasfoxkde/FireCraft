@@ -466,3 +466,33 @@ Batch: `bitmap.moveSelectionMaskBy`, `bitmap.adjustPixelSel` (8.15).
   gates). fuzzdrive: 2 CALLS + arms (kinds cycled, amounts cross the
   gate). Local fuzz 256×48 clean.
 - Registry 225→227. dom-parity: **255C/16P/0M/85N**, unresolved [].
+
+## #120 — 2026-10-14 — fuzz-found defect fixes
+
+CI's fuzz job caught two refuted-calls-mutate-nothing violations that
+local pre-push sweeps had missed (the local sweep base differed from
+CI's).
+
+- **Clipboard panic (d482b5d's CI seed)**: `capture_selection_with`
+  pushed a root slot BEFORE capturing, but `capture_into` skips stale
+  selection ids — roots and elements went out of alignment and
+  `single_root` indexed an empty list. Fix: push the root only when
+  the capture produced an element (index-aligned by construction);
+  `single_root` reads through `.get()` and refuses on the impossible
+  miss instead of panicking.
+- **Animation-walk refusal-mutates (1024-seed sweep, seed
+  5846161706420016621)**: `edit_animation_instances` resolved each
+  selection id with a mid-walk `access::object(...)?` — a stale id
+  errored AFTER an earlier member had already mutated and pushed its
+  delta. Fix: the walker pattern (clone-before resolve, stale skips,
+  then `get_mut`); no fallible resolution after any mutation. Audit
+  of every other mid-walk `?` site (bake, convertToPaths, web,
+  deleteAllInDocument) confirmed all pre-flight their fallible steps.
+- **panic_hunt repro message corrected**: the CLI is
+  `[seeds] [base-seed]` (seed = base ^ i*0x9E3779B97F4A7C15), and CI
+  runs base 0x4A2DC0DE — the old message's `[seeds] [steps] [seed]`
+  shape sent repro attempts into the wrong seed space, which is why
+  the first CI fuzz failure initially "didn't reproduce". Local
+  sweeps must use base 1242750446 to cover CI's space.
+- Verification: 1024-seed CI-base sweep clean (both repro seeds
+  included); engine suite green; clippy -D warnings clean; fmt clean.
