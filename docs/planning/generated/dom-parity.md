@@ -14,17 +14,17 @@ enforced == the fuzz call table).
 
 | class | meaning | count (of 356 dom verbs) |
 |---|---|---|
-| C | carried: a registry command implements the mutation | 221 |
+| C | carried: a registry command implements the mutation | 225 |
 | P | partial: carried with a recorded model limitation | 45 |
-| M | missing: no command and no decision — work items | 5 |
+| M | missing: no command and no decision — work items | 1 |
 | N | not applicable: non-document surface (accessor/UI/session/clipboard/export/OS) | 85 |
 
-Document-mutation coverage: **266 of 271** carried-or-partial
-(221 carried, 45 partial, 5 missing).
+Document-mutation coverage: **270 of 271** carried-or-partial
+(225 carried, 45 partial, 1 missing).
 
 ### Gap families (the Missing table, grouped)
 
-The 5 missing verbs collapse into six families, largest first —
+The 1 missing verbs collapse into six families, largest first —
 each family is one design decision plus a command batch:
 
 1. **Object transforms** (1 verb remains): setDocumentImageSize
@@ -144,6 +144,10 @@ each family is one design decision plus a command batch:
 | `enableNineScale` | C | symbol.set9Slice |  |
 | `enableTextAntiAliasing` | C | text.setAttrs |  |
 | `fillSelectedPixels` | C | bitmap.fill |  |
+| `filterSelection` | C | filter.selection | no out-of-bounds growth: shadows clip to the image surface (debt) |
+| `filterSelectionByID` | C | filter.selectionByID | headless: params in the payload, no dialog |
+| `filterSelectionByName` | C | filter.selectionByName | compose::FILTER_CATALOG; non-images refuse (rasterizer debt) |
+| `filterSelectonByName` | C | filter.selectionByName | compose::FILTER_CATALOG; non-images refuse (rasterizer debt) |
 | `flattenDocument` | C | flatten.document | Merge Layers: content layers collapse to one bottom bitmap layer, web layers preserved; single-state pages only |
 | `flattenSelection` | C | flatten.selection | Merge Images: canvas-sized bitmap via render_subset, placed at the topmost member's z-position |
 | `group` | C | object.group | same-container selection folds at the topmost member slot |
@@ -336,10 +340,6 @@ each family is one design decision plus a command batch:
 
 | CS6 verb | class | FireCraft carrier | note |
 |---|---|---|---|
-| `filterSelection` | M | - | pixel-filter bake verb (permanent, not a Live Effect) — filter family; needs the bitmap bake pass (debt) |
-| `filterSelectionByID` | M | - | pixel-filter bake verb (permanent, not a Live Effect) — filter family; needs the bitmap bake pass (debt) |
-| `filterSelectionByName` | M | - | pixel-filter bake verb (permanent, not a Live Effect) — filter family; needs the bitmap bake pass (debt) |
-| `filterSelectonByName` | M | - | pixel-filter bake verb (permanent, not a Live Effect) — filter family; needs the bitmap bake pass (debt) |
 | `setDocumentImageSize` | M | - | no resample command |
 
 ## Not applicable (N)

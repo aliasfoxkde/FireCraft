@@ -8,10 +8,11 @@
 
 - **Released:** v0.1.0 (2026-10-13), repo public.
 - **Roadmap:** M0–M15 **all closed**.
-- **Registry:** 195 commands. **CI:** green 7/7 on `f668d85`; later
+- **Registry:** 198 commands. **CI:** green 7/7 on `f668d85`; later
   campaign pushes verified per batch (runbook: HANDOFF §6).
-- **CS6 DOM parity:** **221 C / 45 P / 5 M / 85 N** — the 5 M verbs
-  are the active campaign; the phased plan is [`HANDOFF.md`](HANDOFF.md) §4.
+- **CS6 DOM parity:** **225 C / 45 P / 1 M / 85 N** — the last M verb
+  (`setDocumentImageSize`) rides the 6.4 resample debt; the phased
+  plan is [`HANDOFF.md`](HANDOFF.md) §4.
 
 ## Milestones
 
@@ -63,11 +64,11 @@
 | #106 | button symbols: 4 behavior booleans + slice options (Phase 7, decision 0036) | 3d74723 | **208 C / 45 P / 15 M / 88 N** |
 | #107 | place-image trio + shared assemble/retile helpers (8.1, decision 0037) | 7ea2288 | **212 C / 45 P / 12 M / 88 N** |
 | #108 | saved-selections trio (8.7, decision 0038) | f668d85 | **215 C / 45 P / 8 M / 88 N** |
-| #109 | clipboard surface: copy/cut/paste + paste-mask trio (8.6/6.6, decision 0039) | this batch | **221 C / 45 P / 5 M / 85 N** |
+| #109 | clipboard surface: copy/cut/paste + paste-mask trio (8.6/6.6, decision 0039) | 1d1c8dc | **221 C / 45 P / 5 M / 85 N** |
+| #110 | filterSelection bake trio over compose kernels (8.8, decision 0040) | this batch | **225 C / 45 P / 1 M / 85 N** |
 
-Remaining families (HANDOFF §4 order): 8.6 clipboard masks/6.6
-clipboard surface → filterSelection bake trio → 6.4 resample →
-5.4 setDocumentImageSize.
+Remaining families (HANDOFF §4 order): 6.4 resample →
+5.4 setDocumentImageSize (the last M row).
 
 ## Recorded debts (open)
 
@@ -79,6 +80,8 @@ clipboard surface → filterSelection bake trio → 6.4 resample →
 | Image resample pass | setDocumentImageSize | M8 |
 | mask_replace_options "add" (mask union fold) | clipPasteAsMask variant | #109 (decision 0039) |
 | Path→image rasterizer (mask_type "image" on vector clipboard) | clipPasteAsMask variant | #109 (decision 0039) |
+| Path→image rasterizer (filterSelection on non-image selection) | 8.8 bake family refuses whole | #110 (decision 0040) |
+| Out-of-bounds effect growth (bake clips to the image surface) | tile-bank growth parity | #110 (decision 0040) |
 | Shared-layer link-resolution render | shared layers render empty | #93 (decision 0022) |
 
 ## Parity timeline
@@ -98,5 +101,6 @@ clipboard surface → filterSelection bake trio → 6.4 resample →
 | 2026-10-14 | **212** | 45 | **12** | #107 place-image trio (decision 0037) |
 | 2026-10-14 | **215** | 45 | **8** | #108 saved selections (decision 0038) |
 | 2026-10-14 | **221** | 45 | **5** | #109 clipboard surface (decision 0039) |
+| 2026-10-14 | **225** | 45 | **1** | #110 filter bake family (decision 0040) |
 
 (Pre-#91 counts are approximate; the matrix file is the authority.)

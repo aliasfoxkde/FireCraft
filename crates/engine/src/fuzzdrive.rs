@@ -585,6 +585,9 @@ pub const CALLS: &[&str] = &[
     "filter.add",
     "filter.remove",
     "filter.setParam",
+    "filter.selection",
+    "filter.selectionByID",
+    "filter.selectionByName",
     "flatten.mergeDown",
     "flatten.selection",
     "flatten.document",
@@ -837,6 +840,63 @@ pub fn random_call(rng: &mut FuzzRng, document: &Document) -> (String, serde_jso
             "index": rng.below(5),
             "key": format!("p-{}", rng.below(6)),
             "value": format!("{}", rng.below(200)),
+        }),
+        // The bake family drives off the object selection the fuzz
+        // sequence has set; payloads mix resolvable identities with
+        // refusals.
+        "filter.selection" => {
+            let mut payload = serde_json::json!({
+                "name": rng
+                    .pick(&["invert", "Hue/Saturation", "noKernel", ""])
+                    .copied(),
+            });
+            if rng.chance(40) {
+                payload["category"] =
+                    serde_json::json!(rng.pick(&["Adjust Color", "Fuzz"]).copied());
+            }
+            if rng.chance(60) {
+                payload["params"] = serde_json::json!([
+                    {
+                        "key": "EffectMoaID",
+                        "value": if rng.chance(70) {
+                            "d2541291-70d6-11d1-8c8000a024cdc039"
+                        } else {
+                            "bogus-guid"
+                        },
+                    },
+                    {
+                        "key": "hue_amount",
+                        "value": format!("{}", rng.below(100)),
+                    },
+                ]);
+            }
+            payload
+        }
+        "filter.selectionByID" => {
+            let mut payload = serde_json::json!({
+                "id": rng
+                    .pick(&[
+                        "d2541291-70d6-11d1-8c8000a024cdc039",
+                        "{D2541291-70D6-11D1-8C8000A024CDC039}",
+                        "bogus-guid",
+                    ])
+                    .copied(),
+            });
+            if rng.chance(40) {
+                payload["params"] = serde_json::json!([
+                    {
+                        "key": "gaussian_blur_radius",
+                        "value": format!("{}", rng.below(20)),
+                    },
+                ]);
+            }
+            payload
+        }
+        "filter.selectionByName" => serde_json::json!({
+            "category": rng
+                .pick(&["Adjust Color", "Blur", "Sharpen", "Other", "Fuzz"])
+                .copied(),
+            "name": rng.pick(&["Invert", "Blur...", "Find Edges", "Bogus"]).copied(),
         }),
         "object.duplicate" => serde_json::json!({ "id": any_id(rng) }),
         "object.translate" => {

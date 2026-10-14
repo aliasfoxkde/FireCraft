@@ -117,6 +117,38 @@ pub const RECOGNIZED_GUIDS: &[&str] = &[
     GUID_LIVE_EFFECTS,
 ];
 
+/// The pixel-filter catalog CS6's `filterSelectionByName(category,
+/// name)` resolves against: Filter-menu categories and the dictionary's
+/// `EffectMoaID` spellings. Shadows, bevels, glows and clouds are Live
+/// Effect machinery — reachable through the effect forms but not part
+/// of the bake-by-name menu. Every GUID here is in `RECOGNIZED_GUIDS`
+/// (the enumeration test pins it).
+pub const FILTER_CATALOG: &[(&str, &str, &str)] = &[
+    ("Adjust Color", "Auto Levels", GUID_AUTO_LEVELS),
+    (
+        "Adjust Color",
+        "Brightness/Contrast",
+        GUID_BRIGHTNESS_CONTRAST,
+    ),
+    ("Adjust Color", "Color Fill", GUID_COLOR_FILL),
+    ("Adjust Color", "Convert to Alpha", GUID_CONVERT_TO_ALPHA),
+    ("Adjust Color", "Curves", GUID_CURVES),
+    ("Adjust Color", "Hue/Saturation", GUID_HUE_SATURATION),
+    ("Adjust Color", "Invert", GUID_INVERT),
+    ("Adjust Color", "Levels", GUID_LEVELS),
+    ("Blur", "Blur", GUID_BLUR),
+    ("Blur", "Blur More", GUID_BLUR_MORE),
+    ("Blur", "Gaussian Blur", GUID_GAUSSIAN_BLUR),
+    ("Blur", "Motion Blur", GUID_MOTION_BLUR),
+    ("Blur", "Radial Blur", GUID_RADIAL_BLUR),
+    ("Blur", "Zoom Blur", GUID_ZOOM_BLUR),
+    ("Noise", "Add Noise", GUID_ADD_NOISE),
+    ("Sharpen", "Sharpen", GUID_SHARPEN),
+    ("Sharpen", "Sharpen More", GUID_SHARPEN_MORE),
+    ("Sharpen", "Unsharp Mask", GUID_UNSHARP_MASK),
+    ("Other", "Find Edges", GUID_FIND_EDGES),
+];
+
 /// One interpretable kernel step, in stack order.
 #[derive(Clone, Debug, PartialEq)]
 pub enum KernelOp {
@@ -2529,5 +2561,15 @@ mod tests {
             px.chunks_exact(4).all(|p| p[0] == p[1] && p[1] == p[2]),
             "gray sky↔cloud keeps the texture gray"
         );
+    }
+
+    #[test]
+    fn the_filter_catalog_stays_inside_the_recognized_set() {
+        for (category, name, guid) in FILTER_CATALOG {
+            assert!(
+                RECOGNIZED_GUIDS.contains(guid),
+                "catalog entry {category}/{name} names {guid}, which no kernel interprets"
+            );
+        }
     }
 }

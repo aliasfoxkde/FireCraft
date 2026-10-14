@@ -14,9 +14,9 @@
 - **Ship state:** v0.1.0 released, repo public. Roadmap M0–M15 all
   closed. 155+ commits, CI green on `3d74723` (7/7 jobs; the fuzz job
   on that commit caught the addImage minting leak — fixed in `000557d`).
-- **Engine registry:** 195 commands, pinned equal to the fuzz call
+- **Engine registry:** 198 commands, pinned equal to the fuzz call
   table by `the_call_table_covers_the_catalog`.
-- **CS6 DOM verb-surface parity:** **221 C / 45 P / 5 M / 85 N**
+- **CS6 DOM verb-surface parity:** **225 C / 45 P / 1 M / 85 N**
   (`docs/planning/generated/dom-parity.md`, regenerate per §5 below).
   (The CS6 verb list carries both case spellings of mergeDown and
   AddNewImage — those families flipped four rows each.)
@@ -277,6 +277,24 @@ mutations and refuses without a linked slice.
   plane on a single selected image, or mints a grayscale image from
   `RGB = byte` when none is selected — matching the manual's
   "resulting in a grayscale image" clause.
+- **8.8 — DONE (decision 0040).** The filterSelection bake trio
+  landed 2026-10-14: `filter.selection` (named filter, optional
+  category, optional param bag), `filter.selectionByID` (the raw
+  `EffectMoaID` GUID — CS6's FW8 spelling), and
+  `filter.selectionByName` (category+name; the manual's
+  `filterSelectonByName` typo rides the same command). All three
+  resolve to one `bake_core`: identity → `compose::plan` (unknown
+  GUID/name refuses; `skipped != 0` refuses — no passthrough) →
+  per-image assemble → `apply_stack` in the premultiplied domain →
+  pixel-mask blend (mask=255 keeps the original byte) → re-tile in
+  place → one `Mutated` delta per image + one `Bank` delta for all
+  mints, in `Delta::Group`. `compose` publishes the 19-entry
+  `FILTER_CATALOG` (Adjust Color / Blur / Noise / Sharpen / Other)
+  and re-exports `apply_stack`/`Surface` so engine needed no new
+  edge. Deviations (recorded): non-image selection members refuse
+  the whole command (CS6 would rasterize them first — Phase 9
+  rasterizer debt); out-of-bounds effect results clip to the image
+  surface (no tile growth); no dialog (headless).
 
 ### Phase 9 — Recorded debts (P-class limitations; no parity pressure)
 - **6.1-object-duplicate** deep-clone of groups (today shallow).
@@ -294,14 +312,12 @@ mutations and refuses without a linked slice.
 ### Suggested order
 5.1 → 5.2 (quick wins, warm up the loop) → Phase 1 → Phase 2 → 6.1 →
 6.2 → 8.2 → 8.5 → Phase 3 → 8.3 → 8.4 → 5.3 → 4 (evidence) → 7
-(evidence) → 8.1 → 8.7 → 8.6/6.6 → 6.4 → 5.4. Progress through
+(evidence) → 8.1 → 8.7 → 8.6/6.6 → 8.8 → 6.4 → 5.4. Progress through
 2026-10-14: 5.1–5.2, Phases 1–2, 6.1, 6.2, 8.2, 8.5, Phase 3, 8.3,
-8.4, 5.3, 4, 7, 8.1, 8.7, 8.6/6.6 done — **next is the filterSelection
-bake trio** (4 M rows, one a CS6-typo duplicate `filterSelectonByName`;
-the `filters` kernel crate exists from `be98d4b`), then 6.4 (resample)
-and 5.4 (setDocumentImageSize, which rides 6.4).
-Re-derive from `dom-parity.md`'s M table if the matrix has moved; the
-plan follows the matrix, not the reverse.
+8.4, 5.3, 4, 7, 8.1, 8.7, 8.6/6.6, 8.8 done — **next is 6.4 (image
+resample), then 5.4 (setDocumentImageSize, which rides 6.4)** — the
+last M row in the matrix. Re-derive from `dom-parity.md`'s M table if
+the matrix has moved; the plan follows the matrix, not the reverse.
 
 ## 5. Parity-matrix regeneration recipe
 

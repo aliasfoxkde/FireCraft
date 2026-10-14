@@ -6,6 +6,7 @@
 
 pub(crate) mod arrange;
 pub(crate) mod autoshape;
+pub(crate) mod bake;
 pub(crate) mod bitmap;
 pub(crate) mod cell;
 pub(crate) mod clipboard;
@@ -38,6 +39,7 @@ pub fn install(registry: &mut CommandRegistry) -> Result<(), EngineError> {
     retouch::install(registry)?;
     autoshape::install(registry)?;
     filter::install(registry)?;
+    bake::install(registry)?;
     flatten::install(registry)?;
     path::install(registry)?;
     cell::install(registry)?;

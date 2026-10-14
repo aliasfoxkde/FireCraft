@@ -166,3 +166,32 @@ format research, vendored node dictionary).
   `Channel` overlays a channel plane on a single selected image, or
   mints a grayscale image (`RGB = byte`) when none is selected.
   Parity **221C/45P/5M**, registry 195.
+  2026-10-14 (cont.) — CI fuzz on 1d1c8dc caught the second
+  refused-call mutation of the campaign: `clipboard.cut` wrote the
+  clipboard and cleared the selection, then `detach()` failed on a
+  live-but-unattached object (its owner group was cut earlier in the
+  same call — only the group's registry entry is removed, so the
+  child rides live). Fixed in 2ae190a: a read-only `find_owner`
+  pre-flight refuses the whole cut before any mutation; descendants
+  orphaned mid-loop skip silently, having left with the captured
+  subtree. Regression test cuts the group then tries the orphan plus
+  its healthy sibling, byte-comparing the refusal.
+  #110 filterSelection bake family (decision 0040): the three CS6
+  front doors — `filter.selection` (named, optional category, optional
+  param bag), `filter.selectionByID` (raw `EffectMoaID` GUID), and
+  `filter.selectionByName` (the manual's `filterSelectonByName` typo
+  rides the same CANON carrier) — resolve through one `bake_core`:
+  identity → `compose::plan` (unknown GUID/name refuses; `skipped
+  != 0` refuses, no passthrough) → per-image `assemble_rgba` →
+  `apply_stack` premultiplied → pixel-mask blend (255 keeps the
+  original byte) → `retile_rgba` in place → per-image `Mutated` plus
+  one `Bank` delta in a `Group`. `compose` publishes the 19-entry
+  `FILTER_CATALOG` (Adjust Color/Blur/Noise/Sharpen/Other) and
+  re-exports `apply_stack`/`Surface`, so engine gained no Cargo edge.
+  Non-image selection members refuse whole (CS6 rasterizes first —
+  debt); out-of-bounds effect results clip to the image surface.
+  Fixture laws recorded the hard way: a box mean preserves affine
+  gradients exactly (test fixtures must be non-linear), and
+  premultiply rounding breaks invert involution on semi-transparent
+  pixels (exactness requires alpha 255). Parity **225C/45P/1M**,
+  registry 198.

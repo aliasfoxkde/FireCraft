@@ -56,7 +56,7 @@ fn grab_list(points: &[[f64; 2]]) -> Node {
 
 /// Validates one parameter's encoding (text xor knot list, knots
 /// non-empty and finite) and yields its `DCEv` value.
-fn param_value(
+pub(crate) fn param_value(
     name: &'static str,
     key: &str,
     value: &str,
@@ -150,7 +150,7 @@ struct AddFilterPayload {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 #[serde(deny_unknown_fields)]
-struct FilterParamPayload {
+pub(crate) struct FilterParamPayload {
     /// `DCKs` key, e.g. "gaussian_blur_radius".
     key: String,
     /// `DCVs` value; effects carry decimals as decimal strings. Must
@@ -162,6 +162,42 @@ struct FilterParamPayload {
     /// from files — the JSON equivalent of the CS6 scripts' JS arrays.
     #[serde(default)]
     points: Option<Vec<[f64; 2]>>,
+}
+
+/// Builds an `Effect` from a command payload's parts, validating the
+/// internal name and every parameter encoding. Shared by the stack
+/// commands (`filter.add`) and the bake family (`filter.selection` …)
+/// so both speak the exact same effect wire shape.
+pub(crate) fn build_effect(
+    name: &'static str,
+    category: String,
+    internal_name: String,
+    params: &[FilterParamPayload],
+) -> Result<Effect, EngineError> {
+    if internal_name.is_empty() {
+        return Err(EngineError::InvalidState {
+            name: name.to_owned(),
+            detail: "an effect needs an internal name".to_owned(),
+        });
+    }
+    if params.iter().any(|param| param.key.is_empty()) {
+        return Err(EngineError::InvalidState {
+            name: name.to_owned(),
+            detail: "parameter keys must be non-empty".to_owned(),
+        });
+    }
+    let mut properties = Vec::with_capacity(params.len());
+    for param in params {
+        properties.push(EffectProperty {
+            key: param.key.clone(),
+            value: param_value(name, &param.key, &param.value, &param.points)?,
+        });
+    }
+    Ok(Effect {
+        category,
+        internal_name,
+        properties,
+    })
 }
 
 impl TypedCommand for AddFilter {
@@ -177,30 +213,12 @@ impl TypedCommand for AddFilter {
         payload: &Self::Payload,
     ) -> Result<Delta, EngineError> {
         const NAME: &str = "filter.add";
-        if payload.name.is_empty() {
-            return Err(EngineError::InvalidState {
-                name: NAME.to_owned(),
-                detail: "an effect needs an internal name".to_owned(),
-            });
-        }
-        if payload.params.iter().any(|param| param.key.is_empty()) {
-            return Err(EngineError::InvalidState {
-                name: NAME.to_owned(),
-                detail: "parameter keys must be non-empty".to_owned(),
-            });
-        }
-        let mut properties = Vec::with_capacity(payload.params.len());
-        for param in &payload.params {
-            properties.push(EffectProperty {
-                key: param.key.clone(),
-                value: param_value(NAME, &param.key, &param.value, &param.points)?,
-            });
-        }
-        let effect = Effect {
-            category: payload.category.clone(),
-            internal_name: payload.name.clone(),
-            properties,
-        };
+        let effect = build_effect(
+            NAME,
+            payload.category.clone(),
+            payload.name.clone(),
+            &payload.params,
+        )?;
         // Slot check before the mutate: `Vec::insert` cannot be handed
         // an out-of-range slot, and the generic mutate error would
         // misreport it as a missing spine.
