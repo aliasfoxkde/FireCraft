@@ -11,6 +11,7 @@ pub(crate) mod cell;
 pub(crate) mod display;
 pub(crate) mod document;
 pub(crate) mod filter;
+pub(crate) mod flatten;
 pub(crate) mod layer;
 pub(crate) mod mask;
 pub(crate) mod object;
@@ -35,6 +36,7 @@ pub fn install(registry: &mut CommandRegistry) -> Result<(), EngineError> {
     retouch::install(registry)?;
     autoshape::install(registry)?;
     filter::install(registry)?;
+    flatten::install(registry)?;
     path::install(registry)?;
     cell::install(registry)?;
     layer::install(registry)?;

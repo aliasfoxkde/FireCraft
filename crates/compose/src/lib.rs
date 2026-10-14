@@ -26,7 +26,8 @@ pub use cache::EffectCache;
 pub use convert::{abgr, blend_mode, blend_value};
 pub use effects::{KernelOp, Plan, RECOGNIZED_GUIDS, plan};
 pub use render::{
-    ComposeError, Render, render, render_transparent, render_with_cache, straight_alpha,
+    ComposeError, Render, render, render_subset, render_transparent, render_with_cache,
+    straight_alpha,
 };
 // The mix vocabulary `blend_mode` speaks, re-exported so export
 // surfaces can match on it without a second vello dependency edge.

@@ -577,6 +577,9 @@ pub const CALLS: &[&str] = &[
     "filter.add",
     "filter.remove",
     "filter.setParam",
+    "flatten.mergeDown",
+    "flatten.selection",
+    "flatten.document",
     "cell.setVisible",
     "cell.setLocked",
     "layer.add",
@@ -1397,6 +1400,13 @@ pub fn random_call(rng: &mut FuzzRng, document: &Document) -> (String, serde_jso
             "id": any_id(rng),
             "mode": rng.pick(&["hard", "antialias", "feather"]).copied(),
             "feather": rng.below(60),
+        }),
+        // Selection-driven bakes: whatever earlier calls left selected
+        // is the bake target, so arms land in the no-op, refusal, and
+        // bake paths alike. mergeDown/selection carry empty payloads.
+        "flatten.mergeDown" | "flatten.selection" => serde_json::json!({}),
+        "flatten.document" => serde_json::json!({
+            "page": any_index(rng, 2),
         }),
         // Selection-driven: whatever earlier calls left selected is
         // the crop target, so arms land in the no-op, crop, and

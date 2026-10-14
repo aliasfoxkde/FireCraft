@@ -13,10 +13,13 @@
 
 - **Ship state:** v0.1.0 released, repo public. Roadmap M0–M15 all
   closed. 153+ commits, CI green on `25fedbc` (7/7 jobs).
-- **Engine registry:** 170 commands, pinned equal to the fuzz call
+- **Engine registry:** 173 commands, pinned equal to the fuzz call
   table by `the_call_table_covers_the_catalog`.
-- **CS6 DOM verb-surface parity:** **194 C / 45 P / 33 M / 84 N**
+- **CS6 DOM verb-surface parity:** **198 C / 45 P / 29 M / 84 N**
   (`docs/planning/generated/dom-parity.md`, regenerate per §5 below).
+  (The CS6 verb list carries both case spellings of mergeDown — the
+  three-command flatten family flipped four rows.)
+- **Active campaign:** close the 29 remaining M (missing) verbs in
 - **Active campaign:** close the 33 remaining M (missing) verbs in
   family batches — one decision doc + one command batch per family,
   exactly as #87–#93 did. The plan is §4 below.
@@ -34,7 +37,7 @@
 | `AGENTS.md` | Operating manual: commands, gates, commit rules, day-to-day method |
 | `docs/PLANNING.md` | Master plan: format spec (§6), architecture (§7), method |
 | `docs/planning/firecraft/` | `ROADMAP.md` + tickets M0–M15 (all closed; reference for how tickets are written) |
-| `docs/decisions/` | Decision records 0001–0030 — **write one per family/batch** |
+| `docs/decisions/` | Decision records 0001–0031 — **write one per family/batch** |
 | `docs/planning/generated/` | `parity.md`, `scorecard.md` (xtask-owned) + `dom-parity.md` (generator-owned, see §5) |
 | `docs/research/fireworks-png-nodes.md` | The node dictionary — the format Rosetta stone (observational; corpus wins on conflict) |
 | `log/devlog.md` | Detailed session log (gitignored) — **append an entry to close every task** |
@@ -130,16 +133,19 @@ for any of the three, so the API text is the sole authority; the
 silent points (all-includes-source, range refusals, append z-order)
 are recorded in the decision doc.
 
-### Phase 3 — Group/flatten (3 verbs)
-- **3.1 `mergeDown`.** Merge the layer/selection into the layer below.
-  Vector+vector = composite into one path set is CS6-faithful only as a
-  bitmap bake for overlapping content — decide in the decision doc
-  (path booleans exist: decision 0003). Stopping: golden-verified
-  composite; undo exact.
-- **3.2 `flattenSelection`.** Bake selected objects into one bitmap
-  object via the compose render path (render → tile bank → ImageObject
-  swap). Depends on nothing; shares machinery with debt 6.5.
-- **3.3 `flattenDocument`.** Whole-page bake; page-level variant of 3.2.
+### Phase 3 — Group/flatten (3 verbs) — DONE (decision 0031)
+`flatten.mergeDown` / `flatten.selection` / `flatten.document` landed
+2026-10-14, backed by a new `compose::render_subset` (listed ids,
+list order = paint order, no canvas matte). Each bake mints fresh
+`mkBT` bank tiles and swaps the participants for one canvas-sized
+ImageObject (Fireworks bitmaps are canvas-sized — faithful).
+mergeDown mutates the bitmap below **in place** (identity/name kept,
+`path.boolean`-style) and refuses unless a bitmap is immediately
+below; flattenSelection spans layers of one page and lands at the
+topmost member's z-slot; flattenDocument collapses content layers to
+one bottom layer with web layers preserved and refuses multi-state
+pages (state-0-only bakes are the recorded deviation). Baked pixels
+carry default weight (the render already applied paint/weight/effects).
 
 ### Phase 4 — View flags (4 verbs) — evidence-gated
 - **4.1 Corpus hunt:** prove or refute a wire home for
@@ -235,10 +241,11 @@ are recorded in the decision doc.
 5.1 → 5.2 (quick wins, warm up the loop) → Phase 1 → Phase 2 → 6.1 →
 6.2 → 8.2 → 8.5 → Phase 3 → 8.3 → 8.4 → 5.3 → 4 (evidence) → 7
 (evidence) → 8.1 → 8.6/6.6 → 6.4 → 5.4. Progress through 2026-10-14:
-5.1–5.2, Phases 1–2, 6.1, 6.2, 8.2, 8.5 done — **next is Phase 3**
-(mergeDown → flattenSelection → flattenDocument). Re-derive from
-`dom-parity.md`'s M table if the matrix has moved; the plan follows the
-matrix, not the reverse.
+5.1–5.2, Phases 1–2, 6.1, 6.2, 8.2, 8.5, Phase 3 done — **next is
+8.3** (split/knife: `splitPaths`, `knifeElementsFromPoint(s)` —
+boolean ops exist, knife = line-vs-path intersection + split).
+Re-derive from `dom-parity.md`'s M table if the matrix has moved; the
+plan follows the matrix, not the reverse.
 
 ## 5. Parity-matrix regeneration recipe
 

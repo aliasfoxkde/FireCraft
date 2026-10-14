@@ -10,6 +10,18 @@ Current version: **0.1.0**.
 
 ### Features
 
+- **engine**: fill edge, crop, tween (df8fe42)
+- **engine**: web-object point append (3516d89)
+- **engine**: autoshape redraw (614bc64)
+- **engine**: rectangle primitive params + quadrangle (93c59b4)
+- **engine**: selection-to-frames fans (ba60816)
+- **engine**: hierarchy selects + selectSimilar (135cb6b)
+- **engine**: object selection model + selection commands (cc85956)
+- **engine**: document canvas color + resolution (4b813ef)
+- **engine**: typed shared layers + sharing commands (25fedbc)
+- **structure**: layer/page order, locks, master pages (e830802)
+- **mask**: element masks, pixel planes, JPEG stash (faa738d)
+- **object**: transform command family (afe257c)
 - **cell**: frame management commands (8187375)
 - **page**: guide, grid, and onion-skinning commands (32dd03a)
 - **object**: group/ungroup commands (96aa656)
@@ -115,6 +127,10 @@ Current version: **0.1.0**.
 
 ### Documentation
 
+- agent handoff, progress, sessions, history (a1e0e9c)
+- **parity**: fix family-list numbering (b1c8f4b)
+- **mask**: decision 0020, element masks as groups (a28c4e0)
+- **planning**: transform family carried in parity matrix (2c381ab)
 - **decisions**: object transform family design (92a29f7)
 - **planning**: frame family carried in parity matrix (b4895c1)
 - **planning**: group/ungroup carried in parity matrix (9f4ba8b)
@@ -146,6 +162,7 @@ Current version: **0.1.0**.
 
 ### Tests
 
+- **cli**: seed symbol state so forcing cannot stall (535340f)
 - **corpus**: textpath golden fixture + anchor (7b08bc7)
 - **corpus**: text golden fixture + anchor (254c442)
 - **app**: M5 shell stopping condition as corpus gate (84c9235)

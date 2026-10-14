@@ -14,17 +14,17 @@ enforced == the fuzz call table).
 
 | class | meaning | count (of 356 dom verbs) |
 |---|---|---|
-| C | carried: a registry command implements the mutation | 194 |
+| C | carried: a registry command implements the mutation | 198 |
 | P | partial: carried with a recorded model limitation | 45 |
-| M | missing: no command and no decision — work items | 33 |
+| M | missing: no command and no decision — work items | 29 |
 | N | not applicable: non-document surface (accessor/UI/session/clipboard/export/OS) | 84 |
 
-Document-mutation coverage: **239 of 272** carried-or-partial
-(194 carried, 45 partial, 33 missing).
+Document-mutation coverage: **243 of 272** carried-or-partial
+(198 carried, 45 partial, 29 missing).
 
 ### Gap families (the Missing table, grouped)
 
-The 33 missing verbs collapse into six families, largest first —
+The 29 missing verbs collapse into six families, largest first —
 each family is one design decision plus a command batch:
 
 1. **Object transforms** (2 verbs remain): rotateDocument (canvas
@@ -44,7 +44,8 @@ each family is one design decision plus a command batch:
    removeAllGuides/setGridOrigin/setGridSize/setOnionSkinning
    landed as page.* commands (page-scoped overrides).
 3. **Group/flatten** (~3 verbs): mergeDown, flattenSelection,
-   flattenDocument. group/ungroup landed as object.group/
+   flattenDocument — landed as flatten.mergeDown / flatten.selection /
+   flatten.document (decision 0031, compositor-backed bakes).
    object.ungroup; setGroupType is partial (GRTi setter).
 4. **Selection tooling** (~7 verbs): select all/inverse/similar/
    parents/children/scope, saved (named) selections,
@@ -59,6 +60,7 @@ each family is one design decision plus a command batch:
 | `AddNewStar` | C | autoshape.star |  |
 | `AddNewText` | C | text.createText |  |
 | `ApplyEffects` | C | filter.add |  |
+| `MergeDown` | C | flatten.mergeDown | bakes the selection into the bitmap directly below (compositor-backed; refuses unless a bitmap is immediately below) |
 | `MovePointOnHotspotByWithFlags` | C | object.translate | generic object move; per-point web-geometry edit is the P-shaped remainder |
 | `addBehavior` | C | slice.addBehavior |  |
 | `addElementMask` | C | mask.add | reveal-all/hide-all/reveal-selection/hide-selection; no plane degrades to reveal-all |
@@ -127,6 +129,8 @@ each family is one design decision plus a command batch:
 | `enableNineScale` | C | symbol.set9Slice |  |
 | `enableTextAntiAliasing` | C | text.setAttrs |  |
 | `fillSelectedPixels` | C | bitmap.fill |  |
+| `flattenDocument` | C | flatten.document | Merge Layers: content layers collapse to one bottom bitmap layer, web layers preserved; single-state pages only |
+| `flattenSelection` | C | flatten.selection | Merge Images: canvas-sized bitmap via render_subset, placed at the topmost member's z-position |
 | `group` | C | object.group | same-container selection folds at the topmost member slot |
 | `hideSelection` | C | object.setVisible |  |
 | `importSymbol` | C | library.importSymbol |  |
@@ -139,6 +143,7 @@ each family is one design decision plus a command batch:
 | `linkElementMask` | C | mask.link | LNKb absent = linked, false = unlinked |
 | `lockNineScale` | C | symbol.set9Slice | grid lock rides the 9-slice payload |
 | `lockSelection` | C | object.setLocked |  |
+| `mergeDown` | C | flatten.mergeDown | bakes the selection into the bitmap directly below (compositor-backed; refuses unless a bitmap is immediately below) |
 | `modifyPointOnPath` | C | path.movePoints |  |
 | `moveBezierHandleBy` | C | path.movePoints | handle (primary/secondary) edit |
 | `moveElementMaskBy` | C | mask.moveBy |  |
@@ -306,7 +311,6 @@ each family is one design decision plus a command batch:
 | CS6 verb | class | FireCraft carrier | note |
 |---|---|---|---|
 | `AddNewImage` | M | - | no engine place-image command; io::raster::attach_image is the import-side path (SVG/raster import), app_cli carries file placement |
-| `MergeDown` | M | - | no merge-down (object or bitmap flatten) |
 | `addNewImage` | M | - | no engine place-image command; io::raster::attach_image is the import-side path (SVG/raster import), app_cli carries file placement |
 | `addNewImageViaCopy` | M | - | same gap as addNewImage |
 | `addNewImageViaCut` | M | - | same gap as addNewImage |
@@ -319,11 +323,8 @@ each family is one design decision plus a command batch:
 | `filterSelectionByID` | M | - | pixel-filter bake verb (permanent, not a Live Effect) — filter family; needs the bitmap bake pass (debt) |
 | `filterSelectionByName` | M | - | pixel-filter bake verb (permanent, not a Live Effect) — filter family; needs the bitmap bake pass (debt) |
 | `filterSelectonByName` | M | - | pixel-filter bake verb (permanent, not a Live Effect) — filter family; needs the bitmap bake pass (debt) |
-| `flattenDocument` | M | - | no flatten-all |
-| `flattenSelection` | M | - | no flatten command |
 | `knifeElementsFromPoint` | M | - | no split/knife boolean op |
 | `knifeElementsFromPoints` | M | - | no split/knife boolean op |
-| `mergeDown` | M | - | no merge-down (object or bitmap flatten) |
 | `restoreSelection` | M | - | named saved selections unmodeled |
 | `rotateDocument` | M | - | canvas rotation (90-degree steps + re-bake) |
 | `saveSelection` | M | - | named saved selections unmodeled |

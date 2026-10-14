@@ -201,13 +201,41 @@ pub fn render_with_cache(
     render_inner(document, page, frame, cache, true)
 }
 
-fn render_inner(
+/// Renders only the listed object ids, in list order (bottom-first),
+/// against a transparent canvas — the bitmap-bake surface for the
+/// flatten family (engine decision 0031). No canvas matte: the pixels
+/// carry object coverage only, so the document's canvas color stays a
+/// live property after a flatten bakes this render into tiles. An id
+/// absent from the registry is a [`ComposeError::DanglingId`]; hidden
+/// and slice objects contribute nothing, exactly as in the full walk.
+pub fn render_subset(
     document: &Document,
     page: usize,
     frame: usize,
-    cache: &mut EffectCache,
-    matte: bool,
+    ids: &[doc::ObjectId],
 ) -> Result<Render, ComposeError> {
+    let (width, height) = canvas_extent(document, page)?;
+    let mut ctx = RenderContext::new(width, height);
+    let resources = Resources::new();
+    let mut text_engine = None;
+    let mut walk = Walk {
+        document,
+        frame,
+        canvas: (width, height),
+        cache: &mut EffectCache::new(),
+        text_engine: &mut text_engine,
+        ctx: &mut ctx,
+        stack: &[],
+    };
+    for id in ids {
+        render_object(*id, &mut walk)?;
+    }
+    finish(ctx, resources, width, height)
+}
+
+/// Rounds and range-checks a page's canvas to the rasterizer's pixel
+/// extent — the shared preamble of every render entry point.
+fn canvas_extent(document: &Document, page: usize) -> Result<(u16, u16), ComposeError> {
     let page = document
         .pages
         .get(page)
@@ -224,10 +252,36 @@ fn render_inner(
             height: canvas.height,
         });
     }
-    let (width, height) = (width as u16, height as u16);
+    Ok((width as u16, height as u16))
+}
 
+/// Flushes the context into a finished [`Render`].
+fn finish(
+    mut ctx: RenderContext,
+    mut resources: Resources,
+    width: u16,
+    height: u16,
+) -> Result<Render, ComposeError> {
+    ctx.flush();
+    let mut pixmap = Pixmap::new(width, height);
+    ctx.render(pixmap.as_mut(), &mut resources);
+    Ok(Render {
+        width,
+        height,
+        pixels: pixmap.data_as_u8_slice().to_vec(),
+    })
+}
+
+fn render_inner(
+    document: &Document,
+    page: usize,
+    frame: usize,
+    cache: &mut EffectCache,
+    matte: bool,
+) -> Result<Render, ComposeError> {
+    let (width, height) = canvas_extent(document, page)?;
     let mut ctx = RenderContext::new(width, height);
-    let mut resources = Resources::new();
+    let resources = Resources::new();
     // The canvas background (`BGCi`) paints under everything, before
     // the layer walk — CS6's matte shows wherever no object covers.
     // The raw is ABGR like every paint slot; its alpha byte rides
@@ -235,7 +289,7 @@ fn render_inner(
     // forced opaque. Transparency-native exports opt out via
     // [`render_transparent`].
     if matte {
-        let raw = canvas.background_raw as u32;
+        let raw = document.pages[page].info.canvas.background_raw as u32;
         ctx.set_paint(Brush::Solid(AlphaColor::from_rgba8(
             (raw & 0xFF) as u8,
             ((raw >> 8) & 0xFF) as u8,
@@ -247,8 +301,9 @@ fn render_inner(
     // The text shaping engine builds lazily — documents without text
     // never pay for the font database.
     let mut text_engine = None;
+    let page_layers = &document.pages[page].layers.layers;
     walk_layers(
-        &page.layers.layers,
+        page_layers,
         &mut Walk {
             document,
             frame,
@@ -259,15 +314,7 @@ fn render_inner(
             stack: &[],
         },
     )?;
-    ctx.flush();
-
-    let mut pixmap = Pixmap::new(width, height);
-    ctx.render(pixmap.as_mut(), &mut resources);
-    Ok(Render {
-        width,
-        height,
-        pixels: pixmap.data_as_u8_slice().to_vec(),
-    })
+    finish(ctx, resources, width, height)
 }
 
 /// Converts a [`Render`]'s premultiplied pixels to straight alpha —

@@ -11,6 +11,7 @@ description = "FireCraft editor engine: command registry, inverse deltas, transa
 
 [dependencies]
 base64 = "0.22"
+compose = { path = "../compose" }
 doc = { path = "../doc", features = ["serde"] }
 geom = { path = "../geom" }
 raster = { path = "../raster", features = ["serde"] }
