@@ -34,7 +34,9 @@ pub(crate) fn install(registry: &mut CommandRegistry) -> Result<(), EngineError>
     registry.register(PathRedraw)?;
     registry.register(PathSetFill)?;
     registry.register(PathSetFillColor)?;
-    registry.register(PathSetFillVector)
+    registry.register(PathSetFillVector)?;
+    registry.register(PathSetFillEdgeMode)?;
+    registry.register(PathCropSelection)
 }
 
 /// Maps a vector-pipeline failure to a command error. [`VectorError`]
@@ -1071,6 +1073,252 @@ impl TypedCommand for PathSetFillVector {
     }
 }
 
+/// The fill edge (`FEFi`/`FRDb`) a payload selects — CS6's
+/// `setFillEdgeMode` strings.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+enum FillEdgeMode {
+    /// `FRDb` set: no anti-aliasing on the fill boundary.
+    Hard,
+    /// `FEFi` 0, anti-aliased boundary.
+    Antialias,
+    /// `FEFi` = the feather amount, anti-aliased boundary.
+    Feather,
+}
+
+/// `path.setFillEdgeMode` — CS6
+/// `dom.setFillEdgeMode(edgemode, featherAmt)`: "Sets the edge type for
+/// selected items with fills." Values map onto the two `FPLv` slots:
+/// `hard` sets `FRDb` and clears `FEFi`; `antialias` clears both;
+/// `feather` clears `FRDb` and stores the amount in `FEFi`. A path
+/// without an `FPLv` subtree gains one (a solid definition with the
+/// edge set — the panel does the same when you open Edge on a solid
+/// fill).
+struct PathSetFillEdgeMode;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct PathSetFillEdgeModePayload {
+    /// Target object.
+    id: doc::ObjectId,
+    /// The edge treatment.
+    mode: FillEdgeMode,
+    /// Feather width in pixels; read only for `mode: "feather"`.
+    #[serde(default)]
+    feather: i64,
+}
+
+impl TypedCommand for PathSetFillEdgeMode {
+    type Payload = PathSetFillEdgeModePayload;
+
+    fn name(&self) -> &'static str {
+        "path.setFillEdgeMode"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "path.setFillEdgeMode";
+        if payload.mode == FillEdgeMode::Feather && payload.feather < 0 {
+            return Err(EngineError::BadPayload {
+                name: NAME.to_owned(),
+                detail: format!("feather amount {} is negative", payload.feather),
+            });
+        }
+        let before = access::object(document, NAME, payload.id)?.clone();
+        let (hard_edge, feather) = match payload.mode {
+            FillEdgeMode::Hard => (true, 0),
+            FillEdgeMode::Antialias => (false, 0),
+            FillEdgeMode::Feather => (false, payload.feather),
+        };
+        let applied = match document.registry.get_mut(payload.id) {
+            Some(ObjectData::Path(path)) => {
+                match &mut path.paint {
+                    Some(paint) => match &mut paint.fill {
+                        Some(fill) => {
+                            fill.hard_edge = hard_edge;
+                            fill.feather = feather;
+                        }
+                        None => {
+                            paint.fill = Some(doc::Fill {
+                                shape: doc::FillShape::Solid,
+                                shape_extended: true,
+                                texture_blend: 0,
+                                feather,
+                                stamping: None,
+                                hard_edge,
+                                gradient: None,
+                                dither: None,
+                                pattern: None,
+                            });
+                        }
+                    },
+                    // A path with no paint at all still carries a fill
+                    // edge once the panel sets one; mirror setFill's
+                    // materialization with the CS6 default paint.
+                    None => {
+                        path.paint = Some(doc::PaintStyle {
+                            stroke_raw: 0,
+                            fill_raw: 0xFF00_0000,
+                            fill: Some(doc::Fill {
+                                shape: doc::FillShape::Solid,
+                                shape_extended: true,
+                                texture_blend: 0,
+                                feather,
+                                stamping: None,
+                                hard_edge,
+                                gradient: None,
+                                dither: None,
+                                pattern: None,
+                            }),
+                        });
+                    }
+                }
+                true
+            }
+            _ => false,
+        };
+        if !applied {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: format!("object {} is not a path", payload.id.index()),
+            });
+        }
+        Ok(Delta::Object {
+            id: payload.id,
+            inverse: ObjectInverse::Mutated {
+                object: Box::new(before),
+            },
+        })
+    }
+}
+
+/// `path.cropSelection` — CS6 `dom.cropSelection(boundingRectangle)`:
+/// "Crops the selection to the specified rectangle." Each selected
+/// path is combined with the rectangle (the `Crop` boolean —
+/// intersection with Fireworks' combine order), replaced in place,
+/// keeping its display fields; a path entirely outside the rectangle
+/// leaves nothing behind and is removed, as `path.boolean` does.
+/// Non-path members refuse the whole command: cropping bitmaps is a
+/// pixel operation (the bake debt), and groups/text/slices have no
+/// crop semantics on the wire.
+struct PathCropSelection;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct PathCropSelectionPayload {
+    /// The crop rectangle as `[x0, y0, x1, y1]`, world coordinates.
+    rect: [f64; 4],
+}
+
+impl TypedCommand for PathCropSelection {
+    type Payload = PathCropSelectionPayload;
+
+    fn name(&self) -> &'static str {
+        "path.cropSelection"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "path.cropSelection";
+        let [x0, y0, x1, y1] = payload.rect;
+        if [x0, y0, x1, y1].iter().any(|value| !value.is_finite()) {
+            return Err(EngineError::BadPayload {
+                name: NAME.to_owned(),
+                detail: "rect is not finite".to_owned(),
+            });
+        }
+        if x1 <= x0 || y1 <= y0 {
+            return Err(EngineError::BadPayload {
+                name: NAME.to_owned(),
+                detail: format!("rect ({x0}, {y0})..({x1}, {y1}) is empty"),
+            });
+        }
+        if document.object_selection.is_empty() {
+            return Ok(Delta::Noop);
+        }
+        let selection = document.object_selection.clone();
+        let blade = doc::PathObject {
+            contours: super::object::rounded_rect_contour(geom::Rect::new(x0, y0, x1, y1), 0.0),
+            even_odd: false,
+            primitive: None,
+            paint: None,
+            fill_start: None,
+            fill_end: None,
+            fill_third: None,
+            brush_placement: None,
+            fill_on_top: None,
+            locked: false,
+            visible: true,
+            opacity: 1000,
+            blend: 0,
+            name: None,
+            effects: Vec::new(),
+        };
+        // Compute every crop before any mutation: one hostile member
+        // refuses the whole command.
+        let mut crops = Vec::new();
+        for id in &selection {
+            let Some(ObjectData::Path(path)) = document.registry.get(*id) else {
+                return Err(EngineError::InvalidState {
+                    name: NAME.to_owned(),
+                    detail: format!(
+                        "selected object {} is not a path; only paths crop",
+                        id.index()
+                    ),
+                });
+            };
+            let cropped = vector::boolean(path, &blade, BooleanOp::Crop)
+                .map_err(|error| vector_error(NAME, error))?;
+            crops.push(cropped);
+        }
+        let mut deltas = Vec::new();
+        // Pre-flight the removals: an unattached (or group-orphaned)
+        // member must refuse before the first crop lands.
+        for (id, cropped) in selection.iter().zip(&crops) {
+            if cropped.contours.is_empty() {
+                object::ensure_detachable(document, NAME, *id)?;
+            }
+        }
+        for (id, cropped) in selection.iter().zip(crops) {
+            let before = access::object(document, NAME, *id)?.clone();
+            if cropped.contours.is_empty() {
+                deltas.push(object::detach(document, NAME, *id)?);
+                if document.registry.remove(*id).is_none() {
+                    return Err(EngineError::MissingTarget {
+                        name: NAME.to_owned(),
+                        detail: format!("object {} vanished mid-crop", id.index()),
+                    });
+                }
+                deltas.push(Delta::Object {
+                    id: *id,
+                    inverse: ObjectInverse::Removed {
+                        object: Box::new(before),
+                    },
+                });
+            } else {
+                if let Some(ObjectData::Path(path)) = document.registry.get_mut(*id) {
+                    path.contours = cropped.contours;
+                    path.even_odd = cropped.even_odd;
+                    path.primitive = None;
+                }
+                deltas.push(Delta::Object {
+                    id: *id,
+                    inverse: ObjectInverse::Mutated {
+                        object: Box::new(before),
+                    },
+                });
+            }
+        }
+        Ok(Delta::Group(deltas))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
@@ -1941,5 +2189,232 @@ mod tests {
         let error = apply_by_name(&mut document, "path.setFillVector", json!({ "id": ids[0] }))
             .unwrap_err();
         assert!(matches!(error, EngineError::InvalidState { .. }), "{error}");
+    }
+
+    fn fill_of(document: &Document, id: ObjectId) -> &doc::Fill {
+        match document.registry.get(id).unwrap() {
+            ObjectData::Path(path) => path
+                .paint
+                .as_ref()
+                .and_then(|paint| paint.fill.as_ref())
+                .expect("fill materialized"),
+            other => panic!("wrong object kind: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn set_fill_edge_mode_maps_each_mode_and_inverts() {
+        let (mut document, ids) = document_with(vec![square(0.0, 0.0, 8.0, 8.0)]);
+        let before = document_bytes(&document);
+
+        // `antialias` materializes the fill definition (the square has
+        // paint but no fill) and clears both edge slots.
+        let deltas = [
+            apply_by_name(
+                &mut document,
+                "path.setFillEdgeMode",
+                json!({ "id": ids[0], "mode": "antialias" }),
+            )
+            .unwrap(),
+            apply_by_name(
+                &mut document,
+                "path.setFillEdgeMode",
+                json!({ "id": ids[0], "mode": "feather", "feather": 12 }),
+            )
+            .unwrap(),
+            apply_by_name(
+                &mut document,
+                "path.setFillEdgeMode",
+                json!({ "id": ids[0], "mode": "hard" }),
+            )
+            .unwrap(),
+        ];
+        let fill = fill_of(&document, ids[0]);
+        assert!(fill.hard_edge, "hard sets FRDb");
+        assert_eq!(fill.feather, 0, "hard clears FEFi");
+        assert!(matches!(fill.shape, doc::FillShape::Solid));
+        // The pre-existing paint survives the materialization.
+        match document.registry.get(ids[0]).unwrap() {
+            ObjectData::Path(path) => match path.paint.as_ref() {
+                Some(paint) => {
+                    assert_eq!(paint.stroke_raw, 0x11);
+                    assert_eq!(paint.fill_raw, 0x22);
+                }
+                None => panic!("paint kept"),
+            },
+            other => panic!("wrong object kind: {other:?}"),
+        }
+
+        // Undo lands on the fill-less square (LIFO through the whole
+        // sequence).
+        for delta in deltas.iter().rev() {
+            delta.apply_inverse(&mut document).unwrap();
+        }
+        assert_eq!(document_bytes(&document), before);
+    }
+
+    #[test]
+    fn set_fill_edge_mode_creates_the_paint_when_absent() {
+        let mut unpainted = square(0.0, 0.0, 8.0, 8.0);
+        if let ObjectData::Path(path) = &mut unpainted {
+            path.paint = None;
+        }
+        let (mut document, ids) = document_with(vec![unpainted]);
+        let before = document_bytes(&document);
+        let delta = apply_by_name(
+            &mut document,
+            "path.setFillEdgeMode",
+            json!({ "id": ids[0], "mode": "feather", "feather": 4 }),
+        )
+        .unwrap();
+        match document.registry.get(ids[0]).unwrap() {
+            ObjectData::Path(path) => {
+                let paint = path.paint.as_ref().expect("paint materialized");
+                assert_eq!(paint.fill_raw, 0xFF00_0000, "CS6 default fill color");
+                let fill = paint.fill.as_ref().expect("fill materialized");
+                assert_eq!(fill.feather, 4);
+                assert!(!fill.hard_edge);
+            }
+            other => panic!("wrong object kind: {other:?}"),
+        }
+        delta.apply_inverse(&mut document).unwrap();
+        assert_eq!(document_bytes(&document), before);
+    }
+
+    #[test]
+    fn set_fill_edge_mode_refusals_leave_the_document_alone() {
+        let (mut document, ids) = document_with(vec![square(0.0, 0.0, 8.0, 8.0), image_object()]);
+        let before = document_bytes(&document);
+        let refusals = [
+            (
+                json!({ "id": ids[0], "mode": "feather", "feather": -1 }),
+                "BadPayload",
+                "negative feather",
+            ),
+            (
+                json!({ "id": ids[0], "mode": "blurry" }),
+                "BadPayload",
+                "unknown mode",
+            ),
+            (
+                json!({ "id": ids[1], "mode": "hard" }),
+                "InvalidState",
+                "not a path",
+            ),
+            (
+                json!({ "id": ObjectId::from_parts(999, 0), "mode": "hard" }),
+                "MissingTarget",
+                "missing object",
+            ),
+        ];
+        for (payload, kind, why) in refusals {
+            let error = apply_by_name(&mut document, "path.setFillEdgeMode", payload).unwrap_err();
+            let rendered = match &error {
+                EngineError::BadPayload { .. } => "BadPayload",
+                EngineError::InvalidState { .. } => "InvalidState",
+                EngineError::MissingTarget { .. } => "MissingTarget",
+                other => panic!("unexpected error for {why}: {other:?}"),
+            };
+            assert_eq!(rendered, kind, "{why}: {error}");
+        }
+        assert_eq!(document_bytes(&document), before);
+    }
+
+    #[test]
+    fn crop_selection_clips_paths_and_inverts() {
+        let (mut document, ids) = document_with(vec![
+            square(0.0, 0.0, 8.0, 8.0),
+            square(4.0, 4.0, 12.0, 12.0),
+        ]);
+        document.object_selection = vec![ids[0], ids[1]];
+        let before = document_bytes(&document);
+        let delta = apply_by_name(
+            &mut document,
+            "path.cropSelection",
+            json!({ "rect": [2.0, 2.0, 6.0, 6.0] }),
+        )
+        .unwrap();
+        let mut first = anchors(&document, ids[0]);
+        first.sort_unstable();
+        assert_eq!(first, vec![(2, 2), (2, 6), (6, 2), (6, 6)]);
+        let mut second = anchors(&document, ids[1]);
+        second.sort_unstable();
+        assert_eq!(second, vec![(4, 4), (4, 6), (6, 4), (6, 6)]);
+        // Display fields ride along; the geometry is derived.
+        match document.registry.get(ids[0]).unwrap() {
+            ObjectData::Path(path) => {
+                assert_eq!(path.name.as_deref(), Some("square"));
+                assert_eq!(path.paint.as_ref().unwrap().stroke_raw, 0x11);
+                assert!(path.primitive.is_none());
+            }
+            other => panic!("wrong object kind: {other:?}"),
+        }
+        delta.apply_inverse(&mut document).unwrap();
+        assert_eq!(document_bytes(&document), before);
+    }
+
+    #[test]
+    fn crop_selection_removes_paths_outside_the_rect() {
+        let (mut document, ids) = document_with(vec![
+            square(0.0, 0.0, 8.0, 8.0),
+            square(20.0, 20.0, 24.0, 24.0),
+        ]);
+        document.object_selection = vec![ids[0], ids[1]];
+        let before = document_bytes(&document);
+        let delta = apply_by_name(
+            &mut document,
+            "path.cropSelection",
+            json!({ "rect": [1.0, 1.0, 5.0, 5.0] }),
+        )
+        .unwrap();
+        assert!(
+            document.registry.get(ids[1]).is_none(),
+            "outside path removed"
+        );
+        let cell = &document.pages[0].layers.layers[0].cells[0];
+        assert_eq!(cell.elements, vec![ids[0]]);
+        delta.apply_inverse(&mut document).unwrap();
+        assert_eq!(document_bytes(&document), before);
+    }
+
+    #[test]
+    fn crop_selection_noop_and_refusals_leave_the_document_alone() {
+        let (mut document, ids) = document_with(vec![square(0.0, 0.0, 8.0, 8.0), image_object()]);
+
+        // Nothing selected: an explicit no-op.
+        let delta = apply_by_name(
+            &mut document,
+            "path.cropSelection",
+            json!({ "rect": [0.0, 0.0, 4.0, 4.0] }),
+        )
+        .unwrap();
+        assert!(matches!(delta, Delta::Noop));
+
+        document.object_selection = vec![ids[0], ids[1]];
+        let before = document_bytes(&document);
+
+        // Malformed rects are refused before the selection is read.
+        for rect in [
+            json!([0.0, 0.0, 0.0, 4.0]),
+            json!([4.0, 4.0, 0.0, 0.0]),
+            serde_json::Value::Null,
+        ] {
+            let error = apply_by_name(&mut document, "path.cropSelection", json!({ "rect": rect }))
+                .unwrap_err();
+            assert!(
+                matches!(error, EngineError::BadPayload { .. }),
+                "rect {rect}: {error}"
+            );
+        }
+
+        // A non-path member refuses the whole command untouched.
+        let error = apply_by_name(
+            &mut document,
+            "path.cropSelection",
+            json!({ "rect": [1.0, 1.0, 6.0, 6.0] }),
+        )
+        .unwrap_err();
+        assert!(matches!(error, EngineError::InvalidState { .. }), "{error}");
+        assert_eq!(document_bytes(&document), before);
     }
 }

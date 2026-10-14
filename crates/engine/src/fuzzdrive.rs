@@ -569,6 +569,8 @@ pub const CALLS: &[&str] = &[
     "path.warp",
     "path.reshapeArea",
     "path.redrawPath",
+    "path.setFillEdgeMode",
+    "path.cropSelection",
     "path.setFill",
     "path.setFillColor",
     "path.setFillVector",
@@ -630,6 +632,7 @@ pub const CALLS: &[&str] = &[
     "symbol.editAttach",
     "symbol.editDetach",
     "symbol.editReorder",
+    "symbol.tween",
     "library.add",
     "library.importSymbol",
     "library.remove",
@@ -1390,6 +1393,22 @@ pub fn random_call(rng: &mut FuzzRng, document: &Document) -> (String, serde_jso
             }
             payload
         }
+        "path.setFillEdgeMode" => serde_json::json!({
+            "id": any_id(rng),
+            "mode": rng.pick(&["hard", "antialias", "feather"]).copied(),
+            "feather": rng.below(60),
+        }),
+        // Selection-driven: whatever earlier calls left selected is
+        // the crop target, so arms land in the no-op, crop, and
+        // refusal paths alike.
+        "path.cropSelection" => serde_json::json!({
+            "rect": [
+                -(rng.below(80) as f64),
+                -(rng.below(80) as f64),
+                rng.below(120) as f64,
+                rng.below(120) as f64,
+            ],
+        }),
         "path.reshapeArea" => serde_json::json!({
             "id": any_id(rng),
             "x0": -(rng.below(200) as f64),
@@ -1941,6 +1960,14 @@ pub fn random_call(rng: &mut FuzzRng, document: &Document) -> (String, serde_jso
             "layer": any_index(rng, 2),
             "cell": any_index(rng, frames),
             "index": any_opt_index(rng, 6),
+        }),
+        // Selection-driven like the dialog: lands on the refusals
+        // (wrong count, mixed symbols) most draws, same-cell tweens
+        // when the fuzzer happens to have two instances selected.
+        "symbol.tween" => serde_json::json!({
+            "numSteps": 1 + rng.below(5),
+            "distribute": rng.chance(2),
+            "frame": any_index(rng, frames),
         }),
         "symbol.editDetach" => serde_json::json!({
             "symbol": rng.below(3),

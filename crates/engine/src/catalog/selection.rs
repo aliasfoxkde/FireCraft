@@ -9,7 +9,7 @@
 
 use doc::{Document, ObjectId};
 
-use super::cell::{DEFAULT_FRAME_DURATION, check_closure, clone_element, splice_cells};
+use super::cell::{append_frames, check_closure, clone_element};
 use super::object::{Owner, find_owner};
 use crate::access;
 use crate::command::TypedCommand;
@@ -573,38 +573,6 @@ fn fan_clones(
         }
     }
     Ok(minted)
-}
-
-/// Appends `count` empty frames to the page (cells on every layer plus
-/// the `FRCi` counts and, when aligned, the duration vec), the same
-/// shape `frame.add` uses for end-appended frames.
-fn append_frames(document: &mut Document, page: usize, count: usize) {
-    let Some(target) = document.pages.get_mut(page) else {
-        return;
-    };
-    let old_count = target.info.frame_count.max(0) as usize;
-    let aligned =
-        target.info.frame_durations.len() == old_count && !target.info.frame_durations.is_empty();
-    splice_cells(
-        target,
-        old_count,
-        || doc::Cell {
-            locked: false,
-            visible: true,
-            elements: Vec::new(),
-        },
-        count,
-    );
-    if aligned {
-        for _ in 0..count {
-            target
-                .info
-                .frame_durations
-                .insert(old_count, DEFAULT_FRAME_DURATION);
-        }
-    }
-    target.info.frame_count += count as i64;
-    target.info.frame_count_duplicate += count as i64;
 }
 
 /// `selection.duplicateToFrames` — CS6

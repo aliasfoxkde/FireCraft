@@ -48,7 +48,8 @@ pub(crate) fn install(registry: &mut CommandRegistry) -> Result<(), EngineError>
     registry.register(LibraryAdd)?;
     registry.register(LibraryRemove)?;
     registry.register(LibraryRename)?;
-    registry.register(LibraryImport)
+    registry.register(LibraryImport)?;
+    registry.register(Tween)
 }
 
 /// The settable symbol types. `Other(raw)` definitions stay readable
@@ -1455,6 +1456,199 @@ impl TypedCommand for LibraryImport {
     }
 }
 
+/// Splits a transform into the translation, rotation and scale the
+/// tween interpolates. Skew-free by construction: a skewed source
+/// rounds into the nearest rotation + anisotropic scale (the tween
+/// panel exposes exactly these three knobs, so the decomposition is
+/// the format's own vocabulary).
+fn decompose(m: geom::Affine) -> ([f64; 2], f64, [f64; 2]) {
+    let [a, b, c, d, e, f] = m.as_coeffs();
+    let rotation = b.atan2(a);
+    let scale_x = a.hypot(b);
+    // Strip the rotation from the second column; what remains is the
+    // y scale (the residue is skew, which the tween does not carry).
+    let scale_y = -c * rotation.sin() + d * rotation.cos();
+    ([e, f], rotation, [scale_x, scale_y])
+}
+
+/// Recomposes [`decompose`]'s parts.
+fn recompose(translation: [f64; 2], rotation: f64, scale: [f64; 2]) -> geom::Affine {
+    let (sin, cos) = rotation.sin_cos();
+    geom::Affine::new([
+        scale[0] * cos,
+        scale[0] * sin,
+        -scale[1] * sin,
+        scale[1] * cos,
+        translation[0],
+        translation[1],
+    ])
+}
+
+/// `symbol.tween` — CS6 `dom.tween(numSteps, bDistribute)`: "Tweens
+/// between the two selected instances", generating `numSteps` new
+/// instances on the line between them (the Transform panel's
+/// location/rotation/scale knobs interpolated; the rotation takes the
+/// shortest arc), optionally distributed across the states following
+/// the source frame (`bDistribute`), adding frames as
+/// `distributeToFrames` does. Both instances must be of one symbol in
+/// one cell of one page — the dialog's own precondition. Per-instance
+/// animation parameters are not tweened (copies carry none); recorded
+/// as the decision's deviation.
+struct Tween;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct TweenPayload {
+    /// How many new instances sit between the two selected ones.
+    num_steps: u32,
+    /// Distribute the new instances across the following frames.
+    distribute: bool,
+    /// Source ("current") frame for the distribution.
+    frame: usize,
+}
+
+impl TypedCommand for Tween {
+    type Payload = TweenPayload;
+
+    fn name(&self) -> &'static str {
+        "symbol.tween"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "symbol.tween";
+        if payload.num_steps == 0 {
+            return Err(EngineError::BadPayload {
+                name: NAME.to_owned(),
+                detail: "numSteps must be at least 1".to_owned(),
+            });
+        }
+        let picked: Vec<(ObjectId, SymbolInstanceObject)> = document
+            .object_selection
+            .iter()
+            .copied()
+            .filter_map(|id| match document.registry.get(id) {
+                Some(ObjectData::SymbolInstance(instance)) => Some((id, instance.clone())),
+                _ => None,
+            })
+            .collect();
+        if picked.len() != 2 {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: format!(
+                    "tween needs exactly two selected instances, got {}",
+                    picked.len()
+                ),
+            });
+        }
+        let selected: Vec<ObjectId> = picked.iter().map(|(id, _)| *id).collect();
+        let instances: Vec<SymbolInstanceObject> =
+            picked.into_iter().map(|(_, instance)| instance).collect();
+        if instances[0].symbol_number != instances[1].symbol_number {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: "the two instances are not of the same symbol".to_owned(),
+            });
+        }
+        let cell_of = |id: ObjectId| match find_owner(document, id) {
+            Some(Owner::Cell {
+                page,
+                layer,
+                cell,
+                position,
+            }) => Some((page, layer, cell, position)),
+            _ => None,
+        };
+        let (Some((page, layer, cell, position)), Some((other_page, other_layer, other_cell, _))) =
+            (cell_of(selected[0]), cell_of(selected[1]))
+        else {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: "both instances must sit in cells (not nested in groups)".to_owned(),
+            });
+        };
+        if (other_page, other_layer, other_cell) != (page, layer, cell) {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: "the two instances must share one cell".to_owned(),
+            });
+        }
+        // Shortest-arc rotation between the endpoints (round is 0 for
+        // a half-turn or less, ±1 past it).
+        let (from_t, from_r, from_s) = decompose(instances[0].transform);
+        let (to_t, mut to_r, to_s) = decompose(instances[1].transform);
+        let turn = (to_r - from_r) / std::f64::consts::TAU;
+        to_r -= turn.round() * std::f64::consts::TAU;
+        let count = document.pages[page].info.frame_count.max(0) as usize;
+        if payload.distribute && payload.frame >= count {
+            return Err(EngineError::MissingTarget {
+                name: NAME.to_owned(),
+                detail: format!(
+                    "frame {} is beyond the page's {} frames",
+                    payload.frame, count
+                ),
+            });
+        }
+        let needed = if payload.distribute {
+            (payload.frame + payload.num_steps as usize + 1).saturating_sub(count)
+        } else {
+            0
+        };
+        let before = Box::new(document.pages[page].clone());
+        if needed > 0 {
+            super::cell::append_frames(document, page, needed);
+        }
+        let steps = payload.num_steps as f64;
+        let mut minted = Vec::new();
+        for step in 1..=payload.num_steps {
+            let t = step as f64 / (steps + 1.0);
+            let lerp = |from: f64, to: f64| from + (to - from) * t;
+            let transform = recompose(
+                [lerp(from_t[0], to_t[0]), lerp(from_t[1], to_t[1])],
+                lerp(from_r, to_r),
+                [lerp(from_s[0], to_s[0]), lerp(from_s[1], to_s[1])],
+            );
+            let instance =
+                document
+                    .registry
+                    .insert(ObjectData::SymbolInstance(SymbolInstanceObject {
+                        symbol_number: instances[0].symbol_number,
+                        transform,
+                        locked: false,
+                        name: None,
+                        animation: None,
+                        custom_data: instances[0].custom_data.clone(),
+                    }));
+            minted.push(instance);
+            if payload.distribute {
+                let target = payload.frame + step as usize;
+                access::cell_mut(document, NAME, page, layer, target)?
+                    .elements
+                    .push(instance);
+            } else {
+                attach_cell(
+                    document,
+                    NAME,
+                    page,
+                    layer,
+                    cell,
+                    instance,
+                    Some(position + step as usize),
+                )?;
+            }
+        }
+        let mut deltas = vec![Delta::PageBody { page, before }];
+        deltas.extend(minted.into_iter().map(|id| Delta::Object {
+            id,
+            inverse: ObjectInverse::Created,
+        }));
+        Ok(Delta::Group(deltas))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
@@ -2657,5 +2851,252 @@ mod tests {
         assert!(matches!(error, EngineError::InvalidState { .. }));
         assert_eq!(serde_json::to_vec(&document).unwrap(), before);
         assert!(document.symbols.is_empty());
+    }
+
+    /// Two instances of one symbol in page 0's anchor cell: `first` at
+    /// the origin, `second` at (30, 60). Returns their ids.
+    fn tween_endpoints() -> (Document, ObjectId, ObjectId) {
+        let (mut document, ids) = testdoc::sample_document();
+        let registry = registry();
+        registry
+            .execute(
+                &mut document,
+                "symbol.create",
+                json!({
+                    "ids": [ids[0], ids[1]],
+                    "name": "dot",
+                    "symbol_type": "graphic",
+                }),
+            )
+            .unwrap();
+        let (first, _) = instance_of(&document);
+        registry
+            .execute(
+                &mut document,
+                "symbol.createInstance",
+                json!({
+                    "symbol": 0, "page": 0, "layer": 0, "cell": 0,
+                    "x": 30.0, "y": 60.0,
+                }),
+            )
+            .unwrap();
+        let elements = cell_elements(&document).to_vec();
+        let second = *elements.last().unwrap();
+        if let Some(ObjectData::SymbolInstance(instance)) = document.registry.get_mut(second) {
+            instance.transform = geom::Affine::translate((30.0, 60.0));
+        }
+        document.object_selection = vec![first, second];
+        (document, first, second)
+    }
+
+    fn transform_coeffs(document: &Document, id: ObjectId) -> [f64; 6] {
+        match document.registry.get(id).unwrap() {
+            ObjectData::SymbolInstance(instance) => instance.transform.as_coeffs(),
+            other => panic!("wrong object kind: {other:?}"),
+        }
+    }
+
+    fn near(a: f64, b: f64) -> bool {
+        (a - b).abs() < 1e-9
+    }
+
+    #[test]
+    fn tween_inserts_lerped_instances_between_the_endpoints() {
+        let (mut document, first, second) = tween_endpoints();
+        let original = serde_json::to_vec(&document).unwrap();
+        let registry = registry();
+        let delta = registry
+            .execute(
+                &mut document,
+                "symbol.tween",
+                json!({ "numSteps": 2, "distribute": false, "frame": 0 }),
+            )
+            .unwrap();
+
+        // The new instances sit between the endpoints: attached after
+        // the first endpoint's position, so the order reads first,
+        // step 1, step 2, second.
+        let elements = cell_elements(&document).to_vec();
+        assert_eq!(elements.len(), 4);
+        assert_eq!(elements[0], first);
+        assert_eq!(elements[3], second);
+        let t1 = transform_coeffs(&document, elements[1]);
+        let t2 = transform_coeffs(&document, elements[2]);
+        assert!(near(t1[4], 10.0) && near(t1[5], 20.0), "{t1:?}");
+        assert!(near(t2[4], 20.0) && near(t2[5], 40.0), "{t2:?}");
+        for coeffs in [t1, t2] {
+            assert!(near(coeffs[0], 1.0) && near(coeffs[3], 1.0), "{coeffs:?}");
+            assert!(near(coeffs[1], 0.0) && near(coeffs[2], 0.0), "{coeffs:?}");
+        }
+        // Copies are fresh instances: unnamed, unlocked, no animation,
+        // carrying the source's custom data.
+        for id in [elements[1], elements[2]] {
+            match document.registry.get(id).unwrap() {
+                ObjectData::SymbolInstance(instance) => {
+                    assert_eq!(instance.symbol_number, 0);
+                    assert_eq!(instance.name, None);
+                    assert!(!instance.locked);
+                    assert!(instance.animation.is_none());
+                }
+                other => panic!("wrong object kind: {other:?}"),
+            }
+        }
+
+        delta.apply_inverse(&mut document).unwrap();
+        assert_eq!(
+            serde_json::to_vec(&document).unwrap(),
+            original,
+            "undo removes the minted instances"
+        );
+    }
+
+    #[test]
+    fn tween_rotation_takes_the_shortest_arc() {
+        let (mut document, _, second) = tween_endpoints();
+        // Second endpoint at 270°: the short way round is -90°, so the
+        // midpoint leans -45° — not +135°.
+        if let Some(ObjectData::SymbolInstance(instance)) = document.registry.get_mut(second) {
+            instance.transform = geom::Affine::translate((30.0, 60.0))
+                * geom::Affine::rotate(3.0 * std::f64::consts::FRAC_PI_2);
+        }
+        let registry = registry();
+        registry
+            .execute(
+                &mut document,
+                "symbol.tween",
+                json!({ "numSteps": 1, "distribute": false, "frame": 0 }),
+            )
+            .unwrap();
+        let elements = cell_elements(&document).to_vec();
+        let mid = transform_coeffs(&document, elements[1]);
+        assert!(
+            near(mid[1], -std::f64::consts::FRAC_1_SQRT_2),
+            "midpoint must lean the short way: {mid:?}"
+        );
+    }
+
+    #[test]
+    fn tween_distribute_grows_the_frames_and_inverts() {
+        let (mut document, first, second) = tween_endpoints();
+        let original = serde_json::to_vec(&document).unwrap();
+        let registry = registry();
+        let delta = registry
+            .execute(
+                &mut document,
+                "symbol.tween",
+                json!({ "numSteps": 2, "distribute": true, "frame": 0 }),
+            )
+            .unwrap();
+
+        // Frame 0 keeps the endpoints; steps 1..=2 land on frames 1 and
+        // 2, and the page grew one frame to hold the last one.
+        assert_eq!(document.pages[0].info.frame_count, 3);
+        let cells = &document.pages[0].layers.layers[0].cells;
+        assert_eq!(cells.len(), 3);
+        assert_eq!(cells[0].elements, vec![first, second]);
+        assert_eq!(cells[1].elements.len(), 1);
+        assert_eq!(cells[2].elements.len(), 1);
+        let t1 = transform_coeffs(&document, cells[1].elements[0]);
+        let t2 = transform_coeffs(&document, cells[2].elements[0]);
+        assert!(near(t1[4], 10.0) && near(t1[5], 20.0), "{t1:?}");
+        assert!(near(t2[4], 20.0) && near(t2[5], 40.0), "{t2:?}");
+
+        delta.apply_inverse(&mut document).unwrap();
+        assert_eq!(
+            serde_json::to_vec(&document).unwrap(),
+            original,
+            "undo restores the pre-tween frames"
+        );
+    }
+
+    #[test]
+    fn tween_refusals_leave_the_document_alone() {
+        let (mut document, first, _) = tween_endpoints();
+        let registry = registry();
+        let original = serde_json::to_vec(&document).unwrap();
+
+        // Zero steps is a payload error.
+        let error = registry
+            .execute(
+                &mut document,
+                "symbol.tween",
+                json!({ "numSteps": 0, "distribute": false, "frame": 0 }),
+            )
+            .unwrap_err();
+        assert!(matches!(error, EngineError::BadPayload { .. }));
+
+        // Not exactly two selected instances.
+        document.object_selection = vec![first];
+        let one_selected = serde_json::to_vec(&document).unwrap();
+        let error = registry
+            .execute(
+                &mut document,
+                "symbol.tween",
+                json!({ "numSteps": 1, "distribute": false, "frame": 0 }),
+            )
+            .unwrap_err();
+        assert!(matches!(error, EngineError::InvalidState { .. }));
+        assert_eq!(serde_json::to_vec(&document).unwrap(), one_selected);
+        let _ = original;
+
+        // Mixed symbols refuse: a second definition, one instance each.
+        document.symbols.push(SymbolDefinition {
+            name: "other".to_owned(),
+            symbol_number: 5,
+            origin: geom::Point::ZERO,
+            frame_count: 1,
+            layers: LayerList::default(),
+            background_raw: 0,
+            symbol_type: SymbolType::Graphic,
+            nine_slice: None,
+            op_code: None,
+        });
+        registry
+            .execute(
+                &mut document,
+                "symbol.createInstance",
+                json!({
+                    "symbol": 5, "page": 0, "layer": 0, "cell": 0,
+                    "x": -4.0, "y": -4.0,
+                }),
+            )
+            .unwrap();
+        let stranger = *cell_elements(&document).last().unwrap();
+        document.object_selection = vec![first, stranger];
+        let before = serde_json::to_vec(&document).unwrap();
+        let error = registry
+            .execute(
+                &mut document,
+                "symbol.tween",
+                json!({ "numSteps": 1, "distribute": false, "frame": 0 }),
+            )
+            .unwrap_err();
+        assert!(matches!(error, EngineError::InvalidState { .. }), "{error}");
+        assert_eq!(serde_json::to_vec(&document).unwrap(), before);
+
+        // Different cells refuse too: move the stranger's twin of the
+        // first instance into frame 1 and try again.
+        registry
+            .execute(
+                &mut document,
+                "symbol.createInstance",
+                json!({
+                    "symbol": 0, "page": 0, "layer": 0, "cell": 1,
+                    "x": 6.0, "y": 6.0,
+                }),
+            )
+            .unwrap();
+        let twin = document.pages[0].layers.layers[0].cells[1].elements[0];
+        document.object_selection = vec![first, twin];
+        let before = serde_json::to_vec(&document).unwrap();
+        let error = registry
+            .execute(
+                &mut document,
+                "symbol.tween",
+                json!({ "numSteps": 1, "distribute": false, "frame": 0 }),
+            )
+            .unwrap_err();
+        assert!(matches!(error, EngineError::InvalidState { .. }), "{error}");
+        assert_eq!(serde_json::to_vec(&document).unwrap(), before);
     }
 }

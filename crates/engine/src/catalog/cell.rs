@@ -193,6 +193,38 @@ pub(crate) fn splice_cells(
     }
 }
 
+/// Appends `count` empty frames to the page (cells on every layer plus
+/// the `FRCi` counts and, when aligned, the duration vec), the same
+/// shape `frame.add` uses for end-appended frames.
+pub(crate) fn append_frames(document: &mut Document, page: usize, count: usize) {
+    let Some(target) = document.pages.get_mut(page) else {
+        return;
+    };
+    let old_count = target.info.frame_count.max(0) as usize;
+    let aligned =
+        target.info.frame_durations.len() == old_count && !target.info.frame_durations.is_empty();
+    splice_cells(
+        target,
+        old_count,
+        || Cell {
+            locked: false,
+            visible: true,
+            elements: Vec::new(),
+        },
+        count,
+    );
+    if aligned {
+        for _ in 0..count {
+            target
+                .info
+                .frame_durations
+                .insert(old_count, DEFAULT_FRAME_DURATION);
+        }
+    }
+    target.info.frame_count += count as i64;
+    target.info.frame_count_duplicate += count as i64;
+}
+
 /// A frame's content as an owned list — the element ids of one cell of
 /// every layer, in layer order.
 fn frame_slice(page: &doc::Page, index: usize) -> Vec<Vec<ObjectId>> {

@@ -14,17 +14,17 @@ enforced == the fuzz call table).
 
 | class | meaning | count (of 356 dom verbs) |
 |---|---|---|
-| C | carried: a registry command implements the mutation | 191 |
+| C | carried: a registry command implements the mutation | 194 |
 | P | partial: carried with a recorded model limitation | 45 |
-| M | missing: no command and no decision — work items | 37 |
-| N | not applicable: non-document surface (accessor/UI/session/clipboard/export/OS) | 83 |
+| M | missing: no command and no decision — work items | 33 |
+| N | not applicable: non-document surface (accessor/UI/session/clipboard/export/OS) | 84 |
 
-Document-mutation coverage: **236 of 273** carried-or-partial
-(191 carried, 45 partial, 37 missing).
+Document-mutation coverage: **239 of 272** carried-or-partial
+(194 carried, 45 partial, 33 missing).
 
 ### Gap families (the Missing table, grouped)
 
-The 37 missing verbs collapse into six families, largest first —
+The 33 missing verbs collapse into six families, largest first —
 each family is one design decision plus a command batch:
 
 1. **Object transforms** (2 verbs remain): rotateDocument (canvas
@@ -49,10 +49,8 @@ each family is one design decision plus a command batch:
 4. **Selection tooling** (~7 verbs): select all/inverse/similar/
    parents/children/scope, saved (named) selections,
    attribute filter.
-5. **Misc** (~14 verbs): place-image, crop, text-to-paths, tween,
-   split/knife path ops, primitive param edits (roundness/sides/
-   quadrangle), smart-shape param edits, fill-edge mode, gradient
-   names, button-symbol state, web-object point append.
+5. **Misc** (~11 verbs): place-image, crop, text-to-paths,
+   split/knife path ops, button-symbol state.
 
 ## Carried (C)
 
@@ -103,6 +101,7 @@ each family is one design decision plus a command batch:
 | `convertToAnimSymbol` | C | symbol.setType | create then type to anim |
 | `convertToSymbol` | C | symbol.create | selection folds into the definition |
 | `convetToAnimSymbol` | C | symbol.setType |  |
+| `cropSelection` | C | path.cropSelection | each selected path is cropped (intersected) by the rect; empty results remove the path |
 | `cuplicateSelectionToFrames` | C | selection.duplicateToFrames | all/previous/next/end; next past the last frame adds one (decision 0026) |
 | `deleteFrames` | C | frame.delete | guards: range, overrun, last frame |
 | `deleteLayer` | C | layer.delete |  |
@@ -206,6 +205,7 @@ each family is one design decision plus a command batch:
 | `setElementVisisble` | C | object.setVisible |  |
 | `setFill` | C | path.setFill |  |
 | `setFillColor` | C | path.setFillColor | decision 0018: the colour verb installs a solid (collapse) |
+| `setFillEdgeMode` | C | path.setFillEdgeMode | maps onto the FEFi/FRDb slots; materializes the fill definition when absent |
 | `setFillNColor` | C | path.setFillColor | numbered-slot variant |
 | `setFillPlacement` | C | path.setFillVector | same handle axis (pattern placement) |
 | `setFillVector` | C | path.setFillVector |  |
@@ -246,6 +246,7 @@ each family is one design decision plus a command batch:
 | `shareLayerToPages` | C | layer.shareToPages | per-page add/remove of the LSAv link; CS6 name-lists mapped to indices (decision 0022) |
 | `showAllHidden` | C | object.setVisible |  |
 | `transformSelection` | C | object.transform | free affine; the family primitive |
+| `tween` | C | symbol.tween | two same-symbol instances in one cell; transform (location/rotation/scale, shortest arc) lerped; distribute appends frames |
 | `ungroup` | C | object.ungroup | children splice in at the group position, z-order preserved |
 | `unsetMasterPage` | C | page.unsetMaster |  |
 | `updateSymbol` | C | library.add | replace the definition |
@@ -313,7 +314,6 @@ each family is one design decision plus a command batch:
 | `clipPasteFromChannelToChannel` | M | - | pixel channel copy - bitmap domain, no command |
 | `clipPasteInside` | M | - | paste-inside = clipboard op (mask model landed) |
 | `convertToPaths` | M | - | text-to-paths has no command (render flattens glyphs; editable conversion missing) |
-| `cropSelection` | M | - | canvas crop; page.setCanvasSize carries resize but not the crop-to-content op |
 | `deleteSavedSelection` | M | - | named saved selections unmodeled |
 | `filterSelection` | M | - | pixel-filter bake verb (permanent, not a Live Effect) — filter family; needs the bitmap bake pass (debt) |
 | `filterSelectionByID` | M | - | pixel-filter bake verb (permanent, not a Live Effect) — filter family; needs the bitmap bake pass (debt) |
@@ -333,14 +333,11 @@ each family is one design decision plus a command batch:
 | `setButtonOptions` | M | - | button symbol gap |
 | `setButtonShowDownOnLoad` | M | - | button symbol gap |
 | `setDocumentImageSize` | M | - | no resample command |
-| `setFillEdgeMode` | M | - | fill edge (anti-alias/hard) mode unmodeled |
-| `setGradientName` | M | - | gradient definitions carry no names in the model |
 | `setShowGrid` | M | - | page.grid model exists; no command |
 | `setShowGuides` | M | - | guides model exists; no command |
 | `setSnapToGrid` | M | - | page.grid model exists; no command |
 | `setSnapToGuides` | M | - | guides model exists; no command |
 | `splitPaths` | M | - | no split/knife boolean op |
-| `tween` | M | - | instance tweening unmodeled |
 
 ## Not applicable (N)
 
@@ -411,6 +408,7 @@ each family is one design decision plus a command batch:
 | `setDefaultFillVector` | N | session | current-paint session state; commands carry payloads |
 | `setExportOptions` | N | export | export-dialog domain (io export options) |
 | `setExportSettings` | N | export |  |
+| `setGradientName` | N | preferences | renames a gradient in Fireworks' gradient library — preferences state, no document-level gradient library node exists on the wire (FGLv names ride unknown bags) |
 | `setGridColor` | N | ui | render tint |
 | `setGuideColor` | N | ui | render tint |
 | `setHotSpotColor` | N | ui | overlay tint |
