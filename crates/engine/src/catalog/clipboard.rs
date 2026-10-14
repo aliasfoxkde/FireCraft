@@ -169,6 +169,26 @@ impl TypedCommand for Cut {
                 detail: "there is no selection to cut".to_owned(),
             });
         }
+        // Every fallible resolution happens BEFORE any mutation (the
+        // standing law from 000557d): a selection holding a live but
+        // unattached object — its owner cell or group is already gone,
+        // the recorded orphan debt — refuses whole, leaving the
+        // clipboard and the selection untouched.
+        for id in &document.object_selection {
+            if document.registry.get(*id).is_none() {
+                continue; // stale id: removed by an earlier cut, rides along
+            }
+            if find_owner(document, *id).is_none() {
+                return Err(EngineError::InvalidState {
+                    name: NAME.to_owned(),
+                    detail: format!(
+                        "object {} (generation {}) is not attached to any cell or group",
+                        id.index(),
+                        id.generation()
+                    ),
+                });
+            }
+        }
         // Capture before mutating (the standing law): the clipboard
         // and the selection both.
         let clip_before = document.clipboard.clone();
@@ -186,6 +206,12 @@ impl TypedCommand for Cut {
             let Some(object) = document.registry.get(*id).cloned() else {
                 continue;
             };
+            // Same for a descendant whose owner group was cut moments
+            // ago: it left with the captured subtree, so there is
+            // nothing to detach and nothing to refuse.
+            if find_owner(document, *id).is_none() {
+                continue;
+            }
             let container = detach(document, NAME, *id)?;
             if document.registry.remove(*id).is_none() {
                 return Err(EngineError::MissingTarget {
@@ -840,6 +866,59 @@ mod clipboard_tests {
             .apply_json(&mut document, json!({}))
             .expect_err("empty refused");
         assert!(matches!(err, EngineError::InvalidState { .. }));
+    }
+
+    #[test]
+    fn cut_refuses_a_live_but_unattached_object_untouched() {
+        // Cutting a group removes only the group's own registry entry,
+        // so its child stays live but unattached (the recorded orphan
+        // debt). A later cut holding that orphan must refuse whole —
+        // the pre-flight fires before any clipboard or selection
+        // write — while the healthy sibling stays cuttable.
+        let (mut document, ids) = testdoc::sample_document();
+        let group_id = document.registry.insert(ObjectData::Group(GroupObject {
+            group_type: 0,
+            name: None,
+            children: vec![ids[0]],
+            opacity: 1000,
+            blend: 0,
+            visible: true,
+            locked: false,
+            mask_hidden: false,
+            mask_linked: None,
+            effects: Vec::new(),
+        }));
+        document.pages[0].layers.layers[0].cells[0].elements = vec![group_id, ids[1]];
+        document.object_selection = vec![group_id];
+        Cut.apply_json(&mut document, json!({}))
+            .expect("group cut applies");
+        assert!(
+            document.registry.get(ids[0]).is_some(),
+            "child is still live, just unattached"
+        );
+
+        document.object_selection = vec![ids[0], ids[1]];
+        let snapshot = serde_json::to_vec(&document).unwrap();
+        let err = Cut
+            .apply_json(&mut document, json!({}))
+            .expect_err("orphan refuses the whole cut");
+        assert!(matches!(err, EngineError::InvalidState { .. }));
+        assert_eq!(
+            serde_json::to_vec(&document).unwrap(),
+            snapshot,
+            "refused cut mutated nothing"
+        );
+        assert_eq!(document.object_selection, vec![ids[0], ids[1]]);
+
+        // Dropping the orphan leaves a healthy selection that cuts.
+        document.object_selection = vec![ids[1]];
+        Cut.apply_json(&mut document, json!({}))
+            .expect("sibling cut applies");
+        assert!(
+            document.pages[0].layers.layers[0].cells[0]
+                .elements
+                .is_empty()
+        );
     }
 
     #[test]
