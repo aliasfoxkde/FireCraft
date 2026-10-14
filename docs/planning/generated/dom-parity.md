@@ -14,17 +14,17 @@ enforced == the fuzz call table).
 
 | class | meaning | count (of 356 dom verbs) |
 |---|---|---|
-| C | carried: a registry command implements the mutation | 177 |
+| C | carried: a registry command implements the mutation | 181 |
 | P | partial: carried with a recorded model limitation | 45 |
-| M | missing: no command and no decision — work items | 52 |
+| M | missing: no command and no decision — work items | 48 |
 | N | not applicable: non-document surface (accessor/UI/session/clipboard/export/OS) | 82 |
 
-Document-mutation coverage: **222 of 274** carried-or-partial
-(177 carried, 45 partial, 52 missing).
+Document-mutation coverage: **226 of 274** carried-or-partial
+(181 carried, 45 partial, 48 missing).
 
 ### Gap families (the Missing table, grouped)
 
-The 52 missing verbs collapse into six families, largest first —
+The 48 missing verbs collapse into six families, largest first —
 each family is one design decision plus a command batch:
 
 1. **Object transforms** (2 verbs remain): rotateDocument (canvas
@@ -179,9 +179,13 @@ each family is one design decision plus a command batch:
 | `scalingGridRect` | C | symbol.set9Slice | the grid rect IS the payload |
 | `selectAll` | C | selection.selectAll | object-selection model + commands (dec 0024) |
 | `selectAllOnLayer` | C | selection.selectAllOnLayer | remember/toggle flags mapped (dec 0024) |
+| `selectChildren` | C | selection.selectChildren | one level per invocation, per CS6 text (dec 0025) |
 | `selectFeather` | C | bitmap.feather |  |
 | `selectInverse` | C | selection.selectInverse | object-mode complement in page+frame scope (dec 0024) |
 | `selectNone` | C | bitmap.selectNone / selection.selectNone | pixel mask and object selection are separate modes |
+| `selectParents` | C | selection.selectParents | collapses a group when every member is selected (dec 0025) |
+| `selectSimilar` | C | bitmap.selectSimilar | pixel-mode verb: matches the selection average color (dec 0025) |
+| `selectSimilarFromPoint` | C | bitmap.selectWand | pixel-mode wand from a point; contiguous:false is the global match |
 | `setBlendMode` | C | object.setBlend |  |
 | `setDocumentCanvasColor` | C | document.setCanvasColor | BGCi document-wide; scripting maps the color string to the raw (dec 0023) |
 | `setDocumentCanvasSize` | C | page.setCanvasSize |  |
@@ -308,10 +312,10 @@ each family is one design decision plus a command batch:
 | `distributeSelectionToFrames` | M | - | needs an object-selection surface (same blocker as the selection family) |
 | `duplicateSelectionToFrameRange` | M | - | needs an object-selection surface (same blocker as the selection family) |
 | `duplicateSelectionToFrames` | M | - | needs an object-selection surface (same blocker as the selection family) |
-| `filterSelection` | M | - | attribute filter select |
-| `filterSelectionByID` | M | - | attribute filter select |
-| `filterSelectionByName` | M | - | attribute filter select |
-| `filterSelectonByName` | M | - | attribute filter select |
+| `filterSelection` | M | - | pixel-filter bake verb (permanent, not a Live Effect) — filter family; needs the bitmap bake pass (debt) |
+| `filterSelectionByID` | M | - | pixel-filter bake verb (permanent, not a Live Effect) — filter family; needs the bitmap bake pass (debt) |
+| `filterSelectionByName` | M | - | pixel-filter bake verb (permanent, not a Live Effect) — filter family; needs the bitmap bake pass (debt) |
+| `filterSelectonByName` | M | - | pixel-filter bake verb (permanent, not a Live Effect) — filter family; needs the bitmap bake pass (debt) |
 | `flattenDocument` | M | - | no flatten-all |
 | `flattenSelection` | M | - | no flatten command |
 | `knifeElementsFromPoint` | M | - | no split/knife boolean op |
@@ -321,10 +325,6 @@ each family is one design decision plus a command batch:
 | `restoreSelection` | M | - | named saved selections unmodeled |
 | `rotateDocument` | M | - | canvas rotation (90-degree steps + re-bake) |
 | `saveSelection` | M | - | named saved selections unmodeled |
-| `selectChildren` | M | - | hierarchy select |
-| `selectParents` | M | - | hierarchy select |
-| `selectSimilar` | M | - | attribute-based select |
-| `selectSimilarFromPoint` | M | - | attribute-based select |
 | `setButtonAutoSlice` | M | - | button-specific symbol state unmodeled |
 | `setButtonIncludeDownState` | M | - | button symbol gap |
 | `setButtonIncludeOverWhileDownState` | M | - | button symbol gap |

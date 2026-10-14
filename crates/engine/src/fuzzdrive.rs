@@ -680,7 +680,10 @@ pub const CALLS: &[&str] = &[
     "selection.selectAll",
     "selection.selectInverse",
     "selection.selectAllOnLayer",
+    "selection.selectParents",
+    "selection.selectChildren",
     "selection.selectNone",
+    "bitmap.selectSimilar",
 ];
 
 /// Builds a random call against `document`: a random catalog id and a
@@ -2103,6 +2106,12 @@ pub fn random_call(rng: &mut FuzzRng, document: &Document) -> (String, serde_jso
             "toggle_selection": rng.chance(3),
         }),
         "selection.selectNone" => serde_json::json!({}),
+        "bitmap.selectSimilar" => serde_json::json!({
+            "id": any_id(rng),
+            "tolerance": rng.below(256),
+            "contiguous": rng.chance(3),
+            "mode": rng.pick(&["replace", "add", "subtract", "intersect"]).copied(),
+        }),
         other => {
             let _ = other;
             // A catalog command without a builder: an empty payload is

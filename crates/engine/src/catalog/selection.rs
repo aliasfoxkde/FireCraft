@@ -21,6 +21,8 @@ pub(crate) fn install(registry: &mut CommandRegistry) -> Result<(), EngineError>
     registry.register(SelectAll)?;
     registry.register(SelectInverse)?;
     registry.register(SelectAllOnLayer)?;
+    registry.register(SelectParents)?;
+    registry.register(SelectChildren)?;
     registry.register(SelectNone)
 }
 
@@ -45,16 +47,21 @@ fn canonicalize(
         }
     }
     // Walk position for cell-listed ids; registry slot otherwise.
-    let mut walk_rank: std::collections::HashMap<ObjectId, (u64, u64)> =
+    // Keys: (walked, packed page/layer/cell or slot, element slot) —
+    // the `walked` flag keeps the fallback in one coherent order
+    // (after every cell-listed id) instead of colliding with packed
+    // page bits.
+    let mut walk_rank: std::collections::HashMap<ObjectId, (bool, u64, u64)> =
         std::collections::HashMap::new();
     for (page_index, page) in document.pages.iter().enumerate() {
         for (layer_index, layer) in page.layers.layers.iter().enumerate() {
             for (cell_index, cell) in layer.cells.iter().enumerate() {
                 for (slot, id) in cell.elements.iter().enumerate() {
                     walk_rank.entry(*id).or_insert((
-                        (u64::from(page_index as u32)) << 48
-                            | (u64::from(layer_index as u32)) << 32
-                            | (u64::from(cell_index as u32)) << 16,
+                        false,
+                        (u64::from(page_index as u32)) << 32
+                            | (u64::from(layer_index as u32)) << 16
+                            | u64::from(cell_index as u32),
                         slot as u64,
                     ));
                 }
@@ -69,9 +76,10 @@ fn canonicalize(
         }
     }
     unique.sort_by_key(|id| {
-        *walk_rank
+        walk_rank
             .get(id)
-            .unwrap_or(&(u64::from(id.index() as u32), 0))
+            .copied()
+            .unwrap_or((true, u64::from(id.index() as u32), 0))
     });
     Ok(unique)
 }
@@ -311,6 +319,116 @@ fn scope_of_layer_frame(
         .and_then(|layer| layer.cells.get(frame))
         .map(|cell| cell.elements.to_vec())
         .unwrap_or_default()
+}
+
+/// `selection.selectParents` — CS6's `dom.selectParents()`: "if all
+/// the members of a group are selected, the individual members are
+/// deselected, and the group is selected." Nested groups resolve
+/// innermost-first, iterating to a fixpoint (depth-capped — corrupt
+/// cycles must not spin).
+struct SelectParents;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct SelectParentsPayload {}
+
+impl TypedCommand for SelectParents {
+    type Payload = SelectParentsPayload;
+
+    fn name(&self) -> &'static str {
+        "selection.selectParents"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        _payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "selection.selectParents";
+        if document.object_selection.is_empty() {
+            return Ok(Delta::Noop);
+        }
+        let mut selected: std::collections::HashSet<ObjectId> =
+            document.object_selection.iter().copied().collect();
+        // Collapse any group whose members are all selected; repeat
+        // so a collapsed inner group can complete an outer one.
+        for _ in 0..64 {
+            let mut changed = false;
+            for (id, data) in document.registry.iter() {
+                if let doc::ObjectData::Group(group) = data {
+                    if group.children.is_empty() {
+                        continue;
+                    }
+                    if group.children.iter().all(|child| selected.contains(child)) {
+                        for child in &group.children {
+                            selected.remove(child);
+                        }
+                        selected.insert(id);
+                        changed = true;
+                    }
+                }
+            }
+            if !changed {
+                break;
+            }
+        }
+        let next = canonicalize(document, NAME, &selected.into_iter().collect::<Vec<_>>())?;
+        if next == document.object_selection {
+            return Ok(Delta::Noop);
+        }
+        Ok(Delta::ObjectSelection {
+            before: std::mem::replace(&mut document.object_selection, next),
+        })
+    }
+}
+
+/// `selection.selectChildren` — CS6's `dom.selectChildren()`: "if a
+/// group is selected, the selection changes from the group to the
+/// individual members of the group." One level per invocation, as
+/// documented; non-group entries keep their places.
+struct SelectChildren;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct SelectChildrenPayload {}
+
+impl TypedCommand for SelectChildren {
+    type Payload = SelectChildrenPayload;
+
+    fn name(&self) -> &'static str {
+        "selection.selectChildren"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        _payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "selection.selectChildren";
+        if document.object_selection.is_empty() {
+            return Ok(Delta::Noop);
+        }
+        let mut next = Vec::with_capacity(document.object_selection.len());
+        let mut expanded = false;
+        for id in &document.object_selection {
+            match document.registry.get(*id) {
+                Some(doc::ObjectData::Group(group)) => {
+                    next.extend(group.children.iter().copied());
+                    expanded = true;
+                }
+                // Dangling entries drop, as in the projection: deleted
+                // objects stop being selected.
+                Some(_) | None => next.push(*id),
+            }
+        }
+        if !expanded {
+            return Ok(Delta::Noop);
+        }
+        let next = canonicalize(document, NAME, &next)?;
+        Ok(Delta::ObjectSelection {
+            before: std::mem::replace(&mut document.object_selection, next),
+        })
+    }
 }
 
 /// `selection.selectNone` — CS6's `dom.selectNone()`: clears the
@@ -561,5 +679,126 @@ mod selection_tests {
             .apply_json(&mut document, serde_json::json!({"ids": picks}))
             .expect("set applies");
         assert_eq!(document.object_selection, vec![ids[0], ids[3], page1[0]]);
+    }
+
+    /// A document with one group holding the two paths of page 0
+    /// layer 0 cell 0 (the group id replaces them in the cell list).
+    fn grouped_document() -> (Document, Vec<ObjectId>, ObjectId) {
+        let (mut document, ids) = testdoc::sample_document();
+        let group = document
+            .registry
+            .insert(doc::ObjectData::Group(doc::GroupObject {
+                group_type: 0,
+                name: None,
+                children: vec![ids[0], ids[1]],
+                opacity: 1000,
+                blend: 0,
+                visible: true,
+                locked: false,
+                mask_hidden: false,
+                mask_linked: None,
+                effects: Vec::new(),
+            }));
+        let cell = &mut document.pages[0].layers.layers[0].cells[0];
+        cell.elements = vec![group];
+        (document, ids, group)
+    }
+
+    #[test]
+    fn select_children_expands_a_group_one_level() {
+        let (mut document, ids, group) = grouped_document();
+        SetSelection
+            .apply_json(&mut document, serde_json::json!({"ids": [group]}))
+            .expect("select group");
+        SelectChildren
+            .apply_json(&mut document, serde_json::json!({}))
+            .expect("selectChildren applies");
+        assert_eq!(document.object_selection, vec![ids[0], ids[1]]);
+
+        // A second invocation with no groups selected is a Noop.
+        let delta = SelectChildren
+            .apply_json(&mut document, serde_json::json!({}))
+            .expect("selectChildren applies");
+        assert!(matches!(delta, Delta::Noop));
+
+        // Undo restores the group selection.
+        let delta = SelectParents
+            .apply_json(&mut document, serde_json::json!({}))
+            .expect("selectParents applies");
+        assert_eq!(document.object_selection, vec![group]);
+        delta.apply_inverse(&mut document).expect("undo");
+        assert_eq!(document.object_selection, vec![ids[0], ids[1]]);
+    }
+
+    #[test]
+    fn select_parents_needs_every_member_selected() {
+        let (mut document, ids, group) = grouped_document();
+        // Only one member selected: nothing collapses (Noop).
+        SetSelection
+            .apply_json(&mut document, serde_json::json!({"ids": [ids[0]]}))
+            .expect("select member");
+        let delta = SelectParents
+            .apply_json(&mut document, serde_json::json!({}))
+            .expect("selectParents applies");
+        assert!(matches!(delta, Delta::Noop));
+        assert_eq!(document.object_selection, vec![ids[0]]);
+
+        // A selected non-member alongside the full set does not block
+        // the collapse: both members in → the group replaces them.
+        SetSelection
+            .apply_json(
+                &mut document,
+                serde_json::json!({"ids": [ids[0], ids[1], ids[2]]}),
+            )
+            .expect("select members + outsider");
+        SelectParents
+            .apply_json(&mut document, serde_json::json!({}))
+            .expect("selectParents applies");
+        assert_eq!(document.object_selection.len(), 2);
+        assert!(document.object_selection.contains(&group));
+        assert!(document.object_selection.contains(&ids[2]));
+    }
+
+    #[test]
+    fn select_parents_and_children_round_trip_nested() {
+        // group2 holds [group1, outsider]; selecting all of group2's
+        // members collapses both levels; selectChildren then expands
+        // exactly one level.
+        let (mut document, ids, group1) = grouped_document();
+        let outsider = ids[2];
+        let group2 = document
+            .registry
+            .insert(doc::ObjectData::Group(doc::GroupObject {
+                group_type: 0,
+                name: None,
+                children: vec![group1, outsider],
+                opacity: 1000,
+                blend: 0,
+                visible: true,
+                locked: false,
+                mask_hidden: false,
+                mask_linked: None,
+                effects: Vec::new(),
+            }));
+        document.pages[0].layers.layers[0].cells[0].elements = vec![group2];
+
+        SetSelection
+            .apply_json(
+                &mut document,
+                serde_json::json!({"ids": [group1, outsider]}),
+            )
+            .expect("select inner group + outsider");
+        SelectParents
+            .apply_json(&mut document, serde_json::json!({}))
+            .expect("selectParents applies");
+        assert_eq!(document.object_selection, vec![group2]);
+
+        SelectChildren
+            .apply_json(&mut document, serde_json::json!({}))
+            .expect("selectChildren applies");
+        // One level: group1 stays a group; the outsider joins. Neither
+        // is cell-listed any more, so canonical order falls back to
+        // registry slots (outsider first).
+        assert_eq!(document.object_selection, vec![outsider, group1]);
     }
 }

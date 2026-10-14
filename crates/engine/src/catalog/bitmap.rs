@@ -30,6 +30,7 @@ pub(crate) fn install(registry: &mut CommandRegistry) -> Result<(), EngineError>
     registry.register(SelectLasso)?;
     registry.register(SelectPolygon)?;
     registry.register(SelectWand)?;
+    registry.register(SelectSimilar)?;
     registry.register(SelectFeather)?;
     registry.register(SelectNone)?;
     registry.register(Fill)?;
@@ -345,6 +346,99 @@ impl TypedCommand for SelectWand {
         let pixels = flat.pixels.clone();
         stamped_selection(document, size, mode, |mask| {
             stamp_wand(mask, &pixels, x, y, target, contiguous);
+        });
+        Ok(selection_delta(before))
+    }
+}
+
+/// `bitmap.selectSimilar` — CS6's `dom.selectSimilar()`: every image
+/// pixel within tolerance of the active selection's average color.
+/// CS6's `edgemode`/`featherAmt` arguments are edge softening the
+/// model applies separately (`bitmap.feather`); recorded deviation,
+/// decision 0025. The match is global (every matching pixel joins)
+/// unless `contiguous` asks for a flood from the first selected pixel.
+struct SelectSimilar;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct SelectSimilarPayload {
+    /// Target image.
+    id: ObjectId,
+    /// Per-channel tolerance `0..=255` around the selection's average
+    /// color.
+    tolerance: u8,
+    /// Flood from the average-colored seed region (`true`) or select
+    /// every matching pixel in the image (`false`, CS6's behavior).
+    #[serde(default)]
+    contiguous: Option<bool>,
+    /// How to combine with the active selection.
+    #[serde(default)]
+    mode: Option<String>,
+}
+
+impl TypedCommand for SelectSimilar {
+    type Payload = SelectSimilarPayload;
+
+    fn name(&self) -> &'static str {
+        "bitmap.selectSimilar"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "bitmap.selectSimilar";
+        let mode = mode_of(NAME, payload.mode.as_ref())?;
+        let Some(active) = document.selection.clone() else {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: "selectSimilar needs an active pixel selection".to_owned(),
+            });
+        };
+        let image = image_of(document, NAME, payload.id)?.clone();
+        let size = pixel_size(&image, NAME)?;
+        if (active.width, active.height) != size {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: format!(
+                    "selection plane {}x{} does not span the {}x{} image",
+                    active.width, active.height, size.0, size.1
+                ),
+            });
+        }
+        let flat = gather(&image, &document.tiles, NAME)?;
+        // Channel average over the selected pixels (the mask's alpha
+        // weights membership; zero-alpha pixels do not count).
+        let mut sum = [0u64; 4];
+        let mut count = 0u64;
+        for (index, alpha) in active.alpha.iter().enumerate() {
+            if *alpha == 0 {
+                continue;
+            }
+            let pixel = &flat.pixels[index * 4..index * 4 + 4];
+            for channel in 0..4 {
+                sum[channel] += u64::from(pixel[channel]);
+            }
+            count += 1;
+        }
+        if count == 0 {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: "selectSimilar over an empty selection".to_owned(),
+            });
+        }
+        let seed: [u8; 4] =
+            std::array::from_fn(|channel| ((sum[channel] + count / 2) / count).min(255) as u8);
+        let target = WandColor {
+            seed,
+            tolerance: payload.tolerance,
+        };
+        let contiguous = payload.contiguous.unwrap_or(false);
+        let before = document.selection.clone();
+        let pixels = flat.pixels.clone();
+        stamped_selection(document, size, mode, |mask| {
+            stamp_wand(mask, &pixels, 0, 0, target, contiguous);
         });
         Ok(selection_delta(before))
     }
@@ -1332,6 +1426,41 @@ mod tests {
         for x in [1u32, 3] {
             assert_eq!(mask.get(x, 0), Some(0), "blue never matches at ({x},0)");
         }
+    }
+
+    #[test]
+    fn select_similar_matches_the_selections_average_color() {
+        let (mut document, image) = checker_document();
+        // Seed: one red pixel (column 0). The average over a solid
+        // selection is that color, so tolerance 0 finds every red
+        // pixel image-wide (columns 0 and 2) — CS6 selectSimilar.
+        SelectRect
+            .apply_json(
+                &mut document,
+                json!({ "id": image, "x": 0, "y": 0, "width": 1, "height": 1 }),
+            )
+            .unwrap();
+        SelectSimilar
+            .apply_json(&mut document, json!({ "id": image, "tolerance": 0 }))
+            .unwrap();
+        let mask = document.selection.as_ref().unwrap();
+        for x in [0u32, 2] {
+            for y in 0..4 {
+                assert_eq!(mask.get(x, y), Some(255), "red joins at ({x},{y})");
+            }
+        }
+        for x in [1u32, 3] {
+            for y in 0..4 {
+                assert_eq!(mask.get(x, y), Some(0), "blue never joins at ({x},{y})");
+            }
+        }
+
+        // No active selection: a refusal, never a silent no-op.
+        document.selection = None;
+        let err = SelectSimilar
+            .apply_json(&mut document, json!({ "id": image, "tolerance": 0 }))
+            .expect_err("no active selection is refused");
+        assert!(matches!(err, EngineError::InvalidState { .. }));
     }
 
     #[test]

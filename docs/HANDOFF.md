@@ -107,12 +107,18 @@ selection.*
 - **1.3 Hierarchy selects.** `selectParents`, `selectChildren` — walk
   group containment from the current selection. Stopping: selection of
   a group child promotes/demotes exactly per CS6 text; undo exact.
-- **1.4 Attribute selects.** `selectSimilar`, `selectSimilarFromPoint`,
-  `filterSelection`, `filterSelectionByID`, `filterSelectionByName`
-  (the `filterSelectonByName` row is the CS6 doc's own typo of the
-  same verb — flip both rows together). Attribute predicates: fill
-  shape, stroke, type. Stopping: deterministic predicate ordering,
-  tests with mixed-attribute fixtures.
+- **1.4 Attribute selects — CORRECTED 2026-10-14 (decision 0025).**
+  The API text showed the original premise wrong: `selectSimilar` is a
+  *bitmap-mode* verb (pixels within tolerance of the selection's
+  average color — mapped to `bitmap.selectSimilar`),
+  `selectSimilarFromPoint` is carried by `bitmap.selectWand`, and the
+  `filterSelection*` trio are *filter-application* verbs (permanent
+  pixel filters — filter family + the bitmap bake debt, **not**
+  selection surface). Landed: `selection.selectParents` /
+  `selectChildren` (group hierarchy). The genuinely-unclaimed
+  attribute select (fill/stroke/type predicates) has **no CS6 dom
+  verb** — drop the idea from this campaign unless corpus evidence
+  surfaces one.
 
 ### Phase 2 — Selection-to-frames (3 verbs + 1 typo dup) — needs Phase 1
 - **2.1** `duplicateSelectionToFrames` + the `cuplicateSelectionToFrames`
