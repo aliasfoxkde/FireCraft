@@ -14,17 +14,17 @@ enforced == the fuzz call table).
 
 | class | meaning | count (of 356 dom verbs) |
 |---|---|---|
-| C | carried: a registry command implements the mutation | 198 |
+| C | carried: a registry command implements the mutation | 201 |
 | P | partial: carried with a recorded model limitation | 45 |
-| M | missing: no command and no decision — work items | 29 |
+| M | missing: no command and no decision — work items | 26 |
 | N | not applicable: non-document surface (accessor/UI/session/clipboard/export/OS) | 84 |
 
-Document-mutation coverage: **243 of 272** carried-or-partial
-(198 carried, 45 partial, 29 missing).
+Document-mutation coverage: **246 of 272** carried-or-partial
+(201 carried, 45 partial, 26 missing).
 
 ### Gap families (the Missing table, grouped)
 
-The 29 missing verbs collapse into six families, largest first —
+The 26 missing verbs collapse into six families, largest first —
 each family is one design decision plus a command batch:
 
 1. **Object transforms** (2 verbs remain): rotateDocument (canvas
@@ -140,6 +140,8 @@ each family is one design decision plus a command batch:
 | `insertSymbolAt` | C | symbol.createInstance |  |
 | `insertText` | C | text.setText | CS6 inserts into the active text object; our payload replaces the string |
 | `joinPaths` | C | path.boolean | union |
+| `knifeElementsFromPoint` | C | path.knifeElementsFromPoint | click cut within tolerance opens/cuts selected paths |
+| `knifeElementsFromPoints` | C | path.knifeElementsFromPoints | drag-blade crossings + tolerance clause cut selected paths |
 | `linkElementMask` | C | mask.link | LNKb absent = linked, false = unlinked |
 | `lockNineScale` | C | symbol.set9Slice | grid lock rides the 9-slice payload |
 | `lockSelection` | C | object.setLocked |  |
@@ -250,6 +252,7 @@ each family is one design decision plus a command batch:
 | `setTextOrientation` | C | text.setAttrs |  |
 | `shareLayerToPages` | C | layer.shareToPages | per-page add/remove of the LSAv link; CS6 name-lists mapped to indices (decision 0022) |
 | `showAllHidden` | C | object.setVisible |  |
+| `splitPaths` | C | path.splitPaths | compound paths become one path per contour; identity keeps the first contour |
 | `transformSelection` | C | object.transform | free affine; the family primitive |
 | `tween` | C | symbol.tween | two same-symbol instances in one cell; transform (location/rotation/scale, shortest arc) lerped; distribute appends frames |
 | `ungroup` | C | object.ungroup | children splice in at the group position, z-order preserved |
@@ -323,8 +326,6 @@ each family is one design decision plus a command batch:
 | `filterSelectionByID` | M | - | pixel-filter bake verb (permanent, not a Live Effect) — filter family; needs the bitmap bake pass (debt) |
 | `filterSelectionByName` | M | - | pixel-filter bake verb (permanent, not a Live Effect) — filter family; needs the bitmap bake pass (debt) |
 | `filterSelectonByName` | M | - | pixel-filter bake verb (permanent, not a Live Effect) — filter family; needs the bitmap bake pass (debt) |
-| `knifeElementsFromPoint` | M | - | no split/knife boolean op |
-| `knifeElementsFromPoints` | M | - | no split/knife boolean op |
 | `restoreSelection` | M | - | named saved selections unmodeled |
 | `rotateDocument` | M | - | canvas rotation (90-degree steps + re-bake) |
 | `saveSelection` | M | - | named saved selections unmodeled |
@@ -338,7 +339,6 @@ each family is one design decision plus a command batch:
 | `setShowGuides` | M | - | guides model exists; no command |
 | `setSnapToGrid` | M | - | page.grid model exists; no command |
 | `setSnapToGuides` | M | - | guides model exists; no command |
-| `splitPaths` | M | - | no split/knife boolean op |
 
 ## Not applicable (N)
 

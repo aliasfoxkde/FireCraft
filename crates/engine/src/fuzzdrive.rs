@@ -571,6 +571,9 @@ pub const CALLS: &[&str] = &[
     "path.redrawPath",
     "path.setFillEdgeMode",
     "path.cropSelection",
+    "path.splitPaths",
+    "path.knifeElementsFromPoint",
+    "path.knifeElementsFromPoints",
     "path.setFill",
     "path.setFillColor",
     "path.setFillVector",
@@ -1418,6 +1421,19 @@ pub fn random_call(rng: &mut FuzzRng, document: &Document) -> (String, serde_jso
                 rng.below(120) as f64,
                 rng.below(120) as f64,
             ],
+        }),
+        // Selection-driven split family: whatever earlier calls left
+        // selected is the split target, so arms land in the no-op,
+        // split, and refusal paths alike.
+        "path.splitPaths" => serde_json::json!({}),
+        "path.knifeElementsFromPoint" => serde_json::json!({
+            "from": [-(rng.below(40) as f64), -(rng.below(40) as f64)],
+            "tolerance": rng.below(10) as f64,
+        }),
+        "path.knifeElementsFromPoints" => serde_json::json!({
+            "from": [-(rng.below(40) as f64), -(rng.below(40) as f64)],
+            "to": [rng.below(120) as f64, rng.below(120) as f64],
+            "tolerance": rng.below(10) as f64,
         }),
         "path.reshapeArea" => serde_json::json!({
             "id": any_id(rng),

@@ -93,3 +93,20 @@ format research, vendored node dictionary).
   (arc + decisions + lessons), SESSIONS.md (this file).
 - Cleanup: scratch scripts tidied, doc pointers added to CLAUDE.md and
   AGENTS.md.
+
+## 2026-10-14 — Gap-family campaign day (#94–#102)
+- #94 committed doc set (HANDOFF/PROGRESS/HISTORY/SESSIONS) + campaign
+  plan; devlog consolidated.
+- #95 canvas color + resolution setters (4b813ef) · #96 object-selection
+  model + selection.* basics (cc85956) · #97 hierarchy selects +
+  bitmap selectSimilar (135cb6b) · #98 selection-to-frames fans
+  (decision 0026, ba60816) · #99 primitive params + autoshape redraw
+  (decisions 0027/0028, 93c59b4 + 614bc64) · #100 web-object point
+  append (decision 0029, 3516d89) · #100b crop/fill-edge/tween
+  (decision 0030, df8fe42) · #101 flatten family via compositor bakes
+  (decision 0031, 235e4d4, render_subset) · #102 knife + splitPaths
+  (decision 0032, new vector::knife module).
+- Parity 172C/57M → **201C/26M** across the day; registry 148 → 176.
+- Infra: t5500 runner offline since 2026-10-11 (no route to host);
+  fedora-docker carries the CI image; re-shipped on lockfile moves per
+  the lockfile-bytes rule.

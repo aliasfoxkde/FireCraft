@@ -36,7 +36,10 @@ pub(crate) fn install(registry: &mut CommandRegistry) -> Result<(), EngineError>
     registry.register(PathSetFillColor)?;
     registry.register(PathSetFillVector)?;
     registry.register(PathSetFillEdgeMode)?;
-    registry.register(PathCropSelection)
+    registry.register(PathCropSelection)?;
+    registry.register(PathSplitPaths)?;
+    registry.register(PathKnifePoint)?;
+    registry.register(PathKnifePoints)
 }
 
 /// Maps a vector-pipeline failure to a command error. [`VectorError`]
@@ -1319,6 +1322,315 @@ impl TypedCommand for PathCropSelection {
     }
 }
 
+/// The split contract shared by `path.splitPaths` and the knife verbs
+/// (decision 0032): each changed path keeps its identity on the first
+/// resulting contour; further contours become fresh paths attached
+/// right after it in the same cell, inheriting the display fields.
+/// The results take over the selection (CS6 leaves the pieces
+/// selected); untouched selected paths stay selected where they were.
+fn replace_with_pieces(
+    document: &mut Document,
+    name: &'static str,
+    order: &[ObjectId],
+    splits: &[(ObjectId, Vec<doc::Contour>)],
+) -> Result<Delta, EngineError> {
+    let mut deltas = vec![Delta::ObjectSelection {
+        before: document.object_selection.clone(),
+    }];
+    let mut pieces_of: Vec<(ObjectId, Vec<ObjectId>)> = Vec::new();
+    for (id, contours) in splits {
+        let before = access::object(document, name, *id)?.clone();
+        let template = match &before {
+            ObjectData::Path(path) => path.clone(),
+            _ => {
+                return Err(EngineError::InvalidState {
+                    name: name.to_owned(),
+                    detail: format!("selected object {} is not a path", id.index()),
+                });
+            }
+        };
+        let Some(object::Owner::Cell {
+            page,
+            layer,
+            cell,
+            position,
+        }) = object::find_owner(document, *id)
+        else {
+            return Err(EngineError::InvalidState {
+                name: name.to_owned(),
+                detail: format!(
+                    "selected object {} must sit in a cell (not nested in groups)",
+                    id.index()
+                ),
+            });
+        };
+        let mut piece_ids = Vec::new();
+        for (offset, contour) in contours.iter().enumerate().skip(1) {
+            let piece = doc::PathObject {
+                contours: vec![contour.clone()],
+                primitive: None,
+                ..template.clone()
+            };
+            let piece_id = document.registry.insert(ObjectData::Path(piece));
+            deltas.push(object::attach_cell(
+                document,
+                name,
+                page,
+                layer,
+                cell,
+                piece_id,
+                Some(position + offset),
+            )?);
+            deltas.push(Delta::Object {
+                id: piece_id,
+                inverse: ObjectInverse::Created,
+            });
+            piece_ids.push(piece_id);
+        }
+        if let Some(ObjectData::Path(path)) = document.registry.get_mut(*id) {
+            path.contours = vec![contours[0].clone()];
+            path.primitive = None;
+        }
+        deltas.push(Delta::Object {
+            id: *id,
+            inverse: ObjectInverse::Mutated {
+                object: Box::new(before),
+            },
+        });
+        pieces_of.push((*id, piece_ids));
+    }
+    // Selection: split results replace their original's slot; paths the
+    // command did not touch keep theirs.
+    document.object_selection = order
+        .iter()
+        .flat_map(
+            |id| match pieces_of.iter().find(|(split_id, _)| split_id == id) {
+                Some((original, piece_ids)) => {
+                    let mut pieces = vec![*original];
+                    pieces.extend_from_slice(piece_ids);
+                    pieces
+                }
+                None => vec![*id],
+            },
+        )
+        .collect();
+    Ok(Delta::Group(deltas))
+}
+
+/// Pre-flights the selection for a split-family command: every member
+/// must be a cell-placed path. Returns the selection order, or an
+/// empty vec for an empty selection.
+fn split_selection(document: &Document, name: &'static str) -> Result<Vec<ObjectId>, EngineError> {
+    if document.object_selection.is_empty() {
+        return Ok(Vec::new());
+    }
+    for id in &document.object_selection {
+        if !matches!(document.registry.get(*id), Some(ObjectData::Path(_))) {
+            return Err(EngineError::InvalidState {
+                name: name.to_owned(),
+                detail: format!(
+                    "selected object {} is not a path; only paths split",
+                    id.index()
+                ),
+            });
+        }
+        if !matches!(
+            object::find_owner(document, *id),
+            Some(object::Owner::Cell { .. })
+        ) {
+            return Err(EngineError::InvalidState {
+                name: name.to_owned(),
+                detail: format!(
+                    "selected object {} must sit in a cell (not nested in groups)",
+                    id.index()
+                ),
+            });
+        }
+    }
+    Ok(document.object_selection.clone())
+}
+
+fn point_of(name: &'static str, xy: [f64; 2]) -> Result<geom::Point, EngineError> {
+    let [x, y] = xy;
+    if !x.is_finite() || !y.is_finite() {
+        return Err(EngineError::BadPayload {
+            name: name.to_owned(),
+            detail: "point is not finite".to_owned(),
+        });
+    }
+    Ok(geom::Point::new(x, y))
+}
+
+/// `path.splitPaths` — CS6 `dom.splitPaths()`: "Splits the selected
+/// paths. Compound paths are split into separate contours." Each split
+/// path keeps its identity on the first contour; the rest become fresh
+/// paths right after it. A single-contour path has nothing to split;
+/// when nothing splits the command is a no-op (the dom returns nothing
+/// either way).
+struct PathSplitPaths;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct PathSplitPathsPayload {}
+
+impl TypedCommand for PathSplitPaths {
+    type Payload = PathSplitPathsPayload;
+
+    fn name(&self) -> &'static str {
+        "path.splitPaths"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        _payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "path.splitPaths";
+        let order = split_selection(document, NAME)?;
+        if order.is_empty() {
+            return Ok(Delta::Noop);
+        }
+        let splits: Vec<(ObjectId, Vec<doc::Contour>)> = order
+            .iter()
+            .filter_map(|id| match document.registry.get(*id) {
+                Some(ObjectData::Path(path)) if path.contours.len() > 1 => {
+                    Some((*id, path.contours.clone()))
+                }
+                _ => None,
+            })
+            .collect();
+        if splits.is_empty() {
+            return Ok(Delta::Noop);
+        }
+        replace_with_pieces(document, NAME, &order, &splits)
+    }
+}
+
+/// `path.knifeElementsFromPoint` — CS6 `dom.knifeElementsFromPoint(
+/// from, tolerance)`: "When the user clicks a single point while using
+/// the Knife tool, this function cuts paths within the specified
+/// tolerance." Selection-driven like the tool itself: only selected
+/// paths cut. Nothing within tolerance is the dom's `false` — a no-op
+/// here.
+struct PathKnifePoint;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct PathKnifePointPayload {
+    /// The clicked point.
+    from: [f64; 2],
+    /// Cut reach, >= 0.
+    tolerance: f64,
+}
+
+impl TypedCommand for PathKnifePoint {
+    type Payload = PathKnifePointPayload;
+
+    fn name(&self) -> &'static str {
+        "path.knifeElementsFromPoint"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "path.knifeElementsFromPoint";
+        let from = point_of(NAME, payload.from)?;
+        if !payload.tolerance.is_finite() || payload.tolerance < 0.0 {
+            return Err(EngineError::BadPayload {
+                name: NAME.to_owned(),
+                detail: format!("tolerance {} is negative or not finite", payload.tolerance),
+            });
+        }
+        let order = split_selection(document, NAME)?;
+        if order.is_empty() {
+            return Ok(Delta::Noop);
+        }
+        let splits: Vec<(ObjectId, Vec<doc::Contour>)> = order
+            .iter()
+            .filter_map(|id| match document.registry.get(*id) {
+                Some(ObjectData::Path(path)) => {
+                    vector::knife_contours(&path.contours, from, from, payload.tolerance)
+                        .map(|contours| (*id, contours))
+                }
+                _ => None,
+            })
+            .collect();
+        if splits.is_empty() {
+            return Ok(Delta::Noop);
+        }
+        replace_with_pieces(document, NAME, &order, &splits)
+    }
+}
+
+/// `path.knifeElementsFromPoints` — CS6 `dom.knifeElementsFromPoints(
+/// from, to, tolerance)`: "When the user drags while using the Knife
+/// tool, this function cuts additional items within the specified
+/// tolerance." Every crossing of the from→to blade cuts; paths the
+/// blade misses but that lie within tolerance are cut at the nearest
+/// position.
+struct PathKnifePoints;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct PathKnifePointsPayload {
+    /// The drag start.
+    from: [f64; 2],
+    /// The drag end.
+    to: [f64; 2],
+    /// Cut reach for items the blade misses, >= 0.
+    tolerance: f64,
+}
+
+impl TypedCommand for PathKnifePoints {
+    type Payload = PathKnifePointsPayload;
+
+    fn name(&self) -> &'static str {
+        "path.knifeElementsFromPoints"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "path.knifeElementsFromPoints";
+        let from = point_of(NAME, payload.from)?;
+        let to = point_of(NAME, payload.to)?;
+        if from == to {
+            return Err(EngineError::BadPayload {
+                name: NAME.to_owned(),
+                detail: "the drag is zero-length; use the click verb".to_owned(),
+            });
+        }
+        if !payload.tolerance.is_finite() || payload.tolerance < 0.0 {
+            return Err(EngineError::BadPayload {
+                name: NAME.to_owned(),
+                detail: format!("tolerance {} is negative or not finite", payload.tolerance),
+            });
+        }
+        let order = split_selection(document, NAME)?;
+        if order.is_empty() {
+            return Ok(Delta::Noop);
+        }
+        let splits: Vec<(ObjectId, Vec<doc::Contour>)> = order
+            .iter()
+            .filter_map(|id| match document.registry.get(*id) {
+                Some(ObjectData::Path(path)) => {
+                    vector::knife_contours(&path.contours, from, to, payload.tolerance)
+                        .map(|contours| (*id, contours))
+                }
+                _ => None,
+            })
+            .collect();
+        if splits.is_empty() {
+            return Ok(Delta::Noop);
+        }
+        replace_with_pieces(document, NAME, &order, &splits)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
@@ -2416,5 +2728,207 @@ mod tests {
         .unwrap_err();
         assert!(matches!(error, EngineError::InvalidState { .. }), "{error}");
         assert_eq!(document_bytes(&document), before);
+    }
+
+    /// A named compound path: two disjoint squares in one object.
+    fn compound() -> ObjectData {
+        let ObjectData::Path(template) = square(0.0, 0.0, 10.0, 10.0) else {
+            panic!("square builds a path");
+        };
+        ObjectData::Path(PathObject {
+            contours: vec![
+                square_contour(0.0, 0.0, 10.0, 10.0),
+                square_contour(20.0, 0.0, 30.0, 10.0),
+            ],
+            ..template
+        })
+    }
+
+    #[test]
+    fn split_paths_separates_compound_and_undo_restores() {
+        let (mut document, ids) = document_with(vec![compound()]);
+        let id = ids[0];
+        document.object_selection = vec![id];
+        let before = document_bytes(&document);
+        let delta = apply_by_name(&mut document, "path.splitPaths", json!({})).unwrap();
+
+        // The original keeps the first contour; a fresh path carries the
+        // second, attached right after it, inheriting the display fields.
+        let piece = match document.registry.get(id).unwrap() {
+            ObjectData::Path(path) => {
+                assert_eq!(
+                    anchors(&document, id),
+                    vec![(0, 0), (10, 0), (10, 10), (0, 10)]
+                );
+                assert!(path.primitive.is_none());
+                *document.pages[0].layers.layers[0].cells[0]
+                    .elements
+                    .iter()
+                    .find(|&&e| e != id)
+                    .unwrap()
+            }
+            other => panic!("wrong object kind: {other:?}"),
+        };
+        match document.registry.get(piece).unwrap() {
+            ObjectData::Path(path) => {
+                assert_eq!(path.contours.len(), 1);
+                assert_eq!(
+                    anchors(&document, piece),
+                    vec![(20, 0), (30, 0), (30, 10), (20, 10)]
+                );
+                assert_eq!(path.name.as_deref(), Some("square"));
+                assert!(path.paint.is_some());
+                assert!(path.primitive.is_none());
+            }
+            other => panic!("wrong object kind: {other:?}"),
+        }
+        let cell = &document.pages[0].layers.layers[0].cells[0];
+        assert_eq!(cell.elements, vec![id, piece]);
+        assert_eq!(document.object_selection, vec![id, piece]);
+
+        delta.apply_inverse(&mut document).unwrap();
+        assert_eq!(document_bytes(&document), before, "undo restores both");
+    }
+
+    #[test]
+    fn split_paths_noop_and_refusals() {
+        let (mut document, ids) = document_with(vec![square(0.0, 0.0, 8.0, 8.0), image_object()]);
+
+        // Empty selection and single-contour selection are no-ops.
+        assert!(matches!(
+            apply_by_name(&mut document, "path.splitPaths", json!({})).unwrap(),
+            Delta::Noop
+        ));
+        document.object_selection = vec![ids[0]];
+        assert!(matches!(
+            apply_by_name(&mut document, "path.splitPaths", json!({})).unwrap(),
+            Delta::Noop
+        ));
+
+        // A non-path member refuses the whole command untouched.
+        document.object_selection = vec![ids[0], ids[1]];
+        let before = document_bytes(&document);
+        let error = apply_by_name(&mut document, "path.splitPaths", json!({})).unwrap_err();
+        assert!(matches!(error, EngineError::InvalidState { .. }), "{error}");
+        assert_eq!(document_bytes(&document), before);
+    }
+
+    #[test]
+    fn knife_point_opens_square_and_undo_restores() {
+        let (mut document, ids) = document_with(vec![square(0.0, 0.0, 10.0, 10.0)]);
+        let id = ids[0];
+        document.object_selection = vec![id];
+        let before = document_bytes(&document);
+
+        // A click within tolerance of the top edge cuts at the nearest
+        // position and opens the ring; one piece, so the identity keeps
+        // the geometry and no new object is minted.
+        let delta = apply_by_name(
+            &mut document,
+            "path.knifeElementsFromPoint",
+            json!({ "from": [5.0, -0.3], "tolerance": 1.0 }),
+        )
+        .unwrap();
+        assert_eq!(
+            document.pages[0].layers.layers[0].cells[0].elements,
+            vec![id]
+        );
+        assert_eq!(
+            anchors(&document, id),
+            vec![(5, 0), (10, 0), (10, 10), (0, 10), (0, 0), (5, 0)]
+        );
+        match document.registry.get(id).unwrap() {
+            ObjectData::Path(path) => {
+                assert!(!path.contours[0].closed, "the cut opens the ring");
+                assert_eq!(path.name.as_deref(), Some("square"));
+            }
+            other => panic!("wrong object kind: {other:?}"),
+        }
+        assert_eq!(document.object_selection, vec![id]);
+
+        delta.apply_inverse(&mut document).unwrap();
+        assert_eq!(document_bytes(&document), before, "undo restores the ring");
+
+        // A click far from every selected path is the dom's `false`.
+        document.object_selection = vec![id];
+        let miss = apply_by_name(
+            &mut document,
+            "path.knifeElementsFromPoint",
+            json!({ "from": [50.0, 50.0], "tolerance": 1.0 }),
+        )
+        .unwrap();
+        assert!(matches!(miss, Delta::Noop));
+
+        // Negative tolerance is refused before anything is read.
+        let error = apply_by_name(
+            &mut document,
+            "path.knifeElementsFromPoint",
+            json!({ "from": [5.0, -0.3], "tolerance": -1.0 }),
+        )
+        .unwrap_err();
+        assert!(matches!(error, EngineError::BadPayload { .. }), "{error}");
+    }
+
+    #[test]
+    fn knife_drag_splits_square_and_undo_restores() {
+        let (mut document, ids) = document_with(vec![square(0.0, 0.0, 10.0, 10.0)]);
+        let id = ids[0];
+        document.object_selection = vec![id];
+        let before = document_bytes(&document);
+
+        // A vertical drag through the middle cuts the square into two
+        // pieces: the identity keeps the left half, a fresh path carries
+        // the right half.
+        let delta = apply_by_name(
+            &mut document,
+            "path.knifeElementsFromPoints",
+            json!({ "from": [-1.0, 5.0], "to": [11.0, 5.0], "tolerance": 0.0 }),
+        )
+        .unwrap();
+        let piece = match document.registry.get(id).unwrap() {
+            ObjectData::Path(path) => {
+                assert_eq!(path.contours.len(), 1);
+                assert!(!path.contours[0].closed);
+                *document.pages[0].layers.layers[0].cells[0]
+                    .elements
+                    .iter()
+                    .find(|&&e| e != id)
+                    .unwrap()
+            }
+            other => panic!("wrong object kind: {other:?}"),
+        };
+        assert!(matches!(
+            document.registry.get(piece).unwrap(),
+            ObjectData::Path(_)
+        ));
+        let cell = &document.pages[0].layers.layers[0].cells[0];
+        assert_eq!(cell.elements, vec![id, piece]);
+        assert_eq!(document.object_selection, vec![id, piece]);
+
+        delta.apply_inverse(&mut document).unwrap();
+        assert_eq!(
+            document_bytes(&document),
+            before,
+            "undo restores the square"
+        );
+
+        // A zero-length drag is refused (the click verb owns that case).
+        document.object_selection = vec![id];
+        let error = apply_by_name(
+            &mut document,
+            "path.knifeElementsFromPoints",
+            json!({ "from": [5.0, 5.0], "to": [5.0, 5.0], "tolerance": 0.0 }),
+        )
+        .unwrap_err();
+        assert!(matches!(error, EngineError::BadPayload { .. }), "{error}");
+
+        // A drag that misses everything is a no-op.
+        let miss = apply_by_name(
+            &mut document,
+            "path.knifeElementsFromPoints",
+            json!({ "from": [40.0, 40.0], "to": [60.0, 40.0], "tolerance": 0.0 }),
+        )
+        .unwrap();
+        assert!(matches!(miss, Delta::Noop));
     }
 }

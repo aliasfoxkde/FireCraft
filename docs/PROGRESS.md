@@ -8,8 +8,9 @@
 
 - **Released:** v0.1.0 (2026-10-13), repo public.
 - **Roadmap:** M0–M15 **all closed**.
-- **Registry:** 148 commands. **CI:** green 7/7 on `25fedbc`.
-- **CS6 DOM parity:** **172 C / 45 P / 57 M / 82 N** — the 57 M verbs
+- **Registry:** 176 commands. **CI:** green 7/7 on `25fedbc`; later
+  campaign pushes verified per batch (runbook: HANDOFF §6).
+- **CS6 DOM parity:** **201 C / 45 P / 26 M / 84 N** — the 26 M verbs
   are the active campaign; the phased plan is [`HANDOFF.md`](HANDOFF.md) §4.
 
 ## Milestones
@@ -46,12 +47,21 @@
 | #91 | object mask family | faa738d | 162 C / 45 P / 67 M |
 | #92 | layer/page structure family (7 commands, decision 0021) | e830802 (+ 535340f test fix) | 169 C / 45 P / 60 M |
 | #93 | shared-layer model + sharing commands (decision 0022) | 25fedbc | **172 C / 45 P / 57 M** |
+| #94 | handoff/progress/session docs + campaign plan | a1e0e9c | — |
+| #95 | document canvas color + resolution setters (5.1/5.2) | 4b813ef | 174 C |
+| #96 | object-selection model + selection basics (Phase 1) | cc85956 | 177 C |
+| #97 | hierarchy selects + bitmap selectSimilar | 135cb6b | 180 C |
+| #98 | selection-to-frames fans (Phase 2, decision 0026) | ba60816 | 183 C |
+| #99 | rect primitive params + quadrangle; autoshape redraw (6.1/6.2, decisions 0027/0028) | 93c59b4, 614bc64 | 188 C |
+| #100 | slice/hotspot point append (8.2, decision 0029) | 3516d89 | 190 C |
+| #100b | cropSelection, fill-edge mode, symbol tween (8.5, decision 0030) | df8fe42 | 195 C |
+| #101 | flatten family via compositor bakes (Phase 3, decision 0031) | 235e4d4 | 198 C (4 rows, mergeDown case pair) |
+| #102 | knife + splitPaths (8.3, decision 0032) | this batch | **201 C / 45 P / 26 M** |
 
-Remaining families: selection tooling (12 verbs, includes the
-object-selection surface), frames-selection (3+1), group/flatten (3),
-view flags (4, evidence-gated), document/image ops (4), primitives (5),
-button symbols (5, evidence-gated), misc singles (~9). Full breakdown
-with atomic tasks: [`HANDOFF.md`](HANDOFF.md) §4.
+Remaining families (HANDOFF §4 order): 8.4 convertToPaths → 5.3
+rotateDocument → view flags (4, evidence-gated) → button symbols (5,
+evidence-gated) → 8.1 place-image trio → 8.6 clipboard masks/6.6 →
+6.4 resample → 5.4 setDocumentImageSize.
 
 ## Recorded debts (open)
 
@@ -71,6 +81,8 @@ with atomic tasks: [`HANDOFF.md`](HANDOFF.md) §4.
 | 2026-10-13 | ~148 | 45 | ~90 | matrix created (#86 sweep) |
 | 2026-10-14 | 162 | 45 | 67 | #91 mask family |
 | 2026-10-14 | 169 | 45 | 60 | #92 structure family |
-| 2026-10-14 | **172** | 45 | **57** | #93 shared layers |
+| 2026-10-14 | 172 | 45 | 57 | #93 shared layers |
+| 2026-10-14 | 195 | 45 | 34 | #95–#100b (selection, frames, primitives, misc) |
+| 2026-10-14 | **201** | 45 | **26** | #101 flatten + #102 knife/split |
 
 (Pre-#91 counts are approximate; the matrix file is the authority.)

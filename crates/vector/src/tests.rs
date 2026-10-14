@@ -15,6 +15,7 @@ use crate::bridge::{
 };
 use crate::flatten::{FLATTEN_TOLERANCE, flatten_cubic};
 use crate::intersect::{dedup_params, segment_intersection};
+use crate::knife::{knife_contour, knife_contours};
 use crate::offset::{CapKind, JoinKind, StrokeStyle, expand_stroke, offset_path};
 use crate::simplify::simplify;
 use crate::split::split_seg;
@@ -1014,4 +1015,84 @@ fn self_union_of_identical_operands_preserves_the_region() {
     let r = boolean(&square, &square, BooleanOp::Union).unwrap();
     assert_eq!(r.contours.len(), 1);
     assert_eq!(anchor_set(&r), set(&[(0, 0), (10, 0), (10, 10), (0, 10)]));
+}
+
+// ---------------------------------------------------------------------
+// knife cuts (decision 0032)
+
+#[test]
+fn click_cut_opens_a_closed_contour_at_the_nearest_point() {
+    let square = rect_contour_x();
+    // Click just off the bottom edge's midpoint: one cut opens the
+    // ring into a single open contour (the cut point appears at both
+    // ends).
+    let pieces = knife_contour(&square, Point::new(5.0, 0.3), Point::new(5.0, 0.3), 1.0).unwrap();
+    assert_eq!(pieces.len(), 1);
+    assert!(!pieces[0].closed);
+    assert_eq!(pieces[0].point_count, 6);
+    assert_eq!(
+        piece_anchors(&pieces[0]),
+        vec![
+            Point::new(5.0, 0.0),
+            Point::new(10.0, 0.0),
+            Point::new(10.0, 6.0),
+            Point::new(0.0, 6.0),
+            Point::new(0.0, 0.0),
+            Point::new(5.0, 0.0),
+        ]
+    );
+    // A click out of reach cuts nothing.
+    assert!(knife_contour(&square, Point::new(50.0, 50.0), Point::new(50.0, 50.0), 1.0).is_none());
+}
+
+#[test]
+fn drag_cut_splits_a_closed_contour_at_crossings() {
+    let square = rect_contour_x();
+    let pieces = knife_contour(&square, Point::new(5.0, -2.0), Point::new(5.0, 8.0), 0.0).unwrap();
+    assert_eq!(pieces.len(), 2);
+    assert!(pieces.iter().all(|contour| !contour.closed));
+    assert_eq!(pieces[0].point_count, 4);
+    assert_eq!(pieces[1].point_count, 4);
+    // A blade missing by more than the tolerance cuts nothing.
+    assert!(knife_contour(&square, Point::new(20.0, -2.0), Point::new(20.0, 8.0), 0.0).is_none());
+    // Within tolerance it cuts the nearest contour at the nearest
+    // position (here: one cut opens the ring).
+    let near = knife_contour(&square, Point::new(11.0, -2.0), Point::new(11.0, 8.0), 1.5).unwrap();
+    assert_eq!(near.len(), 1);
+    assert!(!near[0].closed);
+}
+
+#[test]
+fn drag_cut_splits_an_open_contour_at_every_crossing() {
+    let mut open = rect_contour_x();
+    open.closed = false;
+    let pieces = knife_contour(&open, Point::new(5.0, -1.0), Point::new(5.0, 7.0), 0.0).unwrap();
+    // Two crossings on a line: three pieces.
+    assert_eq!(pieces.len(), 3);
+    assert!(pieces.iter().all(|contour| !contour.closed));
+}
+
+#[test]
+fn knife_contours_reports_none_only_when_nothing_was_cut() {
+    let square = rect_contour_x();
+    // A cut plus an out-of-reach pass-through contour is a cut.
+    let mut far = rect_contour_x();
+    for point in &mut far.points {
+        point.anchor.x += 30.0;
+    }
+    let both = knife_contours(
+        &[square.clone(), far],
+        Point::new(5.0, -2.0),
+        Point::new(5.0, 8.0),
+        0.0,
+    )
+    .unwrap();
+    assert_eq!(both.len(), 3, "two pieces plus the untouched pass-through");
+    // Nothing within reach anywhere: the dom's `false`.
+    let miss = Point::new(50.0, 50.0);
+    assert!(knife_contours(&[square.clone(), square], miss, miss, 0.0).is_none());
+}
+
+fn piece_anchors(contour: &Contour) -> Vec<Point> {
+    contour.points.iter().map(|p| p.anchor).collect()
 }

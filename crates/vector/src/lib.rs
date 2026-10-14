@@ -17,6 +17,7 @@ mod bridge;
 mod edit;
 mod flatten;
 mod intersect;
+mod knife;
 mod offset;
 mod simplify;
 mod split;
@@ -35,6 +36,7 @@ pub use bridge::{
 pub use edit::{redraw_span, reshape_area, translate_path, translate_points, warp};
 pub use flatten::{FLATTEN_MAX_CHORDS, FLATTEN_TOLERANCE, flatten_cubic};
 pub use geom::Rect;
+pub use knife::{knife_contour, knife_contours};
 pub use offset::{CapKind, DEFAULT_MITER_LIMIT, JoinKind, StrokeStyle, expand_stroke, offset_path};
 pub use simplify::simplify;
 
