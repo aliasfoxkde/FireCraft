@@ -298,3 +298,35 @@ format research, vendored node dictionary).
   materialization + retraction), ten refusal shapes byte-stable,
   non-instance skip + Noop + empty-selection refuse.
 - Registry 206→212. dom-parity: **239C/32P/0M/85N**, unresolved [].
+
+## 2026-10-14 — text rectangle trio (#115, decision 0045)
+
+Batch: `text.setTextRectangle`, `text.setTextRectangleAuto`,
+`text.setTextRectangleAutoFromPoint` — the P→C flip of the CS6
+text-frame verbs (8.11).
+
+- `setTextRectangle` is a pure frame write: runs and `transform`
+  untouched, re-flow is layout-time (the text crate wraps at
+  `frame.width()` on every measure). Honors the dom promise "the text
+  is not scaled or transformed".
+- `setTextRectangleAuto` fits the smallest box via the new
+  `TextEngine::auto_block`: unconstrained layout (no wrap), reduce
+  widest glyph advance (kern × index, ×hscale, + glyph width·hscale)
+  and deepest `line_top + line_height`. Keeps the frame's top-left
+  corner.
+- `setTextRectangleAutoFromPoint` pins the anchor by justification:
+  left/default `x0 = anchor.x`, center `x0 = anchor.x − width/2`
+  (documented), right `x1 = anchor.x` (undocumented symmetric mirror,
+  recorded). Top-anchored in all modes.
+- `ATEb` untouched — one-shot fits vs the persistent auto-enlarge
+  mode (`text.setAttrs auto_enlarge`); recorded non-equivalence.
+- Shared `fit_frame` tail: measure → gate → capture → frame write →
+  `Mutated`. Zero-extent/inverted rects and empty runs refuse
+  ("lays out to no box"); non-finite edges cannot survive JSON
+  (serde_json maps them to null → payload decode error first), so
+  the finite gate is fuzzer-covered, not JSON-test-covered.
+- Tests: rewrite + undo byte-exact; auto-fit re-measure equality
+  (`engine.auto_block` cross-check) + undo; justification anchoring
+  via real `text.setAttrs` deltas; refusal byte-stability across
+  two-selected / path-selected / zero-extent / inverted / empty-text.
+- Registry 212→215. dom-parity: **242C/29P/0M/85N**, unresolved [].

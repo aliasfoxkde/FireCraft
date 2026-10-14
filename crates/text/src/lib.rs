@@ -141,7 +141,7 @@ impl TextEngine {
             };
         }
 
-        let laid = self.layout(object, &style, &text);
+        let laid = self.layout(object, &style, &text, false);
         match (&object.on_path, object.flow) {
             (Some(on_path), Some(2)) if !on_path.path.is_empty() => {
                 self.lower_on_path(object, &style, on_path, laid)
@@ -151,8 +151,16 @@ impl TextEngine {
     }
 
     /// Shapes `text` over the bundled faces at the object's mapped
-    /// attributes. Pure over its inputs.
-    fn layout(&mut self, object: &TextObject, style: &TextStyle, text: &str) -> Laid {
+    /// attributes. Pure over its inputs. `unconstrained` lifts the
+    /// width wrap — every paragraph lays on one line (the auto-fit
+    /// measurement).
+    fn layout(
+        &mut self,
+        object: &TextObject,
+        style: &TextStyle,
+        text: &str,
+        unconstrained: bool,
+    ) -> Laid {
         let size = positive(style.size).unwrap_or(DEFAULT_POINT_SIZE);
         let mut buffer = Buffer::new(
             &mut self.font_system,
@@ -185,9 +193,13 @@ impl TextEngine {
         // Normal flow wraps at the frame width; auto-enlarge is a height
         // concern. On-path text ignores the frame — the path is the
         // layout constraint.
-        let frame_width = match &object.on_path {
-            Some(on_path) if object.flow == Some(2) && !on_path.path.is_empty() => None,
-            _ => (object.frame.width() > 0.0).then_some(object.frame.width() as f32),
+        let frame_width = if unconstrained {
+            None
+        } else {
+            match &object.on_path {
+                Some(on_path) if object.flow == Some(2) && !on_path.path.is_empty() => None,
+                _ => (object.frame.width() > 0.0).then_some(object.frame.width() as f32),
+            }
         };
         buffer.set_size(frame_width, None);
         buffer.shape_until_scroll(&mut self.font_system, true);
@@ -196,6 +208,34 @@ impl TextEngine {
             kern_px: kerning_px(style, size),
             hs: horizontal_scale_of(style),
         }
+    }
+
+    /// The laid-out block with no width constraint — every paragraph
+    /// on one line — as `(widest line, total height)`. This is the
+    /// auto-fit measurement behind `text.setTextRectangleAuto`: the
+    /// smallest box that encloses the text. Pure over the model.
+    pub fn auto_block(&mut self, object: &TextObject) -> (f64, f64) {
+        let style = object.style.clone().unwrap_or_default();
+        let text: String = object
+            .runs
+            .iter()
+            .map(|run| run.text.as_str())
+            .collect::<Vec<&str>>()
+            .concat();
+        if text.trim().is_empty() {
+            return (0.0, 0.0);
+        }
+        let laid = self.layout(object, &style, &text, true);
+        let mut widest = 0.0f64;
+        let mut height = 0.0f64;
+        for run in laid.buffer.layout_runs() {
+            for (index, glyph) in run.glyphs.iter().enumerate() {
+                let line_x = (f64::from(glyph.x) + laid.kern_px * index as f64) * laid.hs;
+                widest = widest.max(line_x + f64::from(glyph.w) * laid.hs);
+            }
+            height = f64::from(run.line_top + run.line_height);
+        }
+        (widest, height)
     }
 
     /// Linear flow: the laid-out block hangs off the frame's top-left

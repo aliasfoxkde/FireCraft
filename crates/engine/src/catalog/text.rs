@@ -25,7 +25,10 @@ pub(crate) fn install(registry: &mut CommandRegistry) -> Result<(), EngineError>
     registry.register(SetFont)?;
     registry.register(AttachPath)?;
     registry.register(DetachPath)?;
-    registry.register(ConvertToPaths)
+    registry.register(ConvertToPaths)?;
+    registry.register(SetTextRectangle)?;
+    registry.register(SetTextRectangleAuto)?;
+    registry.register(SetTextRectangleAutoFromPoint)
 }
 
 /// Edits the text object `id` names, capturing it for the inverse.
@@ -718,6 +721,253 @@ impl TypedCommand for ConvertToPaths {
     }
 }
 
+/// The text-rectangle verbs (`text.setTextRectangle*`) address exactly
+/// one selected text item — CS6's "the selected text item" singular.
+/// Refuses the empty/multi selection and non-text members up front.
+fn one_text_target(
+    document: &mut Document,
+    name: &'static str,
+) -> Result<(doc::ObjectId, doc::TextObject), EngineError> {
+    if document.object_selection.len() != 1 {
+        return Err(EngineError::InvalidState {
+            name: name.to_owned(),
+            detail: format!(
+                "exactly one text item must be selected ({} selected)",
+                document.object_selection.len()
+            ),
+        });
+    }
+    let id = document.object_selection[0];
+    match access::object(document, name, id)? {
+        ObjectData::Text(object) => Ok((id, object.clone())),
+        _ => Err(EngineError::InvalidState {
+            name: name.to_owned(),
+            detail: format!("selected object {} is not a text object", id.index()),
+        }),
+    }
+}
+
+/// `text.setTextRectangle` — CS6 `dom.setTextRectangle(boundingRectangle)`:
+/// "Changes the bounding rectangle of the selected text item to the
+/// specified size. This function causes the text to reflow inside the
+/// new rectangle; the text item is not scaled or transformed. Text
+/// that does not fit in the new rectangle is not visible." The frame
+/// write is the whole command — reflow happens at layout time (the
+/// shaper wraps at the frame width) and nothing transforms.
+struct SetTextRectangle;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct TextRectanglePayload {
+    /// The new frame the text flows inside.
+    rect: TextRect,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct TextRect {
+    left: f64,
+    top: f64,
+    right: f64,
+    bottom: f64,
+}
+
+impl TypedCommand for SetTextRectangle {
+    type Payload = TextRectanglePayload;
+
+    fn name(&self) -> &'static str {
+        "text.setTextRectangle"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "text.setTextRectangle";
+        let rect = &payload.rect;
+        if !rect.left.is_finite()
+            || !rect.top.is_finite()
+            || !rect.right.is_finite()
+            || !rect.bottom.is_finite()
+        {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: "the rectangle must be finite".to_owned(),
+            });
+        }
+        if rect.right <= rect.left || rect.bottom <= rect.top {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: format!(
+                    "rectangle extents {}x{} must be positive",
+                    rect.right - rect.left,
+                    rect.bottom - rect.top
+                ),
+            });
+        }
+        let (id, _) = one_text_target(document, NAME)?;
+        let Some(before) = document.registry.get(id).cloned() else {
+            return Err(EngineError::MissingTarget {
+                name: NAME.to_owned(),
+                detail: format!("object {} vanished mid-command", id.index()),
+            });
+        };
+        let Some(ObjectData::Text(slot)) = document.registry.get_mut(id) else {
+            return Err(EngineError::MissingTarget {
+                name: NAME.to_owned(),
+                detail: format!("object {} vanished mid-command", id.index()),
+            });
+        };
+        slot.frame = geom::Rect::new(rect.left, rect.top, rect.right, rect.bottom);
+        Ok(Delta::Object {
+            id,
+            inverse: ObjectInverse::Mutated {
+                object: Box::new(before),
+            },
+        })
+    }
+}
+
+/// `text.setTextRectangleAuto` — CS6 `dom.setTextRectangleAuto()`:
+/// "Recalculates the bounding rectangle of the selected text item,
+/// setting the rectangle to the smallest box that encloses the text."
+/// A one-shot recalculation, left/top anchored: the laid-out block
+/// measured with no width constraint (`TextEngine::auto_block`)
+/// becomes the frame. The `ATEb` auto-enlarge flag is a separate
+/// Objects-panel mode and stands untouched (recorded).
+struct SetTextRectangleAuto;
+
+impl TypedCommand for SetTextRectangleAuto {
+    type Payload = ConvertToPathsPayload;
+
+    fn name(&self) -> &'static str {
+        "text.setTextRectangleAuto"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        _payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "text.setTextRectangleAuto";
+        let (id, object) = one_text_target(document, NAME)?;
+        let mut engine = text::TextEngine::new();
+        let (width, height) = engine.auto_block(&object);
+        fit_frame(document, id, width, height, |width, height| {
+            geom::Rect::new(
+                object.frame.x0,
+                object.frame.y0,
+                object.frame.x0 + width,
+                object.frame.y0 + height,
+            )
+        })
+    }
+}
+
+/// `text.setTextRectangleAutoFromPoint` — CS6
+/// `dom.setTextRectangleAutoFromPoint(anchorPoint)`: the auto fit with
+/// the box anchored at a point — "left-justified horizontal text is
+/// placed with its top and left edges at anchorPoint"; "centered
+/// horizontal text is centered horizontally around anchorPoint".
+/// Right-justified (undocumented) extends the symmetry: the right
+/// edge sits at the anchor.
+struct SetTextRectangleAutoFromPoint;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct TextAnchorPayload {
+    /// Where the fitted box anchors.
+    anchor: TextPoint,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct TextPoint {
+    x: f64,
+    y: f64,
+}
+
+impl TypedCommand for SetTextRectangleAutoFromPoint {
+    type Payload = TextAnchorPayload;
+
+    fn name(&self) -> &'static str {
+        "text.setTextRectangleAutoFromPoint"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "text.setTextRectangleAutoFromPoint";
+        if !payload.anchor.x.is_finite() || !payload.anchor.y.is_finite() {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: "the anchor point must be finite".to_owned(),
+            });
+        }
+        let (id, object) = one_text_target(document, NAME)?;
+        let justification = object.style.as_ref().and_then(|style| style.justification);
+        let mut engine = text::TextEngine::new();
+        let (width, height) = engine.auto_block(&object);
+        fit_frame(document, id, width, height, |width, height| {
+            let left = match justification {
+                // Centered: the box spreads equally either side.
+                Some(1) => payload.anchor.x - width / 2.0,
+                // Right (the manual's undocumented mirror): the right
+                // edge sits at the anchor.
+                Some(2) => payload.anchor.x - width,
+                _ => payload.anchor.x,
+            };
+            geom::Rect::new(
+                left,
+                payload.anchor.y,
+                left + width,
+                payload.anchor.y + height,
+            )
+        })
+    }
+}
+
+/// Shared auto-fit tail: measure-then-write. A block with no extent
+/// (empty runs) refuses — there is no smallest box around nothing.
+/// `place` turns the measured `(width, height)` into the new frame.
+fn fit_frame(
+    document: &mut Document,
+    id: doc::ObjectId,
+    width: f64,
+    height: f64,
+    place: impl Fn(f64, f64) -> geom::Rect,
+) -> Result<Delta, EngineError> {
+    const NAME: &str = "text.setTextRectangleAuto";
+    if width <= 0.0 || height <= 0.0 || !width.is_finite() || !height.is_finite() {
+        return Err(EngineError::InvalidState {
+            name: NAME.to_owned(),
+            detail: "the text lays out to no box (empty runs?)".to_owned(),
+        });
+    }
+    let Some(before) = document.registry.get(id).cloned() else {
+        return Err(EngineError::MissingTarget {
+            name: NAME.to_owned(),
+            detail: format!("object {} vanished mid-command", id.index()),
+        });
+    };
+    let Some(ObjectData::Text(slot)) = document.registry.get_mut(id) else {
+        return Err(EngineError::MissingTarget {
+            name: NAME.to_owned(),
+            detail: format!("object {} vanished mid-command", id.index()),
+        });
+    };
+    slot.frame = place(width, height);
+    Ok(Delta::Object {
+        id,
+        inverse: ObjectInverse::Mutated {
+            object: Box::new(before),
+        },
+    })
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
@@ -1346,5 +1596,201 @@ mod tests {
         );
         delta.apply_inverse(&mut document).unwrap();
         assert_eq!(document_bytes(&document), before);
+    }
+
+    #[test]
+    fn set_text_rectangle_rewrite_and_undo() {
+        let mut document = document();
+        let (_, id) = create(&mut document, "Hello wrapped world");
+        document.object_selection = vec![id];
+        let original = serde_json::to_vec(&document).unwrap();
+        let registry = registry();
+
+        let delta = registry
+            .execute(
+                &mut document,
+                "text.setTextRectangle",
+                json!({ "rect": {"left": 0.0, "top": 5.0, "right": 40.0, "bottom": 200.0} }),
+            )
+            .unwrap();
+        let object = text_object(&document, id);
+        assert_eq!(object.frame.x0, 0.0);
+        assert_eq!(object.frame.y0, 5.0);
+        assert_eq!(object.frame.width(), 40.0);
+        assert_eq!(object.frame.height(), 195.0);
+        // Not scaled, not transformed — the wrap happens at layout.
+        assert!(object.transform.is_none());
+
+        delta.apply_inverse(&mut document).unwrap();
+        assert_eq!(serde_json::to_vec(&document).unwrap(), original);
+    }
+
+    #[test]
+    fn set_text_rectangle_auto_fits_the_smallest_box() {
+        let mut document = document();
+        // A narrow frame wraps; the auto fit widens back to one line.
+        let payload = json!({
+            "page": 0, "layer": 0, "cell": 0,
+            "x": 10.0, "y": 20.0, "width": 30.0, "height": 120.0,
+            "text": "Handgloves",
+            "name": "narrow",
+        });
+        registry()
+            .execute(&mut document, "text.createText", payload)
+            .unwrap();
+        let id = document.pages[0].layers.layers[0].cells[0].elements[0];
+        document.object_selection = vec![id];
+        let original = serde_json::to_vec(&document).unwrap();
+        let registry = registry();
+
+        let before = text_object(&document, id).clone();
+        let delta = registry
+            .execute(&mut document, "text.setTextRectangleAuto", json!({}))
+            .unwrap();
+        let after = text_object(&document, id);
+        // The unconstrained block is wider than the 30 px wrap and one
+        // line tall — smaller than the 120 px frame.
+        assert!(after.frame.width() > before.frame.width());
+        assert!(after.frame.height() < before.frame.height());
+        assert_eq!(after.frame.x0, before.frame.x0);
+        assert_eq!(after.frame.y0, before.frame.y0);
+        // The measured height matches what the renderer lays out.
+        let mut engine = text::TextEngine::new();
+        let (width, height) = engine.auto_block(text_object(&document, id));
+        assert_eq!(after.frame.width(), width);
+        assert_eq!(after.frame.height(), height);
+
+        delta.apply_inverse(&mut document).unwrap();
+        assert_eq!(serde_json::to_vec(&document).unwrap(), original);
+    }
+
+    #[test]
+    fn set_text_rectangle_auto_from_point_anchors_by_justification() {
+        let mut document = document();
+        let (_, id) = create(&mut document, "Anchored");
+        document.object_selection = vec![id];
+        let original = serde_json::to_vec(&document).unwrap();
+        let registry = registry();
+        let mut deltas = Vec::new();
+
+        // Left (the default): top and left edges at the anchor.
+        deltas.push(
+            registry
+                .execute(
+                    &mut document,
+                    "text.setTextRectangleAutoFromPoint",
+                    json!({ "anchor": {"x": 100.0, "y": 50.0} }),
+                )
+                .unwrap(),
+        );
+        let left = text_object(&document, id).clone();
+        assert_eq!(left.frame.x0, 100.0);
+        assert_eq!(left.frame.y0, 50.0);
+
+        // Centered: the box spreads equally either side of the anchor.
+        deltas.push(
+            registry
+                .execute(
+                    &mut document,
+                    "text.setAttrs",
+                    json!({ "id": id, "justification": 1 }),
+                )
+                .unwrap(),
+        );
+        deltas.push(
+            registry
+                .execute(
+                    &mut document,
+                    "text.setTextRectangleAutoFromPoint",
+                    json!({ "anchor": {"x": 100.0, "y": 50.0} }),
+                )
+                .unwrap(),
+        );
+        let centered = text_object(&document, id);
+        assert_eq!(centered.frame.x0 + centered.frame.width() / 2.0, 100.0);
+        assert_eq!(centered.frame.y0, 50.0);
+
+        // Undo both fits (and the justification) back to the original.
+        for delta in deltas.into_iter().rev() {
+            delta.apply_inverse(&mut document).unwrap();
+        }
+        assert_eq!(serde_json::to_vec(&document).unwrap(), original);
+    }
+
+    #[test]
+    fn set_text_rectangle_refusals_touch_nothing() {
+        let mut document = document();
+        let (_, id) = create(&mut document, "Steady");
+        let path_id = document.registry.insert(path_fixture());
+        document.pages[0].layers.layers[0].cells[0]
+            .elements
+            .push(path_id);
+        let ids = [path_id];
+        let registry = registry();
+
+        // Two selected — the verbs address one item. The selection is
+        // editing state, so each round snapshots after it is set.
+        document.object_selection = vec![id, ids[0]];
+        let mut before = serde_json::to_vec(&document).unwrap();
+        for (name, payload) in [
+            (
+                "text.setTextRectangle",
+                json!({ "rect": {"left": 0.0, "top": 0.0, "right": 40.0, "bottom": 40.0} }),
+            ),
+            ("text.setTextRectangleAuto", json!({})),
+            (
+                "text.setTextRectangleAutoFromPoint",
+                json!({ "anchor": {"x": 1.0, "y": 1.0} }),
+            ),
+        ] {
+            let error = registry.execute(&mut document, name, payload).unwrap_err();
+            assert!(matches!(error, EngineError::InvalidState { .. }), "{name}");
+            assert_eq!(
+                serde_json::to_vec(&document).unwrap(),
+                before,
+                "{name} mutated on refusal"
+            );
+        }
+
+        // A path in the slot refuses too.
+        document.object_selection = vec![ids[0]];
+        let error = registry
+            .execute(
+                &mut document,
+                "text.setTextRectangle",
+                json!({ "rect": {"left": 0.0, "top": 0.0, "right": 40.0, "bottom": 40.0} }),
+            )
+            .unwrap_err();
+        assert!(matches!(error, EngineError::InvalidState { .. }));
+
+        // Zero-extent and inverted rectangles refuse (non-finite edges
+        // cannot survive JSON, so the finite gate is covered by the fuzzer).
+        document.object_selection = vec![id];
+        before = serde_json::to_vec(&document).unwrap();
+        for payload in [
+            json!({ "rect": {"left": 0.0, "top": 0.0, "right": 0.0, "bottom": 40.0} }),
+            json!({ "rect": {"left": 50.0, "top": 0.0, "right": 40.0, "bottom": 40.0} }),
+        ] {
+            let error = registry
+                .execute(&mut document, "text.setTextRectangle", payload)
+                .unwrap_err();
+            assert!(matches!(error, EngineError::InvalidState { .. }));
+            assert_eq!(serde_json::to_vec(&document).unwrap(), before);
+        }
+
+        // Text with no runs lays out to no box.
+        registry
+            .execute(
+                &mut document,
+                "text.setText",
+                json!({ "id": id, "text": "" }),
+            )
+            .unwrap();
+        let emptied = serde_json::to_vec(&document).unwrap();
+        let error = registry
+            .execute(&mut document, "text.setTextRectangleAuto", json!({}))
+            .unwrap_err();
+        assert!(matches!(error, EngineError::InvalidState { .. }));
+        assert_eq!(serde_json::to_vec(&document).unwrap(), emptied);
     }
 }

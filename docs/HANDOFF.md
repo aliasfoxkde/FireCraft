@@ -14,17 +14,17 @@
 - **Ship state:** v0.1.0 released, repo public. Roadmap M0–M15 all
   closed. 155+ commits, CI green on `3d74723` (7/7 jobs; the fuzz job
   on that commit caught the addImage minting leak — fixed in `000557d`).
-- **Engine registry:** 212 commands, pinned equal to the fuzz call
+- **Engine registry:** 215 commands, pinned equal to the fuzz call
   table by `the_call_table_covers_the_catalog`.
-- **CS6 DOM verb-surface parity:** **239 C / 32 P / 0 M / 85 N** —
+- **CS6 DOM verb-surface parity:** **242 C / 29 P / 0 M / 85 N** —
   the missing table is empty (2026-10-14, decision 0041); every dom
   mutation verb is carried or partial. Remaining surface work is the
-  32 P rows and Phase 9 debts.
+  29 P rows and Phase 9 debts.
   (`docs/planning/generated/dom-parity.md`, regenerate per §5 below).
   (The CS6 verb list carries both case spellings of mergeDown and
   AddNewImage — those families flipped four rows each.)
 - **Active campaign:** COMPLETE (2026-10-14) — the M table is empty.
-  Remaining surface work: the 32 P rows and Phase 9 debts, prioritized
+  Remaining surface work: the 29 P rows and Phase 9 debts, prioritized
   from `dom-parity.md`'s P table. New families follow the §3 loop.
 - **Clean-room invariants (never violate):** `source/` is Adobe's
   copyrighted material — git-ignored, never committed, never copied
@@ -40,7 +40,7 @@
 | `AGENTS.md` | Operating manual: commands, gates, commit rules, day-to-day method |
 | `docs/PLANNING.md` | Master plan: format spec (§6), architecture (§7), method |
 | `docs/planning/firecraft/` | `ROADMAP.md` + tickets M0–M15 (all closed; reference for how tickets are written) |
-| `docs/decisions/` | Decision records 0001–0044 — **write one per family/batch** |
+| `docs/decisions/` | Decision records 0001–0045 — **write one per family/batch** |
 | `docs/planning/generated/` | `parity.md`, `scorecard.md` (xtask-owned) + `dom-parity.md` (generator-owned, see §5) |
 | `docs/research/fireworks-png-nodes.md` | The node dictionary — the format Rosetta stone (observational; corpus wins on conflict) |
 | `log/devlog.md` | Detailed session log (gitignored) — **append an entry to close every task** |
@@ -343,6 +343,19 @@ mutations and refuses without a linked slice.
   `setAnimInstanceStartFrame` stays P — FW4 dropped the field from
   the format, so the verb refuses pointing at placement (inventing
   a wire node would fabricate format).
+- **8.11 — DONE (decision 0045).** The text-rectangle trio landed
+  2026-10-14: `text.setTextRectangle` is a pure frame write (runs and
+  transform untouched — re-flow is layout-time, honoring "not scaled
+  or transformed"), `text.setTextRectangleAuto` fits the smallest box
+  via the new `TextEngine::auto_block` (unconstrained measure: widest
+  kerned+scaled advance, deepest line box) keeping the top-left
+  corner, `text.setTextRectangleAutoFromPoint` re-anchors by
+  justification — left/center documented, right the symmetric mirror
+  (recorded). `ATEb` untouched: these are one-shot fits, the
+  persistent auto-enlarge mode stays a `setAttrs` concern (recorded
+  non-equivalence). Zero-extent and inverted rects refuse; empty runs
+  refuse ("lays out to no box"). Next text cluster (markup/para/runs)
+  needs the multi-run model first.
 
 ### Phase 9 — Recorded debts (P-class limitations; no parity pressure)
 - **6.1-object-duplicate** deep-clone of groups (today shallow).

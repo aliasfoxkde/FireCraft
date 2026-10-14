@@ -642,6 +642,9 @@ pub const CALLS: &[&str] = &[
     "text.attachPath",
     "text.detachPath",
     "text.convertToPaths",
+    "text.setTextRectangle",
+    "text.setTextRectangleAuto",
+    "text.setTextRectangleAutoFromPoint",
     "symbol.create",
     "symbol.createInstance",
     "symbol.breakApart",
@@ -2032,6 +2035,25 @@ pub fn random_call(rng: &mut FuzzRng, document: &Document) -> (String, serde_jso
         // the conversion target, so arms land in the no-op, convert,
         // and refusal paths alike.
         "text.convertToPaths" => serde_json::json!({}),
+        // Rectangle payloads mix legal frames with zero-extent and
+        // inverted ones; Auto payloads are empty (selection-driven);
+        // FromPoint anchors wander so every justification anchors
+        // differently.
+        "text.setTextRectangle" => serde_json::json!({
+            "rect": {
+                "left": rng.below(160) as f64 - 40.0,
+                "top": rng.below(160) as f64 - 40.0,
+                "right": rng.below(160) as f64 - 40.0,
+                "bottom": rng.below(160) as f64 - 40.0,
+            }
+        }),
+        "text.setTextRectangleAuto" => serde_json::json!({}),
+        "text.setTextRectangleAutoFromPoint" => serde_json::json!({
+            "anchor": {
+                "x": rng.below(200) as f64 - 50.0,
+                "y": rng.below(200) as f64 - 50.0,
+            }
+        }),
         "symbol.create" => {
             let count = 1 + rng.below(3);
             let mut ids = Vec::with_capacity(count);

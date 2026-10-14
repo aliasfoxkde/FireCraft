@@ -7,20 +7,20 @@ regeneration recipe in docs/PLANNING.md §5.4). The DOM is stable
 CS4→CS6; CS6 additions the text lacks (e.g. 9-slice guides) are
 covered by the CS6 `.jsf` scripts and appear here via their verbs.
 
-FireCraft side: the 212-command registry (`engine::catalog::ids()`,
+FireCraft side: the 215-command registry (`engine::catalog::ids()`,
 enforced == the fuzz call table).
 
 ## Coverage classes
 
 | class | meaning | count (of 356 dom verbs) |
 |---|---|---|
-| C | carried: a registry command implements the mutation | 239 |
-| P | partial: carried with a recorded model limitation | 32 |
+| C | carried: a registry command implements the mutation | 242 |
+| P | partial: carried with a recorded model limitation | 29 |
 | M | missing: no command and no decision — work items | 0 |
 | N | not applicable: non-document surface (accessor/UI/session/clipboard/export/OS) | 85 |
 
 Document-mutation coverage: **271 of 271** carried-or-partial
-(239 carried, 32 partial, 0 missing).
+(242 carried, 29 partial, 0 missing).
 
 ### Gap families (the Missing table, grouped)
 
@@ -264,6 +264,9 @@ partial rows and the recorded debts in docs/HANDOFF.md Phase 9.
 | `setTextHorizontalScale` | C | text.setAttrs |  |
 | `setTextLeading` | C | text.setAttrs |  |
 | `setTextOrientation` | C | text.setAttrs |  |
+| `setTextRectangle` | C | text.setTextRectangle | carried (0045): frame write only, reflow happens at layout; not scaled or transformed |
+| `setTextRectangleAuto` | C | text.setTextRectangleAuto | carried (0045): one-shot smallest-box fit via TextEngine::auto_block, left/top anchored |
+| `setTextRectangleAutoFromPoint` | C | text.setTextRectangleAutoFromPoint | carried (0045): anchor lands per justification (left/center documented, right = recorded mirror) |
 | `setWebObjectsVisibility` | C | page.setWebObjectsVisibility | decision 0043: the Web Layer eye bit per page; the layer provisions like any first web touch |
 | `shareLayerToPages` | C | layer.shareToPages | per-page add/remove of the LSAv link; CS6 name-lists mapped to indices (decision 0022) |
 | `showAllHidden` | C | object.setVisible |  |
@@ -306,9 +309,6 @@ partial rows and the recorded debts in docs/HANDOFF.md Phase 9.
 | `setTextParaIndent` | P | text.setAttrs | paragraph runs - single-run attr model |
 | `setTextParaSpacingAfter` | P | text.setAttrs | paragraph runs |
 | `setTextParaSpacingBefore` | P | text.setAttrs | paragraph runs |
-| `setTextRectangle` | P | text.setText | frame box edit rides the text payload |
-| `setTextRectangleAuto` | P | text.setText | auto-fit variant |
-| `setTextRectangleAutoFromPoint` | P | text.setText | auto-fit variant |
 | `setTextRuns` | P | text.setText | multi-run styled text; the model carries single runs (ZSOi 0x1f text-style application is a recorded M15 gap) |
 
 ## Missing (M) — work items
