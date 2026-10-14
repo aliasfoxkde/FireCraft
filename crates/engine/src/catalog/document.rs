@@ -598,24 +598,25 @@ fn scaled_pixels(
     Ok((new_w, new_h))
 }
 
-/// Assembles the image's tile grid, resamples the buffer, and re-tiles
-/// over fresh bank slots — the rotate bake with the bilinear pass in
-/// place of the permutation. Callers preflight the tile bank, so the
-/// assembly cannot miss.
+/// Resamples the pre-assembled buffer and re-tiles it over fresh bank
+/// slots — the rotate bake with the bilinear pass in place of the
+/// permutation. The assembly happened in pre-flight (000557d) and is
+/// passed in, so this is the command's first mutation and cannot
+/// refuse.
 #[allow(clippy::too_many_arguments)]
 fn scale_image(
     document: &mut Document,
     image: &doc::ImageObject,
+    flat: &[u8],
     map: geom::Affine,
     new_pixels: (i64, i64),
-) -> Result<(doc::ImageObject, Vec<u32>), EngineError> {
+) -> (doc::ImageObject, Vec<u32>) {
     let (old_width, old_height) = image.pixels;
-    let flat = crate::bitmap::assemble_rgba(document, image, "document.setImageSize")?;
     let resampled =
-        crate::bitmap::resample_rgba(&flat, old_width, old_height, new_pixels.0, new_pixels.1);
+        crate::bitmap::resample_rgba(flat, old_width, old_height, new_pixels.0, new_pixels.1);
     let (tiles, minted) =
         crate::bitmap::retile_rgba(document, &resampled, new_pixels.0, new_pixels.1);
-    Ok((
+    (
         doc::ImageObject {
             location: map * image.location,
             offset: map * image.offset,
@@ -630,7 +631,7 @@ fn scale_image(
             effects: image.effects.clone(),
         },
         minted,
-    ))
+    )
 }
 
 impl TypedCommand for SetDocumentImageSize {
@@ -699,8 +700,20 @@ impl TypedCommand for SetDocumentImageSize {
             }
         }
         // Everything fallible resolves before any mutation: per-page
-        // preflights (editable grids, loaded tiles, resample caps) and
-        // the scale maps.
+        // preflights (editable grids, loaded tiles, resample caps,
+        // assemblies) and the scale maps — across ALL affected pages
+        // before the first page bakes.
+        /// One image's pre-resolved bake: the pre-scale object, the
+        /// assembled pixels, and the resample target grid (the 000557d
+        /// pattern — resolution holds the read-only work). Baking is
+        /// the command's first mutation and runs only after every page
+        /// has resolved.
+        struct ImageBake {
+            id: doc::ObjectId,
+            image: doc::ImageObject,
+            flat: Vec<u8>,
+            new_pixels: (i64, i64),
+        }
         struct PagePlan {
             page: usize,
             before_page: Box<doc::Page>,
@@ -709,8 +722,7 @@ impl TypedCommand for SetDocumentImageSize {
             old_guides: (Vec<f64>, Vec<f64>),
             map: geom::Affine,
             befores: Vec<(doc::ObjectId, doc::ObjectData)>,
-            bakes: Vec<(doc::ObjectId, doc::ImageObject)>,
-            minted: Vec<u32>,
+            bakes: Vec<ImageBake>,
         }
         let mut plans = Vec::with_capacity(affected.len());
         for page in &affected {
@@ -728,13 +740,16 @@ impl TypedCommand for SetDocumentImageSize {
                 befores.push((*id, access::object(document, NAME, *id)?.clone()));
             }
             let mut bakes = Vec::new();
-            let mut minted = Vec::new();
             for (id, before) in &befores {
                 if let doc::ObjectData::Image(image) = before {
                     let new_pixels = scaled_pixels(image.pixels, (sx, sy), NAME, *id)?;
-                    let (scaled, added) = scale_image(document, image, map, new_pixels)?;
-                    bakes.push((*id, scaled));
-                    minted.extend(added);
+                    let flat = crate::bitmap::assemble_rgba(document, image, NAME)?;
+                    bakes.push(ImageBake {
+                        id: *id,
+                        image: image.clone(),
+                        flat,
+                        new_pixels,
+                    });
                 }
             }
             plans.push(PagePlan {
@@ -747,7 +762,6 @@ impl TypedCommand for SetDocumentImageSize {
                 map,
                 befores,
                 bakes,
-                minted,
             });
         }
         // Mutations, all post-validation: resolution rides the root
@@ -762,12 +776,24 @@ impl TypedCommand for SetDocumentImageSize {
         document.info.canvas.resolution_unit = payload.unit.raw();
         for plan in plans {
             let old_canvas = plan.before_page.info.canvas.clone();
+            // Bake every image: caps and assemblies settled above, so
+            // resample-and-retile cannot refuse. Minted tiles land in
+            // the bank delta after the page-body delta, undo order
+            // preserved.
+            let mut bakes = Vec::with_capacity(plan.bakes.len());
+            let mut minted = Vec::new();
+            for bake in plan.bakes {
+                let (scaled, added) =
+                    scale_image(document, &bake.image, &bake.flat, plan.map, bake.new_pixels);
+                bakes.push((bake.id, scaled));
+                minted.extend(added);
+            }
             deltas.push(Delta::PageBody {
                 page: plan.page,
                 before: plan.before_page,
             });
-            deltas.push(Delta::Bank { added: plan.minted });
-            for (id, scaled) in plan.bakes {
+            deltas.push(Delta::Bank { added: minted });
+            for (id, scaled) in bakes {
                 let Some(doc::ObjectData::Image(slot)) = document.registry.get_mut(id) else {
                     return Err(EngineError::MissingTarget {
                         name: NAME.to_owned(),
@@ -1197,6 +1223,66 @@ mod document_tests {
                 "refused image size mutated nothing"
             );
         }
+    }
+
+    #[test]
+    fn image_size_refusal_after_another_page_bakes_touches_nothing() {
+        // The fuzz-found hole (000557d regression): with
+        // `current_page_only: false` the old pre-flight baked page 0's
+        // image — minting bank tiles — before page 1's resample cap
+        // refused, leaving the refusal holding minted tiles. Every
+        // page resolves before the first bake, so the cap refusal now
+        // strands nothing.
+        let (mut document, _) = testdoc::sample_document();
+        document.pages[0].info.canvas = canvas(512.0, 512.0);
+        document.pages[1].info.canvas = canvas(4.0, 4.0);
+        for page in 0..2 {
+            let tile_id = next_tile_id(&document);
+            document
+                .tiles
+                .insert(tile_id, raster::Tile::from_rgba8([0u8; raster::TILE_BYTES]));
+            let image_id = document
+                .registry
+                .insert(doc::ObjectData::Image(doc::ImageObject {
+                    location: geom::Point::ZERO,
+                    offset: geom::Point::ZERO,
+                    pixels: (8, 6),
+                    tile_size: i64::from(raster::TILE_SIDE as u32),
+                    tiles: vec![doc::TileRef::Tile(tile_id)],
+                    name: None,
+                    opacity: 1000,
+                    blend: 0,
+                    visible: true,
+                    locked: false,
+                    effects: Vec::new(),
+                }));
+            document.pages[page].layers.layers[0].cells[0]
+                .elements
+                .push(image_id);
+        }
+        let before = document_bytes(&document);
+
+        // Page 0 (512 px canvas) scales 8x6 to 128x96 — legal. Page 1
+        // (4 px canvas) would resample the same image to 16384 wide —
+        // past the cap — so the whole command refuses.
+        let error = SetDocumentImageSize
+            .apply_json(
+                &mut document,
+                serde_json::json!({
+                    "rect": {"left": 0.0, "top": 0.0, "right": 8192.0, "bottom": 8192.0},
+                    "resolution": 72.0,
+                    "unit": "inch",
+                    "page": 0,
+                    "current_page_only": false,
+                }),
+            )
+            .expect_err("page 1's resample cap refuses the whole command");
+        assert!(matches!(error, EngineError::InvalidState { .. }));
+        assert_eq!(
+            document_bytes(&document),
+            before,
+            "the refusal left page 0's minted tiles behind"
+        );
     }
 
     #[test]
