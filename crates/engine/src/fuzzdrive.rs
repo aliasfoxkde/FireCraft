@@ -691,6 +691,7 @@ pub const CALLS: &[&str] = &[
     "symbol.editAttach",
     "symbol.editDetach",
     "symbol.editReorder",
+    "symbol.duplicateSymbolForAlias",
     "symbol.tween",
     "library.add",
     "library.importSymbol",
@@ -2394,6 +2395,10 @@ pub fn random_call(rng: &mut FuzzRng, document: &Document) -> (String, serde_jso
             "id": any_id(rng),
             "to": rng.below(6),
         }),
+        // Selection-driven: the arm only shapes the payload — the
+        // verb reads the live object_selection (empty refuses;
+        // instance-less selections no-op).
+        "symbol.duplicateSymbolForAlias" => serde_json::json!({}),
         "library.add" => serde_json::json!({
             "name": format!("L-{}", rng.below(100)),
             "symbol_type": rng

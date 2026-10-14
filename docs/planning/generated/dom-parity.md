@@ -14,13 +14,13 @@ enforced == the fuzz call table).
 
 | class | meaning | count (of 356 dom verbs) |
 |---|---|---|
-| C | carried: a registry command implements the mutation | 266 |
-| P | partial: carried with a recorded model limitation | 5 |
+| C | carried: a registry command implements the mutation | 267 |
+| P | partial: carried with a recorded model limitation | 4 |
 | M | missing: no command and no decision — work items | 0 |
 | N | not applicable: non-document surface (accessor/UI/session/clipboard/export/OS) | 85 |
 
 Document-mutation coverage: **271 of 271** carried-or-partial
-(266 carried, 5 partial, 0 missing).
+(267 carried, 4 partial, 0 missing).
 
 ### Gap families (the Missing table, grouped)
 
@@ -121,6 +121,7 @@ partial rows and the recorded debts in docs/HANDOFF.md Phase 9.
 | `duplicateSelectionToFrameRange` | C | selection.duplicateToFrameRange | -1 keeps its current-frame meaning; spanning ranges skip the source (decision 0026) |
 | `duplicateSelectionToFrames` | C | selection.duplicateToFrames | all/previous/next/end; next past the last frame adds one (decision 0026) |
 | `duplicateSymbol` | C | library.add |  |
+| `duplicateSymbolForAlias` | C | symbol.duplicateSymbolForAlias | decision 0053 |
 | `enableElementMask` | C | mask.enable | disabled masks keep their structure under GRTi 0 (decision 0020) |
 | `enableNineScale` | C | symbol.set9Slice |  |
 | `enableTextAntiAliasing` | C | text.setAttrs |  |
@@ -305,7 +306,6 @@ partial rows and the recorded debts in docs/HANDOFF.md Phase 9.
 
 | CS6 verb | class | FireCraft carrier | note |
 |---|---|---|---|
-| `duplicateSymbolForAlias` | P | library.add | alias linkage unmodeled |
 | `importFile` | P | io | io carries SVG/raster importers; no engine place-imported-file command |
 | `setAnimInstanceStartFrame` | P | symbol.setParam | FW4 dropped the start-frame field from the format; refuses pointing at instance placement (the documented FW4 substitute) |
 | `setFillNColorNTexture` | P | path.setFillColor | texture component of the numbered form (texture_blend rides the fill model, no command surface) |

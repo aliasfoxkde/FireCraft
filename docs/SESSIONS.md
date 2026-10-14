@@ -591,3 +591,26 @@ Batch: `text.setTextCustomAntiAliasOverSample`,
 - Registry 235→238. dom-parity: **266C/5P/0M/85N**, unresolved [].
   Gates: engine + doc suites green, clippy -D warnings, fmt,
   256-seed CI-base fuzz sweep clean.
+
+## #124 — 2026-10-14 — duplicateSymbolForAlias (decision 0053)
+
+Batch: `symbol.duplicateSymbolForAlias` (8.19).
+
+- The dom's semantics read literally: one duplicate per distinct
+  pointed-to `MSNi` (the symbols pointed to, not the instances),
+  content cloned verbatim under a fresh number, and only the
+  selected instances re-point. Nonlinked-for-free — linkage is not a
+  modeled definition property, so every definition is already the
+  kind the dom guarantees.
+- Gates: empty selection refuses; a selection with no instances (or
+  only instances with dangling numbers) is the no-op; non-instance
+  members skip. All reads before the first mutation (000557d);
+  `Delta::Library` captures the appends, each re-point carries its
+  mutated-inverse, folded in a group so undo restores numbers and
+  library in one step.
+- Tests: +2 (replicate + repoint + untouched-standalone + undo;
+  refusal/no-op/dangling gates with nothing-mutated asserts).
+  fuzzdrive: +1 CALLS + empty-payload arm (selection-driven).
+- Registry 238→239. dom-parity: **267C/4P/0M/85N**, unresolved [].
+  Gates: engine suite green, clippy -D warnings, fmt, 256-seed
+  CI-base fuzz sweep clean.

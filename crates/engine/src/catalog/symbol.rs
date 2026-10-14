@@ -68,6 +68,7 @@ pub(crate) fn install(registry: &mut CommandRegistry) -> Result<(), EngineError>
     registry.register(LibraryRemove)?;
     registry.register(LibraryRename)?;
     registry.register(LibraryImport)?;
+    registry.register(DuplicateSymbolForAlias)?;
     registry.register(Tween)?;
     registry.register(ReplaceButtonTextStrings)?;
     registry.register(ReplaceButtonTextStringsInInstances)
@@ -1206,6 +1207,109 @@ impl TypedCommand for ReplaceButtonTextStringsInInstances {
             }
         }
         replace_button_text(document, payload, &numbers)
+    }
+}
+
+/// `symbol.duplicateSymbolForAlias` — CS6's
+/// `dom.duplicateSymbolForAlias()` (Fireworks 3): every definition the
+/// selection's instances point at is duplicated (fresh `MSNi`, content
+/// cloned verbatim — the dom guarantees the duplicates are nonlinked,
+/// and nonlinked is the only kind this model carries) and the selected
+/// instances re-point to the copy. One duplicate per distinct
+/// pointed-to number: the dom duplicates "the symbols that are pointed
+/// to", not one per instance. An empty selection refuses; a selection
+/// without instances is the no-op.
+struct DuplicateSymbolForAlias;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct DuplicateSymbolForAliasPayload {}
+
+impl TypedCommand for DuplicateSymbolForAlias {
+    type Payload = DuplicateSymbolForAliasPayload;
+
+    fn name(&self) -> &'static str {
+        "symbol.duplicateSymbolForAlias"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        _payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "symbol.duplicateSymbolForAlias";
+        if document.object_selection.is_empty() {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: "nothing is selected".to_owned(),
+            });
+        }
+        // Pre-flight reads (000557d): the distinct numbers the
+        // selection's instances point at, first-seen order.
+        let mut numbers: Vec<i64> = Vec::new();
+        for id in &document.object_selection {
+            if let Some(doc::ObjectData::SymbolInstance(instance)) = document.registry.get(*id) {
+                if !numbers.contains(&instance.symbol_number) {
+                    numbers.push(instance.symbol_number);
+                }
+            }
+        }
+        // Content clones out before any mutation; a number with no
+        // definition (a dangling instance) skips — the walker rule.
+        let mut clones: Vec<(i64, SymbolDefinition)> = Vec::new();
+        for symbol in &numbers {
+            let Some(definition) = document
+                .symbols
+                .iter()
+                .find(|definition| definition.symbol_number == *symbol)
+            else {
+                continue;
+            };
+            clones.push((*symbol, definition.clone()));
+        }
+        if clones.is_empty() {
+            return Ok(Delta::Noop);
+        }
+        // Nothing below refuses: append one duplicate per clone (each
+        // takes the next free `MSNi`, so replay over the restored
+        // library allocates the same numbers), then re-point.
+        let mut deltas = vec![Delta::Library {
+            before: document.symbols.clone(),
+        }];
+        let mut renumber: Vec<(i64, i64)> = Vec::new();
+        for (old, mut definition) in clones {
+            definition.symbol_number = next_symbol_number(document);
+            renumber.push((old, definition.symbol_number));
+            document.symbols.push(definition);
+        }
+        for id in document.object_selection.clone() {
+            // Resolution reads only: a stale id skips (the walker
+            // rule), never an error.
+            let Some(before) = document.registry.get(id).cloned() else {
+                continue;
+            };
+            let doc::ObjectData::SymbolInstance(instance) = &before else {
+                continue;
+            };
+            let Some(new_number) = renumber
+                .iter()
+                .find(|(old, _)| *old == instance.symbol_number)
+                .map(|(_, new)| *new)
+            else {
+                continue;
+            };
+            let Some(doc::ObjectData::SymbolInstance(slot)) = document.registry.get_mut(id) else {
+                continue;
+            };
+            slot.symbol_number = new_number;
+            deltas.push(Delta::Object {
+                id,
+                inverse: ObjectInverse::Mutated {
+                    object: Box::new(before),
+                },
+            });
+        }
+        Ok(Delta::Group(deltas))
     }
 }
 
@@ -4307,5 +4411,101 @@ mod tests {
             )
             .unwrap_err();
         assert!(matches!(error, EngineError::InvalidState { .. }));
+    }
+
+    #[test]
+    fn duplicate_for_alias_clones_definitions_and_repoints() {
+        let (mut document, ids) = testdoc::sample_document();
+        let instance = placed_instance(&mut document);
+        let registry = registry();
+        // Two more instances of definition 7: one joins the selection,
+        // one stays out of it.
+        for (index, x) in [(1, 30.0), (2, 60.0)] {
+            registry
+                .execute(
+                    &mut document,
+                    "symbol.createInstance",
+                    json!({
+                        "symbol": 7, "page": 0, "layer": 1, "cell": 1,
+                        "index": index, "x": x, "y": 0.0,
+                    }),
+                )
+                .unwrap();
+        }
+        let cell = &document.pages[0].layers.layers[1].cells[1].elements;
+        let (twin, standalone) = (cell[1], cell[2]);
+        // A non-instance rides the selection and skips.
+        document.object_selection = vec![instance, twin, ids[0]];
+        let original_library = document.symbols.clone();
+        let delta = registry
+            .execute(&mut document, "symbol.duplicateSymbolForAlias", json!({}))
+            .unwrap();
+        // One duplicate per pointed-to definition, content cloned
+        // verbatim under a fresh number.
+        assert_eq!(document.symbols.len(), 2);
+        assert_eq!(document.symbols[0], original_library[0]);
+        assert_eq!(document.symbols[1].name, "dot");
+        assert_eq!(document.symbols[1].symbol_number, 8);
+        assert_eq!(document.symbols[1].layers, original_library[0].layers);
+        // Both selected instances re-point; the unselected one and the
+        // definition they left behind are untouched.
+        for id in [instance, twin] {
+            match document.registry.get(id).unwrap() {
+                ObjectData::SymbolInstance(slot) => assert_eq!(slot.symbol_number, 8),
+                other => panic!("wrong object kind: {other:?}"),
+            }
+        }
+        match document.registry.get(standalone).unwrap() {
+            ObjectData::SymbolInstance(slot) => assert_eq!(slot.symbol_number, 7),
+            other => panic!("wrong object kind: {other:?}"),
+        }
+        // Undo restores the library and the selected instances' numbers.
+        delta.apply_inverse(&mut document).unwrap();
+        assert_eq!(document.symbols, original_library);
+        for id in [instance, twin] {
+            match document.registry.get(id).unwrap() {
+                ObjectData::SymbolInstance(slot) => assert_eq!(slot.symbol_number, 7),
+                other => panic!("wrong object kind: {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn duplicate_for_alias_gates_and_noops() {
+        let (mut document, ids) = testdoc::sample_document();
+        let instance = placed_instance(&mut document);
+        let registry = registry();
+        // An empty selection refuses and mutates nothing.
+        document.object_selection = Vec::new();
+        let before = serde_json::to_vec(&document).unwrap();
+        let error = registry
+            .execute(&mut document, "symbol.duplicateSymbolForAlias", json!({}))
+            .unwrap_err();
+        assert!(
+            matches!(error, crate::error::EngineError::InvalidState { .. }),
+            "{error}"
+        );
+        assert_eq!(serde_json::to_vec(&document).unwrap(), before);
+        // A selection without instances is the no-op.
+        document.object_selection = vec![ids[0]];
+        let before = serde_json::to_vec(&document).unwrap();
+        assert!(matches!(
+            registry
+                .execute(&mut document, "symbol.duplicateSymbolForAlias", json!({}),)
+                .unwrap(),
+            Delta::Noop
+        ));
+        assert_eq!(serde_json::to_vec(&document).unwrap(), before);
+        // So is a selection of instances whose definition is gone.
+        document.object_selection = vec![instance];
+        document.symbols.clear();
+        let before = serde_json::to_vec(&document).unwrap();
+        assert!(matches!(
+            registry
+                .execute(&mut document, "symbol.duplicateSymbolForAlias", json!({}),)
+                .unwrap(),
+            Delta::Noop
+        ));
+        assert_eq!(serde_json::to_vec(&document).unwrap(), before);
     }
 }

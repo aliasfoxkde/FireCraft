@@ -10,6 +10,7 @@ Current version: **0.1.0**.
 
 ### Features
 
+- **text**: custom anti-alias dial setters (cdeeea5)
 - **text**: multi-run model and markup verbs (55de409)
 - **text**: paragraph attribute setter trio (ab9e1fb)
 - **bitmap**: pixel-mask move and adjust commands (d4f6b3d)

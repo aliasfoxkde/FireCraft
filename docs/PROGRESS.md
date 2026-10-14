@@ -8,14 +8,14 @@
 
 - **Released:** v0.1.0 (2026-10-13), repo public.
 - **Roadmap:** M0–M15 **all closed**.
-- **Registry:** 238 commands. **CI:** green 7/7 per batch since
+- **Registry:** 239 commands. **CI:** green 7/7 per batch since
   `55de409`; later campaign pushes verified per batch (runbook:
   HANDOFF §6).
-- **CS6 DOM parity:** **266 C / 5 P / 0 M / 85 N** — **the M table is
+- **CS6 DOM parity:** **267 C / 4 P / 0 M / 85 N** — **the M table is
   empty** (2026-10-14): every CS6 dom mutation verb is carried or
-  partial. The custom anti-alias trio closed (#123, decision 0052):
-  remaining surface work is the 5 P rows (importFile,
-  setFillNColorNTexture, duplicateSymbolForAlias, two permanent) and
+  partial. duplicateSymbolForAlias closed (#124, decision 0053):
+  remaining surface work is the 4 P rows (importFile,
+  setFillNColorNTexture, two permanent) and
   the recorded debts ([`HANDOFF.md`](HANDOFF.md) §4 Phase 9).
 
 ## Milestones
@@ -82,6 +82,7 @@
 | #121 | paragraph setter trio: setTextParaIndent/SpacingBefore/After over the mapped PINf/PSBf/PSAf style fields (8.16, decision 0050) | this batch | **258 C / 13 P / 0 M / 85 N** |
 | #122 | multi-run text model + markup verbs: TFSv marker-stream fold, setTextRuns + markup quartet (8.17, decision 0051) | this batch | **263 C / 8 P / 0 M / 85 N** |
 | #123 | custom anti-alias dials: overSample {4,8,16} + sharpness/strength 0..=255; TA1i/TA2i/TOSi typed out of the bag (8.18, decision 0052) | this batch | **266 C / 5 P / 0 M / 85 N** |
+| #124 | duplicateSymbolForAlias: one duplicate per pointed-to MSNi, selected instances re-point (8.19, decision 0053) | this batch | **267 C / 4 P / 0 M / 85 N** |
 
 **Campaign complete:** no remaining M families. Next: P-class partials
 and Phase 9 debts (HANDOFF §4).
@@ -130,5 +131,6 @@ and Phase 9 debts (HANDOFF §4).
 | 2026-10-14 | **258** | 13 | 0 | #121 paragraph setter trio (decision 0050) |
 | 2026-10-14 | **263** | 8 | 0 | #122 multi-run text + markup verbs (decision 0051) |
 | 2026-10-14 | **266** | 5 | 0 | #123 custom anti-alias dials (decision 0052) |
+| 2026-10-14 | **267** | 4 | 0 | #124 duplicateSymbolForAlias (decision 0053) |
 
 (Pre-#91 counts are approximate; the matrix file is the authority.)

@@ -13,12 +13,12 @@
 
 - **Ship state:** v0.1.0 released, repo public. Roadmap M0–M15 all
   closed. CI green 7/7 per batch since `55de409` (runbook §6).
-- **Engine registry:** 238 commands, pinned equal to the fuzz call
+- **Engine registry:** 239 commands, pinned equal to the fuzz call
   table by `the_call_table_covers_the_catalog`.
-- **CS6 DOM verb-surface parity:** **266 C / 5 P / 0 M / 85 N** —
+- **CS6 DOM verb-surface parity:** **267 C / 4 P / 0 M / 85 N** —
   the missing table is empty (2026-10-14, decision 0041); every dom
   mutation verb is carried or partial. Remaining surface work is the
-  5 P rows and Phase 9 debts.
+  4 P rows and Phase 9 debts.
   (`docs/planning/generated/dom-parity.md`, regenerate per §5 below).
   (The CS6 verb list carries both case spellings of mergeDown and
   AddNewImage — those families flipped four rows each.)
@@ -442,6 +442,14 @@ mutations and refuses without a linked slice.
   silently dropping them. Unset stays unset — no defaults invented.
   Renderer consumption of the dials is a recorded Phase-9-stage
   limitation (same stage as para attrs and run groups).
+
+- **8.19 — DONE (decision 0053).** `symbol.duplicateSymbolForAlias`
+  landed 2026-10-14: one duplicate per distinct pointed-to `MSNi`
+  (content verbatim, fresh number, nonlinked for free — linkage
+  isn't a modeled property), selected instances re-point, unselected
+  instances keep the master. Empty selection refuses; instance-less
+  or all-dangling selections no-op; non-instance members skip.
+  `Delta::Library` + per-instance `Delta::Object` folded in a group.
 
 ### Phase 9 — Recorded debts (P-class limitations; no parity pressure)
 - **6.1-object-duplicate** deep-clone of groups (today shallow).
