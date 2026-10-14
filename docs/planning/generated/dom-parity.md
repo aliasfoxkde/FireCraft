@@ -14,13 +14,13 @@ enforced == the fuzz call table).
 
 | class | meaning | count (of 356 dom verbs) |
 |---|---|---|
-| C | carried: a registry command implements the mutation | 258 |
-| P | partial: carried with a recorded model limitation | 13 |
+| C | carried: a registry command implements the mutation | 263 |
+| P | partial: carried with a recorded model limitation | 8 |
 | M | missing: no command and no decision — work items | 0 |
 | N | not applicable: non-document surface (accessor/UI/session/clipboard/export/OS) | 85 |
 
 Document-mutation coverage: **271 of 271** carried-or-partial
-(258 carried, 13 partial, 0 missing).
+(263 carried, 8 partial, 0 missing).
 
 ### Gap families (the Missing table, grouped)
 
@@ -68,8 +68,10 @@ partial rows and the recorded debts in docs/HANDOFF.md Phase 9.
 | `appendPointToPath` | C | path.redrawPath | geometry rewrite carries point add |
 | `appendPointToSlice` | C | slice.appendPoint | same state machine, slice class (decision 0029) |
 | `appendPointtoPath` | C | path.redrawPath | geometry rewrite carries point add |
+| `applyCharacterMarkup` | C | text.applyCharacterMarkup | carried (0051): tag restates per run, groups re-diff; fwplain clears base + runs |
 | `applyCurrentFill` | C | path.setFill |  |
 | `applyEffects` | C | filter.add |  |
+| `applyFontMarkup` | C | text.applyFontMarkup | carried (0051): size takes the dom NNNpt form, face a family name |
 | `applyStyle` | C | style.apply |  |
 | `arrange` | C | object.reorder |  |
 | `attachTextToPath` | C | text.attachPath |  |
@@ -174,8 +176,10 @@ partial rows and the recorded debts in docs/HANDOFF.md Phase 9.
 | `reflectSelection` | C | object.reflect | bHoriz/bVert; both false is the documented no-op |
 | `removeAllGuides` | C | page.removeAllGuides | one axis or both (the no-arg form); empty is a no-op |
 | `removeBehavior` | C | slice.removeBehavior |  |
+| `removeCharacterMarkup` | C | text.removeCharacterMarkup | carried (0051): tag restates false per run |
 | `removeElementMask` | C | mask.remove | apply bakes coverage into the image, discard drops it |
 | `removeFill` | C | path.setFill | none |
+| `removeFontMarkup` | C | text.removeFontMarkup | carried (0051): base drops the field, runs re-diff to inherit |
 | `removeGuide` | C | page.removeGuide | absent position is a documented CS6 no-op |
 | `removeNineScale` | C | symbol.set9Slice |  |
 | `reorderFrame` | C | frame.reorder | move onto own slot is the documented no-op |
@@ -283,6 +287,7 @@ partial rows and the recorded debts in docs/HANDOFF.md Phase 9.
 | `setTextRectangle` | C | text.setTextRectangle | carried (0045): frame write only, reflow happens at layout; not scaled or transformed |
 | `setTextRectangleAuto` | C | text.setTextRectangleAuto | carried (0045): one-shot smallest-box fit via TextEngine::auto_block, left/top anchored |
 | `setTextRectangleAutoFromPoint` | C | text.setTextRectangleAutoFromPoint | carried (0045): anchor lands per justification (left/center documented, right = recorded mirror) |
+| `setTextRuns` | C | text.setTextRuns | carried (0051): initialAttrs become the base, runs carry changedAttrs marker groups |
 | `setWebObjectsVisibility` | C | page.setWebObjectsVisibility | decision 0043: the Web Layer eye bit per page; the layer provisions like any first web touch |
 | `shareLayerToPages` | C | layer.shareToPages | per-page add/remove of the LSAv link; CS6 name-lists mapped to indices (decision 0022) |
 | `showAllHidden` | C | object.setVisible |  |
@@ -297,19 +302,14 @@ partial rows and the recorded debts in docs/HANDOFF.md Phase 9.
 
 | CS6 verb | class | FireCraft carrier | note |
 |---|---|---|---|
-| `applyCharacterMarkup` | P | text.setAttrs | per-range markup unmodeled (single-run) |
-| `applyFontMarkup` | P | text.setFont | per-range markup unmodeled |
 | `duplicateSymbolForAlias` | P | library.add | alias linkage unmodeled |
 | `importFile` | P | io | io carries SVG/raster importers; no engine place-imported-file command |
-| `removeCharacterMarkup` | P | text.setAttrs |  |
-| `removeFontMarkup` | P | text.setFont |  |
 | `setAnimInstanceStartFrame` | P | symbol.setParam | FW4 dropped the start-frame field from the format; refuses pointing at instance placement (the documented FW4 substitute) |
 | `setFillNColorNTexture` | P | path.setFillColor | texture component of the numbered form (texture_blend rides the fill model, no command surface) |
 | `setSliceAutonaming` | P | slice.setData | no wire node for the toggle - FILs carries the naming label; the flag is UI state |
 | `setTextCustomAntiAliasOverSample` | P | text.setAttrs | custom-AA tuning is renderer-side |
 | `setTextCustomAntiAliasSharpness` | P | text.setAttrs | renderer-side |
 | `setTextCustomAntiAliasStrength` | P | text.setAttrs | renderer-side |
-| `setTextRuns` | P | text.setText | multi-run styled text; the model carries single runs (ZSOi 0x1f text-style application is a recorded M15 gap) |
 
 ## Missing (M) — work items
 

@@ -14,9 +14,9 @@
 - **Ship state:** v0.1.0 released, repo public. Roadmap M0–M15 all
   closed. 155+ commits, CI green on `3d74723` (7/7 jobs; the fuzz job
   on that commit caught the addImage minting leak — fixed in `000557d`).
-- **Engine registry:** 230 commands, pinned equal to the fuzz call
+- **Engine registry:** 235 commands, pinned equal to the fuzz call
   table by `the_call_table_covers_the_catalog`.
-- **CS6 DOM verb-surface parity:** **258 C / 13 P / 0 M / 85 N** —
+- **CS6 DOM verb-surface parity:** **263 C / 8 P / 0 M / 85 N** —
   the missing table is empty (2026-10-14, decision 0041); every dom
   mutation verb is carried or partial. Remaining surface work is the
   21 P rows and Phase 9 debts.
@@ -24,7 +24,7 @@
   (The CS6 verb list carries both case spellings of mergeDown and
   AddNewImage — those families flipped four rows each.)
 - **Active campaign:** COMPLETE (2026-10-14) — the M table is empty.
-  Remaining surface work: the 13 P rows and Phase 9 debts, prioritized
+  Remaining surface work: the 8 P rows and Phase 9 debts, prioritized
   from `dom-parity.md`'s P table. New families follow the §3 loop.
 - **Clean-room invariants (never violate):** `source/` is Adobe's
   copyrighted material — git-ignored, never committed, never copied
@@ -413,8 +413,23 @@ mutations and refuses without a linked slice.
   pixels. One macro (`paragraph_setter!`) generates all three; the
   style slot materializes on first write; undo rides the whole-object
   capture. The markup quartet + `setTextRuns` (5 P rows) remain the
-  multi-run model work: the documented `TFSv` begin/end marker stream
-  folds last-write-wins today.
+  multi-run model work.
+
+- **8.17 — DONE (decision 0051).** The multi-run text model landed
+  2026-10-14 — the recorded M15 text gap closes. `TextRun` carries
+  `changes: TextStyle`; the reader folds the documented `TFSv`
+  marker stream (base before the first `TRNs`, per-run groups
+  between, trailing markers bag verbatim at their indices), the
+  writer re-emits each group before its `TRNs` (byte-stable for
+  uniform files, two-cycle-pinned for divergent ones). Five verbs
+  landed on it: `text.setTextRuns` (initialAttrs + runs, all gates
+  pre-flight), `applyCharacterMarkup`/`removeCharacterMarkup`
+  (b/i/u; `fwplain` also clears the base), `applyFontMarkup`
+  ("NNNpt"-suffixed sizes per the dom's grammar, face names),
+  `removeFontMarkup` (base drops the field, runs re-diff to
+  inherit). Delta groups restate, never unset — "inherit" is the
+  absence of a node. Layout reads the base style until per-run
+  shaping lands (recorded rendering stage, like the para attrs).
 
 ### Phase 9 — Recorded debts (P-class limitations; no parity pressure)
 - **6.1-object-duplicate** deep-clone of groups (today shallow).

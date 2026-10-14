@@ -25,6 +25,11 @@ pub(crate) fn install(registry: &mut CommandRegistry) -> Result<(), EngineError>
     registry.register(SetTextParaIndent)?;
     registry.register(SetTextParaSpacingBefore)?;
     registry.register(SetTextParaSpacingAfter)?;
+    registry.register(SetTextRuns)?;
+    registry.register(ApplyCharacterMarkup)?;
+    registry.register(RemoveCharacterMarkup)?;
+    registry.register(ApplyFontMarkup)?;
+    registry.register(RemoveFontMarkup)?;
     registry.register(SetFont)?;
     registry.register(AttachPath)?;
     registry.register(DetachPath)?;
@@ -139,6 +144,7 @@ impl TypedCommand for CreateText {
         if !payload.text.is_empty() {
             object.runs = vec![TextRun {
                 text: payload.text.clone(),
+                changes: TextStyle::default(),
             }];
         }
         object.name = payload.name.clone();
@@ -193,6 +199,7 @@ impl TypedCommand for SetText {
             } else {
                 vec![TextRun {
                     text: payload.text.clone(),
+                    changes: TextStyle::default(),
                 }]
             };
         })
@@ -445,6 +452,578 @@ paragraph_setter!(
     space_after,
     "paraSpaceAfter"
 );
+
+/// Overlays `changes` onto `style`: a stated field replaces, an
+/// unstated field inherits — the marker-stream read rule (0051).
+fn overlay_changes(style: &mut TextStyle, changes: &TextStyle) {
+    if changes.font.is_some() {
+        style.font = changes.font.clone();
+    }
+    if changes.size.is_some() {
+        style.size = changes.size;
+    }
+    if changes.bold.is_some() {
+        style.bold = changes.bold;
+    }
+    if changes.italic.is_some() {
+        style.italic = changes.italic;
+    }
+    if changes.underline.is_some() {
+        style.underline = changes.underline;
+    }
+    if changes.horizontal_scale.is_some() {
+        style.horizontal_scale = changes.horizontal_scale;
+    }
+    if changes.kerning.is_some() {
+        style.kerning = changes.kerning;
+    }
+    if changes.baseline_shift.is_some() {
+        style.baseline_shift = changes.baseline_shift;
+    }
+    if changes.leading.is_some() {
+        style.leading = changes.leading;
+    }
+    if changes.leading_unit.is_some() {
+        style.leading_unit = changes.leading_unit;
+    }
+    if changes.justification.is_some() {
+        style.justification = changes.justification;
+    }
+    if changes.fill_raw.is_some() {
+        style.fill_raw = changes.fill_raw;
+    }
+    if changes.paragraph_indent.is_some() {
+        style.paragraph_indent = changes.paragraph_indent;
+    }
+    if changes.space_before.is_some() {
+        style.space_before = changes.space_before;
+    }
+    if changes.space_after.is_some() {
+        style.space_after = changes.space_after;
+    }
+}
+
+/// The fields where `to` departs from `from` — the marker group a run
+/// needs between the previous effective style and its own. Deltas
+/// restate, never unset: "inherit" is the absence of a node, so a
+/// mid-stream unstate has no wire form (only the whole-style base can
+/// drop a field, which `removeFontMarkup` does).
+fn style_delta(from: &TextStyle, to: &TextStyle) -> TextStyle {
+    let mut out = TextStyle::default();
+    if from.font != to.font {
+        out.font = to.font.clone();
+    }
+    if from.size != to.size {
+        out.size = to.size;
+    }
+    if from.bold != to.bold {
+        out.bold = to.bold;
+    }
+    if from.italic != to.italic {
+        out.italic = to.italic;
+    }
+    if from.underline != to.underline {
+        out.underline = to.underline;
+    }
+    if from.horizontal_scale != to.horizontal_scale {
+        out.horizontal_scale = to.horizontal_scale;
+    }
+    if from.kerning != to.kerning {
+        out.kerning = to.kerning;
+    }
+    if from.baseline_shift != to.baseline_shift {
+        out.baseline_shift = to.baseline_shift;
+    }
+    if from.leading != to.leading {
+        out.leading = to.leading;
+    }
+    if from.leading_unit != to.leading_unit {
+        out.leading_unit = to.leading_unit;
+    }
+    if from.justification != to.justification {
+        out.justification = to.justification;
+    }
+    if from.fill_raw != to.fill_raw {
+        out.fill_raw = to.fill_raw;
+    }
+    if from.paragraph_indent != to.paragraph_indent {
+        out.paragraph_indent = to.paragraph_indent;
+    }
+    if from.space_before != to.space_before {
+        out.space_before = to.space_before;
+    }
+    if from.space_after != to.space_after {
+        out.space_after = to.space_after;
+    }
+    out
+}
+
+/// Rewrites the run marker stream so every run's effective style is
+/// `edit(previous effective)`, re-diffing each group minimally. The
+/// base style is untouched — markup rides the run groups over it.
+fn restyle_runs(object: &mut TextObject, edit: &mut dyn FnMut(&mut TextStyle)) {
+    let base = object.style.clone().unwrap_or_default();
+    let mut effective = base.clone();
+    let mut previous = base;
+    for run in &mut object.runs {
+        overlay_changes(&mut effective, &run.changes);
+        let mut desired = effective;
+        edit(&mut desired);
+        run.changes = style_delta(&previous, &desired);
+        previous = desired.clone();
+        effective = desired;
+    }
+}
+
+/// The `TextAttrs` subset the markup/run verbs move — the mapped
+/// `TFSv` style fields, dom names (`face` for `FONs`, `size` for
+/// `PTSf`).
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, PartialEq)]
+#[serde(deny_unknown_fields, default)]
+struct TextAttrsPayload {
+    face: Option<String>,
+    size: Option<f64>,
+    bold: Option<bool>,
+    italic: Option<bool>,
+    underline: Option<bool>,
+    horizontal_scale: Option<f64>,
+    kerning: Option<f64>,
+    baseline_shift: Option<f64>,
+    leading: Option<f64>,
+    leading_unit: Option<i64>,
+    justification: Option<i64>,
+    fill_raw: Option<i64>,
+    paragraph_indent: Option<f64>,
+    space_before: Option<f64>,
+    space_after: Option<f64>,
+}
+
+impl TextAttrsPayload {
+    /// The stated fields as a style set (unstated fields stay absent).
+    fn to_style(&self) -> TextStyle {
+        TextStyle {
+            font: self.face.clone(),
+            size: self.size,
+            bold: self.bold,
+            italic: self.italic,
+            underline: self.underline,
+            horizontal_scale: self.horizontal_scale,
+            kerning: self.kerning,
+            baseline_shift: self.baseline_shift,
+            leading: self.leading,
+            leading_unit: self.leading_unit,
+            justification: self.justification,
+            fill_raw: self.fill_raw,
+            paragraph_indent: self.paragraph_indent,
+            space_before: self.space_before,
+            space_after: self.space_after,
+        }
+    }
+
+    /// The attribute gates `text.setAttrs` enforces: sizes positive,
+    /// scaled values finite, enums in range.
+    fn validate(&self, name: &'static str) -> Result<(), EngineError> {
+        let bad = |detail: String| EngineError::InvalidState {
+            name: name.to_owned(),
+            detail,
+        };
+        if let Some(size) = self.size {
+            if !size.is_finite() || size <= 0.0 {
+                return Err(bad("size must be finite and positive".to_owned()));
+            }
+        }
+        if let Some(scale) = self.horizontal_scale {
+            if !scale.is_finite() || scale <= 0.0 {
+                return Err(bad(
+                    "horizontal_scale must be finite and positive".to_owned()
+                ));
+            }
+        }
+        if let Some(leading) = self.leading {
+            if !leading.is_finite() || leading <= 0.0 {
+                return Err(bad("leading must be finite and positive".to_owned()));
+            }
+        }
+        if let Some(kerning) = self.kerning {
+            if !kerning.is_finite() {
+                return Err(bad("kerning must be finite".to_owned()));
+            }
+        }
+        if let Some(shift) = self.baseline_shift {
+            if !shift.is_finite() {
+                return Err(bad("baseline_shift must be finite".to_owned()));
+            }
+        }
+        match self.leading_unit {
+            Some(0) | Some(1) | None => {}
+            other => {
+                return Err(bad(format!("leadingUnit {other:?} outside 0..1")));
+            }
+        }
+        if let Some(justification) = self.justification {
+            if !(0..=3).contains(&justification) {
+                return Err(bad(format!("justification {justification} outside 0..3")));
+            }
+        }
+        for (field, value) in [
+            ("paragraph_indent", self.paragraph_indent),
+            ("space_before", self.space_before),
+            ("space_after", self.space_after),
+        ] {
+            if let Some(value) = value {
+                if !value.is_finite() {
+                    return Err(bad(format!("{field} must be finite")));
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Writes the stated fields into `style` (unstated fields keep the
+    /// style's current value).
+    fn write_into(&self, style: &mut TextStyle) {
+        if self.face.is_some() {
+            style.font = self.face.clone();
+        }
+        if self.size.is_some() {
+            style.size = self.size;
+        }
+        if self.bold.is_some() {
+            style.bold = self.bold;
+        }
+        if self.italic.is_some() {
+            style.italic = self.italic;
+        }
+        if self.underline.is_some() {
+            style.underline = self.underline;
+        }
+        if self.horizontal_scale.is_some() {
+            style.horizontal_scale = self.horizontal_scale;
+        }
+        if self.kerning.is_some() {
+            style.kerning = self.kerning;
+        }
+        if self.baseline_shift.is_some() {
+            style.baseline_shift = self.baseline_shift;
+        }
+        if self.leading.is_some() {
+            style.leading = self.leading;
+        }
+        if self.leading_unit.is_some() {
+            style.leading_unit = self.leading_unit;
+        }
+        if self.justification.is_some() {
+            style.justification = self.justification;
+        }
+        if self.fill_raw.is_some() {
+            style.fill_raw = self.fill_raw;
+        }
+        if self.paragraph_indent.is_some() {
+            style.paragraph_indent = self.paragraph_indent;
+        }
+        if self.space_before.is_some() {
+            style.space_before = self.space_before;
+        }
+        if self.space_after.is_some() {
+            style.space_after = self.space_after;
+        }
+    }
+}
+
+/// `text.applyCharacterMarkup` — apply one character markup tag
+/// ("b", "i", "u", or "fwplain") to the selected text: every run's
+/// effective style restates the tag, and the marker groups re-diff.
+struct ApplyCharacterMarkup;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct ApplyCharacterMarkupPayload {
+    /// Target text object.
+    id: doc::ObjectId,
+    /// The tag: "b", "i", "u", or "fwplain" (no character markup).
+    tag: String,
+}
+
+impl TypedCommand for ApplyCharacterMarkup {
+    type Payload = ApplyCharacterMarkupPayload;
+
+    fn name(&self) -> &'static str {
+        "text.applyCharacterMarkup"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "text.applyCharacterMarkup";
+        let edit: &dyn Fn(&mut TextStyle) = match payload.tag.as_str() {
+            "b" => &|style: &mut TextStyle| style.bold = Some(true),
+            "i" => &|style: &mut TextStyle| style.italic = Some(true),
+            "u" => &|style: &mut TextStyle| style.underline = Some(true),
+            // "no character markup": the three tags revert to their
+            // defaults everywhere, base included.
+            "fwplain" => &|style: &mut TextStyle| {
+                style.bold = Some(false);
+                style.italic = Some(false);
+                style.underline = Some(false);
+            },
+            other => {
+                return Err(EngineError::InvalidState {
+                    name: NAME.to_owned(),
+                    detail: format!("unknown character markup tag {other:?}"),
+                });
+            }
+        };
+        mutate_text(document, NAME, payload.id, |object| {
+            if payload.tag == "fwplain" {
+                let style = style_of(object);
+                style.bold = Some(false);
+                style.italic = Some(false);
+                style.underline = Some(false);
+            }
+            restyle_runs(object, &mut |style| edit(style));
+        })
+    }
+}
+
+/// `text.removeCharacterMarkup` — reapply the default for one markup
+/// tag ("b", "i", "u") across the selection's runs.
+struct RemoveCharacterMarkup;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct RemoveCharacterMarkupPayload {
+    /// Target text object.
+    id: doc::ObjectId,
+    /// The tag: "b", "i", or "u".
+    tag: String,
+}
+
+impl TypedCommand for RemoveCharacterMarkup {
+    type Payload = RemoveCharacterMarkupPayload;
+
+    fn name(&self) -> &'static str {
+        "text.removeCharacterMarkup"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "text.removeCharacterMarkup";
+        let edit: &dyn Fn(&mut TextStyle) = match payload.tag.as_str() {
+            "b" => &|style: &mut TextStyle| style.bold = Some(false),
+            "i" => &|style: &mut TextStyle| style.italic = Some(false),
+            "u" => &|style: &mut TextStyle| style.underline = Some(false),
+            other => {
+                return Err(EngineError::InvalidState {
+                    name: NAME.to_owned(),
+                    detail: format!("unknown character markup tag {other:?}"),
+                });
+            }
+        };
+        mutate_text(document, NAME, payload.id, |object| {
+            restyle_runs(object, &mut |style| edit(style));
+        })
+    }
+}
+
+/// `text.applyFontMarkup` — apply one font markup attribute to the
+/// selection's runs: `size` (value must carry the "pt" suffix — the dom
+/// refuses a bare number) or `face` (a family name).
+struct ApplyFontMarkup;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct ApplyFontMarkupPayload {
+    /// Target text object.
+    id: doc::ObjectId,
+    /// The attribute: "size" or "face".
+    font_attribute: String,
+    /// The value: "NNNpt" for size, the family name for face.
+    value: String,
+}
+
+impl TypedCommand for ApplyFontMarkup {
+    type Payload = ApplyFontMarkupPayload;
+
+    fn name(&self) -> &'static str {
+        "text.applyFontMarkup"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "text.applyFontMarkup";
+        match payload.font_attribute.as_str() {
+            "size" => {
+                // The dom requires the "XXXpt" form: "a simple numeric
+                // value is not allowed".
+                let Some(digits) = payload.value.strip_suffix("pt") else {
+                    return Err(EngineError::InvalidState {
+                        name: NAME.to_owned(),
+                        detail: "size markup takes a \"NNNpt\" value".to_owned(),
+                    });
+                };
+                let size: f64 = digits.parse().map_err(|_| EngineError::InvalidState {
+                    name: NAME.to_owned(),
+                    detail: format!("size markup value {:?} is not a point size", payload.value),
+                })?;
+                if !size.is_finite() || size <= 0.0 {
+                    return Err(EngineError::InvalidState {
+                        name: NAME.to_owned(),
+                        detail: "size markup must be finite and positive".to_owned(),
+                    });
+                }
+                mutate_text(document, NAME, payload.id, |object| {
+                    restyle_runs(object, &mut |style| style.size = Some(size));
+                })
+            }
+            "face" => {
+                if payload.value.is_empty() {
+                    return Err(EngineError::InvalidState {
+                        name: NAME.to_owned(),
+                        detail: "face markup takes a family name".to_owned(),
+                    });
+                }
+                let face = payload.value.clone();
+                mutate_text(document, NAME, payload.id, |object| {
+                    restyle_runs(object, &mut |style| style.font = Some(face.clone()));
+                })
+            }
+            other => Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: format!("unknown font markup attribute {other:?}"),
+            }),
+        }
+    }
+}
+
+/// `text.removeFontMarkup` — reapply the default for one font
+/// attribute ("size", "color", "face"): the base style drops the field
+/// and every run's effective style drops it with it (the recorded
+/// default is the unset value — the renderer's own fallback).
+struct RemoveFontMarkup;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct RemoveFontMarkupPayload {
+    /// Target text object.
+    id: doc::ObjectId,
+    /// The attribute: "size", "color", or "face".
+    font_attribute: String,
+}
+
+impl TypedCommand for RemoveFontMarkup {
+    type Payload = RemoveFontMarkupPayload;
+
+    fn name(&self) -> &'static str {
+        "text.removeFontMarkup"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "text.removeFontMarkup";
+        // The restyle edit and the base clear name the same field.
+        fn clear(style: &mut TextStyle, field: &str) {
+            match field {
+                "size" => style.size = None,
+                "color" => style.fill_raw = None,
+                "face" => style.font = None,
+                _ => {}
+            }
+        }
+        if !matches!(payload.font_attribute.as_str(), "size" | "color" | "face") {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: format!("unknown font markup attribute {:?}", payload.font_attribute),
+            });
+        }
+        let field = payload.font_attribute.as_str().to_owned();
+        mutate_text(document, NAME, payload.id, |object| {
+            clear(style_of(object), &field);
+            restyle_runs(object, &mut |style| clear(style, &field));
+        })
+    }
+}
+
+/// `text.setTextRuns` — replace the formatted-string structure: the
+/// stated `initialAttrs` become the base style and the run list
+/// replaces every run (each carrying its `changedAttrs` group).
+struct SetTextRuns;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct SetTextRunsPayload {
+    /// Target text object.
+    id: doc::ObjectId,
+    /// The base style statements; omitted fields keep the current
+    /// base. Absent entirely, the base is untouched.
+    #[serde(default)]
+    initial_attrs: Option<TextAttrsPayload>,
+    /// The runs, in order. An empty list clears the text (the
+    /// `text.setText` empty-string precedent).
+    runs: Vec<SetRunPayload>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct SetRunPayload {
+    /// The style statements this run begins with.
+    #[serde(default)]
+    changed_attrs: Option<TextAttrsPayload>,
+    /// The run's characters.
+    characters: String,
+}
+
+impl TypedCommand for SetTextRuns {
+    type Payload = SetTextRunsPayload;
+
+    fn name(&self) -> &'static str {
+        "text.setTextRuns"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "text.setTextRuns";
+        // Every gate runs before the first mutation (000557d).
+        if let Some(attrs) = &payload.initial_attrs {
+            attrs.validate(NAME)?;
+        }
+        for run in &payload.runs {
+            if let Some(attrs) = &run.changed_attrs {
+                attrs.validate(NAME)?;
+            }
+        }
+        mutate_text(document, NAME, payload.id, |object| {
+            if let Some(attrs) = &payload.initial_attrs {
+                attrs.write_into(style_of(object));
+            }
+            object.runs = payload
+                .runs
+                .iter()
+                .map(|run| TextRun {
+                    text: run.characters.clone(),
+                    changes: run
+                        .changed_attrs
+                        .as_ref()
+                        .map(TextAttrsPayload::to_style)
+                        .unwrap_or_default(),
+                })
+                .collect();
+        })
+    }
+}
 
 /// `text.setFont` — set the family name (`FONs`). The name round-trips
 /// verbatim; unknown families render in the bundled sans.
@@ -1480,6 +2059,272 @@ mod tests {
         let object = text_object(&document, id);
         assert!(object.style.is_none());
         assert_eq!(object.anti_alias, None);
+    }
+
+    #[test]
+    fn markup_streams_run_groups_and_inverts() {
+        let mut document = document();
+        let (_, id) = create(&mut document, "head");
+        let registry = registry();
+        // Two runs: the first plain, the second restating size.
+        registry
+            .execute(
+                &mut document,
+                "text.setTextRuns",
+                json!({
+                    "id": id,
+                    "runs": [
+                        { "characters": "big " },
+                        { "characters": "small", "changed_attrs": { "size": 10.0 } },
+                    ],
+                }),
+            )
+            .unwrap();
+        // Bold the whole text: the first run states the change, the
+        // second inherits it (its size statement stays).
+        let delta = registry
+            .execute(
+                &mut document,
+                "text.applyCharacterMarkup",
+                json!({ "id": id, "tag": "b" }),
+            )
+            .unwrap();
+        let runs = &text_object(&document, id).runs;
+        assert_eq!(runs[0].changes.bold, Some(true));
+        assert_eq!(runs[0].changes.size, None);
+        assert_eq!(runs[1].changes.bold, None, "inherits the first run's");
+        assert_eq!(runs[1].changes.size, Some(10.0));
+        delta.apply_inverse(&mut document).unwrap();
+        let runs = &text_object(&document, id).runs;
+        assert_eq!(runs[0].changes.bold, None);
+        assert_eq!(runs[1].changes.size, Some(10.0));
+
+        // removeCharacterMarkup unbolds every run.
+        registry
+            .execute(
+                &mut document,
+                "text.applyCharacterMarkup",
+                json!({ "id": id, "tag": "b" }),
+            )
+            .unwrap();
+        registry
+            .execute(
+                &mut document,
+                "text.removeCharacterMarkup",
+                json!({ "id": id, "tag": "b" }),
+            )
+            .unwrap();
+        let runs = &text_object(&document, id).runs;
+        assert_eq!(runs[0].changes.bold, Some(false));
+        assert_eq!(runs[1].changes.bold, None);
+
+        // fwplain strips the three tags from the base and the runs.
+        registry
+            .execute(
+                &mut document,
+                "text.setAttrs",
+                json!({ "id": id, "bold": true }),
+            )
+            .unwrap();
+        registry
+            .execute(
+                &mut document,
+                "text.applyCharacterMarkup",
+                json!({ "id": id, "tag": "fwplain" }),
+            )
+            .unwrap();
+        let object = text_object(&document, id);
+        assert_eq!(object.style.as_ref().unwrap().bold, Some(false));
+        // The run group is empty: the cleared base already says plain,
+        // and the minimal stream restates nothing.
+        assert_eq!(object.runs[0].changes.bold, None);
+
+        // Unknown tags refuse, both verbs.
+        for verb in ["text.applyCharacterMarkup", "text.removeCharacterMarkup"] {
+            let error = registry
+                .execute(&mut document, verb, json!({ "id": id, "tag": "s" }))
+                .unwrap_err();
+            assert!(matches!(error, EngineError::InvalidState { .. }), "{verb}");
+        }
+    }
+
+    #[test]
+    fn font_markup_parses_points_and_faces() {
+        let mut document = document();
+        let (_, id) = create(&mut document, "sized");
+        let _ = create(&mut document, "gone");
+        let gone = *document.pages[0].layers.layers[0].cells[0]
+            .elements
+            .last()
+            .unwrap();
+        document.registry.remove(gone);
+        let registry = registry();
+        let delta = registry
+            .execute(
+                &mut document,
+                "text.applyFontMarkup",
+                json!({ "id": id, "font_attribute": "size", "value": "14pt" }),
+            )
+            .unwrap();
+        assert_eq!(text_object(&document, id).runs[0].changes.size, Some(14.0));
+        delta.apply_inverse(&mut document).unwrap();
+        assert_eq!(text_object(&document, id).runs[0].changes.size, None);
+
+        registry
+            .execute(
+                &mut document,
+                "text.applyFontMarkup",
+                json!({ "id": id, "font_attribute": "face", "value": "Arial" }),
+            )
+            .unwrap();
+        assert_eq!(
+            text_object(&document, id).runs[0].changes.font.as_deref(),
+            Some("Arial")
+        );
+        // Refusals: bare numbers are not allowed (the dom's rule), bad
+        // sizes, empty faces, unknown attributes, stale ids.
+        let mut refused = |payload: serde_json::Value, label: &str| {
+            let error = registry
+                .execute(&mut document, "text.applyFontMarkup", payload)
+                .unwrap_err();
+            assert!(matches!(error, EngineError::InvalidState { .. }), "{label}");
+        };
+        refused(
+            json!({ "id": id, "font_attribute": "size", "value": "14" }),
+            "bare number",
+        );
+        refused(
+            json!({ "id": id, "font_attribute": "size", "value": "widept" }),
+            "non-numeric",
+        );
+        refused(
+            json!({ "id": id, "font_attribute": "size", "value": "0pt" }),
+            "zero size",
+        );
+        refused(
+            json!({ "id": id, "font_attribute": "face", "value": "" }),
+            "empty face",
+        );
+        refused(
+            json!({ "id": id, "font_attribute": "weight", "value": "bold" }),
+            "unknown attribute",
+        );
+        let error = registry
+            .execute(
+                &mut document,
+                "text.applyFontMarkup",
+                json!({ "id": gone, "font_attribute": "size", "value": "12pt" }),
+            )
+            .unwrap_err();
+        assert!(matches!(error, EngineError::MissingTarget { .. }));
+    }
+
+    #[test]
+    fn remove_font_markup_clears_base_and_runs() {
+        let mut document = document();
+        let (_, id) = create(&mut document, "mixed");
+        let registry = registry();
+        registry
+            .execute(
+                &mut document,
+                "text.setAttrs",
+                json!({ "id": id, "size": 24.0 }),
+            )
+            .unwrap();
+        registry
+            .execute(
+                &mut document,
+                "text.setTextRuns",
+                json!({
+                    "id": id,
+                    "runs": [
+                        { "characters": "a", "changed_attrs": { "size": 30.0 } },
+                        { "characters": "b" },
+                    ],
+                }),
+            )
+            .unwrap();
+        let delta = registry
+            .execute(
+                &mut document,
+                "text.removeFontMarkup",
+                json!({ "id": id, "font_attribute": "size" }),
+            )
+            .unwrap();
+        let object = text_object(&document, id);
+        assert_eq!(object.style.as_ref().unwrap().size, None, "base drops");
+        assert_eq!(object.runs[0].changes.size, None, "run group drops");
+        delta.apply_inverse(&mut document).unwrap();
+        let object = text_object(&document, id);
+        assert_eq!(object.style.as_ref().unwrap().size, Some(24.0));
+        assert_eq!(object.runs[0].changes.size, Some(30.0));
+        // Unknown attributes refuse.
+        let error = registry
+            .execute(
+                &mut document,
+                "text.removeFontMarkup",
+                json!({ "id": id, "font_attribute": "weight" }),
+            )
+            .unwrap_err();
+        assert!(matches!(error, EngineError::InvalidState { .. }));
+    }
+
+    #[test]
+    fn set_text_runs_replaces_the_stream_and_gates() {
+        let mut document = document();
+        let (_, id) = create(&mut document, "runs");
+        let registry = registry();
+        let delta = registry
+            .execute(
+                &mut document,
+                "text.setTextRuns",
+                json!({
+                    "id": id,
+                    "initial_attrs": { "face": "Arial", "size": 12.0 },
+                    "runs": [
+                        { "characters": "plain " },
+                        { "characters": "red", "changed_attrs": { "fill_raw": -65536 } },
+                    ],
+                }),
+            )
+            .unwrap();
+        let object = text_object(&document, id);
+        let style = object.style.as_ref().unwrap();
+        assert_eq!(style.font.as_deref(), Some("Arial"));
+        assert_eq!(style.size, Some(12.0));
+        assert_eq!(object.runs.len(), 2);
+        assert_eq!(object.runs[1].changes.fill_raw, Some(-65536));
+        delta.apply_inverse(&mut document).unwrap();
+        let object = text_object(&document, id);
+        assert_eq!(object.runs.len(), 1);
+        assert_eq!(object.runs[0].text, "runs");
+
+        // An empty run list clears the text (setText's precedent).
+        registry
+            .execute(
+                &mut document,
+                "text.setTextRuns",
+                json!({ "id": id, "runs": [] }),
+            )
+            .unwrap();
+        assert!(text_object(&document, id).runs.is_empty());
+
+        // Gate refusals leave the object untouched: bad size in the
+        // base attrs, bad justification in a run's attrs.
+        let before = text_object(&document, id).runs.len();
+        for payload in [
+            json!({ "id": id, "initial_attrs": { "size": 0.0 }, "runs": [] }),
+            json!({
+                "id": id,
+                "runs": [{ "characters": "x", "changed_attrs": { "justification": 9 } }],
+            }),
+        ] {
+            let error = registry
+                .execute(&mut document, "text.setTextRuns", payload)
+                .unwrap_err();
+            assert!(matches!(error, EngineError::InvalidState { .. }));
+        }
+        assert_eq!(text_object(&document, id).runs.len(), before);
     }
 
     #[test]

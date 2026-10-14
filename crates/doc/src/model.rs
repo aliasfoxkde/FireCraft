@@ -1027,11 +1027,22 @@ pub struct TextStyle {
 /// corpus sample exists yet; FireCraft emits the characters as a string
 /// node and accepts a string node back (decision 0007). Anything else
 /// rides in the unknown bag.
+///
+/// Per-run styling rides the documented `TFSv` marker stream, not the
+/// `TRNs` payload: style nodes between runs are the changes that take
+/// effect at the next run (`UNDb` begins/ends underline et al.), so a
+/// run carries the style fields its group stated — everything else
+/// inherits from the previous run or the `TFSv` base (decision 0051).
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TextRun {
     /// The run's characters.
     pub text: String,
+    /// The style fields stated between the previous run (or the base
+    /// scalars) and this run's `TRNs`. Absent fields inherit; an empty
+    /// set is the uniform-style run.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub changes: TextStyle,
 }
 
 /// `TAPv` — text along a path (flow 2): the guide path is embedded in

@@ -20,6 +20,7 @@ fn pinned() -> TextObject {
     });
     object.runs = vec![TextRun {
         text: "FireCraft".into(),
+        changes: TextStyle::default(),
     }];
     object
 }
@@ -69,6 +70,7 @@ fn on_path(path: Vec<Contour>, alignment: Option<i64>, offset: f64) -> TextObjec
     });
     object.runs = vec![TextRun {
         text: "FireCraft".into(),
+        changes: TextStyle::default(),
     }];
     object.flow = Some(2);
     object.on_path = Some(TextOnPath {
@@ -139,6 +141,7 @@ fn empty_runs_produce_nothing() {
 
     object.runs = vec![TextRun {
         text: "  \n\t".into(),
+        changes: TextStyle::default(),
     }];
     let whitespace = layout(&object);
     assert!(whitespace.contours.is_empty());
@@ -150,6 +153,7 @@ fn long_text_wraps_at_frame_width() {
     let mut object = pinned();
     object.runs = vec![TextRun {
         text: "the quick brown fox jumps over the lazy dog".into(),
+        changes: TextStyle::default(),
     }];
     let wrapped = layout(&object);
     // Three line boxes stack: the block is three line heights tall.
@@ -493,6 +497,7 @@ fn second_line_continues_along_the_rail() {
     let mut object = on_path(rail((0.0, 40.0), (410.0, 40.0)), Some(0), 0.0);
     object.runs = vec![TextRun {
         text: "FireCraft\nFireCraft".into(),
+        changes: TextStyle::default(),
     }];
     let wrapped = ink(&layout(&object));
     let single = ink(&layout(&on_path(

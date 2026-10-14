@@ -396,6 +396,7 @@ fn random_text(rng: &mut FuzzRng) -> ObjectData {
         runs: if rng.chance(4) {
             vec![doc::TextRun {
                 text: "FireCraft".to_owned(),
+                changes: doc::TextStyle::default(),
             }]
         } else {
             Vec::new()
@@ -653,6 +654,11 @@ pub const CALLS: &[&str] = &[
     "text.setTextParaIndent",
     "text.setTextParaSpacingBefore",
     "text.setTextParaSpacingAfter",
+    "text.setTextRuns",
+    "text.applyCharacterMarkup",
+    "text.removeCharacterMarkup",
+    "text.applyFontMarkup",
+    "text.removeFontMarkup",
     "document.setDocumentCanvasSizeToDocumentExtents",
     "document.setDocumentCanvasSizeToSelection",
     "document.deleteAllInDocument",
@@ -2113,6 +2119,66 @@ pub fn random_call(rng: &mut FuzzRng, document: &Document) -> (String, serde_jso
         "text.setTextParaSpacingAfter" => serde_json::json!({
             "id": any_id(rng),
             "para_space_after": (rng.below(300) as f64) - 100.0,
+        }),
+        "text.setTextRuns" => {
+            let mut runs = Vec::new();
+            for word in ["big", "small", "red", "plain"] {
+                let mut run = serde_json::json!({ "characters": word });
+                if rng.chance(40) {
+                    run["changed_attrs"] = serde_json::json!({
+                        "bold": rng.chance(50),
+                        "size": rng.below(60) as f64 + 0.5,
+                    });
+                }
+                runs.push(run);
+            }
+            let mut payload = serde_json::json!({ "id": any_id(rng), "runs": runs });
+            if rng.chance(40) {
+                payload["initial_attrs"] = serde_json::json!({
+                    "face": "Liberation Sans",
+                    "size": rng.below(60) as f64 + 0.5,
+                });
+            }
+            payload
+        }
+        "text.applyCharacterMarkup" => serde_json::json!({
+            "id": any_id(rng),
+            "tag": rng.pick(&["b", "i", "u", "fwplain", "s"]).copied(),
+        }),
+        "text.removeCharacterMarkup" => serde_json::json!({
+            "id": any_id(rng),
+            "tag": rng.pick(&["b", "i", "u", "s"]).copied(),
+        }),
+        "text.applyFontMarkup" => {
+            let attribute = rng
+                .pick(&["size", "face", "weight"])
+                .copied()
+                .unwrap_or("size");
+            let value = if attribute == "size" {
+                // Both the legal "NNNpt" form and gate-crossing junk.
+                match rng.below(4) {
+                    0 => format!("{}pt", rng.below(96) + 1),
+                    1 => "0pt".to_owned(),
+                    2 => "widept".to_owned(),
+                    _ => rng.below(96).to_string(),
+                }
+            } else if attribute == "face" && rng.chance(80) {
+                rng.pick(&["Arial", "Liberation Sans", ""])
+                    .copied()
+                    .unwrap_or("Arial")
+                    .to_owned()
+            } else {
+                "bold".to_owned()
+            };
+            serde_json::json!({
+                "id": any_id(rng),
+                "font_attribute": attribute,
+                "value": value,
+            })
+        }
+        "text.removeFontMarkup" => serde_json::json!({
+            "id": any_id(rng),
+            "font_attribute": rng.pick(&["size", "color", "face", "weight"]).copied(),
         }),
         // Renames wander over categories and names so most calls miss
         // (the no-op); hits rename every matching effect on whatever

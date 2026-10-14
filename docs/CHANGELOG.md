@@ -10,6 +10,22 @@ Current version: **0.1.0**.
 
 ### Features
 
+- **text**: paragraph attribute setter trio (ab9e1fb)
+- **bitmap**: pixel-mask move and adjust commands (d4f6b3d)
+- **text**: on-path mode/offset/reverse commands (a0304d4)
+- **engine**: loose-ends setter commands (d482b5d)
+- **document**: canvas trim + delete-all commands (51a3c3e)
+- **text**: text rectangle fit commands (8f2919d)
+- **symbol**: anim instance parameter commands (d98764b)
+- **web**: hotspot/group/web-layer setter commands (12b5e40)
+- **filters**: convolve + motionBlur bake commands (8eae611)
+- **document**: setImageSize - the last M verb (a4455d6)
+- **filters**: filterSelection bake family (3f67491)
+- **clipboard**: copy/cut/paste + paste-mask trio (1d1c8dc)
+- **selection**: named saved selections (f668d85)
+- **bitmap**: place-image trio (addImage family) (7ea2288)
+- **symbol**: button behaviors + button options (3d74723)
+- **scripting**: view flags as session state (a363f0f)
 - **engine**: page rotation with geometry re-bake (48ec811)
 - **engine**: convertToPaths freezes glyph outlines (56c6f2f)
 - **vector**: knife cuts + splitPaths commands (3baf178)
@@ -125,6 +141,10 @@ Current version: **0.1.0**.
 
 ### Fixes
 
+- **engine**: stale selection broke clipboard and walks (f01365b)
+- **document**: setImageSize preflight hoists bakes (c9c2630)
+- **clipboard**: pre-flight cut detaches (2ae190a)
+- **bitmap**: pre-flight placement cell before minting (000557d)
 - **engine**: seed fuzz symbol before page objects (9dbd265)
 - **fuzz**: record raster entries in lockfile (3aff718)
 - **deps**: trim image features, pin node 24 in CI (7adecc4)

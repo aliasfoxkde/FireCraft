@@ -152,6 +152,56 @@ fn shape_raw(shape: FillShape) -> i64 {
     }
 }
 
+/// One style set's nodes in dictionary order — the `TFSv` base scalars
+/// and every run's marker group share this emission (decision 0051).
+pub(crate) fn push_style_nodes(mapped: &mut Vec<Node>, style: &TextStyle) {
+    if let Some(font) = &style.font {
+        mapped.push(n_s(*b"FONs", font));
+    }
+    if let Some(size) = style.size {
+        mapped.push(n_f(*b"PTSf", size));
+    }
+    if let Some(bold) = style.bold {
+        mapped.push(n_b(*b"BOLb", bold));
+    }
+    if let Some(italic) = style.italic {
+        mapped.push(n_b(*b"ITLb", italic));
+    }
+    if let Some(underline) = style.underline {
+        mapped.push(n_b(*b"UNDb", underline));
+    }
+    if let Some(scale) = style.horizontal_scale {
+        mapped.push(n_f(*b"HSCf", scale));
+    }
+    if let Some(kerning) = style.kerning {
+        mapped.push(n_f(*b"RKNf", kerning));
+    }
+    if let Some(shift) = style.baseline_shift {
+        mapped.push(n_f(*b"BLSf", shift));
+    }
+    if let Some(leading) = style.leading {
+        mapped.push(n_f(*b"LEDf", leading));
+    }
+    if let Some(unit) = style.leading_unit {
+        mapped.push(n_i(*b"LDMi", unit));
+    }
+    if let Some(justification) = style.justification {
+        mapped.push(n_i(*b"JSTi", justification));
+    }
+    if let Some(fill_raw) = style.fill_raw {
+        mapped.push(n_i(*b"FCLi", fill_raw));
+    }
+    if let Some(indent) = style.paragraph_indent {
+        mapped.push(n_f(*b"PINf", indent));
+    }
+    if let Some(before) = style.space_before {
+        mapped.push(n_f(*b"PSBf", before));
+    }
+    if let Some(after) = style.space_after {
+        mapped.push(n_f(*b"PSAf", after));
+    }
+}
+
 pub(crate) fn splice(mapped: Vec<Node>, bagged: Vec<(usize, Node)>) -> Vec<Node> {
     let mut out = Vec::with_capacity(mapped.len() + bagged.len());
     let mut mapped = mapped.into_iter();
@@ -1088,57 +1138,16 @@ impl Writer<'_> {
         Ok(n_kids(*b"TAPv", splice(mapped, rest)))
     }
 
-    /// One `TFSv`: the mapped style scalars in dictionary order, then
-    /// one string-node `TRNs` per run (decision 0007). Unmapped styling
-    /// splices back between the mapped children.
+    /// One `TFSv`: the base style scalars in dictionary order, then
+    /// per run its marker group (`changes`) followed by the string-node
+    /// `TRNs` (decisions 0007 and 0051). Unmapped styling — including
+    /// trailing markers the reader bagged — splices back between the
+    /// mapped children at their original indices.
     fn write_formatted_string(&mut self, style: &TextStyle, runs: &[TextRun], path: &str) -> Node {
         let mut mapped = Vec::new();
-        if let Some(font) = &style.font {
-            mapped.push(n_s(*b"FONs", font));
-        }
-        if let Some(size) = style.size {
-            mapped.push(n_f(*b"PTSf", size));
-        }
-        if let Some(bold) = style.bold {
-            mapped.push(n_b(*b"BOLb", bold));
-        }
-        if let Some(italic) = style.italic {
-            mapped.push(n_b(*b"ITLb", italic));
-        }
-        if let Some(underline) = style.underline {
-            mapped.push(n_b(*b"UNDb", underline));
-        }
-        if let Some(scale) = style.horizontal_scale {
-            mapped.push(n_f(*b"HSCf", scale));
-        }
-        if let Some(kerning) = style.kerning {
-            mapped.push(n_f(*b"RKNf", kerning));
-        }
-        if let Some(shift) = style.baseline_shift {
-            mapped.push(n_f(*b"BLSf", shift));
-        }
-        if let Some(leading) = style.leading {
-            mapped.push(n_f(*b"LEDf", leading));
-        }
-        if let Some(unit) = style.leading_unit {
-            mapped.push(n_i(*b"LDMi", unit));
-        }
-        if let Some(justification) = style.justification {
-            mapped.push(n_i(*b"JSTi", justification));
-        }
-        if let Some(fill_raw) = style.fill_raw {
-            mapped.push(n_i(*b"FCLi", fill_raw));
-        }
-        if let Some(indent) = style.paragraph_indent {
-            mapped.push(n_f(*b"PINf", indent));
-        }
-        if let Some(before) = style.space_before {
-            mapped.push(n_f(*b"PSBf", before));
-        }
-        if let Some(after) = style.space_after {
-            mapped.push(n_f(*b"PSAf", after));
-        }
+        push_style_nodes(&mut mapped, style);
         for run in runs {
+            push_style_nodes(&mut mapped, &run.changes);
             mapped.push(n_s(*b"TRNs", &run.text));
         }
         let bagged = self.bag.take_under(path);

@@ -232,6 +232,7 @@ fn sample_document() -> Document {
         }),
         runs: vec![TextRun {
             text: "Fireworks".into(),
+            changes: TextStyle::default(),
         }],
         flow: Some(0),
         on_path: None,
@@ -491,6 +492,53 @@ fn curve_points() -> Node {
 }
 
 // --- tests --------------------------------------------------------------
+
+#[test]
+fn divergent_run_markers_round_trip() {
+    // Decision 0051: per-run styling rides the documented marker
+    // stream. A run whose group restates fields keeps them as its
+    // `changes`, the write re-emits each group before its `TRNs`, and
+    // a second cycle is byte-stable.
+    let mut doc = sample_document();
+    let text_id = doc
+        .registry
+        .iter()
+        .find_map(|(id, object)| match object {
+            ObjectData::Text(_) => Some(id),
+            _ => None,
+        })
+        .expect("sample document carries a text object");
+    let Some(ObjectData::Text(text)) = doc.registry.get_mut(text_id) else {
+        panic!("text id names a non-text object");
+    };
+    text.runs.push(TextRun {
+        text: " rocks".into(),
+        changes: TextStyle {
+            bold: Some(true),
+            size: Some(18.0),
+            ..TextStyle::default()
+        },
+    });
+
+    let (bytes, doc2, bag2) = round_trip_bytes(&doc, &UnknownBag::new());
+    assert!(bag2.is_empty(), "trailing-free marker stream maps whole");
+    let runs = match doc2.registry.get(text_id) {
+        Some(ObjectData::Text(text)) => &text.runs,
+        other => panic!("text id names a non-text object: {other:?}"),
+    };
+    assert_eq!(runs.len(), 2);
+    assert_eq!(runs[0].text, "Fireworks");
+    assert_eq!(runs[0].changes, TextStyle::default());
+    assert_eq!(runs[1].text, " rocks");
+    assert_eq!(runs[1].changes.bold, Some(true));
+    assert_eq!(runs[1].changes.size, Some(18.0));
+
+    // The second cycle is byte-stable: markers re-emit before their
+    // run in the same canonical order.
+    let (bytes2, _doc3, bag3) = round_trip_bytes(&doc2, &bag2);
+    assert_eq!(bytes2, bytes, "marker stream re-emits identically");
+    assert!(bag3.is_empty());
+}
 
 #[test]
 fn full_spine_round_trips_losslessly() {

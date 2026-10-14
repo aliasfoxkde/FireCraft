@@ -1974,43 +1974,90 @@ impl Reader {
     /// Reads one `TFSv`: the mapped style scalars plus `TRNs`+ runs.
     /// Unknown styling (gradient fills and friends) bags in place, so
     /// the container still round-trips whole.
+    /// Reads one `TFSv`: the base style set (scalars before the first
+    /// run — the dom's `initialAttrs`) plus one run per `TRNs`, each
+    /// carrying the style markers stated since the previous run (the
+    /// documented begin/end stream: `UNDb` true begins underline, false
+    /// ends it, and every other style node restates its field).
+    /// Markers after the last run are trailing state with no run to
+    /// attach to — they bag verbatim at their original index, so the
+    /// write splices them back in place (decision 0051).
     fn read_formatted_string(
         &mut self,
         children: &[Node],
         path: &str,
     ) -> Result<(TextStyle, Vec<TextRun>), MapError> {
-        let mut style = TextStyle::default();
+        let mut base = TextStyle::default();
+        let mut pending = TextStyle::default();
+        let mut pending_indices: Vec<usize> = Vec::new();
         let mut runs = Vec::new();
 
         for (i, child) in children.iter().enumerate() {
             match &child.fourcc {
-                b"FONs" => self.slot_str(child, path, i, &mut style.font)?,
-                b"PTSf" => self.slot_f64(child, path, i, &mut style.size)?,
-                b"BOLb" => self.slot_bool(child, path, i, &mut style.bold)?,
-                b"ITLb" => self.slot_bool(child, path, i, &mut style.italic)?,
-                b"UNDb" => self.slot_bool(child, path, i, &mut style.underline)?,
-                b"HSCf" => self.slot_f64(child, path, i, &mut style.horizontal_scale)?,
-                b"RKNf" => self.slot_f64(child, path, i, &mut style.kerning)?,
-                b"BLSf" => self.slot_f64(child, path, i, &mut style.baseline_shift)?,
-                b"LEDf" => self.slot_f64(child, path, i, &mut style.leading)?,
-                b"LDMi" => self.slot_i64(child, path, i, &mut style.leading_unit)?,
-                b"JSTi" => self.slot_i64(child, path, i, &mut style.justification)?,
-                b"FCLi" => self.slot_i64(child, path, i, &mut style.fill_raw)?,
-                b"PINf" => self.slot_f64(child, path, i, &mut style.paragraph_indent)?,
-                b"PSBf" => self.slot_f64(child, path, i, &mut style.space_before)?,
-                b"PSAf" => self.slot_f64(child, path, i, &mut style.space_after)?,
+                b"FONs" | b"PTSf" | b"BOLb" | b"ITLb" | b"UNDb" | b"HSCf" | b"RKNf" | b"BLSf"
+                | b"LEDf" | b"LDMi" | b"JSTi" | b"FCLi" | b"PINf" | b"PSBf" | b"PSAf" => {
+                    // Before the first run the markers extend the base;
+                    // after one, they are the next run's changes.
+                    if runs.is_empty() {
+                        self.apply_style_node(child, path, i, &mut base)?;
+                    } else {
+                        self.apply_style_node(child, path, i, &mut pending)?;
+                        pending_indices.push(i);
+                    }
+                }
                 b"TRNs" => match child.as_str() {
-                    // Decision 0007: the run characters as a string node.
-                    Some(text) => runs.push(TextRun {
-                        text: text.to_owned(),
-                    }),
+                    // Decision 0007: the run characters as a string
+                    // node; decision 0051 attaches the pending marker
+                    // group as the run's changes.
+                    Some(text) => {
+                        let changes = std::mem::take(&mut pending);
+                        pending_indices.clear();
+                        runs.push(TextRun {
+                            text: text.to_owned(),
+                            changes,
+                        });
+                    }
                     // Undocumented payload shape: preserve it verbatim.
                     None => self.bag_node(path, i, child),
                 },
                 _ => self.bag_node(path, i, child),
             }
         }
-        Ok((style, runs))
+        // Trailing markers (no following `TRNs`): bag the original
+        // nodes so they round-trip byte-exact at their own indices.
+        for i in pending_indices.drain(..) {
+            self.bag_node(path, i, &children[i]);
+        }
+        Ok((base, runs))
+    }
+
+    /// Folds one style node into a style set (first occurrence in the
+    /// set wins; duplicates bag through the slot helpers).
+    fn apply_style_node(
+        &mut self,
+        child: &Node,
+        path: &str,
+        index: usize,
+        style: &mut TextStyle,
+    ) -> Result<(), MapError> {
+        match &child.fourcc {
+            b"FONs" => self.slot_str(child, path, index, &mut style.font),
+            b"PTSf" => self.slot_f64(child, path, index, &mut style.size),
+            b"BOLb" => self.slot_bool(child, path, index, &mut style.bold),
+            b"ITLb" => self.slot_bool(child, path, index, &mut style.italic),
+            b"UNDb" => self.slot_bool(child, path, index, &mut style.underline),
+            b"HSCf" => self.slot_f64(child, path, index, &mut style.horizontal_scale),
+            b"RKNf" => self.slot_f64(child, path, index, &mut style.kerning),
+            b"BLSf" => self.slot_f64(child, path, index, &mut style.baseline_shift),
+            b"LEDf" => self.slot_f64(child, path, index, &mut style.leading),
+            b"LDMi" => self.slot_i64(child, path, index, &mut style.leading_unit),
+            b"JSTi" => self.slot_i64(child, path, index, &mut style.justification),
+            b"FCLi" => self.slot_i64(child, path, index, &mut style.fill_raw),
+            b"PINf" => self.slot_f64(child, path, index, &mut style.paragraph_indent),
+            b"PSBf" => self.slot_f64(child, path, index, &mut style.space_before),
+            b"PSAf" => self.slot_f64(child, path, index, &mut style.space_after),
+            _ => Ok(()),
+        }
     }
 
     /// Reads one `EFLv` — one live effect: `CATs`/`INMs` names plus the

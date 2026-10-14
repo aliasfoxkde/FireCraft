@@ -523,3 +523,46 @@ Batch: `text.setTextParaIndent`, `text.setTextParaSpacingBefore`,
   text + stale refusals, negative/zero accepted). fuzzdrive: 3 CALLS
   + arms (pixel range straddles negative/zero/positive).
 - Registry 227→230. dom-parity: **258C/13P/0M/85N**, unresolved [].
+
+## #122 — 2026-10-14 — multi-run text model + markup verbs (decision 0051)
+
+Batch: `text.setTextRuns`, `text.applyCharacterMarkup`,
+`text.removeCharacterMarkup`, `text.applyFontMarkup`,
+`text.removeFontMarkup` (8.17). The recorded M15 text gap closes.
+
+- The model caught up to the wire: `TFSv` already documented the
+  marker stream (style nodes between `TRNs` runs = the next run's
+  changes; `UNDb` true begins / false ends). `TextRun` gained
+  `changes: TextStyle` (`serde(default)` keeps old journals
+  decodable).
+- Reader fold: markers before the first run extend the base; between
+  runs they accumulate into the next run's group; trailing markers
+  (no following run) bag verbatim at their original child index and
+  splice back byte-exact. Writer: each group re-emits before its
+  `TRNs`. Marker-free files emit the same bytes as before — corpus
+  round-trips untouched; a two-cycle byte-stability test pins the
+  divergent shape.
+- Restyle machinery (`overlay_changes` / `style_delta` /
+  `restyle_runs`): groups restate, never unset — "inherit" is the
+  absence of a node. `fwplain` is the only verb that clears the base.
+  `removeFontMarkup` drops the field from the base and lets the runs
+  re-diff to inherit (default = unset, recorded).
+- `applyFontMarkup` enforces the dom's size grammar ("14pt"; a bare
+  number refuses). `setTextRuns` pre-flights all attr gates before
+  the first mutation; empty run list clears the text.
+- Layout still reads the base style (recorded rendering stage, same
+  as the para attrs) — wire and model carry divergence now.
+- Test traps: the `create()` helper reports `elements[0]` (second
+  create's id must be read off the cell tail — again); fwplain's run
+  groups come out EMPTY (base cleared first → minimal stream); the
+  placeholder-marker lint hook rejects "XXXpt" in prose — decision
+  docs say "14pt" instead.
+- Tests: +4 engine (markup streams+inverts, font markup grammar,
+  remove clears base+runs, setTextRuns replace+gates) +1 doc
+  (divergent round-trip, two-cycle byte-stable). fuzzdrive: 5 CALLS +
+  arms (tags include an unknown one; size values cross the pt-suffix
+  and positivity gates; setTextRuns builds 1-4 runs with occasional
+  changed_attrs/initial_attrs).
+- Registry 230→235. dom-parity: **263C/8P/0M/85N**, unresolved [].
+  `xtask ci` all gates green locally; xtask also restamped the
+  changelog (186 commits).

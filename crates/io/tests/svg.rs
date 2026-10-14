@@ -391,6 +391,7 @@ fn text_carries_style_and_runs() {
     });
     text.runs = vec![doc::TextRun {
         text: "hi & bye".to_owned(),
+        changes: doc::TextStyle::default(),
     }];
     let (svg, report) = encode(&document(vec![ObjectData::Text(text)]));
     assert!(

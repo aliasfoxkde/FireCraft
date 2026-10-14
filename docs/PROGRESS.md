@@ -8,15 +8,16 @@
 
 - **Released:** v0.1.0 (2026-10-13), repo public.
 - **Roadmap:** M0–M15 **all closed**.
-- **Registry:** 230 commands. **CI:** green 7/7 on `f01365b` (the
+- **Registry:** 235 commands. **CI:** green 7/7 on `f01365b` (the
   defect-fix commit; the fuzz job that caught both defects runs on
   every push); later campaign pushes verified per batch (runbook:
   HANDOFF §6).
-- **CS6 DOM parity:** **258 C / 13 P / 0 M / 85 N** — **the M table is
+- **CS6 DOM parity:** **263 C / 8 P / 0 M / 85 N** — **the M table is
   empty** (2026-10-14): every CS6 dom mutation verb is carried or
-  partial. Remaining surface work is the 13 P rows (the markup quartet
-  + `setTextRuns` need the multi-run text model) and the recorded
-  debts ([`HANDOFF.md`](HANDOFF.md) §4 Phase 9).
+  partial. The multi-run text gap closed (#122): remaining surface
+  work is the 8 P rows (anti-alias trio, importFile,
+  setFillNColorNTexture, duplicateSymbolForAlias, two permanent) and
+  the recorded debts ([`HANDOFF.md`](HANDOFF.md) §4 Phase 9).
 
 ## Milestones
 
@@ -80,6 +81,7 @@
 | #118 | on-path setters: setTextOnPathMode/Offset + reversePathTextDirection over a shared selection walk (8.14, decision 0048) | a0304d4 | **253 C / 18 P / 0 M / 85 N** |
 | #119 | pixel-mask pair: moveSelectionMaskBy (plane translate) + adjustPixelSel (expand/contract/border/smooth via chamfer distance field) (8.15, decision 0049) | this batch | **255 C / 16 P / 0 M / 85 N** |
 | #121 | paragraph setter trio: setTextParaIndent/SpacingBefore/After over the mapped PINf/PSBf/PSAf style fields (8.16, decision 0050) | this batch | **258 C / 13 P / 0 M / 85 N** |
+| #122 | multi-run text model + markup verbs: TFSv marker-stream fold, setTextRuns + markup quartet (8.17, decision 0051) | this batch | **263 C / 8 P / 0 M / 85 N** |
 
 **Campaign complete:** no remaining M families. Next: P-class partials
 and Phase 9 debts (HANDOFF §4).

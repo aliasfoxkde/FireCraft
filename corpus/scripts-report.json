@@ -1,11 +1,11 @@
 {
   "counts": {
     "not-implemented": 32,
-    "ran": 19,
-    "threw": 38
+    "ran": 20,
+    "threw": 37
   },
   "floor": 19,
-  "generated_unix": 1791932650,
+  "generated_unix": 1792000715,
   "name_status": {
     "Files.copy": "function",
     "Files.createDirectory": "function",
@@ -183,7 +183,7 @@
     },
     {
       "applied": 0,
-      "doc_sha": "1d284ea4b320f332",
+      "doc_sha": "5cd6cf6bbd878db6",
       "message": null,
       "missing": [
         "smartShape.elem",
@@ -346,7 +346,7 @@
     },
     {
       "applied": 0,
-      "doc_sha": "1d284ea4b320f332",
+      "doc_sha": "5cd6cf6bbd878db6",
       "message": null,
       "missing": [
         "smartShape.elem",
@@ -517,7 +517,7 @@
     },
     {
       "applied": 0,
-      "doc_sha": "1d284ea4b320f332",
+      "doc_sha": "5cd6cf6bbd878db6",
       "message": null,
       "missing": [
         "smartShape.elem",
@@ -688,7 +688,7 @@
     },
     {
       "applied": 0,
-      "doc_sha": "1d284ea4b320f332",
+      "doc_sha": "5cd6cf6bbd878db6",
       "message": null,
       "missing": [
         "smartShape.elem",
@@ -874,7 +874,7 @@
     },
     {
       "applied": 0,
-      "doc_sha": "1d284ea4b320f332",
+      "doc_sha": "5cd6cf6bbd878db6",
       "message": null,
       "missing": [
         "smartShape.elem",
@@ -1072,7 +1072,7 @@
     },
     {
       "applied": 0,
-      "doc_sha": "1d284ea4b320f332",
+      "doc_sha": "5cd6cf6bbd878db6",
       "message": null,
       "missing": [
         "smartShape.elem",
@@ -1294,7 +1294,7 @@
     },
     {
       "applied": 0,
-      "doc_sha": "1d284ea4b320f332",
+      "doc_sha": "5cd6cf6bbd878db6",
       "message": null,
       "missing": [
         "smartShape.elem",
@@ -1492,7 +1492,7 @@
     },
     {
       "applied": 0,
-      "doc_sha": "1d284ea4b320f332",
+      "doc_sha": "5cd6cf6bbd878db6",
       "message": null,
       "missing": [
         "smartShape.elem",
@@ -1663,7 +1663,7 @@
     },
     {
       "applied": 0,
-      "doc_sha": "1d284ea4b320f332",
+      "doc_sha": "5cd6cf6bbd878db6",
       "message": null,
       "missing": [
         "smartShape.elem",
@@ -1813,7 +1813,7 @@
     },
     {
       "applied": 0,
-      "doc_sha": "1d284ea4b320f332",
+      "doc_sha": "5cd6cf6bbd878db6",
       "message": null,
       "missing": [
         "smartShape.elem",
@@ -1886,7 +1886,7 @@
     },
     {
       "applied": 0,
-      "doc_sha": "1d284ea4b320f332",
+      "doc_sha": "5cd6cf6bbd878db6",
       "message": null,
       "missing": [
         "smartShape.elem",
@@ -3305,7 +3305,7 @@
     },
     {
       "applied": 0,
-      "doc_sha": "1d284ea4b320f332",
+      "doc_sha": "5cd6cf6bbd878db6",
       "message": null,
       "missing": [
         "smartShape.currentMousePos",
@@ -3535,10 +3535,12 @@
       "status": "threw"
     },
     {
-      "message": "Commands/Batch Commands/Select All.jsf: TypeError: not a callable function",
+      "applied": 1,
+      "doc_sha": "ef413a87644da31b",
+      "message": null,
       "missing": [],
       "name": "Commands/Batch Commands/Select All.jsf",
-      "status": "threw"
+      "status": "ran"
     },
     {
       "message": "Commands/Batch Commands/Sharpen Selection.jsf: TypeError: not a callable function",
@@ -3580,8 +3582,8 @@
       "status": "threw"
     },
     {
-      "applied": 2,
-      "doc_sha": "482b27605d0d35b1",
+      "applied": 3,
+      "doc_sha": "2163919eeb212475",
       "message": null,
       "missing": [],
       "name": "Commands/Document/Distribute to Layers.jsf",
@@ -3627,7 +3629,7 @@
     },
     {
       "applied": 0,
-      "doc_sha": "1d284ea4b320f332",
+      "doc_sha": "5cd6cf6bbd878db6",
       "message": null,
       "missing": [],
       "name": "Commands/Text/Case Lowercase.jsf",
@@ -3635,7 +3637,7 @@
     },
     {
       "applied": 0,
-      "doc_sha": "1d284ea4b320f332",
+      "doc_sha": "5cd6cf6bbd878db6",
       "message": null,
       "missing": [],
       "name": "Commands/Text/Case Uppercase First.jsf",
@@ -3643,7 +3645,7 @@
     },
     {
       "applied": 0,
-      "doc_sha": "1d284ea4b320f332",
+      "doc_sha": "5cd6cf6bbd878db6",
       "message": null,
       "missing": [],
       "name": "Commands/Text/Case Uppercase.jsf",
@@ -3657,7 +3659,7 @@
     },
     {
       "applied": 0,
-      "doc_sha": "1d284ea4b320f332",
+      "doc_sha": "5cd6cf6bbd878db6",
       "message": null,
       "missing": [],
       "name": "Commands/Text/Render as Paths.jsf",
@@ -3665,7 +3667,7 @@
     },
     {
       "applied": 0,
-      "doc_sha": "1d284ea4b320f332",
+      "doc_sha": "5cd6cf6bbd878db6",
       "message": null,
       "missing": [],
       "name": "Commands/Text/Render as Pixels.jsf",
@@ -3689,7 +3691,7 @@
     },
     {
       "applied": 0,
-      "doc_sha": "1d284ea4b320f332",
+      "doc_sha": "5cd6cf6bbd878db6",
       "message": null,
       "missing": [],
       "name": "Commands/Text/Toggle Fixed Width.jsf",
@@ -3882,7 +3884,7 @@
   "scripts_total": 89,
   "seed_journal_len": 2,
   "seed_sha": {
-    "Ok": "1d284ea4b320f332"
+    "Ok": "5cd6cf6bbd878db6"
   },
   "source": "source/Adobe Fireworks CS6/Configuration",
   "static_calls": {

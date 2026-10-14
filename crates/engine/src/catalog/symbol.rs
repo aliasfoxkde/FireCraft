@@ -17,7 +17,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use doc::{
     Cell, Document, ExportOptions, Layer, LayerList, NineSliceGuides, ObjectData, ObjectId,
-    SymbolAnimation, SymbolDefinition, SymbolInstanceObject, SymbolType, TextRun,
+    SymbolAnimation, SymbolDefinition, SymbolInstanceObject, SymbolType, TextRun, TextStyle,
 };
 
 use crate::access;
@@ -1254,6 +1254,7 @@ fn replace_button_text(
         } else {
             vec![TextRun {
                 text: payload.text.clone(),
+                changes: TextStyle::default(),
             }]
         };
         deltas.push(Delta::Object {
