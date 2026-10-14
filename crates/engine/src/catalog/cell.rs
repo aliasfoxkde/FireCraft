@@ -83,7 +83,7 @@ fn frame_count(document: &Document, page: usize) -> usize {
 }
 
 /// The `FNDi` Frame Duration default the GIF exporter documents.
-const DEFAULT_FRAME_DURATION: i64 = 10;
+pub(crate) const DEFAULT_FRAME_DURATION: i64 = 10;
 
 /// Map key for the duplicate-frame remap table — `ObjectId` is `Hash`
 /// but not `Ord` (see `doc::library` for the same idiom).
@@ -173,7 +173,12 @@ fn copied_duration(durations: &[i64], source: usize) -> i64 {
 
 /// Splices `cells` into every layer's cell list at `at`, keeping each
 /// layer's per-frame visibility vec aligned when it is present.
-fn splice_cells(page: &mut doc::Page, at: usize, cells: impl Fn() -> Cell, count: usize) {
+pub(crate) fn splice_cells(
+    page: &mut doc::Page,
+    at: usize,
+    cells: impl Fn() -> Cell,
+    count: usize,
+) {
     for layer in &mut page.layers.layers {
         for _ in 0..count {
             layer.cells.insert(at, cells());

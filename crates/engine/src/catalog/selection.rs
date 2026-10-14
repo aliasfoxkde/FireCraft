@@ -9,6 +9,8 @@
 
 use doc::{Document, ObjectId};
 
+use super::cell::{DEFAULT_FRAME_DURATION, check_closure, clone_element, splice_cells};
+use super::object::{Owner, find_owner};
 use crate::access;
 use crate::command::TypedCommand;
 use crate::delta::Delta;
@@ -23,7 +25,10 @@ pub(crate) fn install(registry: &mut CommandRegistry) -> Result<(), EngineError>
     registry.register(SelectAllOnLayer)?;
     registry.register(SelectParents)?;
     registry.register(SelectChildren)?;
-    registry.register(SelectNone)
+    registry.register(SelectNone)?;
+    registry.register(DuplicateToFrames)?;
+    registry.register(DuplicateToFrameRange)?;
+    registry.register(DistributeToFrames)
 }
 
 /// Validates every id and returns them deduplicated in canonical
@@ -486,6 +491,362 @@ fn frame_in_scope(
     Ok(())
 }
 
+// --- Selection-to-frames fans (CS6 `dom.cuplicateSelectionToFrames`,
+// `dom.duplicateSelectionToFrameRange`, `dom.distributeSelectionToFrames`;
+// decision 0026). CS6 aims these at "the current frame" — editor state
+// the engine does not carry — so every command names its source frame
+// explicitly, mirroring `frame.add`'s current-relative form.
+
+/// Which frames `duplicateToFrames` fans to (CS6's `whichFrames`
+/// strings, decision 0026).
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, PartialEq)]
+#[serde(rename_all = "lowercase")]
+enum FrameFan {
+    All,
+    Previous,
+    Next,
+    End,
+}
+
+/// The selection members that live on one page+frame, in canonical
+/// order. Group children are skipped: frame fans move whole top-level
+/// items, so a group is fanned by selecting the group itself.
+fn fan_items(
+    document: &Document,
+    name: &'static str,
+    page: usize,
+    frame: usize,
+) -> Result<Vec<ObjectId>, EngineError> {
+    access::page(document, name, page)?;
+    frame_in_scope(document, name, page, frame)?;
+    Ok(document
+        .object_selection
+        .iter()
+        .copied()
+        .filter(|id| {
+            matches!(
+                find_owner(document, *id),
+                Some(Owner::Cell {
+                    page: p,
+                    cell: f,
+                    ..
+                }) if p == page && f == frame
+            )
+        })
+        .collect())
+}
+
+/// Clones `items` onto `targets` (frame indices on `page`), one
+/// independent deep copy per (item, target). Copies append to the
+/// target cell (top of z-order — recorded deviation from Clone's
+/// above-original placement). Returns the minted ids in insertion
+/// order; closures are checked before any mint so a refused fan leaves
+/// nothing behind.
+fn fan_clones(
+    document: &mut Document,
+    name: &'static str,
+    page: usize,
+    items: &[ObjectId],
+    targets: &[usize],
+) -> Result<Vec<ObjectId>, EngineError> {
+    for &id in items {
+        check_closure(document, name, id, 0)?;
+    }
+    let mut minted = Vec::new();
+    for &target in targets {
+        for &id in items {
+            let Some(Owner::Cell { layer, .. }) = find_owner(document, id) else {
+                return Err(EngineError::MissingTarget {
+                    name: name.to_owned(),
+                    detail: format!(
+                        "selected object {} (generation {}) left its cell mid-fan",
+                        id.index(),
+                        id.generation()
+                    ),
+                });
+            };
+            let mut remap = std::collections::HashMap::new();
+            let copy = clone_element(document, id, &mut remap, &mut minted);
+            access::cell_mut(document, name, page, layer, target)?
+                .elements
+                .push(copy);
+        }
+    }
+    Ok(minted)
+}
+
+/// Appends `count` empty frames to the page (cells on every layer plus
+/// the `FRCi` counts and, when aligned, the duration vec), the same
+/// shape `frame.add` uses for end-appended frames.
+fn append_frames(document: &mut Document, page: usize, count: usize) {
+    let Some(target) = document.pages.get_mut(page) else {
+        return;
+    };
+    let old_count = target.info.frame_count.max(0) as usize;
+    let aligned =
+        target.info.frame_durations.len() == old_count && !target.info.frame_durations.is_empty();
+    splice_cells(
+        target,
+        old_count,
+        || doc::Cell {
+            locked: false,
+            visible: true,
+            elements: Vec::new(),
+        },
+        count,
+    );
+    if aligned {
+        for _ in 0..count {
+            target
+                .info
+                .frame_durations
+                .insert(old_count, DEFAULT_FRAME_DURATION);
+        }
+    }
+    target.info.frame_count += count as i64;
+    target.info.frame_count_duplicate += count as i64;
+}
+
+/// `selection.duplicateToFrames` — CS6
+/// `dom.cuplicateSelectionToFrames(whichFrames)` (the original's own
+/// typo lives in the parity matrix; the command carries the clean
+/// name). "all" covers every existing frame including the source (an
+/// in-place clone — the text documents no exclusion); "next" past the
+/// last frame adds one; "end" never adds.
+struct DuplicateToFrames;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct DuplicateToFramesPayload {
+    /// Page whose frames receive the copies.
+    page: usize,
+    /// Source ("current") frame.
+    frame: usize,
+    /// Which frames to fan to.
+    which: FrameFan,
+}
+
+impl TypedCommand for DuplicateToFrames {
+    type Payload = DuplicateToFramesPayload;
+
+    fn name(&self) -> &'static str {
+        "selection.duplicateToFrames"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "selection.duplicateToFrames";
+        let items = fan_items(document, NAME, payload.page, payload.frame)?;
+        let count = document.pages[payload.page].info.frame_count.max(0) as usize;
+        let (targets, extra) = match payload.which {
+            FrameFan::All => ((0..count).collect(), 0),
+            FrameFan::Previous => {
+                if payload.frame == 0 {
+                    return Ok(Delta::Noop);
+                }
+                (vec![payload.frame - 1], 0)
+            }
+            FrameFan::Next => {
+                let extra = usize::from(payload.frame + 1 == count);
+                (vec![payload.frame + 1], extra)
+            }
+            FrameFan::End => {
+                if count == 0 {
+                    return Err(EngineError::InvalidState {
+                        name: NAME.to_owned(),
+                        detail: "page carries no frames".to_owned(),
+                    });
+                }
+                (vec![count - 1], 0)
+            }
+        };
+        if items.is_empty() {
+            return Ok(Delta::Noop);
+        }
+        let before = Box::new(document.pages[payload.page].clone());
+        if extra > 0 {
+            append_frames(document, payload.page, extra);
+        }
+        let minted = fan_clones(document, NAME, payload.page, &items, &targets)?;
+        let mut deltas = vec![Delta::PageBody {
+            page: payload.page,
+            before,
+        }];
+        deltas.extend(minted.into_iter().map(|id| Delta::Object {
+            id,
+            inverse: crate::delta::ObjectInverse::Created,
+        }));
+        Ok(Delta::Group(deltas))
+    }
+}
+
+/// `selection.duplicateToFrameRange` — CS6
+/// `dom.duplicateSelectionToFrameRange(first, last)`, inclusive. `-1`
+/// keeps its CS6 meaning ("the current frame") and names the payload's
+/// source frame. When the range spans, the source frame is skipped
+/// ("duplicates are not placed on that frame"); when `first == last`
+/// the single frame is copied to even if it is the source. Ranges
+/// never create frames (the text grants creation only to `distribute`
+/// and "next").
+struct DuplicateToFrameRange;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct DuplicateToFrameRangePayload {
+    /// Page whose frames receive the copies.
+    page: usize,
+    /// Source ("current") frame; `-1` in `first`/`last` names it.
+    frame: usize,
+    /// First frame of the inclusive range (`-1` = the source frame).
+    first: i64,
+    /// Last frame of the inclusive range (`-1` = the source frame).
+    last: i64,
+}
+
+impl TypedCommand for DuplicateToFrameRange {
+    type Payload = DuplicateToFrameRangePayload;
+
+    fn name(&self) -> &'static str {
+        "selection.duplicateToFrameRange"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "selection.duplicateToFrameRange";
+        let items = fan_items(document, NAME, payload.page, payload.frame)?;
+        if items.is_empty() {
+            return Ok(Delta::Noop);
+        }
+        let resolve = |value: i64| -> Result<usize, EngineError> {
+            if value < -1 {
+                return Err(EngineError::InvalidState {
+                    name: NAME.to_owned(),
+                    detail: format!("frame index {value} below -1"),
+                });
+            }
+            Ok(if value < 0 {
+                payload.frame
+            } else {
+                value as usize
+            })
+        };
+        let first = resolve(payload.first)?;
+        let last = resolve(payload.last)?;
+        let count = document.pages[payload.page].info.frame_count.max(0) as usize;
+        if first > last {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: format!("range {first}..={last} is empty"),
+            });
+        }
+        if last >= count {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: format!("frame {last} out of range (page carries {count})"),
+            });
+        }
+        let targets: Vec<usize> = (first..=last)
+            .filter(|&target| first == last || target != payload.frame)
+            .collect();
+        if targets.is_empty() {
+            return Ok(Delta::Noop);
+        }
+        let before = Box::new(document.pages[payload.page].clone());
+        let minted = fan_clones(document, NAME, payload.page, &items, &targets)?;
+        let mut deltas = vec![Delta::PageBody {
+            page: payload.page,
+            before,
+        }];
+        deltas.extend(minted.into_iter().map(|id| Delta::Object {
+            id,
+            inverse: crate::delta::ObjectInverse::Created,
+        }));
+        Ok(Delta::Group(deltas))
+    }
+}
+
+/// `selection.distributeToFrames` — CS6
+/// `dom.distributeSelectionToFrames()`: moves the selected items onto
+/// consecutive frames starting at the source frame ("the first item
+/// goes to the current frame"), adding frames when the run outruns the
+/// page. One item — or none — is the documented no-effect case.
+struct DistributeToFrames;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct DistributeToFramesPayload {
+    /// Page whose frames receive the items.
+    page: usize,
+    /// Source ("current") frame.
+    frame: usize,
+}
+
+impl TypedCommand for DistributeToFrames {
+    type Payload = DistributeToFramesPayload;
+
+    fn name(&self) -> &'static str {
+        "selection.distributeToFrames"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "selection.distributeToFrames";
+        let items = fan_items(document, NAME, payload.page, payload.frame)?;
+        if items.len() <= 1 {
+            return Ok(Delta::Noop);
+        }
+        let count = document.pages[payload.page].info.frame_count.max(0) as usize;
+        let needed = (payload.frame + items.len()).saturating_sub(count);
+        let before = Box::new(document.pages[payload.page].clone());
+        if needed > 0 {
+            append_frames(document, payload.page, needed);
+        }
+        // Item 0 stays (it is already on the source frame); the rest
+        // move within their own layer, one frame further each.
+        for (step, &id) in items.iter().enumerate().skip(1) {
+            let target = payload.frame + step;
+            let Some(Owner::Cell { layer, .. }) = find_owner(document, id) else {
+                return Err(EngineError::MissingTarget {
+                    name: NAME.to_owned(),
+                    detail: format!(
+                        "selected object {} (generation {}) left its cell mid-fan",
+                        id.index(),
+                        id.generation()
+                    ),
+                });
+            };
+            let source = access::cell_mut(document, NAME, payload.page, layer, payload.frame)?;
+            let Some(position) = source.elements.iter().position(|&element| element == id) else {
+                return Err(EngineError::MissingTarget {
+                    name: NAME.to_owned(),
+                    detail: format!(
+                        "selected object {} (generation {}) is not in the source cell",
+                        id.index(),
+                        id.generation()
+                    ),
+                });
+            };
+            source.elements.remove(position);
+            access::cell_mut(document, NAME, payload.page, layer, target)?
+                .elements
+                .push(id);
+        }
+        Ok(Delta::PageBody {
+            page: payload.page,
+            before,
+        })
+    }
+}
+
 #[cfg(test)]
 mod selection_tests {
     #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
@@ -800,5 +1161,254 @@ mod selection_tests {
         // is cell-listed any more, so canonical order falls back to
         // registry slots (outsider first).
         assert_eq!(document.object_selection, vec![outsider, group1]);
+    }
+
+    /// The sample's page 0 reshaped for frame fans: two layers, two
+    /// frames; layer 0 frame 0 holds `[a, group, c]` (the group wraps
+    /// `child`), frame 1 holds `[f2]`, layer 1 is empty. Returned ids:
+    /// `[a, child, group, c, f2]`.
+    fn fan_document() -> (Document, Vec<ObjectId>) {
+        let (mut document, ids) = testdoc::sample_document();
+        document.pages.truncate(1);
+        let (a, child, f2, c) = (ids[0], ids[1], ids[2], ids[3]);
+        let group = document
+            .registry
+            .insert(doc::ObjectData::Group(doc::GroupObject {
+                group_type: 0,
+                name: None,
+                children: vec![child],
+                opacity: 1000,
+                blend: 0,
+                visible: true,
+                locked: false,
+                mask_hidden: false,
+                mask_linked: None,
+                effects: Vec::new(),
+            }));
+        let page = &mut document.pages[0];
+        page.info.frame_count = 2;
+        page.info.frame_count_duplicate = 2;
+        page.layers.layers[0].cells[0].elements = vec![a, group, c];
+        page.layers.layers[0].cells[1].elements = vec![f2];
+        page.layers.layers[1].cells[0].elements.clear();
+        (document, vec![a, child, group, c, f2])
+    }
+
+    #[test]
+    fn duplicate_to_frames_all_covers_every_frame() {
+        let (mut document, ids) = fan_document();
+        let (a, group) = (ids[0], ids[2]);
+        SetSelection
+            .apply_json(&mut document, serde_json::json!({"ids": [a, group]}))
+            .expect("select frame-0 items");
+        let live_before = document.registry.len();
+        let layer0 = |document: &Document, frame: usize| -> Vec<ObjectId> {
+            document.pages[0].layers.layers[0].cells[frame]
+                .elements
+                .clone()
+        };
+        let delta = DuplicateToFrames
+            .apply_json(
+                &mut document,
+                serde_json::json!({"page": 0, "frame": 0, "which": "all"}),
+            )
+            .expect("all frames fan applies");
+        // Copies append to every frame including the source; each
+        // group copy brings its own child (3 mints per frame, two
+        // frames in the fixture).
+        assert_eq!(document.registry.len(), live_before + 6);
+        assert_eq!(layer0(&document, 0).len(), 5);
+        assert_eq!(layer0(&document, 1).len(), 3);
+        assert_eq!(layer0(&document, 1)[0], ids[4]);
+        delta.apply_inverse(&mut document).expect("undo");
+        assert_eq!(document.registry.len(), live_before);
+        assert_eq!(layer0(&document, 0), vec![a, group, ids[3]]);
+        assert_eq!(layer0(&document, 1), vec![ids[4]]);
+        assert_eq!(document.object_selection, vec![a, group]);
+    }
+
+    #[test]
+    fn duplicate_to_frame_range_skips_the_source_frame() {
+        let (mut document, ids) = fan_document();
+        let (a, f2) = (ids[0], ids[4]);
+        SetSelection
+            .apply_json(&mut document, serde_json::json!({"ids": [a]}))
+            .expect("select a");
+        let live_before = document.registry.len();
+        let delta = DuplicateToFrameRange
+            .apply_json(
+                &mut document,
+                serde_json::json!({"page": 0, "frame": 0, "first": 0, "last": 1}),
+            )
+            .expect("range fan applies");
+        // The spanning range drops the source frame; frame 1 gains one
+        // copy on the item's own layer, behind its resident.
+        assert_eq!(document.registry.len(), live_before + 1);
+        assert_eq!(document.pages[0].layers.layers[0].cells[0].elements[0], a);
+        let target = document.pages[0].layers.layers[0].cells[1].elements.clone();
+        assert_eq!(target.len(), 2);
+        assert_eq!(target[0], f2, "the resident stays first");
+        assert_ne!(target[1], f2, "the copy is a fresh slot");
+        assert_eq!(
+            document.pages[0].layers.layers[1].cells[1].elements.len(),
+            0
+        );
+        delta.apply_inverse(&mut document).expect("undo");
+        assert_eq!(
+            document.pages[0].layers.layers[0].cells[1].elements,
+            vec![f2]
+        );
+        assert_eq!(document.registry.len(), live_before);
+    }
+
+    #[test]
+    fn duplicate_to_frame_range_single_frame_copies_in_place() {
+        let (mut document, ids) = fan_document();
+        let (a, group, c) = (ids[0], ids[2], ids[3]);
+        SetSelection
+            .apply_json(&mut document, serde_json::json!({"ids": [a]}))
+            .expect("select a");
+        let live_before = document.registry.len();
+        // first == last on the source frame: the documented exception
+        // to the skip rule.
+        let delta = DuplicateToFrameRange
+            .apply_json(
+                &mut document,
+                serde_json::json!({"page": 0, "frame": 0, "first": 0, "last": 0}),
+            )
+            .expect("single-frame fan applies");
+        assert_eq!(document.registry.len(), live_before + 1);
+        let cell = document.pages[0].layers.layers[0].cells[0].elements.clone();
+        assert_eq!(cell.len(), 4);
+        assert_eq!(&cell[..3], &[a, group, c]);
+        assert_ne!(cell[3], a, "the copy is a fresh slot");
+        delta.apply_inverse(&mut document).expect("undo");
+
+        // Refusals: empty range, out-of-range last (no creation).
+        for payload in [
+            serde_json::json!({"page": 0, "frame": 0, "first": 1, "last": 0}),
+            serde_json::json!({"page": 0, "frame": 0, "first": 0, "last": 2}),
+            serde_json::json!({"page": 0, "frame": 0, "first": -3, "last": 1}),
+        ] {
+            assert!(
+                DuplicateToFrameRange
+                    .apply_json(&mut document, payload)
+                    .is_err(),
+                "range fan must refuse"
+            );
+        }
+        assert_eq!(document.registry.len(), live_before);
+    }
+
+    #[test]
+    fn duplicate_to_frames_next_adds_a_frame() {
+        let (mut document, ids) = fan_document();
+        let f2 = ids[4];
+        SetSelection
+            .apply_json(&mut document, serde_json::json!({"ids": [f2]}))
+            .expect("select the last-frame item");
+        let live_before = document.registry.len();
+        let count_before = document.pages[0].info.frame_count;
+        let delta = DuplicateToFrames
+            .apply_json(
+                &mut document,
+                serde_json::json!({"page": 0, "frame": 1, "which": "next"}),
+            )
+            .expect("next fan applies");
+        assert_eq!(document.pages[0].info.frame_count, count_before + 1);
+        assert_eq!(document.registry.len(), live_before + 1);
+        // "next" past the last frame appended one; every layer got a
+        // cell for it.
+        assert_eq!(
+            document.pages[0].layers.layers[0].cells[2].elements.len(),
+            1
+        );
+        assert_eq!(
+            document.pages[0].layers.layers[1].cells[2].elements.len(),
+            0
+        );
+        delta.apply_inverse(&mut document).expect("undo");
+        assert_eq!(document.pages[0].info.frame_count, count_before);
+        assert_eq!(document.registry.len(), live_before);
+        assert_eq!(document.pages[0].layers.layers[0].cells.len(), 2);
+        assert_eq!(
+            document.pages[0].layers.layers[0].cells[1].elements,
+            vec![f2]
+        );
+    }
+
+    #[test]
+    fn duplicate_to_frames_previous_noops_at_frame_zero() {
+        let (mut document, ids) = fan_document();
+        SetSelection
+            .apply_json(&mut document, serde_json::json!({"ids": [ids[0]]}))
+            .expect("select a");
+        let live_before = document.registry.len();
+        let delta = DuplicateToFrames
+            .apply_json(
+                &mut document,
+                serde_json::json!({"page": 0, "frame": 0, "which": "previous"}),
+            )
+            .expect("previous at 0 applies");
+        assert_eq!(delta, Delta::Noop);
+        assert_eq!(document.registry.len(), live_before);
+        // An empty frame-0 selection is the other no-effect case.
+        let (mut document, _ids) = fan_document();
+        let delta = DuplicateToFrames
+            .apply_json(
+                &mut document,
+                serde_json::json!({"page": 0, "frame": 1, "which": "all"}),
+            )
+            .expect("empty fan applies");
+        assert_eq!(delta, Delta::Noop);
+    }
+
+    #[test]
+    fn distribute_moves_items_onto_consecutive_frames() {
+        let (mut document, ids) = fan_document();
+        let (a, group, c) = (ids[0], ids[2], ids[3]);
+        SetSelection
+            .apply_json(&mut document, serde_json::json!({"ids": [a, group, c]}))
+            .expect("select frame-0 items");
+        let delta = DistributeToFrames
+            .apply_json(&mut document, serde_json::json!({"page": 0, "frame": 0}))
+            .expect("distribute applies");
+        // a stays on frame 0; group and c move one and two frames out —
+        // the run outruns the two-frame page, so a frame is added, and
+        // group lands behind frame 1's resident. Ids are preserved,
+        // selection intact.
+        assert_eq!(document.pages[0].info.frame_count, 3);
+        let layer0 = |document: &Document, frame: usize| -> Vec<ObjectId> {
+            document.pages[0].layers.layers[0].cells[frame]
+                .elements
+                .clone()
+        };
+        assert_eq!(layer0(&document, 0), vec![a]);
+        assert_eq!(layer0(&document, 1), vec![ids[4], group]);
+        assert_eq!(layer0(&document, 2), vec![c]);
+        assert_eq!(document.object_selection, vec![a, group, c]);
+        delta.apply_inverse(&mut document).expect("undo");
+        assert_eq!(document.pages[0].info.frame_count, 2);
+        assert_eq!(layer0(&document, 0), vec![a, group, c]);
+        assert_eq!(layer0(&document, 1), vec![ids[4]]);
+        assert_eq!(document.pages[0].layers.layers[0].cells.len(), 2);
+    }
+
+    #[test]
+    fn distribute_single_item_noops() {
+        let (mut document, ids) = fan_document();
+        SetSelection
+            .apply_json(&mut document, serde_json::json!({"ids": [ids[0]]}))
+            .expect("select one");
+        let delta = DistributeToFrames
+            .apply_json(&mut document, serde_json::json!({"page": 0, "frame": 0}))
+            .expect("distribute applies");
+        assert_eq!(delta, Delta::Noop);
+        // And with nothing selected at all.
+        let (mut document, _ids) = fan_document();
+        let delta = DistributeToFrames
+            .apply_json(&mut document, serde_json::json!({"page": 0, "frame": 0}))
+            .expect("distribute applies");
+        assert_eq!(delta, Delta::Noop);
     }
 }

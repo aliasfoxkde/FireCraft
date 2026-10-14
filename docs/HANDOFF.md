@@ -120,13 +120,15 @@ selection.*
   verb** — drop the idea from this campaign unless corpus evidence
   surfaces one.
 
-### Phase 2 — Selection-to-frames (3 verbs + 1 typo dup) — needs Phase 1
-- **2.1** `duplicateSelectionToFrames` + the `cuplicateSelectionToFrames`
-  typo row; **2.2** `duplicateSelectionToFrameRange`;
-  **2.3** `distributeSelectionToFrames`. All are clone_element fans
-  into target cells — reuse `clone_element`/`check_closure` from
-  cell.rs (the layer.reorder copy branch is the template). Stopping:
-  per-frame fan with closure validation; undo retracts fresh slots.
+### Phase 2 — Selection-to-frames (3 verbs + 1 typo dup) — DONE (decision 0026)
+`selection.duplicateToFrames` / `duplicateToFrameRange` /
+`distributeToFrames` landed 2026-10-14: source frame is an explicit
+payload field (the engine has no current-frame state — the `frame.add`
+precedent), fans reuse `check_closure`/`clone_element`/`splice_cells`,
+and copies append to the target cell. No `.jsf` corpus usage exists
+for any of the three, so the API text is the sole authority; the
+silent points (all-includes-source, range refusals, append z-order)
+are recorded in the decision doc.
 
 ### Phase 3 — Group/flatten (3 verbs)
 - **3.1 `mergeDown`.** Merge the layer/selection into the layer below.

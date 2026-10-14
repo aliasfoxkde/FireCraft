@@ -683,6 +683,9 @@ pub const CALLS: &[&str] = &[
     "selection.selectParents",
     "selection.selectChildren",
     "selection.selectNone",
+    "selection.duplicateToFrames",
+    "selection.duplicateToFrameRange",
+    "selection.distributeToFrames",
     "bitmap.selectSimilar",
 ];
 
@@ -2106,6 +2109,21 @@ pub fn random_call(rng: &mut FuzzRng, document: &Document) -> (String, serde_jso
             "toggle_selection": rng.chance(3),
         }),
         "selection.selectNone" => serde_json::json!({}),
+        "selection.duplicateToFrames" => serde_json::json!({
+            "page": any_index(rng, pages),
+            "frame": any_index(rng, frames),
+            "which": rng.pick(&["all", "previous", "next", "end"]).copied(),
+        }),
+        "selection.duplicateToFrameRange" => serde_json::json!({
+            "page": any_index(rng, pages),
+            "frame": any_index(rng, frames),
+            "first": if rng.chance(3) { -1 } else { rng.below(4) as i64 },
+            "last": if rng.chance(3) { -1 } else { rng.below(4) as i64 },
+        }),
+        "selection.distributeToFrames" => serde_json::json!({
+            "page": any_index(rng, pages),
+            "frame": any_index(rng, frames),
+        }),
         "bitmap.selectSimilar" => serde_json::json!({
             "id": any_id(rng),
             "tolerance": rng.below(256),

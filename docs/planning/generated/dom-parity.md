@@ -14,17 +14,17 @@ enforced == the fuzz call table).
 
 | class | meaning | count (of 356 dom verbs) |
 |---|---|---|
-| C | carried: a registry command implements the mutation | 181 |
+| C | carried: a registry command implements the mutation | 185 |
 | P | partial: carried with a recorded model limitation | 45 |
-| M | missing: no command and no decision — work items | 48 |
+| M | missing: no command and no decision — work items | 44 |
 | N | not applicable: non-document surface (accessor/UI/session/clipboard/export/OS) | 82 |
 
-Document-mutation coverage: **226 of 274** carried-or-partial
-(181 carried, 45 partial, 48 missing).
+Document-mutation coverage: **230 of 274** carried-or-partial
+(185 carried, 45 partial, 44 missing).
 
 ### Gap families (the Missing table, grouped)
 
-The 48 missing verbs collapse into six families, largest first —
+The 44 missing verbs collapse into six families, largest first —
 each family is one design decision plus a command batch:
 
 1. **Object transforms** (2 verbs remain): rotateDocument (canvas
@@ -32,12 +32,11 @@ each family is one design decision plus a command batch:
    (bitmap resample). The object transform family itself is
    carried by object.* per decision 0019 — images refuse
    transforms until the resample pass this family shares.
-2. **Frames/states** (4 verbs remain): duplicateSelectionToFrames /
-   duplicateSelectionToFrameRange / distributeSelectionToFrames
-   duplicate the SELECTION across frames — they need an
-   object-selection surface (same blocker as the selection
-   family). add/delete/duplicate/reorder/distribute-layer are
-   carried by frame.* (task 89).
+2. **Frames/states**: add/delete/duplicate/reorder/
+   distribute-layer are carried by frame.* (task 89); the
+   selection fans landed as selection.duplicateToFrames /
+   selection.duplicateToFrameRange / selection.distributeToFrames
+   (decision 0026 — source frame is an explicit payload field).
 4. **Guides/grid/snap/onion** (4 verbs remain): setShowGrid/
    setShowGuides/setSnapToGrid/setSnapToGuides are view/session
    flags with no decoded wire node — blocked on corpus evidence
@@ -102,6 +101,7 @@ each family is one design decision plus a command batch:
 | `convertToAnimSymbol` | C | symbol.setType | create then type to anim |
 | `convertToSymbol` | C | symbol.create | selection folds into the definition |
 | `convetToAnimSymbol` | C | symbol.setType |  |
+| `cuplicateSelectionToFrames` | C | selection.duplicateToFrames | all/previous/next/end; next past the last frame adds one (decision 0026) |
 | `deleteFrames` | C | frame.delete | guards: range, overrun, last frame |
 | `deleteLayer` | C | layer.delete |  |
 | `deletePageAt` | C | page.delete |  |
@@ -113,11 +113,14 @@ each family is one design decision plus a command batch:
 | `detachTextFromPath` | C | text.detachPath |  |
 | `distribute` | C | object.distribute |  |
 | `distributeLayerToFrames` | C | frame.distributeLayer | grows frames when items outnumber them; single item is the documented no-op |
+| `distributeSelectionToFrames` | C | selection.distributeToFrames | moves items onto consecutive frames, adding frames; single item is the documented no-op (decision 0026) |
 | `dragControlPoint` | C | path.movePoints |  |
 | `duplicateFrame` | C | frame.duplicate | deep-copies closures to fresh slots; bDupeSelectionOnly refused (no selection) |
 | `duplicateLayer` | C | layer.add | add with copied payload; no dedicated duplicate verb |
 | `duplicatePage` | C | page.add | same shape as duplicateLayer |
 | `duplicateSelection` | C | object.duplicate |  |
+| `duplicateSelectionToFrameRange` | C | selection.duplicateToFrameRange | -1 keeps its current-frame meaning; spanning ranges skip the source (decision 0026) |
+| `duplicateSelectionToFrames` | C | selection.duplicateToFrames | all/previous/next/end; next past the last frame adds one (decision 0026) |
 | `duplicateSymbol` | C | library.add |  |
 | `enableElementMask` | C | mask.enable | disabled masks keep their structure under GRTi 0 (decision 0020) |
 | `enableNineScale` | C | symbol.set9Slice |  |
@@ -307,11 +310,7 @@ each family is one design decision plus a command batch:
 | `clipPasteInside` | M | - | paste-inside = clipboard op (mask model landed) |
 | `convertToPaths` | M | - | text-to-paths has no command (render flattens glyphs; editable conversion missing) |
 | `cropSelection` | M | - | canvas crop; page.setCanvasSize carries resize but not the crop-to-content op |
-| `cuplicateSelectionToFrames` | M | - | needs an object-selection surface (same blocker as the selection family) |
 | `deleteSavedSelection` | M | - | named saved selections unmodeled |
-| `distributeSelectionToFrames` | M | - | needs an object-selection surface (same blocker as the selection family) |
-| `duplicateSelectionToFrameRange` | M | - | needs an object-selection surface (same blocker as the selection family) |
-| `duplicateSelectionToFrames` | M | - | needs an object-selection surface (same blocker as the selection family) |
 | `filterSelection` | M | - | pixel-filter bake verb (permanent, not a Live Effect) — filter family; needs the bitmap bake pass (debt) |
 | `filterSelectionByID` | M | - | pixel-filter bake verb (permanent, not a Live Effect) — filter family; needs the bitmap bake pass (debt) |
 | `filterSelectionByName` | M | - | pixel-filter bake verb (permanent, not a Live Effect) — filter family; needs the bitmap bake pass (debt) |
