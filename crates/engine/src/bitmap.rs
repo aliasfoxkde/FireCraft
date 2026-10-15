@@ -291,7 +291,7 @@ pub(crate) fn retile_rgba(
     (tiles, minted)
 }
 
-fn unpremultiply_all(pixels: &mut [u8]) {
+pub(crate) fn unpremultiply_all(pixels: &mut [u8]) {
     for pixel in pixels.chunks_exact_mut(4) {
         let alpha = pixel[3];
         if alpha == 0 || alpha == 255 {
@@ -307,7 +307,7 @@ fn unpremultiply_all(pixels: &mut [u8]) {
     }
 }
 
-fn premultiply_all(pixels: &mut [u8]) {
+pub(crate) fn premultiply_all(pixels: &mut [u8]) {
     for pixel in pixels.chunks_exact_mut(4) {
         let alpha = pixel[3];
         if alpha == 255 {

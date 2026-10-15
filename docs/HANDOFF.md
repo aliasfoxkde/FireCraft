@@ -488,9 +488,11 @@ mutations and refuses without a linked slice.
   path pattern fills) and refuses a dangling reference
   (`MissingTile`). Untouched files: tile-free byte-exact, foreign
   tiled files chunk-exact outside the re-canonicalized `mkTS`.
-- **Image resample pass** — **DONE** (landed as `bitmap::resample_rgba`
-  in #111); the open remainder is bilinear *quality* on
-  `bitmap.importFile` (nearest-neighbour today, decision 0054).
+- ~~**Image resample pass**~~ **DONE** — `bitmap::resample_rgba`
+  landed in #111; **bilinear quality on `bitmap.importFile`** closed
+  2026-10-14 (decision 0061, #132): the import path resamples with
+  the same centre-point bilinear filter in exact u128 math,
+  premultiplied (transparent neighbours dilute alpha, never colour).
 - ~~**mask_replace_options "add"** (mask union fold)~~ **DONE
   2026-10-14 (decision 0058, #129):** "add" unions the coverages —
   `mask_coverage` reduces both operands (path or image) to a
@@ -519,6 +521,11 @@ mutations and refuses without a linked slice.
   both the link's and the definition's display flags gate; links
   never nest (symbol-definition walks pass `resolve_links: false`);
   a dangling uid draws nothing.
+- **importFile bilinear resample** **DONE 2026-10-14 (decision 0061,
+  #132):** `resample_crop` blends with `resample_rgba`'s centre-point
+  convention in exact u128 integers, premultiplied → unpremultiplied
+  (straight-alpha black-bleed eliminated); border clamps; all import
+  doors (file/payload/importPNG/importJPEG) inherit it.
 
 ### Suggested order — COMPLETE
 5.1 → 5.2 (quick wins, warm up the loop) → Phase 1 → Phase 2 → 6.1 →

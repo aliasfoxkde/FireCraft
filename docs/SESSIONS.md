@@ -797,3 +797,30 @@ Batch: Phase 9 debt closed (no new commands, no parity flip).
   z-position under a later opaque layer).
 - Gates: engine+compose suites green, clippy -D warnings, fmt,
   256-seed CI-base fuzz sweep clean, xtask ci green.
+
+## #132 — 2026-10-14 — importFile bilinear resample (decision 0061)
+
+Batch: Phase 9 debt closed (no new commands, no parity flip).
+
+- `resample_crop` (bitmap.importFile and the importPNG/importJPEG
+  doors) now blends bilinearly under `resample_rgba`'s centre-point
+  convention — `(2·d + 1)·src / (2·dst)`, 1/256 fixed-point weights —
+  in exact u128 integers, because the import path's scaled extent is
+  unbounded float arithmetic away from the canvas (setImageSize
+  resamples inside a canvas-bounded crop; import computes the scaled
+  image first, then crops).
+- The blend runs in the premultiplied domain: the import plane is
+  straight alpha, so premultiply → blend → unpremultiply. Transparent
+  neighbours dilute alpha only; a straight blend would bleed black
+  into the colour. `premultiply_all`/`unpremultiply_all` widened to
+  `pub(crate)`.
+- `source_axis` border-clamps both ends (the 2×1 → 8×4 row is
+  symmetric: pure red, red→blue ramp, pure blue). Detected a
+  numerator bug during development because all tests passed when the
+  ramp should have moved — probe-printed the actual output instead of
+  trusting green.
+- Tests: +1 unit (half-alpha red beside transparent keeps pure-red
+  colour at diluted alpha), 3 import_file integration expectations
+  updated to the bilinear ramp.
+- Gates: engine suite green, clippy -D warnings, fmt, 256-seed
+  CI-base fuzz sweep clean, xtask ci green.

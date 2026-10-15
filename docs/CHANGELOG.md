@@ -10,6 +10,7 @@ Current version: **0.1.0**.
 
 ### Features
 
+- **compose**: resolve shared-layer links (052ff13)
 - **bake**: rasterize non-image selections (deb4abc)
 - **mask**: pasteAsMask add unions masks (6df4903)
 - **mask**: rasterize vector clipboards as image masks (420fd66)

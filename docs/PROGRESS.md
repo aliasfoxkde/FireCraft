@@ -31,6 +31,10 @@
 - **Shared layers render:** link layers resolve their `LSEv`
   definitions in the link's z-position (decision 0060) — renders and
   exports show shared content.
+- **importFile resamples bilinearly:** the same filter as
+  `setImageSize`, premultiplied (decision 0061) — decision 0054's
+  nearest-neighbour quality debt closed; only the pattern-authoring
+  command remains on the Phase 9 debt list.
 
 ## Milestones
 
@@ -104,6 +108,7 @@
 | #129 | pasteAsMask mask_replace_options "add" unions the coverages (mask_coverage max-fold, Phase 9, decision 0058) | this batch | 268 C (no surface change) |
 | #130 | bake family rasterizes non-image selections in place (render_subset → slot swap, Phase 9, decision 0059) | this batch | 268 C (no surface change) |
 | #131 | shared-layer links render their definitions in the link's z-position (compose walk, decision 0060) | this batch | 268 C (no surface change) |
+| #132 | importFile resamples bilinearly in the premultiplied domain (centre-point convention, exact u128; decision 0061) | this batch | 268 C (no surface change) |
 
 **Campaign complete:** no remaining M families. Next: P-class partials
 and Phase 9 debts (HANDOFF §4).
@@ -115,7 +120,7 @@ and Phase 9 debts (HANDOFF §4).
 | ~~object.duplicate shallow-clones groups~~ **DONE** — deep clone landed in #127 (decision 0056) | fidelity | pre-#91 |
 | Pattern-authoring command | fills UX | #85 |
 | ~~mkBT tile-bank **writer**~~ **DONE** — landed as open-join + save-merge + extract-copy in #126 (decision 0055) | bitmap round-trip | M7 |
-| ~~Image resample pass~~ **DONE** — landed as `bitmap::resample_rgba` in #111 | setDocumentImageSize (closed, decision 0041) | M8 |
+| ~~Image resample pass~~ **DONE** — `bitmap::resample_rgba` in #111; importFile quality closed in #132 (decision 0061) | setDocumentImageSize (closed, decision 0041) | M8 |
 | ~~mask_replace_options "add" (mask union fold)~~ **DONE** — landed in #129 (decision 0058) | clipPasteAsMask variant | #109 (decision 0039) |
 | ~~Path→image rasterizer (mask_type "image" on vector clipboard)~~ **DONE** — landed in #128 (decision 0057); bake-site half remains | clipPasteAsMask variant | #109 (decision 0039) |
 | ~~Path→image rasterizer (filterSelection on non-image selection)~~ **DONE** — landed in #130 (decision 0059) | 8.8 bake family | #110 (decision 0040) |
@@ -160,5 +165,6 @@ and Phase 9 debts (HANDOFF §4).
 | 2026-10-14 | 268 | 3 | 0 | #129 mask "add" union fold (decision 0058, no surface change) |
 | 2026-10-14 | 268 | 3 | 0 | #130 bake rasterize-first (decision 0059, no surface change) |
 | 2026-10-14 | 268 | 3 | 0 | #131 shared-layer link render (decision 0060, no surface change) |
+| 2026-10-14 | 268 | 3 | 0 | #132 importFile bilinear resample (decision 0061, no surface change) |
 
 (Pre-#91 counts are approximate; the matrix file is the authority.)

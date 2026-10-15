@@ -1293,9 +1293,9 @@ impl TypedCommand for AddImage {
 /// rectangle that keeps the source ratio (centered), and `false`
 /// stretches to fill. Like every pixel-object placement the scaled
 /// extent intersects the page canvas, an empty intersection refuses,
-/// and fresh zero tiles back the grid. Resampling is nearest-neighbour
-/// — the quality bar for foreign resampling is the recorded HANDOFF
-/// §4 debt.
+/// and fresh zero tiles back the grid. Resampling is bilinear in the
+/// premultiplied domain (decision 0061 — the same filter
+/// `document.setImageSize` uses).
 struct ImportFile;
 
 /// CS6's `boundingRectangle` argument shape.
@@ -1330,11 +1330,15 @@ struct ImportFilePayload {
     name: Option<String>,
 }
 
-/// Nearest-neighbour sample of `source` (`sw` x `sh`) into the
-/// `crop` window of a `scaled_w` x `scaled_h` plane: destination
-/// pixel (x0+ix, y0+iy) takes the source pixel under the scaled
-/// plane's centre point. Products run in `u128` — the scaled extent
-/// is unbounded float arithmetic away from the canvas-bounded crop.
+/// Bilinear sample of `source` (`sw` x `sh`) into the `crop` window of
+/// a `scaled_w` x `scaled_h` plane: destination pixel (x0+ix, y0+iy)
+/// blends the four source pixels around the scaled plane's centre
+/// point with 1/256 weights (the `bitmap::resample_rgba` convention —
+/// decision 0061 closes importFile's nearest-neighbour debt). The
+/// blend runs in the premultiplied domain so transparent neighbours do
+/// not bleed color: straight in, premultiply once, blend, unpremultiply
+/// out. Products run in `u128` — the scaled extent is unbounded float
+/// arithmetic away from the canvas-bounded crop.
 fn resample_crop(
     source: &[u8],
     sw: usize,
@@ -1344,18 +1348,59 @@ fn resample_crop(
 ) -> Vec<u8> {
     let (x0, y0, crop_w, crop_h) = crop;
     let (scaled_w, scaled_h) = (scaled.0.max(1) as u128, scaled.1.max(1) as u128);
+    let mut premultiplied = source.to_vec();
+    crate::bitmap::premultiply_all(&mut premultiplied);
+    // Per-destination-column source pair and weight, computed once and
+    // reused for every row.
+    let columns: Vec<(usize, usize, u64)> = (0..crop_w)
+        .map(|ix| source_axis((x0 + ix) as u128, sw as u128, scaled_w))
+        .collect();
     let mut out = vec![0u8; (crop_w * crop_h * 4) as usize];
     for iy in 0..crop_h {
-        let sy = ((((2 * (y0 + iy) + 1) as u128) * sh as u128) / (2 * scaled_h)) as usize;
-        let sy = sy.min(sh - 1);
+        let (sy0, sy1, fy) = source_axis((y0 + iy) as u128, sh as u128, scaled_h);
+        let gy = 256 - fy;
         for ix in 0..crop_w {
-            let sx = ((((2 * (x0 + ix) + 1) as u128) * sw as u128) / (2 * scaled_w)) as usize;
-            let sx = sx.min(sw - 1);
+            let (sx0, sx1, fx) = columns[ix as usize];
+            let gx = 256 - fx;
             let dst = ((iy * crop_w + ix) * 4) as usize;
-            out[dst..dst + 4].copy_from_slice(&source[(sy * sw + sx) * 4..(sy * sw + sx) * 4 + 4]);
+            for channel in 0..4 {
+                let at = |y: usize, x: usize| -> u64 {
+                    u64::from(premultiplied[(y * sw + x) * 4 + channel])
+                };
+                let top = at(sy0, sx0) * gx + at(sy0, sx1) * fx;
+                let bottom = at(sy1, sx0) * gx + at(sy1, sx1) * fx;
+                let mixed = top * gy + bottom * fy; // ≤ 255·256²
+                out[dst + channel] = ((mixed + 32_768) / 65_536) as u8;
+            }
         }
     }
+    crate::bitmap::unpremultiply_all(&mut out);
     out
+}
+
+/// The source-axis sample triple for one destination coordinate: the
+/// clamped pixel pair and the 1/256 weight of the second, under the
+/// centre-point convention `src = (dst + ½)·scale − ½` — the same
+/// mapping `bitmap::resample_rgba` uses, in exact integer math.
+fn source_axis(dst: u128, source: u128, scaled: u128) -> (usize, usize, u64) {
+    let last = (source - 1) as usize;
+    // src = ((2·dst + 1)·source − scaled) / (2·scaled), possibly
+    // negative for far-left/top destinations (clamp to the border).
+    let raw = (2 * dst + 1) * source;
+    let den = 2 * scaled;
+    if raw < scaled {
+        return (0, last.min(1), 0);
+    }
+    let num = raw - scaled;
+    let (whole, rem) = (num / den, num % den);
+    let first = (whole as usize).min(last);
+    if first == last {
+        return (first, last, 0);
+    }
+    // Round-half-up the fraction to 1/256 units (0 < fraction < 1 here,
+    // so the weight lands in 1..=255).
+    let weight = ((rem * 256 + den / 2) / den) as u64;
+    (first, first + 1, weight.min(255))
 }
 
 impl TypedCommand for ImportFile {
@@ -1746,7 +1791,9 @@ fn clear_by_coverage(pixels: &mut [u8], mask: &SelectionMask) {
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+
     use super::*;
+
     use crate::command::Command;
     use serde_json::json;
 
@@ -2597,6 +2644,20 @@ mod tests {
     }
 
     #[test]
+    fn resample_crop_blends_in_the_premultiplied_domain() {
+        // Straight red at half alpha next to fully transparent, upscaled
+        // 2×1 → 4×1: alpha dilutes toward the transparent side but the
+        // colour never darkens toward black (a straight-domain blend
+        // would sink the red channel).
+        let source = vec![255u8, 0, 0, 128, 0, 0, 0, 0];
+        let out = resample_crop(&source, 2, 1, (4, 1), (0, 0, 4, 1));
+        let at = |x: usize| -> [u8; 4] { out[x * 4..x * 4 + 4].try_into().expect("four channels") };
+        assert_eq!(at(0), [255, 0, 0, 128], "the border keeps the source pixel");
+        assert_eq!(at(2), [255, 0, 0, 32], "alpha blends, colour stays red");
+        assert_eq!(at(3), [0, 0, 0, 0], "fully transparent stays transparent");
+    }
+
+    #[test]
     fn import_file_places_unscaled_at_a_degenerate_rectangle() {
         let (mut document, _) = placed_image_document();
         let before = serde_json::to_vec(&document).unwrap();
@@ -2664,9 +2725,14 @@ mod tests {
             let base = (y * side + x) * 4;
             document.tiles.get(tile_id).unwrap().pixels()[base..base + 4].to_vec()
         };
+        // Bilinear (decision 0061): the border pixels stay pure, the
+        // interior blends toward the other colour symmetrically —
+        // dst 3 samples src_x 0.375 → 160/256 of the red side.
         assert_eq!(at(0, 0), vec![255, 0, 0, 255]);
-        assert_eq!(at(3, 3), vec![255, 0, 0, 255]);
-        assert_eq!(at(4, 0), vec![0, 0, 255, 255]);
+        assert_eq!(at(1, 0), vec![255, 0, 0, 255], "src_x clamps to the border");
+        assert_eq!(at(3, 3), vec![159, 0, 96, 255]);
+        assert_eq!(at(4, 0), vec![96, 0, 159, 255]);
+        assert_eq!(at(6, 2), vec![0, 0, 255, 255]);
         assert_eq!(at(7, 2), vec![0, 0, 255, 255]);
 
         // Aspect-kept fit: 2×1 into 8×2 scales by 2 to 4×2, centered
