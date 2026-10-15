@@ -872,3 +872,22 @@ Batch: the first post-parity enhancement (more image support).
   round-trip; unknown-extension refusal names the set).
 - Gates: io+app-cli suites green (137), clippy -D warnings, fmt,
   xtask ci green.
+
+## #135 — 2026-10-14 — README refresh + evidence-gated growth debt
+
+Batch: documentation only (no code, no registry change).
+
+- README Status section updated from its M0-era text ("no usable
+  application yet") to the release reality: M0–M15 closed, v0.1.0
+  released, 241 commands, parity 268 C / 3 P / 0 M, quick-start CLI
+  commands, pointers to the live status docs.
+- CLI usage strings gain `webp` in the export and batch format sets
+  (the strings lagged #134).
+- The out-of-bounds effect-growth debt (decision 0040) is marked
+  **evidence-gated** in PROGRESS/HANDOFF: the live render already
+  grows (compose applies kernels canvas-spanning since M14); the
+  destructive bake clips by settled law (0031/0040/0059); reopening
+  needs a CS6 filter/flatten bounds oracle — any growth rule without
+  one would be invented (clean-room policy).
+- Gates: app-cli suite green, clippy -D warnings, fmt, xtask ci
+  green.
