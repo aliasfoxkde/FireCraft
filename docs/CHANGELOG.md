@@ -10,6 +10,7 @@ Current version: **0.1.0**.
 
 ### Features
 
+- **bitmap**: bilinear importFile resample (84b45fc)
 - **compose**: resolve shared-layer links (052ff13)
 - **bake**: rasterize non-image selections (deb4abc)
 - **mask**: pasteAsMask add unions masks (6df4903)

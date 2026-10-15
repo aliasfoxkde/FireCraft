@@ -580,6 +580,7 @@ pub const CALLS: &[&str] = &[
     "path.reshapeArea",
     "path.redrawPath",
     "path.setFillEdgeMode",
+    "path.setPatternFill",
     "path.cropSelection",
     "path.splitPaths",
     "path.knifeElementsFromPoint",
@@ -1571,6 +1572,19 @@ pub fn random_call(rng: &mut FuzzRng, document: &Document) -> (String, serde_jso
             "mode": rng.pick(&["hard", "antialias", "feather"]).copied(),
             "feather": rng.below(60),
         }),
+        // id/source are independent draws: arms land in the refuse,
+        // no-op, and author paths alike (any earlier bitmap is a
+        // usable source).
+        "path.setPatternFill" => {
+            let mut payload = serde_json::json!({
+                "id": any_id(rng),
+                "source": any_id(rng),
+            });
+            if rng.chance(30) {
+                payload["name"] = serde_json::json!("fuzz pattern");
+            }
+            payload
+        }
         // Selection-driven bakes: whatever earlier calls left selected
         // is the bake target, so arms land in the no-op, refusal, and
         // bake paths alike. mergeDown/selection carry empty payloads.

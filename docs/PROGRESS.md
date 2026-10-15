@@ -33,8 +33,10 @@
   exports show shared content.
 - **importFile resamples bilinearly:** the same filter as
   `setImageSize`, premultiplied (decision 0061) — decision 0054's
-  nearest-neighbour quality debt closed; only the pattern-authoring
-  command remains on the Phase 9 debt list.
+  nearest-neighbour quality debt closed.
+- **Patterns author:** `path.setPatternFill` turns an image into a
+  pattern fill through the flatten minting law (decision 0062) — the
+  Phase 9 debt list is **empty**; parity work left is the 3 P rows.
 
 ## Milestones
 
@@ -109,6 +111,7 @@
 | #130 | bake family rasterizes non-image selections in place (render_subset → slot swap, Phase 9, decision 0059) | this batch | 268 C (no surface change) |
 | #131 | shared-layer links render their definitions in the link's z-position (compose walk, decision 0060) | this batch | 268 C (no surface change) |
 | #132 | importFile resamples bilinearly in the premultiplied domain (centre-point convention, exact u128; decision 0061) | this batch | 268 C (no surface change) |
+| #133 | `path.setPatternFill` authors a pattern fill from an image (flatten minting law; decision 0062) | this batch | 268 C (registry 241) |
 
 **Campaign complete:** no remaining M families. Next: P-class partials
 and Phase 9 debts (HANDOFF §4).
@@ -118,7 +121,7 @@ and Phase 9 debts (HANDOFF §4).
 | Debt | Blocks / feeds | Origin |
 |---|---|---|
 | ~~object.duplicate shallow-clones groups~~ **DONE** — deep clone landed in #127 (decision 0056) | fidelity | pre-#91 |
-| Pattern-authoring command | fills UX | #85 |
+| ~~Pattern-authoring command~~ **DONE** — `path.setPatternFill` landed in #133 (decision 0062) | fills UX | #85 |
 | ~~mkBT tile-bank **writer**~~ **DONE** — landed as open-join + save-merge + extract-copy in #126 (decision 0055) | bitmap round-trip | M7 |
 | ~~Image resample pass~~ **DONE** — `bitmap::resample_rgba` in #111; importFile quality closed in #132 (decision 0061) | setDocumentImageSize (closed, decision 0041) | M8 |
 | ~~mask_replace_options "add" (mask union fold)~~ **DONE** — landed in #129 (decision 0058) | clipPasteAsMask variant | #109 (decision 0039) |
@@ -166,5 +169,6 @@ and Phase 9 debts (HANDOFF §4).
 | 2026-10-14 | 268 | 3 | 0 | #130 bake rasterize-first (decision 0059, no surface change) |
 | 2026-10-14 | 268 | 3 | 0 | #131 shared-layer link render (decision 0060, no surface change) |
 | 2026-10-14 | 268 | 3 | 0 | #132 importFile bilinear resample (decision 0061, no surface change) |
+| 2026-10-14 | 268 | 3 | 0 | #133 pattern authoring (decision 0062, registry 241) |
 
 (Pre-#91 counts are approximate; the matrix file is the authority.)

@@ -474,8 +474,14 @@ mutations and refuses without a linked slice.
   re-points, undo retracts every minted slot in one step. Dangling
   child ids skip (walker rule); symbol instances stay one slot
   (definitions are shared by number by design).
-- **Pattern-authoring command** (pattern fills landed; authoring UI
-  command missing).
+- ~~**Pattern-authoring command**~~ **DONE 2026-10-14 (decision 0062,
+  #133):** `path.setPatternFill { id, source, name? }` authors a
+  pattern fill from an image — the source raster assembles and tiles
+  through the flatten minting law, the fill installs with the
+  placement left identity (`setFillVector` moves it), undo drops the
+  minted slots with the paint restore. The CS6 Fill panel's pattern
+  authoring is UI-only (no DOM verb), so this is the command surface
+  for that property write. The Phase 9 debt list is now empty.
 - ~~**mkBT tile-bank WRITER**~~ **DONE 2026-10-14 (decision 0055,
   #126):** open now joins every `mkBT` tile into `document.tiles`
   (`app_cli::io::join_tiles`; malformed stream refuses; grayscale
@@ -526,6 +532,13 @@ mutations and refuses without a linked slice.
   convention in exact u128 integers, premultiplied → unpremultiplied
   (straight-alpha black-bleed eliminated); border clamps; all import
   doors (file/payload/importPNG/importJPEG) inherit it.
+- **Pattern-authoring command** **DONE 2026-10-14 (decision 0062,
+  #133):** `path.setPatternFill` mints the source image's raster into
+  bank tiles (`assemble_rgba` → `retile_rgba`, the flatten law) and
+  installs a `FillShape::Pattern` fill on the target path; undo is a
+  group (paint restore + `Delta::Bank` drop); extent 1..=8192
+  enforced at write (the render-side bound); refusals pre-flight
+  before the first mutation.
 
 ### Suggested order — COMPLETE
 5.1 → 5.2 (quick wins, warm up the loop) → Phase 1 → Phase 2 → 6.1 →

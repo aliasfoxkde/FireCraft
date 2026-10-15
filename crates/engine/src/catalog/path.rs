@@ -36,6 +36,7 @@ pub(crate) fn install(registry: &mut CommandRegistry) -> Result<(), EngineError>
     registry.register(PathSetFillColor)?;
     registry.register(PathSetFillVector)?;
     registry.register(PathSetFillEdgeMode)?;
+    registry.register(PathSetPatternFill)?;
     registry.register(PathCropSelection)?;
     registry.register(PathSplitPaths)?;
     registry.register(PathKnifePoint)?;
@@ -1202,6 +1203,124 @@ impl TypedCommand for PathSetFillEdgeMode {
 /// "Crops the selection to the specified rectangle." Each selected
 /// path is combined with the rectangle (the `Crop` boolean —
 /// intersection with Fireworks' combine order), replaced in place,
+/// `path.setPatternFill` — authors a pattern fill from an image and
+/// installs it on a path. The CS6 Fill panel's pattern authoring has
+/// no DOM verb (the panel writes `pathAttributes.fill` directly; the
+/// parity matrix carries no authoring row), so this is the command
+/// surface for that property write: the source image's raster becomes
+/// the pattern tile at its native pixel extent, minted into the bank
+/// with the flatten law (decision 0062).
+struct PathSetPatternFill;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct PathSetPatternFillPayload {
+    /// Target path.
+    id: doc::ObjectId,
+    /// Source image: its raster becomes the pattern tile.
+    source: doc::ObjectId,
+    /// Internal pattern name (`INMs`); defaults to the image's name.
+    name: Option<String>,
+}
+
+impl TypedCommand for PathSetPatternFill {
+    type Payload = PathSetPatternFillPayload;
+
+    fn name(&self) -> &'static str {
+        "path.setPatternFill"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "path.setPatternFill";
+        // Preflights before the first mutation: the target must be a
+        // path, the source an image whose extent `pattern_brush` would
+        // accept at render — refusing at write, not at draw.
+        let before = access::object(document, NAME, payload.id)?.clone();
+        if !matches!(document.registry.get(payload.id), Some(ObjectData::Path(_))) {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: format!("object {} is not a path", payload.id.index()),
+            });
+        }
+        let Some(ObjectData::Image(image)) = document.registry.get(payload.source) else {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: format!("object {} is not an image", payload.source.index()),
+            });
+        };
+        if image.pixels.0 > 8192 || image.pixels.1 > 8192 {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: format!(
+                    "pattern extent {}x{} is not a usable raster",
+                    image.pixels.0, image.pixels.1
+                ),
+            });
+        }
+        let pixels = crate::bitmap::assemble_rgba(document, image, NAME)?;
+        let (width, height) = image.pixels;
+        let pattern_name = payload
+            .name
+            .clone()
+            .or_else(|| image.name.clone())
+            .unwrap_or_else(|| "Pattern".to_owned());
+        let (tiles, minted) = crate::bitmap::retile_rgba(document, &pixels, width, height);
+        let fill = doc::Fill {
+            shape: doc::FillShape::Pattern,
+            shape_extended: true,
+            texture_blend: 0,
+            feather: 0,
+            stamping: None,
+            hard_edge: false,
+            gradient: None,
+            dither: None,
+            pattern: Some(doc::PatternTile {
+                name: Some(pattern_name),
+                pixels: (width, height),
+                tile_size: i64::from(raster::TILE_SIDE as u32),
+                tiles,
+            }),
+        };
+        let applied = match document.registry.get_mut(payload.id) {
+            Some(ObjectData::Path(path)) => {
+                match &mut path.paint {
+                    Some(paint) => paint.fill = Some(fill),
+                    None => {
+                        path.paint = Some(doc::PaintStyle {
+                            stroke_raw: 0,
+                            fill_raw: 0,
+                            fill: Some(fill),
+                        });
+                    }
+                }
+                true
+            }
+            _ => false,
+        };
+        if !applied {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: format!("object {} is not a path", payload.id.index()),
+            });
+        }
+        // The bank capture rides LAST: undo restores the paint and
+        // drops the minted slots in one step.
+        Ok(Delta::Group(vec![
+            Delta::Object {
+                id: payload.id,
+                inverse: ObjectInverse::Mutated {
+                    object: Box::new(before),
+                },
+            },
+            Delta::Bank { added: minted },
+        ]))
+    }
+}
+
 /// keeping its display fields; a path entirely outside the rectangle
 /// leaves nothing behind and is removed, as `path.boolean` does.
 /// Non-path members refuse the whole command: cropping bitmaps is a
@@ -2930,5 +3049,149 @@ mod tests {
         )
         .unwrap();
         assert!(matches!(miss, Delta::Noop));
+    }
+
+    #[test]
+    fn set_pattern_fill_mints_the_source_raster_and_installs() {
+        let (mut document, ids) = document_with(vec![square(0.0, 0.0, 8.0, 8.0), image_object()]);
+        let before = document_bytes(&document);
+        let delta = apply_by_name(
+            &mut document,
+            "path.setPatternFill",
+            json!({ "id": ids[0], "source": ids[1] }),
+        )
+        .unwrap();
+        let ObjectData::Path(path) = document.registry.get(ids[0]).unwrap() else {
+            panic!("square is a path");
+        };
+        let paint = path.paint.as_ref().unwrap();
+        assert_eq!(paint.stroke_raw, 0x11, "the stroke channel is untouched");
+        let fill = paint.fill.as_ref().unwrap();
+        assert_eq!(fill.shape, doc::FillShape::Pattern);
+        assert!(fill.shape_extended, "commands write the FSXi slot");
+        let pattern = fill.pattern.as_ref().unwrap();
+        assert_eq!(pattern.pixels, (4, 4));
+        assert_eq!(pattern.tile_size, 128);
+        assert_eq!(pattern.name.as_deref(), Some("Pattern"));
+        let [doc::TileRef::Tile(tile_id)] = pattern.tiles.as_slice() else {
+            panic!("4x4 tiles into exactly one 128 slot");
+        };
+        // The authored pattern carries the source raster verbatim
+        // (assemble → retile is the flatten minting law).
+        let ObjectData::Image(image) = document.registry.get(ids[1]).unwrap() else {
+            panic!("inserted an image");
+        };
+        let source = crate::bitmap::assemble_rgba(&document, image, "test").unwrap();
+        let tile = document.tiles.get(*tile_id).unwrap();
+        // Bank tiles are 128-wide planes; the raster sits in the
+        // top-left corner, row by row.
+        for line in 0..4usize {
+            let expected = &source[line * 16..line * 16 + 16];
+            assert_eq!(
+                &tile.pixels()[line * raster::TILE_SIDE * 4..line * raster::TILE_SIDE * 4 + 16],
+                expected
+            );
+        }
+        delta.apply_inverse(&mut document).unwrap();
+        assert_eq!(
+            document_bytes(&document),
+            before,
+            "undo restores the paint and drops the minted tile"
+        );
+    }
+
+    #[test]
+    fn set_pattern_fill_names_from_the_payload_then_the_image() {
+        let (mut document, ids) = document_with(vec![square(0.0, 0.0, 8.0, 8.0), image_object()]);
+        apply_by_name(
+            &mut document,
+            "path.setPatternFill",
+            json!({ "id": ids[0], "source": ids[1], "name": "grid" }),
+        )
+        .unwrap();
+        let ObjectData::Path(path) = document.registry.get(ids[0]).unwrap() else {
+            panic!("square is a path");
+        };
+        let pattern = path.paint.as_ref().unwrap().fill.as_ref().unwrap();
+        assert_eq!(
+            pattern.pattern.as_ref().unwrap().name.as_deref(),
+            Some("grid")
+        );
+
+        // Without a payload name the image's OBNs names the pattern.
+        let (mut document, ids) = document_with(vec![square(0.0, 0.0, 8.0, 8.0), image_object()]);
+        if let ObjectData::Image(image) = document.registry.get_mut(ids[1]).unwrap() {
+            image.name = Some("src".to_owned());
+        }
+        apply_by_name(
+            &mut document,
+            "path.setPatternFill",
+            json!({ "id": ids[0], "source": ids[1] }),
+        )
+        .unwrap();
+        let ObjectData::Path(path) = document.registry.get(ids[0]).unwrap() else {
+            panic!("square is a path");
+        };
+        let pattern = path.paint.as_ref().unwrap().fill.as_ref().unwrap();
+        assert_eq!(
+            pattern.pattern.as_ref().unwrap().name.as_deref(),
+            Some("src")
+        );
+    }
+
+    #[test]
+    fn set_pattern_fill_refuses_and_mints_nothing() {
+        // A non-image source refuses before the bank is touched.
+        let (mut document, ids) = document_with(vec![square(0.0, 0.0, 8.0, 8.0)]);
+        let before = document_bytes(&document);
+        let error = apply_by_name(
+            &mut document,
+            "path.setPatternFill",
+            json!({ "id": ids[0], "source": ids[0] }),
+        )
+        .unwrap_err();
+        assert!(matches!(error, EngineError::InvalidState { .. }), "{error}");
+        assert_eq!(document_bytes(&document), before);
+        assert!(document.tiles.is_empty());
+
+        // An over-extent source refuses at write, not at render. The
+        // pixel extent is mutated after building the fixture, so the
+        // extent preflight fires before the (now inconsistent) tile
+        // grid is ever validated.
+        let (mut document, ids) = document_with(vec![square(0.0, 0.0, 8.0, 8.0), image_object()]);
+        if let ObjectData::Image(image) = document.registry.get_mut(ids[1]).unwrap() {
+            image.pixels = (8193, 1);
+        }
+        let error = apply_by_name(
+            &mut document,
+            "path.setPatternFill",
+            json!({ "id": ids[0], "source": ids[1] }),
+        )
+        .unwrap_err();
+        assert!(matches!(error, EngineError::InvalidState { .. }), "{error}");
+        assert!(document.tiles.is_empty());
+    }
+
+    #[test]
+    fn an_authored_pattern_renders_the_source_pixels() {
+        let (mut document, ids) = document_with(vec![square(0.0, 0.0, 2.0, 2.0), image_object()]);
+        document.pages[0].info.canvas.width = 16.0;
+        document.pages[0].info.canvas.height = 16.0;
+        apply_by_name(
+            &mut document,
+            "path.setPatternFill",
+            json!({ "id": ids[0], "source": ids[1] }),
+        )
+        .unwrap();
+        let render = compose::render_subset(&document, 0, 0, &[ids[0]]).unwrap();
+        let at = |x: usize, y: usize| -> [u8; 4] {
+            let base = (y * usize::from(render.width) + x) * 4;
+            render.pixels[base..base + 4].try_into().unwrap()
+        };
+        // The matte raster (opaque black) fills the path; the pattern
+        // is anchored at the canvas origin unscaled, so 4×4 of it
+        // covers the 2×2 square.
+        assert_eq!(at(1, 1), [0, 0, 0, 255]);
+        assert_eq!(at(8, 8), [0, 0, 0, 0], "outside the path stays empty");
     }
 }

@@ -824,3 +824,33 @@ Batch: Phase 9 debt closed (no new commands, no parity flip).
   updated to the bilinear ramp.
 - Gates: engine suite green, clippy -D warnings, fmt, 256-seed
   CI-base fuzz sweep clean, xtask ci green.
+
+## #133 — 2026-10-14 — pattern authoring (decision 0062)
+
+Batch: the last Phase 9 debt closed (one new command).
+
+- `path.setPatternFill { id, source, name? }`: the source image's
+  raster becomes the target path's pattern fill. The raster
+  assembles through `bitmap::assemble_rgba` (premultiplied
+  tile-domain view) and tiles through `bitmap::retile_rgba` (fresh
+  `next_tile_id` slots, tail padding) — the flatten minting law
+  verbatim, so decision 0055's save-merge serializes authored
+  patterns with no writer change and library export carries them.
+- The CS6 Fill panel's pattern authoring is UI-only (the panel writes
+  `pathAttributes.fill` directly; the DOM has no pattern verb and the
+  parity matrix carries exactly one pattern row, `setFillPlacement`,
+  already C) — this is the command surface for that property write.
+  Placement stays identity; `path.setFillVector`/`setFillPlacement`
+  move it.
+- Undo is a group: the path capture rides first, `Delta::Bank {
+  added }` rides LAST (paint restore + minted-slot drop in one step).
+  Refusals pre-flight before the first mutation: non-path target,
+  non-image source, extent outside 1..=8192 (the
+  `compose::pattern_brush` render bound, enforced at write).
+- Tests: +4 (mint/instal + undo round-trip + tile bytes equal the
+  source raster; payload-name-then-image-name law; refusals mint
+  nothing; an authored pattern renders the source pixels through
+  compose). Fuzzdrive gained the call-table arm (independent id/source
+  draws land refusals, no-ops, and authors alike).
+- Gates: engine suite green (415), clippy -D warnings, fmt, 256-seed
+  CI-base fuzz sweep clean, xtask ci green.
