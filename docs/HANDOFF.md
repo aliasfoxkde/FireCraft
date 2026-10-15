@@ -468,6 +468,14 @@ mutations and refuses without a linked slice.
   (no observed `TXFv` shape + no mintable rasters).
 
 ### Phase 9 — Recorded debts (P-class limitations; no parity pressure)
+
+**The Phase 9 debt list is empty** (2026-10-14, decision 0062). The
+one remaining recorded limitation is the out-of-bounds effect-growth
+posture (decision 0040), now marked **evidence-gated** in PROGRESS:
+the live render grows (compose applies kernels canvas-spanning since
+M14) and the destructive bake clips by settled law; reopening it
+needs a CS6 filter/flatten bounds oracle — any growth rule without
+one would be invented.
 - ~~**6.1-object-duplicate** deep-clone of groups~~ **DONE 2026-10-14
   (decision 0056, #127):** `clone_subtree` recurses through group
   children — every live descendant mints its own slot, the copy

@@ -4,7 +4,7 @@
 //! firecraft-cli info <file.fw.png>
 //! firecraft-cli convert <in.fw.png> <out.fw.png>
 //! firecraft-cli apply <doc.fw.png> <journal.fwj> [--out <out.fw.png>] [--steps <out.fwsteps>]
-//! firecraft-cli export <in.fw.png> <out.(png|jpg|bmp|tiff|wbmp|svg)>
+//! firecraft-cli export <in.fw.png> <out.(png|jpg|bmp|tiff|wbmp|webp|svg|psd|gif)>
 //! firecraft-cli import <in.raster> <out.fw.png> [name]
 //! firecraft-cli run-script <script.jsf> <doc.fw.png> [--out <out.fw.png>]
 //! firecraft-cli serve <doc.fw.png> [--out <out.fw.png>]
@@ -29,7 +29,7 @@ use app_cli::{CliError, channel, info, io, mcp, ops};
 use engine::Session;
 use engine::platform::FileSystem as _;
 
-const USAGE: &str = "usage: firecraft-cli <info <file>|convert <in> <out>|apply <doc> <journal> [--out <out>] [--steps <out.fwsteps>]|export <in.fw.png> <out.(png|jpg|bmp|tiff|wbmp|svg|psd|gif)> [--quality <1-100>] [--progressive] [--matte <white|black>]|import <in.raster> <out.fw.png> [name]|batch <dir> --format <png|jpg|bmp|tiff|wbmp|svg|psd|gif> [--options <json|file>] [--out <dir>]|export-web <in.fw.png> <out-dir> [--workflow <images|html|css|sprites|properties|pages|states|layers|gif>] [--page <n>] [--state <n>] [--name <base>] [--images-dir <prefix>] [--pct-width <n>] [--no-shim] [--skip-undefined]|run-script <script.jsf> <doc> [--out <out>]|serve <doc> [--out <out>]|mcp <doc> [--out <out>]";
+const USAGE: &str = "usage: firecraft-cli <info <file>|convert <in> <out>|apply <doc> <journal> [--out <out>] [--steps <out.fwsteps>]|export <in.fw.png> <out.(png|jpg|bmp|tiff|wbmp|webp|svg|psd|gif)> [--quality <1-100>] [--progressive] [--matte <white|black>]|import <in.raster> <out.fw.png> [name]|batch <dir> --format <png|jpg|bmp|tiff|wbmp|webp|svg|psd|gif> [--options <json|file>] [--out <dir>]|export-web <in.fw.png> <out-dir> [--workflow <images|html|css|sprites|properties|pages|states|layers|gif>] [--page <n>] [--state <n>] [--name <base>] [--images-dir <prefix>] [--pct-width <n>] [--no-shim] [--skip-undefined]|run-script <script.jsf> <doc> [--out <out>]|serve <doc> [--out <out>]|mcp <doc> [--out <out>]";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();

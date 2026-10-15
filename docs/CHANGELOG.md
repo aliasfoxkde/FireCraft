@@ -10,6 +10,7 @@ Current version: **0.1.0**.
 
 ### Features
 
+- **io**: lossless WebP export (05e91b3)
 - **path**: pattern fill authoring (5a17fd9)
 - **bitmap**: bilinear importFile resample (84b45fc)
 - **compose**: resolve shared-layer links (052ff13)
