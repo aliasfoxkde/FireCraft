@@ -21,3 +21,6 @@ web/dist/
 
 # release staging (xtask dist)
 /dist/
+
+# wrangler local state
+/.wrangler/
