@@ -10,6 +10,7 @@ Current version: **0.1.0**.
 
 ### Features
 
+- **bake**: rasterize non-image selections (deb4abc)
 - **mask**: pasteAsMask add unions masks (6df4903)
 - **mask**: rasterize vector clipboards as image masks (420fd66)
 - **object**: deep-clone groups on duplicate (8b06184)

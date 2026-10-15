@@ -513,8 +513,12 @@ mutations and refuses without a linked slice.
   original object; slices refuse (not rasterizable content); the page
   resolves through the ownership walk, so group-nested selections
   convert.
-- **Shared-layer link-resolution render** (decision 0022: link layers
-  render empty today).
+- ~~**Shared-layer link-resolution render**~~ **DONE 2026-10-14
+  (decision 0060, #131):** the page walk resolves a link layer
+  (`LSAv`) through its `LSEv` definition in the link's z-position;
+  both the link's and the definition's display flags gate; links
+  never nest (symbol-definition walks pass `resolve_links: false`);
+  a dangling uid draws nothing.
 
 ### Suggested order — COMPLETE
 5.1 → 5.2 (quick wins, warm up the loop) → Phase 1 → Phase 2 → 6.1 →

@@ -773,3 +773,27 @@ Batch: Phase 9 debt closed (no new commands, no parity flip).
   tile retraction; group-wrapped conversion + slice refusal).
 - Gates: engine suite green (385 lib), clippy -D warnings, fmt,
   256-seed CI-base fuzz sweep clean, xtask ci green.
+
+## #131 — 2026-10-14 — shared-layer link render (decision 0060)
+
+Batch: Phase 9 debt closed (no new commands, no parity flip).
+
+- `walk_layers` gains `resolve_links`: a page's link layer (`LSAv`)
+  resolves through `shared_layer_defs` by uid and renders the
+  definition's layer body in the link's z-position. The link layer's
+  `display`/`visibility_per_frame` gate per page; the definition
+  body's flags gate everywhere (the recursion re-enters with
+  `resolve_links: false`, which also makes nested links inert and
+  uid cycles impossible).
+- Symbol-definition walks (the other `walk_layers` caller) pass
+  `false` — sharing is a page-level property, a symbol's content is
+  its own. `render_subset` (explicit ids) is untouched.
+- A dangling uid draws nothing (the stale-reference walker rule);
+  renders and exports inherit the fix through `render_inner`
+  (`render_transparent` for GIF/PSD included). No corpus fixture
+  carries `LSAv` — goldens unaffected.
+- Tests: +4 compose integration (content renders; both display
+  switches gate independently; dangling uid + self-referencing def;
+  z-position under a later opaque layer).
+- Gates: engine+compose suites green, clippy -D warnings, fmt,
+  256-seed CI-base fuzz sweep clean, xtask ci green.

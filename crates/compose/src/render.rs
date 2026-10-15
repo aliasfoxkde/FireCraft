@@ -313,6 +313,7 @@ fn render_inner(
             ctx: &mut ctx,
             stack: &[],
         },
+        true,
     )?;
     finish(ctx, resources, width, height)
 }
@@ -363,13 +364,37 @@ struct Walk<'a> {
 /// *j..j+span*, so the walk also rescans earlier cells for spanning
 /// instances. The latest placement wins — an id re-placed in a later
 /// cell supersedes its earlier cells (and is rendered once).
-fn walk_layers(layers: &[Layer], walk: &mut Walk) -> Result<(), ComposeError> {
+/// Walks a layer list bottom-first. `resolve_links` gates the
+/// shared-layer resolution (decision 0022): page walks resolve a link
+/// layer through the definition its `UIDs` names; symbol-definition
+/// walks keep links inert (sharing is a page-level property — a
+/// definition's content is its own).
+fn walk_layers(layers: &[Layer], walk: &mut Walk, resolve_links: bool) -> Result<(), ComposeError> {
     for layer in layers {
         if !layer.display {
             continue;
         }
         if let Some(flags) = &layer.visibility_per_frame {
             if !flags.get(walk.frame).copied().unwrap_or(true) {
+                continue;
+            }
+        }
+        if resolve_links {
+            if let Some(link) = &layer.shared_link {
+                // The definition renders once, in this layer's
+                // z-position; its own display/visibility flags gate
+                // the recursion. Links never nest — a definition
+                // body's own shared_link stays inert, which also
+                // rules out uid cycles. A dangling uid draws nothing
+                // (the stale-reference walker rule).
+                if let Some(def) = walk
+                    .document
+                    .shared_layer_defs
+                    .iter()
+                    .find(|def| def.uid == link.uid)
+                {
+                    walk_layers(std::slice::from_ref(&def.layer), walk, false)?;
+                }
                 continue;
             }
         }
@@ -1154,6 +1179,7 @@ fn render_instance(
             ctx: &mut offscreen,
             stack: &inner,
         },
+        false,
     )?;
     offscreen.flush();
     let mut pixmap = Pixmap::new(walk.canvas.0, walk.canvas.1);
