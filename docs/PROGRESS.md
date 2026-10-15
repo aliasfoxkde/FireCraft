@@ -37,6 +37,10 @@
 - **Patterns author:** `path.setPatternFill` turns an image into a
   pattern fill through the flatten minting law (decision 0062) — the
   Phase 9 debt list is **empty**; parity work left is the 3 P rows.
+- **WebP in and out:** import existed since M8; `.webp` export
+  routes through the lossless VP8L codec (decision 0063) — the first
+  post-parity enhancement family (more image support, per the
+  project's standing direction).
 
 ## Milestones
 
@@ -112,6 +116,7 @@
 | #131 | shared-layer links render their definitions in the link's z-position (compose walk, decision 0060) | this batch | 268 C (no surface change) |
 | #132 | importFile resamples bilinearly in the premultiplied domain (centre-point convention, exact u128; decision 0061) | this batch | 268 C (no surface change) |
 | #133 | `path.setPatternFill` authors a pattern fill from an image (flatten minting law; decision 0062) | this batch | 268 C (registry 241) |
+| #134 | WebP export (lossless VP8L through `image-webp`, zero new deps; decision 0063) | this batch | — (enhancement) |
 
 **Campaign complete:** no remaining M families. Next: P-class partials
 and Phase 9 debts (HANDOFF §4).
@@ -170,5 +175,6 @@ and Phase 9 debts (HANDOFF §4).
 | 2026-10-14 | 268 | 3 | 0 | #131 shared-layer link render (decision 0060, no surface change) |
 | 2026-10-14 | 268 | 3 | 0 | #132 importFile bilinear resample (decision 0061, no surface change) |
 | 2026-10-14 | 268 | 3 | 0 | #133 pattern authoring (decision 0062, registry 241) |
+| 2026-10-14 | 268 | 3 | 0 | #134 WebP export (decision 0063, enhancement) |
 
 (Pre-#91 counts are approximate; the matrix file is the authority.)

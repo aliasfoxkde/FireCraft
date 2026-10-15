@@ -854,3 +854,21 @@ Batch: the last Phase 9 debt closed (one new command).
   draws land refusals, no-ops, and authors alike).
 - Gates: engine suite green (415), clippy -D warnings, fmt, 256-seed
   CI-base fuzz sweep clean, xtask ci green.
+
+## #134 — 2026-10-14 — WebP export (decision 0063)
+
+Batch: the first post-parity enhancement (more image support).
+
+- `crates/io/src/webp.rs`: lossless VP8L encode through the `image`
+  crate's pure-Rust encoder (`image-webp` — already in the graph
+  behind the `webp` feature, zero new dependencies, wasm-safe).
+  Lossy VP8 needs libwebp (C, breaks wasm) and stays out of scope.
+- `export_raster` routes `.webp`; the unknown-extension error names
+  the new set `png|jpg|bmp|tiff|wbmp|webp`. WebP import existed
+  since M8 (`io::raster` sniffs it).
+- Tests: +1 io round-trip (encode → decode through the independent
+  import path → exact pixels, alpha preserved) and +2 app-cli
+  (end-to-end render → plane → `.webp` byte container + pixel
+  round-trip; unknown-extension refusal names the set).
+- Gates: io+app-cli suites green (137), clippy -D warnings, fmt,
+  xtask ci green.

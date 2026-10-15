@@ -539,6 +539,13 @@ mutations and refuses without a linked slice.
   group (paint restore + `Delta::Bank` drop); extent 1..=8192
   enforced at write (the render-side bound); refusals pre-flight
   before the first mutation.
+- **WebP export** **DONE 2026-10-14 (decision 0063, #134):** the
+  first enhancement family after the parity campaign reached its
+  evidence limits. `io::webp::encode` is lossless VP8L through the
+  `image` crate's pure-Rust encoder (zero new dependencies,
+  wasm-safe); `export_raster` routes `.webp`. Lossy VP8 needs
+  libwebp and stays out of scope; AVIF/HEIC remain future work
+  (OS-decoder bindings, wasm story unresolved).
 
 ### Suggested order — COMPLETE
 5.1 → 5.2 (quick wins, warm up the loop) → Phase 1 → Phase 2 → 6.1 →

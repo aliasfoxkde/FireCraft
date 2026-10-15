@@ -292,3 +292,20 @@ fn diff_stats(expected_rgb: &[u8], decoded: &image::RgbaImage) -> (u32, u64) {
     }
     (max, sum)
 }
+
+#[test]
+fn webp_lossless_round_trips_alpha_and_pixels() {
+    let rgba = gradient();
+    let plane = gradient_plane(&rgba);
+    let bytes = io::webp::encode(&plane).expect("webp encode");
+    assert!(
+        bytes.starts_with(b"RIFF") && &bytes[8..12] == b"WEBP",
+        "a RIFF/WEBP container: {:?}",
+        &bytes[..12]
+    );
+    // Decode through the import path (the `image` crate again) and
+    // require the exact pixels back — lossless is the contract.
+    let decoded = io::raster::decode(&bytes).expect("webp decode");
+    assert_eq!((decoded.width, decoded.height), (37, 23));
+    assert_eq!(decoded.rgba, rgba);
+}
