@@ -891,3 +891,30 @@ Batch: documentation only (no code, no registry change).
   one would be invented (clean-room policy).
 - Gates: app-cli suite green, clippy -D warnings, fmt, xtask ci
   green.
+
+## #136 — 2026-10-15 — v0.2.0 released; Pages redeployed
+
+Batch: release engineering (no code change).
+
+- Version 0.1.0 → 0.2.0 across seven stamps: the six Cargo.toml
+  stamps (workspace, app, app-cli, scripting, fwpng, web) + the
+  xtask compose dep pin + packaging/deb/control (the dist gate
+  caught that one: "pins Version 0.1.0 but the workspace is
+  0.2.0").
+- Cargo.lock delta is 17 member version strings + internal `color`
+  dep refs — no external crate moved, so `cargo fetch` output is
+  unchanged and the CI image needed no re-ship.
+- Artifacts: `xtask dist --native` (desktop tar.gz, cli tar.gz, deb
+  verified by dpkg-deb, MANIFEST.sha256) and `dist --web` (wasm
+  12,777,644 B under the 14 MB ceiling, bridge smoke green).
+  firecraft-web-0.2.0.zip hand-zipped with files at the root.
+- Release: tag v0.2.0 = ae75ee2, pushed to gitforge + origin;
+  GitHub release https://github.com/aliasfoxkde/FireCraft/releases/tag/v0.2.0
+  with the five assets. GitForge carries the tag only — it has no
+  release-asset surface (repos/git/pipeline/runner/sync/review).
+- Cloudflare Pages: firecraft-web redeployed from the dist/web
+  bundle (https://firecraft-web.pages.dev); production verified
+  serving the new js/wasm hashes. This closes the user-reported
+  staleness (last publish was 2 days prior, before the verb
+  campaign landed).
+- Gates: dist native + web green; GitForge CI 7/7 on ae75ee2.
