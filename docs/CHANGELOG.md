@@ -164,6 +164,7 @@ Current version: **0.2.0**.
 
 ### Documentation
 
+- session log for the v0.2.0 release (e230ed6)
 - session log for the docs batch (d315a96)
 - refresh README status, evidence-gate growth debt (8249797)
 - agent handoff, progress, sessions, history (a1e0e9c)
@@ -218,6 +219,7 @@ Current version: **0.2.0**.
 
 ### Chores
 
+- **release**: bump workspace to v0.2.0 (ae75ee2)
 - retrigger CI after runner sandbox race (b78180a)
 - regenerate changelog and scripts report (aa4dd70)
 - regenerate changelog and scripts report (a99c044)

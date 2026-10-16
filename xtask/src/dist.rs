@@ -506,8 +506,13 @@ fn smoke_bridge(staged: &[PathBuf]) -> Result<(), String> {
             &url,
         ],
     )?;
-    let dom = String::from_utf8_lossy(&output.stdout);
-    if dom.contains("FireCraft host: green") {
+    let dom = strip_script_bodies(&String::from_utf8_lossy(&output.stdout));
+    // The verdict must appear OUTSIDE the page's own script source:
+    // before this check stripped scripts, the literal verdict string
+    // in the host page's JavaScript matched an app that had actually
+    // panicked at boot, and the smoke reported green on a dead bridge
+    // (shipped broken through v0.2.0 — found 2026-10-15).
+    if dom.contains("FireCraft host: green") && !dom.contains("FireCraft host: FAIL") {
         return Ok(());
     }
     // The dumped DOM carries the page's verdict — a FAIL title or the
@@ -520,6 +525,23 @@ fn smoke_bridge(staged: &[PathBuf]) -> Result<(), String> {
             .collect::<Vec<_>>()
             .join("\n")
     ))
+}
+
+/// Drops every `<script>…</script>` body from a dumped DOM, so
+/// verdict checks match runtime output, not the page's own source.
+/// Unterminated script (a dump cut off mid-pause) drops the tail.
+fn strip_script_bodies(dom: &str) -> String {
+    let mut cleaned = String::with_capacity(dom.len());
+    let mut rest = dom;
+    while let Some(start) = rest.find("<script") {
+        cleaned.push_str(&rest[..start]);
+        let Some(after) = rest[start..].find("</script>") else {
+            return cleaned;
+        };
+        rest = &rest[start + after + "</script>".len()..];
+    }
+    cleaned.push_str(rest);
+    cleaned
 }
 
 /// The smoke's host page: the worked page from `docs/WEBOS.md`,

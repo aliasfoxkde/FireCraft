@@ -3453,6 +3453,14 @@ impl eframe::App for Shell {
             ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
         }
     }
+
+    // The web bridge downcasts through this (`WebRunner::app_mut`);
+    // the trait default returns None and the runner panics on it,
+    // which took down every browser open/apply/export until v0.2.1.
+    #[cfg(target_arch = "wasm32")]
+    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
+        Some(self)
+    }
 }
 
 #[cfg(test)]
