@@ -84,11 +84,11 @@ checksum = "940b3a0ca603d1eade50a4846a2afffd5ef57a9feac2c0e2ec2e14f9ead76000"
 
 [[package]]
 name = "app"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "app-cli",
  "base64",
- "color 0.2.0",
+ "color 0.2.1",
  "compose",
  "doc",
  "eframe",
@@ -105,7 +105,7 @@ dependencies = [
 
 [[package]]
 name = "app-cli"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "compose",
  "doc",
@@ -581,7 +581,7 @@ dependencies = [
 
 [[package]]
 name = "color"
-version = "0.2.0"
+version = "0.2.1"
 
 [[package]]
 name = "color"
@@ -610,9 +610,9 @@ dependencies = [
 
 [[package]]
 name = "compose"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
- "color 0.2.0",
+ "color 0.2.1",
  "criterion",
  "doc",
  "filters",
@@ -881,7 +881,7 @@ dependencies = [
 
 [[package]]
 name = "doc"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "fwpng",
  "geom",
@@ -1045,7 +1045,7 @@ dependencies = [
 
 [[package]]
 name = "engine"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "base64",
  "compose",
@@ -1155,9 +1155,9 @@ checksum = "f4beca3cb2444e3304ac30843cc091f44ed58932353cd492ce740067bfce6b12"
 
 [[package]]
 name = "filters"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
- "color 0.2.0",
+ "color 0.2.1",
 ]
 
 [[package]]
@@ -1168,7 +1168,7 @@ checksum = "aedcfb3409746eddb02b9e19ebda1c3394f759a152e48ee875a0844d1b955484"
 
 [[package]]
 name = "firecraft-web"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "app",
  "app-cli",
@@ -1308,7 +1308,7 @@ dependencies = [
 
 [[package]]
 name = "fwpng"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "crc32fast",
  "flate2",
@@ -1329,7 +1329,7 @@ dependencies = [
 
 [[package]]
 name = "geom"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "kurbo 0.13.1",
 ]
@@ -1796,7 +1796,7 @@ dependencies = [
 
 [[package]]
 name = "io"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "base64",
  "color_quant",
@@ -2911,7 +2911,7 @@ checksum = "a611d15b50743feb4c76b7d03edcb0e64f399c26961e4efe6975bc398be6aa3d"
 
 [[package]]
 name = "raster"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "serde",
 ]
@@ -3178,7 +3178,7 @@ checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
 
 [[package]]
 name = "scripting"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "boa_engine",
  "boa_gc",
@@ -3550,7 +3550,7 @@ checksum = "55937e1799185b12863d447f42597ed69d9928686b8d88a1df17376a097d8369"
 
 [[package]]
 name = "text"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "cosmic-text",
  "doc",
@@ -3913,7 +3913,7 @@ checksum = "2ef6dac1e96601b4fb3acccccff2139741fcb757cb9a36089bf5be91cfb285ce"
 
 [[package]]
 name = "vector"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "doc",
  "geom",
@@ -4257,7 +4257,7 @@ dependencies = [
 
 [[package]]
 name = "webexport"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "compose",
  "doc",
@@ -4720,7 +4720,7 @@ checksum = "ec7a2a501ed189703dba8b08142f057e887dfc4b2cc4db2d343ac6376ba3e0b9"
 
 [[package]]
 name = "xtask"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "base64",
  "compose",

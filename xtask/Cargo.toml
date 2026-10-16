@@ -32,7 +32,7 @@ image-compare = "0.5.0"
 # in every xtask (and therefore CI) build for one `image::open` of a PNG
 # sidecar. Only the golden machinery's PNG loads are needed here.
 image = { version = "0.25.9", default-features = false, features = ["png"] }
-compose = { version = "0.2.0", path = "../crates/compose" }
+compose = { version = "0.2.1", path = "../crates/compose" }
 io = { path = "../crates/io" }
 # Web-export structural pins (M11 task 6): the gate runs the same
 # pure export functions the app and CLI share.
