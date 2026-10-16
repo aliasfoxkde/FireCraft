@@ -107,7 +107,13 @@ type Gate = (&'static str, fn() -> Result<(), String>);
 
 fn run_ci(full: Option<&str>) -> ExitCode {
     let mut steps: Vec<Gate> = vec![
-        ("fmt", || util::cargo(&["fmt", "--all", "--", "--check"])),
+        ("fmt", || {
+            util::cargo(&["fmt", "--all", "--", "--check"]).and_then(|()| {
+                // `web` is workspace-excluded (trunk) — `--all` never
+                // sees it, so it is checked here explicitly.
+                util::cargo(&["fmt", "--manifest-path", "web/Cargo.toml", "--", "--check"])
+            })
+        }),
         ("clippy", || {
             util::cargo(&[
                 "clippy",

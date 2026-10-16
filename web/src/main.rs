@@ -77,15 +77,21 @@ fn reply_bytes(kind: &str, bytes: &[u8]) {
     ]));
 }
 
-/// Runs `f` against the running shell, if the runner is live.
+/// Runs `f` against the running shell, if the runner is live. Every
+/// bridge call may mutate the shell between frames, so each one wakes
+/// the frame loop afterwards — without the repaint, an opened or
+/// applied document stayed behind the stale canvas until the next
+/// input event.
 #[cfg(target_arch = "wasm32")]
 fn with_app<T>(
     runner: &std::rc::Rc<eframe::WebRunner>,
     f: impl FnOnce(&mut app::shell::Shell) -> T,
 ) -> Option<T> {
-    runner
-        .app_mut::<app::shell::Shell>()
-        .map(|mut shell| f(&mut shell))
+    runner.app_mut::<app::shell::Shell>().map(|mut shell| {
+        let outcome = f(&mut shell);
+        shell.request_repaint();
+        outcome
+    })
 }
 
 #[cfg(target_arch = "wasm32")]

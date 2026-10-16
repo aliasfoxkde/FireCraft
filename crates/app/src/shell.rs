@@ -1073,6 +1073,11 @@ pub struct Shell {
     autoshape_flyout: bool,
     /// The Styles panel's new-style name field.
     style_name: String,
+    /// The live egui context, stashed each frame so code outside the
+    /// frame loop (the web bridge) can request a repaint after it
+    /// mutates the shell — without one, a bridge-loaded document sat
+    /// behind a stale untitled canvas until the next input event.
+    ctx: Option<egui::Context>,
 }
 
 impl Shell {
@@ -1105,6 +1110,17 @@ impl Shell {
             close_requested: false,
             autoshape_flyout: false,
             style_name: String::new(),
+            ctx: None,
+        }
+    }
+
+    /// Wakes the frame loop — a no-op until the first `ui` frame has
+    /// stashed the context. Bridge-side mutations (open/apply) must
+    /// call this: they run between frames, where nothing else would
+    /// repaint the stale canvas.
+    pub fn request_repaint(&self) {
+        if let Some(ctx) = &self.ctx {
+            ctx.request_repaint();
         }
     }
 
@@ -3392,6 +3408,9 @@ impl Shell {
 
 impl eframe::App for Shell {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        // Keep the context reachable for out-of-frame mutators (the
+        // web bridge's request_repaint).
+        self.ctx = Some(ui.ctx().clone());
         // Menu/shortcut actions run before layout so their effects are
         // visible the same frame.
         self.shortcuts(ui.ctx());
