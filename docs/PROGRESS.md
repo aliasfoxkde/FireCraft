@@ -4,43 +4,29 @@
 > [`HANDOFF.md`](HANDOFF.md) §7). History and narrative:
 > [`HISTORY.md`](HISTORY.md). Per-session log: [`SESSIONS.md`](SESSIONS.md).
 
-## Now (2026-10-14)
+## Now (2026-10-15)
 
-- **Released:** v0.1.0 (2026-10-13), repo public.
-- **Roadmap:** M0–M15 **all closed**.
-- **Registry:** 240 commands. **CI:** green 7/7 per batch since
-  `55de409`; later campaign pushes verified per batch (runbook:
+- **Released:** v0.2.0 + **v0.2.1** (2026-10-15), repo public. The web
+  bundle is live at <https://firecraft-web.pages.dev>. v0.2.0's web
+  bundle shipped a dead browser bridge (every file operation panicked;
+  the smoke check was reading its own script source) — v0.2.1 replaces
+  it and was verified end to end in a real browser (open → draw →
+  save). Full story: HANDOFF §4 Phase 10; lessons in HANDOFF §3.
+- **Roadmap:** M0–M15 **all closed**; the post-roadmap DOM parity
+  campaign is **complete** (no M families, debt list empty).
+- **Registry:** 241 commands. **CI:** green 7/7 per batch (runbook:
   HANDOFF §6).
-- **CS6 DOM parity:** **268 C / 3 P / 0 M / 85 N** — **the M table is
-  empty** (2026-10-14): every CS6 dom mutation verb is carried or
-  partial. importFile closed (#125, decision 0054): remaining
-  surface work is the 3 P rows (setFillNColorNTexture + two
-  permanent) and the recorded debts
-  ([`HANDOFF.md`](HANDOFF.md) §4 Phase 9).
-- **Bitmap round-trip:** the mkBT tile bank now loads (open joins
-  every tile) and writes (runtime-minted tiles serialize; original
-  streams stay verbatim), and library export carries member rasters
-  (#126, decision 0055) — Phase 9's tile-bank debt closed.
-- **Mask fidelity:** pasteAsMask rasterizes vector clipboards into
-  grayscale image masks (#128, decision 0057) and `mask_replace_options
-  "add"` unions coverages (#129, decision 0058) — Phase 9's mask debts
-  closed.
-- **Filter bakes convert:** the whole bake family rasterizes
-  non-image selections in place through the compositor (decision 0059)
-  — the bake-site rasterize debt closed alongside the mask-site one.
-- **Shared layers render:** link layers resolve their `LSEv`
-  definitions in the link's z-position (decision 0060) — renders and
-  exports show shared content.
-- **importFile resamples bilinearly:** the same filter as
-  `setImageSize`, premultiplied (decision 0061) — decision 0054's
-  nearest-neighbour quality debt closed.
-- **Patterns author:** `path.setPatternFill` turns an image into a
-  pattern fill through the flatten minting law (decision 0062) — the
-  Phase 9 debt list is **empty**; parity work left is the 3 P rows.
-- **WebP in and out:** import existed since M8; `.webp` export
-  routes through the lossless VP8L codec (decision 0063) — the first
-  post-parity enhancement family (more image support, per the
-  project's standing direction).
+- **CS6 DOM parity:** **268 C / 3 P / 0 M / 85 N** — stable since
+  #125. The 3 P rows are terminal at today's evidence (two permanent
+  refusals, one evidence-gated; HANDOFF §4 Phase 12).
+- **Active work:** application surface + enhancements — HANDOFF §4
+  Phase 11 (image support: lossy WebP decision, AVIF/HEIC,
+  import-surface parity), Phase 13 (release engineering hygiene:
+  WebOS packaging dry-run, platform recipes, in-repo release notes).
+- **WebP in and out:** import since M8; `.webp` export routes through
+  the lossless VP8L codec (decision 0063) — the first post-parity
+  enhancement family (more image support, per the project's standing
+  direction).
 
 ## Milestones
 
@@ -63,6 +49,8 @@
 | M13 | Deep RE evidence + CS6 shell parity | 2026-10-13 | interaction parity + scorecard |
 | M14 | Live-filter parity | 2026-10-13 | |
 | M15 | Tool-surface parity | 2026-10-13 | tasks 5–6 + gaps #82–#85 |
+| — | **v0.2.0 released** | 2026-10-15 | shell/tools/filters/styles; web bundle broken (Phase 10) |
+| — | **v0.2.1 released** | 2026-10-15 | web bridge + repaint + honest smoke fix |
 
 ## Post-roadmap parity campaign (the current work)
 
@@ -118,8 +106,10 @@
 | #133 | `path.setPatternFill` authors a pattern fill from an image (flatten minting law; decision 0062) | this batch | 268 C (registry 241) |
 | #134 | WebP export (lossless VP8L through `image-webp`, zero new deps; decision 0063) | this batch | — (enhancement) |
 
-**Campaign complete:** no remaining M families. Next: P-class partials
-and Phase 9 debts (HANDOFF §4).
+**Campaign complete** (2026-10-14): no remaining M families; the
+Phase 9 debt list closed the same day (#126–#132). The 3 P rows are
+terminal/evidence-gated (HANDOFF §4 Phase 12). Current work is the
+enhancement phases (HANDOFF §4 Phases 11–13).
 
 ## Recorded debts (open)
 

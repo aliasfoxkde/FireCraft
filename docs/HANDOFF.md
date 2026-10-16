@@ -9,31 +9,35 @@
 
 ---
 
-## 1. State snapshot (2026-10-14)
+## 1. State snapshot (2026-10-15)
 
-- **Ship state:** v0.1.0 released, repo public. Roadmap M0–M15 all
-  closed. CI green 7/7 per batch since `55de409` (runbook §6).
-- **Engine registry:** 240 commands, pinned equal to the fuzz call
+- **Ship state:** v0.2.1 released (v0.2.0's web bundle shipped a dead
+  browser bridge — replaced within the day; see §4 Phase 10 for what
+  was wrong). Repo public. Desktop + CLI + web bundle + deb all cut
+  from `xtask dist`. The web bundle is live at
+  <https://firecraft-web.pages.dev> (Cloudflare Pages, direct upload —
+  deploy door in §6). CI green 7/7 per batch (runbook §6).
+- **Engine registry:** 241 commands, pinned equal to the fuzz call
   table by `the_call_table_covers_the_catalog`.
-- **CS6 DOM verb-surface parity:** **268 C / 3 P / 0 M / 85 N** —
-  the missing table is empty (2026-10-14, decision 0041); every dom
-  mutation verb is carried or partial. Remaining surface work is the
-  3 P rows and Phase 9 debts.
-  (`docs/planning/generated/dom-parity.md`, regenerate per §5 below).
-  (The CS6 verb list carries both case spellings of mergeDown and
-  AddNewImage — those families flipped four rows each.)
-- **Active campaign:** COMPLETE (2026-10-14) — the M table is empty.
-  Remaining surface work: the 3 P rows and Phase 9 debts, prioritized
-  from `dom-parity.md`'s P table. Phase 9's mkBT tile-bank
-  load/write debt closed 2026-10-14 (decision 0055, #126), the
-  duplicate deep-clone closed (#127), the mask rasterize hook closed
-  (decision 0057, #128), and the mask "add" union fold closed
-  (decision 0058, #129). New families follow the §3 loop.
+- **CS6 DOM verb-surface parity:** **268 C / 3 P / 0 M / 85 N** — the
+  M table has been empty since 2026-10-14. The 3 P rows are terminal
+  at today's evidence: `setAnimInstanceStartFrame` and
+  `setSliceAutonaming` are permanent (no wire node exists — refusing
+  is the faithful behavior), and `setFillNColorNTexture` is
+  evidence-gated (no observed `TXFv` shape, no mintable texture
+  rasters). Do not reopen without new evidence.
+  (`docs/planning/generated/dom-parity.md`, regenerate per §5.)
+- **Where the frontier is:** the parity campaign reached its evidence
+  limits; active work is **application surface and enhancements** —
+  §4 Phase 10 (browser shell, landed), Phase 11 (image support:
+  AVIF/HEIC/lossy-WebP), Phase 12 (evidence holds), Phase 13
+  (release engineering hygiene). WebOS packaging
+  (`docs/WEBOS.md`) is the standing primary-target goal.
 - **Clean-room invariants (never violate):** `source/` is Adobe's
   copyrighted material — git-ignored, never committed, never copied
-  from. Adobe-derived text extracts are uncommitted working notes under
-  `/var/tmp/`. Adobe-authored corpus files are test oracles only. The
-  `AMT/` tree is out of scope entirely. Assets need a
+  from. Adobe-derived text extracts are uncommitted working notes
+  under `/var/tmp/`. Adobe-authored corpus files are test oracles
+  only. The `AMT/` tree is out of scope entirely. Assets need a
   `docs/ATTRIBUTION.md` row in the same change.
 
 ## 2. Where everything lives
@@ -43,526 +47,178 @@
 | `AGENTS.md` | Operating manual: commands, gates, commit rules, day-to-day method |
 | `docs/PLANNING.md` | Master plan: format spec (§6), architecture (§7), method |
 | `docs/planning/firecraft/` | `ROADMAP.md` + tickets M0–M15 (all closed; reference for how tickets are written) |
-| `docs/decisions/` | Decision records 0001–0049 — **write one per family/batch** |
+| `docs/decisions/` | Decision records 0001–0063 — **write one per family/batch** |
 | `docs/planning/generated/` | `parity.md`, `scorecard.md` (xtask-owned) + `dom-parity.md` (generator-owned, see §5) |
 | `docs/research/fireworks-png-nodes.md` | The node dictionary — the format Rosetta stone (observational; corpus wins on conflict) |
+| `docs/WEBOS.md` | The web embedding contract + the smoke host page (load-bearing — see the warning there) |
 | `log/devlog.md` | Detailed session log (gitignored) — **append an entry to close every task** |
 | `crates/engine/src/catalog/` | The command registry, one module per family |
 | `crates/engine/src/fuzzdrive.rs` | Random driver: `CALLS` table + payload builders (pinned to the catalog) |
+| `crates/app/src/shell.rs` | The egui shell (desktop + wasm); `eframe::App` impl at the bottom — carries the wasm-only `as_any_mut` and the stashed repaint context |
+| `web/src/main.rs` | The wasm entry: trunk bootstrap, hidden file input (browser Open), postMessage bridge, downloads (browser Save) |
 | `corpus/fixtures/` | Committed Fireworks fixtures (round-trip/golden oracles) |
 
-## 3. How to work here (the loop that produced #87–#93)
+## 3. How to work here (the family loop)
 
-1. **Pick the next family** from §4. Read the CS6 API text for its
-   verbs (regeneration recipe: `PLANNING.md` §5.4; the extract lives at
-   `/var/tmp/fw_ext_full.txt`).
+1. **Pick the next phase** from §4. For parity rows, read the CS6 API
+   text for its verbs (regeneration recipe: `PLANNING.md` §5.4; the
+   extract lives at `/var/tmp/fw_ext_full.txt`).
 2. **Write the decision doc first** (`docs/decisions/00NN-<topic>.md`):
    wire/model design, CS6 API mapping, deviations, consequences,
    recorded debts. Look for existing types before inventing new ones.
 3. **Implement model → reader/writer → delta → commands → tests** in
    that order; run per-crate gates as you go (`cargo test -p <crate>`,
-   clippy `-p`). Hooks deny workspace-wide cargo.
-4. **Grow the fuzzer in the same change**: append the new command names
-   to `CALLS` in `fuzzdrive.rs` + a payload builder arm each —
+   clippy `-p`). Hooks deny workspace-wide cargo in ad-hoc shells.
+4. **Grow the fuzzer in the same change**: append new command names to
+   `CALLS` in `fuzzdrive.rs` + a payload builder arm each —
    `the_call_table_covers_the_catalog` fails otherwise.
-5. **Update the parity matrix**: flip the family's rows M→C in
-   `/var/tmp/domp/gen.py` (edit via a `python3` heredoc script — the
+5. **Update the parity matrix** (when rows move): flip the family's
+   rows in `/var/tmp/domp/gen.py` (edit via a `python3` heredoc — the
    Edit tool is cwd-bounded and hooks deny `| python3`), regenerate,
    then `cargo run -p xtask -- parity scorecard floor layers`.
 6. **Gate, commit, push, verify CI** (runbook §6), append the devlog
-   entry, update `PROGRESS.md`/`SESSIONS.md`.
+   entry, update `PROGRESS.md`/`SESSIONS.md`. For shell/web work,
+   **prove the browser path** before pushing: §6.2's playwright
+   pattern, against the served `dist/web`, end to end.
 
 **Standing engineering lessons (each cost a real failure once):**
 
 - **Capture before mutating.** A delta holds *prior* state; capturing
-  after the mutation silently undo-writes the post-state. This produced
-  three test failures in #92. Every `before = …clone()` line goes
-  above the first mutation of that slice.
+  after the mutation silently undo-writes the post-state. Every
+  `before = …clone()` line goes above the first mutation of that
+  slice.
 - **Never trust an RNG stream across catalog growth.** Fuzz-derived
   tests that *force* a call class must draw-until-landed **and** seed
   deterministic state first — the generator deliberately over-draws
-  indices and injects junk fields for refusal coverage, so a thin
-  surface can have no landable draw for a fixed seed (#92's CI leg).
-- **Fixture-first, corpus-second** (quality rules): validate each layer
-  separately — wire round-trip, then model equality, then composition.
-  An end-to-end pass alone hides which layer regressed.
+  indices and injects junk fields for refusal coverage.
+- **Fixture-first, corpus-second** (quality rules): validate each
+  layer separately — wire round-trip, then model equality, then
+  composition. An end-to-end pass alone hides which layer regressed.
 - **No corpus oracle → the dictionary stands** and a synthetic
   write→read→byte-equal round-trip is the gate; record the missing
-  oracle in the decision doc (#93 did this for `LSMv`/`LSAv`).
+  oracle in the decision doc.
+- **A verdict check must not be able to pass on its own inputs** (the
+  vacuous-smoke lesson): the bridge smoke matched its "green" string
+  inside the host page's own `<script>` source and was green for
+  months while the bridge panicked at boot. Strip `<script>` bodies
+  before any DOM-string assertion (`strip_script_bodies` in
+  `xtask/src/dist.rs`), and require the failure marker's absence too.
+- **eframe wasm shells: `as_any_mut` + repaint.** `WebRunner::app_mut`
+  panics unless the `App` overrides the wasm-only `as_any_mut`
+  default; and mutations arriving outside the frame loop (bridge
+  messages, file input) must `ctx.request_repaint()` or the canvas
+  shows the stale frame until the next input event. Neither is
+  reachable from desktop tests — only a real browser run catches them
+  (see the playwright pattern, §6.2).
+- **The `web` crate is workspace-excluded (trunk).** `cargo fmt
+  --all`, `clippy --workspace`, and `test --workspace` never see it.
+  The fmt gate checks it explicitly (added 2026-10-15 after an
+  unformatted `web/src/main.rs` slipped through); remember it for
+  clippy/test when touching `web/` — run them with
+  `--manifest-path web/Cargo.toml`.
 
 ## 4. The plan — phases and atomic tasks
 
 Each task follows the house ticket shape: **objective / inputs /
-authority / stopping condition / verification**. A phase = one decision
-doc + one command batch + one parity flip + one commit (unless size
-says otherwise). Tasks inside a phase are atomic and independently
+authority / stopping condition / verification**. A phase = one
+decision doc + one batch + gates + one commit (unless size says
+otherwise). Tasks inside a phase are atomic and independently
 verifiable.
 
-### Phase 1 — Object-selection surface + selection tooling (12 verbs)
-*Do first: Phase 2 is blocked on it. The current `Document.selection`
-is the raster marquee (`SelectionMask`); there is no object-level
-selection.*
+### Closed campaigns (for context — do not reopen without new evidence)
 
-- **1.1 Type the object selection.** Objective: a document-level
-  object selection (`Vec<ObjectId>`), an ordering rule (z-order), and a
-  delta variant (capture `before: Vec<ObjectId>`). Authority: CS6
-  `fw.getSelection()` semantics. Stopping: commands can read AND set
-  the selection; undo round-trips; scripting projection exposes it.
-  Verify: unit tests + fuzz arms for the new commands.
-- **1.2 `selection.*` basics.** `selectAll`, `selectInverse`,
-  `selectAllOnLayer` (scope), `selectNone` if absent. Stopping: each
-  command + undo + refusal (empty document → Noop or InvalidState per
-  CS6) + fuzz arms + parity rows C.
-- **1.3 Hierarchy selects.** `selectParents`, `selectChildren` — walk
-  group containment from the current selection. Stopping: selection of
-  a group child promotes/demotes exactly per CS6 text; undo exact.
-- **1.4 Attribute selects — CORRECTED 2026-10-14 (decision 0025).**
-  The API text showed the original premise wrong: `selectSimilar` is a
-  *bitmap-mode* verb (pixels within tolerance of the selection's
-  average color — mapped to `bitmap.selectSimilar`),
-  `selectSimilarFromPoint` is carried by `bitmap.selectWand`, and the
-  `filterSelection*` trio are *filter-application* verbs (permanent
-  pixel filters — filter family + the bitmap bake debt, **not**
-  selection surface). Landed: `selection.selectParents` /
-  `selectChildren` (group hierarchy). The genuinely-unclaimed
-  attribute select (fill/stroke/type predicates) has **no CS6 dom
-  verb** — drop the idea from this campaign unless corpus evidence
-  surfaces one.
+- **M0–M15** (2026-10-10 → 10-13): workspace bootstrap → format
+  read/write → compositor → catalog + shell → vector depth → text +
+  filters → import/export → scripting → symbols → web layer → parity
+  hardening → shell parity → live filters → tool surface. Tickets in
+  `docs/planning/firecraft/`.
+- **The DOM verb-surface campaign** (2026-10-13 → 10-14, tasks
+  #86–#134): 356 CS6 verbs swept into `dom-parity.md`; 57 missing
+  verbs closed family-by-family to **268 C / 3 P / 0 M**; registry
+  105 → 241. The full family table with commits lives in
+  `PROGRESS.md`; the design rationale lives in `docs/decisions/
+  0001–0063`. Phase 9's recorded debts are all closed; the one
+  evidence-gated hold is in §4 Phase 12.
 
-### Phase 2 — Selection-to-frames (3 verbs + 1 typo dup) — DONE (decision 0026)
-`selection.duplicateToFrames` / `duplicateToFrameRange` /
-`distributeToFrames` landed 2026-10-14: source frame is an explicit
-payload field (the engine has no current-frame state — the `frame.add`
-precedent), fans reuse `check_closure`/`clone_element`/`splice_cells`,
-and copies append to the target cell. No `.jsf` corpus usage exists
-for any of the three, so the API text is the sole authority; the
-silent points (all-includes-source, range refusals, append z-order)
-are recorded in the decision doc.
+### Phase 10 — Browser shell surface — LANDED 2026-10-15 (commit `67532fa`, v0.2.1)
 
-### Phase 3 — Group/flatten (3 verbs) — DONE (decision 0031)
-`flatten.mergeDown` / `flatten.selection` / `flatten.document` landed
-2026-10-14, backed by a new `compose::render_subset` (listed ids,
-list order = paint order, no canvas matte). Each bake mints fresh
-`mkBT` bank tiles and swaps the participants for one canvas-sized
-ImageObject (Fireworks bitmaps are canvas-sized — faithful).
-mergeDown mutates the bitmap below **in place** (identity/name kept,
-`path.boolean`-style) and refuses unless a bitmap is immediately
-below; flattenSelection spans layers of one page and lands at the
-topmost member's z-slot; flattenDocument collapses content layers to
-one bottom layer with web layers preserved and refuses multi-state
-pages (state-0-only bakes are the recorded deviation). Baked pixels
-carry default weight (the render already applied paint/weight/effects).
+The v0.2.0 web bundle could not open, import, or save anything: every
+bridge call panicked in `WebRunner::app_mut` (`Shell` never overrode
+the wasm-only `eframe::App::as_any_mut` default, which returns `None`),
+and the smoke that should have caught it matched its verdict string
+inside the host page's own script source (always green). A second
+defect hid behind the first: bridge mutations never repainted, so even
+after loading, the canvas showed the stale untitled frame. All three
+are fixed and the deploy is verified end to end (open → draw → save in
+a real browser). **Carry-forward lessons are in §3 — read them before
+touching `web/` or the smoke.**
 
-### Phase 4 — View flags (4 verbs) — DONE (decision 0035)
-Resolved 2026-10-14: no wire home exists — proven by the exhaustive
-dictionary (`GRDv` = geometry+colour, `GDSv` = locked/colour/
-positions, complete `MKBv`/`PDCv` child lists have no view node) and
-zero `.jsf` usage across the CS6 Configuration tree. The four verbs
-are app-preferences session state: hosted in the scripting session
-(`HostState` flags + `AttachView` projection + control intents, the
-`changeCurrentPage` pattern), rows flipped to `N`. No wire node was
-invented.
+### Phase 11 — Image support enhancements (the standing "more image support" direction)
 
-### Phase 5 — Document/image ops (4 verbs)
-- **5.1 `setDocumentCanvasColor`** — DONE.
-- **5.2 `setDocumentResolution`** — DONE.
-- **5.3 — DONE (decision 0034).** `document.rotate {rotation, page}`
-  landed 2026-10-14: one page's canvas rotates 90/180/270 clockwise
-  with a full geometry re-bake — paths/slices map point-for-point,
-  text/symbol transforms compose the rotation, images assemble their
-  tile grid, rotate the buffer by permutation, and re-tile over fresh
-  bank slots (matte slots bake — flatten debt). Guides swap, the grid
-  origin rides the map, deltas are `[PageBody, Bank, Mutated × n]`
-  with byte-exact undo. The rotation linear part is built from
-  integers (trig smears `cos(pi/2)` into every coordinate — caught by
-  the corner-anchor test).
-- **5.4 — DONE (decision 0041).** `document.setImageSize` landed
-  2026-10-14 and emptied the M table: the rect (corpus BatchTemplate:
-  left/top-anchored, exact target extents) is the new document
-  bounds; content maps through `T(rect.origin)·S(sx, sy)`, images
-  resample through the new bilinear `bitmap::resample_rgba`
-  (edge-clamped fixed-point, premultiplied domain, capped at the
-  editable 1..=8192 grid) and re-tile over fresh slots;
-  `currentPageOnly` defaults true, false scales every page by its own
-  canvas ratio; resolution rides root + scaled pages. Deltas
-  `[Info, PageBody×pages, Bank, Object×n]`, byte-exact undo.
+- **11.1 Lossy WebP — decide first.** The `image` crate's lossless
+  VP8L encoder is pure Rust (landed, decision 0063); lossy VP8 needs
+  libwebp-sys (C) — a wasm-build breaker unless feature-gated
+  native-only. Decision doc must record the feature-gate design
+  *before* code. Stopping: native lossy WebP export behind a cargo
+  feature, wasm unaffected, or a recorded refusal.
+- **11.2 AVIF decode.** No pure-Rust AVIF decoder is production-grade;
+  the honest doors are OS decoders (desktop) or wasm-friendly
+  fallback (decode failure naming the format). Investigate
+  `image`'s avif-native feature state first; record findings in a
+  decision doc before any dependency lands. Import-only is acceptable;
+  export stays out of scope until an encoder exists without C.
+- **11.3 HEIC — likely refusal.** No maintainable open encoder/decoder
+  without patents-or-C problems. Expected outcome: a decision doc that
+  records the refusal and the import path (OS decode on desktop
+  builds only, if anywhere). Do not ship a half-decoder.
+- **11.4 Import surface parity with the export matrix.** The CLI
+  `import` door takes jpg/png/webp; `io::raster::decode` sniffs more
+  (bmp/tiff/gif). Align the CLI accept-lists and error strings with
+  what the decoder actually supports, one test per format.
 
-### Phase 6 — Primitives / smart shapes (5 verbs)
-- **6.1 — DONE (decision 0027).** `primitive.setRectRoundness` /
-  `primitive.setRectSides` / `object.setQuadrangle` landed 2026-10-14;
-  `setRectRoundnessMode` went `N` — the exhaustive `PRIv` dictionary
-  has no mode node (session-state unit toggle), so no command was
-  invented for it. Percent roundness scales the shorter side; the
-  quadrangle maps the bounds rect onto a parallelogram-only quad
-  (affine `MTXv`).
-- **6.2 — DONE (decision 0028).** `autoshape.redraw {id, kind,
-  params}` landed 2026-10-14: the Auto Shape library's generators
-  re-run over explicit parameters (CS6 re-runs each shape's embedded
-  JSF, which has no clean-room equivalent — no script interpreter, no
-  wire node), swapping contours + `even_odd` behind one captured
-  mutation. Golden gate: redrawn contours == freshly created contours
-  for the same parameters. Cross-kind redraw is allowed (CS6 could
-  not); recorded as a deviation.
+### Phase 12 — Evidence-gated holds (parked, not lost)
 
-### Phase 7 — Button symbols (5 verbs) — DONE (decision 0036)
-Landed 2026-10-14. The four behaviors are the four previously-unknown
-`MSTv` child booleans (`ATSb`=auto-slice, `IDSb`=include-Down,
-`DVLb`=show-Down-on-load, `IODb`=include-Over-While-Down — three
-fourccs spell their behavior; the fourth pinned by elimination), typed
-as presence-tracked `Option<bool>` on `SymbolDefinition` (no corpus
-fixture carries them — the synthetic byte-equal round-trip +
-wire-order check is the gate). `setButtonOptions` mutates the button's
-auto-slice, found through the newly-typed slice→definition `MSNi`
-link (`SliceObject::symbol_number`): link/alt/slice name/export
-override; `targetTagString`/`statusMessage` have no wire home
-(deviation 1). No `.jsf` usage exists for any of the five. Commands
-`symbol.setButton*` follow the `SetSymbolType` shape
-(`Delta::Library`); options produces a `Delta::Group` of slice
-mutations and refuses without a linked slice.
+- **Out-of-bounds effect growth** (decision 0040): the live render
+  grows (compose kernels canvas-spanning since M14); the destructive
+  bake clips by settled law. Reopening needs a CS6 filter/flatten
+  bounds oracle (a Wine corpus run). **Setup recipe if attempted:**
+  `source/FireworksPortable/` exists to run CS6 under Wine; the corpus
+  it would generate is an Adobe-authored test oracle — usable locally,
+  never committed.
+- **`setFillNColorNTexture`** (parity P): needs an observed `TXFv`
+  shape. Same oracle: author a textured fill in CS6 under Wine, read
+  the file. Without it, the row stays P.
+- **`setAnimInstanceStartFrame` / `setSliceAutonaming`**: permanent —
+  the wire nodes do not exist; refusing is faithful. Closed.
 
-### Phase 8 — Misc singles (independent; any order)
-- **8.2 — DONE (decision 0029).** `slice.appendPoint` /
-  `hotspot.appendPoint` landed 2026-10-14: CS6's selection-driven
-  point-append state machine (append to the selected open polygon of
-  the command's class, else start a fresh one on the Web Layer;
-  tolerance closes the polyline). The closing point itself still
-  lands; rect/ellipse selections fall through to the create branch.
-- **8.5 — DONE (decision 0030).** `path.cropSelection` (selection ×
-  rect blade = BooleanOp::Crop per path; empty results remove;
-  non-path members refuse — bitmap crop is bake debt),
-  `path.setFillEdgeMode` (hard/antialias/feather onto the FEFi/FRDb
-  slots; materializes the fill definition when absent),
-  `symbol.tween` (two same-symbol instances in one cell; transform
-  lerped with shortest-arc rotation; `distribute` appends frames;
-  transform-only — instance opacity/animation params are debt),
-  `setGradientName` → **N** (gradient library is preferences state;
-  no document-level node — same rule as setRectRoundnessMode).
-- **8.1 — DONE (decision 0037).** The place-image trio landed
-  2026-10-14 over the rotate machinery's assemble→re-tile helpers
-  (now factored as `engine::bitmap::{assemble_rgba, retile_rgba}`;
-  the originally-planned `io::raster::attach_image` is io-internal
-  and import-shaped). `bitmap.addImage` places an empty image with
-  bounds constrained to the canvas — fresh zero bank tiles, not
-  mattes, so the bitmap is paintable; `…ViaCopy` turns the pixel
-  selection into a new image directly above the source (coverage
-  scaling in the premultiplied domain); `…ViaCut` also clears the
-  source over fresh tile ids. No clipboard interaction (the CS6 text
-  names none); no paint-mode posture (deviation 1).
-- **8.3 — DONE (decision 0032).** `path.splitPaths` (compound paths
-  become one path per contour; identity keeps the first),
-  `path.knifeElementsFromPoint` (click cut within tolerance opens/cuts
-  selected paths), `path.knifeElementsFromPoints` (drag-blade
-  crossings + tolerance clause) landed 2026-10-14 via the new
-  `vector::knife` module (flattened-proxy crossings, true-curve
-  `subsegment` output, ring rotation at the first cut, sliver-drop
-  with marker ride-along). Selection-driven like the tool; non-path
-  and group-nested members refuse whole-command.
-- **8.4 — DONE (decision 0033).** `text.convertToPaths` landed
-  2026-10-14: each selected text object swaps to a `PathObject` in
-  place (same id, z-order kept; the renderer's synthetic-path contract
-  — default black fill, nonzero winding, display fields inherited).
-  The `text::TextEngine::glyph_contours` world-space outlines are the
-  geometry; a golden test proves `render_subset` pixels are
-  byte-identical before/after. Ink-less text removes the object
-  (empty-result contract). Engine gained the `text` dependency.
-- **8.7 — DONE (decision 0038).** The saved-selections trio landed
-  2026-10-14: `Document.saved_selections: Vec<SavedSelection>` joins
-  the editing-state-not-file-content class (`selection`, `jpeg_mask`);
-  `selection.save` requires an active pixel selection and folds into
-  an existing name through the operation (base = stored);
-  `selection.restore` inverts on request then folds with the active
-  selection as base (collapsed fold → no selection); `selection.deleteSaved`
-  removes. Single-document (`toDocument`/`fromDocument` omitted);
-  both "new or replace" and "replace" spellings accepted.
-- **8.6/6.6 — DONE (decision 0039).** The full clipboard surface
-  landed 2026-10-14: `Document.clipboard: Option<Clipboard>`
-  (editing-state class; `elements`/`ids`/`roots`, subtree-closed).
-  `clipboard.copy` deep-captures the selection; `clipboard.cut`
-  captures then deletes through object.delete machinery (stale
-  members skipped); `clipboard.paste` pre-flights the placement cell,
-  re-mints bottom-up with child-id rewrite, attaches roots, and
-  pushes Created deltas in chronological mint order (registry
-  retraction is strictly newest-first). `clipPasteAsMask` keeps the
-  CS6 exactly-one-selected throw, maps mask kind to the `GRTi` type,
-  and `replace` swaps the existing mask child in place;
-  `clipPasteInside` delegates with defaults (the manual retires it in
-  Fireworks 4). `clipPasteFromChannelToChannel` overlays a channel
-  plane on a single selected image, or mints a grayscale image from
-  `RGB = byte` when none is selected — matching the manual's
-  "resulting in a grayscale image" clause.
-- **8.8 — DONE (decision 0040).** The filterSelection bake trio
-  landed 2026-10-14: `filter.selection` (named filter, optional
-  category, optional param bag), `filter.selectionByID` (the raw
-  `EffectMoaID` GUID — CS6's FW8 spelling), and
-  `filter.selectionByName` (category+name; the manual's
-  `filterSelectonByName` typo rides the same command). All three
-  resolve to one `bake_core`: identity → `compose::plan` (unknown
-  GUID/name refuses; `skipped != 0` refuses — no passthrough) →
-  per-image assemble → `apply_stack` in the premultiplied domain →
-  pixel-mask blend (mask=255 keeps the original byte) → re-tile in
-  place → one `Mutated` delta per image + one `Bank` delta for all
-  mints, in `Delta::Group`. `compose` publishes the 19-entry
-  `FILTER_CATALOG` (Adjust Color / Blur / Noise / Sharpen / Other)
-  and re-exports `apply_stack`/`Surface` so engine needed no new
-  edge. Deviations (recorded): non-image selection members refuse
-  the whole command (CS6 would rasterize them first — Phase 9
-  rasterizer debt); out-of-bounds effect results clip to the image
-  surface (no tile growth); no dialog (headless). — **Extended
-  (decision 0042):** `filter.convolveSelection` (raw integer kernel
-  via the new `KernelOp::Convolve`; sides 1..=31, count-checked,
-  no normalization — the dom's scale-is-caller's-contract law) and
-  `filter.motionBlurSelection` (blurType linear/radial/zoom,
-  `samples` = the kernel tap count through
-  `filters::motion_blur_taps`; Live Effect output byte-identical at
-  `taps = distance + 1`) build one-op plans and ride the same
-  `bake_core`.
-- **8.9 — DONE (decision 0043).** The web/group setter batch landed
-  2026-10-14: `hotspot.setRectangle` (frame rewrite with
-  contour-mapping rescale; copy mode inserts + selects a duplicate
-  after the original), `hotspot.setShape` (rectangle/oval/polyline
-  filtered by hotspots/slices/both; junk strings refuse, mismatches
-  skip, empty result is `Noop`), `hotspot.copyToHotspot`
-  (single-union or per-object areas from `content_bounds`;
-  `makeRectangular: false` donates polygon contours from the source;
-  `"ask user"` refuses headless), `object.setGroupType` (normalizes
-  `GRTi` mask groups to regular; the FW4 mask-to-image/path
-  spellings refuse — mask.* owns masks), and
-  `page.setWebObjectsVisibility` (provisions the Web Layer lazily,
-  one `Layer` delta flips `display`). The batch's fuzz-call shift
-  exposed a latent `document.setImageSize` 000557d violation (its
-  pre-flight baked page N before page N+1's cap refused, stranding
-  minted tiles) — fixed by holding every page's assembled buffer
-  until all pages resolve (the `bake_core` pattern), pinned by
-  `image_size_refusal_after_another_page_bakes_touches_nothing`.
-- **8.10 — DONE (decision 0044).** The anim-instance parameter
-  family landed 2026-10-14: six `symbol.setAnimInstance*` verbs over
-  the already-round-tripping `ANNi` carrier — NumFrames (the
-  anchor), LoopCount (FW3 spelling → same field per Adobe's own
-  deprecation note), OffsetDist (ANXf/ANYf), RotationAmount (ANRi;
-  fractional degrees round), ScaleAmount (ASCf, positive),
-  StartEndOpacity (ASOi/AEOi, 0–100 → per-mille). One selection
-  walker: non-instance members skip, plain instances materialize the
-  carrier with Objects-panel defaults, empty selection refuses.
-  `setAnimInstanceStartFrame` stays P — FW4 dropped the field from
-  the format, so the verb refuses pointing at placement (inventing
-  a wire node would fabricate format).
-- **8.11 — DONE (decision 0045).** The text-rectangle trio landed
-  2026-10-14: `text.setTextRectangle` is a pure frame write (runs and
-  transform untouched — re-flow is layout-time, honoring "not scaled
-  or transformed"), `text.setTextRectangleAuto` fits the smallest box
-  via the new `TextEngine::auto_block` (unconstrained measure: widest
-  kerned+scaled advance, deepest line box) keeping the top-left
-  corner, `text.setTextRectangleAutoFromPoint` re-anchors by
-  justification — left/center documented, right the symmetric mirror
-  (recorded). `ATEb` untouched: these are one-shot fits, the
-  persistent auto-enlarge mode stays a `setAttrs` concern (recorded
-  non-equivalence). Zero-extent and inverted rects refuse; empty runs
-  refuse ("lays out to no box"). Next text cluster (markup/para/runs)
-  needs the multi-run model first.
-- **8.12 — DONE (decision 0046).** Canvas trim + delete-all landed
-  2026-10-14: `document.setDocumentCanvasSizeToDocumentExtents`
-  (Modify > Trim Canvas — the canvas rect (XLCf/YLCf/WIDf/HITf) moves
-  to hug the page's item extents; objects keep their world
-  coordinates; `bGrowCanvas` false clamps each dimension to the
-  current size; empty page = documented no-op),
-  `document.setDocumentCanvasSizeToSelection` (same trim over the
-  selection bounds; empty selection refuses),
-  `document.deleteAllInDocument` (pre-flight sweep, then each
-  top-level element through exact `object.delete` semantics folded
-  into one transaction; empty document = no-op). Extents floor at
-  1px/side, refuse beyond 65535 like `page.setCanvasSize`.
-- **8.13 — DONE (decision 0047).** The loose-ends setters landed
-  2026-10-14: `filter.setEffectName` (selection walker renames every
-  matching `(CATs, INMs)` pair; stale/spine-less/no-match objects skip,
-  empty sweep = no-op), `slice.addSwapImageBehaviorFromPoint`
-  (point-resolved source slice — rect/ellipse by frame, polygon by
-  real even-odd contour test; miss = refusal (CS6's `false` return);
-  writes the kind-2 behavior + `DTAv swapTarget` from the source's
-  name, decision 0017's wire shape),
-  `text.replaceButtonTextStrings` /
-  `text.replaceButtonTextStringsInInstances` (rewrites the topmost
-  text item on every `SymbolType::Button` definition frame; the
-  instances variant scopes to the selection's instances; empty
-  selection refuses; `uniformAttrs` a no-op under the single-run
-  text model). `setSliceAutonaming` stays P — the autonaming flag has
-  no wire node (FILs carries only the label).
-- **8.14 — DONE (decision 0048).** The on-path setters landed
-  2026-10-14: `text.setTextOnPathMode` (TAMi 0..=3 gate then
-  selection walk), `text.setTextOnPathOffset` (CHOf, finite gate,
-  negatives legal), `text.reversePathTextDirection` (rail points
-  reverse, handles swap — the curve is preserved; offset untouched
-  since CS6 documents no compensation). All three share
-  `on_path_selection_walk`: guided text items participate, everything
-  else skips, change-nothing sweeps are the no-op, empty selection
-  refuses. The model already carried TAMi/CHOf (decision 0013) —
-  these were model debt, not format debt.
-- **8.15 — DONE (decision 0049).** The pixel-mask pair landed
-  2026-10-14: `bitmap.moveSelectionMaskBy` (coverage-plane translate;
-  the marquee moves, pixels stay — `bitmap.movePixels` moves pixels;
-  no plane refuses like CS6's exception, zero delta and |d| > 65535
-  refuse), `bitmap.adjustPixelSel` (expand/contract/border/smooth
-  over a 3-4 chamfer distance field — one O(pixels) two-pass field
-  per op, thresholded at 3×amount; smooth is opening then closing;
-  the image edge is not a boundary so a boundary-less plane is
-  contract's identity; the binary projection is what adjusts so
-  feather softness collapses hard). First morphological machinery in
-  the engine — retouch refines can reuse the field.
-- **8.16 — DONE (decision 0050).** The paragraph setter trio landed
-  2026-10-14: `text.setTextParaIndent`/`SetTextParaSpacingBefore`/
-  `SetTextParaSpacingAfter` write `PINf`/`PSBf`/`PSAf` in the `TFSv`
-  style set (both sides already mapped the nodes — pure model debt).
-  Id-addressed (`text.setAttrs` precedent); the gate is finiteness
-  only — negative (outdent/overlap) and zero (clear) are expressible
-  pixels. One macro (`paragraph_setter!`) generates all three; the
-  style slot materializes on first write; undo rides the whole-object
-  capture. The markup quartet + `setTextRuns` (5 P rows) remain the
-  multi-run model work.
+### Phase 13 — Release engineering hygiene (small, high-leverage)
 
-- **8.17 — DONE (decision 0051).** The multi-run text model landed
-  2026-10-14 — the recorded M15 text gap closes. `TextRun` carries
-  `changes: TextStyle`; the reader folds the documented `TFSv`
-  marker stream (base before the first `TRNs`, per-run groups
-  between, trailing markers bag verbatim at their indices), the
-  writer re-emits each group before its `TRNs` (byte-stable for
-  uniform files, two-cycle-pinned for divergent ones). Five verbs
-  landed on it: `text.setTextRuns` (initialAttrs + runs, all gates
-  pre-flight), `applyCharacterMarkup`/`removeCharacterMarkup`
-  (b/i/u; `fwplain` also clears the base), `applyFontMarkup`
-  ("NNNpt"-suffixed sizes per the dom's grammar, face names),
-  `removeFontMarkup` (base drops the field, runs re-diff to
-  inherit). Delta groups restate, never unset — "inherit" is the
-  absence of a node. Layout reads the base style until per-run
-  shaping lands (recorded rendering stage, like the para attrs).
+- **13.1 WebOS packaging dry-run.** `docs/WEBOS.md` sketches the
+  `appinfo.json`; build a real one + operator-supplied icons
+  (ATTRIBUTION rows in the same change) and land a `host.html` in
+  `dist/web` staging so the packaged artifact is the proven one.
+- **13.2 Platform matrix recipes.** `packaging/` carries AppImage, macOS
+  dmg, and Windows scripts that this repo has never executed
+  (TOOLCHAINS.md records why). Each one that gets run on real hardware
+  should produce its artifact for the next release; until then the
+  release notes keep the honest "built and verified on Linux x86_64"
+  line.
+- **13.3 Release notes in-repo?** `dist/release-notes.txt` is
+  gitignored staging. Consider `docs/releases/vX.Y.Z.md` (tracked) so
+  notes survive in history; keep the SHA block generated.
+- **13.4 Smoke budget.** The bridge smoke is chromium-headless inside
+  `dist --web`; it currently needs `--virtual-time-budget=60000`. If
+  the wasm grows past the boot budget on slow machines, the smoke
+  fails spuriously — budget the timeout off the measured load time,
+  not a constant.
 
-- **8.18 — DONE (decision 0052).** The custom anti-alias trio landed
-  2026-10-14: `text.setTextCustomAntiAliasOverSample` (gate
-  {4, 8, 16} — the UI's set; anything else refuses),
-  `setTextCustomAntiAliasSharpness` and `…Strength` (gate 0..=255 —
-  the panel's 8-bit dials), generated by one `aa_dial_setter!` macro.
-  Wire-side this closes the M13 bag debt: `TA1i`/`TA2i`/`TOSi` were
-  recorded but bagged verbatim; `TextObject` now carries all three
-  as typed `Option<i64>` slots (reader promotes, writer emits each
-  when `Some`, after `TAAi`), so files carrying the nodes stop
-  silently dropping them. Unset stays unset — no defaults invented.
-  Renderer consumption of the dials is a recorded Phase-9-stage
-  limitation (same stage as para attrs and run groups).
+### Suggested order
 
-- **8.19 — DONE (decision 0053).** `symbol.duplicateSymbolForAlias`
-  landed 2026-10-14: one duplicate per distinct pointed-to `MSNi`
-  (content verbatim, fresh number, nonlinked for free — linkage
-  isn't a modeled property), selected instances re-point, unselected
-  instances keep the master. Empty selection refuses; instance-less
-  or all-dangling selections no-op; non-instance members skip.
-  `Delta::Library` + per-instance `Delta::Object` folded in a group.
-
-- **8.20 — DONE (decision 0054).** `bitmap.importFile` landed
-  2026-10-14: the `library.importSymbol` law (content in the
-  payload, IO at the boundary) — the shell decodes, the command
-  places. Degenerate rectangles place unscaled at the corner;
-  aspect-kept fit rounds to the largest ≥1-px fit and centers;
-  stretch-to-fill takes the rect extents; the scaled extent crops
-  to the canvas (empty intersection refuses) and lands on fresh
-  zero tiles. Nearest-neighbour resampling (u128 sampling math);
-  bilinear quality stays the §4 resample debt. With this, every
-  non-permanent P row is closed except `setFillNColorNTexture`
-  (no observed `TXFv` shape + no mintable rasters).
-
-### Phase 9 — Recorded debts (P-class limitations; no parity pressure)
-
-**The Phase 9 debt list is empty** (2026-10-14, decision 0062). The
-one remaining recorded limitation is the out-of-bounds effect-growth
-posture (decision 0040), now marked **evidence-gated** in PROGRESS:
-the live render grows (compose applies kernels canvas-spanning since
-M14) and the destructive bake clips by settled law; reopening it
-needs a CS6 filter/flatten bounds oracle — any growth rule without
-one would be invented.
-- ~~**6.1-object-duplicate** deep-clone of groups~~ **DONE 2026-10-14
-  (decision 0056, #127):** `clone_subtree` recurses through group
-  children — every live descendant mints its own slot, the copy
-  re-points, undo retracts every minted slot in one step. Dangling
-  child ids skip (walker rule); symbol instances stay one slot
-  (definitions are shared by number by design).
-- ~~**Pattern-authoring command**~~ **DONE 2026-10-14 (decision 0062,
-  #133):** `path.setPatternFill { id, source, name? }` authors a
-  pattern fill from an image — the source raster assembles and tiles
-  through the flatten minting law, the fill installs with the
-  placement left identity (`setFillVector` moves it), undo drops the
-  minted slots with the paint restore. The CS6 Fill panel's pattern
-  authoring is UI-only (no DOM verb), so this is the command surface
-  for that property write. The Phase 9 debt list is now empty.
-- ~~**mkBT tile-bank WRITER**~~ **DONE 2026-10-14 (decision 0055,
-  #126):** open now joins every `mkBT` tile into `document.tiles`
-  (`app_cli::io::join_tiles`; malformed stream refuses; grayscale
-  256×256 skips and fails at render only if referenced); save merges
-  — original-stream tiles stay verbatim, runtime-minted ids
-  (`flatten`/place-image/`retouch`) serialize before `IEND` via
-  `fwpng::encode_mkbt` (76-byte header + zlib ARGB split at the
-  64 KiB payload cap, the reader's split law mirrored); library
-  export copies the member closure's referenced tiles (image grids +
-  path pattern fills) and refuses a dangling reference
-  (`MissingTile`). Untouched files: tile-free byte-exact, foreign
-  tiled files chunk-exact outside the re-canonicalized `mkTS`.
-- ~~**Image resample pass**~~ **DONE** — `bitmap::resample_rgba`
-  landed in #111; **bilinear quality on `bitmap.importFile`** closed
-  2026-10-14 (decision 0061, #132): the import path resamples with
-  the same centre-point bilinear filter in exact u128 math,
-  premultiplied (transparent neighbours dilute alpha, never colour).
-- ~~**mask_replace_options "add"** (mask union fold)~~ **DONE
-  2026-10-14 (decision 0058, #129):** "add" unions the coverages —
-  `mask_coverage` reduces both operands (path or image) to a
-  `SelectionMask` over the target's bounds, max-fold, `plane_mask_image`
-  mints the grayscale result, the group flips to `GRAYSCALE_MASK`,
-  `Delta::Bank` rides undo; mismatched image masks refuse (CS6's
-  `whatIfResolutionDifferent` resample stays unmodeled); "add" with no
-  existing mask is a plain paste.
-- ~~**Path→image rasterizer hook** (mask_type "image")~~ **DONE
-  2026-10-14 (decision 0057, #128):** `pasteAsMask` rasterizes a
-  vector clipboard into the grayscale mask image (the `mask.setMode`
-  conversion, `stamp_path` → `plane_mask_image`, over the target's
-  bounds); `Delta::Bank` rides undo.
-- ~~**Path→image rasterizer, bake site** (`filterSelection`
-  rasterize-first)~~ **DONE 2026-10-14 (decision 0059, #130):** the
-  whole bake family converts non-image selections in place through
-  `compose::render_subset` (same id, same parent position,
-  canvas-spanning at the origin — the flatten bake posture; baked
-  pixels carry the old weight), then filters; undo restores the
-  original object; slices refuse (not rasterizable content); the page
-  resolves through the ownership walk, so group-nested selections
-  convert.
-- ~~**Shared-layer link-resolution render**~~ **DONE 2026-10-14
-  (decision 0060, #131):** the page walk resolves a link layer
-  (`LSAv`) through its `LSEv` definition in the link's z-position;
-  both the link's and the definition's display flags gate; links
-  never nest (symbol-definition walks pass `resolve_links: false`);
-  a dangling uid draws nothing.
-- **importFile bilinear resample** **DONE 2026-10-14 (decision 0061,
-  #132):** `resample_crop` blends with `resample_rgba`'s centre-point
-  convention in exact u128 integers, premultiplied → unpremultiplied
-  (straight-alpha black-bleed eliminated); border clamps; all import
-  doors (file/payload/importPNG/importJPEG) inherit it.
-- **Pattern-authoring command** **DONE 2026-10-14 (decision 0062,
-  #133):** `path.setPatternFill` mints the source image's raster into
-  bank tiles (`assemble_rgba` → `retile_rgba`, the flatten law) and
-  installs a `FillShape::Pattern` fill on the target path; undo is a
-  group (paint restore + `Delta::Bank` drop); extent 1..=8192
-  enforced at write (the render-side bound); refusals pre-flight
-  before the first mutation.
-- **WebP export** **DONE 2026-10-14 (decision 0063, #134):** the
-  first enhancement family after the parity campaign reached its
-  evidence limits. `io::webp::encode` is lossless VP8L through the
-  `image` crate's pure-Rust encoder (zero new dependencies,
-  wasm-safe); `export_raster` routes `.webp`. Lossy VP8 needs
-  libwebp and stays out of scope; AVIF/HEIC remain future work
-  (OS-decoder bindings, wasm story unresolved).
-
-### Suggested order — COMPLETE
-5.1 → 5.2 (quick wins, warm up the loop) → Phase 1 → Phase 2 → 6.1 →
-6.2 → 8.2 → 8.5 → Phase 3 → 8.3 → 8.4 → 5.3 → 4 (evidence) → 7
-(evidence) → 8.1 → 8.7 → 8.6/6.6 → 8.8 → 6.4/5.4. All families landed
-2026-10-14 (6.4's resample pass landed *inside* 5.4 as
-`bitmap::resample_rgba`). **The M table is empty** — next work is
-P-class partials and Phase 9 debts, prioritized from
-`dom-parity.md`'s P table, not a fixed order.
+11.4 (quick) → 13.1 → 11.1 (decision first) → 13.2/13.3 → 11.2 →
+11.3 → Phase 12 only if the Wine oracle actually materializes. Phase
+10 is closed. Re-verify the deployed site after any `web/` change
+(§6.2) — the browser is the primary target and the only place its
+failure modes live.
 
 ## 5. Parity-matrix regeneration recipe
 
@@ -581,32 +237,81 @@ python3 /var/tmp/domp/gen.py   # writes docs/planning/generated/dom-parity.md
 
 Inputs: `/var/tmp/fw_api_verbs.json` (CS6 verb list) +
 `/var/tmp/firecraft_commands_full.txt`. Regeneration recipes for the
-other extracts: `PLANNING.md` §5.4.
+other extracts: `PLANNING.md` §5.4. Reading `dom-parity.md` from
+`/var/tmp/domp` with a relative path reads a STALE shadow copy — use
+the absolute repo path.
 
 ## 6. CI runbook (GitForge)
 
-- **Push order:** `git push gitforge main && git push origin main`.
+### 6.1 Pipeline
+
+- **Push order:** `git push gitforge main && git push origin main`
+  (tags ride `--tags` when releasing).
 - **Find the run:** `GET /api/pipeline-runs?limit=15` — match
-  `commit_hash` (field name is `commit_hash`, *not* `sha`).
+  `commit_hash` (field name is `commit_hash`, *not* `sha`; both are
+  `None` in the list view — fetch jobs to identify a run by its 7-job
+  shape).
 - **Wait + jobs:** `GET /api/pipeline-runs/{id}` until status is
   terminal; `GET /api/pipeline-runs/{id}/jobs` for the 7 jobs
   (fmt-layers, clippy-test, wasm-web, corpus-golden, perf-budgets,
-  fuzz, generated-docs). All must be `succeeded`.
+  fuzz, generated-docs). All must be `succeeded`. ~15–18 min.
 - **Job logs:** `GET /api/jobs/{job_id}/logs` — walk
   `data.logs[].chunk` or `data.receipt.step_results[].stdout/stderr`
   (helper: `/var/tmp/getjoblog.py`).
 - **Known runner quirks:**
   - *"mkdir: file exists"* infra failure = sshfs race on the fedora
-    runner → retrigger via an empty commit in a quiet window (no retry
-    API).
+    runner → retrigger via an empty commit in a quiet window (no
+    retry API).
   - *Silent mid-compile death* = offline-refusal from a stale image
-    cache → check the job-log ledger FIRST; re-ship the image whenever
-    `Cargo.lock` moved.
-- **Local gates before any push:** `cargo fmt --all -- --check`,
-  `cargo clippy -p <touched> --all-targets -- -D warnings`,
-  `cargo test -p <touched>`, the four xtask verbs (§3.5).
-  `git checkout -- corpus/scripts-report.json` before committing if the
-  corpus run touched it.
+    cache → check the job-log ledger FIRST. Re-ship the image
+    (`infrastructure/docker/ci-rust.Dockerfile`; `docker save |
+    ssh <host> docker load` to BOTH hosts) whenever an **external**
+    crate version in either lockfile moves — workspace-only version
+    bumps leave `cargo fetch` output unchanged (verified v0.2.0).
+- **Local gates before any push:** the full gate is
+  `cargo run -p xtask -- ci` (fmt incl. the workspace-excluded `web/`
+  crate, clippy `-D warnings`, tests, layers, wasm, corpus, goldens,
+  perf, fuzz-quick, parity, scorecard, changelog). Per-crate commands
+  for dev-loop iteration. `git checkout --
+  corpus/scripts-report.json` before committing if the corpus run
+  touched it (timestamp-only churn).
+
+### 6.2 Proving a web change (do this before pushing any `web/` or shell change)
+
+The desktop test suite cannot see the browser failure modes — both
+Phase 10 defects passed every desktop gate. The working pattern
+(playwright, headless chromium):
+
+1. `cargo run -q -p xtask -- dist --web` — the bridge smoke must pass
+   **honestly** (script bodies stripped before the verdict check).
+2. Serve `dist/web` on loopback, then with playwright: load the page,
+   install a `message` listener for `source: "firecraft"` replies
+   FIRST, then drive. Reply to `ping` proves the downcast; a
+   `postMessage openDocument` + **zero input events** + screenshot
+   proves the repaint; `expect_file_chooser` + a real `.fw.png` from
+   `corpus/fixtures/` proves the menu open; `expect_download` proves
+   save. Check `pageerror` after every step (`unreachable` = a wasm
+   panic).
+3. Redeploy Pages and repeat step 2 against the live URL — check the
+   served `MANIFEST.sha256` hash matches `dist/web` before
+   diagnosing anything (edge propagation lags a few minutes).
+
+### 6.3 Release + deploy doors
+
+- **Version stamps (8):** workspace `Cargo.toml`, the six member
+  `Cargo.toml`s incl. `web/`, the `xtask` `compose` dep pin,
+  `packaging/deb/control`. `xtask changelog` verifies consistency.
+- **Artifacts:** `cargo run -q -p xtask -- dist --native` (desktop +
+  cli tar.gz, deb, MANIFEST.sha256 → `dist/native/`) and
+  `dist --web`. Web zip is manual, files at root:
+  `cd dist/web && zip -qr ../firecraft-web-<v>.zip .`
+- **Publish:** tag, `git push gitforge main --tags`, `git push origin
+  main --tags`, `gh release create vX.Y.Z --notes-file
+  dist/release-notes.txt <5 assets>`. GitForge has no release-asset
+  surface (tags only); GitHub carries the assets.
+- **Pages:** `wrangler pages deploy dist/web --project-name
+  firecraft-web` (authenticated via `CLOUDFLARE_API_TOKEN`;
+  <https://firecraft-web.pages.dev>, direct-upload project).
 
 ## 7. Session-close checklist
 
@@ -616,3 +321,5 @@ other extracts: `PLANNING.md` §5.4.
 4. Task board state (the session task list mirrors the active phase).
 5. Commit docs with the work (or as an immediate follow-up), push,
    verify CI on the final hash.
+6. If `web/` or the shell changed: §6.2 against the live URL, then a
+   Pages redeploy if the bundle moved.

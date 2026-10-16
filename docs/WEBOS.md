@@ -146,7 +146,7 @@ asset that is not your own):
 ```json
 {
   "id": "dev.firecraft.web",
-  "version": "0.1.0",
+  "version": "0.2.1",
   "vendor": "FireCraft",
   "type": "web",
   "main": "index.html",

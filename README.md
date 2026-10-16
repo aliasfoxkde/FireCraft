@@ -18,16 +18,20 @@ target, alongside native desktop and headless CLI releases.
 
 ## Status
 
-**v0.1.0 released.** All roadmap milestones (M0–M15) are closed: the
-document model with full `.fw.png` read/write fidelity, a
-deterministic CPU compositor with golden-image gates, the vector and
-bitmap tool surface, text, symbols, scripting (`.jsf`), and
-import/export (SVG, PSD, GIF, WebP, and the rest of the raster
-matrix). The scripting surface carries **241 commands**; the CS6 DOM
-parity matrix stands at **268 carried / 3 partial / 0 missing**.
+**v0.2.1 released.** All roadmap milestones (M0–M15) are closed and
+the post-roadmap CS6 DOM parity campaign is complete: the document
+model with full `.fw.png` read/write fidelity, a deterministic CPU
+compositor with golden-image gates, the vector and bitmap tool
+surface, text, symbols, scripting (`.jsf`), and import/export (SVG,
+PSD, GIF, WebP, and the rest of the raster matrix). The command
+registry carries **241 commands**; the CS6 DOM parity matrix stands
+at **268 carried / 3 partial (evidence-gated) / 0 missing**.
 
-Headless today; the desktop shell and WebAssembly build are the
-active fronts.
+The WebAssembly build is live at <https://firecraft-web.pages.dev>
+(open, draw, and save documents in the browser), alongside desktop
+and CLI releases on the [releases page](https://github.com/aliasfoxkde/FireCraft/releases).
+Active work: image-support enhancements (lossy WebP, AVIF, HEIC
+decisions) and WebOS packaging.
 
 ```sh
 cargo run -p xtask -- ci                      # the full gate

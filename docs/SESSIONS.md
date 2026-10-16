@@ -918,3 +918,49 @@ Batch: release engineering (no code change).
   staleness (last publish was 2 days prior, before the verb
   campaign landed).
 - Gates: dist native + web green; GitForge CI 7/7 on ae75ee2.
+
+## #137 — 2026-10-15 — web bridge hotfix, v0.2.1, doc overhaul
+
+Batch: the v0.2.0 browser-surface failure, its fix, and the
+documentation reset.
+
+- **The failure (user-reported: "doesn't function").** v0.2.0's web
+  bundle could not open, import, or save anything. Root cause chain,
+  found by driving the deployed URL in headless Chromium: (1) the
+  eframe shell never overrode the wasm-only
+  `eframe::App::as_any_mut` default (returns `None`),
+  `WebRunner::app_mut` panicked on every bridge call, JS saw a bare
+  `unreachable` pageerror; (2) the `dist --web` smoke asserted its
+  "green" string against a DOM dump that still contained the host
+  page's own `<script>` source — vacuously green since the web
+  bundle existed; (3) behind the first two, bridge mutations never
+  repainted — an opened document rendered only after the next input
+  event.
+- **The fix (67532fa).** `Shell` overrides `as_any_mut` (wasm32-only)
+  and stashes `ui.ctx()` each frame; `web/src/main.rs`'s `with_app`
+  calls `shell.request_repaint()` after every bridge mutation. The
+  smoke strips `<script>` bodies before its verdict check and also
+  requires the FAIL marker's absence (`strip_script_bodies` in
+  xtask/src/dist.rs). The fmt gate now covers the workspace-excluded
+  `web` crate explicitly. Verified locally: bridge ping → ready,
+  postMessage openDocument with ZERO input events → renders,
+  menu open (file chooser) → renders, draw → save download
+  (validated by `app-cli info`).
+- **v0.2.1 (23beb08).** 8 stamps + both lockfiles + CHANGELOG;
+  replaces the broken v0.2.0 web zip. Release notes lead with the
+  fix. Pages redeployed and production-verified (served-hash check
+  first — edge propagation lags minutes and bit us once).
+- **Documentation overhaul (this batch).** HANDOFF.md rewritten as a
+  true entry point: current state snapshot, forward phases (11 image
+  support / 12 evidence holds / 13 release hygiene), the
+  browser-proof runbook (§6.2), release+deploy doors (§6.3),
+  standing lessons. PROGRESS "Now" reset to 2026-10-15; release rows
+  in the milestone table; campaign-closed note. HISTORY: arc
+  paragraph for the campaign completion + the v0.2.x incident,
+  decision index extended 0022 → 0063, lesson 7 (a verdict check
+  must not pass on its own inputs). README status updated (v0.2.1,
+  live Pages URL — "headless today" was stale). WEBOS appinfo
+  example 0.1.0 → 0.2.1. AGENTS workflow now routes to HANDOFF §4
+  phases and mandates the browser proof for web/shell changes.
+- Gates: full `xtask ci` green on 67532fa before push; dist native +
+  web green at v0.2.1; GitForge CI verified on the batch.

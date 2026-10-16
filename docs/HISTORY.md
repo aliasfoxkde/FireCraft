@@ -39,9 +39,25 @@ masks, layer/page structure (decision 0021), and the typed shared-layer
 model with its sharing commands (decision 0022) — taking the registry
 to 148 commands and parity to 172C/45P/57M.
 
-**Where it goes.** The 57 missing verbs, the partial-class debts, and
-the evidence-gated questions (view flags, button-symbol wire shape) are
-phased into atomic tasks in [`HANDOFF.md`](HANDOFF.md) §4.
+**Campaign complete, release turn two (2026-10-14 → 10-15).** The gap
+families ran #95–#125 in one day, taking parity from 174C to
+**268 C / 3 P / 0 M / 85 N** (registry 105 → 241); #126–#132 closed
+every recorded Phase 9 debt (tile bank, deep clone, mask rasterize,
+bake rasterize, shared-layer render, bilinear import), #133–#134 added
+pattern authoring and lossless WebP export. v0.2.0 shipped the whole
+surface — and its web bundle was dead on arrival: the eframe shell
+never overrode the wasm-only `as_any_mut`, so every browser file
+operation panicked, and the bridge smoke matched its "green" string
+inside the host page's own script source, so every gate stayed green.
+A real-browser session against the deployed bundle found it in an
+hour; v0.2.1 replaced the bundle the same day (downcast override,
+repaint after bridge mutations, honest smoke, web fmt gate).
+
+**Where it goes.** The parity campaign reached its evidence limits;
+current work is application surface and enhancements —
+[`HANDOFF.md`](HANDOFF.md) §4 Phases 11–13 (image support: lossy WebP
+decision, AVIF/HEIC; WebOS packaging dry-run; release-engineering
+hygiene) with the evidence-gated holds parked in Phase 12.
 
 ## Decision index
 
@@ -69,6 +85,47 @@ phased into atomic tasks in [`HANDOFF.md`](HANDOFF.md) §4.
 | 0020 | element masks | Mask model (mask.add family) |
 | 0021 | layer/page structure | Flat LYLv, IMPb master, PageBody/Pages deltas; sharing deferred |
 | 0022 | shared-layer model | LSMv/LSEv/LSAv typed; setSharing/shareToPages/detachShared |
+| 0023 | canvas color/resolution | document canvas color & resolution commands |
+| 0024 | object selection | selection model & the selection.* commands |
+| 0025 | hierarchy selects | hierarchy selects, selectSimilar, and the walk |
+| 0026 | selection-to-frames | selection-to-frames fans |
+| 0027 | primitive params | rectangle-primitive params and the quadrangle |
+| 0028 | autoshape redraw | autoshape.redraw (CS6 redrawSmartShape) |
+| 0029 | web point append | web-object point append |
+| 0030 | crop/edge/tween | crop selection, fill edge mode, tween |
+| 0031 | flatten family | flatten.mergeDown & co. via compositor bakes |
+| 0032 | knife/split | Knife + splitPaths (path splitting) |
+| 0033 | convert to paths | convertToPaths (text → glyph outlines) |
+| 0034 | rotate document | page rotation with a geometry re-bake |
+| 0035 | view flags | view flags are session state, not document state |
+| 0036 | button symbols | the four behaviors + button options |
+| 0037 | place image | the place-image trio + shared assemble/retile helpers |
+| 0038 | saved selections | named saved selections |
+| 0039 | clipboard | clipboard surface + the paste-mask trio |
+| 0040 | filter bake | filterSelection bake family over compose kernels |
+| 0041 | image size | document.setImageSize (the last M row) |
+| 0042 | convolve/motion blur | convolveSelection / motionBlurSelection bakes |
+| 0043 | web/group setters | web/group setter verbs |
+| 0044 | anim instance params | symbol.setAnimInstance* over the ANNi carrier |
+| 0045 | text rectangle fits | text.setTextRectangle* via TextEngine::auto_block |
+| 0046 | canvas trim | canvas trim + delete-all |
+| 0047 | loose-ends setters | setEffectName walker, swap behaviors, button text |
+| 0048 | text on path | text-on-path setters over a shared selection walk |
+| 0049 | pixel selection | pixel-mask move + chamfer-field adjust |
+| 0050 | paragraph setters | paragraph attribute setters over PINf/PSBf/PSAf |
+| 0051 | multi-run text | multi-run text model + markup verbs |
+| 0052 | anti-alias dials | custom anti-alias dial setters |
+| 0053 | symbol alias | duplicateSymbolForAlias re-points instances |
+| 0054 | import file | importFile placement (the last surface P row) |
+| 0055 | tile bank | mkBT tile-bank load/write |
+| 0056 | duplicate deep clone | object.duplicate deep-clones groups |
+| 0057 | vector image mask | mask_type "image" rasterizes a vector clipboard |
+| 0058 | mask union fold | pasteAsMask "add" unions the coverages |
+| 0059 | bake rasterize-first | filterSelection rasterizes non-image selections |
+| 0060 | shared-layer render | shared-layer links render their definitions |
+| 0061 | bilinear resample | importFile resamples bilinearly, premultiplied |
+| 0062 | pattern authoring | path.setPatternFill authors a pattern from an image |
+| 0063 | WebP export | lossless VP8L export through image-webp, zero new deps |
 
 ## Lessons (each paid for in a real failure)
 
@@ -97,6 +154,20 @@ phased into atomic tasks in [`HANDOFF.md`](HANDOFF.md) §4.
    diagnosis that exists only in chat is appeasement — decision docs,
    the parity matrix, PROGRESS.md, and the devlog are where work
    becomes durable.
+7. **A verdict check must not be able to pass on its own inputs**
+   (v0.2.0, 2026-10-15). The `dist --web` bridge smoke asserted its
+   "green" string against a DOM dump that still contained the host
+   page's own `<script>` source — it matched the code that would
+   produce the outcome, so it stayed green for the web bundle's
+   entire life while the bridge panicked on first use, and the
+   release could not open or save anything. Strip script bodies
+   before any DOM-string assertion; require the failure marker's
+   absence too. Paired lesson: both web defects (the `as_any_mut`
+   downcast panic, the missing repaint after bridge mutations) were
+   invisible to every desktop gate — wasm-only cfgs and
+   out-of-frame mutation have no desktop analog. Prove browser
+   behavior in a browser (HANDOFF §6.2) before shipping any `web/`
+   change.
 
 ## Infra archaeology (the runbook's "why")
 
