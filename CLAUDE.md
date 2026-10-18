@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-FireCraft: a clean-room reimplementation of Adobe Fireworks CS6 in pure Rust (MIT OR Apache-2.0 once M0 lands; Apache-2.0 today), modeled on the StoryTold/ArtCraft projects (github.com/storytold — photocraft et al.). Primary release target is a **WASM build for the user's WebOS**, plus a wide desktop/CLI release matrix. The reference application is Adobe Fireworks CS6 (v12.0).
+FireCraft: a clean-room reimplementation of Adobe Fireworks CS6 in pure Rust (Apache-2.0 OR MIT), modeled on the StoryTold/ArtCraft projects (github.com/storytold — photocraft et al.). Primary release target is a **WASM build for the user's WebOS** (live at https://firecraft-web.pages.dev), plus a wide desktop/CLI release matrix. The reference application is Adobe Fireworks CS6 (v12.0).
 
-**Status: M0–M15 complete; v0.1.0 released. Active work = the CS6 DOM verb-surface parity campaign (closing the 57 missing verbs in family batches).** Start at `docs/HANDOFF.md` — it holds the state snapshot, the phased/atomic plan, and the runbooks. Read before doing anything:
+**Status: M0–M15 complete; v0.2.1 released. The CS6 DOM verb-surface parity campaign is complete (268 C / 3 P / 0 M, registry 241). Active work = Phases 11–13: image support enhancements, WebOS packaging, release engineering hygiene.** Start at `docs/HANDOFF.md` — it holds the state snapshot, the phased/atomic plan, and the runbooks. Read before doing anything:
 
 1. `docs/HANDOFF.md` — agent handoff: state, phased plan, CI runbook, lessons (START HERE)
 2. `docs/PLANNING.md` — master plan: clean-room policy, Fireworks PNG format spec (§6), crate architecture (§7), stack decisions (§7.6), tiers, risks, method, RE tooling (§5.5), sourced research appendix
