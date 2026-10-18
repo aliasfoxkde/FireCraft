@@ -148,16 +148,12 @@ fn push_i32(out: &mut Vec<u8>, v: i32) {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::unwrap_used)]
     use super::*;
 
     /// White 2×2 opaque plane.
     fn white_plane() -> Plane<'static> {
         Plane::new(2, 2, &[255u8; 16]).unwrap()
-    }
-
-    /// Black 1×1 opaque plane.
-    fn black_plane() -> Plane<'static> {
-        Plane::new(1, 1, &[0u8, 0, 0, 255]).unwrap()
     }
 
     #[test]
@@ -170,10 +166,14 @@ mod tests {
     #[test]
     fn encode_bpp24_vs_bpp32_different_headers() {
         let plane = white_plane();
-        let mut opts24 = BmpOptions::default();
-        opts24.depth = BmpDepth::Bpp24;
-        let mut opts32 = BmpOptions::default();
-        opts32.depth = BmpDepth::Bpp32;
+        let opts24 = BmpOptions {
+            depth: BmpDepth::Bpp24,
+            ..Default::default()
+        };
+        let opts32 = BmpOptions {
+            depth: BmpDepth::Bpp32,
+            ..Default::default()
+        };
         let out24 = encode(&plane, &opts24).unwrap();
         let out32 = encode(&plane, &opts32).unwrap();
         // 24-bit uses BITMAPINFOHEADER (40 bytes),

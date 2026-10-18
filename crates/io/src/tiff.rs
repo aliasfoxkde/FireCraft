@@ -63,6 +63,7 @@ fn encode_err(stage: &str, error: tiff::TiffError) -> ExportError {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::unwrap_used)]
     use super::*;
 
     #[test]
@@ -85,8 +86,9 @@ mod tests {
         let out_none = encode(&plane, &TiffOptions::default()).unwrap();
         assert!(!out_none.is_empty());
 
-        let mut opts_pack = TiffOptions::default();
-        opts_pack.compression = TiffCompression::Packbits;
+        let opts_pack = TiffOptions {
+            compression: TiffCompression::Packbits,
+        };
         let out_pack = encode(&plane, &opts_pack).unwrap();
         assert!(!out_pack.is_empty());
     }

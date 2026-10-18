@@ -185,6 +185,7 @@ fn overflow_import() -> ImportError {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::unwrap_used)]
     use super::*;
 
     // ── helpers ───────────────────────────────────────────────────────────────

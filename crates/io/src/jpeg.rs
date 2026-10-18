@@ -94,6 +94,7 @@ pub fn encode(plane: &Plane<'_>, options: &JpegOptions) -> Result<Vec<u8>, Expor
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::unwrap_used)]
     use super::*;
 
     /// White 1×1 opaque plane.
@@ -104,8 +105,10 @@ mod tests {
     #[test]
     fn encode_rejects_quality_zero() {
         let plane = white_plane();
-        let mut opts = JpegOptions::default();
-        opts.quality = 0;
+        let opts = JpegOptions {
+            quality: 0,
+            ..Default::default()
+        };
         let err = encode(&plane, &opts).unwrap_err();
         assert!(
             matches!(err, ExportError::Unsupported { format: "jpeg", .. }
@@ -115,9 +118,11 @@ mod tests {
 
     #[test]
     fn encode_rejects_oversized_dimensions() {
-        // 65536 × 1 × 4 bytes = 262144 bytes needed for a plane this large.
-        let rgba = vec![0u8; 65536 * 1 * 4];
-        let plane = Plane::new(65536, 1, &rgba).unwrap();
+        // 65536 wide × 1 high × 4 bytes/pixel = 262144 bytes.
+        let width = 65536usize;
+        let height = 1usize;
+        let rgba = vec![0u8; width * height * 4];
+        let plane = Plane::new(width as u32, height as u32, &rgba).unwrap();
         let err = encode(&plane, &JpegOptions::default()).unwrap_err();
         assert!(matches!(err, ExportError::TooLarge { format: "jpeg", .. }));
     }
@@ -125,10 +130,14 @@ mod tests {
     #[test]
     fn encode_s444_vs_s420_produce_different_sizes() {
         let plane = white_plane();
-        let mut opts_444 = JpegOptions::default();
-        opts_444.chroma = ChromaSampling::S444;
-        let mut opts_420 = JpegOptions::default();
-        opts_420.chroma = ChromaSampling::S420;
+        let opts_444 = JpegOptions {
+            chroma: ChromaSampling::S444,
+            ..Default::default()
+        };
+        let opts_420 = JpegOptions {
+            chroma: ChromaSampling::S420,
+            ..Default::default()
+        };
         let out_444 = encode(&plane, &opts_444).unwrap();
         let out_420 = encode(&plane, &opts_420).unwrap();
         // Same content but different subsampling → different byte counts.

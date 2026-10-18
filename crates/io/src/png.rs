@@ -46,6 +46,7 @@ pub fn encode_with(plane: &Plane<'_>, options: &PngOptions) -> Result<Vec<u8>, E
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::unwrap_used)]
     use super::*;
 
     #[test]
