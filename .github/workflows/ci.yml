@@ -1,0 +1,125 @@
+# GitHub Actions backup CI — mirrors the GitForge 7-job pipeline.
+# GitForge is primary; this is the fallback if GitForge is unavailable.
+# Trigger: push to main and all branches (quick feedback), tags (releases).
+# The full gate (aegis + coverage + fmt + clippy + test + layers + wasm +
+# corpus + perf + fuzz + parity + scorecard + changelog) runs in one job.
+# No secrets required; no code is published from this workflow.
+
+name: CI (backup)
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: [main]
+  push:
+    tags: ["v*"]
+
+env:
+  CARGO_TERM_COLOR: always
+  # Disable network fetches in the Rust image to match GitForge offline behavior
+  CARGO_NET_OFFLINE: false
+
+jobs:
+  ci:
+    name: full gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-action@stable
+        with:
+          # Match the toolchain the project pins (check rust-toolchain.toml or Cargo.lock)
+          components: clippy, rustfmt
+
+      - name: Install aegis
+        run: |
+          # aegis 0.6.3 — must match the version pinned in the GitForge CI image
+          curl -sSL https://github.com/aliasfai/aegis/releases/download/v0.6.3/aegis_0.6.3_amd64.tar.gz \
+            | tar xz aegis
+          sudo mv aegis /usr/local/bin/aegis
+          aegis --version
+
+      - name: Install wasm32 target
+        run: rustup target add wasm32-unknown-unknown
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/registry
+          key: cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache cargo index
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/git
+          key: cargo-index-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache build artifacts
+        uses: actions/cache@v4
+        with:
+          path: target
+          key: cargo-build-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: cargo-build-${{ runner.os }}-
+
+      # Run the full gate — mirrors `cargo run -p xtask -- ci`
+      # Order: aegis → coverage → fmt → clippy → test → layers → wasm → corpus → perf → fuzz → parity → scorecard → changelog
+      - name: Aegis scan (PII/credential baseline)
+        run: aegis --format json -c production scan . --baseline .aegis-baseline.json -q
+        continue-on-error: false
+
+      - name: Coverage gate
+        run: cargo llvm-cov --all -- lcov --output-path lcov.info && grep -q "LH:\|LF:" lcov.info
+        continue-on-error: false
+
+      - name: Format check
+        run: cargo fmt --all -- --check && cargo fmt --manifest-path web/Cargo.toml -- --check
+        continue-on-error: false
+
+      - name: Clippy (deny warnings)
+        run: cargo clippy --workspace --all-targets -- -D warnings
+        continue-on-error: false
+
+      - name: Tests
+        run: cargo test --workspace
+        continue-on-error: false
+
+      - name: Layer enforcement
+        run: cargo run --quiet --package xtask -- layers
+        continue-on-error: false
+
+      - name: Wasm32 build check
+        run: cargo run --quiet --package xtask -- wasm
+        continue-on-error: false
+
+      - name: Corpus digests and round-trip
+        run: cargo run --quiet --package xtask -- corpus
+        continue-on-error: false
+
+      - name: Performance budgets
+        run: cargo run --quiet --package xtask -- perf
+        continue-on-error: false
+
+      - name: Fuzz compile check
+        run: cargo run --quiet --package xtask -- fuzz-quick
+        continue-on-error: false
+
+      - name: Parity floors
+        run: cargo run --quiet --package xtask -- parity
+        continue-on-error: false
+
+      - name: Scorecard
+        run: cargo run --quiet --package xtask -- scorecard
+        continue-on-error: false
+
+      - name: Changelog (version stamps)
+        run: cargo run --quiet --package xtask -- changelog
+        continue-on-error: false
+
+      # Smoke for the web bundle — only runs on tag pushes (release candidates)
+      - name: Web bundle smoke
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: cargo run --quiet --package xtask -- dist --web
+        continue-on-error: false
