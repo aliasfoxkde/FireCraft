@@ -29,9 +29,8 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install Rust
-        uses: dtolnay/rust-action@stable
+        uses: dtolnay/rust-toolchain@stable
         with:
-          # Match the toolchain the project pins (check rust-toolchain.toml or Cargo.lock)
           components: clippy, rustfmt
 
       - name: Install aegis
