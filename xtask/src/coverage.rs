@@ -114,10 +114,12 @@ pub fn bless() -> Result<(), String> {
 
 fn parse_lcov(path: &std::path::Path) -> Result<(f64, f64, f64), String> {
     let mut text = String::new();
+    // lcov.info is written relative to workspace_root(), which is also
+    // where this process runs when invoked via `cargo run -p xtask`.
     std::fs::File::open(path)
-        .map_err(|e| format!("could not open lcov.info: {e}"))?
+        .map_err(|e| format!("could not open {}: {e}", path.display()))?
         .read_to_string(&mut text)
-        .map_err(|e| format!("could not read lcov.info: {e}"))?;
+        .map_err(|e| format!("could not read {}: {e}", path.display()))?;
 
     let mut lines_hit: f64 = 0.0;
     let mut lines_found: f64 = 0.0;
