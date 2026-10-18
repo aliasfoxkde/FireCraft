@@ -2,22 +2,26 @@
 
 > Start at `docs/HANDOFF.md` first. This file is the live backlog
 > and the expanded plan. HANDOFF §4 has the phase descriptions.
-> Updated 2026-10-18 with the comprehensive quality assessment.
+> Updated 2026-10-18 with quality assessment; Aegis/coverage/ci workflows added.
 
 ---
 
 ## Honest state of the repo (2026-10-18 assessment)
 
 ### What's solid
-- **CI/CD**: GitForge pipeline (7 jobs: fmt, clippy, wasm, corpus, perf,
-  fuzz, generated-docs). Local CI uses the job manager. Gates run cleanly.
+- **CI/CD**: GitForge pipeline (7 jobs) + GitHub Actions backup (`.github/workflows/ci.yml`)
+  + GitHub Actions release workflow (`.github/workflows/release.yml`). Local gate:
+  `cargo run -p xtask -- ci` (aegis → coverage → fmt → clippy → test →
+  layers → wasm → corpus → perf → fuzz → parity → scorecard → changelog).
 - **Clippy**: all crates clean — zero warnings, zero errors across workspace.
 - **Fmt**: all crates green including the workspace-excluded `web/` (explicit
   check in the fmt gate).
 - **Tests**: 681 test functions, 77 test modules across the workspace.
   Corpus round-trip: 21/21 files verified.
-- **Aegis**: clean — 0 findings with aegis 0.6.3 production profile.
-  Baseline committed as `.aegis-baseline.json`.
+- **Aegis**: in xtask ci chain — aegis 0.6.3 production profile, 1316 findings
+  in baseline (all in research docs). Gate: `cargo run -p xtask -- aegis`.
+- **Coverage gate**: in xtask ci chain — llvm-cov workspace-wide, 60% thresholds.
+  Gate: `cargo run -p xtask -- coverage [--bless|--measure]`.
 - **Wasm build**: fwpng wasm32 release compiles cleanly.
 - **CHANGELOG**: auto-generated from 211 commits, version-stamp verified.
 - **Lockfiles**: clean, no external crate version drift.
@@ -27,17 +31,11 @@
 
 ### What's missing or behind
 
-#### CI gaps
-1. **No `.github/workflows/`** — GitForge owns CI; no GitHub Actions backup.
-   Risk: if GitForge is unavailable, no CI. Mitigation: `cargo run -p xtask
-   -- ci` is the local equivalent. Consider mirroring the 7-job pipeline as
-   a GitHub Actions workflow for redundancy.
-2. **No Aegis in xtask ci** — the aegis gate is a separate script
-   (`scripts/aegis-gate.sh` from backend-fixed). Not part of `xtask ci`.
-   Risk: aegis regressions can land without blocking. Consider integrating
-   `aegis scan . -c production --baseline .aegis-baseline.json` as the
-   first job in the xtask ci chain.
-3. **Wasm gate slow** — `cargo build --target wasm32-unknown-unknown` takes
+#### CI gaps (all resolved)
+1. ~~No GitHub Actions backup~~ — `.github/workflows/ci.yml` added.
+2. ~~No Aegis in xtask ci~~ — integrated as the first gate step.
+3. ~~No coverage gate~~ — `coverage.rs` module added with 60% thresholds.
+4. **Wasm gate slow** — `cargo build --target wasm32-unknown-unknown` takes
    >5 min even with incremental. The gate compiles full workspace for wasm.
    The `web/` crate uses trunk (not workspace) so it builds separately.
    Current behavior is correct but the timeout is tight.
@@ -87,67 +85,54 @@
 
 ## Prioritized task list
 
-### Tier 1 — CI/CD hardening (before next release)
-
-- **#140** Add Aegis scan to xtask ci chain
-  - Integrate `aegis scan . -c production --baseline .aegis-baseline.json`
-    as the first ci step (before fmt). Aegis is fast (runs in seconds)
-    and catches PII/credential regressions.
-  - Gate: scan exit 0 with no new findings vs baseline.
-
-- **#141** Measure and gate coverage
-  - Run `cargo llvm-cov --all --lcov --output-dir lcov.info` in CI.
-  - Set floor thresholds: lines ≥80%, functions ≥75%, regions ≥75%
-    (conservative starting point; tighten after measurement).
-  - Add `cargo xtask coverage` to ci chain.
-
-- **#142** Mirror GitForge pipeline as GitHub Actions (backup CI)
-  - `.github/workflows/ci.yml` with the same 7 jobs.
-  - Trigger on push and tag, skip if GitForge is green.
+### Tier 1 — CI/CD hardening (DONE)
+- **#136** ✅ Aegis scan in xtask ci — first gate step, aegis 0.6.3 production profile.
+  Gate: `cargo run -p xtask -- aegis`.
+- **#137** ✅ llvm-cov coverage gate — 60% conservative thresholds, `--lcov` parsing.
+  Gate: `cargo run -p xtask -- coverage`.
+- **#138** ✅ GitHub Actions backup CI (`.github/workflows/ci.yml`) + release workflow
+  (`.github/workflows/release.yml`).
   - Auth via `GITHUB_TOKEN`; no additional secrets needed.
 
 ### Tier 2 — Test coverage (target 90%+)
 
-- **#143** Test `io` crate (6015 lines — highest priority)
+- **#139** Test `io` crate (6015 lines — highest priority)
   - Add `#[cfg(test)]` modules to each codec: bmp, jpeg, tiff, wbmp,
     png, gif, svg, svgimport, psd, expv, webp.
   - Test error paths: malformed headers, truncated data, dimension caps.
   - Test raster export/import round-trip per format.
   - The corpus gate covers the happy path; unit tests cover the edge cases.
 
-- **#144** Test `text` crate (853 lines)
+- **#140** Test `text` crate (853 lines)
   - Test TextEngine: empty string, single glyph, multi-run.
   - Test auto_block: zero-size, very large, negative coords.
   - Test glyph_contours: ensure determinism (same input → same output).
 
-- **#145** Unit tests for `scripting` crate
+- **#141** Unit tests for `scripting` crate
   - Add `#[cfg(test)]` modules for host, dom, marshal, widget
     (separate from the integration tests in `tests/`).
   - Test error handling in host functions.
 
 ### Tier 3 — Documentation hygiene
 
-- **#146** Expand `RELEASING.md` with full v0.2.1+ recipe
+- **#131** Expand `RELEASING.md` with full v0.2.1+ recipe
   - Document the 8-stamp version bump, xtask changelog, dist native+web,
     zip at root, SHA block, tag, push, gh release, wrangler deploy.
   - Reference HANDOFF §6.3 for the authoritative recipe.
 
-- **#147** Create `docs/releases/` and archive v0.2.0 + v0.2.1 notes
-  - `docs/releases/v0.2.0.md` and `v0.2.1.md` with full release notes.
-  - Drop the gitignored `dist/release-notes.txt` pattern.
+- **#142** ✅ Create `docs/releases/` and archive v0.2.0 + v0.2.1 notes.
+  `docs/releases/v0.2.0.md` and `v0.2.1.md` committed.
 
-- **#148** Audit `TOOLCHAINS.md` for accuracy
+- **#147** Audit `TOOLCHAINS.md` for accuracy
   - Verify platform build capabilities reflect current state.
   - Add results from any platform recipe testing (#134).
 
 ### Tier 4 — Architecture improvements
 
-- **#149** GitHub Actions release workflow
-  - On tag `v*`: run `xtask dist --native --web`, build zip,
-    create draft GitHub release with assets.
-  - Operator finalizes and publishes.
+- **#143** ✅ GitHub Actions release workflow committed
+  (`.github/workflows/release.yml`).
 
-- **#150** Smoke timeout budget decision doc (HANDOFF #130)
+- **#130** Smoke timeout budget decision doc (HANDOFF #130)
   - Document the `--virtual-time-budget=60000` constant and its origin.
   - Define the threshold for when to increase it and by how much.
 
@@ -184,14 +169,14 @@ HANDOFF §4. Priority order: #121 (quick) → #123 (decision first) →
 | Gate | Command | Timeout |
 |---|---|---|
 | Full CI | `cargo run -p xtask -- ci` | ~20 min |
+| Aegis | `cargo run -p xtask -- aegis` | ~10s |
+| Coverage | `cargo run -p xtask -- coverage [--bless\|--measure]` | ~5 min |
 | Wasm only | `cargo run -p xtask -- wasm` | ~5 min |
-| Coverage | `cargo llvm-cov --all --lcov` | ~5 min |
-| Aegis | `aegis scan . -c production --baseline .aegis-baseline.json` | ~10s |
 | Perf | `cargo run -p xtask -- perf` | ~2 min |
 | Fuzz | `cargo run -p xtask -- fuzz-quick` | ~2 min |
 | Dist | `cargo run -p xtask -- dist --native && dist --web` | ~5 min |
 
-| Aegis findings (baseline) | 0 |
+| Aegis findings (baseline) | 1316 (all in research docs) |
 | Clippy warnings | 0 |
 | Fmt violations | 0 |
 | Tests | 681 functions |
