@@ -154,6 +154,8 @@ Current version: **0.2.1**.
 
 ### Fixes
 
+- **ci**: regenerate aegis baseline (correct JSON format) (8c067cc)
+- **ci**: use dtolnay/rust-toolchain not rust-action (correct action name) (653f313)
 - **web**: repaint after bridge mutations (67532fa)
 - **web**: bridge downcast, honest smoke verdict (bf3df7c)
 - **engine**: stale selection broke clipboard and walks (f01365b)
@@ -166,6 +168,12 @@ Current version: **0.2.1**.
 
 ### Documentation
 
+- update NEXT.md task status (Tier 1 CI done, #130 still pending) (7053081)
+- archive release notes in docs/releases/ (v0.2.0, v0.2.1) (df8e280)
+- expand NEXT.md with comprehensive quality assessment and 10-tier plan (a4fda47)
+- add NEXT.md — live next-agent task list (38c2ee5)
+- un-stale CLAUDE.md status line (v0.2.1, campaign complete) (6fcf80f)
+- reset handoff, status, and history to post-v0.2.1 reality (142093a)
 - session log for the v0.2.0 release (e230ed6)
 - session log for the docs batch (d315a96)
 - refresh README status, evidence-gate growth debt (8249797)
@@ -211,6 +219,10 @@ Current version: **0.2.1**.
 
 ### Continuous Integration
 
+- add GitHub Actions backup CI and release workflows (cc6d0ac)
+- add llvm-cov coverage gate to xtask ci chain (c01bb4a)
+- add Aegis scan to xtask ci chain (40d25f5)
+- commit Aegis production baseline (0 findings, aegis 0.6.3) (6453440)
 - restore fuzz step, document offline cache rule (5dd2660)
 - raise fuzz sandbox ceiling, jobs cap 2 -> 6 (05cfa96)
 - bound fuzz release build for 4G cgroup (b7932bd)
@@ -221,6 +233,7 @@ Current version: **0.2.1**.
 
 ### Chores
 
+- **release**: bump workspace to v0.2.1 (23beb08)
 - sync fuzz lockfile member versions (aec8a04)
 - **release**: bump workspace to v0.2.0 (ae75ee2)
 - retrigger CI after runner sandbox race (b78180a)

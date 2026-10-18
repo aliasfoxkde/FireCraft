@@ -44,10 +44,14 @@ fn aegis() -> Result<(), String> {
         Some(util::workspace_root().as_path()),
         "aegis",
         &[
-            "--format", "json",
-            "-c", "production",
-            "scan", ".",
-            "--baseline", ".aegis-baseline.json",
+            "--format",
+            "json",
+            "-c",
+            "production",
+            "scan",
+            ".",
+            "--baseline",
+            ".aegis-baseline.json",
             "-q",
         ],
     )
@@ -136,13 +140,21 @@ fn run_ci(full: Option<&str>) -> ExitCode {
             // Fast (~10 s): catches PII / credential regressions before fmt.
             // Baseline committed as `.aegis-baseline.json` (aegis 0.6.3, production profile).
             // Re-generate only when the aegis version changes.
-            util::run_in(Some(util::workspace_root().as_path()), "aegis", &[
-                "--format", "json",
-                "-c", "production",
-                "scan", ".",
-                "--baseline", ".aegis-baseline.json",
-                "-q",
-            ])
+            util::run_in(
+                Some(util::workspace_root().as_path()),
+                "aegis",
+                &[
+                    "--format",
+                    "json",
+                    "-c",
+                    "production",
+                    "scan",
+                    ".",
+                    "--baseline",
+                    ".aegis-baseline.json",
+                    "-q",
+                ],
+            )
         }),
         ("coverage", coverage::run),
         ("fmt", || {

@@ -24,3 +24,4 @@ web/dist/
 
 # wrangler local state
 /.wrangler/
+lcov.info
