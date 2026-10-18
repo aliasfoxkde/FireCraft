@@ -14,6 +14,7 @@
 
 mod changelog;
 mod corpus;
+mod coverage;
 mod dist;
 mod floor;
 mod fuzz;
@@ -32,7 +33,7 @@ mod webgolden;
 
 use std::process::ExitCode;
 
-const USAGE: &str = "usage: cargo run -p xtask -- <ci [--full]|aegis|layers|wasm|corpus [--report]|corpus-gen|library-gen|styles-gen|scripts|floor|golden [--bless]|svg-golden [--bless]|svg-roundtrip [--measure]|web-golden [--bless|--measure]|perf [--bless|--measure]|dist --web|--native|fuzz|fuzz-quick|panic-hunt|parity|scorecard>";
+const USAGE: &str = "usage: cargo run -p xtask -- <ci [--full]|aegis|coverage [--bless|--measure]|layers|wasm|corpus [--report]|corpus-gen|library-gen|styles-gen|scripts|floor|golden [--bless]|svg-golden [--bless]|svg-roundtrip [--measure]|web-golden [--bless|--measure]|perf [--bless|--measure]|dist --web|--native|fuzz|fuzz-quick|panic-hunt|parity|scorecard>";
 
 /// Run Aegis scan with the committed production-profile baseline.
 /// Runs from the workspace root so the baseline path (.aegis-baseline.json)
@@ -56,6 +57,11 @@ fn main() -> ExitCode {
     match std::env::args().nth(1).as_deref() {
         Some("ci") => run_ci(std::env::args().nth(2).as_deref()),
         Some("aegis") => finish("aegis", aegis()),
+        Some("coverage") => match std::env::args().nth(2).as_deref() {
+            Some("--bless") => finish("coverage --bless", coverage::bless()),
+            Some("--measure") => finish("coverage --measure", coverage::measure()),
+            _ => finish("coverage", coverage::run()),
+        },
         Some("layers") => finish("layers", layers::run()),
         Some("wasm") => finish("wasm", wasm::run()),
         Some("corpus") => match std::env::args().nth(2).as_deref() {
@@ -131,11 +137,14 @@ fn run_ci(full: Option<&str>) -> ExitCode {
             // Baseline committed as `.aegis-baseline.json` (aegis 0.6.3, production profile).
             // Re-generate only when the aegis version changes.
             util::run_in(Some(util::workspace_root().as_path()), "aegis", &[
-                "scan", ".",
+                "--format", "json",
                 "-c", "production",
+                "scan", ".",
                 "--baseline", ".aegis-baseline.json",
+                "-q",
             ])
         }),
+        ("coverage", coverage::run),
         ("fmt", || {
             util::cargo(&["fmt", "--all", "--", "--check"]).and_then(|()| {
                 // `web` is workspace-excluded (trunk) — `--all` never
