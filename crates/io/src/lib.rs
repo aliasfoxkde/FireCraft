@@ -250,3 +250,181 @@ impl std::fmt::Display for ImportError {
 }
 
 impl std::error::Error for ImportError {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── Plane ────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn plane_new_rejects_mismatched_bytes() {
+        // 2×2 needs 16 bytes, not 8.
+        let e = Plane::new(2, 2, &[0u8; 8]).unwrap_err();
+        assert!(matches!(
+            e,
+            ExportError::PlaneSize {
+                width: 2,
+                height: 2,
+                len: 8
+            }
+        ));
+    }
+
+    #[test]
+    fn plane_new_accepts_exact_bytes() {
+        let p = Plane::new(3, 2, &[0u8; 24]).unwrap();
+        assert_eq!(p.width, 3);
+        assert_eq!(p.height, 2);
+    }
+
+    #[test]
+    fn plane_pixel_returns_correct_bytes() {
+        let rgba = [0x11u8, 0x22, 0x33, 0x44];
+        let p = Plane::new(1, 1, &rgba).unwrap();
+        assert_eq!(p.pixel(0, 0), [0x11, 0x22, 0x33, 0x44]);
+    }
+
+    #[test]
+    fn plane_luma_at_opaque_white() {
+        // Opaque white → flatten_channel(255,255,255)=255 for all channels
+        // → luma = (255*77 + 255*151 + 255*28 + 127)/255 = 255
+        let rgba = [255u8, 255, 255, 255];
+        let p = Plane::new(1, 1, &rgba).unwrap();
+        assert_eq!(p.luma_at(0, 0, Matte::White), 255);
+    }
+
+    #[test]
+    fn plane_luma_at_opaque_black() {
+        // Opaque black → flatten_channel(0,255,0)=0 for all channels
+        // → luma = (0*77 + 0*151 + 0*28 + 127)/255 = 0
+        let rgba = [0u8, 0, 0, 255];
+        let p = Plane::new(1, 1, &rgba).unwrap();
+        assert_eq!(p.luma_at(0, 0, Matte::White), 0);
+    }
+
+    #[test]
+    fn plane_luma_at_gray_is_deterministic() {
+        // ITU-R 601: (77R + 151G + 28B + 128) / 255, half-up
+        // R=G=B=128 → (128*256 + 128) / 255 = 329 * 128 / 255 = 129
+        let rgba = [128u8, 128, 128, 255];
+        let p = Plane::new(1, 1, &rgba).unwrap();
+        assert_eq!(p.luma_at(0, 0, Matte::White), 129);
+    }
+
+    #[test]
+    fn plane_flatten_rgb_strips_alpha() {
+        let rgba = [255u8, 0, 0, 128]; // semi-transparent red
+        let p = Plane::new(1, 1, &rgba).unwrap();
+        let rgb = p.flatten_rgb(Matte::White);
+        // flatten_channel(255,128,255) = (255*128 + 255*127)/255 ≈ 128
+        assert_eq!(rgb.len(), 3);
+        assert_eq!(rgb[0], 255); // red channel stays red
+    }
+
+    // ── Matte ────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn matte_default_is_white() {
+        assert_eq!(Matte::default(), Matte::White);
+    }
+
+    #[test]
+    fn matte_rgb_extracts_channels() {
+        let m = Matte::Rgb(10, 20, 30);
+        assert_eq!(m.red_channel(), 10);
+        assert_eq!(m.green_channel(), 20);
+        assert_eq!(m.blue_channel(), 30);
+    }
+
+    // ── flatten_channel ───────────────────────────────────────────────────────
+
+    #[test]
+    fn flatten_channel_opaque_white_over_white() {
+        // c=255, a=255, m=255 → (255*255 + 255*0 + 127)/255 = 255
+        assert_eq!(super::flatten_channel(255, 255, 255), 255);
+    }
+
+    #[test]
+    fn flatten_channel_opaque_black_over_white() {
+        // c=0, a=255, m=255 → (0*255 + 255*0 + 127)/255 = 0
+        assert_eq!(super::flatten_channel(0, 255, 255), 0);
+    }
+
+    #[test]
+    fn flatten_channel_opaque_color_over_black() {
+        // c=255, a=255, m=0 → (255*255 + 0*0 + 127)/255 = 255
+        assert_eq!(super::flatten_channel(255, 255, 0), 255);
+    }
+
+    #[test]
+    fn flatten_channel_50_percent_alpha() {
+        // c=255, a=64 (25% alpha), m=255
+        // → (255*64 + 255*191 + 127)/255 = (16320 + 48705 + 127)/255 = 255
+        let result = super::flatten_channel(255, 64, 255);
+        assert_eq!(result, 255);
+    }
+
+    // ── ExportError Display ──────────────────────────────────────────────────
+
+    #[test]
+    fn export_error_plane_size_display() {
+        let e = ExportError::PlaneSize {
+            width: 2,
+            height: 3,
+            len: 16,
+        };
+        let s = format!("{e}");
+        assert!(s.contains("2x3"));
+        assert!(s.contains("16"));
+    }
+
+    #[test]
+    fn export_error_too_large_display() {
+        let e = ExportError::TooLarge {
+            format: "bmp",
+            width: 100,
+            height: 100,
+            limit: 50,
+        };
+        let s = format!("{e}");
+        assert!(s.contains("bmp"));
+        assert!(s.contains("100"));
+        assert!(s.contains("50"));
+    }
+
+    #[test]
+    fn export_error_encode_display() {
+        let e = ExportError::Encode {
+            format: "jpeg",
+            reason: "oops".into(),
+        };
+        let s = format!("{e}");
+        assert!(s.contains("jpeg"));
+        assert!(s.contains("oops"));
+    }
+
+    // ── ImportError Display ──────────────────────────────────────────────────
+
+    #[test]
+    fn import_error_truncated_display() {
+        let e = ImportError::Truncated {
+            format: "png",
+            needed: "header",
+        };
+        let s = format!("{e}");
+        assert!(s.contains("png"));
+        assert!(s.contains("truncated"));
+    }
+
+    #[test]
+    fn import_error_decode_display() {
+        let e = ImportError::Decode {
+            format: "gif",
+            reason: "bad data".into(),
+        };
+        let s = format!("{e}");
+        assert!(s.contains("gif"));
+        assert!(s.contains("bad data"));
+    }
+}

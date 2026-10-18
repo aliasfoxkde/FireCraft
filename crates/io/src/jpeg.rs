@@ -91,3 +91,55 @@ pub fn encode(plane: &Plane<'_>, options: &JpegOptions) -> Result<Vec<u8>, Expor
         })?;
     Ok(out)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// White 1×1 opaque plane.
+    fn white_plane() -> Plane<'static> {
+        Plane::new(1, 1, &[255u8, 255, 255, 255]).unwrap()
+    }
+
+    #[test]
+    fn encode_rejects_quality_zero() {
+        let plane = white_plane();
+        let mut opts = JpegOptions::default();
+        opts.quality = 0;
+        let err = encode(&plane, &opts).unwrap_err();
+        assert!(
+            matches!(err, ExportError::Unsupported { format: "jpeg", .. }
+                       if format!("{err}").contains("quality"))
+        );
+    }
+
+    #[test]
+    fn encode_rejects_oversized_dimensions() {
+        // 65536 × 1 × 4 bytes = 262144 bytes needed for a plane this large.
+        let rgba = vec![0u8; 65536 * 1 * 4];
+        let plane = Plane::new(65536, 1, &rgba).unwrap();
+        let err = encode(&plane, &JpegOptions::default()).unwrap_err();
+        assert!(matches!(err, ExportError::TooLarge { format: "jpeg", .. }));
+    }
+
+    #[test]
+    fn encode_s444_vs_s420_produce_different_sizes() {
+        let plane = white_plane();
+        let mut opts_444 = JpegOptions::default();
+        opts_444.chroma = ChromaSampling::S444;
+        let mut opts_420 = JpegOptions::default();
+        opts_420.chroma = ChromaSampling::S420;
+        let out_444 = encode(&plane, &opts_444).unwrap();
+        let out_420 = encode(&plane, &opts_420).unwrap();
+        // Same content but different subsampling → different byte counts.
+        // Both should be valid JPEG (image crate accepts them).
+        assert_ne!(out_444.len(), out_420.len());
+    }
+
+    #[test]
+    fn jpeg_options_default_has_quality_90() {
+        let opts = JpegOptions::default();
+        assert_eq!(opts.quality, 90);
+        assert_eq!(opts.chroma, ChromaSampling::S444);
+    }
+}

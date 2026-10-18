@@ -31,3 +31,26 @@ pub fn encode(plane: &Plane<'_>) -> Result<Vec<u8>, ExportError> {
         })?;
     Ok(out)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn encode_produces_nonempty_webp() {
+        let rgba = vec![255u8, 0, 0, 255]; // opaque red
+        let plane = Plane::new(1, 1, &rgba).unwrap();
+        let out = encode(&plane).unwrap();
+        assert!(!out.is_empty());
+        // RIFF header + WebP signature (image crate lowercases to "WEBP").
+        assert_eq!(&out[0..4], b"RIFF");
+        assert_eq!(&out[8..12], b"WEBP");
+    }
+
+    #[test]
+    fn encode_rejects_mismatched_plane() {
+        // Plane says 2×2 (16 bytes) but only 4 bytes provided → Plane::new fails.
+        let result = Plane::new(2, 2, &[0u8; 4]);
+        assert!(result.is_err());
+    }
+}

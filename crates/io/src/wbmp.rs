@@ -182,3 +182,238 @@ fn overflow_import() -> ImportError {
         reason: "dimension does not fit the platform word".to_owned(),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── helpers ───────────────────────────────────────────────────────────────
+
+    /// White 2×2 RGBA plane with all alpha = 255.
+    fn white_plane() -> Plane<'static> {
+        Plane::new(2, 2, &[255u8; 16]).unwrap()
+    }
+
+    /// Constructs a WBMP byte stream manually so we can test decode on
+    /// well-formed and malformed inputs without going through `encode`.
+    fn wbmp_bytes(type_octet: u8, fixed: u8, width: u64, height: u64) -> Vec<u8> {
+        let mut b = vec![type_octet, fixed];
+        let mut w = width;
+        loop {
+            let octet = (w & 0x7F) as u8 | if w > 0x7F { 0x80 } else { 0 };
+            b.push(octet);
+            w >>= 7;
+            if w == 0 {
+                break;
+            }
+        }
+        let mut h = height;
+        loop {
+            let octet = (h & 0x7F) as u8 | if h > 0x7F { 0x80 } else { 0 };
+            b.push(octet);
+            h >>= 7;
+            if h == 0 {
+                break;
+            }
+        }
+        b
+    }
+
+    // ── Plane::new validation ────────────────────────────────────────────────
+
+    #[test]
+    fn plane_new_rejects_mismatched_len() {
+        // width=2, height=2 → need 16 bytes, provide 8.
+        let result = Plane::new(2, 2, &[0u8; 8]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn plane_new_accepts_correct_len() {
+        let p = Plane::new(2, 2, &[0u8; 16]).unwrap();
+        assert_eq!(p.width, 2);
+        assert_eq!(p.height, 2);
+    }
+
+    #[test]
+    fn plane_luma_at_returns_correct_value() {
+        // Opaque white pixel → luma = 255.
+        let rgba = [255u8, 255, 255, 255];
+        let p = Plane::new(1, 1, &rgba).unwrap();
+        assert_eq!(p.luma_at(0, 0, crate::Matte::White), 255);
+    }
+
+    #[test]
+    fn plane_flatten_rgb_produces_rgb() {
+        let rgba = [255u8, 0, 0, 255]; // opaque red
+        let p = Plane::new(1, 1, &rgba).unwrap();
+        let rgb = p.flatten_rgb(crate::Matte::White);
+        assert_eq!(rgb, &[255, 0, 0]);
+    }
+
+    // ── varint helpers ────────────────────────────────────────────────────────
+
+    #[test]
+    fn varint_single_octet() {
+        let input = [0x00];
+        let mut c = 0;
+        let v = read_varint(&input, &mut c).unwrap();
+        assert_eq!(v, 0);
+        assert_eq!(c, 1);
+    }
+
+    #[test]
+    fn varint_two_octets() {
+        // 0x81 0x01  →  (1 << 0) | (1 << 7) = 129
+        let input = [0x81, 0x01];
+        let mut c = 0;
+        let v = read_varint(&input, &mut c).unwrap();
+        assert_eq!(v, 129);
+        assert_eq!(c, 2);
+    }
+
+    #[test]
+    fn varint_truncated() {
+        // Last octet has continuation bit set but there is no more data.
+        let input = [0x81];
+        let mut c = 0;
+        let err = read_varint(&input, &mut c).unwrap_err();
+        assert!(matches!(err, ImportError::Truncated { format: "wbmp", .. }));
+    }
+
+    // ── decode: header errors ─────────────────────────────────────────────────
+
+    #[test]
+    fn decode_rejects_empty() {
+        let err = decode(&[]).unwrap_err();
+        assert!(matches!(
+            err,
+            ImportError::Truncated {
+                needed: "type + fixed header octets",
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn decode_rejects_type_non_zero() {
+        // type=1 is not WMT type 0.
+        let b = wbmp_bytes(1, 0, 2, 2);
+        let err = decode(&b).unwrap_err();
+        assert!(matches!(err, ImportError::Unsupported { reason, .. }
+                       if reason.contains("type 0")));
+    }
+
+    #[test]
+    fn decode_rejects_extended_header() {
+        // fixed = 0x20 signals an extension header.
+        let b = wbmp_bytes(0, 0x20, 2, 2);
+        let err = decode(&b).unwrap_err();
+        assert!(matches!(err, ImportError::Unsupported { reason, .. }
+                       if reason.contains("extended header")));
+    }
+
+    #[test]
+    fn decode_rejects_nonzero_fixed_header() {
+        let b = wbmp_bytes(0, 0x01, 2, 2);
+        let err = decode(&b).unwrap_err();
+        assert!(matches!(err, ImportError::Decode { reason, .. }
+                       if reason.contains("0x00")));
+    }
+
+    #[test]
+    fn decode_rejects_zero_width() {
+        let b = wbmp_bytes(0, 0, 0, 2);
+        let err = decode(&b).unwrap_err();
+        assert!(matches!(err, ImportError::Decode { reason, .. }
+                       if reason.contains("degenerate")));
+    }
+
+    #[test]
+    fn decode_rejects_zero_height() {
+        let b = wbmp_bytes(0, 0, 2, 0);
+        let err = decode(&b).unwrap_err();
+        assert!(matches!(err, ImportError::Decode { reason, .. }
+                       if reason.contains("degenerate")));
+    }
+
+    #[test]
+    fn decode_rejects_oversized_dimensions() {
+        // width * height > MAX_PIXELS (100_000_000)
+        let b = wbmp_bytes(0, 0, 200_000, 200_000);
+        let err = decode(&b).unwrap_err();
+        assert!(matches!(err, ImportError::Unsupported { reason, .. }
+                       if reason.contains("exceeds")));
+    }
+
+    #[test]
+    fn decode_rejects_truncated_pixel_array() {
+        // Header OK: width=16, height=2 needs 4 pixel bytes
+        // (2 bytes/row × 2 rows). Provide only 2 — still 2 short.
+        let mut b = wbmp_bytes(0, 0, 16, 2);
+        b.extend([0u8; 2]); // only 2 of 4 needed bytes
+        let err = decode(&b).unwrap_err();
+        assert!(matches!(
+            err,
+            ImportError::Truncated {
+                needed: "complete pixel array",
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn decode_roundtrips_through_encode() {
+        let plane = white_plane();
+        let encoded = encode(&plane, crate::Matte::White).unwrap();
+        let (w, h, rgba) = decode(&encoded).unwrap();
+        assert_eq!(w, 2);
+        assert_eq!(h, 2);
+        // White pixels are 255 after luma threshold, all opaque → RGBA [255,255,255,255].
+        for px in rgba.chunks_exact(4) {
+            assert_eq!(px, &[255, 255, 255, 255]);
+        }
+    }
+
+    // ── encode: dimension limits ───────────────────────────────────────────────
+
+    #[test]
+    fn encode_produces_correct_header() {
+        let plane = white_plane();
+        let out = encode(&plane, crate::Matte::White).unwrap();
+        // Type header 0x00 0x00, then varint width=2, height=2.
+        // varint 2 = 0x02 (no continuation bit).
+        assert_eq!(&out[0..2], &[0x00, 0x00]);
+        assert_eq!(out[2], 2); // width varint
+        assert_eq!(out[3], 2); // height varint
+    }
+
+    #[test]
+    fn encode_pixel_row_thresholding() {
+        // Opaque black pixel: luma=0 < 128 → bit=0 → row byte 0x00.
+        // Opaque white pixel: luma=255 ≥ 128 → bit=1 → row byte 0x80.
+        let black = [0u8, 0, 0, 255];
+        let p_black = Plane::new(1, 1, &black).unwrap();
+        let out_black = encode(&p_black, crate::Matte::White).unwrap();
+        // Header (00 00 01 01) + 1 pixel byte; bit=0 → 0x00.
+        assert_eq!(out_black[4], 0x00, "black pixel should set no bits");
+
+        let white = [255u8, 255, 255, 255];
+        let p_white = Plane::new(1, 1, &white).unwrap();
+        let out_white = encode(&p_white, crate::Matte::White).unwrap();
+        // bit=1 → 0x80 (bit 7 set = first pixel white).
+        assert_eq!(out_white[4], 0x80, "white pixel should set bit 7");
+    }
+
+    #[test]
+    fn encode_matte_black_affects_thresholding() {
+        // Opaque white pixel over black matte → luma = (255*255 + 0*127)/255 = 255
+        // → bit=1. Opaque black pixel over black matte → luma = 0 → bit=0.
+        // 1×1 white pixel.
+        let white = [255u8, 255, 255, 255];
+        let p = Plane::new(1, 1, &white).unwrap();
+        let out = encode(&p, crate::Matte::Black).unwrap();
+        // Header + 1 pixel byte; bit 0 set → 0x80>>0 = 0x80.
+        assert_eq!(out[4], 0x80);
+    }
+}

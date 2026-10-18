@@ -60,3 +60,34 @@ fn encode_err(stage: &str, error: tiff::TiffError) -> ExportError {
         reason: format!("{stage}: {error}"),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tiff_compression_default_is_none() {
+        assert_eq!(TiffCompression::default(), TiffCompression::None);
+    }
+
+    #[test]
+    fn tiff_options_default_is_none_compression() {
+        let opts = TiffOptions::default();
+        assert_eq!(opts.compression, TiffCompression::None);
+    }
+
+    #[test]
+    fn encode_accepts_both_compression_modes() {
+        // 1×1 white plane — exercise both paths without hitting error branches.
+        let rgba = vec![255u8, 255, 255, 255];
+        let plane = Plane::new(1, 1, &rgba).unwrap();
+
+        let out_none = encode(&plane, &TiffOptions::default()).unwrap();
+        assert!(!out_none.is_empty());
+
+        let mut opts_pack = TiffOptions::default();
+        opts_pack.compression = TiffCompression::Packbits;
+        let out_pack = encode(&plane, &opts_pack).unwrap();
+        assert!(!out_pack.is_empty());
+    }
+}

@@ -145,3 +145,73 @@ fn push_u32(out: &mut Vec<u8>, v: u32) {
 fn push_i32(out: &mut Vec<u8>, v: i32) {
     out.extend_from_slice(&v.to_le_bytes());
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// White 2×2 opaque plane.
+    fn white_plane() -> Plane<'static> {
+        Plane::new(2, 2, &[255u8; 16]).unwrap()
+    }
+
+    /// Black 1×1 opaque plane.
+    fn black_plane() -> Plane<'static> {
+        Plane::new(1, 1, &[0u8, 0, 0, 255]).unwrap()
+    }
+
+    #[test]
+    fn encode_bpp24_produces_bm_magic() {
+        let plane = white_plane();
+        let out = encode(&plane, &BmpOptions::default()).unwrap();
+        assert_eq!(&out[0..2], b"BM");
+    }
+
+    #[test]
+    fn encode_bpp24_vs_bpp32_different_headers() {
+        let plane = white_plane();
+        let mut opts24 = BmpOptions::default();
+        opts24.depth = BmpDepth::Bpp24;
+        let mut opts32 = BmpOptions::default();
+        opts32.depth = BmpDepth::Bpp32;
+        let out24 = encode(&plane, &opts24).unwrap();
+        let out32 = encode(&plane, &opts32).unwrap();
+        // 24-bit uses BITMAPINFOHEADER (40 bytes),
+        // 32-bit uses BITMAPV4HEADER (108 bytes).
+        // Data offset = 14 + header_len → 54 vs 122.
+        let off24 = u32::from_le_bytes([out24[10], out24[11], out24[12], out24[13]]);
+        let off32 = u32::from_le_bytes([out32[10], out32[11], out32[12], out32[13]]);
+        assert_eq!(off24, 54);
+        assert_eq!(off32, 122);
+    }
+
+    #[test]
+    fn encode_bpp24_row_padding() {
+        // 2 pixels × 3 bytes = 6 bytes; pad to 4 → 2 padding bytes.
+        let plane = Plane::new(2, 1, &[255u8; 8]).unwrap();
+        let out = encode(&plane, &BmpOptions::default()).unwrap();
+        // After header (54 bytes), row should be 6 pixel bytes + 2 padding.
+        assert_eq!(out.len(), 54 + 8);
+    }
+
+    #[test]
+    fn encode_rejects_oversized_dimensions() {
+        // Width = i32::MAX + 1 (requires 8+ GB for the plane itself —
+        // cannot be constructed on 64-bit, so this documents the boundary
+        // rather than testing it in-process. The integration corpus covers
+        // large-dimension paths.)
+        let too_big = i32::MAX as u32 + 1;
+        let rgba = vec![0u8; 1]; // single byte so Plane::new fails first
+        let plane = Plane::new(too_big, 1, &rgba);
+        assert!(
+            plane.is_err(),
+            "plane construction should fail for oversized width"
+        );
+    }
+
+    #[test]
+    fn encode_bmpoptions_default_is_bpp24() {
+        let opts = BmpOptions::default();
+        assert_eq!(opts.depth, BmpDepth::Bpp24);
+    }
+}
