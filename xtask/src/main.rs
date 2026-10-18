@@ -32,11 +32,30 @@ mod webgolden;
 
 use std::process::ExitCode;
 
-const USAGE: &str = "usage: cargo run -p xtask -- <ci [--full]|layers|wasm|corpus [--report]|corpus-gen|library-gen|styles-gen|scripts|floor|golden [--bless]|svg-golden [--bless]|svg-roundtrip [--measure]|web-golden [--bless|--measure]|perf [--bless|--measure]|dist --web|--native|fuzz|fuzz-quick|panic-hunt|parity|scorecard>";
+const USAGE: &str = "usage: cargo run -p xtask -- <ci [--full]|aegis|layers|wasm|corpus [--report]|corpus-gen|library-gen|styles-gen|scripts|floor|golden [--bless]|svg-golden [--bless]|svg-roundtrip [--measure]|web-golden [--bless|--measure]|perf [--bless|--measure]|dist --web|--native|fuzz|fuzz-quick|panic-hunt|parity|scorecard>";
+
+/// Run Aegis scan with the committed production-profile baseline.
+/// Runs from the workspace root so the baseline path (.aegis-baseline.json)
+/// resolves correctly.  Baseline was generated with:
+///   aegis --format json -c production scan . --output-file .aegis-baseline.json -q
+fn aegis() -> Result<(), String> {
+    util::run_in(
+        Some(util::workspace_root().as_path()),
+        "aegis",
+        &[
+            "--format", "json",
+            "-c", "production",
+            "scan", ".",
+            "--baseline", ".aegis-baseline.json",
+            "-q",
+        ],
+    )
+}
 
 fn main() -> ExitCode {
     match std::env::args().nth(1).as_deref() {
         Some("ci") => run_ci(std::env::args().nth(2).as_deref()),
+        Some("aegis") => finish("aegis", aegis()),
         Some("layers") => finish("layers", layers::run()),
         Some("wasm") => finish("wasm", wasm::run()),
         Some("corpus") => match std::env::args().nth(2).as_deref() {
@@ -107,6 +126,16 @@ type Gate = (&'static str, fn() -> Result<(), String>);
 
 fn run_ci(full: Option<&str>) -> ExitCode {
     let mut steps: Vec<Gate> = vec![
+        ("aegis", || {
+            // Fast (~10 s): catches PII / credential regressions before fmt.
+            // Baseline committed as `.aegis-baseline.json` (aegis 0.6.3, production profile).
+            // Re-generate only when the aegis version changes.
+            util::run_in(Some(util::workspace_root().as_path()), "aegis", &[
+                "scan", ".",
+                "-c", "production",
+                "--baseline", ".aegis-baseline.json",
+            ])
+        }),
         ("fmt", || {
             util::cargo(&["fmt", "--all", "--", "--check"]).and_then(|()| {
                 // `web` is workspace-excluded (trunk) — `--all` never
