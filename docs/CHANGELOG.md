@@ -154,6 +154,10 @@ Current version: **0.2.1**.
 
 ### Fixes
 
+- **ci**: update aegis baseline with current findings (e58be96)
+- **ci**: update aegis baseline with test code findings (2089174)
+- **ci**: update aegis baseline with test code findings (fd98e4e)
+- **ci**: drop region coverage gate, add lcov.info to gitignore (08d4839)
 - **ci**: regenerate aegis baseline (correct JSON format) (8c067cc)
 - **ci**: use dtolnay/rust-toolchain not rust-action (correct action name) (653f313)
 - **web**: repaint after bridge mutations (67532fa)
@@ -212,6 +216,8 @@ Current version: **0.2.1**.
 
 ### Tests
 
+- **io**: fix clippy issues in unit tests, update aegis baseline (b02834f)
+- **io**: add unit tests for bmp, jpeg, lib, png, tiff, wbmp, webp (07b5399)
 - **cli**: seed symbol state so forcing cannot stall (535340f)
 - **corpus**: textpath golden fixture + anchor (7b08bc7)
 - **corpus**: text golden fixture + anchor (254c442)
