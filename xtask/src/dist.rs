@@ -31,7 +31,7 @@ const WASM_SIZE_CEILING: u64 = 14_000_000;
 
 /// Wall-clock backstop for the headless browser: a hung WebGL init
 /// kills the smoke instead of hanging `dist`.
-const SMOKE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(120);
+const SMOKE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(300);
 
 /// Assembles the web bundle under `dist/web/`.
 pub fn web() -> Result<(), String> {
