@@ -518,6 +518,366 @@ fn include_point(ink: &mut Option<geom::Rect>, point: &geom::Point) {
     ));
 }
 
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::unwrap_used)]
+    use super::*;
+    use doc::{Contour, PathPoint};
+    use geom::{Point, Rect};
+
+    // --- constants ---
+
+    #[test]
+    fn sans_family_is_liberation_sans() {
+        assert_eq!(SANS_FAMILY, "Liberation Sans");
+    }
+
+    #[test]
+    fn default_point_size_is_12() {
+        assert_eq!(DEFAULT_POINT_SIZE, 12.0);
+    }
+
+    #[test]
+    fn default_leading_factor_is_1_2() {
+        assert_eq!(DEFAULT_LEADING_FACTOR, 1.2);
+    }
+
+    // --- positive ---
+
+    #[test]
+    fn positive_rejects_negative() {
+        assert_eq!(positive(Some(-1.0)), None);
+    }
+
+    #[test]
+    fn positive_rejects_zero() {
+        assert_eq!(positive(Some(0.0)), None);
+    }
+
+    #[test]
+    fn positive_rejects_nan() {
+        assert_eq!(positive(Some(f64::NAN)), None);
+    }
+
+    #[test]
+    fn positive_rejects_infinity() {
+        assert_eq!(positive(Some(f64::INFINITY)), None);
+        assert_eq!(positive(Some(f64::NEG_INFINITY)), None);
+    }
+
+    #[test]
+    fn positive_accepts_positive() {
+        assert_eq!(positive(Some(1.0)), Some(1.0));
+        assert_eq!(positive(Some(0.001)), Some(0.001));
+    }
+
+    #[test]
+    fn positive_none_to_none() {
+        assert_eq!(positive(None), None);
+    }
+
+    // --- justification_of ---
+
+    #[test]
+    fn justification_of_default_left() {
+        let style = TextStyle::default();
+        assert_eq!(justification_of(&style), Align::Left);
+    }
+
+    #[test]
+    fn justification_of_0_left() {
+        let style = TextStyle {
+            justification: Some(0),
+            ..Default::default()
+        };
+        assert_eq!(justification_of(&style), Align::Left);
+    }
+
+    #[test]
+    fn justification_of_1_center() {
+        let style = TextStyle {
+            justification: Some(1),
+            ..Default::default()
+        };
+        assert_eq!(justification_of(&style), Align::Center);
+    }
+
+    #[test]
+    fn justification_of_2_right() {
+        let style = TextStyle {
+            justification: Some(2),
+            ..Default::default()
+        };
+        assert_eq!(justification_of(&style), Align::Right);
+    }
+
+    #[test]
+    fn justification_of_3_falls_back_to_left() {
+        // 3 is not a recognised value — falls back to Left.
+        let style = TextStyle {
+            justification: Some(3),
+            ..Default::default()
+        };
+        assert_eq!(justification_of(&style), Align::Left);
+    }
+
+    // --- line_height_of ---
+
+    #[test]
+    fn line_height_of_no_leading_uses_default_factor() {
+        let style = TextStyle::default();
+        let size = 12.0;
+        // Default leading factor 1.2 * size = 14.4; compare as scaled
+        // integers to avoid f32/f64 precision noise.
+        assert_eq!((line_height_of(&style, size) * 10.0) as i32, 144);
+    }
+
+    #[test]
+    fn line_height_of_positive_leading_unit_em() {
+        // leading_unit 0 = em; leading = 1.5 em; size = 10 → 15px
+        let style = TextStyle {
+            leading: Some(1.5),
+            leading_unit: Some(0),
+            ..Default::default()
+        };
+        assert_eq!(line_height_of(&style, 10.0), 15.0);
+    }
+
+    #[test]
+    fn line_height_of_positive_leading_unit_pixel() {
+        // leading_unit 1 = pixels
+        let style = TextStyle {
+            leading: Some(20.0),
+            leading_unit: Some(1),
+            ..Default::default()
+        };
+        assert_eq!(line_height_of(&style, 10.0), 20.0);
+    }
+
+    #[test]
+    fn line_height_of_negative_leading_uses_default() {
+        let style = TextStyle {
+            leading: Some(-1.0),
+            ..Default::default()
+        };
+        assert_eq!(line_height_of(&style, 10.0), 12.0); // 1.2 * 10
+    }
+
+    #[test]
+    fn line_height_of_nan_leading_uses_default() {
+        let style = TextStyle {
+            leading: Some(f64::NAN),
+            ..Default::default()
+        };
+        assert_eq!(line_height_of(&style, 10.0), 12.0);
+    }
+
+    // --- kerning_px ---
+
+    #[test]
+    fn kerning_px_no_kerning_is_zero() {
+        let style = TextStyle::default();
+        assert_eq!(kerning_px(&style, 10.0), 0.0);
+    }
+
+    #[test]
+    fn kerning_px_nan_kerning_is_zero() {
+        let style = TextStyle {
+            kerning: Some(f64::NAN),
+            ..Default::default()
+        };
+        assert_eq!(kerning_px(&style, 10.0), 0.0);
+    }
+
+    #[test]
+    fn kerning_px_applies_formula() {
+        // kerning in per-mille of em; size = 1000 px → kerning / 1000 * size
+        let style = TextStyle {
+            kerning: Some(50.0),
+            ..Default::default()
+        };
+        assert_eq!(kerning_px(&style, 1000.0), 50.0); // 50/1000*1000
+    }
+
+    // --- horizontal_scale_of ---
+
+    #[test]
+    fn horizontal_scale_of_no_scale_is_identity() {
+        let style = TextStyle::default();
+        assert_eq!(horizontal_scale_of(&style), 1.0);
+    }
+
+    #[test]
+    fn horizontal_scale_of_rejects_non_positive() {
+        let style = TextStyle {
+            horizontal_scale: Some(0.0),
+            ..Default::default()
+        };
+        assert_eq!(horizontal_scale_of(&style), 1.0);
+    }
+
+    #[test]
+    fn horizontal_scale_of_rejects_nan() {
+        let style = TextStyle {
+            horizontal_scale: Some(f64::NAN),
+            ..Default::default()
+        };
+        assert_eq!(horizontal_scale_of(&style), 1.0);
+    }
+
+    #[test]
+    fn horizontal_scale_of_applies_formula() {
+        // HORIZONTAL_SCALE_IDENTITY = 100; scale = 200 → 2.0
+        let style = TextStyle {
+            horizontal_scale: Some(200.0),
+            ..Default::default()
+        };
+        assert_eq!(horizontal_scale_of(&style), 2.0);
+    }
+
+    // --- family_of ---
+
+    #[test]
+    fn family_of_unknown_name_defaults_to_sans() {
+        let style = TextStyle {
+            font: Some("UnknownFont".to_owned()),
+            ..Default::default()
+        };
+        assert_eq!(family_of(&style), SANS_FAMILY);
+    }
+
+    #[test]
+    fn family_of_liberation_sans_preserved() {
+        let style = TextStyle {
+            font: Some("Liberation Sans".to_owned()),
+            ..Default::default()
+        };
+        assert_eq!(family_of(&style), "Liberation Sans");
+    }
+
+    #[test]
+    fn family_of_liberation_sans_case_insensitive() {
+        let style = TextStyle {
+            font: Some("liberation sans".to_owned()),
+            ..Default::default()
+        };
+        assert_eq!(family_of(&style), SANS_FAMILY);
+    }
+
+    #[test]
+    fn family_of_no_font_defaults_to_sans() {
+        let style = TextStyle::default();
+        assert_eq!(family_of(&style), SANS_FAMILY);
+    }
+
+    // --- ink_of ---
+
+    fn pt(x: f64, y: f64) -> Point {
+        Point::new(x, y)
+    }
+
+    fn path_point(x: f64, y: f64) -> PathPoint {
+        PathPoint {
+            anchor: pt(x, y),
+            primary: None,
+            secondary: None,
+            is_curve: false,
+        }
+    }
+
+    fn contour(pts: Vec<PathPoint>) -> Contour {
+        Contour {
+            closed: true,
+            point_count: pts.len() as i64,
+            points: pts,
+        }
+    }
+
+    #[test]
+    fn ink_of_empty_is_none() {
+        assert_eq!(ink_of(&[]), None);
+    }
+
+    #[test]
+    fn ink_of_single_anchor() {
+        let c = contour(vec![path_point(1.0, 2.0)]);
+        assert_eq!(ink_of(&[c]), Some(Rect::new(1.0, 2.0, 1.0, 2.0)));
+    }
+
+    #[test]
+    fn ink_of_multiple_anchors() {
+        let c = contour(vec![path_point(0.0, 0.0), path_point(10.0, 20.0)]);
+        assert_eq!(ink_of(&[c]), Some(Rect::new(0.0, 0.0, 10.0, 20.0)));
+    }
+
+    #[test]
+    fn ink_of_includes_handles() {
+        // primary handle shifts the ink bounding box
+        let pp = PathPoint {
+            anchor: pt(5.0, 5.0),
+            primary: Some(pt(15.0, 5.0)), // extends right edge
+            secondary: None,
+            is_curve: true,
+        };
+        assert_eq!(
+            ink_of(&[contour(vec![pp])]),
+            Some(Rect::new(5.0, 5.0, 15.0, 5.0))
+        );
+    }
+
+    #[test]
+    fn ink_of_multiple_contours() {
+        let c1 = contour(vec![path_point(0.0, 0.0), path_point(5.0, 5.0)]);
+        let c2 = contour(vec![path_point(-10.0, 0.0), path_point(20.0, 30.0)]);
+        // union: x0=-10, y0=0, x1=20, y1=30
+        assert_eq!(ink_of(&[c1, c2]), Some(Rect::new(-10.0, 0.0, 20.0, 30.0)));
+    }
+
+    // --- include_point ---
+
+    #[test]
+    fn include_point_first_point_sets_rect() {
+        let mut ink: Option<Rect> = None;
+        include_point(&mut ink, &pt(3.0, 7.0));
+        assert_eq!(ink, Some(Rect::new(3.0, 7.0, 3.0, 7.0)));
+    }
+
+    #[test]
+    fn include_point_expands_left() {
+        let mut ink = Some(Rect::new(5.0, 5.0, 10.0, 10.0));
+        include_point(&mut ink, &pt(1.0, 7.0));
+        assert_eq!(ink, Some(Rect::new(1.0, 5.0, 10.0, 10.0)));
+    }
+
+    #[test]
+    fn include_point_expands_right() {
+        let mut ink = Some(Rect::new(5.0, 5.0, 10.0, 10.0));
+        include_point(&mut ink, &pt(20.0, 7.0));
+        assert_eq!(ink, Some(Rect::new(5.0, 5.0, 20.0, 10.0)));
+    }
+
+    #[test]
+    fn include_point_expands_top() {
+        let mut ink = Some(Rect::new(5.0, 5.0, 10.0, 10.0));
+        include_point(&mut ink, &pt(7.0, 1.0));
+        assert_eq!(ink, Some(Rect::new(5.0, 1.0, 10.0, 10.0)));
+    }
+
+    #[test]
+    fn include_point_expands_bottom() {
+        let mut ink = Some(Rect::new(5.0, 5.0, 10.0, 10.0));
+        include_point(&mut ink, &pt(7.0, 20.0));
+        assert_eq!(ink, Some(Rect::new(5.0, 5.0, 10.0, 20.0)));
+    }
+
+    #[test]
+    fn include_point_point_inside_no_change() {
+        let mut ink = Some(Rect::new(0.0, 0.0, 100.0, 100.0));
+        include_point(&mut ink, &pt(50.0, 50.0));
+        assert_eq!(ink, Some(Rect::new(0.0, 0.0, 100.0, 100.0)));
+    }
+}
+
 /// Collects zeno outline commands into document contours. One contour
 /// per subpath; the closing segment folds into the first point (the
 /// model encodes closed contours without a duplicated anchor).

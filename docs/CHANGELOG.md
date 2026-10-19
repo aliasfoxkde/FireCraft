@@ -239,6 +239,7 @@ Current version: **0.2.1**.
 
 ### Chores
 
+- update scripts-report and CHANGELOG from CI run (93da18e)
 - **release**: bump workspace to v0.2.1 (23beb08)
 - sync fuzz lockfile member versions (aec8a04)
 - **release**: bump workspace to v0.2.0 (ae75ee2)
