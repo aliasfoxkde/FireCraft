@@ -125,6 +125,8 @@ pub fn native() -> Result<(), String> {
 /// Builds the release bundle with trunk and stages a fresh copy under
 /// `dist/web/` — the staging directory starts empty every run, so a
 /// dist artifact can never carry leftovers from an older tree.
+/// WebOS packaging files (`appinfo.json`, `host.html`) from
+/// `packaging/webos/` are copied and stamped with the workspace version.
 fn stage_web() -> Result<Vec<PathBuf>, String> {
     let web = workspace_root().join("web");
     let out = workspace_root().join("dist/web");
@@ -149,6 +151,25 @@ fn stage_web() -> Result<Vec<PathBuf>, String> {
             .map_err(|e| format!("stage {}: {e}", name.to_string_lossy()))?;
         staged.push(target);
     }
+
+    // Copy and stamp WebOS packaging files.
+    let version = workspace_version()?;
+    let webos_src = workspace_root().join("packaging/webos");
+    for entry in
+        std::fs::read_dir(&webos_src).map_err(|e| format!("read packaging/webos: {e}"))?
+    {
+        let entry = entry.map_err(|e| format!("readdir packaging/webos: {e}"))?;
+        let source = entry.path();
+        let name = entry.file_name();
+        let target = out.join(&name);
+        let contents = std::fs::read_to_string(&source)
+            .map_err(|e| format!("read {}: {e}", name.to_string_lossy()))?;
+        let stamped = contents.replace("@VERSION@", &version);
+        std::fs::write(&target, stamped)
+            .map_err(|e| format!("stage {}: {e}", name.to_string_lossy()))?;
+        staged.push(target);
+    }
+
     staged.sort();
     if staged.is_empty() {
         return Err("trunk produced no files — nothing to stage".to_owned());

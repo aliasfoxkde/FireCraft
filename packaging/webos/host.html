@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>FireCraft host</title></head>
+<body style="margin:0;background:#111">
+<iframe id="firecraft" src="/index.html" style="width:100vw;height:100vh;border:0"></iframe>
+<script>
+"use strict";
+const frame = document.getElementById("firecraft");
+// The tab title doubles as the status line: a hosting shell (and the
+// dist smoke) can watch for "green" without touching the page.
+const fail = (why) => { document.title = "FireCraft host: FAIL " + why; };
+const post = (message) => frame.contentWindow.postMessage(message, "*");
+function fixtureBytes() {
+    const bin = atob("__FIXTURE_B64__");
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return bytes;
+}
+let pngBytes = 0;
+window.addEventListener("message", (event) => {
+    const data = event.data;
+    if (!data || data.source !== "firecraft") return;
+    if (data.type === "ready") {
+        post({ type: "openDocument", bytes: fixtureBytes().buffer });
+    } else if (data.type === "opened") {
+        if (!data.ok) return fail("openDocument: " + (data.error || "unknown"));
+        post({
+            type: "apply", name: "object.createPath",
+            payload: { kind: "rect", x: 1, y: 1, width: 4, height: 4, page: 0, layer: 0, cell: 0 },
+        });
+    } else if (data.type === "applied") {
+        if (!data.ok) return fail("apply: " + (data.error || "unknown"));
+        post({ type: "exportPng" });
+    } else if (data.type === "png") {
+        if (!data.bytes || data.bytes.byteLength === 0) return fail("exportPng: empty");
+        pngBytes = data.bytes.byteLength;
+        post({ type: "exportDocument" });
+    } else if (data.type === "document") {
+        if (!data.bytes || data.bytes.byteLength === 0) return fail("exportDocument: empty");
+        document.title = "FireCraft host: green (png " + pngBytes + " B, doc " +
+            data.bytes.byteLength + " B)";
+    }
+});
+</script></body></html>

@@ -187,7 +187,7 @@ pub fn export_raster(
         "wbmp" => ::io::wbmp::encode(&plane, flags.matte).map_err(codec_err),
         "webp" => ::io::webp::encode(&plane).map_err(codec_err),
         other => Err(CliError(format!(
-            "unsupported export format .{other} (png|jpg|bmp|tiff|wbmp|webp)"
+            "unsupported export format .{other} (png|jpg|bmp|tiff|wbmp|webp|svg|psd|gif)"
         ))),
     }
 }

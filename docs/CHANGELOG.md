@@ -216,6 +216,7 @@ Current version: **0.2.1**.
 
 ### Tests
 
+- add unit tests for scripting marshal and text lib helpers (c9f5ed5)
 - **io**: fix clippy issues in unit tests, update aegis baseline (b02834f)
 - **io**: add unit tests for bmp, jpeg, lib, png, tiff, wbmp, webp (07b5399)
 - **cli**: seed symbol state so forcing cannot stall (535340f)
