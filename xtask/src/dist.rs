@@ -155,9 +155,7 @@ fn stage_web() -> Result<Vec<PathBuf>, String> {
     // Copy and stamp WebOS packaging files.
     let version = workspace_version()?;
     let webos_src = workspace_root().join("packaging/webos");
-    for entry in
-        std::fs::read_dir(&webos_src).map_err(|e| format!("read packaging/webos: {e}"))?
-    {
+    for entry in std::fs::read_dir(&webos_src).map_err(|e| format!("read packaging/webos: {e}"))? {
         let entry = entry.map_err(|e| format!("readdir packaging/webos: {e}"))?;
         let source = entry.path();
         let name = entry.file_name();
