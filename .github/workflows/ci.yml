@@ -10,10 +10,9 @@ name: CI (backup)
 on:
   push:
     branches: ["**"]
+    tags: ["v*"]
   pull_request:
     branches: [main]
-  push:
-    tags: ["v*"]
 
 env:
   CARGO_TERM_COLOR: always
@@ -35,14 +34,32 @@ jobs:
 
       - name: Install aegis
         run: |
-          # aegis 0.6.3 — must match the version pinned in the GitForge CI image
-          curl -sSL https://github.com/aliasfai/aegis/releases/download/v0.6.3/aegis_0.6.3_amd64.tar.gz \
-            | tar xz aegis
+          # aegis 0.6.3 — must match the version pinned in the GitForge CI
+          # image, or the baseline findings shift and the gate fails on
+          # tool drift rather than on a real finding.
+          set -euo pipefail
+          url=https://github.com/aliasfoxkde/aegis/releases/download/v0.6.3/aegis-linux-x86_64.tar.gz
+          curl -sSL -o aegis.tar.gz "$url"
+          echo "835fad56172f8977a91424a580d0a3ec0c5b59fea99f4c2eb4c0a88fce30ff9e  aegis.tar.gz" \
+            | sha256sum -c -
+          tar xzf aegis.tar.gz aegis
           sudo mv aegis /usr/local/bin/aegis
           aegis --version
 
       - name: Install wasm32 target
         run: rustup target add wasm32-unknown-unknown
+
+      - name: Install cargo-llvm-cov
+        # The coverage gate runs `cargo llvm-cov`; a fresh runner has no
+        # cargo-llvm-cov, and the step would fail with "no such command".
+        # --locked pins the version so the gate's output is reproducible.
+        run: cargo install cargo-llvm-cov --locked
+
+      - name: Install trunk
+        # `xtask wasm` skips the web bundle when trunk is absent — but the
+        # browser bundle is the primary release target, so CI must build
+        # it or a broken web/ change reaches the deploy unnoticed.
+        run: cargo install trunk --locked
 
       - name: Cache cargo registry
         uses: actions/cache@v4
@@ -63,62 +80,20 @@ jobs:
           key: cargo-build-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: cargo-build-${{ runner.os }}-
 
-      # Run the full gate — mirrors `cargo run -p xtask -- ci`
-      # Order: aegis → coverage → fmt → clippy → test → layers → wasm → corpus → perf → fuzz → parity → scorecard → changelog
-      - name: Aegis scan (PII/credential baseline)
-        run: aegis --format json -c production scan . --baseline .aegis-baseline.json -q
-        continue-on-error: false
-
-      - name: Coverage gate
-        run: cargo llvm-cov --all -- lcov --output-path lcov.info && grep -q "LH:\|LF:" lcov.info
-        continue-on-error: false
-
-      - name: Format check
-        run: cargo fmt --all -- --check && cargo fmt --manifest-path web/Cargo.toml -- --check
-        continue-on-error: false
-
-      - name: Clippy (deny warnings)
-        run: cargo clippy --workspace --all-targets -- -D warnings
-        continue-on-error: false
-
-      - name: Tests
-        run: cargo test --workspace
-        continue-on-error: false
-
-      - name: Layer enforcement
-        run: cargo run --quiet --package xtask -- layers
-        continue-on-error: false
-
-      - name: Wasm32 build check
-        run: cargo run --quiet --package xtask -- wasm
-        continue-on-error: false
-
-      - name: Corpus digests and round-trip
-        run: cargo run --quiet --package xtask -- corpus
-        continue-on-error: false
-
-      - name: Performance budgets
-        run: cargo run --quiet --package xtask -- perf
-        continue-on-error: false
-
-      - name: Fuzz compile check
-        run: cargo run --quiet --package xtask -- fuzz-quick
-        continue-on-error: false
-
-      - name: Parity floors
-        run: cargo run --quiet --package xtask -- parity
-        continue-on-error: false
-
-      - name: Scorecard
-        run: cargo run --quiet --package xtask -- scorecard
-        continue-on-error: false
-
-      - name: Changelog (version stamps)
-        run: cargo run --quiet --package xtask -- changelog
+      # The full gate. `xtask ci` is the single source of truth for the
+      # gate list (aegis → coverage → fmt → clippy → test → layers →
+      # wasm → corpus → floor → scripts → golden → svg-golden →
+      # svg-roundtrip → web-golden → perf → fuzz → parity → scorecard →
+      # changelog). A hand-written step list here silently drifted from
+      # it and missed six gates; calling the canonical command means the
+      # workflow cannot drift again. Each gate prints its own name, so a
+      # failure is still identifiable in the log.
+      - name: Full gate (xtask ci)
+        run: cargo run --package xtask -- ci
         continue-on-error: false
 
       # Smoke for the web bundle — only runs on tag pushes (release candidates)
       - name: Web bundle smoke
         if: startsWith(github.ref, 'refs/tags/v')
-        run: cargo run --quiet --package xtask -- dist --web
+        run: cargo run --package xtask -- dist --web
         continue-on-error: false

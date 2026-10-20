@@ -307,8 +307,10 @@ Phase 10 defects passed every desktop gate. The working pattern
   `cd dist/web && zip -qr ../firecraft-web-<v>.zip .`
 - **Publish:** tag, `git push gitforge main --tags`, `git push origin
   main --tags`, `gh release create vX.Y.Z --notes-file
-  dist/release-notes.txt <5 assets>`. GitForge has no release-asset
-  surface (tags only); GitHub carries the assets.
+  docs/releases/vX.Y.Z.md <5 assets>`. GitForge has no release-asset
+  surface (tags only); GitHub carries the assets. The release notes are
+  tracked in `docs/releases/` (13.3, closed) — `dist/release-notes.txt`
+  is gitignored staging and can be stale; do not ship it.
 - **Pages:** `wrangler pages deploy dist/web --project-name
   firecraft-web` (authenticated via `CLOUDFLARE_API_TOKEN`;
   <https://firecraft-web.pages.dev>, direct-upload project).

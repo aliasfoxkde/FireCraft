@@ -10,6 +10,7 @@ Current version: **0.2.2**.
 
 ### Features
 
+- cut v0.2.2 — CLI export message, WebOS packaging, decision docs (1665ce8)
 - **io**: lossless WebP export (05e91b3)
 - **path**: pattern fill authoring (5a17fd9)
 - **bitmap**: bilinear importFile resample (84b45fc)
@@ -173,6 +174,8 @@ Current version: **0.2.2**.
 
 ### Documentation
 
+- update v0.2.2 release notes with artifact hashes and deployment URL (c91378b)
+- add v0.2.2 release notes (0164f2f)
 - update NEXT.md task status (Tier 1 CI done, #130 still pending) (7053081)
 - archive release notes in docs/releases/ (v0.2.0, v0.2.1) (df8e280)
 - expand NEXT.md with comprehensive quality assessment and 10-tier plan (a4fda47)
@@ -241,6 +244,8 @@ Current version: **0.2.2**.
 
 ### Chores
 
+- increase smoke timeout 120s -> 300s; add native artifact hashes to v0.2.2 release notes (9bd7d40)
+- stamp deb package version to 0.2.2 (ee02f9f)
 - update scripts-report and CHANGELOG from CI run (93da18e)
 - **release**: bump workspace to v0.2.1 (23beb08)
 - sync fuzz lockfile member versions (aec8a04)

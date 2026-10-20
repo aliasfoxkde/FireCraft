@@ -46,6 +46,15 @@ jobs:
       - name: Install wasm32 target
         run: rustup target add wasm32-unknown-unknown
 
+      - name: Install trunk
+        # `dist --web` shells out to `trunk build --release`; without it
+        # the web bundle step dies with "trunk not on PATH".
+        run: cargo install trunk --locked
+
+      - name: Install chromium
+        # The bridge smoke inside `dist --web` drives a headless browser.
+        run: sudo apt-get update && sudo apt-get install -y chromium-browser
+
       - name: Build native artifacts
         run: cargo run --quiet --package xtask -- dist --native
 
@@ -53,20 +62,30 @@ jobs:
         run: cargo run --quiet --package xtask -- dist --web
 
       - name: Zip web bundle
+        env:
+          TAG: ${{ github.ref_name }}
         run: |
+          # The zip name must match the checksum step's path exactly —
+          # "${TAG}" keeps the "v" (v0.2.2) while the artifacts are
+          # named without it (0.2.2), matching the native set.
           cd dist/web
-          zip -qr ../firecraft-web-${GITHUB_REF#refs/tags/}.zip .
+          zip -qr "../firecraft-web-${TAG#v}.zip" .
           cd ../..
 
       - name: Generate checksums
         run: |
+          # Name each file explicitly. The globs over-match:
+          # `firecraft-*.tar.gz` also matches `firecraft-cli-*.tar.gz`,
+          # and `firecraft-web-*.zip` picks up older versions left in dist/.
           (
-            sha256sum dist/native/firecraft-*.tar.gz
-            sha256sum dist/native/firecraft-cli-*.tar.gz
-            sha256sum dist/native/firecraft_*.deb
-            sha256sum dist/firecraft-web-*.zip
+            sha256sum "dist/native/firecraft-${TAG#v}-linux-x86_64.tar.gz"
+            sha256sum "dist/native/firecraft-cli-${TAG#v}-linux-x86_64.tar.gz"
+            sha256sum "dist/native/firecraft_${TAG#v}_amd64.deb"
+            sha256sum "dist/firecraft-web-${TAG#v}.zip"
             sha256sum dist/native/MANIFEST.sha256
           ) > dist/RELEASE_SHA256.txt
+        env:
+          TAG: ${{ github.ref_name }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -80,6 +99,11 @@ jobs:
             dist/firecraft-web-*.zip
             dist/RELEASE_SHA256.txt
           retention-days: 5
+          # A clean runner has no stale artifacts, but a self-hosted or
+          # re-run job might. Fail loudly on a name collision rather
+          # than shipping two versions' files as one release.
+          if-no-files-found: error
+          overwrite: true
 
   release:
     name: create draft release
@@ -92,6 +116,9 @@ jobs:
           name: release-artifacts
           path: artifacts/
 
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Create draft release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -101,10 +128,18 @@ jobs:
           for f in artifacts/*; do
             assets+=(-a "$f")
           done
-          gh release create "v${TAG#v}" \
+          # Release body: the tracked notes in docs/releases/. Falls back
+          # to the checksum list only if that file is missing, so a release
+          # is never published with a bare SHA dump as its description.
+          notes="docs/releases/${TAG}.md"
+          if [ ! -f "$notes" ]; then
+            echo "::warning::${notes} not found; using checksum list as release body"
+            notes="artifacts/RELEASE_SHA256.txt"
+          fi
+          gh release create "$TAG" \
             --title "FireCraft ${TAG#v}" \
             --draft \
-            --notes-file artifacts/RELEASE_SHA256.txt \
+            --notes-file "$notes" \
             "${assets[@]}"
 
       # Uncomment to also deploy to Cloudflare Pages on every tag push.
