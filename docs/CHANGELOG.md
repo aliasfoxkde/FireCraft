@@ -155,6 +155,7 @@ Current version: **0.2.2**.
 
 ### Fixes
 
+- **ci**: repair broken GitHub Actions workflows (a3373ab)
 - **cli**: align export error message with actual format support (85edf33)
 - **ci**: update aegis baseline with current findings (e58be96)
 - **ci**: update aegis baseline with test code findings (2089174)
