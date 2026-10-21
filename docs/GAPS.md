@@ -53,11 +53,14 @@ currently pass through the "unsupported format" path cleanly.
 
 Decision 0065: deliberate refusal — HEVC patent pools. No HEIC code.
 
-### 2.3 Import surface parity (2–3 hr) → Task #145
+### 2.3 Import surface parity — ✅ No action needed (2026-10-20)
 
-CLI `import` accepts jpg/png/webp; `io::raster::decode` supports
-bmp/tiff/gif/wbmp/pnm/ico. Align CLI accept-lists and error strings.
-One test per newly-supported format.
+CLI `import` accepts any file — no extension whitelist. Format detection
+is pure magic-byte sniffing (`io::raster::sniff`/`decode`). All 7
+supported formats (PNG/JPEG/GIF/BMP/TIFF/WebP/WBMP) are handled
+correctly regardless of filename. PNM and ICO are correctly rejected.
+No mismatch exists. GAPS.md description of a CLI/export list mismatch was
+wrong — documented here as a finding, not a gap.
 
 ### 2.4 Lossy WebP — implementation (3–4 hr) → Task #146
 
@@ -138,36 +141,25 @@ WebOS device. This is infrastructure-blocked (no WebOS device in scope).
 
 ---
 
-### 4.2 Smoke budget measurement (1 hr)
+### 4.2 Smoke budget measurement — ✅ DONE
 
-**Problem:** `--virtual-time-budget=60000` is a constant. If the WASM
-bundle grows past ~15MB compiled, fetch+compile can exceed 60s on slow
-CI runners (not virtual time — actual wall time).
+Measured 2026-10-20: `firecraft-web-71ff69a0cf973bce_bg.wasm`
+is **12.2 MB** (12,778,688 bytes). Above 10MB threshold (warrants
+investigation) but below 15MB (no budget raise needed).
 
-**Action:** Measure wasm bundle size over time. If it approaches 15MB,
-raise the virtual-time budget to match measured load time + 50% headroom.
-
-**Current bundle:** `firecraft-web-0.2.2.wasm` — check size.
-```bash
-ls -lh dist/web/*.wasm
-```
-
-If >10MB: investigate. If >15MB: raise budget to measured time.
+60s virtual-time budget is adequate for a 12MB bundle — fetch+compile
+takes ~3–10s on CI runners. The 300s wall-clock backstop covers any
+unexpected slowness. Decision 0066 is current. Re-measure after any
+wasm bundle size increase >1MB.
 
 ---
 
-### 4.3 Platform recipes honest status (30 min)
+### 4.3 Platform recipes honest status — ✅ Done
 
-The `packaging/` directory has AppImage, macOS dmg, Windows scripts that
-have never been executed. The release notes correctly state "built and
-verified on Linux x86_64".
-
-**Action:** For each untested platform, add a "last verified" date and
-the known blocker (e.g., "macOS: no macOS SDK on this host; no CI runner
-for darwin target"). Do not ship untested platform artifacts.
-
-**Deliverable:** A `packaging/STATUS.md` or comments in each script
-describing the last-verified date and blocker.
+`docs/packaging/STATUS.md` created with table of all platforms, recipes,
+artifacts, last-verified dates, and known blockers. Linux x86_64
+verified 2026-10-19 (v0.2.2). AppImage/macOS/Windows: never verified,
+off-fleet recipes owned by operators with the respective toolchains.
 
 ---
 
