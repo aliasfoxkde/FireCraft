@@ -10,6 +10,8 @@ Current version: **0.2.2**.
 
 ### Features
 
+- **ci**: cache cargo-llvm-cov and trunk between CI runs (4a6e7d5)
+- **ci**: split fmt into its own fail-fast job (bf3dcdd)
 - cut v0.2.2 — CLI export message, WebOS packaging, decision docs (1665ce8)
 - **io**: lossless WebP export (05e91b3)
 - **path**: pattern fill authoring (5a17fd9)
@@ -155,6 +157,9 @@ Current version: **0.2.2**.
 
 ### Fixes
 
+- **xtask**: document ci-no-fmt in USAGE string (ecf87ab)
+- resolve local aegis hang, close v0.2.2, update docs, add GAPS.md (694024a)
+- **ci**: exclude generated files from the aegis scan (b27c658)
 - **ci**: repair broken GitHub Actions workflows (a3373ab)
 - **cli**: align export error message with actual format support (85edf33)
 - **ci**: update aegis baseline with current findings (e58be96)
@@ -175,6 +180,10 @@ Current version: **0.2.2**.
 
 ### Documentation
 
+- mark Phase 3 blocked findings, close stale tasks (a3ed43f)
+- update WEBOS.md — hardware proof gap documented, @VERSION@ mechanism clarified (b7705e9)
+- add platform STATUS.md, close #151; import parity is a non-finding (#145) (c3cff6e)
+- update GAPS.md Phase 1 done, fix decision numbers, refresh task table (f2ec12a)
 - update v0.2.2 release notes with artifact hashes and deployment URL (c91378b)
 - add v0.2.2 release notes (0164f2f)
 - update NEXT.md task status (Tier 1 CI done, #130 still pending) (7053081)

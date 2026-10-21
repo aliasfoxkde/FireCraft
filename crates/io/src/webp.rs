@@ -1,8 +1,10 @@
 //! WebP export: lossless VP8L through the `image` crate's pure-Rust
-//! encoder (`image-webp`). Lossy VP8 needs libwebp and stays out of
-//! scope — the export is the honest lossless round-trip: pixels in,
-//! the same pixels out (verified by the round-trip test against the
-//! import decoder in [`crate::raster`]).
+//! encoder (`image-webp`). Lossy VP8 via `libwebp-sys` behind the
+//! `lossy-webp` feature gate (native only; wasm32 cannot enable it).
+//!
+//! The export is the honest lossless round-trip: pixels in, the same
+//! pixels out (verified by the round-trip test against the import decoder
+//! in [`crate::raster`]).
 
 use crate::{ExportError, Plane};
 
@@ -30,6 +32,18 @@ pub fn encode(plane: &Plane<'_>) -> Result<Vec<u8>, ExportError> {
             reason: error.to_string(),
         })?;
     Ok(out)
+}
+
+/// Encodes a plane as lossy WebP (VP8) via `libwebp-sys`.
+///
+/// Only available when the `lossy-webp` feature is enabled (native builds).
+/// WASM builds must not enable this feature.
+///
+/// # Errors
+/// [`ExportError::Encode`] when libwebp refuses the input.
+#[cfg(feature = "lossy-webp")]
+pub fn encode_lossy(plane: &Plane<'_>, quality: f32) -> Result<Vec<u8>, ExportError> {
+    crate::webp_lossy::encode(plane, quality)
 }
 
 #[cfg(test)]
