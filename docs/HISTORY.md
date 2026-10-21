@@ -55,9 +55,24 @@ repaint after bridge mutations, honest smoke, web fmt gate).
 
 **Where it goes.** The parity campaign reached its evidence limits;
 current work is application surface and enhancements —
-[`HANDOFF.md`](HANDOFF.md) §4 Phases 11–13 (image support: lossy WebP
-decision, AVIF/HEIC; WebOS packaging dry-run; release-engineering
-hygiene) with the evidence-gated holds parked in Phase 12.
+[`HANDOFF.md`](HANDOFF.md) §4 Phases 11–13 (image support: AVIF/HEIC
+decisions 0064–0065, import surface parity, lossy WebP; WebOS packaging
+dry-run; release-engineering hygiene). Evidence-gated holds parked in
+Phase 12.
+
+**v0.2.2 and the hygiene turn (2026-10-19 → 10-20).** The GitHub
+Actions CI had been failing silently on every push for 18 commits —
+duplicate `push:` key in the `on:` block, wrong aegis download URL,
+missing trunk/chromium install, a coverage step that would pass at 0%,
+and a step list that had drifted 6 gates from `xtask ci`. All repaired
+in one session. The aegis PII scan was also found to hang locally on
+`target/` (build artifacts) and `fuzz/` (23GB corpus) — neither affects
+CI on a clean runner, but it meant local gate validation was skipped.
+Fixed: `target/` + `web/dist/` + `fuzz/` in `.aegisignore`; baseline
+regenerated. aegis now runs in 0.17s locally vs the previous >120s hang.
+The `xtask changelog` version stamp was also extended to verify all 8
+Cargo.toml files, and the smoke timeout raised 120s→300s. v0.2.2
+published on GitHub with 5 assets.
 
 ## Decision index
 
@@ -126,6 +141,9 @@ hygiene) with the evidence-gated holds parked in Phase 12.
 | 0061 | bilinear resample | importFile resamples bilinearly, premultiplied |
 | 0062 | pattern authoring | path.setPatternFill authors a pattern from an image |
 | 0063 | WebP export | lossless VP8L export through image-webp, zero new deps |
+| 0064 | AVIF decode policy | OS decoder on desktop; "unsupported in browser" in WASM |
+| 0065 | HEIC refusal | No maintainable open HEIC encoder/decoder; patent pools |
+| 0066 | smoke budget | 60s virtual-time covers app logic; 300s wall-clock backstop |
 
 ## Lessons (each paid for in a real failure)
 

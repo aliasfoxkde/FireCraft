@@ -964,3 +964,28 @@ documentation reset.
   phases and mandates the browser proof for web/shell changes.
 - Gates: full `xtask ci` green on 67532fa before push; dist native +
   web green at v0.2.1; GitForge CI verified on the batch.
+
+## 2026-10-20 — CI repair, v0.2.2 closed, gaps audit (#138)
+- GitHub Actions CI was broken for 18 pushes (duplicate `push:` key in
+  `on:` block), wrong aegis download URL, missing trunk/chromium
+  install, toothless coverage step, and 6 missing gates vs `xtask ci`.
+  Full repair: single `xtask ci` call in one job, all tools installed,
+  coverage uses the `xtask coverage` gate (enforces 60% threshold).
+- `xtask changelog` version stamp now checks all 8 Cargo.toml files
+  for consistency; `xtask dist --web` smoke timeout raised 120s→300s.
+- v0.2.2 tag pushed; 5 assets uploaded to GitHub draft release;
+  `appinfo.json` version stamp fixed (`@VERSION@`→`0.2.2`).
+  `gh release edit v0.2.2 --draft=false` — published.
+- aegis scan hangs locally on `target/` (110K+ build artifact lines)
+  and `fuzz/` (23GB corpus) — neither affects CI (clean runner).
+  Fixed: `target/` + `web/dist/` + `fuzz/` in `.aegisignore`;
+  baseline regenerated. aegis now runs in 0.17s locally.
+- `docs/GAPS.md` written: comprehensive phased plan covering Phase 11
+  (image support: AVIF decode policy/0064, HEIC refusal/0065,
+  import surface parity, lossy WebP), Phase 13 hygiene (WebOS proof,
+  smoke budget measurement, platform status), coverage growth to 90%,
+  CI improvements. Critical blockers fixed in this session.
+- PROGRESS "Now" reset to 2026-10-20; HISTORY arc extended; decision
+  index extended 0063 → 0066 (AVIF, HEIC, smoke budget); SESSIONS
+  entry added.
+- `xtask ci` full gate green on b27c658 (19/19 gates, ~15 min).
