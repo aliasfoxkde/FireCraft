@@ -4,23 +4,26 @@
 > [`HANDOFF.md`](HANDOFF.md) §7). History and narrative:
 > [`HISTORY.md`](HISTORY.md). Per-session log: [`SESSIONS.md`](SESSIONS.md).
 
-## Now (2026-10-20)
+## Now (2026-10-21)
 
 - **Released:** v0.2.0 + **v0.2.1** + **v0.2.2** (2026-10-20), repo
   public. v0.2.2 shipped: 54 unit tests, AVIF/HEIC decision docs,
   WebOS packaging dry-run, smoke budget documentation, 13 CLI format
   improvements. Web bundle live at <https://firecraft-web.pages.dev>
   (v0.2.2). The v0.2.2 GitHub release is published (not draft).
-- **Active work:** application surface + enhancements — HANDOFF §4
-  Phase 11 (image support: AVIF decode policy, HEIC refusal, import
-  surface parity), Phase 13 (release engineering hygiene). See
-  `docs/GAPS.md` for the full phased plan.
+- **Phase 2/11 complete (2026-10-21):** AVIF policy (dec. 0064),
+  HEIC refusal (dec. 0065), import surface parity, lossy WebP export
+  (`libwebp-sys`, `lossy-webp` feature, native only). All GAPS.md
+  Phase 2 tasks closed.
+- **Parked:** Phase 7 research (effect growth #156, TXFv texture #157)
+  — both need Wine oracle. Not actionable without CS6 corpus oracle.
 - **CI:** GitHub Actions green on all pushes. Local aegis scan fixed
-  (excludes `target/` / `web/dist/` / `fuzz/` from local scan).
+  (excludes `target/` / `web/dist/` / `fuzz/`).
 - **Roadmap:** M0–M15 **all closed**; the post-roadmap DOM parity
   campaign is **complete** (no M families). Decision docs 0001–0066.
-- **WebP in and out:** import since M8; `.webp` export routes through
-  the lossless VP8L codec (decision 0063).
+- **WebP:** import since M8; `.webp` export is VP8L lossless by default.
+  Native builds can opt into lossy VP8 via `--quality N` (feature
+  `lossy-webp`).
 
 ## Milestones
 
