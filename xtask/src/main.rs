@@ -59,7 +59,8 @@ fn aegis() -> Result<(), String> {
 
 fn main() -> ExitCode {
     match std::env::args().nth(1).as_deref() {
-        Some("ci") => run_ci(std::env::args().nth(2).as_deref()),
+        Some("ci") => run_ci(std::env::args().nth(2).as_deref(), false),
+        Some("ci-no-fmt") => run_ci(std::env::args().nth(2).as_deref(), true),
         Some("aegis") => finish("aegis", aegis()),
         Some("coverage") => match std::env::args().nth(2).as_deref() {
             Some("--bless") => finish("coverage --bless", coverage::bless()),
@@ -134,7 +135,9 @@ fn main() -> ExitCode {
 /// One gate: a name plus the check it runs.
 type Gate = (&'static str, fn() -> Result<(), String>);
 
-fn run_ci(full: Option<&str>) -> ExitCode {
+fn run_ci(full: Option<&str>, skip_fmt: bool) -> ExitCode {
+    // Build the step list. fmt is conditionally included so that `ci-no-fmt`
+    // (used by the CI fmt-gate job) stays independent from the gate job.
     let mut steps: Vec<Gate> = vec![
         ("aegis", || {
             // Fast (~10 s): catches PII / credential regressions before fmt.
@@ -190,6 +193,9 @@ fn run_ci(full: Option<&str>) -> ExitCode {
         ("scorecard", status::scorecard),
         ("changelog", changelog::run),
     ];
+    if skip_fmt {
+        steps.remove(2); // remove "fmt" at index 2
+    }
     if full == Some("--full") || full == Some("full") {
         steps.insert(steps.len() - 2, ("fuzz-full", fuzz::full));
     }

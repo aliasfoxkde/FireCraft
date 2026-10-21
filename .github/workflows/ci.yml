@@ -1,9 +1,12 @@
 # GitHub Actions backup CI — mirrors the GitForge 7-job pipeline.
 # GitForge is primary; this is the fallback if GitForge is unavailable.
-# Trigger: push to main and all branches (quick feedback), tags (releases).
-# The full gate (aegis + coverage + fmt + clippy + test + layers + wasm +
-# corpus + perf + fuzz + parity + scorecard + changelog) runs in one job.
-# No secrets required; no code is published from this workflow.
+#
+# Two-job design:
+#   fmt  — fast (~30s), fails fast, no expensive tool installs needed
+#   gate — the full `xtask ci-no-fmt` suite; only runs if fmt passes
+#
+# Both run on all pushes and PRs. The fmt job prevents wasted runner
+# time on formatting errors that would fail clippy anyway.
 
 name: CI (backup)
 
@@ -16,13 +19,31 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  # Disable network fetches in the Rust image to match GitForge offline behavior
-  CARGO_NET_OFFLINE: false
 
 jobs:
-  ci:
-    name: full gate
+  fmt:
+    name: fmt
     runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      # Also check the workspace-excluded web crate explicitly.
+      - name: Check web formatting
+        run: cargo fmt --manifest-path web/Cargo.toml -- --check
+
+  gate:
+    name: gate
+    runs-on: ubuntu-latest
+    needs: [fmt]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -80,16 +101,10 @@ jobs:
           key: cargo-build-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: cargo-build-${{ runner.os }}-
 
-      # The full gate. `xtask ci` is the single source of truth for the
-      # gate list (aegis → coverage → fmt → clippy → test → layers →
-      # wasm → corpus → floor → scripts → golden → svg-golden →
-      # svg-roundtrip → web-golden → perf → fuzz → parity → scorecard →
-      # changelog). A hand-written step list here silently drifted from
-      # it and missed six gates; calling the canonical command means the
-      # workflow cannot drift again. Each gate prints its own name, so a
-      # failure is still identifiable in the log.
-      - name: Full gate (xtask ci)
-        run: cargo run --package xtask -- ci
+      # `ci-no-fmt` skips the fmt step so the two jobs stay independent —
+      # fmt is owned by the `fmt` job above.
+      - name: Full gate (xtask ci-no-fmt)
+        run: cargo run --package xtask -- ci-no-fmt
         continue-on-error: false
 
       # Smoke for the web bundle — only runs on tag pushes (release candidates)

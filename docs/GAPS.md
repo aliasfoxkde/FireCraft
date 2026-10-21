@@ -62,12 +62,16 @@ correctly regardless of filename. PNM and ICO are correctly rejected.
 No mismatch exists. GAPS.md description of a CLI/export list mismatch was
 wrong — documented here as a finding, not a gap.
 
-### 2.4 Lossy WebP — implementation (3–4 hr) → Task #146
+### 2.4 Lossy WebP — implementation blocked on toolchain (3–4 hr) → Task #146
 
-Decision 0063 landed lossless VP8L. Lossy VP8 (libwebp-sys) remains:
-feature-gate `lossy-webp` native-only, WASM gets error message.
-`cargo build --release` exports lossy WebP; `trunk build --release`
-succeeds without libwebp-sys.
+Decision 0063 landed lossless VP8L via `image-webp` 0.2.4. `image-webp`
+exposes only `WebPEncoder::new_lossless()` — no lossy VP8 API exists in
+the pure-Rust crate. Adding lossy WebP requires `libwebp-sys` (C FFI)
+behind a feature gate: `#[cfg(feature = "lossy-webp")]`. The `wasm32`
+target cannot enable this feature. Native builds export lossy; WASM builds
+return "lossy WebP not supported in browser". `libwebp-sys` must be
+added as a conditional dependency and the encode path split in
+`crates/io/src/webp.rs`. App-CLI needs a quality flag.
 
 ---
 
@@ -165,17 +169,11 @@ off-fleet recipes owned by operators with the respective toolchains.
 
 ## Phase 5: CI / infrastructure improvements (optional, high-value)
 
-### 5.1 GitHub Actions — separate fmt check into its own job (1 hr)
+### 5.1 GitHub Actions — separate fmt check into its own job — ✅ Done
 
-**Problem:** The full gate runs in one `ci` job. If fmt fails, clippy and
-tests never run. Separating fmt into its own first job saves 10+ minutes
-of runner time per failed push.
-
-**Approach:** Two-job CI:
-1. `fmt` — runs `cargo fmt --all --check` (fast, ~30s)
-2. `gate` — runs `cargo run -p xtask -- ci` excluding fmt (the rest)
-
-Both run on all pushes. The `fmt` job fails fast.
+Two-job CI: `fmt` (fast ~30s) + `gate` (`xtask ci-no-fmt`). Both run
+on all pushes. `xtask` gained `ci-no-fmt` verb. `fmt` job fails fast,
+prevents expensive gates from running on formatting errors.
 
 ---
 
