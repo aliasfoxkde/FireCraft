@@ -177,26 +177,16 @@ prevents expensive gates from running on formatting errors.
 
 ---
 
-### 5.2 Coverage step isolation (1 hr)
+### 5.2 Coverage step isolation — ✅ Done (with #5.3)
 
-**Problem:** `cargo install cargo-llvm-cov --locked` runs on every CI
-job (every push). Installing a binary takes ~2 min. The xtask `coverage`
-step is the only thing that needs it.
+cargo-llvm-cov and trunk caching implemented below.
 
-**Approach:** Move `cargo-llvm-cov` install into a dedicated `coverage`
-job that runs in parallel with the main gate. Or: use a composite action
-that caches the installed binary.
+### 5.3 Trunk caching — ✅ Done
 
----
-
-### 5.3 Trunk caching (1 hr)
-
-**Problem:** `cargo install trunk --locked` runs on every CI job.
-Trunk is only needed for `dist --web`. It is installed in the `ci`
-job but only used in the smoke sub-step (which only runs on tags).
-
-**Approach:** Move trunk install into the `dist --web` step. Or: cache the
-`~/.cargo/bin/trunk` binary between runs.
+`~/.cargo/bin/cargo-llvm-cov` and `~/.cargo/bin/trunk` are now cached
+between runs via `actions/cache@v4`. Both use the `Cargo.lock` hash as
+the cache key. If cache-hit, the install step is skipped (~2 min saved
+per run). Locked versions are pinned so the cache key is stable.
 
 ---
 

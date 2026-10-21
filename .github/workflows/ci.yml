@@ -70,18 +70,6 @@ jobs:
       - name: Install wasm32 target
         run: rustup target add wasm32-unknown-unknown
 
-      - name: Install cargo-llvm-cov
-        # The coverage gate runs `cargo llvm-cov`; a fresh runner has no
-        # cargo-llvm-cov, and the step would fail with "no such command".
-        # --locked pins the version so the gate's output is reproducible.
-        run: cargo install cargo-llvm-cov --locked
-
-      - name: Install trunk
-        # `xtask wasm` skips the web bundle when trunk is absent — but the
-        # browser bundle is the primary release target, so CI must build
-        # it or a broken web/ change reaches the deploy unnoticed.
-        run: cargo install trunk --locked
-
       - name: Cache cargo registry
         uses: actions/cache@v4
         with:
@@ -100,6 +88,30 @@ jobs:
           path: target
           key: cargo-build-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: cargo-build-${{ runner.os }}-
+
+      # Cache cargo-llvm-cov and trunk binaries between runs (~2 min saved per run).
+      # --locked pins the version so the cache key matches the locked version.
+      - name: Cache cargo-llvm-cov
+        id: cache-llvc
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/cargo-llvm-cov
+          key: cargo-llvm-cov-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Install cargo-llvm-cov (if uncached)
+        if: steps.cache-llvc.outputs.cache-hit != 'true'
+        run: cargo install cargo-llvm-cov --locked
+
+      - name: Cache trunk
+        id: cache-trunk
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/trunk
+          key: trunk-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Install trunk (if uncached)
+        if: steps.cache-trunk.outputs.cache-hit != 'true'
+        run: cargo install trunk --locked
 
       # `ci-no-fmt` skips the fmt step so the two jobs stay independent —
       # fmt is owned by the `fmt` job above.
