@@ -22,6 +22,8 @@ pub mod svgimport;
 pub mod tiff;
 pub mod wbmp;
 pub mod webp;
+#[cfg(feature = "lossy-webp")]
+pub mod webp_lossy;
 
 /// A borrowed straight-alpha RGBA8 image plane.
 ///

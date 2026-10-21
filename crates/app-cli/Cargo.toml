@@ -20,6 +20,9 @@ default = ["scripting"]
 # wasm build drops them with --no-default-features — the web shell
 # embeds scripting directly; the control channel never crosses wasm.
 scripting = ["dep:scripting"]
+# Enable lossy WebP export via libwebp-sys (native only; browser wasm
+# gets "lossy WebP not supported in browser").
+lossy-webp = ["io/lossy-webp"]
 
 [dependencies]
 doc = { path = "../doc", features = ["serde"] }

@@ -185,7 +185,17 @@ pub fn export_raster(
             ::io::tiff::encode(&plane, &::io::tiff::TiffOptions::default()).map_err(codec_err)
         }
         "wbmp" => ::io::wbmp::encode(&plane, flags.matte).map_err(codec_err),
-        "webp" => ::io::webp::encode(&plane).map_err(codec_err),
+        "webp" => {
+            #[cfg(feature = "lossy-webp")]
+            {
+                let q = flags.quality.map_or(75.0, |q| q as f32);
+                ::io::webp::encode_lossy(&plane, q).map_err(codec_err)
+            }
+            #[cfg(not(feature = "lossy-webp"))]
+            {
+                ::io::webp::encode(&plane).map_err(codec_err)
+            }
+        }
         other => Err(CliError(format!(
             "unsupported export format .{other} (png|jpg|bmp|tiff|wbmp|webp|svg|psd|gif)"
         ))),

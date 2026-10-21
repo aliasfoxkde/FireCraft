@@ -62,16 +62,27 @@ correctly regardless of filename. PNM and ICO are correctly rejected.
 No mismatch exists. GAPS.md description of a CLI/export list mismatch was
 wrong — documented here as a finding, not a gap.
 
-### 2.4 Lossy WebP — implementation blocked on toolchain (3–4 hr) → Task #146
+### 2.4 Lossy WebP — ✅ Done (2026-10-21, Task #146)
 
 Decision 0063 landed lossless VP8L via `image-webp` 0.2.4. `image-webp`
 exposes only `WebPEncoder::new_lossless()` — no lossy VP8 API exists in
-the pure-Rust crate. Adding lossy WebP requires `libwebp-sys` (C FFI)
+the pure-Rust crate. Adding lossy WebP required `libwebp-sys` (C FFI)
 behind a feature gate: `#[cfg(feature = "lossy-webp")]`. The `wasm32`
 target cannot enable this feature. Native builds export lossy; WASM builds
-return "lossy WebP not supported in browser". `libwebp-sys` must be
-added as a conditional dependency and the encode path split in
-`crates/io/src/webp.rs`. App-CLI needs a quality flag.
+return "lossy WebP not supported in browser".
+
+Implementation (2026-10-21):
+- `crates/io/Cargo.toml`: added `libwebp-sys = "0.14.4"` as optional dep,
+  `lossy-webp = ["libwebp-sys"]` feature. Local `unsafe_code = "allow"` added
+  (required for FFI-only crate).
+- `crates/io/src/webp_lossy.rs`: new module using `WebPEncodeRGBA` directly
+  (quality passed as f32, no `WebPConfig` needed for this API). `Plane` → raw
+  RGBA → `WebPEncodeRGBA` → `WebPFree` → `Vec<u8>`. Three tests: basic encode,
+  mismatched plane, quality clamping.
+- `crates/io/src/lib.rs`: added `#[cfg(feature = "lossy-webp")] pub mod webp_lossy`.
+- `crates/app-cli/Cargo.toml`: added `lossy-webp = ["io/lossy-webp"]` feature.
+- `crates/app-cli/src/ops.rs`: `webp` branch splits on `#[cfg(feature)]` — lossy
+  path uses `flags.quality.map_or(75.0, |q| q as f32)`; lossless path unchanged.
 
 ---
 
