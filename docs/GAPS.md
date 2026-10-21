@@ -77,38 +77,23 @@ added as a conditional dependency and the encode path split in
 
 ## Phase 3: Coverage growth toward 90% line / 90% function (ongoing)
 
-### 3.1 Establish the baseline (30 min)
+### 3.1 Establish the baseline — blocked (local environment)
 
-Run on a clean build:
-```bash
-cargo clean
-cargo build --workspace
-cargo run -p xtask -- coverage --bless
-```
-Then commit the new `llvmcov/default.profdata` and threshold comments.
-
-**Note:** `cargo llvm-cov` directly (without the xtask wrapper) currently
-fails locally on a stale `target/llvm-cov-target/` artifact from a prior
-build. The xtask `coverage` step works because it re-measures from a
-fresh state. The direct invocation issue is a local environment problem
-(not a CI issue), but the coverage data should be re-measured on a clean
-build before any threshold raise.
+`cargo run -p xtask -- coverage --bless` fails locally: `llvm-cov export`
+reports `No such file or directory` for a `batch-*` binary from a prior
+build. `target/llvm-cov-target/` has stale artifacts. **Resolution:**
+run in CI on a clean runner, or `cargo clean` before the next coverage run.
+Threshold remains at 60%. The CI coverage gate still enforces 60% correctly.
 
 ---
 
-### 3.2 Identify the coverage gaps (1 hr)
+### 3.2 Identify the coverage gaps — blocked (needs clean coverage run)
 
-The 80.3% / 78.0% numbers cover the whole workspace. Identify which crates
-are below average:
-- `crates/doc/src/fwmap/` — reader is well-tested (fwmap/tests.rs is 2996
-  lines, heavy on round-trip)
-- `crates/engine/src/catalog/` — many command handlers may be untested
-- `crates/compose/src/effects.rs` — filter kernels likely well-covered by
-  golden tests
-- `crates/io/` — jpeg/png/webp have some unit tests; other formats may not
-
-**Deliverable:** A table of below-average crates with targeted test gaps
-(e.g., "bitmap resize: no unit test for the aspect-correct path").
+Per-crate breakdown requires `cargo llvm-cov --lib --manifest-path
+crates/CRATE/Cargo.toml --text`. Cannot run locally due to stale
+`target/llvm-cov-target/` artifacts. **Deliverable:** a table of
+below-average crates with one concrete test idea per gap. Unblock by
+running the coverage re-measure in CI or `cargo clean` first.
 
 ---
 
