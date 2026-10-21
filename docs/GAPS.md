@@ -217,21 +217,22 @@ The untested surface at 80.3% line coverage is likely concentrated in:
 
 ## Phase 7: Deep research items (parked unless oracle materializes)
 
-### 7.1 Out-of-bounds effect growth (Wine oracle needed)
+### 7.1 Out-of-bounds effect growth — closed (infra blocked)
 
-See HANDOFF §4 Phase 12. The destructive bake clips to the image surface
-by settled posture. Reopening requires a CS6 filter/flatten bounds
-oracle — `source/FireworksPortable/` exists to run CS6 under Wine.
+Attempted 2026-10-21: Wine installed, Xvfb available, `source/` binaries
+accessible. FireworksPortable.exe launches but fails because `mfc100u.dll`
+(Visual C++ 2010 runtime) is not present in the CS6 install and not
+available in any Debian package. Microsoft download URLs for vcredist_x64
+are dead/redirected. No Windows installation available to copy from.
 
-**Blocker:** No Wine on this host. The corpus run would generate Adobe-
-authored test files. Do not attempt without the oracle.
+**Blocker is infrastructure, not effort.** Do not reopen unless:
+- A Windows installation (real or VM) becomes available to extract `mfc100u.dll`, OR
+- The VC++ 2010 runtime redistributable becomes available from an accessible archive
 
----
+### 7.2 `setFillNColorNTexture` — closed (same infra blocker)
 
-### 7.2 `setFillNColorNTexture` (TXFv texture observation needed)
-
-Evidence-gated. Needs an observed `TXFv` shape authored in CS6. Same
-oracle requirement as 7.1.
+Same blocker as 7.1: CS6 cannot launch without VC++ 2010 runtime.
+Do not reopen without the same oracle.
 
 ---
 
