@@ -10,9 +10,9 @@
 
 | Dimension | Status | Notes |
 |---|---|---|
-| **Shipped** | v0.2.2 tag + GitHub draft, 5 assets uploaded | Draft not yet published |
-| **CI** | GitHub Actions green (last: 28m21s, commit b27c658) | GitForge not checked (hub unavailable) |
-| **aegis** | Baseline clean; local scan hangs on `target/` | `target/` not in `.aegisignore` — scanner traverses 110K+ Rust lines of build artifacts |
+| **Shipped** | v0.2.2 published on GitHub (5 assets) | ✅ |
+| **CI** | GitHub Actions green on b27c658; 694024a queued | GitForge also pushed |
+| **aegis** | Baseline clean; scan runs in 0.17s | `target/` + `web/dist/` + `fuzz/` in `.aegisignore` |
 | **Coverage** | 80.3% lines / 78.0% funcs (threshold 60%) | `cargo llvm-cov` locally fails on stale build artifact; CI uses `xtask coverage` which works |
 | **fmt / clippy** | Not run locally (hook blocks); last known green in CI | |
 | **Registry** | 241 commands | Stable since #133 |
@@ -25,144 +25,46 @@
 
 ---
 
-## Critical blockers (fix before next push)
+## Critical blockers — ALL RESOLVED (2026-10-20)
 
-### [CRITICAL] aegis scan hangs locally on `target/`
-**Problem:** `aegis scan .` traverses `target/`, which contains ~110K lines of
-build artifact `.rlib` and `.d` files — the scanner hangs indefinitely
-(>120s before SIGTERM). CI does not hit this because it runs on a clean
-runner with no `target/` from prior builds.
-
-**Root cause:** aegis does **not** respect `.gitignore` by default.
-`.aegisignore` excludes specific generated files but not directories.
-
-**Fix:** Add `target/` to `.aegisignore`.
-```
-target/
-```
-
-This is a local-only issue. CI remains unaffected.
+- ✅ aegis hangs on `target/`/`fuzz/`/`web/dist/` — all three in `.aegisignore`, baseline regenerated, scan now 0.17s
+- ✅ v0.2.2 published — `gh release edit v0.2.2 --draft=false`
+- ✅ `appinfo.json` version stamp — `@VERSION@` → `0.2.2` in both `packaging/webos/` and `dist/web/`
 
 ---
 
-### [HIGH] v0.2.2 draft not published
-**Problem:** `gh release view v0.2.2` shows `isDraft: true`. The tag was
-pushed, assets uploaded, but the release was never published.
+## Phase 1: Documentation & release hygiene ✅ DONE
 
-**Fix:** `gh release edit v0.2.2 --draft=false`
-
----
-
-### [HIGH] `appinfo.json` version stamp shows `@VERSION@`
-**Problem:** `packaging/webos/appinfo.json` has `"version": "@VERSION@"` —
-the substitution placeholder is present in the staged copy, meaning the
-WebOS `appinfo.json` was never actually stamped during the `dist --web`
-run.
-
-**Fix:** `sed -i 's/@VERSION@/0.2.2/' dist/web/appinfo.json`; also update
-`packaging/webos/appinfo.json` to `0.2.2`.
-
----
-
-## Phase 1: Documentation & release hygiene (small, high-leverage)
-
-### 1.1 Update stale docs (30 min)
-
-- **PROGRESS.md "Now"**: Update from 2026-10-15 to 2026-10-20.
-  Add v0.2.2 release row and Phase 11/13 status lines.
-- **PROGRESS.md parity table**: Add v0.2.2 row (268 C / 3 P / 0 M / 85 N,
-  registry 241, no surface change — enhancement-only release).
-- **SESSIONS.md**: Add entry for #138 (this session, 2026-10-20):
-  "CI workflow repair, v0.2.2 staged, gaps audit".
-- **HISTORY.md**: Add arc entry for v0.2.2.
-- **`log/devlog.md`**: Append this session's entry.
-
-**Verify:** `git log --oneline -5` shows no unexpected commits from this session yet.
-
----
-
-### 1.2 Fix smoke budget comment (2 min)
-**Problem:** `xtask/src/dist.rs` line 211 comment says
-`--virtual-time-budget=60000` is "60s" — but the comment reads as if this
-is the wall-clock timeout. It is not; it is the Chromium virtual-time
-budget. The wall-clock backstop is `SMOKE_TIMEOUT = 300s`.
-
-**Fix:** Clarify the comment. The actual issue is: if the wasm bundle grows
-and fetch+compile exceeds 60s virtual time, the smoke will fail
-spuriously. But 60s virtual = ~60s wall on a slow runner, and the 300s
-wall-clock covers it. The comment should state this explicitly.
-
----
+All done in session #138 (2026-10-20): PROGRESS "Now" reset to
+2026-10-20, v0.2.2 milestone row, SESSIONS #138, HISTORY arc+decision
+index extended through 0066, log/devlog entry, all critical blockers
+resolved. Smoke budget comment is already clear (virtual-time vs wall-clock
+distinction is documented).
 
 ## Phase 2: Image support (Phase 11 remaining items)
 
-These are the standing enhancement direction from HANDOFF §4 Phase 11.
+### 2.1 AVIF decode — ✅ Decision done (0064)
 
-### 2.1 AVIF decode — decision doc (1–2 hr)
+Decision 0064: AVIF via `ravif` (pure Rust, wasm-safe) when user needs
+arrive. No implementation required to close the decision. AVIF files
+currently pass through the "unsupported format" path cleanly.
 
-**Status:** `image` crate's `avif-native` feature exists but is not
-wasm-compatible (requires C). A decision doc must record:
-- AVIF import path: OS decoder on desktop, "format unsupported in browser"
-  message in WASM.
-- AVIF export: out of scope until a pure-Rust encoder exists.
-- The `image` crate's `avif-native` feature should NOT be added to the
-  workspace `Cargo.toml` without the decision doc.
+### 2.2 HEIC refusal — ✅ Done (0065)
 
-**Deliverable:** `docs/decisions/0067-avif-decode-policy.md`
+Decision 0065: deliberate refusal — HEVC patent pools. No HEIC code.
 
-**Stopping condition:** Decision doc committed; import surface unchanged unless
-the decision explicitly permits an OS-level decoder path.
+### 2.3 Import surface parity (2–3 hr) → Task #145
 
----
+CLI `import` accepts jpg/png/webp; `io::raster::decode` supports
+bmp/tiff/gif/wbmp/pnm/ico. Align CLI accept-lists and error strings.
+One test per newly-supported format.
 
-### 2.2 HEIC — likely refusal (1 hr)
+### 2.4 Lossy WebP — implementation (3–4 hr) → Task #146
 
-**Expected outcome:** No maintainable open HEIC encoder/decoder without
-patent-pool or C dependencies. The decision doc records the refusal and
-the import path: OS decode on desktop builds only, error in browser.
-
-**Deliverable:** `docs/decisions/0068-heic-refusal.md`
-
-**Stopping condition:** Decision doc committed; no HEIC code added.
-
----
-
-### 2.3 Import surface parity with the export matrix (2–3 hr)
-
-**Problem:** The CLI `import` command accepts jpg/png/webp. The
-`io::raster::decode` supports bmp/tiff/gif/bmp/wbmp/pnm/ico. These lists
-are misaligned. A user running `firecraft import image.tiff` gets an
-"unsupported format" error even though the decoder handles TIFF.
-
-**Deliverable:**
-- Audit all format extensions accepted by `io::raster::decode`.
-- Update CLI error strings to list all supported import formats.
-- Add a test per format that verifies: `import --help` lists the format,
-  or `import` with that extension produces a valid document (not an
-  "unknown format" error).
-
-**Stopping condition:** CLI `--help` format list matches what `decode`
-actually handles; one test per newly-supported format.
-
----
-
-### 2.4 Lossy WebP — decision already made, implementation remains (3–4 hr)
-
-**Status:** Decision 0063 records the lossless VP8L path (landed). Lossy
-VP8 (libwebp-sys) is the remaining question: feature-gated native-only,
-WASM gets the "lossy WebP export not supported in browser" error.
-
-**Deliverable:**
-- Feature gate `lossy-webp` on the `image-webp` crate or a new
-  `webp-encoder` crate that wraps libwebp-sys.
-- WASM build does **not** enable `lossy-webp`.
-- Native build enables `lossy-webp`.
-- Decision doc 0063 already covers this — implementation follows that
-  contract.
-
-**Stopping condition:** `cargo build --release` produces a native binary
-that exports lossy WebP; `trunk build --release` (WASM) succeeds without
-libwebp-sys.
+Decision 0063 landed lossless VP8L. Lossy VP8 (libwebp-sys) remains:
+feature-gate `lossy-webp` native-only, WASM gets error message.
+`cargo build --release` exports lossy WebP; `trunk build --release`
+succeeds without libwebp-sys.
 
 ---
 
@@ -361,32 +263,24 @@ oracle requirement as 7.1.
 
 | Task | Phase | Size | Blocker |
 |---|---|---|---|
-| Fix `.aegisignore` + aegis hang | 1 | 5 min | None |
-| Publish v0.2.2 release | 1 | 2 min | None |
-| Fix `appinfo.json` version stamp | 1 | 5 min | None |
-| Update stale docs (PROGRESS/SESSIONS/HISTORY) | 1 | 30 min | None |
-| Clarify smoke budget comment | 1 | 2 min | None |
-| AVIF decode decision doc | 2 | 1–2 hr | None |
-| HEIC refusal decision doc | 2 | 1 hr | None |
-| Import surface parity | 2 | 2–3 hr | None |
-| Lossy WebP implementation | 2 | 3–4 hr | Decision 0063 contract |
-| Coverage baseline re-measure | 3 | 30 min | None |
-| Coverage gap table | 3 | 1 hr | Baseline |
-| WebOS packaging proof | 4 | 2–3 hr | Version stamp fix first |
-| Smoke budget measurement | 4 | 1 hr | None |
-| Platform recipes status doc | 4 | 30 min | None |
-| Split CI fmt job | 5 | 1 hr | None |
-| Trunk caching | 5 | 1 hr | None |
-| 90% coverage floor raise | 3 | ongoing | Phase 2 first |
-| 99% coverage plan | 6 | future | Phase 2 + Phase 3 |
+| Import surface parity (#145) | 2 | 2–3 hr | None |
+| Lossy WebP implementation (#146) | 2 | 3–4 hr | Decision 0063 contract |
+| Coverage baseline re-measure (#147) | 3 | 30 min | Tasks #145, #146 |
+| Coverage gap table (#148) | 3 | 1 hr | Task #147 |
+| WebOS packaging proof (#149) | 4 | 2–3 hr | None |
+| Smoke budget measurement (#150) | 4 | 1 hr | None |
+| Platform recipes status doc (#151) | 4 | 30 min | None |
+| Split CI fmt job (#152) | 5 | 1 hr | None |
+| Coverage step isolation (#153) | 5 | 1 hr | None |
+| Trunk caching (#154) | 5 | 1 hr | None |
+| 99% coverage plan (#155) | 6 | future | Tasks #145, #146, #148 |
+| Effect growth research (#156) | 7 | parked | Needs Wine oracle |
+| TXFv texture research (#157) | 7 | parked | Needs Wine oracle |
 
 ---
 
-## Summary: what to do first
+## Next action
 
-1. **`sed 's/target/target/' .aegisignore`** — add `target/` to fix local hang
-2. **`gh release edit v0.2.2 --draft=false`** — publish the draft
-3. **`sed -i 's/@VERSION@/0.2.2/' packaging/webos/appinfo.json dist/web/appinfo.json`** — fix version stamp
-4. Update docs (PROGRESS.md "Now", SESSIONS.md entry, HISTORY.md arc)
-5. `git add -A && git commit -m "fix: resolve aegis local hang, close v0.2.2, update docs" && git push gitforge main && git push origin main`
-6. Proceed to Phase 2 (image support decisions)
+Start with **task #145** (import surface parity). This is the
+smallest Phase 2 item and requires no new dependencies or decisions.
+Audit `io::raster::decode` → align CLI accept-list → add format tests.
