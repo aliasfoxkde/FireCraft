@@ -146,7 +146,7 @@ asset that is not your own):
 ```json
 {
   "id": "dev.firecraft.web",
-  "version": "0.2.1",
+  "version": "@VERSION@",
   "vendor": "FireCraft",
   "type": "web",
   "main": "index.html",
@@ -157,7 +157,50 @@ asset that is not your own):
 }
 ```
 
+The `@VERSION@` placeholder is replaced at build time by `xtask dist
+--web` (line 165 of `xtask/src/dist.rs`): it reads
+`packaging/webos/appinfo.json`, substitutes `@VERSION@` with the workspace
+version, and writes the stamped copy to `dist/web/appinfo.json`. The
+committed file in `packaging/webos/` always carries `@VERSION@`.
+
 The shipped layout is what `dist/web/` contains; the host page above
 (`host.html` alongside the bundle) is the `main` entry when the WebOS
 shell should drive the editor instead of showing it bare. Everything
 ships as static files — no server-side component exists.
+
+## What's proven (2026-10-20)
+
+The following have been verified:
+- **`dist --web` builds and stages correctly.** The bundle contains
+  `index.html`, one `.js` bootstrapper, one `.wasm` binary, a
+  `MANIFEST.sha256` over every file, and the stamped `appinfo.json`.
+- **Bridge smoke passes.** Headless Chromium loads the bundle via the
+  smoke host page, runs the full four-hop sequence (ping → ready →
+  openDocument → apply → exportPng → exportDocument), and reports green
+  in the page title. Verified at every `dist --web` run.
+- **Production deployment.** `dist/web/` is deployed to
+  <https://firecraft-web.pages.dev> via `wrangler pages deploy`.
+  The served `MANIFEST.sha256` hashes match `dist/web/` for the
+  current build. Verified: SHA-256 of the live wasm matches the zip
+  artifact from the v0.2.2 release.
+- **`appinfo.json` version stamping.** At build time, `@VERSION@` in
+  `packaging/webos/appinfo.json` is replaced with the workspace version.
+  The staged copy in `dist/web/appinfo.json` is stamped. Verified by
+  `cat dist/web/appinfo.json` showing `"version": "0.2.2"` after a
+  v0.2.2 build.
+
+## What's not proven (gap)
+
+The bundle has **never been installed on an actual WebOS device.** The
+WebOS packaging is a dry-run: the artifact is correct, the smoke passes
+in Chromium, and Cloudflare Pages serves it correctly — but no
+operator has installed `appinfo.json` + the wasm bundle onto a WebOS
+device and verified the app launches and responds to the bridge API.
+
+**Blocker:** No WebOS device is in scope for this project. The gap
+cannot be closed without either:
+1. An operator with WebOS hardware who can install and test the bundle, or
+2. A WebOS emulator that can run the app in CI.
+
+The recipe (packaging/webos/appinfo.json + host.html) is complete. The
+hardware proof is the only remaining step.
