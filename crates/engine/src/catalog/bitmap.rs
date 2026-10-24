@@ -40,6 +40,7 @@ pub(crate) fn install(registry: &mut CommandRegistry) -> Result<(), EngineError>
     registry.register(Erase)?;
     registry.register(BrushPaint)?;
     registry.register(Pencil)?;
+    registry.register(Gradient)?;
     registry.register(MovePixels)?;
     registry.register(AddImage)?;
     registry.register(AddImageViaCopy)?;
@@ -1029,9 +1030,99 @@ impl TypedCommand for BrushPaint {
     }
 }
 
+/// `bitmap.gradient` — paint a linear gradient across the selection
+/// (the whole image when nothing is selected): `color_a` at the start
+/// point, `color_b` at the end point. The raster mode of CS6's
+/// Gradient tool.
+struct Gradient;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct GradientPayload {
+    /// Target image.
+    id: ObjectId,
+    /// Gradient start color as ARGB raw int (same convention as
+    /// `bitmap.fill`).
+    color_a_raw: i64,
+    /// Gradient end color as ARGB raw int.
+    color_b_raw: i64,
+    /// Gradient start point in image pixel coordinates.
+    x0: f64,
+    y0: f64,
+    /// Gradient end point in image pixel coordinates.
+    x1: f64,
+    y1: f64,
+}
+
+impl TypedCommand for Gradient {
+    type Payload = GradientPayload;
+
+    fn name(&self) -> &'static str {
+        "bitmap.gradient"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "bitmap.gradient";
+        let span = (payload.x1 - payload.x0).powi(2) + (payload.y1 - payload.y0).powi(2);
+        if span <= 0.0 {
+            return Err(EngineError::BadPayload {
+                name: NAME.to_owned(),
+                detail: "the gradient needs two distinct points".to_owned(),
+            });
+        }
+        let start = (payload.x0, payload.y0);
+        let axis = (payload.x1 - payload.x0, payload.y1 - payload.y0);
+        let from = argb_color(payload.color_a_raw);
+        let to = argb_color(payload.color_b_raw);
+        masked_pixel_edit(document, NAME, payload.id, |pixels, size, mask| {
+            let width = f64::from(size.0);
+            for (index, &coverage) in mask.alpha.iter().enumerate() {
+                if coverage == 0 {
+                    continue;
+                }
+                let position = index as f64;
+                let px = position % width;
+                let py = (position / width).floor();
+                // The ramp parameter is the pixel's projection onto the
+                // gradient vector, clamped to the segment.
+                let projection = ((px - start.0) * axis.0 + (py - start.1) * axis.1) / span;
+                let t = projection.clamp(0.0, 1.0);
+                let mut pixel: [u8; 4] =
+                    pixels[index * 4..index * 4 + 4].try_into().map_err(|_| {
+                        EngineError::InvalidState {
+                            name: NAME.to_owned(),
+                            detail: "flat buffer shorter than its mask".to_owned(),
+                        }
+                    })?;
+                blend_pixel(&mut pixel, lerp_color(from, to, t), coverage);
+                pixels[index * 4..index * 4 + 4].copy_from_slice(&pixel);
+            }
+            Ok::<(), EngineError>(())
+        })
+    }
+}
+
+/// One point on a straight ramp between two colors: the channels are
+/// interpolated independently, the alpha included, and each rounds
+/// half-up.
+fn lerp_color(from: [u8; 4], to: [u8; 4], t: f64) -> [u8; 4] {
+    let mut out = [0u8; 4];
+    for (slot, value) in out.iter_mut().enumerate() {
+        let start = f64::from(from[slot]);
+        let end = f64::from(to[slot]);
+        *value = (start + (end - start) * t).round().clamp(0.0, 255.0) as u8;
+    }
+    out
+}
+
 /// `bitmap.pencil` — the hard one-pixel dab: no size/edge/shape slots
 /// (the pencil is definitionally a hard single-pixel stamp), only the
-/// per-dab pressure.
+/// per-dab pressure. The stamp lands on the pixel the point falls
+/// in, not on the pixel whose center it crosses.
 struct Pencil;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
@@ -1065,16 +1156,6 @@ impl TypedCommand for Pencil {
         payload: &Self::Payload,
     ) -> Result<Delta, EngineError> {
         const NAME: &str = "bitmap.pencil";
-        let options = brush_of(
-            NAME,
-            payload.x,
-            payload.y,
-            1,
-            &BrushOptionsPayload {
-                edge: Some(0),
-                ..BrushOptionsPayload::default()
-            },
-        )?;
         let strength = strength_of(NAME, payload.strength.unwrap_or(100))?;
         let pressure = match payload.pressure {
             Some(0) => {
@@ -1087,14 +1168,44 @@ impl TypedCommand for Pencil {
             None => 100,
         };
         let color = argb_color(payload.color_raw);
-        let dab = PaintDab {
-            brush: options.brush,
-            strength,
-            pressure,
-            color,
-        };
+        // The pencil is a hard single-pixel stamp: the pixel the point
+        // falls IN, wherever inside that pixel the point sits. The
+        // brush stamp cannot express this — a one-pixel round stamp
+        // only covers the pixel whose center it lands on — so the
+        // pencil writes the pixel itself.
+        let column = payload.x.floor();
+        let row = payload.y.floor();
         masked_pixel_edit(document, NAME, payload.id, |pixels, size, mask| {
-            paint_dab(pixels, size, mask, &dab, NAME)
+            if column < 0.0 || row < 0.0 {
+                return Ok(());
+            }
+            let (Ok(column), Ok(row)) = (u32::try_from(column as i64), u32::try_from(row as i64))
+            else {
+                return Ok(());
+            };
+            if column >= size.0 || row >= size.1 {
+                return Ok(());
+            }
+            let index = (row * size.0 + column) as usize;
+            let Some(&selection) = mask.alpha.get(index) else {
+                return Ok(());
+            };
+            if selection == 0 {
+                return Ok(());
+            }
+            // The brush effect's algebra: coverage (full for the
+            // hard pencil) × strength × pressure × selection.
+            let scaled = (255 * strength * pressure + 5_000) / 10_000;
+            let effect = ((scaled * u32::from(selection) + 127) / 255) as u8;
+            let mut pixel: [u8; 4] = pixels[index * 4..index * 4 + 4].try_into().map_err(|_| {
+                EngineError::InvalidState {
+                    name: NAME.to_owned(),
+                    detail: "flat buffer shorter than its mask".to_owned(),
+                }
+            })?;
+            blend_pixel(&mut pixel, color, effect);
+            pixels[index * 4..index * 4 + 4].copy_from_slice(&pixel);
+            Ok::<(), EngineError>(())
         })
     }
 }
@@ -1316,7 +1427,11 @@ struct ImportFilePayload {
     /// Source plane height in pixels.
     height: i64,
     /// The decoded plane: `width * height * 4` RGBA bytes, row-major,
-    /// straight from the shell's importer.
+    /// straight from the shell's importer. Accepts a JSON byte array
+    /// (the reference shape the fixtures and the fuzz driver use) or a
+    /// base64 string — the GUI's fast path, because a 640×480 plane is
+    /// 1.2 M array elements to build and parse.
+    #[serde(deserialize_with = "plane_bytes")]
     pixels: Vec<u8>,
     /// CS6's `boundingRectangle`.
     bounds: BoundsRect,
@@ -1328,6 +1443,49 @@ struct ImportFilePayload {
     cell: usize,
     /// `OBNs` — object name.
     name: Option<String>,
+}
+
+/// Decodes a pixel plane from either a JSON byte array or a base64
+/// string. The array form is the reference shape; the base64 form
+/// exists because the interactive surfaces hand the engine a decoded
+/// raster, and spelling those bytes out as JSON costs seconds per
+/// megabyte in a browser.
+fn plane_bytes<'de, D>(deserializer: D) -> Result<Vec<u8>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    struct PlaneVisitor;
+
+    impl<'de> serde::de::Visitor<'de> for PlaneVisitor {
+        type Value = Vec<u8>;
+
+        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+            formatter.write_str("a byte array or a base64 string")
+        }
+
+        fn visit_seq<A>(self, mut seq: A) -> Result<Vec<u8>, A::Error>
+        where
+            A: serde::de::SeqAccess<'de>,
+        {
+            let mut plane = Vec::with_capacity(seq.size_hint().unwrap_or(0));
+            while let Some(byte) = seq.next_element::<u8>()? {
+                plane.push(byte);
+            }
+            Ok(plane)
+        }
+
+        fn visit_str<E>(self, text: &str) -> Result<Vec<u8>, E>
+        where
+            E: serde::de::Error,
+        {
+            use base64::Engine as _;
+            base64::engine::general_purpose::STANDARD
+                .decode(text)
+                .map_err(|error| E::custom(format!("base64 pixel plane: {error}")))
+        }
+    }
+
+    deserializer.deserialize_any(PlaneVisitor)
 }
 
 /// Bilinear sample of `source` (`sw` x `sh`) into the `crop` window of
@@ -1905,6 +2063,51 @@ mod tests {
     }
 
     #[test]
+    fn gradient_paints_a_ramp_across_the_image() {
+        let (mut document, image) = checker_document();
+        Gradient
+            .apply_json(
+                &mut document,
+                json!({
+                    "id": image,
+                    "color_a_raw": 0xFF_00_00_00i64,
+                    "color_b_raw": 0xFF_FF_FF_FFi64,
+                    "x0": 0.0, "y0": 0.0, "x1": 3.0, "y1": 0.0,
+                }),
+            )
+            .unwrap();
+        assert_eq!(flat_pixel(&document, 0, 0), [0, 0, 0, 255]);
+        assert_eq!(flat_pixel(&document, 3, 0), [255, 255, 255, 255]);
+        // The ramp parameter is the projection onto the gradient
+        // vector: pixel 1 sits at a third of the way, pixel 2 at two
+        // thirds.
+        assert_eq!(flat_pixel(&document, 1, 0)[0], 85);
+        assert_eq!(flat_pixel(&document, 2, 0)[0], 170);
+    }
+
+    #[test]
+    fn a_gradient_without_two_distinct_points_is_refused() {
+        let (mut document, image) = checker_document();
+        let error = Gradient
+            .apply_json(
+                &mut document,
+                json!({
+                    "id": image,
+                    "color_a_raw": 0xFF_00_00_00i64,
+                    "color_b_raw": 0xFF_FF_FF_FFi64,
+                    "x0": 1.0, "y0": 1.0, "x1": 1.0, "y1": 1.0,
+                }),
+            )
+            .unwrap_err();
+        assert!(matches!(error, EngineError::BadPayload { .. }));
+        assert_eq!(
+            flat_pixel(&document, 0, 0),
+            [255, 0, 0, 255],
+            "the refusal leaves the pixels alone"
+        );
+    }
+
+    #[test]
     fn intersect_mode_keeps_the_overlap() {
         let (mut document, image) = checker_document();
         SelectRect
@@ -2180,6 +2383,27 @@ mod tests {
         assert_eq!(flat_pixel(&document, 2, 2), [0, 0, 0, 0]);
         assert_eq!(flat_pixel(&document, 1, 1), [0, 0, 0, 0]);
         assert_eq!(flat_pixel(&document, 1, 3), [0, 0, 0, 0]);
+    }
+
+    #[test]
+    fn the_pencil_stamps_the_pixel_the_point_falls_in() {
+        let (mut document, image) = checker_document();
+        let mut blank = document.tiles.get(0).cloned().unwrap();
+        blank
+            .pixels_mut()
+            .copy_from_slice(&[0u8; raster::TILE_BYTES]);
+        document.tiles.insert(0, blank);
+        // A point on a pixel corner belongs to the pixel below and to
+        // the right of it.
+        Pencil
+            .apply_json(
+                &mut document,
+                json!({ "id": image, "x": 1.0, "y": 2.0, "color_raw": 0xFF00FF00u64 as i64 }),
+            )
+            .unwrap();
+        assert_eq!(flat_pixel(&document, 1, 2), [0, 255, 0, 255]);
+        assert_eq!(flat_pixel(&document, 0, 1), [0, 0, 0, 0]);
+        assert_eq!(flat_pixel(&document, 2, 2), [0, 0, 0, 0]);
     }
 
     #[test]
@@ -2641,6 +2865,36 @@ mod tests {
     /// A 2×1 red/blue source plane for the import tests.
     fn import_plane() -> Vec<u8> {
         vec![255, 0, 0, 255, 0, 0, 255, 255]
+    }
+
+    #[test]
+    fn import_file_accepts_a_base64_plane() {
+        use base64::Engine as _;
+        let (mut document, _) = placed_image_document();
+        let encoded = base64::engine::general_purpose::STANDARD.encode(import_plane());
+        ImportFile
+            .apply_json(
+                &mut document,
+                json!({
+                    "width": 2, "height": 1, "pixels": encoded,
+                    "bounds": {"left": 10.0, "top": 6.0, "right": 10.0, "bottom": 6.0},
+                    "maintain_aspect_ratio": true,
+                    "page": 0, "layer": 0, "cell": 0,
+                    "name": "imported",
+                }),
+            )
+            .unwrap();
+        let elements = document.pages[0].layers.layers[0].cells[0].elements.clone();
+        let placed = *elements.last().unwrap();
+        let doc::ObjectData::Image(image) = document.registry.get(placed).unwrap() else {
+            panic!("new object is an image")
+        };
+        assert_eq!(
+            image.pixels,
+            (2, 1),
+            "the base64 plane decoded to the source"
+        );
+        assert_eq!(image.name.as_deref(), Some("imported"));
     }
 
     #[test]

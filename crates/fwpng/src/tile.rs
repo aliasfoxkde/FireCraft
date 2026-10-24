@@ -6,6 +6,9 @@ use std::io::{Read, Write};
 
 /// Magic at the start of a `mkBT` chunk payload.
 const MAGIC: [u8; 4] = [0xFA, 0xCE, 0xCA, 0xFE];
+/// The same magic, exported: a chunk payload that starts with it
+/// begins a tile stream, and any following `mkBT` chunk continues it.
+pub const MKBT_MAGIC: [u8; 4] = MAGIC;
 /// Header size: 4 magic + 4 index + 3 reserved + 1 flag + 64 reserved.
 /// Offsets are provisional until pinned against the reference corpus in M2.
 pub const MKBT_HEADER_LEN: usize = 76;

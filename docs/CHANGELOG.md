@@ -10,6 +10,7 @@ Current version: **0.2.2**.
 
 ### Features
 
+- **io**: lossy WebP export via libwebp-sys (feature-gated) (dd8d0ad)
 - **ci**: cache cargo-llvm-cov and trunk between CI runs (4a6e7d5)
 - **ci**: split fmt into its own fail-fast job (bf3dcdd)
 - cut v0.2.2 — CLI export message, WebOS packaging, decision docs (1665ce8)
@@ -157,6 +158,7 @@ Current version: **0.2.2**.
 
 ### Fixes
 
+- **io**: lock libwebp-sys and expose lossy WebP (f37c7b2)
 - **xtask**: document ci-no-fmt in USAGE string (ecf87ab)
 - resolve local aegis hang, close v0.2.2, update docs, add GAPS.md (694024a)
 - **ci**: exclude generated files from the aegis scan (b27c658)
@@ -180,6 +182,8 @@ Current version: **0.2.2**.
 
 ### Documentation
 
+- close Phase 7 tasks — infra blocked (mfc100u.dll missing) (0b5c8e7)
+- update Now to 2026-10-21, Phase 2/11 closed (3c0e63f)
 - mark Phase 3 blocked findings, close stale tasks (a3ed43f)
 - update WEBOS.md — hardware proof gap documented, @VERSION@ mechanism clarified (b7705e9)
 - add platform STATUS.md, close #151; import parity is a non-finding (#145) (c3cff6e)

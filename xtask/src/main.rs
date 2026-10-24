@@ -42,7 +42,7 @@ const USAGE: &str = "usage: cargo run -p xtask -- <ci [--full]|ci-no-fmt|aegis|c
 fn aegis() -> Result<(), String> {
     util::run_in(
         Some(util::workspace_root().as_path()),
-        "aegis",
+        &aegis_binary()?,
         &[
             "--format",
             "json",
@@ -55,6 +55,34 @@ fn aegis() -> Result<(), String> {
             "-q",
         ],
     )
+}
+
+/// The Aegis scanner's CLI. An unrelated tool also ships under the
+/// bare name `aegis` (a security-file generator), so the versioned
+/// scanner binary is preferred and the plain name is used only when
+/// it really is the scanner — decided by its own `--help`, which lists
+/// the `scan` subcommand the gate needs. `FIRECRAFT_AEGIS` overrides
+/// both.
+fn aegis_binary() -> Result<String, String> {
+    let mut candidates: Vec<String> = Vec::new();
+    if let Ok(explicit) = std::env::var("FIRECRAFT_AEGIS") {
+        candidates.push(explicit);
+    }
+    candidates.push("aegis-0.6.3".to_owned());
+    candidates.push("aegis".to_owned());
+    for candidate in &candidates {
+        let Ok(output) = std::process::Command::new(candidate).arg("--help").output() else {
+            continue;
+        };
+        let help = String::from_utf8_lossy(&output.stdout);
+        if help.contains("scan") {
+            return Ok(candidate.clone());
+        }
+    }
+    Err(format!(
+        "no Aegis scanner found (looked for {}); set FIRECRAFT_AEGIS to the scanner's path",
+        candidates.join(", ")
+    ))
 }
 
 fn main() -> ExitCode {
@@ -145,7 +173,7 @@ fn run_ci(full: Option<&str>, skip_fmt: bool) -> ExitCode {
             // Re-generate only when the aegis version changes.
             util::run_in(
                 Some(util::workspace_root().as_path()),
-                "aegis",
+                &aegis_binary()?,
                 &[
                     "--format",
                     "json",

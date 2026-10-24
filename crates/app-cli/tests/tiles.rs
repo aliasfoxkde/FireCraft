@@ -12,6 +12,7 @@ use app_cli::io;
 use engine::CommandRegistry;
 use engine::catalog;
 use engine::fuzzdrive::{FuzzRng, random_document};
+use raster::Tile;
 
 /// Bytes of a tile-free `.fw.png`, canonically written through the
 /// model.
@@ -189,4 +190,95 @@ fn a_malformed_tile_stream_refuses_instead_of_silently_dropping() {
         panic!("malformed tiles must refuse");
     };
     assert!(error.contains("mkBT"), "{error}");
+}
+
+/// A document built from scratch that carries an imported raster:
+/// one page, a 64×48 canvas, and a 4×4 red plate on page 0 / layer 0.
+fn raster_document() -> doc::Document {
+    let mut document = doc::Document::default();
+    let registry = registry();
+    registry
+        .execute(
+            &mut document,
+            "page.add",
+            serde_json::json!({ "index": null }),
+        )
+        .expect("adds the page");
+    registry
+        .execute(
+            &mut document,
+            "page.setCanvasSize",
+            serde_json::json!({ "page": 0, "width": 64.0, "height": 48.0 }),
+        )
+        .expect("sizes the canvas");
+    let pixels = [255u8, 0, 0, 255].repeat(16);
+    registry
+        .execute(
+            &mut document,
+            "bitmap.importFile",
+            serde_json::json!({
+                "width": 4, "height": 4,
+                "pixels": pixels,
+                "bounds": {"left": 0.0, "top": 0.0, "right": 0.0, "bottom": 0.0},
+                "maintain_aspect_ratio": true,
+                "page": 0, "layer": 0, "cell": 0, "name": "plate",
+            }),
+        )
+        .expect("imports the plate");
+    document.info.canvas.width = 64.0;
+    document.info.canvas.height = 48.0;
+    document
+}
+
+#[test]
+fn a_new_document_carrying_a_raster_saves_its_tiles_and_reopens() {
+    // A document FireCraft built itself must re-open: the tiles the
+    // image object names have to reach the file, or every render of
+    // the reopened document fails with a tile-bank miss.
+    let document = raster_document();
+    assert!(
+        !document.tiles.ids().collect::<Vec<_>>().is_empty(),
+        "the import minted bank tiles"
+    );
+    let saved = io::save(&document, &doc::fwmap::UnknownBag::default(), &[]).expect("saves");
+    let reopened = io::open(&saved).expect("reopens");
+    assert!(
+        !reopened.document.tiles.ids().collect::<Vec<_>>().is_empty(),
+        "the tiles rejoined the bank"
+    );
+    let render = compose::render(&reopened.document, 0, 0).expect("renders");
+    assert_eq!((render.width, render.height), (64, 48));
+    // The plate is red at the canvas origin.
+    let straight = compose::straight_alpha(&render.pixels);
+    assert_eq!(&straight[..4], &[255, 0, 0, 255], "the red plate survives");
+}
+
+#[test]
+fn an_edited_tile_is_re_encoded_rather_than_ridden_by_the_original() {
+    // Open a file that already carries the plate, repaint its tile,
+    // and save: the file's own copy of the tile must not win.
+    let document = raster_document();
+    let saved = io::save(&document, &doc::fwmap::UnknownBag::default(), &[]).expect("saves");
+    let mut loaded = io::open(&saved).expect("opens");
+    let id = loaded.document.tiles.ids().next().expect("a tile");
+    let mut plane = loaded
+        .document
+        .tiles
+        .get(id)
+        .expect("tile")
+        .pixels()
+        .to_vec();
+    // Repaint the first pixel blue.
+    plane[..4].copy_from_slice(&[0, 0, 255, 255]);
+    let mut fixed = [0u8; raster::TILE_BYTES];
+    fixed.copy_from_slice(&plane);
+    loaded.document.tiles.insert(id, Tile::from_rgba8(fixed));
+    let resaved = io::save(&loaded.document, &loaded.unknown, &loaded.chunks).expect("saves");
+    let reopened = io::open(&resaved).expect("reopens");
+    let tile = reopened.document.tiles.get(id).expect("tile rejoins");
+    assert_eq!(
+        &tile.pixels()[..4],
+        &[0, 0, 255, 255],
+        "the edit survived the round trip"
+    );
 }

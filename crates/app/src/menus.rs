@@ -51,6 +51,9 @@ pub enum Action {
 pub enum ShellAction {
     New,
     Open,
+    /// File ▸ Import… — place a raster (PNG/JPEG/GIF/BMP/TIFF/WebP)
+    /// into the current document on the active layer.
+    Import,
     Save,
     SaveAs,
     Export,
@@ -60,6 +63,19 @@ pub enum ShellAction {
     Redo,
     Deselect,
     SelectAll,
+    /// Select ▸ Select Inverse — everything in the current cell the
+    /// selection does not cover.
+    SelectInverse,
+    /// Edit ▸ Cut — copy the selection to the clipboard, then delete it.
+    Cut,
+    /// Edit ▸ Copy — copy the selection to the clipboard.
+    Copy,
+    /// Edit ▸ Paste — paste the clipboard onto the active layer.
+    Paste,
+    /// Edit ▸ Paste as Mask — paste the clipboard as the selection's mask.
+    PasteAsMask,
+    /// Edit ▸ Paste Inside — paste the clipboard inside the selection.
+    PasteInside,
     ZoomIn,
     ZoomOut,
     /// Set an absolute magnification (fraction: 1.0 = 100%).
@@ -91,6 +107,25 @@ pub enum SelAction {
     BreakApart,
     /// `object.setVisible` false on the selection.
     Hide,
+    /// `object.group` — fold the selection into one group.
+    Group,
+    /// `object.ungroup` — dissolve the selected group.
+    Ungroup,
+    /// `flatten.selection` — bake the selection into one bitmap.
+    FlattenSelection,
+    /// `flatten.mergeDown` — merge the selection into the bitmap below.
+    MergeDown,
+    /// `flatten.document` — collapse the page into one bitmap.
+    FlattenLayers,
+    /// `object.rotate` — rotate the selection clockwise by degrees.
+    Rotate(f64),
+    /// `object.reflect` — flip the selection.
+    Reflect {
+        /// Flip left-right.
+        horizontal: bool,
+        /// Flip top-bottom.
+        vertical: bool,
+    },
 }
 
 /// The Modify ▸ Arrange items; dispatch resolves the numeric index.
@@ -174,7 +209,7 @@ pub static FILE: Menu = Menu {
         item(37867, "Save As Template...", "", Action::Inert),
         item(35036, "Revert", "", Action::Inert),
         Entry::Sep,
-        item(35012, "Import...", "", Action::Inert),
+        item(35012, "Import...", "", Action::Shell(ShellAction::Import)),
         item(
             35007,
             "Export...",
@@ -267,15 +302,25 @@ pub static EDIT: Menu = Menu {
         ),
         item(43402, "Find and Replace...", "", Action::Inert),
         Entry::Sep,
-        item(57635, "Cut", "Ctrl+X", Action::Inert),
-        item(57634, "Copy", "Ctrl+C", Action::Inert),
+        item(57635, "Cut", "Ctrl+X", Action::Shell(ShellAction::Cut)),
+        item(57634, "Copy", "Ctrl+C", Action::Shell(ShellAction::Copy)),
         item(35411, "Copy as Vectors", "", Action::Inert),
         item(35415, "Copy HTML Code...", "", Action::Inert),
-        item(57637, "Paste", "Ctrl+V", Action::Inert),
+        item(57637, "Paste", "Ctrl+V", Action::Shell(ShellAction::Paste)),
         item(57632, "Clear", "Del", Action::Sel(SelAction::Delete)),
         Entry::Sep,
-        item(35430, "Paste as Mask", "", Action::Inert),
-        item(35127, "Paste Inside", "", Action::Inert),
+        item(
+            35430,
+            "Paste as Mask",
+            "",
+            Action::Shell(ShellAction::PasteAsMask),
+        ),
+        item(
+            35127,
+            "Paste Inside",
+            "",
+            Action::Shell(ShellAction::PasteInside),
+        ),
         item(35033, "Paste Attributes", "", Action::Inert),
         Entry::Sep,
         item(35006, "Duplicate", "Ctrl+Alt+D", Action::Inert),
@@ -401,7 +446,12 @@ pub static SELECT: Menu = Menu {
         item(35193, "Subselect", "", Action::Inert),
         Entry::Sep,
         item(35041, "Select Similar", "", Action::Inert),
-        item(35039, "Select Inverse", "", Action::Inert),
+        item(
+            35039,
+            "Select Inverse",
+            "",
+            Action::Shell(ShellAction::SelectInverse),
+        ),
         item(35089, "Feather...", "", Action::Inert),
         Entry::Sep,
         item(35405, "Expand Marquee...", "", Action::Inert),
@@ -497,9 +547,24 @@ pub static MODIFY: Menu = Menu {
         ),
         Entry::Sep,
         item(35784, "Lock Selection", "", Action::Inert),
-        item(35009, "Flatten Selection", "", Action::Inert),
-        item(35583, "Merge Down", "Ctrl+Alt+E", Action::Inert),
-        item(35008, "Flatten Layers", "", Action::Inert),
+        item(
+            35009,
+            "Flatten Selection",
+            "",
+            Action::Sel(SelAction::FlattenSelection),
+        ),
+        item(
+            35583,
+            "Merge Down",
+            "Ctrl+Alt+E",
+            Action::Sel(SelAction::MergeDown),
+        ),
+        item(
+            35008,
+            "Flatten Layers",
+            "",
+            Action::Sel(SelAction::FlattenLayers),
+        ),
         Entry::Sep,
         Entry::Sub(
             "Transform",
@@ -511,12 +576,43 @@ pub static MODIFY: Menu = Menu {
                 item(35090, "Distort", "", Action::Inert),
                 item(35201, "Numeric Transform...", "", Action::Inert),
                 Entry::Sep,
-                item(35173, "Rotate 180°", "", Action::Inert),
-                item(35174, "Rotate 90° CW", "", Action::Inert),
-                item(35175, "Rotate 90° CCW", "", Action::Inert),
+                item(
+                    35173,
+                    "Rotate 180°",
+                    "",
+                    Action::Sel(SelAction::Rotate(180.0)),
+                ),
+                item(
+                    35174,
+                    "Rotate 90° CW",
+                    "",
+                    Action::Sel(SelAction::Rotate(90.0)),
+                ),
+                item(
+                    35175,
+                    "Rotate 90° CCW",
+                    "",
+                    Action::Sel(SelAction::Rotate(-90.0)),
+                ),
                 Entry::Sep,
-                item(35176, "Flip Horizontal", "", Action::Inert),
-                item(35177, "Flip Vertical", "", Action::Inert),
+                item(
+                    35176,
+                    "Flip Horizontal",
+                    "",
+                    Action::Sel(SelAction::Reflect {
+                        horizontal: true,
+                        vertical: false,
+                    }),
+                ),
+                item(
+                    35177,
+                    "Flip Vertical",
+                    "",
+                    Action::Sel(SelAction::Reflect {
+                        horizontal: false,
+                        vertical: true,
+                    }),
+                ),
                 Entry::Sep,
                 item(35152, "Remove Transformations", "", Action::Inert),
             ],
@@ -977,6 +1073,14 @@ pub static SHORTCUTS: &[Shortcut] = &[
     key(CTRL, egui::Key::A, Action::Shell(ShellAction::SelectAll)),
     key(CTRL, egui::Key::D, Action::Shell(ShellAction::Deselect)),
     key(CTRL, egui::Key::M, Action::Sel(SelAction::Hide)),
+    // Edit ▸ clipboard
+    key(CTRL, egui::Key::C, Action::Shell(ShellAction::Copy)),
+    key(CTRL, egui::Key::X, Action::Shell(ShellAction::Cut)),
+    key(CTRL, egui::Key::V, Action::Shell(ShellAction::Paste)),
+    // Modify ▸ group
+    key(CTRL, egui::Key::G, Action::Sel(SelAction::Group)),
+    key(CTRL, egui::Key::U, Action::Sel(SelAction::Ungroup)),
+    key(CTRL_ALT, egui::Key::E, Action::Sel(SelAction::MergeDown)),
     // View
     key(CTRL, egui::Key::Equals, Action::Shell(ShellAction::ZoomIn)),
     key(CTRL, egui::Key::Minus, Action::Shell(ShellAction::ZoomOut)),
@@ -1014,7 +1118,7 @@ pub static SHORTCUTS: &[Shortcut] = &[
     ),
     key(
         NONE,
-        egui::Key::L,
+        egui::Key::O,
         Action::Shell(ShellAction::PickTool(Tool::Line)),
     ),
     key(
@@ -1031,6 +1135,58 @@ pub static SHORTCUTS: &[Shortcut] = &[
         NONE,
         egui::Key::H,
         Action::Shell(ShellAction::PickTool(Tool::Hand)),
+    ),
+    key(
+        NONE,
+        egui::Key::B,
+        Action::Shell(ShellAction::PickTool(Tool::Paintbrush)),
+    ),
+    key(
+        NONE,
+        egui::Key::N,
+        Action::Shell(ShellAction::PickTool(Tool::Pencil)),
+    ),
+    key(
+        NONE,
+        egui::Key::Y,
+        Action::Shell(ShellAction::PickTool(Tool::Eraser)),
+    ),
+    key(
+        NONE,
+        egui::Key::G,
+        Action::Shell(ShellAction::PickTool(Tool::PaintBucket)),
+    ),
+    key(
+        NONE,
+        egui::Key::D,
+        Action::Shell(ShellAction::PickTool(Tool::Gradient)),
+    ),
+    key(
+        NONE,
+        egui::Key::I,
+        Action::Shell(ShellAction::PickTool(Tool::Eyedropper)),
+    ),
+    // Pixel-selection tools (CS6's keymap: L is the Lasso; the Line
+    // tool has no letter and carries O here).
+    key(
+        NONE,
+        egui::Key::M,
+        Action::Shell(ShellAction::PickTool(Tool::Marquee)),
+    ),
+    key(
+        NONE,
+        egui::Key::L,
+        Action::Shell(ShellAction::PickTool(Tool::Lasso)),
+    ),
+    key(
+        NONE,
+        egui::Key::P,
+        Action::Shell(ShellAction::PickTool(Tool::PolygonalMarquee)),
+    ),
+    key(
+        NONE,
+        egui::Key::W,
+        Action::Shell(ShellAction::PickTool(Tool::MagicWand)),
     ),
 ];
 

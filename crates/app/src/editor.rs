@@ -10,6 +10,7 @@ use doc::{Cell, Document, Layer, ObjectData, ObjectId, TileRef};
 use engine::catalog;
 use engine::error::EngineError;
 use engine::{CommandRegistry, Session};
+use std::collections::{BTreeMap, BTreeSet};
 use std::io::Read as _;
 
 /// Which tool the pointer carries.
@@ -41,6 +42,116 @@ pub enum Tool {
     /// Drag to create an Auto Shape with the tool's default
     /// parameters (shape chosen in the Tools menu).
     AutoShape(AutoShape),
+    /// Paint with the brush: soft-edged dabs along the drag.
+    Paintbrush,
+    /// Draw with the pencil: hard one-pixel dabs.
+    Pencil,
+    /// Erase with the brush-shaped eraser.
+    Eraser,
+    /// Fill the selection (or the whole image) with the paint color.
+    PaintBucket,
+    /// Drag a linear gradient across the image.
+    Gradient,
+    /// Pick the paint color from the canvas.
+    Eyedropper,
+    /// Drag a rectangular pixel marquee over an image.
+    Marquee,
+    /// Drag an elliptical pixel marquee over an image.
+    EllipticalMarquee,
+    /// Freehand pixel lasso: the drag's trace becomes the outline.
+    Lasso,
+    /// Click a pixel polygon vertex by vertex; the panel commits it.
+    PolygonalMarquee,
+    /// Click to select the pixels that match the one clicked.
+    MagicWand,
+}
+
+/// The engine's ARGB raw-int color convention (the low 32 bits are
+/// the color): `0xAARRGGBB`.
+fn argb_raw(color: [u8; 4]) -> i64 {
+    let raw = (u32::from(color[3]) << 24)
+        | (u32::from(color[0]) << 16)
+        | (u32::from(color[1]) << 8)
+        | u32::from(color[2]);
+    i64::from(raw)
+}
+
+/// The gradient's second color: the paint color ramps to white, the
+/// two-color default of CS6's Gradient tool.
+fn gradient_end_color(color: [u8; 4]) -> [u8; 4] {
+    [255, 255, 255, color[3]]
+}
+
+/// The stamp shape a brush leaves behind.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum StampShape {
+    /// A round footprint (the default).
+    Round,
+    /// A square footprint.
+    Square,
+}
+
+impl StampShape {
+    /// The wire name the engine's brush payload uses.
+    #[must_use]
+    pub fn wire(self) -> &'static str {
+        match self {
+            Self::Round => "round",
+            Self::Square => "square",
+        }
+    }
+}
+
+/// The brush model the paint tools share: the Edit Brush dialog's
+/// slots plus the paint color and the effect strength. The engine
+/// validates the same ranges, so the panel's bounds match the
+/// command's refusals.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct BrushSettings {
+    /// Brush diameter in pixels (the dialog's Size slot), 1..=1024.
+    pub size: u32,
+    /// Edge softness percent (0 hard rim, 100 full falloff).
+    pub edge: u8,
+    /// The stamp shape.
+    pub shape: StampShape,
+    /// Minor axis as a percent of the size (1..=100).
+    pub aspect: u8,
+    /// Rotation in degrees.
+    pub angle: i16,
+    /// Per-dab pressure percent (1..=100).
+    pub pressure: u8,
+    /// Effect strength percent (1..=100).
+    pub strength: u8,
+    /// The paint color, straight RGBA.
+    pub color: [u8; 4],
+}
+
+impl Default for BrushSettings {
+    fn default() -> Self {
+        Self {
+            size: 16,
+            edge: 50,
+            shape: StampShape::Round,
+            aspect: 100,
+            angle: 0,
+            pressure: 100,
+            strength: 100,
+            color: [0, 0, 0, 255],
+        }
+    }
+}
+
+/// A paint stroke in progress: the image it paints on and where the
+/// last dab landed (image pixel coordinates).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Stroke {
+    /// The image being painted.
+    pub target: ObjectId,
+    /// The last dab's center, in image pixel coordinates.
+    pub last: geom::Point,
+    /// The stroke's start point, in image pixel coordinates — the
+    /// gradient's first handle.
+    pub start: geom::Point,
 }
 
 /// The Auto Shape tool group: one drag-to-create tool per shape,
@@ -124,11 +235,11 @@ impl AutoShape {
     /// shapes take the frame center + radius, frame-based shapes the
     /// normalized frame, line-based shapes the raw endpoints.
     #[must_use]
-    fn payload(self, drag: Drag, page: usize, frame: usize) -> serde_json::Value {
+    fn payload(self, drag: Drag, page: usize, layer: usize, frame: usize) -> serde_json::Value {
         let (sx, sy) = (drag.start.x, drag.start.y);
         let (cx, cy) = (drag.current.x, drag.current.y);
         let frame_json = serde_json::json!({
-            "page": page, "layer": 0, "cell": frame, "name": null,
+            "page": page, "layer": layer, "cell": frame, "name": null,
         });
         // Frame origin/size, normalized so drags in any direction
         // produce positive extents.
@@ -262,8 +373,87 @@ fn drag_class(tool: Tool) -> DragClass {
         | Tool::Hotspot
         | Tool::AutoShape(_) => DragClass::Box,
         Tool::Line => DragClass::Line,
-        Tool::Pointer | Tool::Subselect | Tool::Zoom | Tool::Hand => DragClass::None,
+        Tool::Pointer
+        | Tool::Subselect
+        | Tool::Zoom
+        | Tool::Hand
+        | Tool::Paintbrush
+        | Tool::Pencil
+        | Tool::Eraser
+        | Tool::PaintBucket
+        | Tool::Gradient
+        | Tool::Eyedropper
+        | Tool::Marquee
+        | Tool::EllipticalMarquee
+        | Tool::Lasso
+        | Tool::PolygonalMarquee
+        | Tool::MagicWand => DragClass::None,
     }
+}
+
+/// How a new pixel selection combines with the active one — CS6's
+/// marquee modifier keys (shift adds, alt subtracts) made explicit.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PixelSelectMode {
+    /// Replace the active selection.
+    Replace,
+    /// Union with the active selection.
+    Add,
+    /// Cut out of the active selection.
+    Subtract,
+    /// Keep only the overlap.
+    Intersect,
+}
+
+impl PixelSelectMode {
+    /// The wire name the engine's selection payloads use.
+    #[must_use]
+    pub fn wire(self) -> &'static str {
+        match self {
+            Self::Replace => "replace",
+            Self::Add => "add",
+            Self::Subtract => "subtract",
+            Self::Intersect => "intersect",
+        }
+    }
+
+    /// The mode the modifier keys select: shift adds, alt subtracts,
+    /// ctrl intersects; no modifier replaces.
+    #[must_use]
+    pub fn from_modifiers(modifiers: egui::Modifiers) -> Self {
+        if modifiers.shift {
+            Self::Add
+        } else if modifiers.alt {
+            Self::Subtract
+        } else if modifiers.ctrl {
+            Self::Intersect
+        } else {
+            Self::Replace
+        }
+    }
+}
+
+/// A pixel selection being drawn: the image it lands on, the drag's
+/// endpoints, and the trace a freehand lasso leaves behind.
+#[derive(Clone, Debug, PartialEq)]
+pub struct PixelSelection {
+    /// The image being selected in.
+    pub target: ObjectId,
+    /// The drag's first point, in image pixel coordinates.
+    pub start: geom::Point,
+    /// The drag's current point, in image pixel coordinates.
+    pub current: geom::Point,
+    /// The lasso's trace: every point the pointer visited.
+    pub trace: Vec<geom::Point>,
+}
+
+/// A pixel polygon being built click by click.
+#[derive(Clone, Debug, PartialEq)]
+pub struct PolygonDraft {
+    /// The image the vertices are in.
+    pub target: ObjectId,
+    /// The vertices, in image pixel coordinates.
+    pub points: Vec<geom::Point>,
 }
 
 /// One place computes the constrained drag geometry — the
@@ -373,6 +563,10 @@ pub struct Editor {
     pub page: usize,
     /// Current state (frame) index (view state).
     pub frame: usize,
+    /// Active layer on the current page (view state): every placement
+    /// command lands its object here, and the Layers panel highlights
+    /// the row. Bottom-first, like the document's own layer list.
+    pub active_layer: usize,
     /// Selected object, if any (the last one picked).
     pub selection: Option<ObjectId>,
     /// Multi-selection the arrange/boolean surfaces operate on, in
@@ -389,6 +583,25 @@ pub struct Editor {
     pub symbol_layer: usize,
     /// Nine-slice guide edge drag in progress.
     pub guide_drag: Option<GuideDrag>,
+    /// The brush model the paint tools use (view state — the engine
+    /// re-reads it from every stroke's payload).
+    pub brush: BrushSettings,
+    /// The paint stroke in progress, if any.
+    pub stroke: Option<Stroke>,
+    /// The pixel selection being drawn, if any.
+    pub pixel_selection: Option<PixelSelection>,
+    /// The pixel polygon being built, if any.
+    pub polygon: Option<PolygonDraft>,
+    /// The image the active pixel selection belongs to — the
+    /// selection plane is document-wide, so the overlay needs to know
+    /// which image it is drawn over.
+    pub pixel_target: Option<ObjectId>,
+    /// How the next pixel selection combines with the active one.
+    pub pixel_mode: PixelSelectMode,
+    /// The magic wand's per-channel tolerance.
+    pub wand_tolerance: u8,
+    /// The feather radius the panel's slider applies.
+    pub feather_radius: u8,
 }
 
 impl Editor {
@@ -426,6 +639,13 @@ impl Editor {
         // install() can only fail on duplicate ids — impossible for
         // the built-in table; a bug there is a panic-grade defect.
         let _ = catalog::install(&mut registry);
+        // CS6 opens a document with its topmost layer active, so a
+        // freshly opened multi-layer file lands new objects where the
+        // user expects them.
+        let active_layer = document
+            .pages
+            .first()
+            .map_or(0, |page| page.layers.layers.len().saturating_sub(1));
         Self {
             session: Session::with_registry(document, registry),
             unknown,
@@ -433,13 +653,57 @@ impl Editor {
             tool: Tool::Pointer,
             page: 0,
             frame: 0,
+            active_layer,
             selection: None,
             selection_set: Vec::new(),
             drag: None,
             symbol_scope: None,
             symbol_layer: 0,
             guide_drag: None,
+            brush: BrushSettings::default(),
+            stroke: None,
+            pixel_selection: None,
+            polygon: None,
+            pixel_target: None,
+            pixel_mode: PixelSelectMode::Replace,
+            wand_tolerance: 32,
+            feather_radius: 2,
         }
+    }
+
+    /// The number of layers on the current page (0 when the document
+    /// has no such page).
+    #[must_use]
+    pub fn layer_count(&self) -> usize {
+        self.session
+            .document()
+            .pages
+            .get(self.page)
+            .map_or(0, |page| page.layers.layers.len())
+    }
+
+    /// The active layer, clamped into the current page's layer list.
+    /// A stale index (the last layer was deleted, the page changed)
+    /// resolves to the topmost layer rather than refusing.
+    #[must_use]
+    pub fn active_layer(&self) -> usize {
+        let count = self.layer_count();
+        if count == 0 {
+            0
+        } else {
+            self.active_layer.min(count - 1)
+        }
+    }
+
+    /// Makes `index` the active layer — the Layers panel's click
+    /// handler. Out-of-range indices are clamped to the topmost layer.
+    pub fn set_active_layer(&mut self, index: usize) {
+        let count = self.layer_count();
+        if count == 0 {
+            self.active_layer = 0;
+            return;
+        }
+        self.active_layer = index.min(count - 1);
     }
 
     /// Opens `.fw.png` bytes through the full read path.
@@ -763,15 +1027,26 @@ impl Editor {
     }
 
     /// The target cell of the current page/frame, if it exists.
+    ///
+    /// The active layer's cell is the editor's cell: everything the
+    /// user places lands there, so hit-testing and selection read the
+    /// same cell the placement commands write. A document whose layers
+    /// disagree about their frame count (an opened file whose top
+    /// layer has fewer states) falls back to the first layer that
+    /// carries the frame.
     #[must_use]
     pub fn current_cell(&self) -> Option<&Cell> {
-        self.document()
-            .pages
-            .get(self.page)?
-            .layers
-            .layers
-            .iter()
-            .find_map(|layer: &Layer| layer.cells.get(self.frame))
+        let page = self.document().pages.get(self.page)?;
+        let layers = &page.layers.layers;
+        let active = self.active_layer().min(layers.len().saturating_sub(1));
+        layers
+            .get(active)
+            .and_then(|layer: &Layer| layer.cells.get(self.frame))
+            .or_else(|| {
+                layers
+                    .iter()
+                    .find_map(|layer: &Layer| layer.cells.get(self.frame))
+            })
     }
 
     /// A library definition by its `MSNi` number.
@@ -857,7 +1132,7 @@ impl Editor {
             "symbol.createInstance",
             serde_json::json!({
                 "symbol": symbol,
-                "page": self.page, "layer": 0, "cell": self.frame,
+                "page": self.page, "layer": self.active_layer(), "cell": self.frame,
                 "index": null,
                 "x": world.x, "y": world.y,
                 "name": null,
@@ -1227,7 +1502,7 @@ impl Editor {
                         "kind": kind,
                         "x": x, "y": y,
                         "width": width, "height": height,
-                        "page": self.page, "layer": 0, "cell": self.frame,
+                        "page": self.page, "layer": self.active_layer(), "cell": self.frame,
                         "name": null,
                     }),
                 )?;
@@ -1237,7 +1512,7 @@ impl Editor {
                 self.apply(
                     "text.createText",
                     serde_json::json!({
-                        "page": self.page, "layer": 0, "cell": self.frame,
+                        "page": self.page, "layer": self.active_layer(), "cell": self.frame,
                         "x": x, "y": y, "width": width, "height": height,
                         "text": "", "name": null,
                     }),
@@ -1245,7 +1520,10 @@ impl Editor {
                 true
             }
             Tool::AutoShape(shape) => {
-                self.apply(shape.command(), shape.payload(drag, self.page, self.frame))?;
+                self.apply(
+                    shape.command(),
+                    shape.payload(drag, self.page, self.active_layer(), self.frame),
+                )?;
                 true
             }
             Tool::Slice | Tool::Hotspot => {
@@ -1268,12 +1546,574 @@ impl Editor {
                 )?;
                 false
             }
-            Tool::Pointer | Tool::Subselect | Tool::Zoom | Tool::Hand => false,
+            Tool::Pointer
+            | Tool::Subselect
+            | Tool::Zoom
+            | Tool::Hand
+            | Tool::Paintbrush
+            | Tool::Pencil
+            | Tool::Eraser
+            | Tool::PaintBucket
+            | Tool::Gradient
+            | Tool::Eyedropper
+            | Tool::Marquee
+            | Tool::EllipticalMarquee
+            | Tool::Lasso
+            | Tool::PolygonalMarquee
+            | Tool::MagicWand => false,
         };
         if created && self.symbol_scope.is_some() {
             self.lift_creation_into_scope(&before)?;
         }
         Ok(())
+    }
+
+    /// The image under `world` and the point in its own pixel space —
+    /// the paint tools' target. The topmost image of the edited cell
+    /// wins; a point that misses every image has no target.
+    #[must_use]
+    pub fn paint_target(&self, world: geom::Point) -> Option<(ObjectId, geom::Point)> {
+        let cell = self.editing_cell()?;
+        for id in cell.elements.iter().rev() {
+            let Some(data) = self.document().registry.get(*id) else {
+                continue;
+            };
+            let ObjectData::Image(image) = data else {
+                continue;
+            };
+            let bounds = geom::Rect::from_points(
+                image.location,
+                image.location
+                    + geom::Vec2::new(
+                        f64::from(i32::try_from(image.pixels.0).unwrap_or(0)),
+                        f64::from(i32::try_from(image.pixels.1).unwrap_or(0)),
+                    ),
+            );
+            if !bounds.contains(world) {
+                continue;
+            }
+            return Some((
+                *id,
+                geom::Point::new(world.x - image.location.x, world.y - image.location.y),
+            ));
+        }
+        None
+    }
+
+    /// Starts a paint stroke at `world`: the brush lays its first dab
+    /// on the image under the pointer. Every dab of the stroke folds
+    /// into one undo step.
+    ///
+    /// # Errors
+    /// The engine refuses the dab; the document is untouched.
+    pub fn begin_stroke(&mut self, world: geom::Point) -> Result<(), EngineError> {
+        let Some((target, point)) = self.paint_target(world) else {
+            return Ok(());
+        };
+        self.stroke = Some(Stroke {
+            target,
+            last: point,
+            start: point,
+        });
+        if self.tool == Tool::Gradient {
+            // The gradient's two handles come from the drag itself;
+            // nothing is painted until the pointer lifts.
+            return Ok(());
+        }
+        self.session.begin_transaction("paint stroke")?;
+        if let Err(error) = self.paint_dab(target, point) {
+            let _ = self.session.abort_transaction();
+            self.stroke = None;
+            return Err(error);
+        }
+        Ok(())
+    }
+
+    /// Continues the stroke: dabs along the segment from the last one
+    /// to the pointer. The gradient tool only records its end handle.
+    ///
+    /// # Errors
+    /// The engine refuses a dab; the document is untouched.
+    pub fn stroke_to(&mut self, world: geom::Point) -> Result<(), EngineError> {
+        let Some(stroke) = self.stroke else {
+            return Ok(());
+        };
+        let Some((target, point)) = self.paint_target(world) else {
+            return Ok(());
+        };
+        if target != stroke.target {
+            return Ok(());
+        }
+        if self.tool == Tool::Gradient {
+            self.stroke = Some(Stroke {
+                target,
+                last: point,
+                start: stroke.start,
+            });
+            return Ok(());
+        }
+        let from = stroke.last;
+        let distance = ((point.x - from.x).powi(2) + (point.y - from.y).powi(2)).sqrt();
+        // A pointer that barely moved adds no dab — the stroke would
+        // pile opacity onto the same pixel.
+        if distance < 0.5 {
+            return Ok(());
+        }
+        let spacing = match self.tool {
+            Tool::Pencil => 1.0,
+            _ => f64::from(self.brush.size.clamp(1, 1024)) / 4.0,
+        };
+        let steps = ((distance / spacing).floor() as usize).max(1);
+        for step in 1..=steps {
+            let t = step as f64 / steps as f64;
+            let dab = geom::Point::new(
+                from.x + (point.x - from.x) * t,
+                from.y + (point.y - from.y) * t,
+            );
+            self.paint_dab(target, dab)?;
+        }
+        self.stroke = Some(Stroke {
+            target,
+            last: point,
+            start: stroke.start,
+        });
+        Ok(())
+    }
+
+    /// Ends the stroke: the gradient paints, the dabs fold into the
+    /// stroke's single undo step.
+    ///
+    /// # Errors
+    /// The engine refuses the final command; the stroke's dabs stay.
+    pub fn end_stroke(&mut self) -> Result<(), EngineError> {
+        let Some(stroke) = self.stroke.take() else {
+            return Ok(());
+        };
+        if self.tool == Tool::Gradient {
+            return self.paint_gradient(stroke);
+        }
+        if self.session.transaction_open() {
+            return self.session.commit_transaction().map(|_label| ());
+        }
+        Ok(())
+    }
+
+    /// Lays one dab of the current brush on `target` at `point` (image
+    /// pixel coordinates).
+    ///
+    /// # Errors
+    /// The engine refuses the dab; the document is untouched.
+    fn paint_dab(&mut self, target: ObjectId, point: geom::Point) -> Result<(), EngineError> {
+        let brush = self.brush;
+        let color_raw = argb_raw(brush.color);
+        let slots = serde_json::json!({
+            "edge": brush.edge,
+            "shape": brush.shape.wire(),
+            "aspect": brush.aspect,
+            "angle": brush.angle,
+            "pressure": brush.pressure,
+        });
+        match self.tool {
+            Tool::Pencil => self.apply(
+                "bitmap.pencil",
+                serde_json::json!({
+                    "id": target, "x": point.x, "y": point.y,
+                    "color_raw": color_raw,
+                    "strength": brush.strength,
+                    "pressure": brush.pressure,
+                }),
+            ),
+            Tool::Eraser => self.apply(
+                "retouch.eraser",
+                serde_json::json!({
+                    "id": target, "x": point.x, "y": point.y,
+                    "radius": (brush.size / 2).clamp(1, 512),
+                    "strength": brush.strength,
+                    "brush": slots,
+                }),
+            ),
+            _ => self.apply(
+                "bitmap.brush",
+                serde_json::json!({
+                    "id": target, "x": point.x, "y": point.y,
+                    "size": brush.size.clamp(1, 1024),
+                    "color_raw": color_raw,
+                    "strength": brush.strength,
+                    "brush": slots,
+                }),
+            ),
+        }
+    }
+
+    /// Paints the gradient the drag described: the stroke's two
+    /// handles, in the stroke's image.
+    ///
+    /// # Errors
+    /// The engine refuses the gradient; the document is untouched.
+    fn paint_gradient(&mut self, stroke: Stroke) -> Result<(), EngineError> {
+        let brush = self.brush;
+        self.apply(
+            "bitmap.gradient",
+            serde_json::json!({
+                "id": stroke.target,
+                "color_a_raw": argb_raw(brush.color),
+                "color_b_raw": argb_raw(gradient_end_color(brush.color)),
+                "x0": stroke.start.x, "y0": stroke.start.y,
+                "x1": stroke.last.x, "y1": stroke.last.y,
+            }),
+        )
+    }
+
+    /// Fills the target image's selection (or the whole image when
+    /// nothing is selected) with the paint color — the paint bucket.
+    ///
+    /// # Errors
+    /// The engine refuses the fill; the document is untouched.
+    pub fn fill_target(&mut self, world: geom::Point) -> Result<bool, EngineError> {
+        let Some((target, _point)) = self.paint_target(world) else {
+            return Ok(false);
+        };
+        self.apply(
+            "bitmap.fill",
+            serde_json::json!({ "id": target, "color_raw": argb_raw(self.brush.color) }),
+        )?;
+        Ok(true)
+    }
+
+    /// Picks the paint color from the pixel under `world` — the
+    /// eyedropper. The color lands in the brush model, not in the
+    /// document.
+    #[must_use]
+    pub fn pick_color(&mut self, world: geom::Point) -> Option<[u8; 4]> {
+        let (target, point) = self.paint_target(world)?;
+        let data = self.document().registry.get(target)?;
+        let ObjectData::Image(image) = data else {
+            return None;
+        };
+        // The point is inside the image's bounds (the hit test said
+        // so), so the floor fits an `i64` and the cast saturates
+        // rather than wrapping.
+        let x = point.x.floor() as i64;
+        let y = point.y.floor() as i64;
+        let color = engine::bitmap::sample_pixel(image, &self.document().tiles, x, y)?;
+        self.brush.color = color;
+        Some(color)
+    }
+
+    /// The point in `target`'s own pixel space for a world point.
+    /// Unlike [`Editor::paint_target`] this does not require the point
+    /// to be inside the image — a lasso may leave the frame.
+    fn image_point(&self, target: ObjectId, world: geom::Point) -> Option<geom::Point> {
+        let data = self.document().registry.get(target)?;
+        let ObjectData::Image(image) = data else {
+            return None;
+        };
+        Some(geom::Point::new(
+            world.x - image.location.x,
+            world.y - image.location.y,
+        ))
+    }
+
+    /// Starts a pixel selection at `world`: the marquee, ellipse and
+    /// lasso tools act on the image under the pointer. The wand is a
+    /// click, not a drag — it selects at once.
+    ///
+    /// # Errors
+    /// The engine refuses the selection; the document is untouched.
+    pub fn begin_pixel_selection(&mut self, world: geom::Point) -> Result<(), EngineError> {
+        let Some((target, point)) = self.paint_target(world) else {
+            return Ok(());
+        };
+        if self.tool == Tool::MagicWand {
+            self.pixel_target = Some(target);
+            return self.wand_select(target, point);
+        }
+        self.pixel_selection = Some(PixelSelection {
+            target,
+            start: point,
+            current: point,
+            trace: vec![point],
+        });
+        Ok(())
+    }
+
+    /// Continues a pixel selection: the marquee tracks the pointer,
+    /// the lasso records the trace it leaves behind.
+    ///
+    /// # Errors
+    /// The engine refuses the extension; the document is untouched.
+    pub fn extend_pixel_selection(&mut self, world: geom::Point) -> Result<(), EngineError> {
+        let Some(selection) = self.pixel_selection.as_ref() else {
+            return Ok(());
+        };
+        let target = selection.target;
+        let Some(point) = self.image_point(target, world) else {
+            return Ok(());
+        };
+        let Some(selection) = self.pixel_selection.as_mut() else {
+            return Ok(());
+        };
+        selection.current = point;
+        if self.tool == Tool::Lasso {
+            let last = selection.trace.last().copied().unwrap_or(point);
+            let moved = ((point.x - last.x).powi(2) + (point.y - last.y).powi(2)).sqrt();
+            // A pointer that barely moved adds no vertex — the trace
+            // would grow without describing a different shape.
+            if moved >= 2.0 {
+                selection.trace.push(point);
+            }
+        }
+        Ok(())
+    }
+
+    /// Ends a pixel selection: the marquee, ellipse and lasso apply
+    /// their shape to the document's selection plane. A collapsed
+    /// shape selects nothing, as in the original.
+    ///
+    /// # Errors
+    /// The engine refuses the selection; the document is untouched.
+    pub fn end_pixel_selection(&mut self) -> Result<(), EngineError> {
+        let Some(selection) = self.pixel_selection.take() else {
+            return Ok(());
+        };
+        let mode = self.pixel_mode.wire();
+        self.pixel_target = Some(selection.target);
+        let x = selection.start.x.min(selection.current.x);
+        let y = selection.start.y.min(selection.current.y);
+        let width = (selection.current.x - selection.start.x).abs();
+        let height = (selection.current.y - selection.start.y).abs();
+        match self.tool {
+            Tool::Marquee => self.apply(
+                "bitmap.selectRect",
+                serde_json::json!({
+                    "id": selection.target, "x": x, "y": y,
+                    "width": width, "height": height, "mode": mode,
+                }),
+            ),
+            Tool::EllipticalMarquee => self.apply(
+                "bitmap.selectEllipse",
+                serde_json::json!({
+                    "id": selection.target, "x": x, "y": y,
+                    "width": width, "height": height, "mode": mode,
+                }),
+            ),
+            Tool::Lasso => {
+                let points: Vec<[f64; 2]> = selection
+                    .trace
+                    .iter()
+                    .map(|point| [point.x, point.y])
+                    .collect();
+                self.apply(
+                    "bitmap.selectLasso",
+                    serde_json::json!({
+                        "id": selection.target, "points": points, "mode": mode,
+                    }),
+                )
+            }
+            _ => Ok(()),
+        }
+    }
+
+    /// The magic wand: every pixel that matches the clicked one
+    /// within the tolerance joins the selection.
+    ///
+    /// # Errors
+    /// The engine refuses the selection; the document is untouched.
+    fn wand_select(&mut self, target: ObjectId, point: geom::Point) -> Result<(), EngineError> {
+        // The point is inside the image (the hit test said so), so
+        // the floor fits a `u32` and the cast saturates rather than
+        // wrapping.
+        let x = point.x.floor() as u32;
+        let y = point.y.floor() as u32;
+        let tolerance = self.wand_tolerance;
+        let mode = self.pixel_mode.wire();
+        self.apply(
+            "bitmap.selectWand",
+            serde_json::json!({
+                "id": target, "x": x, "y": y,
+                "tolerance": tolerance, "contiguous": true, "mode": mode,
+            }),
+        )
+    }
+
+    /// Adds a vertex to the pixel polygon being built. A click on
+    /// another image starts a new polygon.
+    ///
+    /// # Errors
+    /// The engine refuses nothing here; the method cannot fail today,
+    /// but it keeps the panel's error door open for later commands.
+    pub fn add_polygon_point(&mut self, world: geom::Point) -> Result<(), EngineError> {
+        let Some((target, point)) = self.paint_target(world) else {
+            return Ok(());
+        };
+        match self.polygon.as_mut() {
+            Some(draft) if draft.target == target => draft.points.push(point),
+            _ => {
+                self.polygon = Some(PolygonDraft {
+                    target,
+                    points: vec![point],
+                });
+            }
+        }
+        Ok(())
+    }
+
+    /// Commits the pixel polygon: its vertices become the selection.
+    /// A polygon with fewer than three vertices is not a shape.
+    ///
+    /// # Errors
+    /// The engine refuses the selection; the document is untouched.
+    pub fn commit_polygon(&mut self) -> Result<bool, EngineError> {
+        let Some(draft) = self.polygon.as_ref() else {
+            return Ok(false);
+        };
+        if draft.points.len() < 3 {
+            // A refused commit keeps the draft: the pointer adds the
+            // next vertex and clicks commit again.
+            return Ok(false);
+        }
+        let Some(draft) = self.polygon.take() else {
+            return Ok(false);
+        };
+        self.pixel_target = Some(draft.target);
+        let points: Vec<[f64; 2]> = draft
+            .points
+            .iter()
+            .map(|point| [point.x, point.y])
+            .collect();
+        let mode = self.pixel_mode.wire();
+        self.apply(
+            "bitmap.selectPolygon",
+            serde_json::json!({
+                "id": draft.target, "points": points, "mode": mode,
+            }),
+        )?;
+        Ok(true)
+    }
+
+    /// The image's world-space location (its top-left), for overlays.
+    #[must_use]
+    pub fn image_location(&self, target: ObjectId) -> Option<geom::Point> {
+        let data = self.document().registry.get(target)?;
+        match data {
+            ObjectData::Image(image) => Some(image.location),
+            _ => None,
+        }
+    }
+
+    /// Whether the document carries a pixel selection.
+    #[must_use]
+    pub fn has_pixel_selection(&self) -> bool {
+        self.document().selection.is_some()
+    }
+
+    /// Clears the pixel selection.
+    ///
+    /// # Errors
+    /// The engine refuses the command; the document is untouched.
+    pub fn deselect_pixels(&mut self) -> Result<(), EngineError> {
+        self.pixel_target = None;
+        self.apply("bitmap.selectNone", serde_json::json!({}))
+    }
+
+    /// Softens the pixel selection's edge.
+    ///
+    /// # Errors
+    /// The engine refuses the command; the document is untouched.
+    pub fn feather_selection(&mut self, radius: u8) -> Result<(), EngineError> {
+        self.apply("bitmap.feather", serde_json::json!({ "radius": radius }))
+    }
+
+    /// Grows, shrinks, borders or smooths the pixel selection.
+    ///
+    /// # Errors
+    /// The engine refuses the command; the document is untouched.
+    pub fn adjust_pixel_selection(&mut self, what: &str, amount: i64) -> Result<(), EngineError> {
+        self.apply(
+            "bitmap.adjustPixelSel",
+            serde_json::json!({ "what": what, "amount": amount }),
+        )
+    }
+
+    /// Selects the pixels that match the active selection's average
+    /// color within `tolerance`.
+    ///
+    /// # Errors
+    /// The engine refuses the command; the document is untouched.
+    pub fn select_similar(&mut self, tolerance: u8) -> Result<(), EngineError> {
+        let Some(target) = self.pixel_target else {
+            return Ok(());
+        };
+        let mode = self.pixel_mode.wire();
+        self.apply(
+            "bitmap.selectSimilar",
+            serde_json::json!({
+                "id": target, "tolerance": tolerance,
+                "contiguous": false, "mode": mode,
+            }),
+        )
+    }
+
+    /// Moves the selection plane itself — the pixels under it stay.
+    ///
+    /// # Errors
+    /// The engine refuses the command; the document is untouched.
+    pub fn move_selection_mask(&mut self, dx: i64, dy: i64) -> Result<(), EngineError> {
+        self.apply(
+            "bitmap.moveSelectionMaskBy",
+            serde_json::json!({ "delta": { "x": dx, "y": dy } }),
+        )
+    }
+
+    /// Moves the pixels under the selection.
+    ///
+    /// # Errors
+    /// The engine refuses the command; the document is untouched.
+    pub fn move_selected_pixels(&mut self, dx: i64, dy: i64) -> Result<(), EngineError> {
+        let Some(target) = self.pixel_target else {
+            return Ok(());
+        };
+        self.apply(
+            "bitmap.movePixels",
+            serde_json::json!({ "id": target, "dx": dx, "dy": dy }),
+        )
+    }
+
+    /// Erases the pixels under the selection.
+    ///
+    /// # Errors
+    /// The engine refuses the command; the document is untouched.
+    pub fn erase_selected(&mut self) -> Result<(), EngineError> {
+        let Some(target) = self.pixel_target else {
+            return Ok(());
+        };
+        self.apply("bitmap.erase", serde_json::json!({ "id": target }))
+    }
+
+    /// The active pixel selection's outline in world coordinates —
+    /// the marching-ants path the canvas draws. `None` when nothing
+    /// is selected.
+    #[must_use]
+    pub fn selection_outline(&self) -> Option<Vec<[f64; 4]>> {
+        let mask = self.document().selection.as_ref()?;
+        let target = self.pixel_target?;
+        let data = self.document().registry.get(target)?;
+        let ObjectData::Image(image) = data else {
+            return None;
+        };
+        Some(
+            selection_edges(mask)
+                .into_iter()
+                .map(|[x0, y0, x1, y1]| {
+                    [
+                        image.location.x + x0,
+                        image.location.y + y0,
+                        image.location.x + x1,
+                        image.location.y + y1,
+                    ]
+                })
+                .collect(),
+        )
     }
 
     /// While a symbol is being edited, a fresh creation belongs to the
@@ -1375,6 +2215,37 @@ impl Editor {
             .filter(|id| self.document().registry.get(*id).is_some())
     }
 
+    /// Installs a selection as the view state: the pick order is the
+    /// order given, and the primary selection is its last entry.
+    pub fn set_selection(&mut self, ids: Vec<ObjectId>) {
+        self.selection = ids.last().copied();
+        self.selection_set = ids;
+    }
+
+    /// Pushes the view's selection into the document's editing state.
+    ///
+    /// The engine's selection-scoped commands — the clipboard, the
+    /// flatten family — read `Document::object_selection`, while the
+    /// shell tracks the selection as view state. This is the bridge:
+    /// the ids land in the document through the same command door as
+    /// every other mutation, so the change is journaled and undoable
+    /// like any other edit. A selection that already matches is not
+    /// re-sent — the command would be a no-op that only adds an undo
+    /// step.
+    ///
+    /// # Errors
+    /// Whatever the command refuses; the document is untouched.
+    pub fn sync_selection(&mut self) -> Result<(), EngineError> {
+        let mut ids = self.live_selection();
+        ids.sort_by_key(|id| (id.index(), id.generation()));
+        let mut current = self.session.document().object_selection.clone();
+        current.sort_by_key(|id| (id.index(), id.generation()));
+        if ids == current {
+            return Ok(());
+        }
+        self.apply("selection.set", serde_json::json!({ "ids": ids }))
+    }
+
     /// The two operands for `path.boolean`: the live pair ordered
     /// bottom-first in the current cell (z order), so `a` is the base
     /// and `b` the consumed top object — Fireworks' Punch semantics.
@@ -1402,6 +2273,123 @@ impl Editor {
 /// World-space bounding box of a path's contour points (anchors and
 /// control handles — the handles keep fast strokes inside the box).
 #[must_use]
+/// The parts of `span` that `covered` does not cover — the helper
+/// behind the selection's horizontal boundary.
+fn uncovered(covered: &[(usize, usize)], span: (usize, usize)) -> Vec<(usize, usize)> {
+    let mut gaps = Vec::new();
+    let mut cursor = span.0;
+    for &(start, end) in covered {
+        if end <= cursor {
+            continue;
+        }
+        if start >= span.1 {
+            break;
+        }
+        if start > cursor {
+            gaps.push((cursor, start.min(span.1)));
+        }
+        cursor = cursor.max(end);
+        if cursor >= span.1 {
+            break;
+        }
+    }
+    if cursor < span.1 {
+        gaps.push((cursor, span.1));
+    }
+    gaps
+}
+
+/// The boundary of a selection mask in image pixel coordinates: the
+/// line segments `[x0, y0, x1, y1]` between selected and unselected
+/// pixels. The image's own border is not a boundary — a selection
+/// that runs to the edge of the frame has no ants there.
+#[must_use]
+pub fn selection_edges(mask: &doc::SelectionMask) -> Vec<[f64; 4]> {
+    let width = mask.width as usize;
+    let height = mask.height as usize;
+    if width == 0 || height == 0 {
+        return Vec::new();
+    }
+    let selected =
+        |x: usize, y: usize| -> bool { x < width && y < height && mask.alpha[y * width + x] != 0 };
+    // The selected runs of every row.
+    let mut rows: Vec<Vec<(usize, usize)>> = Vec::with_capacity(height);
+    for y in 0..height {
+        let mut runs = Vec::new();
+        let mut x = 0;
+        while x < width {
+            if !selected(x, y) {
+                x += 1;
+                continue;
+            }
+            let start = x;
+            while x < width && selected(x, y) {
+                x += 1;
+            }
+            runs.push((start, x));
+        }
+        rows.push(runs);
+    }
+    let mut edges = Vec::new();
+    // Horizontal boundaries: the parts of a run that the row above
+    // (or below) does not cover.
+    let empty: Vec<(usize, usize)> = Vec::new();
+    for (y, runs) in rows.iter().enumerate() {
+        let above = if y == 0 { &empty } else { &rows[y - 1] };
+        let below = if y + 1 == height {
+            &empty
+        } else {
+            &rows[y + 1]
+        };
+        for &(x0, x1) in runs {
+            // The image border is not a boundary: no edge along y = 0
+            // or y = height, just as the vertical pass skips x = 0 and
+            // x = width.
+            if y > 0 {
+                for (a, b) in uncovered(above, (x0, x1)) {
+                    edges.push([a as f64, y as f64, b as f64, y as f64]);
+                }
+            }
+            if y + 1 < height {
+                for (a, b) in uncovered(below, (x0, x1)) {
+                    edges.push([a as f64, (y + 1) as f64, b as f64, (y + 1) as f64]);
+                }
+            }
+        }
+    }
+    // Vertical boundaries: a run's left and right edges, merged
+    // across the rows that share them.
+    let mut open: BTreeMap<usize, usize> = BTreeMap::new();
+    for (y, runs) in rows.iter().enumerate() {
+        let mut boundaries = BTreeSet::new();
+        for &(x0, x1) in runs {
+            if x0 > 0 {
+                boundaries.insert(x0);
+            }
+            if x1 < width {
+                boundaries.insert(x1);
+            }
+        }
+        let closed: Vec<usize> = open
+            .keys()
+            .filter(|x| !boundaries.contains(x))
+            .copied()
+            .collect();
+        for x in closed {
+            if let Some(y0) = open.remove(&x) {
+                edges.push([x as f64, y0 as f64, x as f64, y as f64]);
+            }
+        }
+        for x in boundaries {
+            open.entry(x).or_insert(y);
+        }
+    }
+    for (x, y0) in open {
+        edges.push([x as f64, y0 as f64, x as f64, height as f64]);
+    }
+    edges
+}
+
 pub fn bounds_of(path: &doc::PathObject) -> geom::Rect {
     let mut points = Vec::new();
     for contour in &path.contours {
@@ -2122,5 +3110,196 @@ mod tests {
         assert!(editor.enable_nine_slice(number).is_err());
         editor.disable_nine_slice(number).unwrap();
         assert!(editor.document().symbols[0].nine_slice.is_none());
+    }
+
+    /// A 2×2 red image on the page — the selection tools' target.
+    fn editor_with_raster() -> (Editor, ObjectId) {
+        let mut editor = Editor::untitled();
+        // 2×2 opaque red, base64 of [255, 0, 0, 255] × 2 rows.
+        let red = [
+            255u8, 0, 0, 255, 255, 0, 0, 255, 255, 0, 0, 255, 255, 0, 0, 255,
+        ];
+        let plane = base64::engine::general_purpose::STANDARD.encode(red);
+        editor
+            .apply(
+                "bitmap.importFile",
+                serde_json::json!({
+                    "width": 2, "height": 2, "pixels": plane,
+                    "bounds": { "left": 0.0, "top": 0.0, "right": 0.0, "bottom": 0.0 },
+                    "maintain_aspect_ratio": true,
+                    "page": 0, "layer": 0, "cell": 0, "name": "red",
+                }),
+            )
+            .unwrap();
+        let id = editor.current_cell().unwrap().elements[0];
+        (editor, id)
+    }
+
+    #[test]
+    fn the_marquee_selects_a_rect_of_pixels() {
+        let (mut editor, id) = editor_with_raster();
+        editor.tool = Tool::Marquee;
+        editor
+            .begin_pixel_selection(geom::Point::new(0.5, 0.5))
+            .unwrap();
+        // Half-open center rule: the drag [0.5, 2.0) covers both pixel
+        // centers (0.5, 1.5).
+        editor
+            .extend_pixel_selection(geom::Point::new(2.0, 2.0))
+            .unwrap();
+        editor.end_pixel_selection().unwrap();
+
+        let mask = editor.document().selection.as_ref().expect("selected");
+        assert_eq!((mask.width, mask.height), (2, 2));
+        assert_eq!(mask.get(0, 0), Some(255));
+        assert_eq!(mask.get(1, 1), Some(255));
+        assert_eq!(editor.pixel_target, Some(id));
+
+        // The engine's deselect command clears it through the same door.
+        editor.deselect_pixels().unwrap();
+        assert!(editor.document().selection.is_none());
+    }
+
+    #[test]
+    fn a_marquee_with_add_mode_folds_over_the_active_one() {
+        let (mut editor, _id) = editor_with_raster();
+        editor.tool = Tool::Marquee;
+        editor
+            .begin_pixel_selection(geom::Point::new(0.5, 0.5))
+            .unwrap();
+        editor
+            .extend_pixel_selection(geom::Point::new(0.9, 1.9))
+            .unwrap();
+        editor.end_pixel_selection().unwrap();
+
+        // Shift = add: a second column joins the first.
+        editor.pixel_mode = PixelSelectMode::Add;
+        editor
+            .begin_pixel_selection(geom::Point::new(1.5, 0.5))
+            .unwrap();
+        editor
+            .extend_pixel_selection(geom::Point::new(1.9, 0.9))
+            .unwrap();
+        editor.end_pixel_selection().unwrap();
+
+        let mask = editor.document().selection.as_ref().expect("selected");
+        assert_eq!(mask.get(0, 1), Some(255), "the first column survives");
+        assert_eq!(mask.get(1, 0), Some(255), "the second joined it");
+    }
+
+    #[test]
+    fn the_lasso_selects_its_trace_polygon() {
+        let (mut editor, _id) = editor_with_raster();
+        editor.tool = Tool::Lasso;
+        editor
+            .begin_pixel_selection(geom::Point::new(0.0, 0.0))
+            .unwrap();
+        editor
+            .extend_pixel_selection(geom::Point::new(2.0, 0.0))
+            .unwrap();
+        editor
+            .extend_pixel_selection(geom::Point::new(2.0, 2.0))
+            .unwrap();
+        editor
+            .extend_pixel_selection(geom::Point::new(0.0, 2.0))
+            .unwrap();
+        editor.end_pixel_selection().unwrap();
+
+        let mask = editor.document().selection.as_ref().expect("selected");
+        // The trace closes a full square: centers 0.5 and 1.5 on both
+        // axes sit strictly inside [0, 2).
+        assert_eq!(mask.get(0, 1), Some(255));
+        assert_eq!(mask.get(1, 0), Some(255));
+    }
+
+    #[test]
+    fn the_wand_selects_matching_pixels_from_the_seed() {
+        let (mut editor, _id) = editor_with_raster();
+        editor.tool = Tool::MagicWand;
+        editor.wand_tolerance = 0;
+        editor
+            .begin_pixel_selection(geom::Point::new(0.5, 0.5))
+            .unwrap();
+
+        let mask = editor.document().selection.as_ref().expect("selected");
+        assert_eq!(mask.get(0, 0), Some(255));
+        assert_eq!(mask.get(1, 1), Some(255), "the whole red field matches");
+    }
+
+    #[test]
+    fn the_polygon_selects_on_commit() {
+        let (mut editor, _id) = editor_with_raster();
+        editor.tool = Tool::PolygonalMarquee;
+        // Two points are not a shape; three commit.
+        editor
+            .add_polygon_point(geom::Point::new(0.5, 0.5))
+            .unwrap();
+        editor
+            .add_polygon_point(geom::Point::new(1.5, 0.5))
+            .unwrap();
+        assert!(!editor.commit_polygon().unwrap_or(false));
+        editor
+            .add_polygon_point(geom::Point::new(0.5, 1.5))
+            .unwrap();
+        assert!(editor.commit_polygon().unwrap());
+
+        let mask = editor.document().selection.as_ref().expect("selected");
+        assert_eq!(mask.get(0, 0), Some(255));
+        assert_eq!(mask.get(1, 1), Some(0), "the far corner stays out");
+    }
+
+    #[test]
+    fn feather_adjust_and_move_ride_the_panel_commands() {
+        let (mut editor, id) = editor_with_raster();
+        editor.tool = Tool::Marquee;
+        editor
+            .begin_pixel_selection(geom::Point::new(0.5, 0.5))
+            .unwrap();
+        editor
+            .extend_pixel_selection(geom::Point::new(0.9, 0.9))
+            .unwrap();
+        editor.end_pixel_selection().unwrap();
+
+        // Grow by two: the diagonal is chamfer distance 4, so a
+        // radius-1 expand (threshold 3) reaches only axis neighbors —
+        // radius 2 (threshold 6) covers the whole 2×2 image.
+        editor.adjust_pixel_selection("expand", 2).unwrap();
+        let mask = editor.document().selection.as_ref().expect("selected");
+        assert_eq!(mask.get(1, 1), Some(255));
+
+        // Move the pixels under it: the red field shifts, undo walks
+        // it back.
+        editor.pixel_target = Some(id);
+        editor.move_selected_pixels(0, 1).unwrap();
+        editor.undo().unwrap();
+        assert!(editor.document().selection.is_some());
+
+        // Erase under the mask, then undo restores the pixels.
+        editor.erase_selected().unwrap();
+        editor.undo().unwrap();
+        let mask = editor.document().selection.as_ref().expect("still there");
+        assert_eq!(mask.get(0, 0), Some(255));
+    }
+
+    #[test]
+    fn selection_edges_outlines_the_mask_not_the_image() {
+        // A full-image selection has no interior boundary — the image
+        // border is not a boundary — but a half-image one has a
+        // vertical line down the middle.
+        let mut mask = doc::SelectionMask::empty(2, 1);
+        mask.set(0, 0, 255);
+        let edges = selection_edges(&mask);
+        // The image border is not a boundary on any side: the lone
+        // pixel contributes only its interior right edge (x = 1).
+        assert_eq!(edges.len(), 1);
+        assert_eq!(edges[0], [1.0, 0.0, 1.0, 1.0]);
+
+        let mut full = doc::SelectionMask::empty(2, 2);
+        for y in 0..2 {
+            for x in 0..2 {
+                full.set(x, y, 255);
+            }
+        }
+        assert!(selection_edges(&full).is_empty());
     }
 }

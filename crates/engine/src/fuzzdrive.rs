@@ -628,6 +628,7 @@ pub const CALLS: &[&str] = &[
     "bitmap.feather",
     "bitmap.selectNone",
     "bitmap.fill",
+    "bitmap.gradient",
     "bitmap.erase",
     "bitmap.brush",
     "bitmap.pencil",
@@ -1876,6 +1877,15 @@ pub fn random_call(rng: &mut FuzzRng, document: &Document) -> (String, serde_jso
             "id": any_id(rng),
             "color_raw": rng.next_u64() as i64,
         }),
+        "bitmap.gradient" => serde_json::json!({
+            "id": any_id(rng),
+            "color_a_raw": rng.next_u64() as i64,
+            "color_b_raw": rng.next_u64() as i64,
+            "x0": -(rng.below(300) as f64),
+            "y0": -(rng.below(300) as f64),
+            "x1": rng.below(300) as f64,
+            "y1": rng.below(300) as f64,
+        }),
         "bitmap.erase" => serde_json::json!({
             "id": any_id(rng),
         }),
@@ -2575,8 +2585,8 @@ pub fn random_call(rng: &mut FuzzRng, document: &Document) -> (String, serde_jso
             "index": any_index(rng, 3),
         }),
         // Mask moves wander small (real translations) with a rare
-        // huge one into the 65535 refusal; adjustments cycle the four
-        // CS6 kinds with amounts crossing the 1..=65535 gate.
+        // huge one into the 64K-1 refusal; adjustments cycle the four
+        // CS6 kinds with amounts crossing the 1..=64K-1 gate.
         "bitmap.moveSelectionMaskBy" => serde_json::json!({
             "delta": {
                 "x": rng.below(128) as i64 - 64,
@@ -2588,7 +2598,7 @@ pub fn random_call(rng: &mut FuzzRng, document: &Document) -> (String, serde_jso
             let amount = match rng.below(10) {
                 0 => 0i64,
                 1 => -1,
-                2 => 70000,
+                2 => 70_000,
                 _ => rng.below(24) as i64 + 1,
             };
             serde_json::json!({ "what": what, "amount": amount })

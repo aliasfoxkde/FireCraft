@@ -293,18 +293,59 @@ pub(crate) fn retile_rgba(
 
 pub(crate) fn unpremultiply_all(pixels: &mut [u8]) {
     for pixel in pixels.chunks_exact_mut(4) {
-        let alpha = pixel[3];
-        if alpha == 0 || alpha == 255 {
-            continue;
-        }
-        // Straight = premultiplied · 255 / alpha, rounded half-up; the
-        // dividend is ≤ 255·255 + 127, which fits u16 math per step via
-        // u32 intermediates.
-        for channel in &mut pixel[..3] {
-            *channel =
-                ((u32::from(*channel) * 255 + u32::from(alpha) / 2) / u32::from(alpha)) as u8;
+        if let Ok(pixel) = <&mut [u8; 4]>::try_from(pixel) {
+            unpremultiply_pixel(pixel);
         }
     }
+}
+
+/// One straight-alpha pixel from its premultiplied form: straight =
+/// premultiplied · 255 / alpha, rounded half-up; the dividend is
+/// ≤ 255·255 + 127, which fits u16 math per step via u32
+/// intermediates.
+pub(crate) fn unpremultiply_pixel(pixel: &mut [u8; 4]) {
+    let alpha = pixel[3];
+    if alpha == 0 || alpha == 255 {
+        return;
+    }
+    for channel in &mut pixel[..3] {
+        *channel = ((u32::from(*channel) * 255 + u32::from(alpha) / 2) / u32::from(alpha)) as u8;
+    }
+}
+
+/// The straight-alpha RGBA pixel at image coordinates `(x, y)` — the
+/// eyedropper's read.
+///
+/// `None` when the point falls outside the image, when the grid slot
+/// is a matte tile (flat file-side color, not editable pixels), or
+/// when the tile payload is not loaded. The read is straight-alpha,
+/// like every other pixel path in the engine.
+#[must_use]
+pub fn sample_pixel(image: &ImageObject, bank: &TileBank, x: i64, y: i64) -> Option<[u8; 4]> {
+    let (width, height) = (image.pixels.0, image.pixels.1);
+    if x < 0 || y < 0 || x >= width || y >= height {
+        return None;
+    }
+    let side = raster::TILE_SIDE as u64;
+    let cols = u64::try_from(width).ok()?.div_ceil(side);
+    let slot = usize::try_from((y as u64 / side) * cols + (x as u64 / side)).ok()?;
+    let tile_id = match image.tiles.get(slot)? {
+        TileRef::Tile(tile_id) => *tile_id,
+        TileRef::Matte(_) => return None,
+    };
+    let tile = bank.get(tile_id)?;
+    let tx = usize::try_from(x as u64 % side).ok()?;
+    let ty = usize::try_from(y as u64 % side).ok()?;
+    let pixels = tile.pixels();
+    let index = (ty * usize::try_from(side).ok()? + tx) * 4;
+    let mut pixel = [
+        *pixels.get(index)?,
+        *pixels.get(index + 1)?,
+        *pixels.get(index + 2)?,
+        *pixels.get(index + 3)?,
+    ];
+    unpremultiply_pixel(&mut pixel);
+    Some(pixel)
 }
 
 pub(crate) fn premultiply_all(pixels: &mut [u8]) {
@@ -439,6 +480,55 @@ mod tests {
         let flat = gather(&image, &bank, "test").unwrap();
         assert_eq!(&flat.pixels[0..4], &[0, 0, 0, 0], "matte slot stays empty");
         assert_eq!(&flat.pixels[128 * 4..128 * 4 + 4], &[10, 20, 30, 255]);
+    }
+
+    #[test]
+    fn sample_pixel_reads_the_straight_color() {
+        // A 128×128 grid whose second row is a half-alpha green.
+        let image = image_object(128, 128, 128, vec![TileRef::Tile(0)]);
+        let mut bank = TileBank::new();
+        let mut tile = solid_tile([10, 20, 30, 255]);
+        {
+            let pixels = tile.pixels_mut();
+            // Premultiplied (64, 128, 0, 128) → straight (128, 255, 0, 128).
+            for px in 0..128usize {
+                let index = (128 + px) * 4;
+                pixels[index..index + 4].copy_from_slice(&[64, 128, 0, 128]);
+            }
+        }
+        bank.insert(0, tile);
+
+        assert_eq!(
+            sample_pixel(&image, &bank, 0, 0),
+            Some([10, 20, 30, 255]),
+            "an opaque pixel reads straight"
+        );
+        assert_eq!(
+            sample_pixel(&image, &bank, 3, 1),
+            Some([128, 255, 0, 128]),
+            "a half-alpha pixel reads unpremultiplied"
+        );
+        assert_eq!(
+            sample_pixel(&image, &bank, 128, 0),
+            None,
+            "a point past the image has no pixel"
+        );
+        assert_eq!(
+            sample_pixel(&image, &bank, -1, 0),
+            None,
+            "a point before the image has no pixel"
+        );
+    }
+
+    #[test]
+    fn sample_pixel_skips_matte_slots() {
+        let image = image_object(128, 128, 128, vec![TileRef::Matte(0xFF_FF_FF_FF)]);
+        let bank = TileBank::new();
+        assert_eq!(
+            sample_pixel(&image, &bank, 0, 0),
+            None,
+            "a matte slot is file-side color, not pixels"
+        );
     }
 
     #[test]

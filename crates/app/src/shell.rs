@@ -7,8 +7,12 @@
 use doc::{ObjectData, PathObject, SymbolInstanceObject, SymbolType, TextObject};
 use egui::{Color32, ColorImage, Pos2, Rect, Sense, TextureHandle, TextureOptions, Vec2};
 
+use base64::Engine as _;
+
 use crate::canvas::View;
-use crate::editor::{AutoShape, DragConstraint, Editor, NineSliceEdge, Tool};
+use crate::editor::{
+    AutoShape, DragConstraint, Editor, NineSliceEdge, PixelSelectMode, StampShape, Tool,
+};
 use crate::menus;
 
 /// The CS6 chrome look: near-black charcoal panels, square corners,
@@ -56,6 +60,17 @@ fn tool_label(tool: Tool) -> &'static str {
         Tool::Slice => "Rectangle Slice",
         Tool::Hotspot => "Web Hotspot",
         Tool::AutoShape(_) => "Auto Shape",
+        Tool::Paintbrush => "Paintbrush",
+        Tool::Pencil => "Pencil",
+        Tool::Eraser => "Eraser",
+        Tool::PaintBucket => "Paint Bucket",
+        Tool::Gradient => "Gradient",
+        Tool::Eyedropper => "Eyedropper",
+        Tool::Marquee => "Marquee",
+        Tool::EllipticalMarquee => "Elliptical Marquee",
+        Tool::Lasso => "Lasso",
+        Tool::PolygonalMarquee => "Polygonal Marquee",
+        Tool::MagicWand => "Magic Wand",
     }
 }
 
@@ -65,10 +80,22 @@ fn tool_key(tool: Tool) -> &'static str {
         Tool::Pointer => "V",
         Tool::Rect => "R",
         Tool::Ellipse => "E",
-        Tool::Line => "L",
+        // CS6's keymap gives L to the Lasso tool; the Line tool has
+        // no letter there, so FireCraft gives it O.
+        Tool::Line => "O",
         Tool::Text => "T",
         Tool::Zoom => "Z",
         Tool::Hand => "H",
+        Tool::Paintbrush => "B",
+        Tool::Pencil => "N",
+        Tool::Eraser => "Y",
+        Tool::PaintBucket => "G",
+        Tool::Gradient => "D",
+        Tool::Eyedropper => "I",
+        Tool::Marquee => "M",
+        Tool::Lasso => "L",
+        Tool::PolygonalMarquee => "P",
+        Tool::MagicWand => "W",
         _ => "",
     }
 }
@@ -193,6 +220,206 @@ fn draw_tool_glyph(painter: &egui::Painter, rect: Rect, tool: Tool, color: Color
             painter.circle_stroke(c, 5.5, (1.0, Color32::from_rgb(0x9c, 0xb8, 0xe0)));
         }
         Tool::AutoShape(shape) => draw_autoshape_glyph(painter, rect, shape, color),
+        Tool::Paintbrush => {
+            // handle down-right, bristle tip up-left
+            painter.line_segment(
+                [
+                    Pos2::new(c.x + 4.5, c.y + 4.5),
+                    Pos2::new(c.x - 1.5, c.y - 1.5),
+                ],
+                (2.2, color),
+            );
+            painter.add(egui::Shape::convex_polygon(
+                vec![
+                    Pos2::new(c.x - 5.5, c.y + 1.5),
+                    Pos2::new(c.x - 1.5, c.y - 2.5),
+                    Pos2::new(c.x + 1.5, c.y - 1.5),
+                    Pos2::new(c.x - 2.5, c.y + 2.5),
+                ],
+                color,
+                stroke,
+            ));
+        }
+        Tool::Pencil => {
+            painter.line_segment(
+                [
+                    Pos2::new(c.x + 5.0, c.y + 5.0),
+                    Pos2::new(c.x - 2.0, c.y - 2.0),
+                ],
+                (2.2, color),
+            );
+            painter.add(egui::Shape::convex_polygon(
+                vec![
+                    Pos2::new(c.x - 5.5, c.y - 1.5),
+                    Pos2::new(c.x - 2.0, c.y - 5.0),
+                    Pos2::new(c.x - 0.5, c.y - 2.5),
+                    Pos2::new(c.x - 3.0, c.y + 1.0),
+                ],
+                color,
+                stroke,
+            ));
+        }
+        Tool::Eraser => {
+            painter.add(egui::Shape::convex_polygon(
+                vec![
+                    Pos2::new(c.x - 5.5, c.y + 3.5),
+                    Pos2::new(c.x - 1.5, c.y - 3.5),
+                    Pos2::new(c.x + 5.5, c.y + 0.5),
+                    Pos2::new(c.x + 2.0, c.y + 6.0),
+                ],
+                color,
+                stroke,
+            ));
+        }
+        Tool::PaintBucket => {
+            painter.add(egui::Shape::convex_polygon(
+                vec![
+                    Pos2::new(c.x - 5.5, c.y - 3.5),
+                    Pos2::new(c.x + 0.5, c.y - 3.5),
+                    Pos2::new(c.x + 4.0, c.y + 4.0),
+                    Pos2::new(c.x - 3.0, c.y + 4.0),
+                ],
+                color,
+                stroke,
+            ));
+            painter.circle_filled(Pos2::new(c.x - 5.5, c.y - 4.5), 1.6, color);
+        }
+        Tool::Gradient => {
+            // a ramp of bands from the ink color to the background
+            let bands = 6;
+            for band in 0..bands {
+                let mix = band as f32 / (bands - 1) as f32;
+                let shade = Color32::from_rgba_unmultiplied(
+                    (color.r() as f32 * mix) as u8,
+                    (color.g() as f32 * mix) as u8,
+                    (color.b() as f32 * mix) as u8,
+                    color.a(),
+                );
+                let x = c.x - 6.0 + band as f32 * 2.0;
+                painter.rect_filled(
+                    Rect::from_min_size(Pos2::new(x, c.y - 5.0), egui::Vec2::new(2.0, 10.0)),
+                    0.0,
+                    shade,
+                );
+            }
+        }
+        Tool::Eyedropper => {
+            painter.add(egui::Shape::convex_polygon(
+                vec![
+                    Pos2::new(c.x - 4.5, c.y + 4.5),
+                    Pos2::new(c.x - 1.0, c.y + 1.0),
+                    Pos2::new(c.x + 1.5, c.y + 3.5),
+                    Pos2::new(c.x - 2.0, c.y + 6.0),
+                ],
+                color,
+                stroke,
+            ));
+            painter.line_segment(
+                [
+                    Pos2::new(c.x - 0.5, c.y + 1.5),
+                    Pos2::new(c.x + 4.5, c.y - 3.5),
+                ],
+                (2.0, color),
+            );
+        }
+        Tool::Marquee => {
+            // the dashed rectangle of a marquee: two dashes per edge
+            let frame = Rect::from_center_size(c, egui::Vec2::splat(11.0));
+            let dashes = [
+                [
+                    Pos2::new(frame.left(), frame.top()),
+                    Pos2::new(frame.center().x, frame.top()),
+                ],
+                [
+                    Pos2::new(frame.center().x, frame.top()),
+                    Pos2::new(frame.right(), frame.top()),
+                ],
+                [
+                    Pos2::new(frame.right(), frame.top()),
+                    Pos2::new(frame.right(), frame.center().y),
+                ],
+                [
+                    Pos2::new(frame.right(), frame.center().y),
+                    Pos2::new(frame.right(), frame.bottom()),
+                ],
+                [
+                    Pos2::new(frame.right(), frame.bottom()),
+                    Pos2::new(frame.center().x, frame.bottom()),
+                ],
+                [
+                    Pos2::new(frame.center().x, frame.bottom()),
+                    Pos2::new(frame.left(), frame.bottom()),
+                ],
+                [
+                    Pos2::new(frame.left(), frame.bottom()),
+                    Pos2::new(frame.left(), frame.center().y),
+                ],
+                [
+                    Pos2::new(frame.left(), frame.center().y),
+                    Pos2::new(frame.left(), frame.top()),
+                ],
+            ];
+            for dash in dashes {
+                painter.line_segment(dash, stroke);
+            }
+        }
+        Tool::EllipticalMarquee => {
+            // the same dashed idea, round
+            painter.circle_stroke(c, 5.5, (1.0, color));
+            painter.circle_stroke(c, 2.5, (1.0, color));
+        }
+        Tool::Lasso => {
+            // a loop with a trailing tail
+            painter.add(egui::Shape::convex_polygon(
+                vec![
+                    Pos2::new(c.x - 4.5, c.y - 1.0),
+                    Pos2::new(c.x - 1.0, c.y - 4.5),
+                    Pos2::new(c.x + 4.0, c.y - 2.0),
+                    Pos2::new(c.x + 2.5, c.y + 3.0),
+                    Pos2::new(c.x - 2.5, c.y + 3.5),
+                ],
+                color,
+                stroke,
+            ));
+            painter.line_segment(
+                [
+                    Pos2::new(c.x + 2.5, c.y + 3.0),
+                    Pos2::new(c.x + 5.5, c.y + 5.5),
+                ],
+                (1.2, color),
+            );
+        }
+        Tool::PolygonalMarquee => {
+            // a triangle of vertices with its handles
+            let points = [
+                Pos2::new(c.x - 5.0, c.y + 4.0),
+                Pos2::new(c.x, c.y - 5.0),
+                Pos2::new(c.x + 5.0, c.y + 4.0),
+            ];
+            painter.add(egui::Shape::convex_polygon(
+                points.to_vec(),
+                Color32::TRANSPARENT,
+                stroke,
+            ));
+            for point in points {
+                painter.rect_filled(
+                    Rect::from_center_size(point, egui::Vec2::splat(2.0)),
+                    0.0,
+                    color,
+                );
+            }
+        }
+        Tool::MagicWand => {
+            // a wand with a spark at its tip
+            painter.line_segment(
+                [
+                    Pos2::new(c.x - 4.5, c.y + 4.5),
+                    Pos2::new(c.x + 2.5, c.y - 2.5),
+                ],
+                (2.0, color),
+            );
+            painter.circle_stroke(Pos2::new(c.x + 4.0, c.y - 4.0), 2.0, (1.0, color));
+        }
     }
 }
 
@@ -342,8 +569,9 @@ fn symbol_type_label(kind: &SymbolType) -> String {
 /// share — the CS6 display label, and the `DCVs` defaults that give
 /// each kernel its working shape (visible where a visible default
 /// exists; `levels` ships its identity master so the rows are
-/// editable from a known state, and `dropShadow` stays empty as the
-/// deliberate pass-through control, exactly as in `filtered.fw.png`).
+/// editable from a known state, and the shadow family ships the CS6
+/// defaults — the same four scalars its Inner Shadow preset
+/// documents — because the kernel reads all four or renders nothing).
 #[derive(Clone, Copy)]
 pub(crate) struct FilterPreset {
     /// Engine internal name (`filter.add`'s `name`).
@@ -529,7 +757,12 @@ pub(crate) static FILTER_FAMILIES: &[(&str, &[FilterPreset])] = &[
             FilterPreset {
                 name: "dropShadow",
                 label: "Drop Shadow",
-                params: &[],
+                params: &[
+                    ("ShadowColor", "#000000"),
+                    ("ShadowAngle", "135"),
+                    ("ShadowBlur", "2"),
+                    ("ShadowDistance", "3"),
+                ],
                 points: &[],
             },
             FilterPreset {
@@ -952,8 +1185,12 @@ impl engine::platform::Dialogs for EnvDialogs {
     }
 }
 
-/// The export formats the dialog offers, in menu order.
-const EXPORT_FORMATS: &[&str] = &["png", "jpg", "bmp", "tiff", "wbmp", "svg", "psd", "gif"];
+/// The export formats the dialog offers, in menu order. The index is
+/// the document's `FMTi` export-format id, so new formats append —
+/// reordering would re-point every saved document's setting.
+const EXPORT_FORMATS: &[&str] = &[
+    "png", "jpg", "bmp", "tiff", "wbmp", "svg", "psd", "gif", "webp",
+];
 
 /// The web export workflows the dialog offers (the M11 set), in menu
 /// order — the same names the CLI's `--workflow` flag takes.
@@ -1073,6 +1310,9 @@ pub struct Shell {
     autoshape_flyout: bool,
     /// The Styles panel's new-style name field.
     style_name: String,
+    /// The layer whose name is being edited in the Layers panel
+    /// (`None` = no inline rename open).
+    rename_layer: Option<usize>,
     /// The live egui context, stashed each frame so code outside the
     /// frame loop (the web bridge) can request a repaint after it
     /// mutates the shell — without one, a bridge-loaded document sat
@@ -1110,6 +1350,7 @@ impl Shell {
             close_requested: false,
             autoshape_flyout: false,
             style_name: String::new(),
+            rename_layer: None,
             ctx: None,
         }
     }
@@ -1149,20 +1390,39 @@ impl Shell {
         )
     }
 
-    /// File → Open through the injected traits.
+    /// File → Open through the injected traits. A Fireworks PNG
+    /// opens as a document; any other supported raster opens as a
+    /// document sized to the image — one door, no guessing.
     fn open_document(&mut self) {
         let Some(path) = self.dialogs.open_path(
             "Open document",
-            &[("Fireworks PNG".to_owned(), vec!["png".to_owned()])],
+            &[
+                ("Fireworks PNG".to_owned(), vec!["png".to_owned()]),
+                (
+                    "Images".to_owned(),
+                    vec![
+                        "png".to_owned(),
+                        "jpg".to_owned(),
+                        "jpeg".to_owned(),
+                        "gif".to_owned(),
+                        "bmp".to_owned(),
+                        "tif".to_owned(),
+                        "tiff".to_owned(),
+                        "webp".to_owned(),
+                    ],
+                ),
+            ],
         ) else {
             return;
         };
-        match self
-            .fs
-            .read_file(&path)
-            .map_err(|e| e.to_string())
-            .and_then(|bytes| Editor::open(&bytes).map_err(|e| e.to_string()))
-        {
+        let bytes = match self.fs.read_file(&path).map_err(|e| e.to_string()) {
+            Ok(bytes) => bytes,
+            Err(error) => {
+                self.status = format!("open failed: {error}");
+                return;
+            }
+        };
+        match Editor::open(&bytes) {
             Ok(editor) => {
                 self.status = format!("opened {path}");
                 self.raster = None;
@@ -1172,10 +1432,158 @@ impl Shell {
                     .file_name()
                     .map_or_else(|| path.clone(), |name| name.to_string_lossy().into_owned());
             }
-            Err(error) => {
-                self.status = format!("open failed: {error}");
+            Err(document_error) => {
+                // Not a Fireworks PNG — try a plain raster. A raster
+                // opens as its own document, sized to the image, which
+                // is what CS6 does with a JPEG.
+                let name = std::path::Path::new(&path)
+                    .file_name()
+                    .map_or_else(|| path.clone(), |name| name.to_string_lossy().into_owned());
+                match self.open_raster_document(&bytes, &name) {
+                    Ok(()) => {
+                        self.status = format!("opened {path} as an image");
+                        self.raster = None;
+                        self.view = View::default();
+                        self.doc_name = name;
+                    }
+                    Err(_) => {
+                        self.status = format!("open failed: {document_error}");
+                    }
+                }
             }
         }
+    }
+
+    /// File → Import…: place a raster into the current document, on
+    /// the active layer.
+    fn import_raster_dialog(&mut self) {
+        let Some(path) = self.dialogs.open_path(
+            "Import image",
+            &[(
+                "Images".to_owned(),
+                vec![
+                    "png".to_owned(),
+                    "jpg".to_owned(),
+                    "jpeg".to_owned(),
+                    "gif".to_owned(),
+                    "bmp".to_owned(),
+                    "tif".to_owned(),
+                    "tiff".to_owned(),
+                    "webp".to_owned(),
+                ],
+            )],
+        ) else {
+            return;
+        };
+        let bytes = match self.fs.read_file(&path).map_err(|e| e.to_string()) {
+            Ok(bytes) => bytes,
+            Err(error) => {
+                self.status = format!("import failed: {error}");
+                return;
+            }
+        };
+        let name = std::path::Path::new(&path)
+            .file_name()
+            .map_or_else(|| path.clone(), |name| name.to_string_lossy().into_owned());
+        match self.import_raster(&bytes, &name) {
+            Ok(placed) => {
+                self.status = format!("imported {name} ({placed})");
+            }
+            Err(error) => {
+                self.status = format!("import failed: {error}");
+            }
+        }
+    }
+
+    /// Decodes `bytes` and places the raster on the active layer of
+    /// the current page. A source larger than the canvas is scaled to
+    /// fit it (aspect kept); a smaller one lands unscaled at the
+    /// canvas corner, the way CS6 imports it.
+    fn import_raster(&mut self, bytes: &[u8], name: &str) -> Result<String, String> {
+        let decoded = io::raster::decode(bytes).map_err(|error| error.to_string())?;
+        let (page, layer, cell) = (
+            self.editor.page,
+            self.editor.active_layer(),
+            self.editor.frame,
+        );
+        let canvas = self
+            .editor
+            .document()
+            .pages
+            .get(page)
+            .map(|page| page.info.canvas.clone())
+            .ok_or_else(|| "the document has no such page".to_owned())?;
+        let fits =
+            f64::from(decoded.width) <= canvas.width && f64::from(decoded.height) <= canvas.height;
+        let bounds = if fits {
+            // A degenerate rectangle places the file unscaled with
+            // its top-left corner at that point.
+            serde_json::json!({
+                "left": canvas.x,
+                "top": canvas.y,
+                "right": canvas.x,
+                "bottom": canvas.y,
+            })
+        } else {
+            serde_json::json!({
+                "left": canvas.x,
+                "top": canvas.y,
+                "right": canvas.x + canvas.width,
+                "bottom": canvas.y + canvas.height,
+            })
+        };
+        let payload = serde_json::json!({
+            "width": decoded.width,
+            "height": decoded.height,
+            "pixels": base64::engine::general_purpose::STANDARD.encode(&decoded.rgba),
+            "bounds": bounds,
+            "maintain_aspect_ratio": true,
+            "page": page,
+            "layer": layer,
+            "cell": cell,
+            "name": name,
+        });
+        self.editor
+            .apply("bitmap.importFile", payload)
+            .map_err(|error| error.to_string())?;
+        Ok(format!("{}x{}", decoded.width, decoded.height))
+    }
+
+    /// Opens a plain raster as its own document: a fresh one-page
+    /// document whose canvas matches the image, with the image on the
+    /// page's layer.
+    fn open_raster_document(&mut self, bytes: &[u8], name: &str) -> Result<(), String> {
+        let decoded = io::raster::decode(bytes).map_err(|error| error.to_string())?;
+        let mut editor = Editor::untitled();
+        let _ = editor.apply(
+            "page.setCanvasSize",
+            serde_json::json!({
+                "page": 0,
+                "width": decoded.width,
+                "height": decoded.height,
+            }),
+        );
+        let payload = serde_json::json!({
+            "width": decoded.width,
+            "height": decoded.height,
+            "pixels": base64::engine::general_purpose::STANDARD.encode(&decoded.rgba),
+            "bounds": {
+                "left": 0.0,
+                "top": 0.0,
+                "right": 0.0,
+                "bottom": 0.0,
+            },
+            "maintain_aspect_ratio": true,
+            "page": 0,
+            "layer": 0,
+            "cell": 0,
+            "name": name,
+        });
+        editor
+            .apply("bitmap.importFile", payload)
+            .map_err(|error| error.to_string())?;
+        self.editor = editor;
+        Ok(())
     }
 
     /// File → Save through the injected traits.
@@ -1820,6 +2228,7 @@ impl Shell {
                 self.status = "new document".to_owned();
             }
             menus::ShellAction::Open => self.open_document(),
+            menus::ShellAction::Import => self.import_raster_dialog(),
             menus::ShellAction::Save | menus::ShellAction::SaveAs => self.save_document(),
             menus::ShellAction::Export | menus::ShellAction::ExportPreview => {
                 self.export_dialog = Some(ExportDialog::default());
@@ -1834,8 +2243,7 @@ impl Shell {
                 Err(error) => self.status = format!("redo failed: {error}"),
             },
             menus::ShellAction::Deselect => {
-                self.editor.selection = None;
-                self.editor.selection_set.clear();
+                self.editor.set_selection(Vec::new());
                 self.status = "deselected".to_owned();
             }
             menus::ShellAction::SelectAll => {
@@ -1843,11 +2251,16 @@ impl Shell {
                     .editor
                     .current_cell()
                     .map_or_else(Vec::new, |cell| cell.elements.clone());
-                self.editor.selection = ids.last().copied();
                 let picked = ids.len();
-                self.editor.selection_set = ids;
+                self.editor.set_selection(ids);
                 self.status = format!("selected {picked} object(s)");
             }
+            menus::ShellAction::SelectInverse => self.select_inverse(),
+            menus::ShellAction::Copy => self.clipboard_copy(false),
+            menus::ShellAction::Cut => self.clipboard_copy(true),
+            menus::ShellAction::Paste => self.clipboard_paste(),
+            menus::ShellAction::PasteAsMask => self.paste_as_mask("clipboard.pasteAsMask"),
+            menus::ShellAction::PasteInside => self.paste_as_mask("clipboard.pasteInside"),
             menus::ShellAction::ZoomIn => {
                 let center = self
                     .canvas_rect
@@ -1886,6 +2299,99 @@ impl Shell {
                 self.status = format!("tool: {}", tool_label(tool));
             }
         }
+    }
+
+    /// Select ▸ Select Inverse: everything in the current cell the
+    /// selection does not cover. The cell is the editor's scope (one
+    /// layer, one state) — the same scope Select All covers.
+    fn select_inverse(&mut self) {
+        let selected = self.editor.live_selection();
+        let ids: Vec<doc::ObjectId> = self
+            .editor
+            .current_cell()
+            .map_or_else(Vec::new, |cell| cell.elements.clone())
+            .into_iter()
+            .filter(|id| !selected.contains(id))
+            .collect();
+        let picked = ids.len();
+        self.editor.set_selection(ids);
+        self.status = format!("selected {picked} object(s)");
+    }
+
+    /// Edit ▸ Copy / Cut: the engine's clipboard commands read the
+    /// document's selection, so the view's selection lands there
+    /// first. A cut takes the objects with it, so the view's selection
+    /// follows them out.
+    fn clipboard_copy(&mut self, cut: bool) {
+        if self.editor.live_selection().is_empty() {
+            self.status = "nothing selected".to_owned();
+            return;
+        }
+        if let Err(error) = self.editor.sync_selection() {
+            self.status = format!("selection failed: {error}");
+            return;
+        }
+        let name = if cut {
+            "clipboard.cut"
+        } else {
+            "clipboard.copy"
+        };
+        match self.editor.apply(name, serde_json::json!({})) {
+            Ok(()) => {
+                if cut {
+                    self.editor.set_selection(Vec::new());
+                    self.status = "cut".to_owned();
+                } else {
+                    self.status = "copied".to_owned();
+                }
+            }
+            Err(error) => self.status = format!("{name} failed: {error}"),
+        }
+    }
+
+    /// Edit ▸ Paste: the clipboard re-mints onto the active layer of
+    /// the current page, in place (CS6's paste-in-place). The pasted
+    /// objects become the selection, so a second paste rides the same
+    /// place.
+    fn clipboard_paste(&mut self) {
+        let page = self.editor.page;
+        let layer = self.editor.active_layer();
+        let cell = self.editor.frame;
+        let before: Vec<doc::ObjectId> = self
+            .editor
+            .current_cell()
+            .map_or_else(Vec::new, |cell| cell.elements.clone());
+        let payload = serde_json::json!({ "page": page, "layer": layer, "cell": cell });
+        if let Err(error) = self.editor.apply("clipboard.paste", payload) {
+            self.status = format!("clipboard.paste failed: {error}");
+            return;
+        }
+        let after: Vec<doc::ObjectId> = self
+            .editor
+            .current_cell()
+            .map_or_else(Vec::new, |cell| cell.elements.clone());
+        let fresh: Vec<doc::ObjectId> = after
+            .into_iter()
+            .filter(|id| !before.contains(id))
+            .collect();
+        let pasted = fresh.len();
+        self.editor.set_selection(fresh);
+        self.status = format!("pasted {pasted} object(s)");
+    }
+
+    /// Edit ▸ Paste as Mask / Paste Inside: the clipboard becomes the
+    /// selection's mask. Both commands read the document's selection,
+    /// so it is synced first.
+    fn paste_as_mask(&mut self, name: &str) {
+        if self.editor.live_selection().is_empty() {
+            self.status = "nothing selected".to_owned();
+            return;
+        }
+        if let Err(error) = self.editor.sync_selection() {
+            self.status = format!("selection failed: {error}");
+            return;
+        }
+        self.run_command(name, serde_json::json!({}));
     }
 
     /// Engine commands whose payload derives from the current
@@ -1944,6 +2450,10 @@ impl Shell {
             }
             menus::SelAction::NewLayer => {
                 self.run_command("layer.add", serde_json::json!({ "page": self.editor.page }));
+                // CS6 makes a freshly added layer the active one, so
+                // what the user draws next lands on it.
+                let top = self.editor.layer_count().saturating_sub(1);
+                self.editor.set_active_layer(top);
             }
             menus::SelAction::NewPage => {
                 self.run_command("page.add", serde_json::json!({ "index": null }));
@@ -1953,7 +2463,83 @@ impl Shell {
                     self.run_command("symbol.breakApart", serde_json::json!({ "id": id }));
                 }
             }
+            menus::SelAction::Group => {
+                let ids = self.editor.live_selection();
+                if ids.len() < 2 {
+                    self.status = "group needs two or more objects".to_owned();
+                    return;
+                }
+                self.run_command("object.group", serde_json::json!({ "ids": ids }));
+            }
+            menus::SelAction::Ungroup => {
+                if let Some(id) = self.editor.selected_live() {
+                    self.run_command("object.ungroup", serde_json::json!({ "id": id }));
+                }
+            }
+            menus::SelAction::FlattenSelection => self.flatten_selection(),
+            menus::SelAction::MergeDown => self.merge_down(),
+            menus::SelAction::FlattenLayers => {
+                let page = self.editor.page;
+                self.run_command("flatten.document", serde_json::json!({ "page": page }));
+            }
+            menus::SelAction::Rotate(degrees) => {
+                let ids = self.editor.live_selection();
+                if ids.is_empty() {
+                    self.status = "nothing selected".to_owned();
+                    return;
+                }
+                self.run_command(
+                    "object.rotate",
+                    serde_json::json!({ "ids": ids, "degrees": degrees, "pivot": null }),
+                );
+            }
+            menus::SelAction::Reflect {
+                horizontal,
+                vertical,
+            } => {
+                let ids = self.editor.live_selection();
+                if ids.is_empty() {
+                    self.status = "nothing selected".to_owned();
+                    return;
+                }
+                self.run_command(
+                    "object.reflect",
+                    serde_json::json!({
+                        "ids": ids, "horizontal": horizontal, "vertical": vertical,
+                        "pivot": null,
+                    }),
+                );
+            }
         }
+    }
+
+    /// Modify ▸ Flatten Selection: bakes the selection into one
+    /// bitmap. The engine reads the document's selection, so the
+    /// view's selection lands there first.
+    fn flatten_selection(&mut self) {
+        if self.editor.live_selection().is_empty() {
+            self.status = "nothing selected".to_owned();
+            return;
+        }
+        if let Err(error) = self.editor.sync_selection() {
+            self.status = format!("selection failed: {error}");
+            return;
+        }
+        self.run_command("flatten.selection", serde_json::json!({}));
+    }
+
+    /// Modify ▸ Merge Down: merges the selection into the bitmap
+    /// directly below it. Same selection bridge as the flatten.
+    fn merge_down(&mut self) {
+        if self.editor.live_selection().is_empty() {
+            self.status = "nothing selected".to_owned();
+            return;
+        }
+        if let Err(error) = self.editor.sync_selection() {
+            self.status = format!("selection failed: {error}");
+            return;
+        }
+        self.run_command("flatten.mergeDown", serde_json::json!({}));
     }
 
     /// Modify ▸ Arrange: resolve the numeric `object.reorder` target
@@ -2100,13 +2686,17 @@ impl Shell {
     }
 
     /// Layers section: name + display toggle per layer, bottom-first.
+    /// The active layer's row is highlighted and can be changed by
+    /// clicking it — that row is where every placement command lands
+    /// its object.
     fn layers_section(&mut self, ui: &mut egui::Ui) {
         // Snapshot what the panel shows so closures never borrow the
         // document while the editor is mutable.
         let Some(page) = self.editor.document().pages.get(self.editor.page) else {
             return;
         };
-        let layers: Vec<(String, bool)> = page
+        let frame = self.editor.frame;
+        let layers: Vec<(String, bool, bool)> = page
             .layers
             .layers
             .iter()
@@ -2117,10 +2707,16 @@ impl Shell {
                 } else {
                     layer.name.clone()
                 };
-                (label, layer.display)
+                // The lock is per state (CS6 locks a layer's cell in
+                // one frame), so the row reads the current frame.
+                let locked = layer.cells.get(frame).is_some_and(|cell| cell.locked);
+                (label, layer.display, locked)
             })
             .collect();
-        for (layer_index, (label, display)) in layers.iter().enumerate() {
+        let count = layers.len();
+        let active = self.editor.active_layer();
+        for (layer_index, (label, display, locked)) in layers.iter().enumerate() {
+            let mut rename = label.clone();
             ui.horizontal(|ui| {
                 let eye = if *display { "👁" } else { "·" };
                 if ui
@@ -2137,8 +2733,127 @@ impl Shell {
                         }),
                     );
                 }
-                ui.label(label);
+                let lock = if *locked { "🔒" } else { "🔓" };
+                if ui
+                    .button(lock)
+                    .on_hover_text("Lock this layer in the current state")
+                    .clicked()
+                {
+                    let _ = self.editor.apply(
+                        "layer.setLocked",
+                        serde_json::json!({
+                            "page": self.editor.page,
+                            "layer": layer_index,
+                            "frame": frame,
+                            "locked": !locked,
+                        }),
+                    );
+                }
+                if self.rename_layer == Some(layer_index) {
+                    let field = ui
+                        .add(egui::TextEdit::singleline(&mut rename).desired_width(72.0))
+                        .on_hover_text("rename (Enter applies)");
+                    let enter = ui.input(|input| input.key_pressed(egui::Key::Enter));
+                    if (field.lost_focus() || enter) && rename != *label {
+                        self.run_command(
+                            "layer.rename",
+                            serde_json::json!({
+                                "page": self.editor.page,
+                                "layer": layer_index,
+                                "name": rename,
+                            }),
+                        );
+                    }
+                    if field.lost_focus() || enter {
+                        self.rename_layer = None;
+                    }
+                } else if ui
+                    .selectable_label(active == layer_index, label)
+                    .on_hover_text("Make this the active layer")
+                    .clicked()
+                {
+                    self.editor.set_active_layer(layer_index);
+                }
+                if ui
+                    .small_button("✎")
+                    .on_hover_text("Rename this layer")
+                    .clicked()
+                {
+                    self.rename_layer = Some(layer_index);
+                }
+                if ui
+                    .small_button("↑")
+                    .on_hover_text("Move this layer up")
+                    .clicked()
+                {
+                    self.reorder_layer(layer_index, true);
+                }
+                if ui
+                    .small_button("↓")
+                    .on_hover_text("Move this layer down")
+                    .clicked()
+                {
+                    self.reorder_layer(layer_index, false);
+                }
             });
+        }
+        ui.horizontal(|ui| {
+            if ui
+                .button("+")
+                .on_hover_text("Add a layer above the active one")
+                .clicked()
+            {
+                self.run_command(
+                    "layer.add",
+                    serde_json::json!({ "page": self.editor.page, "index": null }),
+                );
+                let top = self.editor.layer_count().saturating_sub(1);
+                self.editor.set_active_layer(top);
+            }
+            if ui
+                .button("−")
+                .on_hover_text("Delete the active layer")
+                .clicked()
+                && count > 1
+            {
+                self.run_command(
+                    "layer.delete",
+                    serde_json::json!({ "page": self.editor.page, "layer": active }),
+                );
+                self.editor.set_active_layer(active.saturating_sub(1));
+            }
+        });
+    }
+
+    /// Layers-panel reorder: one slot up (toward the top of the
+    /// stack) or down. `before` is the pre-removal index the moved
+    /// layer lands in front of, so moving up one slot is `index + 2`.
+    fn reorder_layer(&mut self, index: usize, up: bool) {
+        let count = self.editor.layer_count();
+        if count == 0 {
+            return;
+        }
+        let before = if up {
+            (index + 2).min(count)
+        } else {
+            index.saturating_sub(1)
+        };
+        if before == index || before == index + 1 {
+            return; // already at the end of the stack
+        }
+        let payload = serde_json::json!({
+            "page": self.editor.page,
+            "from": index,
+            "before": before,
+        });
+        match self.editor.apply("layer.reorder", payload) {
+            Ok(()) => {
+                // The moved layer keeps the active role; its index
+                // shifts by one slot in the direction of the move.
+                let moved = if up { index + 1 } else { index - 1 };
+                self.editor.set_active_layer(moved);
+            }
+            Err(error) => self.status = format!("layer.reorder failed: {error}"),
         }
     }
 
@@ -2357,6 +3072,34 @@ impl Shell {
     /// Right panel: the align/distribute group, then properties of the
     /// selection.
     fn properties_panel(&mut self, ui: &mut egui::Ui) {
+        if matches!(
+            self.editor.tool,
+            Tool::Paintbrush
+                | Tool::Pencil
+                | Tool::Eraser
+                | Tool::PaintBucket
+                | Tool::Gradient
+                | Tool::Eyedropper
+                | Tool::Marquee
+                | Tool::EllipticalMarquee
+                | Tool::Lasso
+                | Tool::PolygonalMarquee
+                | Tool::MagicWand
+        ) {
+            self.brush_panel(ui);
+            ui.separator();
+        }
+        if matches!(
+            self.editor.tool,
+            Tool::Marquee
+                | Tool::EllipticalMarquee
+                | Tool::Lasso
+                | Tool::PolygonalMarquee
+                | Tool::MagicWand
+        ) {
+            self.selection_panel(ui);
+            ui.separator();
+        }
         ui.heading("Align");
         let ids = self.editor.live_selection();
         for row in [
@@ -2430,6 +3173,204 @@ impl Shell {
         };
         // The live effect list: every kind that carries an `EFLv` spine.
         self.filter_panel(ui, id, &effects);
+    }
+
+    /// The paint tools' slots: the Edit Brush dialog's size, edge,
+    /// shape, aspect, angle, pressure and strength, plus the paint
+    /// color. The canvas paints with exactly these — the engine reads
+    /// them from every stroke's payload.
+    fn brush_panel(&mut self, ui: &mut egui::Ui) {
+        ui.heading("Brush");
+        let brush = self.editor.brush;
+        let mut size = f32::from(u16::try_from(brush.size.min(1024)).unwrap_or(u16::MAX));
+        if ui
+            .add(egui::Slider::new(&mut size, 1.0..=1024.0).text("size"))
+            .changed()
+        {
+            self.editor.brush.size = size.round().clamp(1.0, 1024.0) as u32;
+        }
+        let mut edge = f32::from(brush.edge);
+        if ui
+            .add(egui::Slider::new(&mut edge, 0.0..=100.0).text("edge"))
+            .changed()
+        {
+            self.editor.brush.edge = edge.round().clamp(0.0, 100.0) as u8;
+        }
+        let mut aspect = f32::from(brush.aspect);
+        if ui
+            .add(egui::Slider::new(&mut aspect, 1.0..=100.0).text("aspect"))
+            .changed()
+        {
+            self.editor.brush.aspect = aspect.round().clamp(1.0, 100.0) as u8;
+        }
+        let mut angle = f32::from(brush.angle);
+        if ui
+            .add(egui::Slider::new(&mut angle, -180.0..=180.0).text("angle"))
+            .changed()
+        {
+            self.editor.brush.angle = angle.round().clamp(-180.0, 180.0) as i16;
+        }
+        let mut pressure = f32::from(brush.pressure);
+        if ui
+            .add(egui::Slider::new(&mut pressure, 1.0..=100.0).text("pressure"))
+            .changed()
+        {
+            self.editor.brush.pressure = pressure.round().clamp(1.0, 100.0) as u8;
+        }
+        let mut strength = f32::from(brush.strength);
+        if ui
+            .add(egui::Slider::new(&mut strength, 1.0..=100.0).text("strength"))
+            .changed()
+        {
+            self.editor.brush.strength = strength.round().clamp(1.0, 100.0) as u8;
+        }
+        ui.horizontal(|ui| {
+            ui.label("shape");
+            for (shape, label) in [(StampShape::Round, "round"), (StampShape::Square, "square")] {
+                if ui.selectable_label(brush.shape == shape, label).clicked() {
+                    self.editor.brush.shape = shape;
+                }
+            }
+        });
+        ui.horizontal(|ui| {
+            ui.label("color");
+            let mut color = egui::Color32::from_rgba_unmultiplied(
+                brush.color[0],
+                brush.color[1],
+                brush.color[2],
+                brush.color[3],
+            );
+            if ui.color_edit_button_srgba(&mut color).changed() {
+                self.editor.brush.color = [color.r(), color.g(), color.b(), color.a()];
+            }
+        });
+        if matches!(self.editor.tool, Tool::MagicWand) {
+            let mut tolerance = f32::from(self.editor.wand_tolerance);
+            if ui
+                .add(egui::Slider::new(&mut tolerance, 0.0..=255.0).text("tolerance"))
+                .changed()
+            {
+                self.editor.wand_tolerance = tolerance.round().clamp(0.0, 255.0) as u8;
+            }
+        }
+    }
+
+    /// The pixel-selection tools' panel: the mask's presence and
+    /// statistics, the mode words, and the feather / adjust / move /
+    /// erase actions on it.
+    fn selection_panel(&mut self, ui: &mut egui::Ui) {
+        ui.heading("Select");
+        let active = self.editor.has_pixel_selection();
+        if active {
+            let (pixels, coverage) =
+                self.editor
+                    .document()
+                    .selection
+                    .as_ref()
+                    .map_or((0, 0), |mask| {
+                        (
+                            mask.alpha.iter().filter(|&&a| a != 0).count(),
+                            u64::from(mask.alpha.iter().map(|&a| u16::from(a)).sum::<u16>()) * 100
+                                / (255 * u64::try_from(mask.alpha.len().max(1)).unwrap_or(1)),
+                        )
+                    });
+            ui.label(format!("{pixels} pixels selected ({coverage}% coverage)"));
+        } else {
+            ui.label("no pixel selection");
+        }
+        ui.horizontal(|ui| {
+            ui.label("mode");
+            for (mode, label) in [
+                (PixelSelectMode::Replace, "new"),
+                (PixelSelectMode::Add, "add"),
+                (PixelSelectMode::Subtract, "subtract"),
+                (PixelSelectMode::Intersect, "intersect"),
+            ] {
+                if ui
+                    .selectable_label(self.editor.pixel_mode == mode, label)
+                    .clicked()
+                {
+                    self.editor.pixel_mode = mode;
+                }
+            }
+        });
+        ui.separator();
+        let mut feather = f32::from(self.editor.feather_radius);
+        if ui
+            .add(egui::Slider::new(&mut feather, 1.0..=64.0).text("feather"))
+            .changed()
+        {
+            self.editor.feather_radius = feather.round().clamp(1.0, 64.0) as u8;
+        }
+        ui.horizontal(|ui| {
+            if ui
+                .add_enabled(active, egui::Button::new("feather").small())
+                .clicked()
+            {
+                let radius = self.editor.feather_radius;
+                if let Err(error) = self.editor.feather_selection(radius) {
+                    self.status = format!("feather failed: {error}");
+                }
+            }
+            if ui
+                .add_enabled(active, egui::Button::new("deselect").small())
+                .clicked()
+                && let Err(error) = self.editor.deselect_pixels()
+            {
+                self.status = format!("deselect failed: {error}");
+            }
+        });
+        ui.horizontal(|ui| {
+            for (what, label) in [
+                ("expand", "grow"),
+                ("contract", "shrink"),
+                ("smooth", "smooth"),
+            ] {
+                if ui
+                    .add_enabled(active, egui::Button::new(label).small())
+                    .clicked()
+                    && let Err(error) = self.editor.adjust_pixel_selection(what, 1)
+                {
+                    self.status = format!("{label} failed: {error}");
+                }
+            }
+        });
+        if matches!(self.editor.tool, Tool::MagicWand) && ui.button("select similar").clicked() {
+            let tolerance = self.editor.wand_tolerance;
+            if let Err(error) = self.editor.select_similar(tolerance) {
+                self.status = format!("similar failed: {error}");
+            }
+        }
+        ui.separator();
+        ui.horizontal(|ui| {
+            for (dx, dy, label) in [(-1, 0, "◀"), (0, -1, "▲"), (0, 1, "▼"), (1, 0, "▶")] {
+                if ui
+                    .add_enabled(active, egui::Button::new(label).small())
+                    .clicked()
+                {
+                    if ui.input(|i| i.modifiers.shift) {
+                        // Shift moves the pixels; the plain arrows
+                        // move the selection frame.
+                        let target_move = (dx, dy);
+                        if let Err(error) = self
+                            .editor
+                            .move_selected_pixels(target_move.0, target_move.1)
+                        {
+                            self.status = format!("move failed: {error}");
+                        }
+                    } else if let Err(error) = self.editor.move_selection_mask(dx, dy) {
+                        self.status = format!("move failed: {error}");
+                    }
+                }
+            }
+        });
+        if ui
+            .add_enabled(active, egui::Button::new("erase pixels").small())
+            .clicked()
+            && let Err(error) = self.editor.erase_selected()
+        {
+            self.status = format!("erase failed: {error}");
+        }
     }
 
     /// Symbol-instance properties: the referenced definition, the
@@ -2907,6 +3848,21 @@ impl Shell {
         let groups: &[&[Tool]] = &[
             &[Tool::Pointer, Tool::Subselect],
             &[Tool::Rect, Tool::Ellipse, Tool::Line, Tool::Text],
+            &[
+                Tool::Paintbrush,
+                Tool::Pencil,
+                Tool::Eraser,
+                Tool::PaintBucket,
+                Tool::Gradient,
+                Tool::Eyedropper,
+            ],
+            &[
+                Tool::Marquee,
+                Tool::EllipticalMarquee,
+                Tool::Lasso,
+                Tool::PolygonalMarquee,
+                Tool::MagicWand,
+            ],
             &[Tool::Slice, Tool::Hotspot],
             &[Tool::Zoom, Tool::Hand],
         ];
@@ -3117,6 +4073,17 @@ impl Shell {
                 Tool::Zoom => egui::CursorIcon::ZoomIn,
                 Tool::Hand => egui::CursorIcon::Grab,
                 Tool::AutoShape(_) => egui::CursorIcon::Crosshair,
+                Tool::Paintbrush
+                | Tool::Pencil
+                | Tool::Eraser
+                | Tool::PaintBucket
+                | Tool::Gradient
+                | Tool::Eyedropper => egui::CursorIcon::Crosshair,
+                Tool::Marquee
+                | Tool::EllipticalMarquee
+                | Tool::Lasso
+                | Tool::PolygonalMarquee
+                | Tool::MagicWand => egui::CursorIcon::Crosshair,
             }
         };
         let response = response.on_hover_cursor(cursor);
@@ -3230,6 +4197,60 @@ impl Shell {
             }
         }
 
+        // Marching ants: the pixel selection's boundary, drawn over
+        // the page. The in-progress marquee paints a dashed preview
+        // band; the committed mask paints from `selection_edges`
+        // (the image border is not a boundary).
+        {
+            const ANTS: Color32 = Color32::from_rgb(0, 0, 0);
+            let to_canvas = |world: geom::Point| {
+                let screen = self.view.to_screen(world);
+                Pos2::new(rect.left() + screen.x, rect.top() + screen.y)
+            };
+            let painter = ui.painter();
+            // The drag preview: the marquee's live frame, offset by
+            // the target image's location.
+            if let Some(selection) = self.editor.pixel_selection.as_ref() {
+                let location = self.editor.image_location(selection.target);
+                let offset = location.unwrap_or_default();
+                let a = to_canvas(geom::Point::new(
+                    offset.x + selection.start.x.min(selection.current.x),
+                    offset.y + selection.start.y.min(selection.current.y),
+                ));
+                let b = to_canvas(geom::Point::new(
+                    offset.x + selection.start.x.max(selection.current.x),
+                    offset.y + selection.start.y.max(selection.current.y),
+                ));
+                let band = Rect::from_two_pos(a, b);
+                for shape in egui::Shape::dashed_line(
+                    &[
+                        band.left_top(),
+                        band.right_top(),
+                        band.right_bottom(),
+                        band.left_bottom(),
+                        band.left_top(),
+                    ],
+                    (1.0, ANTS),
+                    4.0,
+                    3.0,
+                ) {
+                    painter.add(shape);
+                }
+            }
+            // The committed selection's boundary.
+            if let Some(edges) = self.editor.selection_outline() {
+                for [x0, y0, x1, y1] in edges {
+                    painter.line_segment(
+                        [
+                            to_canvas(geom::Point::new(x0, y0)),
+                            to_canvas(geom::Point::new(x1, y1)),
+                        ],
+                        (1.0, ANTS),
+                    );
+                }
+            }
+        }
+
         // Rubber band for a creation drag.
         if let Some(drag) = &self.editor.drag {
             let a = self.view.to_screen(drag.start);
@@ -3267,6 +4288,13 @@ impl Shell {
                         // temporary Hand is active.
                         if !space_held {
                             match self.editor.tool {
+                                Tool::Paintbrush | Tool::Pencil | Tool::Eraser | Tool::Gradient => {
+                                    // A paint stroke: the dabs land on
+                                    // the image under the pointer.
+                                    if let Err(error) = self.editor.begin_stroke(world) {
+                                        self.status = format!("paint failed: {error}");
+                                    }
+                                }
                                 Tool::Pointer | Tool::Subselect => {
                                     // A press selects its target first,
                                     // then moves the selection live —
@@ -3295,6 +4323,28 @@ impl Shell {
                                         self.editor.begin_drag(world);
                                     }
                                 }
+                                Tool::PaintBucket | Tool::Eyedropper => {
+                                    // Click-only tools: the press
+                                    // itself is the whole gesture.
+                                }
+                                Tool::Marquee
+                                | Tool::EllipticalMarquee
+                                | Tool::Lasso
+                                | Tool::MagicWand => {
+                                    // A pixel selection: the shape
+                                    // lands on the image under the
+                                    // pointer, folded by the
+                                    // modifier keys.
+                                    self.editor.pixel_mode =
+                                        PixelSelectMode::from_modifiers(ui.input(|i| i.modifiers));
+                                    if let Err(error) = self.editor.begin_pixel_selection(world) {
+                                        self.status = format!("select failed: {error}");
+                                    }
+                                }
+                                Tool::PolygonalMarquee => {
+                                    // The polygon's vertices are
+                                    // clicks, not a drag.
+                                }
                                 _ => self.editor.begin_drag(world),
                             }
                         }
@@ -3308,6 +4358,14 @@ impl Shell {
                 let world = self.view.to_world(local);
                 if self.editor.guide_drag.is_some() {
                     self.editor.drag_guide_to(world);
+                } else if self.editor.pixel_selection.is_some() {
+                    if let Err(error) = self.editor.extend_pixel_selection(world) {
+                        self.status = format!("select failed: {error}");
+                    }
+                } else if self.editor.stroke.is_some() {
+                    if let Err(error) = self.editor.stroke_to(world) {
+                        self.status = format!("paint failed: {error}");
+                    }
                 } else if self.editor.drag.is_some() {
                     let (shift, alt) = ui.input(|i| (i.modifiers.shift, i.modifiers.alt));
                     self.editor
@@ -3329,6 +4387,12 @@ impl Shell {
             }
             if let Err(error) = self.editor.end_drag() {
                 self.status = format!("create failed: {error}");
+            }
+            if let Err(error) = self.editor.end_stroke() {
+                self.status = format!("paint failed: {error}");
+            }
+            if let Err(error) = self.editor.end_pixel_selection() {
+                self.status = format!("select failed: {error}");
             }
         }
         // Drop target for the Library panel's drag-to-place: the
@@ -3359,6 +4423,45 @@ impl Shell {
                         }
                     }
                     Tool::Hand => {}
+                    Tool::PaintBucket => {
+                        let world = self.view.to_world(local);
+                        match self.editor.fill_target(world) {
+                            Ok(true) => {}
+                            Ok(false) => {
+                                self.status = "no image under the pointer".to_owned();
+                            }
+                            Err(error) => self.status = format!("fill failed: {error}"),
+                        }
+                    }
+                    Tool::Eyedropper => {
+                        let world = self.view.to_world(local);
+                        if self.editor.pick_color(world).is_none() {
+                            self.status = "no image under the pointer".to_owned();
+                        }
+                    }
+                    Tool::Marquee | Tool::EllipticalMarquee | Tool::Lasso | Tool::MagicWand => {
+                        // A click without a drag is still a
+                        // gesture: the wand selects, a collapsed
+                        // marquee deselects (the engine folds an
+                        // empty shape into no selection).
+                        let world = self.view.to_world(local);
+                        self.editor.pixel_mode =
+                            PixelSelectMode::from_modifiers(ui.input(|i| i.modifiers));
+                        if self.editor.pixel_selection.is_none()
+                            && self.editor.begin_pixel_selection(world).is_ok()
+                            && let Err(error) = self.editor.end_pixel_selection()
+                        {
+                            self.status = format!("select failed: {error}");
+                        }
+                    }
+                    Tool::PolygonalMarquee => {
+                        let world = self.view.to_world(local);
+                        self.editor.pixel_mode =
+                            PixelSelectMode::from_modifiers(ui.input(|i| i.modifiers));
+                        if let Err(error) = self.editor.add_polygon_point(world) {
+                            self.status = format!("polygon failed: {error}");
+                        }
+                    }
                     Tool::Zoom => {
                         let factor = if ui.input(|i| i.modifiers.alt) {
                             1.0 / 1.25
@@ -3694,6 +4797,226 @@ mod tests {
         }
     }
 
+    /// The three presets the audit found dead now reach a kernel: the
+    /// drop shadow carries the four scalars its kernel reads (all four
+    /// or nothing renders), and the two emboss presets reach the bevel
+    /// kernel under their panel spellings. Each preset must change
+    /// the rendered page — a preset that lands as an effect stack the
+    /// kernel skips leaves the render untouched.
+    #[test]
+    fn the_shadowed_and_embossed_presets_reach_the_renderer() {
+        for name in ["dropShadow", "emboss", "pillowEmboss"] {
+            let mut shell = gui_shell(gui_editor());
+            let id = shell.editor.current_cell().unwrap().elements[0];
+            let before = compose::render(
+                shell.editor.document(),
+                shell.editor.page,
+                shell.editor.frame,
+            )
+            .expect("renders");
+            shell.apply_filter_preset(id, *filter_preset(name).expect("preset exists"));
+            let after = compose::render(
+                shell.editor.document(),
+                shell.editor.page,
+                shell.editor.frame,
+            )
+            .expect("renders");
+            assert_ne!(
+                before.pixels, after.pixels,
+                "{name}: the preset must change the render"
+            );
+        }
+    }
+
+    /// An editor holding two rectangles on the active layer.
+    fn gui_editor_two() -> Editor {
+        let mut editor = gui_editor();
+        editor.begin_drag(geom::Point::new(110.0, 100.0));
+        editor.drag_to(geom::Point::new(180.0, 140.0));
+        editor.end_drag().unwrap();
+        editor
+    }
+
+    /// The path object behind an id, for the transform assertions.
+    fn shell_path(shell: &Shell, id: doc::ObjectId) -> PathObject {
+        match shell.editor.document().registry.get(id) {
+            Some(ObjectData::Path(path)) => path.clone(),
+            _ => panic!("object {id:?} is not a path"),
+        }
+    }
+
+    /// Edit ▸ Copy / Paste: the clipboard crosses the engine's command
+    /// door — the view's selection lands in the document first, the
+    /// paste re-mints onto the active layer, and the pasted object
+    /// becomes the selection.
+    #[test]
+    fn copy_and_paste_round_trip_through_the_clipboard() {
+        let mut shell = gui_shell(gui_editor());
+        let id = shell.editor.current_cell().unwrap().elements[0];
+        shell.editor.set_selection(vec![id]);
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::Copy));
+        assert!(shell.status.contains("copied"), "{}", shell.status);
+        let before = shell.editor.current_cell().unwrap().elements.len();
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::Paste));
+        assert!(shell.status.contains("pasted"), "{}", shell.status);
+        let cell = shell.editor.current_cell().unwrap();
+        assert_eq!(cell.elements.len(), before + 1, "the paste adds one object");
+        assert_eq!(
+            shell.editor.selection_set,
+            vec![cell.elements[before]],
+            "the pasted object is the selection"
+        );
+    }
+
+    /// Edit ▸ Cut: the objects leave the document, and the view's
+    /// selection follows them out.
+    #[test]
+    fn cut_takes_the_objects_with_it() {
+        let mut shell = gui_shell(gui_editor());
+        let id = shell.editor.current_cell().unwrap().elements[0];
+        shell.editor.set_selection(vec![id]);
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::Cut));
+        assert!(
+            shell.editor.current_cell().unwrap().elements.is_empty(),
+            "the cell is empty"
+        );
+        assert!(
+            shell.editor.document().registry.get(id).is_none(),
+            "the object left the registry"
+        );
+        assert!(
+            shell.editor.selection_set.is_empty(),
+            "the selection follows the cut objects out"
+        );
+    }
+
+    /// Select ▸ Select Inverse: the complement of the selection within
+    /// the cell the editor edits.
+    #[test]
+    fn select_inverse_complements_the_cell() {
+        let mut shell = gui_shell(gui_editor_two());
+        let ids = shell.editor.current_cell().unwrap().elements.clone();
+        shell.editor.set_selection(vec![ids[0]]);
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::SelectInverse));
+        assert_eq!(shell.editor.selection_set, vec![ids[1]]);
+    }
+
+    /// Modify ▸ Group / Ungroup: the group lands in the cell where the
+    /// members were, and ungroup puts the members back.
+    #[test]
+    fn group_and_ungroup_fold_the_selection() {
+        let mut shell = gui_shell(gui_editor_two());
+        let ids = shell.editor.current_cell().unwrap().elements.clone();
+        shell.editor.set_selection(ids);
+        shell.run_action(&menus::Action::Sel(menus::SelAction::Group));
+        let cell = shell.editor.current_cell().unwrap();
+        assert_eq!(cell.elements.len(), 1, "one group replaces the members");
+        let group = cell.elements[0];
+        assert!(
+            matches!(
+                shell.editor.document().registry.get(group),
+                Some(ObjectData::Group(_))
+            ),
+            "the folded object is a group"
+        );
+        shell.editor.set_selection(vec![group]);
+        shell.run_action(&menus::Action::Sel(menus::SelAction::Ungroup));
+        assert_eq!(
+            shell.editor.current_cell().unwrap().elements.len(),
+            2,
+            "the group dissolves"
+        );
+    }
+
+    /// Modify ▸ Transform: a quarter turn swaps the object's extents,
+    /// and a flip moves its points.
+    #[test]
+    fn transform_rotates_and_flips_the_selection() {
+        let mut shell = gui_shell(gui_editor());
+        let id = shell.editor.current_cell().unwrap().elements[0];
+        shell.editor.set_selection(vec![id]);
+        let before = crate::editor::bounds_of(&shell_path(&shell, id));
+        shell.run_action(&menus::Action::Sel(menus::SelAction::Rotate(90.0)));
+        let after = crate::editor::bounds_of(&shell_path(&shell, id));
+        assert!(
+            (after.width() - before.height()).abs() < 0.001
+                && (after.height() - before.width()).abs() < 0.001,
+            "a quarter turn swaps the extents: {before:?} -> {after:?}"
+        );
+        let anchors = |shell: &Shell| {
+            shell_path(shell, id)
+                .contours
+                .iter()
+                .flat_map(|contour| contour.points.iter().map(|point| point.anchor))
+                .collect::<Vec<_>>()
+        };
+        let before_points = anchors(&shell);
+        shell.run_action(&menus::Action::Sel(menus::SelAction::Reflect {
+            horizontal: true,
+            vertical: false,
+        }));
+        assert_ne!(anchors(&shell), before_points, "the flip moves the points");
+    }
+
+    /// The Layers panel's three mutating surfaces: rename, the
+    /// per-state lock, and the reorder. The reorder keeps the moved
+    /// layer active — the user keeps editing the layer they moved.
+    #[test]
+    fn the_layers_panel_renames_locks_and_reorders() {
+        let mut shell = gui_shell(gui_editor());
+        shell.run_action(&menus::Action::Sel(menus::SelAction::NewLayer));
+        assert_eq!(shell.editor.layer_count(), 2, "the panel adds a layer");
+
+        shell.run_command(
+            "layer.rename",
+            serde_json::json!({ "page": 0, "layer": 0, "name": "base" }),
+        );
+        assert_eq!(
+            shell.editor.document().pages[0].layers.layers[0].name,
+            "base"
+        );
+
+        shell.run_command(
+            "layer.setLocked",
+            serde_json::json!({
+                "page": 0, "layer": 0, "frame": 0, "locked": true,
+            }),
+        );
+        assert!(
+            shell.editor.document().pages[0].layers.layers[0].cells[0].locked,
+            "the layer is locked in this state"
+        );
+
+        shell.editor.set_active_layer(0);
+        shell.reorder_layer(0, true);
+        let layers = &shell.editor.document().pages[0].layers.layers;
+        assert_eq!(layers[1].name, "base", "the layer moved up");
+        assert_eq!(
+            shell.editor.active_layer(),
+            1,
+            "the moved layer stays active"
+        );
+    }
+
+    /// Modify ▸ Flatten Selection: the selection bakes into one
+    /// bitmap, in place of the members.
+    #[test]
+    fn flatten_selection_bakes_into_one_bitmap() {
+        let mut shell = gui_shell(gui_editor_two());
+        let ids = shell.editor.current_cell().unwrap().elements.clone();
+        shell.editor.set_selection(ids);
+        shell.run_action(&menus::Action::Sel(menus::SelAction::FlattenSelection));
+        let cell = shell.editor.current_cell().unwrap();
+        assert_eq!(cell.elements.len(), 1, "the bake leaves one object");
+        assert!(
+            matches!(
+                shell.editor.document().registry.get(cell.elements[0]),
+                Some(ObjectData::Image(_))
+            ),
+            "the baked object is a bitmap"
+        );
+    }
+
     /// One text param of one applied effect (the `DCVs` form the
     /// panel's rows edit).
     fn shell_param(shell: &Shell, id: doc::ObjectId, index: usize, key: &str) -> String {
@@ -3796,5 +5119,226 @@ mod tests {
         // name; the dialog's doc base is "export".
         let image = shell.fs.read_file("nexport_1_1.png").unwrap();
         assert_eq!(&image[..4], b"\x89PNG");
+    }
+
+    /// A 4×4 opaque red PNG, written through the project's own encoder.
+    fn red_png() -> Vec<u8> {
+        let rgba = [255u8, 0, 0, 255].repeat(16);
+        let plane = io::Plane::new(4, 4, &rgba).expect("4x4 plane");
+        io::png::encode(&plane).expect("png bytes")
+    }
+
+    /// File ▸ Import… places the raster on the active layer, and the
+    /// object that lands there is a real image object.
+    #[test]
+    fn import_places_a_raster_on_the_active_layer() {
+        let mut shell = gui_shell(Editor::untitled());
+        shell.import_raster(&red_png(), "red.png").expect("import");
+        let cell = shell.editor.current_cell().expect("the page's cell");
+        assert_eq!(cell.elements.len(), 1, "the import added one object");
+        let id = cell.elements[0];
+        let document = shell.editor.document();
+        let Some(ObjectData::Image(image)) = document.registry.get(id) else {
+            panic!("the imported object is an image")
+        };
+        assert_eq!(image.pixels, (4, 4), "the source extent is kept");
+        assert_eq!(image.name.as_deref(), Some("red.png"));
+    }
+
+    /// The active layer decides where the import lands: with a second
+    /// layer added and selected, the object goes there — not to the
+    /// layer underneath.
+    #[test]
+    fn import_lands_on_the_selected_layer() {
+        let mut shell = gui_shell(Editor::untitled());
+        shell
+            .editor
+            .apply("layer.add", serde_json::json!({ "page": 0 }))
+            .expect("second layer");
+        assert_eq!(shell.editor.layer_count(), 2);
+        shell.editor.set_active_layer(1);
+        shell.import_raster(&red_png(), "red.png").expect("import");
+        let document = shell.editor.document();
+        assert!(
+            document.pages[0].layers.layers[0].cells[0]
+                .elements
+                .is_empty(),
+            "the lower layer stays empty"
+        );
+        assert_eq!(
+            document.pages[0].layers.layers[1].cells[0].elements.len(),
+            1,
+            "the active layer took the import"
+        );
+    }
+
+    /// The pixel at image coordinates (x, y) — the paint tools' read
+    /// path, through the engine's own sampler.
+    fn image_pixel(shell: &Shell, id: doc::ObjectId, x: i64, y: i64) -> Option<[u8; 4]> {
+        let document = shell.editor.document();
+        let Some(ObjectData::Image(image)) = document.registry.get(id) else {
+            return None;
+        };
+        engine::bitmap::sample_pixel(image, &document.tiles, x, y)
+    }
+
+    /// A shell with a 4×4 red raster imported on the active layer,
+    /// and the imported image's id.
+    fn shell_with_raster() -> (Shell, doc::ObjectId) {
+        let mut shell = gui_shell(Editor::untitled());
+        shell.import_raster(&red_png(), "red.png").expect("import");
+        let id = shell
+            .editor
+            .current_cell()
+            .expect("the page's cell")
+            .elements[0];
+        (shell, id)
+    }
+
+    /// The brush lays its dabs on the image under the pointer, and the
+    /// whole stroke undoes as one step.
+    #[test]
+    fn the_brush_paints_a_stroke_on_the_image() {
+        let (mut shell, id) = shell_with_raster();
+        shell.editor.tool = Tool::Paintbrush;
+        shell.editor.brush.color = [0, 0, 255, 255];
+        shell.editor.brush.size = 2;
+        shell.editor.brush.edge = 0;
+
+        shell
+            .editor
+            .begin_stroke(geom::Point::new(0.5, 1.5))
+            .expect("the stroke starts");
+        shell
+            .editor
+            .stroke_to(geom::Point::new(3.5, 1.5))
+            .expect("the stroke continues");
+        shell.editor.end_stroke().expect("the stroke ends");
+
+        assert_eq!(
+            image_pixel(&shell, id, 0, 1),
+            Some([0, 0, 255, 255]),
+            "the dab painted the row"
+        );
+        assert_eq!(
+            image_pixel(&shell, id, 0, 0),
+            Some([255, 0, 0, 255]),
+            "the rows above the stroke keep their color"
+        );
+
+        shell.editor.undo().expect("undo");
+        assert_eq!(
+            image_pixel(&shell, id, 0, 1),
+            Some([255, 0, 0, 255]),
+            "one undo takes the whole stroke back"
+        );
+    }
+
+    /// The pencil draws a hard one-pixel line — the dab carries no
+    /// size, edge or shape slot.
+    #[test]
+    fn the_pencil_draws_a_hard_line() {
+        let (mut shell, id) = shell_with_raster();
+        shell.editor.tool = Tool::Pencil;
+        shell.editor.brush.color = [0, 255, 0, 255];
+
+        shell
+            .editor
+            .begin_stroke(geom::Point::new(0.0, 2.0))
+            .expect("the stroke starts");
+        shell
+            .editor
+            .stroke_to(geom::Point::new(3.0, 2.0))
+            .expect("the stroke continues");
+        shell.editor.end_stroke().expect("the stroke ends");
+
+        assert_eq!(image_pixel(&shell, id, 1, 2), Some([0, 255, 0, 255]));
+        assert_eq!(
+            image_pixel(&shell, id, 1, 1),
+            Some([255, 0, 0, 255]),
+            "the pencil leaves its neighbours alone"
+        );
+    }
+
+    /// The paint bucket fills the image under the pointer with the
+    /// paint color.
+    #[test]
+    fn the_paint_bucket_fills_the_image() {
+        let (mut shell, id) = shell_with_raster();
+        shell.editor.tool = Tool::PaintBucket;
+        shell.editor.brush.color = [255, 255, 0, 255];
+        assert!(
+            shell
+                .editor
+                .fill_target(geom::Point::new(1.0, 1.0))
+                .expect("fill")
+        );
+        assert_eq!(image_pixel(&shell, id, 3, 3), Some([255, 255, 0, 255]));
+    }
+
+    /// The eyedropper reads the pixel under the pointer into the
+    /// brush model — the color model, not the document.
+    #[test]
+    fn the_eyedropper_picks_the_color_under_the_pointer() {
+        let (mut shell, id) = shell_with_raster();
+        shell.editor.tool = Tool::Eyedropper;
+        let picked = shell.editor.pick_color(geom::Point::new(2.0, 2.0));
+        assert_eq!(picked, Some([255, 0, 0, 255]));
+        assert_eq!(shell.editor.brush.color, [255, 0, 0, 255]);
+        assert_eq!(
+            image_pixel(&shell, id, 2, 2),
+            Some([255, 0, 0, 255]),
+            "the pick does not touch the document"
+        );
+    }
+
+    /// The gradient tool paints a ramp between the press and the
+    /// release points.
+    #[test]
+    fn the_gradient_paints_a_ramp_between_its_handles() {
+        let (mut shell, id) = shell_with_raster();
+        shell.editor.tool = Tool::Gradient;
+        shell.editor.brush.color = [0, 0, 0, 255];
+
+        shell
+            .editor
+            .begin_stroke(geom::Point::new(0.0, 0.0))
+            .expect("the gradient starts");
+        shell
+            .editor
+            .stroke_to(geom::Point::new(3.0, 0.0))
+            .expect("the gradient follows");
+        shell.editor.end_stroke().expect("the gradient paints");
+
+        assert_eq!(image_pixel(&shell, id, 0, 0), Some([0, 0, 0, 255]));
+        assert_eq!(
+            image_pixel(&shell, id, 3, 0),
+            Some([255, 255, 255, 255]),
+            "the ramp ends in white"
+        );
+    }
+
+    /// File ▸ Open on a plain raster opens it as its own document,
+    /// with the canvas sized to the image.
+    #[test]
+    fn open_raster_sizes_the_document_to_the_image() {
+        let mut shell = gui_shell(Editor::untitled());
+        shell
+            .open_raster_document(&red_png(), "red.png")
+            .expect("open");
+        let document = shell.editor.document();
+        let canvas = document.pages[0].info.canvas.clone();
+        assert_eq!((canvas.width, canvas.height), (4.0, 4.0));
+        let cell = shell.editor.current_cell().expect("the page's cell");
+        assert_eq!(cell.elements.len(), 1);
+    }
+
+    /// A file that is neither a Fireworks PNG nor a raster is
+    /// refused with a message rather than a panic.
+    #[test]
+    fn open_raster_refuses_a_non_image() {
+        let mut shell = gui_shell(Editor::untitled());
+        let error = shell.open_raster_document(b"not an image at all", "x.bin");
+        assert!(error.is_err(), "the decode is refused");
     }
 }

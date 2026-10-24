@@ -1,263 +1,411 @@
 # FireCraft — Gaps, Improvements & Next Steps
 
-> Audited 2026-10-20. Replaces the "Now" snapshot in PROGRESS.md until
+> Audited 2026-10-21. Replaces the "Now" snapshot in PROGRESS.md until
 > the next session close. A living document — update in-place, do not
 > maintain a separate stale copy.
+>
+> **This revision answers the standing question**: *is FireCraft fully
+> reverse engineered, fully functional, working end to end, and
+> deployed?* The answer is **no, on the application surface** — see
+> §1. The engine and command surface are complete; the interactive
+> shell exposes a fifth of them. Phases 8–18 below close that gap.
 
 ---
 
-## State snapshot
+## 1. The audit that produced this plan (2026-10-21)
+
+### 1.1 What is genuinely complete
+
+| Surface | State | Evidence |
+|---|---|---|
+| Fireworks PNG format | Complete | `crates/fwpng`, `crates/doc/src/fwmap.rs`; node tree round-trips |
+| Engine command registry | **243 commands** | `engine::catalog::ids()` — 243 |
+| CS6 DOM verb parity | **268 C / 3 P / 0 M / 85 N** | `docs/planning/generated/dom-parity.md` (356 verbs) |
+| ExtendScript host | Complete | `crates/scripting` — runs the CS6 `.jsf` corpus headless |
+| Web bridge | Exposes **all** commands | `web/src/main.rs` — `apply(name, payload)` |
+| CLI | Complete | `crates/app-cli` — every verb drivable headless |
+| Browser build + smoke | **Green** | `xtask dist --web` — wasm 12,778,687 B, "bridge smoke green" |
+| Smoke is not vacuous | Fixed | `xtask/src/dist.rs:strip_script_bodies` — verdict read outside `<script>` |
+| Live effects rendered | 6 (shadow×2, glow×2, bevel, fill) | `crates/compose/src/effects.rs:924` |
+| Filters exposed | 30 | `crates/app/src/menus.rs` — `Action::Filter` |
+
+### 1.2 What is NOT complete — the real finding
+
+**The engine has 243 commands. The interactive shell reached 54 of
+them when this audit ran — 188 commands (78%) unreachable from the
+UI. After the Tier-1 batch (Phases 8–10 and the Phase 16 slice) the
+shell reaches 72; after Phase 11's paint family it reaches 77;
+166 commands (68%) are still unreachable.**
+
+```
+$ comm -23 <(engine::catalog::ids()) <(command names in crates/app/src)
+188   # at audit time
+170   # after the Tier-1 batch
+166   # after Phase 11 (the paint family)
+```
+
+| Family | Unexposed | What the user cannot do |
+|---|---|---|
+| `text.*` | 22 | character/font markup, text-on-path, text rectangle, paragraph spacing/indent, anti-alias control, text runs |
+| `bitmap.*` | 15 | **feather, pixel selection (rect/ellipse/lasso/polygon/wand), pixel edits** |
+| `symbol.*` | 18 | symbol graph editing, instance placement, symbol type, transforms |
+| `page.*` | 14 | page properties, canvas/export presets, page guides |
+| `mask.*` | 14 | masks of every kind, mask mode/link/move, JPEG mask stash |
+| `path.*` | 13 | path point editing, stroke properties, convert-to-path |
+| `selection.*` | 12 | select children/parents/none, save/restore selection |
+| `object.*` | 10 | object-level properties beyond the exposed ones |
+| `slice.*` `document.*` | 14 | slice/link editing depth, document properties |
+| `filter.*` `retouch.*` | 11 | selection-scoped filters, retouch tools |
+| `frame.*` `hotspot.*` `style.*` `layer.*` `cell.*` `primitive.*` `autoshape.*` `clipboard.*` | 22 | frame animation depth, hotspot editing, style library, layer opacity/blend/duplicate, state handling, channel-to-channel paste |
+
+Supporting evidence:
+
+- **190 of 265 CS6 menu items render disabled** (`Action::Inert`,
+  `crates/app/src/menus.rs`). The shell refuses to pretend.
+- **The app could not open a raster image.** *(fixed 2026-10-21)*
+  `File > Open` called `Editor::open` → `app_cli::io::open`, which
+  parses only a Fireworks PNG (`mkTS` node tree) and rejected
+  anything else with *"no mkTS node tree in file (not a Fireworks
+  document?)"* (`crates/app-cli/src/io.rs:59`); `File > Import…` was
+  **inert** and `bitmap.importFile` unreachable. Both are wired now.
+- **The app could not copy, cut, or paste.** *(fixed 2026-10-21)*
+  All six `clipboard.*` commands existed; none was wired, and no
+  `Ctrl+C`/`Ctrl+V` shortcut existed. All five are wired now (the
+  sixth, paste-from-channel-to-channel, still is not).
+- **The app could not paint.** *(fixed 2026-10-21)* `bitmap.brush`,
+  `bitmap.pencil`, `bitmap.erase`, `bitmap.fill` existed; the tool
+  strip had 11 tools (`crates/app/src/editor.rs:17`) and none of them
+  edited a pixel. The M15 brush model — shape, size, edge, aspect,
+  angle — is complete and was unreachable. The paint family is in now
+  (Phase 11); `bitmap.erase` and the pixel-selection commands are
+  still out (11.4).
+- **The app had no active layer.** *(fixed 2026-10-21)* The Editor
+  tracked `page` and `frame` but no layer index; the Layers panel was
+  display-only. Both now exist, and the panel's rows drive the
+  placement target.
+
+### 1.3 Verdict against the goal question
+
+| Question | Answer |
+|---|---|
+| Fully reverse engineered? | **Yes** for the command/DOM/format surface (0 missing verbs, 3 documented partials). **No** for the application surface — 166 commands unreachable. |
+| Fully functional? | **No.** A user can now import an image, place it on a chosen layer, copy/cut/paste, group, flatten, transform, rename and reorder layers, and paint on an image with the brush, pencil, eraser, bucket, gradient and eyedropper — but the raster tools stop at the paint family: no pixel selection, no mask surfaces. |
+| Working end to end? | **Yes** for the command surface (CLI, scripting, web bridge all drive every command) and **yes** for the browser round trip (open → apply → export PNG → export document, headless Chromium green). **No** for a human editing an image. |
+| Deployed? | **Partly.** v0.2.2 on GitHub; web bundle live at firecraft-web.pages.dev; browser smoke green. Desktop artifacts: Linux x86_64 only, never executed on macOS/Windows. |
+
+**Conclusion: the goal is not met. Phases 11–18 are the work.**
+
+---
+
+## 2. State snapshot
 
 | Dimension | Status | Notes |
 |---|---|---|
-| **Shipped** | v0.2.2 published on GitHub (5 assets) | ✅ |
-| **CI** | GitHub Actions green on b27c658; 694024a queued | GitForge also pushed |
-| **aegis** | Baseline clean; scan runs in 0.17s | `target/` + `web/dist/` + `fuzz/` in `.aegisignore` |
-| **Coverage** | 80.3% lines / 78.0% funcs (threshold 60%) | `cargo llvm-cov` locally fails on stale build artifact; CI uses `xtask coverage` which works |
-| **fmt / clippy** | Not run locally (hook blocks); last known green in CI | |
-| **Registry** | 241 commands | Stable since #133 |
-| **Parity** | 268 C / 3 P / 0 M / 85 N | Evidence-gated P rows are terminal |
-| **Code** | 110,805 Rust lines (crates + web); 118,012 total | No `unwrap()`/`panic!()` outside `#[cfg(test)]` |
-| **Decision docs** | 66 docs (0001–0066) | Complete through decision 0066 |
-| **TODO/FIXME** | 0 in crates/xtask/web | Clean |
-| **CHANGELOG** | Generated, tracked | `.aegisignore`-excluded |
-| **v0.2.2 release notes** | `docs/releases/v0.2.2.md` | Artifact hashes present |
+| **Shipped** | v0.2.2 on GitHub (5 assets) | ✅ |
+| **CI** | GitHub Actions: `fmt` (fast) + `gate` (`xtask ci-no-fmt`) | ✅ |
+| **aegis** | Baseline clean; scan 0.17 s | `.aegisignore` excludes `target/`, `web/dist/`, `fuzz/` |
+| **Coverage** | 80.3 % lines / 78.0 % funcs (floor 60 %) | Local `llvm-cov` fails on stale artifacts; CI works |
+| **Code** | 110,928 Rust lines | No `unwrap()`/`panic!()` outside `#[cfg(test)]`; no `todo!`/`unimplemented!` |
+| **Registry** | 243 commands | 77 reachable from the UI (54 at audit time) — **the gap** |
+| **Parity** | 268 C / 3 P / 0 M / 85 N | 3 P rows are evidence-gated (Phase 12 oracle) |
+| **Decision docs** | 66 (0001–0066) | Next: 0067 |
+| **Web bundle** | 12,778,687 B (ceiling 14,000,000) | Re-measure if it grows >1 MB |
 
 ---
 
-## Critical blockers — ALL RESOLVED (2026-10-20)
+## 3. Phase 8 — Raster import (the app's first real act) · S
 
-- ✅ aegis hangs on `target/`/`fuzz/`/`web/dist/` — all three in `.aegisignore`, baseline regenerated, scan now 0.17s
-- ✅ v0.2.2 published — `gh release edit v0.2.2 --draft=false`
-- ✅ `appinfo.json` version stamp — `@VERSION@` → `0.2.2` in both `packaging/webos/` and `dist/web/`
+**Why first:** without it the app cannot open a JPEG or a PNG. Every
+other editing feature is unreachable in practice.
 
----
+- **8.1 `File > Import…`** — read a raster file (PNG/JPEG/GIF/BMP/TIFF/
+  WebP/WBMP), decode through `io::raster::decode`, and place it with
+  `bitmap.importFile` (bounds = the document canvas, maintain aspect
+  ratio on).
+- **8.2 `File > Open` sniffs** — `.fw.png` opens as a document; any
+  other supported raster opens as an import. One door, no guessing.
+- **8.3 Place on the active layer** — needs 8.1's payload
+  (`page`/`layer`/`cell`). Lands with Phase 9's active-layer concept,
+  defaulting to the topmost layer until then.
 
-## Phase 1: Documentation & release hygiene ✅ DONE
+**Authority:** `bitmap.importFile` (CS6 `dom.importFile(fileURL,
+boundingRectangle, bMaintainAspectRatio)`), `io::raster::decode`.
+**Verification:** a shell test that imports a PNG fixture and asserts
+one new image object of the right size; a CLI round-trip that is
+already green stays green.
 
-All done in session #138 (2026-10-20): PROGRESS "Now" reset to
-2026-10-20, v0.2.2 milestone row, SESSIONS #138, HISTORY arc+decision
-index extended through 0066, log/devlog entry, all critical blockers
-resolved. Smoke budget comment is already clear (virtual-time vs wall-clock
-distinction is documented).
-
-## Phase 2: Image support (Phase 11 remaining items)
-
-### 2.1 AVIF decode — ✅ Decision done (0064)
-
-Decision 0064: AVIF via `ravif` (pure Rust, wasm-safe) when user needs
-arrive. No implementation required to close the decision. AVIF files
-currently pass through the "unsupported format" path cleanly.
-
-### 2.2 HEIC refusal — ✅ Done (0065)
-
-Decision 0065: deliberate refusal — HEVC patent pools. No HEIC code.
-
-### 2.3 Import surface parity — ✅ No action needed (2026-10-20)
-
-CLI `import` accepts any file — no extension whitelist. Format detection
-is pure magic-byte sniffing (`io::raster::sniff`/`decode`). All 7
-supported formats (PNG/JPEG/GIF/BMP/TIFF/WebP/WBMP) are handled
-correctly regardless of filename. PNM and ICO are correctly rejected.
-No mismatch exists. GAPS.md description of a CLI/export list mismatch was
-wrong — documented here as a finding, not a gap.
-
-### 2.4 Lossy WebP — ✅ Done (2026-10-21, Task #146)
-
-Decision 0063 landed lossless VP8L via `image-webp` 0.2.4. `image-webp`
-exposes only `WebPEncoder::new_lossless()` — no lossy VP8 API exists in
-the pure-Rust crate. Adding lossy WebP required `libwebp-sys` (C FFI)
-behind a feature gate: `#[cfg(feature = "lossy-webp")]`. The `wasm32`
-target cannot enable this feature. Native builds export lossy; WASM builds
-return "lossy WebP not supported in browser".
-
-Implementation (2026-10-21):
-- `crates/io/Cargo.toml`: added `libwebp-sys = "0.14.4"` as optional dep,
-  `lossy-webp = ["libwebp-sys"]` feature. Local `unsafe_code = "allow"` added
-  (required for FFI-only crate).
-- `crates/io/src/webp_lossy.rs`: new module using `WebPEncodeRGBA` directly
-  (quality passed as f32, no `WebPConfig` needed for this API). `Plane` → raw
-  RGBA → `WebPEncodeRGBA` → `WebPFree` → `Vec<u8>`. Three tests: basic encode,
-  mismatched plane, quality clamping.
-- `crates/io/src/lib.rs`: added `#[cfg(feature = "lossy-webp")] pub mod webp_lossy`.
-- `crates/app-cli/Cargo.toml`: added `lossy-webp = ["io/lossy-webp"]` feature.
-- `crates/app-cli/src/ops.rs`: `webp` branch splits on `#[cfg(feature)]` — lossy
-  path uses `flags.quality.map_or(75.0, |q| q as f32)`; lossless path unchanged.
+**Status (2026-10-21): done.** `File ▸ Import…` reads a raster
+through `io::raster::decode` and places it with `bitmap.importFile`
+(8.1); `File ▸ Open` sniffs — a `.fw.png` opens as a document, any
+other supported raster opens as an import sized to the image (8.2);
+the placement lands on the active layer (8.3). The engine's import
+payload also accepts a base64 plane, so the browser sends one string
+instead of a million-element JSON array.
 
 ---
 
-## Phase 3: Coverage growth toward 90% line / 90% function (ongoing)
+## 4. Phase 9 — Active layer + Layers panel · M
 
-### 3.1 Establish the baseline — blocked (local environment)
+- **9.1 `Editor::active_layer`** — an index into the current page's
+  layer list, defaulting to the topmost, changed by clicking a row.
+  Every placement command (`bitmap.importFile`, `clipboard.paste`,
+  `layer.add`, `object.createPath`) resolves its `layer` from it.
+- **9.2 Layers panel depth** — select (active), add, delete, rename,
+  duplicate, reorder; per-layer display, opacity, blend mode, lock.
+  Uses the 7 unexposed `layer.*` commands.
+- **9.3 The panel shows the active layer** so the placement target is
+  never a guess.
 
-`cargo run -p xtask -- coverage --bless` fails locally: `llvm-cov export`
-reports `No such file or directory` for a `batch-*` binary from a prior
-build. `target/llvm-cov-target/` has stale artifacts. **Resolution:**
-run in CI on a clean runner, or `cargo clean` before the next coverage run.
-Threshold remains at 60%. The CI coverage gate still enforces 60% correctly.
+**Verification:** layer rows render state; add/delete/rename/reorder
+land in the document and survive save/reload.
 
----
-
-### 3.2 Identify the coverage gaps — blocked (needs clean coverage run)
-
-Per-crate breakdown requires `cargo llvm-cov --lib --manifest-path
-crates/CRATE/Cargo.toml --text`. Cannot run locally due to stale
-`target/llvm-cov-target/` artifacts. **Deliverable:** a table of
-below-average crates with one concrete test idea per gap. Unblock by
-running the coverage re-measure in CI or `cargo clean` first.
-
----
-
-### 3.3 Raise the floor incrementally (ongoing, per session)
-
-Approach: add 0.5–1% per session as a side-effect of feature work.
-Do not reserve a dedicated "coverage sprint". The rule from AGENTS.md:
-**rising-only test floors** — each new feature must bring its own tests.
-
-Target:
-- Current: 80.3% lines / 78.0% funcs
-- Next raise: 82% lines / 82% funcs (after Phase 2 closes)
-- Stretch: 90% / 90% (requires Phase 5 infra work)
+**Status (2026-10-21): 9.1 and 9.3 done; 9.2 partially.** The active
+layer is a view-state index (topmost by default, set by clicking a
+row) and every placement command — `bitmap.importFile`,
+`clipboard.paste`, `object.createPath`, `text.createText`,
+`AutoShape::payload` — resolves its `layer` from it; the editor's
+current cell is the active layer's cell, so hit-testing and placement
+agree. The panel rows carry display, lock (per state), rename,
+reorder (up/down), add and delete. Still open in 9.2: layer
+duplicate, opacity and blend mode.
 
 ---
 
-## Phase 4: Release engineering hygiene (Phase 13 remaining)
+## 5. Phase 10 — Clipboard · S
 
-### 4.1 WebOS packaging proof (2–3 hr)
+- **10.1 `Ctrl+C` / `Ctrl+X` / `Ctrl+V`** and the matching Edit menu
+  items (CS6 shows them inert today) → `clipboard.copy`,
+  `clipboard.cut`, `clipboard.paste`.
+- **10.2 `Paste as Mask…` / `Paste Inside`** → `clipboard.pasteAsMask`,
+  `clipboard.pasteInside`.
+- **10.3 `Paste from Channel to Channel…`** → the
+  `clipboard.pasteFromChannelToChannel` command.
+- **10.4 Placement** uses the active layer (Phase 9).
 
-**Status:** `packaging/webos/appinfo.json` and `host.html` are staged in
-`dist/web` during `dist --web`. `appinfo.json` version stamp is broken
-(see Critical blockers above).
+**Verification:** copy an object, paste, assert the document carries
+one more object; cut, assert the source is gone and the clipboard
+holds it.
 
-**What works:** `dist/web/` contains a valid WebOS app bundle. The
-`host.html` is the smoke host (the same one Chromium loads in the bridge
-smoke test).
-
-**What has not been proven:** The bundle installs and runs on an actual
-WebOS device. This is infrastructure-blocked (no WebOS device in scope).
-
-**Deliverable:** Fix the version stamp. Document in `docs/WEBOS.md` what
-"proven on real hardware" means and what the blocking gap is.
-
----
-
-### 4.2 Smoke budget measurement — ✅ DONE
-
-Measured 2026-10-20: `firecraft-web-71ff69a0cf973bce_bg.wasm`
-is **12.2 MB** (12,778,688 bytes). Above 10MB threshold (warrants
-investigation) but below 15MB (no budget raise needed).
-
-60s virtual-time budget is adequate for a 12MB bundle — fetch+compile
-takes ~3–10s on CI runners. The 300s wall-clock backstop covers any
-unexpected slowness. Decision 0066 is current. Re-measure after any
-wasm bundle size increase >1MB.
+**Status (2026-10-21): 10.1, 10.2, 10.4 done; 10.3 open.** The
+clipboard commands read the *document's* selection while the shell
+tracks the selection as view state, so `Editor::sync_selection` is
+the bridge: the view's ids land in the document through the same
+command door as every other mutation (journaled, undoable), and an
+unchanged selection is not re-sent. `Ctrl+C`/`Ctrl+X`/`Ctrl+V` and
+the Edit menu items drive `clipboard.copy` / `clipboard.cut` /
+`clipboard.paste`; the pasted objects re-mint onto the active layer
+and become the selection. `Paste as Mask` / `Paste Inside` drive
+`clipboard.pasteAsMask` / `clipboard.pasteInside`. Open in 10.3:
+`clipboard.pasteFromChannelToChannel`.
 
 ---
 
-### 4.3 Platform recipes honest status — ✅ Done
+## 6. Phase 11 — Raster tools · L
 
-`docs/packaging/STATUS.md` created with table of all platforms, recipes,
-artifacts, last-verified dates, and known blockers. Linux x86_64
-verified 2026-10-19 (v0.2.2). AppImage/macOS/Windows: never verified,
-off-fleet recipes owned by operators with the respective toolchains.
+- **11.1 Tool strip** grows the paint family: **Paintbrush**,
+  **Pencil**, **Eraser**, **Paint Bucket**, **Gradient**,
+  **Eyedropper** (CS6 order).
+- **11.2 Canvas interactions** drive `bitmap.brush`, `bitmap.pencil`,
+  `bitmap.erase`, `bitmap.fill` with the M15 brush model
+  (shape/size/edge/aspect/angle).
+- **11.3 Properties panel** gains a **Brush** section (the CS6 Edit
+  Brush dialog's slots) and a **Fill** section.
+- **11.4 Pixel selection tools** — marquee (rect), ellipse, lasso,
+  polygonal, wand → `bitmap.selectRect` / `selectEllipse` /
+  `selectLasso` / `selectPolygon` / `selectWand` / `selectSimilar`.
+- **11.5 `bitmap.feather`, `bitmap.movePixels`,
+  `bitmap.moveSelectionMaskBy`, `bitmap.setPixelMask`,
+  `bitmap.adjustPixelSel`** reach the UI.
 
----
+**Verification:** a shell test paints a pixel and asserts the tile
+bank changed; a selection test asserts the mask moved.
 
-## Phase 5: CI / infrastructure improvements (optional, high-value)
+**Status (2026-10-21): 11.1, 11.2, 11.3 done; 11.4, 11.5 open.** The
+tool strip carries the paint family in CS6 order (Paintbrush, Pencil,
+Eraser, Paint Bucket, Gradient, Eyedropper), each with its one-key
+select (B / N / Y / G / D / I). The canvas drives `bitmap.brush`
+(soft-edged dabs along the drag, spaced a quarter-diameter apart),
+`bitmap.pencil` (the hard one-pixel stamp), `retouch.eraser` (the
+brush-shaped eraser), `bitmap.fill` (the bucket) and — new in this
+phase — `bitmap.gradient`, the raster mode of CS6's Gradient tool:
+a linear ramp between the press and the release points, clipped to
+the selection. The eyedropper reads through the engine's new
+`engine::bitmap::sample_pixel`, so the color model and the document
+stay separate. The whole stroke folds into one undo step
+(`Session::begin_transaction`), the way a moved gesture does. The
+properties panel gains the **Brush** section (size, edge, aspect,
+angle, pressure, strength, shape, paint color — the Edit Brush
+dialog's slots), which serves as the fill section too.
 
-### 5.1 GitHub Actions — separate fmt check into its own job — ✅ Done
+Two engine corrections fell out of the work and are recorded here
+because they change observed behavior:
 
-Two-job CI: `fmt` (fast ~30s) + `gate` (`xtask ci-no-fmt`). Both run
-on all pushes. `xtask` gained `ci-no-fmt` verb. `fmt` job fails fast,
-prevents expensive gates from running on formatting errors.
+- **`bitmap.pencil` stamps the pixel the point falls IN.** The
+  one-pixel round stamp only covered the pixel whose center it
+  crossed, so a pencil dab on a pixel corner painted nothing; the
+  command now writes the containing pixel directly.
+- **`bitmap.gradient` is a new registry command** (registry 241 →
+  243) — CS6's Gradient tool has no raster equivalent in the
+  engine until now.
 
----
-
-### 5.2 Coverage step isolation — ✅ Done (with #5.3)
-
-cargo-llvm-cov and trunk caching implemented below.
-
-### 5.3 Trunk caching — ✅ Done
-
-`~/.cargo/bin/cargo-llvm-cov` and `~/.cargo/bin/trunk` are now cached
-between runs via `actions/cache@v4`. Both use the `Cargo.lock` hash as
-the cache key. If cache-hit, the install step is skipped (~2 min saved
-per run). Locked versions are pinned so the cache key is stable.
-
----
-
-## Phase 6: 99% coverage plan (stretch — begins after Phase 3)
-
-> This is aspirational. The 90% floor is already above the current 80%.
-> Reaching 99% requires structural changes, not just test additions.
-
-### 6.1 What's not covered at 80%
-
-The untested surface at 80.3% line coverage is likely concentrated in:
-- **Error paths**: `Result::unwrap()` / `?` propagation in non-test code —
-  these are covered by integration tests but not isolated unit tests.
-- **Rare format paths**: TIFF read, PSD write, GIF animation encode —
-  these may have integration tests but sparse line coverage.
-- **UI event handlers**: `crates/app/src/shell.rs` (3800 lines) handles
-  egui events; most are tested via manual browser proof, not unit tests.
-
-### 6.2 The path to 99%
-
-1. **Error path isolation**: For each `?` in hot paths, add a targeted
-   test that feeds the error variant. Do not test the happy path again.
-2. **Golden test expansion**: If a format round-trips, the golden test
-   already covers the lines. Expand the golden corpus rather than writing
-   unit tests for format readers.
-3. **UI stubs**: For shell event handlers that cannot be tested headlessly,
-   add `#[cfg(test)]` stubs that at minimum exercise the dispatch match.
-
-**This phase is not started until Phase 2 (image support) is closed.**
+Open in 11.4: the pixel-selection tools (marquee, ellipse, lasso,
+polygon, wand). Open in 11.5: `bitmap.feather`, `bitmap.movePixels`,
+`bitmap.moveSelectionMaskBy`, `bitmap.setPixelMask`,
+`bitmap.adjustPixelSel`.
 
 ---
 
-## Phase 7: Deep research items (parked unless oracle materializes)
+## 7. Phase 12 — Selection and mask surfaces · M
 
-### 7.1 Out-of-bounds effect growth — closed (infra blocked)
+`selection.*` (13) and `mask.*` (13): select all / all-on-layer /
+children / parents / inverse / none, save & restore named selections,
+`selection.duplicateToFrame(s)` / `duplicateToFrameRange` /
+`distributeToFrames`; mask add / remove / clear / enable / mode /
+link / move / moveContentsBy / marqueeToPath / pathToMarquee, and the
+JPEG mask stash (`mask.saveJPEG` / `mask.restoreJPEG`).
 
-Attempted 2026-10-21: Wine installed, Xvfb available, `source/` binaries
-accessible. FireworksPortable.exe launches but fails because `mfc100u.dll`
-(Visual C++ 2010 runtime) is not present in the CS6 install and not
-available in any Debian package. Microsoft download URLs for vcredist_x64
-are dead/redirected. No Windows installation available to copy from.
-
-**Blocker is infrastructure, not effort.** Do not reopen unless:
-- A Windows installation (real or VM) becomes available to extract `mfc100u.dll`, OR
-- The VC++ 2010 runtime redistributable becomes available from an accessible archive
-
-### 7.2 `setFillNColorNTexture` — closed (same infra blocker)
-
-Same blocker as 7.1: CS6 cannot launch without VC++ 2010 runtime.
-Do not reopen without the same oracle.
+**Evidence-gated hold (do not attempt):** the out-of-bounds effect
+growth bake and `setFillNColorNTexture` need a CS6 oracle. Wine and
+Xvfb are installed on this host, but CS6 cannot launch: `mfc100u.dll`
+(VC++ 2010 runtime) is absent from the install and from every Debian
+package, and the Microsoft download URLs are dead. Record the
+blocker; do not fake the evidence.
 
 ---
 
-## Quick-reference: task ownership
+## 8. Phase 13 — Text depth · M
+
+The 22 unexposed `text.*` commands: character markup
+(`applyCharacterMarkup` / `removeCharacterMarkup`), font markup,
+`convertToPaths`, `attachPath` / `detachPath` / `setTextOnPathMode` /
+`setTextOnPathOffset` / `reversePathTextDirection`, `setTextRectangle`
+(+ auto variants), paragraph indent / spacing-before / spacing-after,
+anti-alias over-sample / sharpness / strength, `setTextRuns`,
+`replaceButtonTextStrings` (+ in instances).
+
+The CS6 Text panel (font, size, colour, weight, style, alignment,
+leading, kerning, anti-alias) belongs in the Properties panel.
+
+---
+
+## 9. Phase 14 — Symbol and instance depth · M
+
+The 19 unexposed `symbol.*` commands: definition editing, instance
+placement and transforms, symbol types, nested-instance expansion.
+
+---
+
+## 10. Phase 15 — Page, frame, document, cell depth · M
+
+`page.*` (14), `frame.*` (5), `document.*` (7), `cell.*` (2): page
+properties and guides, canvas sizing and export presets, frame
+animation timing, document-level properties, state (cell) handling.
+
+---
+
+## 11. Phase 16 — Remaining object, path, filter, style, slice, hotspot · M
+
+`object.*` (14 remaining), `path.*` (13), `filter.*` (6 selection-scoped
+filters + `filter.selection*`), `style.*` (3), `slice.*` (7),
+`hotspot.*` (4), `flatten.*` (3), `primitive.*` (2), `autoshape.*` (2),
+`retouch.*` (5: blur, smudge, clone, eraser, red-eye).
+
+**Status (2026-10-21): the Tier-1 slice is done.** `Modify ▸ Group` /
+`Ungroup` → `object.group` / `object.ungroup`; `Flatten Selection` /
+`Merge Down` / `Flatten Layers` → `flatten.selection` /
+`flatten.mergeDown` / `flatten.document`; `Transform ▸ Rotate 180° /
+90° CW / 90° CCW` and `Flip Horizontal / Vertical` → `object.rotate` /
+`object.reflect`; `Select ▸ Select Inverse` → the cell complement.
+Three filter presets that were *dead* in the UI now reach a kernel:
+`dropShadow` shipped zero parameters (the kernel reads four or
+renders nothing) and the emboss presets were named `emboss` /
+`pillowEmboss` while the kernel matched `raisedemboss` /
+`insetemboss` — all three now change the rendered page, which a
+regression test asserts. The export dialog gained WebP (appended to
+the format list, so the stored `FMTi` indices of saved documents keep
+their meaning). Still open: the scale/skew/distort/numeric-transform
+dialogs, the six selection-scoped filters, `style.*`, `slice.*`,
+`hotspot.*`, `primitive.*`, `autoshape.*` and `retouch.*`.
+
+---
+
+## 12. Phase 17 — The Optimize panel · M
+
+CS6's Optimize panel is a first-class window: per-format lossy
+settings, palette reduction with dithering, matte colour, and the
+export preview. FireCraft has the format writers
+(`crates/io/src/{png,jpeg,gif,bmp,tiff,webp}.rs`) but no tuning
+surface. Build the panel over the existing `ExportOptions` / `EXPv`
+model.
+
+---
+
+## 13. Phase 18 — Deployment and verification hardening · M
+
+- **18.1 Desktop release** — build the Linux x86_64 binary on the
+  release pipeline, ship it as a release asset, and add a real
+  end-to-end CLI test (open → edit → export → reopen).
+- **18.2 Browser smoke depth** — the current smoke proves the bridge
+  round trip. Extend it to a *human* flow: import a PNG, paint, make a
+  selection, copy/paste, export. It must fail if the UI regresses.
+- **18.3 macOS / Windows artifacts** — blocked on hardware; the
+  recipes exist (`docs/packaging/STATUS.md`) and stay honestly
+  unverified.
+- **18.4 WebOS on a real device** — blocked on device access.
+  `docs/WEBOS.md` records the gap.
+
+---
+
+## 14. Quick-reference: task ownership
 
 | Task | Phase | Size | Blocker |
 |---|---|---|---|
-| Import surface parity (#145) | 2 | 2–3 hr | None |
-| Lossy WebP implementation (#146) | 2 | 3–4 hr | Decision 0063 contract |
-| Coverage baseline re-measure (#147) | 3 | 30 min | Tasks #145, #146 |
-| Coverage gap table (#148) | 3 | 1 hr | Task #147 |
-| WebOS packaging proof (#149) | 4 | 2–3 hr | None |
-| Smoke budget measurement (#150) | 4 | 1 hr | None |
-| Platform recipes status doc (#151) | 4 | 30 min | None |
-| Split CI fmt job (#152) | 5 | 1 hr | None |
-| Coverage step isolation (#153) | 5 | 1 hr | None |
-| Trunk caching (#154) | 5 | 1 hr | None |
-| 99% coverage plan (#155) | 6 | future | Tasks #145, #146, #148 |
-| Effect growth research (#156) | 7 | parked | Needs Wine oracle |
-| TXFv texture research (#157) | 7 | parked | Needs Wine oracle |
+| 8.1 File > Import (raster) | 8 | S | **done** |
+| 8.2 File > Open sniffs | 8 | S | **done** |
+| 9.1 Active layer concept | 9 | M | **done** |
+| 9.2 Layers panel depth | 9 | M | partly (opacity/blend/duplicate open) |
+| 10.1 Clipboard shortcuts + menu | 10 | S | **done** |
+| 10.2 Paste as Mask / Inside | 10 | S | **done** |
+| 10.3 Paste from Channel to Channel | 10 | M | open |
+| 11.1–11.5 Raster tools | 11 | L | 11.1–11.3 **done** |
+| 12 Selection + mask surfaces | 12 | M | 1 row needs the CS6 oracle |
+| 13 Text depth | 13 | M | — |
+| 14 Symbol depth | 14 | M | — |
+| 15 Page/frame/document/cell | 15 | M | — |
+| 16 Remaining families | 16 | M | Tier-1 slice **done** |
+| 17 Optimize panel | 17 | M | — |
+| 18.1 Desktop release + e2e test | 18 | M | — |
+| 18.2 Browser smoke depth | 18 | M | — |
+| 18.3/18.4 Off-fleet artifacts | 18 | — | Hardware |
 
 ---
 
-## Next action
+## 15. Next action
 
-Start with **task #145** (import surface parity). This is the
-smallest Phase 2 item and requires no new dependencies or decisions.
-Audit `io::raster::decode` → align CLI accept-list → add format tests.
+**Phase 11.4 / 11.5 — the pixel-selection tools and the pixel-edit
+surfaces.** The paint family is in: the tool strip, the strokes and
+the brush slots landed in Phase 11. What is still missing is the
+*selection* side of the raster tools — CS6's marquee, ellipse, lasso,
+polygon and wand, and the pixel edits that ride on a selection
+(`bitmap.feather`, `bitmap.movePixels`,
+`bitmap.moveSelectionMaskBy`, `bitmap.setPixelMask`,
+`bitmap.adjustPixelSel`). The engine commands all exist; they need a
+tool strip row, canvas drags and a panel that shows the mask.
+
+---
+
+## 16. Closed work (for context — do not reopen without new evidence)
+
+- **M0–M15** (2026-10-10 → 10-13): the whole milestone ladder.
+- **The DOM verb-surface campaign** (tasks #86–#134): 356 CS6 verbs
+  swept; 57 missing verbs closed family-by-family to 268 C / 3 P / 0 M;
+  registry 105 → 241.
+- **Phase 1–7 of the previous GAPS** (2026-10-20 → 10-21): docs and
+  release hygiene, image support (AVIF decision 0064, HEIC refusal
+  0065, import-surface parity, lossy WebP 0063 + implementation),
+  coverage baseline, WebOS packaging proof, smoke budget, platform
+  recipes, CI split into `fmt` + `gate`, cargo-llvm-cov and trunk
+  caching.
+- **Phase 7 (research holds)**: closed as infrastructure-blocked —
+  CS6 cannot run under Wine here because `mfc100u.dll` is unobtainable
+  (see §7).

@@ -109,28 +109,53 @@ pub fn save(
         ihdr.extend_from_slice(&[8, 6, 0, 0, 0]);
         write_chunk(&mut out, b"IHDR", &ihdr);
         write_chunk(&mut out, b"mkTS", &compressed);
-        write_new_tiles(&mut out, document, &BTreeSet::new())?;
+        // Every bank tile the document owns: without them the file
+        // names a tile the bank does not carry, and every render of it
+        // fails with a tile-bank miss.
+        let every: BTreeSet<u32> = document.tiles.ids().collect();
+        write_new_tiles(&mut out, document, &every)?;
         write_chunk(&mut out, b"IEND", &[]);
         return Ok(out);
     }
-    // The original stream's tile ids: bank tiles already on disk stay
-    // verbatim (byte-exact round-trips); only runtime-minted ids —
-    // ones flatten/retouch/place-image added since open — serialize.
-    // A malformed tile stream refuses: the id set cannot be known, so
-    // neither a verbatim nor a merged re-emit is honest.
-    let original_ids = original_tile_ids(original)?;
-    let fresh: BTreeSet<u32> = document
-        .tiles
-        .ids()
-        .filter(|id| !original_ids.contains(id))
-        .collect();
+    // The bank tiles whose file copy is missing or stale — the ones a
+    // save must serialize. The rest ride along verbatim (byte-exact
+    // round-trips of an untouched file), and a tile the bank edited
+    // is re-encoded so the edit survives the round trip. A malformed
+    // tile stream refuses: the id set cannot be known, so neither a
+    // verbatim nor a merged re-emit is honest.
+    let _original_ids = original_tile_ids(original)?;
+    let stale = stale_tiles(document, original);
     let mut tree_written = false;
-    for chunk in original {
+    let mut index = 0usize;
+    while index < original.len() {
+        let chunk = &original[index];
+        if &chunk.ctype == b"mkBT" {
+            // Copy the whole stream verbatim, or drop it: a stale
+            // tile is re-encoded before IEND instead.
+            let mut end = index + 1;
+            while end < original.len()
+                && &original[end].ctype == b"mkBT"
+                && original[end].data.len() >= 4
+                && original[end].data[..4] != fwpng::MKBT_MAGIC
+            {
+                end += 1;
+            }
+            let stream = &original[index..end];
+            let id = stream_index(&stream.iter().collect::<Vec<_>>());
+            if !id.is_some_and(|id| stale.contains(&id)) {
+                for part in stream {
+                    write_chunk(&mut out, b"mkBT", &part.data);
+                }
+            }
+            index = end;
+            continue;
+        }
         if &chunk.ctype == b"IEND" {
-            write_new_tiles(&mut out, document, &fresh)?;
+            write_new_tiles(&mut out, document, &stale)?;
         }
         if &chunk.ctype == b"mkTS" {
             if tree_written {
+                index += 1;
                 continue; // one canonical tree, not the split originals
             }
             write_chunk(&mut out, b"mkTS", &compressed);
@@ -138,6 +163,7 @@ pub fn save(
         } else {
             write_chunk(&mut out, &chunk.ctype, &chunk.data);
         }
+        index += 1;
     }
     if !tree_written {
         return Err(CliError(
@@ -159,6 +185,70 @@ fn original_tile_ids(original: &[RawChunk]) -> Result<BTreeSet<u32>, CliError> {
         .into_iter()
         .map(|tile| tile.index)
         .collect())
+}
+
+/// The original stream's `mkBT` chunks grouped into tile streams: a
+/// payload that starts with the tile magic begins a stream, and every
+/// following `mkBT` chunk continues it (a high-entropy tile's
+/// compressed stream exceeds one chunk).
+fn tile_streams(original: &[RawChunk]) -> Vec<Vec<&RawChunk>> {
+    let mut streams: Vec<Vec<&RawChunk>> = Vec::new();
+    for chunk in original {
+        if &chunk.ctype != b"mkBT" {
+            continue;
+        }
+        let starts_stream = chunk.data.len() >= 4 && chunk.data[..4] == fwpng::MKBT_MAGIC;
+        if starts_stream {
+            streams.push(Vec::new());
+        }
+        match streams.last_mut() {
+            Some(stream) => stream.push(chunk),
+            // A continuation with no stream to continue: the reader
+            // refuses such a file outright, so the writer keeps the
+            // chunk in its own group rather than guessing.
+            None => streams.push(vec![chunk]),
+        }
+    }
+    streams
+}
+
+/// The tile id one original tile stream carries, read from its header.
+fn stream_index(stream: &[&RawChunk]) -> Option<u32> {
+    let head = stream.first()?;
+    let bytes = head.data.get(4..8)?;
+    Some(u32::from_be_bytes([bytes[0], bytes[1], bytes[2], 0]) >> 8)
+}
+
+/// The bank ids whose file copy is missing or no longer matches the
+/// bank — the tiles a save must re-encode. An id the file carries
+/// unchanged rides along verbatim, so an untouched file stays
+/// byte-identical; an id the bank edited is re-encoded, so a painted
+/// pixel survives the round trip.
+fn stale_tiles(document: &Document, original: &[RawChunk]) -> BTreeSet<u32> {
+    let mut stale = BTreeSet::new();
+    let streams = tile_streams(original);
+    for id in document.tiles.ids() {
+        let Some(tile) = document.tiles.get(id) else {
+            continue;
+        };
+        let file_copy = streams.iter().find_map(|stream| {
+            if stream_index(stream) != Some(id) {
+                return None;
+            }
+            let payloads: Vec<&[u8]> = stream.iter().map(|chunk| chunk.data.as_slice()).collect();
+            fwpng::parse_mkbt_stream(&payloads)
+                .ok()
+                .filter(|image| !image.grayscale)
+                .map(|image| image.to_rgba8())
+        });
+        match file_copy {
+            Some(pixels) if pixels == tile.pixels() => {}
+            _ => {
+                stale.insert(id);
+            }
+        }
+    }
+    stale
 }
 
 /// Serializes the document bank's `fresh` tile ids into `mkBT` chunks

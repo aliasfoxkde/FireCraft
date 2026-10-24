@@ -701,7 +701,7 @@ fn by_name(effect: &Effect) -> Option<KernelOp> {
         "innerglow" => mx_inner_glow(effect),
         "solidshadow" => mx_solid_shadow(effect),
         "bevel" | "bevelemboss" | "innerbevel" | "outerbevel" | "raisedemboss" | "insetemboss"
-        | "glow" => mx_bevel(effect),
+        | "emboss" | "pillowemboss" | "glow" => mx_bevel(effect),
         _ => None,
     }
 }
