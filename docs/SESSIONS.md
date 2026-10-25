@@ -989,3 +989,33 @@ documentation reset.
   index extended 0063 → 0066 (AVIF, HEIC, smoke budget); SESSIONS
   entry added.
 - `xtask ci` full gate green on b27c658 (19/19 gates, ~15 min).
+
+## 2026-10-24 — Phase 11.4 + paint/IO batch, v0.2.3 released (#158–#160)
+
+- Phase 11.4 pixel selection landed: marquee/ellipse/lasso/
+  polygonal-lasso/wand with marching ants, select all/deselect/
+  inverse/feather, `bitmap.adjustPixelSel` (expand/contract/border/
+  smooth via chamfer distance field), `bitmap.moveSelectionMaskBy`;
+  fuzz driver covers the new verbs.
+- Paint/IO batch: brush/eraser hardening, fwpng tile-decode fixes,
+  lossy-WebP CLI plumbing, GAPS.md regenerated.
+- Gate loop: aegis flagged `65535`/`70000` literals as ZIP codes and
+  the word "pan" as PCI PAN — comments reworded where reasonable,
+  five false positives baselined. fmt + two clippy lints (collapsed
+  if, saturating_sub) + a `vec!`→array fix inside `json!` (doesn't
+  parse — needs a let binding). All green.
+- v0.2.3 cut: all 8 version stamps + lockfiles bumped; dist native
+  (3 archives, sha256-verified) + web (13.0 MB wasm, bridge smoke
+  green).
+- CI incident: two GitForge runs died on `infrastructure_failure` —
+  root cause was the runner pulling a missing `firecraft-ci-rust:1`
+  image (lockfiles moved, image stale). Rebuilt from
+  `infrastructure/docker/ci-rust.Dockerfile` manifest-only context
+  (with fuzz/Cargo.lock re-locked — `--locked` fetch fails against
+  the stale one); re-shipped to swarmone-docker. `00d2bf8` ran
+  7/7 green.
+- Release: tag v0.2.3 → GitForge + origin; GitHub release with 5
+  assets + hash table; wrangler pages deploy to firecraft-web
+  (deployment 51ee86b4).
+- Aegis false-positive handling recorded in agent memory: "pan"
+  trips PCI, big literals trip ZIP-code — baseline, don't reword.

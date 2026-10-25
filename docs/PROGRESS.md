@@ -4,20 +4,24 @@
 > [`HANDOFF.md`](HANDOFF.md) §7). History and narrative:
 > [`HISTORY.md`](HISTORY.md). Per-session log: [`SESSIONS.md`](SESSIONS.md).
 
-## Now (2026-10-21)
+## Now (2026-10-25)
 
-- **Released:** v0.2.0 + **v0.2.1** + **v0.2.2** (2026-10-20), repo
-  public. v0.2.2 shipped: 54 unit tests, AVIF/HEIC decision docs,
-  WebOS packaging dry-run, smoke budget documentation, 13 CLI format
-  improvements. Web bundle live at <https://firecraft-web.pages.dev>
-  (v0.2.2). The v0.2.2 GitHub release is published (not draft).
+- **Released:** v0.2.0 + **v0.2.1** + **v0.2.2** + **v0.2.3**
+  (2026-10-24), repo public. v0.2.3 shipped: Phase 11.4 pixel
+  selection (marquee/ellipse/lasso/polygonal/wand + marching ants,
+  adjustPixelSel, moveSelectionMaskBy), brush/eraser hardening,
+  fwpng tile-decode fixes, lossy-WebP CLI plumbing. Web bundle live
+  at <https://firecraft-web.pages.dev> (v0.2.3). Notes:
+  [`releases/v0.2.3.md`](releases/v0.2.3.md).
 - **Phase 2/11 complete (2026-10-21):** AVIF policy (dec. 0064),
   HEIC refusal (dec. 0065), import surface parity, lossy WebP export
   (`libwebp-sys`, `lossy-webp` feature, native only). All GAPS.md
   Phase 2 tasks closed.
 - **Parked:** Phase 7 research (effect growth #156, TXFv texture #157)
   — both need Wine oracle. Not actionable without CS6 corpus oracle.
-- **CI:** GitHub Actions green on all pushes. Local aegis scan fixed
+- **CI:** GitForge pipeline 7/7 green on the re-shipped
+  `firecraft-ci-rust:1` image (rebuilt 2026-10-24 after image-pull
+  404s); GitHub Actions green on all pushes. Local aegis scan fixed
   (excludes `target/` / `web/dist/` / `fuzz/`).
 - **Roadmap:** M0–M15 **all closed**; the post-roadmap DOM parity
   campaign is **complete** (no M families). Decision docs 0001–0066.
@@ -49,6 +53,7 @@
 | — | **v0.2.0 released** | 2026-10-15 | shell/tools/filters/styles; web bundle broken (Phase 10) |
 | — | **v0.2.1 released** | 2026-10-15 | web bridge + repaint + honest smoke fix |
 | — | **v0.2.2 released** | 2026-10-19 | AVIF/HEIC decisions, WebOS dry-run, smoke budget, 54 tests |
+| — | **v0.2.3 released** | 2026-10-24 | Phase 11.4 pixel selection + marching ants, paint/IO batch, CI image re-ship |
 
 ## Post-roadmap parity campaign (the current work)
 
