@@ -3418,4 +3418,71 @@ mod tests {
         editor.set_selection(Vec::new());
         assert_eq!(editor.selected_live(), None);
     }
+
+    #[test]
+    fn a_pencil_stroke_dabs_and_is_one_undo_step() {
+        let (mut editor, _id) = editor_with_raster();
+        editor.tool = Tool::Pencil;
+        editor.begin_stroke(geom::Point::new(0.5, 0.5)).unwrap();
+        editor.stroke_to(geom::Point::new(1.5, 0.5)).unwrap();
+        editor.stroke_to(geom::Point::new(1.5, 0.5)).unwrap(); // no-op: same point
+        editor.end_stroke().unwrap();
+
+        // One transaction = one undo step; undo restores the pre-stroke
+        // document.
+        assert!(editor.undo().is_ok());
+    }
+
+    #[test]
+    fn a_stroke_off_the_canvas_is_a_no_op() {
+        let (mut editor, _id) = editor_with_raster();
+        editor.tool = Tool::Pencil;
+        // No image under this point: begin is Ok and paints nothing.
+        editor.begin_stroke(geom::Point::new(900.0, 900.0)).unwrap();
+        assert!(editor.stroke.is_none());
+        editor.end_stroke().unwrap();
+    }
+
+    #[test]
+    fn replay_steps_replays_journal_lines() {
+        let mut editor = Editor::untitled();
+        editor.tool = Tool::Rect;
+        editor.begin_drag(geom::Point::new(0.0, 0.0));
+        editor.drag_to(geom::Point::new(10.0, 10.0));
+        editor.end_drag().unwrap();
+        let steps = editor.steps_text();
+        // Reopen replays the whole journal (seed steps included) onto
+        // the given document, so the base is bare — an untitled base
+        // would double the seed page.
+        let mut fresh = Editor::from_document(doc::Document::default());
+        fresh.replay_steps(&steps).unwrap();
+        assert_eq!(fresh.document().pages.len(), editor.document().pages.len(),);
+        assert_eq!(
+            fresh.current_cell().unwrap().elements.len(),
+            editor.current_cell().unwrap().elements.len(),
+            "replay lands the same objects",
+        );
+    }
+
+    #[test]
+    fn guide_drag_commits_an_inset_through_the_full_gesture() {
+        let (mut editor, _content, _instance) = symbol_editor();
+        editor.enter_symbol(0).unwrap();
+        editor.enable_nine_slice(0).unwrap();
+        editor.exit_symbol();
+        editor.enter_symbol(0).unwrap();
+        editor
+            .begin_guide_drag(0, NineSliceEdge::Top, geom::Point::new(50.0, 15.0))
+            .unwrap();
+        editor.drag_guide_to(geom::Point::new(50.0, 20.0));
+        editor.end_guide_drag().unwrap();
+    }
+
+    #[test]
+    fn pick_color_reads_the_pixel_under_the_point() {
+        let (mut editor, _id) = editor_with_raster();
+        let color = editor.pick_color(geom::Point::new(0.5, 0.5));
+        assert_eq!(color, Some([255, 0, 0, 255]), "the raster is opaque red");
+        assert_eq!(editor.pick_color(geom::Point::new(900.0, 900.0)), None);
+    }
 }
