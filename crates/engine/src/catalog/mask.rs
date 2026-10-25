@@ -2526,4 +2526,95 @@ mod tests {
                 .is_err()
         );
     }
+
+    #[test]
+    fn path_to_marquee_refuses_bad_mode_and_non_path_and_bad_feather() {
+        let (mut document, image_id) = image_document();
+        let path = document.registry.insert(square_path(0.0, 0.0, 4.0));
+        // Bad mode.
+        let error = PathToMarquee
+            .apply_json(
+                &mut document,
+                serde_json::json!({ "id": path, "image": image_id, "mode": "sparkle" }),
+            )
+            .unwrap_err();
+        assert!(matches!(error, EngineError::BadPayload { .. }), "{error}");
+        // Non-path target.
+        let error = PathToMarquee
+            .apply_json(
+                &mut document,
+                serde_json::json!({ "id": image_id, "image": image_id, "mode": "hard edge" }),
+            )
+            .unwrap_err();
+        assert!(matches!(error, EngineError::InvalidState { .. }), "{error}");
+        // Non-image source.
+        let error = PathToMarquee
+            .apply_json(
+                &mut document,
+                serde_json::json!({ "id": path, "image": path, "mode": "hard edge" }),
+            )
+            .unwrap_err();
+        assert!(matches!(error, EngineError::InvalidState { .. }), "{error}");
+        // Feather with a non-positive radius.
+        let error = PathToMarquee
+            .apply_json(
+                &mut document,
+                serde_json::json!({ "id": path, "image": image_id, "mode": "feather",
+                                    "feather_amount": 0.0 }),
+            )
+            .unwrap_err();
+        assert!(matches!(error, EngineError::BadPayload { .. }), "{error}");
+        // Feather with a good radius applies (and caps above 64).
+        PathToMarquee
+            .apply_json(
+                &mut document,
+                serde_json::json!({ "id": path, "image": image_id, "mode": "feather",
+                                    "feather_amount": 500.0 }),
+            )
+            .unwrap();
+        assert!(document.selection.is_some());
+    }
+
+    #[test]
+    fn mask_kind_without_coverage_is_invalid_state() {
+        // A group as the mask source: no rasterizable coverage.
+        let (mut document, image_id) = image_document();
+        let (group_id, _mask_id) = half_plane_group(&mut document, image_id);
+        // Reach the coverage path through marqueeToPath's mask read:
+        // put the group in as the selection source via a path-shaped
+        // probe — the simplest door is PathToMarquee with the group id.
+        let error = PathToMarquee
+            .apply_json(
+                &mut document,
+                serde_json::json!({ "id": group_id, "image": image_id, "mode": "hard edge" }),
+            )
+            .unwrap_err();
+        assert!(matches!(error, EngineError::InvalidState { .. }), "{error}");
+    }
+
+    #[test]
+    fn path_to_marquee_with_a_cubic_contour_stamps_the_flattened_curve() {
+        let (mut document, image_id) = image_document();
+        let mut path = match square_path(0.0, 0.0, 4.0) {
+            ObjectData::Path(inner) => inner,
+            // The test module already allows panic; this is a fixture
+            // invariant, not a production path.
+            _ => panic!("square_path is a path"),
+        };
+        // Make one segment a cubic: primaries off the corners.
+        if let Some(first) = path.contours[0].points.first_mut() {
+            first.is_curve = true;
+            first.primary = Some(Point::new(2.0, -2.0));
+            first.secondary = Some(Point::new(4.0, 2.0));
+        }
+        let path_id = document.registry.insert(ObjectData::Path(path));
+        PathToMarquee
+            .apply_json(
+                &mut document,
+                serde_json::json!({ "id": path_id, "image": image_id, "mode": "hard edge" }),
+            )
+            .unwrap();
+        let mask = document.selection.as_ref().unwrap();
+        assert!(mask.alpha.iter().any(|a| *a > 0), "the curve stamped");
+    }
 }

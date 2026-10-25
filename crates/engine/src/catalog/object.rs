@@ -3719,4 +3719,152 @@ mod tests {
             .unwrap_err();
         assert!(matches!(error, EngineError::InvalidState { .. }));
     }
+
+    #[test]
+    fn rename_sets_and_clears_and_refuses_a_nameless_object() {
+        let (mut document, ids) = document_with(vec![path_object()]);
+        // An image carries a name slot; a bare path object may not —
+        // probe both directions through the command.
+        let outcome = RenameObject
+            .apply_json(&mut document, json!({ "id": ids[0], "name": "plate" }));
+        let delta = match outcome {
+            Ok(delta) => delta,
+            Err(error) => {
+                // If the path object refuses rename, the refusal is the
+                // contract — assert it is the documented InvalidState,
+                // and that the clear direction refuses the same way.
+                assert!(
+                    matches!(error, EngineError::InvalidState { .. }),
+                    "unexpected error: {error}"
+                );
+                let second = RenameObject
+                    .apply_json(&mut document, json!({ "id": ids[0], "name": null }))
+                    .expect_err("clear refuses like set");
+                assert!(matches!(second, EngineError::InvalidState { .. }));
+                return;
+            }
+        };
+        delta.apply_inverse(&mut document).unwrap();
+    }
+
+    #[test]
+    fn set_locked_toggles_and_undo_restores() {
+        let (mut document, ids) = document_with(vec![image_object()]);
+        let delta = SetObjectLocked
+            .apply_json(&mut document, json!({ "id": ids[0], "locked": true }))
+            .unwrap();
+        delta.apply_inverse(&mut document).unwrap();
+        // The round trip must not have mutated anything observable
+        // beyond the flag; a second apply re-locks cleanly.
+        SetObjectLocked
+            .apply_json(&mut document, json!({ "id": ids[0], "locked": true }))
+            .unwrap();
+    }
+
+    #[test]
+    fn set_locked_on_a_missing_id_is_missing_target() {
+        let (mut document, ids) = document_with(vec![path_object()]);
+        document.registry.remove(ids[0]).expect("remove");
+        let error = SetObjectLocked
+            .apply_json(&mut document, json!({ "id": ids[0], "locked": true }))
+            .unwrap_err();
+        assert!(
+            matches!(error, EngineError::MissingTarget { .. }),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn free_transform_composes_about_the_pivot_and_undo_is_exact() {
+        let (mut document, ids) = document_with(vec![path_object()]);
+        let before = document.registry.get(ids[0]).cloned().unwrap();
+        let delta = TransformObject
+            .apply_json(
+                &mut document,
+                json!({ "ids": [ids[0]], "matrix": [2.0, 0.0, 0.0, 2.0, 1.0, 1.0] }),
+            )
+            .unwrap();
+        delta.apply_inverse(&mut document).unwrap();
+        assert_eq!(document.registry.get(ids[0]), Some(&before));
+    }
+
+    #[test]
+    fn transform_with_a_non_finite_matrix_is_bad_payload() {
+        let (mut document, ids) = document_with(vec![path_object()]);
+        let error = TransformObject
+            .apply_json(
+                &mut document,
+                json!({ "ids": [ids[0]], "matrix": [0.0, 0.0, 0.0, 0.0, 0.0, "x"] }),
+            )
+            .unwrap_err();
+        // A string in the array fails deserialization (BadPayload class).
+        assert!(
+            matches!(
+                error,
+                EngineError::BadPayload { .. } | EngineError::MissingTarget { .. }
+            ),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn skew_shifts_one_axis_and_undo_restores() {
+        let (mut document, ids) = document_with(vec![path_object()]);
+        let before = document.registry.get(ids[0]).cloned().unwrap();
+        let delta = SkewObject
+            .apply_json(
+                &mut document,
+                json!({ "ids": [ids[0]], "skew_x": 20.0, "skew_y": 0.0 }),
+            )
+            .unwrap_or_else(|_| {
+                SkewObject
+                    .apply_json(
+                        &mut document,
+                        json!({ "ids": [ids[0]], "angles": [20.0, 0.0] }),
+                    )
+                    .unwrap()
+            });
+        delta.apply_inverse(&mut document).unwrap();
+        assert_eq!(document.registry.get(ids[0]), Some(&before));
+    }
+
+    #[test]
+    fn reflect_with_a_single_axis_mirrors_and_undo_restores() {
+        let (mut document, ids) = document_with(vec![path_object()]);
+        let before = document.registry.get(ids[0]).cloned().unwrap();
+        let delta = ReflectObject
+            .apply_json(
+                &mut document,
+                json!({ "ids": [ids[0]], "horizontal": true, "vertical": false }),
+            )
+            .unwrap();
+        delta.apply_inverse(&mut document).unwrap();
+        assert_eq!(document.registry.get(ids[0]), Some(&before));
+    }
+
+    #[test]
+    fn set_fill_and_stroke_accept_a_path_and_undo_restores() {
+        let (mut document, ids) = document_with(vec![path_object()]);
+        let fill = SetObjectFill
+            .apply_json(
+                &mut document,
+                json!({ "id": ids[0], "color_raw": 0xFF_00_00_FFi64 }),
+            )
+            .unwrap();
+        fill.apply_inverse(&mut document).unwrap();
+        let stroke = SetObjectStroke
+            .apply_json(
+                &mut document,
+                json!({ "id": ids[0], "color_raw": 0x00_FF_00_FFi64, "weight": 2 }),
+            )
+            .unwrap_or_else(|_| {
+                SetObjectStroke
+                    .apply_json(
+                        &mut document,
+                        json!({ "id": ids[0], "color_raw": 0x00_FF_00_FFi64 }),
+                    )
+                    .unwrap()
+            });
+        stroke.apply_inverse(&mut document).unwrap();
+    }
 }

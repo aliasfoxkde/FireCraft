@@ -3194,4 +3194,50 @@ mod tests {
         assert_eq!(at(1, 1), [0, 0, 0, 255]);
         assert_eq!(at(8, 8), [0, 0, 0, 0], "outside the path stays empty");
     }
+
+    #[test]
+    fn expand_stroke_refuses_a_bad_miter_limit() {
+        let (mut document, ids) = document_with(vec![square(0.0, 0.0, 8.0, 8.0)]);
+        for limit in [0.0, -1.5] {
+            let error = apply_by_name(
+                &mut document,
+                "path.expandStroke",
+                json!({ "id": ids[0], "width": 2.0, "cap": "round",
+                            "join": "miter", "miter_limit": limit }),
+            )
+            .unwrap_err();
+            assert!(
+                matches!(error, EngineError::InvalidState { .. }),
+                "limit {limit}: {error}"
+            );
+        }
+    }
+
+    #[test]
+    fn expand_stroke_non_path_target_is_invalid_state() {
+        let (mut document, ids) = document_with(vec![image_object()]);
+        let error = apply_by_name(
+            &mut document,
+            "path.expandStroke",
+            json!({ "id": ids[0], "width": 2.0, "cap": "butt",
+                        "join": "bevel", "miter_limit": 4.0 }),
+        )
+        .unwrap_err();
+        assert!(matches!(error, EngineError::InvalidState { .. }), "{error}");
+    }
+
+    #[test]
+    fn expand_stroke_covers_the_cap_and_join_choices() {
+        for (cap, join) in [("square", "round"), ("round", "bevel"), ("butt", "miter")] {
+            let (mut document, ids) = document_with(vec![square(0.0, 0.0, 8.0, 8.0)]);
+            let delta = apply_by_name(
+                &mut document,
+                "path.expandStroke",
+                json!({ "id": ids[0], "width": 2.0, "cap": cap,
+                            "join": join, "miter_limit": 4.0 }),
+            )
+            .unwrap();
+            delta.apply_inverse(&mut document).unwrap();
+        }
+    }
 }
