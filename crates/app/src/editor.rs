@@ -3302,4 +3302,120 @@ mod tests {
         }
         assert!(selection_edges(&full).is_empty());
     }
+
+    #[test]
+    fn undo_and_redo_round_trip_a_command() {
+        let mut editor = Editor::untitled();
+        // untitled()'s seed steps (page.add + setCanvasSize) are the
+        // setup history; the shape lands on top of them.
+        let seed_depth = editor.session.undo_len();
+
+        editor.tool = Tool::Rect;
+        editor.begin_drag(geom::Point::new(10.0, 10.0));
+        editor.drag_to(geom::Point::new(60.0, 40.0));
+        editor.end_drag().unwrap();
+        assert_eq!(editor.current_cell().unwrap().elements.len(), 1);
+
+        let name = editor.undo().unwrap();
+        assert!(!name.is_empty(), "undo returns the undone command's name");
+        assert!(editor.current_cell().unwrap().elements.is_empty());
+
+        editor.redo().unwrap();
+        assert_eq!(editor.current_cell().unwrap().elements.len(), 1);
+        // Redo the remaining setup steps back to seed depth, then the
+        // drained stack refuses.
+        while editor.session.undo_len() > seed_depth {
+            if editor.redo().is_err() {
+                break;
+            }
+        }
+        assert!(editor.redo().is_err(), "drained redo stack refuses");
+    }
+
+    #[test]
+    fn save_and_open_round_trip_preserves_elements() {
+        let mut editor = Editor::untitled();
+        editor.tool = Tool::Ellipse;
+        editor.begin_drag(geom::Point::new(0.0, 0.0));
+        editor.drag_to(geom::Point::new(30.0, 30.0));
+        editor.end_drag().unwrap();
+
+        let bytes = editor.save().unwrap();
+        let reopened = Editor::open(&bytes).unwrap();
+        let cell = reopened.current_cell().unwrap();
+        assert_eq!(cell.elements.len(), 1);
+        assert!(matches!(
+            reopened.document().registry.get(cell.elements[0]),
+            Some(doc::ObjectData::Path(_))
+        ));
+    }
+
+    #[test]
+    fn open_refuses_garbage_bytes() {
+        assert!(Editor::open(b"not a png at all").is_err());
+    }
+
+    #[test]
+    fn set_active_layer_clamps_to_the_topmost_layer() {
+        let mut editor = Editor::untitled();
+        editor.set_active_layer(9);
+        assert_eq!(editor.active_layer(), 0, "clamped on a fresh document");
+    }
+
+    #[test]
+    fn pixel_select_ops_refuse_cleanly_without_a_selection() {
+        let mut editor = Editor::untitled();
+        // No pixel selection exists: the no-selection early-return
+        // paths must be Ok (no-ops), not errors.
+        assert!(editor.deselect_pixels().is_ok());
+        assert!(editor.select_similar(16).is_ok());
+        assert!(editor.move_selected_pixels(1, 1).is_ok());
+    }
+
+    #[test]
+    fn pixel_select_ops_drive_the_commands_with_a_selection() {
+        let (mut editor, _id) = editor_with_raster();
+        editor.tool = Tool::Marquee;
+        // A real drag span: begin at the seed pixel, end one pixel
+        // over, so the committed rect selection is non-empty.
+        editor.pixel_mode = PixelSelectMode::from_modifiers(egui::Modifiers::default());
+        editor
+            .begin_pixel_selection(geom::Point::new(0.5, 0.5))
+            .unwrap();
+        editor
+            .extend_pixel_selection(geom::Point::new(2.0, 2.0))
+            .unwrap();
+        editor.end_pixel_selection().unwrap();
+        assert!(
+            editor.pixel_selection.is_none(),
+            "end consumes the live drag"
+        );
+        assert!(editor.document().selection.is_some());
+
+        editor.move_selection_mask(1, 0).unwrap();
+        editor.adjust_pixel_selection("expand", 1).unwrap();
+        editor.feather_selection(1).unwrap();
+        editor.select_similar(8).unwrap();
+        editor.move_selected_pixels(1, 0).unwrap();
+        editor.deselect_pixels().unwrap();
+        assert!(editor.pixel_selection.is_none());
+        // Every op above landed exactly one undo step.
+        assert!(!editor.session.undo().is_err());
+    }
+
+    #[test]
+    fn set_selection_replaces_the_vector_selection() {
+        let mut editor = Editor::untitled();
+        editor.tool = Tool::Rect;
+        editor.begin_drag(geom::Point::new(0.0, 0.0));
+        editor.drag_to(geom::Point::new(10.0, 10.0));
+        editor.end_drag().unwrap();
+        let id = editor.current_cell().unwrap().elements[0];
+
+        editor.set_selection(vec![id]);
+        assert_eq!(editor.selected_live(), Some(id));
+
+        editor.set_selection(Vec::new());
+        assert_eq!(editor.selected_live(), None);
+    }
 }

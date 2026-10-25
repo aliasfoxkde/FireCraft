@@ -1,5 +1,7 @@
 # M10 — Symbols, libraries, components
 
+> **CLOSED milestone (historical reference).** See docs/PROGRESS.md for the closure date and docs/HANDOFF.md for current work.
+
 > Roadmap: [ROADMAP.md](ROADMAP.md) · Strategy: [../../PLANNING.md](../../PLANNING.md)
 
 **Objective:** FireCraft gains CS6's symbol system: graphic / button /

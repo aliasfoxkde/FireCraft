@@ -1,5 +1,7 @@
 # M3 — `doc` model + format mapping + round-trip writer
 
+> **CLOSED milestone (historical reference).** See docs/PROGRESS.md for the closure date and docs/HANDOFF.md for current work.
+
 > Roadmap: [ROADMAP.md](ROADMAP.md) · Strategy: [../../PLANNING.md](../../PLANNING.md)
 
 **Objective:** a typed document model (pages/states/layers/objects) fully

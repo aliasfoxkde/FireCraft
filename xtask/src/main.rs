@@ -204,6 +204,15 @@ fn run_ci(full: Option<&str>, skip_fmt: bool) -> ExitCode {
                 "-D",
                 "warnings",
             ])
+            .and_then(|()| {
+                // `web` is workspace-excluded (trunk) — clippy needs the
+                // explicit manifest, same as the fmt check above.
+                util::run_in(
+                    Some(std::path::Path::new("web")),
+                    "cargo",
+                    &["clippy", "--all-targets", "--", "-D", "warnings"],
+                )
+            })
         }),
         ("test", || util::cargo(&["test", "--workspace"])),
         ("layers", layers::run),

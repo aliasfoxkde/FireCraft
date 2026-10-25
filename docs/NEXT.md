@@ -1,168 +1,173 @@
-# FireCraft — Next-agent plan (2026-10-18)
+# FireCraft — Next-agent plan (2026-10-25)
 
 > Start at `docs/HANDOFF.md` first. This file is the live backlog
 > and the expanded plan. HANDOFF §4 has the phase descriptions.
-> Updated 2026-10-18 with quality assessment; Aegis/coverage/ci workflows added.
+> Rewritten 2026-10-25 from a full audit: coverage measured at
+> 80.47% lines / 77.85% functions, production code panic-free,
+> clippy zero-warning, v0.2.3 shipped.
 
 ---
 
-## Honest state of the repo (2026-10-18 assessment)
+## Measured baseline (2026-10-25)
 
-### What's solid
-- **CI/CD**: GitForge pipeline (7 jobs) + GitHub Actions backup (`.github/workflows/ci.yml`)
-  + GitHub Actions release workflow (`.github/workflows/release.yml`). Local gate:
-  `cargo run -p xtask -- ci` (aegis → coverage → fmt → clippy → test →
-  layers → wasm → corpus → perf → fuzz → parity → scorecard → changelog).
-- **Clippy**: all crates clean — zero warnings, zero errors across workspace.
-- **Fmt**: all crates green including the workspace-excluded `web/` (explicit
-  check in the fmt gate).
-- **Tests**: 681 test functions, 77 test modules across the workspace.
-  Corpus round-trip: 21/21 files verified.
-- **Aegis**: in xtask ci chain — aegis 0.6.3 production profile, 1316 findings
-  in baseline (all in research docs). Gate: `cargo run -p xtask -- aegis`.
-- **Coverage gate**: in xtask ci chain — llvm-cov workspace-wide, 60% thresholds.
-  Gate: `cargo run -p xtask -- coverage [--bless|--measure]`.
-- **Wasm build**: fwpng wasm32 release compiles cleanly.
-- **CHANGELOG**: auto-generated from 211 commits, version-stamp verified.
-- **Lockfiles**: clean, no external crate version drift.
-- **Documentation**: current — HANDOFF, PROGRESS, HISTORY, SESSIONS, README,
-  CLAUDE.md, AGENTS, WEBOS all aligned to v0.2.1 / post-parity reality.
-- **Clean-room**: `source/` untouched, AMT/ out of scope, no git-unsafe ops.
+| Metric | Value | Source |
+|---|---|---|
+| Line coverage | 80.47% (21,401 / 109,573) | `cargo llvm-cov --summary-only` |
+| Function coverage | 77.85% (1,072 / 4,839 missed... see note) | same run |
+| Region coverage | 79.83% | same run |
+| Clippy (default + deny set) | 0 warnings | `xtask ci` |
+| Pedantic clippy delta | ~1,825 hits (86% `cast_possible_truncation`) | manual run |
+| Production unwrap/panic/expect | **0** (all hits in `#[cfg(test)]` files) | grep audit |
+| Tests | 38 editor + 106 io + workspace suite | cargo test |
+| Web crate | clippy-clean, fmt-gated, smoke-gated | manual + dist --web |
 
-### What's missing or behind
+Note: the 77.85% function figure reads `4839` as the total function
+count in the summary table, not the missed count — re-read the table
+columns when re-blessing.
 
-#### CI gaps (all resolved)
-1. ~~No GitHub Actions backup~~ — `.github/workflows/ci.yml` added.
-2. ~~No Aegis in xtask ci~~ — integrated as the first gate step.
-3. ~~No coverage gate~~ — `coverage.rs` module added with 60% thresholds.
-4. **Wasm gate slow** — `cargo build --target wasm32-unknown-unknown` takes
-   >5 min even with incremental. The gate compiles full workspace for wasm.
-   The `web/` crate uses trunk (not workspace) so it builds separately.
-   Current behavior is correct but the timeout is tight.
+## Worst coverage files (missed lines, 2026-10-25)
 
-#### Coverage gaps
-4. **`io` crate (6015 lines)**: zero `#[cfg(test)]` modules, zero
-   `*_test.rs` files. The corpus round-trip gate (21 files) covers the
-   read/write paths at the integration level, but unit-level correctness
-   (error paths, edge cases in each codec) is not individually verified.
-   Priority: bmp, jpeg, tiff, wbmp codecs have no unit tests.
-5. **`text` crate (853 lines)**: zero test modules. Text layout is
-   deterministic (contract enforced by font pinning) but error paths and
-   edge cases in TextEngine and glyph contour generation are untested.
-6. **`scripting` crate (2113 lines)**: has integration tests (44 tests
-   across 5 files: dom, files, hostile, mutate, widget) but no unit
-   tests in `#[cfg(test)]` modules inside the src tree. The integration
-   tests cover the DOM surface, hostile input, and mutation. Acceptable
-   but incomplete.
-7. **Coverage not measured**: llvm-cov (cargo-llvm-cov 0.9.0) is available
-   but no coverage gate exists in xtask ci. The backend-fixed repo has
-   99.1% line / 98.8% function / 98.9% region thresholds. FireCraft
-   does not measure coverage.
-8. **web crate**: workspace-excluded (trunk). No clippy, no test, no
-   coverage for `web/src/`. The fmt gate catches formatting. The browser
-   smoke (playwright against dist/web) is the functional proof.
+| File | Missed | What's untested |
+|---|---|---|
+| crates/app/src/editor.rs | 665 | 75 public fns lack a test: import_styles, wire, replay_steps, symbol helpers |
+| crates/engine/src/catalog/object.rs | 483 | refusal branches of the object family |
+| crates/engine/src/catalog/mask.rs | 427 | mask refusal + edge paths |
+| crates/compose/src/effects.rs | 360 | filter-stack edge parameters |
+| crates/engine/src/catalog/path.rs | 271 | path family refusals |
+| crates/engine/src/fuzzdrive.rs | 160 | driver-only (acceptable; fuzz is its own gate) |
+| crates/io/src/psd.rs | 180 | PSD error paths (malformed headers) |
 
-#### Documentation gaps
-9. **`RELEASING.md`**: accurate but could reference the full v0.2.1 release
-   recipe (8 stamps, wrangler deploy, etc.) — currently only covers the
-   native set partially.
-10. **`TOOLCHAINS.md`**: exists but may not reflect current state of
-    platform build capabilities.
-11. **No `docs/releases/`**: release notes are gitignored staging
-    (`dist/release-notes.txt`). Tracked history would survive.
-12. **`docs/planning/firecraft/`**: milestone tickets M0–M15 still present
-    as reference. Useful but needs a note that they are historical.
+## Phases
 
-#### Architecture gaps
-13. **`webexport` (3 modules, 15 inline tests)**: has `rasterize` returning
-    `Result` but the only `unwrap()` in the module is inside a `#[cfg(test)]`
-    block. Production code path is panic-free. ✓
-14. **No GitHub release automation**: releases are manual (gh CLI). No
-    GitHub Actions triggered on tag. Consider a workflow that runs
-    `xtask dist` and creates a draft release on tag.
+### Phase 14 — Coverage ratchet to 99% (multi-session)
 
----
+The floors were raised 60% → 80% lines / 77% functions (measured
+baseline, 2026-10-25). The gate is rising-only from here.
 
-## Prioritized task list
+- **14.1 Editor surface tests** (biggest single gap, 665 missed).
+  Tests for: `import_styles` (good mkTS + corrupt + missing-mkBT),
+  `replay_steps`, `wire` string table, symbol helpers, `pick_color`,
+  `begin_stroke`/`stroke_to`/`end_stroke` family, `commit_polygon`,
+  guide drag family, nine-slice toggles. ~30 tests. Accept: editor.rs
+  line coverage ≥ 95%.
+- **14.2 Catalog refusal branches** (object 483, mask 427, path 271,
+  text 211, bitmap 193, web 152). Each command's error rows are
+  mechanical: wrong payload shape, missing target, out-of-range
+  params. Write a table-driven helper (payload → expect refusal) and
+  cover every `Err` arm. Accept: each listed file ≥ 95%.
+- **14.3 compose/effects.rs edge parameters** (360). Filter kernels
+  with zero-size inputs, degenerate radii, boundary pixels.
+- **14.4 io/psd.rs malformed-header tests** (180): truncated chunks,
+  bad version, impossible dims.
+- **14.5 Ratchet the floors**: after each of 14.1–14.4 lands, re-run
+  `cargo llvm-cov --summary-only` and bless the floors to the new
+  number. Target: 99% lines / 99% functions. Record each raise in
+  the session log.
+- **14.6 Coverage of the `web/` crate**: trunk builds it outside the
+  workspace; add `cargo llvm-cov --manifest-path web/Cargo.toml` to
+  the measure path (may need the wasm target excluded — measure,
+  then decide).
 
-### Tier 1 — CI/CD hardening (DONE)
-- **#136** ✅ Aegis scan in xtask ci — first gate step, aegis 0.6.3 production profile.
-  Gate: `cargo run -p xtask -- aegis`.
-- **#137** ✅ llvm-cov coverage gate — 60% conservative thresholds, `--lcov` parsing.
-  Gate: `cargo run -p xtask -- coverage`.
-- **#138** ✅ GitHub Actions backup CI (`.github/workflows/ci.yml`) + release workflow
-  (`.github/workflows/release.yml`).
-  - Auth via `GITHUB_TOKEN`; no additional secrets needed.
+### Phase 15 — Lint hardening
 
-### Tier 2 — Test coverage (target 90%+)
+Current deny set: unwrap_used, expect_used, panic, todo,
+unimplemented, unreachable, dbg_macro, print_stdout, exit +
+unsafe_code=forbid. Production code is already clean.
 
-- **#139** Test `io` crate (6015 lines — highest priority)
-  - Add `#[cfg(test)]` modules to each codec: bmp, jpeg, tiff, wbmp,
-    png, gif, svg, svgimport, psd, expv, webp.
-  - Test error paths: malformed headers, truncated data, dimension caps.
-  - Test raster export/import round-trip per format.
-  - The corpus gate covers the happy path; unit tests cover the edge cases.
+- **15.1 Curated pedantic adoption.** Blanket pedantic is 1,825 hits,
+  86% `cast_possible_truncation` (raster math does i64↔u32↔f64
+  constantly). Do NOT blanket-enable. Instead enable per-lint:
+  - `clippy::cast_possible_truncation` → add `#[allow]` with a
+    one-line justification at the ~50 raster-math sites, deny
+    elsewhere? No — measure first; if the allow density is too high
+    (>1 per 100 lines), record a refusal decision instead.
+  - `clippy::doc_markdown` (13 hits) → fix the docs, enable.
+  - `clippy::needless_pass_by_value` (8) → fix, enable.
+  - `clippy::must_use_candidate` (9) → evaluate; enable if the hits
+    are real.
+- **15.2 web/ clippy in the gate** — DONE 2026-10-25 (xtask clippy
+  gate + `.gitforge.yml` addition below).
+- **15.3 `.gitforge.yml`: add the web clippy step** to the
+  clippy-test job (`cd web && cargo clippy --all-targets -- -D
+  warnings`). Requires the CI image to carry the web/ manifest (it
+  does — the fetch context includes web/).
+- **15.4 `#![deny(missing_docs)]` evaluation** — public-API doc
+  coverage. Count first; if the delta is under ~200 items, fix and
+  enable per-crate starting with `geom` and `color`.
 
-- **#140** Test `text` crate (853 lines)
-  - Test TextEngine: empty string, single glyph, multi-run.
-  - Test auto_block: zero-size, very large, negative coords.
-  - Test glyph_contours: ensure determinism (same input → same output).
+### Phase 16 — WCAG 2.1 AAA audit (web host)
 
-- **#141** Unit tests for `scripting` crate
-  - Add `#[cfg(test)]` modules for host, dom, marshal, widget
-    (separate from the integration tests in `tests/`).
-  - Test error handling in host functions.
+The host surface is `web/index.html` (29 lines) + the egui canvas.
+The egui app itself draws via egui/accesskit — egui has built-in
+accesskit integration.
 
-### Tier 3 — Documentation hygiene
+- **16.1 Static audit of index.html**: lang attribute, title, meta
+  description, skip-link, canvas fallback text, focus outline policy.
+  Small; fix in place.
+- **16.2 egui/accesskit audit**: verify accesskit is compiled in on
+  the wasm build (egui feature flag), test with a screen reader on
+  the deployed site, document what is reachable. Record results in a
+  decision doc — some AAA criteria (1.4.8 visual presentation,
+  2.1.3 keyboard-no-exception) may be honest refusals for a
+  canvas-drawing app; document them as such rather than fake conformance.
+- **16.3 Contrast audit** of the default theme's text colors (egui
+  dark theme + any custom styles in `app/src/shell.rs`). Compute
+  ratios; bump to ≥ 7:1 (AAA) where the theme allows.
+- **16.4 Keyboard map**: verify every tool and menu action is
+  reachable by keyboard; document shortcuts in a help panel. AAA
+  2.1.3 requires no keyboard trap.
 
-- **#131** Expand `RELEASING.md` with full v0.2.1+ recipe
-  - Document the 8-stamp version bump, xtask changelog, dist native+web,
-    zip at root, SHA block, tag, push, gh release, wrangler deploy.
-  - Reference HANDOFF §6.3 for the authoritative recipe.
+### Phase 17 — Release engineering (from HANDOFF Phase 13)
 
-- **#142** ✅ Create `docs/releases/` and archive v0.2.0 + v0.2.1 notes.
-  `docs/releases/v0.2.0.md` and `v0.2.1.md` committed.
+- **17.1 Platform matrix recipes** (13.2, still open): run the
+  AppImage/Windows/macOS scripts on real hardware as hardware
+  becomes available; keep the honest "built on Linux x86_64" line
+  until then.
+- **17.2 Release automation**: a GitForge pipeline job that, on tag
+  push, runs `xtask dist --web --native` and uploads artifacts —
+  removes the manual gh release step from the runbook.
+- **17.3 Smoke budget off measured load** (13.4): the bridge smoke
+  uses `--virtual-time-budget=60000`; derive the budget from the
+  measured wasm load time × margin, not a constant.
 
-- **#147** Audit `TOOLCHAINS.md` for accuracy
-  - Verify platform build capabilities reflect current state.
-  - Add results from any platform recipe testing (#134).
+### Phase 18 — Documentation coverage
 
-### Tier 4 — Architecture improvements
+- **18.1 Update NEXT.md's stale facts as they change** (this file —
+  the io/text "zero tests" claims were stale: io has 106 tests
+  across 8 integration files).
+- **18.2 Historical ticket notes**: `docs/planning/firecraft/M*.md`
+  are closed milestones — add a banner note so agents don't treat
+  them as open.
+- **18.3 TOOLCHAINS.md + RELEASING.md accuracy pass** against the
+  v0.2.3 reality (the 8-stamp bump list changed with web/Cargo.toml).
+- **18.4 CLAUDE.md project status line** — update the "Status"
+  paragraph per release (currently says v0.2.1).
 
-- **#143** ✅ GitHub Actions release workflow committed
-  (`.github/workflows/release.yml`).
+### Parked (evidence-gated, unchanged)
 
-- **#130** Smoke timeout budget decision doc (HANDOFF #130)
-  - Document the `--virtual-time-budget=60000` constant and its origin.
-  - Define the threshold for when to increase it and by how much.
+- Phase 12 holds (effect growth, TXFv texture) — need the Wine/CS6
+  oracle. No action without it.
+- 11.2/11.3 AVIF/HEIC — decided (0064/0065); revisit only when the
+  `image` crate's AVIF state changes.
 
-### Recurring (run before any web/shell change)
+## Suggested order
 
-- **#126** Browser smoke against live Pages URL
-- **#127** Cloudflare Pages redeploy after web/shell change
-
-### Staged work (HANDOFF tasks #121–#134, still valid)
-
-These remain the primary feature direction. See their descriptions in
-HANDOFF §4. Priority order: #121 (quick) → #123 (decision first) →
-#122 → #124 → #125 → #131 → #130 → #132/#133 (evidence-gated, parked) →
-#129 → #134.
-
----
+14.1 → 14.2 → 14.5 (ratchet) → 15.1/15.3 → 16.1/16.3 (cheap wins) →
+16.2/16.4 → 18.x → 14.3/14.4 → 17.2 → 17.1/17.3.
 
 ## What NOT to do
 
-- **Do not add aegis baseline without scanning first.** The baseline is
-  already committed (0 findings). Re-generate only if aegis version changes.
-- **Do not run `cargo test --workspace` directly** — use the job manager
-  or `cargo run -p xtask -- ci`. Hooks deny workspace-wide test in ad-hoc
-  shells.
-- **Do not touch `source/`** — Adobe's binaries are reference-only.
-- **Do not commit `dist/`** — it is gitignored. Artifacts are local.
-- **Do not push `--force`** — the git hooks block it.
-- **Do not use `rm -rf` compounds** — deny-listed.
-
----
+- Do not blanket-enable pedantic clippy (1,825 hits, mostly raster
+  casts — the noise would bury real findings).
+- Do not bless coverage floors above the measured number (a lying
+  gate is worse than a low one).
+- Do not fake WCAG conformance — record honest refusals per criterion.
+- Do not run `cargo test --workspace` locally (hook-denied; use
+  GitForge or per-crate commands).
+- Do not touch `source/`, do not commit `dist/`, do not force-push.
+- Do not add aegis baseline entries without verifying each finding is
+  a false positive ("pan" in pan/zoom prose trips PCI; 65535-style
+  literals trip zip-code — those two are the known classes).
 
 ## Quick reference
 
@@ -170,18 +175,16 @@ HANDOFF §4. Priority order: #121 (quick) → #123 (decision first) →
 |---|---|---|
 | Full CI | `cargo run -p xtask -- ci` | ~20 min |
 | Aegis | `cargo run -p xtask -- aegis` | ~10s |
-| Coverage | `cargo run -p xtask -- coverage [--bless\|--measure]` | ~5 min |
+| Coverage measure | `cargo llvm-cov --summary-only` (hook: use GitForge) | ~6 min |
+| Coverage gate | `cargo run -p xtask -- coverage` | ~6 min |
 | Wasm only | `cargo run -p xtask -- wasm` | ~5 min |
-| Perf | `cargo run -p xtask -- perf` | ~2 min |
-| Fuzz | `cargo run -p xtask -- fuzz-quick` | ~2 min |
-| Dist | `cargo run -p xtask -- dist --native && dist --web` | ~5 min |
+| Web clippy | `cd web && cargo clippy --all-targets -- -D warnings` | ~2 min |
+| Dist | `cargo run -p xtask -- dist --native` + `-- --web` | ~10 min |
 
-| Aegis findings (baseline) | 1316 (all in research docs) |
-| Clippy warnings | 0 |
-| Fmt violations | 0 |
-| Tests | 681 functions |
-| Test modules | 77 |
-| Untested crates | io (6015 lines), text (853 lines) |
-| Integration-tested crates | scripting (44 tests) |
-| Web bundle | wasm32, 12.7 MB, bridge smoke green |
-| Live site | https://firecraft-web.pages.dev (v0.2.1) |
+| Fact | Value |
+|---|---|
+| Live site | <https://firecraft-web.pages.dev> (v0.2.3) |
+| Latest release | v0.2.3 (2026-10-24) |
+| Coverage floors | 80% lines / 77% functions (rising-only) |
+| CI image | `firecraft-ci-rust:1` — rebuild + re-ship when ANY lockfile moves |
+| GitForge API | 127.0.0.1:42780, bearer via `~/.config/gitforge/mkinney-credentials.env` |

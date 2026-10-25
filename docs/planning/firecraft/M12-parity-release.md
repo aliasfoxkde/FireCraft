@@ -1,5 +1,7 @@
 # M12 — Parity hardening & release matrix
 
+> **CLOSED milestone (historical reference).** See docs/PROGRESS.md for the closure date and docs/HANDOFF.md for current work.
+
 > Roadmap: [ROADMAP.md](ROADMAP.md) · Strategy: [../../PLANNING.md](../../PLANNING.md)
 
 **Objective:** FireCraft ships. The parity/scorecard machinery stops

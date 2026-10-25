@@ -1,5 +1,7 @@
 # M13 — Deep RE evidence & CS6 shell parity
 
+> **CLOSED milestone (historical reference).** See docs/PROGRESS.md for the closure date and docs/HANDOFF.md for current work.
+
 > Roadmap: [ROADMAP.md](ROADMAP.md) · Strategy: [../../PLANNING.md](../../PLANNING.md)
 
 **Objective:** close the two gaps v0.1.0 exposed. First, the binary-analysis

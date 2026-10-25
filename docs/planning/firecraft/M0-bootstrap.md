@@ -1,5 +1,7 @@
 # M0 — Bootstrap & method
 
+> **CLOSED milestone (historical reference).** See docs/PROGRESS.md for the closure date and docs/HANDOFF.md for current work.
+
 > Roadmap: [ROADMAP.md](ROADMAP.md) · Strategy: [../../PLANNING.md](../../PLANNING.md)
 
 **Objective:** turn this docs-only repo into a working Rust workspace with

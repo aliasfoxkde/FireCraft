@@ -1,5 +1,7 @@
 # M5 — Editor shell (native + web)
 
+> **CLOSED milestone (historical reference).** See docs/PROGRESS.md for the closure date and docs/HANDOFF.md for current work.
+
 > Roadmap: [ROADMAP.md](ROADMAP.md) · Strategy: [../../PLANNING.md](../../PLANNING.md)
 
 **Objective:** a usable app: open → inspect → edit → save `.fw.png`, in

@@ -1,5 +1,7 @@
 # M1 — L0 foundations + scripting-engine spike
 
+> **CLOSED milestone (historical reference).** See docs/PROGRESS.md for the closure date and docs/HANDOFF.md for current work.
+
 > Roadmap: [ROADMAP.md](ROADMAP.md) · Strategy: [../../PLANNING.md](../../PLANNING.md)
 
 **Objective:** geometry, color/blending, and tiled rasters solid enough to

@@ -1,5 +1,7 @@
 # M2 — `fwpng`: Fireworks PNG read
 
+> **CLOSED milestone (historical reference).** See docs/PROGRESS.md for the closure date and docs/HANDOFF.md for current work.
+
 > Roadmap: [ROADMAP.md](ROADMAP.md) · Strategy: [../../PLANNING.md](../../PLANNING.md)
 > Format spec: PLANNING §6 · Node dictionary: `docs/research/fireworks-png-nodes.md`
 

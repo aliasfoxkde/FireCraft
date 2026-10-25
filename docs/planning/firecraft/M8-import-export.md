@@ -1,5 +1,7 @@
 # M8 — Import/export pipeline
 
+> **CLOSED milestone (historical reference).** See docs/PROGRESS.md for the closure date and docs/HANDOFF.md for current work.
+
 > Roadmap: [ROADMAP.md](ROADMAP.md) · Strategy: [../../PLANNING.md](../../PLANNING.md)
 
 **Objective:** FireCraft stops being a closed world. A new `io` crate
