@@ -1019,3 +1019,37 @@ documentation reset.
   (deployment 51ee86b4).
 - Aegis false-positive handling recorded in agent memory: "pan"
   trips PCI, big literals trip ZIP-code — baseline, don't reword.
+
+## 2026-10-25 — Quality audit, Phases 14–18 plan, WCAG AAA, coverage ratchet
+
+- Full audit: coverage measured 80.47% lines / 77.85% functions
+  (first real measure; the 60% floors were guesswork). Production
+  code confirmed panic-free — every unwrap/expect/panic hit lives in
+  #[cfg(test)] files. Pedantic clippy delta measured (~1,825 hits,
+  86% cast_possible_truncation) and refused as blanket policy;
+  per-lint adoption plan in NEXT.md Phase 15.
+- Coverage floors raised 60% → 80%/77% (rising-only ratchet). New
+  editor tests: undo/redo round-trip (seed-depth aware), save/open
+  round-trip, garbage refusal, pixel-select op batch, set_selection,
+  pencil stroke (one-transaction law), off-canvas stroke no-op,
+  replay_steps on a bare base (reopen includes seed steps — an
+  untitled base doubles the page), nine-slice guide drag,
+  pick_color. Editor 34 → 43 tests.
+- web/ crate clippy wired into the xtask gate and .gitforge.yml —
+  it was only fmt-gated before.
+- WCAG 2.1 AAA audit (decision 0067): canvas focus ring restored
+  (:focus-visible), aria-label + fallback content on the canvas,
+  meta description; theme text 0xd9→0xdd so all four fills clear
+  7:1 (faint was 6.90:1). Two honest structural refusals recorded
+  (1.4.8, 2.1.3). accesskit ships unconditionally in egui 0.36 —
+  verified in the lock.
+- docs/NEXT.md rewritten as the measured phased plan (14 coverage
+  ratchet → 99%, 15 lint hardening, 16 WCAG, 17 release eng, 18
+  docs coverage). CLOSED banners on all 16 milestone tickets;
+  CLAUDE.md status line to v0.2.3; v0.2.3 notes archived.
+- CI: 03b2bef (all quality changes) green 7/7. 91c2a27's fuzz job
+  died runner_lost_while_running (infra) — retriggered 400773c.
+  A failed d5b9307/5768458 pair in the same window is another
+  repo's pipeline (dsc-ci-rust) — not FireCraft.
+- Web redeployed with the WCAG host page (deployment cc87dd8a);
+  bridge smoke green, wasm 13.0 MB under ceiling.
