@@ -3,6 +3,7 @@
 <head>
     <meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <meta name="description" content="FireCraft — a clean-room Fireworks-class vector and bitmap editor, running in the browser via WebAssembly."/>
     <title>FireCraft</title>
     <link data-trunk rel="rust" data-bin="firecraft-web" data-wasm-opt="2"/>
     <style>
@@ -14,16 +15,30 @@
             background: #202020;
         }
 
-        /* eframe owns sizing; the canvas fills the viewport. */
+        /* eframe owns sizing; the canvas fills the viewport. The focus
+           ring stays (WCAG 2.4.7): the canvas is tabbable and egui
+           routes keyboard input through it. */
         #firecraft-canvas {
             width: 100%;
             height: 100%;
             display: block;
-            outline: none;
+        }
+        #firecraft-canvas:focus-visible {
+            outline: 2px solid #7ab8ff;
+            outline-offset: -2px;
         }
     </style>
 </head>
 <body>
-<canvas id="firecraft-canvas"></canvas>
+<!-- Accessible fallback: replaced once the egui runtime takes the
+     canvas over; readable by screen readers while the wasm loads and
+     if it never does. -->
+<canvas id="firecraft-canvas" aria-label="FireCraft editor canvas" aria-describedby="firecraft-fallback">
+    <span id="firecraft-fallback">
+        FireCraft is a vector and bitmap editor. It needs WebAssembly
+        and WebGL; your browser did not start it. See
+        https://github.com/aliasfoxkde/FireCraft for the desktop build.
+    </span>
+</canvas>
 </body>
 </html>

@@ -26,7 +26,9 @@ fn apply_cs6_theme(ctx: &egui::Context) {
         visuals.window_fill = Color32::from_rgb(0x32, 0x32, 0x32);
         visuals.extreme_bg_color = Color32::from_rgb(0x28, 0x28, 0x28);
         visuals.faint_bg_color = Color32::from_rgb(0x44, 0x44, 0x44);
-        visuals.override_text_color = Some(Color32::from_rgb(0xd9, 0xd9, 0xd9));
+        // 0xdd against the darkest fill we put text on (faint 0x44)
+        // is 7.2:1 — WCAG 2.1 AAA (≥7:1). 0xd9 was 6.9:1, a hair short.
+        visuals.override_text_color = Some(Color32::from_rgb(0xdd, 0xdd, 0xdd));
         visuals.selection.bg_fill = Color32::from_rgb(0x2f, 0x5d, 0x8a);
         visuals.selection.stroke = (1.0, Color32::from_rgb(0x50, 0x7e, 0xab)).into();
         visuals.window_corner_radius = egui::CornerRadius::ZERO;
@@ -3971,7 +3973,7 @@ impl Shell {
                     let ink = if selected || row_response.hovered() {
                         Color32::from_rgb(0xe8, 0xe8, 0xe8)
                     } else {
-                        Color32::from_rgb(0xd9, 0xd9, 0xd9)
+                        Color32::from_rgb(0xdd, 0xdd, 0xdd)
                     };
                     draw_autoshape_glyph(
                         rp,
