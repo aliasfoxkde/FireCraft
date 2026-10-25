@@ -1,6 +1,6 @@
 {
   "id": "dev.firecraft.web",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "vendor": "FireCraft",
   "type": "web",
   "main": "index.html",
