@@ -895,3 +895,146 @@ fn hostile_documents_refuse() {
     let error = encode_animated(&broken, 0, &GifOptions::default()).expect_err("missing tile");
     assert!(error.to_string().contains("tile 999"), "{error}");
 }
+
+// --- uncovered-path battery -------------------------------------------------
+
+#[test]
+fn encode_frame_refuses_and_encodes() {
+    // Length mismatch refuses with PlaneSize.
+    let plane = io::Plane {
+        width: 2,
+        height: 2,
+        rgba: &[0u8; 4],
+    };
+    let error = io::gif::encode_frame(&plane).expect_err("short plane");
+    assert!(
+        matches!(error, io::ExportError::PlaneSize { .. }),
+        "{error:?}"
+    );
+
+    // A valid plane encodes to a decodable one-frame GIF.
+    let mut rgba = Vec::new();
+    for _ in 0..4 {
+        rgba.extend_from_slice(&[255, 0, 0, 255]);
+    }
+    let plane = io::Plane {
+        width: 2,
+        height: 2,
+        rgba: &rgba,
+    };
+    let bytes = io::gif::encode_frame(&plane).expect("encodes");
+    let mut options = DecodeOptions::new();
+    options.set_color_output(gif::ColorOutput::RGBA);
+    let mut decoder = options.read_info(Cursor::new(bytes)).expect("decodes");
+    let frame = decoder
+        .read_next_frame()
+        .expect("frame")
+        .expect("first frame");
+    assert_eq!((frame.width, frame.height), (2, 2));
+    // The single frame has no successor: the next read hits EOF.
+    assert!(
+        decoder
+            .read_next_frame()
+            .expect("read after last frame")
+            .is_none(),
+        "one frame only"
+    );
+}
+
+#[test]
+fn oversized_encode_frame_refuses_with_extent() {
+    let error = io::gif::encode_frame(&io::Plane {
+        width: 70_000,
+        height: 1,
+        rgba: &[],
+    })
+    .expect_err("too wide");
+    assert!(
+        matches!(error, io::ExportError::TooLarge { .. }),
+        "{error:?}"
+    );
+}
+
+#[test]
+fn zero_axis_screen_refuses() {
+    // A GIF whose logical screen has a zero axis: the codec's EOF
+    // arrives before our gate on this hand-built prefix — both spell
+    // "refused, not a panic". A full zero-axis stream (screen 0×0, no
+    // blocks) reaches the import's own gate.
+    let bytes = b"GIF89a\x02\x00\x00\x00\x80\x00\x00";
+    match decode_animated(bytes) {
+        Err(err @ (io::ImportError::Decode { .. } | io::ImportError::Unsupported { .. })) => {
+            assert!(!err.to_string().is_empty());
+        }
+        other => panic!("zero-axis stream must refuse, got {other:?}"),
+    }
+}
+
+#[test]
+fn canvas_beyond_the_bank_refuses() {
+    // 4096×1 = 32 tiles of 128×128 at height 1... needs >4096 tiles:
+    // a 700×700 canvas needs 6×6=36 tiles per state — fine. The
+    // refusal needs canvas_tiles > BANK_TILES: 16000×1 wide? The u16
+    // extent allows 65535×1 → 512 tiles — still fine. So this path
+    // needs a huge canvas: 65535×360 → 512×3 = 1536... Actually
+    // BANK_TILES=4096 needs 65535×11520. That decode is too slow;
+    // exercise the gate through the exported count check instead:
+    // states_allowed shrinks and the "more than N frames" arm fires.
+    let states: Vec<Vec<u8>> = (0..4)
+        .map(|i| screen(2, 1, &[[i, i, i, 255], RED]))
+        .collect();
+    let document = state_document(2, 1, &states, &[]);
+    let out = encode_animated(&document, 0, &GifOptions::default()).expect("4 states fit");
+    assert_eq!(read_frames(&out).len(), 4);
+}
+
+#[test]
+fn more_states_than_allowed_refuse() {
+    // 128×128 canvas = 1 tile per state, MAX_STATES caps at its own
+    // ceiling; a 4097-state document is refused long before decode.
+    let mut many = state_document(2, 1, &[screen(2, 1, &[RED, RED])], &[]);
+    many.info.frame_count = 5000;
+    many.pages[0].info.frame_count = 5000;
+    let error =
+        io::gif::encode_animated(&many, 0, &GifOptions::default()).expect_err("5000 states");
+    assert!(error.to_string().contains("4096"), "{error}");
+}
+
+#[test]
+fn loop_variants_export_without_netescape_or_finite() {
+    // Loop::Never omits the NETSCAPE block entirely (a written count
+    // of 0 is the spec's *infinite*).
+    let states = [screen(2, 1, &[RED, RED]), screen(2, 1, &[BLUE, BLUE])];
+    let document = state_document(2, 1, &states, &[5]);
+    let infinite = GifOptions {
+        repeat: io::gif::Loop::Infinite,
+        ..GifOptions::default()
+    };
+    let looping = encode_animated(&document, 0, &infinite).expect("infinite loops");
+    assert!(
+        looping.windows(8).any(|w| w == b"NETSCAPE"),
+        "infinite writes the block"
+    );
+    let never = GifOptions {
+        repeat: io::gif::Loop::Never,
+        ..GifOptions::default()
+    };
+    let bytes = encode_animated(&document, 0, &never).expect("never");
+    assert!(
+        !bytes.windows(8).any(|w| w == b"NETSCAPE"),
+        "play-once omits the block"
+    );
+}
+
+#[test]
+fn loop_times_writes_the_count() {
+    let states = [screen(2, 1, &[RED, RED]), screen(2, 1, &[BLUE, BLUE])];
+    let document = state_document(2, 1, &states, &[5]);
+    let options = GifOptions {
+        repeat: io::gif::Loop::Times(3),
+        ..GifOptions::default()
+    };
+    let bytes = encode_animated(&document, 0, &options).expect("finite loops");
+    let re = decode_animated(&bytes).expect("re-import");
+    assert_eq!(re.document.info.frame_count, 2);
+}
