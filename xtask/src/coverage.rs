@@ -20,12 +20,12 @@ use std::io::Read as _;
 use std::process::Command;
 
 /// Minimum line coverage (percentage).  Drops below this are gate failures.
-/// Raised to the measured 2026-10-26 baseline (80.8%) so the gate becomes
+/// Raised to the measured 2026-10-26 baseline (81.1%) so the gate becomes
 /// a rising-only ratchet; further gains re-bless upward.
-const LINE_THRESHOLD: f64 = 80.5;
+const LINE_THRESHOLD: f64 = 81.0;
 
-/// Minimum function coverage (percentage).  Measured baseline 78.3%.
-const FUNCTION_THRESHOLD: f64 = 78.0;
+/// Minimum function coverage (percentage).  Measured baseline 78.8%.
+const FUNCTION_THRESHOLD: f64 = 78.5;
 
 /// Run the coverage gate.  Exits 0 if all thresholds are met or exceeded.
 pub fn run() -> Result<(), String> {
