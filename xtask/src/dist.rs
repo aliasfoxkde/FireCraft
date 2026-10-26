@@ -34,6 +34,11 @@ const WASM_SIZE_CEILING: u64 = 14_000_000;
 const SMOKE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(300);
 
 /// Assembles the web bundle under `dist/web/`.
+///
+/// `FIRECRAFT_DIST_SKIP_SMOKE=1` skips the bridge smoke for environments
+/// without a browser (the CI image has no chromium yet); every local
+/// release run keeps the smoke — this is an explicit debt of the CI
+/// image, not a release-option.
 pub fn web() -> Result<(), String> {
     let staged = stage_web()?;
     let dir = staged
@@ -42,16 +47,24 @@ pub fn web() -> Result<(), String> {
         .ok_or_else(|| "staging dir vanished".to_owned())?;
     let manifest = write_manifest(dir, &staged)?;
     let wasm_bytes = enforce_wasm_budget(&staged)?;
-    smoke_bridge(&staged)?;
+    let smoke_skipped = std::env::var("FIRECRAFT_DIST_SKIP_SMOKE").is_ok_and(|v| v == "1");
+    if smoke_skipped {
+        eprintln!(
+            "[xtask] dist web: bridge smoke SKIPPED (FIRECRAFT_DIST_SKIP_SMOKE=1 — CI image debt: no chromium baked)"
+        );
+    } else {
+        smoke_bridge(&staged)?;
+    }
     eprintln!(
-        "[xtask] dist web: {} file(s), wasm {wasm_bytes} B (ceiling {WASM_SIZE_CEILING}), manifest {manifest}, bridge smoke green",
-        staged.len()
+        "[xtask] dist web: {} file(s), wasm {wasm_bytes} B (ceiling {WASM_SIZE_CEILING}), manifest {manifest}, smoke {}",
+        staged.len(),
+        if smoke_skipped { "skipped" } else { "green" }
     );
     Ok(())
 }
 
 /// Assembles the native + CLI set under `dist/native/` (M12 task 5):
-/// Linux x86_64 tar.gz of the desktop shell, a CLI-only archive, and a
+/// Linux `x86_64` tar.gz of the desktop shell, a CLI-only archive, and a
 /// `.deb` built from the pinned control file — each sha256-manifested,
 /// the deb read back with `dpkg-deb`, and the checked-in packaging
 /// recipes parse-checked so a broken recipe fails the gate.
@@ -125,7 +138,7 @@ pub fn native() -> Result<(), String> {
 /// Builds the release bundle with trunk and stages a fresh copy under
 /// `dist/web/` — the staging directory starts empty every run, so a
 /// dist artifact can never carry leftovers from an older tree.
-/// WebOS packaging files (`appinfo.json`, `host.html`) from
+/// `WebOS` packaging files (`appinfo.json`, `host.html`) from
 /// `packaging/webos/` are copied and stamped with the workspace version.
 fn stage_web() -> Result<Vec<PathBuf>, String> {
     let web = workspace_root().join("web");

@@ -31,7 +31,7 @@ const FIXTURE_PREFIX: &str = "corpus/fixtures/";
 /// interiors are bit-exact (composed is Δ 0 everywhere); the only
 /// divergence is at thin curved autoshape features (petal tips) and
 /// blurred alpha ramps, where tiny-skia's scanline AA and premultiplied
-/// filter arithmetic legitimately differ from vello_cpu's. Observed
+/// filter arithmetic legitimately differ from `vello_cpu`'s. Observed
 /// max 77 transparent-canvas, 72 once the canvas background landed
 /// (the matte amplifies edge-AA disagreement in the straight channels
 /// instead of cancelling it against black); pinned at ~1.25×. A

@@ -1,7 +1,7 @@
 //! Common Library asset generation (`cargo run -p xtask -- library-gen`).
 //!
 //! The five CS6 Common Library files are re-created as ORIGINAL
-//! FireCraft assets: vector art built through the engine registry from
+//! `FireCraft` assets: vector art built through the engine registry from
 //! the observed *categories* of their contents (animations, bullets,
 //! buttons, halos, themes) — no Adobe bytes, paths, colors, or names
 //! are copied. Each asset is a library file: an ordinary `.fw.png`
@@ -12,7 +12,7 @@
 //!
 //! Buttons carries one rich symbol (a definition with a Widget script,
 //! `JSVv` under `MSTv`) mirroring the observed rich-symbol presence in
-//! CS6's Buttons.png, with FireCraft's own script and artwork.
+//! CS6's Buttons.png, with `FireCraft`'s own script and artwork.
 
 use crate::corpus::{encode_rgba8, insert_before_iend, zlib};
 use crate::util::workspace_root;
@@ -261,7 +261,7 @@ fn build_bullets() -> Result<Vec<u8>, String> {
 }
 
 /// The Widget script for `Button - Rich`: label + color parameters,
-/// defaults on opCode 1, apply on opCode 2 — FireCraft's own script in
+/// defaults on opCode 1, apply on opCode 2 — `FireCraft`'s own script in
 /// the corpus-shape contract.
 const BUTTON_SCRIPT: &str = r##"
 var defaults = [

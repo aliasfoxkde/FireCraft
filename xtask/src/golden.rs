@@ -387,8 +387,8 @@ fn anchor_composed(name: &str, render: &Render) -> Result<(), String> {
     Ok(())
 }
 
-/// The text golden: "FireCraft" set at 10px in frame (12,18,40,12),
-/// filled ABGR 0xFF00_0000 (opaque black), nothing else on the page.
+/// The text golden: "`FireCraft`" set at 10px in frame (12,18,40,12),
+/// filled ABGR `0xFF00_0000` (opaque black), nothing else on the page.
 /// Every ink pixel — anything off the white matte — must be achromatic
 /// (the composite of a black fill's coverage over white; chroma means
 /// a broken fill decode), must fall inside the frame (±1px

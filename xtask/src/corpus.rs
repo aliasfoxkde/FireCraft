@@ -228,7 +228,7 @@ fn node_tree_checks(label: &str, inflated: &[u8], checks: &mut Vec<(String, bool
 
 /// Round-trip battery for a style library (`.stl`): the same floor the
 /// document battery enforces, over the style read/write pair — canonical
-/// re-emit, then read_style_library -> write_style_library -> re-read
+/// re-emit, then `read_style_library` -> `write_style_library` -> re-read
 /// equal, re-write idempotent.
 fn style_library_checks(bytes: &[u8]) -> Vec<(String, bool)> {
     let mut checks = Vec::new();

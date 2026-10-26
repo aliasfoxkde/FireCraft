@@ -334,7 +334,7 @@ fn run(args: &[String]) -> Result<(), CliError> {
                 .map_err(|error| CliError(error.to_string()))?;
             let loaded = io::open(&bytes)?;
             let applied = ops::run_script(loaded, Rc::new(io::StdFs), script_path, &source)?;
-            finish_session(applied, parsed.out)
+            finish_session(&applied, parsed.out)
         }
         Some("serve") => {
             let parsed = parse_session_args(args, "serve <doc> [--out <out>]", 1)?;
@@ -410,7 +410,7 @@ fn run(args: &[String]) -> Result<(), CliError> {
 /// otherwise summarize on stdout. (Only `run-script` returns an
 /// [`ops::Applied`] today, so this rides its feature gate.)
 #[cfg_attr(not(feature = "scripting"), allow(dead_code))]
-fn finish_session(applied: ops::Applied, out: Option<&str>) -> Result<(), CliError> {
+fn finish_session(applied: &ops::Applied, out: Option<&str>) -> Result<(), CliError> {
     match out {
         Some(out_path) => {
             let fs = io::StdFs;

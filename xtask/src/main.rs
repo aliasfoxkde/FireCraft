@@ -1,4 +1,4 @@
-//! FireCraft verification gates (`cargo run -p xtask -- <gate>`).
+//! `FireCraft` verification gates (`cargo run -p xtask -- <gate>`).
 //!
 //! Gates: `ci [--full]` (everything; `--full` adds the libfuzzer
 //! compile check), `layers` (workspace dependency tiers), `wasm`

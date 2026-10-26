@@ -7,7 +7,7 @@
 //! document coordinates are canvas pixels and the shell samples the
 //! rendered texture), and canonical save (model → node tree →
 //! `.fw.png` bytes, the app-cli save algorithm) — plus the open
-//! path's peak memory, measured as VmHWM in a fresh child process so
+//! path's peak memory, measured as `VmHWM` in a fresh child process so
 //! the high-water mark belongs to the path, not to everything the
 //! gate process touched before it.
 //!
@@ -204,7 +204,7 @@ pub fn bless() -> Result<(), String> {
 
 /// The child half of the memory probe (`xtask perf-child <file>`):
 /// open + first render, nothing else, then one line — this process's
-/// VmHWM in KiB — on stderr. A fresh process owns no history, so its
+/// `VmHWM` in KiB — on stderr. A fresh process owns no history, so its
 /// high-water mark is the open path's peak plus the runtime baseline.
 pub fn child(path: &str) -> Result<(), String> {
     let bytes = std::fs::read(path).map_err(|e| format!("read {path}: {e}"))?;
@@ -428,7 +428,7 @@ fn save_len(
     Ok(out.len())
 }
 
-/// VmHWM (KiB) of a fresh process that runs the open path on `path` —
+/// `VmHWM` (KiB) of a fresh process that runs the open path on `path` —
 /// this binary re-exec'd with the probe verb.
 fn peak_memory_kib(path: &str) -> Result<f64, String> {
     let exe = std::env::current_exe().map_err(|e| format!("current_exe: {e}"))?;

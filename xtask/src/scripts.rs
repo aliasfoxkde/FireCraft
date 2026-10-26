@@ -33,7 +33,7 @@ const REPORT: &str = "corpus/scripts-report.json";
 /// The shipped Configuration tree the corpus walks. Git-ignored.
 const SOURCE_DIR: &str = "source/Adobe Fireworks CS6/Configuration";
 
-/// Scratch snapshot directory under `TMPDIR` (NVMe — small files).
+/// Scratch snapshot directory under `TMPDIR` (`NVMe` — small files).
 const SCRATCH_DIR: &str = "firecraft-jsf-corpus";
 
 /// Host refusal prefix (emitted by the prelude's `__notImplemented`).

@@ -1,6 +1,6 @@
 //! Fuzz gates over the standalone `fuzz/` workspace.
 //!
-//! - `quick`: stable, deterministic drivers (anchors + panic_hunt).
+//! - `quick`: stable, deterministic drivers (anchors + `panic_hunt`).
 //!   Part of `ci`.
 //! - `full`: compiles the libfuzzer targets with cargo-fuzz under
 //!   nightly. Part of `ci --full`; skipped with a note when cargo-fuzz
@@ -67,7 +67,7 @@ pub fn full() -> Result<(), String> {
     )
 }
 
-/// The panic_hunt campaign: the whole stable driver across a wide seed
+/// The `panic_hunt` campaign: the whole stable driver across a wide seed
 /// range, then 60 s of libfuzzer over `engine_commands` when cargo-fuzz
 /// is available. `xtask panic-hunt`.
 pub fn panic_hunt() -> Result<(), String> {

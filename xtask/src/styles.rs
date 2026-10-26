@@ -1,4 +1,4 @@
-//! Generates `assets/styles/firecraft-core.stl`: the original FireCraft
+//! Generates `assets/styles/firecraft-core.stl`: the original `FireCraft`
 //! style set — six named object styles built through the engine's own
 //! style surface (`path.setFill`/`filter.add` paint members, then
 //! `style.redefineFromSelection` lifts each appearance into a record)

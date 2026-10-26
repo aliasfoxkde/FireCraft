@@ -1,6 +1,6 @@
 //! Wasm gate: the crates that power the editor core must always compile
-//! for `wasm32-unknown-unknown` (the primary FireCraft release target is a
-//! WASM build for the user's WebOS). Anything that breaks wasm breaks the
+//! for `wasm32-unknown-unknown` (the primary `FireCraft` release target is a
+//! WASM build for the user's `WebOS`). Anything that breaks wasm breaks the
 //! product.
 //!
 //! When `wasm-bindgen-test-runner` is on PATH, the gate additionally
