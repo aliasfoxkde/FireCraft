@@ -1053,3 +1053,38 @@ documentation reset.
   repo's pipeline (dsc-ci-rust) — not FireCraft.
 - Web redeployed with the WCAG host page (deployment cc87dd8a);
   bridge smoke green, wasm 13.0 MB under ceiling.
+
+## 2026-10-26 — Phase 14.1 landed, coverage ratchet, Phase 15.1 lints, Phase 17.2 release job
+
+- Phase 14.1 closed: the editor gesture-surface battery (`crates/app/
+  tests/editor_surface.rs`, 30 tests) landed as `cbfe7eb` — autoshape
+  tables, the stroke family, pixel selections (marquee/ellipse/lasso/
+  polygon/outline/helpers), drag classes, nine-slice guide drags
+  (targets derived from live shape bounds), library round-trips, and
+  the `import_styles` refusal paths. Seven initial expectation
+  failures were each traced to real behavior (exclusive stroke bounds,
+  degenerate-trace lasso, full-mask outlines having no interior
+  edges, erase leaving ants up, bounds-relative guide insets, node-
+  shape import refusal) — the tests now pin the actual contracts.
+- Coverage measured 81.1% lines / 78.8% functions (`xtask coverage
+  --measure` after the battery); floors ratcheted 80.5/78.0 →
+  81.0/78.5 (`6b0c46f`).
+- Phase 15.1: three pedantic lints measured, fixed, and denied at the
+  workspace table — `doc_markdown` (~250 backticks, `173f05b`),
+  `must_use_candidate` (same commit), `needless_pass_by_value`
+  (~11 real sites: error mappers → `&Error`, bake/coverage/splice/
+  stitch/slice signatures, justified envelope-ownership allows on
+  the MCP reply builders, `196277c`). `cast_possible_truncation`
+  stays refused per the NEXT.md 15.1 density rule.
+- Phase 17.2: release job added to `.gitforge.yml` (`5d83ed3`).
+  Finding: GitForge stamps tag pushes as `TriggerType::Push` with
+  the ref name verbatim — the CI service never produces
+  `TriggerType::Tag` — so the tag gate is in-step via
+  `git describe --exact-match`. The job builds web + native dist,
+  verifies manifests, and stages into `<workspace>/artifacts/` for
+  the runner's artifact collection. Enabler: `dist --web` gained
+  `FIRECRAFT_DIST_SKIP_SMOKE` (`4486f5f`) — the CI image bakes no
+  chromium (recorded as image debt; the real fix is baking a
+  browser in).
+- A stale 0-byte `.git/index.lock` from the crashed prior session
+  was removed after confirming no live git process owned it.

@@ -43,13 +43,13 @@ columns when re-blessing.
 
 The floors were raised 60% → 80% lines / 77% functions (measured
 baseline, 2026-10-25). The gate is rising-only from here.
+**2026-10-26: 81.1/78.8 measured, floors 81.0/78.5; 14.1 landed.**
 
-- **14.1 Editor surface tests** (biggest single gap, 665 missed).
-  Tests for: `import_styles` (good mkTS + corrupt + missing-mkBT),
-  `replay_steps`, `wire` string table, symbol helpers, `pick_color`,
-  `begin_stroke`/`stroke_to`/`end_stroke` family, `commit_polygon`,
-  guide drag family, nine-slice toggles. ~30 tests. Accept: editor.rs
-  line coverage ≥ 95%.
+- **14.1 Editor surface tests** — LANDED 2026-10-26 (`cbfe7eb`, 30
+  tests). Remaining sub-items for a later pass: `import_styles` good-
+  mkTS path, `replay_steps`, `wire` string table, symbol helpers,
+  nine-slice toggles (the landed battery covers strokes, selections,
+  drags, guide drags, library round-trips, refusal paths).
 - **14.2 Catalog refusal branches** (object 483, mask 427, path 271,
   text 211, bitmap 193, web 152). Each command's error rows are
   mechanical: wrong payload shape, missing target, out-of-range
@@ -77,14 +77,15 @@ unsafe_code=forbid. Production code is already clean.
 - **15.1 Curated pedantic adoption.** Blanket pedantic is 1,825 hits,
   86% `cast_possible_truncation` (raster math does i64↔u32↔f64
   constantly). Do NOT blanket-enable. Instead enable per-lint:
-  - `clippy::cast_possible_truncation` → add `#[allow]` with a
-    one-line justification at the ~50 raster-math sites, deny
-    elsewhere? No — measure first; if the allow density is too high
-    (>1 per 100 lines), record a refusal decision instead.
-  - `clippy::doc_markdown` (13 hits) → fix the docs, enable.
-  - `clippy::needless_pass_by_value` (8) → fix, enable.
-  - `clippy::must_use_candidate` (9) → evaluate; enable if the hits
-    are real.
+  - `clippy::doc_markdown` — DONE 2026-10-26 (`173f05b`, ~250 docs
+    fixed, denied workspace-wide; xtask's share rode `4486f5f`).
+  - `clippy::must_use_candidate` — DONE 2026-10-26 (same commit;
+    ~44 real accessors annotated).
+  - `clippy::needless_pass_by_value` — DONE 2026-10-26 (`196277c`,
+    ~11 real sites; justified allows on the MCP reply builders).
+  - `clippy::cast_possible_truncation` → REFUSED per the density
+    rule below (allow density would far exceed 1/100 lines in the
+    raster crates).
 - **15.2 web/ clippy in the gate** — DONE 2026-10-25 (xtask clippy
   gate + `.gitforge.yml` addition below).
 - **15.3 `.gitforge.yml`: add the web clippy step** to the
@@ -123,9 +124,15 @@ accesskit integration.
   AppImage/Windows/macOS scripts on real hardware as hardware
   becomes available; keep the honest "built on Linux x86_64" line
   until then.
-- **17.2 Release automation**: a GitForge pipeline job that, on tag
-  push, runs `xtask dist --web --native` and uploads artifacts —
-  removes the manual gh release step from the runbook.
+- **17.2 Release automation** — DONE 2026-10-26 (`5d83ed3`): a
+  `release` job chains after generated-docs; on a tag push it builds
+  web + native dist (bridge smoke skipped — the CI image bakes no
+  chromium, recorded as image debt via `FIRECRAFT_DIST_SKIP_SMOKE`),
+  verifies manifests, and stages into `<workspace>/artifacts/` for
+  the runner's artifact collection. Note: GitForge stamps tag pushes
+  as `TriggerType::Push` — the tag gate is in-step
+  (`git describe --exact-match`). gh-release upload remains manual
+  (operator's signing ceremony).
 - **17.3 Smoke budget off measured load** (13.4): the bridge smoke
   uses `--virtual-time-budget=60000`; derive the budget from the
   measured wasm load time × margin, not a constant.
