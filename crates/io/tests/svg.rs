@@ -807,7 +807,7 @@ fn unsharp_mask_without_threshold_exports_arithmetic_composite() {
             ("unsharp_mask_amount", "100"),
         ],
     )];
-    let (svg, report) = encode(&document(vec![ObjectData::Path(path)]));
+    let (svg, _report) = encode(&document(vec![ObjectData::Path(path)]));
     assert!(svg.contains("<feGaussianBlur"), "{svg}");
     assert!(svg.contains("feComposite"), "{svg}");
     assert!(svg.contains("filter="), "{svg}");
