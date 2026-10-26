@@ -2741,4 +2741,304 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    fn every_guid_skips_on_missing_parameters() {
+        // An effect with the right identity but none of its parameters
+        // is uninterpretable — it skips rather than guessing defaults.
+        let cases: &[(&str, &str)] = &[
+            ("brightness", GUID_BRIGHTNESS_CONTRAST),
+            ("hueSat", GUID_HUE_SATURATION),
+            ("levels", GUID_LEVELS),
+            ("gaussian", GUID_GAUSSIAN_BLUR),
+            ("unsharp", GUID_UNSHARP_MASK),
+            ("noise", GUID_ADD_NOISE),
+            ("curves", GUID_CURVES),
+            ("colorfill", GUID_COLOR_FILL),
+            ("motion", GUID_MOTION_BLUR),
+            ("radial", GUID_RADIAL_BLUR),
+            ("zoom", GUID_ZOOM_BLUR),
+            ("shadow", GUID_DROP_SHADOW),
+            ("innershadow", GUID_INNER_SHADOW),
+            ("innerglow", GUID_INNER_GLOW),
+            ("solidshadow", GUID_SOLID_SHADOW),
+            ("bevel", GUID_BEVEL),
+            ("clouds", GUID_CLOUDS),
+            ("diffclouds", GUID_DIFFERENCE_CLOUDS),
+        ];
+        for (name, guid) in cases {
+            let stack = [guid_effect(name, guid, &[])];
+            let parsed = plan(&stack);
+            assert!(
+                parsed.ops.is_empty() && parsed.skipped == 1,
+                "{name} with no parameters must skip, got {:?}",
+                parsed
+            );
+        }
+    }
+
+    #[test]
+    fn parameterized_guids_reject_out_of_domain_values() {
+        // Present but out-of-domain parameters skip too.
+        let cases: &[(&str, &str, &str)] = &[
+            ("gaussian_blur_radius", "0", GUID_GAUSSIAN_BLUR),
+            ("unsharp_mask_radius", "-1", GUID_UNSHARP_MASK),
+            ("motion_blur_distance", "0.5", GUID_MOTION_BLUR),
+        ];
+        for (key, value, guid) in cases {
+            let stack = [guid_effect("x", guid, &[(key, value)])];
+            let parsed = plan(&stack);
+            assert!(
+                parsed.ops.is_empty() && parsed.skipped == 1,
+                "{key}={value} must skip"
+            );
+        }
+        // Radial/Zoom blur need amount AND quality ≥ 1.
+        let amount_key = |guid: &str| {
+            if guid == GUID_ZOOM_BLUR {
+                "zoom_blur_amount"
+            } else {
+                "radial_blur_amount"
+            }
+        };
+        for guid in [GUID_RADIAL_BLUR, GUID_ZOOM_BLUR] {
+            let quality_key = if guid == GUID_ZOOM_BLUR {
+                "zoom_blur_quality"
+            } else {
+                "radial_blur_quality"
+            };
+            let bad = [guid_effect(
+                "x",
+                guid,
+                &[(amount_key(guid), "0"), (quality_key, "1")],
+            )];
+            assert!(plan(&bad).ops.is_empty(), "zero amount skips");
+            let good = [guid_effect(
+                "x",
+                guid,
+                &[(amount_key(guid), "5"), (quality_key, "2")],
+            )];
+            assert_eq!(plan(&good).ops.len(), 1, "in-domain values parse");
+        }
+    }
+
+    #[test]
+    fn color_fill_rejects_unknown_blend_codes_and_bad_hex() {
+        // A `Blendmode` code with no kernel counterpart skips the
+        // effect rather than guessing CS6's private table.
+        let unknown = [guid_effect(
+            "colorfill",
+            GUID_COLOR_FILL,
+            &[("Color", "#ff0000"), ("Opacity", "50"), ("Blendmode", "25")],
+        )];
+        assert!(plan(&unknown).ops.is_empty(), "code 25 has no kernel form");
+        // Bad hex refuses.
+        let bad_hex = [guid_effect(
+            "colorfill",
+            GUID_COLOR_FILL,
+            &[("Color", "#ff00"), ("Opacity", "50"), ("Blendmode", "0")],
+        )];
+        assert!(plan(&bad_hex).ops.is_empty());
+        // Every documented code lands on a distinct kernel mode.
+        for (code, mode) in [
+            ("0", BlendMode::Normal),
+            ("2", BlendMode::ColorBurn),
+            ("3", BlendMode::Luminosity),
+            ("4", BlendMode::HardLight),
+            ("8", BlendMode::Lighten),
+            ("9", BlendMode::Multiply),
+            ("10", BlendMode::ColorDodge),
+            ("18", BlendMode::SoftLight),
+            ("21", BlendMode::Hue),
+            ("22", BlendMode::Saturation),
+            ("33", BlendMode::Exclusion),
+            ("35", BlendMode::Difference),
+            ("40", BlendMode::Overlay),
+        ] {
+            let stack = [guid_effect(
+                "colorfill",
+                GUID_COLOR_FILL,
+                &[("Color", "#112233"), ("Opacity", "50"), ("Blendmode", code)],
+            )];
+            let KernelOp::ColorFill { mode: got, .. } = plan(&stack).ops[0] else {
+                panic!("code {code} parses");
+            };
+            assert_eq!(got, mode, "code {code}");
+        }
+    }
+
+    #[test]
+    fn bevel_rejects_unknown_types_and_glow_reads_its_own_widths() {
+        let base: &[(&str, &str)] = &[
+            ("LightAngle", "45"),
+            ("HiliteColor", "#ffffff"),
+            ("OuterBevelColor", "#000000"),
+        ];
+        // Type 6 is not in the dictionary's 0..=4.
+        let mut bad = base.to_vec();
+        bad.push(("BevelType", "6"));
+        bad.push(("BevelWidth", "4"));
+        let stack = [guid_effect("bevel", GUID_BEVEL, &bad)];
+        assert!(plan(&stack).ops.is_empty(), "type 6 skips");
+
+        // The glow variant reads GlowWidth + GlowStartDistance.
+        let mut glow = base.to_vec();
+        glow.push(("BevelType", "4"));
+        glow.push(("GlowWidth", "5"));
+        glow.push(("GlowStartDistance", "2"));
+        let stack = [guid_effect("glow", GUID_BEVEL, &glow)];
+        let KernelOp::Bevel {
+            style,
+            width,
+            start,
+            ..
+        } = plan(&stack).ops[0]
+        else {
+            panic!("glow parses");
+        };
+        assert_eq!(style, filters::BevelStyle::Glow);
+        assert_eq!((width, start), (5, 2));
+
+        // Each documented type lands on its style.
+        for (kind, style) in [
+            ("0", filters::BevelStyle::InnerBevel),
+            ("1", filters::BevelStyle::OuterBevel),
+            ("2", filters::BevelStyle::RaisedEmboss),
+            ("3", filters::BevelStyle::InsetEmboss),
+        ] {
+            let mut props = base.to_vec();
+            props.push(("BevelType", kind));
+            props.push(("BevelWidth", "4"));
+            let stack = [guid_effect("bevel", GUID_BEVEL, &props)];
+            let KernelOp::Bevel { style: got, .. } = plan(&stack).ops[0] else {
+                panic!("type {kind} parses");
+            };
+            assert_eq!(got, style, "type {kind}");
+        }
+    }
+
+    #[test]
+    fn curves_rejects_malformed_grab_lists() {
+        // A text value where a node list belongs: the whole effect
+        // skips (a misread is not a curve).
+        let text_prop = [effect("curves", &[("rgb_points", "12,34")])];
+        assert!(plan(&text_prop).ops.is_empty());
+        // A missing X or Y coordinate inside a grab point fails the
+        // whole list.
+        let incomplete = Effect {
+            category: String::new(),
+            internal_name: "curves".to_owned(),
+            properties: vec![EffectProperty {
+                key: "rgb_points".to_owned(),
+                value: EffectValue::Raw(Node {
+                    fourcc: *b"GPLv",
+                    value: NodeValue::Children(vec![Node {
+                        fourcc: *b"GPTv",
+                        value: NodeValue::Children(vec![Node {
+                            fourcc: *b"XLCf",
+                            value: NodeValue::Float(0.5),
+                        }]),
+                    }]),
+                }),
+            }],
+        };
+        assert!(plan(std::slice::from_ref(&incomplete)).ops.is_empty());
+        // A wrong list fourcc also refuses.
+        let wrong_fourcc = Effect {
+            category: String::new(),
+            internal_name: "curves".to_owned(),
+            properties: vec![EffectProperty {
+                key: "rgb_points".to_owned(),
+                value: EffectValue::Raw(Node {
+                    fourcc: *b"XXXX",
+                    value: NodeValue::Children(Vec::new()),
+                }),
+            }],
+        };
+        assert!(plan(std::slice::from_ref(&wrong_fourcc)).ops.is_empty());
+    }
+
+    #[test]
+    fn live_effects_rejects_uninterpreted_kinds_and_bad_packed_strings() {
+        // satin has no kernel action: the whole container skips.
+        let satin = [guid_effect(
+            "liveEffects",
+            GUID_LIVE_EFFECTS,
+            &[("satin", "packed-nonsense")],
+        )];
+        assert!(plan(&satin).ops.is_empty());
+
+        // A glow whose number list has no size slot skips too.
+        let truncated_glow = [guid_effect(
+            "liveEffects",
+            GUID_LIVE_EFFECTS,
+            &[("outerGlow", "0&0&normal&10:0&0&RGBColor;255;0;0&0&0")],
+        )];
+        assert!(plan(&truncated_glow).ops.is_empty());
+        // A complete glow parses with opacity baked into alpha.
+        let glow = [guid_effect(
+            "liveEffects",
+            GUID_LIVE_EFFECTS,
+            &[("outerGlow", "0&50&0&50:0:10&0&RGBColor;255;0;0&0&0")],
+        )];
+        let KernelOp::OuterGlow { color, blur, .. } = plan(&glow).ops[0] else {
+            panic!("packed outerGlow parses");
+        };
+        assert_eq!((color.a, blur), (128, 10));
+
+        // A truncated dropShadow packed string skips too.
+        let short = [guid_effect(
+            "liveEffects",
+            GUID_LIVE_EFFECTS,
+            &[("dropShadow", "5&50")],
+        )];
+        assert!(plan(&short).ops.is_empty());
+
+        // A complete dropShadow string parses to the shadow op with
+        // opacity baked into the color alpha.
+        let full = [guid_effect(
+            "liveEffects",
+            GUID_LIVE_EFFECTS,
+            &[("dropShadow", "0&50&0&90&0&0&4&7&0&0&0&RGBColor;255;0;0")],
+        )];
+        let KernelOp::DropShadow { color, .. } = plan(&full).ops[0] else {
+            panic!("packed dropShadow parses");
+        };
+        assert_eq!(color.a, 128, "50% opacity fades the alpha");
+
+        // packed solidFill maps blend names, rejects unknown ones.
+        let fill = [guid_effect(
+            "liveEffects",
+            GUID_LIVE_EFFECTS,
+            &[("solidFill", "0&50&Multiply&RGBColor;10;20;30")],
+        )];
+        let KernelOp::ColorFill { fill, mode, .. } = plan(&fill).ops[0] else {
+            panic!("packed solidFill parses");
+        };
+        assert_eq!(fill, [10, 20, 30]);
+        assert_eq!(mode, BlendMode::Multiply);
+        let bad_blend = [guid_effect(
+            "liveEffects",
+            GUID_LIVE_EFFECTS,
+            &[("solidFill", "0&50&Satin&RGBColor;10;20;30")],
+        )];
+        assert!(plan(&bad_blend).ops.is_empty(), "unknown blend skips");
+    }
+
+    #[test]
+    fn unknown_guid_and_unmatched_name_both_skip() {
+        // A GUID outside the catalog is never guessed at — this one
+        // is Find Edges' with its tail flipped.
+        let stranger = [guid_effect(
+            "mystery",
+            "fc7093f1-f95c-11d0-8be200a024cdc038",
+            &[],
+        )];
+        let parsed = plan(&stranger);
+        assert!(parsed.ops.is_empty() && parsed.skipped == 1);
+        // A bare name with no kernel match too.
+        let unknown_name = [effect("sepiaTone", &[])];
+        let parsed = plan(&unknown_name);
+        assert!(parsed.ops.is_empty() && parsed.skipped == 1);
+    }
 }
