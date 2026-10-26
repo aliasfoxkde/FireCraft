@@ -528,7 +528,9 @@ mod tests {
     #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
     use super::*;
     use crate::effects::plan;
+    use color::Rgba8;
     use doc::{Contour, Effect, PathObject, PathPoint};
+    use filters::{BevelStyle, CurvesKnots, LevelsControls};
 
     fn path_object(contours: Vec<Contour>) -> PathObject {
         PathObject::neutral(contours)
@@ -703,6 +705,205 @@ mod tests {
             hash_path(&matte, canvas, &plan),
             "tile references are content"
         );
+    }
+
+    #[test]
+    fn every_kernel_op_rides_the_key() {
+        // Each variant hashes through its own arm — two distinct
+        // values per op must produce distinct keys, and each op's key
+        // must differ from a shared baseline.
+        let canvas = (8u16, 8u16);
+        let pixels = vec![7u8; (canvas.0 * canvas.1 * 4) as usize];
+        let knots = || CurvesKnots {
+            rgb: vec![(0.0, 0.0), (1.0, 1.0)],
+            red: Vec::new(),
+            green: Vec::new(),
+            blue: Vec::new(),
+        };
+        let color = Rgba8::new(1, 2, 3, 4);
+        let ops: Vec<Vec<crate::effects::KernelOp>> = vec![
+            vec![crate::effects::KernelOp::BrightnessContrast {
+                brightness: 10,
+                contrast: 20,
+            }],
+            vec![crate::effects::KernelOp::Levels {
+                master: LevelsControls {
+                    in_black: 0,
+                    in_white: 255,
+                    gamma: 1.0,
+                    out_black: 0,
+                    out_white: 255,
+                },
+                red: None,
+                green: None,
+                blue: None,
+            }],
+            vec![crate::effects::KernelOp::Invert],
+            vec![crate::effects::KernelOp::HueSaturation {
+                hue: 90.0,
+                saturation: 0.5,
+                lightness: 0.0,
+                colorize: true,
+            }],
+            vec![crate::effects::KernelOp::Clouds {
+                seed: 1,
+                sky: color,
+                cloud: color,
+            }],
+            vec![crate::effects::KernelOp::DifferenceClouds {
+                seed: 1,
+                sky: color,
+                cloud: color,
+            }],
+            vec![crate::effects::KernelOp::GaussianBlur { radius: 2.0 }],
+            vec![crate::effects::KernelOp::BoxBlur { radius: 1 }],
+            vec![crate::effects::KernelOp::UnsharpMask {
+                radius: 1.0,
+                amount: 50,
+                threshold: 3,
+            }],
+            vec![crate::effects::KernelOp::Curves { knots: knots() }],
+            vec![crate::effects::KernelOp::AutoLevels],
+            vec![crate::effects::KernelOp::ColorFill {
+                fill: [1, 2, 3],
+                opacity: 50,
+                mode: color::BlendMode::Normal,
+            }],
+            vec![crate::effects::KernelOp::MotionBlur {
+                angle_degrees: 45.0,
+                distance: 5,
+                taps: 6,
+            }],
+            vec![crate::effects::KernelOp::RadialBlur {
+                amount: 30,
+                quality: 8,
+            }],
+            vec![crate::effects::KernelOp::ZoomBlur {
+                amount: 30,
+                quality: 8,
+            }],
+            vec![crate::effects::KernelOp::Convolve {
+                width: 3,
+                height: 3,
+                values: vec![0, 1, 0, 1, -4, 1, 0, 1, 0],
+                affects_alpha: false,
+            }],
+            vec![crate::effects::KernelOp::Sharpen],
+            vec![crate::effects::KernelOp::SharpenMore],
+            vec![crate::effects::KernelOp::ConvertToAlpha],
+            vec![crate::effects::KernelOp::AddNoise {
+                seed: 9,
+                amount: 40,
+                monochrome: true,
+            }],
+            vec![crate::effects::KernelOp::FindEdges],
+            vec![crate::effects::KernelOp::DropShadow {
+                color,
+                angle_degrees: 135.0,
+                distance: 4,
+                blur: 2,
+                knockout: false,
+            }],
+            vec![crate::effects::KernelOp::InnerShadow {
+                color,
+                angle_degrees: 135.0,
+                distance: 4,
+                blur: 2,
+            }],
+            vec![crate::effects::KernelOp::SolidShadow {
+                color,
+                show_object: true,
+            }],
+            vec![crate::effects::KernelOp::OuterGlow {
+                color,
+                blur: 3,
+                edge_threshold: 128,
+            }],
+            vec![crate::effects::KernelOp::InnerGlow {
+                color,
+                blur: 3,
+                edge_threshold: 128,
+            }],
+            vec![crate::effects::KernelOp::Bevel {
+                style: BevelStyle::InnerBevel,
+                angle_degrees: 120.0,
+                width: 4,
+                contrast: 50,
+                depth: 100,
+                start: 5,
+                hilite: color,
+                shadow: color,
+                face: Some(color),
+            }],
+        ];
+        let baseline = hash_pixels(
+            &pixels,
+            canvas,
+            &Plan {
+                ops: Vec::new(),
+                skipped: 0,
+            },
+        );
+        for op_group in &ops {
+            let plan = Plan {
+                ops: op_group.clone(),
+                skipped: 0,
+            };
+            let key = hash_pixels(&pixels, canvas, &plan);
+            assert_ne!(
+                key, baseline,
+                "{:?} must hash differently from empty",
+                op_group[0]
+            );
+            // Perturb the op: same variant, different value → new key.
+            let mut changed = plan.clone();
+            match &mut changed.ops[0] {
+                crate::effects::KernelOp::BrightnessContrast { brightness, .. } => {
+                    *brightness += 1;
+                }
+                crate::effects::KernelOp::Levels { master, .. } => master.in_black = 1,
+                crate::effects::KernelOp::Invert
+                | crate::effects::KernelOp::AutoLevels
+                | crate::effects::KernelOp::Sharpen
+                | crate::effects::KernelOp::SharpenMore
+                | crate::effects::KernelOp::ConvertToAlpha
+                | crate::effects::KernelOp::FindEdges => {}
+                crate::effects::KernelOp::HueSaturation { hue, .. } => *hue += 1.0,
+                crate::effects::KernelOp::Clouds { seed, .. }
+                | crate::effects::KernelOp::DifferenceClouds { seed, .. }
+                | crate::effects::KernelOp::AddNoise { seed, .. } => *seed += 1,
+                crate::effects::KernelOp::GaussianBlur { radius } => *radius += 1.0,
+                crate::effects::KernelOp::BoxBlur { radius } => *radius += 1,
+                crate::effects::KernelOp::UnsharpMask { amount, .. } => *amount += 1,
+                crate::effects::KernelOp::Curves { knots } => knots.rgb.push((0.5, 0.5)),
+                crate::effects::KernelOp::ColorFill { opacity, .. } => *opacity += 1,
+                crate::effects::KernelOp::MotionBlur { distance, .. } => *distance += 1,
+                crate::effects::KernelOp::RadialBlur { amount, .. }
+                | crate::effects::KernelOp::ZoomBlur { amount, .. } => *amount += 1,
+                crate::effects::KernelOp::Convolve { values, .. } => values[4] += 1,
+                crate::effects::KernelOp::DropShadow { blur, .. }
+                | crate::effects::KernelOp::InnerShadow { blur, .. }
+                | crate::effects::KernelOp::OuterGlow { blur, .. }
+                | crate::effects::KernelOp::InnerGlow { blur, .. } => *blur += 1,
+                crate::effects::KernelOp::SolidShadow { show_object, .. } => {
+                    *show_object = !*show_object;
+                }
+                crate::effects::KernelOp::Bevel { width, .. } => *width += 1,
+            }
+            if changed.ops == plan.ops {
+                continue; // parameterless variant: nothing to perturb
+            }
+            let changed_plan = Plan {
+                ops: changed.ops,
+                skipped: 0,
+            };
+            assert_ne!(
+                key,
+                hash_pixels(&pixels, canvas, &changed_plan),
+                "{:?} parameter change must change the key",
+                op_group[0]
+            );
+        }
     }
 
     #[test]

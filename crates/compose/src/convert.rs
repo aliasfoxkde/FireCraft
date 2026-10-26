@@ -234,4 +234,47 @@ mod tests {
         let path = to_bezpath(&[contour(true, Vec::new())]);
         assert_eq!(path.elements().len(), 0);
     }
+
+    #[test]
+    fn blend_value_is_the_inverse_of_blend_mode() {
+        use super::blend_value;
+        for bldi in [0, 2, 3, 4, 5, 9, 10, 11, 12, 13, 14, 32, 33, 34, 36, 37] {
+            assert_eq!(blend_value(blend_mode(bldi)), bldi, "bldi {bldi}");
+        }
+        // The fallback target round-trips to the 0 value, so importers
+        // never fabricate a dictionary entry for an unknown mode.
+        assert_eq!(blend_value(blend_mode(99)), 0);
+    }
+
+    #[test]
+    fn out_control_only_bends_toward_the_endpoint() {
+        let mut from = point(0.0, 0.0);
+        from.secondary = Some(Point::new(2.0, 0.0));
+        let to = point(4.0, 0.0);
+        let path = to_bezpath(&[contour(false, vec![from, to])]);
+        let elements: Vec<PathEl> = path.elements().to_vec();
+        assert_eq!(
+            elements,
+            vec![
+                PathEl::MoveTo((0.0, 0.0).into()),
+                PathEl::CurveTo((2.0, 0.0).into(), (4.0, 0.0).into(), (4.0, 0.0).into()),
+            ]
+        );
+    }
+
+    #[test]
+    fn in_control_only_bends_from_the_anchor() {
+        let from = point(0.0, 0.0);
+        let mut to = point(4.0, 0.0);
+        to.primary = Some(Point::new(2.0, 0.0));
+        let path = to_bezpath(&[contour(false, vec![from, to])]);
+        let elements: Vec<PathEl> = path.elements().to_vec();
+        assert_eq!(
+            elements,
+            vec![
+                PathEl::MoveTo((0.0, 0.0).into()),
+                PathEl::CurveTo((0.0, 0.0).into(), (2.0, 0.0).into(), (4.0, 0.0).into()),
+            ]
+        );
+    }
 }

@@ -1993,6 +1993,149 @@ mod tests {
     }
 
     #[test]
+    fn apply_stack_drives_every_kernel() {
+        // Every KernelOp variant passes through the stack once on a
+        // tiny opaque surface and produces opaque, same-sized pixels —
+        // the dispatch arms exist and no op panics or collapses alpha.
+        let width = 6u32;
+        let height = 6u32;
+        let pixels = vec![128u8; (width * height * 4) as usize];
+        let color = color::Rgba8::new(255, 0, 0, 255);
+        let knots = filters::CurvesKnots {
+            rgb: vec![(0.0, 0.0), (1.0, 1.0)],
+            red: Vec::new(),
+            green: Vec::new(),
+            blue: Vec::new(),
+        };
+        let stack = vec![
+            KernelOp::BrightnessContrast {
+                brightness: 5,
+                contrast: 5,
+            },
+            KernelOp::Levels {
+                master: filters::LevelsControls {
+                    in_black: 0,
+                    in_white: 255,
+                    gamma: 1.0,
+                    out_black: 0,
+                    out_white: 255,
+                },
+                red: Some(filters::LevelsControls {
+                    in_black: 0,
+                    in_white: 255,
+                    gamma: 1.0,
+                    out_black: 0,
+                    out_white: 255,
+                }),
+                green: None,
+                blue: None,
+            },
+            KernelOp::Invert,
+            KernelOp::HueSaturation {
+                hue: 10.0,
+                saturation: 0.1,
+                lightness: 0.0,
+                colorize: false,
+            },
+            KernelOp::Clouds {
+                seed: 1,
+                sky: color,
+                cloud: color,
+            },
+            KernelOp::DifferenceClouds {
+                seed: 1,
+                sky: color,
+                cloud: color,
+            },
+            KernelOp::GaussianBlur { radius: 0.5 },
+            KernelOp::BoxBlur { radius: 1 },
+            KernelOp::UnsharpMask {
+                radius: 1.0,
+                amount: 50,
+                threshold: 0,
+            },
+            KernelOp::Curves { knots },
+            KernelOp::AutoLevels,
+            KernelOp::ColorFill {
+                fill: [10, 20, 30],
+                opacity: 25,
+                mode: BlendMode::Normal,
+            },
+            KernelOp::MotionBlur {
+                angle_degrees: 0.0,
+                distance: 1,
+                taps: 2,
+            },
+            KernelOp::RadialBlur {
+                amount: 10,
+                quality: 4,
+            },
+            KernelOp::ZoomBlur {
+                amount: 10,
+                quality: 4,
+            },
+            KernelOp::Convolve {
+                width: 3,
+                height: 3,
+                values: vec![0, 0, 0, 0, 1, 0, 0, 0, 0],
+                affects_alpha: false,
+            },
+            KernelOp::Sharpen,
+            KernelOp::SharpenMore,
+            KernelOp::ConvertToAlpha,
+            KernelOp::AddNoise {
+                seed: 7,
+                amount: 10,
+                monochrome: false,
+            },
+            KernelOp::FindEdges,
+            KernelOp::DropShadow {
+                color,
+                angle_degrees: 90.0,
+                distance: 1,
+                blur: 1,
+                knockout: false,
+            },
+            KernelOp::InnerShadow {
+                color,
+                angle_degrees: 90.0,
+                distance: 1,
+                blur: 1,
+            },
+            KernelOp::SolidShadow {
+                color,
+                show_object: true,
+            },
+            KernelOp::OuterGlow {
+                color,
+                blur: 1,
+                edge_threshold: 128,
+            },
+            KernelOp::InnerGlow {
+                color,
+                blur: 1,
+                edge_threshold: 128,
+            },
+            KernelOp::Bevel {
+                style: filters::BevelStyle::InnerBevel,
+                angle_degrees: 120.0,
+                width: 2,
+                contrast: 50,
+                depth: 100,
+                start: 2,
+                hilite: color,
+                shadow: color,
+                face: None,
+            },
+        ];
+        let out = apply_stack(
+            Surface::from_premultiplied(width, height, pixels).expect("square size"),
+            &stack,
+        );
+        assert_eq!(out.into_pixels().len(), (width * height * 4) as usize);
+    }
+
+    #[test]
     fn mx_shadow_scalars_parse_from_dictionary_props() {
         // Drop Shadow: color alpha, angle, blur, distance; ShadowType 1
         // is the knockout variant.

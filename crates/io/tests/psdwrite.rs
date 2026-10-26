@@ -553,3 +553,141 @@ fn writer_output_is_deterministic() {
     let second = psd::encode(&document, 0).expect("second encode");
     assert_eq!(first, second);
 }
+
+#[test]
+fn matte_tiles_write_through_and_read_back_straight() {
+    // A TMCi matte tile reference exports as literal ARGB pixels —
+    // no bank lookup, straight alpha as stored.
+    let mut doc_mut = document(vec![("matte", true, Vec::new())]);
+    let id = doc_mut.registry.insert(ObjectData::Image(ImageObject {
+        location: Point::ZERO,
+        offset: Point::ZERO,
+        pixels: (2, 2),
+        tile_size: 128,
+        tiles: vec![TileRef::Matte(0x80_00_40_FF)],
+        name: Some("matte".to_owned()),
+        opacity: 1000,
+        blend: 0,
+        visible: true,
+        locked: false,
+        effects: Vec::new(),
+    }));
+    doc_mut.pages[0].layers.layers[0].cells[0].elements.push(id);
+    let bytes = psd::encode(&doc_mut, 0).expect("encode");
+    let imported = psd::decode(&bytes).expect("decode");
+    assert_eq!(imported.layers, 1);
+    let tile = imported.document.tiles.get(0).expect("tile");
+    // The written channel data carries the matte's RGBA; read-back
+    // re-premultiplies into the bank tile (import policy).
+    assert!(
+        tile.pixels()
+            .chunks_exact(4)
+            .any(|p| p == [0, 32, 128, 128]),
+        "matte pixel appears premultiplied in the read-back tile"
+    );
+}
+
+#[test]
+fn straight_pixel_un_premultiplies_on_export() {
+    // A half-opacity red tile: premultiplied (128,0,0,128) must come
+    // back straight (255,0,0,128) in the RLE channel bytes.
+    let mut doc_mut = document(vec![("half", true, Vec::new())]);
+    let mut tile = color_tile([255, 0, 0]);
+    for chunk in tile.pixels_mut().chunks_exact_mut(4) {
+        chunk[0] = 128;
+        chunk[3] = 128;
+    }
+    let leaf = image_object(&mut doc_mut, tile, Point::ZERO, "half", 1000, 0, true);
+    doc_mut.pages[0].layers.layers[0].cells[0]
+        .elements
+        .push(leaf);
+    let bytes = psd::encode(&doc_mut, 0).expect("encode");
+    let imported = psd::decode(&bytes).expect("decode");
+    let tile = imported.document.tiles.get(0).expect("tile");
+    assert!(
+        tile.pixels().chunks_exact(4).any(|p| p == [128, 0, 0, 128]),
+        "half-red survives the round trip, got {:?}",
+        &tile.pixels()[..16]
+    );
+}
+
+#[test]
+fn export_refuses_empty_and_oversized_images() {
+    let mut doc_mut = document(vec![("x", true, Vec::new())]);
+    let empty = doc_mut.registry.insert(ObjectData::Image(ImageObject {
+        location: Point::ZERO,
+        offset: Point::ZERO,
+        pixels: (0, 0),
+        tile_size: 128,
+        tiles: Vec::new(),
+        name: Some("empty".to_owned()),
+        opacity: 1000,
+        blend: 0,
+        visible: true,
+        locked: false,
+        effects: Vec::new(),
+    }));
+    doc_mut.pages[0].layers.layers[0].cells[0]
+        .elements
+        .push(empty);
+    let error = psd::encode(&doc_mut, 0).expect_err("empty image refuses");
+    assert!(error.to_string().contains("empty pixel extent"), "{error}");
+
+    let mut huge = document(vec![("huge", true, Vec::new())]);
+    let big = huge.registry.insert(ObjectData::Image(ImageObject {
+        location: Point::ZERO,
+        offset: Point::ZERO,
+        pixels: (5_000, 5_000),
+        tile_size: 128,
+        tiles: Vec::new(),
+        name: Some("huge".to_owned()),
+        opacity: 1000,
+        blend: 0,
+        visible: true,
+        locked: false,
+        effects: Vec::new(),
+    }));
+    huge.pages[0].layers.layers[0].cells[0].elements.push(big);
+    let error = psd::encode(&huge, 0).expect_err("oversized image refuses");
+    assert!(error.to_string().contains("plane cap"), "{error}");
+}
+
+#[test]
+fn export_refuses_wrong_tile_size_and_short_tile_lists() {
+    let mut doc_mut = document(vec![("bad", true, Vec::new())]);
+    let bad = doc_mut.registry.insert(ObjectData::Image(ImageObject {
+        location: Point::ZERO,
+        offset: Point::ZERO,
+        pixels: (2, 2),
+        tile_size: 64,
+        tiles: Vec::new(),
+        name: Some("bad".to_owned()),
+        opacity: 1000,
+        blend: 0,
+        visible: true,
+        locked: false,
+        effects: Vec::new(),
+    }));
+    doc_mut.pages[0].layers.layers[0].cells[0]
+        .elements
+        .push(bad);
+    let error = psd::encode(&doc_mut, 0).expect_err("wrong tile size refuses");
+    assert!(error.to_string().contains("128"), "{error}");
+
+    let mut short = document(vec![("short", true, Vec::new())]);
+    let leaf = image_object(
+        &mut short,
+        color_tile([0, 0, 255]),
+        Point::ZERO,
+        "leaf",
+        1000,
+        0,
+        true,
+    );
+    if let ObjectData::Image(image) = short.registry.get_mut(leaf).expect("registered") {
+        image.tiles.clear();
+    }
+    short.pages[0].layers.layers[0].cells[0].elements.push(leaf);
+    let error = psd::encode(&short, 0).expect_err("short tile list refuses");
+    assert!(error.to_string().contains("fewer tiles"), "{error}");
+}

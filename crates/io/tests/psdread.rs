@@ -777,3 +777,79 @@ fn negative_layer_count_notes_merged_alpha() {
     );
     assert_eq!(imported.layers, 1);
 }
+
+#[test]
+fn unknown_version_names_itself() {
+    // Neither PSD (1) nor PSB (2).
+    let mut odd = header(2, 2, 3, 8, 3);
+    odd[4] = 0;
+    odd[5] = 7;
+    assert!(matches!(
+        psd::decode(&odd),
+        Err(io::ImportError::Unsupported { reason, .. }) if reason.contains("version 7")
+    ));
+}
+
+#[test]
+fn empty_canvas_reason_reports_both_axes() {
+    let zero_width = header(0, 4, 3, 8, 3);
+    assert!(matches!(
+        psd::decode(&zero_width),
+        Err(io::ImportError::Unsupported { reason, .. })
+            if reason.contains("0x4") && reason.contains("empty")
+    ));
+}
+
+#[test]
+fn every_color_mode_refuses_with_its_name() {
+    for (mode, name) in [
+        (0u16, "bitmap"),
+        (1, "grayscale"),
+        (2, "indexed"),
+        (4, "CMYK"),
+        (7, "multichannel"),
+        (8, "duotone"),
+        (9, "lab"),
+        (42, "unknown"),
+    ] {
+        assert!(
+            matches!(
+                psd::decode(&header(2, 2, 3, 8, mode)),
+                Err(io::ImportError::Unsupported { reason, .. })
+                    if reason.contains(name)
+            ),
+            "mode {mode} must refuse as {name}"
+        );
+    }
+}
+
+#[test]
+fn truncated_header_refuses_at_every_prefix() {
+    let good = header(2, 2, 3, 8, 3);
+    for cut in 0..good.len() {
+        assert!(
+            psd::decode(&good[..cut]).is_err(),
+            "header prefix of {cut} bytes must refuse"
+        );
+    }
+}
+
+#[test]
+fn oversized_color_mode_section_refuses() {
+    // The declared color-mode section length runs past the stream.
+    let mut bytes = header(2, 2, 3, 8, 3);
+    bytes.extend_from_slice(&u32::MAX.to_be_bytes());
+    assert!(psd::decode(&bytes).is_err());
+}
+
+#[test]
+fn negative_widths_are_not_sign_extendable() {
+    // i32 −1 in the width slot is a u32 near-max: over the ceiling.
+    let mut bytes = header(2, 2, 3, 8, 3);
+    let width_at = 26 - 8;
+    bytes[width_at..width_at + 4].copy_from_slice(&(-1i32).to_be_bytes());
+    assert!(matches!(
+        psd::decode(&bytes),
+        Err(io::ImportError::Unsupported { reason, .. }) if reason.contains("65535")
+    ));
+}
