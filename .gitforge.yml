@@ -139,3 +139,39 @@ jobs:
           cmp /tmp/parity.committed docs/planning/generated/parity.md
           cmp /tmp/scorecard.committed docs/planning/generated/scorecard.md
     timeout: 20m
+
+  - name: release
+    image: firecraft-ci-rust:1
+    needs: [generated-docs]
+    steps:
+      - name: Tag gate
+        # GitForge stamps every push AND every tag push as TriggerType::
+        # Push with the ref name carried verbatim; trigger_on cannot
+        # distinguish them. The gate is therefore in-step: on a branch
+        # push `git describe --exact-match` fails and the job exits 0
+        # without building (a normal push run stays cheap); on a tag
+        # push it names the tag and the build proceeds.
+        run: |
+          if git describe --exact-match --tags HEAD >/tmp/tag 2>/dev/null; then
+            echo "release build for tag $(cat /tmp/tag)"
+          else
+            echo "not a tag push — skipping release build"
+            exit 0
+          fi
+      - name: Web bundle (bridge smoke skipped — CI image debt: no chromium)
+        # Same container as the tag gate; the fresh job target dir
+        # builds the release profile from scratch, which is the point:
+        # the bundle must come from tag bytes, not a warm debug cache.
+        run: FIRECRAFT_DIST_SKIP_SMOKE=1 CARGO_TARGET_DIR=/tmp/ci-dist-target cargo run --locked -p xtask -- dist --web
+      - name: Native set + deb read-back
+        run: CARGO_TARGET_DIR=/tmp/ci-dist-target cargo run --locked -p xtask -- dist --native
+      - name: Stage artifacts for the runner's artifact collection
+        # The runner uploads everything under <workspace>/artifacts/ —
+        # copy the dist outputs there so the run carries its bundles.
+        run: |
+          mkdir -p artifacts
+          cp -r dist/web artifacts/web
+          cp -r dist/native artifacts/native
+          sha256sum -c artifacts/web/MANIFEST.sha256
+          sha256sum -c artifacts/native/MANIFEST.sha256
+    timeout: 90m
