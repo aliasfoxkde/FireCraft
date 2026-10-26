@@ -10,7 +10,7 @@
 //! 4096-tile bank), and the fault-tolerance policy from decision 0006:
 //! unknown blend keys, layer masks, clipping, text layers, and
 //! adjustment layers all land as report notes with a best-effort
-//! document, never an error (real writers — ImageMagick included —
+//! document, never an error (real writers — `ImageMagick` included —
 //! emit non-conformant bytes).
 //!
 //! Structure mapping: PSD layer records (stored bottom-first, the same
@@ -312,7 +312,7 @@ struct LayerRecord {
 /// Parses `count` layer records starting at the cursor, stopping at
 /// `end`. Records are stored bottom-first. Channel streams arrive in
 /// either of the two layouts real writers emit: interleaved after
-/// each record's extra data (ImageMagick) or as one block after all
+/// each record's extra data (`ImageMagick`) or as one block after all
 /// records (the spec layout Photoshop and ag-psd write). The stream
 /// is walked interleaved first; any structural failure retries the
 /// block layout before giving up. Compression markers and the mask
@@ -951,7 +951,7 @@ fn composite_plane(
     Ok(rgba)
 }
 
-/// Decodes one PackBits RLE plane at the cursor: a per-scanline u16
+/// Decodes one `PackBits` RLE plane at the cursor: a per-scanline u16
 /// byte-count table, then the packed rows (the layer-channel layout).
 /// Runs that overshoot a row are truncated to the row width; the
 /// cursor stops after the last declared row.

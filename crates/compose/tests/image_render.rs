@@ -128,7 +128,7 @@ fn pixel(render: &compose::Render, x: u32, y: u32) -> [u8; 4] {
 }
 
 /// Asserts every pixel of the render is the bare canvas matte —
-/// "renders nothing" since the background landed (BGCi white).
+/// "renders nothing" since the background landed (`BGCi` white).
 fn assert_all_matte(render: &compose::Render) {
     assert!(render.pixels.chunks_exact(4).all(|px| px == BACKGROUND));
 }

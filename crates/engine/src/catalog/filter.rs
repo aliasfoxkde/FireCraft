@@ -152,7 +152,7 @@ struct AddFilterPayload {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct FilterParamPayload {
-    /// `DCKs` key, e.g. "gaussian_blur_radius".
+    /// `DCKs` key, e.g. "`gaussian_blur_radius`".
     key: String,
     /// `DCVs` value; effects carry decimals as decimal strings. Must
     /// stay empty when `points` is present — a parameter takes one

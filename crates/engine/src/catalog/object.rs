@@ -1637,7 +1637,7 @@ impl TypedCommand for ReflectObject {
 
 /// Resolves the union bounds or names what was missing. Shared by the
 /// fixed-origin sugars (`resize`, `setBounds`): an empty id list is the
-/// family's MissingTarget, a bounds-less set is InvalidState.
+/// family's `MissingTarget`, a bounds-less set is `InvalidState`.
 fn union_bounds_or(
     document: &Document,
     name: &'static str,

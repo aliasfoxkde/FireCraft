@@ -1,4 +1,4 @@
-//! Geometry foundations for FireCraft: affine transforms, bezier paths,
+//! Geometry foundations for `FireCraft`: affine transforms, bezier paths,
 //! bounds, and hit testing built on [`kurbo`].
 //!
 //! Layer L0: depends on nothing from this workspace.

@@ -59,6 +59,7 @@ pub struct RectParams {
 
 impl RectParams {
     /// The tool's insert defaults: 200×150, corner `H/4`.
+    #[must_use]
     pub fn defaults(origin: Point, kind: CornerKind) -> Self {
         Self {
             origin,
@@ -71,6 +72,7 @@ impl RectParams {
 }
 
 /// Generates the rectangle as one closed 8-anchor contour.
+#[must_use]
 pub fn rectangle(p: RectParams) -> PathObject {
     let t = p.kind.index();
     let cpdist = p.corner * ELLIPSE_BCP_CONST;

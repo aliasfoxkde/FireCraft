@@ -67,7 +67,7 @@ mod tests {
     use super::*;
     use boa_engine::{Context, JsValue, Source};
 
-    /// Builds a JsValue by evaluating a JS expression.
+    /// Builds a `JsValue` by evaluating a JS expression.
     fn eval_js(ctx: &mut Context, src: &str) -> JsValue {
         ctx.eval(Source::from_bytes(src.as_bytes())).unwrap()
     }

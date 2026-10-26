@@ -39,6 +39,7 @@ pub struct ConnectorParams {
 impl ConnectorParams {
     /// The tool's insert defaults: a 200-unit square route, spine
     /// halfway, sharp corners.
+    #[must_use]
     pub fn defaults(elbow: Point) -> Self {
         Self {
             start: Point::new(elbow.x - 100.0, elbow.y - 100.0),
@@ -89,6 +90,7 @@ fn handled(x: f64, y: f64, hx: f64, hy: f64, succ: bool) -> PathPoint {
 /// Generates the six-node elbow contour (`RedrawSmartShape`, both
 /// orientation branches, with the script's signed-corner values used
 /// directly).
+#[must_use]
 pub fn connector_line(p: ConnectorParams) -> PathObject {
     let r1 = p.corner1.abs();
     let r2 = p.corner2.abs();

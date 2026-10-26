@@ -108,6 +108,7 @@ impl TextEngine {
     /// Builds a font system holding exactly the bundled faces, with a
     /// pinned locale and an empty fallback list — nothing on this host
     /// can change what a given text lays out to.
+    #[must_use]
     pub fn new() -> Self {
         let mut db = fontdb::Database::new();
         for face in FACES {

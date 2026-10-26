@@ -1,4 +1,4 @@
-//! `firecraft-cli` — the headless FireCraft surface.
+//! `firecraft-cli` — the headless `FireCraft` surface.
 //!
 //! ```text
 //! firecraft-cli info <file.fw.png>

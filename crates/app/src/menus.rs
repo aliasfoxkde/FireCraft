@@ -8,7 +8,7 @@
 //! transcription and future work can map more of them.
 //!
 //! Two axes of honesty live here:
-//! - an item present in CS6 but not wired in FireCraft yet is
+//! - an item present in CS6 but not wired in `FireCraft` yet is
 //!   [`Action::Inert`] — the shell renders it disabled rather than
 //!   pretending;
 //! - displayed accelerator text matches the CS6 keymap even when the
@@ -41,8 +41,8 @@ pub enum Action {
     /// `filter.add` from the Filters menu: the preset's internal name,
     /// resolved through the same registry the Live Filters panel uses
     /// (`shell::filter_preset`). CS6 builds this menu at runtime from
-    /// its filter registry — the static RT_MENU resource carries only
-    /// Repeat Filter — and FireCraft mirrors exactly that.
+    /// its filter registry — the static `RT_MENU` resource carries only
+    /// Repeat Filter — and `FireCraft` mirrors exactly that.
     Filter(&'static str),
 }
 
@@ -174,7 +174,7 @@ const fn item(id: u32, label: &'static str, accel: &'static str, action: Action)
     })
 }
 
-/// File — ids from RT_MENU 128; Ctrl+N/O/S/Shift+S/Shift+R from the
+/// File — ids from `RT_MENU` 128; Ctrl+N/O/S/Shift+S/Shift+R from the
 /// Fireworks.xml keymap, Ctrl+F4 as displayed by the resource itself.
 pub static FILE: Menu = Menu {
     label: "File",

@@ -2,7 +2,7 @@
 
 /// An 8-bit-per-channel sRGB color with straight (non-premultiplied) alpha.
 ///
-/// This is the canonical interchange format between FireCraft crates; tiled
+/// This is the canonical interchange format between `FireCraft` crates; tiled
 /// raster storage premultiplies internally for compositing.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct Rgba8 {
@@ -36,17 +36,20 @@ impl Rgba8 {
     };
 
     /// Constructs a color from channel values.
+    #[must_use]
     pub const fn new(r: u8, g: u8, b: u8, a: u8) -> Self {
         Self { r, g, b, a }
     }
 
     /// Packs as `0xRRGGBBAA` (the layout Fireworks documents use for colors
     /// in string contexts).
+    #[must_use]
     pub const fn to_u32(self) -> u32 {
         ((self.r as u32) << 24) | ((self.g as u32) << 16) | ((self.b as u32) << 8) | (self.a as u32)
     }
 
     /// Unpacks a `0xRRGGBBAA` value.
+    #[must_use]
     pub const fn from_u32(v: u32) -> Self {
         Self {
             r: (v >> 24) as u8,
@@ -71,11 +74,13 @@ impl Rgba8 {
     }
 
     /// Whether every pixel of this color is opaque.
+    #[must_use]
     pub const fn is_opaque(self) -> bool {
         self.a == 255
     }
 
     /// Whether every pixel of this color is fully transparent.
+    #[must_use]
     pub const fn is_transparent(self) -> bool {
         self.a == 0
     }

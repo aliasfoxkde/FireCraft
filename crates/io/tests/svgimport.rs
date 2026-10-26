@@ -26,7 +26,7 @@ fn point(x: f64, y: f64) -> PathPoint {
 }
 
 /// A closed unit-ish square with an opaque red fill (`FCLi` ABGR
-/// 0xFF_00_00_FF) and no stroke.
+/// `0xFF_00_00_FF`) and no stroke.
 fn square() -> PathObject {
     PathObject {
         contours: vec![Contour {

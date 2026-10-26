@@ -765,7 +765,7 @@ fn commuting_brightness_shifts_compose_exactly() {
     assert_eq!(pixel(&render, 1, 5), [192, 192, 192, 255], "50");
 }
 
-/// Effects the kernel catalog cannot interpret (a GUIDed dropShadow)
+/// Effects the kernel catalog cannot interpret (a `GUIDed` dropShadow)
 /// and hidden effects (`EffectIsVisible` false) leave the object
 /// rendered unfiltered — never dropped, never approximated.
 #[test]

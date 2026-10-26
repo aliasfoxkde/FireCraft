@@ -778,7 +778,7 @@ impl Writer<'_> {
         Ok(n_kids(*b"EFLv", children))
     }
 
-    /// `PATv` children in dictionary order: BCLi FCLi, then the
+    /// `PATv` children in dictionary order: `BCLi` `FCLi`, then the
     /// modeled `FPLv` fill; the texture subtrees (`TXBv` `TXFv`
     /// `BPLv`) splice back from the bag.
     fn write_paint(&mut self, paint: &PaintStyle, path: &str) -> Result<Node, MapError> {
@@ -794,8 +794,8 @@ impl Writer<'_> {
         Ok(n_kids(*b"PATv", children))
     }
 
-    /// `FPLv` children in dictionary order (mapped subset): FTBi FEFi
-    /// FSMi FRDb, the shape slot (`FSXi` when the file carried the
+    /// `FPLv` children in dictionary order (mapped subset): `FTBi` `FEFi`
+    /// `FSMi` `FRDb`, the shape slot (`FSXi` when the file carried the
     /// extended kind, else `FSHi`), `FGLv`, the dither colours, and
     /// the `FPTv` pattern tile. Names, `RDOb`, `FETi`/`FRRi` and a
     /// compatibility `FSHi` (when `FSXi` carried the kind) splice

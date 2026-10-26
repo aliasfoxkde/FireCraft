@@ -1,4 +1,4 @@
-//! FireCraft scripting host: a sandboxed [`boa_engine`] embedding that
+//! `FireCraft` scripting host: a sandboxed [`boa_engine`] embedding that
 //! executes Fireworks-style `.jsf` scripts against a host object model
 //! (`fw`, `dom`, `smartShape`, `Files`).
 //!
@@ -80,6 +80,7 @@ pub struct ScriptReport {
 
 impl ScriptReport {
     /// True when the script ran to completion.
+    #[must_use]
     pub fn completed(&self) -> bool {
         self.outcome == Outcome::Completed
     }
@@ -510,6 +511,7 @@ const BUDGET_EXCEEDED: &str = "host call budget exhausted";
 
 /// Strips a UTF-8 BOM and normalizes CRLF to LF (shipped-script
 /// normalization, pinned by test).
+#[must_use]
 pub fn prepare_source(source: &str) -> String {
     let no_bom = source.strip_prefix('\u{feff}').unwrap_or(source);
     no_bom.replace("\r\n", "\n")

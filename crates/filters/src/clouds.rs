@@ -5,7 +5,7 @@
 //! CS6's fractal-noise kernel is unobservable without a render
 //! oracle, so the texture is a pinned substitution, recorded here per
 //! the M7 discipline: one-octave value noise on a 16 px lattice. Each
-//! lattice point hashes `(seed, x, y)` through the SplitMix64 final
+//! lattice point hashes `(seed, x, y)` through the `SplitMix64` final
 //! cascade — position-independent, so the same world pixel carries the
 //! same texture in any bounding box — and the field bilinearly
 //! interpolates the four corners in integer math with add-half
@@ -26,7 +26,7 @@ use color::pixel::unpremultiply;
 /// Lattice cell size in pixels.
 const CELL: i64 = 16;
 
-/// One lattice value: the SplitMix64 final cascade over
+/// One lattice value: the `SplitMix64` final cascade over
 /// `(seed, x, y)`, folded to 0..=255.
 fn lattice(seed: u64, gx: i64, gy: i64) -> i64 {
     let x = u64::from_ne_bytes(gx.to_ne_bytes());

@@ -12,7 +12,7 @@
 //! | `mkBT` | one tile of the 128x128 ARGB raster cache, per 64 KiB |
 //!
 //! This crate is standalone: it has no dependencies on the rest of the
-//! FireCraft workspace and never links C, so it builds for `wasm32` and can
+//! `FireCraft` workspace and never links C, so it builds for `wasm32` and can
 //! be published independently.
 //!
 //! Chunk byte offsets are provisional until pinned against the reference

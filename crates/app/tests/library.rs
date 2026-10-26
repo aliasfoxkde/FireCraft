@@ -1,7 +1,7 @@
 //! The M10 task 6 stopping condition: library export → import → place
 //! round-trips byte-comparably; import undoes to the pre-import bytes;
 //! the five re-created Common Library assets (`assets/library/`,
-//! original FireCraft art from `xtask library-gen`) open, import,
+//! original `FireCraft` art from `xtask library-gen`) open, import,
 //! place, and render.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]

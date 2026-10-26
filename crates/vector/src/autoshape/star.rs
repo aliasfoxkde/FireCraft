@@ -41,6 +41,7 @@ pub struct StarParams {
 impl StarParams {
     /// The tool's insert defaults: 100/50 radii, five points, straight
     /// corners (roundness radii equal the plain radii), first corner up.
+    #[must_use]
     pub fn defaults(center: Point) -> Self {
         Self {
             center,
@@ -55,6 +56,7 @@ impl StarParams {
 }
 
 /// Generates the star as one closed contour of `2·points` anchors.
+#[must_use]
 pub fn star(p: StarParams) -> PathObject {
     let n = (p.points as f64).clamp(MIN_POINTS as f64, MAX_POINTS as f64) as usize;
     let da = std::f64::consts::TAU / (2.0 * n as f64);

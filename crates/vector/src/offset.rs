@@ -415,7 +415,7 @@ fn flatten_span(seg: &Seg) -> Result<Vec<(f64, Point)>, VectorError> {
 
 /// Computes the join between offset span `incoming`'s end and offset
 /// span `outgoing`'s start at `vertex`: returns the spans' new
-/// (end_param, start_param) window bounds plus filler segments bridging
+/// (`end_param`, `start_param`) window bounds plus filler segments bridging
 /// the trimmed ends.
 fn join_at(
     incoming: &Seg,

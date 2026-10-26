@@ -1126,7 +1126,7 @@ fn redraw_connector_line(p: &RedrawConnectorLine) -> PathObject {
 /// `autoshape.redraw` — CS6 `dom.redrawSmartShape()`: "Forces the Auto
 /// Shapes in the document to redraw... useful when modifying a Auto
 /// Shape outside a tool." CS6 re-runs each shape's embedded generator
-/// script; FireCraft's library bakes geometry at insert (no script
+/// script; `FireCraft`'s library bakes geometry at insert (no script
 /// interpreter, no wire node for script state), so the redraw carries
 /// its parameters explicitly and regenerates one path's contours.
 /// Styling, name, and effects are untouched — this re-parameterizes,

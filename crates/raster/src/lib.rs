@@ -1,4 +1,4 @@
-//! Tiled raster storage for FireCraft.
+//! Tiled raster storage for `FireCraft`.
 //!
 //! Layer L0: depends on nothing from this workspace. Tiles are 128x128 RGBA8
 //! blocks — the same geometry as the Fireworks `mkBT` tile cache — held in

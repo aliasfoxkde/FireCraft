@@ -61,6 +61,7 @@ pub struct ArrowLineParams {
 impl ArrowLineParams {
     /// The tool's insert defaults: a 100-unit horizontal line, no head
     /// at the start, an open head at the end.
+    #[must_use]
     pub fn defaults(start: Point, end: Point) -> Self {
         Self {
             start,
@@ -135,6 +136,7 @@ fn head_nodes(at: Point, angle: f64, kind: ArrowHead, forward: bool) -> Vec<Path
 /// Generates the arrow line: the open 2-node line contour, then each
 /// present head as its own contour (open for `Open`, closed for the
 /// filled styles).
+#[must_use]
 pub fn arrow_line(p: ArrowLineParams) -> PathObject {
     let angle = (p.end.y - p.start.y).atan2(p.end.x - p.start.x);
     let mut contours = Vec::with_capacity(3);

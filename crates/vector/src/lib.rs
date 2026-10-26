@@ -1,4 +1,4 @@
-//! Vector depth for FireCraft: curve-aware path booleans (union,
+//! Vector depth for `FireCraft`: curve-aware path booleans (union,
 //! intersect, punch, crop) over the `doc` path model, built on kurbo
 //! curve primitives.
 //!
@@ -52,7 +52,7 @@ pub use simplify::simplify;
 ///   proxy's deviation from the true curve) so the sample lands on the
 ///   intended side of the *true* boundary; must stay below the feature
 ///   sizes the booleans claim to resolve — a sliver narrower than
-///   2×SIDE_OFFSET is absorbed into the region on both sides of its
+///   `2×SIDE_OFFSET` is absorbed into the region on both sides of its
 ///   bounding edge and lost (proved by the sub-pixel wedge case in the
 ///   test suite; 0.1 resolves 0.2 px features).
 /// - [`SNAP`]: endpoint quantization for loop stitching — two pieces

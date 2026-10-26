@@ -392,6 +392,7 @@ pub struct Plan {
 }
 
 /// Interprets a live-effect stack into kernel ops.
+#[must_use]
 pub fn plan(stack: &[Effect]) -> Plan {
     let mut ops = Vec::new();
     let mut skipped = 0usize;
@@ -500,6 +501,7 @@ pub fn plan(stack: &[Effect]) -> Plan {
 }
 
 /// Applies a plan's ops to a surface, in order.
+#[must_use]
 pub fn apply_stack(mut surface: Surface, ops: &[KernelOp]) -> Surface {
     for op in ops {
         surface = match op {
@@ -1092,7 +1094,7 @@ fn packed_color(text: &str) -> Option<Rgba8> {
     Some(Rgba8::new(r, g, b, 255))
 }
 
-/// The same shape as `[u8; 3]` for the ColorFill op.
+/// The same shape as `[u8; 3]` for the `ColorFill` op.
 fn packed_rgb(text: &str) -> Option<[u8; 3]> {
     let (r, g, b) = packed_rgb_channels(text)?;
     Some([r, g, b])

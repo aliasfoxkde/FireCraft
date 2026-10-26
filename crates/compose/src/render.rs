@@ -639,6 +639,7 @@ fn blit_tile(
 /// canvas buffer. Public so bake paths outside the compositor (canvas
 /// rotation re-tiles images the same way the renderer reads them) can
 /// materialize matte slots to the exact bytes this renderer blits.
+#[must_use]
 pub fn matte_premultiplied(raw: i64) -> [u8; 4] {
     let raw = raw as u32;
     let (r, g, b, a) = (

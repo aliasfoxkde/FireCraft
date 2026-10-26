@@ -1,4 +1,4 @@
-//! FireCraft editor engine (`engine`, L3): everything that mutates a
+//! `FireCraft` editor engine (`engine`, L3): everything that mutates a
 //! document goes through one command registry.
 //!
 //! The model in [`doc`] is plain data; this crate turns edits into

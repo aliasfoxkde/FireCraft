@@ -1,4 +1,4 @@
-//! Headless FireCraft: the CLI's engine-facing operations, as a library
+//! Headless `FireCraft`: the CLI's engine-facing operations, as a library
 //! so the integration tests drive exactly what the binary runs.
 //!
 //! Surfaces rule: nothing here mutates a document except through the

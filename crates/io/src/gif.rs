@@ -1,6 +1,6 @@
 //! Animated GIF ↔ document states (M8 task 7).
 //!
-//! Import walks the GIF89a frame loop with browser compositing
+//! Import walks the `GIF89a` frame loop with browser compositing
 //! semantics — the observable contract for an animation format: each
 //! frame draws over the screen (transparent pixels leave what is
 //! beneath), state *i* captures the screen after frame *i*, and the

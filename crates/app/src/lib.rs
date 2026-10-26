@@ -1,4 +1,4 @@
-//! FireCraft editor shell, windowless core + thin egui face.
+//! `FireCraft` editor shell, windowless core + thin egui face.
 //!
 //! The rule that makes surfaces equivalent: shell code never touches a
 //! `Document` except through [`editor::Editor`], which only mutates

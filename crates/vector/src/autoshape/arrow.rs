@@ -41,6 +41,7 @@ pub struct LShapeParams {
 
 impl LShapeParams {
     /// The tool's insert defaults: 200×200 with a 100 arm, sharp.
+    #[must_use]
     pub fn defaults(origin: Point) -> Self {
         Self {
             origin,
@@ -76,6 +77,7 @@ impl ArrowParams {
     /// The tool's insert defaults: 200 wide, 100 tall shaft, barbs
     /// spanning 200 (they overhang the shaft band by ±50), no setback,
     /// tip reach 100, sharp corners.
+    #[must_use]
     pub fn defaults(origin: Point) -> Self {
         Self {
             origin,
@@ -136,6 +138,7 @@ fn tail(x: f64, y: f64, t: f64, h: f64, r: f64, r_: f64) -> Vec<PathPoint> {
 }
 
 /// Generates the L-Shape: one closed 8-node contour.
+#[must_use]
 pub fn lshape(p: LShapeParams) -> PathObject {
     let (t, r, w, h) = (p.thickness, p.roundness, p.width, p.height);
     let r_ = if r > t { r - t } else { 0.0 };
@@ -151,6 +154,7 @@ pub fn lshape(p: LShapeParams) -> PathObject {
 
 /// Generates the Arrow: one closed 11-node contour — the L's frame
 /// with the right side replaced by barbs and tip.
+#[must_use]
 pub fn arrow(p: ArrowParams) -> PathObject {
     let (t, r, w, h, aw, al, at) = (
         p.thickness,

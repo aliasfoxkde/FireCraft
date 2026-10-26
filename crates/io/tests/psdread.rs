@@ -3,10 +3,10 @@
 //! Every fixture is hand-built from the public Adobe spec — the house
 //! byte-array style — plus one real-writer oracle fixture generated
 //! with `ag-psd` (MIT, PLANNING §7.6). The battery pins: flat and
-//! layered documents, raw and PackBits channels, the group pair,
+//! layered documents, raw and `PackBits` channels, the group pair,
 //! Unicode names, opacity/blend/visibility mapping, every report-note
 //! divergence (masks, clipping, text, adjustment, unknown blends —
-//! including ImageMagick's byte-reversed-key bug), and every refuse
+//! including `ImageMagick`'s byte-reversed-key bug), and every refuse
 //! gate. Nothing panics.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]

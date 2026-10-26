@@ -1,7 +1,7 @@
 //! Symbol-instance and error-path coverage: typed refusals (missing
 //! definition, cycle, depth, tile-bank miss, oversized canvas), plain
 //! and nine-slice instances, animation interpolation, text objects,
-//! pattern-assembly fallbacks, and the render_subset flatten surface.
+//! pattern-assembly fallbacks, and the `render_subset` flatten surface.
 //! Every expected pixel value is hand-derived.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]

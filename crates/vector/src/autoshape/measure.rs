@@ -45,6 +45,7 @@ pub struct MeasureParams {
 
 impl MeasureParams {
     /// The tool's insert defaults: a 100-unit horizontal span.
+    #[must_use]
     pub fn defaults(start: Point) -> Self {
         Self {
             start,
@@ -91,6 +92,7 @@ fn tick(at: Point, angle: f64) -> Contour {
 }
 
 /// Generates the six measurement contours.
+#[must_use]
 pub fn measure(p: MeasureParams) -> PathObject {
     let span = (p.end.x - p.start.x).hypot(p.end.y - p.start.y);
     let angle = (p.end.y - p.start.y).atan2(p.end.x - p.start.x);

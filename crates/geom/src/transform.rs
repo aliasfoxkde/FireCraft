@@ -1,6 +1,6 @@
 //! Affine transform helpers over [`kurbo::Affine`].
 //!
-//! FireCraft composes transforms by matrix multiplication (`a * b` means
+//! `FireCraft` composes transforms by matrix multiplication (`a * b` means
 //! "apply `b`, then `a`", kurbo's convention). These helpers add the
 //! operations the document layer needs on top of kurbo's bare matrix.
 

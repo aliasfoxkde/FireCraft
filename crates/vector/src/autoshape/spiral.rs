@@ -46,6 +46,7 @@ pub struct SpiralParams {
 impl SpiralParams {
     /// The tool's insert defaults: radius 100, tightness 80°, open,
     /// clockwise.
+    #[must_use]
     pub fn defaults(center: Point) -> Self {
         Self {
             center,
@@ -107,6 +108,7 @@ fn point_on_spiral(p: &SpiralParams, r: f64, theta: f64, b: f64, cpdist: f64) ->
 /// radius inside the first turn clips the whole curve onto the limit
 /// (one node); a non-positive radius has no curve at all and yields
 /// the empty path.
+#[must_use]
 pub fn spiral(p: SpiralParams) -> PathObject {
     let b_deg = p.tightness_deg.clamp(MIN_TIGHTNESS_DEG, MAX_TIGHTNESS_DEG);
     let b = b_deg.to_radians();

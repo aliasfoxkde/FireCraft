@@ -1,4 +1,4 @@
-//! FireCraft typed document model (`doc`, L1).
+//! `FireCraft` typed document model (`doc`, L1).
 //!
 //! The model mirrors Fireworks document semantics: a document (`MKBv`)
 //! holds pages (`PDCv`), pages hold layer lists, layers hold one cell

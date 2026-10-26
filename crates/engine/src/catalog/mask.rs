@@ -523,8 +523,8 @@ enum RemoveMode {
     Discard,
 }
 
-/// Attaches `id` back where `owner` was captured (the AddMask /
-/// RemoveMask splice step).
+/// Attaches `id` back where `owner` was captured (the `AddMask` /
+/// `RemoveMask` splice step).
 pub(crate) fn attach_at(
     document: &mut Document,
     name: &'static str,

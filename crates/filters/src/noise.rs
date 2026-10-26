@@ -1,5 +1,5 @@
 //! Seeded noise. Deterministic by construction: the generator is
-//! explicit-seed SplitMix64 and the stream is consumed in fixed
+//! explicit-seed `SplitMix64` and the stream is consumed in fixed
 //! row-major order, so a given `(input, seed, amount, monochrome)`
 //! replays bit-identically — journal replay depends on it. The seed is
 //! part of every filter payload that carries noise (M7 ticket rule).
@@ -7,7 +7,7 @@
 use crate::{Surface, clamp255};
 use color::Rgba8;
 
-/// SplitMix64: 64-bit state, one multiply-xor cascade per draw.
+/// `SplitMix64`: 64-bit state, one multiply-xor cascade per draw.
 /// Not cryptographic — it is fast, stateless per draw, and its output
 /// is pinned by these tests, which is all replay needs.
 #[derive(Debug, Clone)]

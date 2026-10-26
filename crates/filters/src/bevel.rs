@@ -1,6 +1,6 @@
 //! Bevel / emboss composites (M14 task 3b): the gradient-lighting
 //! family — inner/outer bevel, raised/inset emboss, and the MX
-//! "Glow" variant (BevelType 4), all driven by one height field.
+//! "Glow" variant (`BevelType` 4), all driven by one height field.
 //!
 //! The model: the silhouette alpha is a plateau (255 inside, 0
 //! outside); `box_blur` by the bevel width rounds the rim into a

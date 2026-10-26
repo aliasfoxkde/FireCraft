@@ -50,14 +50,14 @@ pub enum NodeValue {
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Node {
-    /// The FourCC as it appears in the stream (type letter included).
+    /// The `FourCC` as it appears in the stream (type letter included).
     pub fourcc: [u8; 4],
     /// The typed payload.
     pub value: NodeValue,
 }
 
 impl Node {
-    /// The ThreeCC (FourCC minus its type letter) as a string.
+    /// The `ThreeCC` (`FourCC` minus its type letter) as a string.
     #[must_use]
     pub fn name(&self) -> &str {
         std::str::from_utf8(&self.fourcc[..3]).unwrap_or_default()

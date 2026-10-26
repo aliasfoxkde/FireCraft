@@ -24,6 +24,8 @@ unreachable = "deny"
 dbg_macro = "deny"
 print_stdout = "deny"
 exit = "deny"
+doc_markdown = "deny"
+must_use_candidate = "deny"
 
 [profile.release]
 lto = "thin"

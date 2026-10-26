@@ -410,6 +410,7 @@ fn group_child_bounds(document: &Document, data: &ObjectData, depth: u32) -> (f6
 /// Anchor-point bounds of a path (`(left, top, width, height)`; the
 /// editable geometry, not the primitive source). Empty contours give
 /// zeros.
+#[must_use]
 pub fn path_bounds(path: &doc::PathObject) -> (f64, f64, f64, f64) {
     let mut min = Point::new(f64::INFINITY, f64::INFINITY);
     let mut max = Point::new(f64::NEG_INFINITY, f64::NEG_INFINITY);

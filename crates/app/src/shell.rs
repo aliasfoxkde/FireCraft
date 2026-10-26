@@ -103,7 +103,7 @@ fn tool_key(tool: Tool) -> &'static str {
 }
 
 /// Original glyph art for a tool, drawn from `Painter` primitives.
-/// Silhouettes are FireCraft's own — no Adobe icon bytes, no traces.
+/// Silhouettes are `FireCraft`'s own — no Adobe icon bytes, no traces.
 fn draw_tool_glyph(painter: &egui::Painter, rect: Rect, tool: Tool, color: Color32) {
     let c = rect.center();
     let stroke = (1.4, color);
@@ -1324,6 +1324,7 @@ pub struct Shell {
 
 impl Shell {
     /// Builds the shell with desktop platform defaults.
+    #[must_use]
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         apply_cs6_theme(&cc.egui_ctx);
         Self::with_platform(
@@ -1334,6 +1335,7 @@ impl Shell {
     }
 
     /// Builds the shell over an editor and explicit platform services.
+    #[must_use]
     pub fn with_platform(
         editor: Editor,
         fs: Box<dyn engine::platform::FileSystem>,

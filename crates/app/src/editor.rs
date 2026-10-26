@@ -2390,6 +2390,7 @@ pub fn selection_edges(mask: &doc::SelectionMask) -> Vec<[f64; 4]> {
     edges
 }
 
+#[must_use]
 pub fn bounds_of(path: &doc::PathObject) -> geom::Rect {
     let mut points = Vec::new();
     for contour in &path.contours {

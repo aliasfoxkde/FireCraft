@@ -1,4 +1,4 @@
-//! FireCraft import/export codecs (L4).
+//! `FireCraft` import/export codecs (L4).
 //!
 //! A pure data plane: byte buffers in, byte buffers out, no `std::fs`
 //! and no shell concerns — the engine's platform-services traits and
@@ -76,6 +76,7 @@ impl<'a> Plane<'a> {
     /// the house integer policy `(77r + 151g + 28b + 127) / 255`
     /// (ITU-R 601 weights, half-up — same policy as the `filters`
     /// kernels).
+    #[must_use]
     pub fn luma_at(&self, x: u32, y: u32, matte: Matte) -> u8 {
         let px = self.pixel(x, y);
         let r = flatten_channel(px[0], px[3], matte.red_channel());
@@ -87,6 +88,7 @@ impl<'a> Plane<'a> {
 
     /// The plane flattened to opaque RGB over `matte` (for
     /// alpha-less formats).
+    #[must_use]
     pub fn flatten_rgb(&self, matte: Matte) -> Vec<u8> {
         let mut rgb = Vec::with_capacity(self.rgba.len() / 4 * 3);
         for px in self.rgba.chunks_exact(4) {

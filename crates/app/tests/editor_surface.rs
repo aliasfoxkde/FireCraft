@@ -4,7 +4,7 @@
 //! eraser, gradient), pixel selections (lasso, ellipse, polygon,
 //! wand-adjacent helpers), drag classes (creation, move, clone,
 //! constrained), guide drags, library export/import, and the
-//! import_styles refusal paths. Every expected value is hand-derived
+//! `import_styles` refusal paths. Every expected value is hand-derived
 //! from the editor's documented defaults.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]

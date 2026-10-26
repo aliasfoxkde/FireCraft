@@ -1,4 +1,4 @@
-//! Color foundations for FireCraft: pixel formats, premultiplication,
+//! Color foundations for `FireCraft`: pixel formats, premultiplication,
 //! sRGB/linear conversion, and the 27 blend modes.
 //!
 //! Layer L0: depends on nothing from this workspace.

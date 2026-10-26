@@ -39,6 +39,7 @@ pub struct PieParams {
 impl PieParams {
     /// The pie tool's insert defaults: radius 100, no inner radius,
     /// quarter sector from −90° to 0°.
+    #[must_use]
     pub fn pie_defaults(center: Point) -> Self {
         Self {
             center,
@@ -52,6 +53,7 @@ impl PieParams {
 
     /// The doughnut tool's insert defaults: radius 100, inner 40,
     /// coincident angles (the full-circle shortcut).
+    #[must_use]
     pub fn doughnut_defaults(center: Point) -> Self {
         Self {
             center,
@@ -192,12 +194,14 @@ fn circle_nodes(center: Point, radius: f64) -> Vec<PathPoint> {
 }
 
 /// The doughnut tool: the shared generator pinned to pie = false.
+#[must_use]
 pub fn doughnut(mut p: PieParams) -> PathObject {
     p.is_pie = false;
     pie(p)
 }
 
 /// Generates the pie wedge / doughnut sector.
+#[must_use]
 pub fn pie(p: PieParams) -> PathObject {
     if !p.is_pie && p.start == p.end {
         // Doughnut circle shortcut: outer circle, inner circle when the

@@ -1,4 +1,4 @@
-//! FireCraft deterministic CPU compositor (L3).
+//! `FireCraft` deterministic CPU compositor (L3).
 //!
 //! Renders a [`Document`] page in one state (frame) to premultiplied
 //! sRGB RGBA8 pixels through `vello_cpu` (decision 0002). Same input →

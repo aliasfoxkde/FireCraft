@@ -2,11 +2,11 @@
 //!
 //! Path scheme used by the [`UnknownBag`]: a bag entry is keyed by the
 //! structural path of the *container* whose child list holds it, plus the
-//! child index within that list. Container paths are FourCC chains
+//! child index within that list. Container paths are `FourCC` chains
 //! (`/MKBv/LYLv/LAYv/CLLv/CELv/ELMv`); repetition that is canonical in
 //! real files is disambiguated with an index (`/…/ELMv[3]` is the third
 //! child of that `ELMv`, `/PDCv[1]` is the second page). The chain form
-//! assumes a FourCC container appears at most once per parent — true for
+//! assumes a `FourCC` container appears at most once per parent — true for
 //! every canonical file; malformed duplicates collapse onto the same
 //! path, which degrades to re-emission in the first position, never to
 //! data loss.
@@ -22,7 +22,7 @@ pub use reader::{read, read_style_library};
 pub use unknown::{UnknownBag, UnknownEntry};
 pub use writer::{WriteStats, write, write_style_library};
 
-/// A Fireworks node FourCC (`PTHv`, `OPAi`, …).
+/// A Fireworks node `FourCC` (`PTHv`, `OPAi`, …).
 pub type FourCC = [u8; 4];
 
 /// Mapping failures. Type-level violations on *known* nodes are errors;
@@ -34,7 +34,7 @@ pub enum MapError {
     BadShape {
         /// Path of the container holding the offending node.
         path: String,
-        /// The offending node's FourCC.
+        /// The offending node's `FourCC`.
         node: FourCC,
         /// What the mapper needed.
         expected: &'static str,

@@ -44,6 +44,7 @@ pub struct PolygonParams {
 impl PolygonParams {
     /// The tool's insert defaults: heptagon (N=7), all sides, no inner
     /// ring.
+    #[must_use]
     pub fn defaults(center: Point) -> Self {
         Self {
             center,
@@ -58,6 +59,7 @@ impl PolygonParams {
 }
 
 /// Generates the polygon (ring or pinwheel).
+#[must_use]
 pub fn smart_polygon(p: PolygonParams) -> PathObject {
     let n = (p.points as f64).clamp(MIN_POINTS as f64, MAX_POINTS as f64) as u32;
     let s = p.sections.clamp(1, n);

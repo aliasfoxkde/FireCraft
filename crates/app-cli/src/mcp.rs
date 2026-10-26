@@ -78,6 +78,7 @@ pub fn handle(
 
 /// A frame that failed JSON parsing gets this typed reply (`id` null —
 /// there is nothing to echo).
+#[must_use]
 pub fn parse_error(detail: &str) -> serde_json::Value {
     error_reply(serde_json::Value::Null, PARSE_ERROR, detail)
 }

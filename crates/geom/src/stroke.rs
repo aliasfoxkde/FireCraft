@@ -1,6 +1,6 @@
 //! Stroke-to-outline expansion, delegated to [`kurbo::stroke`].
 //!
-//! Fireworks renders strokes as expanded outlines; FireCraft keeps the
+//! Fireworks renders strokes as expanded outlines; `FireCraft` keeps the
 //! same model (a stroke produces a filled path), so this module is a thin
 //! convenience wrapper that pins our default tolerance and options.
 

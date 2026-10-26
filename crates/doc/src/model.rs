@@ -28,7 +28,7 @@ pub struct Effect {
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct EffectProperty {
-    /// `DCKs` key (e.g. "EffectMoaID", "gaussian_blur_radius").
+    /// `DCKs` key (e.g. "`EffectMoaID`", "`gaussian_blur_radius`").
     pub key: String,
     pub value: EffectValue,
 }
@@ -512,6 +512,7 @@ pub enum SymbolType {
 
 impl SymbolType {
     /// Raw `MSYi` payload; `None` when the node is omitted (graphic).
+    #[must_use]
     pub fn raw(self) -> Option<i64> {
         match self {
             SymbolType::Graphic => None,
@@ -522,6 +523,7 @@ impl SymbolType {
     }
 
     /// Classifies an `MSYi` payload (absent node → [`SymbolType::Graphic`]).
+    #[must_use]
     pub fn from_raw(raw: Option<i64>) -> SymbolType {
         match raw {
             None => SymbolType::Graphic,
@@ -661,7 +663,7 @@ pub struct StyleEntry {
 /// `FATi` `FARi` `FABi` `FONs` [`CFTs`] `PTSf` `BOLb` `ITLb` `UNDb`
 /// `JSTi` `HSCf` `RKNf` `LEDf` `LDMi` `ATKb` `TIAb` `TAAi` `TA1i`
 /// `TA2i` `TOSi` spine in file order. Field semantics mirror the
-/// text-object slots of the same FourCC where those are decoded
+/// text-object slots of the same `FourCC` where those are decoded
 /// (`FONs`, `PTSf`, `BOLb`, `ITLb`, `UNDb`, `JSTi`, `HSCf`, `RKNf`,
 /// `LEDf`, `LDMi`); the rest are preserved raw with their corpus
 /// values recorded.
@@ -919,6 +921,7 @@ impl PathObject {
     /// nonzero fill, no paint — the shape every geometry generator
     /// starts from (booleans, Auto Shapes). Paint and metadata are the
     /// caller's to attach.
+    #[must_use]
     pub fn neutral(contours: Vec<Contour>) -> Self {
         Self {
             contours,
@@ -982,7 +985,7 @@ pub struct PrimitiveSource {
 }
 
 /// `TFSv` — one style set shared by the [`TextRun`]s that follow it.
-/// Every field is optional: the dictionary marks the TFSv children with
+/// Every field is optional: the dictionary marks the `TFSv` children with
 /// `*` (zero or more), so a file may omit any of them and the reader
 /// must too. Unmapped styling (gradient fills, `CFTs` typefaces) stays
 /// bagged at the container level.
@@ -1024,7 +1027,7 @@ pub struct TextStyle {
 
 /// `TRNs` — one run of characters sharing the enclosing [`TextStyle`].
 /// The dictionary does not document the run payload's node shape and no
-/// corpus sample exists yet; FireCraft emits the characters as a string
+/// corpus sample exists yet; `FireCraft` emits the characters as a string
 /// node and accepts a string node back (decision 0007). Anything else
 /// rides in the unknown bag.
 ///
@@ -1114,6 +1117,7 @@ pub struct TextObject {
 impl TextObject {
     /// A neutral, visible text object over `frame`: no style, no runs,
     /// opaque, normal blend — the object `text.createText` starts from.
+    #[must_use]
     pub fn new(frame: Rect) -> Self {
         Self {
             frame,

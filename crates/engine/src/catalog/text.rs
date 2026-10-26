@@ -845,7 +845,7 @@ struct ApplyFontMarkupPayload {
     id: doc::ObjectId,
     /// The attribute: "size" or "face".
     font_attribute: String,
-    /// The value: "NNNpt" for size, the family name for face.
+    /// The value: "`NNNpt`" for size, the family name for face.
     value: String,
 }
 

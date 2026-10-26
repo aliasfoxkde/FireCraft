@@ -3,7 +3,7 @@
 //!
 //! Always RGBA8 (`PhotometricInterpretation` RGB with extra sample =
 //! associated alpha is what every mainstream reader accepts for
-//! straight RGBA). Compression: uncompressed or PackBits (the CS6
+//! straight RGBA). Compression: uncompressed or `PackBits` (the CS6
 //! save dialog's two options for the format's lossless family; LZW
 //! and Deflate are recorded as future options in the decision note).
 
@@ -20,7 +20,7 @@ pub enum TiffCompression {
     /// No compression (default — maximum reader compatibility).
     #[default]
     None,
-    /// PackBits run-length coding (the classic Mac-era TIFF default).
+    /// `PackBits` run-length coding (the classic Mac-era TIFF default).
     Packbits,
 }
 
