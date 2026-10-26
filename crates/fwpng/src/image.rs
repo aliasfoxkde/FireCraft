@@ -31,14 +31,16 @@ pub struct StandardImage {
 pub fn decode_standard_rgba8(input: &[u8]) -> Result<StandardImage, FwPngError> {
     let mut decoder = png::Decoder::new(Cursor::new(input));
     decoder.set_transformations(png::Transformations::normalize_to_color8());
-    let mut reader = decoder.read_info().map_err(png_decode_err)?;
+    let mut reader = decoder.read_info().map_err(|e| png_decode_err(&e))?;
     let size = reader
         .output_buffer_size()
         .ok_or(FwPngError::UnsupportedImage {
             layout: "decoder reported no output size".to_string(),
         })?;
     let mut buf = vec![0u8; size];
-    let info = reader.next_frame(&mut buf).map_err(png_decode_err)?;
+    let info = reader
+        .next_frame(&mut buf)
+        .map_err(|e| png_decode_err(&e))?;
     buf.truncate(info.buffer_size());
 
     let rgba8 = match info.color_type {
@@ -59,7 +61,7 @@ pub fn decode_standard_rgba8(input: &[u8]) -> Result<StandardImage, FwPngError> 
     })
 }
 
-fn png_decode_err(err: png::DecodingError) -> FwPngError {
+fn png_decode_err(err: &png::DecodingError) -> FwPngError {
     FwPngError::PngDecode {
         reason: err.to_string(),
     }

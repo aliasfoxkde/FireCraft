@@ -40,7 +40,7 @@ pub fn encode(plane: &Plane<'_>, options: &TiffOptions) -> Result<Vec<u8>, Expor
     {
         // `TiffEncoder` needs `Write + Seek`; buffer through a cursor.
         let encoder = TiffEncoder::new(Cursor::new(&mut buffer))
-            .map_err(|error| encode_err("writer setup", error))?;
+            .map_err(|error| encode_err("writer setup", &error))?;
         let mut encoder = match options.compression {
             TiffCompression::None => encoder,
             TiffCompression::Packbits => encoder.with_compression(Compression::Packbits),
@@ -49,12 +49,12 @@ pub fn encode(plane: &Plane<'_>, options: &TiffOptions) -> Result<Vec<u8>, Expor
         // Drop then writes the (already complete) IFD chain.
         encoder
             .write_image::<RGBA8>(plane.width, plane.height, plane.rgba)
-            .map_err(|error| encode_err("pixel data", error))?;
+            .map_err(|error| encode_err("pixel data", &error))?;
     }
     Ok(buffer)
 }
 
-fn encode_err(stage: &str, error: tiff::TiffError) -> ExportError {
+fn encode_err(stage: &str, error: &tiff::TiffError) -> ExportError {
     ExportError::Encode {
         format: "tiff",
         reason: format!("{stage}: {error}"),

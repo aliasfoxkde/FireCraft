@@ -26,6 +26,7 @@ print_stdout = "deny"
 exit = "deny"
 doc_markdown = "deny"
 must_use_candidate = "deny"
+needless_pass_by_value = "deny"
 
 [profile.release]
 lto = "thin"

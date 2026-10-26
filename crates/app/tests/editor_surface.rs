@@ -356,7 +356,7 @@ fn a_clone_drag_duplicates_then_moves_the_copies() {
     let id = editor.current_cell().unwrap().elements[0];
 
     let created = editor
-        .begin_clone_drag(Point::new(0.0, 0.0), vec![id])
+        .begin_clone_drag(Point::new(0.0, 0.0), &[id])
         .unwrap();
     assert_eq!(created.len(), 1);
     assert_ne!(created[0], id);

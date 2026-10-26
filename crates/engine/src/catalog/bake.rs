@@ -144,7 +144,7 @@ fn owning_page(
 fn bake_core(
     document: &mut Document,
     name: &'static str,
-    plan: compose::Plan,
+    plan: &compose::Plan,
 ) -> Result<Delta, EngineError> {
     if document.object_selection.is_empty() {
         return Err(EngineError::InvalidState {
@@ -365,7 +365,11 @@ impl TypedCommand for BakeSelection {
             None,
             &payload.params,
         )?;
-        bake_core(document, NAME, compose::plan(std::slice::from_ref(&effect)))
+        bake_core(
+            document,
+            NAME,
+            &compose::plan(std::slice::from_ref(&effect)),
+        )
     }
 }
 
@@ -403,7 +407,11 @@ impl TypedCommand for BakeSelectionByID {
             Some(&payload.id),
             &payload.params,
         )?;
-        bake_core(document, NAME, compose::plan(std::slice::from_ref(&effect)))
+        bake_core(
+            document,
+            NAME,
+            &compose::plan(std::slice::from_ref(&effect)),
+        )
     }
 }
 
@@ -445,7 +453,11 @@ impl TypedCommand for BakeSelectionByName {
             Some(guid),
             &payload.params,
         )?;
-        bake_core(document, NAME, compose::plan(std::slice::from_ref(&effect)))
+        bake_core(
+            document,
+            NAME,
+            &compose::plan(std::slice::from_ref(&effect)),
+        )
     }
 }
 
@@ -531,7 +543,7 @@ impl TypedCommand for ConvolveSelection {
             }],
             skipped: 0,
         };
-        bake_core(document, NAME, plan)
+        bake_core(document, NAME, &plan)
     }
 }
 
@@ -619,7 +631,7 @@ impl TypedCommand for MotionBlurSelection {
             ops: vec![op],
             skipped: 0,
         };
-        bake_core(document, NAME, plan)
+        bake_core(document, NAME, &plan)
     }
 }
 

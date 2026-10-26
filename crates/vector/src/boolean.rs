@@ -172,7 +172,7 @@ pub fn boolean(a: &PathObject, b: &PathObject, op: BooleanOp) -> Result<PathObje
     collect_boundary(&oa, &params_a, (&oa, &ob), op, &mut boundary)?;
     collect_boundary(&ob, &params_b, (&oa, &ob), op, &mut boundary)?;
 
-    let loops = stitch(boundary)?;
+    let loops = stitch(&boundary)?;
     Ok(assemble(loops))
 }
 
@@ -317,7 +317,7 @@ fn piece_frame(piece: &Piece, t: f64) -> Result<(Point, Point), VectorError> {
 /// incoming direction — the standard face-walk rule for keeping the
 /// region interior on the walker's left. Ties break by piece index, so
 /// the walk is deterministic.
-fn stitch(pieces: Vec<Piece>) -> Result<Vec<Vec<Piece>>, VectorError> {
+fn stitch(pieces: &[Piece]) -> Result<Vec<Vec<Piece>>, VectorError> {
     let mut used = vec![false; pieces.len()];
     let mut loops = Vec::new();
     for start in 0..pieces.len() {

@@ -50,7 +50,7 @@ pub fn write(
         unconsumed_unknown: writer.bag.len(),
     };
     let bagged = writer.bag.take_under("");
-    Ok((splice(mapped, bagged), stats))
+    Ok((splice(mapped, &bagged), stats))
 }
 
 /// Writes a style library: named [`StyleEntry`] records plus the
@@ -73,7 +73,7 @@ pub fn write_style_library(
         unconsumed_unknown: writer.bag.len(),
     };
     let bagged = writer.bag.take_under("");
-    Ok((splice(vec![node], bagged), stats))
+    Ok((splice(vec![node], &bagged), stats))
 }
 
 fn n_i(fourcc: FourCC, value: i64) -> Node {
@@ -202,7 +202,7 @@ pub(crate) fn push_style_nodes(mapped: &mut Vec<Node>, style: &TextStyle) {
     }
 }
 
-pub(crate) fn splice(mapped: Vec<Node>, bagged: Vec<(usize, Node)>) -> Vec<Node> {
+pub(crate) fn splice(mapped: Vec<Node>, bagged: &[(usize, Node)]) -> Vec<Node> {
     let mut out = Vec::with_capacity(mapped.len() + bagged.len());
     let mut mapped = mapped.into_iter();
     let mut bag_at = 0usize;
@@ -253,7 +253,7 @@ struct Writer<'a> {
 impl Writer<'_> {
     fn splice_container(&mut self, mapped: Vec<Node>, path: &str) -> Vec<Node> {
         let bagged = self.bag.take_under(path);
-        splice(mapped, bagged)
+        splice(mapped, &bagged)
     }
 
     /// Document node (`MKBv`). Dictionary order: version scalars, frame
@@ -460,7 +460,7 @@ impl Writer<'_> {
             let mstv_path = format!("{path}/MSTv[{}]", indices[i]);
             mapped.push(self.write_symbol_definition(symbol, &mstv_path)?);
         }
-        Ok(n_kids(*b"MSLv", splice(mapped, bagged)))
+        Ok(n_kids(*b"MSLv", splice(mapped, &bagged)))
     }
 
     fn write_symbol_definition(
@@ -539,21 +539,21 @@ impl Writer<'_> {
         for value in guides.controls {
             mapped.push(n_f(*b"NGCf", value));
         }
-        mapped.push(self.write_bounds(&guides.shape_bounds, format!("{path}/NGMv"), *b"NGMv"));
-        mapped.push(self.write_bounds(&guides.limits, format!("{path}/NGVv"), *b"NGVv"));
+        mapped.push(self.write_bounds(&guides.shape_bounds, &format!("{path}/NGMv"), *b"NGMv"));
+        mapped.push(self.write_bounds(&guides.limits, &format!("{path}/NGVv"), *b"NGVv"));
         let children = self.splice_container(mapped, path);
         Ok(n_kids(*b"NGSv", children))
     }
 
     /// `NGMv`/`NGVv` — `LFTf TOPf RITf BOTf` bounds.
-    fn write_bounds(&mut self, rect: &Rect, path: String, fourcc: FourCC) -> Node {
+    fn write_bounds(&mut self, rect: &Rect, path: &str, fourcc: FourCC) -> Node {
         let mapped = vec![
             n_f(*b"LFTf", rect.x0),
             n_f(*b"TOPf", rect.y0),
             n_f(*b"RITf", rect.x1),
             n_f(*b"BOTf", rect.y1),
         ];
-        let children = self.splice_container(mapped, &path);
+        let children = self.splice_container(mapped, path);
         n_kids(fourcc, children)
     }
 
@@ -577,7 +577,7 @@ impl Writer<'_> {
                 mapped.push(self.write_layer(layer, &layv_path)?);
             }
         }
-        Ok(n_kids(*b"LYLv", splice(mapped, bagged)))
+        Ok(n_kids(*b"LYLv", splice(mapped, &bagged)))
     }
 
     /// The shared-definitions node (`LSMv`, decision 0022): one `LSEv`
@@ -605,7 +605,7 @@ impl Writer<'_> {
             );
             mapped.push(n_kids(*b"LSEv", children));
         }
-        Ok(n_kids(*b"LSMv", splice(mapped, bagged)))
+        Ok(n_kids(*b"LSMv", splice(mapped, &bagged)))
     }
 
     fn write_layer(&mut self, layer: &Layer, path: &str) -> Result<Node, MapError> {
@@ -639,7 +639,7 @@ impl Writer<'_> {
             let celv_path = format!("{path}/CELv[{}]", indices[i]);
             mapped.push(self.write_cell(cell, &celv_path)?);
         }
-        Ok(n_kids(*b"CLLv", splice(mapped, bagged)))
+        Ok(n_kids(*b"CLLv", splice(mapped, &bagged)))
     }
 
     fn write_cell(&mut self, cell: &Cell, path: &str) -> Result<Node, MapError> {
@@ -666,7 +666,7 @@ impl Writer<'_> {
             let object_path = format!("{path}[{}]", indices[i]);
             mapped.push(self.write_object(*id, &object_path)?);
         }
-        Ok(n_kids(*b"ELMv", splice(mapped, bagged)))
+        Ok(n_kids(*b"ELMv", splice(mapped, &bagged)))
     }
 
     /// Exhaustive over [`ObjectData`]: adding a variant without a
@@ -772,7 +772,7 @@ impl Writer<'_> {
                 .iter()
                 .map(effect_property_node)
                 .collect::<Vec<_>>();
-            mapped.push(n_kids(*b"EPSv", splice(props, bagged)));
+            mapped.push(n_kids(*b"EPSv", splice(props, &bagged)));
         }
         let children = self.splice_container(mapped, path);
         Ok(n_kids(*b"EFLv", children))
@@ -853,7 +853,7 @@ impl Writer<'_> {
             self.write_tiles(&pattern.tiles, &img_path)?,
         ];
         let bagged = self.bag.take_under(&img_path);
-        mapped.push(n_kids(*b"IMGv", splice(img, bagged)));
+        mapped.push(n_kids(*b"IMGv", splice(img, &bagged)));
         let children = self.splice_container(mapped, path);
         Ok(n_kids(*b"FPTv", children))
     }
@@ -880,7 +880,7 @@ impl Writer<'_> {
                 ));
             }
             let bagged = self.bag.take_under(&fgyv_path);
-            mapped.push(n_kids(*b"FGYv", splice(ramps, bagged)));
+            mapped.push(n_kids(*b"FGYv", splice(ramps, &bagged)));
         }
         let children = self.splice_container(mapped, path);
         Ok(n_kids(*b"FGLv", children))
@@ -902,7 +902,7 @@ impl Writer<'_> {
             let zstv_path = format!("{path}/ZSTv[{}]", indices[i]);
             mapped.push(self.write_style_entry(entry, &zstv_path)?);
         }
-        Ok(n_kids(*b"ZSLv", splice(mapped, bagged)))
+        Ok(n_kids(*b"ZSLv", splice(mapped, &bagged)))
     }
 
     /// One `ZSTv`, in the corpus's fixed child spine: `ZSNs ZSFi ZSOi
@@ -965,10 +965,10 @@ impl Writer<'_> {
             let fgiv_path = format!("{path}/FGIv[{i}]");
             let bagged = self.bag.take_under(&fgiv_path);
             let point = vec![n_f(*b"FGPf", stop.position), n_i(*b"FGCi", stop.color_raw)];
-            mapped.push(n_kids(*b"FGIv", splice(point, bagged)));
+            mapped.push(n_kids(*b"FGIv", splice(point, &bagged)));
         }
         let bagged = self.bag.take_under(path);
-        n_kids(fourcc, splice(mapped, bagged))
+        n_kids(fourcc, splice(mapped, &bagged))
     }
 
     fn write_contours(
@@ -984,7 +984,7 @@ impl Writer<'_> {
             let pbpv_path = format!("{path}/PBPv[{}]", indices[i]);
             mapped.push(self.write_contour(contour, &pbpv_path)?);
         }
-        Ok(n_kids(*b"PBLv", splice(mapped, bagged)))
+        Ok(n_kids(*b"PBLv", splice(mapped, &bagged)))
     }
 
     fn write_contour(&mut self, contour: &Contour, path: &str) -> Result<Node, MapError> {
@@ -998,7 +998,7 @@ impl Writer<'_> {
             let pbtv_path = format!("{path}/PBTv[{}]", indices[2 + i]);
             mapped.push(self.write_path_point(point, &pbtv_path)?);
         }
-        Ok(n_kids(*b"PBPv", splice(mapped, bagged)))
+        Ok(n_kids(*b"PBPv", splice(mapped, &bagged)))
     }
 
     fn write_path_point(&mut self, point: &PathPoint, path: &str) -> Result<Node, MapError> {
@@ -1041,11 +1041,11 @@ impl Writer<'_> {
         rect_kids.push(n_f(*b"BOTf", primitive.rect.y1));
         let rctv_path = format!("{path}/RCTv");
         let rctv_bagged = self.bag.take_under(&rctv_path);
-        mapped.push(n_kids(*b"RCTv", splice(rect_kids, rctv_bagged)));
+        mapped.push(n_kids(*b"RCTv", splice(rect_kids, &rctv_bagged)));
         if primitive.maintain_radius {
             mapped.push(n_b(*b"RDMb", true));
         }
-        Ok(n_kids(*b"PRIv", splice(mapped, bagged)))
+        Ok(n_kids(*b"PRIv", splice(mapped, &bagged)))
     }
 
     /// `path` is this `MTXv` node's own path (unknown `M*` children are
@@ -1064,7 +1064,7 @@ impl Writer<'_> {
             n_f(*b"M22f", 1.0),
         ];
         let bagged = self.bag.take_under(path);
-        n_kids(*b"MTXv", splice(mapped, bagged))
+        n_kids(*b"MTXv", splice(mapped, &bagged))
     }
 
     fn write_text_object(&mut self, object: &TextObject, path: &str) -> Result<Node, MapError> {
@@ -1141,10 +1141,10 @@ impl Writer<'_> {
         }
         let bagged = self.bag.take_under(&format!("{path}/PTHv"));
         let pblv = self.write_contours(&on_path.path, &format!("{path}/PTHv[0]"))?;
-        let pthv = n_kids(*b"PTHv", splice(vec![pblv], bagged));
+        let pthv = n_kids(*b"PTHv", splice(vec![pblv], &bagged));
         mapped.push(pthv);
         let rest = self.bag.take_under(path);
-        Ok(n_kids(*b"TAPv", splice(mapped, rest)))
+        Ok(n_kids(*b"TAPv", splice(mapped, &rest)))
     }
 
     /// One `TFSv`: the base style scalars in dictionary order, then
@@ -1160,7 +1160,7 @@ impl Writer<'_> {
             mapped.push(n_s(*b"TRNs", &run.text));
         }
         let bagged = self.bag.take_under(path);
-        n_kids(*b"TFSv", splice(mapped, bagged))
+        n_kids(*b"TFSv", splice(mapped, &bagged))
     }
 
     fn write_group_object(&mut self, object: &GroupObject, path: &str) -> Result<Node, MapError> {
@@ -1226,7 +1226,7 @@ impl Writer<'_> {
                 TileRef::Matte(argb) => n_i(*b"TMCi", *argb),
             });
         }
-        Ok(n_kids(*b"TILv", splice(mapped, bagged)))
+        Ok(n_kids(*b"TILv", splice(mapped, &bagged)))
     }
 
     fn write_slice_object(&mut self, object: &SliceObject, path: &str) -> Result<Node, MapError> {
@@ -1284,14 +1284,14 @@ impl Writer<'_> {
                 let kids = self.splice_container(beti, &behv_path);
                 behv_nodes.push(n_kids(*b"BEHv", kids));
             }
-            let bevv = splice(behv_nodes, bagged_bevv);
+            let bevv = splice(behv_nodes, &bagged_bevv);
             mapped.push(n_kids(*b"BEVv", bevv));
         } else {
             // Unreadable behaviors (whole-bagged) still re-emit.
             let bevv_path = format!("{path}/BEVv");
             let bagged_bevv = self.bag.take_under(&bevv_path);
             if !bagged_bevv.is_empty() {
-                mapped.push(n_kids(*b"BEVv", splice(Vec::new(), bagged_bevv)));
+                mapped.push(n_kids(*b"BEVv", splice(Vec::new(), &bagged_bevv)));
             }
         }
         if let Some(slice_type) = object.slice_type {
@@ -1423,6 +1423,6 @@ impl Writer<'_> {
         for position in positions {
             mapped.push(n_f(*b"GDCf", *position));
         }
-        Ok(n_kids(fourcc, splice(mapped, bagged)))
+        Ok(n_kids(fourcc, splice(mapped, &bagged)))
     }
 }

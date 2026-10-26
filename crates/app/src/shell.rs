@@ -4315,7 +4315,7 @@ impl Shell {
                                         };
                                         let outcome = if ui.input(|i| i.modifiers.alt) {
                                             self.editor
-                                                .begin_clone_drag(world, ids)
+                                                .begin_clone_drag(world, &ids)
                                                 .map(|_created| ())
                                         } else {
                                             self.editor.begin_move_drag(world, ids)

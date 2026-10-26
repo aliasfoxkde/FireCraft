@@ -1060,7 +1060,7 @@ impl TypedCommand for RemoveMask {
             };
             let coverage = mask_gray_plane(document, NAME, mask_id, &content)?;
             deltas.push(apply_coverage_to_image(
-                document, NAME, content_id, &content, coverage,
+                document, NAME, content_id, &content, &coverage,
             )?);
         }
 
@@ -1106,7 +1106,7 @@ fn apply_coverage_to_image(
     name: &'static str,
     id: ObjectId,
     image: &ImageObject,
-    coverage: SelectionMask,
+    coverage: &SelectionMask,
 ) -> Result<Delta, EngineError> {
     let (width, height) = check_editable(image, name)?;
     if u64::from(coverage.width) != width || u64::from(coverage.height) != height {
@@ -1118,7 +1118,7 @@ fn apply_coverage_to_image(
             ),
         });
     }
-    let tile_ids = touched_tiles(image, &coverage);
+    let tile_ids = touched_tiles(image, coverage);
     let before_tiles: Vec<(u32, raster::Tile)> = tile_ids
         .iter()
         .filter_map(|tile_id| {

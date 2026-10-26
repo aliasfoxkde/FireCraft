@@ -235,7 +235,7 @@ impl AutoShape {
     /// shapes take the frame center + radius, frame-based shapes the
     /// normalized frame, line-based shapes the raw endpoints.
     #[must_use]
-    fn payload(self, drag: Drag, page: usize, layer: usize, frame: usize) -> serde_json::Value {
+    fn payload(self, drag: &Drag, page: usize, layer: usize, frame: usize) -> serde_json::Value {
         let (sx, sy) = (drag.start.x, drag.start.y);
         let (cx, cy) = (drag.current.x, drag.current.y);
         let frame_json = serde_json::json!({
@@ -1356,13 +1356,13 @@ impl Editor {
     pub fn begin_clone_drag(
         &mut self,
         world: geom::Point,
-        ids: Vec<ObjectId>,
+        ids: &[ObjectId],
     ) -> Result<Vec<ObjectId>, EngineError> {
         const NAME: &str = "object.duplicate";
         self.session.begin_transaction("Move")?;
         let mut created = Vec::new();
         let result = (|| -> Result<(), EngineError> {
-            for id in &ids {
+            for id in ids {
                 let delta = self
                     .session
                     .apply_delta(NAME, serde_json::json!({ "id": id }))?;
@@ -1522,7 +1522,7 @@ impl Editor {
             Tool::AutoShape(shape) => {
                 self.apply(
                     shape.command(),
-                    shape.payload(drag, self.page, self.active_layer(), self.frame),
+                    shape.payload(&drag, self.page, self.active_layer(), self.frame),
                 )?;
                 true
             }
@@ -2756,7 +2756,7 @@ mod tests {
 
         editor.tool = Tool::Pointer;
         let created = editor
-            .begin_clone_drag(geom::Point::new(30.0, 20.0), vec![id])
+            .begin_clone_drag(geom::Point::new(30.0, 20.0), &[id])
             .unwrap();
         editor.drag_to(geom::Point::new(60.0, 40.0));
         editor.end_drag().unwrap();

@@ -46,7 +46,7 @@ pub(crate) fn install(registry: &mut CommandRegistry) -> Result<(), EngineError>
 /// Maps a vector-pipeline failure to a command error. [`VectorError`]
 /// is deterministic given the geometry, so these are state refusals,
 /// not lineage bugs.
-fn vector_error(name: &'static str, error: vector::VectorError) -> EngineError {
+fn vector_error(name: &'static str, error: &vector::VectorError) -> EngineError {
     EngineError::InvalidState {
         name: name.to_owned(),
         detail: error.to_string(),
@@ -124,7 +124,7 @@ impl TypedCommand for PathBoolean {
         // Compute before anything mutates: a refused combine touches
         // neither operand.
         let result = vector::boolean(a_path, b_path, payload.op.into())
-            .map_err(|error| vector_error(NAME, error))?;
+            .map_err(|error| vector_error(NAME, &error))?;
 
         // Pre-flight every detach the chosen branch will perform: an
         // unattached (or group-orphaned) operand must refuse BEFORE the
@@ -299,7 +299,7 @@ impl TypedCommand for PathSimplify {
                     detail: format!("object {} is not a path", payload.id.index()),
                 });
             };
-            vector::simplify(path, payload.tolerance).map_err(|error| vector_error(NAME, error))?
+            vector::simplify(path, payload.tolerance).map_err(|error| vector_error(NAME, &error))?
         };
         splice_geometry(document, NAME, payload.id, simplified)?;
         Ok(Delta::Object {
@@ -385,7 +385,7 @@ impl TypedCommand for PathExpandStroke {
                 },
                 miter_limit: payload.miter_limit,
             };
-            vector::expand_stroke(path, &style).map_err(|error| vector_error(NAME, error))?
+            vector::expand_stroke(path, &style).map_err(|error| vector_error(NAME, &error))?
         };
         splice_geometry(document, NAME, payload.id, outlined)?;
         Ok(Delta::Object {
@@ -434,7 +434,7 @@ impl TypedCommand for PathInset {
                 });
             };
             vector::offset_path(path, payload.distance)
-                .map_err(|error| vector_error(NAME, error))?
+                .map_err(|error| vector_error(NAME, &error))?
         };
         splice_geometry(document, NAME, payload.id, offset)?;
         Ok(Delta::Object {
@@ -506,7 +506,7 @@ impl TypedCommand for PathMovePoints {
                 .iter()
                 .map(|edit| (edit.contour, edit.point, geom::Vec2::new(edit.dx, edit.dy)))
                 .collect();
-            vector::translate_points(path, &edits).map_err(|error| vector_error(NAME, error))?
+            vector::translate_points(path, &edits).map_err(|error| vector_error(NAME, &error))?
         };
         splice_geometry(document, NAME, payload.id, edited)?;
         Ok(Delta::Object {
@@ -567,7 +567,7 @@ impl TypedCommand for PathWarp {
                 payload.radius,
                 geom::Vec2::new(payload.dx, payload.dy),
             )
-            .map_err(|error| vector_error(NAME, error))?
+            .map_err(|error| vector_error(NAME, &error))?
         };
         splice_geometry(document, NAME, payload.id, warped)?;
         Ok(Delta::Object {
@@ -638,7 +638,7 @@ impl TypedCommand for PathReshapeArea {
                 payload.falloff,
                 geom::Vec2::new(payload.dx, payload.dy),
             )
-            .map_err(|error| vector_error(NAME, error))?
+            .map_err(|error| vector_error(NAME, &error))?
         };
         splice_geometry(document, NAME, payload.id, shaped)?;
         Ok(Delta::Object {
@@ -725,7 +725,7 @@ impl TypedCommand for PathRedraw {
                 })
                 .collect();
             vector::redraw_span(path, payload.contour, payload.from, payload.to, drawn)
-                .map_err(|error| vector_error(NAME, error))?
+                .map_err(|error| vector_error(NAME, &error))?
         };
         splice_geometry(document, NAME, payload.id, redrawn)?;
         Ok(Delta::Object {
@@ -1396,7 +1396,7 @@ impl TypedCommand for PathCropSelection {
                 });
             };
             let cropped = vector::boolean(path, &blade, BooleanOp::Crop)
-                .map_err(|error| vector_error(NAME, error))?;
+                .map_err(|error| vector_error(NAME, &error))?;
             crops.push(cropped);
         }
         let mut deltas = Vec::new();

@@ -843,7 +843,7 @@ fn unknown_symbol_type_preserves_raw() {
 fn splice_restores_bagged_positions() {
     let mapped = vec![n_i(b"AAAi", 1), n_i(b"BBBi", 2)];
     let bagged = vec![(1, n_i(b"MIDi", 9))];
-    let out = splice(mapped, bagged);
+    let out = splice(mapped, &bagged);
     let fourccs: Vec<[u8; 4]> = out.iter().map(|node| node.fourcc).collect();
     assert_eq!(fourccs, vec![*b"AAAi", *b"MIDi", *b"BBBi"]);
 }
@@ -852,7 +852,7 @@ fn splice_restores_bagged_positions() {
 fn splice_appends_unplaceable_entries() {
     let mapped = vec![n_i(b"AAAi", 1)];
     let bagged = vec![(5, n_i(b"MIDi", 9))];
-    let out = splice(mapped, bagged);
+    let out = splice(mapped, &bagged);
     assert_eq!(out.len(), 2, "content stays lossless even off-position");
 }
 

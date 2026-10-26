@@ -224,6 +224,10 @@ fn run_script_tool(
 }
 
 /// A successful tool result wrapping `text` content.
+// The envelope takes the id by value: each call site moves its id into
+// exactly one reply, so a reference would only force a clone at every
+// caller.
+#[allow(clippy::needless_pass_by_value)]
 fn tool_result(id: serde_json::Value, is_error: bool, text: &str) -> serde_json::Value {
     serde_json::json!({
         "jsonrpc": "2.0",
@@ -236,11 +240,15 @@ fn tool_result(id: serde_json::Value, is_error: bool, text: &str) -> serde_json:
 }
 
 /// A successful JSON-RPC result.
+// Same envelope-ownership rule as `tool_result`.
+#[allow(clippy::needless_pass_by_value)]
 fn ok_reply(id: serde_json::Value, result: serde_json::Value) -> serde_json::Value {
     serde_json::json!({ "jsonrpc": "2.0", "id": id, "result": result })
 }
 
 /// A JSON-RPC error envelope.
+// Same envelope-ownership rule as `tool_result`.
+#[allow(clippy::needless_pass_by_value)]
 fn error_reply(id: serde_json::Value, code: i64, message: &str) -> serde_json::Value {
     serde_json::json!({
         "jsonrpc": "2.0",

@@ -123,13 +123,13 @@ pub(crate) fn crop(
 /// Encodes one region per its format: GIF (single frame), JPEG
 /// (flattened over the matte), PNG.
 fn encode(
-    rgba: Vec<u8>,
+    rgba: &[u8],
     w: u32,
     h: u32,
     slice: Option<&doc::SliceObject>,
 ) -> Result<Vec<u8>, WebExportError> {
     let plane =
-        io::Plane::new(w, h, &rgba).map_err(|error| WebExportError::Encode(error.to_string()))?;
+        io::Plane::new(w, h, rgba).map_err(|error| WebExportError::Encode(error.to_string()))?;
     let export = slice.and_then(|slice| slice.export.as_ref());
     match export.and_then(|export| export.format) {
         Some(0) => {
@@ -228,7 +228,7 @@ pub(crate) fn rasterize(
             );
             files.push(ExportedFile {
                 name: file.clone(),
-                bytes: encode(rgba, w, h, slice)?,
+                bytes: encode(&rgba, w, h, slice)?,
             });
         }
         pieces.push(Piece {

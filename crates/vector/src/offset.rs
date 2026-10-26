@@ -149,7 +149,7 @@ pub fn offset_path(path: &PathObject, distance: f64) -> Result<PathObject, Vecto
         // square); the miter limit bevels spikes the way the join-side
         // analysis dictates.
         let chain = offset_chain(&spans, side, true, (JoinKind::Miter, DEFAULT_MITER_LIMIT))?;
-        if let Some(ring) = chain_to_contour(chain) {
+        if let Some(ring) = chain_to_contour(&chain) {
             raw_contours.push(ring);
         }
     }
@@ -187,7 +187,7 @@ fn rings_closed(spans: &[Seg], d: f64, style: &StrokeStyle) -> Result<Vec<Contou
     for side in [d, -d] {
         let (join, miter) = (style.join, style.miter_limit);
         let chain = offset_chain(spans, side, true, (join, miter))?;
-        if let Some(ring) = chain_to_contour(chain) {
+        if let Some(ring) = chain_to_contour(&chain) {
             out.push(ring);
         }
     }
@@ -269,7 +269,7 @@ fn ring_open(spans: &[Seg], d: f64, style: &StrokeStyle) -> Result<Contour, Vect
         style.cap,
     )?;
     chain.extend(cap_start);
-    chain_to_contour(chain).ok_or(VectorError::DegenerateSegment)
+    chain_to_contour(&chain).ok_or(VectorError::DegenerateSegment)
 }
 
 fn chain_tail(chain: &[Seg]) -> Result<Point, VectorError> {
@@ -648,10 +648,10 @@ fn short_delta(a0: f64, a1: f64) -> f64 {
 /// Builds one closed contour from a connected chain of segments.
 /// Anchors closer than [`SNAP`] merge (a degenerate connection carries
 /// no geometry); the wrap anchor inherits the last segment's in-handle.
-fn chain_to_contour(chain: Vec<Seg>) -> Option<Contour> {
+fn chain_to_contour(chain: &[Seg]) -> Option<Contour> {
     let mut points: Vec<PathPoint> = Vec::new();
     let mut last_cubic_p2: Option<Point> = None;
-    for seg in &chain {
+    for seg in chain {
         let start = seg.start();
         if let Some(prev) = points.last() {
             if chord(prev.anchor, start) < SNAP {
