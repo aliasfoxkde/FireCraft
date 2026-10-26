@@ -763,3 +763,178 @@ fn pattern_missing_tiles_drop_to_solid_with_a_note() {
     );
     assert!(svg.contains("fill=\"#ff0000\""), "solid `FCLi`: {svg}");
 }
+
+#[test]
+fn image_embed_failure_drops_with_a_note() {
+    // A wrong tile count makes image_png fail — the object drops with
+    // a note instead of poisoning the export.
+    let mut document = document(Vec::new());
+    let image = ImageObject {
+        location: Point::ZERO,
+        offset: Point::ZERO,
+        pixels: (256, 128),
+        tile_size: 128,
+        tiles: vec![TileRef::Tile(0)], // needs 2 tiles
+        name: None,
+        opacity: 1000,
+        blend: 0,
+        visible: true,
+        locked: false,
+        effects: Vec::new(),
+    };
+    let id = document.registry.insert(ObjectData::Image(image));
+    document.pages[0].layers.layers[0].cells[0].elements = vec![id];
+    let (svg, report) = encode(&document);
+    assert!(!svg.contains("data:image/png"), "no embed: {svg}");
+    assert!(
+        report
+            .notes
+            .iter()
+            .any(|note| note.contains("image dropped") && note.contains("tile refs")),
+        "{:?}",
+        report.notes
+    );
+}
+
+#[test]
+fn unsharp_mask_without_threshold_exports_arithmetic_composite() {
+    let mut path = square();
+    path.effects = vec![effect(
+        "unsharpMask",
+        &[
+            ("EffectMoaID", "f1cfce44-718e-11d1-8c8200a024cdc039"),
+            ("unsharp_mask_radius", "2"),
+            ("unsharp_mask_amount", "100"),
+        ],
+    )];
+    let (svg, report) = encode(&document(vec![ObjectData::Path(path)]));
+    assert!(svg.contains("<feGaussianBlur"), "{svg}");
+    assert!(svg.contains("feComposite"), "{svg}");
+    assert!(svg.contains("filter="), "{svg}");
+}
+
+#[test]
+fn box_blur_exports_its_convolve_matrix() {
+    let mut path = square();
+    path.effects = vec![effect(
+        "blur",
+        &[("EffectMoaID", "f1cfce41-718e-11d1-8c8200a024cdc039")],
+    )];
+    let (svg, _) = encode(&document(vec![ObjectData::Path(path)]));
+    assert!(
+        svg.contains("feConvolveMatrix") && svg.contains("kernelMatrix=\"1 1 1 1 1 1 1 1 1\""),
+        "{svg}"
+    );
+}
+
+#[test]
+fn sharpen_and_sharpen_more_export_their_preset_matrices() {
+    for (name, guid, matrix) in [
+        (
+            "sharpen",
+            "c20952b1-fc76-11d0-8be700a024cdc039",
+            "0 -1 0 -1 5 -1 0 -1 0",
+        ),
+        (
+            "sharpenMore",
+            "1f2f2591-9db7-11d1-8cad00a024cdc039",
+            "-1 -1 -1 -1 9 -1 -1 -1 -1",
+        ),
+    ] {
+        let mut path = square();
+        path.effects = vec![effect(name, &[("EffectMoaID", guid)])];
+        let (svg, _) = encode(&document(vec![ObjectData::Path(path)]));
+        assert!(
+            svg.contains(&format!("kernelMatrix=\"{matrix}\"")),
+            "{name}: {svg}"
+        );
+    }
+}
+
+#[test]
+fn hidden_image_draws_nothing() {
+    let mut document = document(Vec::new());
+    let mut image = ImageObject {
+        location: Point::ZERO,
+        offset: Point::ZERO,
+        pixels: (4, 4),
+        tile_size: 128,
+        tiles: vec![TileRef::Matte(0xFF_FF_00_00)],
+        name: None,
+        opacity: 1000,
+        blend: 0,
+        visible: false,
+        locked: false,
+        effects: Vec::new(),
+    };
+    image.visible = false;
+    let id = document.registry.insert(ObjectData::Image(image));
+    document.pages[0].layers.layers[0].cells[0].elements = vec![id];
+    let (svg, report) = encode(&document);
+    assert!(!svg.contains("data:image/png"), "{svg}");
+    assert_eq!(report.image_objects, 0, "hidden image is not counted");
+}
+
+#[test]
+fn slices_and_symbol_instances_export_notes_not_elements() {
+    let mut document = document(Vec::new());
+    let slice = document
+        .registry
+        .insert(ObjectData::Slice(doc::SliceObject::default()));
+    let instance =
+        document
+            .registry
+            .insert(ObjectData::SymbolInstance(doc::SymbolInstanceObject {
+                symbol_number: 1,
+                transform: geom::Affine::IDENTITY,
+                locked: false,
+                name: None,
+                animation: None,
+                custom_data: Default::default(),
+            }));
+    document.pages[0].layers.layers[0].cells[0].elements = vec![slice, instance];
+    let (_, report) = encode(&document);
+    assert!(
+        report
+            .notes
+            .iter()
+            .any(|note| note.contains("slice renders as nothing")),
+        "{:?}",
+        report.notes
+    );
+    assert!(
+        report
+            .notes
+            .iter()
+            .any(|note| note.contains("symbol instance renders as nothing")),
+        "{:?}",
+        report.notes
+    );
+}
+
+#[test]
+fn group_wrapper_carries_opacity_and_filter_together() {
+    let mut document = document(Vec::new());
+    let square = document.registry.insert(ObjectData::Path(square()));
+    let group = document.registry.insert(ObjectData::Group(GroupObject {
+        group_type: 0,
+        name: None,
+        children: vec![square],
+        opacity: 500,
+        blend: 9,
+        visible: true,
+        locked: false,
+        mask_hidden: false,
+        mask_linked: None,
+        effects: vec![effect("invert", &[])],
+    }));
+    document.pages[0].layers.layers[0].cells[0].elements = vec![group];
+    let (svg, _) = encode(&document);
+    // The wrapper carries multiply blend, half opacity, and the filter.
+    assert!(
+        svg.contains("mix-blend-mode:darken")
+            && svg.contains("opacity=\"0.5\"")
+            && svg.contains("<filter"),
+        "{svg}"
+    );
+}
