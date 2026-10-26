@@ -68,4 +68,16 @@ mod tests {
         let result = Plane::new(2, 2, &[0u8; 4]);
         assert!(result.is_err());
     }
+
+    #[test]
+    fn encode_rejects_dimension_length_mismatch() {
+        // A plane whose buffer is shorter than width*height*4 refuses.
+        let err = encode(&Plane {
+            width: 4,
+            height: 4,
+            rgba: &[0u8; 8],
+        })
+        .unwrap_err();
+        assert!(matches!(err, ExportError::Encode { format: "webp", .. }));
+    }
 }

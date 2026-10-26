@@ -92,4 +92,16 @@ mod tests {
         let out_pack = encode(&plane, &opts_pack).unwrap();
         assert!(!out_pack.is_empty());
     }
+
+    #[test]
+    fn encode_accepts_wide_dimensions() {
+        // The TIFF format has no per-axis ceiling (it uses u32 offsets);
+        // the `tiff` crate takes arbitrary u32 dimensions, so the encoder
+        // adds no gate of its own.
+        let width = 70_000u32;
+        let rgba = vec![0u8; width as usize * 4];
+        let plane = Plane::new(width, 1, &rgba).unwrap();
+        let out = encode(&plane, &TiffOptions::default()).unwrap();
+        assert!(!out.is_empty());
+    }
 }

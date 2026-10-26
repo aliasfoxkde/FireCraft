@@ -214,4 +214,20 @@ mod tests {
         let opts = BmpOptions::default();
         assert_eq!(opts.depth, BmpDepth::Bpp24);
     }
+
+    #[test]
+    fn encode_refuses_dimensions_past_the_i32_ceiling() {
+        // The info header's fields are i32; a u32-plane beyond that
+        // refuses with TooLarge before any allocation.
+        let err = encode(
+            &Plane {
+                width: i32::MAX as u32 + 1,
+                height: 1,
+                rgba: &[],
+            },
+            &BmpOptions::default(),
+        )
+        .unwrap_err();
+        assert!(matches!(err, ExportError::TooLarge { format: "bmp", .. }));
+    }
 }

@@ -3725,8 +3725,8 @@ mod tests {
         let (mut document, ids) = document_with(vec![path_object()]);
         // An image carries a name slot; a bare path object may not —
         // probe both directions through the command.
-        let outcome = RenameObject
-            .apply_json(&mut document, json!({ "id": ids[0], "name": "plate" }));
+        let outcome =
+            RenameObject.apply_json(&mut document, json!({ "id": ids[0], "name": "plate" }));
         let delta = match outcome {
             Ok(delta) => delta,
             Err(error) => {

@@ -258,6 +258,28 @@ mod tests {
     #![allow(clippy::unwrap_used)]
     use super::*;
 
+    #[test]
+    fn error_display_spells_each_variant() {
+        let truncated = ImportError::Truncated {
+            format: "psd",
+            needed: "more section bytes than the stream holds",
+        };
+        assert_eq!(
+            truncated.to_string(),
+            "psd stream truncated: more section bytes than the stream holds"
+        );
+        let unsupported = ImportError::Unsupported {
+            format: "gif",
+            reason: "zero axis".to_owned(),
+        };
+        assert_eq!(unsupported.to_string(), "gif import unsupported: zero axis");
+        let decode = ImportError::Decode {
+            format: "wbmp",
+            reason: "bad header".to_owned(),
+        };
+        assert_eq!(decode.to_string(), "wbmp decode failed: bad header");
+    }
+
     // ── Plane ────────────────────────────────────────────────────────────────
 
     #[test]
@@ -363,7 +385,7 @@ mod tests {
     #[test]
     fn flatten_channel_50_percent_alpha() {
         // c=255, a=64 (25% alpha), m=255
-        // → (255*64 + 255*191 + 127)/255 = (16320 + 48705 + 127)/255 = 255
+        // → (255*64 + 255*191 + 127)/255 = 255
         let result = super::flatten_channel(255, 64, 255);
         assert_eq!(result, 255);
     }

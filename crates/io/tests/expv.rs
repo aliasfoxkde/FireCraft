@@ -356,3 +356,58 @@ fn loop_never_omits_netscape_and_times_writes_count() {
     assert_eq!(times[count_at], 7, "loop count 7 written");
     assert_eq!(times[count_at + 1], 0);
 }
+
+#[test]
+fn for_page_prefers_the_page_over_the_document() {
+    let mut document = doc::Document {
+        export: Some(doc::ExportOptions::default()),
+        ..doc::Document::default()
+    };
+    // No page at that index: falls to the document default.
+    assert!(
+        io::expv::for_page(&document, 5).is_some(),
+        "document default"
+    );
+
+    let page_export = doc::ExportOptions::default();
+    let mut page = doc::Page {
+        info: doc::PageInfo {
+            version: None,
+            revision: None,
+            frame_count: 1,
+            frame_count_duplicate: 1,
+            request_id: 0,
+            canvas: doc::Canvas {
+                x: 0.0,
+                y: 0.0,
+                width: 16.0,
+                height: 16.0,
+                resolution: 72.0,
+                resolution_unit: 0,
+                background_raw: 0,
+            },
+            onion_before: 0,
+            onion_after: 0,
+            frame_durations: Vec::new(),
+        },
+        name: None,
+        is_master: false,
+        is_linked: false,
+        page_id: None,
+        last_export_dir: None,
+        last_export_file: None,
+        layers: doc::LayerList { layers: Vec::new() },
+        grid: None,
+        guides: doc::Guides::default(),
+        export: Some(page_export),
+    };
+    let _ = &mut page;
+    document.pages.push(page);
+    assert!(
+        io::expv::for_page(&document, 0).is_some(),
+        "page setting wins"
+    );
+    // No settings anywhere.
+    let bare = doc::Document::default();
+    assert!(io::expv::for_page(&bare, 0).is_none());
+}
