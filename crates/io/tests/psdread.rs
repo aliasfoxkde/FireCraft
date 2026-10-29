@@ -853,3 +853,26 @@ fn negative_widths_are_not_sign_extendable() {
         Err(io::ImportError::Unsupported { reason, .. }) if reason.contains("65535")
     ));
 }
+
+#[test]
+fn every_unsupported_depth_names_itself() {
+    // 1-bit and 32-bit both refuse with the depth in the reason.
+    for depth in [1u16, 32] {
+        let deep = header(2, 2, 3, depth, 3);
+        assert!(
+            matches!(
+                psd::decode(&deep),
+                Err(io::ImportError::Unsupported { reason, .. }) if reason.contains("bit depth")
+            ),
+            "depth {depth} must refuse as unsupported"
+        );
+    }
+}
+
+#[test]
+fn bare_header_with_no_sections_refuses_cleanly() {
+    // The 26-byte header alone: the layer-section read runs off the
+    // end instead of panicking or accepting an empty document.
+    let bare = header(2, 2, 3, 8, 3);
+    assert!(psd::decode(&bare).is_err());
+}
