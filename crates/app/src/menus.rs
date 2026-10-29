@@ -82,6 +82,8 @@ pub enum ShellAction {
     ZoomTo(f32),
     FitAll,
     About,
+    /// Help ▸ Keyboard Shortcuts — the shortcut map panel (F1).
+    ShowShortcuts,
     /// One-key tool select (the CS6 tool letters).
     PickTool(Tool),
 }
@@ -956,6 +958,12 @@ pub static HELP: Menu = Menu {
     label: "Help",
     entries: &[
         item(57667, "Fireworks Help", "", Action::Inert),
+        item(
+            0,
+            "Keyboard Shortcuts\tF1",
+            "",
+            Action::Shell(ShellAction::ShowShortcuts),
+        ),
         item(35323, "Fireworks Support Center", "", Action::Inert),
         Entry::Sep,
         item(
@@ -1188,7 +1196,122 @@ pub static SHORTCUTS: &[Shortcut] = &[
         egui::Key::W,
         Action::Shell(ShellAction::PickTool(Tool::MagicWand)),
     ),
+    // Help — the shortcut-map panel. Not part of the CS6 keymap
+    // (Fireworks had no help binding); F1 is the desktop convention.
+    key(
+        NONE,
+        egui::Key::F1,
+        Action::Shell(ShellAction::ShowShortcuts),
+    ),
 ];
+
+impl Shortcut {
+    /// Human-readable binding, e.g. `Ctrl+Shift+S` or `Delete` —
+    /// the form the help panel shows.
+    #[must_use]
+    pub fn label(&self) -> String {
+        let mut s = String::new();
+        if self.mods.ctrl {
+            s.push_str("Ctrl+");
+        }
+        if self.mods.alt {
+            s.push_str("Alt+");
+        }
+        if self.mods.shift {
+            s.push_str("Shift+");
+        }
+        s.push_str(&key_name(self.key));
+        s
+    }
+}
+
+/// Display name for an [`egui::Key`] as printed on the keyboard.
+fn key_name(key: egui::Key) -> String {
+    use egui::Key as K;
+    match key {
+        K::Equals => "=".into(),
+        K::Minus => "-".into(),
+        K::Num0 => "0".into(),
+        K::ArrowDown => "↓".into(),
+        K::ArrowLeft => "←".into(),
+        K::ArrowRight => "→".into(),
+        K::ArrowUp => "↑".into(),
+        other => format!("{other:?}"),
+    }
+}
+
+/// Short description of what a bound action does, for the help panel.
+#[must_use]
+pub fn action_name(action: Action) -> String {
+    match action {
+        Action::Inert => "unwired".into(),
+        Action::Shell(shell) => match shell {
+            ShellAction::New => "New document".into(),
+            ShellAction::Open => "Open".into(),
+            ShellAction::Import => "Import image".into(),
+            ShellAction::Save => "Save".into(),
+            ShellAction::SaveAs => "Save As".into(),
+            ShellAction::Export => "Export".into(),
+            ShellAction::ExportPreview => "Export preview".into(),
+            ShellAction::Quit => "Quit".into(),
+            ShellAction::Undo => "Undo".into(),
+            ShellAction::Redo => "Redo".into(),
+            ShellAction::Deselect => "Deselect".into(),
+            ShellAction::SelectAll => "Select all".into(),
+            ShellAction::SelectInverse => "Select inverse".into(),
+            ShellAction::Copy => "Copy".into(),
+            ShellAction::Cut => "Cut".into(),
+            ShellAction::Paste => "Paste".into(),
+            ShellAction::PasteAsMask => "Paste as mask".into(),
+            ShellAction::PasteInside => "Paste inside".into(),
+            ShellAction::ZoomIn => "Zoom in".into(),
+            ShellAction::ZoomOut => "Zoom out".into(),
+            ShellAction::ZoomTo(_) => "Zoom to".into(),
+            ShellAction::FitAll => "Fit all".into(),
+            ShellAction::About => "About".into(),
+            ShellAction::ShowShortcuts => "Shortcut map".into(),
+            ShellAction::PickTool(tool) => format!("Tool: {tool:?}"),
+        },
+        Action::Sel(sel) => match sel {
+            SelAction::Delete => "Delete selection".into(),
+            SelAction::Simplify => "Simplify paths".into(),
+            SelAction::ExpandStroke => "Expand stroke".into(),
+            SelAction::Inset(_) => "Inset path".into(),
+            SelAction::NewSymbol => "New symbol".into(),
+            SelAction::NewLayer => "New layer".into(),
+            SelAction::NewPage => "New page".into(),
+            SelAction::BreakApart => "Break apart".into(),
+            SelAction::Hide => "Hide selection".into(),
+            SelAction::Group => "Group".into(),
+            SelAction::Ungroup => "Ungroup".into(),
+            SelAction::FlattenSelection => "Flatten selection".into(),
+            SelAction::MergeDown => "Merge down".into(),
+            SelAction::FlattenLayers => "Flatten page".into(),
+            SelAction::Rotate(deg) => format!("Rotate {deg}°"),
+            SelAction::Reflect {
+                horizontal,
+                vertical,
+            } => match (horizontal, vertical) {
+                (true, false) => "Flip horizontal".into(),
+                (false, true) => "Flip vertical".into(),
+                (true, true) => "Flip both".into(),
+                (false, false) => "Reflect (no-op)".into(),
+            },
+        },
+        Action::Align(mode) => format!("Align {mode}"),
+        Action::Distribute(axis) => format!("Distribute {axis}"),
+        Action::Boolean(op) => format!("Combine: {op}"),
+        Action::Arrange(arrange) => match arrange {
+            Arrange::Front => "Arrange to front".into(),
+            Arrange::Forward => "Bring forward".into(),
+            Arrange::Backward => "Send backward".into(),
+            Arrange::Back => "Arrange to back".into(),
+        },
+        Action::TextSize(_) => "Text size".into(),
+        Action::TextFlag(flag) => format!("Text {flag}"),
+        Action::Filter(preset) => format!("Filter: {preset}"),
+    }
+}
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
@@ -1378,5 +1501,21 @@ mod tests {
         ] {
             assert!(labels.contains(&expected), "Window menu missing {expected}");
         }
+    }
+
+    /// Every action in the table resolves to a help-panel description
+    /// (no placeholder or panic path), and the F1 binding exists.
+    #[test]
+    fn every_shortcut_has_a_help_name() {
+        for s in SHORTCUTS {
+            let name = action_name(s.action);
+            assert!(!name.is_empty(), "unlabeled action for {:?}", s.label());
+        }
+        assert!(
+            SHORTCUTS
+                .iter()
+                .any(|s| s.action == Action::Shell(ShellAction::ShowShortcuts)),
+            "F1 shortcut map binding missing"
+        );
     }
 }

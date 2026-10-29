@@ -1310,6 +1310,8 @@ pub struct Shell {
     close_requested: bool,
     /// The Auto Shape flyout is open (toggled by its tool button).
     autoshape_flyout: bool,
+    /// The keyboard-shortcuts help panel is open (F1 / Help menu).
+    help_open: bool,
     /// The Styles panel's new-style name field.
     style_name: String,
     /// The layer whose name is being edited in the Layers panel
@@ -1353,6 +1355,7 @@ impl Shell {
             canvas_rect: None,
             close_requested: false,
             autoshape_flyout: false,
+            help_open: false,
             style_name: String::new(),
             rename_layer: None,
             ctx: None,
@@ -2298,6 +2301,7 @@ impl Shell {
                     Adobe Fireworks CS6 (Apache-2.0)"
                     .to_owned();
             }
+            menus::ShellAction::ShowShortcuts => self.help_open = !self.help_open,
             menus::ShellAction::PickTool(tool) => {
                 self.editor.tool = tool;
                 self.status = format!("tool: {}", tool_label(tool));
@@ -2575,6 +2579,65 @@ impl Shell {
             return;
         }
         self.run_command("object.reorder", serde_json::json!({ "id": id, "to": to }));
+    }
+
+    /// The keyboard-shortcuts help panel: every binding in the
+    /// SHORTCUTS table, grouped by the table's section structure.
+    fn help_panel(&mut self, ctx: &egui::Context) {
+        let mut open = self.help_open;
+        egui::Window::new("Keyboard Shortcuts")
+            .open(&mut open)
+            .resizable(true)
+            .collapsible(false)
+            .default_width(340.0)
+            .show(ctx, |ui| {
+                egui::ScrollArea::vertical()
+                    .max_height(420.0)
+                    .show(ui, |ui| {
+                        ui.add(
+                            egui::Label::new(
+                                egui::RichText::new(
+                                    "Plain keys do not fire while a text field has focus.",
+                                )
+                                .italics(),
+                            )
+                            .wrap(),
+                        );
+                        ui.separator();
+                        // (title, row count) — mirrors the SHORTCUTS table's
+                        // section comments; the sums are asserted in tests.
+                        let groups: &[(&str, usize)] = &[
+                            ("File", 7),
+                            ("Edit", 6),
+                            ("Clipboard", 3),
+                            ("Modify ▸ Group", 3),
+                            ("View", 3),
+                            ("Modify ▸ Arrange", 4),
+                            ("Modify ▸ Combine Paths", 1),
+                            ("Text styles", 3),
+                            ("Tools (one-key selects)", 14),
+                            ("Pixel-selection tools", 4),
+                            ("Help", 1),
+                        ];
+                        let mut row = 0usize;
+                        for (title, count) in groups {
+                            ui.heading(*title);
+                            egui::Grid::new((*title).to_string())
+                                .num_columns(2)
+                                .spacing([12.0, 2.0])
+                                .show(ui, |ui| {
+                                    for s in &menus::SHORTCUTS[row..row + count] {
+                                        ui.strong(s.label());
+                                        ui.label(menus::action_name(s.action));
+                                        ui.end_row();
+                                    }
+                                });
+                            ui.separator();
+                            row += count;
+                        }
+                    });
+            });
+        self.help_open = open;
     }
 
     /// The Fireworks.xml keymap bindings: one-shot key events mapped
@@ -4573,6 +4636,9 @@ impl eframe::App for Shell {
                 .resizable(false)
                 .collapsible(false)
                 .show(ui.ctx(), |ui| self.export_dialog_ui(ui));
+        }
+        if self.help_open {
+            self.help_panel(ui.ctx());
         }
         if self.close_requested {
             self.close_requested = false;
