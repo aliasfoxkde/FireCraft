@@ -2532,7 +2532,7 @@ mod tests {
 
     /// The dictionary's full per-channel Levels prop set for one
     /// channel: `master` rides `*_rgb`, overrides ride `*_red` etc.
-    fn levels_props(suffix: String, in_white: &str) -> Vec<(String, String)> {
+    fn levels_props(suffix: &str, in_white: &str) -> Vec<(String, String)> {
         vec![
             (format!("source_low_{suffix}"), "0".to_owned()),
             (format!("source_high_{suffix}"), in_white.to_owned()),
@@ -2544,14 +2544,14 @@ mod tests {
 
     #[test]
     fn levels_channel_overrides_replace_only_their_channel() {
-        let mut props: Vec<EffectProperty> = levels_props("rgb".to_owned(), "255")
+        let mut props: Vec<EffectProperty> = levels_props("rgb", "255")
             .into_iter()
             .map(|(key, value)| EffectProperty {
                 key,
                 value: EffectValue::Text(value),
             })
             .collect();
-        for (key, value) in levels_props("red".to_owned(), "128") {
+        for (key, value) in levels_props("red", "128") {
             props.push(EffectProperty {
                 key,
                 value: EffectValue::Text(value),
@@ -2581,7 +2581,7 @@ mod tests {
     fn levels_partial_channel_group_is_not_an_override() {
         // A UI mid-edit state (two of five props) must not silently
         // merge with the master — the channel falls back to it.
-        let mut props: Vec<EffectProperty> = levels_props("rgb".to_owned(), "255")
+        let mut props: Vec<EffectProperty> = levels_props("rgb", "255")
             .into_iter()
             .map(|(key, value)| EffectProperty {
                 key,
