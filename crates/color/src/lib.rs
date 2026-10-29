@@ -2,6 +2,7 @@
 //! sRGB/linear conversion, and the 27 blend modes.
 //!
 //! Layer L0: depends on nothing from this workspace.
+#![deny(missing_docs)]
 
 pub mod blend;
 pub mod convert;
