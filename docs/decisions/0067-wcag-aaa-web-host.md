@@ -32,11 +32,32 @@ recorded here as refusals, not conformance:
 
 ## Accesskit
 
-egui 0.36 depends on accesskit unconditionally (verified in
-Cargo.lock), so the accessibility tree ships in the wasm bundle
-without a feature change. Full screen-reader verification on the
-deployed site is open work (needs a human with a screen reader);
-recorded as such.
+**Corrected 2026-10-29 (code audit): NOT reachable on web.** The
+earlier claim ("the accessibility tree ships in the wasm bundle") was
+wrong. Evidence in the pinned dependencies:
+
+- egui 0.36 builds the AccessKit tree only when
+  `Context::enable_accesskit()` has been called; eframe calls it only
+  from the **native** winit path (`eframe/src/native/winit_integration.rs:180`).
+- The **web** runner's event loop discards the tree updates outright:
+  `eframe/src/web/app_runner.rs:394` — `accesskit_update: _,  // not
+  currently implemented`.
+- `accesskit_winit` (the only adapter in the tree) is winit-specific;
+  there is no web/DOM adapter in eframe 0.36.
+
+So on wasm the canvas is opaque to screen readers regardless of any
+feature flag we could enable in this repo. Criteria affected:
+**1.1.1 Non-text Content** (canvas fallback content in
+`web/index.html` remains the only reachable accommodation) and
+**4.1.2 Name, Role, Value** (unreachable inside the canvas). This is
+recorded as a refusal pending an upstream eframe web-accesskit
+implementation — not conformance. The `web_screen_reader` feature
+(SpeechSynthesis event narration) is orthogonal and available; enabling
+egui's `screen_reader` option is a separate candidate.
+
+Full screen-reader verification on the deployed site remains open
+human work and cannot change this verdict: there is no tree for a
+screen reader to consume.
 
 ## Verification
 
