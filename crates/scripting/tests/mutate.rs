@@ -308,7 +308,7 @@ fn set_text_auto_expand_maps_to_text_set_attrs() {
         }),
     )
     .expect("seed text");
-    base = seed_document(seed);
+    base = seed_document(&seed);
 
     let scripted_session = scripted(
         base.clone(),
@@ -337,7 +337,7 @@ fn set_text_auto_expand_maps_to_text_set_attrs() {
 }
 
 /// Extracts the seed session's mutated document.
-fn seed_document(seed: Session) -> Document {
+fn seed_document(seed: &Session) -> Document {
     seed.document().clone()
 }
 
