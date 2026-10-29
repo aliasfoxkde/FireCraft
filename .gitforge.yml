@@ -158,7 +158,7 @@ jobs:
             echo "not a tag push — skipping release build"
             exit 0
           fi
-      - name: Web bundle (bridge smoke skipped — CI image debt: no chromium)
+      - name: "Web bundle (bridge smoke skipped — CI image debt: no chromium)"
         # Same container as the tag gate; the fresh job target dir
         # builds the release profile from scratch, which is the point:
         # the bundle must come from tag bytes, not a warm debug cache.

@@ -25,17 +25,19 @@ Note: the 77.85% function figure reads `4839` as the total function
 count in the summary table, not the missed count — re-read the table
 columns when re-blessing.
 
-## Worst coverage files (missed lines, 2026-10-25)
+## Worst coverage files (missed lines, refreshed 2026-10-29 from lcov)
 
 | File | Missed | What's untested |
 |---|---|---|
-| crates/app/src/editor.rs | 665 | 75 public fns lack a test: import_styles, wire, replay_steps, symbol helpers |
-| crates/engine/src/catalog/object.rs | 483 | refusal branches of the object family |
-| crates/engine/src/catalog/mask.rs | 427 | mask refusal + edge paths |
-| crates/compose/src/effects.rs | 360 | filter-stack edge parameters |
-| crates/engine/src/catalog/path.rs | 271 | path family refusals |
-| crates/engine/src/fuzzdrive.rs | 160 | driver-only (acceptable; fuzz is its own gate) |
-| crates/io/src/psd.rs | 180 | PSD error paths (malformed headers) |
+| crates/app/src/shell.rs | ~2741 | UI shell (menus, panels, interaction glue) — largest single gap; not in the original plan |
+| crates/app/src/editor.rs | — | 14.1 landed 30 tests; residual misses folded into the shell.rs work |
+| xtask/src/corpus.rs | 1245 | xtask tooling (gated, lower priority than app code) |
+| xtask/src/dist.rs | 519 | dist packaging paths (partially covered by CI) |
+| crates/app-cli/src/main.rs | 387 | CLI arg paths |
+| crates/compose/src/effects.rs | ~360 | 14.3 filter-stack edge parameters |
+| crates/engine/src/catalog/mask.rs | ~319 | 14.2 refusal branches |
+| crates/engine/src/catalog/object.rs | ~317 | 14.2 refusal branches (down from 483 after earlier batteries) |
+| crates/io/src/psd.rs | ~180 | 14.4 PSD error paths |
 
 ## Phases
 
@@ -50,8 +52,9 @@ baseline, 2026-10-25). The gate is rising-only from here.
   mkTS path, `replay_steps`, `wire` string table, symbol helpers,
   nine-slice toggles (the landed battery covers strokes, selections,
   drags, guide drags, library round-trips, refusal paths).
-- **14.2 Catalog refusal branches** (object 483, mask 427, path 271,
-  text 211, bitmap 193, web 152). Each command's error rows are
+- **14.2 Catalog refusal branches** (mask ~319, object ~317, path,
+  text, bitmap, web — numbers refreshed 2026-10-29 in the table
+  above). Each command's error rows are
   mechanical: wrong payload shape, missing target, out-of-range
   params. Write a table-driven helper (payload → expect refusal) and
   cover every `Err` arm. Accept: each listed file ≥ 95%.
@@ -63,10 +66,12 @@ baseline, 2026-10-25). The gate is rising-only from here.
   `cargo llvm-cov --summary-only` and bless the floors to the new
   number. Target: 99% lines / 99% functions. Record each raise in
   the session log.
-- **14.6 Coverage of the `web/` crate**: trunk builds it outside the
-  workspace; add `cargo llvm-cov --manifest-path web/Cargo.toml` to
-  the measure path (may need the wasm target excluded — measure,
-  then decide).
+- **14.6 Coverage of the `web/` crate**: CORRECTED 2026-10-29 —
+  the premise was wrong. `web/` is a workspace member (root
+  `Cargo.toml` `members` since 3295ef0, 2026-10-10), so the
+  workspace-wide `cargo llvm-cov` measure already includes it. No
+  separate manifest-path measure is needed; audit the lcov for
+  `web/src` entries if its share ever matters.
 
 ### Phase 15 — Lint hardening
 
@@ -86,12 +91,16 @@ unsafe_code=forbid. Production code is already clean.
   - `clippy::cast_possible_truncation` → REFUSED per the density
     rule below (allow density would far exceed 1/100 lines in the
     raster crates).
-- **15.2 web/ clippy in the gate** — DONE 2026-10-25 (xtask clippy
-  gate + `.gitforge.yml` addition below).
+- **15.2 web/ clippy in the gate** — DONE 2026-10-25. Note
+  (corrected 2026-10-29): since `web/` is a workspace member, the
+  workspace clippy sweep already covers it; the dedicated web step
+  in `.gitforge.yml` is belt-and-braces (kept — it fails fast with
+  a shorter log).
 - **15.3 `.gitforge.yml`: add the web clippy step** to the
   clippy-test job (`cd web && cargo clippy --all-targets -- -D
-  warnings`). Requires the CI image to carry the web/ manifest (it
-  does — the fetch context includes web/).
+  warnings`). DONE — but note (2026-10-29): it is redundant with
+  the workspace sweep (web/ is a member); it stays as a fast-fail
+  step, not as the only web coverage.
 - **15.4 `#![deny(missing_docs)]` evaluation** — public-API doc
   coverage. Count first; if the delta is under ~200 items, fix and
   enable per-crate starting with `geom` and `color`.

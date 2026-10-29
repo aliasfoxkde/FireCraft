@@ -32,10 +32,8 @@ cargo run -p xtask -- parity    # regenerate parity floors
 cargo run -p xtask -- scorecard # regenerate milestone scorecard
 cargo test -p fwpng             # one crate
 cargo test -p fwpng nodetree    # one module filter
-cargo fmt --all                 # before committing
-cargo fmt --manifest-path web/Cargo.toml -- --check
-                                # web/ is workspace-excluded (trunk);
-                                # fmt --all never sees it
+cargo fmt --all                 # before committing — covers web/ too
+                                # (web/ IS a workspace member since 3295ef0)
 ```
 
 `target/` is a symlink to `/nas/Dev/Targets/firecraft-target` — recreate
