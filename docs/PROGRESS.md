@@ -106,7 +106,7 @@
 | #130 | bake family rasterizes non-image selections in place (render_subset → slot swap, Phase 9, decision 0059) | this batch | 268 C (no surface change) |
 | #131 | shared-layer links render their definitions in the link's z-position (compose walk, decision 0060) | this batch | 268 C (no surface change) |
 | #132 | importFile resamples bilinearly in the premultiplied domain (centre-point convention, exact u128; decision 0061) | this batch | 268 C (no surface change) |
-| #133 | `path.setPatternFill` authors a pattern fill from an image (flatten minting law; decision 0062) | this batch | 268 C (registry 241) |
+| #133 | `path.setPatternFill` authors a pattern fill from an image (flatten minting law; decision 0062) | this batch | 268 C (registry 241 at write time; live count 243 — see note below) |
 | #134 | WebP export (lossless VP8L through `image-webp`, zero new deps; decision 0063) | this batch | — (enhancement) |
 
 **Campaign complete** (2026-10-14): no remaining M families; the
@@ -170,4 +170,10 @@ enhancement phases (HANDOFF §4 Phases 11–13).
 | 2026-10-14 | 268 | 3 | 0 | #133 pattern authoring (decision 0062, registry 241) |
 | 2026-10-14 | 268 | 3 | 0 | #134 WebP export (decision 0063, enhancement) |
 
-(Pre-#91 counts are approximate; the matrix file is the authority.)
+(Pre-#91 counts are approximate; the matrix file is the authority.
+"Registry N" rows are point-in-time: `engine::catalog::ids()` is the
+live authority and reads 243 as of 2026-10-29 — the same-day verb
+batches #135+ (text markup/AA dials, symbol alias, importFile)
+registered the remainder after row #133 was written. GAPS.md §1
+already carries the 243 figure.)
+
