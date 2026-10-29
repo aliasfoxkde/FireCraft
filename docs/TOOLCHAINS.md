@@ -15,6 +15,7 @@ gate exercised. A recipe shipped in `packaging/` has been parse-checked
 | Recipe | Target artifact | Toolchain | Runs on |
 |---|---|---|---|
 | `web/` (trunk) | `dist/web/` bundle | rustup wasm32-unknown-unknown, trunk, wasm-opt | release fleet (`xtask dist --web`) |
+| `packaging/webos/` (`appinfo.json`, `host.html`) | WebOS packaging stamped `@VERSION@` into `dist/web/` | none (text copy + stamp) | release fleet (`xtask dist --web`) |
 | `packaging/deb/control` | `firecraft_<v>_amd64.deb` | dpkg-deb | release fleet (`xtask dist --native`) |
 | `packaging/build-appimage.sh` | `firecraft-<v>-linux-x86_64.AppImage` | linuxdeploy-x86_64.AppImage (FUSE or `--appimage-extract-and-run`), GNU coreutils | any Linux x86_64 host with linuxdeploy |
 | `packaging/build-macos-dmg.sh` | `firecraft-<v>-macos-universal.dmg` | macOS + Xcode CLT, rustup targets aarch64/x86_64-apple-darwin, lipo, codesign, hdiutil | macOS only |
