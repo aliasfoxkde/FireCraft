@@ -3043,4 +3043,137 @@ mod tests {
         let parsed = plan(&unknown_name);
         assert!(parsed.ops.is_empty() && parsed.skipped == 1);
     }
+
+    #[test]
+    fn color_hex_rejects_non_hex_digits() {
+        // Length checks pass but the bytes are not hex: refuse rather
+        // than panic in from_str_radix.
+        let bad = guid_effect(
+            "solidShadow",
+            GUID_SOLID_SHADOW,
+            &[("ShadowColor", "#zz9900")],
+        );
+        assert!(plan(&[bad]).ops.is_empty());
+        let odd = guid_effect(
+            "solidShadow",
+            GUID_SOLID_SHADOW,
+            &[("ShadowColor", "#ff00gg")],
+        );
+        assert!(plan(&[odd]).ops.is_empty());
+    }
+
+    #[test]
+    fn packed_inner_shadow_and_negative_bevel_angle_parse() {
+        // innerShadow shares dropShadow's field shape.
+        let inner = [guid_effect(
+            "liveEffects",
+            GUID_LIVE_EFFECTS,
+            &[("innerShadow", "0&25&0&90&0&0&4&7&0&0&0&RGBColor;0;0;255")],
+        )];
+        assert_eq!(
+            plan(&inner).ops,
+            vec![KernelOp::InnerShadow {
+                color: Rgba8::new(0, 0, 255, 64),
+                angle_degrees: 90.0,
+                distance: 7,
+                blur: 4,
+            }]
+        );
+        // A packed bevel with a negative angle normalizes; the
+        // pillowemboss token lands on InsetEmboss.
+        let pillow = [guid_effect(
+            "liveEffects",
+            GUID_LIVE_EFFECTS,
+            &[(
+                "bevelEmboss",
+                "0&0&0&0&0&75&75&-45&30&100&5&0&screen&RGBColor;255;255;255&multiply&RGBColor;0;0;0&softMatte&pillowEmboss&stampIn",
+            )],
+        )];
+        let KernelOp::Bevel {
+            style,
+            angle_degrees,
+            ..
+        } = plan(&pillow).ops[0]
+        else {
+            panic!("packed pillow emboss parses");
+        };
+        assert_eq!(style, filters::BevelStyle::InsetEmboss);
+        assert_eq!(angle_degrees, 315.0);
+    }
+
+    #[test]
+    fn unsharp_and_noise_amounts_clamp_to_the_kernel_domain() {
+        let over = [guid_effect(
+            "unsharpMask",
+            GUID_UNSHARP_MASK,
+            &[
+                ("unsharp_mask_radius", "99999"),
+                ("unsharp_mask_amount", "900"),
+                ("unsharp_mask_threshold", "300"),
+            ],
+        )];
+        assert_eq!(
+            plan(&over).ops,
+            vec![KernelOp::UnsharpMask {
+                radius: 250.0,
+                amount: 500,
+                threshold: 255,
+            }]
+        );
+        // add_noise clamps out-of-range amounts; "true" is a truthy
+        // spelling for the color flag.
+        let noise = [guid_effect(
+            "addNoise",
+            GUID_ADD_NOISE,
+            &[("add_noise_amount", "150"), ("add_noise_use_color", "true")],
+        )];
+        let KernelOp::AddNoise {
+            amount, monochrome, ..
+        } = plan(&noise).ops[0]
+        else {
+            panic!("noise parses");
+        };
+        assert_eq!(amount, 100);
+        assert!(!monochrome, "the color flag reads 'true'");
+    }
+
+    #[test]
+    fn hue_out_of_domain_clamps_follow_the_colorize_split() {
+        // Colorize clamps hue into 0..360; shift clamps ±180.
+        let over_colorize = [guid_effect(
+            "hueSaturation",
+            GUID_HUE_SATURATION,
+            &[
+                ("hue_amount", "500"),
+                ("saturation_amount", "0"),
+                ("lightness_amount", "0"),
+                ("hls_colorize", "true"),
+            ],
+        )];
+        assert!(matches!(
+            plan(&over_colorize).ops[0],
+            KernelOp::HueSaturation {
+                hue: 360.0,
+                colorize: true,
+                ..
+            }
+        ));
+        let over_shift = [guid_effect(
+            "hueSaturation",
+            GUID_HUE_SATURATION,
+            &[
+                ("hue_amount", "-500"),
+                ("saturation_amount", "0"),
+                ("lightness_amount", "0"),
+            ],
+        )];
+        assert!(matches!(
+            plan(&over_shift).ops[0],
+            KernelOp::HueSaturation {
+                hue: -180.0,
+                colorize: false,
+                ..
+            }
+        ));
+    }
 }
