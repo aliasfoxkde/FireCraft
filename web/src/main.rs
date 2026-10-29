@@ -1,6 +1,6 @@
 //! `firecraft-web` — the browser bundle: the same app shell compiled
 //! for wasm32 (trunk), plus a postMessage bridge so a host page (the
-//! WebOS) can open documents, drive registry commands, and pull
+//! `WebOS`) can open documents, drive registry commands, and pull
 //! renders and saves out.
 //!
 //! The bridge is a surface, not a side door: every document mutation
