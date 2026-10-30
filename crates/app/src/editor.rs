@@ -847,7 +847,7 @@ impl Editor {
         let images = fwpng::parse_mkbt_chunks(&chunks).map_err(detail)?;
         let mut tile_map: std::collections::HashMap<u32, u32> = std::collections::HashMap::new();
         let mut tiles = Vec::new();
-        if !images.is_empty() {
+        {
             const NAME: &str = "style.importLibraryTiles";
             let base = u32::try_from(self.session.document().tiles.len()).map_err(|_| {
                 EngineError::InvalidState {

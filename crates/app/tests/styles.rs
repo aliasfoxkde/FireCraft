@@ -242,6 +242,241 @@ fn the_shipped_style_set_imports_and_paints() {
     }
 }
 
+// --- residual surfaces ------------------------------------------------------------
+
+/// A style record whose fill carries a pattern tile: the `FPTv`
+/// subtree names one `mkBT` raster through a `TIDi` reference.
+fn patterned(name: &str, tile: u32) -> StyleEntry {
+    let mut entry = solid(name, 0xFF30_4050);
+    entry.paint.fill = Some(doc::Fill {
+        shape: doc::FillShape::Solid,
+        shape_extended: false,
+        texture_blend: 1000,
+        feather: 0,
+        stamping: None,
+        hard_edge: false,
+        gradient: None,
+        dither: None,
+        pattern: Some(doc::PatternTile {
+            name: Some("hatch".to_owned()),
+            pixels: (128, 128),
+            tile_size: 128,
+            tiles: vec![doc::TileRef::Tile(tile)],
+        }),
+    });
+    entry
+}
+
+/// A `.stl` carrying one pattern-backed record that references `mkBT`
+/// index `tile`, plus the `mkBT` chunk itself.
+fn patterned_stl(tile: u32) -> Vec<u8> {
+    let entries = vec![patterned("Hatch 01", tile)];
+    let (nodes, stats) = doc::fwmap::write_style_library(&entries, &Default::default()).unwrap();
+    assert_eq!(stats.unconsumed_unknown, 0, "the writer ate every node");
+    let body = fwpng::nodetree::serialize(&nodes);
+    let mut compressed = Vec::new();
+    flate2::write::ZlibEncoder::new(&mut compressed, flate2::Compression::default())
+        .write_all(&body)
+        .unwrap();
+    let mut out = Vec::from(fwpng::chunk::PNG_SIGNATURE);
+    fwpng::chunk::write_chunk(&mut out, b"mkTS", &compressed);
+    for payload in fwpng::tile::encode_mkbt(tile, &tile_plane()).unwrap() {
+        fwpng::chunk::write_chunk(&mut out, b"mkBT", &payload);
+    }
+    fwpng::chunk::write_chunk(&mut out, b"IEND", &[]);
+    out
+}
+
+/// One 128×128 ARGB tile plane.
+fn tile_plane() -> Vec<u8> {
+    let mut plane = vec![0u8; fwpng::tile::TILE_STREAM_BYTES];
+    for (index, byte) in plane.iter_mut().enumerate() {
+        *byte = (index % 251) as u8;
+    }
+    plane
+}
+
+/// A pattern-backed style import re-keys the library's `TIDi` onto
+/// the document's tile bank: the reference lands on the fresh bank
+/// slot, the raster joins the bank, and the record still applies.
+#[test]
+fn pattern_tile_import_rekeys_and_joins_the_bank() {
+    let mut editor = Editor::untitled();
+    assert!(editor.document().tiles.is_empty(), "the bank starts empty");
+
+    let count = editor.import_styles(&patterned_stl(7)).unwrap();
+    assert_eq!(count, 1, "the record lands");
+    assert_eq!(
+        editor.document().tiles.len(),
+        1,
+        "the library's raster joins the bank"
+    );
+
+    let pattern = editor.document().styles[0]
+        .paint
+        .fill
+        .as_ref()
+        .and_then(|fill| fill.pattern.as_ref())
+        .expect("the pattern subtree survives the import");
+    assert_eq!(
+        pattern.tiles,
+        vec![doc::TileRef::Tile(0)],
+        "the library's tile 7 re-keys to the fresh bank slot 0"
+    );
+
+    // The record still applies onto a selection, pattern and all.
+    let (mut editor, id) = editor_with_selection();
+    editor.import_styles(&patterned_stl(7)).unwrap();
+    editor
+        .apply(
+            "style.apply",
+            serde_json::json!({ "index": 0, "ids": [id] }),
+        )
+        .unwrap();
+    match editor.document().registry.get(id) {
+        Some(doc::ObjectData::Path(path)) => {
+            let fill = path.paint.as_ref().unwrap().fill.as_ref().unwrap();
+            assert!(fill.pattern.is_some(), "the pattern rides the bundle");
+        }
+        other => panic!("expected the plate path, got {other:?}"),
+    }
+}
+
+/// A grayscale `mkBT` (256×256) is not a style tile — the import
+/// refuses whole rather than landing a wrong-shaped raster.
+#[test]
+fn grayscale_tile_refuses_the_import() {
+    let mut editor = Editor::untitled();
+    let entries = vec![solid("Plain", 0xFF00_0000)];
+    let (nodes, _) = doc::fwmap::write_style_library(&entries, &Default::default()).unwrap();
+    let body = fwpng::nodetree::serialize(&nodes);
+    let mut compressed = Vec::new();
+    flate2::write::ZlibEncoder::new(&mut compressed, flate2::Compression::default())
+        .write_all(&body)
+        .unwrap();
+    let mut out = Vec::from(fwpng::chunk::PNG_SIGNATURE);
+    fwpng::chunk::write_chunk(&mut out, b"mkTS", &compressed);
+    // A grayscale payload: the header's flag byte at [11] set, and the
+    // stream sized for the 256×256 expansion.
+    let mut payloads = fwpng::tile::encode_mkbt(3, &tile_plane()).unwrap();
+    payloads[0][11] = 1;
+    for payload in payloads {
+        fwpng::chunk::write_chunk(&mut out, b"mkBT", &payload);
+    }
+    fwpng::chunk::write_chunk(&mut out, b"IEND", &[]);
+
+    let error = editor.import_styles(&out).expect_err("grayscale refuses");
+    let text = error.to_string();
+    assert!(
+        text.contains("grayscale"),
+        "the refusal names the reason: {text}"
+    );
+    assert!(
+        editor.document().styles.is_empty() && editor.document().tiles.is_empty(),
+        "the document is untouched"
+    );
+}
+
+/// A `TIDi` with no `mkBT` payload behind it is a corrupt library —
+/// the import refuses whole rather than land a dangling reference.
+#[test]
+fn dangling_tile_reference_refuses_the_import() {
+    let mut editor = Editor::untitled();
+    // The record references tile 5, but no `mkBT` chunk rides along.
+    let entries = vec![patterned("Hatch 01", 5)];
+    let (nodes, _) = doc::fwmap::write_style_library(&entries, &Default::default()).unwrap();
+    let body = fwpng::nodetree::serialize(&nodes);
+    let mut compressed = Vec::new();
+    flate2::write::ZlibEncoder::new(&mut compressed, flate2::Compression::default())
+        .write_all(&body)
+        .unwrap();
+    let mut out = Vec::from(fwpng::chunk::PNG_SIGNATURE);
+    fwpng::chunk::write_chunk(&mut out, b"mkTS", &compressed);
+    fwpng::chunk::write_chunk(&mut out, b"IEND", &[]);
+
+    let error = editor
+        .import_styles(&out)
+        .expect_err("dangling reference refuses");
+    let text = error.to_string();
+    assert!(
+        text.contains("no mkBT payload") || text.contains("tile 5"),
+        "the refusal names the dangling reference: {text}"
+    );
+    assert!(
+        editor.document().styles.is_empty(),
+        "the document is untouched"
+    );
+}
+
+/// Replaying a steps file onto a pristine base rebuilds the document
+/// the recording was made from — the journal is the whole history.
+#[test]
+fn replay_steps_onto_a_pristine_base() {
+    let mut editor = Editor::untitled();
+    editor
+        .apply(
+            "object.createPath",
+            serde_json::json!({
+                "kind": "rect",
+                "x": 0.0, "y": 0.0, "width": 24.0, "height": 10.0,
+                "page": 0, "layer": 0, "cell": 0, "name": "plate",
+            }),
+        )
+        .unwrap();
+    let recorded = editor.steps_text();
+    assert!(!recorded.is_empty(), "the journal captured the edit");
+    let expected = editor.document().clone();
+
+    // A pristine base (the untitled document) replays the recording
+    // into the same end state.
+    let mut replay = Editor::untitled();
+    replay.replay_steps(&recorded).unwrap();
+    assert_eq!(replay.document().registry, expected.registry);
+    assert_eq!(
+        replay.steps_text(),
+        recorded,
+        "the journal is exactly the recording"
+    );
+}
+
+/// Nine-slice guides clear cleanly: enabling installs them, disabling
+/// takes them away, and the definition keeps the rest of its shape.
+#[test]
+fn disable_nine_slice_clears_the_guides() {
+    let mut editor = Editor::untitled();
+    editor
+        .apply(
+            "library.add",
+            serde_json::json!({ "name": "s", "symbol_type": "graphic" }),
+        )
+        .unwrap();
+    editor.enter_symbol(0).unwrap();
+    editor.tool = app::editor::Tool::Rect;
+    editor.begin_drag(geom::Point::new(0.0, 0.0));
+    editor.drag_to(geom::Point::new(20.0, 20.0));
+    editor.end_drag().unwrap();
+    editor.exit_symbol();
+
+    let number = editor.document().symbols[0].symbol_number;
+    editor.enable_nine_slice(number).unwrap();
+    assert!(
+        editor.document().symbols[0].nine_slice.is_some(),
+        "the guides land"
+    );
+
+    editor.disable_nine_slice(number).unwrap();
+    assert!(
+        editor.document().symbols[0].nine_slice.is_none(),
+        "the guides clear"
+    );
+
+    // And the definition's content survives the round trip.
+    assert!(
+        editor.definition_content_bounds(number).is_some(),
+        "the shape content is untouched"
+    );
+}
+
 /// Absolute path to a generated style asset.
 fn asset(name: &str) -> std::path::PathBuf {
     std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
