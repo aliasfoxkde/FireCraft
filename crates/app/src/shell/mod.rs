@@ -26,8 +26,8 @@ use base64::Engine as _;
 
 use crate::canvas::View;
 use crate::editor::{
-    AutoShape, DragConstraint, Editor, NineSliceEdge, PixelSelectMode, StampShape, Tool,
-    TransformHandle,
+    AutoShape, DragConstraint, Editor, GradientHandle, NineSliceEdge, PixelSelectMode, StampShape,
+    Tool, TransformHandle,
 };
 use crate::menus;
 

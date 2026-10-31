@@ -501,6 +501,27 @@ impl Shell {
             }
         }
 
+        // Gradient fill overlay: the ramp line with a square handle at
+        // each end, over the selected path's gradient fill.
+        let gradient_frame = self.editor.gradient_handles().map(|(_, start, end)| {
+            let shift = egui::Vec2::new(rect.left(), rect.top());
+            let a = self.view.to_screen(start) + shift;
+            let b = self.view.to_screen(end) + shift;
+            let painter = ui.painter();
+            painter.line_segment([a, b], (1.0, Color32::from_rgb(0x2f, 0x5d, 0x8a)));
+            for point in [a, b] {
+                let square = Rect::from_center_size(point, Vec2::splat(9.0));
+                painter.rect_filled(square, 2.0, Color32::WHITE);
+                painter.rect_stroke(
+                    square,
+                    0.0,
+                    (1.0, Color32::BLACK),
+                    egui::StrokeKind::Outside,
+                );
+            }
+            (a, b)
+        });
+
         // Rubber band for a creation drag. A move drag is excluded:
         // the band belongs to shape creation, and painting it during a
         // move made every object drag look like a marquee selection.
@@ -538,6 +559,26 @@ impl Shell {
                         }
                     }
                     None => {
+                        // A press on a gradient handle moves the ramp
+                        // end; it outranks the transform handles
+                        // (the gradient overlay paints above them).
+                        let grabbed_gradient = gradient_frame.and_then(|(a, b)| {
+                            if Rect::from_center_size(a, Vec2::splat(13.0)).contains(local) {
+                                Some(GradientHandle::Start)
+                            } else if Rect::from_center_size(b, Vec2::splat(13.0)).contains(local) {
+                                Some(GradientHandle::End)
+                            } else {
+                                None
+                            }
+                        });
+                        if let Some(handle) = grabbed_gradient
+                            && let Some((id, _, _)) = self.editor.gradient_handles()
+                        {
+                            if let Err(error) = self.editor.begin_gradient_drag(id, handle, world) {
+                                self.status = format!("gradient drag failed: {error}");
+                            }
+                            return;
+                        }
                         // A press on a selection handle scales the
                         // selection live. It outranks the tool: the
                         // handle is an affordance of the current
@@ -638,6 +679,8 @@ impl Shell {
                     self.editor.transform_drag_to(world);
                 } else if self.editor.node_drag.is_some() {
                     self.editor.node_drag_to(world);
+                } else if self.editor.gradient_drag.is_some() {
+                    self.editor.gradient_drag_to(world);
                 } else if self.editor.pixel_selection.is_some() {
                     if let Err(error) = self.editor.extend_pixel_selection(world) {
                         self.status = format!("select failed: {error}");
@@ -675,6 +718,9 @@ impl Shell {
             }
             if let Err(error) = self.editor.end_node_drag() {
                 self.status = format!("reshape failed: {error}");
+            }
+            if let Err(error) = self.editor.end_gradient_drag() {
+                self.status = format!("gradient drag failed: {error}");
             }
             if let Err(error) = self.editor.end_drag() {
                 self.status = format!("create failed: {error}");
