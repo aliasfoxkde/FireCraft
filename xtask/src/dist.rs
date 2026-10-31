@@ -238,9 +238,15 @@ pub(crate) fn workspace_version() -> Result<String, String> {
         .ok_or_else(|| "cargo metadata: no workspace-local xtask version".to_owned())
 }
 
-/// Path of a release binary from the shared build.
+/// Path of a release binary from the shared build. Honors
+/// `CARGO_TARGET_DIR` — the CI release job builds with an override
+/// (`/tmp/ci-dist-target`), so the hardcoded workspace `target/` never
+/// exists there.
 fn release_bin(name: &str) -> Result<PathBuf, String> {
-    let path = workspace_root().join("target/release").join(name);
+    let target = std::env::var_os("CARGO_TARGET_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| workspace_root().join("target"));
+    let path = target.join("release").join(name);
     if path.is_file() {
         Ok(path)
     } else {
