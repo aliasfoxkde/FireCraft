@@ -175,6 +175,8 @@ jobs:
           mkdir -p artifacts
           cp -r dist/web artifacts/web
           cp -r dist/native artifacts/native
-          sha256sum -c artifacts/web/MANIFEST.sha256
-          sha256sum -c artifacts/native/MANIFEST.sha256
+          # Manifests list bare filenames relative to their own
+          # directory, so verify from inside each one.
+          (cd artifacts/web && sha256sum -c MANIFEST.sha256)
+          (cd artifacts/native && sha256sum -c MANIFEST.sha256)
     timeout: 90m
