@@ -13,6 +13,10 @@
   fwpng tile-decode fixes, lossy-WebP CLI plumbing. Web bundle live
   at <https://firecraft-web.pages.dev> (v0.2.3). Notes:
   [`releases/v0.2.3.md`](releases/v0.2.3.md).
+- **Web file doors closed (2026-10-31):** picker `accept` covers
+  every sniffed format; drag-and-drop loads through the same
+  `load_document_bytes` door (`dfd7f46`); sink is `Rc` +
+  `thread_local` (wasm is single-threaded).
 - **Phase 2/11 complete (2026-10-21):** AVIF policy (dec. 0064),
   HEIC refusal (dec. 0065), import surface parity, lossy WebP export
   (`libwebp-sys`, `lossy-webp` feature, native only). All GAPS.md
