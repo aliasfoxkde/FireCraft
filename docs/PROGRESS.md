@@ -17,6 +17,11 @@
   every sniffed format; drag-and-drop loads through the same
   `load_document_bytes` door (`dfd7f46`); sink is `Rc` +
   `thread_local` (wasm is single-threaded).
+- **Live deployment audit closed (2026-10-31):** headless input
+  probe verified the served app end-to-end — tool hotkeys, canvas
+  drags, engine commands, and the postMessage bridge all work;
+  console clean. Brush no-op on an empty document is by-design
+  (paint targets require an image under the pointer).
 - **Phase 2/11 complete (2026-10-21):** AVIF policy (dec. 0064),
   HEIC refusal (dec. 0065), import surface parity, lossy WebP export
   (`libwebp-sys`, `lossy-webp` feature, native only). All GAPS.md

@@ -1113,3 +1113,24 @@ documentation reset.
 - Photocraft best-practices audit dispatched to background research
   (task #13): extractable practices ranked against NEXT.md Phases
   14–18.
+
+## 2026-10-31 (late) — Live deployment audit closed: input verified end-to-end
+
+- Playwright headless probe of the served web app drove real input
+  through the app and proved the full path works: `R`/`E` keyboard
+  shortcuts switch tools, and shape-tool drags change the document
+  (exportPng bytes 2242 → 2367 → 4374). Pointer, keyboard, tool
+  routing, command execution, and the postMessage bridge
+  (`ping`/`apply`/`exportPng`) all verified green; console shows
+  no errors.
+- The earlier "mouse strokes don't paint" finding was a false
+  alarm: `paint_target` requires an Image object under the pointer,
+  so brush strokes on a fresh empty document correctly no-op. The
+  dark pixels in the first probe were static toolbar text.
+- Probe-method lessons banked: exportPng byte-diff is the oracle;
+  verify input via shape tools, not the brush; egui menus inside
+  the WebGL canvas are unreachable from DOM clicks and synthetic
+  DragEvents are untrusted (the DnD door stands verified from its
+  own session).
+- Photocraft audit returned (ranked practices, top pick
+  `panic_hunt`; feeds NEXT.md Phases 14–18).
