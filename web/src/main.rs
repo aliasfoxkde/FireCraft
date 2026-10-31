@@ -117,7 +117,9 @@ pub async fn start() -> Result<(), wasm_bindgen::JsValue> {
         .create_element("input")?
         .dyn_into::<web_sys::HtmlInputElement>()?;
     input.set_type("file");
-    input.set_accept(".png,image/png");
+    // Every format the open door accepts (see `Shell::open_document`):
+    // the picker must not hide files the app can open.
+    input.set_accept(".fw.png,.png,.jpg,.jpeg,.gif,.bmp,.tif,.tiff,.webp,image/*");
     input.set_id("firecraft-file-input");
     let _ = input.set_attribute(
         "style",
@@ -182,6 +184,33 @@ pub async fn start() -> Result<(), wasm_bindgen::JsValue> {
             }),
         )
         .await?;
+
+    // Drop sink: the shell's drag-and-drop handler hands us the
+    // dropped-file handle (the read is async on the web); the bytes
+    // load through the same `load_document_bytes` door the bridge's
+    // openDocument uses, with a repaint so the result is visible
+    // immediately.
+    let drop_runner = runner.clone();
+    app::shell::Shell::set_drop_sink(std::rc::Rc::new(move |file, ctx| {
+        let runner = drop_runner.clone();
+        let file = file.clone();
+        let ctx = ctx.clone();
+        wasm_bindgen_futures::spawn_local(async move {
+            match file.bytes_async().await {
+                Ok(bytes) => {
+                    with_app(&runner, |shell| {
+                        let _ = shell.load_document_bytes(&bytes);
+                    });
+                }
+                Err(error) => {
+                    with_app(&runner, |shell| {
+                        shell.status = format!("open failed: {error}");
+                    });
+                }
+            }
+            ctx.request_repaint();
+        });
+    }));
 
     reply_status("ready", true, None);
     Ok(())

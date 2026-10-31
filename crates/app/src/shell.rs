@@ -15,6 +15,17 @@ use crate::editor::{
 };
 use crate::menus;
 
+/// The web drop sink ([`Shell::set_drop_sink`]): the web crate's async
+/// file reader, installed at startup. Wasm only — the desktop shell
+/// reads dropped bytes directly. No `Send`/`Sync` bound: wasm is
+/// single-threaded and the sink captures `Rc<WebRunner>`, so the
+/// holder is a `thread_local` (a `static Mutex` would demand `Send`).
+#[cfg(target_arch = "wasm32")]
+thread_local! {
+    static DROP_SINK: std::cell::RefCell<Option<std::rc::Rc<dyn Fn(&egui::DroppedFileHandle, egui::Context)>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
 /// The CS6 chrome look: near-black charcoal panels, square corners,
 /// small type. Applied once at startup; `eww`-era Fireworks was dark
 /// graphite against a mid-gray canvas.
@@ -1372,18 +1383,30 @@ impl Shell {
         }
     }
 
-    /// Replaces the document from raw `.fw.png` bytes — the same read
-    /// path the desktop open uses (`io::open`, no registry side door).
+    /// Replaces the document from raw bytes — the same one-door read
+    /// path the desktop open uses: a Fireworks PNG opens through
+    /// `io::open`, any other supported raster opens as a document
+    /// sized to the image. No registry side door.
     ///
     /// # Errors
-    /// Whatever the reader refuses; the current document is kept.
+    /// Whatever both readers refuse; the current document is kept.
     pub fn load_document_bytes(&mut self, bytes: &[u8]) -> Result<(), engine::EngineError> {
-        let editor = Editor::open(bytes)?;
-        self.editor = editor;
-        self.view = View::default();
-        self.raster = None;
-        self.status = "opened document".to_owned();
-        Ok(())
+        match Editor::open(bytes) {
+            Ok(editor) => {
+                self.raster = None;
+                self.editor = editor;
+                self.view = View::default();
+                self.status = "opened document".to_owned();
+                Ok(())
+            }
+            Err(document_error) => {
+                self.open_raster_document(bytes, "imported image")
+                    .map_err(|_| document_error)?;
+                self.status = "opened image".to_owned();
+                self.view = View::default();
+                Ok(())
+            }
+        }
     }
 
     /// A change stamp over the session: any apply/undo/redo moves at
@@ -2676,6 +2699,53 @@ impl Shell {
         });
         for action in fired {
             self.run_action(&action);
+        }
+    }
+
+    /// The installed web drop sink: the web crate registers a reader
+    /// at startup ([`Shell::set_drop_sink`]) that takes a dropped-file
+    /// handle, reads its bytes async, and loads them through the
+    /// runner. `None` until then — a drop before startup is a no-op
+    /// (the status line already said the app was still coming up).
+    #[cfg(target_arch = "wasm32")]
+    pub fn set_drop_sink(sink: std::rc::Rc<dyn Fn(&egui::DroppedFileHandle, egui::Context)>) {
+        DROP_SINK.with(|cell| *cell.borrow_mut() = Some(sink));
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    fn drop_sink() -> Option<std::rc::Rc<dyn Fn(&egui::DroppedFileHandle, egui::Context)>> {
+        DROP_SINK.with(|cell| cell.borrow().clone())
+    }
+
+    /// Files dropped onto the window open through the same one-door
+    /// path as File ▸ Open: a Fireworks PNG replaces the document,
+    /// any other supported raster opens as a document sized to the
+    /// image. Only the first dropped file is taken — a batch drop is
+    /// not a batch import. On the web the bytes arrive async, so the
+    /// shell hands the handle to the installed drop sink (the web
+    /// crate reads the file and calls back through
+    /// [`Shell::load_document_bytes`]); natively the read is direct.
+    fn dropped_files(&mut self, ctx: &egui::Context) {
+        let dropped: Vec<_> = ctx.input(|input| input.raw.dropped_files.clone());
+        let Some(file) = dropped.into_iter().next() else {
+            return;
+        };
+        #[cfg(not(target_arch = "wasm32"))]
+        match file.bytes() {
+            Ok(bytes) => {
+                if let Err(error) = self.load_document_bytes(&bytes) {
+                    self.status = format!("open failed: {error}");
+                }
+            }
+            Err(error) => self.status = format!("open failed: {error}"),
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            let sink = Self::drop_sink();
+            if let Some(sink) = sink {
+                sink(&file, ctx.clone());
+                self.status = "reading dropped file…".to_owned();
+            }
         }
     }
 
@@ -4584,6 +4654,7 @@ impl eframe::App for Shell {
         // Menu/shortcut actions run before layout so their effects are
         // visible the same frame.
         self.shortcuts(ui.ctx());
+        self.dropped_files(ui.ctx());
         // Panels first, CentralPanel last (egui's required order), in
         // the CS6 arrangement: menu, tool strip, panel stack,
         // bottom-docked Properties, status strip, document canvas.
