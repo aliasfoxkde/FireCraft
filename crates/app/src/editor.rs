@@ -627,6 +627,29 @@ pub struct NodeDrag {
     pub applied: bool,
 }
 
+/// Which end of a gradient ramp a drag grabs.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GradientHandle {
+    /// The ramp origin (`fdct` start).
+    Start,
+    /// The ramp terminus (`fdct` end).
+    End,
+}
+
+/// A gradient-handle drag in progress: one `path.setFillVector` step
+/// per pointer move, folded into a single "Gradient" undo step.
+#[derive(Clone, Debug, PartialEq)]
+pub struct GradientDrag {
+    /// The path whose ramp is moving.
+    pub id: ObjectId,
+    /// Which end is under the pointer.
+    pub handle: GradientHandle,
+    /// Latest world position of the pointer.
+    pub current: geom::Point,
+    /// Whether any step applied.
+    pub applied: bool,
+}
+
 /// Everything the shell shows, minus the window itself.
 pub struct Editor {
     /// The editing session (document + history + journal).
@@ -665,6 +688,8 @@ pub struct Editor {
     pub transform_drag: Option<TransformDrag>,
     /// Path-node drag in progress (Subselect).
     pub node_drag: Option<NodeDrag>,
+    /// Gradient-handle drag in progress.
+    pub gradient_drag: Option<GradientDrag>,
     /// The brush model the paint tools use (view state — the engine
     /// re-reads it from every stroke's payload).
     pub brush: BrushSettings,
@@ -744,6 +769,7 @@ impl Editor {
             guide_drag: None,
             transform_drag: None,
             node_drag: None,
+            gradient_drag: None,
             brush: BrushSettings::default(),
             stroke: None,
             pixel_selection: None,
@@ -1592,6 +1618,92 @@ impl Editor {
             }
         }
         best.map(|(_, contour, point)| (contour, point))
+    }
+
+    /// The selected path's gradient handles (start, end) in world
+    /// space — the drag targets of the canvas fill overlay. `None`
+    /// when the selection is not a path with a gradient fill.
+    #[must_use]
+    pub fn gradient_handles(&self) -> Option<(ObjectId, geom::Point, geom::Point)> {
+        let id = self.selected_live()?;
+        let data = self.document().registry.get(id)?;
+        let ObjectData::Path(path) = data else {
+            return None;
+        };
+        let is_gradient = path
+            .paint
+            .as_ref()
+            .and_then(|paint| paint.fill.as_ref())
+            .is_some_and(|fill| !matches!(fill.shape, doc::FillShape::Solid));
+        if !is_gradient {
+            return None;
+        }
+        Some((id, path.fill_start?, path.fill_end?))
+    }
+
+    /// Begins a gradient-handle drag: moves the ramp's start or end
+    /// point live through `path.setFillVector`, one step per pointer
+    /// move, folded into a single "Gradient" transaction.
+    ///
+    /// # Errors
+    /// Opening the transaction was refused; nothing was mutated.
+    pub fn begin_gradient_drag(
+        &mut self,
+        id: ObjectId,
+        handle: GradientHandle,
+        world: geom::Point,
+    ) -> Result<(), EngineError> {
+        self.session.begin_transaction("Gradient")?;
+        self.gradient_drag = Some(GradientDrag {
+            id,
+            handle,
+            current: world,
+            applied: false,
+        });
+        Ok(())
+    }
+
+    /// Updates the gradient-handle drag: one `path.setFillVector` step
+    /// repositioning the grabbed handle. A refused step aborts.
+    pub fn gradient_drag_to(&mut self, world: geom::Point) {
+        let Some(drag) = &self.gradient_drag else {
+            return;
+        };
+        let moved = match drag.handle {
+            GradientHandle::Start => "start",
+            GradientHandle::End => "end",
+        };
+        let payload = serde_json::json!({
+            "id": drag.id,
+            moved: { "x": world.x, "y": world.y },
+        });
+        match self.apply("path.setFillVector", payload) {
+            Ok(()) => {
+                if let Some(drag) = &mut self.gradient_drag {
+                    drag.current = world;
+                    drag.applied = true;
+                }
+            }
+            Err(_) => {
+                let _ = self.session.abort_transaction();
+                self.gradient_drag = None;
+            }
+        }
+    }
+
+    /// Ends the gradient-handle drag.
+    ///
+    /// # Errors
+    /// Whatever the transaction commit refuses.
+    pub fn end_gradient_drag(&mut self) -> Result<(), EngineError> {
+        let Some(drag) = self.gradient_drag.take() else {
+            return Ok(());
+        };
+        if drag.applied {
+            self.session.commit_transaction().map(|_label| ())
+        } else {
+            self.session.abort_transaction()
+        }
     }
 
     /// Begins a handle drag that scales the selection live: one
@@ -2983,6 +3095,59 @@ mod tests {
             .unwrap();
         editor.end_node_drag().unwrap();
         assert_eq!(editor.session.undo_len(), undo_before, "no step committed");
+    }
+
+    #[test]
+    fn gradient_handles_drag_and_survive_undo() {
+        let mut editor = Editor::untitled();
+        let id = rect_at(&mut editor, 0.0, 0.0);
+        editor.set_selection(vec![id]);
+
+        // No handles on a solid fill.
+        assert!(editor.gradient_handles().is_none());
+
+        // Install a linear ramp through the registry (the panel's path).
+        editor
+            .apply(
+                "path.setFill",
+                serde_json::json!({
+                    "id": id, "shape": "linear",
+                    "stops": [
+                        { "position": 0.0, "color_raw": 0xFF00_00FF_i64 },
+                        { "position": 1.0, "color_raw": 0xFFFF_FFFF_i64 },
+                    ],
+                    "alpha": [],
+                }),
+            )
+            .unwrap();
+        editor
+            .apply(
+                "path.setFillVector",
+                serde_json::json!({
+                    "id": id,
+                    "start": { "x": 0.0, "y": 10.0 },
+                    "end": { "x": 40.0, "y": 10.0 },
+                }),
+            )
+            .unwrap();
+
+        let (_, start, end) = editor.gradient_handles().expect("handles");
+        assert_eq!((start.x, start.y), (0.0, 10.0));
+        assert_eq!((end.x, end.y), (40.0, 10.0));
+
+        // Drag the end handle: one undo step, and undo restores.
+        let undo_before = editor.session.undo_len();
+        editor
+            .begin_gradient_drag(id, GradientHandle::End, geom::Point::new(40.0, 10.0))
+            .unwrap();
+        editor.gradient_drag_to(geom::Point::new(60.0, 20.0));
+        editor.end_gradient_drag().unwrap();
+        assert_eq!(editor.session.undo_len(), undo_before + 1, "one step");
+        let (_, _, end) = editor.gradient_handles().unwrap();
+        assert_eq!((end.x, end.y), (60.0, 20.0));
+        editor.undo().unwrap();
+        let (_, _, end) = editor.gradient_handles().unwrap();
+        assert_eq!((end.x, end.y), (40.0, 10.0), "undo restores the ramp");
     }
 
     #[test]

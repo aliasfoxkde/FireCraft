@@ -567,6 +567,7 @@ impl Shell {
             ui.label("(select a vector object to edit its colors)");
             return;
         }
+        self.gradient_editor_section(ui, &ids);
         for (channel, label) in [("fill", "Fill"), ("stroke", "Stroke")] {
             ui.horizontal(|ui| {
                 ui.label(label);
@@ -1421,5 +1422,154 @@ impl Shell {
                 }
             });
         }
+    }
+
+    /// The gradient section of the fill editor: toggles the first
+    /// selected path between solid and a linear ramp, and edits the
+    /// ramp's stops (position + color). The on-canvas start/end
+    /// handles live in the canvas overlay (`fill_handles_frame`).
+    pub(super) fn gradient_editor_section(&mut self, ui: &mut egui::Ui, ids: &[doc::ObjectId]) {
+        ui.horizontal(|ui| {
+            ui.label("Fill type:");
+            let Some(first) = ids.first() else {
+                return;
+            };
+            let is_gradient = match self.editor.document().registry.get(*first) {
+                Some(ObjectData::Path(path)) => path
+                    .paint
+                    .as_ref()
+                    .and_then(|paint| paint.fill.as_ref())
+                    .is_some_and(|fill| !matches!(fill.shape, doc::FillShape::Solid)),
+                _ => false,
+            };
+            let mut linear = is_gradient;
+            if ui.checkbox(&mut linear, "linear gradient").changed() {
+                if linear {
+                    // Seed the ramp: the fill color to white.
+                    let color_raw = self.first_fill_raw(*first).unwrap_or(0xFF00_0000);
+                    let id = *first;
+                    self.run_command(
+                        "path.setFill",
+                        serde_json::json!({
+                            "id": id, "shape": "linear",
+                            "stops": [
+                                { "position": 0.0, "color_raw": color_raw },
+                                { "position": 1.0, "color_raw": 0xFFFF_FFFF_i64 },
+                            ],
+                            "alpha": [],
+                        }),
+                    );
+                    // Give the new ramp a default vector across the
+                    // object's bounds.
+                    if let Some(bounds) =
+                        crate::editor::union_selection_bounds(self.editor.document(), ids)
+                    {
+                        self.run_command(
+                            "path.setFillVector",
+                            serde_json::json!({
+                                "id": id,
+                                "start": { "x": bounds.x0, "y": bounds.center().y },
+                                "end": { "x": bounds.x1, "y": bounds.center().y },
+                            }),
+                        );
+                    }
+                    self.status = "linear gradient fill".to_owned();
+                } else {
+                    // Collapse back to solid at the ramp's first color.
+                    let color_raw = self.first_fill_raw(*first).unwrap_or(0xFF00_0000);
+                    let id = *first;
+                    self.run_command(
+                        "path.setFill",
+                        serde_json::json!({ "id": id, "shape": "solid", "stops": [], "alpha": [] }),
+                    );
+                    self.run_command(
+                        "path.setFillColor",
+                        serde_json::json!({ "id": id, "color_raw": color_raw }),
+                    );
+                    self.status = "solid fill".to_owned();
+                }
+            }
+        });
+
+        // Stop editing: one row per RGB stop of the first gradient.
+        let Some(first) = ids.first().copied() else {
+            return;
+        };
+        let Some(stops) = self.gradient_stops(first) else {
+            return;
+        };
+        for (index, stop) in stops.iter().enumerate() {
+            ui.horizontal(|ui| {
+                let raw = stop.color_raw as u32;
+                let mut color = Color32::from_rgba_unmultiplied(
+                    (raw & 0xFF) as u8,
+                    ((raw >> 8) & 0xFF) as u8,
+                    ((raw >> 16) & 0xFF) as u8,
+                    ((raw >> 24) & 0xFF) as u8,
+                );
+                if ui.color_edit_button_srgba(&mut color).changed() {
+                    let new_raw = i64::from(
+                        (u32::from(color.r()) << 24)
+                            | (u32::from(color.g()) << 16)
+                            | (u32::from(color.b()) << 8)
+                            | u32::from(color.a()),
+                    );
+                    self.set_gradient_stop(first, index, stop.position, new_raw);
+                }
+                let mut position = stop.position;
+                let slider = ui.add(egui::Slider::new(&mut position, 0.0..=1.0));
+                if slider.changed() {
+                    self.set_gradient_stop(first, index, position, stop.color_raw);
+                }
+            });
+        }
+    }
+
+    /// The fill color (`FCLi`) of a path, if it carries a paint.
+    fn first_fill_raw(&self, id: doc::ObjectId) -> Option<i64> {
+        match self.editor.document().registry.get(id) {
+            Some(ObjectData::Path(path)) => path.paint.as_ref().map(|paint| paint.fill_raw),
+            _ => None,
+        }
+    }
+
+    /// The RGB ramp of the first selected path's gradient fill, if any.
+    fn gradient_stops(&self, id: doc::ObjectId) -> Option<Vec<doc::GradientStop>> {
+        match self.editor.document().registry.get(id) {
+            Some(ObjectData::Path(path)) => path
+                .paint
+                .as_ref()
+                .and_then(|paint| paint.fill.as_ref())
+                .and_then(|fill| fill.gradient.as_ref())
+                .map(|gradient| gradient.rgb.clone()),
+            _ => None,
+        }
+    }
+
+    /// Rewrites the whole RGB ramp with one stop changed —
+    /// `path.setFill` carries no per-stop mutation verb, so the panel
+    /// round-trips the ramp (one undo step per edit, same as a drag).
+    fn set_gradient_stop(
+        &mut self,
+        id: doc::ObjectId,
+        index: usize,
+        position: f64,
+        color_raw: i64,
+    ) {
+        let Some(mut stops) = self.gradient_stops(id) else {
+            return;
+        };
+        if let Some(stop) = stops.get_mut(index) {
+            stop.position = position;
+            stop.color_raw = color_raw;
+        }
+        let payload: Vec<_> = stops
+            .iter()
+            .map(|stop| serde_json::json!({ "position": stop.position, "color_raw": stop.color_raw }))
+            .collect();
+        self.run_command(
+            "path.setFill",
+            serde_json::json!({ "id": id, "shape": "linear", "stops": payload, "alpha": [] }),
+        );
     }
 }
