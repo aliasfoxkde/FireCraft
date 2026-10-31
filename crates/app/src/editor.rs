@@ -549,6 +549,67 @@ pub struct GuideDrag {
     pub current: geom::Point,
 }
 
+/// Which selection handle the transform drag grabbed. Corner handles
+/// scale both axes; edge handles scale one; nothing else reaches the
+/// transform gesture.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TransformHandle {
+    /// Top-left corner: scales away from the opposite corner.
+    TopLeft,
+    /// Top-right corner.
+    TopRight,
+    /// Bottom-right corner.
+    BottomRight,
+    /// Bottom-left corner.
+    BottomLeft,
+    /// Top edge midpoint: vertical scale only.
+    Top,
+    /// Bottom edge midpoint.
+    Bottom,
+    /// Left edge midpoint: horizontal scale only.
+    Left,
+    /// Right edge midpoint.
+    Right,
+}
+
+impl TransformHandle {
+    /// The fixed (opposite) anchor the drag scales away from, in
+    /// normalized bounds coordinates — CS6's handle semantics: the
+    /// opposite corner/edge stays put while the grabbed one follows
+    /// the pointer.
+    #[must_use]
+    fn anchor_norm(self) -> (f64, f64) {
+        match self {
+            Self::TopLeft => (1.0, 1.0),
+            Self::TopRight => (0.0, 1.0),
+            Self::BottomRight => (0.0, 0.0),
+            Self::BottomLeft => (1.0, 0.0),
+            Self::Top => (0.5, 1.0),
+            Self::Bottom => (0.5, 0.0),
+            Self::Left => (1.0, 0.5),
+            Self::Right => (0.0, 0.5),
+        }
+    }
+}
+
+/// A handle drag in progress: the selection is being scaled live by
+/// one `object.scale`/`object.transform` step per pointer move, folded
+/// into a single "Transform" undo step like a move drag.
+#[derive(Clone, Debug, PartialEq)]
+pub struct TransformDrag {
+    /// The objects being transformed.
+    pub ids: Vec<ObjectId>,
+    /// Which handle is under the pointer.
+    pub handle: TransformHandle,
+    /// The selection's union bounds at drag start (the scale space).
+    pub bounds: geom::Rect,
+    /// Latest world position of the pointer.
+    pub current: geom::Point,
+    /// Whether any scale step applied (a click-sized drag commits
+    /// nothing, mirroring `MoveDrag::moved`).
+    pub applied: bool,
+}
+
 /// Everything the shell shows, minus the window itself.
 pub struct Editor {
     /// The editing session (document + history + journal).
@@ -583,6 +644,8 @@ pub struct Editor {
     pub symbol_layer: usize,
     /// Nine-slice guide edge drag in progress.
     pub guide_drag: Option<GuideDrag>,
+    /// Selection-handle transform drag in progress.
+    pub transform_drag: Option<TransformDrag>,
     /// The brush model the paint tools use (view state — the engine
     /// re-reads it from every stroke's payload).
     pub brush: BrushSettings,
@@ -660,6 +723,7 @@ impl Editor {
             symbol_scope: None,
             symbol_layer: 0,
             guide_drag: None,
+            transform_drag: None,
             brush: BrushSettings::default(),
             stroke: None,
             pixel_selection: None,
@@ -1410,6 +1474,130 @@ impl Editor {
             None => return,
         };
         self.drag_step(constrained);
+    }
+
+    /// Begins a handle drag that scales the selection live: one
+    /// `object.scale`/`object.transform` step per pointer move, folded
+    /// by a "Transform" transaction into a single undo step. The bounds
+    /// are captured once at drag start — the scale space the handle
+    /// math works in — so mid-drag bounds changes never feed back.
+    ///
+    /// # Errors
+    /// Opening the transaction was refused; nothing was mutated.
+    pub fn begin_transform_drag(
+        &mut self,
+        world: geom::Point,
+        handle: TransformHandle,
+        ids: Vec<ObjectId>,
+    ) -> Result<(), EngineError> {
+        let document = self.document();
+        let bounds = union_selection_bounds(document, &ids).ok_or(EngineError::InvalidState {
+            name: "transform.begin".to_owned(),
+            detail: "the selection carries no bounds to scale".to_owned(),
+        })?;
+        self.session.begin_transaction("Transform")?;
+        self.transform_drag = Some(TransformDrag {
+            ids,
+            handle,
+            bounds,
+            current: world,
+            applied: false,
+        });
+        Ok(())
+    }
+
+    /// Updates the in-progress transform drag: computes the affine the
+    /// handle position implies (the opposite anchor stays fixed) and
+    /// applies it as one incremental step. CS6 composes each step on
+    /// top of the last, so the drag is a product of small scales — a
+    /// refused step aborts the whole gesture (the transaction rolls
+    /// back).
+    pub fn transform_drag_to(&mut self, world: geom::Point) {
+        let Some(drag) = &self.transform_drag else {
+            return;
+        };
+        let (ax, ay) = drag.handle.anchor_norm();
+        let b = drag.bounds;
+        let anchor = geom::Point::new(b.x0 + ax * b.width(), b.y0 + ay * b.height());
+        // The grabbed handle's home position, in bounds space.
+        let (hx, hy) = (1.0 - ax, 1.0 - ay);
+        let home = geom::Point::new(b.x0 + hx * b.width(), b.y0 + hy * b.height());
+        // Project the pointer onto the handle's drag axes: an edge
+        // handle moves along one axis only; a corner tracks both.
+        let (free_x, free_y) = match drag.handle {
+            TransformHandle::Top | TransformHandle::Bottom => (false, true),
+            TransformHandle::Left | TransformHandle::Right => (true, false),
+            _ => (true, true),
+        };
+        let want = geom::Vec2::new(
+            if free_x {
+                world.x - anchor.x
+            } else {
+                home.x - anchor.x
+            },
+            if free_y {
+                world.y - anchor.y
+            } else {
+                home.y - anchor.y
+            },
+        );
+        let had = home - anchor;
+        // Degenerate home offsets (a zero-width selection) have no
+        // meaningful scale; the step is identity.
+        let (sx, sy) = (
+            if had.x != 0.0 { want.x / had.x } else { 1.0 },
+            if had.y != 0.0 { want.y / had.y } else { 1.0 },
+        );
+        let (sx, sy) = (sx.max(0.0), sy.max(0.0));
+        if (sx - 1.0).abs() < 1e-9 && (sy - 1.0).abs() < 1e-9 {
+            return;
+        }
+        let ids = drag.ids.clone();
+        let payload = serde_json::json!({
+            "ids": ids,
+            "sx": sx, "sy": sy,
+            "pivot": [anchor.x, anchor.y],
+        });
+        match self.apply("object.scale", payload) {
+            Ok(()) => {
+                // The bounds grow with the object: recompute so the
+                // next step composes against current geometry.
+                let ids = self
+                    .transform_drag
+                    .as_ref()
+                    .map(|drag| drag.ids.clone())
+                    .unwrap_or_default();
+                let document = self.document();
+                let bounds = union_selection_bounds(document, &ids);
+                if let Some(drag) = &mut self.transform_drag {
+                    drag.current = world;
+                    drag.applied = true;
+                    if let Some(bounds) = bounds {
+                        drag.bounds = bounds;
+                    }
+                }
+            }
+            Err(_) => {
+                let _ = self.session.abort_transaction();
+                self.transform_drag = None;
+            }
+        }
+    }
+
+    /// Ends the transform drag: a moved gesture folds into its one
+    /// "Transform" undo step; a click-sized drag commits nothing.
+    ///
+    /// # Errors
+    /// Whatever the transaction commit refuses.
+    pub fn end_transform_drag(&mut self) -> Result<(), EngineError> {
+        let Some(drag) = self.transform_drag.take() else {
+            return Ok(());
+        };
+        if drag.applied {
+            self.session.commit_transaction().map(|_label| ())
+        } else {
+            self.session.abort_transaction()
+        }
     }
 
     /// Applies one drag step (already constrained).
@@ -2422,6 +2610,27 @@ pub fn bounds_of(path: &doc::PathObject) -> geom::Rect {
 /// cannot recurse forever; an unknown or empty kind gives a zero box
 /// that never hits.
 #[must_use]
+/// The union bounds of a selection — the space a transform handle
+/// scales in. `None` when nothing in the set carries bounds.
+pub fn union_selection_bounds(document: &Document, ids: &[ObjectId]) -> Option<geom::Rect> {
+    let mut out: Option<geom::Rect> = None;
+    for id in ids {
+        let Some(data) = document.registry.get(*id) else {
+            continue;
+        };
+        let bounds = object_bounds(document, data, 0);
+        if bounds.width() <= 0.0 && bounds.height() <= 0.0 {
+            continue;
+        }
+        out = Some(match out {
+            Some(acc) => acc.union(bounds),
+            None => bounds,
+        });
+    }
+    out
+}
+
+#[must_use]
 pub fn object_bounds(document: &Document, data: &ObjectData, depth: u8) -> geom::Rect {
     const MAX_DEPTH: u8 = 32;
     if depth > MAX_DEPTH {
@@ -2590,8 +2799,111 @@ mod tests {
                 let anchor = path.contours[0].points[0].anchor;
                 (anchor.x, anchor.y)
             }
-            other => panic!("wrong kind: {other:?}"),
+            _ => (f64::NAN, f64::NAN),
         }
+    }
+
+    #[test]
+    fn handle_drag_scales_and_is_one_undo_step() {
+        let mut editor = Editor::untitled();
+        let id = rect_at(&mut editor, 10.0, 10.0);
+        editor.set_selection(vec![id]);
+        let undo_before = editor.session.undo_len();
+
+        // Grab the bottom-right handle; the pointer to the doubled
+        // corner scales 2× about the top-left anchor.
+        editor
+            .begin_transform_drag(
+                geom::Point::new(50.0, 30.0),
+                TransformHandle::BottomRight,
+                vec![id],
+            )
+            .unwrap();
+        editor.transform_drag_to(geom::Point::new(90.0, 50.0));
+        editor.end_transform_drag().unwrap();
+
+        let (x, y) = first_anchor(&editor, id);
+        assert_eq!((x, y), (10.0, 10.0), "the opposite anchor stays put");
+        let after = crate::editor::union_selection_bounds(editor.document(), &[id]).unwrap();
+        assert!(
+            (after.width() - 80.0).abs() < 0.001 && (after.height() - 40.0).abs() < 0.001,
+            "2× scale doubled the extents: {after:?}"
+        );
+        assert_eq!(editor.session.undo_len(), undo_before + 1, "one undo step");
+        editor.undo().unwrap();
+        let restored = crate::editor::union_selection_bounds(editor.document(), &[id]).unwrap();
+        assert!(
+            (restored.width() - 40.0).abs() < 0.001 && (restored.height() - 20.0).abs() < 0.001,
+            "undo restores the pre-drag geometry: {restored:?}"
+        );
+    }
+
+    #[test]
+    fn edge_handle_scales_one_axis_only() {
+        let mut editor = Editor::untitled();
+        let id = rect_at(&mut editor, 0.0, 0.0);
+        editor.set_selection(vec![id]);
+        editor
+            .begin_transform_drag(
+                geom::Point::new(40.0, 10.0),
+                TransformHandle::Right,
+                vec![id],
+            )
+            .unwrap();
+        // The pointer moves down too, but a Right handle ignores y.
+        editor.transform_drag_to(geom::Point::new(80.0, 100.0));
+        editor.end_transform_drag().unwrap();
+        let after = crate::editor::union_selection_bounds(editor.document(), &[id]).unwrap();
+        assert!(
+            (after.width() - 80.0).abs() < 0.001 && (after.height() - 20.0).abs() < 0.001,
+            "height unchanged under an edge handle: {after:?}"
+        );
+    }
+
+    #[test]
+    fn a_click_sized_handle_drag_commits_nothing() {
+        let mut editor = Editor::untitled();
+        let id = rect_at(&mut editor, 10.0, 10.0);
+        editor.set_selection(vec![id]);
+        let undo_before = editor.session.undo_len();
+        editor
+            .begin_transform_drag(
+                geom::Point::new(50.0, 30.0),
+                TransformHandle::BottomRight,
+                vec![id],
+            )
+            .unwrap();
+        editor.end_transform_drag().unwrap();
+        assert_eq!(editor.session.undo_len(), undo_before, "no step committed");
+        let after = crate::editor::union_selection_bounds(editor.document(), &[id]).unwrap();
+        assert!(
+            (after.width() - 40.0).abs() < 0.001,
+            "geometry untouched: {after:?}"
+        );
+    }
+
+    #[test]
+    fn transform_steps_compose_mid_drag() {
+        let mut editor = Editor::untitled();
+        let id = rect_at(&mut editor, 0.0, 0.0);
+        editor.set_selection(vec![id]);
+        editor
+            .begin_transform_drag(
+                geom::Point::new(40.0, 20.0),
+                TransformHandle::BottomRight,
+                vec![id],
+            )
+            .unwrap();
+        // Two steps: 1.5×, then another 1.5× against the new bounds —
+        // a net 2.25×.
+        editor.transform_drag_to(geom::Point::new(60.0, 30.0));
+        editor.transform_drag_to(geom::Point::new(90.0, 45.0));
+        editor.end_transform_drag().unwrap();
+        let after = crate::editor::union_selection_bounds(editor.document(), &[id]).unwrap();
+        assert!(
+            (after.width() - 90.0).abs() < 0.001 && (after.height() - 45.0).abs() < 0.001,
+            "steps compose against current geometry: {after:?}"
+        );
     }
 
     #[test]

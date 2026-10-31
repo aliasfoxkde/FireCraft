@@ -58,6 +58,9 @@ pub enum ShellAction {
     SaveAs,
     Export,
     ExportPreview,
+    /// Modify ▸ Transform ▸ Numeric Transform (Scale/Skew route here
+    /// too): opens the numeric dialog over the live selection.
+    NumericTransform,
     Quit,
     Undo,
     Redo,
@@ -573,10 +576,25 @@ pub static MODIFY: Menu = Menu {
             &[
                 item(35178, "Free Transform", "", Action::Inert),
                 Entry::Sep,
-                item(35060, "Scale", "", Action::Inert),
-                item(35061, "Skew", "", Action::Inert),
+                item(
+                    35060,
+                    "Scale",
+                    "",
+                    Action::Shell(ShellAction::NumericTransform),
+                ),
+                item(
+                    35061,
+                    "Skew",
+                    "",
+                    Action::Shell(ShellAction::NumericTransform),
+                ),
                 item(35090, "Distort", "", Action::Inert),
-                item(35201, "Numeric Transform...", "", Action::Inert),
+                item(
+                    35201,
+                    "Numeric Transform...",
+                    "",
+                    Action::Shell(ShellAction::NumericTransform),
+                ),
                 Entry::Sep,
                 item(
                     35173,
@@ -1253,6 +1271,7 @@ pub fn action_name(action: Action) -> String {
             ShellAction::SaveAs => "Save As".into(),
             ShellAction::Export => "Export".into(),
             ShellAction::ExportPreview => "Export preview".into(),
+            ShellAction::NumericTransform => "Numeric Transform".into(),
             ShellAction::Quit => "Quit".into(),
             ShellAction::Undo => "Undo".into(),
             ShellAction::Redo => "Redo".into(),

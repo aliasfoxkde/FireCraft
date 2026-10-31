@@ -1,6 +1,7 @@
 //! Dialog types and the import/export plumbing on [`Shell`].
 
 use super::*;
+use engine::EngineError;
 
 /// The display quartet plus name, captured read-only from any
 /// property-bearing kind.
@@ -22,6 +23,39 @@ pub(crate) type WebRow = (
     Option<String>,
     i64,
 );
+
+/// The Numeric Transform dialog's fields — CS6's Modify ▸ Transform ▸
+/// Numeric Transform: a uniform or per-axis scale, then a rotate and a
+/// skew, composed about the selection bounds center and applied as one
+/// transaction step (`scale` × `rotate` × `skew`, in that order).
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct NumericTransformDialog {
+    /// Horizontal scale percent (100 = unchanged).
+    pub scale_x: f64,
+    /// Vertical scale percent.
+    pub scale_y: f64,
+    /// Uniform-scale toggle: `scale_y` follows `scale_x`.
+    pub uniform: bool,
+    /// Clockwise rotation in degrees.
+    pub rotate: f64,
+    /// Horizontal skew angle in degrees.
+    pub skew_x: f64,
+    /// Vertical skew angle in degrees.
+    pub skew_y: f64,
+}
+
+impl Default for NumericTransformDialog {
+    fn default() -> Self {
+        Self {
+            scale_x: 100.0,
+            scale_y: 100.0,
+            uniform: true,
+            rotate: 0.0,
+            skew_x: 0.0,
+            skew_y: 0.0,
+        }
+    }
+}
 
 /// Desktop file routing for v1: the open/save path comes from
 /// `FIRECRAFT_DOC` (default `untitled.fw.png` in the working
@@ -554,6 +588,122 @@ impl Shell {
         self.export_dialog = Some(dialog);
     }
 
+    /// The Numeric Transform dialog: per-field scale/rotate/skew,
+    /// applied to the live selection as one composed transaction step.
+    pub(super) fn numeric_transform_dialog_ui(&mut self, ui: &mut egui::Ui) {
+        let Some(mut dialog) = self.numeric_transform.take() else {
+            return;
+        };
+        egui::Grid::new("numeric_transform")
+            .num_columns(2)
+            .spacing([8.0, 6.0])
+            .show(ui, |ui| {
+                ui.add(
+                    egui::DragValue::new(&mut dialog.scale_x)
+                        .range(0.0..=10_000.0)
+                        .suffix("%"),
+                );
+                ui.label("Scale X");
+                if dialog.uniform {
+                    dialog.scale_y = dialog.scale_x;
+                }
+                ui.add_enabled(
+                    !dialog.uniform,
+                    egui::DragValue::new(&mut dialog.scale_y)
+                        .range(0.0..=10_000.0)
+                        .suffix("%"),
+                );
+                ui.label("Scale Y");
+                ui.checkbox(&mut dialog.uniform, "Uniform");
+                ui.add(
+                    egui::DragValue::new(&mut dialog.rotate)
+                        .range(-360.0..=360.0)
+                        .suffix("°"),
+                );
+                ui.label("Rotate");
+                ui.add(
+                    egui::DragValue::new(&mut dialog.skew_x)
+                        .range(-89.0..=89.0)
+                        .suffix("°"),
+                );
+                ui.label("Skew X");
+                ui.add(
+                    egui::DragValue::new(&mut dialog.skew_y)
+                        .range(-89.0..=89.0)
+                        .suffix("°"),
+                );
+                ui.label("Skew Y");
+            });
+        ui.separator();
+        ui.horizontal(|ui| {
+            if ui.button("OK").clicked() {
+                self.apply_numeric_transform(&dialog);
+            } else {
+                self.status = "numeric transform cancelled".to_owned();
+            }
+        });
+        self.numeric_transform = Some(dialog);
+    }
+
+    /// Composes scale → rotate → skew about the selection bounds
+    /// center and applies the three commands inside one "Transform"
+    /// transaction — one undo step for the whole dialog.
+    pub(super) fn apply_numeric_transform(&mut self, dialog: &NumericTransformDialog) {
+        let ids = self.editor.live_selection();
+        if ids.is_empty() {
+            self.status = "nothing selected".to_owned();
+            return;
+        }
+        if self.editor.session.begin_transaction("Transform").is_err() {
+            self.status = "transform failed: a transaction is already open".to_owned();
+            return;
+        }
+        let result = (|| -> Result<(), EngineError> {
+            let (sx, sy) = (
+                dialog.scale_x / 100.0,
+                if dialog.uniform {
+                    dialog.scale_x / 100.0
+                } else {
+                    dialog.scale_y / 100.0
+                },
+            );
+            if (sx - 1.0).abs() > 1e-9 || (sy - 1.0).abs() > 1e-9 {
+                self.editor.session.apply_delta(
+                    "object.scale",
+                    serde_json::json!({ "ids": ids, "sx": sx, "sy": sy, "pivot": null }),
+                )?;
+            }
+            if dialog.rotate.abs() > 1e-9 {
+                self.editor.session.apply_delta(
+                    "object.rotate",
+                    serde_json::json!({ "ids": ids, "degrees": dialog.rotate, "pivot": null }),
+                )?;
+            }
+            if dialog.skew_x.abs() > 1e-9 || dialog.skew_y.abs() > 1e-9 {
+                self.editor.session.apply_delta(
+                    "object.skew",
+                    serde_json::json!({
+                        "ids": ids,
+                        "skew_x": dialog.skew_x, "skew_y": dialog.skew_y,
+                        "pivot": null,
+                    }),
+                )?;
+            }
+            Ok(())
+        })();
+        match result {
+            Ok(()) => {
+                let _ = self.editor.session.commit_transaction();
+                self.numeric_transform = None;
+                self.status = "transformed selection".to_owned();
+            }
+            Err(error) => {
+                let _ = self.editor.session.abort_transaction();
+                self.numeric_transform = None;
+                self.status = format!("transform failed: {error}");
+            }
+        }
+    }
     /// A change stamp over the dialog settings plus the document, so
     /// the preview regenerates exactly when either could have moved.
     pub(super) fn preview_stamp(&self) -> u64 {
