@@ -2846,6 +2846,9 @@ impl Shell {
     /// CS6's floating docks).
     fn right_panels(&mut self, ui: &mut egui::Ui) {
         egui::ScrollArea::vertical().show(ui, |ui| {
+            egui::CollapsingHeader::new("Properties")
+                .default_open(true)
+                .show(ui, |ui| self.properties_panel(ui));
             egui::CollapsingHeader::new("Pages")
                 .default_open(true)
                 .show(ui, |ui| self.pages_section(ui));
@@ -3338,6 +3341,42 @@ impl Shell {
         for (channel, label) in [("fill", "Fill"), ("stroke", "Stroke")] {
             ui.horizontal(|ui| {
                 ui.label(label);
+                // The current color of the first selected path, as a
+                // full color picker next to the quick swatches.
+                let current =
+                    ids.iter()
+                        .find_map(|id| match self.editor.document().registry.get(*id) {
+                            Some(ObjectData::Path(path)) => path.paint.as_ref().map(|paint| {
+                                let raw = if channel == "fill" {
+                                    paint.fill_raw
+                                } else {
+                                    paint.stroke_raw
+                                } as u32;
+                                Color32::from_rgba_unmultiplied(
+                                    (raw & 0xFF) as u8,
+                                    ((raw >> 8) & 0xFF) as u8,
+                                    ((raw >> 16) & 0xFF) as u8,
+                                    ((raw >> 24) & 0xFF) as u8,
+                                )
+                            }),
+                            _ => None,
+                        });
+                if let Some(mut color) = current
+                    && ui.color_edit_button_srgba(&mut color).changed()
+                {
+                    let raw = i64::from(
+                        (u32::from(color.r()) << 24)
+                            | (u32::from(color.g()) << 16)
+                            | (u32::from(color.b()) << 8)
+                            | u32::from(color.a()),
+                    );
+                    for id in &ids {
+                        self.run_command(
+                            Self::paint_command(channel),
+                            serde_json::json!({ "id": id, "color_raw": raw }),
+                        );
+                    }
+                }
                 for (name, color_raw) in Self::FILL_STROKE_PALETTE {
                     let raw = color_raw as u32;
                     let swatch = Color32::from_rgba_unmultiplied(
@@ -4362,9 +4401,13 @@ impl Shell {
         self.canvas_rect = Some(rect);
 
         // Per-tool cursor icons (CS6 semantics); space held anywhere
-        // switches to the temporary Hand (the CS6 space-drag pan).
+        // switches to the temporary Hand (the CS6 space-drag pan). While
+        // a pan drag is actively moving, the cursor closes (Grabbing).
         let space_held = ui.input(|input| input.key_down(egui::Key::Space));
-        let cursor = if space_held {
+        let pan_dragging = space_held && response.dragged();
+        let cursor = if pan_dragging {
+            egui::CursorIcon::Grabbing
+        } else if space_held {
             egui::CursorIcon::Grab
         } else {
             match self.editor.tool {
@@ -4878,6 +4921,38 @@ impl Shell {
             }
         }
     }
+
+    /// The CS6 context options bar under the menu: the active tool's
+    /// name, the zoom control, and quick hints. One row, always
+    /// visible — the CS6 pattern Photopea follows.
+    fn options_bar(&mut self, ui: &mut egui::Ui) {
+        ui.horizontal(|ui| {
+            ui.label(egui::RichText::new(tool_label(self.editor.tool)).strong());
+            if !tool_key(self.editor.tool).is_empty() {
+                ui.weak(format!("({})", tool_key(self.editor.tool)));
+            }
+            ui.separator();
+            // Zoom readout + in/out, always at hand.
+            if ui.small_button("−").clicked() {
+                if let Some(rect) = self.canvas_rect {
+                    self.view.zoom_about(rect.center(), 1.0 / 1.25);
+                }
+            }
+            ui.label(format!("{}%", (self.view.zoom * 100.0).round() as i64));
+            if ui.small_button("+").clicked()
+                && let Some(rect) = self.canvas_rect
+            {
+                self.view.zoom_about(rect.center(), 1.25);
+            }
+            if ui.small_button("Fit").clicked()
+                && let (Some(page), Some(rect)) = (self.page_world(), self.canvas_rect)
+            {
+                self.view.fit(page, rect.size());
+            }
+            ui.separator();
+            ui.weak("F1 for all shortcuts");
+        });
+    }
 }
 
 impl eframe::App for Shell {
@@ -4890,22 +4965,21 @@ impl eframe::App for Shell {
         self.shortcuts(ui.ctx());
         self.dropped_files(ui.ctx());
         // Panels first, CentralPanel last (egui's required order), in
-        // the CS6 arrangement: menu, tool strip, panel stack,
-        // bottom-docked Properties, status strip, document canvas.
+        // the CS6 arrangement: menu, context options bar, tool strip,
+        // panel stack (Properties included), status strip, canvas.
+        // The Properties block lived in a bottom dock, which read as a
+        // detached options strip floating at the lower left — the CS6
+        // and Photopea arrangement puts it in the right dock.
         egui::Panel::top(egui::Id::new("menu")).show(ui, |ui| self.menu_bar(ui));
+        egui::Panel::top(egui::Id::new("options")).show(ui, |ui| self.options_bar(ui));
         egui::Panel::left(egui::Id::new("tools"))
             .exact_size(34.0)
             .show(ui, |ui| self.tools_panel(ui));
         egui::Panel::right(egui::Id::new("panels"))
-            .default_size(230.0)
-            .size_range(160.0..=420.0)
+            .default_size(250.0)
+            .size_range(180.0..=460.0)
             .resizable(true)
             .show(ui, |ui| self.right_panels(ui));
-        egui::Panel::bottom(egui::Id::new("properties"))
-            .default_size(210.0)
-            .size_range(120.0..=360.0)
-            .resizable(true)
-            .show(ui, |ui| self.properties_panel(ui));
         egui::Panel::bottom(egui::Id::new("status")).show(ui, |ui| {
             ui.horizontal(|ui| {
                 ui.label(&self.status);
