@@ -1,0 +1,1811 @@
+//! The egui face of the editor: menus, panels, canvas. Thin by rule —
+//! every document change you see here is an [`Editor::apply`] call,
+//! and every panel reads the document read-only. Desktop file routing
+//! goes through the injected [`engine::platform`] traits ([`EnvDialogs`]
+//! in [`dialogs`]; real modal dialogs land with desktop integration).
+mod canvas_ui;
+mod dialogs;
+mod filters_ui;
+mod glyphs;
+mod panels;
+
+pub use glyphs::apply_cs6_theme;
+pub(crate) use glyphs::{
+    draw_autoshape_glyph, draw_tool_glyph, symbol_type_label, tool_key, tool_label,
+};
+
+pub(crate) use dialogs::{DisplayState, EnvDialogs, ExportDialog};
+pub(crate) use filters_ui::{
+    FILTER_BOOL_KEYS, FILTER_FAMILIES, FILTER_PARAMS, FilterPreset, filter_preset,
+};
+
+use doc::{ObjectData, PathObject, SymbolInstanceObject, SymbolType, TextObject};
+use egui::{Color32, ColorImage, Pos2, Rect, Sense, TextureHandle, TextureOptions, Vec2};
+
+use base64::Engine as _;
+
+use crate::canvas::View;
+use crate::editor::{
+    AutoShape, DragConstraint, Editor, NineSliceEdge, PixelSelectMode, StampShape, Tool,
+};
+use crate::menus;
+
+/// The web drop sink ([`Shell::set_drop_sink`]): the web crate's async
+/// file reader, installed at startup. Wasm only — the desktop shell
+/// reads dropped bytes directly. No `Send`/`Sync` bound: wasm is
+/// single-threaded and the sink captures `Rc<WebRunner>`, so the
+/// holder is a `thread_local` (a `static Mutex` would demand `Send`).
+#[cfg(target_arch = "wasm32")]
+thread_local! {
+    static DROP_SINK: std::cell::RefCell<Option<std::rc::Rc<dyn Fn(&egui::DroppedFileHandle, egui::Context)>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// The eframe app. Holds the editor core plus everything window-shaped.
+/// Platform services are trait objects: the desktop build injects
+/// [`EnvDialogs`] + `StdFs`, the wasm build (crate `firecraft-web`)
+/// injects browser implementations without touching this code.
+pub struct Shell {
+    /// The editor core (document, tools, selection).
+    pub editor: Editor,
+    /// Canvas view (pan/zoom).
+    pub view: View,
+    /// Cached page raster + the document stamp it was made from.
+    raster: Option<(TextureHandle, (usize, usize, usize))>,
+    /// Injected platform services.
+    fs: Box<dyn engine::platform::FileSystem>,
+    dialogs: Box<dyn engine::platform::Dialogs>,
+    /// Last status line (errors, save confirmations).
+    pub status: String,
+    /// Open export dialog, if any.
+    export_dialog: Option<ExportDialog>,
+    /// Display name of the open document (tab strip).
+    doc_name: String,
+    /// Last canvas widget rect — the anchor for view commands that
+    /// arrive outside the canvas (menu/shortcut zoom and fit).
+    canvas_rect: Option<Rect>,
+    /// Set by the Exit action; the frame loop closes the viewport.
+    close_requested: bool,
+    /// The Auto Shape flyout is open (toggled by its tool button).
+    autoshape_flyout: bool,
+    /// The keyboard-shortcuts help panel is open (F1 / Help menu).
+    help_open: bool,
+    /// The Styles panel's new-style name field.
+    style_name: String,
+    /// The layer whose name is being edited in the Layers panel
+    /// (`None` = no inline rename open).
+    rename_layer: Option<usize>,
+    /// The live egui context, stashed each frame so code outside the
+    /// frame loop (the web bridge) can request a repaint after it
+    /// mutates the shell — without one, a bridge-loaded document sat
+    /// behind a stale untitled canvas until the next input event.
+    ctx: Option<egui::Context>,
+}
+
+impl Shell {
+    /// Builds the shell with desktop platform defaults.
+    #[must_use]
+    pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
+        apply_cs6_theme(&cc.egui_ctx);
+        Self::with_platform(
+            Editor::untitled(),
+            Box::new(app_cli::io::StdFs),
+            Box::new(EnvDialogs::default()),
+        )
+    }
+
+    /// Builds the shell over an editor and explicit platform services.
+    #[must_use]
+    pub fn with_platform(
+        editor: Editor,
+        fs: Box<dyn engine::platform::FileSystem>,
+        dialogs: Box<dyn engine::platform::Dialogs>,
+    ) -> Self {
+        Self {
+            editor,
+            view: View::default(),
+            raster: None,
+            fs,
+            dialogs,
+            status: "ready".to_owned(),
+            export_dialog: None,
+            doc_name: "untitled".to_owned(),
+            canvas_rect: None,
+            close_requested: false,
+            autoshape_flyout: false,
+            help_open: false,
+            style_name: String::new(),
+            rename_layer: None,
+            ctx: None,
+        }
+    }
+
+    /// Wakes the frame loop — a no-op until the first `ui` frame has
+    /// stashed the context. Bridge-side mutations (open/apply) must
+    /// call this: they run between frames, where nothing else would
+    /// repaint the stale canvas.
+    pub fn request_repaint(&self) {
+        if let Some(ctx) = &self.ctx {
+            ctx.request_repaint();
+        }
+    }
+
+    /// Replaces the document from raw bytes — the same one-door read
+    /// path the desktop open uses: a Fireworks PNG opens through
+    /// `io::open`, any other supported raster opens as a document
+    /// sized to the image. No registry side door.
+    ///
+    /// A raster that arrives while the document already holds objects
+    /// is *placed* into it (CS6's File → Import) rather than replacing
+    /// it — the browser's one file door must add to the artwork the
+    /// user is making, not silently swap the canvas for the image.
+    ///
+    /// # Errors
+    /// Whatever both readers refuse; the current document is kept.
+    pub fn load_document_bytes(&mut self, bytes: &[u8]) -> Result<(), engine::EngineError> {
+        match Editor::open(bytes) {
+            Ok(editor) => {
+                self.raster = None;
+                self.editor = editor;
+                self.view = View::default();
+                self.status = "opened document".to_owned();
+                Ok(())
+            }
+            Err(document_error) => {
+                if self.document_has_content() {
+                    self.place_raster_into_document(bytes, "imported image")
+                        .map_err(|_| document_error)?;
+                    self.status = "placed image in the document".to_owned();
+                } else {
+                    self.open_raster_document(bytes, "imported image")
+                        .map_err(|_| document_error)?;
+                    self.raster = None;
+                    self.status = "opened image".to_owned();
+                    self.view = View::default();
+                }
+                Ok(())
+            }
+        }
+    }
+
+    /// A change stamp over the session: any apply/undo/redo moves at
+    /// least one component, so the page raster re-renders exactly when
+    /// the document could have changed.
+    fn stamp(&self) -> (usize, usize, usize) {
+        (
+            self.editor.session.undo_len(),
+            self.editor.session.redo_len(),
+            self.editor.session.journal_len(),
+        )
+    }
+
+    /// File → Open through the injected traits. A Fireworks PNG
+    /// opens as a document; any other supported raster opens as a
+    /// document sized to the image — one door, no guessing.
+    fn open_document(&mut self) {
+        let Some(path) = self.dialogs.open_path(
+            "Open document",
+            &[
+                ("Fireworks PNG".to_owned(), vec!["png".to_owned()]),
+                (
+                    "Images".to_owned(),
+                    vec![
+                        "png".to_owned(),
+                        "jpg".to_owned(),
+                        "jpeg".to_owned(),
+                        "gif".to_owned(),
+                        "bmp".to_owned(),
+                        "tif".to_owned(),
+                        "tiff".to_owned(),
+                        "webp".to_owned(),
+                    ],
+                ),
+            ],
+        ) else {
+            return;
+        };
+        let bytes = match self.fs.read_file(&path).map_err(|e| e.to_string()) {
+            Ok(bytes) => bytes,
+            Err(error) => {
+                self.status = format!("open failed: {error}");
+                return;
+            }
+        };
+        match Editor::open(&bytes) {
+            Ok(editor) => {
+                self.status = format!("opened {path}");
+                self.raster = None;
+                self.editor = editor;
+                self.view = View::default();
+                self.doc_name = std::path::Path::new(&path)
+                    .file_name()
+                    .map_or_else(|| path.clone(), |name| name.to_string_lossy().into_owned());
+            }
+            Err(document_error) => {
+                // Not a Fireworks PNG — try a plain raster. A raster
+                // opens as its own document, sized to the image, which
+                // is what CS6 does with a JPEG.
+                let name = std::path::Path::new(&path)
+                    .file_name()
+                    .map_or_else(|| path.clone(), |name| name.to_string_lossy().into_owned());
+                match self.open_raster_document(&bytes, &name) {
+                    Ok(()) => {
+                        self.status = format!("opened {path} as an image");
+                        self.raster = None;
+                        self.view = View::default();
+                        self.doc_name = name;
+                    }
+                    Err(_) => {
+                        self.status = format!("open failed: {document_error}");
+                    }
+                }
+            }
+        }
+    }
+
+    /// File → Save through the injected traits.
+    fn save_document(&mut self) {
+        let Some(path) = self.dialogs.save_path(
+            "Save document",
+            "untitled.fw.png",
+            &[("Fireworks PNG".to_owned(), vec!["png".to_owned()])],
+        ) else {
+            return;
+        };
+        match self.editor.save() {
+            Ok(bytes) => match self.fs.write_file(&path, &bytes) {
+                Ok(()) => {
+                    self.editor.session.mark_clean();
+                    self.doc_name = std::path::Path::new(&path)
+                        .file_name()
+                        .map_or_else(|| path.clone(), |name| name.to_string_lossy().into_owned());
+                    self.status = format!("saved {path} ({} bytes)", bytes.len());
+                }
+                Err(error) => self.status = format!("save failed: {error}"),
+            },
+            Err(error) => self.status = format!("save failed: {error}"),
+        }
+    }
+
+    /// Applies through the editor and reports failures on the status
+    /// line — the one idiom every menu/panel action shares.
+    fn run_command(&mut self, name: &str, payload: serde_json::Value) {
+        if let Err(error) = self.editor.apply(name, payload) {
+            self.status = format!("{name} failed: {error}");
+        }
+    }
+
+    /// History → Save Steps…: the session journal written as a
+    /// `.fwsteps` command file (JSON lines) through the injected
+    /// traits. The file replays through [`Session::reopen`] — the same
+    /// path the CLI's `apply` verb drives — so a saved command is not
+    /// an export but the session's own restart record.
+    fn save_steps(&mut self) {
+        let Some(path) = self.dialogs.save_path(
+            "Save Steps As Command",
+            "steps.fwsteps",
+            &[("FireCraft steps".to_owned(), vec!["fwsteps".to_owned()])],
+        ) else {
+            return;
+        };
+        let text = self.editor.steps_text();
+        match self.fs.write_file(&path, text.as_bytes()) {
+            Ok(()) => {
+                self.status = format!(
+                    "saved steps {path} ({} rows)",
+                    self.editor.session.journal_len()
+                );
+            }
+            Err(error) => self.status = format!("save steps failed: {error}"),
+        }
+    }
+
+    /// History → Replay…: pick a `.fwsteps` file, then the base
+    /// document it replays onto (the File → Open flow — a steps file
+    /// is a journal prefix, so it needs the pre-steps document). The
+    /// replayed session replaces the current one, undo history
+    /// included.
+    fn replay_steps(&mut self) {
+        let steps_filters = [("FireCraft steps".to_owned(), vec!["fwsteps".to_owned()])];
+        let Some(steps_path) = self.dialogs.open_path("Replay steps", &steps_filters) else {
+            return;
+        };
+        let steps = match self
+            .fs
+            .read_file(&steps_path)
+            .map_err(|error| error.to_string())
+            .and_then(|bytes| String::from_utf8(bytes).map_err(|error| error.to_string()))
+        {
+            Ok(text) => text,
+            Err(error) => {
+                self.status = format!("replay failed: {error}");
+                return;
+            }
+        };
+        let doc_filters = [("Fireworks PNG".to_owned(), vec!["png".to_owned()])];
+        let Some(doc_path) = self
+            .dialogs
+            .open_path("Base document for replay", &doc_filters)
+        else {
+            return;
+        };
+        let replayed = self
+            .fs
+            .read_file(&doc_path)
+            .map_err(|e| e.to_string())
+            .and_then(|bytes| {
+                Editor::open(&bytes)
+                    .map_err(|e| e.to_string())
+                    .and_then(|mut editor| {
+                        editor
+                            .replay_steps(&steps)
+                            .map(|()| editor)
+                            .map_err(|e| e.to_string())
+                    })
+            });
+        match replayed {
+            Ok(editor) => {
+                let rows = editor.session.journal_len();
+                self.editor = editor;
+                self.view = View::default();
+                self.raster = None;
+                self.status = format!("replayed {steps_path} onto {doc_path} ({rows} rows)");
+            }
+            Err(error) => self.status = format!("replay failed: {error}"),
+        }
+    }
+
+    /// The CS6 menu bar: ten menus rendered from the [`crate::menus`]
+    /// table. Items whose action is [`menus::Action::Inert`] render
+    /// disabled — the bar shows the full CS6 surface while only the
+    /// wired subset is actionable.
+    fn menu_bar(&mut self, ui: &mut egui::Ui) {
+        egui::MenuBar::new().ui(ui, |ui| {
+            for menu in menus::MENUBAR {
+                ui.menu_button(menu.label, |ui| self.entries_ui(ui, menu.entries));
+            }
+        });
+    }
+
+    /// Renders one menu-tree level; submenus recurse.
+    fn entries_ui(&mut self, ui: &mut egui::Ui, entries: &'static [menus::Entry]) {
+        for entry in entries {
+            match entry {
+                menus::Entry::Sep => {
+                    ui.separator();
+                }
+                menus::Entry::Sub(label, sub) => {
+                    ui.menu_button(*label, |ui| self.entries_ui(ui, sub));
+                }
+                menus::Entry::Item(item) => {
+                    let label = if item.accel.is_empty() {
+                        item.label.to_owned()
+                    } else {
+                        format!("{}\t{}", item.label, item.accel)
+                    };
+                    let wired = !matches!(item.action, menus::Action::Inert);
+                    if ui.add_enabled(wired, egui::Button::new(label)).clicked() {
+                        self.run_action(&item.action);
+                    }
+                }
+            }
+        }
+    }
+
+    /// Executes one menu/shortcut action. This is the only place an
+    /// [`menus::Action`] becomes behavior.
+    fn run_action(&mut self, action: &menus::Action) {
+        match *action {
+            menus::Action::Inert => {}
+            menus::Action::Shell(shell) => self.run_shell(shell),
+            menus::Action::Sel(sel) => self.run_sel(sel),
+            menus::Action::Align(mode) => {
+                let ids = self.editor.live_selection();
+                if ids.len() >= 2 {
+                    self.run_command(
+                        "object.align",
+                        serde_json::json!({ "ids": ids, "mode": mode }),
+                    );
+                } else {
+                    self.status = "align needs two or more objects".to_owned();
+                }
+            }
+            menus::Action::Distribute(axis) => {
+                let ids = self.editor.live_selection();
+                if ids.len() >= 3 {
+                    self.run_command(
+                        "object.distribute",
+                        serde_json::json!({ "ids": ids, "axis": axis }),
+                    );
+                } else {
+                    self.status = "distribute needs three or more objects".to_owned();
+                }
+            }
+            menus::Action::Boolean(op) => match self.editor.boolean_pair() {
+                Some((a, b)) => self.run_command(
+                    "path.boolean",
+                    serde_json::json!({ "a": a, "b": b, "op": op }),
+                ),
+                None => self.status = "booleans need exactly two live paths".to_owned(),
+            },
+            menus::Action::Arrange(direction) => self.run_arrange(direction),
+            menus::Action::TextSize(size) => {
+                if let Some(id) = self.editor.selection {
+                    self.run_command(
+                        "text.setAttrs",
+                        serde_json::json!({ "id": id, "size": size }),
+                    );
+                }
+            }
+            menus::Action::TextFlag(flag) => {
+                if let Some(id) = self.editor.selection {
+                    self.run_command(
+                        "text.setAttrs",
+                        serde_json::json!({ "id": id, (flag): true }),
+                    );
+                }
+            }
+            menus::Action::Filter(name) => match self.editor.selection {
+                Some(id) => match filter_preset(name) {
+                    Some(preset) => self.apply_filter_preset(id, *preset),
+                    None => self.status = format!("no such filter: {name}"),
+                },
+                None => self.status = "pick an object to filter".to_owned(),
+            },
+        }
+    }
+
+    /// Shell-level plumbing: file, history, selection, view.
+    fn run_shell(&mut self, action: menus::ShellAction) {
+        match action {
+            menus::ShellAction::New => {
+                self.editor = Editor::untitled();
+                self.view = View::default();
+                self.raster = None;
+                self.doc_name = "untitled".to_owned();
+                self.status = "new document".to_owned();
+            }
+            menus::ShellAction::Open => self.open_document(),
+            menus::ShellAction::Import => self.import_raster_dialog(),
+            menus::ShellAction::Save | menus::ShellAction::SaveAs => self.save_document(),
+            menus::ShellAction::Export | menus::ShellAction::ExportPreview => {
+                self.export_dialog = Some(ExportDialog::default());
+            }
+            menus::ShellAction::Quit => self.close_requested = true,
+            menus::ShellAction::Undo => match self.editor.undo() {
+                Ok(name) => self.status = format!("undid {name}"),
+                Err(error) => self.status = format!("undo failed: {error}"),
+            },
+            menus::ShellAction::Redo => match self.editor.redo() {
+                Ok(name) => self.status = format!("redid {name}"),
+                Err(error) => self.status = format!("redo failed: {error}"),
+            },
+            menus::ShellAction::Deselect => {
+                self.editor.set_selection(Vec::new());
+                self.status = "deselected".to_owned();
+            }
+            menus::ShellAction::SelectAll => {
+                let ids = self
+                    .editor
+                    .current_cell()
+                    .map_or_else(Vec::new, |cell| cell.elements.clone());
+                let picked = ids.len();
+                self.editor.set_selection(ids);
+                self.status = format!("selected {picked} object(s)");
+            }
+            menus::ShellAction::SelectInverse => self.select_inverse(),
+            menus::ShellAction::Copy => self.clipboard_copy(false),
+            menus::ShellAction::Cut => self.clipboard_copy(true),
+            menus::ShellAction::Paste => self.clipboard_paste(),
+            menus::ShellAction::PasteAsMask => self.paste_as_mask("clipboard.pasteAsMask"),
+            menus::ShellAction::PasteInside => self.paste_as_mask("clipboard.pasteInside"),
+            menus::ShellAction::ZoomIn => {
+                let center = self
+                    .canvas_rect
+                    .map_or_else(|| Pos2::ZERO, |rect| rect.center());
+                self.view.zoom_about(center, 1.25);
+            }
+            menus::ShellAction::ZoomOut => {
+                let center = self
+                    .canvas_rect
+                    .map_or_else(|| Pos2::ZERO, |rect| rect.center());
+                self.view.zoom_about(center, 1.0 / 1.25);
+            }
+            menus::ShellAction::ZoomTo(target) => {
+                if self.view.zoom > 0.0 {
+                    let center = self
+                        .canvas_rect
+                        .map_or_else(|| Pos2::ZERO, |rect| rect.center());
+                    self.view.zoom_about(center, target / self.view.zoom);
+                }
+            }
+            menus::ShellAction::FitAll => {
+                let size = self
+                    .canvas_rect
+                    .map_or_else(|| egui::Vec2::ZERO, |rect| rect.size());
+                if let Some(world) = self.page_world() {
+                    self.view.fit(world, size);
+                }
+            }
+            menus::ShellAction::About => {
+                self.status = "FireCraft — a clean-room reimplementation of \
+                    Adobe Fireworks CS6 (Apache-2.0)"
+                    .to_owned();
+            }
+            menus::ShellAction::ShowShortcuts => self.help_open = !self.help_open,
+            menus::ShellAction::PickTool(tool) => {
+                self.editor.tool = tool;
+                self.status = format!("tool: {}", tool_label(tool));
+            }
+        }
+    }
+
+    /// Select ▸ Select Inverse: everything in the current cell the
+    /// selection does not cover. The cell is the editor's scope (one
+    /// layer, one state) — the same scope Select All covers.
+    fn select_inverse(&mut self) {
+        let selected = self.editor.live_selection();
+        let ids: Vec<doc::ObjectId> = self
+            .editor
+            .current_cell()
+            .map_or_else(Vec::new, |cell| cell.elements.clone())
+            .into_iter()
+            .filter(|id| !selected.contains(id))
+            .collect();
+        let picked = ids.len();
+        self.editor.set_selection(ids);
+        self.status = format!("selected {picked} object(s)");
+    }
+
+    /// Edit ▸ Copy / Cut: the engine's clipboard commands read the
+    /// document's selection, so the view's selection lands there
+    /// first. A cut takes the objects with it, so the view's selection
+    /// follows them out.
+    fn clipboard_copy(&mut self, cut: bool) {
+        if self.editor.live_selection().is_empty() {
+            self.status = "nothing selected".to_owned();
+            return;
+        }
+        if let Err(error) = self.editor.sync_selection() {
+            self.status = format!("selection failed: {error}");
+            return;
+        }
+        let name = if cut {
+            "clipboard.cut"
+        } else {
+            "clipboard.copy"
+        };
+        match self.editor.apply(name, serde_json::json!({})) {
+            Ok(()) => {
+                if cut {
+                    self.editor.set_selection(Vec::new());
+                    self.status = "cut".to_owned();
+                } else {
+                    self.status = "copied".to_owned();
+                }
+            }
+            Err(error) => self.status = format!("{name} failed: {error}"),
+        }
+    }
+
+    /// Edit ▸ Paste: the clipboard re-mints onto the active layer of
+    /// the current page, in place (CS6's paste-in-place). The pasted
+    /// objects become the selection, so a second paste rides the same
+    /// place.
+    fn clipboard_paste(&mut self) {
+        let page = self.editor.page;
+        let layer = self.editor.active_layer();
+        let cell = self.editor.frame;
+        let before: Vec<doc::ObjectId> = self
+            .editor
+            .current_cell()
+            .map_or_else(Vec::new, |cell| cell.elements.clone());
+        let payload = serde_json::json!({ "page": page, "layer": layer, "cell": cell });
+        if let Err(error) = self.editor.apply("clipboard.paste", payload) {
+            self.status = format!("clipboard.paste failed: {error}");
+            return;
+        }
+        let after: Vec<doc::ObjectId> = self
+            .editor
+            .current_cell()
+            .map_or_else(Vec::new, |cell| cell.elements.clone());
+        let fresh: Vec<doc::ObjectId> = after
+            .into_iter()
+            .filter(|id| !before.contains(id))
+            .collect();
+        let pasted = fresh.len();
+        self.editor.set_selection(fresh);
+        self.status = format!("pasted {pasted} object(s)");
+    }
+
+    /// Engine commands whose payload derives from the current
+    /// selection or document shape.
+    fn run_sel(&mut self, action: menus::SelAction) {
+        match action {
+            menus::SelAction::Delete => {
+                if let Some(id) = self.editor.selection {
+                    self.run_command("object.delete", serde_json::json!({ "id": id }));
+                }
+            }
+            menus::SelAction::Hide => {
+                if let Some(id) = self.editor.selection {
+                    self.run_command(
+                        "object.setVisible",
+                        serde_json::json!({ "id": id, "visible": false }),
+                    );
+                }
+            }
+            menus::SelAction::Simplify => {
+                if let Some(id) = self.editor.selected_live() {
+                    self.run_command(
+                        "path.simplify",
+                        serde_json::json!({ "id": id, "tolerance": 1.0 }),
+                    );
+                }
+            }
+            menus::SelAction::ExpandStroke => {
+                if let Some(id) = self.editor.selected_live() {
+                    self.run_command(
+                        "path.expandStroke",
+                        serde_json::json!({
+                            "id": id, "width": 2.0,
+                            "cap": "butt", "join": "miter", "miter_limit": 4.0,
+                        }),
+                    );
+                }
+            }
+            menus::SelAction::Inset(distance) => {
+                if let Some(id) = self.editor.selected_live() {
+                    self.run_command(
+                        "path.inset",
+                        serde_json::json!({ "id": id, "distance": distance }),
+                    );
+                }
+            }
+            menus::SelAction::NewSymbol => {
+                let count = self.editor.document().symbols.len();
+                self.run_command(
+                    "library.add",
+                    serde_json::json!({
+                        "name": format!("Symbol {}", count + 1),
+                        "symbol_type": "graphic",
+                    }),
+                );
+            }
+            menus::SelAction::NewLayer => {
+                self.run_command("layer.add", serde_json::json!({ "page": self.editor.page }));
+                // CS6 makes a freshly added layer the active one, so
+                // what the user draws next lands on it.
+                let top = self.editor.layer_count().saturating_sub(1);
+                self.editor.set_active_layer(top);
+            }
+            menus::SelAction::NewPage => {
+                self.run_command("page.add", serde_json::json!({ "index": null }));
+            }
+            menus::SelAction::BreakApart => {
+                if let Some(id) = self.editor.selection {
+                    self.run_command("symbol.breakApart", serde_json::json!({ "id": id }));
+                }
+            }
+            menus::SelAction::Group => {
+                let ids = self.editor.live_selection();
+                if ids.len() < 2 {
+                    self.status = "group needs two or more objects".to_owned();
+                    return;
+                }
+                self.run_command("object.group", serde_json::json!({ "ids": ids }));
+            }
+            menus::SelAction::Ungroup => {
+                if let Some(id) = self.editor.selected_live() {
+                    self.run_command("object.ungroup", serde_json::json!({ "id": id }));
+                }
+            }
+            menus::SelAction::FlattenSelection => self.flatten_selection(),
+            menus::SelAction::MergeDown => self.merge_down(),
+            menus::SelAction::FlattenLayers => {
+                let page = self.editor.page;
+                self.run_command("flatten.document", serde_json::json!({ "page": page }));
+            }
+            menus::SelAction::Rotate(degrees) => {
+                let ids = self.editor.live_selection();
+                if ids.is_empty() {
+                    self.status = "nothing selected".to_owned();
+                    return;
+                }
+                self.run_command(
+                    "object.rotate",
+                    serde_json::json!({ "ids": ids, "degrees": degrees, "pivot": null }),
+                );
+            }
+            menus::SelAction::Reflect {
+                horizontal,
+                vertical,
+            } => {
+                let ids = self.editor.live_selection();
+                if ids.is_empty() {
+                    self.status = "nothing selected".to_owned();
+                    return;
+                }
+                self.run_command(
+                    "object.reflect",
+                    serde_json::json!({
+                        "ids": ids, "horizontal": horizontal, "vertical": vertical,
+                        "pivot": null,
+                    }),
+                );
+            }
+        }
+    }
+
+    /// Modify ▸ Flatten Selection: bakes the selection into one
+    /// bitmap. The engine reads the document's selection, so the
+    /// view's selection lands there first.
+    fn flatten_selection(&mut self) {
+        if self.editor.live_selection().is_empty() {
+            self.status = "nothing selected".to_owned();
+            return;
+        }
+        if let Err(error) = self.editor.sync_selection() {
+            self.status = format!("selection failed: {error}");
+            return;
+        }
+        self.run_command("flatten.selection", serde_json::json!({}));
+    }
+
+    /// Modify ▸ Merge Down: merges the selection into the bitmap
+    /// directly below it. Same selection bridge as the flatten.
+    fn merge_down(&mut self) {
+        if self.editor.live_selection().is_empty() {
+            self.status = "nothing selected".to_owned();
+            return;
+        }
+        if let Err(error) = self.editor.sync_selection() {
+            self.status = format!("selection failed: {error}");
+            return;
+        }
+        self.run_command("flatten.mergeDown", serde_json::json!({}));
+    }
+
+    /// Modify ▸ Arrange: resolve the numeric `object.reorder` target
+    /// from the object's position in the current cell. Payload indexes
+    /// are post-removal, so "front" is `len - 2` of the pre-removal
+    /// list.
+    fn run_arrange(&mut self, direction: menus::Arrange) {
+        let Some(id) = self.editor.selection else {
+            self.status = "nothing selected".to_owned();
+            return;
+        };
+        let Some(cell) = self.editor.current_cell() else {
+            self.status = "no current cell".to_owned();
+            return;
+        };
+        let Some(position) = cell.elements.iter().position(|&element| element == id) else {
+            self.status = "selection is not in the current cell".to_owned();
+            return;
+        };
+        let last = cell.elements.len().saturating_sub(2);
+        let to = match direction {
+            menus::Arrange::Front => last,
+            menus::Arrange::Forward => (position + 1).min(last),
+            menus::Arrange::Backward => position.saturating_sub(1),
+            menus::Arrange::Back => 0,
+        };
+        if to == position {
+            self.status = "already at that stacking position".to_owned();
+            return;
+        }
+        self.run_command("object.reorder", serde_json::json!({ "id": id, "to": to }));
+    }
+
+    /// The Fireworks.xml keymap bindings: one-shot key events mapped
+    /// through the same [`Shell::run_action`] dispatch as the menus.
+    /// Plain (modifier-free) keys are ignored while a text field has
+    /// keyboard focus.
+    fn shortcuts(&mut self, ctx: &egui::Context) {
+        let text_focus = ctx.egui_wants_keyboard_input();
+        let mut fired: Vec<menus::Action> = Vec::new();
+        ctx.input(|input| {
+            for event in &input.events {
+                let egui::Event::Key {
+                    key,
+                    pressed: true,
+                    repeat: false,
+                    modifiers,
+                    ..
+                } = event
+                else {
+                    continue;
+                };
+                for shortcut in menus::SHORTCUTS {
+                    if shortcut.key != *key
+                        || shortcut.mods.ctrl != modifiers.ctrl
+                        || shortcut.mods.alt != modifiers.alt
+                        || shortcut.mods.shift != modifiers.shift
+                    {
+                        continue;
+                    }
+                    let plain = !shortcut.mods.ctrl && !shortcut.mods.alt && !shortcut.mods.shift;
+                    if !(plain && text_focus) {
+                        fired.push(shortcut.action);
+                    }
+                }
+            }
+        });
+        for action in fired {
+            self.run_action(&action);
+        }
+    }
+
+    /// The installed web drop sink: the web crate registers a reader
+    /// at startup ([`Shell::set_drop_sink`]) that takes a dropped-file
+    /// handle, reads its bytes async, and loads them through the
+    /// runner. `None` until then — a drop before startup is a no-op
+    /// (the status line already said the app was still coming up).
+    #[cfg(target_arch = "wasm32")]
+    pub fn set_drop_sink(sink: std::rc::Rc<dyn Fn(&egui::DroppedFileHandle, egui::Context)>) {
+        DROP_SINK.with(|cell| *cell.borrow_mut() = Some(sink));
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    fn drop_sink() -> Option<std::rc::Rc<dyn Fn(&egui::DroppedFileHandle, egui::Context)>> {
+        DROP_SINK.with(|cell| cell.borrow().clone())
+    }
+
+    /// Files dropped onto the window open through the same one-door
+    /// path as File ▸ Open: a Fireworks PNG replaces the document,
+    /// any other supported raster opens as a document sized to the
+    /// image. Only the first dropped file is taken — a batch drop is
+    /// not a batch import. On the web the bytes arrive async, so the
+    /// shell hands the handle to the installed drop sink (the web
+    /// crate reads the file and calls back through
+    /// [`Shell::load_document_bytes`]); natively the read is direct.
+    fn dropped_files(&mut self, ctx: &egui::Context) {
+        let dropped: Vec<_> = ctx.input(|input| input.raw.dropped_files.clone());
+        let Some(file) = dropped.into_iter().next() else {
+            return;
+        };
+        #[cfg(not(target_arch = "wasm32"))]
+        match file.bytes() {
+            Ok(bytes) => {
+                if let Err(error) = self.load_document_bytes(&bytes) {
+                    self.status = format!("open failed: {error}");
+                }
+            }
+            Err(error) => self.status = format!("open failed: {error}"),
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            let sink = Self::drop_sink();
+            if let Some(sink) = sink {
+                sink(&file, ctx.clone());
+                self.status = "reading dropped file…".to_owned();
+            }
+        }
+    }
+
+    /// The fill/stroke engine command for a swatch channel.
+    pub(crate) fn paint_command(channel: &str) -> &'static str {
+        if channel == "fill" {
+            "object.setFill"
+        } else {
+            "object.setStroke"
+        }
+    }
+}
+
+impl eframe::App for Shell {
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        // Keep the context reachable for out-of-frame mutators (the
+        // web bridge's request_repaint).
+        self.ctx = Some(ui.ctx().clone());
+        // Menu/shortcut actions run before layout so their effects are
+        // visible the same frame.
+        self.shortcuts(ui.ctx());
+        self.dropped_files(ui.ctx());
+        // Panels first, CentralPanel last (egui's required order), in
+        // the CS6 arrangement: menu, context options bar, tool strip,
+        // panel stack (Properties included), status strip, canvas.
+        // The Properties block lived in a bottom dock, which read as a
+        // detached options strip floating at the lower left — the CS6
+        // and Photopea arrangement puts it in the right dock.
+        egui::Panel::top(egui::Id::new("menu")).show(ui, |ui| self.menu_bar(ui));
+        egui::Panel::top(egui::Id::new("options")).show(ui, |ui| self.options_bar(ui));
+        egui::Panel::left(egui::Id::new("tools"))
+            .exact_size(34.0)
+            .show(ui, |ui| self.tools_panel(ui));
+        egui::Panel::right(egui::Id::new("panels"))
+            .default_size(250.0)
+            .size_range(180.0..=460.0)
+            .resizable(true)
+            .show(ui, |ui| self.right_panels(ui));
+        egui::Panel::bottom(egui::Id::new("status")).show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.label(&self.status);
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    ui.label(format!(
+                        "{} · page {} · state {} · undo {} · redo {} · journal {}",
+                        self.doc_name,
+                        self.editor.page + 1,
+                        self.editor.frame + 1,
+                        self.editor.session.undo_len(),
+                        self.editor.session.redo_len(),
+                        self.editor.session.journal_len(),
+                    ));
+                });
+            });
+        });
+        egui::CentralPanel::default()
+            .frame(egui::Frame::NONE)
+            .show(ui, |ui| {
+                // The document tab strip: a single-document window, so
+                // the CS6 MDI tab strip reduced to its one member.
+                ui.horizontal(|ui| {
+                    ui.add(
+                        egui::Button::new(egui::RichText::new(&self.doc_name).size(11.0))
+                            .selected(true),
+                    );
+                    ui.weak("FireCraft");
+                });
+                self.canvas(ui);
+            });
+        if self.export_dialog.is_some() {
+            egui::Window::new("Export")
+                .resizable(false)
+                .collapsible(false)
+                .show(ui.ctx(), |ui| self.export_dialog_ui(ui));
+        }
+        if self.help_open {
+            self.help_panel(ui.ctx());
+        }
+        if self.close_requested {
+            self.close_requested = false;
+            ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+        }
+    }
+
+    // The web bridge downcasts through this (`WebRunner::app_mut`);
+    // the trait default returns None and the runner panics on it,
+    // which took down every browser open/apply/export until v0.2.1.
+    #[cfg(target_arch = "wasm32")]
+    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
+        Some(self)
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+mod tests {
+    use super::*;
+    use engine::platform::{FileSystem, MemoryFs};
+
+    /// Scripted dialogs: the steps path answers the replay/save
+    /// picks, the document path the base pick — matched by title.
+    struct FixedDialogs {
+        steps: String,
+        doc: String,
+    }
+
+    impl engine::platform::Dialogs for FixedDialogs {
+        fn open_path(&self, title: &str, _filters: &[(String, Vec<String>)]) -> Option<String> {
+            if title.starts_with("Replay") {
+                Some(self.steps.clone())
+            } else {
+                Some(self.doc.clone())
+            }
+        }
+
+        fn save_path(
+            &self,
+            _title: &str,
+            _suggested_name: &str,
+            _filters: &[(String, Vec<String>)],
+        ) -> Option<String> {
+            Some(self.steps.clone())
+        }
+
+        fn message(&self, title: &str, text: &str) {
+            eprintln!("[firecraft-test] {title}: {text}");
+        }
+    }
+
+    /// A GUI-shaped session: seeds + drag-created rect + a rename.
+    fn gui_editor() -> Editor {
+        let mut editor = Editor::untitled();
+        editor.tool = Tool::Rect;
+        editor.begin_drag(geom::Point::new(10.0, 10.0));
+        editor.drag_to(geom::Point::new(90.0, 50.0));
+        editor.end_drag().unwrap();
+        let id = editor.current_cell().unwrap().elements[0];
+        editor
+            .apply(
+                "object.rename",
+                serde_json::json!({ "id": id, "name": "plate" }),
+            )
+            .unwrap();
+        editor
+    }
+
+    /// A shell with scripted dialogs over a memory filesystem.
+    fn gui_shell(editor: Editor) -> Shell {
+        let dialogs = FixedDialogs {
+            steps: "/mem/steps.fwsteps".to_owned(),
+            doc: "/mem/doc.fw.png".to_owned(),
+        };
+        Shell::with_platform(editor, Box::new(MemoryFs::new()), Box::new(dialogs))
+    }
+
+    /// The action dispatch wiring: Select All picks up the cell's
+    /// objects, Delete removes through the registry, Arrange reorders
+    /// with a post-removal index, and Inert renders but does nothing.
+    #[test]
+    fn menu_actions_drive_the_editor() {
+        let mut shell = gui_shell(gui_editor());
+        let first = shell.editor.current_cell().unwrap().elements[0];
+
+        // Select All selects everything in the current cell.
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::SelectAll));
+        assert_eq!(shell.editor.selection_set.len(), 1);
+        assert_eq!(shell.editor.selection, Some(first));
+
+        // Arrange with a single object is a no-op with a status line,
+        // not a command.
+        shell.run_action(&menus::Action::Arrange(menus::Arrange::Front));
+        assert!(shell.status.contains("stacking position"));
+
+        // Inert actions are accepted by the table but change nothing.
+        let before = shell.editor.session.journal_len();
+        shell.run_action(&menus::Action::Inert);
+        assert_eq!(shell.editor.session.journal_len(), before);
+
+        // Delete drives object.delete and empties the cell.
+        shell.run_action(&menus::Action::Sel(menus::SelAction::Delete));
+        assert!(shell.editor.current_cell().unwrap().elements.is_empty());
+    }
+
+    /// The CS6 shortcut table fires through the same dispatch —
+    /// Ctrl+Z undoes, plain V picks the Pointer tool.
+    #[test]
+    fn shortcut_actions_share_the_dispatch() {
+        let mut shell = gui_shell(gui_editor());
+        let undoable = shell.editor.session.undo_len();
+        assert!(undoable >= 1, "the seeded session has history");
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::Undo));
+        assert_eq!(shell.editor.session.undo_len(), undoable - 1);
+        assert_eq!(shell.editor.session.redo_len(), 1);
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::Redo));
+        assert_eq!(shell.editor.session.undo_len(), undoable);
+        assert_eq!(shell.editor.session.redo_len(), 0);
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::PickTool(
+            Tool::Pointer,
+        )));
+        assert_eq!(shell.editor.tool, Tool::Pointer);
+    }
+
+    /// The preset registry is internally consistent: names unique,
+    /// every numeric default parses inside its documented range, the
+    /// knot preset rides raw points with an empty value, and the
+    /// slider metadata's reset values stay in range.
+    #[test]
+    fn filter_preset_registry_is_consistent() {
+        let mut names = Vec::new();
+        for (family, presets) in FILTER_FAMILIES {
+            assert!(!presets.is_empty(), "{family} is empty");
+            for preset in *presets {
+                names.push(preset.name);
+                let points_preset = !preset.points.is_empty();
+                assert_eq!(
+                    points_preset,
+                    preset
+                        .params
+                        .iter()
+                        .any(|(key, _)| key.ends_with("_points")),
+                    "{}: points xor text",
+                    preset.name
+                );
+                for (key, value) in preset.params {
+                    if FILTER_BOOL_KEYS.contains(key) {
+                        assert!(matches!(*value, "0" | "1"), "{key}: {value}");
+                        continue;
+                    }
+                    if key.ends_with("_points") {
+                        assert!(value.is_empty(), "{key}: knots carry no text");
+                        continue;
+                    }
+                    if let Some(meta) = FILTER_PARAMS.iter().find(|meta| meta.key == *key) {
+                        let parsed: f64 =
+                            value.parse().unwrap_or_else(|_| panic!("{key}: {value}"));
+                        assert!(
+                            (meta.min..=meta.max).contains(&parsed),
+                            "{key}: {parsed} outside {}..{}",
+                            meta.min,
+                            meta.max
+                        );
+                    }
+                }
+            }
+        }
+        let before = names.len();
+        names.sort_unstable();
+        names.dedup();
+        assert_eq!(names.len(), before, "duplicate preset names");
+        for meta in FILTER_PARAMS {
+            assert!(
+                (meta.min..=meta.max).contains(&meta.default),
+                "{}: default outside range",
+                meta.key
+            );
+        }
+    }
+
+    /// The Filters menu dispatch and the panel preset path drive the
+    /// same commands: a menu pick adds the preset's `DCVs`, the curves
+    /// preset lands as the raw knot node, a param edit rides
+    /// `filter.setParam` through the journal (so undo restores
+    /// it), and a pick with nothing selected is a status line.
+    #[test]
+    fn filter_actions_flow_through_the_journal() {
+        let mut shell = gui_shell(gui_editor());
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::SelectAll));
+        let id = shell.editor.selection.unwrap();
+
+        shell.run_action(&menus::Action::Filter("gaussianBlur"));
+        let effects = shell_effect_list(&shell, id);
+        assert_eq!(effects.len(), 1);
+        assert_eq!(effects[0].internal_name, "gaussianBlur");
+
+        let curves = filter_preset("curves").unwrap();
+        shell.apply_filter_preset(id, *curves);
+        let effects = shell_effect_list(&shell, id);
+        assert_eq!(effects.len(), 2);
+        let doc::EffectValue::Raw(node) = &effects[1].properties[0].value else {
+            panic!("curves knots encode as a raw node");
+        };
+        assert_eq!(node.as_children().map_or(0, <[doc::Node]>::len), 3);
+
+        shell.set_filter_param(id, 0, "gaussian_blur_radius", "4");
+        let mut radius = shell_param(&shell, id, 0, "gaussian_blur_radius");
+        assert_eq!(radius, "4");
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::Undo));
+        radius = shell_param(&shell, id, 0, "gaussian_blur_radius");
+        assert_eq!(radius, "2", "undo restores the preset default");
+
+        let mut bare = gui_shell(gui_editor());
+        bare.run_action(&menus::Action::Filter("invert"));
+        assert!(bare.status.contains("pick an object"), "{}", bare.status);
+    }
+
+    /// The applied effects of an object, read the way the properties
+    /// panel reads them.
+    fn shell_effect_list(shell: &Shell, id: doc::ObjectId) -> Vec<doc::Effect> {
+        match shell.editor.document().registry.get(id) {
+            Some(ObjectData::Path(path)) => path.effects.clone(),
+            Some(ObjectData::Text(text)) => text.effects.clone(),
+            _ => Vec::new(),
+        }
+    }
+
+    /// The three presets the audit found dead now reach a kernel: the
+    /// drop shadow carries the four scalars its kernel reads (all four
+    /// or nothing renders), and the two emboss presets reach the bevel
+    /// kernel under their panel spellings. Each preset must change
+    /// the rendered page — a preset that lands as an effect stack the
+    /// kernel skips leaves the render untouched.
+    #[test]
+    fn the_shadowed_and_embossed_presets_reach_the_renderer() {
+        for name in ["dropShadow", "emboss", "pillowEmboss"] {
+            let mut shell = gui_shell(gui_editor());
+            let id = shell.editor.current_cell().unwrap().elements[0];
+            let before = compose::render(
+                shell.editor.document(),
+                shell.editor.page,
+                shell.editor.frame,
+            )
+            .expect("renders");
+            shell.apply_filter_preset(id, *filter_preset(name).expect("preset exists"));
+            let after = compose::render(
+                shell.editor.document(),
+                shell.editor.page,
+                shell.editor.frame,
+            )
+            .expect("renders");
+            assert_ne!(
+                before.pixels, after.pixels,
+                "{name}: the preset must change the render"
+            );
+        }
+    }
+
+    /// An editor holding two rectangles on the active layer.
+    fn gui_editor_two() -> Editor {
+        let mut editor = gui_editor();
+        editor.begin_drag(geom::Point::new(110.0, 100.0));
+        editor.drag_to(geom::Point::new(180.0, 140.0));
+        editor.end_drag().unwrap();
+        editor
+    }
+
+    /// The path object behind an id, for the transform assertions.
+    fn shell_path(shell: &Shell, id: doc::ObjectId) -> PathObject {
+        match shell.editor.document().registry.get(id) {
+            Some(ObjectData::Path(path)) => path.clone(),
+            _ => panic!("object {id:?} is not a path"),
+        }
+    }
+
+    /// Edit ▸ Copy / Paste: the clipboard crosses the engine's command
+    /// door — the view's selection lands in the document first, the
+    /// paste re-mints onto the active layer, and the pasted object
+    /// becomes the selection.
+    #[test]
+    fn copy_and_paste_round_trip_through_the_clipboard() {
+        let mut shell = gui_shell(gui_editor());
+        let id = shell.editor.current_cell().unwrap().elements[0];
+        shell.editor.set_selection(vec![id]);
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::Copy));
+        assert!(shell.status.contains("copied"), "{}", shell.status);
+        let before = shell.editor.current_cell().unwrap().elements.len();
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::Paste));
+        assert!(shell.status.contains("pasted"), "{}", shell.status);
+        let cell = shell.editor.current_cell().unwrap();
+        assert_eq!(cell.elements.len(), before + 1, "the paste adds one object");
+        assert_eq!(
+            shell.editor.selection_set,
+            vec![cell.elements[before]],
+            "the pasted object is the selection"
+        );
+    }
+
+    /// Edit ▸ Cut: the objects leave the document, and the view's
+    /// selection follows them out.
+    #[test]
+    fn cut_takes_the_objects_with_it() {
+        let mut shell = gui_shell(gui_editor());
+        let id = shell.editor.current_cell().unwrap().elements[0];
+        shell.editor.set_selection(vec![id]);
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::Cut));
+        assert!(
+            shell.editor.current_cell().unwrap().elements.is_empty(),
+            "the cell is empty"
+        );
+        assert!(
+            shell.editor.document().registry.get(id).is_none(),
+            "the object left the registry"
+        );
+        assert!(
+            shell.editor.selection_set.is_empty(),
+            "the selection follows the cut objects out"
+        );
+    }
+
+    /// Select ▸ Select Inverse: the complement of the selection within
+    /// the cell the editor edits.
+    #[test]
+    fn select_inverse_complements_the_cell() {
+        let mut shell = gui_shell(gui_editor_two());
+        let ids = shell.editor.current_cell().unwrap().elements.clone();
+        shell.editor.set_selection(vec![ids[0]]);
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::SelectInverse));
+        assert_eq!(shell.editor.selection_set, vec![ids[1]]);
+    }
+
+    /// Modify ▸ Group / Ungroup: the group lands in the cell where the
+    /// members were, and ungroup puts the members back.
+    #[test]
+    fn group_and_ungroup_fold_the_selection() {
+        let mut shell = gui_shell(gui_editor_two());
+        let ids = shell.editor.current_cell().unwrap().elements.clone();
+        shell.editor.set_selection(ids);
+        shell.run_action(&menus::Action::Sel(menus::SelAction::Group));
+        let cell = shell.editor.current_cell().unwrap();
+        assert_eq!(cell.elements.len(), 1, "one group replaces the members");
+        let group = cell.elements[0];
+        assert!(
+            matches!(
+                shell.editor.document().registry.get(group),
+                Some(ObjectData::Group(_))
+            ),
+            "the folded object is a group"
+        );
+        shell.editor.set_selection(vec![group]);
+        shell.run_action(&menus::Action::Sel(menus::SelAction::Ungroup));
+        assert_eq!(
+            shell.editor.current_cell().unwrap().elements.len(),
+            2,
+            "the group dissolves"
+        );
+    }
+
+    /// Modify ▸ Transform: a quarter turn swaps the object's extents,
+    /// and a flip moves its points.
+    #[test]
+    fn transform_rotates_and_flips_the_selection() {
+        let mut shell = gui_shell(gui_editor());
+        let id = shell.editor.current_cell().unwrap().elements[0];
+        shell.editor.set_selection(vec![id]);
+        let before = crate::editor::bounds_of(&shell_path(&shell, id));
+        shell.run_action(&menus::Action::Sel(menus::SelAction::Rotate(90.0)));
+        let after = crate::editor::bounds_of(&shell_path(&shell, id));
+        assert!(
+            (after.width() - before.height()).abs() < 0.001
+                && (after.height() - before.width()).abs() < 0.001,
+            "a quarter turn swaps the extents: {before:?} -> {after:?}"
+        );
+        let anchors = |shell: &Shell| {
+            shell_path(shell, id)
+                .contours
+                .iter()
+                .flat_map(|contour| contour.points.iter().map(|point| point.anchor))
+                .collect::<Vec<_>>()
+        };
+        let before_points = anchors(&shell);
+        shell.run_action(&menus::Action::Sel(menus::SelAction::Reflect {
+            horizontal: true,
+            vertical: false,
+        }));
+        assert_ne!(anchors(&shell), before_points, "the flip moves the points");
+    }
+
+    /// The Layers panel's three mutating surfaces: rename, the
+    /// per-state lock, and the reorder. The reorder keeps the moved
+    /// layer active — the user keeps editing the layer they moved.
+    #[test]
+    fn the_layers_panel_renames_locks_and_reorders() {
+        let mut shell = gui_shell(gui_editor());
+        shell.run_action(&menus::Action::Sel(menus::SelAction::NewLayer));
+        assert_eq!(shell.editor.layer_count(), 2, "the panel adds a layer");
+
+        shell.run_command(
+            "layer.rename",
+            serde_json::json!({ "page": 0, "layer": 0, "name": "base" }),
+        );
+        assert_eq!(
+            shell.editor.document().pages[0].layers.layers[0].name,
+            "base"
+        );
+
+        shell.run_command(
+            "layer.setLocked",
+            serde_json::json!({
+                "page": 0, "layer": 0, "frame": 0, "locked": true,
+            }),
+        );
+        assert!(
+            shell.editor.document().pages[0].layers.layers[0].cells[0].locked,
+            "the layer is locked in this state"
+        );
+
+        shell.editor.set_active_layer(0);
+        shell.reorder_layer(0, true);
+        let layers = &shell.editor.document().pages[0].layers.layers;
+        assert_eq!(layers[1].name, "base", "the layer moved up");
+        assert_eq!(
+            shell.editor.active_layer(),
+            1,
+            "the moved layer stays active"
+        );
+    }
+
+    /// Modify ▸ Flatten Selection: the selection bakes into one
+    /// bitmap, in place of the members.
+    #[test]
+    fn flatten_selection_bakes_into_one_bitmap() {
+        let mut shell = gui_shell(gui_editor_two());
+        let ids = shell.editor.current_cell().unwrap().elements.clone();
+        shell.editor.set_selection(ids);
+        shell.run_action(&menus::Action::Sel(menus::SelAction::FlattenSelection));
+        let cell = shell.editor.current_cell().unwrap();
+        assert_eq!(cell.elements.len(), 1, "the bake leaves one object");
+        assert!(
+            matches!(
+                shell.editor.document().registry.get(cell.elements[0]),
+                Some(ObjectData::Image(_))
+            ),
+            "the baked object is a bitmap"
+        );
+    }
+
+    /// One text param of one applied effect (the `DCVs` form the
+    /// panel's rows edit).
+    fn shell_param(shell: &Shell, id: doc::ObjectId, index: usize, key: &str) -> String {
+        let effects = shell_effect_list(shell, id);
+        let doc::EffectValue::Text(value) = &effects[index]
+            .properties
+            .iter()
+            .find(|property| property.key == key)
+            .unwrap_or_else(|| panic!("{key}: absent"))
+            .value
+        else {
+            panic!("{key}: not text");
+        };
+        value.clone()
+    }
+
+    #[test]
+    fn history_panel_saves_and_replays_steps() {
+        let editor = gui_editor();
+        let steps = editor.steps_text();
+        // The replay base is the PRE-steps document — what the user
+        // opens before running the recorded steps — not the edited one.
+        let base = Editor::from_document(doc::Document::default())
+            .save()
+            .unwrap();
+
+        // Save through the panel action.
+        let dialogs = FixedDialogs {
+            steps: "session.fwsteps".to_owned(),
+            doc: "base.fw.png".to_owned(),
+        };
+        let mut saver = Shell::with_platform(
+            gui_editor(),
+            Box::new(MemoryFs::new()),
+            Box::new(FixedDialogs {
+                steps: dialogs.steps.clone(),
+                doc: dialogs.doc.clone(),
+            }),
+        );
+        saver.save_steps();
+        assert!(saver.status.contains("saved steps"), "{}", saver.status);
+
+        // Replay through the panel action: fresh FS carrying the base
+        // document and the steps file, base opened from disk.
+        let fs = MemoryFs::new();
+        fs.write_file("session.fwsteps", steps.as_bytes()).unwrap();
+        fs.write_file("base.fw.png", &base).unwrap();
+        let mut replayer =
+            Shell::with_platform(Editor::untitled(), Box::new(fs), Box::new(dialogs));
+        replayer.replay_steps();
+        assert!(replayer.status.contains("replayed"), "{}", replayer.status);
+        assert_eq!(
+            serde_json::to_vec(replayer.editor.session.document()).unwrap(),
+            serde_json::to_vec(editor.session.document()).unwrap(),
+            "the replayed session equals the original, byte for byte"
+        );
+    }
+
+    #[test]
+    fn web_export_dialog_writes_html_and_files() {
+        // A slice dragged on the canvas, then the dialog pointed at
+        // the HTML+Images workflow.
+        let mut editor = Editor::untitled();
+        editor.tool = Tool::Slice;
+        editor.begin_drag(geom::Point::new(10.0, 10.0));
+        editor.drag_to(geom::Point::new(90.0, 50.0));
+        editor.end_drag().unwrap();
+        let id = editor.document().pages[0]
+            .layers
+            .layers
+            .iter()
+            .find(|layer| layer.has_url && layer.is_special)
+            .and_then(|layer| layer.cells[0].elements.first())
+            .copied()
+            .unwrap();
+        editor
+            .apply(
+                "slice.setLink",
+                serde_json::json!({ "id": id, "link": "https://example.test/", "alt": "go" }),
+            )
+            .unwrap();
+
+        let dialogs = FixedDialogs {
+            steps: "export.html".to_owned(),
+            doc: String::new(),
+        };
+        let mut shell = Shell::with_platform(editor, Box::new(MemoryFs::new()), Box::new(dialogs));
+        shell.export_dialog = Some(ExportDialog {
+            web: Some(1), // HTML + images
+            ..ExportDialog::default()
+        });
+        let dialog = shell.export_dialog.take().unwrap();
+        shell.export_via_dialog(&dialog);
+
+        assert!(shell.status.contains("exported"), "{}", shell.status);
+        assert!(shell.export_dialog.is_none(), "the dialog closes");
+        let html = String::from_utf8(shell.fs.read_file("export.html").unwrap()).unwrap();
+        assert!(html.contains(r#"href="https://example.test/""#));
+        // The slice's image landed beside the HTML under its auto
+        // name; the dialog's doc base is "export".
+        let image = shell.fs.read_file("nexport_1_1.png").unwrap();
+        assert_eq!(&image[..4], b"\x89PNG");
+    }
+
+    /// A 4×4 opaque red PNG, written through the project's own encoder.
+    fn red_png() -> Vec<u8> {
+        let rgba = [255u8, 0, 0, 255].repeat(16);
+        let plane = io::Plane::new(4, 4, &rgba).expect("4x4 plane");
+        io::png::encode(&plane).expect("png bytes")
+    }
+
+    /// File ▸ Import… places the raster on the active layer, and the
+    /// object that lands there is a real image object.
+    #[test]
+    fn import_places_a_raster_on_the_active_layer() {
+        let mut shell = gui_shell(Editor::untitled());
+        shell.import_raster(&red_png(), "red.png").expect("import");
+        let cell = shell.editor.current_cell().expect("the page's cell");
+        assert_eq!(cell.elements.len(), 1, "the import added one object");
+        let id = cell.elements[0];
+        let document = shell.editor.document();
+        let Some(ObjectData::Image(image)) = document.registry.get(id) else {
+            panic!("the imported object is an image")
+        };
+        assert_eq!(image.pixels, (4, 4), "the source extent is kept");
+        assert_eq!(image.name.as_deref(), Some("red.png"));
+    }
+
+    /// The active layer decides where the import lands: with a second
+    /// layer added and selected, the object goes there — not to the
+    /// layer underneath.
+    #[test]
+    fn import_lands_on_the_selected_layer() {
+        let mut shell = gui_shell(Editor::untitled());
+        shell
+            .editor
+            .apply("layer.add", serde_json::json!({ "page": 0 }))
+            .expect("second layer");
+        assert_eq!(shell.editor.layer_count(), 2);
+        shell.editor.set_active_layer(1);
+        shell.import_raster(&red_png(), "red.png").expect("import");
+        let document = shell.editor.document();
+        assert!(
+            document.pages[0].layers.layers[0].cells[0]
+                .elements
+                .is_empty(),
+            "the lower layer stays empty"
+        );
+        assert_eq!(
+            document.pages[0].layers.layers[1].cells[0].elements.len(),
+            1,
+            "the active layer took the import"
+        );
+    }
+
+    /// The pixel at image coordinates (x, y) — the paint tools' read
+    /// path, through the engine's own sampler.
+    fn image_pixel(shell: &Shell, id: doc::ObjectId, x: i64, y: i64) -> Option<[u8; 4]> {
+        let document = shell.editor.document();
+        let Some(ObjectData::Image(image)) = document.registry.get(id) else {
+            return None;
+        };
+        engine::bitmap::sample_pixel(image, &document.tiles, x, y)
+    }
+
+    /// A shell with a 4×4 red raster imported on the active layer,
+    /// and the imported image's id.
+    fn shell_with_raster() -> (Shell, doc::ObjectId) {
+        let mut shell = gui_shell(Editor::untitled());
+        shell.import_raster(&red_png(), "red.png").expect("import");
+        let id = shell
+            .editor
+            .current_cell()
+            .expect("the page's cell")
+            .elements[0];
+        (shell, id)
+    }
+
+    /// The brush lays its dabs on the image under the pointer, and the
+    /// whole stroke undoes as one step.
+    #[test]
+    fn the_brush_paints_a_stroke_on_the_image() {
+        let (mut shell, id) = shell_with_raster();
+        shell.editor.tool = Tool::Paintbrush;
+        shell.editor.brush.color = [0, 0, 255, 255];
+        shell.editor.brush.size = 2;
+        shell.editor.brush.edge = 0;
+
+        shell
+            .editor
+            .begin_stroke(geom::Point::new(0.5, 1.5))
+            .expect("the stroke starts");
+        shell
+            .editor
+            .stroke_to(geom::Point::new(3.5, 1.5))
+            .expect("the stroke continues");
+        shell.editor.end_stroke().expect("the stroke ends");
+
+        assert_eq!(
+            image_pixel(&shell, id, 0, 1),
+            Some([0, 0, 255, 255]),
+            "the dab painted the row"
+        );
+        assert_eq!(
+            image_pixel(&shell, id, 0, 0),
+            Some([255, 0, 0, 255]),
+            "the rows above the stroke keep their color"
+        );
+
+        shell.editor.undo().expect("undo");
+        assert_eq!(
+            image_pixel(&shell, id, 0, 1),
+            Some([255, 0, 0, 255]),
+            "one undo takes the whole stroke back"
+        );
+    }
+
+    /// The pencil draws a hard one-pixel line — the dab carries no
+    /// size, edge or shape slot.
+    #[test]
+    fn the_pencil_draws_a_hard_line() {
+        let (mut shell, id) = shell_with_raster();
+        shell.editor.tool = Tool::Pencil;
+        shell.editor.brush.color = [0, 255, 0, 255];
+
+        shell
+            .editor
+            .begin_stroke(geom::Point::new(0.0, 2.0))
+            .expect("the stroke starts");
+        shell
+            .editor
+            .stroke_to(geom::Point::new(3.0, 2.0))
+            .expect("the stroke continues");
+        shell.editor.end_stroke().expect("the stroke ends");
+
+        assert_eq!(image_pixel(&shell, id, 1, 2), Some([0, 255, 0, 255]));
+        assert_eq!(
+            image_pixel(&shell, id, 1, 1),
+            Some([255, 0, 0, 255]),
+            "the pencil leaves its neighbours alone"
+        );
+    }
+
+    /// The paint bucket fills the image under the pointer with the
+    /// paint color.
+    #[test]
+    fn the_paint_bucket_fills_the_image() {
+        let (mut shell, id) = shell_with_raster();
+        shell.editor.tool = Tool::PaintBucket;
+        shell.editor.brush.color = [255, 255, 0, 255];
+        assert!(
+            shell
+                .editor
+                .fill_target(geom::Point::new(1.0, 1.0))
+                .expect("fill")
+        );
+        assert_eq!(image_pixel(&shell, id, 3, 3), Some([255, 255, 0, 255]));
+    }
+
+    /// The eyedropper reads the pixel under the pointer into the
+    /// brush model — the color model, not the document.
+    #[test]
+    fn the_eyedropper_picks_the_color_under_the_pointer() {
+        let (mut shell, id) = shell_with_raster();
+        shell.editor.tool = Tool::Eyedropper;
+        let picked = shell.editor.pick_color(geom::Point::new(2.0, 2.0));
+        assert_eq!(picked, Some([255, 0, 0, 255]));
+        assert_eq!(shell.editor.brush.color, [255, 0, 0, 255]);
+        assert_eq!(
+            image_pixel(&shell, id, 2, 2),
+            Some([255, 0, 0, 255]),
+            "the pick does not touch the document"
+        );
+    }
+
+    /// The gradient tool paints a ramp between the press and the
+    /// release points.
+    #[test]
+    fn the_gradient_paints_a_ramp_between_its_handles() {
+        let (mut shell, id) = shell_with_raster();
+        shell.editor.tool = Tool::Gradient;
+        shell.editor.brush.color = [0, 0, 0, 255];
+
+        shell
+            .editor
+            .begin_stroke(geom::Point::new(0.0, 0.0))
+            .expect("the gradient starts");
+        shell
+            .editor
+            .stroke_to(geom::Point::new(3.0, 0.0))
+            .expect("the gradient follows");
+        shell.editor.end_stroke().expect("the gradient paints");
+
+        assert_eq!(image_pixel(&shell, id, 0, 0), Some([0, 0, 0, 255]));
+        assert_eq!(
+            image_pixel(&shell, id, 3, 0),
+            Some([255, 255, 255, 255]),
+            "the ramp ends in white"
+        );
+    }
+
+    /// File ▸ Open on a plain raster opens it as its own document,
+    /// with the canvas sized to the image.
+    #[test]
+    fn open_raster_sizes_the_document_to_the_image() {
+        let mut shell = gui_shell(Editor::untitled());
+        shell
+            .open_raster_document(&red_png(), "red.png")
+            .expect("open");
+        let document = shell.editor.document();
+        let canvas = document.pages[0].info.canvas.clone();
+        assert_eq!((canvas.width, canvas.height), (4.0, 4.0));
+        let cell = shell.editor.current_cell().expect("the page's cell");
+        assert_eq!(cell.elements.len(), 1);
+    }
+
+    /// A file that is neither a Fireworks PNG nor a raster is
+    /// refused with a message rather than a panic.
+    #[test]
+    fn open_raster_refuses_a_non_image() {
+        let mut shell = gui_shell(Editor::untitled());
+        let error = shell.open_raster_document(b"not an image at all", "x.bin");
+        assert!(error.is_err(), "the decode is refused");
+    }
+
+    /// Loading a raster into an empty document opens it as its own
+    /// document (the Open door); loading into a document that already
+    /// holds objects *places* it (the Import door) — the browser's one
+    /// file input must not silently swap out the user's artwork.
+    #[test]
+    fn load_into_a_drawing_places_the_image_instead_of_replacing_it() {
+        // Empty document: the raster becomes the document.
+        let mut shell = gui_shell(Editor::untitled());
+        shell
+            .load_document_bytes(&red_png())
+            .expect("open into an empty document");
+        assert_eq!(
+            shell.editor.document().pages[0].info.canvas.width,
+            4.0,
+            "the raster opened as its own document"
+        );
+
+        // Document with a drawn rect: the raster is placed into it.
+        let mut shell = gui_shell(gui_editor());
+        let before = shell.editor.current_cell().unwrap().elements.len();
+        shell
+            .load_document_bytes(&red_png())
+            .expect("place into a drawing");
+        let cell = shell.editor.current_cell().unwrap();
+        assert_eq!(
+            cell.elements.len(),
+            before + 1,
+            "the placed image joined the existing objects"
+        );
+        let placed = cell.elements[cell.elements.len() - 1];
+        let data = shell.editor.document().registry.get(placed);
+        assert!(
+            matches!(data, Some(ObjectData::Image(_))),
+            "the new object is the imported image"
+        );
+    }
+
+    /// `document_has_content` separates the two doors: empty page
+    /// (fresh editor) is content-free, a drag-created rect is not.
+    #[test]
+    fn document_has_content_follows_the_cell() {
+        assert!(!gui_shell(Editor::untitled()).document_has_content());
+        assert!(gui_shell(gui_editor()).document_has_content());
+    }
+
+    /// The palette commands route to the right engine verbs, and the
+    /// swatch raws decode in the ABGR layout the engine stores.
+    #[test]
+    fn fill_stroke_palette_routes_to_engine_commands() {
+        assert_eq!(Shell::paint_command("fill"), "object.setFill");
+        assert_eq!(Shell::paint_command("stroke"), "object.setStroke");
+        // The black swatch is opaque black in ABGR; transparent is all
+        // zero.
+        let black = Shell::FILL_STROKE_PALETTE
+            .iter()
+            .find(|(n, _)| *n == "black");
+        assert_eq!(black.map(|(_, raw)| *raw), Some(0xFF00_0000));
+        let clear = Shell::FILL_STROKE_PALETTE
+            .iter()
+            .find(|(n, _)| *n == "none (transparent)");
+        assert_eq!(clear.map(|(_, raw)| *raw), Some(0));
+        // End-to-end: applying the fill command through the editor
+        // changes the created rect's fill_raw.
+        let mut editor = gui_editor();
+        let id = editor.current_cell().unwrap().elements[0];
+        editor
+            .apply(
+                "object.setFill",
+                serde_json::json!({ "id": id, "color_raw": 0xFFFF_0000i64 }),
+            )
+            .expect("the fill applies");
+        match editor.document().registry.get(id) {
+            Some(ObjectData::Path(path)) => {
+                let paint = path.paint.as_ref().expect("the paint style");
+                assert_eq!(paint.fill_raw, 0xFFFF_0000);
+            }
+            other => panic!("expected a path, got {other:?}"),
+        }
+    }
+}

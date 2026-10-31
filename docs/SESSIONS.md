@@ -1134,3 +1134,12 @@ documentation reset.
   own session).
 - Photocraft audit returned (ranked practices, top pick
   `panic_hunt`; feeds NEXT.md Phases 14–18).
+
+## 2026-10-31 (round 2) — CS6 layout: options bar + right-dock Properties
+
+- Landed f6203ed: context options bar (tool, zoom, Fit), Properties
+  into the right panel stack, fill/stroke color picker, pan cursor.
+- Verified locally and in production with the SwiftShader headless
+  probe (blank-render = known WebGL context loss; retry with
+  swiftshader flags). Deployed to firecraft-web.pages.dev, gitforge
+  sweep pushed.
