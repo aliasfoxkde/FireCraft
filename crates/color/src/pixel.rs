@@ -6,9 +6,13 @@
 /// raster storage premultiplies internally for compositing.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct Rgba8 {
+    /// Red channel, sRGB-encoded.
     pub r: u8,
+    /// Green channel, sRGB-encoded.
     pub g: u8,
+    /// Blue channel, sRGB-encoded.
     pub b: u8,
+    /// Alpha channel: 0 = fully transparent, 255 = fully opaque.
     pub a: u8,
 }
 

@@ -102,7 +102,8 @@ pub fn import_to_fwpng(input: &[u8], name: Option<String>) -> Result<Vec<u8>, Cl
 
 /// True when `input` sniffs as GIF and the frame loop yields more than
 /// one frame (the animated/static routing line).
-fn is_animated_gif(input: &[u8]) -> bool {
+#[must_use]
+pub fn is_animated_gif(input: &[u8]) -> bool {
     if !input.starts_with(b"GIF8") {
         return false;
     }

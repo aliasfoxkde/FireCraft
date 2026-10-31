@@ -206,11 +206,12 @@ touching `web/` or the smoke.**
 - **13.3 Release notes in-repo?** `dist/release-notes.txt` is
   gitignored staging. Consider `docs/releases/vX.Y.Z.md` (tracked) so
   notes survive in history; keep the SHA block generated.
-- **13.4 Smoke budget.** The bridge smoke is chromium-headless inside
-  `dist --web`; it currently needs `--virtual-time-budget=60000`. If
-  the wasm grows past the boot budget on slow machines, the smoke
-  fails spuriously — budget the timeout off the measured load time,
-  not a constant.
+- ~~**13.4 Smoke budget.**~~ **Decided (0066): keep the constant.**
+  Virtual time covers only JS execution; wasm fetch/compile are wall
+  clock and outside the budget, so the 60000 ceiling cannot mask a
+  slow-loading bundle. The load-side budget is the wasm size ceiling
+  (`enforce_wasm_budget`) — tighten that if the bundle grows, not the
+  virtual-time constant.
 
 ### Suggested order
 

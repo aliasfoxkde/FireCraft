@@ -583,7 +583,7 @@ mod tests {
     }
 
     /// One page, one layer, one cell holding the objects.
-    fn document_with(objects: Vec<ObjectData>) -> (Document, Vec<ObjectId>) {
+    fn document_with(objects: &[ObjectData]) -> (Document, Vec<ObjectId>) {
         let mut document = Document::default();
         let ids: Vec<ObjectId> = objects
             .iter()
@@ -715,7 +715,7 @@ mod tests {
 
     #[test]
     fn apply_copies_the_bundle_and_undo_restores() {
-        let (mut document, ids) = document_with(vec![
+        let (mut document, ids) = document_with(&[
             square(
                 0.0,
                 0.0,
@@ -763,7 +763,7 @@ mod tests {
 
     #[test]
     fn apply_refuses_atomically() {
-        let (mut document, ids) = document_with(vec![
+        let (mut document, ids) = document_with(&[
             square(0.0, 0.0, 8.0, 8.0, None),
             ObjectData::Image(doc::ImageObject {
                 location: geom::Point::ZERO,
@@ -810,7 +810,7 @@ mod tests {
 
     #[test]
     fn redefine_by_index_writes_the_appearance_back() {
-        let (mut document, ids) = document_with(vec![square(
+        let (mut document, ids) = document_with(&[square(
             0.0,
             0.0,
             8.0,
@@ -865,7 +865,7 @@ mod tests {
 
     #[test]
     fn redefine_by_name_hits_the_first_match_only() {
-        let (mut document, ids) = document_with(vec![square(0.0, 0.0, 8.0, 8.0, None)]);
+        let (mut document, ids) = document_with(&[square(0.0, 0.0, 8.0, 8.0, None)]);
         document.styles = library();
 
         apply_by_name(
@@ -881,7 +881,7 @@ mod tests {
 
     #[test]
     fn redefine_from_selection_upserts() {
-        let (mut document, ids) = document_with(vec![square(0.0, 0.0, 8.0, 8.0, None)]);
+        let (mut document, ids) = document_with(&[square(0.0, 0.0, 8.0, 8.0, None)]);
         document.styles = library();
         let count = document.styles.len();
 
@@ -911,7 +911,7 @@ mod tests {
 
     #[test]
     fn redefine_refuses() {
-        let (mut document, ids) = document_with(vec![square(0.0, 0.0, 8.0, 8.0, None)]);
+        let (mut document, ids) = document_with(&[square(0.0, 0.0, 8.0, 8.0, None)]);
         document.styles = library();
         let before = document_bytes(&document);
 
@@ -953,7 +953,7 @@ mod tests {
 
     #[test]
     fn scale_styles_multiplies_sizes_and_undo_restores() {
-        let (mut document, _ids) = document_with(vec![]);
+        let (mut document, _ids) = document_with(&[]);
         document.styles = library();
 
         let noop =
@@ -967,7 +967,7 @@ mod tests {
         delta.apply_inverse(&mut document).unwrap();
         assert_eq!(document.styles[0].text.size, 12.0);
 
-        let (mut empty, _ids) = document_with(vec![]);
+        let (mut empty, _ids) = document_with(&[]);
         let noop = apply_by_name(&mut empty, "style.scaleStyles", json!({ "scale": 2.0 })).unwrap();
         assert!(matches!(noop, Delta::Noop), "empty library changes nothing");
 
@@ -987,7 +987,7 @@ mod tests {
 
     #[test]
     fn import_appends_and_undo_restores() {
-        let (mut document, _ids) = document_with(vec![]);
+        let (mut document, _ids) = document_with(&[]);
         document.styles = library();
         let before = document_bytes(&document);
         let imported: Vec<StyleEntry> = (0..2)
@@ -1020,7 +1020,7 @@ mod tests {
 
     #[test]
     fn payloads_refuse_unknown_or_missing_fields() {
-        let (mut document, _ids) = document_with(vec![]);
+        let (mut document, _ids) = document_with(&[]);
         document.styles = library();
         for (name, command, payload) in [
             (

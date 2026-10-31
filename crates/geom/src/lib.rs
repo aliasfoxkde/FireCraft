@@ -2,6 +2,7 @@
 //! bounds, and hit testing built on [`kurbo`].
 //!
 //! Layer L0: depends on nothing from this workspace.
+#![deny(missing_docs)]
 
 pub mod bounds;
 pub mod hit;

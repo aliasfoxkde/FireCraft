@@ -142,9 +142,12 @@ accesskit integration.
   as `TriggerType::Push` — the tag gate is in-step
   (`git describe --exact-match`). gh-release upload remains manual
   (operator's signing ceremony).
-- **17.3 Smoke budget off measured load** (13.4): the bridge smoke
-  uses `--virtual-time-budget=60000`; derive the budget from the
-  measured wasm load time × margin, not a constant.
+- ~~**17.3 Smoke budget off measured load** (13.4)~~ **Decided
+  (0066): no change.** Virtual time in headless chromium covers only
+  JS execution — wasm fetch/compile run on wall clock, outside the
+  budget — so deriving the budget from load time addresses the wrong
+  quantity. The real load budget is the wasm size ceiling
+  (`enforce_wasm_budget`); the 60000 virtual-time ceiling stays.
 
 ### Phase 18 — Documentation coverage
 

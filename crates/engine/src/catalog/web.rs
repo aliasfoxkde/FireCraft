@@ -2611,4 +2611,231 @@ mod tests {
             "refusals mutate nothing"
         );
     }
+
+    #[test]
+    fn set_export_quality_gate_and_clear() {
+        let (mut document, _ids) = testdoc::sample_document();
+        registry()
+            .execute(
+                &mut document,
+                "slice.create",
+                json!({
+                    "shape": "rect", "x": 0.0, "y": 0.0,
+                    "width": 10.0, "height": 10.0, "page": 0,
+                }),
+            )
+            .unwrap();
+        let (id, _) = the_slice(&document);
+
+        let out_of_range = registry().execute(
+            &mut document,
+            "slice.setExport",
+            json!({"id": id, "jpeg_quality": 101}),
+        );
+        assert!(matches!(
+            out_of_range,
+            Err(EngineError::InvalidState { .. })
+        ));
+
+        // Seed an export, clear it, and undo restores the node.
+        registry()
+            .execute(
+                &mut document,
+                "slice.setExport",
+                json!({"id": id, "format": 1}),
+            )
+            .unwrap();
+        let delta = registry()
+            .execute(
+                &mut document,
+                "slice.setExport",
+                json!({"id": id, "format": 1, "clear": true}),
+            )
+            .unwrap();
+        assert!(slice_at(&document, id).export.is_none());
+        delta.apply_inverse(&mut document).unwrap();
+        assert!(slice_at(&document, id).export.is_some(), "undo restores");
+    }
+
+    #[test]
+    fn remove_behavior_drops_the_indexed_entry_and_gates() {
+        let (mut document, _ids) = testdoc::sample_document();
+        let id = make_polygon_hotspot(&mut document);
+        registry()
+            .execute(
+                &mut document,
+                "slice.addBehavior",
+                json!({"id": id, "kind": 7}),
+            )
+            .unwrap();
+        registry()
+            .execute(
+                &mut document,
+                "slice.addBehavior",
+                json!({"id": id, "kind": 9}),
+            )
+            .unwrap();
+
+        let delta = registry()
+            .execute(
+                &mut document,
+                "slice.removeBehavior",
+                json!({"id": id, "index": 0}),
+            )
+            .unwrap();
+        assert_eq!(
+            slice_at(&document, id).behaviors,
+            vec![SliceBehavior { kind: 9 }],
+            "the indexed entry is the one removed"
+        );
+        delta.apply_inverse(&mut document).unwrap();
+        assert_eq!(
+            slice_at(&document, id).behaviors,
+            vec![SliceBehavior { kind: 7 }, SliceBehavior { kind: 9 }]
+        );
+
+        let err = registry()
+            .execute(
+                &mut document,
+                "slice.removeBehavior",
+                json!({"id": id, "index": 2}),
+            )
+            .unwrap_err();
+        assert!(matches!(err, EngineError::InvalidState { .. }));
+    }
+
+    #[test]
+    fn set_rectangle_refusals_leave_the_document_alone() {
+        let (mut document, _ids) = testdoc::sample_document();
+        let id = make_polygon_hotspot(&mut document);
+        document.object_selection = vec![id];
+        let before = serde_json::to_vec(&document).unwrap();
+        for payload in [
+            json!({"rect": {"left": 10.0, "top": 10.0, "right": 10.0, "bottom": 20.0}}),
+            json!({"rect": {"left": 10.0, "top": 20.0, "right": 10.0, "bottom": 10.0}}),
+        ] {
+            let err = registry()
+                .execute(&mut document, "hotspot.setRectangle", payload)
+                .unwrap_err();
+            assert!(matches!(err, EngineError::InvalidState { .. }));
+            assert_eq!(serde_json::to_vec(&document).unwrap(), before);
+        }
+
+        // An empty selection is refused before the id is resolved.
+        document.object_selection.clear();
+        let err = registry()
+            .execute(
+                &mut document,
+                "hotspot.setRectangle",
+                json!({"rect": {"left": 0.0, "top": 0.0, "right": 5.0, "bottom": 5.0}}),
+            )
+            .unwrap_err();
+        assert!(err.to_string().contains("single hotspot or slice"));
+        // And the wrong class of selection, too.
+        let (_, ids) = testdoc::sample_document();
+        let path_id = *ids.first().unwrap();
+        document.object_selection = vec![path_id];
+        let err = registry()
+            .execute(
+                &mut document,
+                "hotspot.setRectangle",
+                json!({"rect": {"left": 0.0, "top": 0.0, "right": 5.0, "bottom": 5.0}}),
+            )
+            .unwrap_err();
+        assert!(err.to_string().contains("not a slice or hotspot"));
+    }
+
+    #[test]
+    fn copy_to_hotspot_gates_before_mutating() {
+        let (mut document, _ids) = testdoc::sample_document();
+        let registry = registry();
+
+        // No selection.
+        let err = registry
+            .execute(
+                &mut document,
+                "hotspot.copyToHotspot",
+                json!({"page": 0, "hotspot_type": "hotspot", "what_if_multiple": "single"}),
+            )
+            .unwrap_err();
+        assert!(err.to_string().contains("nothing is selected"));
+
+        // A selection with no drawable bounds: a path with no
+        // contours contributes nothing to content_bounds.
+        let orphan = document.registry.insert(path_object_like());
+        document.object_selection = vec![orphan];
+        let before = serde_json::to_vec(&document).unwrap();
+        let err = registry
+            .execute(
+                &mut document,
+                "hotspot.copyToHotspot",
+                json!({
+                    "page": 0, "hotspot_type": "hotspot",
+                    "what_if_multiple": "multiple", "make_rectangular": false,
+                }),
+            )
+            .unwrap_err();
+        assert!(err.to_string().contains("carries no bounds"));
+        assert_eq!(
+            serde_json::to_vec(&document).unwrap(),
+            before,
+            "the gated copies mutated nothing"
+        );
+    }
+
+    /// A path object with no contours — contributes no bounds.
+    fn path_object_like() -> ObjectData {
+        ObjectData::Path(doc::PathObject {
+            contours: Vec::new(),
+            primitive: None,
+            even_odd: false,
+            paint: None,
+            fill_start: None,
+            fill_end: None,
+            fill_third: None,
+            brush_placement: None,
+            fill_on_top: None,
+            locked: false,
+            visible: true,
+            opacity: 1000,
+            blend: 0,
+            name: None,
+            effects: Vec::new(),
+        })
+    }
+
+    #[test]
+    fn set_shape_on_an_empty_selection_is_a_noop_refusal() {
+        let (mut document, _ids) = testdoc::sample_document();
+        let err = registry()
+            .execute(
+                &mut document,
+                "hotspot.setShape",
+                json!({"what": "hotspots", "shape": "oval"}),
+            )
+            .unwrap_err();
+        assert!(err.to_string().contains("nothing is selected"));
+
+        // Same shape twice: the second pass is a Noop delta, not an
+        // error.
+        let id = make_polygon_hotspot(&mut document);
+        document.object_selection = vec![id];
+        let delta = registry()
+            .execute(
+                &mut document,
+                "hotspot.setShape",
+                json!({"what": "hotspots", "shape": "polyline"}),
+            )
+            .unwrap();
+        assert_eq!(slice_at(&document, id).shape, 2);
+        let again = registry()
+            .execute(
+                &mut document,
+                "hotspot.setShape",
+                json!({"what": "hotspots", "shape": "polyline"}),
+            )
+            .unwrap();
+        assert!(matches!(again, crate::delta::Delta::Noop));
+        delta.apply_inverse(&mut document).unwrap();
+    }
 }

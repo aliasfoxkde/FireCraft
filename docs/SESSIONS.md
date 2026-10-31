@@ -1088,3 +1088,28 @@ documentation reset.
   browser in).
 - A stale 0-byte `.git/index.lock` from the crashed prior session
   was removed after confirming no live git process owned it.
+
+## 2026-10-31 — Web file doors complete, drop sink landed, release gate verified
+
+- Phase 11.x web front-end file doors closed: the file picker's
+  `accept` now lists every format the open door sniffs (was
+  PNG-only, hiding JPEG/GIF/BMP/TIFF/WebP the app can open), and
+  drag-and-drop onto the window opens through the same
+  `load_document_bytes` one-door path as File ▸ Open — no more
+  silently-ignored drops.
+- Architecture fix en route: the drop sink dropped its `Send`/`Sync`
+  bounds (`Rc` not `Arc`) — wasm is single-threaded and the closure
+  captures `Rc<WebRunner>` — and moved from a `static Mutex` to a
+  `thread_local` (`RefCell`), since `Send` contents are mandatory in
+  a `static`. The web closure clones the `DroppedFileHandle` and
+  context before `spawn_local` (borrowed data escapes otherwise).
+- `trunk build` green; clippy `-D warnings` clean; workspace tests
+  pass. Committed as `dfd7f46`.
+- Release gate `xtask dist --native` exercised: first run failed
+  with a tar race ("file shrank by N bytes" — the CLI binary was
+  rebuilt mid-tar by the concurrently-running test suite; a
+  scheduling artifact of running two gates in parallel, not a
+  recipe defect). Re-run in isolation to confirm.
+- Photocraft best-practices audit dispatched to background research
+  (task #13): extractable practices ranked against NEXT.md Phases
+  14–18.
