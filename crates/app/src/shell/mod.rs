@@ -14,7 +14,7 @@ pub(crate) use glyphs::{
     draw_autoshape_glyph, draw_tool_glyph, symbol_type_label, tool_key, tool_label,
 };
 
-pub(crate) use dialogs::{DisplayState, EnvDialogs, ExportDialog};
+pub(crate) use dialogs::{DisplayState, EnvDialogs, ExportDialog, NumericTransformDialog};
 pub(crate) use filters_ui::{
     FILTER_BOOL_KEYS, FILTER_FAMILIES, FILTER_PARAMS, FilterPreset, filter_preset,
 };
@@ -27,6 +27,7 @@ use base64::Engine as _;
 use crate::canvas::View;
 use crate::editor::{
     AutoShape, DragConstraint, Editor, NineSliceEdge, PixelSelectMode, StampShape, Tool,
+    TransformHandle,
 };
 use crate::menus;
 
@@ -59,6 +60,8 @@ pub struct Shell {
     pub status: String,
     /// Open export dialog, if any.
     export_dialog: Option<ExportDialog>,
+    /// Open Numeric Transform dialog, if any.
+    pub(crate) numeric_transform: Option<NumericTransformDialog>,
     /// Display name of the open document (tab strip).
     doc_name: String,
     /// Last canvas widget rect — the anchor for view commands that
@@ -109,6 +112,7 @@ impl Shell {
             dialogs,
             status: "ready".to_owned(),
             export_dialog: None,
+            numeric_transform: None,
             doc_name: "untitled".to_owned(),
             canvas_rect: None,
             close_requested: false,
@@ -470,6 +474,9 @@ impl Shell {
             menus::ShellAction::Save | menus::ShellAction::SaveAs => self.save_document(),
             menus::ShellAction::Export | menus::ShellAction::ExportPreview => {
                 self.export_dialog = Some(ExportDialog::default());
+            }
+            menus::ShellAction::NumericTransform => {
+                self.numeric_transform = Some(NumericTransformDialog::default());
             }
             menus::ShellAction::Quit => self.close_requested = true,
             menus::ShellAction::Undo => match self.editor.undo() {
@@ -954,6 +961,12 @@ impl eframe::App for Shell {
                 .collapsible(false)
                 .show(ui.ctx(), |ui| self.export_dialog_ui(ui));
         }
+        if self.numeric_transform.is_some() {
+            egui::Window::new("Numeric Transform")
+                .resizable(false)
+                .collapsible(false)
+                .show(ui.ctx(), |ui| self.numeric_transform_dialog_ui(ui));
+        }
         if self.help_open {
             self.help_panel(ui.ctx());
         }
@@ -1343,6 +1356,36 @@ mod tests {
             vertical: false,
         }));
         assert_ne!(anchors(&shell), before_points, "the flip moves the points");
+    }
+
+    /// The Numeric Transform dialog: scale+rotate through the menu
+    /// action lands as one undo step through the journal.
+    #[test]
+    fn numeric_transform_dialog_applies_one_undo_step() {
+        let mut shell = gui_shell(gui_editor());
+        let id = shell.editor.current_cell().unwrap().elements[0];
+        shell.editor.set_selection(vec![id]);
+        let undo_before = shell.editor.session.undo_len();
+
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::NumericTransform));
+        let dialog = NumericTransformDialog {
+            scale_x: 200.0,
+            rotate: 90.0,
+            ..NumericTransformDialog::default()
+        };
+        shell.apply_numeric_transform(&dialog);
+
+        let after = crate::editor::bounds_of(&shell_path(&shell, id));
+        assert!(
+            (after.width() - 80.0).abs() < 0.001 && (after.height() - 160.0).abs() < 0.001,
+            "2× then a quarter turn: the extents double and swap: {after:?}"
+        );
+        assert_eq!(
+            shell.editor.session.undo_len(),
+            undo_before + 1,
+            "the whole dialog is one undo step"
+        );
+        assert!(shell.numeric_transform.is_none(), "OK closes the dialog");
     }
 
     /// The Layers panel's three mutating surfaces: rename, the

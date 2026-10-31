@@ -438,59 +438,40 @@ impl Shell {
             }
         }
 
-        // Selection affordances: CS6 puts a bounding box with corner
-        // and edge handles around the selected object. Without it a
-        // moved shape has no anchor, and the drag reads as a marquee
-        // selection rather than a move.
-        {
+        // Selection affordances: CS6 puts one bounding box with corner
+        // and edge handles around the whole selection — the frame is
+        // also the transform gesture's geometry, since a press on a
+        // handle starts a live scale (see the drag_started routing).
+        let union_frame = {
             let ids = self.editor.live_selection();
-            if !ids.is_empty() {
-                let document = self.editor.document();
-                let shift = egui::Vec2::new(rect.left(), rect.top());
+            let frame =
+                crate::editor::union_selection_bounds(self.editor.document(), &ids).map(|bounds| {
+                    let shift = egui::Vec2::new(rect.left(), rect.top());
+                    let a = self.view.to_screen(geom::Point::new(bounds.x0, bounds.y0)) + shift;
+                    let b = self.view.to_screen(geom::Point::new(bounds.x1, bounds.y1)) + shift;
+                    Rect::from_two_pos(a, b)
+                });
+            if let Some(frame) = frame {
                 let painter = ui.painter();
-                for id in ids {
-                    let Some(data) = document.registry.get(id) else {
-                        continue;
-                    };
-                    let bounds = crate::editor::object_bounds(document, data, 0);
-                    if bounds.width() <= 0.0 && bounds.height() <= 0.0 {
-                        continue;
-                    }
-                    let top_left =
-                        self.view.to_screen(geom::Point::new(bounds.x0, bounds.y0)) + shift;
-                    let bottom_right =
-                        self.view.to_screen(geom::Point::new(bounds.x1, bounds.y1)) + shift;
-                    let frame = Rect::from_two_pos(top_left, bottom_right);
+                painter.rect_stroke(
+                    frame,
+                    0.0,
+                    (1.0, Color32::from_rgb(120, 180, 255)),
+                    egui::StrokeKind::Outside,
+                );
+                for handle in transform_handle_points(frame) {
+                    let square = Rect::from_center_size(handle, Vec2::splat(7.0));
+                    painter.rect_filled(square, 0.0, Color32::WHITE);
                     painter.rect_stroke(
-                        frame,
+                        square,
                         0.0,
-                        (1.0, Color32::from_rgb(120, 180, 255)),
+                        (1.0, Color32::BLACK),
                         egui::StrokeKind::Outside,
                     );
-                    let middle = frame.center();
-                    let handles = [
-                        frame.left_top(),
-                        frame.right_top(),
-                        frame.right_bottom(),
-                        frame.left_bottom(),
-                        Pos2::new(middle.x, frame.top()),
-                        Pos2::new(middle.x, frame.bottom()),
-                        Pos2::new(frame.left(), middle.y),
-                        Pos2::new(frame.right(), middle.y),
-                    ];
-                    for handle in handles {
-                        let square = Rect::from_center_size(handle, Vec2::splat(7.0));
-                        painter.rect_filled(square, 0.0, Color32::WHITE);
-                        painter.rect_stroke(
-                            square,
-                            0.0,
-                            (1.0, Color32::BLACK),
-                            egui::StrokeKind::Outside,
-                        );
-                    }
                 }
             }
-        }
+            frame
+        };
 
         // Rubber band for a creation drag. A move drag is excluded:
         // the band belongs to shape creation, and painting it during a
@@ -529,9 +510,19 @@ impl Shell {
                         }
                     }
                     None => {
-                        // Space-drag pan: no tool drag begins while the
-                        // temporary Hand is active.
-                        if !space_held {
+                        // A press on a selection handle scales the
+                        // selection live. It outranks the tool: the
+                        // handle is an affordance of the current
+                        // selection, not of the active tool.
+                        let grabbed =
+                            union_frame.and_then(|frame| transform_handle_at(frame, local));
+                        if let Some(handle) = grabbed {
+                            let ids = self.editor.live_selection();
+                            if let Err(error) = self.editor.begin_transform_drag(world, handle, ids)
+                            {
+                                self.status = format!("transform failed: {error}");
+                            }
+                        } else if !space_held {
                             match self.editor.tool {
                                 Tool::Paintbrush | Tool::Pencil | Tool::Eraser | Tool::Gradient => {
                                     // A paint stroke: the dabs land on
@@ -603,6 +594,8 @@ impl Shell {
                 let world = self.view.to_world(local);
                 if self.editor.guide_drag.is_some() {
                     self.editor.drag_guide_to(world);
+                } else if self.editor.transform_drag.is_some() {
+                    self.editor.transform_drag_to(world);
                 } else if self.editor.pixel_selection.is_some() {
                     if let Err(error) = self.editor.extend_pixel_selection(world) {
                         self.status = format!("select failed: {error}");
@@ -634,6 +627,9 @@ impl Shell {
                 && let Err(error) = self.editor.end_guide_drag()
             {
                 self.status = format!("nine-slice drag failed: {error}");
+            }
+            if let Err(error) = self.editor.end_transform_drag() {
+                self.status = format!("transform failed: {error}");
             }
             if let Err(error) = self.editor.end_drag() {
                 self.status = format!("create failed: {error}");
@@ -789,4 +785,41 @@ impl Shell {
             ui.weak("F1 for all shortcuts");
         });
     }
+}
+
+/// The eight transform-handle positions of a selection frame, in
+/// [`TransformHandle`] order.
+fn transform_handle_points(frame: Rect) -> [Pos2; 8] {
+    let middle = frame.center();
+    [
+        frame.left_top(),
+        frame.right_top(),
+        frame.right_bottom(),
+        frame.left_bottom(),
+        Pos2::new(middle.x, frame.top()),
+        Pos2::new(middle.x, frame.bottom()),
+        Pos2::new(frame.left(), middle.y),
+        Pos2::new(frame.right(), middle.y),
+    ]
+}
+
+/// The handle (if any) under a widget-local press on the selection
+/// frame. Hit squares match the painted 7px handles with a small
+/// slack so a near-miss still grabs.
+fn transform_handle_at(frame: Rect, local: Pos2) -> Option<TransformHandle> {
+    const HANDLES: [TransformHandle; 8] = [
+        TransformHandle::TopLeft,
+        TransformHandle::TopRight,
+        TransformHandle::BottomRight,
+        TransformHandle::BottomLeft,
+        TransformHandle::Top,
+        TransformHandle::Bottom,
+        TransformHandle::Left,
+        TransformHandle::Right,
+    ];
+    transform_handle_points(frame)
+        .iter()
+        .zip(HANDLES)
+        .find(|(point, _)| Rect::from_center_size(**point, Vec2::splat(11.0)).contains(local))
+        .map(|(_, handle)| handle)
 }
