@@ -610,6 +610,23 @@ pub struct TransformDrag {
     pub applied: bool,
 }
 
+/// A path-node drag in progress (Subselect tool): one anchor of one
+/// path moves live, one `path.movePoints` step per pointer move,
+/// folded into a single "Reshape" undo step.
+#[derive(Clone, Debug, PartialEq)]
+pub struct NodeDrag {
+    /// The path being reshaped.
+    pub id: ObjectId,
+    /// Contour index of the grabbed anchor.
+    pub contour: usize,
+    /// Point index of the grabbed anchor.
+    pub point: usize,
+    /// Latest world position of the pointer.
+    pub current: geom::Point,
+    /// Whether any step applied (a click-sized drag commits nothing).
+    pub applied: bool,
+}
+
 /// Everything the shell shows, minus the window itself.
 pub struct Editor {
     /// The editing session (document + history + journal).
@@ -646,6 +663,8 @@ pub struct Editor {
     pub guide_drag: Option<GuideDrag>,
     /// Selection-handle transform drag in progress.
     pub transform_drag: Option<TransformDrag>,
+    /// Path-node drag in progress (Subselect).
+    pub node_drag: Option<NodeDrag>,
     /// The brush model the paint tools use (view state — the engine
     /// re-reads it from every stroke's payload).
     pub brush: BrushSettings,
@@ -724,6 +743,7 @@ impl Editor {
             symbol_layer: 0,
             guide_drag: None,
             transform_drag: None,
+            node_drag: None,
             brush: BrushSettings::default(),
             stroke: None,
             pixel_selection: None,
@@ -1474,6 +1494,104 @@ impl Editor {
             None => return,
         };
         self.drag_step(constrained);
+    }
+
+    /// Begins a Subselect node drag: the anchor under the press moves
+    /// live through `path.movePoints`, one step per pointer move,
+    /// folded into a single "Reshape" transaction.
+    ///
+    /// # Errors
+    /// Opening the transaction was refused; nothing was mutated.
+    pub fn begin_node_drag(
+        &mut self,
+        id: ObjectId,
+        contour: usize,
+        point: usize,
+        world: geom::Point,
+    ) -> Result<(), EngineError> {
+        self.session.begin_transaction("Reshape")?;
+        self.node_drag = Some(NodeDrag {
+            id,
+            contour,
+            point,
+            current: world,
+            applied: false,
+        });
+        Ok(())
+    }
+
+    /// Updates the node drag: one `path.movePoints` step carrying the
+    /// delta from the last pointer position (handles ride along with
+    /// the anchor). A refused step aborts the gesture.
+    pub fn node_drag_to(&mut self, world: geom::Point) {
+        let Some(drag) = &self.node_drag else {
+            return;
+        };
+        let step = world - drag.current;
+        if step.x == 0.0 && step.y == 0.0 {
+            return;
+        }
+        let payload = serde_json::json!({
+            "id": drag.id,
+            "edits": [{
+                "contour": drag.contour,
+                "point": drag.point,
+                "dx": step.x, "dy": step.y,
+            }],
+        });
+        match self.apply("path.movePoints", payload) {
+            Ok(()) => {
+                if let Some(drag) = &mut self.node_drag {
+                    drag.current = world;
+                    drag.applied = true;
+                }
+            }
+            Err(_) => {
+                let _ = self.session.abort_transaction();
+                self.node_drag = None;
+            }
+        }
+    }
+
+    /// Ends the node drag: a moved gesture folds into its one
+    /// "Reshape" undo step; a click commits nothing.
+    ///
+    /// # Errors
+    /// Whatever the transaction commit refuses.
+    pub fn end_node_drag(&mut self) -> Result<(), EngineError> {
+        let Some(drag) = self.node_drag.take() else {
+            return Ok(());
+        };
+        if drag.applied {
+            self.session.commit_transaction().map(|_label| ())
+        } else {
+            self.session.abort_transaction()
+        }
+    }
+
+    /// The nearest anchor of the selected path within `radius` world
+    /// units of `world` — the Subselect press's grab target. Only the
+    /// single selected object is searched: CS6's node editing requires
+    /// exactly one path selected.
+    #[must_use]
+    pub fn node_at(&self, world: geom::Point, radius: f64) -> Option<(usize, usize)> {
+        let id = self.selected_live()?;
+        let data = self.document().registry.get(id)?;
+        let ObjectData::Path(path) = data else {
+            return None;
+        };
+        let mut best: Option<(f64, usize, usize)> = None;
+        for (contour, points) in path.contours.iter().enumerate() {
+            for (point, path_point) in points.points.iter().enumerate() {
+                let dx = path_point.anchor.x - world.x;
+                let dy = path_point.anchor.y - world.y;
+                let distance = (dx * dx + dy * dy).sqrt();
+                if distance <= radius && best.is_none_or(|(d, _, _)| distance < d) {
+                    best = Some((distance, contour, point));
+                }
+            }
+        }
+        best.map(|(_, contour, point)| (contour, point))
     }
 
     /// Begins a handle drag that scales the selection live: one
@@ -2801,6 +2919,70 @@ mod tests {
             }
             _ => (f64::NAN, f64::NAN),
         }
+    }
+
+    #[test]
+    fn subselect_node_drag_moves_one_anchor_in_one_undo_step() {
+        let mut editor = Editor::untitled();
+        let id = rect_at(&mut editor, 10.0, 10.0);
+        editor.set_selection(vec![id]);
+        let undo_before = editor.session.undo_len();
+
+        // The rect's first anchor sits at (10, 10): grab it, move by
+        // +20, -5.
+        let (contour, point) = editor
+            .node_at(geom::Point::new(10.0, 10.0), 5.0)
+            .expect("anchor hit");
+        editor
+            .begin_node_drag(id, contour, point, geom::Point::new(10.0, 10.0))
+            .unwrap();
+        editor.node_drag_to(geom::Point::new(25.0, 8.0));
+        editor.node_drag_to(geom::Point::new(30.0, 5.0));
+        editor.end_node_drag().unwrap();
+
+        assert_eq!(first_anchor(&editor, id), (30.0, 5.0));
+        assert_eq!(editor.session.undo_len(), undo_before + 1, "one undo step");
+        editor.undo().unwrap();
+        assert_eq!(first_anchor(&editor, id), (10.0, 10.0));
+    }
+
+    #[test]
+    fn node_at_misses_far_anchors_and_non_paths() {
+        let mut editor = Editor::untitled();
+        let id = rect_at(&mut editor, 10.0, 10.0);
+        editor.set_selection(vec![id]);
+        assert!(
+            editor
+                .node_at(geom::Point::new(500.0, 500.0), 5.0)
+                .is_none()
+        );
+        // A text object (or any non-path) has no nodes.
+        editor
+            .apply(
+                "text.createText",
+                serde_json::json!({
+                    "page": 0, "layer": 0, "cell": 0,
+                    "x": 0.0, "y": 0.0, "width": 50.0, "height": 20.0,
+                    "text": "hi", "name": null,
+                }),
+            )
+            .unwrap();
+        let text = editor.current_cell().unwrap().elements[1];
+        editor.set_selection(vec![text]);
+        assert!(editor.node_at(geom::Point::new(0.0, 0.0), 50.0).is_none());
+    }
+
+    #[test]
+    fn a_click_sized_node_drag_commits_nothing() {
+        let mut editor = Editor::untitled();
+        let id = rect_at(&mut editor, 10.0, 10.0);
+        editor.set_selection(vec![id]);
+        let undo_before = editor.session.undo_len();
+        editor
+            .begin_node_drag(id, 0, 0, geom::Point::new(10.0, 10.0))
+            .unwrap();
+        editor.end_node_drag().unwrap();
+        assert_eq!(editor.session.undo_len(), undo_before, "no step committed");
     }
 
     #[test]

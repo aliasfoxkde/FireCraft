@@ -473,6 +473,34 @@ impl Shell {
             frame
         };
 
+        // Subselect over exactly one path: draw the anchors as filled
+        // squares — the node-editing surface the drag grabs.
+        if self.editor.tool == Tool::Subselect {
+            let ids = self.editor.live_selection();
+            if let [only] = ids.as_slice() {
+                let document = self.editor.document();
+                if let Some(data) = document.registry.get(*only)
+                    && let ObjectData::Path(path) = data
+                {
+                    let shift = egui::Vec2::new(rect.left(), rect.top());
+                    let painter = ui.painter();
+                    for contour in &path.contours {
+                        for point in &contour.points {
+                            let screen = self.view.to_screen(point.anchor) + shift;
+                            let square = Rect::from_center_size(screen, Vec2::splat(6.0));
+                            painter.rect_filled(square, 1.0, Color32::from_rgb(0x2f, 0x5d, 0x8a));
+                            painter.rect_stroke(
+                                square,
+                                0.0,
+                                (1.0, Color32::WHITE),
+                                egui::StrokeKind::Outside,
+                            );
+                        }
+                    }
+                }
+            }
+        }
+
         // Rubber band for a creation drag. A move drag is excluded:
         // the band belongs to shape creation, and painting it during a
         // move made every object drag look like a marquee selection.
@@ -536,8 +564,20 @@ impl Shell {
                                     // then moves the selection live —
                                     // or (Alt) clones it, CS6 pointer
                                     // semantics. Empty canvas starts a
-                                    // (no-op) rubber band.
-                                    if let Some(hit) = self.editor.hit_at(world) {
+                                    // (no-op) rubber band. Subselect
+                                    // over one selected path grabs the
+                                    // anchor under the press instead:
+                                    // the node drag outranks the move.
+                                    if self.editor.tool == Tool::Subselect
+                                        && let Some(id) = self.editor.selected_live()
+                                        && let Some((contour, point)) = self
+                                            .editor
+                                            .node_at(world, f64::from(6.0 / self.view.zoom))
+                                        && let Err(error) =
+                                            self.editor.begin_node_drag(id, contour, point, world)
+                                    {
+                                        self.status = format!("reshape failed: {error}");
+                                    } else if let Some(hit) = self.editor.hit_at(world) {
                                         let ids = if self.editor.selection_set.contains(&hit) {
                                             self.editor.live_selection()
                                         } else {
@@ -596,6 +636,8 @@ impl Shell {
                     self.editor.drag_guide_to(world);
                 } else if self.editor.transform_drag.is_some() {
                     self.editor.transform_drag_to(world);
+                } else if self.editor.node_drag.is_some() {
+                    self.editor.node_drag_to(world);
                 } else if self.editor.pixel_selection.is_some() {
                     if let Err(error) = self.editor.extend_pixel_selection(world) {
                         self.status = format!("select failed: {error}");
@@ -630,6 +672,9 @@ impl Shell {
             }
             if let Err(error) = self.editor.end_transform_drag() {
                 self.status = format!("transform failed: {error}");
+            }
+            if let Err(error) = self.editor.end_node_drag() {
+                self.status = format!("reshape failed: {error}");
             }
             if let Err(error) = self.editor.end_drag() {
                 self.status = format!("create failed: {error}");
