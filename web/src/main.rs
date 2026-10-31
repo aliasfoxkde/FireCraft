@@ -175,7 +175,11 @@ pub async fn start() -> Result<(), wasm_bindgen::JsValue> {
         .start(
             canvas,
             eframe::WebOptions::default(),
-            Box::new(|_cc| {
+            Box::new(|cc| {
+                // The web build has no `Shell::new`, so the CS6 theme
+                // has to be applied here — without it the deployed app
+                // rendered egui's default light chrome.
+                app::shell::apply_cs6_theme(&cc.egui_ctx);
                 Ok(Box::new(app::shell::Shell::with_platform(
                     app::editor::Editor::untitled(),
                     Box::new(platform::WebFs),
