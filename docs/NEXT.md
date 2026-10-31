@@ -174,6 +174,93 @@ accesskit integration.
 14.1 → 14.2 → 14.5 (ratchet) → 15.1/15.3 → 16.1/16.3 (cheap wins) →
 16.2/16.4 → 18.x → 14.3/14.4 → 17.2 → 17.1/17.3.
 
+## The daily-driver expansion (2026-10-31)
+
+A judge-panel audit against Fireworks CS6 and Photopea (screenshots in
+`/var/tmp/fc-audit`, method: headless Playwright interaction + vision
+judges) found the web build far below the bar, and the root cause is
+structural: **the engine has 243 registered commands but the shell
+binds only 91 (37%)** — 152 commands are engine-complete with zero UI,
+and 181 of 295 menu items render `Action::Inert`. The owner's bar is a
+daily-driver Fireworks CS6 replacement; reaching it is a
+reachability-and-canvas program, not a repair program.
+
+Round-1 fixes landed 2026-10-31 (this branch): web CS6 theme gap
+(`apply_cs6_theme` was desktop-only — the deployed build rendered
+egui's default light chrome), rubber band no longer paints during
+object moves, selection bounding box + CS6 handles, mid-gesture
+repaint, page drop shadow, image import places into a drawing instead
+of replacing it, fill/stroke swatch panel bound to
+`object.setFill`/`setStroke`.
+
+### Phase 19 — Canvas competence (P0, feeds usability directly)
+
+- **19.1 Transform handles** (L): corner/edge handles scale/rotate/skew
+  live with preview over `object.transform`/`scale`/`skew`; Numeric
+  Transform dialog. Accept: handle drag is one undo step with live
+  preview.
+- **19.2 Path node editing** (M–L): Subselect draws anchors/handles;
+  drag via `path.movePoints`; double-click adds/deletes. Accept: node
+  drag round-trips save/open.
+- **19.3 Gradient fill editor** (M): stops + on-canvas handles over
+  `path.setFill`/`path.setFillVector`. Accept: linear gradient drawn,
+  edited, survives save.
+- **19.4 Command palette** (S): Ctrl+P over `engine::catalog::ids()`
+  with payload templates — makes all 152 unreachable commands
+  executable immediately. Accept: 100% registry coverage, testable like
+  `the_call_table_covers_the_catalog`.
+- **19.5 Guides + grid + snapping** (M): `page.addGuide`, drag-out
+  guides, snap-to on object drag.
+- **19.6 Inert-menu burn-down** (L, multi-session): family batches in
+  GAPS order (selection/mask → page/frame → symbol/animation → text);
+  every wired item proven by a shell test through the journal.
+
+### Phase 20 — Daily-driver features (P1)
+
+- **20.1 In-canvas text editing** (L): egui TextEdit overlay at the
+  text frame; budget kittest focus-regression tests.
+- **20.2 Optimize panel** (M): palette/bitrate over `ExportOptions` +
+  live preview (export preview exists).
+- **20.3 Animation timeline** (M): frames strip, per-frame timing,
+  onion skinning, `symbol.tween`.
+- **20.4 Mask stack UI** (M): add/remove/mode/link/move.
+- **20.5 Multi-document tabs + Window-menu panel toggles** (M).
+- **20.6 History panel click-to-rewind** (S): journal replay to seq N.
+- **20.7 Slice/hotspot behavior editing + HTML preview** (M).
+
+### Phase 21 — Modern differentiators (P2)
+
+- **21.1 Autosave + crash recovery** (M): periodic journal snapshot to
+  a sidecar; restore prompt on open.
+- **21.2 Zoom-aware/HiDPI rendering** (L): re-render vectors at
+  `zoom × pixels_per_point`; extend `compose::cache::EffectCache` to
+  view transforms. The single-texture blit is blurry above 100%.
+- **21.3 Command palette v2** (S after 19.4): fuzzy, recents,
+  save-steps-as-command.
+- **21.4 Preferences dialog + `pixels_per_point`** (S), persisting via
+  platform storage (decision 0067 follow-up).
+- **21.5 accesskit** desktop + web re-audit (0067 records the web
+  blocker).
+- **21.6 In-app scripting** (S): Commands menu → run `.jsf`/`.fwsteps`.
+
+### Quality gates for UI work (new)
+
+1. **egui_kittest snapshots** per panel/toolbar — theme and WCAG
+   regressions become mechanical.
+2. **Reachability gate** in xtask: the set difference
+   `catalog::ids()` − UI-bound commands only shrinks (mirror of the
+   call-table test). 63% unreachable with no gate means drift.
+3. **Inert-drift test**: every non-Help/Command `Action::Inert` item
+   carries a tracking ticket id in its doc comment.
+4. **Wasm budget**: keep `WASM_SIZE_CEILING` honest — the 12.78 MB
+   current size leaves ~1.2 MB headroom against the 14 MB ceiling;
+   panel work must fit or re-pin with evidence.
+5. **Render-stamp migration** when 21.2 lands: the undo/redo/journal
+   tuple-stamp misses view-dependent re-renders — move to a dirty
+   counter in `Editor`.
+6. **shell.rs split**: 5.7k lines; split panels into modules during
+   19.1, before more canvases accrete.
+
 ## What NOT to do
 
 - Do not blanket-enable pedantic clippy (1,825 hits, mostly raster

@@ -29,7 +29,12 @@ thread_local! {
 /// The CS6 chrome look: near-black charcoal panels, square corners,
 /// small type. Applied once at startup; `eww`-era Fireworks was dark
 /// graphite against a mid-gray canvas.
-fn apply_cs6_theme(ctx: &egui::Context) {
+///
+/// Public because the web entry point builds the shell through
+/// [`Shell::with_platform`] (which has no creation context), and a
+/// web build that skipped this rendered egui's default light theme —
+/// the single loudest difference from the CS6 look.
+pub fn apply_cs6_theme(ctx: &egui::Context) {
     ctx.all_styles_mut(|style| {
         let visuals = &mut style.visuals;
         visuals.dark_mode = true;
@@ -1388,6 +1393,11 @@ impl Shell {
     /// `io::open`, any other supported raster opens as a document
     /// sized to the image. No registry side door.
     ///
+    /// A raster that arrives while the document already holds objects
+    /// is *placed* into it (CS6's File → Import) rather than replacing
+    /// it — the browser's one file door must add to the artwork the
+    /// user is making, not silently swap the canvas for the image.
+    ///
     /// # Errors
     /// Whatever both readers refuse; the current document is kept.
     pub fn load_document_bytes(&mut self, bytes: &[u8]) -> Result<(), engine::EngineError> {
@@ -1400,13 +1410,95 @@ impl Shell {
                 Ok(())
             }
             Err(document_error) => {
-                self.open_raster_document(bytes, "imported image")
-                    .map_err(|_| document_error)?;
-                self.status = "opened image".to_owned();
-                self.view = View::default();
+                if self.document_has_content() {
+                    self.place_raster_into_document(bytes, "imported image")
+                        .map_err(|_| document_error)?;
+                    self.status = "placed image in the document".to_owned();
+                } else {
+                    self.open_raster_document(bytes, "imported image")
+                        .map_err(|_| document_error)?;
+                    self.raster = None;
+                    self.status = "opened image".to_owned();
+                    self.view = View::default();
+                }
                 Ok(())
             }
         }
+    }
+
+    /// Whether the current document holds anything — the test that
+    /// separates "open this file" from "place this file".
+    fn document_has_content(&self) -> bool {
+        self.editor
+            .current_cell()
+            .is_some_and(|cell| !cell.elements.is_empty())
+    }
+
+    /// Places a raster into the current document as a new image
+    /// object (CS6's File → Import): at its natural size, centred on
+    /// the page canvas, scaled down to fit when it is larger than the
+    /// canvas.
+    fn place_raster_into_document(&mut self, bytes: &[u8], name: &str) -> Result<(), String> {
+        let decoded = io::raster::decode(bytes).map_err(|error| error.to_string())?;
+        let canvas = self
+            .editor
+            .document()
+            .pages
+            .get(self.editor.page)
+            .map(|page| {
+                geom::Rect::new(
+                    page.info.canvas.x,
+                    page.info.canvas.y,
+                    page.info.canvas.x + page.info.canvas.width,
+                    page.info.canvas.y + page.info.canvas.height,
+                )
+            })
+            .ok_or_else(|| "no page to place into".to_owned())?;
+        let image = geom::Rect::new(
+            0.0,
+            0.0,
+            f64::from(decoded.width),
+            f64::from(decoded.height),
+        );
+        // The placement rectangle: the canvas when the image has to be
+        // scaled, otherwise a degenerate rectangle at the centred
+        // top-left corner (the unscaled placement law).
+        let (bounds, maintain_aspect_ratio) =
+            if image.width() > canvas.width() || image.height() > canvas.height() {
+                (
+                    serde_json::json!({
+                        "left": canvas.x0,
+                        "top": canvas.y0,
+                        "right": canvas.x1,
+                        "bottom": canvas.y1,
+                    }),
+                    true,
+                )
+            } else {
+                (
+                    serde_json::json!({
+                        "left": canvas.x0 + (canvas.width() - image.width()) / 2.0,
+                        "top": canvas.y0 + (canvas.height() - image.height()) / 2.0,
+                        "right": canvas.x0 + (canvas.width() - image.width()) / 2.0,
+                        "bottom": canvas.y0 + (canvas.height() - image.height()) / 2.0,
+                    }),
+                    true,
+                )
+            };
+        let payload = serde_json::json!({
+            "width": decoded.width,
+            "height": decoded.height,
+            "pixels": base64::engine::general_purpose::STANDARD.encode(&decoded.rgba),
+            "bounds": bounds,
+            "maintain_aspect_ratio": maintain_aspect_ratio,
+            "page": self.editor.page,
+            "layer": self.editor.active_layer(),
+            "cell": self.editor.frame,
+            "name": name,
+        });
+        self.editor
+            .apply("bitmap.importFile", payload)
+            .map_err(|error| error.to_string())
     }
 
     /// A change stamp over the session: any apply/undo/redo moves at
@@ -3206,9 +3298,83 @@ impl Shell {
         }
     }
 
+    /// The fill/stroke palette: ABGR raws per the node dictionary's
+    /// layout, shared by the swatch panel and its tests.
+    pub(crate) const FILL_STROKE_PALETTE: [(&str, i64); 12] = [
+        ("black", 0xFF00_0000),
+        ("white", 0xFFFF_FFFF),
+        ("red", 0xFF00_00FF),
+        ("orange", 0xFF00_A5FF),
+        ("yellow", 0xFF00_FFFF),
+        ("green", 0xFF00_8000),
+        ("cyan", 0xFFFF_FF00),
+        ("blue", 0xFFFF_0000),
+        ("purple", 0xFF80_0080),
+        ("gray", 0xFF80_8080),
+        ("dark gray", 0xFF40_4040),
+        ("none (transparent)", 0x0000_0000),
+    ];
+
+    /// The fill/stroke engine command for a swatch channel.
+    pub(crate) fn paint_command(channel: &str) -> &'static str {
+        if channel == "fill" {
+            "object.setFill"
+        } else {
+            "object.setStroke"
+        }
+    }
+
+    /// Fill/stroke swatches for the selection — the CS6 Properties
+    /// essentials. The engine's `object.setFill`/`object.setStroke` were
+    /// registered with no UI bound to them, leaving every created shape
+    /// stuck opaque black.
+    fn fill_stroke_panel(&mut self, ui: &mut egui::Ui) {
+        ui.heading("Fill & Stroke");
+        let ids = self.editor.live_selection();
+        if ids.is_empty() {
+            ui.label("(select a vector object to edit its colors)");
+            return;
+        }
+        for (channel, label) in [("fill", "Fill"), ("stroke", "Stroke")] {
+            ui.horizontal(|ui| {
+                ui.label(label);
+                for (name, color_raw) in Self::FILL_STROKE_PALETTE {
+                    let raw = color_raw as u32;
+                    let swatch = Color32::from_rgba_unmultiplied(
+                        (raw & 0xFF) as u8,
+                        ((raw >> 8) & 0xFF) as u8,
+                        ((raw >> 16) & 0xFF) as u8,
+                        ((raw >> 24) & 0xFF) as u8,
+                    );
+                    let size = egui::Vec2::splat(16.0);
+                    let (response, painter) = ui.allocate_painter(size, egui::Sense::click());
+                    let square = response.rect;
+                    painter.rect_filled(square, 2.0, swatch);
+                    painter.rect_stroke(
+                        square,
+                        2.0,
+                        (1.0, Color32::from_rgb(0x77, 0x77, 0x77)),
+                        egui::StrokeKind::Outside,
+                    );
+                    if response.clicked() {
+                        for id in &ids {
+                            self.run_command(
+                                Self::paint_command(channel),
+                                serde_json::json!({ "id": id, "color_raw": color_raw }),
+                            );
+                        }
+                        self.status = format!("{channel} → {name}");
+                    }
+                }
+            });
+        }
+    }
+
     /// Right panel: the align/distribute group, then properties of the
     /// selection.
     fn properties_panel(&mut self, ui: &mut egui::Ui) {
+        self.fill_stroke_panel(ui);
+        ui.separator();
         if matches!(
             self.editor.tool,
             Tool::Paintbrush
@@ -4282,6 +4448,11 @@ impl Shell {
             Pos2::new(rect.left() + top_left.x, rect.top() + top_left.y),
             Vec2::new(size.x.max(1.0), size.y.max(1.0)),
         );
+        // CS6 pasteboard: the page floats on gray with a soft shadow,
+        // so the document edge is visible while panning.
+        let shadow = Rect::from_min_size(image_rect.min + Vec2::new(4.0, 6.0), image_rect.size());
+        ui.painter()
+            .rect_filled(shadow, 6.0, Color32::from_rgb(16, 16, 16));
         ui.painter().image(
             texture.id(),
             image_rect,
@@ -4388,8 +4559,66 @@ impl Shell {
             }
         }
 
-        // Rubber band for a creation drag.
-        if let Some(drag) = &self.editor.drag {
+        // Selection affordances: CS6 puts a bounding box with corner
+        // and edge handles around the selected object. Without it a
+        // moved shape has no anchor, and the drag reads as a marquee
+        // selection rather than a move.
+        {
+            let ids = self.editor.live_selection();
+            if !ids.is_empty() {
+                let document = self.editor.document();
+                let shift = egui::Vec2::new(rect.left(), rect.top());
+                let painter = ui.painter();
+                for id in ids {
+                    let Some(data) = document.registry.get(id) else {
+                        continue;
+                    };
+                    let bounds = crate::editor::object_bounds(document, data, 0);
+                    if bounds.width() <= 0.0 && bounds.height() <= 0.0 {
+                        continue;
+                    }
+                    let top_left =
+                        self.view.to_screen(geom::Point::new(bounds.x0, bounds.y0)) + shift;
+                    let bottom_right =
+                        self.view.to_screen(geom::Point::new(bounds.x1, bounds.y1)) + shift;
+                    let frame = Rect::from_two_pos(top_left, bottom_right);
+                    painter.rect_stroke(
+                        frame,
+                        0.0,
+                        (1.0, Color32::from_rgb(120, 180, 255)),
+                        egui::StrokeKind::Outside,
+                    );
+                    let middle = frame.center();
+                    let handles = [
+                        frame.left_top(),
+                        frame.right_top(),
+                        frame.right_bottom(),
+                        frame.left_bottom(),
+                        Pos2::new(middle.x, frame.top()),
+                        Pos2::new(middle.x, frame.bottom()),
+                        Pos2::new(frame.left(), middle.y),
+                        Pos2::new(frame.right(), middle.y),
+                    ];
+                    for handle in handles {
+                        let square = Rect::from_center_size(handle, Vec2::splat(7.0));
+                        painter.rect_filled(square, 0.0, Color32::WHITE);
+                        painter.rect_stroke(
+                            square,
+                            0.0,
+                            (1.0, Color32::BLACK),
+                            egui::StrokeKind::Outside,
+                        );
+                    }
+                }
+            }
+        }
+
+        // Rubber band for a creation drag. A move drag is excluded:
+        // the band belongs to shape creation, and painting it during a
+        // move made every object drag look like a marquee selection.
+        if let Some(drag) = &self.editor.drag
+            && drag.moving.is_none()
+        {
             let a = self.view.to_screen(drag.start);
             let b = self.view.to_screen(drag.current);
             let band = Rect::from_two_pos(
@@ -4514,6 +4743,11 @@ impl Shell {
                     // Hand tool, space-drag pan, or middle-button pan.
                     self.view.pan_by(response.drag_delta());
                 }
+                // Any gesture that mutated state above needs the next
+                // frame now — egui otherwise sleeps between input
+                // events, and a web drag only became visible on
+                // release.
+                ui.ctx().request_repaint();
             }
         }
         if response.drag_stopped() {
@@ -5481,5 +5715,85 @@ mod tests {
         let mut shell = gui_shell(Editor::untitled());
         let error = shell.open_raster_document(b"not an image at all", "x.bin");
         assert!(error.is_err(), "the decode is refused");
+    }
+
+    /// Loading a raster into an empty document opens it as its own
+    /// document (the Open door); loading into a document that already
+    /// holds objects *places* it (the Import door) — the browser's one
+    /// file input must not silently swap out the user's artwork.
+    #[test]
+    fn load_into_a_drawing_places_the_image_instead_of_replacing_it() {
+        // Empty document: the raster becomes the document.
+        let mut shell = gui_shell(Editor::untitled());
+        shell
+            .load_document_bytes(&red_png())
+            .expect("open into an empty document");
+        assert_eq!(
+            shell.editor.document().pages[0].info.canvas.width,
+            4.0,
+            "the raster opened as its own document"
+        );
+
+        // Document with a drawn rect: the raster is placed into it.
+        let mut shell = gui_shell(gui_editor());
+        let before = shell.editor.current_cell().unwrap().elements.len();
+        shell
+            .load_document_bytes(&red_png())
+            .expect("place into a drawing");
+        let cell = shell.editor.current_cell().unwrap();
+        assert_eq!(
+            cell.elements.len(),
+            before + 1,
+            "the placed image joined the existing objects"
+        );
+        let placed = cell.elements[cell.elements.len() - 1];
+        let data = shell.editor.document().registry.get(placed);
+        assert!(
+            matches!(data, Some(ObjectData::Image(_))),
+            "the new object is the imported image"
+        );
+    }
+
+    /// `document_has_content` separates the two doors: empty page
+    /// (fresh editor) is content-free, a drag-created rect is not.
+    #[test]
+    fn document_has_content_follows_the_cell() {
+        assert!(!gui_shell(Editor::untitled()).document_has_content());
+        assert!(gui_shell(gui_editor()).document_has_content());
+    }
+
+    /// The palette commands route to the right engine verbs, and the
+    /// swatch raws decode in the ABGR layout the engine stores.
+    #[test]
+    fn fill_stroke_palette_routes_to_engine_commands() {
+        assert_eq!(Shell::paint_command("fill"), "object.setFill");
+        assert_eq!(Shell::paint_command("stroke"), "object.setStroke");
+        // The black swatch is opaque black in ABGR; transparent is all
+        // zero.
+        let black = Shell::FILL_STROKE_PALETTE
+            .iter()
+            .find(|(n, _)| *n == "black");
+        assert_eq!(black.map(|(_, raw)| *raw), Some(0xFF00_0000));
+        let clear = Shell::FILL_STROKE_PALETTE
+            .iter()
+            .find(|(n, _)| *n == "none (transparent)");
+        assert_eq!(clear.map(|(_, raw)| *raw), Some(0));
+        // End-to-end: applying the fill command through the editor
+        // changes the created rect's fill_raw.
+        let mut editor = gui_editor();
+        let id = editor.current_cell().unwrap().elements[0];
+        editor
+            .apply(
+                "object.setFill",
+                serde_json::json!({ "id": id, "color_raw": 0xFFFF_0000i64 }),
+            )
+            .expect("the fill applies");
+        match editor.document().registry.get(id) {
+            Some(ObjectData::Path(path)) => {
+                let paint = path.paint.as_ref().expect("the paint style");
+                assert_eq!(paint.fill_raw, 0xFFFF_0000);
+            }
+            other => panic!("expected a path, got {other:?}"),
+        }
     }
 }
