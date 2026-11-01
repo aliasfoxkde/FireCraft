@@ -288,44 +288,83 @@ impl Shell {
             }
         }
 
-        // Raster cache: re-render only when the session changed.
+        // Raster cache: re-render when the session changed or when the
+        // zoom moved off the cached render scale. The raster renders
+        // at a multiple of the document resolution so the view blits
+        // it near 1:1 instead of linear-filtering a 1× raster (the
+        // always-1× blur). Scale clamps to a 16 MPix budget so deep
+        // zoom on a large page stays sane.
+        let page = self
+            .editor
+            .document()
+            .pages
+            .get(self.editor.page)
+            .map(|p| (p.info.canvas.width.round(), p.info.canvas.height.round()));
+        let desired_scale = {
+            let (pw, ph) = page.unwrap_or((1.0, 1.0));
+            let zoom = f64::from(self.view.zoom);
+            let budget = 16.0 * 1024.0 * 1024.0;
+            let max_scale = (budget / (pw * ph).max(1.0)).sqrt();
+            zoom.min(max_scale.max(1.0))
+        };
+        // Between buckets (within 2× of the cached scale) the existing
+        // texture stays crisp enough; a crossing re-renders.
+        let stale_scale =
+            (desired_scale / self.raster_scale) > 2.0 || (self.raster_scale / desired_scale) > 2.0;
         let stamp = self.stamp();
         let texture = match &self.raster {
-            Some((texture, made)) if *made == stamp => texture.clone(),
-            _ => match compose::render(self.editor.document(), self.editor.page, self.editor.frame)
-            {
-                Ok(rendered) => {
-                    let image = ColorImage::from_rgba_premultiplied(
-                        [rendered.width as usize, rendered.height as usize],
-                        &rendered.pixels,
-                    );
-                    let texture = ui.ctx().load_texture("page", image, TextureOptions::LINEAR);
-                    self.raster = Some((texture.clone(), stamp));
-                    texture
+            Some((texture, made)) if *made == stamp && !stale_scale => texture.clone(),
+            _ => {
+                let result = if (desired_scale - 1.0).abs() < 0.05 {
+                    compose::render(self.editor.document(), self.editor.page, self.editor.frame)
+                } else {
+                    compose::render_scaled(
+                        self.editor.document(),
+                        self.editor.page,
+                        self.editor.frame,
+                        desired_scale,
+                    )
+                };
+                match result {
+                    Ok(rendered) => {
+                        let image = ColorImage::from_rgba_premultiplied(
+                            [rendered.width as usize, rendered.height as usize],
+                            &rendered.pixels,
+                        );
+                        let texture = ui.ctx().load_texture("page", image, TextureOptions::LINEAR);
+                        self.raster = Some((texture.clone(), stamp));
+                        self.raster_scale = if (desired_scale - 1.0).abs() < 0.05 {
+                            1.0
+                        } else {
+                            desired_scale
+                        };
+                        texture
+                    }
+                    Err(error) => {
+                        ui.painter()
+                            .rect_filled(rect, 0.0, Color32::from_rgb(24, 24, 24));
+                        ui.painter().text(
+                            rect.center(),
+                            egui::Align2::CENTER_CENTER,
+                            format!("cannot compose: {error}"),
+                            egui::FontId::proportional(14.0),
+                            Color32::from_rgb(200, 120, 120),
+                        );
+                        return;
+                    }
                 }
-                Err(error) => {
-                    ui.painter()
-                        .rect_filled(rect, 0.0, Color32::from_rgb(24, 24, 24));
-                    ui.painter().text(
-                        rect.center(),
-                        egui::Align2::CENTER_CENTER,
-                        format!("cannot compose: {error}"),
-                        egui::FontId::proportional(14.0),
-                        Color32::from_rgb(200, 120, 120),
-                    );
-                    return;
-                }
-            },
+            }
         };
 
         // Checker-dark backdrop, then the page texture through the view.
         ui.painter()
             .rect_filled(rect, 0.0, Color32::from_rgb(32, 32, 32));
+        // The raster may have been rendered at `raster_scale`, so its
+        // world size is texture_size / scale, not texture_size.
+        let world_w = texture.size()[0] as f64 / self.raster_scale;
+        let world_h = texture.size()[1] as f64 / self.raster_scale;
         let top_left = self.view.to_screen(geom::Point::new(0.0, 0.0));
-        let size = self.view.vec_to_screen(geom::Vec2::new(
-            texture.size()[0] as f64,
-            texture.size()[1] as f64,
-        ));
+        let size = self.view.vec_to_screen(geom::Vec2::new(world_w, world_h));
         let image_rect = Rect::from_min_size(
             Pos2::new(rect.left() + top_left.x, rect.top() + top_left.y),
             Vec2::new(size.x.max(1.0), size.y.max(1.0)),

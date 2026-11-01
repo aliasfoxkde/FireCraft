@@ -23,14 +23,14 @@ mod effects;
 mod render;
 
 pub use cache::EffectCache;
-pub use convert::{abgr, blend_mode, blend_value};
+pub use convert::{abgr, abgr_pack, blend_mode, blend_value};
 pub use effects::{FILTER_CATALOG, KernelOp, Plan, RECOGNIZED_GUIDS, apply_stack, plan};
 // The kernel surface type, re-exported so consumers of the effect
 // interpreter (the engine's bake commands) need no second edge.
 pub use filters::Surface;
 pub use render::{
-    ComposeError, Render, matte_premultiplied, render, render_subset, render_transparent,
-    render_with_cache, straight_alpha,
+    ComposeError, Render, matte_premultiplied, render, render_scaled, render_subset,
+    render_transparent, render_with_cache, straight_alpha,
 };
 // The mix vocabulary `blend_mode` speaks, re-exported so export
 // surfaces can match on it without a second vello dependency edge.

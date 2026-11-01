@@ -18,6 +18,17 @@ pub fn abgr(raw: i64) -> Color {
     )
 }
 
+/// The inverse of [`abgr`]: packs an RGBA8 color into the Fireworks
+/// `FCLi`/`BCLi` ABGR layout the vector paint commands
+/// (`object.setFill`, `object.setStroke`, gradient stops) carry.
+/// UI code must encode picker colors through this — never by
+/// hand-rolling a channel shift — so the decode contract has a single
+/// pack side.
+#[must_use]
+pub fn abgr_pack(r: u8, g: u8, b: u8, a: u8) -> i64 {
+    i64::from((u32::from(a) << 24) | (u32::from(b) << 16) | (u32::from(g) << 8) | u32::from(r))
+}
+
 /// Maps a Fireworks `BLDi` value onto the rasterizer's mix modes. The
 /// value table is the node dictionary's; 0 (and any value absent from
 /// the dictionary) is normal painting. Documented values without a
@@ -123,7 +134,7 @@ fn emit_segment(path: &mut BezPath, from: &PathPoint, to: &PathPoint) {
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used, clippy::expect_used)]
-    use super::{abgr, blend_mode, to_bezpath};
+    use super::{abgr, abgr_pack, blend_mode, to_bezpath};
     use doc::{Contour, PathPoint};
     use geom::Point;
     use vello_cpu::kurbo::PathEl;
@@ -155,6 +166,32 @@ mod tests {
         assert_eq!((g * 255.0).round() as u8, 128);
         assert_eq!((b * 255.0).round() as u8, 64);
         assert_eq!((a * 255.0).round() as u8, 32);
+    }
+
+    #[test]
+    fn abgr_pack_round_trips_through_abgr() {
+        for (r, g, b, a) in [
+            (255u8, 255u8, 255u8, 255u8),
+            (255, 0, 0, 255),
+            (0, 128, 64, 32),
+            (0, 0, 0, 0),
+        ] {
+            let raw = abgr_pack(r, g, b, a);
+            let decoded = abgr(raw);
+            let [dr, dg, db, da] = decoded.components;
+            assert_eq!((dr * 255.0).round() as u8, r);
+            assert_eq!((dg * 255.0).round() as u8, g);
+            assert_eq!((db * 255.0).round() as u8, b);
+            assert_eq!((da * 255.0).round() as u8, a);
+        }
+    }
+
+    #[test]
+    fn abgr_pack_lays_channels_out_as_abgr() {
+        // The pack side must mirror the dictionary layout the decode
+        // reads: low byte R, then G, then B, then A.
+        assert_eq!(abgr_pack(0x11, 0x22, 0x33, 0x44), 0x44_33_22_11);
+        assert_eq!(abgr_pack(255, 0, 0, 255), 0xFF_00_00_FF);
     }
 
     #[test]

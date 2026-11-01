@@ -233,6 +233,71 @@ pub fn render_subset(
     finish(ctx, resources, width, height)
 }
 
+/// Composes one page at `scale`× resolution for on-screen viewing.
+/// Identical to [`render`] except the raster extent is the canvas
+/// extent multiplied by `scale` and every paint runs under a matching
+/// scale transform, so a host can blit the result 1:1 at zoom `scale`
+/// without resampling blur. Stroke widths, text sizes and effects
+/// scale with the geometry, matching what a zoomed view must show.
+/// Throws [`ComposeError::CanvasTooLarge`] when the scaled extent
+/// leaves the u16 raster range — the host should cap its scale.
+pub fn render_scaled(
+    document: &Document,
+    page: usize,
+    frame: usize,
+    scale: f64,
+) -> Result<Render, ComposeError> {
+    let (base_w, base_h) = canvas_extent(document, page)?;
+    let scale = if scale.is_finite() && scale > 0.0 {
+        scale
+    } else {
+        1.0
+    };
+    let width = (base_w as f64 * scale).round();
+    let height = (base_h as f64 * scale).round();
+    if width < 1.0 || height < 1.0 {
+        return Err(ComposeError::CanvasEmpty);
+    }
+    if width > f64::from(u16::MAX) || height > f64::from(u16::MAX) {
+        return Err(ComposeError::CanvasTooLarge {
+            width: base_w as f64 * scale,
+            height: base_h as f64 * scale,
+        });
+    }
+    let (width, height) = (width as u16, height as u16);
+    let mut ctx = RenderContext::new(width, height);
+    let resources = Resources::new();
+    let affine = Affine::scale(scale);
+    ctx.set_transform(affine);
+    // Same matte pass as `render_inner`, but the rect spans the
+    // scaled extent in world units (the transform maps it up).
+    let raw = document.pages[page].info.canvas.background_raw as u32;
+    ctx.set_paint(Brush::Solid(AlphaColor::from_rgba8(
+        (raw & 0xFF) as u8,
+        ((raw >> 8) & 0xFF) as u8,
+        ((raw >> 16) & 0xFF) as u8,
+        255,
+    )));
+    ctx.fill_rect(&Rect::new(0.0, 0.0, f64::from(base_w), f64::from(base_h)));
+    let mut text_engine = None;
+    let page_layers = &document.pages[page].layers.layers;
+    walk_layers(
+        page_layers,
+        &mut Walk {
+            document,
+            frame,
+            canvas: (width, height),
+            cache: &mut EffectCache::new(),
+            text_engine: &mut text_engine,
+            ctx: &mut ctx,
+            stack: &[],
+        },
+        true,
+    )?;
+    ctx.reset_transform();
+    finish(ctx, resources, width, height)
+}
+
 /// Rounds and range-checks a page's canvas to the rasterizer's pixel
 /// extent — the shared preamble of every render entry point.
 fn canvas_extent(document: &Document, page: usize) -> Result<(u16, u16), ComposeError> {

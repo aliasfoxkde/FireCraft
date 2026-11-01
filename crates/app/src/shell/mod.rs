@@ -54,6 +54,12 @@ pub struct Shell {
     pub view: View,
     /// Cached page raster + the document stamp it was made from.
     raster: Option<(TextureHandle, (usize, usize, usize))>,
+    /// Zoom the cached raster was rendered at. The stamp alone doesn't
+    /// cover view changes; the raster re-renders when zoom moves off
+    /// the cached scale by more than ~2× (crisp enough everywhere in
+    /// between, and bounded — a 4K page at the 64× ceiling would be a
+    /// 262k-pixel-wide raster, so the effective scale clamps to 4×).
+    raster_scale: f64,
     /// Injected platform services.
     fs: Box<dyn engine::platform::FileSystem>,
     dialogs: Box<dyn engine::platform::Dialogs>,
@@ -111,6 +117,7 @@ impl Shell {
             editor,
             view: View::default(),
             raster: None,
+            raster_scale: 1.0,
             fs,
             dialogs,
             status: "ready".to_owned(),
@@ -154,6 +161,7 @@ impl Shell {
         match Editor::open(bytes) {
             Ok(editor) => {
                 self.raster = None;
+                self.raster_scale = 1.0;
                 self.editor = editor;
                 self.view = View::default();
                 self.status = "opened document".to_owned();
@@ -168,6 +176,7 @@ impl Shell {
                     self.open_raster_document(bytes, "imported image")
                         .map_err(|_| document_error)?;
                     self.raster = None;
+                    self.raster_scale = 1.0;
                     self.status = "opened image".to_owned();
                     self.view = View::default();
                 }
@@ -223,6 +232,7 @@ impl Shell {
             Ok(editor) => {
                 self.status = format!("opened {path}");
                 self.raster = None;
+                self.raster_scale = 1.0;
                 self.editor = editor;
                 self.view = View::default();
                 self.doc_name = std::path::Path::new(&path)
@@ -240,6 +250,7 @@ impl Shell {
                     Ok(()) => {
                         self.status = format!("opened {path} as an image");
                         self.raster = None;
+                        self.raster_scale = 1.0;
                         self.view = View::default();
                         self.doc_name = name;
                     }
@@ -362,6 +373,7 @@ impl Shell {
                 self.editor = editor;
                 self.view = View::default();
                 self.raster = None;
+                self.raster_scale = 1.0;
                 self.status = format!("replayed {steps_path} onto {doc_path} ({rows} rows)");
             }
             Err(error) => self.status = format!("replay failed: {error}"),
@@ -477,6 +489,7 @@ impl Shell {
                 self.editor = Editor::untitled();
                 self.view = View::default();
                 self.raster = None;
+                self.raster_scale = 1.0;
                 self.doc_name = "untitled".to_owned();
                 self.status = "new document".to_owned();
             }
