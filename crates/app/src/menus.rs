@@ -61,6 +61,8 @@ pub enum ShellAction {
     /// Modify ▸ Transform ▸ Numeric Transform (Scale/Skew route here
     /// too): opens the numeric dialog over the live selection.
     NumericTransform,
+    /// The command palette (Ctrl+P): every registered engine command.
+    Palette,
     Quit,
     Undo,
     Redo,
@@ -1076,6 +1078,8 @@ pub static SHORTCUTS: &[Shortcut] = &[
     key(CTRL, egui::Key::S, Action::Shell(ShellAction::Save)),
     key(CTRL_SHIFT, egui::Key::S, Action::Shell(ShellAction::SaveAs)),
     key(CTRL_SHIFT, egui::Key::R, Action::Shell(ShellAction::Export)),
+    // The command palette: every registered engine command, one door.
+    key(CTRL, egui::Key::P, Action::Shell(ShellAction::Palette)),
     key(
         CTRL_SHIFT,
         egui::Key::X,
@@ -1272,6 +1276,7 @@ pub fn action_name(action: Action) -> String {
             ShellAction::Export => "Export".into(),
             ShellAction::ExportPreview => "Export preview".into(),
             ShellAction::NumericTransform => "Numeric Transform".into(),
+            ShellAction::Palette => "Command palette".into(),
             ShellAction::Quit => "Quit".into(),
             ShellAction::Undo => "Undo".into(),
             ShellAction::Redo => "Redo".into(),

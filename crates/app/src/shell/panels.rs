@@ -1,6 +1,9 @@
 //! The right-hand panel stack: Properties, Pages, States, Layers,
 //! History, Styles, Library, Fill & Stroke, plus the help panel and
 //! the shared display/filter row builders.
+//!
+//! Pure egui drawing glue: exercised visually (and later by the
+//! `egui_kittest` snapshot gate), not by line coverage.
 
 use super::*;
 

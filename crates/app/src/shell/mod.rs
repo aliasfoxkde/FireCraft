@@ -7,6 +7,7 @@ mod canvas_ui;
 mod dialogs;
 mod filters_ui;
 mod glyphs;
+mod palette;
 mod panels;
 
 pub use glyphs::apply_cs6_theme;
@@ -62,6 +63,8 @@ pub struct Shell {
     export_dialog: Option<ExportDialog>,
     /// Open Numeric Transform dialog, if any.
     pub(crate) numeric_transform: Option<NumericTransformDialog>,
+    /// The command palette state.
+    pub(crate) palette: palette::CommandPalette,
     /// Display name of the open document (tab strip).
     doc_name: String,
     /// Last canvas widget rect — the anchor for view commands that
@@ -113,6 +116,7 @@ impl Shell {
             status: "ready".to_owned(),
             export_dialog: None,
             numeric_transform: None,
+            palette: palette::CommandPalette::default(),
             doc_name: "untitled".to_owned(),
             canvas_rect: None,
             close_requested: false,
@@ -272,10 +276,15 @@ impl Shell {
     }
 
     /// Applies through the editor and reports failures on the status
-    /// line — the one idiom every menu/panel action shares.
-    fn run_command(&mut self, name: &str, payload: serde_json::Value) {
-        if let Err(error) = self.editor.apply(name, payload) {
-            self.status = format!("{name} failed: {error}");
+    /// line — the one idiom every menu/panel action shares. Returns
+    /// whether the command was accepted.
+    fn run_command(&mut self, name: &str, payload: serde_json::Value) -> bool {
+        match self.editor.apply(name, payload) {
+            Ok(()) => true,
+            Err(error) => {
+                self.status = format!("{name} failed: {error}");
+                false
+            }
         }
     }
 
@@ -426,10 +435,12 @@ impl Shell {
                 }
             }
             menus::Action::Boolean(op) => match self.editor.boolean_pair() {
-                Some((a, b)) => self.run_command(
-                    "path.boolean",
-                    serde_json::json!({ "a": a, "b": b, "op": op }),
-                ),
+                Some((a, b)) => {
+                    self.run_command(
+                        "path.boolean",
+                        serde_json::json!({ "a": a, "b": b, "op": op }),
+                    );
+                }
                 None => self.status = "booleans need exactly two live paths".to_owned(),
             },
             menus::Action::Arrange(direction) => self.run_arrange(direction),
@@ -478,6 +489,7 @@ impl Shell {
             menus::ShellAction::NumericTransform => {
                 self.numeric_transform = Some(NumericTransformDialog::default());
             }
+            menus::ShellAction::Palette => self.toggle_palette(),
             menus::ShellAction::Quit => self.close_requested = true,
             menus::ShellAction::Undo => match self.editor.undo() {
                 Ok(name) => self.status = format!("undid {name}"),
@@ -967,6 +979,7 @@ impl eframe::App for Shell {
                 .collapsible(false)
                 .show(ui.ctx(), |ui| self.numeric_transform_dialog_ui(ui));
         }
+        self.palette_ui(ui);
         if self.help_open {
             self.help_panel(ui.ctx());
         }
@@ -1092,6 +1105,158 @@ mod tests {
             Tool::Pointer,
         )));
         assert_eq!(shell.editor.tool, Tool::Pointer);
+    }
+
+    /// The palette covers the whole registry: every catalog id is
+    /// reachable by an empty filter, carries a non-null payload
+    /// template, and runs without taking the shell down — a command
+    /// may refuse (the palette then names the refusal), but it never
+    /// panics and never leaves the palette without a payload.
+    #[test]
+    fn palette_covers_every_catalog_command() {
+        let mut shell = gui_shell(gui_editor());
+        shell.toggle_palette();
+        assert!(shell.palette.open, "the palette opens on demand");
+        let catalog = engine::catalog::ids();
+        assert_eq!(
+            shell.palette_matches(),
+            catalog,
+            "palette lists the catalog"
+        );
+        for name in catalog {
+            let payload = shell.payload_for(name);
+            assert!(payload.is_object(), "{name}: payload is not an object");
+            assert!(!payload.is_null(), "{name}: payload is null");
+            if !shell.run_palette_command(name) {
+                assert!(
+                    shell.status.contains(name),
+                    "{name}: refusal is not reported: {status}",
+                    status = shell.status
+                );
+            }
+        }
+    }
+
+    /// The palette filter narrows by substring (case-insensitive), the
+    /// selection index is reset when the query changes, and grounding
+    /// clamps the fuzzdrive template's out-of-range targets to the
+    /// live document — the difference between a fuzz call and a user
+    /// command.
+    #[test]
+    fn palette_filters_and_grounds_payloads() {
+        let mut shell = gui_shell(gui_editor());
+        let total = engine::catalog::ids().len();
+
+        shell.palette.filter = "rect".to_owned();
+        for name in shell.palette_matches() {
+            assert!(name.to_lowercase().contains("rect"));
+        }
+        assert!(shell.palette_matches().len() < total, "filter narrows");
+
+        shell.palette.selected = 4;
+        shell.palette.filter = "recta".to_owned();
+        assert_eq!(shell.palette.selected, 4, "index moves only via ui paths");
+
+        let empty = shell.payload_for("object.setOpacity");
+        assert!(empty.get("id").is_some(), "template names a target");
+
+        let id = shell.editor.current_cell().unwrap().elements[0];
+        shell.editor.selection = Some(id);
+        let grounded = shell.grounded("object.setOpacity", 0);
+        assert_eq!(grounded["id"], serde_json::json!(id));
+        let opacity = grounded["opacity"].as_u64().unwrap_or(2000);
+        assert!(
+            grounded["opacity"].is_number(),
+            "opacity stays numeric (grounding targets targets, not ranges), got {opacity}"
+        );
+
+        // Boolean ops ground both operands to a live path.
+        shell
+            .editor
+            .apply("autoshape.rect", serde_json::json!({ "x": 0.0, "y": 0.0, "width": 40.0, "height": 20.0, "corner": 0.0, "kind": "bevel", "page": 0, "layer": 0, "cell": 0, "name": null }))
+            .unwrap();
+        let boolean = shell.grounded("path.boolean", 0);
+        assert!(
+            !boolean["a"].is_null(),
+            "path.boolean grounds operand a, got {}",
+            boolean["a"]
+        );
+        assert_eq!(boolean["b"], boolean["a"], "both operands hit one path");
+    }
+
+    /// The palette's remaining grounding branches: toggle round-trip
+    /// resets the filter, the knife verbs get a viewport `from`/`to`
+    /// pair that survives grounding untouched, and the `symbol` key is
+    /// renumbered to the live symbol table rather than an index.
+    #[test]
+    fn palette_grounds_knife_and_symbol_targets() {
+        let mut shell = gui_shell(gui_editor());
+        shell.toggle_palette();
+        assert!(shell.palette.open);
+        shell.palette.filter = "noise".to_owned();
+        shell.toggle_palette();
+        shell.toggle_palette();
+        assert!(shell.palette.filter.is_empty(), "reopen clears the filter");
+
+        let knife = shell.grounded("path.knifeElementsFromPoint", 0);
+        assert!(
+            knife["from"].is_array() && knife["from"].as_array().unwrap().len() == 2,
+            "knife from is a point pair, got {}",
+            knife["from"]
+        );
+
+        shell
+            .editor
+            .apply(
+                "symbol.create",
+                serde_json::json!({
+                    "ids": [shell.editor.current_cell().unwrap().elements[0]],
+                    "name": "test",
+                    "symbol_type": "graphic",
+                }),
+            )
+            .unwrap();
+        let definition = shell.editor.document().symbols.first().unwrap();
+        let grounded = shell.grounded("symbol.createInstance", 0);
+        assert_eq!(
+            grounded["symbol"],
+            serde_json::json!(definition.symbol_number),
+            "symbol key carries the engine's symbol_number"
+        );
+    }
+
+    /// The selection-restore prep path: with no saved selection, the
+    /// palette seeds an image, selects a rect inside it, saves
+    /// "default", and then `selection.restore` succeeds. A second run
+    /// finds the slot already present and does not duplicate it.
+    #[test]
+    fn palette_prepares_a_saved_selection_for_restore() {
+        let mut shell = gui_shell(gui_editor());
+        assert!(shell.editor.document().saved_selections.is_empty());
+
+        assert!(shell.run_palette_command("selection.restore"));
+        assert_eq!(shell.editor.document().saved_selections.len(), 1);
+        assert_eq!(shell.editor.document().saved_selections[0].name, "default");
+
+        assert!(shell.run_palette_command("selection.restore"));
+        assert_eq!(shell.editor.document().saved_selections.len(), 1);
+        assert!(
+            !shell.status.contains("failed"),
+            "caller (not run_palette_command) sets success status, got {:?}",
+            shell.status
+        );
+    }
+
+    /// A command that refuses under every seed is reported in the
+    /// status line and leaves the palette open for correction.
+    #[test]
+    fn palette_reports_total_refusal() {
+        let mut shell = gui_shell(gui_editor());
+        let before = shell.editor.document().registry.len();
+        // An unknown id: the editor refuses without mutating.
+        assert!(!shell.run_palette_command("object.doesNotExist"));
+        assert!(shell.status.contains("object.doesNotExist"));
+        assert_eq!(shell.editor.document().registry.len(), before);
     }
 
     /// The preset registry is internally consistent: names unique,

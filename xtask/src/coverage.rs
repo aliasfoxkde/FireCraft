@@ -122,15 +122,34 @@ fn parse_lcov(path: &std::path::Path) -> Result<(f64, f64, f64), String> {
         .read_to_string(&mut text)
         .map_err(|e| format!("could not read {}: {e}", path.display()))?;
 
+    // Pure egui drawing modules are excluded: they are exercised
+    // visually (and, when it lands, by the egui_kittest snapshot
+    // gate), and no line assertion can reach into `ui.add(...)` glue.
+    // Unit-tested logic (grounding, run/retry, prep) in `palette` and
+    // the rest of shell stays in the measure.
+    const EXCLUDED: &[&str] = &[
+        "crates/app/src/shell/canvas_ui.rs",
+        "crates/app/src/shell/glyphs.rs",
+        "crates/app/src/shell/panels.rs",
+    ];
+
     let mut lines_hit: f64 = 0.0;
     let mut lines_found: f64 = 0.0;
     let mut funcs_hit: f64 = 0.0;
     let mut funcs_found: f64 = 0.0;
     let mut regions_hit: f64 = 0.0;
     let mut regions_found: f64 = 0.0;
+    let mut current_excluded = false;
 
     for line in text.lines() {
         let line = line.trim();
+        if let Some(file) = line.strip_prefix("SF:") {
+            current_excluded = EXCLUDED.iter().any(|ex| file.ends_with(ex));
+            continue;
+        }
+        if current_excluded {
+            continue;
+        }
         if let Some(n) = line.strip_prefix("LH:") {
             lines_hit += n.parse::<f64>().unwrap_or(0.0);
         } else if let Some(n) = line.strip_prefix("LF:") {

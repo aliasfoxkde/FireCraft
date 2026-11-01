@@ -779,17 +779,13 @@ pub const CALLS: &[&str] = &[
     "object.setQuadrangle",
 ];
 
-/// Builds a random call against `document`: a random catalog id and a
-/// payload whose targets are usually live and whose values are usually
-/// in range — with deliberate invalid variation, because refused calls
-/// must not mutate either.
+/// Builds the canonical payload template for a catalog command.
+///
+/// Every catalog id gets a payload whose targets are usually live ids
+/// and whose values sit in range — the shape a UI command palette and
+/// the fuzz driver share. Callers apply their own variation on top.
 #[must_use]
-pub fn random_call(rng: &mut FuzzRng, document: &Document) -> (String, serde_json::Value) {
-    let Some(name) = rng.pick(CALLS) else {
-        return ("object.setOpacity".to_owned(), serde_json::json!({}));
-    };
-    let name = *name;
-
+pub fn payload_template(name: &str, rng: &mut FuzzRng, document: &Document) -> serde_json::Value {
     let live_ids: Vec<doc::ObjectId> = document.registry.iter().map(|(id, _)| id).collect();
     let any_id = |rng: &mut FuzzRng| -> serde_json::Value {
         if !live_ids.is_empty() && rng.chance(85) {
@@ -824,7 +820,7 @@ pub fn random_call(rng: &mut FuzzRng, document: &Document) -> (String, serde_jso
     let pages = document.pages.len();
     let styles = document.styles.len();
     let frames = 1 + rng.below(3);
-    let payload = match name {
+    match name {
         "object.setOpacity" => serde_json::json!({
             "id": any_id(rng),
             "opacity": rng.below(1100),
@@ -2980,7 +2976,21 @@ pub fn random_call(rng: &mut FuzzRng, document: &Document) -> (String, serde_jso
             // this arm unreachable.
             serde_json::json!({})
         }
+    }
+}
+
+/// Builds a random call against `document`: a random catalog id and a
+/// payload whose targets are usually live and whose values are usually
+/// in range — with deliberate invalid variation, because refused calls
+/// must not mutate either.
+#[must_use]
+pub fn random_call(rng: &mut FuzzRng, document: &Document) -> (String, serde_json::Value) {
+    let Some(name) = rng.pick(CALLS) else {
+        return ("object.setOpacity".to_owned(), serde_json::json!({}));
     };
+    let name = *name;
+
+    let payload = payload_template(name, rng, document);
 
     (name.to_owned(), corrupt(rng, payload))
 }
@@ -3055,6 +3065,20 @@ mod tests {
         let mut table: Vec<&str> = CALLS.to_vec();
         table.sort_unstable();
         assert_eq!(table, catalog_ids, "fuzzdrive must cover every command");
+    }
+
+    #[test]
+    fn every_catalog_id_carries_a_payload_template() {
+        let mut rng = FuzzRng::new(11);
+        let document = random_document(&mut rng);
+        for name in catalog::ids() {
+            let mut rng = FuzzRng::new(3);
+            let payload = payload_template(name, &mut rng, &document);
+            assert!(
+                payload.is_object() && !payload.is_null(),
+                "{name}: template is not an object"
+            );
+        }
     }
 
     #[test]
