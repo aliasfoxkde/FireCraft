@@ -584,6 +584,111 @@ impl Shell {
             );
         }
 
+        // Grid overlay: lines across the page at the effective cell
+        // size, from the page's grid override or the document grid.
+        if self.show_grid {
+            let grid_page = self.editor.document().pages.get(self.editor.page);
+            let grid = grid_page.map(|p| {
+                p.grid
+                    .clone()
+                    .unwrap_or_else(|| self.editor.document().grid.clone())
+            });
+            if let (Some(page), Some(grid)) = (grid_page, grid)
+                && grid.size.x > 0.0
+                && grid.size.y > 0.0
+            {
+                let ink = Color32::from_rgb(70, 70, 70);
+                let painter = ui.painter();
+                let x0 = page.info.canvas.x;
+                let y0 = page.info.canvas.y;
+                let x1 = x0 + page.info.canvas.width;
+                let y1 = y0 + page.info.canvas.height;
+                let mut gx = grid.offset.x;
+                while gx <= x1 {
+                    if gx >= x0 {
+                        let a = self.view.to_screen(geom::Point::new(gx, y0));
+                        let b = self.view.to_screen(geom::Point::new(gx, y1));
+                        painter.line_segment(
+                            [
+                                Pos2::new(rect.left() + a.x, rect.top() + a.y),
+                                Pos2::new(rect.left() + b.x, rect.top() + b.y),
+                            ],
+                            (1.0, ink),
+                        );
+                    }
+                    gx += grid.size.x;
+                }
+                let mut gy = grid.offset.y;
+                while gy <= y1 {
+                    if gy >= y0 {
+                        let a = self.view.to_screen(geom::Point::new(x0, gy));
+                        let b = self.view.to_screen(geom::Point::new(x1, gy));
+                        painter.line_segment(
+                            [
+                                Pos2::new(rect.left() + a.x, rect.top() + a.y),
+                                Pos2::new(rect.left() + b.x, rect.top() + b.y),
+                            ],
+                            (1.0, ink),
+                        );
+                    }
+                    gy += grid.size.y;
+                }
+            }
+        }
+
+        // Guides overlay: the page's committed guide lines, plus the
+        // in-progress drag-out draft in a brighter ink. Both clip to
+        // the page rectangle.
+        if self.show_guides {
+            let guides = self
+                .editor
+                .document()
+                .pages
+                .get(self.editor.page)
+                .map(|p| p.guides.clone());
+            if let (Some(page), Some(guides)) =
+                (self.editor.document().pages.get(self.editor.page), guides)
+            {
+                let ink = Color32::from_rgb(0x00, 0xb0, 0xf0);
+                let painter = ui.painter();
+                let x0 = page.info.canvas.x;
+                let y0 = page.info.canvas.y;
+                let x1 = x0 + page.info.canvas.width;
+                let y1 = y0 + page.info.canvas.height;
+                let line = |position: f64, horizontal: bool, color: Color32| {
+                    let (a, b) = if horizontal {
+                        let a = self.view.to_screen(geom::Point::new(x0, position));
+                        let b = self.view.to_screen(geom::Point::new(x1, position));
+                        (
+                            Pos2::new(rect.left() + a.x, rect.top() + a.y),
+                            Pos2::new(rect.left() + b.x, rect.top() + b.y),
+                        )
+                    } else {
+                        let a = self.view.to_screen(geom::Point::new(position, y0));
+                        let b = self.view.to_screen(geom::Point::new(position, y1));
+                        (
+                            Pos2::new(rect.left() + a.x, rect.top() + a.y),
+                            Pos2::new(rect.left() + b.x, rect.top() + b.y),
+                        )
+                    };
+                    painter.line_segment([a, b], (1.0, color));
+                };
+                for &y in &guides.horizontal {
+                    line(y, true, ink);
+                }
+                for &x in &guides.vertical {
+                    line(x, false, ink);
+                }
+                if let Some(draft) = &self.guide_draft {
+                    line(
+                        draft.position,
+                        draft.horizontal,
+                        Color32::from_rgb(0x60, 0xd0, 0xff),
+                    );
+                }
+            }
+        }
+
         // Input routing, by tool. Pointer coordinates are widget-local;
         // the view works in the same local space (top_left origin).
         // A press on a nine-slice guide handle drags that guide
@@ -601,6 +706,13 @@ impl Shell {
                         }
                     }
                     None => {
+                        // A press near the page's top/left edge drags
+                        // out a guide (CS6 ruler-edge semantics); it
+                        // outranks every tool.
+                        if let Some(draft) = self.guide_draft_at(world) {
+                            self.guide_draft = Some(draft);
+                            return;
+                        }
                         // A press on a gradient handle moves the ramp
                         // end; it outranks the transform handles
                         // (the gradient overlay paints above them).
@@ -715,7 +827,11 @@ impl Shell {
             if let Some(pos) = response.interact_pointer_pos() {
                 let local = pos - rect.left_top().to_vec2();
                 let world = self.view.to_world(local);
-                if self.editor.guide_drag.is_some() {
+                if self.guide_draft.is_some() {
+                    if let Some(draft) = &mut self.guide_draft {
+                        draft.position = if draft.horizontal { world.y } else { world.x };
+                    }
+                } else if self.editor.guide_drag.is_some() {
                     self.editor.drag_guide_to(world);
                 } else if self.editor.transform_drag.is_some() {
                     self.editor.transform_drag_to(world);
@@ -733,6 +849,15 @@ impl Shell {
                     }
                 } else if self.editor.drag.is_some() {
                     let (shift, alt) = ui.input(|i| (i.modifiers.shift, i.modifiers.alt));
+                    // Snap-to-guides folds into the pointer position
+                    // before the constraint matrix: a moving drag whose
+                    // point lands within 4 world px of a guide line
+                    // rides that line. Locked guides don't attract.
+                    let world = if self.snap_to_guides && !self.guides_locked {
+                        self.snap_to_guides(world, 4.0)
+                    } else {
+                        world
+                    };
                     self.editor
                         .drag_to_with(world, DragConstraint { shift, alt });
                 } else if self.editor.tool == Tool::Hand
@@ -750,6 +875,9 @@ impl Shell {
             }
         }
         if response.drag_stopped() {
+            if self.guide_draft.is_some() {
+                self.commit_guide_draft();
+            }
             if self.editor.guide_drag.is_some()
                 && let Err(error) = self.editor.end_guide_drag()
             {

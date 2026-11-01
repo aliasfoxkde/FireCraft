@@ -91,6 +91,21 @@ pub enum ShellAction {
     ShowShortcuts,
     /// One-key tool select (the CS6 tool letters).
     PickTool(Tool),
+    /// View ▸ Grid ▸ Show Grid — the page overlay.
+    ToggleGrid,
+    /// View ▸ Grid ▸ Snap to Grid.
+    ToggleSnapToGrid,
+    /// View ▸ Grid ▸ Edit Grid... — the grid dialog.
+    EditGrid,
+    /// View ▸ Guides ▸ Show Guides.
+    ToggleGuides,
+    /// View ▸ Guides ▸ Lock Guides — a locked guide ignores drag-out
+    /// and move drags cannot snap to it.
+    ToggleGuidesLocked,
+    /// View ▸ Guides ▸ Snap to Guides.
+    ToggleSnapToGuides,
+    /// View ▸ Guides ▸ Clear Guides — `page.removeAllGuides`.
+    ClearGuides,
 }
 
 /// Engine commands with a selection- or document-derived payload.
@@ -400,18 +415,53 @@ pub static VIEW: Menu = Menu {
         Entry::Sub(
             "Grid",
             &[
-                item(35131, "Show Grid", "", Action::Inert),
-                item(35132, "Snap to Grid", "", Action::Inert),
-                item(35133, "Edit Grid...", "", Action::Inert),
+                item(
+                    35131,
+                    "Show Grid",
+                    "Ctrl+Alt+G",
+                    Action::Shell(ShellAction::ToggleGrid),
+                ),
+                item(
+                    35132,
+                    "Snap to Grid",
+                    "Ctrl+Alt+Shift+G",
+                    Action::Shell(ShellAction::ToggleSnapToGrid),
+                ),
+                item(
+                    35133,
+                    "Edit Grid...",
+                    "",
+                    Action::Shell(ShellAction::EditGrid),
+                ),
             ],
         ),
         Entry::Sub(
             "Guides",
             &[
-                item(35134, "Show Guides", "", Action::Inert),
-                item(35135, "Lock Guides", "", Action::Inert),
-                item(35136, "Snap to Guides", "", Action::Inert),
-                item(49004, "Clear Guides", "", Action::Inert),
+                item(
+                    35134,
+                    "Show Guides",
+                    "Ctrl+;",
+                    Action::Shell(ShellAction::ToggleGuides),
+                ),
+                item(
+                    35135,
+                    "Lock Guides",
+                    "Ctrl+Alt+;",
+                    Action::Shell(ShellAction::ToggleGuidesLocked),
+                ),
+                item(
+                    35136,
+                    "Snap to Guides",
+                    "Ctrl+Shift+;",
+                    Action::Shell(ShellAction::ToggleSnapToGuides),
+                ),
+                item(
+                    49004,
+                    "Clear Guides",
+                    "",
+                    Action::Shell(ShellAction::ClearGuides),
+                ),
             ],
         ),
         Entry::Sub(
@@ -1295,6 +1345,13 @@ pub fn action_name(action: Action) -> String {
             ShellAction::About => "About".into(),
             ShellAction::ShowShortcuts => "Shortcut map".into(),
             ShellAction::PickTool(tool) => format!("Tool: {tool:?}"),
+            ShellAction::ToggleGrid => "Show/hide grid".into(),
+            ShellAction::ToggleSnapToGrid => "Snap to grid".into(),
+            ShellAction::EditGrid => "Edit grid".into(),
+            ShellAction::ToggleGuides => "Show/hide guides".into(),
+            ShellAction::ToggleGuidesLocked => "Lock guides".into(),
+            ShellAction::ToggleSnapToGuides => "Snap to guides".into(),
+            ShellAction::ClearGuides => "Clear guides".into(),
         },
         Action::Sel(sel) => match sel {
             SelAction::Delete => "Delete selection".into(),
