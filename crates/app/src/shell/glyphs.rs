@@ -1,5 +1,8 @@
 //! Tool labels, keys, and the hand-painted tool glyphs (original
 //! art, never the Adobe icons).
+//!
+//! Pure egui drawing glue: exercised visually (and later by the
+//! `egui_kittest` snapshot gate), not by line coverage.
 
 use super::*;
 

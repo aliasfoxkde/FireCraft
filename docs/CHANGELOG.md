@@ -10,6 +10,11 @@ Current version: **0.2.3**.
 
 ### Features
 
+- **app**: gradient fill editor + on-canvas handles (19.3) (1c84ee8)
+- **app**: Subselect path-node editing (19.2) (5e4f0ce)
+- **app**: transform handles + Numeric Transform dialog (19.1) (7329087)
+- **app**: options bar, Properties dock, fill/stroke picker, pan cursor (f6203ed)
+- **xtask**: FIRECRAFT_DIST_SKIP_SMOKE door + xtask lint sweep (4486f5f)
 - **web**: WCAG 2.1 AAA host audit — focus ring, fallback, contrast (91c2a27)
 - **app**: Phase 11.4 pixel-selection tools + paint/IO batch (8ac178d)
 - **io**: lossy WebP export via libwebp-sys (feature-gated) (dd8d0ad)
@@ -160,6 +165,11 @@ Current version: **0.2.3**.
 
 ### Fixes
 
+- **app**: web theme, selection handles, image import placement (32e0490)
+- **ci**: verify dist manifests from their own directory (a1edef2)
+- **xtask**: dist honors CARGO_TARGET_DIR for release bins (01b6291)
+- **ci**: fuzz job timeout 30m -> 60m (a54e2ef)
+- **ci**: quote release step name; docs: stale claims (06cc1c9)
 - **io**: unused variable in svg test (601491c)
 - **io**: lock libwebp-sys and expose lossy WebP (f37c7b2)
 - **xtask**: document ci-no-fmt in USAGE string (ecf87ab)
@@ -185,6 +195,8 @@ Current version: **0.2.3**.
 
 ### Documentation
 
+- live deployment audit closed; input verified end-to-end (e80ef64)
+- session log, NEXT.md status, devlog for 2026-10-26 batch (2b83929)
 - 2026-10-25 session log — audit, ratchet, WCAG, plan (8d860f2)
 - v0.2.3 release notes, status board + session log refresh (7b18807)
 - close Phase 7 tasks — infra blocked (mfc100u.dll missing) (0b5c8e7)
@@ -239,6 +251,8 @@ Current version: **0.2.3**.
 
 ### Tests
 
+- **app**: editor gesture-surface battery — 30 tests (cbfe7eb)
+- **io**: webp dimension-mismatch + corrected format gates (cb432c4)
 - **io**: gif still-frame + gate battery (1a1b9a4)
 - **io**: svg export gap battery — embed drops, filter arms, wrappers (4d9d2ac)
 - **compose**: symbol/error-path render battery (2fc6ded)
@@ -255,8 +269,18 @@ Current version: **0.2.3**.
 - **corpus**: text golden fixture + anchor (254c442)
 - **app**: M5 shell stopping condition as corpus gate (84c9235)
 
+### Refactoring
+
+- **app**: split shell.rs (5.9k lines) into shell/ modules (32a110d)
+
+### Style
+
+- **lints**: adopt clippy::needless_pass_by_value (196277c)
+- **lints**: adopt clippy::doc_markdown + must_use_candidate (173f05b)
+
 ### Continuous Integration
 
+- **gitforge**: release job on tag push (5d83ed3)
 - retrigger after runner loss on 91c2a27 fuzz job (400773c)
 - retrigger pipeline after runner sandbox race on 8ac178d (9abc37e)
 - add GitHub Actions backup CI and release workflows (cc6d0ac)
@@ -273,6 +297,10 @@ Current version: **0.2.3**.
 
 ### Chores
 
+- **ci**: retrigger sweep after runner /tmp cleanup (a30caec)
+- **ci**: retrigger sweep on re-shipped firecraft-ci-rust:1 (0027859)
+- **xtask**: ratchet coverage floors to 81.0/78.5 (6b0c46f)
+- **xtask**: ratchet coverage floors to 80.5/78.0 (dc89221)
 - **release**: bump workspace to 0.2.3, refresh fuzz lockfile (00d2bf8)
 - increase smoke timeout 120s -> 300s; add native artifact hashes to v0.2.2 release notes (9bd7d40)
 - stamp deb package version to 0.2.2 (ee02f9f)
@@ -293,4 +321,5 @@ Current version: **0.2.3**.
 
 ### Other
 
+- Web file doors complete, dist gate verified, session close (#4) (7c82997)
 - Initial commit (498f8c9)

@@ -1,5 +1,8 @@
 //! The canvas and tool surfaces: tool strip, options bar, the main
 //! canvas widget, and the nine-slice overlay geometry.
+//!
+//! Pure egui drawing glue: exercised visually (and later by the
+//! `egui_kittest` snapshot gate), not by line coverage.
 
 use super::*;
 
