@@ -3,21 +3,24 @@
 //! and every panel reads the document read-only. Desktop file routing
 //! goes through the injected [`engine::platform`] traits ([`EnvDialogs`]
 //! in [`dialogs`]; real modal dialogs land with desktop integration).
+pub(crate) use dialogs::{DisplayState, EnvDialogs, ExportDialog, NumericTransformDialog};
+pub(crate) use filters_ui::{
+    FILTER_BOOL_KEYS, FILTER_FAMILIES, FILTER_PARAMS, FilterPreset, filter_preset,
+};
+pub(crate) use guides_ui::GridDialog;
+pub(crate) use guides_ui::GuideDraft;
+
 mod canvas_ui;
 mod dialogs;
 mod filters_ui;
 mod glyphs;
+mod guides_ui;
 mod palette;
 mod panels;
 
 pub use glyphs::apply_cs6_theme;
 pub(crate) use glyphs::{
     draw_autoshape_glyph, draw_tool_glyph, symbol_type_label, tool_key, tool_label,
-};
-
-pub(crate) use dialogs::{DisplayState, EnvDialogs, ExportDialog, NumericTransformDialog};
-pub(crate) use filters_ui::{
-    FILTER_BOOL_KEYS, FILTER_FAMILIES, FILTER_PARAMS, FilterPreset, filter_preset,
 };
 
 use doc::{ObjectData, PathObject, SymbolInstanceObject, SymbolType, TextObject};
@@ -87,6 +90,23 @@ pub struct Shell {
     /// The layer whose name is being edited in the Layers panel
     /// (`None` = no inline rename open).
     rename_layer: Option<usize>,
+    /// View-menu toggles + the open grid dialog. Display state only —
+    /// the guides and grid themselves live in the document, so a move
+    /// drag's snapping reads them through the editor like every other
+    /// document fact.
+    show_grid: bool,
+    snap_to_grid: bool,
+    show_guides: bool,
+    /// View ▸ Guides ▸ Lock Guides. Like show/snap this is session
+    /// state (decision 0035) — but unlike them, a locked guide also
+    /// refuses drag-out and move-snap, so the canvas reads it.
+    guides_locked: bool,
+    snap_to_guides: bool,
+    grid_dialog: Option<GridDialog>,
+    /// A guide being dragged out from a canvas-edge press: the axis
+    /// and the live world position. Committed to `page.addGuide` (or
+    /// discarded) at release; locked guides refuse new guides.
+    guide_draft: Option<GuideDraft>,
     /// The live egui context, stashed each frame so code outside the
     /// frame loop (the web bridge) can request a repaint after it
     /// mutates the shell — without one, a bridge-loaded document sat
@@ -131,6 +151,13 @@ impl Shell {
             help_open: false,
             style_name: String::new(),
             rename_layer: None,
+            show_grid: false,
+            snap_to_grid: false,
+            show_guides: true,
+            guides_locked: false,
+            snap_to_guides: false,
+            grid_dialog: None,
+            guide_draft: None,
             ctx: None,
         }
     }
@@ -569,6 +596,53 @@ impl Shell {
                 self.editor.tool = tool;
                 self.status = format!("tool: {}", tool_label(tool));
             }
+            menus::ShellAction::ToggleGrid => {
+                self.show_grid = !self.show_grid;
+                self.status = if self.show_grid {
+                    "grid shown".to_owned()
+                } else {
+                    "grid hidden".to_owned()
+                };
+            }
+            menus::ShellAction::ToggleSnapToGrid => {
+                self.snap_to_grid = !self.snap_to_grid;
+                self.status = if self.snap_to_grid {
+                    "snap to grid on".to_owned()
+                } else {
+                    "snap to grid off".to_owned()
+                };
+            }
+            menus::ShellAction::EditGrid => {
+                self.grid_dialog = Some(GridDialog::from_document(self.editor.document()));
+            }
+            menus::ShellAction::ToggleGuides => {
+                self.show_guides = !self.show_guides;
+                self.status = if self.show_guides {
+                    "guides shown".to_owned()
+                } else {
+                    "guides hidden".to_owned()
+                };
+            }
+            menus::ShellAction::ToggleGuidesLocked => {
+                self.guides_locked = !self.guides_locked;
+                self.status = if self.guides_locked {
+                    "guides locked".to_owned()
+                } else {
+                    "guides unlocked".to_owned()
+                };
+            }
+            menus::ShellAction::ToggleSnapToGuides => {
+                self.snap_to_guides = !self.snap_to_guides;
+                self.status = if self.snap_to_guides {
+                    "snap to guides on".to_owned()
+                } else {
+                    "snap to guides off".to_owned()
+                };
+            }
+            menus::ShellAction::ClearGuides => {
+                let page = self.editor.page;
+                self.run_command("page.removeAllGuides", serde_json::json!({ "page": page }));
+            }
         }
     }
 
@@ -991,6 +1065,12 @@ impl eframe::App for Shell {
                 .resizable(false)
                 .collapsible(false)
                 .show(ui.ctx(), |ui| self.numeric_transform_dialog_ui(ui));
+        }
+        if self.grid_dialog.is_some() {
+            egui::Window::new("Edit Grid")
+                .resizable(false)
+                .collapsible(false)
+                .show(ui.ctx(), |ui| self.grid_dialog_ui(ui));
         }
         self.palette_ui(ui);
         if self.help_open {
@@ -2028,5 +2108,102 @@ mod tests {
             }
             other => panic!("expected a path, got {other:?}"),
         }
+    }
+
+    /// An edge press near the page's top starts a horizontal draft;
+    /// near the left, a vertical one; mid-canvas, none. Locked or
+    /// hidden guides refuse the draft entirely.
+    #[test]
+    fn guide_draft_starts_at_the_page_edge() {
+        let mut shell = gui_shell(Editor::untitled());
+        let page = shell.page_world().expect("untitled page bounds");
+        let mid = geom::Point::new(page.x1 - 100.0, page.y1 - 100.0);
+
+        let top = shell
+            .guide_draft_at(geom::Point::new(page.x0 + 50.0, page.y0 + 2.0))
+            .expect("top-edge press");
+        assert!(top.horizontal);
+        assert_eq!(top.position, page.y0);
+
+        let left = shell
+            .guide_draft_at(geom::Point::new(page.x0 + 1.0, page.y0 + 50.0))
+            .expect("left-edge press");
+        assert!(!left.horizontal);
+        assert_eq!(left.position, page.x0);
+
+        assert!(shell.guide_draft_at(mid).is_none(), "mid-canvas press");
+
+        shell.guides_locked = true;
+        assert!(
+            shell
+                .guide_draft_at(geom::Point::new(page.x0 + 1.0, page.y0 + 2.0))
+                .is_none(),
+            "locked guides refuse drag-out"
+        );
+        shell.guides_locked = false;
+        shell.show_guides = false;
+        assert!(
+            shell
+                .guide_draft_at(geom::Point::new(page.x0 + 1.0, page.y0 + 2.0))
+                .is_none(),
+            "hidden guides refuse drag-out"
+        );
+    }
+
+    /// Releasing a draft commits one `page.addGuide` at the dragged
+    /// position; snap-to-grid rounds it to the nearest cell line.
+    #[test]
+    fn guide_draft_release_commits_the_guide() {
+        let mut shell = gui_shell(Editor::untitled());
+        let page = shell.page_world().expect("untitled page bounds");
+        shell.guide_draft = Some(crate::shell::guides_ui::GuideDraft {
+            horizontal: true,
+            position: page.y0 + 37.0,
+        });
+        shell.commit_guide_draft();
+        assert_eq!(
+            shell.editor.document().pages[0].guides.horizontal,
+            vec![page.y0 + 37.0],
+        );
+
+        shell.snap_to_grid = true;
+        shell.guide_draft = Some(crate::shell::guides_ui::GuideDraft {
+            horizontal: true,
+            position: page.y0 + 26.0,
+        });
+        shell.commit_guide_draft();
+        // Default grid: 24 px cells from the origin — 26 snaps to 24.
+        assert_eq!(
+            shell.editor.document().pages[0].guides.horizontal,
+            vec![page.y0 + 37.0, 24.0],
+        );
+    }
+
+    /// Snap-to-guides pulls a moving drag's point onto the nearest
+    /// line per axis, within tolerance, and ignores far lines.
+    #[test]
+    fn snap_to_guides_pulls_each_axis_independently() {
+        // Install guides directly on the page.
+        let mut shell = gui_shell(Editor::untitled());
+        shell
+            .editor
+            .apply(
+                "page.addGuide",
+                serde_json::json!({ "page": 0, "position": 100.0, "kind": "horizontal" }),
+            )
+            .expect("guide");
+        shell
+            .editor
+            .apply(
+                "page.addGuide",
+                serde_json::json!({ "page": 0, "position": 200.0, "kind": "vertical" }),
+            )
+            .expect("guide");
+
+        let snapped = shell.snap_to_guides(geom::Point::new(197.0, 103.0), 4.0);
+        assert_eq!(snapped, geom::Point::new(200.0, 100.0));
+
+        let untouched = shell.snap_to_guides(geom::Point::new(150.0, 150.0), 4.0);
+        assert_eq!(untouched, geom::Point::new(150.0, 150.0));
     }
 }
