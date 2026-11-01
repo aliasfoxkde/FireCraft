@@ -2477,15 +2477,17 @@ fn ellipse_contour(rect: geom::Rect) -> Vec<doc::Contour> {
         is_curve: true,
     };
     let points = vec![
+        // Clockwise walk starts here: the out-handle (secondary) is
+        // the +kx side, the in-handle (primary) the -kx side.
         curve(
             geom::Point::new(cx, rect.y0),
-            geom::Point::new(cx + kx, rect.y0),
             geom::Point::new(cx - kx, rect.y0),
+            geom::Point::new(cx + kx, rect.y0),
         ),
         curve(
             geom::Point::new(rect.x1, cy),
-            geom::Point::new(rect.x1, rect.y0 + ky),
-            geom::Point::new(rect.x1, rect.y1 - ky),
+            geom::Point::new(rect.x1, cy - ky),
+            geom::Point::new(rect.x1, cy + ky),
         ),
         curve(
             geom::Point::new(cx, rect.y1),
@@ -2494,8 +2496,8 @@ fn ellipse_contour(rect: geom::Rect) -> Vec<doc::Contour> {
         ),
         curve(
             geom::Point::new(rect.x0, cy),
-            geom::Point::new(rect.x0, rect.y1 - ky),
-            geom::Point::new(rect.x0, rect.y0 + ky),
+            geom::Point::new(rect.x0, cy + ky),
+            geom::Point::new(rect.x0, cy - ky),
         ),
     ];
     vec![doc::Contour {
@@ -3118,6 +3120,46 @@ mod tests {
             original,
             "undo restores the exact pre-create bytes"
         );
+    }
+
+    #[test]
+    fn ellipse_contour_handles_point_out_of_each_anchor() {
+        // Regression: the top anchor had its in/out handles swapped, so
+        // the first segment left along a handle pointing backwards and
+        // the drawn shape bulged inward. Every anchor must enter along
+        // the in-handle and leave along the out-handle tangentially.
+        let rect = geom::Rect::new(-10.0, -10.0, 10.0, 10.0);
+        let contour = &ellipse_contour(rect).remove(0);
+        let pts = &contour.points;
+        assert_eq!(pts.len(), 4);
+
+        // Sample each segment as a cubic at t = 0.5 and require the
+        // midpoint to sit on the ellipse (radial error far below the
+        // kappa bulge a reversed handle would produce).
+        let cubic = |p0: &geom::Point, p1: &geom::Point, p2: &geom::Point, p3: &geom::Point| {
+            geom::Point::new(
+                (p0.x + 3.0 * p1.x + 3.0 * p2.x + p3.x) / 8.0,
+                (p0.y + 3.0 * p1.y + 3.0 * p2.y + p3.y) / 8.0,
+            )
+        };
+        let rx = rect.width() / 2.0;
+        let ry = rect.height() / 2.0;
+        let cx = (rect.x0 + rect.x1) / 2.0;
+        let cy = (rect.y0 + rect.y1) / 2.0;
+        for i in 0..4 {
+            let from = &pts[i];
+            let to = &pts[(i + 1) % 4];
+            let out = from.secondary.expect("ellipse handles present");
+            let inc = to.primary.expect("ellipse handles present");
+            let mid = cubic(&from.anchor, &out, &inc, &to.anchor);
+            let nx = (mid.x - cx) / rx;
+            let ny = (mid.y - cy) / ry;
+            let radial = (nx * nx + ny * ny).sqrt();
+            assert!(
+                (radial - 1.0).abs() < 0.01,
+                "segment {i} midpoint radius {radial} != 1"
+            );
+        }
     }
 
     #[test]

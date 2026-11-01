@@ -6,6 +6,7 @@
 //! `egui_kittest` snapshot gate), not by line coverage.
 
 use super::*;
+use compose::abgr_pack;
 
 impl Shell {
     /// Edit ▸ Paste as Mask / Paste Inside: the clipboard becomes the
@@ -597,12 +598,7 @@ impl Shell {
                 if let Some(mut color) = current
                     && ui.color_edit_button_srgba(&mut color).changed()
                 {
-                    let raw = i64::from(
-                        (u32::from(color.r()) << 24)
-                            | (u32::from(color.g()) << 16)
-                            | (u32::from(color.b()) << 8)
-                            | u32::from(color.a()),
-                    );
+                    let raw = abgr_pack(color.r(), color.g(), color.b(), color.a());
                     for id in &ids {
                         self.run_command(
                             Self::paint_command(channel),
@@ -1511,12 +1507,7 @@ impl Shell {
                     ((raw >> 24) & 0xFF) as u8,
                 );
                 if ui.color_edit_button_srgba(&mut color).changed() {
-                    let new_raw = i64::from(
-                        (u32::from(color.r()) << 24)
-                            | (u32::from(color.g()) << 16)
-                            | (u32::from(color.b()) << 8)
-                            | u32::from(color.a()),
-                    );
+                    let new_raw = abgr_pack(color.r(), color.g(), color.b(), color.a());
                     self.set_gradient_stop(first, index, stop.position, new_raw);
                 }
                 let mut position = stop.position;
