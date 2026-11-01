@@ -1,10 +1,11 @@
-# FireCraft — Next-agent plan (2026-10-25)
+# FireCraft — Next-agent plan (2026-11-01)
 
 > Start at `docs/HANDOFF.md` first. This file is the live backlog
 > and the expanded plan. HANDOFF §4 has the phase descriptions.
 > Rewritten 2026-10-25 from a full audit: coverage measured at
 > 80.47% lines / 77.85% functions, production code panic-free,
-> clippy zero-warning, v0.2.3 shipped.
+> clippy zero-warning, v0.2.3 shipped. Phase 19–21 (the daily-driver
+> expansion) appended 2026-10-31; 19.1–19.5 landed 10-31 → 11-01.
 
 ---
 
@@ -29,8 +30,8 @@ columns when re-blessing.
 
 | File | Missed | What's untested |
 |---|---|---|
-| crates/app/src/shell.rs | ~2741 | UI shell (menus, panels, interaction glue) — largest single gap; not in the original plan |
-| crates/app/src/editor.rs | — | 14.1 landed 30 tests; residual misses folded into the shell.rs work |
+| crates/app/src/shell/ | ~2741 (pre-split) | UI shell (menus, panels, interaction glue) — largest single gap; not in the original plan. Now split into `shell/{mod,glyphs,filters_ui,dialogs,panels,canvas_ui}` — re-measure the per-module split |
+| crates/app/src/editor.rs | — | 14.1 landed 30 tests; residual misses folded into the shell work |
 | xtask/src/corpus.rs | 1245 | xtask tooling (gated, lower priority than app code) |
 | xtask/src/dist.rs | 519 | dist packaging paths (partially covered by CI) |
 | crates/app-cli/src/main.rs | 387 | CLI arg paths |
@@ -43,9 +44,9 @@ columns when re-blessing.
 
 ### Phase 14 — Coverage ratchet to 99% (multi-session)
 
-The floors were raised 60% → 80% lines / 77% functions (measured
-baseline, 2026-10-25). The gate is rising-only from here.
-**2026-10-26: 81.1/78.8 measured, floors 81.0/78.5; 14.1 landed.**
+The floors were raised 60% → 81.1% lines / 78.7% functions (measured
+baseline, 2026-10-26). The gate is rising-only from here.
+**2026-10-26: 81.1/78.8 measured, floors 81.1/78.7; 14.1 landed.**
 
 - **14.1 Editor surface tests** — LANDED 2026-10-26 (`cbfe7eb`, 30
   tests). Remaining sub-items for a later pass: `import_styles` good-
@@ -121,7 +122,7 @@ accesskit integration.
   2.1.3 keyboard-no-exception) may be honest refusals for a
   canvas-drawing app; document them as such rather than fake conformance.
 - **16.3 Contrast audit** of the default theme's text colors (egui
-  dark theme + any custom styles in `app/src/shell.rs`). Compute
+  dark theme + any custom styles in `app/src/shell/`). Compute
   ratios; bump to ≥ 7:1 (AAA) where the theme allows.
 - **16.4 Keyboard map**: verify every tool and menu action is
   reachable by keyboard; document shortcuts in a help panel. AAA
@@ -171,8 +172,14 @@ accesskit integration.
 
 ## Suggested order
 
-14.1 → 14.2 → 14.5 (ratchet) → 15.1/15.3 → 16.1/16.3 (cheap wins) →
-16.2/16.4 → 18.x → 14.3/14.4 → 17.2 → 17.1/17.3.
+**Current front:** 19.6 (inert burn-down) → 19b.2/19b.3 (reachability
++ inert-drift gates) → 19b.1 (path-node add/delete) → 19b.4 (wasm
+budget re-pin) → 20.1 (in-canvas text) → 20.4 (mask stack) → 20.3
+(animation timeline) → 21.x.
+
+**Quality-ratchet backlog (14.2–14.5):** 14.2 → 14.5 (ratchet) →
+15.1/15.3 → 16.1/16.3 (cheap wins) → 16.2/16.4 → 18.x → 14.3/14.4 →
+17.2 → 17.1/17.3.
 
 ## The daily-driver expansion (2026-10-31)
 
@@ -193,27 +200,54 @@ repaint, page drop shadow, image import places into a drawing instead
 of replacing it, fill/stroke swatch panel bound to
 `object.setFill`/`setStroke`.
 
+Phase 19 batches 19.1–19.5 landed 2026-10-31 → 11-01: transform
+handles + Numeric Transform, Subselect path-node editing, the gradient
+fill editor, the command palette, and the grid/guides/snap set. The
+inert count is 171 of 295 items (was 181); 19.6 is the remaining
+burn-down.
+
 ### Phase 19 — Canvas competence (P0, feeds usability directly)
 
 - **19.1 Transform handles** (L): corner/edge handles scale/rotate/skew
   live with preview over `object.transform`/`scale`/`skew`; Numeric
   Transform dialog. Accept: handle drag is one undo step with live
-  preview.
+  preview. — **LANDED 2026-10-31** (`7329087`).
 - **19.2 Path node editing** (M–L): Subselect draws anchors/handles;
   drag via `path.movePoints`; double-click adds/deletes. Accept: node
-  drag round-trips save/open.
+  drag round-trips save/open. — **LANDED 2026-10-31** (`5e4f0ce`):
+  anchors + handles drawn, drag folded into one "Reshape" undo step;
+  the double-click add/delete half is **still open**.
 - **19.3 Gradient fill editor** (M): stops + on-canvas handles over
   `path.setFill`/`path.setFillVector`. Accept: linear gradient drawn,
-  edited, survives save.
+  edited, survives save. — **LANDED 2026-10-31** (`1c84ee8`).
 - **19.4 Command palette** (S): Ctrl+P over `engine::catalog::ids()`
   with payload templates — makes all 152 unreachable commands
   executable immediately. Accept: 100% registry coverage, testable like
-  `the_call_table_covers_the_catalog`.
+  `the_call_table_covers_the_catalog`. — **LANDED 2026-10-31**
+  (`4458f3a`); `palette_covers_every_catalog_command` pins the
+  coverage.
 - **19.5 Guides + grid + snapping** (M): `page.addGuide`, drag-out
-  guides, snap-to on object drag.
+  guides, snap-to on object drag. — **LANDED 2026-11-01** (`eb221ac`):
+  grid overlay, guide drag-out, per-axis snap, Edit Grid dialog.
 - **19.6 Inert-menu burn-down** (L, multi-session): family batches in
   GAPS order (selection/mask → page/frame → symbol/animation → text);
-  every wired item proven by a shell test through the journal.
+  every wired item proven by a shell test through the journal. — **IN
+  FLIGHT**: 181 → 178 (19.1) → 171 inert of 295 items. Batch 1 in
+  progress.
+
+### Phase 19b — Follow-ups from the landed batches
+
+- **19b.1 Path-node add/delete** (S): the double-click half of 19.2 —
+  add an anchor on a segment, delete a selected anchor.
+- **19b.2 Reachability gate** (S): the set difference
+  `catalog::ids()` − UI-bound commands may only shrink (a test, not an
+  xtask step). Without it the 63%-unreachable number drifts silently.
+- **19b.3 Inert-drift test** (S): every non-Help/Command `Action::Inert`
+  item carries a tracking reference, so an inert item cannot be added
+  silently.
+- **19b.4 Wasm budget re-pin** (S): the 12.78 MB figure predates the
+  Phase 19 shell work — re-measure and re-pin `WASM_SIZE_CEILING` with
+  evidence before the next release.
 
 ### Phase 20 — Daily-driver features (P1)
 
@@ -234,9 +268,16 @@ of replacing it, fill/stroke swatch panel bound to
   a sidecar; restore prompt on open.
 - **21.2 Zoom-aware/HiDPI rendering** (L): re-render vectors at
   `zoom × pixels_per_point`; extend `compose::cache::EffectCache` to
-  view transforms. The single-texture blit is blurry above 100%.
+  view transforms. The single-texture blit is blurry above 100%. —
+  **PARTLY LANDED 2026-11-01** (`6e35c1e`): `compose::render_scaled`
+  renders the page under an affine scale and the shell caches it per
+  zoom bucket (re-render past 2× drift, 16 MPix budget), so the canvas
+  is crisp past 100%. **Still open**: `pixels_per_point` (HiDPI)
+  plumbing — the scale is zoom-only today.
 - **21.3 Command palette v2** (S after 19.4): fuzzy, recents,
-  save-steps-as-command.
+  save-steps-as-command. — **PARTLY LANDED 2026-10-31** (`4458f3a`):
+  the palette filters by substring (case-insensitive). Still open:
+  fuzzy scoring, recents, save-steps-as-command.
 - **21.4 Preferences dialog + `pixels_per_point`** (S), persisting via
   platform storage (decision 0067 follow-up).
 - **21.5 accesskit** desktop + web re-audit (0067 records the web
@@ -250,16 +291,20 @@ of replacing it, fill/stroke swatch panel bound to
 2. **Reachability gate** in xtask: the set difference
    `catalog::ids()` − UI-bound commands only shrinks (mirror of the
    call-table test). 63% unreachable with no gate means drift.
+   — **open, tracked as 19b.2.**
 3. **Inert-drift test**: every non-Help/Command `Action::Inert` item
    carries a tracking ticket id in its doc comment.
+   — **open, tracked as 19b.3.**
 4. **Wasm budget**: keep `WASM_SIZE_CEILING` honest — the 12.78 MB
    current size leaves ~1.2 MB headroom against the 14 MB ceiling;
    panel work must fit or re-pin with evidence.
+   — **open, tracked as 19b.4** (the figure predates Phase 19).
 5. **Render-stamp migration** when 21.2 lands: the undo/redo/journal
    tuple-stamp misses view-dependent re-renders — move to a dirty
    counter in `Editor`.
 6. **shell.rs split**: 5.7k lines; split panels into modules during
-   19.1, before more canvases accrete.
+   19.1, before more canvases accrete. — **DONE** (`32a110d`,
+   `shell.rs` → `shell/{mod,glyphs,filters_ui,dialogs,panels,canvas_ui}`).
 
 ## What NOT to do
 
@@ -291,6 +336,6 @@ of replacing it, fill/stroke swatch panel bound to
 |---|---|
 | Live site | <https://firecraft-web.pages.dev> (v0.2.3) |
 | Latest release | v0.2.3 (2026-10-24) |
-| Coverage floors | 80% lines / 77% functions (rising-only) |
+| Coverage floors | 81.1% lines / 78.7% functions (rising-only; `xtask/src/coverage.rs`) |
 | CI image | `firecraft-ci-rust:1` — rebuild + re-ship when ANY lockfile moves |
 | GitForge API | 127.0.0.1:42780, bearer via `~/.config/gitforge/mkinney-credentials.env` |

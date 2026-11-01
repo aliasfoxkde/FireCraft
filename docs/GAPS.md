@@ -37,6 +37,14 @@ UI. After the Tier-1 batch (Phases 8–10 and the Phase 16 slice) the
 shell reaches 72; after Phase 11's paint family it reaches 77;
 166 commands (68%) are still unreachable.**
 
+> **Note (2026-11-01):** the reachability picture above is a
+> point-in-time audit snapshot. The command palette (19.4,
+> `4458f3a`) makes **every** registry command executable from the
+> GUI, and the inert count has fallen 190 → 171 of 295 menu items
+> (19.1–19.5). The family table below is superseded by
+> [`NEXT.md`](NEXT.md) Phases 19–21 as the work list; this file's
+> phases remain useful as per-family detail.
+
 ```
 $ comm -23 <(engine::catalog::ids()) <(command names in crates/app/src)
 188   # at audit time
