@@ -54,11 +54,11 @@ hour; v0.2.1 replaced the bundle the same day (downcast override,
 repaint after bridge mutations, honest smoke, web fmt gate).
 
 **Where it goes.** The parity campaign reached its evidence limits;
-current work is application surface and enhancements —
-[`HANDOFF.md`](HANDOFF.md) §4 Phases 11–13 (image support: AVIF/HEIC
-decisions 0064–0065, import surface parity, lossy WebP; WebOS packaging
-dry-run; release-engineering hygiene). Evidence-gated holds parked in
-Phase 12.
+current work is the daily-driver expansion —
+[`NEXT.md`](NEXT.md) Phases 19–21 (shell reachability: inert-menu
+burn-down, canvas competence, daily-driver features, differentiators).
+Evidence-gated holds stay parked in HANDOFF §4 Phase 12; the quality
+ratchet (Phases 14–18) is the parallel backlog.
 
 **v0.2.2 and the hygiene turn (2026-10-19 → 10-20).** The GitHub
 Actions CI had been failing silently on every push for 18 commits —
@@ -73,6 +73,34 @@ regenerated. aegis now runs in 0.17s locally vs the previous >120s hang.
 The `xtask changelog` version stamp was also extended to verify all 8
 Cargo.toml files, and the smoke timeout raised 120s→300s. v0.2.2
 published on GitHub with 5 assets.
+
+**The daily-driver turn (2026-10-31 → 11-01).** A judge-panel audit
+against Fireworks CS6 and Photopea — headless Playwright interaction
+plus vision judges — found the web build far below the bar, and the
+root cause structural rather than cosmetic: the engine registered 243
+commands while the shell bound only 91, and 181 of 295 CS6 menu items
+rendered `Action::Inert`. The engine was never the problem; the
+*interface* was. That reframed the program from "repair" to
+"reachability and canvas competence," and Phase 19 became the front:
+transform handles with a Numeric Transform dialog, Subselect path-node
+editing, a gradient fill editor with on-canvas handles, a command
+palette over the whole registry, and the grid/guides/snap set — 19.1
+through 19.5, in that order, with the inert count falling 181 → 178 →
+171 along the way. The shell was split out of one 5.9k-line file first
+(`shell.rs` → `shell/` modules), because six canvas surfaces were
+about to accrete onto it.
+
+Three rendering defects rode the same pass, and each named a class
+rather than a bug: the canvas rendered at 1× and was linear-filtered
+at zoom (so `compose` grew `render_scaled` and the shell caches per
+zoom bucket); ellipses bulged inward (the top anchor's bezier handles
+were swapped — now pinned by a midpoint-on-ellipse test per anchor);
+and the color pickers packed ARGB where every decode is ABGR (fixed by
+making `compose::abgr_pack` the single encode side, because two call
+sites were symptoms, not causes). **An encoder and a decoder that
+disagree on channel order produce a plausible-looking wrong color,
+not an error** — the fix is one named function, not two patched
+sites.
 
 ## Decision index
 
@@ -144,6 +172,7 @@ published on GitHub with 5 assets.
 | 0064 | AVIF decode policy | OS decoder on desktop; "unsupported in browser" in WASM |
 | 0065 | HEIC refusal | No maintainable open HEIC encoder/decoder; patent pools |
 | 0066 | smoke budget | 60s virtual-time covers app logic; 300s wall-clock backstop |
+| 0067 | WCAG AAA host audit | Criterion-by-criterion audit; accesskit tree unreachable on the web build |
 
 ## Lessons (each paid for in a real failure)
 

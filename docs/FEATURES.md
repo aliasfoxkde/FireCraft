@@ -1,6 +1,6 @@
 # FireCraft — Feature surface
 
-> Audited 2026-10-30 against the v0.2.3 tree. Every claim here is
+> Audited 2026-11-01 against the main tree. Every claim here is
 > backed by a gate in the repository: the command registry
 > (`engine::catalog::ids()`), the parity matrix
 > (`docs/planning/generated/dom-parity.md`), the menus
@@ -34,8 +34,11 @@ verbs.
 
 Surfaces that drive it:
 
-- **GUI** — the shell; menus map CS6 menu ids to actions
-  (`crates/app/src/menus.rs`).
+- **GUI** — the shell (`crates/app/src/shell/`); menus map CS6 menu
+  ids to actions (`crates/app/src/menus.rs`; 171 of 295 items still
+  render inert — the 19.6 burn-down is closing them), and the Ctrl+P
+  command palette makes **every** registry command executable from
+  the GUI regardless of menu state.
 - **CLI** (`firecraft-cli`) — every verb drivable headless.
 - **Journal** — every mutation is a journal line; "Save Steps As
   Command" and replay are exact inverses by construction.
@@ -45,6 +48,15 @@ Surfaces that drive it:
   (`web/src/main.rs`); every mutation goes through the same registry.
 
 ## Editing surfaces
+
+### Canvas
+
+Transform handles (scale/rotate/skew with live preview + a Numeric
+Transform dialog), Subselect path-node editing (anchors and bezier
+handles), gradient fill editing with on-canvas handles, guides +
+grid with drag-out and snapping, selection bounding box with CS6
+handles, and a command palette (Ctrl+P) over the full command
+registry.
 
 ### Vector
 
@@ -64,9 +76,10 @@ intersect/replace modes), gradients, and the retouch tools.
 ### Text
 
 Text objects with font, size, style, color, and alignment; text
-styles; rich text attributes. The paragraph-level surface
-(character markup, text-on-path, text rectangles) remains the largest
-unexposed family.
+styles; rich text attributes. Paragraph-level setters, text-on-path,
+text rectangles, and the multi-run markup model exist in the engine
+(exposed via the command palette); an in-canvas text editor is the
+Phase 20.1 item.
 
 ### Symbols
 

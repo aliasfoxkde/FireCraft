@@ -9,16 +9,15 @@
 
 ---
 
-## 1. State snapshot (2026-10-15)
+## 1. State snapshot (2026-11-01)
 
-- **Ship state:** v0.2.1 released (v0.2.0's web bundle shipped a dead
-  browser bridge — replaced within the day; see §4 Phase 10 for what
-  was wrong). Repo public. Desktop + CLI + web bundle + deb all cut
-  from `xtask dist`. The web bundle is live at
-  <https://firecraft-web.pages.dev> (Cloudflare Pages, direct upload —
-  deploy door in §6). CI green 7/7 per batch (runbook §6).
-- **Engine registry:** 241 commands, pinned equal to the fuzz call
-  table by `the_call_table_covers_the_catalog`.
+- **Ship state:** v0.2.3 released (2026-10-24); repo public. Desktop
+  + CLI + web bundle + deb all cut from `xtask dist`. The web bundle
+  is live at <https://firecraft-web.pages.dev> (Cloudflare Pages,
+  direct upload — deploy door in §6).
+- **Engine registry:** 243 commands (`engine::catalog::ids()` — the
+  live authority; point-in-time counts in the docs trail it), pinned
+  equal to the fuzz call table by `the_call_table_covers_the_catalog`.
 - **CS6 DOM verb-surface parity:** **268 C / 3 P / 0 M / 85 N** — the
   M table has been empty since 2026-10-14. The 3 P rows are terminal
   at today's evidence: `setAnimInstanceStartFrame` and
@@ -27,12 +26,16 @@
   evidence-gated (no observed `TXFv` shape, no mintable texture
   rasters). Do not reopen without new evidence.
   (`docs/planning/generated/dom-parity.md`, regenerate per §5.)
-- **Where the frontier is:** the parity campaign reached its evidence
-  limits; active work is **application surface and enhancements** —
-  §4 Phase 10 (browser shell, landed), Phase 11 (image support:
-  AVIF/HEIC/lossy-WebP), Phase 12 (evidence holds), Phase 13
-  (release engineering hygiene). WebOS packaging
-  (`docs/WEBOS.md`) is the standing primary-target goal.
+- **Where the frontier is:** the *engine* is complete; the *shell* is
+  not. A judge-panel audit (2026-10-31) found the engine's 243
+  commands reach only a fraction of the interface — **171 of 295 CS6
+  menu items still render `Action::Inert`** — so the active program is
+  **reachability and canvas competence**, i.e. `docs/NEXT.md`
+  Phases 19–21 (19.1–19.5 landed: transform handles, path-node
+  editing, gradient editor, command palette, grid/guides/snap; 19.6
+  inert-menu burn-down in flight). The quality ratchet (Phases
+  14–18) is the parallel backlog. WebOS packaging (`docs/WEBOS.md`)
+  is the standing primary-target goal.
 - **Clean-room invariants (never violate):** `source/` is Adobe's
   copyrighted material — git-ignored, never committed, never copied
   from. Adobe-derived text extracts are uncommitted working notes
@@ -47,14 +50,14 @@
 | `AGENTS.md` | Operating manual: commands, gates, commit rules, day-to-day method |
 | `docs/PLANNING.md` | Master plan: format spec (§6), architecture (§7), method |
 | `docs/planning/firecraft/` | `ROADMAP.md` + tickets M0–M15 (all closed; reference for how tickets are written) |
-| `docs/decisions/` | Decision records 0001–0063 — **write one per family/batch** |
+| `docs/decisions/` | Decision records 0001–0067 — **write one per family/batch** |
 | `docs/planning/generated/` | `parity.md`, `scorecard.md` (xtask-owned) + `dom-parity.md` (generator-owned, see §5) |
 | `docs/research/fireworks-png-nodes.md` | The node dictionary — the format Rosetta stone (observational; corpus wins on conflict) |
 | `docs/WEBOS.md` | The web embedding contract + the smoke host page (load-bearing — see the warning there) |
 | `log/devlog.md` | Detailed session log (gitignored) — **append an entry to close every task** |
 | `crates/engine/src/catalog/` | The command registry, one module per family |
 | `crates/engine/src/fuzzdrive.rs` | Random driver: `CALLS` table + payload builders (pinned to the catalog) |
-| `crates/app/src/shell.rs` | The egui shell (desktop + wasm); `eframe::App` impl at the bottom — carries the wasm-only `as_any_mut` and the stashed repaint context |
+| `crates/app/src/shell/` | The egui shell (desktop + wasm), split into modules (`mod`, `glyphs`, `filters_ui`, `dialogs`, `panels`, `canvas_ui`); `eframe::App` impl in `mod.rs` — carries the wasm-only `as_any_mut` and the stashed repaint context |
 | `web/src/main.rs` | The wasm entry: trunk bootstrap, hidden file input (browser Open), postMessage bridge, downloads (browser Save) |
 | `corpus/fixtures/` | Committed Fireworks fixtures (round-trip/golden oracles) |
 
@@ -110,12 +113,13 @@
   shows the stale frame until the next input event. Neither is
   reachable from desktop tests — only a real browser run catches them
   (see the playwright pattern, §6.2).
-- **The `web` crate is workspace-excluded (trunk).** `cargo fmt
-  --all`, `clippy --workspace`, and `test --workspace` never see it.
-  The fmt gate checks it explicitly (added 2026-10-15 after an
-  unformatted `web/src/main.rs` slipped through); remember it for
-  clippy/test when touching `web/` — run them with
-  `--manifest-path web/Cargo.toml`.
+- **The `web` crate IS a workspace member** (`members = ["crates/*",
+  "xtask", "web"]` in the root `Cargo.toml`, since `3295ef0`,
+  2026-10-10). `cargo fmt --all`, `clippy --workspace`, and
+  `test --workspace` all see it; the dedicated web steps in
+  `.gitforge.yml` are belt-and-braces fast-fail steps, not the only
+  web coverage. (This corrects an earlier note here that called the
+  crate workspace-excluded.)
 
 ## 4. The plan — phases and atomic tasks
 
@@ -140,8 +144,35 @@ verifiable.
   0001–0063`. Phase 9's recorded debts are all closed; the one
   evidence-gated hold is in §4 Phase 12.
 
-### Phase 10 — Browser shell surface — LANDED 2026-10-15 (commit `67532fa`, v0.2.1)
+### Phase 19–21 — The daily-driver expansion (the active front, 2026-10-31 →)
 
+**The engine is complete; the shell is not.** A judge-panel audit
+against Fireworks CS6 and Photopea found the structural gap: 243
+registered commands, **171 of 295 CS6 menu items still rendering
+`Action::Inert`**. The program is reachability and canvas competence,
+not repair.
+
+The full plan, with the landed/open state of every item, lives in
+[`NEXT.md`](NEXT.md) — **read that file for the work list**, not this
+one. Summary:
+
+- **19.1–19.5 LANDED** (2026-10-31 → 11-01): transform handles +
+  Numeric Transform, Subselect path-node editing, gradient fill
+  editor, command palette, grid/guides/snap. Inert count 181 → 171.
+- **19.6 IN FLIGHT**: the inert-menu burn-down, in family batches
+  (selection/mask → page/frame → symbol/animation → text).
+- **19b open**: path-node add/delete, the reachability gate, the
+  inert-drift test, the wasm-budget re-pin.
+- **20 / 21 queued**: daily-driver features (in-canvas text, Optimize
+  panel, animation timeline, mask stack, tabs, history rewind, slice
+  behaviors) and differentiators (autosave, HiDPI, palette v2,
+  preferences, in-app scripting).
+
+The shell was split out of one 5.9k-line `shell.rs` into `shell/`
+modules (`32a110d`) before this work — six canvas surfaces were about
+to accrete onto it.
+
+### Phase 10 — Browser shell surface — LANDED 2026-10-15 (commit `67532fa`, v0.2.1)
 The v0.2.0 web bundle could not open, import, or save anything: every
 bridge call panicked in `WebRunner::app_mut` (`Shell` never overrode
 the wasm-only `eframe::App::as_any_mut` default, which returns `None`),
@@ -215,11 +246,13 @@ touching `web/` or the smoke.**
 
 ### Suggested order
 
-11.4 (quick) → 13.1 → 11.1 (decision first) → 13.2/13.3 → 11.2 →
-11.3 → Phase 12 only if the Wine oracle actually materializes. Phase
-10 is closed. Re-verify the deployed site after any `web/` change
-(§6.2) — the browser is the primary target and the only place its
-failure modes live.
+**Current front:** 19.6 (inert burn-down) → 19b gates → Phase 20 →
+Phase 21 — see [`NEXT.md`](NEXT.md) for the live order and per-item
+state; it supersedes the ordering below, which dates from the
+Phases 11–13 era (Phases 11.1–11.4 and 13.1–13.4 are closed; Phase 12
+stays parked unless the Wine oracle materializes). Re-verify the
+deployed site after any `web/` change (§6.2) — the browser is the
+primary target and the only place its failure modes live.
 
 ## 5. Parity-matrix regeneration recipe
 
@@ -270,9 +303,10 @@ the absolute repo path.
     crate version in either lockfile moves — workspace-only version
     bumps leave `cargo fetch` output unchanged (verified v0.2.0).
 - **Local gates before any push:** the full gate is
-  `cargo run -p xtask -- ci` (fmt incl. the workspace-excluded `web/`
-  crate, clippy `-D warnings`, tests, layers, wasm, corpus, goldens,
-  perf, fuzz-quick, parity, scorecard, changelog). Per-crate commands
+  `cargo run -p xtask -- ci` (fmt, clippy `-D warnings`, tests, layers,
+  wasm, corpus, goldens, perf, fuzz-quick, parity, scorecard,
+  changelog — the `web/` crate is a workspace member and is covered by
+  the shared gates). Per-crate commands
   for dev-loop iteration. `git checkout --
   corpus/scripts-report.json` before committing if the corpus run
   touched it (timestamp-only churn).

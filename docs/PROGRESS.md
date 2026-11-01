@@ -4,8 +4,27 @@
 > [`HANDOFF.md`](HANDOFF.md) §7). History and narrative:
 > [`HISTORY.md`](HISTORY.md). Per-session log: [`SESSIONS.md`](SESSIONS.md).
 
-## Now (2026-10-25)
+## Now (2026-11-01)
 
+- **Active work — the daily-driver expansion** (Phase 19 → 21,
+  `docs/NEXT.md`): the engine is complete but the shell exposes a
+  fraction of it, so the program is reachability + canvas, not
+  repair. 19.1–19.5 landed (transform handles, path-node editing,
+  gradient editor, command palette, guides/grid/snap); 19.6
+  (inert-menu burn-down) is in flight.
+- **19.1–19.5 landed** (2026-10-31 → 11-01, `7329087`…`eb221ac`):
+  transform handles + Numeric Transform dialog; Subselect path-node
+  editing; gradient fill editor with on-canvas handles; command palette
+  (Ctrl+P) over the whole registry; grid + guides overlays, drag-out
+  guides, snap-to, Edit Grid dialog. The shell was split from one
+  5.9k-line `shell.rs` into `shell/` modules (`32a110d`) as the
+  precondition.
+- **Three rendering defects fixed in one pass** (`6e35c1e`): the
+  canvas rendered at 1x and was linear-filtered at zoom (now
+  `compose::render_scaled`, cached per zoom bucket); ellipses bulged
+  inward (swapped bezier handles); picker colors were channel-swapped
+  (ARGB packed where ABGR is decoded — fixed by making
+  `compose::abgr_pack` the single encode side).
 - **Released:** v0.2.0 + **v0.2.1** + **v0.2.2** + **v0.2.3**
   (2026-10-24), repo public. v0.2.3 shipped: Phase 11.4 pixel
   selection (marquee/ellipse/lasso/polygonal/wand + marching ants,
@@ -33,7 +52,10 @@
   404s); GitHub Actions green on all pushes. Local aegis scan fixed
   (excludes `target/` / `web/dist/` / `fuzz/`).
 - **Roadmap:** M0–M15 **all closed**; the post-roadmap DOM parity
-  campaign is **complete** (no M families). Decision docs 0001–0066.
+  campaign is **complete** (no M families). Decision docs 0001–0067.
+- **Menu reachability:** 295 CS6 menu items; **171 render inert**.
+  The count fell 181 → 178 (19.1) → 171 (19.5). 19.6 burns it down
+  in family batches.
 - **WebP:** import since M8; `.webp` export is VP8L lossless by default.
   Native builds can opt into lossy VP8 via `--quality N` (feature
   `lossy-webp`).
@@ -117,11 +139,19 @@
 | #132 | importFile resamples bilinearly in the premultiplied domain (centre-point convention, exact u128; decision 0061) | this batch | 268 C (no surface change) |
 | #133 | `path.setPatternFill` authors a pattern fill from an image (flatten minting law; decision 0062) | this batch | 268 C (registry 241 at write time; live count 243 — see note below) |
 | #134 | WebP export (lossless VP8L through `image-webp`, zero new deps; decision 0063) | this batch | — (enhancement) |
+| #135 | 19.1 transform handles + Numeric Transform dialog (canvas competence P0) | 7329087 | inert 181 → 178 |
+| #136 | shell split: `shell.rs` (5.9k) → `shell/` modules (mod, glyphs, filters_ui, dialogs, panels, canvas_ui) | 32a110d | — (structure) |
+| #137 | 19.2 Subselect path-node editing (anchors + handles, `path.movePoints`, one "Reshape" undo step) | 5e4f0ce | — |
+| #138 | 19.3 gradient fill editor + on-canvas stop handles (`path.setFill` / `setFillVector`) | 1c84ee8 | — |
+| #139 | 19.4 command palette (Ctrl+P) over `engine::catalog::ids()` + fuzz-shared payload templates | 4458f3a | 100% registry coverage |
+| #140 | 19.5 grid + guides overlays, drag-out guides, snap-to, Edit Grid dialog | eb221ac | inert 178 → 171 |
+| #141 | rendering fixes: crisp zoom (`compose::render_scaled`), ellipse shape, ABGR picker colors | 6e35c1e | — (defects) |
 
 **Campaign complete** (2026-10-14): no remaining M families; the
 Phase 9 debt list closed the same day (#126–#132). The 3 P rows are
 terminal/evidence-gated (HANDOFF §4 Phase 12). Current work is the
-enhancement phases (HANDOFF §4 Phases 11–13).
+daily-driver expansion (`docs/NEXT.md` Phases 19–21); rows #135+ are
+the shell-reachability program, not parity rows.
 
 ## Recorded debts (open)
 
@@ -136,6 +166,7 @@ enhancement phases (HANDOFF §4 Phases 11–13).
 | ~~Path→image rasterizer (filterSelection on non-image selection)~~ **DONE** — landed in #130 (decision 0059) | 8.8 bake family | #110 (decision 0040) |
 | Out-of-bounds effect growth (bake clips to the image surface) — **evidence-gated**: the live render already grows (compose applies kernels canvas-spanning, M14); the destructive bake clips by settled posture (0031/0040/0059). Reopening needs a CS6 filter/flatten bounds oracle (Wine corpus) — any growth rule without one is invented | tile-bank growth parity | #110 (decision 0040) |
 | ~~Shared-layer link-resolution render~~ **DONE** — landed in #131 (decision 0060) | shared layers render empty | #93 (decision 0022) |
+| 171 inert CS6 menu items (295 items total) — **open**, burn-down in family batches (selection/mask → page/frame → symbol/animation → text); 19.6 | daily-driver reachability | NEXT.md 19.6 |
 
 ## Parity timeline
 
