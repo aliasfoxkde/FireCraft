@@ -16363,6 +16363,4616 @@
    "kind": "pattern",
    "fingerprint": "zip-code:./crates/app/src/menus.rs:1841:baa854830cd2515d02ba1c9c87ac1e275bdff335be0ea9114ef18548c5412bb4",
    "stable_id": "aegis-f194f9f1dd2137ad47a77fdc1e4dadd2d77a13897e767ec3f452efe218196cbc"
+  },
+  {
+   "id": "000000000000000018e4a39a6b43912c",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./docs/NEXT.md",
+    "line": 265,
+    "column": 47
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./docs/NEXT.md:265:158cb7c22ce6943d7fe7d3e01d61b78ab5b2d080cbffdd81c5de41218a6d65ed",
+   "stable_id": "aegis-5e0104245c202a456a7648221378165164d54918715571bb6b7bb466563bebe9"
+  },
+  {
+   "id": "000000000000000018e4a39a6b43ab17",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./docs/NEXT.md",
+    "line": 364,
+    "column": 56
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./docs/NEXT.md:364:f2f89ede8e7d4b3d2243dea1ca96b8ece56f793811d9708b4a0181bf81a50011",
+   "stable_id": "aegis-3bfd9f053647e2b16904c3f5038e19a265bd128cab868b8d8e63a87e1f9dc20f"
+  },
+  {
+   "id": "000000000000000018e4a39a6b43c130",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./docs/NEXT.md",
+    "line": 385,
+    "column": 28
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./docs/NEXT.md:385:d3d64843022420dc7dc2862b235e38ed08e77ab37be23ea65d851b8b2b037901",
+   "stable_id": "aegis-550642b3d4498a83b758f4e2a9273b21b20b5ffd58fd3d22db553889069748cd"
+  },
+  {
+   "id": "000000000000000018e4a39a7f5c35e7",
+   "pattern": "bearer-token-url",
+   "category": "security-hardening",
+   "severity": "medium",
+   "confidence": "high",
+   "location": {
+    "file": "./docs/NEXT.md",
+    "line": 385,
+    "column": 35
+   },
+   "description": "Bearer token detected in code",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "bearer-token-url:./docs/NEXT.md:385:e2c69d19c5b81831c31fa61fe8fd0b18ce2c7ae21cf1062aadcb8e67b49daf34",
+   "stable_id": "aegis-73c6f61a93f917df708b16046a12c4f7e5152f5f59a503c7321da21068d242bf"
+  },
+  {
+   "id": "000000000000000018e4a39a812fea18",
+   "pattern": "ssrf-localhost",
+   "category": "web-security",
+   "severity": "medium",
+   "confidence": "medium",
+   "location": {
+    "file": "./docs/NEXT.md",
+    "line": 385,
+    "column": 18
+   },
+   "description": "Potential SSRF targeting internal resources",
+   "reference": "https://owasp.org/www-community/attacks/Server_Side_Request_Forgery",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "ssrf-localhost:./docs/NEXT.md:385:12ca17b49af2289436f303e0166030a21e525d266e209267433801a8fd4071a0",
+   "stable_id": "aegis-153d3b382305d02874b6af9328a85835885d3795f6ce36ee2090bac2903dbe9a"
+  },
+  {
+   "id": "000000000000000018e4a39a7eb442d1",
+   "pattern": "pci-cardholder-data",
+   "category": "compliance",
+   "severity": "high",
+   "confidence": "high",
+   "location": {
+    "file": "./docs/NEXT.md",
+    "line": 364,
+    "column": 22
+   },
+   "description": "PCI cardholder data reference detected",
+   "reference": "https://www.pcisecuritystandards.org/pci_security/",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "pci-cardholder-data:./docs/NEXT.md:364:00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a",
+   "stable_id": "aegis-ab013ff3f0487460e5a91f715cd1ac53a87590db11ee4637f47df7401fc9c5a4"
+  },
+  {
+   "id": "000000000000000018e4a39a75425ee2",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./docs/HANDOFF.md",
+    "line": 178,
+    "column": 34
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./docs/HANDOFF.md:178:158cb7c22ce6943d7fe7d3e01d61b78ab5b2d080cbffdd81c5de41218a6d65ed",
+   "stable_id": "aegis-897c75004c01db3aecb7381a0810035206f35d71e184c5346b7506ef4278d6aa"
+  },
+  {
+   "id": "000000000000000018e4a39a754291e6",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./docs/HANDOFF.md",
+    "line": 260,
+    "column": 40
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./docs/HANDOFF.md:260:d55d01d0341ed0ba2cd99b322e8c5b609254f47d10c7cd12b99b4922effeba44",
+   "stable_id": "aegis-e9ea217879c85dda5ab9935294e2730b2cfaf619d88b256aaf8013591af56b00"
+  },
+  {
+   "id": "000000000000000018e4a39a8162efa7",
+   "pattern": "path-traversal",
+   "category": "web-security",
+   "severity": "high",
+   "confidence": "medium",
+   "location": {
+    "file": "./docs/HANDOFF.md",
+    "line": 343,
+    "column": 17
+   },
+   "description": "Potential path traversal vulnerability",
+   "reference": "https://owasp.org/www-community/attacks/Path_Traversal",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "path-traversal:./docs/HANDOFF.md:343:8a69ab888f99a99e70366c051f330d9512cabc8d710f849e6eeb0de25711be66",
+   "stable_id": "aegis-0c81ccc6b3fc296274a76b838d49b4fe7b78b12ff160b83ba9010834c2633499"
+  },
+  {
+   "id": "000000000000000018e4a39a1dd45a05",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 266,
+    "column": 40
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:266:00ce795c950c9db7382e3602a94398d7459dc68375632c32c06b694b91bfd7af",
+   "stable_id": "aegis-65d20656f5d4d1b2c679a46f1134f35a2691054638e1a31e6487a5e214fedd4f"
+  },
+  {
+   "id": "000000000000000018e4a39a1dd481da",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 305,
+    "column": 14
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:305:62da24cc616bf24f9945b38dda504b3b52a5b477cc56dd1413728a75847d2a94",
+   "stable_id": "aegis-7179fdd651d96a815c8a3284c7bb1b29692c916a8e394cea79d9d8416a1e05e8"
+  },
+  {
+   "id": "000000000000000018e4a39a1dd49bc4",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 306,
+    "column": 14
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:306:f3ef78e4b39967eb78be9856c0ffc22f7b2233c37532f354dab142134461c0a3",
+   "stable_id": "aegis-345843690c3aa7c88bcec076748f3c2048b886cf918726bb5a8e56a753c5df7e"
+  },
+  {
+   "id": "000000000000000018e4a39a1dd4b70d",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 307,
+    "column": 14
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:307:ebde75f9327fb4a2102567374fb581704ccb18c310f2d397cad102584795a71a",
+   "stable_id": "aegis-0915f5991c7c676c54ff6c09cb311966f43f9dd8ecc49dfe0ebfbcce11d5786a"
+  },
+  {
+   "id": "000000000000000018e4a39a1dd4cdb1",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 308,
+    "column": 14
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:308:4e9805515ebe4ce7e7a880f1be90a00ee004e6732f4014780d9191ee0808bef0",
+   "stable_id": "aegis-55946524cfa9d58d9ad2c93fe55286279ebab45a4b7bfe363d077d2c4e5a315d"
+  },
+  {
+   "id": "000000000000000018e4a39a1dd4ebb4",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 311,
+    "column": 20
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:311:33eb9ff488a4e691a18ef95f3fcd10f7c0fd706f59a1af92f10a39f075072f54",
+   "stable_id": "aegis-54de3eca393000a5a9315115e7bc0000dfde219058ef30834d6b0a3838b4e8d5"
+  },
+  {
+   "id": "000000000000000018e4a39a1dd5062a",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 316,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:316:913cf3a9e8764777ab39c271881b6acb372b0dbcfa2d63331e3a0fde8f5ab327",
+   "stable_id": "aegis-d46020a225ee0e8fb981a639e6b5ab51bb9828a7babaebd336b7af684205e4cf"
+  },
+  {
+   "id": "000000000000000018e4a39a1dd51fcf",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 318,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:318:b70d9bf2c1c5656dfd2da51b2172fb1f599e513864d5c5b47f1b4513fdc2ed29",
+   "stable_id": "aegis-c54c8d15c0cde687fd33ce6e98e226157dd976b7946e8f3320d6eab032811311"
+  },
+  {
+   "id": "000000000000000018e4a39a1dd5378b",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 321,
+    "column": 14
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:321:39db73fd5ed762c7af0e49a9519f77454d35de3251cb456a5622a039cf67fc89",
+   "stable_id": "aegis-7cbc92884ff2ac401b5c403af1a565166aeb008d65300a2b5172eabeca73b221"
+  },
+  {
+   "id": "000000000000000018e4a39a1dd5558e",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 322,
+    "column": 14
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:322:f9471241f2374b2a5289fcf4e0a9002aabd11525f4ac87deaa48c62fa2c27800",
+   "stable_id": "aegis-891b283933dde20cdd50239a1b3c209c034e343f244191a5e5f0e6ff805b331e"
+  },
+  {
+   "id": "000000000000000018e4a39a1dd56e61",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 324,
+    "column": 14
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:324:6d09116d2b83f1a67b7e7a904b5eaea53f79273f2d165229010df0ed9d4a36bb",
+   "stable_id": "aegis-a61ec4e6b14d9e24027cd343f986bcb3a555bd7bcb3e30bb543ea5e91878adb3"
+  },
+  {
+   "id": "000000000000000018e4a39a1dd584c0",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 326,
+    "column": 13
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:326:2bbfa49373a468098465762bf567d5c42a0fbe22fe01071326d1cfa132fd864a",
+   "stable_id": "aegis-423035c10c72536317e6d7ab25d91d90a35410dd5dcae7f11f0d7f70bc25eb0c"
+  },
+  {
+   "id": "000000000000000018e4a39a1dd5a04e",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 331,
+    "column": 14
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:331:ab83666a58d91d656197f872534927019ff049417ea87440d5294b6d33724ba4",
+   "stable_id": "aegis-4c59f04978c6ca045b09238a6b25a6e523d488f0a1f5bf7bea38ac6abb7c6343"
+  },
+  {
+   "id": "000000000000000018e4a39a1dd5b80a",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 332,
+    "column": 14
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:332:e61b7ddff66a1220d3ca0098e3adfde441a174bb52942ca91057bb8c666100de",
+   "stable_id": "aegis-ecdf1e0bbeb1d76209ce5dea6d8d7afc8e5b1685a2e067c618aa9a1498b9359b"
+  },
+  {
+   "id": "000000000000000018e4a39a1dd5d00c",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 333,
+    "column": 14
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:333:c324f7de6ff2e9eb5122329bd1991ea4638cc8f045235b1ae8baf082c3dd7c35",
+   "stable_id": "aegis-a92e46e013239da3f6892d6192bd94785cdc9323382feb2656dd15f08adf7dc3"
+  },
+  {
+   "id": "000000000000000018e4a39a1dd5e66b",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 335,
+    "column": 14
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:335:f52c13859d6e53ff850bf0d6555ea2b62f4a59144bc2f813d217c6c4276f0847",
+   "stable_id": "aegis-c70087bab09bab1663df900376caee2e7f4a33fe5e76688893263c99ebfa16c4"
+  },
+  {
+   "id": "000000000000000018e4a39a1dd5fef9",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 337,
+    "column": 13
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:337:540d4e941d05f0f0d1a16ae4e1a6fbc3ee3c8ef93ef8f8b53b2428f728071d90",
+   "stable_id": "aegis-f988111365f39e96f6fd73a37fed81dfb7e01b13647282c40fa4eb2758d41ce1"
+  },
+  {
+   "id": "000000000000000018e4a39a1dd61c2a",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 343,
+    "column": 13
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:343:6ead8351fe3a37874b4763382e304dfa13ad2b8b4582444efcfe5532e05fbbc3",
+   "stable_id": "aegis-fb86a6856f8278483656f3cd23570e78118dd83b7904646d83bfe1caf5596902"
+  },
+  {
+   "id": "000000000000000018e4a39a1dd633e6",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 351,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:351:ca37cb956ad8d37c449558e1fff426d084ee2bf5cc3a7173572a75eb195741f8",
+   "stable_id": "aegis-d7863c24355b42d79461ad8b356ec584611217f8f166b1821d9b6e46e77835e3"
+  },
+  {
+   "id": "000000000000000018e4a39a1dd64be8",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 352,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:352:4b3ac7306d4dae0dd3daf47d38c294f2f0f94a8127b392beb5c309f5ac5ec451",
+   "stable_id": "aegis-a75a26f1d2e0990dbcbf176d4d9a38f9de5510bbff306be49940ea858cd4d9ed"
+  },
+  {
+   "id": "000000000000000018e4a39a1dd66430",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 353,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:353:21d98036a016c04ec9f1ae4ecc18693ebc3dd4d3f2792a87b141dc27f0e0ec5c",
+   "stable_id": "aegis-a00254f3d746d036218018e129a3a42993aac61aef01262daba6247e25cec1d8"
+  },
+  {
+   "id": "000000000000000018e4a39a1dd67c78",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 356,
+    "column": 14
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:356:e5e1c835eaff1f109bacc17aadd51983945d26068a922a9dee19acc3ce2d724a",
+   "stable_id": "aegis-39bbb463ca92aec81df9ca7b5f193744d3712e0381249d70ce783b497299d36c"
+  },
+  {
+   "id": "000000000000000018e4a39a1dd69505",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 358,
+    "column": 14
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:358:242656b9bacba16214de0517d1e66587da08c85386ed4e92fce46a5c0243a391",
+   "stable_id": "aegis-8522d781f1e8f3a3b30c5fc79ba383fb5fefe8a94697a45aedd7f5bb013b7b08"
+  },
+  {
+   "id": "000000000000000018e4a39a1dd6ab1e",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 360,
+    "column": 14
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:360:92c357ab8c050bfa4257b4359a14f7a2366609fed5281dde3d35182691768c0a",
+   "stable_id": "aegis-a8ff3f8827056150fc9d657ba4296b0b61e973f01c5c1e6c764c3151e4155e59"
+  },
+  {
+   "id": "000000000000000018e4a39a1dd6c320",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 361,
+    "column": 14
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:361:f3fbead98fdedbf3a510d6d643783ef79b1cb6a171bb0da80472abebf63aa6e2",
+   "stable_id": "aegis-4e64a0150ba32a7ca69ff754e6070d0ba671c7269986109b2989fa4497376095"
+  },
+  {
+   "id": "000000000000000018e4a39a1dd6df3a",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 365,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:365:1707ff20ed7abaf28fe8cba49fc31d0c6053cd0088162cf2f75220901bd58533",
+   "stable_id": "aegis-b9ff27c04aa90c135859efdb06612f482ec64f3f9bd14e3cabbbed37ce383119"
+  },
+  {
+   "id": "000000000000000018e4a39a1dd6fb99",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 366,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:366:fa56df86e3673f9a42949d92bb4ecd7dd060f2b59a73a968313e683feb0c8db7",
+   "stable_id": "aegis-d0ba0f614dcc3a219ae09b1751bbc2d02ada53e5d14a4fe6092ebab6a614b3e1"
+  },
+  {
+   "id": "000000000000000018e4a39a1dd7139b",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 369,
+    "column": 21
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:369:9269d298e1a72533d6d57185e64bfbb3be122ca0aa9e07af222c21c8f26befa5",
+   "stable_id": "aegis-956416ea4c63e595368a6c2ad991ac3b4995f3bba4a78c3d0f9d9a4f530e1dea"
+  },
+  {
+   "id": "000000000000000018e4a39a1dd72d86",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 375,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:375:025285462d5eafb1203031862330c70214c161500769cbe48f4fdf35542da075",
+   "stable_id": "aegis-18be6fb0c1ecc009d109ef6a7a56c891b1b9b4edf156f21b48ce155ffd2ac3ea"
+  },
+  {
+   "id": "000000000000000018e4a39a1dd74588",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 376,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:376:4239ff7a657455710a5b6a323e44c237237633801051aa0d325ff12893831238",
+   "stable_id": "aegis-bdc6a210f5782accc87cca33b56c4a1a294dd62d5c279191e5923d1876703639"
+  },
+  {
+   "id": "000000000000000018e4a39a1dd75be7",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 380,
+    "column": 14
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:380:41255266c15b84fff96ceeafde91c025e15283d446d57eb60f72fdb3a7870c6c",
+   "stable_id": "aegis-4ec059a347388065c3ed46edd8aa1ddeb4d5f419757e477d2e2fc8d5faaae427"
+  },
+  {
+   "id": "000000000000000018e4a39a1dd77475",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 381,
+    "column": 14
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:381:e5586501c9641b47d3db40f3d6fabe56b1609d9886c2ad711a497c76ffd76fe4",
+   "stable_id": "aegis-b0e0c89d2a312a48295b7894e8ca8725b155fb7228b79ee4c34f75da04ae688c"
+  },
+  {
+   "id": "000000000000000018e4a39a1dd78c77",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 382,
+    "column": 14
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:382:f0b147fb33b5d017af34d58f6675d6cbd00409b8b553dd313050c20e4370d1f7",
+   "stable_id": "aegis-f53d20f8899f64d61cfb36551d3d48568eaf6f634ee44dbebb4bb968adb0a6a6"
+  },
+  {
+   "id": "000000000000000018e4a39a1dd7ae05",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 384,
+    "column": 14
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:384:78f54f73431f4924a4c5ac3647c0dccca95e2f95d4e25037a92d03f8fae9db10",
+   "stable_id": "aegis-b70fcda8f1e291920f741dae1f1d7da58e90abb23fca1b1c976771fea01c2ddb"
+  },
+  {
+   "id": "000000000000000018e4a39a1dd7c607",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 388,
+    "column": 42
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:388:c417f8e7788d6ee7776f9086d7d118e4cd6e15a75b64858431c6bf834f0b4d87",
+   "stable_id": "aegis-484bdac85913e34645e195d75063c80bb7405649555d1cc6a3184ce00c99947d"
+  },
+  {
+   "id": "000000000000000018e4a39a1dd7de95",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 388,
+    "column": 50
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:388:46dbad4e69b9984e0067cee491e3aae43342fb543019b61a72968ed2ee72566e",
+   "stable_id": "aegis-96c9a298e48db525264e20494c9227eb6bd8bdc95003eaf8d974dada11084e34"
+  },
+  {
+   "id": "000000000000000018e4a39a1dd7f53a",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 394,
+    "column": 14
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:394:fc7ed57d6b886c8c8f9a01a8a1290c58d9a6bfffe952f4c201d9611061429b8b",
+   "stable_id": "aegis-eb01e0e0e5aa65e31638653f9d5d46018b1f97e9cb8fc9767f5b0b5bc1f2504e"
+  },
+  {
+   "id": "000000000000000018e4a39a1dd80cf6",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 396,
+    "column": 13
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:396:46dbad4e69b9984e0067cee491e3aae43342fb543019b61a72968ed2ee72566e",
+   "stable_id": "aegis-85f4522f9fc1155d7adc4765845f9278a5b2089de55279355fb6cc4e63587652"
+  },
+  {
+   "id": "000000000000000018e4a39a1dd82355",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 405,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:405:e339e6f737cff14471715b1c4da71c202dafef3f60611e826d964573d14c6986",
+   "stable_id": "aegis-54b64ebd07abc19035bbca37949fe45057aacef33bd1b2626c676008acc58bc3"
+  },
+  {
+   "id": "000000000000000018e4a39a1dd83b57",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 407,
+    "column": 21
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:407:d575a5dea497c19bedeffef583513c5a2569b534bf5b9b07ab7e52ff5b3ea87b",
+   "stable_id": "aegis-93ca01077cda775ceffb2a0bc3b78e1c01da8b490f4e2eb867fe1b7081e97a67"
+  },
+  {
+   "id": "000000000000000018e4a39a1dd851fb",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 413,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:413:f91370128fc4f0253020a5b0c578ce9fdabffabe0583eb783dff3c139d4b74c6",
+   "stable_id": "aegis-3e075f8f1b2e6734cfbe7ff0e86e6c41ac31037fa6e868132cc5aabc9b32e13a"
+  },
+  {
+   "id": "000000000000000018e4a39a1dd868a0",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 414,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:414:f720185ba71f4c1d4227d4b48a7824f6919c10e6e534a813beab2b20e8d1b5bd",
+   "stable_id": "aegis-3a2c7563e5b5fc16d160f8dca4ac49520e050a47c808177c3a4339c8a5839bbf"
+  },
+  {
+   "id": "000000000000000018e4a39a1dd880e8",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 415,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:415:51af6b704f8b5027317db0350e036893871a67e29bcd96e6f5f14ff452c602a0",
+   "stable_id": "aegis-5860b045887162c37039586cc5a16fc0ce537b7171c464d46d04d0631e3a9f97"
+  },
+  {
+   "id": "000000000000000018e4a39a1dd898a4",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 417,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:417:91f112aadcbd726fa1dd5a7dbe960d401ac67a5b540a04d47c1158389a2a2753",
+   "stable_id": "aegis-60691cfd70a14245db3eeac37a32781ca55eb57621799da37455f6ab5a0f05e1"
+  },
+  {
+   "id": "000000000000000018e4a39a1dd8af03",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 418,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:418:5b759e21f5660593a5285932b34050a55d058d204f7e2739618ab716f9db01d8",
+   "stable_id": "aegis-dbc590cd2e1acf9c3fc71f6d731b1131807ebae64ea0e579348fc5e9df3344af"
+  },
+  {
+   "id": "000000000000000018e4a39a1dd8c562",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 419,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:419:e208931401347316e428e655a5698175fa201a16e2d1e12017013914a8198a7c",
+   "stable_id": "aegis-3e752505a5ee5f3ee7f5bb50eb2713b29ca40f1ff0b3837168a60e07eaba739f"
+  },
+  {
+   "id": "000000000000000018e4a39a1dd8ddf0",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 421,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:421:a08ac6e72355344bd254d375420e33484b4d7cd2d63e0b43c9819f5d4b2d7875",
+   "stable_id": "aegis-66dcfced32fee294256a3341ae3a242da6b9d0944040f4bb2e1c3982113dac04"
+  },
+  {
+   "id": "000000000000000018e4a39a1dd8f637",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 422,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:422:ceef4d8f8be1e0e73b32e995fc232dc91cee214e65ea23a8cec546b119b4b465",
+   "stable_id": "aegis-cf60be787929b73863f71ba4813a53ff3f45d8e1888eaf6b0d648850070cbd25"
+  },
+  {
+   "id": "000000000000000018e4a39a1dd90df4",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 423,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:423:426ce8652170860f8ae5295deaeeee51b659268c364f1a57e33583dfe4ee793b",
+   "stable_id": "aegis-3bf8c37335907e7b8314bb707d1fc4713e9ca7a1d5611c82b9c9e0358fd5100c"
+  },
+  {
+   "id": "000000000000000018e4a39a1dd925f5",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 426,
+    "column": 14
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:426:2516b29128ecd6a3cb043801b07450dc9bbcf63ee852a8430bb0cd157b803be9",
+   "stable_id": "aegis-1c0db399b766d552dbafb928afff212d08e2bc033bf48b6b326a0aa191a74866"
+  },
+  {
+   "id": "000000000000000018e4a39a1dd9420f",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 428,
+    "column": 14
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:428:a9b551de1cdc58510abac48463e5bff8a9671cd20749662d5bda808472b72bc1",
+   "stable_id": "aegis-a6516cf6c4fbcf50d0426e76b9a750610816f93d8b6298ddb050a41f85f1e8c5"
+  },
+  {
+   "id": "000000000000000018e4a39a1dd95ae3",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 429,
+    "column": 14
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:429:8bb62405e501e6053087b02025b93e1f9c5596cb207d36a8605a2c089e7a0b73",
+   "stable_id": "aegis-100dd796d40360d9009a5bedc326c199713faa62bd8bcc5333088a1e019ba08c"
+  },
+  {
+   "id": "000000000000000018e4a39a1dd9732a",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 430,
+    "column": 14
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:430:7f01ef148038d807b241561658da3de6d53908927b8a96dc236699bb65e5115f",
+   "stable_id": "aegis-673c742051f0dd1f30748a65cf5ce4581d2b0690b4893065e2da5990c4158ddb"
+  },
+  {
+   "id": "000000000000000018e4a39a1dd98ccf",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 431,
+    "column": 14
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:431:b085d058de40104a6c6b2b4fc5fa17ce421de8404f7fafde74d734a2649f378f",
+   "stable_id": "aegis-2280f01af8b89b8846fc997d7d08a4778d2f345a1c4176078b9efd71743964f0"
+  },
+  {
+   "id": "000000000000000018e4a39a1dd9a817",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 432,
+    "column": 14
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:432:57648d5e3e16e0e2a62797049dbe5648548728ed070c075b50de4de2fa9ac187",
+   "stable_id": "aegis-0b2394f116be15983aeae990c60c745d085487d4da02451ffaac1979b7208dc8"
+  },
+  {
+   "id": "000000000000000018e4a39a1dd9c019",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 433,
+    "column": 14
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:433:c417f8e7788d6ee7776f9086d7d118e4cd6e15a75b64858431c6bf834f0b4d87",
+   "stable_id": "aegis-bb5588d4557806ad694eb5ce07427420383fa029cf880ee18e4b9c32f96073bc"
+  },
+  {
+   "id": "000000000000000018e4a39a1dd9d8a7",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 436,
+    "column": 13
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:436:5c7617be15fc4b99e4e7f9447e96eaaf71f41118322f49209791487cad27f6f4",
+   "stable_id": "aegis-381a5ef5efc60d14d989e2bb0ee26a3bd32791ff9e00d6a9f7b73b35eae08e79"
+  },
+  {
+   "id": "000000000000000018e4a39a1dd9f0a9",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 442,
+    "column": 13
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:442:4e960e08f7a98b0f7eb6dff609df9103bbd4faa532313e33afcadcda197829c7",
+   "stable_id": "aegis-73d36f367051d273327ac627bbdf85b4ebe17a58f770b17a6ba854cd25db95c2"
+  },
+  {
+   "id": "000000000000000018e4a39a1dda0a4e",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 447,
+    "column": 14
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:447:0772704bface38fcd7c2bbda20d7823f7f169df073a018cb34208998ca3f684f",
+   "stable_id": "aegis-2023709c91eb5a888b79ecdb7c06dc28371ef27aadd1c31c008b12d04d223744"
+  },
+  {
+   "id": "000000000000000018e4a39a1dda2250",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 450,
+    "column": 13
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:450:c1860f954563eeb5afaae3a6c26dcf5048b8dd0c1b1b0ac109ba254775859890",
+   "stable_id": "aegis-e46e799ac19571f992109cf21e4fb7d6634888424cf215cb8b7b49ca017a814d"
+  },
+  {
+   "id": "000000000000000018e4a39a1dda3a52",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 456,
+    "column": 13
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:456:daccd66fc15cb728dd9aa33c48221e41663e4ad754eceab18426c6fd8927a080",
+   "stable_id": "aegis-55947bc404d523547ae703d3655fc8fffea91accfc14cdc3df2cead8dba1de1d"
+  },
+  {
+   "id": "000000000000000018e4a39a1dda529a",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 462,
+    "column": 14
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:462:2cd5760403783cae8db6cb5eabdf018db5668d381973c4844b77d21b12a2a646",
+   "stable_id": "aegis-db892b333c0ff7326a51366376e003a1eaa4534ffe8b9b376c1af2f828257736"
+  },
+  {
+   "id": "000000000000000018e4a39a1dda6ae2",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 463,
+    "column": 14
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:463:75e8751a57e0fc4097f6d98b486fe1680635494bbfc7ce16564757f38192e190",
+   "stable_id": "aegis-431450736407f418ef03d864b04fe0d8341af7d6af2e87aab0bf95db92f93f46"
+  },
+  {
+   "id": "000000000000000018e4a39a1dda8186",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 465,
+    "column": 14
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:465:e6c1f8dc72e9d3a3c2837be0d843cc0b47b4e504c66dcf85d2f03f62d75d5f39",
+   "stable_id": "aegis-d306c01546c8b91f472d349858fdc756b7d7a7257f40f71313321cebd0f5b386"
+  },
+  {
+   "id": "000000000000000018e4a39a1dda9988",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 466,
+    "column": 14
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:466:3e500fbbdaf3642ab1367971a026e84e8b180eb6b0e413427127a16a7633f81e",
+   "stable_id": "aegis-f4906a160d0b16d686082a29cc5ec4720aa02085354fb87145f6e3e75636a1e3"
+  },
+  {
+   "id": "000000000000000018e4a39a1ddac046",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 475,
+    "column": 13
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:475:43a0a9fa89058a3d622b3f864b996910070e5401b0be0dd84b85cfedfd336932",
+   "stable_id": "aegis-2adec686ef1b838f3bc0b1a942d74bb056627730ddd95204134d364f36eb95ee"
+  },
+  {
+   "id": "000000000000000018e4a39a1ddad8d3",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 481,
+    "column": 13
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:481:38094ddd050e13db5d3002f79525db73a49db5965d04877d11a763ce7f05d9d1",
+   "stable_id": "aegis-91d8eac09a330f8b0854f1f2d5e313641fe62b4a1f80445ebfbee0bd8dbc151f"
+  },
+  {
+   "id": "000000000000000018e4a39a1ddaf4ed",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 489,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:489:c94bf2bab723f99c4d8cd32903c6a6c0599df8ed47869aa56dc1a7a58fe6d1c5",
+   "stable_id": "aegis-01a4934998a467aafc0106a2bde2b4589565fa3459a9dc666379374d8d08e527"
+  },
+  {
+   "id": "000000000000000018e4a39a1ddb0b4c",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 490,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:490:14adef56c756e189994a6d359ba16a1ad588167a4693773c90b12f0fac688988",
+   "stable_id": "aegis-c83ab45159111bcfca85d9b628cdb8e677806439aef523aed800c46abb01a22f"
+  },
+  {
+   "id": "000000000000000018e4a39a1ddb2308",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 491,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:491:0b1c82682eaa1b0f72af5c6eac88f4c175ab659d71ba6a966fee29c8fafc4877",
+   "stable_id": "aegis-46e42bc567c99db4985cca9ddd7de8aa5823ed58eb43357a676444e7b9b3ac5f"
+  },
+  {
+   "id": "000000000000000018e4a39a1ddb3b50",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 492,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:492:030449f4d55aa28d29e13a4838a487d3bbeb025442222b74b1ba3a33616f1cc3",
+   "stable_id": "aegis-0cf536a10c2787f656bf8b4e3aa0c599b36778ac298540e20a33d2079aa8f241"
+  },
+  {
+   "id": "000000000000000018e4a39a1ddb51f5",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 493,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:493:351909b4f58d34d3094397e4fc1ba35e4095ea87e9d8c53a5d095d255ac1f9dc",
+   "stable_id": "aegis-804b477bde677e141e8a1cc45c2a24bf42d8070ea23e7bac2cea9c672f4cf5b2"
+  },
+  {
+   "id": "000000000000000018e4a39a1ddb6a3c",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 494,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:494:287fcae255c02667e4b3a9c83eb143430ad11440edd65ca44091e4f0290cb7c8",
+   "stable_id": "aegis-f68005b015119b2e46bcb8958f8775f7a8d113d22030c634cba97071a78bd91a"
+  },
+  {
+   "id": "000000000000000018e4a39a1ddb8056",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 495,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:495:406acb8440ba898d056e1fa9f369aa34aad6cb32c3ccdc5faff03b0e725928b0",
+   "stable_id": "aegis-57227c7d1f0d2dde964e78f0c9627e4b88f91be114472b6c7d651e8cf8467545"
+  },
+  {
+   "id": "000000000000000018e4a39a1ddb96b4",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 496,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:496:df8541c1c7a18256000c16a29cbe46d19c9b943b83eb3e0984307a85d7aa34cf",
+   "stable_id": "aegis-74628a26dfb9bba4eb0ef82ac563901bc27f4197835ecec36b3e1f520cc00de1"
+  },
+  {
+   "id": "000000000000000018e4a39a1ddbaeb6",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 497,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:497:0dd1565bc056a25b9820437e67f66b82f5a55458a5b4aa53e00b558c9c1ae7cb",
+   "stable_id": "aegis-3233505680a1de44de80b8eacb32eb18f163db3a276e07a7de7dada316b27fef"
+  },
+  {
+   "id": "000000000000000018e4a39a1ddbc744",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 498,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:498:ac280071057c43a28522a011a227eb4e8ce38c3c5be9e30e249e7fe2b0f2405d",
+   "stable_id": "aegis-875baff8264adfef1c84705f851030bab640ca868a3933e0ad488f83d3b48598"
+  },
+  {
+   "id": "000000000000000018e4a39a1ddbdde9",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 499,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:499:d16f4916b99df0f6d9a841c28b60312b74a704d5119ed31c46d71a5992034870",
+   "stable_id": "aegis-bcc60f8945b208b239cb5de0f718d33682a9fe6bb3eb1359445d52d860589e16"
+  },
+  {
+   "id": "000000000000000018e4a39a1ddbf5eb",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 500,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:500:d3899592c8711d84c9de45bde599dfcba1a4f32b7d38c529edea3c150af925e7",
+   "stable_id": "aegis-1d2ab323f74d56557942c7744503ab97b2e20a1a5dc6dc845468ceae7a112ad9"
+  },
+  {
+   "id": "000000000000000018e4a39a1ddc0c4a",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 501,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:501:e54f884419f0da9030a8349e71dc4bdc1ed7bcea87100e7bcdfaa9ca04875d65",
+   "stable_id": "aegis-a17a9e6e9928bb03b8b81285feab8e1af4a3eeff568d224b8b662eae33053b00"
+  },
+  {
+   "id": "000000000000000018e4a39a1ddc244c",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 502,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:502:617f919b1e0d71414759f3d27fb3211d8ab6af093e3b356960050c3276909f8b",
+   "stable_id": "aegis-a59b8a898aaa9a170a399d54b48b2240abdb51f79a0e1f03e40349a5a59ff4aa"
+  },
+  {
+   "id": "000000000000000018e4a39a1ddc3aab",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 506,
+    "column": 14
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:506:ae87abf59f31db2add14a23c4853f49571b8a664ede065bdd19192a18886af38",
+   "stable_id": "aegis-40b5e36a2179f76cb93505a10c886dd386b52eb0d03d1cd21f970bc58ba53875"
+  },
+  {
+   "id": "000000000000000018e4a39a1ddc514f",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 508,
+    "column": 13
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:508:c3e4095a0395ccd826644e6881fab1e10e10342278cd3495609d47401b158fdd",
+   "stable_id": "aegis-488b9320f140c4950de54d5eaea008f4996b7978a6b8708680167d863a5a6b29"
+  },
+  {
+   "id": "000000000000000018e4a39a1ddc6951",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 514,
+    "column": 14
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:514:98b1a693ae8e7415b0b6feea74f05641ea3dbcbdb3a18cf6282fbceab3442c58",
+   "stable_id": "aegis-0694f911993ddd4194b51fa8911cc73dfc8e10c8ffb9d4eee9c5d95a48e01d0e"
+  },
+  {
+   "id": "000000000000000018e4a39a1ddc7f6b",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 517,
+    "column": 13
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:517:7c2a0b7d94dfbc4dab636cdfd083f4a754143cc4d711f8278b45d9097eb1e846",
+   "stable_id": "aegis-ba709da5c3e0edadf65e0ff49dc542e45bb5396dc00f6e5e7573536134c29e48"
+  },
+  {
+   "id": "000000000000000018e4a39a1ddc97b2",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 522,
+    "column": 14
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:522:ebcb34169beb54e36100b60a269d65823853a6f91b7c1a9fb5f678707f85d6b8",
+   "stable_id": "aegis-0e22736debbd4f4c1f50b4bc853aa477c0f2c7847b4fd90dc2942f7d422d0bff"
+  },
+  {
+   "id": "000000000000000018e4a39a1ddcae11",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 523,
+    "column": 14
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:523:d5652db2d192b9acfcaee1df09847867e74beac2c8272c98c712bb27b5c0e3ee",
+   "stable_id": "aegis-4154e1ad39f9621882f657feb9c8fa2bef729cc995efb02dddd83829b89a5997"
+  },
+  {
+   "id": "000000000000000018e4a39a1ddcc4b6",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 525,
+    "column": 14
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:525:8ec73dcd1b1479c06bd6c5fd33a37cd627704d56ef8f1f73262a0f522eafaec3",
+   "stable_id": "aegis-ea611c3d7ab2bf7d57aba4a88132c27bd0022afcc2c62595536a7ed896a3b9e9"
+  },
+  {
+   "id": "000000000000000018e4a39a1ddcdcfe",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 530,
+    "column": 21
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:530:b3253cf3eb5d59d5fa0f3a932c2057cfa297a24d27d6461a6f63984733aa754e",
+   "stable_id": "aegis-d29273a7c8858d89986db858e06da6726af5537294c3aa12fcc27c8bbf492b72"
+  },
+  {
+   "id": "000000000000000018e4a39a1ddcf4ba",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 536,
+    "column": 21
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:536:f38d07db38562359e54fc27bc5491d9726030b7be61f691b1b9bdacc3bdd543f",
+   "stable_id": "aegis-96ad500a1fe5e60e633f3ceb17b42c781e0ec06cdc4d950b7f6031209569c421"
+  },
+  {
+   "id": "000000000000000018e4a39a1ddd0d02",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 542,
+    "column": 21
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:542:4056fd29d30f2e44c2700793f8c90cdff0c85e608a8feb0818483c955a142eec",
+   "stable_id": "aegis-604a7100026f2c8c4af9f60da50e16e61d487301420ab20d1bfe20c208b68602"
+  },
+  {
+   "id": "000000000000000018e4a39a1ddd254a",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 553,
+    "column": 21
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:553:b19c1a4229720d09c53fd44bd4cce04ed6fa7db1f66b8b95eef0cb6d507a77a0",
+   "stable_id": "aegis-0c3696d5cc7a135c09ed699deccafe457d02a5967637ed07d2ffdd5729957ca3"
+  },
+  {
+   "id": "000000000000000018e4a39a1ddd3dd7",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 559,
+    "column": 21
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:559:cd83bc48d5a92fd60dd20e1123e5cad0336673bb9e98e39b6b29825cc883d4bb",
+   "stable_id": "aegis-7b27ee03fd558b6e624f4528f75b7b385feb3b91b5a1396084c05672acea64f5"
+  },
+  {
+   "id": "000000000000000018e4a39a1ddd547c",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 565,
+    "column": 21
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:565:fe71955958a0844d86cd6217c0144e33825cd4c111f1fd815232c6b8fb4f6ec0",
+   "stable_id": "aegis-ba28b807280464d2990af962d2f50f19421b17a5c2a8732483b841aaebad7979"
+  },
+  {
+   "id": "000000000000000018e4a39a1ddd6c38",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 571,
+    "column": 21
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:571:b79a4aa258cde2d4381e96baaa5405e94bc616a03ac2cecbf9fe75d27b24b49e",
+   "stable_id": "aegis-61f7d94caadea6f10d231c6652975deb32a3841e4c18071503c754c37e51886e"
+  },
+  {
+   "id": "000000000000000018e4a39a1ddd83f4",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 581,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:581:cca7f8f6d3361ccfec500c1a4acbd3a6acc71c48c8d1d0a433020b30622df10f",
+   "stable_id": "aegis-a0fef18bc799cff10d8cf3a8c1f3a06ad45feee5d31f6448b317e52d06285ebf"
+  },
+  {
+   "id": "000000000000000018e4a39a1ddd9a99",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 582,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:582:4d709df00a8933edcb64f0c9918104ad8479b77d734ff669d72643ab54dcbb58",
+   "stable_id": "aegis-da5b213fdd6e6ac6f0d635fd69a65cf8dec22e55f2d7284731b9dc184dacbbf8"
+  },
+  {
+   "id": "000000000000000018e4a39a1dddb13e",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 587,
+    "column": 20
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:587:94d32a029707fda3d022a8c62ed4c3fde6b09ffe19694e8e85a5cb846813ea0b",
+   "stable_id": "aegis-a5ce06a8c8ba48c58fc585f486f63c8a8fd84d5cd1aa0e18b9ef6f5bcf0c0b5f"
+  },
+  {
+   "id": "000000000000000018e4a39a1dddc9cc",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 589,
+    "column": 14
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:589:7aa29262e1a68c491acdc1b6a10b5c4c91fa5cb541e4a18e85730ea708ab0b99",
+   "stable_id": "aegis-2b67e93e5f34eb67c0d7dc441a3d7e32c78823da3c8e008cb5c322c1f44039d8"
+  },
+  {
+   "id": "000000000000000018e4a39a1ddddfe5",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 590,
+    "column": 14
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:590:3b1591f93565e1cfc49794221a7aa6e383f87b87b25240d889523177be097ddf",
+   "stable_id": "aegis-51b93c39d9d7337e51c1d6dcb76f9c1de2eb5967d0e7fedb5d6c17f5afe79244"
+  },
+  {
+   "id": "000000000000000018e4a39a1dddf7a1",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 592,
+    "column": 14
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:592:7d4617e6d4f6575fbeeea64680d26e1075ca2f7130e06763cd5d00196844e8e8",
+   "stable_id": "aegis-176508dad48d6f1d4ee63b1ac8829be963ed9dfb0a590cacb373680e65a75e36"
+  },
+  {
+   "id": "000000000000000018e4a39a1dde0dba",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 602,
+    "column": 13
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:602:eb629c505f203f4eec11b121f9d88ae3cb5c3488d55a6a4833563fb96ad3af99",
+   "stable_id": "aegis-4f665cf1d2af26e2e2510b0978a4ddbc576b4645facda6155aa7e462ca7b51e9"
+  },
+  {
+   "id": "000000000000000018e4a39a1dde23d3",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 608,
+    "column": 13
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:608:8518fa5bc058621e14473657305bb75e087c8c424f043067bff061e04e4ac28d",
+   "stable_id": "aegis-21bace98fb1c7beec3132b0569a939fe43c5b456271c875830d86125cdc26f69"
+  },
+  {
+   "id": "000000000000000018e4a39a1dde3a78",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 614,
+    "column": 13
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:614:7b0c43de87cb7bd68abdde2c9678721245070e6248e9f30861758e42356587b8",
+   "stable_id": "aegis-7c95bb9ba12f1a29527b3d522fb4b7763cd21bbb7f4d3886ba44d87a1d8f9902"
+  },
+  {
+   "id": "000000000000000018e4a39a1dde52c0",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 620,
+    "column": 13
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:620:fb19d94cb9db7a9bf0ae81a49f9496e73e010fd8adc4cfb7ccb7330e1f8ac15d",
+   "stable_id": "aegis-b029388af7f0b76cf4d98ca480f5ae5f871e4ffd4867276d72f36ecf4e47d36f"
+  },
+  {
+   "id": "000000000000000018e4a39a1dde6964",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 627,
+    "column": 13
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:627:b64cbca6980b4700a1c0722514aa317dabeaa0531742775d1aeb572613db94ed",
+   "stable_id": "aegis-bbb8f20b3b1fc2fadab5c269982cb6ab8f64e69aeccb6dffb2dd3ea158992c53"
+  },
+  {
+   "id": "000000000000000018e4a39a1dde8120",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 633,
+    "column": 13
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:633:fc54e4e23855607fcdcd20ac0e24de1c5590b264541b65b127fa8ed07b83462b",
+   "stable_id": "aegis-388b0f92c293ce7a3f446a446da08ee21f94b7fc874701323e55a9548880d999"
+  },
+  {
+   "id": "000000000000000018e4a39a1dde977f",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 639,
+    "column": 13
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:639:1a523634202bad5469e1e5f6989d3376c5aeb9337ccadb283da55fe7c34aa83f",
+   "stable_id": "aegis-8901e1a12944f2c6a8d70cf753221c870127b351638cdadf86f80d8f0866a742"
+  },
+  {
+   "id": "000000000000000018e4a39a1ddeafc7",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 646,
+    "column": 13
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:646:00ce795c950c9db7382e3602a94398d7459dc68375632c32c06b694b91bfd7af",
+   "stable_id": "aegis-d86866616de7a7975a5d95fde81fdfb4a7663c2934b3cd6c983cdda6007a5083"
+  },
+  {
+   "id": "000000000000000018e4a39a1ddec626",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 655,
+    "column": 13
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:655:1a0360af1684508ffecf25e964eae6ef77fb0e2a30ea15bb6ceb9b26503086d9",
+   "stable_id": "aegis-6f994b5fe37c87a4b74fa1b64ce12e2cde0ba0b6035dabe845146e2bafa02342"
+  },
+  {
+   "id": "000000000000000018e4a39a1ddedeb4",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 664,
+    "column": 13
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:664:15b0be5f7d1ebe8ed9b5373d1e1a4487ec65c1d81e699a80db89498c83e7157b",
+   "stable_id": "aegis-16c2480165e05f6829b18db0784c43148723abbd803185bad78120f0f1b02e8e"
+  },
+  {
+   "id": "000000000000000018e4a39a1ddef513",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 673,
+    "column": 13
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:673:b80e47cb1c3608f7951802d2a481890131020f52094ae4efee70ed8482a067b0",
+   "stable_id": "aegis-a624fa998a15b077a23eb64cd45455b31c0aeab8a1b812de5b18ba75ac2e1c33"
+  },
+  {
+   "id": "000000000000000018e4a39a1ddf0ccf",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 683,
+    "column": 13
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:683:e1acc913a67a60ce430edbc9b49d811d918d61a5e8396ef3c467fd87f8a8a582",
+   "stable_id": "aegis-073eab479237222a78fb4bc808ccc04be954510bb42e42d0dafeea56ce31054b"
+  },
+  {
+   "id": "000000000000000018e4a39a1ddf232e",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 690,
+    "column": 13
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:690:d6a72e6744d5589ac13e42e711d2fda853f2637d55477c1f21e9f1f02f905d3e",
+   "stable_id": "aegis-42e450f2d23037f6c4aa65bd555c86e1530cb4438d4f9b53fa8b0bb6f35c2039"
+  },
+  {
+   "id": "000000000000000018e4a39a1ddf39d3",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 696,
+    "column": 13
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:696:ca754d1680472ff00c2572563b4885055e629f5d23597eb434a093c713107380",
+   "stable_id": "aegis-27959562ac2e76f67e457150e739d84154f79a3c3f5b67fdbb2550691f11e85a"
+  },
+  {
+   "id": "000000000000000018e4a39a1ddf5031",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 702,
+    "column": 13
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:702:3187575a4e3b842b68f132a997a616460bebd0b4806f482f07b6915464947fd1",
+   "stable_id": "aegis-d28ad96aee15abcd6eaebd2e06b26f5eed6dfae489013b4df0c1948af6e3d367"
+  },
+  {
+   "id": "000000000000000018e4a39a1ddf6833",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 718,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:718:158cb7c22ce6943d7fe7d3e01d61b78ab5b2d080cbffdd81c5de41218a6d65ed",
+   "stable_id": "aegis-24c8adb34cee267ba5a1fb516ed0558d0810fdebc07291b3bb800df0a07cba09"
+  },
+  {
+   "id": "000000000000000018e4a39a1ddf7e92",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 720,
+    "column": 21
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:720:5c67c47067f58c83214019d47802f03562700e929f48570674db091aa04e150a",
+   "stable_id": "aegis-de918c9501c95a9e767aca574a0f1a15cf2dca7b6e9219069148cf59a7a003f6"
+  },
+  {
+   "id": "000000000000000018e4a39a1ddf9694",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 726,
+    "column": 21
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:726:57901b0fdee11eb72a741beaef2886c6a0bb1a0f56bc884c8878577f524e4da1",
+   "stable_id": "aegis-1538c2654e655b102873fdd2094a842af9b92a29e145fabe188ac409955fa26b"
+  },
+  {
+   "id": "000000000000000018e4a39a1ddfad39",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 733,
+    "column": 21
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:733:cba1aeb7a72d9ae279b4362ad77a2593d853cf49bce0f3c2c3e75a49135ad1fc",
+   "stable_id": "aegis-e5b0e14ae14a2e15733da176901ea6d2d0c7e883dc6c29f1437a3449424e2ff1"
+  },
+  {
+   "id": "000000000000000018e4a39a1ddfc3de",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 739,
+    "column": 21
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:739:e670e8bb47655f895f07531ba65a8c39f3756b9b512eb13a33dd212f5630ed11",
+   "stable_id": "aegis-7128da8f4dc5c08eff70f19e69e5475ada8eaffedfd346c788c39cc03d6aad46"
+  },
+  {
+   "id": "000000000000000018e4a39a1ddfdbe0",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 746,
+    "column": 21
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:746:93df713d74a9cf8453fb799ff858662c501e2c8175b198e8415467fe47ff1d3e",
+   "stable_id": "aegis-ae7eef1a78f9c9ab7194963b53cbd0c97cd1a03df5f16e6d27766736fcf2a8d4"
+  },
+  {
+   "id": "000000000000000018e4a39a1ddff1f9",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 752,
+    "column": 21
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:752:23702fac98ba5365e6b171b5c89e52b85617b34366744c2c624fc1d224d82b10",
+   "stable_id": "aegis-dea1afd61b1333b9b90afe1baf68d7dd7cb2a3e1c0d111a344e7c7317e467895"
+  },
+  {
+   "id": "000000000000000018e4a39a1de00a41",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 758,
+    "column": 21
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:758:eb0bb749278d0f9652bd8df5e78688d4b2a5de2384be11a12ac92422723b32f9",
+   "stable_id": "aegis-be09bb045a4303f42ea5fc7b1b6dfee529d7f6f82f5b82a19959064ccee2059f"
+  },
+  {
+   "id": "000000000000000018e4a39a1de020a0",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 770,
+    "column": 21
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:770:fd5cf06ef2a35b23fe58d2fa7d75e92510d7f79c62222387443468b7459767a0",
+   "stable_id": "aegis-1112ea9cf14e265838cd60b09e228850eb3867ff96164db2fda81779c1f6481a"
+  },
+  {
+   "id": "000000000000000018e4a39a1de0445d",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 775,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:775:af6b54051799ac2513245a530b62a39f743f0657176e292f608bd361b512cb8c",
+   "stable_id": "aegis-b49fc07e983ae743839c34ae5e3267b6f7f9246cc62144f78c89d7a45b8f3e15"
+  },
+  {
+   "id": "000000000000000018e4a39a1de05e02",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 777,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:777:b5c3388fd755b1e712bd9024267aa93c146f5f0d5db6ffe1c5ea33212a0e2fc7",
+   "stable_id": "aegis-77036a15f93c7b4eb97753c4bb59d4ba7baf85c3a3beb305abed12bf74a50c77"
+  },
+  {
+   "id": "000000000000000018e4a39a1de0764a",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 784,
+    "column": 21
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:784:d730192dfca3e8de55ab1559bf3034038d6a9b1cc01e9c9b283385f7a1ea70ca",
+   "stable_id": "aegis-60537c77b04b041e52133d05f971c240020dfa44d36fb21d2f302115baf5fe93"
+  },
+  {
+   "id": "000000000000000018e4a39a1de08e4c",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 790,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:790:1e71c8cb7f7cedf1169663df4fe6ba30b50f98c101d3979b8e1533ec15f666db",
+   "stable_id": "aegis-cd8b617ead9cabebe1b169e0a38d6dcbbfb7459ae624163f360bdbdb1f66cc96"
+  },
+  {
+   "id": "000000000000000018e4a39a1de0bf67",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 791,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:791:1699dc345bd1e79cfd8cb53f5b62703b3208b8c6ce5a9fb99440ba631b9884a4",
+   "stable_id": "aegis-075f45a792e1bfa52bb60dafd3541fc3c3b5d5d852072693ab26625905a46ead"
+  },
+  {
+   "id": "000000000000000018e4a39a1de0d769",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 793,
+    "column": 21
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:793:055e39086f9b6169db7a9b5cd7bb53b762aebd68f9bd98ea8a6cd16b62130312",
+   "stable_id": "aegis-15111c83a634959d9957b41c2e6c9ee0c956dc1ab1fe58dcf50a013b8b2dcefe"
+  },
+  {
+   "id": "000000000000000018e4a39a1de0ef25",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 798,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:798:32f9d44f4ca81077313670e8a1bebfa00de0451d29eee668c75ab1116cda388e",
+   "stable_id": "aegis-75a0d9ef45ee884b26455a3527a47ae62967676085f3a030b701b608fc5ee534"
+  },
+  {
+   "id": "000000000000000018e4a39a1de10584",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 799,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:799:8fa6c3f384f000af7410226156f57c94efc6f5d188e2e45222981da4595448c6",
+   "stable_id": "aegis-224306cb1e5f20923947911277139f60637984f489b733d7508e8020032719d6"
+  },
+  {
+   "id": "000000000000000018e4a39a1de11c29",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 805,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:805:c9c5422750a5a801155e0abf7a5318d575b48c132d9a98a43e03c5eccd922b45",
+   "stable_id": "aegis-78badb20a2b7f963b28ff9a6914b0636a4f12fc90342c4c1ccbb505c7dc0d3b4"
+  },
+  {
+   "id": "000000000000000018e4a39a1de132ce",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 806,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:806:982ed5e775f04460b7a180f471ebc35207ade755be5c8dfa8c930b72c82a3118",
+   "stable_id": "aegis-1a823ff87a64e86414b63e438c9beb110211e339b3bb200e3695414cfa331eea"
+  },
+  {
+   "id": "000000000000000018e4a39a1de14acf",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 808,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:808:e6ed7f393091d090dc6bb6f5fa02dadc3eac44e2b7d12188965f4d1f0fd2035a",
+   "stable_id": "aegis-321a0d2f9e3fb418676862a6dd90548e1f5b473189eacbda4eff0fe80f5b7f06"
+  },
+  {
+   "id": "000000000000000018e4a39a1de1628c",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 816,
+    "column": 21
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:816:860ca8e8aba81240e9271e4376d835693f61161fa5ab492ebbafadb0207148a2",
+   "stable_id": "aegis-b7ba38133f31039751b7033e40304cc5e063cc57375a8c578242783c33b4411f"
+  },
+  {
+   "id": "000000000000000018e4a39a1de17a8e",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 822,
+    "column": 21
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:822:1fbfa652b37e650dd6e3afff4a361c6074e5e8fbccdfb43bf2c146a5d85c713c",
+   "stable_id": "aegis-2ffa9f590ae232eb389f1b5c454574f4aa457ab7da834dbfa7464f7505ba66fb"
+  },
+  {
+   "id": "000000000000000018e4a39a1de19478",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 829,
+    "column": 21
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:829:5c7617be15fc4b99e4e7f9447e96eaaf71f41118322f49209791487cad27f6f4",
+   "stable_id": "aegis-1cee14c333795935eb074d2a2949201b6277aa55713d724edc872613d33211f2"
+  },
+  {
+   "id": "000000000000000018e4a39a1de1ab1d",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 834,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:834:05d1a5f8ec530483bd42ed0f7ee9dab1e69394aecfa621a409b67cb502a127fd",
+   "stable_id": "aegis-93e2b4422558325654e64943dbe4a5c7d56e64191834e119dd498f93db87ce2d"
+  },
+  {
+   "id": "000000000000000018e4a39a1de1c31f",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 837,
+    "column": 21
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:837:f78e0f98c10b45c7ff42b1081c688b657d75575fcd6410eabce85cea44d894f8",
+   "stable_id": "aegis-74b575fa53bb792f7a1adec5c6bd07d89ec344149502ce8f52e0793d9ceb0f54"
+  },
+  {
+   "id": "000000000000000018e4a39a1de1dadb",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 845,
+    "column": 21
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:845:9672a107061cc100dfcaf046a1d7c03b3612778d937d6eb985da1a770f478318",
+   "stable_id": "aegis-8bc19baa9e09334c6fa2d9bf16c703fc87d949e1d0b214ad8d67bb5f7b0e0329"
+  },
+  {
+   "id": "000000000000000018e4a39a1de1f0f4",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 854,
+    "column": 21
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:854:2422330c5dfdce354623f13918c7d56df063c8bd419d2d7f9228454826090973",
+   "stable_id": "aegis-88e95c489682ae08396769b2e985ce9d27c882de8356d3a4ae9197a393429841"
+  },
+  {
+   "id": "000000000000000018e4a39a1de208f6",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 860,
+    "column": 21
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:860:1476549bcae86f2b31054ccd8ccfc99ffd9ca0c262fd131c47da196c46f7613a",
+   "stable_id": "aegis-bffd594fe7aa486991e07edf9d5595c57f173c7da099e12405415b47f217762c"
+  },
+  {
+   "id": "000000000000000018e4a39a1de21f55",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 873,
+    "column": 21
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:873:dcdbff215eec2616ed583f291281c69e16e3c618662665562127224ed360f0fc",
+   "stable_id": "aegis-3556afa5fe39db591e52ce98e5394ff34539889f89e08faec43f38958b35df75"
+  },
+  {
+   "id": "000000000000000018e4a39a1de2379d",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 879,
+    "column": 21
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:879:e99ae6b95a1b0a4b796029a2f6ad2033c6926c440cc338ac6ff7157b33cd7a0a",
+   "stable_id": "aegis-3e619f3a08422094a42e3468ca409f5de04a61720a2cbfe6da72008077facc18"
+  },
+  {
+   "id": "000000000000000018e4a39a1de24e42",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 884,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:884:c683cbb29be1f227c17c1bdf8ee9b46bf468ac03c7be7c8b77e3840a8d6425c6",
+   "stable_id": "aegis-fd2f7750cd1d455a3572ff7c66affa315b1d3f4a67e01e5b2a514610a74734d6"
+  },
+  {
+   "id": "000000000000000018e4a39a1de2645b",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 887,
+    "column": 21
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:887:3c498fdd0fc9066ea7ec28a629a16dc93e1a615160c666e378e049fbfb119981",
+   "stable_id": "aegis-6e7f21927b6b0dbc86cbd53aac1952d7985eb365ce0ea4b248d0f5f44dc6f0b8"
+  },
+  {
+   "id": "000000000000000018e4a39a1de27c5d",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 896,
+    "column": 13
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:896:b14086a4282b405e7a94de9a5c5c5fd5f06e62b3e5e092f31e5284feb672b43e",
+   "stable_id": "aegis-1cb0e483079fe83f67a8048a5dd5de1678589dee3e4438eb437d1656b67241b5"
+  },
+  {
+   "id": "000000000000000018e4a39a1de292bc",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 902,
+    "column": 13
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:902:9d04ab5a67f0f1c6ada2f8f42a51830a92a31c3e4ddcb2f5411b81fb980c3e3a",
+   "stable_id": "aegis-33e6ac86fb83323d1acdc34f0a6ab198bbfcd56c54c0c1855c6f5d2f4d6301cb"
+  },
+  {
+   "id": "000000000000000018e4a39a1de2a961",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 908,
+    "column": 13
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:908:41db78fe64beafd2265c44e772ff20cd7918dbf66fee4326e757989bc3bd4ebb",
+   "stable_id": "aegis-4769c2b2ca0897c5e646d4a77332495a8e4d68456d382f4f2dceaa75f7779341"
+  },
+  {
+   "id": "000000000000000018e4a39a1de2c1a8",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 914,
+    "column": 13
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:914:a305e3b3bd433193ded6deeeb2bd44072e8902330f594c94e4522930ea76174e",
+   "stable_id": "aegis-c5ed100bb5b0327b9e361c2e5de26a6d9cd3c70a92f2101ec75ba68b4508a000"
+  },
+  {
+   "id": "000000000000000018e4a39a1de2d807",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 923,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:923:c5ea45d255a440bc7d1e8ad9d3b21de8cd1c71fd2f52fe47550b0504bf9aa461",
+   "stable_id": "aegis-fa09c6db765c16db3bea643109e601c7d06c822b00a7f5a51e8ee6d7fb948d05"
+  },
+  {
+   "id": "000000000000000018e4a39a1de2f009",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 926,
+    "column": 21
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:926:19fafe5f3741a37175453c5b243366d74678b5e5e7bfd50efd4334c25701d919",
+   "stable_id": "aegis-81df66d4951c20937afc1e2637e590ea939996d29f4112b52acf5e69335241fc"
+  },
+  {
+   "id": "000000000000000018e4a39a1de30622",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 932,
+    "column": 21
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:932:e81a8588e04d8f58ba675fe485ac6fd8b904397505f7dee6322798452f1b5342",
+   "stable_id": "aegis-a6c7be28e41120cbbbee7ce90ef97aec98cde2862ff6270511b106f1c3da6f73"
+  },
+  {
+   "id": "000000000000000018e4a39a1de31cc7",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 937,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:937:c5fb3c84f70f9a6d78f0685272022bd4f4e5310bbd3a8634ec6af38de7197441",
+   "stable_id": "aegis-4e0a0c4d1549d277965aca8c0624bbc328d956794da0bbf808db6e193dee34c1"
+  },
+  {
+   "id": "000000000000000018e4a39a1de33555",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 939,
+    "column": 21
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:939:4f35c4b6114027c3a3ec21b8dce8e70e39edbd9730db93710bdd0e4ac0ac84c5",
+   "stable_id": "aegis-1512c52e394ed36dde25a4bf5c1a555948f965537a80b721d6904de0caec9cbd"
+  },
+  {
+   "id": "000000000000000018e4a39a1de34b6e",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 946,
+    "column": 21
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:946:f1d2b4c2ca1e79c8333f5d73e5ded7de18b99840778ac1b4ed0af5177771a783",
+   "stable_id": "aegis-247968dc42dcefaa3d5f88e8d9f7688674dddc4585e5facb3ada51d9a69eba7d"
+  },
+  {
+   "id": "000000000000000018e4a39a1de361cd",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 952,
+    "column": 21
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:952:6685ba2342898d3a378bfbd6b390ec3d6ba0a8748c4c0d4f737ae5629133eec7",
+   "stable_id": "aegis-8c8e386f9e556076359f3452f4aac72d74ba92e956cf6ae92920d0074d75afb9"
+  },
+  {
+   "id": "000000000000000018e4a39a1de379cf",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 958,
+    "column": 21
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:958:fe4b5aaceb85434cb5ab2dd46e956d10971a5de67e5f81c344e312f83b55f19f",
+   "stable_id": "aegis-e1cd67d6968fb493b84dbfeb2b7e5d3600ce08b073997dd2e9a1c481f3c15374"
+  },
+  {
+   "id": "000000000000000018e4a39a1de3902e",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 965,
+    "column": 21
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:965:4830c2ae43be7d297fddd0ac1f4453377d35af399f80ab7188a72ff4ac063a49",
+   "stable_id": "aegis-284e3bcd79dc63f295334ff4183be55ddb844ff43862e1204939679f75c9111a"
+  },
+  {
+   "id": "000000000000000018e4a39a1de3a6d3",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 974,
+    "column": 21
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:974:5821d7379fdd4f2796738a7d3bea0641e1fbc5ecb0ad9a383e7a8fdd129b34f1",
+   "stable_id": "aegis-7342a74183ff30b1aeaba1074672edb2b08b2f16a7b07b62f3dcb20a26859a0d"
+  },
+  {
+   "id": "000000000000000018e4a39a1de3bed5",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 983,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:983:98fe3ae3d34e532b38595b8e73dbffdf224c30ccbcfa10ed4740f3964a7c015a",
+   "stable_id": "aegis-59b04d726145242c2aaeb6b92d42c3982643e46643140b1e88295418b1f22e2c"
+  },
+  {
+   "id": "000000000000000018e4a39a1de3d579",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 990,
+    "column": 21
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:990:9a2ae5556cee4e7d5afbf81437553e9e4a3db96704de83d26068886b61e945d0",
+   "stable_id": "aegis-1f00d651946f352ecc8102a84ac897667e7c3bf0b941fec0a68408bd363eb71b"
+  },
+  {
+   "id": "000000000000000018e4a39a1de3ed35",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 996,
+    "column": 21
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:996:cef1745cd0aa26e870da55607ad63aa518f38be9ecf4f491de2b0da903e623a3",
+   "stable_id": "aegis-c70a387f9e230ca49eb917dbb3b0c536bd9946a05c61088fd24b1133e49d64ab"
+  },
+  {
+   "id": "000000000000000018e4a39a1de4057d",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1002,
+    "column": 21
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1002:67afbb0f1ae2d608a33c74b87fee7c5ab71874df676f53bf8edb9125c34a34ea",
+   "stable_id": "aegis-73c7ed54e29929a0d8cb458c8f12c78b70459796786879f387a3d3631643c02a"
+  },
+  {
+   "id": "000000000000000018e4a39a1de41c68",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1008,
+    "column": 21
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1008:b8a6ed6bba56dcdd828c6f472d6bd4da72ea27754f2b75142eb1eddbc49b0c1e",
+   "stable_id": "aegis-718aff25defda0353a7f5882eefcba9b5e8b3a031cfd177b56bd1d65f8dbe836"
+  },
+  {
+   "id": "000000000000000018e4a39a1de4346a",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1018,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1018:02288a89ae983ed25364d4f918a8e2deb3ac471c99ff7ac76325f2a9755de8bf",
+   "stable_id": "aegis-127a6d03effc8dd535010e3ff15708dd1631d18a156e764d4672db236a9441aa"
+  },
+  {
+   "id": "000000000000000018e4a39a1de44a83",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1019,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1019:bfa29f9b70bfd76c0e48c1df34fd79b81ddbc0052ba247afdd6fdf3c639b78a3",
+   "stable_id": "aegis-fa44bdf17335f978e19738b6a9f8fa4a98e1be1156f50cdaa4cd0ed3d106fc13"
+  },
+  {
+   "id": "000000000000000018e4a39a1de460e2",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1020,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1020:e93d60524b42e4cada18060fed25915d1cffa9d03c8fc41678bad660fbcd08f1",
+   "stable_id": "aegis-503730c82ecb6941ef815c11742eb3b14e69ba07233403453c9a0a181c878d86"
+  },
+  {
+   "id": "000000000000000018e4a39a1de478e4",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1022,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1022:5707fb562bcf3e17c76494f19c353088aceb34a1ef12c59262691b3dfb30929b",
+   "stable_id": "aegis-ea9d7aa83edb6eadb07cc0ac2b14f16a883aef70c346b69b975d7210c4ce0961"
+  },
+  {
+   "id": "000000000000000018e4a39a1de48f89",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1023,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1023:e44db5239adc8127f65eef8176850c9ac2c351d1d3a1d3386774e33f6910133d",
+   "stable_id": "aegis-84230515a0abe35423cdd851625f088b60145f88812e038c97ff5812513559a9"
+  },
+  {
+   "id": "000000000000000018e4a39a1de4a62d",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1024,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1024:5b4d00fa9dc90f307dd569e57abc7850484e9291423a32393d1a501d284bae8a",
+   "stable_id": "aegis-fa735de88333507d5ec84bb0ebd09b0eb8832f82928c96d8b86a9093495a0839"
+  },
+  {
+   "id": "000000000000000018e4a39a1de4be2f",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1027,
+    "column": 21
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1027:efe0233a505f5694cb94d27c91d54dce820119f25866e088098c40c68f28c53a",
+   "stable_id": "aegis-9f4bcc59f0d046cbabee5476d09557e01db8aedb1d7cd106e79faadf65ea450b"
+  },
+  {
+   "id": "000000000000000018e4a39a1de4d5ec",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1033,
+    "column": 21
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1033:15f0e1e934d12fc942f276740a642ba282d12703d5e217894b90b0e2a5289719",
+   "stable_id": "aegis-3158fe1bf8a3042dd83f574a4b9960dae007236a77ef6eb8e389f2ad6fd91d88"
+  },
+  {
+   "id": "000000000000000018e4a39a1de4ec90",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1042,
+    "column": 13
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1042:eeb07c665fadd5dd64075e49eca7062780c6e2e45281ca3a37ca9518b9e2865d",
+   "stable_id": "aegis-b5be4eed84dcff11950ddc585c15a6347745c435d2d5f1ce68a2f89efa078346"
+  },
+  {
+   "id": "000000000000000018e4a39a1de502ef",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1050,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1050:b9a5e256c1d7dcaf0d490b82dd507f53e154accc9f9ae64c243e6036c8d49497",
+   "stable_id": "aegis-6f75949613cab596072ff43d4600d38eba209136c32b96ae932543ed9b41735c"
+  },
+  {
+   "id": "000000000000000018e4a39a1de51b7d",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1051,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1051:1d99204e1cedfa12ffb9ea24e99d599d4c12fc7c6d7af5eda852ba010674b7b5",
+   "stable_id": "aegis-ea9811116f448d0b6995958a5ab27d0114b98335610788625b16960734a10932"
+  },
+  {
+   "id": "000000000000000018e4a39a1de531dc",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1053,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1053:4e37d27c8c419c1537f5a1311ea09646e296dc0edd85a70bfd3ca1dfde478481",
+   "stable_id": "aegis-1c799f6a500f23eee3e70105d695523c50ed591426bb35073e6b9708bb2e6d24"
+  },
+  {
+   "id": "000000000000000018e4a39a1de54998",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1054,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1054:d1180dc7eb629b25f0ee3bceac87f07de375b684f35159044965675af6961648",
+   "stable_id": "aegis-a970f9eca5b2d8f5ddcf62708f44e1bcf4e2cd8a545b765dbde47f4eb536923f"
+  },
+  {
+   "id": "000000000000000018e4a39a1de55ff7",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1055,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1055:5a5aaf5c56282c2f61b1b948b7b8b4de57e4f6d68828b99334a6d16e7c30a9fa",
+   "stable_id": "aegis-a146de1737f2d69deb88de84d18aa3574556890b28e3bf36bc0df72ac2836bd2"
+  },
+  {
+   "id": "000000000000000018e4a39a1de57656",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1056,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1056:8aeb79a4d66c85ac83c1ef741ebcb5ca0ba4a9d919df5330e41ebea339f83f8a",
+   "stable_id": "aegis-2226afdd307480ab0aa2c7865457eb37f87166d5f68478b4f090d1dcd2f0bb8d"
+  },
+  {
+   "id": "000000000000000018e4a39a1de58d40",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1062,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1062:34b7b6e9f7590260aa44b043b32fabe1d34b86ab226d97ed3b04e45ef119acba",
+   "stable_id": "aegis-60f3d84281465f2ed4b8b1e90918199e31778549f6bca0652238236205fb1c67"
+  },
+  {
+   "id": "000000000000000018e4a39a1de5a588",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1064,
+    "column": 21
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1064:1541d9047221d07191d5a8d161ed64feae9e590477c1456b980ce5bccb645e05",
+   "stable_id": "aegis-8a2a52c6baebc3e4a09189650b676616b8c28de4d46309525a6894f18be07a36"
+  },
+  {
+   "id": "000000000000000018e4a39a1de5bd44",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1070,
+    "column": 21
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1070:0a9b959cee3b8b267feda12b6d508dd4b8913fa41092e561fdca5c715db5e849",
+   "stable_id": "aegis-7a59074a2cd61f318cb16ad59d826b7c437c9f12b75e869d23b50fe4b56d8c84"
+  },
+  {
+   "id": "000000000000000018e4a39a1de5d35d",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1076,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1076:076ba9c7fb7e4eb492dd8180c17deb00c4cfcadecfee67eb5978961290e1d188",
+   "stable_id": "aegis-ad2a3e574c6dc1826d085da189b6cb04e4bc29f59a77ccd7f56fc74dc635ee9a"
+  },
+  {
+   "id": "000000000000000018e4a39a1de5e977",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1077,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1077:003093a13c569a8fe1e221840c719e86d2186011336ee30a5619dc13f0b56a64",
+   "stable_id": "aegis-d0b4d5a5a68a6d2a229a0f8d065e18d129e1408ecde828b8767c5fc85fd2b05f"
+  },
+  {
+   "id": "000000000000000018e4a39a1de60179",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1078,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1078:97abe534032c53b0499b83205744f4a9560e6eed69aab224daf26973bc30c49d",
+   "stable_id": "aegis-f9087820927e031ece385ebbe7b3d2d3f0aa37115184980a65254243e605908c"
+  },
+  {
+   "id": "000000000000000018e4a39a1de6181d",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1081,
+    "column": 14
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1081:c02e9d0289f96dd1474e1fe89406361dd74f48e0c59bb0957da18e43f4c4684e",
+   "stable_id": "aegis-5887b657c90b1b76979a6f418b969ff3aa350b9a6f527a72028a184de2106029"
+  },
+  {
+   "id": "000000000000000018e4a39a1de6301f",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1083,
+    "column": 14
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1083:c881263e8e30596b3b06b81b7f5f13321dceff75adb3eddd2f5fa7e1b05721c4",
+   "stable_id": "aegis-42465138eb97cd4c48110898844522b1081340afadaf45d28f771f0a199c9139"
+  },
+  {
+   "id": "000000000000000018e4a39a1de645f3",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1084,
+    "column": 14
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1084:71e411bae65754184bbb45baaa3a0e2cadad2ab00e029a58fe87f9510125c12e",
+   "stable_id": "aegis-0d80d07afea351ef2a11719f9195d35547fba1c0c69004c675f1265e59d72faa"
+  },
+  {
+   "id": "000000000000000018e4a39a1de65c0c",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1096,
+    "column": 17
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1096:7e051ba37ad4842aa0e8cffe413c767d754d35a3ef6e80379f9c4e533c0a0dff",
+   "stable_id": "aegis-7b2f27e14ef99b62263e974f76714287fc8e5ca7ef914e6cea47076009a93520"
+  },
+  {
+   "id": "000000000000000018e4a39a1de6740e",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1105,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1105:69bb4acfca30fe3bd14052631067b7d7fac3b0b43c10c4f8ce93475f90fdc83b",
+   "stable_id": "aegis-b161e241a61fc1da2dcc60ffdcc787167f6c70050df8322c2a57d9dcf84ddffd"
+  },
+  {
+   "id": "000000000000000018e4a39a1de68ab2",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1106,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1106:8c6c4b9bcb45a5c12295c100f1b8e7f2a587b354d98c71a24963a5a71921d256",
+   "stable_id": "aegis-9c27144df54079502df869c5ab1de69e320a99627b4403515e50c9a1ef2f2939"
+  },
+  {
+   "id": "000000000000000018e4a39a1de6a111",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1107,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1107:7c3db4e302881d20648d61a3386523aa3505ca7584767665bb9af1f678d5f34e",
+   "stable_id": "aegis-08eab5eb723feaf92aedc881d9ae9c9a11e154b0b6e9b9094b8f6c391843d3cb"
+  },
+  {
+   "id": "000000000000000018e4a39a1de6b7b6",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1109,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1109:7c9c0c36979256d1990bb10e2f0dd4fbfeb381a4fff6a676335d1ca1398ea846",
+   "stable_id": "aegis-7d1346eec19a2dd6d6dca174f7ac87b72557ff3eff7f299a3545d4b9be4a4f90"
+  },
+  {
+   "id": "000000000000000018e4a39a1de6c9fd",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1110,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1110:3a14cbe7c86acb4aee9d55cf8567378473a2c8008941a304a136cc8aba11057c",
+   "stable_id": "aegis-33cbc3de41e75916b897e793198ebc449b84945eef1c8456326e2ca0d12ba4cd"
+  },
+  {
+   "id": "000000000000000018e4a39a1de6e1ff",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1111,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1111:5095168efeb2e47ac863d931a1d4a9a87dfe09f3af3a86b034310f6ef6c7e1cf",
+   "stable_id": "aegis-4e43910625a980d32b9a3378753f40bda28b7a33e614bc3de5cdb854cbd688b6"
+  },
+  {
+   "id": "000000000000000018e4a39a1de6f85e",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1112,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1112:f479b00b10b2baa05541b3a1f48c22aa1090a7a3abc714992d3348b8447062b7",
+   "stable_id": "aegis-c7eb41a670f1c12f0c49a472d5777c8f6e218180f61387b2819bee1013cc2c37"
+  },
+  {
+   "id": "000000000000000018e4a39a1de70f03",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1113,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1113:8e4a8917f8fea977c95466952ee8a75ce6edfdc8e96875644ff6deb3f04e2f7b",
+   "stable_id": "aegis-369c0e79a8e337b719b18ad1935004b98f92f12cffcf06e64617c4090983c3f1"
+  },
+  {
+   "id": "000000000000000018e4a39a1de72562",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1114,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1114:940e3659fa3fb8d28e9f7bce73d1ead54c796ad1c11253d565fdb47f127e1556",
+   "stable_id": "aegis-c53b196ae116fc499304f6f600e0ffaf0613ce484cef39686f75abc7935b9b8f"
+  },
+  {
+   "id": "000000000000000018e4a39a1de73daa",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1115,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1115:9be5d67d9b67715b5dc118d81f5aa0eacc2bf4c0433ed3804a2cf15f871ac65a",
+   "stable_id": "aegis-05bfae7121ab8a4c16a8d176ca9729c52da8d7cceea19093dd7a4f974a66e176"
+  },
+  {
+   "id": "000000000000000018e4a39a1de75566",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1116,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1116:f106bca47fb80745ed020eb6c4b74e2baf510e7379c8661b0a0f7c2df9f12812",
+   "stable_id": "aegis-ce09f23151dbbcc5a2f78e85af46f5e4a08c318afbdee42c976913d45a62344f"
+  },
+  {
+   "id": "000000000000000018e4a39a1de76bc5",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1117,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1117:1bd8b90c1e86120c0742de4dad66c77ab308a01d3aaca283e01654f47596d0dc",
+   "stable_id": "aegis-e36c7e83381e0b14973872536e90ad2f368f992d917b7c42b07aaceb39a18b34"
+  },
+  {
+   "id": "000000000000000018e4a39a1de7916b",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1118,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1118:1bc1372b320fd8a758efd2ad645e140ca469f86e1bd609b37bd6bb3d53edd897",
+   "stable_id": "aegis-84eb36e74e1ad0d180eeaa64af08befc22007229054845d4d58b775f8943aff3"
+  },
+  {
+   "id": "000000000000000018e4a39a1de7ab56",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1119,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1119:2a01042d4fcf5f12c6310b509004ffcedfd614b81f71427de63cd11ec5d759e5",
+   "stable_id": "aegis-3cdf2cc978eb28197b555ccbdf2b6c68de64a2c67cdcc8e903c2cdd4fcf6894d"
+  },
+  {
+   "id": "000000000000000018e4a39a1de7c586",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1120,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1120:8f4e609ac8864316dfe83d814fae74c6378f7cb9e50e1dd1f87c67379971f295",
+   "stable_id": "aegis-402931f9fed6dcd7fb566a22fe0f7bdfce9b5676e27017139ed1208e2884ba69"
+  },
+  {
+   "id": "000000000000000018e4a39a1de7df2b",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1126,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1126:d63fbbd518d8f3fac15da4d2c0656717b9d39426b993c4454d1c164e17c4a62a",
+   "stable_id": "aegis-f858208635b55bf957c45819e755820696914a274329e9f167f5032954bf3e9a"
+  },
+  {
+   "id": "000000000000000018e4a39a1de7f7b9",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1129,
+    "column": 21
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1129:798653c0204944019e08e0f97e5029a23372752fcd8b34ec667f1d7993d089a2",
+   "stable_id": "aegis-84e805210a894d636f80d2bfaede2bd661b4869799e58f5828e3d9cb2324e48f"
+  },
+  {
+   "id": "000000000000000018e4a39a1de81047",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1135,
+    "column": 21
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1135:df0bf6c9fbd101f46b2b9986f2afedad41b031225e7429023ec1af739c9746cf",
+   "stable_id": "aegis-c45b1227aaa07a3e79d81bddf719cb67b575ca89b2f1e8f63b69f3c253f9ddc3"
+  },
+  {
+   "id": "000000000000000018e4a39a1de82849",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1141,
+    "column": 21
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1141:2e8d77a1f829454733789c99a714f7688e1b8bf201c6ba71415220ce1292b385",
+   "stable_id": "aegis-56b58f9875df4b56f4c9fd91eaf82c8b1469c6115f2d08141ad56b25885a8dac"
+  },
+  {
+   "id": "000000000000000018e4a39a1de8404b",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1151,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1151:9a091b18670e1f89ee6edf3af0d72bf8264e5776d53a0887437f0ab303f38f8a",
+   "stable_id": "aegis-6b92491c5b978dc804928387cb1d8246bb2be114c47b8adbb1e81ffb4c6afafd"
+  },
+  {
+   "id": "000000000000000018e4a39a1de8584d",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1152,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1152:197d438175613e3ed9e975d87baa30b0f2fd260e5ae58fde82e7ccb6f32cbe10",
+   "stable_id": "aegis-d534cf0d7f44595e36583b1bcddba11ac4d2726b28692b43a66be060a1e77abc"
+  },
+  {
+   "id": "000000000000000018e4a39a1de86ef1",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1153,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1153:451c0ef0312abfbfc769e535fd14b969ce2096d9b6fb1f236dac52971c3bf0ad",
+   "stable_id": "aegis-8a45e32c8b60abbab9d496dc9922202e57ff5297be2c48a5fc4a5ee70676664d"
+  },
+  {
+   "id": "000000000000000018e4a39a1de8877f",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1154,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1154:d8abc8c5d91d78bab4f6adb811aa188e56c68d1436d8e80e05d8106985938a95",
+   "stable_id": "aegis-d69340fb783df88cf0dd86d44feae77993ac64471f4bdb37afc6dc81990f1ade"
+  },
+  {
+   "id": "000000000000000018e4a39a1de89f81",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1156,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1156:793bf730f23cf4ae95523a12a1d9ec42427defa041026ec06f9fcda4a860e3d1",
+   "stable_id": "aegis-cee0aed0fe918b969c91779ed8eab0d3a06f639c5068abb029648bde25c782e4"
+  },
+  {
+   "id": "000000000000000018e4a39a1de8b59a",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1157,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1157:02aafe7fc05eca9d75a03eb8cf85b099e6e2d2d9e9554ba1c8a8ec6b2df6528f",
+   "stable_id": "aegis-77b15c071f9fc1ec226347d1e629bd748c4733d65530950d792e5a5607724355"
+  },
+  {
+   "id": "000000000000000018e4a39a1de8cde2",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1158,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1158:3e32a80ad1068b394e2e23ec903bec5ce6294930247a4874a10b0d3f6156ddc3",
+   "stable_id": "aegis-58d8f6d6f1acc725b58c885014c033773e97be94fd7317c021afe56368c13e47"
+  },
+  {
+   "id": "000000000000000018e4a39a1de8e5e4",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1159,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1159:6199fe9fa1885bc7a1ffcfcf2962fa63823b9186e9375230f6fa4dbc77939786",
+   "stable_id": "aegis-3105b149a5593f3afb6c1ce5834ddb12138fedbf33ed11e136436a32f9f31738"
+  },
+  {
+   "id": "000000000000000018e4a39a1de8feb7",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1163,
+    "column": 14
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1163:1e8c3ec389ff92e63365f774c591ef419ce069a0dd2cb6518719d5b5a7a4182a",
+   "stable_id": "aegis-ec8b31999a7515152c0eb225ccc1265d86ef5d41e4ce85ce1c63998a5826df52"
+  },
+  {
+   "id": "000000000000000018e4a39a1de91516",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1164,
+    "column": 14
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1164:90e25e1982cc60ad9a07a55f83cceb7ac4518e565a28fe6a310bc53ccf687c01",
+   "stable_id": "aegis-3c651d719912996fdcee94e16115c0eb48e3f81592d1743fc887d8212cd40f8d"
+  },
+  {
+   "id": "000000000000000018e4a39a1de92cd3",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1165,
+    "column": 14
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1165:59ab22523867825824eac08af7e7a07f7db00344fdb946580d5fecea1de0afb7",
+   "stable_id": "aegis-fe6d4b4dd5b131a0a4fb7c6bd9c016c6c7bab5b2eaad5be00a54b89f49aff278"
+  },
+  {
+   "id": "000000000000000018e4a39a1de944d5",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1169,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1169:fcdd622916b6b611e2062d1585cbf4a1e189cd7cfc0c081e32989483a1f9b79a",
+   "stable_id": "aegis-2cc2a8feed78b8a06a1680b93be262d2b40a1d6bc8ac2351030ce4d9c7719a9d"
+  },
+  {
+   "id": "000000000000000018e4a39a1de95d1c",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1170,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1170:b2a177c8bd3979821e018b090e49f54a8afb0b644a2e374ed3ed0f5e2de3a3e7",
+   "stable_id": "aegis-818a3de61b1b1aadcb229c6c00cb17fa5c63e2a3ec81f7f70a01c324d42e1055"
+  },
+  {
+   "id": "000000000000000018e4a39a1de975f0",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1171,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1171:011e7d470a1521bb04a72f8bbc8ff7f9b1cd607b4384f52bc741599aa1d274d7",
+   "stable_id": "aegis-708b3d4d4c9dc5da594623c92555b79411c920df63ad8fcb9d2b2abdd9011600"
+  },
+  {
+   "id": "000000000000000018e4a39a1de98c4f",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1172,
+    "column": 22
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1172:497b870e02a93d243ae10e28c4dc63e08fb11776542958f21ca0b36a1c6e5690",
+   "stable_id": "aegis-24bd2222c2e40283b9108ffada131c6f7a129572adc73ef7c010471884918a69"
+  },
+  {
+   "id": "000000000000000018e4a39a1de9a451",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1175,
+    "column": 14
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1175:e97d7aa7e9a9dccc626f9be8d5f9d8bc101f0abe242405eb28b8d2d37a812b59",
+   "stable_id": "aegis-98223518a214d76958aaa863eb0cd0b47a4e0e5ce04b51515965c9189f41bb46"
+  },
+  {
+   "id": "000000000000000018e4a39a1de9bc0d",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1177,
+    "column": 14
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1177:0a0d561c2e975ab690396929bb35a62983b7d38fe6af128714f50c3887dcadc9",
+   "stable_id": "aegis-1f3c6b77dc9fa138e3356a928ebe6b7331334967463981c7ddc31881d87568f4"
+  },
+  {
+   "id": "000000000000000018e4a39a1de9d5f8",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1179,
+    "column": 14
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1179:8d53be69d1263c70e8049edeb4780dbaa4b31e23788567081c229e23624e6d46",
+   "stable_id": "aegis-4602dc545e7145086b2621a6819ea42c340b7b572081c11fc2901f2d004513bb"
+  },
+  {
+   "id": "000000000000000018e4a39a1de9efe3",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1180,
+    "column": 14
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1180:9bcb773f95804ee6a5322958c76e0a53df105a090bf35c7eb1d0c5ab6e3b0427",
+   "stable_id": "aegis-990b7f1cbd1a26e654e296e65731f700858c89a7b33b18f02492112358ed8534"
+  },
+  {
+   "id": "000000000000000018e4a39a1dea0a13",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1189,
+    "column": 14
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1189:e62147508159e5fc695ede723066fbd9d42118e1c18ece6d18bfb70a96735a20",
+   "stable_id": "aegis-7c1a5c19cf3723b4c5032d9b8e4b3530eadaabcc32ae20744bafe2e6b187d002"
+  },
+  {
+   "id": "000000000000000018e4a39a1dea21cf",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1191,
+    "column": 13
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1191:c4811e67ef000af33f22f8f16a036d706fcf636f7ad79f6afe89411e6a5876a2",
+   "stable_id": "aegis-6f5a582fe3098b9cd1606d7a16ce14f0e96b59249fd15139edc60771dedc8a0f"
+  },
+  {
+   "id": "000000000000000018e4a39a1dea3b74",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1197,
+    "column": 13
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1197:01ad44d03f60bf93f74b92d3af07610e342cbde43b585f39217508b513d14343",
+   "stable_id": "aegis-1650d75ca6f00e53de3ae7344164ecf85235a54ed76180aa90d94ac61a01662e"
+  },
+  {
+   "id": "000000000000000018e4a39a1dea555f",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1216,
+    "column": 14
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1216:baa854830cd2515d02ba1c9c87ac1e275bdff335be0ea9114ef18548c5412bb4",
+   "stable_id": "aegis-e64d95adf13d7f2db777082a4229d2b61502a4e2176082b293b99964e59ca5f3"
+  },
+  {
+   "id": "000000000000000018e4a39a1dea6da7",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1299,
+    "column": 14
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1299:8ad1bda180a71e69610c9d8ffefb58a1a383fb151d637fda354fa158f211443b",
+   "stable_id": "aegis-e6cf6b4e14c9ad30cd121bdd59b9c435e8afc18241890ca836593edf499aeaac"
+  },
+  {
+   "id": "000000000000000018e4a39a1dea87d8",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1301,
+    "column": 13
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1301:180cf44e43a5559b3d1653b2878335d4f8d5af9f1a331cb646020cafbb68cd4c",
+   "stable_id": "aegis-c79cb0fa0d123edc512d914ad6ecc657139331f56bf5e362ca158c4a6897eab2"
+  },
+  {
+   "id": "000000000000000018e4a39a1deaa065",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1307,
+    "column": 41
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1307:12ea4efb3dd88264fc3529e1ba064e102df02d1b3ec4dc55d8513eb6f1944724",
+   "stable_id": "aegis-11b7faee416c1f127e5025122522b0232ae40c74951e04e6871d4c9e19ff1257"
+  },
+  {
+   "id": "000000000000000018e4a39a1deab822",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1312,
+    "column": 17
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1312:be726fe23418e37fa2e8f63932f28c8f19d744e0ae77c75e4aa3b7eba645ab1f",
+   "stable_id": "aegis-56ace9e9a9fc93f75b48a7302a6a8380c8f6001dedf178e4320e8f6cdd23c779"
+  },
+  {
+   "id": "000000000000000018e4a39a1dead024",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1318,
+    "column": 14
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1318:83706ed0a7fe5af737522c77e2f080255c67f37d78b6aa199683a94917302a09",
+   "stable_id": "aegis-1bb5ef24673784538f5da386c822c6a0a15e0581a75c64c367bf789ac3c34a55"
+  },
+  {
+   "id": "000000000000000018e4a39a1deae6c8",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1320,
+    "column": 13
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1320:83b3224c2c14989480197312705ae919167e8e9a9af552b83b44834a3ba960ae",
+   "stable_id": "aegis-b4f82782ef60e5e54acf2e1cf5f198a00a13e6af04d6c8f2c3ed35097dd28741"
+  },
+  {
+   "id": "000000000000000018e4a39a1deaff56",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1326,
+    "column": 14
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1326:8967b2ccf2cc94a9f364c634e2a1d4414df7094055f45c6cc91e65f23c168d0b",
+   "stable_id": "aegis-77a9fd2b51189f05d265e10db88d749507dee5ef2ee11995d84fe38009934521"
+  },
+  {
+   "id": "000000000000000018e4a39a1deb15b5",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1328,
+    "column": 13
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1328:e7c20ffffd16b76ad7c2a84619642b95dc6d07fe1997ff1491d2bcd4f546bf17",
+   "stable_id": "aegis-23ad3589c79c0d0921335c3c2ab8a91f4808ae165f7116448798b471063696b0"
+  },
+  {
+   "id": "000000000000000018e4a39a1deb2db7",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1334,
+    "column": 14
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1334:83f04cf7d18a22e55af2efd0a2bc43b850611b9eaeede85b24fa4b462c5f33c7",
+   "stable_id": "aegis-0765da2c2c499bab8756f380aac2d4e68282b97d65370af648b497d1bb5740fc"
+  },
+  {
+   "id": "000000000000000018e4a39a1deb45b9",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1336,
+    "column": 14
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1336:f1a8066b40fca80840553e871ce9fe636efab3f5b686d0ea458fc90ca4b09c17",
+   "stable_id": "aegis-055bf9cabb64bff141fcb5a7d5330fc2fae3aef33c4a6447b7469f630a23b1b3"
+  },
+  {
+   "id": "000000000000000018e4a39a1deb5c18",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1339,
+    "column": 13
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1339:1749c0069badd97d7f20bc9123374e90114cfdc1314f8011f4f31690a5dc3e68",
+   "stable_id": "aegis-c2bda5ef893533cc3784114b227968b7f42439d58105288f2a9be89bf7d383a7"
+  },
+  {
+   "id": "000000000000000018e4a39a1deb74a5",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1345,
+    "column": 13
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1345:34c1b2df52bd43662e4574afe368a09769be40b2921f0377699564a176080a6c",
+   "stable_id": "aegis-54f320d2779c82bff6843205d03a69826650bc0f2d1f7fae7c81bbef0537320a"
+  },
+  {
+   "id": "000000000000000018e4a39a1deb8ca7",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1351,
+    "column": 13
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1351:8e40a9425e96b2b2f46810b76c3cfb120a7ef301c1d0faa21131dcbff1ef890c",
+   "stable_id": "aegis-24dd06d6dba79aa3fa990312e9968ea928efe66070d0dca3ad170ecb8058b98c"
+  },
+  {
+   "id": "000000000000000018e4a39a1deba306",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1357,
+    "column": 14
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1357:37f5c3f4893f5aa0010e914af9e0bd1bf82313473befc0377f163b0bc5092ecf",
+   "stable_id": "aegis-9bfbac0f94d238a2533b1dda48d2e470f27187978445f6599120dfdd25283405"
+  },
+  {
+   "id": "000000000000000018e4a39a1debbb08",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1359,
+    "column": 13
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1359:ae18c4eebcf4d297c1c74338657db213d3349ade84494a4ffddc2622d9a637cc",
+   "stable_id": "aegis-b8cc232fae65edb0b8efe75283990acec51512782321fb58e45c7114e226b862"
+  },
+  {
+   "id": "000000000000000018e4a39a1debd350",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1365,
+    "column": 13
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1365:43462937931f4de544388a15ec15cf8d834e4762938aca10829ec794cba529e4",
+   "stable_id": "aegis-efe5a4d73515602992ada35c01af13df50c0b476f15aaa2cc30cf8f7ec6e0869"
+  },
+  {
+   "id": "000000000000000018e4a39a1debe9f5",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1370,
+    "column": 14
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1370:ffdfd59d08e67eeff2569e91641bb6adb12fc0bf42ef8f0f2c197ed14369f10d",
+   "stable_id": "aegis-1757f3b7f415ac89a1f7d507ef6f61e66a6510d08aa0b77862c702d8f5e56e4c"
+  },
+  {
+   "id": "000000000000000018e4a39a1dec023d",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1372,
+    "column": 14
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1372:0f9014ed17f9ca2536c7cf4a2e1325712d249a7ac34ac32d1c90ef9178b6d4ae",
+   "stable_id": "aegis-a092b9bd7f453b7b571f10b48bb40ef7ca78c84a249c5bdee7fbf37179cfddc4"
+  },
+  {
+   "id": "000000000000000018e4a39a1dec19f9",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1373,
+    "column": 14
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1373:64815f2085911987c30d3dce151584f607761454b922d95a47373f3f2011ec14",
+   "stable_id": "aegis-7a0e4a9d9fca408ea43a89d6f171daba4c481af916f65959fc2f7997e4a114ab"
+  },
+  {
+   "id": "000000000000000018e4a39a1dec3241",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1375,
+    "column": 14
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1375:6017af6c686609dd487e75a27e6465c8c2e2689148ad7eb1c24eb2cabb0338a2",
+   "stable_id": "aegis-073f6620dc28985b5a102f394c4adf6c75381ffab11cf9af0d87a3fe2e38277b"
+  },
+  {
+   "id": "000000000000000018e4a39a1dec48a0",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1376,
+    "column": 14
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1376:67b4acc3a35001ce2358ee155323bc411457601e60abcc70082524a59cd7a4d5",
+   "stable_id": "aegis-6b5816ef978ffb33d94439bbaaa6d5205e5004121f56632b6b9d3b1d49144f05"
+  },
+  {
+   "id": "000000000000000018e4a39a1dec6316",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1377,
+    "column": 14
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1377:2516b29128ecd6a3cb043801b07450dc9bbcf63ee852a8430bb0cd157b803be9",
+   "stable_id": "aegis-2ec454de913d49a0bf05b05ace274e0af0da1a37676ed5a98a877aacce684ff5"
+  },
+  {
+   "id": "000000000000000018e4a39a1dec7b5e",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1379,
+    "column": 14
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1379:e95e07198fbc2a3fac954c1e20f99ff404edbc4a9bcc08f0ef575f1b58121ac5",
+   "stable_id": "aegis-d8982197555d208496886a91053a7678aa379179df65e18897302d9496a0f15f"
+  },
+  {
+   "id": "000000000000000018e4a39a1decc54d",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1380,
+    "column": 14
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1380:fec32d6024e177ac05e94de175bfccd84ec3d389034f6f57067fb167302534b6",
+   "stable_id": "aegis-041ac0510efe79ecdc7804c1d3bef9f2f0348a11174767722d42832593f29185"
+  },
+  {
+   "id": "000000000000000018e4a39a1decddda",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1389,
+    "column": 13
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1389:d79efc3bee372bac14dd5a2037b4edd92e8a234a9cc8b1a7fbe438e13e7c2049",
+   "stable_id": "aegis-d9d86033b0facc2abf4adbdf33546109aa0d20d153497133eea2b441941f4770"
+  },
+  {
+   "id": "000000000000000018e4a39a1decf668",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1402,
+    "column": 13
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1402:87e6f5b6e5ffee72ff8d12de6dacbe2650a7161ac805803801ad4e0f543350b6",
+   "stable_id": "aegis-605d03c9e119cb799697d5f6a20d66db80997f6a4859f2e3a44061b8bee1645b"
+  },
+  {
+   "id": "000000000000000018e4a39a1ded0e24",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1409,
+    "column": 13
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1409:f56f23b795e7f86db66361d8d3ef81e0e42b7d58c2530eeab083dfb7699c7b45",
+   "stable_id": "aegis-64fb8c03f1b2284b32c8378b350f5eda24b8e487111433f55e58241018ef3e15"
+  },
+  {
+   "id": "000000000000000018e4a39a1ded280f",
+   "pattern": "zip-code",
+   "category": "pii",
+   "severity": "low",
+   "confidence": "high",
+   "location": {
+    "file": "./crates/app/src/menus.rs",
+    "line": 1868,
+    "column": 18
+   },
+   "description": "US ZIP code detected",
+   "tags": [],
+   "kind": "pattern",
+   "fingerprint": "zip-code:./crates/app/src/menus.rs:1868:baa854830cd2515d02ba1c9c87ac1e275bdff335be0ea9114ef18548c5412bb4",
+   "stable_id": "aegis-3ed3a8c15f9b1b79188a03587a55db0e260db13af879801f5d9cd00eed0f29e9"
   }
  ],
  "stats": {

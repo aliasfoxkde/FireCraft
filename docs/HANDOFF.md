@@ -172,8 +172,10 @@ one. Summary:
   toggles — Hide Panels/Tab, Main toolbar, 7 docked panels) landed
   2026-11-03: inert → 120; batch 4 (page/frame — Insert ▸ State,
   Trim/Fit Canvas, canvas rotations via the new `Action::Document`
-  arm) landed 2026-11-03: inert → **114 of 289**. Next batch:
-  symbol/animation.
+  arm) landed 2026-11-03; batch 5 (symbol/animation — Convert to
+  Symbol and Animate Selection via `symbol.create`, Tween Instances
+  via `symbol.tween`) landed 2026-11-03: inert → **111 of 289**.
+  Next batch: Image Size dialog (35226) then text.
 - **19b**: path-node add/delete **DONE** (`bf1b547`); the
   wasm-budget re-pin **DONE** (2026-11-03: measured 21,235,599 B,
   ceiling moved to 21,500,000 with the dated cause — 19b.4). The

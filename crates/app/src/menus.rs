@@ -166,6 +166,15 @@ pub enum SelAction {
     NewFrame,
     /// `symbol.breakApart` on the selection.
     BreakApart,
+    /// `symbol.create` — fold the selection into a new graphic
+    /// definition (CS6's Symbol ▸ Convert to Symbol).
+    ConvertToSymbol,
+    /// `symbol.create` with the `animation` type — CS6's
+    /// Modify ▸ Animation ▸ Animate Selection.
+    AnimateSelection,
+    /// `symbol.tween` — CS6's Symbol ▸ Tween Instances (4 steps,
+    /// distribute to frames).
+    TweenInstances,
     /// `object.setVisible` false on the selection.
     Hide,
     /// `object.setLocked` true on the selection.
@@ -757,7 +766,12 @@ pub static MODIFY: Menu = Menu {
         Entry::Sub(
             "Animation",
             &[
-                item(35451, "Animate Selection...", "", Action::Inert),
+                item(
+                    35451,
+                    "Animate Selection...",
+                    "",
+                    Action::Sel(SelAction::AnimateSelection),
+                ),
                 item(35463, "Settings...", "", Action::Inert),
                 Entry::Sep,
                 item(35472, "Remove Animation", "", Action::Inert),
@@ -766,11 +780,21 @@ pub static MODIFY: Menu = Menu {
         Entry::Sub(
             "Symbol",
             &[
-                item(35189, "Convert to Symbol...", "", Action::Inert),
+                item(
+                    35189,
+                    "Convert to Symbol...",
+                    "",
+                    Action::Sel(SelAction::ConvertToSymbol),
+                ),
                 Entry::Sep,
                 item(35334, "Edit Symbol", "", Action::Inert),
                 item(35842, "Edit in Place", "", Action::Inert),
-                item(35188, "Tween Instances...", "", Action::Inert),
+                item(
+                    35188,
+                    "Tween Instances...",
+                    "",
+                    Action::Sel(SelAction::TweenInstances),
+                ),
                 item(35190, "Break Apart", "", Action::Sel(SelAction::BreakApart)),
                 item(35807, "Swap Symbol...", "", Action::Inert),
             ],
@@ -1756,6 +1780,9 @@ pub fn action_name(action: Action) -> String {
             SelAction::SaveJpegMask => "Save selection as JPEG mask".into(),
             SelAction::RestoreJpegMask => "Restore JPEG mask as selection".into(),
             SelAction::ClearJpegMask => "Remove JPEG mask".into(),
+            SelAction::ConvertToSymbol => "Convert to symbol".into(),
+            SelAction::AnimateSelection => "Animate selection".into(),
+            SelAction::TweenInstances => "Tween instances".into(),
         },
         Action::Align(mode) => format!("Align {mode}"),
         Action::Distribute(axis) => format!("Distribute {axis}"),
@@ -1785,7 +1812,7 @@ mod tests {
     /// The highest inert-item count the docs have recorded. The
     /// `inert_count_never_rises` test refuses any regression above it;
     /// when the count falls, ratchet this down to the new number.
-    const INERT_CEILING: usize = 114;
+    const INERT_CEILING: usize = 111;
 
     fn walk(entries: &'static [Entry]) -> Vec<&'static Item> {
         let mut items = Vec::new();

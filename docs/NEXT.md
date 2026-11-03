@@ -221,7 +221,7 @@ of replacing it, fill/stroke swatch panel bound to
 Phase 19 batches 19.1–19.5 landed 2026-10-31 → 11-01: transform
 handles + Numeric Transform, Subselect path-node editing, the gradient
 fill editor, the command palette, and the grid/guides/snap set. The
-inert count is 114 of 289 items (was 190); 19.6 is the remaining
+inert count is 111 of 289 items (was 190); 19.6 is the remaining
 burn-down.
 
 ### Phase 19 — Canvas competence (P0, feeds usability directly)
@@ -257,7 +257,12 @@ burn-down.
   **114 inert of 289 items** (batch 4 — page/frame: Insert ▸ State
   via `frame.add`, Trim/Fit Canvas via the extents verbs, canvas
   Rotate 180/90CW/90CCW via `document.rotate` through the new
-  `Action::Document` arm; 2026-11-03). Next batch: symbol/animation.
+  `Action::Document` arm; 2026-11-03) → **111 inert of 289 items**
+  (batch 5 — symbol/animation: Convert to Symbol via `symbol.create`,
+  Animate Selection via `symbol.create` with the animation type,
+  Tween Instances via `symbol.tween`; Edit Symbol/Edit in Place/
+  Swap Symbol/Remove Animation stay inert — no engine verbs yet;
+  2026-11-03). Next batch: Image Size dialog (35226) then text.
 
 ### Phase 19b — Follow-ups from the landed batches
 

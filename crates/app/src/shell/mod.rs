@@ -986,6 +986,51 @@ impl Shell {
                     self.run_command("symbol.breakApart", serde_json::json!({ "id": id }));
                 }
             }
+            menus::SelAction::ConvertToSymbol => {
+                let ids = self.editor.live_selection();
+                if ids.is_empty() {
+                    self.status = "convert to symbol needs a selection".to_owned();
+                    return;
+                }
+                let count = self.editor.document().symbols.len();
+                self.run_command(
+                    "symbol.create",
+                    serde_json::json!({
+                        "ids": ids,
+                        "name": format!("Symbol {}", count + 1),
+                        "symbol_type": "graphic",
+                    }),
+                );
+            }
+            menus::SelAction::AnimateSelection => {
+                let ids = self.editor.live_selection();
+                if ids.is_empty() {
+                    self.status = "animate selection needs a selection".to_owned();
+                    return;
+                }
+                let count = self.editor.document().symbols.len();
+                self.run_command(
+                    "symbol.create",
+                    serde_json::json!({
+                        "ids": ids,
+                        "name": format!("Animation {}", count + 1),
+                        "symbol_type": "animation",
+                    }),
+                );
+            }
+            menus::SelAction::TweenInstances => {
+                if self.editor.live_selection().len() < 2 {
+                    self.status = "tween needs two instances of one symbol".to_owned();
+                    return;
+                }
+                self.run_command(
+                    "symbol.tween",
+                    serde_json::json!({
+                        "numSteps": 4, "distribute": true,
+                        "frame": self.editor.frame,
+                    }),
+                );
+            }
             menus::SelAction::Group => {
                 let ids = self.editor.live_selection();
                 if ids.len() < 2 {
@@ -1861,6 +1906,65 @@ mod tests {
         // Every action in the battery landed in the journal (the
         // wired verbs, not the refusals).
         assert!(shell.editor.session.journal_len() >= journal_before);
+    }
+
+    /// The 19.6 symbol/animation batch: Convert to Symbol folds the
+    /// selection into a library definition, Animate Selection makes an
+    /// animation-typed one, Tween Instances distributes instances
+    /// across frames — all through the journal — and each pick with
+    /// nothing (or too little) selected is a status line, not a row.
+    #[test]
+    fn symbol_actions_drive_the_library() {
+        // Convert to Symbol with content: one definition appears and
+        // the command landed in the journal.
+        let mut shell = gui_shell(gui_editor());
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::SelectAll));
+        let journal_before = shell.editor.session.journal_len();
+        shell.run_action(&menus::Action::Sel(menus::SelAction::ConvertToSymbol));
+        assert_eq!(
+            shell.editor.document().symbols.len(),
+            1,
+            "convert to symbol created one definition"
+        );
+        assert!(
+            shell.editor.session.journal_len() > journal_before,
+            "symbol.create recorded in the journal"
+        );
+
+        // Animate Selection with content: an animation-typed symbol.
+        let mut shell = gui_shell(gui_editor());
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::SelectAll));
+        shell.run_action(&menus::Action::Sel(menus::SelAction::AnimateSelection));
+        assert_eq!(shell.editor.document().symbols.len(), 1);
+        assert_eq!(
+            shell.editor.document().symbols[0].symbol_type,
+            doc::SymbolType::Animation,
+            "animate selection makes an animation symbol"
+        );
+
+        // Tween Instances with fewer than two instances is a refusal.
+        let mut shell = gui_shell(gui_editor());
+        let journal_before = shell.editor.session.journal_len();
+        shell.run_action(&menus::Action::Sel(menus::SelAction::TweenInstances));
+        assert!(
+            shell.editor.session.journal_len() == journal_before,
+            "tween with one instance refuses"
+        );
+        assert!(
+            !shell.status.is_empty(),
+            "the refusal is reported on the status line"
+        );
+
+        // Convert to Symbol with nothing selected refuses too.
+        let mut shell = gui_shell(gui_editor());
+        let journal_before = shell.editor.session.journal_len();
+        shell.run_action(&menus::Action::Sel(menus::SelAction::ConvertToSymbol));
+        assert_eq!(
+            shell.editor.session.journal_len(),
+            journal_before,
+            "convert with no selection refuses"
+        );
+        assert!(!shell.status.is_empty());
     }
 
     /// The Filters menu dispatch and the panel preset path drive the
