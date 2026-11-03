@@ -10,6 +10,7 @@ Current version: **0.2.5**.
 
 ### Features
 
+- **app**: Window menu panel toggles (19.6 batch 3) (3bf96ac)
 - **app**: path-node add/delete, canvas dialogs, Duplicate/Clone (19b.1 + 19.6) (8ce5762)
 - **app**: Lucide tool icons, context menu, selection/mask verbs (19.6) (2923392)
 - **app**: grid + guides overlays, drag-out, snap, Edit Grid (19.5) (8465b43)
@@ -305,6 +306,7 @@ Current version: **0.2.5**.
 
 ### Chores
 
+- regen changelog hashes, scripts report from gate (77c497f)
 - **release**: v0.2.5 stamps, notes, operator checklist, aegis hygiene (3a4832b)
 - **release**: v0.2.4 version stamps + changelog + notes (291d658)
 - **xtask**: ratchet coverage floors to 81.0/78.5 (6b0c46f)
