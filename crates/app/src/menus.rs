@@ -106,6 +106,9 @@ pub enum ShellAction {
     ToggleSnapToGuides,
     /// View ▸ Guides ▸ Clear Guides — `page.removeAllGuides`.
     ClearGuides,
+    /// Select ▸ Feather… — the feather-radius dialog over the pixel
+    /// selection.
+    FeatherDialog,
 }
 
 /// Engine commands with a selection- or document-derived payload.
@@ -148,6 +151,51 @@ pub enum SelAction {
         /// Flip top-bottom.
         vertical: bool,
     },
+    /// `selection.selectParents` — collapse each fully-selected group.
+    SelectParents,
+    /// `selection.selectChildren` — expand each selected group.
+    SelectChildren,
+    /// `bitmap.selectSimilar` — select matching pixels image-wide.
+    SelectSimilar,
+    /// `bitmap.feather` — feather the pixel selection.
+    Feather(u8),
+    /// `bitmap.adjustPixelSel` — grow/shrink/border/smooth the marquee.
+    AdjustPixelSel {
+        /// "expand" / "contract" / "border" / "smooth".
+        what: &'static str,
+        /// Pixels to adjust by.
+        amount: i64,
+    },
+    /// `mask.pathToMarquee` — rasterize the selected path into the marquee.
+    PathToMarquee,
+    /// `mask.marqueeToPath` — trace the marquee into a path.
+    MarqueeToPath,
+    /// `selection.save` — save the pixel selection.
+    SaveSelection,
+    /// `selection.restore` — restore a saved pixel selection.
+    RestoreSelection,
+    /// `selection.deleteSaved` — delete a saved pixel selection.
+    DeleteSavedSelection,
+    /// `mask.add` — mask the selection (reveal/hide).
+    AddMask {
+        /// "reveal all" / "hide all" / "reveal selection" / "hide selection".
+        mode: &'static str,
+    },
+    /// `mask.enable` — enable/disable the selection's mask.
+    EnableMask(bool),
+    /// `mask.link` — link/unlink the selection's mask.
+    LinkMask(bool),
+    /// `mask.remove` — apply or discard the selection's mask.
+    RemoveMask {
+        /// "apply" / "discard".
+        what_if_image: &'static str,
+    },
+    /// `mask.saveJPEG` — stash the pixel selection as a JPEG mask.
+    SaveJpegMask,
+    /// `mask.restoreJPEG` — restore the stashed JPEG mask.
+    RestoreJpegMask,
+    /// `mask.clearJPEG` — drop the stashed JPEG mask.
+    ClearJpegMask,
 }
 
 /// The Modify ▸ Arrange items; dispatch resolves the numeric index.
@@ -499,28 +547,100 @@ pub static SELECT: Menu = Menu {
             "Ctrl+D",
             Action::Shell(ShellAction::Deselect),
         ),
-        item(35194, "Superselect", "", Action::Inert),
-        item(35193, "Subselect", "", Action::Inert),
+        item(
+            35194,
+            "Superselect",
+            "",
+            Action::Sel(SelAction::SelectParents),
+        ),
+        item(
+            35193,
+            "Subselect",
+            "",
+            Action::Sel(SelAction::SelectChildren),
+        ),
         Entry::Sep,
-        item(35041, "Select Similar", "", Action::Inert),
+        item(
+            35041,
+            "Select Similar",
+            "",
+            Action::Sel(SelAction::SelectSimilar),
+        ),
         item(
             35039,
             "Select Inverse",
             "",
             Action::Shell(ShellAction::SelectInverse),
         ),
-        item(35089, "Feather...", "", Action::Inert),
+        item(
+            35089,
+            "Feather...",
+            "",
+            Action::Shell(ShellAction::FeatherDialog),
+        ),
         Entry::Sep,
-        item(35405, "Expand Marquee...", "", Action::Inert),
-        item(35406, "Contract Marquee...", "", Action::Inert),
-        item(35407, "Border Marquee...", "", Action::Inert),
-        item(35408, "Smooth Marquee...", "", Action::Inert),
+        item(
+            35405,
+            "Expand Marquee...",
+            "",
+            Action::Sel(SelAction::AdjustPixelSel {
+                what: "expand",
+                amount: 2,
+            }),
+        ),
+        item(
+            35406,
+            "Contract Marquee...",
+            "",
+            Action::Sel(SelAction::AdjustPixelSel {
+                what: "contract",
+                amount: 2,
+            }),
+        ),
+        item(
+            35407,
+            "Border Marquee...",
+            "",
+            Action::Sel(SelAction::AdjustPixelSel {
+                what: "border",
+                amount: 2,
+            }),
+        ),
+        item(
+            35408,
+            "Smooth Marquee...",
+            "",
+            Action::Sel(SelAction::AdjustPixelSel {
+                what: "smooth",
+                amount: 2,
+            }),
+        ),
         Entry::Sep,
-        item(35780, "Convert Marquee to Path", "", Action::Inert),
+        item(
+            35780,
+            "Convert Marquee to Path",
+            "",
+            Action::Sel(SelAction::MarqueeToPath),
+        ),
         Entry::Sep,
-        item(35467, "Save Bitmap Selection...", "", Action::Inert),
-        item(35468, "Restore Bitmap Selection...", "", Action::Inert),
-        item(35783, "Delete Bitmap Selection...", "", Action::Inert),
+        item(
+            35467,
+            "Save Bitmap Selection...",
+            "",
+            Action::Sel(SelAction::SaveSelection),
+        ),
+        item(
+            35468,
+            "Restore Bitmap Selection...",
+            "",
+            Action::Sel(SelAction::RestoreSelection),
+        ),
+        item(
+            35783,
+            "Delete Bitmap Selection...",
+            "",
+            Action::Sel(SelAction::DeleteSavedSelection),
+        ),
     ],
 };
 
@@ -579,27 +699,83 @@ pub static MODIFY: Menu = Menu {
         Entry::Sub(
             "Mask",
             &[
-                item(35431, "Reveal All", "", Action::Inert),
-                item(35432, "Hide All", "", Action::Inert),
+                item(
+                    35431,
+                    "Reveal All",
+                    "",
+                    Action::Sel(SelAction::AddMask { mode: "reveal all" }),
+                ),
+                item(
+                    35432,
+                    "Hide All",
+                    "",
+                    Action::Sel(SelAction::AddMask { mode: "hide all" }),
+                ),
                 Entry::Sep,
-                item(35430, "Paste as Mask", "", Action::Inert),
+                item(
+                    35430,
+                    "Paste as Mask",
+                    "",
+                    Action::Shell(ShellAction::PasteAsMask),
+                ),
                 item(35128, "Group as Mask", "", Action::Inert),
                 Entry::Sep,
-                item(35433, "Reveal Selection", "", Action::Inert),
-                item(35434, "Hide Selection", "", Action::Inert),
+                item(
+                    35433,
+                    "Reveal Selection",
+                    "",
+                    Action::Sel(SelAction::AddMask {
+                        mode: "reveal selection",
+                    }),
+                ),
+                item(
+                    35434,
+                    "Hide Selection",
+                    "",
+                    Action::Sel(SelAction::AddMask {
+                        mode: "hide selection",
+                    }),
+                ),
                 Entry::Sep,
-                item(35435, "Disable Mask", "", Action::Inert),
-                item(35436, "Delete Mask", "", Action::Inert),
+                item(
+                    35435,
+                    "Disable Mask",
+                    "",
+                    Action::Sel(SelAction::EnableMask(false)),
+                ),
+                item(
+                    35436,
+                    "Delete Mask",
+                    "",
+                    Action::Sel(SelAction::RemoveMask {
+                        what_if_image: "discard",
+                    }),
+                ),
             ],
         ),
         Entry::Sub(
             "Selective JPEG",
             &[
-                item(35469, "Save Selection as JPEG Mask", "", Action::Inert),
-                item(35470, "Restore JPEG Mask as Selection", "", Action::Inert),
+                item(
+                    35469,
+                    "Save Selection as JPEG Mask",
+                    "",
+                    Action::Sel(SelAction::SaveJpegMask),
+                ),
+                item(
+                    35470,
+                    "Restore JPEG Mask as Selection",
+                    "",
+                    Action::Sel(SelAction::RestoreJpegMask),
+                ),
                 item(35576, "Settings...", "", Action::Inert),
                 Entry::Sep,
-                item(35471, "Remove JPEG Mask", "", Action::Inert),
+                item(
+                    35471,
+                    "Remove JPEG Mask",
+                    "",
+                    Action::Sel(SelAction::ClearJpegMask),
+                ),
             ],
         ),
         Entry::Sep,
@@ -744,7 +920,12 @@ pub static MODIFY: Menu = Menu {
             ],
         ),
         Entry::Sep,
-        item(35781, "Convert Path to Marquee...", "", Action::Inert),
+        item(
+            35781,
+            "Convert Path to Marquee...",
+            "",
+            Action::Sel(SelAction::PathToMarquee),
+        ),
         Entry::Sub(
             "Combine Paths",
             &[
@@ -1352,6 +1533,7 @@ pub fn action_name(action: Action) -> String {
             ShellAction::ToggleGuidesLocked => "Lock guides".into(),
             ShellAction::ToggleSnapToGuides => "Snap to guides".into(),
             ShellAction::ClearGuides => "Clear guides".into(),
+            ShellAction::FeatherDialog => "Feather selection".into(),
         },
         Action::Sel(sel) => match sel {
             SelAction::Delete => "Delete selection".into(),
@@ -1378,6 +1560,33 @@ pub fn action_name(action: Action) -> String {
                 (true, true) => "Flip both".into(),
                 (false, false) => "Reflect (no-op)".into(),
             },
+            SelAction::SelectParents => "Superselect".into(),
+            SelAction::SelectChildren => "Subselect".into(),
+            SelAction::SelectSimilar => "Select similar".into(),
+            SelAction::Feather(radius) => format!("Feather {radius}px"),
+            SelAction::AdjustPixelSel { what, amount } => {
+                let verb = match what {
+                    "expand" => "Expand",
+                    "contract" => "Contract",
+                    "border" => "Border",
+                    _ => "Smooth",
+                };
+                format!("{verb} marquee by {amount}px")
+            }
+            SelAction::PathToMarquee => "Convert path to marquee".into(),
+            SelAction::MarqueeToPath => "Convert marquee to path".into(),
+            SelAction::SaveSelection => "Save bitmap selection".into(),
+            SelAction::RestoreSelection => "Restore bitmap selection".into(),
+            SelAction::DeleteSavedSelection => "Delete bitmap selection".into(),
+            SelAction::AddMask { mode } => format!("Mask: {mode}"),
+            SelAction::EnableMask(true) => "Enable mask".into(),
+            SelAction::EnableMask(false) => "Disable mask".into(),
+            SelAction::LinkMask(true) => "Link mask".into(),
+            SelAction::LinkMask(false) => "Unlink mask".into(),
+            SelAction::RemoveMask { what_if_image } => format!("Delete mask ({what_if_image})"),
+            SelAction::SaveJpegMask => "Save selection as JPEG mask".into(),
+            SelAction::RestoreJpegMask => "Restore JPEG mask as selection".into(),
+            SelAction::ClearJpegMask => "Remove JPEG mask".into(),
         },
         Action::Align(mode) => format!("Align {mode}"),
         Action::Distribute(axis) => format!("Distribute {axis}"),

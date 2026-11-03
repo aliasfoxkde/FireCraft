@@ -70,6 +70,10 @@ impl TypedCommand for AddLayer {
             })
             .collect();
         let mut layer = Layer {
+            // A new layer is a display layer (CS6's `DISb`): the
+            // derive-default is `false` (smart-reference display),
+            // which would render nothing.
+            display: true,
             cells,
             ..Layer::default()
         };
@@ -1112,6 +1116,18 @@ mod tests {
         assert!(!document.pages[1].layers.layers[0].display);
         delta.apply_inverse(&mut document).unwrap();
         assert!(document.pages[1].layers.layers[0].display);
+    }
+
+    /// A new layer is a display layer: `DISb` set. The derive-default
+    /// is the smart-reference display, which would render nothing.
+    #[test]
+    fn a_new_layer_is_a_display_layer() {
+        let (mut document, _) = testdoc::sample_document();
+        let payload = json!({ "page": 0 });
+        AddLayer.apply_json(&mut document, payload).unwrap();
+        let added = document.pages[0].layers.layers.last().unwrap();
+        assert!(added.display, "the new layer must render");
+        assert!(added.cells.iter().all(|cell| cell.visible && !cell.locked));
     }
 
     #[test]

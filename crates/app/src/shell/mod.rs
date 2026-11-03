@@ -3,7 +3,9 @@
 //! and every panel reads the document read-only. Desktop file routing
 //! goes through the injected [`engine::platform`] traits ([`EnvDialogs`]
 //! in [`dialogs`]; real modal dialogs land with desktop integration).
-pub(crate) use dialogs::{DisplayState, EnvDialogs, ExportDialog, NumericTransformDialog};
+pub(crate) use dialogs::{
+    DisplayState, EnvDialogs, ExportDialog, FeatherDialog, NumericTransformDialog,
+};
 pub(crate) use filters_ui::{
     FILTER_BOOL_KEYS, FILTER_FAMILIES, FILTER_PARAMS, FilterPreset, filter_preset,
 };
@@ -15,13 +17,12 @@ mod dialogs;
 mod filters_ui;
 mod glyphs;
 mod guides_ui;
+mod icons;
 mod palette;
 mod panels;
 
 pub use glyphs::apply_cs6_theme;
-pub(crate) use glyphs::{
-    draw_autoshape_glyph, draw_tool_glyph, symbol_type_label, tool_key, tool_label,
-};
+pub(crate) use glyphs::{draw_autoshape_glyph, symbol_type_label, tool_key, tool_label};
 
 use doc::{ObjectData, PathObject, SymbolInstanceObject, SymbolType, TextObject};
 use egui::{Color32, ColorImage, Pos2, Rect, Sense, TextureHandle, TextureOptions, Vec2};
@@ -72,6 +73,8 @@ pub struct Shell {
     export_dialog: Option<ExportDialog>,
     /// Open Numeric Transform dialog, if any.
     pub(crate) numeric_transform: Option<NumericTransformDialog>,
+    /// Open Feather dialog, if any.
+    pub(crate) feather: Option<FeatherDialog>,
     /// The command palette state.
     pub(crate) palette: palette::CommandPalette,
     /// Display name of the open document (tab strip).
@@ -107,6 +110,10 @@ pub struct Shell {
     /// and the live world position. Committed to `page.addGuide` (or
     /// discarded) at release; locked guides refuse new guides.
     guide_draft: Option<GuideDraft>,
+    /// The canvas context menu: `Some` while open, holding the screen
+    /// position it opened at (the popup re-anchors there each frame,
+    /// so a later pointer move does not drag it).
+    pub(crate) context_menu: Option<Pos2>,
     /// The live egui context, stashed each frame so code outside the
     /// frame loop (the web bridge) can request a repaint after it
     /// mutates the shell — without one, a bridge-loaded document sat
@@ -143,6 +150,7 @@ impl Shell {
             status: "ready".to_owned(),
             export_dialog: None,
             numeric_transform: None,
+            feather: None,
             palette: palette::CommandPalette::default(),
             doc_name: "untitled".to_owned(),
             canvas_rect: None,
@@ -158,6 +166,7 @@ impl Shell {
             snap_to_guides: false,
             grid_dialog: None,
             guide_draft: None,
+            context_menu: None,
             ctx: None,
         }
     }
@@ -529,6 +538,15 @@ impl Shell {
             menus::ShellAction::NumericTransform => {
                 self.numeric_transform = Some(NumericTransformDialog::default());
             }
+            menus::ShellAction::FeatherDialog => {
+                if self.editor.has_pixel_selection() {
+                    self.feather = Some(FeatherDialog {
+                        radius: self.editor.feather_radius,
+                    });
+                } else {
+                    self.status = "no pixel selection to feather".to_owned();
+                }
+            }
             menus::ShellAction::Palette => self.toggle_palette(),
             menus::ShellAction::Quit => self.close_requested = true,
             menus::ShellAction::Undo => match self.editor.undo() {
@@ -840,6 +858,130 @@ impl Shell {
                     }),
                 );
             }
+            menus::SelAction::SelectParents => {
+                if let Err(error) = self.editor.sync_selection() {
+                    self.status = format!("selection failed: {error}");
+                    return;
+                }
+                self.run_command("selection.selectParents", serde_json::json!({}));
+                self.editor.adopt_document_selection();
+            }
+            menus::SelAction::SelectChildren => {
+                if let Err(error) = self.editor.sync_selection() {
+                    self.status = format!("selection failed: {error}");
+                    return;
+                }
+                self.run_command("selection.selectChildren", serde_json::json!({}));
+                self.editor.adopt_document_selection();
+            }
+            menus::SelAction::SelectSimilar => {
+                let tolerance = self.editor.wand_tolerance;
+                if let Err(error) = self.editor.select_similar(tolerance) {
+                    self.status = format!("select similar failed: {error}");
+                }
+            }
+            menus::SelAction::Feather(radius) => {
+                if let Err(error) = self.editor.feather_selection(radius) {
+                    self.status = format!("feather failed: {error}");
+                }
+            }
+            menus::SelAction::AdjustPixelSel { what, amount } => {
+                if let Err(error) = self.editor.adjust_pixel_selection(what, amount) {
+                    self.status = format!("adjust marquee failed: {error}");
+                }
+            }
+            menus::SelAction::PathToMarquee => {
+                let Some(path_id) = self.editor.selected_live() else {
+                    self.status = "select a path to convert".to_owned();
+                    return;
+                };
+                let Some(image_id) = self.editor.pixel_target else {
+                    self.status =
+                        "no image under the marquee; make a pixel selection first".to_owned();
+                    return;
+                };
+                self.run_command(
+                    "mask.pathToMarquee",
+                    serde_json::json!({
+                        "id": path_id, "image": image_id,
+                        "mode": "antialias", "feather_amount": null,
+                    }),
+                );
+            }
+            menus::SelAction::MarqueeToPath => {
+                let Some(image_id) = self.editor.pixel_target else {
+                    self.status = "no pixel selection to convert".to_owned();
+                    return;
+                };
+                self.run_command(
+                    "mask.marqueeToPath",
+                    serde_json::json!({ "image": image_id }),
+                );
+            }
+            menus::SelAction::SaveSelection => {
+                self.run_command(
+                    "selection.save",
+                    serde_json::json!({ "name": null, "operation": "new or replace" }),
+                );
+            }
+            menus::SelAction::RestoreSelection => {
+                self.run_command(
+                    "selection.restore",
+                    serde_json::json!({ "name": null, "operation": "replace", "invert": false }),
+                );
+            }
+            menus::SelAction::DeleteSavedSelection => {
+                self.run_command("selection.deleteSaved", serde_json::json!({ "name": null }));
+            }
+            menus::SelAction::AddMask { mode } => {
+                let Some(id) = self.editor.selected_live() else {
+                    self.status = "nothing selected".to_owned();
+                    return;
+                };
+                self.run_command(
+                    "mask.add",
+                    serde_json::json!({ "id": id, "mode": mode, "enter_edit_mode": false }),
+                );
+            }
+            menus::SelAction::EnableMask(enable) => {
+                let Some(id) = self.editor.selected_live() else {
+                    self.status = "nothing selected".to_owned();
+                    return;
+                };
+                self.run_command(
+                    "mask.enable",
+                    serde_json::json!({ "id": id, "enable": enable }),
+                );
+            }
+            menus::SelAction::LinkMask(linked) => {
+                let Some(id) = self.editor.selected_live() else {
+                    self.status = "nothing selected".to_owned();
+                    return;
+                };
+                self.run_command(
+                    "mask.link",
+                    serde_json::json!({ "id": id, "linked": linked }),
+                );
+            }
+            menus::SelAction::RemoveMask { what_if_image } => {
+                let Some(id) = self.editor.selected_live() else {
+                    self.status = "nothing selected".to_owned();
+                    return;
+                };
+                self.run_command(
+                    "mask.remove",
+                    serde_json::json!({ "id": id, "what_if_image": what_if_image }),
+                );
+            }
+            menus::SelAction::SaveJpegMask => {
+                self.run_command("mask.saveJPEG", serde_json::json!({}));
+            }
+            menus::SelAction::RestoreJpegMask => {
+                self.run_command("mask.restoreJPEG", serde_json::json!({}));
+            }
+            menus::SelAction::ClearJpegMask => {
+                self.run_command("mask.clearJPEG", serde_json::json!({}));
+            }
         }
     }
 
@@ -1065,6 +1207,12 @@ impl eframe::App for Shell {
                 .resizable(false)
                 .collapsible(false)
                 .show(ui.ctx(), |ui| self.numeric_transform_dialog_ui(ui));
+        }
+        if self.feather.is_some() {
+            egui::Window::new("Feather Selection")
+                .resizable(false)
+                .collapsible(false)
+                .show(ui.ctx(), |ui| self.feather_dialog_ui(ui));
         }
         if self.grid_dialog.is_some() {
             egui::Window::new("Edit Grid")
@@ -2205,5 +2353,167 @@ mod tests {
 
         let untouched = shell.snap_to_guides(geom::Point::new(150.0, 150.0), 4.0);
         assert_eq!(untouched, geom::Point::new(150.0, 150.0));
+    }
+
+    /// A pixel-selection helper shared by the 19.6 tests: a shell
+    /// with a red raster and a committed non-empty marquee over it.
+    fn shell_with_marquee() -> (Shell, doc::ObjectId) {
+        let (mut shell, id) = shell_with_raster();
+        shell.editor.tool = Tool::Marquee;
+        shell.editor.pixel_mode = PixelSelectMode::from_modifiers(egui::Modifiers::default());
+        shell
+            .editor
+            .begin_pixel_selection(geom::Point::new(0.5, 0.5))
+            .expect("the drag starts");
+        shell
+            .editor
+            .extend_pixel_selection(geom::Point::new(2.0, 2.0))
+            .expect("the drag continues");
+        shell.editor.end_pixel_selection().expect("the drag ends");
+        (shell, id)
+    }
+
+    /// The Feather dialog only opens over an active pixel selection,
+    /// and the applied radius becomes the next dialog's default.
+    #[test]
+    fn the_feather_dialog_gates_on_a_pixel_selection() {
+        let mut shell = gui_shell(gui_editor());
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::FeatherDialog));
+        assert!(shell.feather.is_none(), "no selection, no dialog");
+        assert!(shell.status.contains("no pixel selection"));
+
+        let (mut shell, _id) = shell_with_marquee();
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::FeatherDialog));
+        assert_eq!(shell.feather, Some(FeatherDialog { radius: 2 }));
+
+        shell.apply_feather(8);
+        assert!(shell.feather.is_none(), "apply closes the dialog");
+        assert_eq!(shell.editor.feather_radius, 8, "the default updates");
+        assert!(shell.status.contains("feathered selection by 8px"));
+
+        // The next open seeds from the last applied radius.
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::FeatherDialog));
+        assert_eq!(shell.feather, Some(FeatherDialog { radius: 8 }));
+    }
+
+    /// Superselect/Subselect route through `selection.selectParents` /
+    /// `selectChildren` and pull the document's rewritten selection
+    /// back into the view via `adopt_document_selection`.
+    #[test]
+    fn superselect_and_subselect_drive_the_selection_verbs() {
+        let mut shell = gui_shell(gui_editor());
+        let id = shell.editor.current_cell().unwrap().elements[0];
+
+        // With a plain object selected, selectParents collapses to the
+        // same object (it is top-level) and the view keeps it.
+        shell.editor.set_selection(vec![id]);
+        shell.run_sel(menus::SelAction::SelectParents);
+        assert!(!shell.status.contains("failed"), "got {:?}", shell.status);
+        assert_eq!(shell.editor.selected_live(), Some(id));
+
+        // selectChildren on a non-group refuses cleanly into status.
+        shell.run_sel(menus::SelAction::SelectChildren);
+        assert!(!shell.status.contains("panic"));
+    }
+
+    /// Marquee ⇄ path conversion and the bitmap-selection save/restore
+    /// actions route to their engine commands through the shell.
+    #[test]
+    fn marquee_conversion_and_saved_selection_actions_dispatch() {
+        let (mut shell, _id) = shell_with_marquee();
+
+        shell.run_sel(menus::SelAction::SaveSelection);
+        assert!(
+            !shell.editor.document().saved_selections.is_empty(),
+            "selection.save stored a slot"
+        );
+
+        shell.run_sel(menus::SelAction::DeleteSavedSelection);
+        assert!(
+            shell.editor.document().saved_selections.is_empty(),
+            "selection.deleteSaved cleared the slot"
+        );
+
+        // With no pixel target left, MarqueeToPath reports into the
+        // status line instead of panicking.
+        shell.editor.deselect_pixels().unwrap();
+        shell.run_sel(menus::SelAction::MarqueeToPath);
+        assert!(shell.status.contains("no pixel selection"));
+    }
+
+    /// Mask verbs refuse cleanly with nothing selected and route to
+    /// `mask.*` commands with a live selection.
+    #[test]
+    fn mask_actions_require_a_selection() {
+        let mut shell = gui_shell(gui_editor());
+        shell.run_sel(menus::SelAction::AddMask { mode: "hide all" });
+        assert_eq!(shell.status, "nothing selected");
+
+        shell.run_sel(menus::SelAction::EnableMask(false));
+        assert_eq!(shell.status, "nothing selected");
+
+        let id = shell.editor.current_cell().unwrap().elements[0];
+        shell.editor.set_selection(vec![id]);
+        shell.run_sel(menus::SelAction::AddMask { mode: "hide all" });
+        assert!(
+            !shell.status.contains("failed"),
+            "mask.add on a live object should route, got {:?}",
+            shell.status
+        );
+    }
+
+    /// `adopt_document_selection` pulls the document's object
+    /// selection back into the view — the reverse of sync.
+    #[test]
+    fn adopt_document_selection_pulls_from_the_document() {
+        let mut editor = Editor::untitled();
+        editor.tool = Tool::Rect;
+        editor.begin_drag(geom::Point::new(0.0, 0.0));
+        editor.drag_to(geom::Point::new(10.0, 10.0));
+        editor.end_drag().unwrap();
+        let id = editor.current_cell().unwrap().elements[0];
+
+        editor.set_selection(Vec::new());
+        editor
+            .apply("selection.set", serde_json::json!({ "ids": [id] }))
+            .unwrap();
+        assert_eq!(editor.selected_live(), None, "the view is stale");
+        editor.adopt_document_selection();
+        assert_eq!(editor.selected_live(), Some(id));
+    }
+
+    /// The context menu's pick step: a right-click that missed the
+    /// selection adopts the object under the pointer; a right-click on
+    /// the selection leaves it alone; a miss on empty canvas clears
+    /// nothing.
+    #[test]
+    fn the_context_menu_pick_selects_under_the_pointer() {
+        let mut editor = Editor::untitled();
+        editor.tool = Tool::Rect;
+        editor.begin_drag(geom::Point::new(0.0, 0.0));
+        editor.drag_to(geom::Point::new(10.0, 10.0));
+        editor.end_drag().unwrap();
+        editor.begin_drag(geom::Point::new(40.0, 0.0));
+        editor.drag_to(geom::Point::new(50.0, 10.0));
+        editor.end_drag().unwrap();
+        let (first, second) = {
+            let elements = &editor.current_cell().unwrap().elements;
+            (elements[0], elements[1])
+        };
+        let mut shell = gui_shell(editor);
+
+        // A miss on the second object while the first is selected.
+        shell.editor.set_selection(vec![first]);
+        shell.context_menu_pick(geom::Point::new(45.0, 5.0));
+        assert_eq!(shell.editor.selected_live(), Some(second));
+
+        // A right-click on the selection keeps it.
+        shell.context_menu_pick(geom::Point::new(45.0, 5.0));
+        assert_eq!(shell.editor.selected_live(), Some(second));
+
+        // A right-click on empty canvas leaves the selection alone —
+        // the menu still opens, its rows just disable.
+        shell.context_menu_pick(geom::Point::new(200.0, 200.0));
+        assert_eq!(shell.editor.selected_live(), Some(second));
     }
 }

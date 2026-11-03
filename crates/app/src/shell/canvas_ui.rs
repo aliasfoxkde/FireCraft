@@ -88,7 +88,7 @@ impl Shell {
         } else {
             Color32::from_rgb(0xc4, 0xc4, 0xc4)
         };
-        draw_tool_glyph(painter, rect, tool, ink);
+        icons::paint(ui, rect, icons::tool_icon(tool), 17.0, ink);
         let key = tool_key(tool);
         if key.is_empty() {
             response.on_hover_text(tool_label(tool));
@@ -127,7 +127,13 @@ impl Shell {
             Color32::from_rgb(0xc4, 0xc4, 0xc4)
         };
         let shown = current.unwrap_or(shapes[0]);
-        draw_tool_glyph(painter, rect, Tool::AutoShape(shown), ink);
+        icons::paint(
+            ui,
+            rect,
+            icons::tool_icon(Tool::AutoShape(shown)),
+            17.0,
+            ink,
+        );
         let tip = match current {
             Some(shape) => format!("Auto Shape — {}", shape.label()),
             None => "Auto Shape".to_owned(),
@@ -1003,6 +1009,32 @@ impl Shell {
                 }
             }
         }
+        // The right-click context menu (CS6's canvas popup): a
+        // secondary click picks the object under the pointer when it
+        // missed the current selection, then opens a popup of
+        // selection verbs — every row routed through `run_action`,
+        // the same door the menu bar uses.
+        if response.secondary_clicked() {
+            if let Some(pos) = response.interact_pointer_pos() {
+                let world = self.view.to_world(pos - rect.left_top().to_vec2());
+                self.context_menu_pick(world);
+                self.context_menu = Some(pos);
+            }
+        }
+        if let Some(open_at) = self.context_menu {
+            let mut open = self.context_menu.is_some();
+            let popup_id = egui::Id::new("canvas_context_menu");
+            let popup = egui::Popup::new(popup_id, ui.ctx().clone(), open_at, response.layer_id)
+                .kind(egui::PopupKind::Menu)
+                .layout(egui::Layout::top_down_justified(egui::Align::Min))
+                .gap(0.0)
+                .anchor(open_at)
+                .open_bool(&mut open)
+                .close_behavior(egui::PopupCloseBehavior::CloseOnClick);
+            popup.show(|ui| self.context_menu_ui(ui));
+            self.context_menu = open.then_some(open_at);
+        }
+
         if response.hovered() {
             let scroll = ui.input(|i| i.smooth_scroll_delta.y);
             if scroll != 0.0 {
@@ -1045,6 +1077,93 @@ impl Shell {
             ui.separator();
             ui.weak("F1 for all shortcuts");
         });
+    }
+
+    /// The canvas context menu's pick step, callable headless: a
+    /// secondary click that missed the current selection selects the
+    /// object under the pointer first (CS6's context-menu pick); a
+    /// press on (or a miss away from) any object leaves the selection
+    /// alone.
+    pub(crate) fn context_menu_pick(&mut self, world: geom::Point) {
+        let hits_selection = self
+            .editor
+            .selection_set
+            .iter()
+            .any(|id| self.editor.hit_at(world) == Some(*id));
+        if hits_selection {
+            return;
+        }
+        if let Some(hit) = self.editor.hit_at(world) {
+            self.editor.selection = Some(hit);
+            self.editor.selection_set = vec![hit];
+        }
+    }
+
+    /// The canvas context menu's rows: selection verbs mirroring the
+    /// CS6 canvas popup (clipboard, transform, arrange, group), routed
+    /// through `run_action` like every other menu surface. An empty
+    /// selection leaves only the paste/view rows enabled.
+    fn context_menu_ui(&mut self, ui: &mut egui::Ui) {
+        use crate::menus::{Action, Arrange, SelAction, ShellAction};
+        let has_selection = !self.editor.selection_set.is_empty();
+        let rows: &[(&str, bool, Action)] = &[
+            ("Cut", has_selection, Action::Shell(ShellAction::Cut)),
+            ("Copy", has_selection, Action::Shell(ShellAction::Copy)),
+            ("Paste", true, Action::Shell(ShellAction::Paste)),
+        ];
+        for (label, wired, action) in rows {
+            if ui.add_enabled(*wired, egui::Button::new(*label)).clicked() {
+                self.run_action(action);
+                ui.close();
+            }
+        }
+        if ui
+            .add_enabled(has_selection, egui::Button::new("Duplicate\tCtrl+Alt+D"))
+            .clicked()
+        {
+            for id in self.editor.live_selection() {
+                self.run_command("object.duplicate", serde_json::json!({ "id": id }));
+            }
+            ui.close();
+        }
+        ui.separator();
+        let sel_rows: &[(&str, Action)] = &[
+            (
+                "Numeric Transform...",
+                Action::Shell(ShellAction::NumericTransform),
+            ),
+            (
+                "Flip Horizontal",
+                Action::Sel(SelAction::Reflect {
+                    horizontal: true,
+                    vertical: false,
+                }),
+            ),
+            (
+                "Flip Vertical",
+                Action::Sel(SelAction::Reflect {
+                    horizontal: false,
+                    vertical: true,
+                }),
+            ),
+            ("Rotate 90° CW", Action::Sel(SelAction::Rotate(90.0))),
+            ("Bring to Front", Action::Arrange(Arrange::Front)),
+            ("Send to Back", Action::Arrange(Arrange::Back)),
+            ("Group\tCtrl+G", Action::Sel(SelAction::Group)),
+            ("Ungroup\tCtrl+U", Action::Sel(SelAction::Ungroup)),
+            ("Hide\tCtrl+M", Action::Sel(SelAction::Hide)),
+            ("Select All", Action::Shell(ShellAction::SelectAll)),
+            ("Deselect\tCtrl+D", Action::Shell(ShellAction::Deselect)),
+        ];
+        for (label, action) in sel_rows {
+            if ui
+                .add_enabled(has_selection, egui::Button::new(*label))
+                .clicked()
+            {
+                self.run_action(action);
+                ui.close();
+            }
+        }
     }
 }
 
