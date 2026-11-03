@@ -5,7 +5,7 @@
 //! in [`dialogs`]; real modal dialogs land with desktop integration).
 pub(crate) use dialogs::{
     CanvasColorDialog, CanvasSizeDialog, DisplayState, EnvDialogs, ExportDialog, FeatherDialog,
-    NumericTransformDialog,
+    ImageSizeDialog, NumericTransformDialog,
 };
 pub(crate) use filters_ui::{
     FILTER_BOOL_KEYS, FILTER_FAMILIES, FILTER_PARAMS, FilterPreset, filter_preset,
@@ -80,6 +80,8 @@ pub struct Shell {
     pub(crate) canvas_size: Option<CanvasSizeDialog>,
     /// Open Canvas Color dialog, if any.
     pub(crate) canvas_color: Option<CanvasColorDialog>,
+    /// Open Image Size dialog, if any.
+    pub(crate) image_size: Option<ImageSizeDialog>,
     /// The command palette state.
     pub(crate) palette: palette::CommandPalette,
     /// Display name of the open document (tab strip).
@@ -168,6 +170,7 @@ impl Shell {
             feather: None,
             canvas_size: None,
             canvas_color: None,
+            image_size: None,
             palette: palette::CommandPalette::default(),
             doc_name: "untitled".to_owned(),
             canvas_rect: None,
@@ -650,6 +653,18 @@ impl Shell {
                     width: canvas.width,
                     height: canvas.height,
                     ..CanvasSizeDialog::default()
+                });
+            }
+            menus::ShellAction::ImageSize => {
+                let canvas = &self.editor.session.document().pages[0].info.canvas;
+                self.image_size = Some(ImageSizeDialog {
+                    width: canvas.width,
+                    height: canvas.height,
+                    resolution: self.editor.session.document().pages[0]
+                        .info
+                        .canvas
+                        .resolution,
+                    ..ImageSizeDialog::default()
                 });
             }
             menus::ShellAction::CanvasColor => {
@@ -1449,6 +1464,12 @@ impl eframe::App for Shell {
                 .resizable(false)
                 .collapsible(false)
                 .show(ui.ctx(), |ui| self.canvas_color_dialog_ui(ui));
+        }
+        if self.image_size.is_some() {
+            egui::Window::new("Image Size")
+                .resizable(false)
+                .collapsible(false)
+                .show(ui.ctx(), |ui| self.image_size_dialog_ui(ui));
         }
         if self.grid_dialog.is_some() {
             egui::Window::new("Edit Grid")
@@ -2877,6 +2898,69 @@ mod tests {
         shell.apply_canvas_size(&dialog);
         let canvas = &shell.editor.session.document().pages[0].info.canvas;
         assert_eq!(canvas.width, 1280.0, "the refused resize leaves the canvas");
+        assert!(shell.status.contains("failed"));
+    }
+
+    /// The Image Size dialog opens seeded with the live canvas and
+    /// resolution, scales the document through `document.setImageSize`
+    /// (objects ride the affine, images resample), and a failed apply
+    /// keeps the dialog's status clean while the document is untouched.
+    #[test]
+    fn the_image_size_dialog_scales_the_document() {
+        let mut shell = gui_shell(gui_editor());
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::ImageSize));
+        let dialog = shell
+            .image_size
+            .clone()
+            .expect("the dialog opens over any document");
+        assert_eq!(dialog.width, 640.0, "seeded from the live canvas");
+        assert_eq!(dialog.height, 480.0);
+        assert_eq!(dialog.resolution, 72.0);
+        assert!(!dialog.unit_cm, "the default unit is inches");
+
+        // A 2× isotropic scale: the canvas doubles, vector geometry
+        // rides the affine.
+        let (mut shell, id) = shell_with_raster();
+        let before = union_selection_bounds(shell.editor.session.document(), &[id])
+            .expect("the raster has bounds");
+        shell.apply_image_size(&ImageSizeDialog {
+            width: 1280.0,
+            height: 960.0,
+            resolution: 144.0,
+            unit_cm: false,
+        });
+        assert!(shell.image_size.is_none(), "apply closes the dialog");
+        assert!(
+            shell
+                .status
+                .contains("image resized to 1280 × 960 @ 144 px/in")
+        );
+        let canvas = &shell.editor.session.document().pages[0].info.canvas;
+        assert_eq!((canvas.width, canvas.height), (1280.0, 960.0));
+        assert_eq!(canvas.resolution, 144.0, "the resolution rides along");
+        let after = union_selection_bounds(shell.editor.session.document(), &[id])
+            .expect("the raster still has bounds");
+        assert_eq!(
+            ((after.x1 - after.x0) as i64, (after.y1 - after.y0) as i64),
+            (
+                (before.x1 - before.x0) as i64 * 2,
+                (before.y1 - before.y0) as i64 * 2
+            ),
+            "the image's pixel grid resamples to twice each side"
+        );
+
+        // A non-finite width refuses at the command boundary and the
+        // document is left alone; the dialog closes either way.
+        let mut shell = gui_shell(gui_editor());
+        shell.apply_image_size(&ImageSizeDialog {
+            width: f64::NAN,
+            height: 480.0,
+            resolution: 72.0,
+            unit_cm: false,
+        });
+        assert!(shell.image_size.is_none());
+        let canvas = &shell.editor.session.document().pages[0].info.canvas;
+        assert_eq!(canvas.width, 640.0, "the refused scale leaves the canvas");
         assert!(shell.status.contains("failed"));
     }
 

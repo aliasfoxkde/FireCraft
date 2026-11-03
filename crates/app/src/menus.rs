@@ -132,6 +132,9 @@ pub enum ShellAction {
     CanvasSize,
     /// Modify ▸ Canvas ▸ Canvas Color… — the document matte color.
     CanvasColor,
+    /// Modify ▸ Canvas ▸ Image Size… — scale the document into a
+    /// target rect (`document.setImageSize`).
+    ImageSize,
     /// Help ▸ Online Help — opens the project wiki in the browser.
     OnlineHelp,
     /// Help ▸ Manage Extensions… — the extension (script) manager.
@@ -715,7 +718,12 @@ pub static MODIFY: Menu = Menu {
         Entry::Sub(
             "Canvas",
             &[
-                item(35226, "Image Size...", "", Action::Inert),
+                item(
+                    35226,
+                    "Image Size...",
+                    "",
+                    Action::Shell(ShellAction::ImageSize),
+                ),
                 item(
                     35004,
                     "Canvas Size...",
@@ -1717,6 +1725,7 @@ pub fn action_name(action: Action) -> String {
             ShellAction::ClearGuides => "Clear guides".into(),
             ShellAction::FeatherDialog => "Feather selection".into(),
             ShellAction::CanvasSize => "Canvas Size".into(),
+            ShellAction::ImageSize => "Image Size".into(),
             ShellAction::CanvasColor => "Canvas Color".into(),
             ShellAction::OnlineHelp => "Online Help".into(),
             ShellAction::ManageExtensions => "Manage Extensions".into(),
