@@ -1,0 +1,40 @@
+name: Bug report
+description: Report something broken in FireCraft
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug. Please fill in the
+        details below — the more reproducible, the faster the fix.
+  - type: dropdown
+    id: target
+    attributes:
+      label: Build
+      options:
+        - WASM (web)
+        - Desktop (Linux)
+        - Desktop (Windows/macOS)
+        - CLI
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The release tag or commit hash.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: What you did, what you expected, what actually happened.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Screenshots, a broken `.fw.png` document, console output.

@@ -24,6 +24,45 @@ impl Shell {
         self.run_command(name, serde_json::json!({}));
     }
 
+    /// Help ▸ About `FireCraft`: version, license, and project links.
+    /// No reference to the reference application beyond the factual
+    /// clean-room statement in the docs — the product speaks for
+    /// itself.
+    pub(super) fn about_ui(&mut self, ui: &mut egui::Ui) {
+        ui.vertical_centered(|ui| {
+            ui.add_space(4.0);
+            ui.heading("FireCraft");
+            ui.weak(concat!("v", env!("CARGO_PKG_VERSION")));
+            ui.add_space(6.0);
+            ui.label("A clean-room, open-source design and\nimage editor in pure Rust.");
+            ui.add_space(6.0);
+            if ui.link("Project home").clicked() {
+                let url = "https://github.com/aliasfoxkde/FireCraft";
+                let opened = self.dialogs.open_url(url);
+                self.status = if opened {
+                    format!("opening {url}")
+                } else {
+                    format!("see {url}")
+                };
+            }
+            if ui.link("Online Help (wiki)").clicked() {
+                let url = "https://github.com/aliasfoxkde/FireCraft/wiki";
+                let opened = self.dialogs.open_url(url);
+                self.status = if opened {
+                    format!("opening {url}")
+                } else {
+                    format!("see {url}")
+                };
+            }
+            ui.add_space(6.0);
+            ui.weak("Dual-licensed under Apache-2.0 OR MIT.");
+            ui.add_space(4.0);
+            if ui.button("Close").clicked() {
+                self.about_open = false;
+            }
+        });
+    }
+
     /// The keyboard-shortcuts help panel: every binding in the
     /// SHORTCUTS table, grouped by the table's section structure.
     pub(super) fn help_panel(&mut self, ctx: &egui::Context) {
@@ -444,7 +483,7 @@ impl Shell {
     pub(super) fn import_styles_dialog(&mut self) {
         let Some(path) = self.dialogs.open_path(
             "Import style library",
-            &[("Fireworks style library".to_owned(), vec!["stl".to_owned()])],
+            &[("Style library".to_owned(), vec!["stl".to_owned()])],
         ) else {
             return;
         };

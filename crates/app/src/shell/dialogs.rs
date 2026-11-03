@@ -66,6 +66,48 @@ pub(crate) struct FeatherDialog {
     pub radius: u8,
 }
 
+/// The Canvas Size dialog's fields — Modify ▸ Canvas ▸ Canvas Size:
+/// absolute width/height in document units plus the CS6 anchor grid
+/// (which corner the resize grows from).
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct CanvasSizeDialog {
+    /// New canvas width in document units.
+    pub width: f64,
+    /// New canvas height in document units.
+    pub height: f64,
+    /// Anchor column 0..=2 (left/center/right).
+    pub anchor_x: usize,
+    /// Anchor row 0..=2 (top/middle/bottom).
+    pub anchor_y: usize,
+}
+
+/// The Canvas Color dialog's field — Modify ▸ Canvas ▸ Canvas Color:
+/// the document-wide matte (`document.setCanvasColor`), ABGR raw.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct CanvasColorDialog {
+    /// Matte color, sRGB bytes (r, g, b).
+    pub color: [u8; 3],
+}
+
+impl Default for CanvasSizeDialog {
+    fn default() -> Self {
+        Self {
+            width: 640.0,
+            height: 480.0,
+            anchor_x: 1,
+            anchor_y: 1,
+        }
+    }
+}
+
+impl Default for CanvasColorDialog {
+    fn default() -> Self {
+        Self {
+            color: [255, 255, 255],
+        }
+    }
+}
+
 impl Default for FeatherDialog {
     fn default() -> Self {
         Self { radius: 2 }
@@ -715,6 +757,157 @@ impl Shell {
         }
         self.editor.feather_radius = radius;
         self.status = format!("feathered selection by {radius}px");
+    }
+
+    /// The Canvas Size dialog: absolute width/height plus the CS6
+    /// 3×3 anchor grid. OK applies `page.setCanvasSize` to page 0
+    /// (the shell is single-page); Cancel closes without touching
+    /// the document.
+    pub(super) fn canvas_size_dialog_ui(&mut self, ui: &mut egui::Ui) {
+        let Some(dialog) = self.canvas_size.take() else {
+            return;
+        };
+        let mut dialog = dialog;
+        egui::Grid::new("canvas_size")
+            .num_columns(2)
+            .spacing([8.0, 6.0])
+            .show(ui, |ui| {
+                ui.add(
+                    egui::DragValue::new(&mut dialog.width)
+                        .range(1.0..=65_535.0)
+                        .suffix(" px"),
+                );
+                ui.label("Width");
+                ui.add(
+                    egui::DragValue::new(&mut dialog.height)
+                        .range(1.0..=65_535.0)
+                        .suffix(" px"),
+                );
+                ui.label("Height");
+            });
+        ui.separator();
+        ui.label("Anchor");
+        ui.horizontal(|ui| {
+            for (row, label) in ["top", "middle", "bottom"].iter().enumerate() {
+                ui.vertical(|ui| {
+                    ui.set_min_width(60.0);
+                    for (col, _) in ["left", "center", "right"].iter().enumerate() {
+                        let selected = dialog.anchor_x == col && dialog.anchor_y == row;
+                        if ui.selectable_label(selected, *label).clicked() {
+                            dialog.anchor_x = col;
+                            dialog.anchor_y = row;
+                        }
+                    }
+                });
+            }
+        });
+        ui.separator();
+        let mut apply = false;
+        ui.horizontal(|ui| {
+            apply |= ui.button("OK").clicked();
+            if ui.button("Cancel").clicked() {
+                self.canvas_size = None;
+                self.status = "canvas size cancelled".to_owned();
+            }
+        });
+        if apply {
+            self.canvas_size = None;
+            self.apply_canvas_size(&dialog);
+            return;
+        }
+        self.canvas_size = Some(dialog);
+    }
+
+    /// Applies the canvas resize anchored per the dialog's grid:
+    /// the anchor corner stays fixed while the opposite edges move,
+    /// and every page-0 object shifts by the same offset (CS6
+    /// `dom.setDocumentCanvasSize` behavior).
+    pub(super) fn apply_canvas_size(&mut self, dialog: &CanvasSizeDialog) {
+        self.canvas_size = None;
+        let document = self.editor.session.document();
+        let canvas = &document.pages[0].info.canvas;
+        let dx = dialog.width - canvas.width;
+        let dy = dialog.height - canvas.height;
+        // Fraction of the growth that lands left/above the fixed anchor.
+        let (fx, fy) = match (dialog.anchor_x, dialog.anchor_y) {
+            (0, 0) => (0.0, 0.0),
+            (1, 0) => (0.5, 0.0),
+            (2, 0) => (1.0, 0.0),
+            (0, 1) => (0.0, 0.5),
+            (1, 1) => (0.5, 0.5),
+            (2, 1) => (1.0, 0.5),
+            (0, 2) => (0.0, 1.0),
+            (1, 2) => (0.5, 1.0),
+            _ => (1.0, 1.0),
+        };
+        let shift_x = -dx * fx;
+        let shift_y = -dy * fy;
+        let ids: Vec<_> = document.pages[0]
+            .layers
+            .layers
+            .iter()
+            .flat_map(|layer| &layer.cells)
+            .flat_map(|cell| &cell.elements)
+            .copied()
+            .collect();
+        if !self.run_command(
+            "page.setCanvasSize",
+            serde_json::json!({"page": 0, "width": dialog.width, "height": dialog.height}),
+        ) {
+            return;
+        }
+        if !(shift_x == 0.0 && shift_y == 0.0) && !ids.is_empty() {
+            self.run_command(
+                "object.translate",
+                serde_json::json!({"ids": ids, "dx": shift_x, "dy": shift_y}),
+            );
+        }
+        self.status = format!("canvas resized to {} × {}", dialog.width, dialog.height);
+    }
+
+    /// The Canvas Color dialog: an egui color picker over the
+    /// document matte. OK applies `document.setCanvasColor`; Cancel
+    /// closes without touching the document.
+    pub(super) fn canvas_color_dialog_ui(&mut self, ui: &mut egui::Ui) {
+        let Some(dialog) = self.canvas_color.take() else {
+            return;
+        };
+        let mut dialog = dialog;
+        let mut color = egui::Color32::from_rgb(dialog.color[0], dialog.color[1], dialog.color[2]);
+        ui.horizontal(|ui| {
+            ui.label("Canvas color");
+            ui.color_edit_button_srgba(&mut color);
+        });
+        dialog.color = [color.r(), color.g(), color.b()];
+        ui.separator();
+        let mut apply = false;
+        ui.horizontal(|ui| {
+            apply |= ui.button("OK").clicked();
+            if ui.button("Cancel").clicked() {
+                self.canvas_color = None;
+                self.status = "canvas color cancelled".to_owned();
+            }
+        });
+        if apply {
+            self.canvas_color = None;
+            self.apply_canvas_color(&dialog);
+            return;
+        }
+        self.canvas_color = Some(dialog);
+    }
+
+    /// Applies the matte color document-wide (one undo step).
+    pub(super) fn apply_canvas_color(&mut self, dialog: &CanvasColorDialog) {
+        self.canvas_color = None;
+        let [r, g, b] = dialog.color;
+        // ABGR raw: fully opaque, R in the low byte.
+        let raw = 0xFF00_0000 | (u32::from(b) << 16) | (u32::from(g) << 8) | u32::from(r);
+        if self.run_command(
+            "document.setCanvasColor",
+            serde_json::json!({"color_raw": raw as i64}),
+        ) {
+            self.status = "canvas color set".to_owned();
+        }
     }
 
     /// Composes scale → rotate → skew about the selection bounds

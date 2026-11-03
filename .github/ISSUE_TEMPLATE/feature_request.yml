@@ -1,0 +1,30 @@
+name: Feature request
+description: Suggest an improvement or new capability
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / use case
+      description: What are you trying to do, and what gets in the way?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: What FireCraft should do instead. References to how
+        Adobe Fireworks CS6 or other editors handle it are welcome —
+        behavior descriptions, not proprietary assets or code.
+  - type: dropdown
+    id: target
+    attributes:
+      label: Area
+      options:
+        - Canvas / tools
+        - Menus / dialogs / panels
+        - File formats (open/save/export)
+        - Filters / effects
+        - WASM / web build
+        - CLI
+        - Other

@@ -1620,6 +1620,36 @@ impl Editor {
         best.map(|(_, contour, point)| (contour, point))
     }
 
+    /// The nearest segment of the selected path within `radius` world
+    /// units of `world` — the Subselect double-click's insert target.
+    /// A segment is the span between point `s` and its successor
+    /// (wrapping on a closed contour); the returned index is `s`.
+    /// Distance is to the straight span between the endpoints — the
+    /// corner-case approximation the double-click affordance shares
+    /// with the insertion preview.
+    #[must_use]
+    pub fn segment_at(&self, world: geom::Point, radius: f64) -> Option<(usize, usize)> {
+        let id = self.selected_live()?;
+        let data = self.document().registry.get(id)?;
+        let ObjectData::Path(path) = data else {
+            return None;
+        };
+        let mut best: Option<(f64, usize, usize)> = None;
+        for (contour, points) in path.contours.iter().enumerate() {
+            let count = points.points.len();
+            let segments = if points.closed { count } else { count - 1 };
+            for segment in 0..segments {
+                let a = &points.points[segment].anchor;
+                let b = &points.points[(segment + 1) % count].anchor;
+                let distance = distance_point_segment(world, a, b);
+                if distance <= radius && best.is_none_or(|(d, _, _)| distance < d) {
+                    best = Some((distance, contour, segment));
+                }
+            }
+        }
+        best.map(|(_, contour, segment)| (contour, segment))
+    }
+
     /// The selected path's gradient handles (start, end) in world
     /// space — the drag targets of the canvas fill overlay. `None`
     /// when the selection is not a path with a gradient fill.
@@ -2870,6 +2900,22 @@ pub fn bounds_of(path: &doc::PathObject) -> geom::Rect {
     bounds
 }
 
+/// Euclidean distance from `p` to the straight span `a`–`b`, clamped
+/// to the span's extent (the segment hit-test metric).
+fn distance_point_segment(p: geom::Point, a: &geom::Point, b: &geom::Point) -> f64 {
+    let ax = b.x - a.x;
+    let ay = b.y - a.y;
+    let length_sq = ax * ax + ay * ay;
+    if length_sq <= f64::EPSILON {
+        return (p.x - a.x).hypot(p.y - a.y);
+    }
+    let t = ((p.x - a.x) * ax + (p.y - a.y) * ay) / length_sq;
+    let t = t.clamp(0.0, 1.0);
+    let cx = a.x + t * ax;
+    let cy = a.y + t * ay;
+    (p.x - cx).hypot(p.y - cy)
+}
+
 /// World-space bounding box of any object: paths by contour points
 /// ([`bounds_of`]), text and slices by frame, images by location plus
 /// pixel size, groups by union over children, symbol instances by the
@@ -3138,6 +3184,53 @@ mod tests {
             .unwrap();
         editor.end_node_drag().unwrap();
         assert_eq!(editor.session.undo_len(), undo_before, "no step committed");
+    }
+
+    /// `segment_at` finds the nearest contour span for the Subselect
+    /// double-click insert: hits between two anchors, misses far off
+    /// the path, and a double-click *on* an anchor resolves to the
+    /// node test first (the shell's ordering contract, asserted here
+    /// as "the node radius wins at the same point").
+    #[test]
+    fn segment_at_finds_spans_for_the_insert_gesture() {
+        let mut editor = Editor::untitled();
+        let id = rect_at(&mut editor, 10.0, 10.0);
+        editor.set_selection(vec![id]);
+        // The rect's bottom edge spans (10,30)-(50,30): mid-edge hit.
+        let (contour, segment) = editor
+            .segment_at(geom::Point::new(30.0, 30.0), 5.0)
+            .expect("bottom edge hit");
+        assert_eq!(contour, 0);
+        // Insert through the registry command, one undo step.
+        let undo_before = editor.session.undo_len();
+        editor
+            .apply(
+                "path.insertPoint",
+                serde_json::json!({
+                    "id": id, "contour": contour, "segment": segment,
+                    "x": 30.0, "y": 30.0,
+                }),
+            )
+            .unwrap();
+        assert_eq!(editor.session.undo_len(), undo_before + 1, "one undo step");
+        let data = editor.document().registry.get(id).unwrap();
+        let ObjectData::Path(path) = data else {
+            panic!("the rect is a path");
+        };
+        assert_eq!(path.contours[0].points.len(), 5, "insert adds one point");
+        editor.undo().unwrap();
+        let data = editor.document().registry.get(id).unwrap();
+        let ObjectData::Path(path) = data else {
+            panic!("the rect is a path");
+        };
+        assert_eq!(path.contours[0].points.len(), 4, "undo restores");
+
+        // Far away: no segment.
+        assert!(
+            editor
+                .segment_at(geom::Point::new(500.0, 500.0), 5.0)
+                .is_none()
+        );
     }
 
     #[test]

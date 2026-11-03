@@ -1009,6 +1009,45 @@ impl Shell {
                 }
             }
         }
+        // Double-click in Subselect is the node add/delete gesture
+        // (19b.1): on an anchor it deletes the point (`path.deletePoint` —
+        // the contour goes with it when it degenerates); on a segment it
+        // inserts a corner point at the click (`path.insertPoint`). The
+        // anchor test outranks the segment test — a click on a node is
+        // never a click on its adjacent segment.
+        if response.double_clicked()
+            && self.editor.tool == Tool::Subselect
+            && let Some(pos) = response.interact_pointer_pos()
+        {
+            let world = self.view.to_world(pos - rect.left_top().to_vec2());
+            let radius = f64::from(6.0 / self.view.zoom);
+            if let Some(id) = self.editor.selected_live()
+                && let Some((contour, point)) = self.editor.node_at(world, radius)
+            {
+                if self.run_command(
+                    "path.deletePoint",
+                    serde_json::json!({ "id": id, "contour": contour, "point": point }),
+                ) {
+                    self.status = format!("deleted node {point} (contour {contour})");
+                }
+            } else if let Some((id, contour, segment)) =
+                self.editor.selected_live().and_then(|id| {
+                    self.editor
+                        .segment_at(world, radius * 2.0)
+                        .map(|c| (id, c.0, c.1))
+                })
+            {
+                if self.run_command(
+                    "path.insertPoint",
+                    serde_json::json!({
+                        "id": id, "contour": contour, "segment": segment,
+                        "x": world.x, "y": world.y
+                    }),
+                ) {
+                    self.status = format!("added node on segment {segment} (contour {contour})");
+                }
+            }
+        }
         // The right-click context menu (CS6's canvas popup): a
         // secondary click picks the object under the pointer when it
         // missed the current selection, then opens a popup of

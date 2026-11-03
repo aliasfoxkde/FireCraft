@@ -42,3 +42,12 @@ corpus/scripts-report.json
 # timestamps, session uuids) trips the numeric PII rules and changes
 # per session, so a baseline entry can never stick.
 .claude/
+
+# Scratch notes (uncommitted operator notes, screenshots). Untracked
+# working files, not source; their content churns constantly.
+temp/
+
+# Proprietary Adobe reference install (git-ignored working material,
+# see CLAUDE.md source/ rules). Third-party binaries and vendor JS —
+# every finding there is noise by definition, and the files churn.
+source/

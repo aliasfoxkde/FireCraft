@@ -27,3 +27,6 @@ web/dist/
 # wrangler local state
 /.wrangler/
 lcov.info
+
+# Session scratch: CS6 reference screenshots + session notes (Adobe-derived, never commit)
+/temp/

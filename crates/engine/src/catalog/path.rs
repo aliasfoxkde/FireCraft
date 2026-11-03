@@ -29,6 +29,8 @@ pub(crate) fn install(registry: &mut CommandRegistry) -> Result<(), EngineError>
     registry.register(PathExpandStroke)?;
     registry.register(PathInset)?;
     registry.register(PathMovePoints)?;
+    registry.register(PathInsertPoint)?;
+    registry.register(PathDeletePoint)?;
     registry.register(PathWarp)?;
     registry.register(PathReshapeArea)?;
     registry.register(PathRedraw)?;
@@ -263,6 +265,117 @@ fn splice_geometry(
         });
     }
     Ok(())
+}
+
+/// `path.insertPoint` — the Subselect double-click-on-a-segment
+/// primitive: inserts a corner point at `at` between `segment` and
+/// `segment + 1` of `contour` (wrapping on a closed contour).
+struct PathInsertPoint;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct PathInsertPointPayload {
+    /// Target object.
+    id: doc::ObjectId,
+    /// Contour index.
+    contour: usize,
+    /// Segment index: the new point lands between `segment` and the
+    /// next point (wrap-around when the contour is closed and this is
+    /// its last segment).
+    segment: usize,
+    /// Insertion position, world coordinates.
+    x: f64,
+    /// Insertion position, world coordinates.
+    y: f64,
+}
+
+impl TypedCommand for PathInsertPoint {
+    type Payload = PathInsertPointPayload;
+
+    fn name(&self) -> &'static str {
+        "path.insertPoint"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "path.insertPoint";
+        let before = access::object(document, NAME, payload.id)?.clone();
+        let edited = {
+            let ObjectData::Path(path) = &before else {
+                return Err(EngineError::InvalidState {
+                    name: NAME.to_owned(),
+                    detail: format!("object {} is not a path", payload.id.index()),
+                });
+            };
+            vector::insert_point(
+                path,
+                payload.contour,
+                payload.segment,
+                geom::Point::new(payload.x, payload.y),
+            )
+            .map_err(|error| vector_error(NAME, &error))?
+        };
+        splice_geometry(document, NAME, payload.id, edited)?;
+        Ok(Delta::Object {
+            id: payload.id,
+            inverse: ObjectInverse::Mutated {
+                object: Box::new(before),
+            },
+        })
+    }
+}
+
+/// `path.deletePoint` — the Subselect Delete-on-an-anchor primitive:
+/// removes one point; a contour that would become degenerate goes with
+/// it.
+struct PathDeletePoint;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct PathDeletePointPayload {
+    /// Target object.
+    id: doc::ObjectId,
+    /// Contour index.
+    contour: usize,
+    /// Point index to remove.
+    point: usize,
+}
+
+impl TypedCommand for PathDeletePoint {
+    type Payload = PathDeletePointPayload;
+
+    fn name(&self) -> &'static str {
+        "path.deletePoint"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "path.deletePoint";
+        let before = access::object(document, NAME, payload.id)?.clone();
+        let edited = {
+            let ObjectData::Path(path) = &before else {
+                return Err(EngineError::InvalidState {
+                    name: NAME.to_owned(),
+                    detail: format!("object {} is not a path", payload.id.index()),
+                });
+            };
+            vector::delete_point(path, payload.contour, payload.point)
+                .map_err(|error| vector_error(NAME, &error))?
+        };
+        splice_geometry(document, NAME, payload.id, edited)?;
+        Ok(Delta::Object {
+            id: payload.id,
+            inverse: ObjectInverse::Mutated {
+                object: Box::new(before),
+            },
+        })
+    }
 }
 
 /// `path.simplify` — tolerance-driven anchor reduction (RDP on linear

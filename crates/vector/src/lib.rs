@@ -33,7 +33,9 @@ pub use boolean::{BooleanOp, boolean};
 pub use bridge::{
     Seg, bezpath_to_contour, canonicalize_contour, contour_segments, contour_to_bezpath,
 };
-pub use edit::{redraw_span, reshape_area, translate_path, translate_points, warp};
+pub use edit::{
+    delete_point, insert_point, redraw_span, reshape_area, translate_path, translate_points, warp,
+};
 pub use flatten::{FLATTEN_MAX_CHORDS, FLATTEN_TOLERANCE, flatten_cubic};
 pub use geom::Rect;
 pub use knife::{knife_contour, knife_contours};

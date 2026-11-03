@@ -576,6 +576,8 @@ pub const CALLS: &[&str] = &[
     "path.expandStroke",
     "path.inset",
     "path.movePoints",
+    "path.insertPoint",
+    "path.deletePoint",
     "path.warp",
     "path.reshapeArea",
     "path.redrawPath",
@@ -1504,6 +1506,18 @@ pub fn payload_template(name: &str, rng: &mut FuzzRng, document: &Document) -> s
                 .collect();
             serde_json::json!({ "id": any_id(rng), "edits": edits })
         }
+        "path.insertPoint" => serde_json::json!({
+            "id": any_id(rng),
+            "contour": rng.below(4),
+            "segment": rng.below(12),
+            "x": -(rng.below(400) as f64),
+            "y": -(rng.below(400) as f64),
+        }),
+        "path.deletePoint" => serde_json::json!({
+            "id": any_id(rng),
+            "contour": rng.below(4),
+            "point": rng.below(12),
+        }),
         "path.warp" => serde_json::json!({
             "id": any_id(rng),
             "x": -(rng.below(400) as f64),

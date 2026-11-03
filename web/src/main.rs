@@ -182,7 +182,7 @@ pub async fn start() -> Result<(), wasm_bindgen::JsValue> {
                 app::shell::apply_cs6_theme(&cc.egui_ctx);
                 Ok(Box::new(app::shell::Shell::with_platform(
                     app::editor::Editor::untitled(),
-                    Box::new(platform::WebFs),
+                    std::rc::Rc::new(platform::WebFs),
                     Box::new(platform::WebDialogs),
                 )))
             }),
