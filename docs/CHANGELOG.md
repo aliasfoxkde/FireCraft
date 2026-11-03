@@ -303,6 +303,7 @@ Current version: **0.2.4**.
 
 ### Chores
 
+- **release**: v0.2.4 version stamps + changelog + notes (6c256bf)
 - **ci**: retrigger sweep after runner /tmp cleanup (a30caec)
 - **ci**: retrigger sweep on re-shipped firecraft-ci-rust:1 (0027859)
 - **xtask**: ratchet coverage floors to 81.0/78.5 (6b0c46f)

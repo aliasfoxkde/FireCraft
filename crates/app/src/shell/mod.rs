@@ -299,8 +299,62 @@ impl Shell {
     }
 
     /// File → Save through the injected traits.
-    fn save_document(&mut self) {
-        let Some(path) = self.dialogs.save_path(
+    /// Help ▸ Manage Extensions / Commands ▸ Run Script: pick a
+    /// `.jsf` script and run it against the live document through the
+    /// same engine the CLI's `run-script` verb drives. A script that
+    /// throws or hits a limit leaves the document untouched and
+    /// reports the failure on the status line.
+    fn run_script_file(&mut self) {
+        let Some(path) = self.dialogs.open_path(
+            "Run script",
+            &[("Fireworks script".to_owned(), vec!["jsf".to_owned()])],
+        ) else {
+            return;
+        };
+        let source = match self.fs.read_file(&path) {
+            Ok(bytes) => String::from_utf8_lossy(&bytes).into_owned(),
+            Err(error) => {
+                self.status = format!("script read failed: {error}");
+                return;
+            }
+        };
+        let name = std::path::Path::new(&path)
+            .file_name()
+            .map_or_else(|| path.clone(), |n| n.to_string_lossy().into_owned());
+        let mut engine = match scripting::ScriptEngine::new(scripting::Limits::default()) {
+            Ok(engine) => engine,
+            Err(error) => {
+                self.status = format!("script engine: {error}");
+                return;
+            }
+        };
+        let report = scripting::run_with_file_system(std::rc::Rc::new(&self.fs), || {
+            scripting::run_in_session(&mut self.editor.session, &mut engine, &name, &source)
+        });
+        if report.completed() {
+            self.status = format!(
+                "ran {name} ({} host call(s))",
+                report.host_calls
+            );
+            self.raster = None;
+            self.raster_scale = 1.0;
+        } else {
+            self.status = format!(
+                "script {name} failed: {}",
+                report.message.as_deref().unwrap_or("unknown error")
+            );
+        }
+    }
+
+    /// The Commands/Help extension surface. Today the manager *is*
+    /// the script runner: pick and execute a `.jsf`. CS6's broader
+    /// extension manager (install/uninstall packages) is recorded as
+    /// a gap, not silently absent.
+    fn open_extension_manager(&mut self) {
+        self.run_script_file();
+    }
+
+    fn save_document(&mut self) {        let Some(path) = self.dialogs.save_path(
             "Save document",
             "untitled.fw.png",
             &[("Fireworks PNG".to_owned(), vec!["png".to_owned()])],
@@ -548,6 +602,16 @@ impl Shell {
                 }
             }
             menus::ShellAction::Palette => self.toggle_palette(),
+            menus::ShellAction::OnlineHelp => {
+                let url = "https://github.com/aliasfoxkde/FireCraft/wiki";
+                let opened = self.dialogs.open_url(url);
+                self.status = if opened {
+                    format!("opening {url}")
+                } else {
+                    "online help: see the project wiki".to_owned()
+                };
+            }
+            menus::ShellAction::ManageExtensions => self.open_extension_manager(),
             menus::ShellAction::Quit => self.close_requested = true,
             menus::ShellAction::Undo => match self.editor.undo() {
                 Ok(name) => self.status = format!("undid {name}"),
@@ -609,6 +673,7 @@ impl Shell {
                     Adobe Fireworks CS6 (Apache-2.0)"
                     .to_owned();
             }
+            menus::ShellAction::ManageExtensions => self.open_extension_manager(),
             menus::ShellAction::ShowShortcuts => self.help_open = !self.help_open,
             menus::ShellAction::PickTool(tool) => {
                 self.editor.tool = tool;

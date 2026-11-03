@@ -57,10 +57,8 @@ cat > "${STAGE}/${APP}/Contents/Info.plist" <<PLIST
 </dict></plist>
 PLIST
 
-install -m 644 LICENSE-MIT \
-    "${STAGE}/${APP}/Contents/Resources/licenses/LICENSE-MIT"
-install -m 644 LICENSE-APACHE \
-    "${STAGE}/${APP}/Contents/Resources/licenses/LICENSE-APACHE"
+install -m 644 LICENSE \
+    "${STAGE}/${APP}/Contents/Resources/licenses/LICENSE"
 
 echo "==> codesign (ad-hoc; swap -s - for your identity to distribute)"
 codesign --force --deep -s - "${STAGE}/${APP}"
