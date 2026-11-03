@@ -1235,6 +1235,7 @@ version = "0.2.5"
 dependencies = [
  "app",
  "app-cli",
+ "base64",
  "compose",
  "eframe",
  "engine",

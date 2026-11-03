@@ -47,8 +47,25 @@ use crate::toolstrip;
 // single-threaded and the sink captures `Rc<WebRunner>`, so the
 // holder is a `thread_local` (a `static Mutex` would demand `Send`).
 #[cfg(target_arch = "wasm32")]
+type DropSink = dyn Fn(&egui::DroppedFileHandle, egui::Context);
+
+#[cfg(target_arch = "wasm32")]
 thread_local! {
-    static DROP_SINK: std::cell::RefCell<Option<std::rc::Rc<dyn Fn(&egui::DroppedFileHandle, egui::Context)>>> =
+    static DROP_SINK: std::cell::RefCell<Option<std::rc::Rc<DropSink>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+// The web persist sink ([`Shell::set_persist_sink`]): the web crate's
+// localStorage writer, installed at startup. The shell calls it with
+// the document's save bytes whenever the session changes — the
+// browser owns *where* the bytes live. Same wasm-only `Rc` contract
+// as the drop sink; empty bytes are the clear signal.
+#[cfg(target_arch = "wasm32")]
+type PersistSink = dyn Fn(&[u8]);
+
+#[cfg(target_arch = "wasm32")]
+thread_local! {
+    static PERSIST_SINK: std::cell::RefCell<Option<std::rc::Rc<PersistSink>>> =
         const { std::cell::RefCell::new(None) };
 }
 
@@ -162,6 +179,7 @@ pub struct Shell {
     /// position it opened at (the popup re-anchors there each frame,
     /// so a later pointer move does not drag it).
     pub(crate) context_menu: Option<Pos2>,
+<<<<<<< HEAD
     /// In-canvas text editing (20.1): the object being edited and the
     /// live buffer. `Some` while the egui `TextEdit` overlay sits on the
     /// text frame; commit writes `text.setText`, cancel (Esc or
@@ -196,6 +214,11 @@ pub struct Shell {
     /// modes: Standard, Full Screen with Menus, Full Screen). Display
     /// state, not document state.
     screen_mode: ScreenMode,
+    /// The last change stamp written to the persist sink (wasm only):
+    /// `None` until the first write, so an untouched untitled document
+    /// never seeds storage.
+    #[cfg(target_arch = "wasm32")]
+    persisted: Option<(usize, usize, usize)>,
     /// The live egui context, stashed each frame so code outside the
     /// frame loop (the web bridge) can request a repaint after it
     /// mutates the shell — without one, a bridge-loaded document sat
@@ -428,6 +451,7 @@ impl Shell {
             gamma_18: false,
             guide_draft: None,
             context_menu: None,
+<<<<<<< HEAD
             text_edit: None,
             last_filter: None,
             // CS6's fresh-document roster: Properties/Pages/States/
@@ -442,6 +466,8 @@ impl Shell {
             options_bar_hidden: false,
             screen_mode: ScreenMode::Standard,
             layout: ShellLayout::default(),
+            #[cfg(target_arch = "wasm32")]
+            persisted: None,
             ctx: None,
             tabs: Vec::new(),
         }
@@ -513,6 +539,11 @@ impl Shell {
             ui_scale: self.ui_scale,
             palette_recents: self.palette.recents.clone(),
         }
+    }
+
+    /// The name shown in the document tab strip.
+    pub fn set_doc_name(&mut self, name: &str) {
+        self.doc_name = name.to_owned();
     }
 
     /// Wakes the frame loop — a no-op until the first `ui` frame has
@@ -1294,6 +1325,8 @@ impl Shell {
                 self.doc_name = "untitled".to_owned();
                 self.doc_path = None;
                 self.status = "new document".to_owned();
+                #[cfg(target_arch = "wasm32")]
+                self.clear_persisted();
             }
             menus::ShellAction::Open => self.open_document(),
             menus::ShellAction::Import => self.import_raster_dialog(),
@@ -2661,13 +2694,53 @@ impl Shell {
     /// runner. `None` until then — a drop before startup is a no-op
     /// (the status line already said the app was still coming up).
     #[cfg(target_arch = "wasm32")]
-    pub fn set_drop_sink(sink: std::rc::Rc<dyn Fn(&egui::DroppedFileHandle, egui::Context)>) {
+    pub fn set_drop_sink(sink: std::rc::Rc<DropSink>) {
         DROP_SINK.with(|cell| *cell.borrow_mut() = Some(sink));
     }
 
     #[cfg(target_arch = "wasm32")]
-    fn drop_sink() -> Option<std::rc::Rc<dyn Fn(&egui::DroppedFileHandle, egui::Context)>> {
+    fn drop_sink() -> Option<std::rc::Rc<DropSink>> {
         DROP_SINK.with(|cell| cell.borrow().clone())
+    }
+
+    /// Installs the browser-side persist writer (called once at web
+    /// startup). Wasm only; see [`PERSIST_SINK`]. Empty bytes clear
+    /// the stored session (File ▸ New).
+    #[cfg(target_arch = "wasm32")]
+    pub fn set_persist_sink(sink: std::rc::Rc<PersistSink>) {
+        PERSIST_SINK.with(|cell| *cell.borrow_mut() = Some(sink));
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    fn persist_tick(&mut self) {
+        // Debounce by change stamp: serialize only when the session
+        // moved since the last write. Saving is the canonical
+        // `.fw.png` bytes, so a refresh restores the exact document.
+        let stamp = self.stamp();
+        if self.persisted == Some(stamp) {
+            return;
+        }
+        if let Ok(bytes) = self.editor.save() {
+            PERSIST_SINK.with(|cell| {
+                if let Some(sink) = cell.borrow().as_ref() {
+                    sink(&bytes);
+                }
+            });
+            self.persisted = Some(stamp);
+        }
+    }
+
+    /// Drops the stored session (File ▸ New): the persisted bytes
+    /// belong to the discarded document, so a refresh must not
+    /// resurrect it.
+    #[cfg(target_arch = "wasm32")]
+    fn clear_persisted(&mut self) {
+        PERSIST_SINK.with(|cell| {
+            if let Some(sink) = cell.borrow().as_ref() {
+                sink(&[]);
+            }
+        });
+        self.persisted = None;
     }
 
     /// Files dropped onto the window open through the same one-door
@@ -2740,6 +2813,8 @@ impl eframe::App for Shell {
         // visible the same frame.
         self.shortcuts(ui.ctx());
         self.dropped_files(ui.ctx());
+        #[cfg(target_arch = "wasm32")]
+        self.persist_tick();
         // Panels first, CentralPanel last (egui's required order), in
         // the CS6 arrangement: menu, context options bar, tool strip,
         // panel stack (Properties included), status strip, canvas.
