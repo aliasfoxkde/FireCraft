@@ -169,7 +169,10 @@ fn stage_web() -> Result<Vec<PathBuf>, String> {
         staged.push(target);
     }
 
-    // Copy and stamp WebOS packaging files.
+    // Copy and stamp WebOS packaging files. appinfo.json MUST carry
+    // the @VERSION@ placeholder: the v0.2.3→v0.2.4 window shipped a
+    // WebOS package pinned to 0.2.3 because the template hardcoded a
+    // literal and the replace below was silently a no-op.
     let version = workspace_version()?;
     let webos_src = workspace_root().join("packaging/webos");
     for entry in std::fs::read_dir(&webos_src).map_err(|e| format!("read packaging/webos: {e}"))? {
@@ -179,7 +182,24 @@ fn stage_web() -> Result<Vec<PathBuf>, String> {
         let target = out.join(&name);
         let contents = std::fs::read_to_string(&source)
             .map_err(|e| format!("read {}: {e}", name.to_string_lossy()))?;
+        // host.html is version-free by design (the smoke host page is
+        // the WEBOS.md contract, extracted verbatim); appinfo.json is
+        // the versioned surface.
+        if name.to_string_lossy() == "appinfo.json" && !contents.contains("@VERSION@") {
+            return Err(
+                "packaging/webos/appinfo.json carries no @VERSION@ placeholder — \
+                 the staged copy would keep a stale hardcoded version \
+                 (the v0.2.4 WebOS appinfo claimed 0.2.3 this way)"
+                    .to_owned(),
+            );
+        }
         let stamped = contents.replace("@VERSION@", &version);
+        if stamped.contains("@VERSION@") {
+            return Err(format!(
+                "packaging/webos/{} still carries @VERSION@ after stamping",
+                name.to_string_lossy()
+            ));
+        }
         std::fs::write(&target, stamped)
             .map_err(|e| format!("stage {}: {e}", name.to_string_lossy()))?;
         staged.push(target);

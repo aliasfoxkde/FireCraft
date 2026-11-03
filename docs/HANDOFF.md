@@ -16,7 +16,7 @@
   + CLI + web bundle + deb all cut from `xtask dist`. The web bundle
   is live at <https://firecraft-web.pages.dev> (Cloudflare Pages,
   direct upload — deploy door in §6).
-- **Engine registry:** 243 commands (`engine::catalog::ids()` — the
+- **Engine registry:** 245 commands (`engine::catalog::ids()` — the
   live authority; point-in-time counts in the docs trail it), pinned
   equal to the fuzz call table by `the_call_table_covers_the_catalog`.
 - **CS6 DOM verb-surface parity:** **268 C / 3 P / 0 M / 85 N** — the
@@ -29,9 +29,10 @@
   (`docs/planning/generated/dom-parity.md`, regenerate per §5.)
 - **Where the frontier is:** the *engine* is complete; the *shell* is
   not. A judge-panel audit (2026-10-31) found the engine's 243
-  commands reach only a fraction of the interface — **144 of 293 CS6
-  menu items still render `Action::Inert`** (derived, gated by
-  `menus::tests::inert_count_never_rises`) — so the active program is
+  commands reach only a fraction of the interface — **129 of 289 CS6
+  menu items still render `Action::Inert`** (derived —
+  `cargo test -p app reachability_census -- --nocapture` prints it —
+  and gated by `menus::tests::inert_count_never_rises`) — so the active program is
   **reachability and canvas competence**, i.e. `docs/NEXT.md`
   Phases 19–21 (19.1–19.5 landed: transform handles, path-node
   editing, gradient editor, command palette, grid/guides/snap; 19.6
@@ -150,8 +151,9 @@ verifiable.
 
 **The engine is complete; the shell is not.** A judge-panel audit
 against Fireworks CS6 and Photopea found the structural gap: 243
-registered commands, **144 of 293 CS6 menu items still rendering
-`Action::Inert`**. The program is reachability and canvas competence,
+registered commands, **129 of 289 CS6 menu items still rendering
+`Action::Inert`** (derived via `reachability_census`, gated by the
+ceiling test). The program is reachability and canvas competence,
 not repair.
 
 The full plan, with the landed/open state of every item, lives in
@@ -164,11 +166,13 @@ one. Summary:
 - **19.6 IN FLIGHT**: the inert-menu burn-down, in family batches
   (selection/mask → page/frame → symbol/animation → text). Batch 1
   (selection/mask) landed 2026-11-02 (`e9ece7d`, with the context
-  menu and Lucide icons): inert 171 → **144 of 293**.
-- **19b open**: path-node add/delete, the wasm-budget re-pin (the
-  working tree measures 15.2 MB against the 14 MB ceiling — verify
-  with `xtask dist web` before the next release). The reachability
-  gate and inert-drift test landed 2026-11-02
+  menu and Lucide icons): inert 171 → 144; batch 2 (canvas dialogs,
+  Duplicate/Clone) + 19b.1 (path-node add/delete) landed 2026-11-03
+  (`bf1b547`): inert → **129 of 289**.
+- **19b**: path-node add/delete **DONE** (`bf1b547`); the
+  wasm-budget re-pin **DONE** (2026-11-03: measured 21,235,599 B,
+  ceiling moved to 21,500,000 with the dated cause — 19b.4). The
+  reachability gate and inert-drift test landed 2026-11-02
   (`menus::tests::inert_count_never_rises` + the derived census).
 - **20 / 21 queued**: daily-driver features (in-canvas text, Optimize
   panel, animation timeline, mask stack, tabs, history rewind, slice

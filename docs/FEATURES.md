@@ -27,7 +27,7 @@ host, and the browser bridge all drive.
 ## The command registry
 
 One registry serves every surface. The live count is
-`engine::catalog::ids()` — 243 as of 2026-10-29 (a point-in-time
+`engine::catalog::ids()` — 245 as of 2026-11-03 (a point-in-time
 number; the call is the authority). The CS6 DOM parity matrix stands
 at **268 carried / 3 partial (evidence-gated) / 0 missing** across 356
 verbs.
@@ -35,9 +35,9 @@ verbs.
 Surfaces that drive it:
 
 - **GUI** — the shell (`crates/app/src/shell/`); menus map CS6 menu
-  ids to actions (`crates/app/src/menus.rs`; 144 of 293 items still
+  ids to actions (`crates/app/src/menus.rs`; 129 of 289 items still
   render inert — the 19.6 burn-down is closing them, and the census
-  is test-gated), and the Ctrl+P
+  is derived (`reachability_census`) and test-gated), and the Ctrl+P
   command palette makes **every** registry command executable from
   the GUI regardless of menu state.
 - **CLI** (`firecraft-cli`) — every verb drivable headless.

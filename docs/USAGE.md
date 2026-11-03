@@ -1,6 +1,6 @@
 # FireCraft — Usage
 
-> Verified against v0.2.3. CLI examples run as written; GUI claims
+> Verified against v0.2.5. CLI examples run as written; GUI claims
 > come from the menus and shortcuts tables in the source
 > (`crates/app/src/menus.rs`).
 

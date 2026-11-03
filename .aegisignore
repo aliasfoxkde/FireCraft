@@ -51,3 +51,9 @@ temp/
 # see CLAUDE.md source/ rules). Third-party binaries and vendor JS —
 # every finding there is noise by definition, and the files churn.
 source/
+
+# Session log (git-ignored per AGENTS.md, appended to close every task).
+# Its prose quotes CS6 resource command ids, which trip the numeric PII
+# rules, and every session appends — line-keyed baseline entries can
+# never stick.
+log/
