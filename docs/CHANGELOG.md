@@ -10,6 +10,9 @@ Current version: **0.2.5**.
 
 ### Features
 
+- **app**: inert-menu burn-down batch 5 (111; symbol/animation) (31344cf)
+- **app**: inert-menu burn-down batch 4 (114 -> 6 more wired) (c18ed9d)
+- **app-cli**: MCP tools for info/export/undo/redo/discovery (ef7e60d)
 - **app**: Window menu panel toggles (19.6 batch 3) (3bf96ac)
 - **app**: path-node add/delete, canvas dialogs, Duplicate/Clone (19b.1 + 19.6) (8ce5762)
 - **app**: Lucide tool icons, context menu, selection/mask verbs (19.6) (2923392)
@@ -306,6 +309,7 @@ Current version: **0.2.5**.
 
 ### Chores
 
+- regen changelog from gate (7d8b68e)
 - regen changelog hashes, scripts report from gate (77c497f)
 - **release**: v0.2.5 stamps, notes, operator checklist, aegis hygiene (3a4832b)
 - **release**: v0.2.4 version stamps + changelog + notes (291d658)
