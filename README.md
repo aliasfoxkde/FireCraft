@@ -1,8 +1,4 @@
-# FireCraft
-
-<p align="center">
-  <img src="docs/img/logo.svg" alt="FireCraft logo" width="128"/>
-</p>
+<h1 align="left"><img src="docs/img/logo.svg" alt="FireCraft logo" width="40" align="top" /> FireCraft</h1>
 
 An open-source, clean-room reimplementation of Adobe Fireworks in pure Rust.
 
@@ -14,14 +10,6 @@ via OS decoders), and first-class Fireworks PNG (`.fw.png`) document support
 with full read/write fidelity. A WebAssembly build is a primary release
 target, alongside native desktop and headless CLI releases.
 
-<p align="center">
-  <a href="https://firecraft-web.pages.dev"><img src="docs/img/app-main.png" alt="FireCraft running in the desktop shell — the demo document with a gradient brand band, vector shapes, and type" width="880"/></a>
-</p>
-<p align="center"><em>FireCraft running the demo document
-(<code>docs/img/firecraft-demo.fw.png</code>, regenerable with
-<code>cargo run -p xtask -- hero-gen</code>) — gradient fills, vector
-shapes, and live type over the CS6-style graphite chrome.</em></p>
-
 > **Trademark notice:** Adobe, Fireworks, Photoshop, Illustrator, and
 > Macromedia are trademarks or registered trademarks of Adobe Inc. FireCraft
 > is an independent, open-source project and is not affiliated with,
@@ -30,7 +18,7 @@ shapes, and live type over the CS6-style graphite chrome.</em></p>
 
 ## Status
 
-**v0.2.4 released (2026-11-02).** All roadmap milestones (M0–M15) are
+**v0.2.5 released (2026-11-03).** All roadmap milestones (M0–M15) are
 closed and the post-roadmap CS6 DOM parity campaign is complete: the
 document model with full `.fw.png` read/write fidelity, a
 deterministic CPU compositor with golden-image gates, the vector and
@@ -41,12 +29,46 @@ carries **245 commands** (`engine::catalog::ids()` is the live
 authority); the CS6 DOM parity matrix stands at **268 carried / 3
 partial (evidence-gated) / 0 missing**.
 
-The WebAssembly build is live at <https://firecraft-web.pages.dev>
-(open, draw, and save documents in the browser), alongside desktop
-and CLI releases on the [releases page](https://github.com/aliasfoxkde/FireCraft/releases).
-Active work: the quality ratchet — coverage toward 99%, lint
-hardening, a WCAG 2.1 audit, release automation (see
-[`docs/NEXT.md`](docs/NEXT.md)).
+### What works today
+
+- **Documents**: full Fireworks PNG (`.fw.png`) read/write, PNG/JPEG/
+  WebP/AVIF/GIF/TIFF/BMP import, SVG and PSD import, export to the
+  full raster matrix plus SVG.
+- **Canvas**: GPU-accelerated rendering with a deterministic CPU
+  reference renderer gated by golden-image tests; vector shapes
+  (rectangle, ellipse, polygon, line, pen), bitmap painting, pixel
+  selection, text, symbols.
+- **Editing**: transform handles with a Numeric Transform dialog,
+  Subselect path-node editing (add/delete node), gradient fill editor
+  with on-canvas handles, guides/grid with drag-out and snapping,
+  duplicate/clone, context menu, command palette.
+- **Shell**: CS6-style menubar and panels (Properties, Layers, History,
+  Optimize, and the Window-menu panel toggles), Lucide tool icons,
+  options bar with fill/stroke picker.
+- **Automation**: 245-command registry (everything-is-a-command),
+  `.jsf` scripting support, headless CLI verbs, `postMessage` browser
+  embedding, and a full MCP server (`firecraft-cli mcp`) with
+  document inspection, export, undo/redo, and registry-discovery
+  tools for AI agents.
+
+### Roadmap — daily-driver expansion (docs/NEXT.md, Phases 19–21)
+
+1. **Reachability** (in flight): the engine binds 245 commands but the
+   shell still leaves ~120 of 289 CS6 menu items inert; the burn-down
+   (`menus::tests::inert_count_never_rises` is the gate) continues with
+   page/frame verbs next.
+2. **Daily-driver features**: live text editing on canvas, Optimize
+   panel with export preview, animation timeline (frames/states), mask
+   stack.
+3. **Differentiators**: autosave/crash recovery, HiDPI polish.
+
+### Next steps
+
+- The quality ratchet runs in parallel: coverage toward 99%, lint
+  hardening (`deny(missing_docs)` on geom/color is in), a WCAG 2.1 AAA
+  audit, and release automation.
+- See [`docs/NEXT.md`](docs/NEXT.md) for the full phased plan and
+  [`docs/PROGRESS.md`](docs/PROGRESS.md) for the live status board.
 
 ## Using FireCraft
 

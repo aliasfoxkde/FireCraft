@@ -11736,6 +11736,57 @@
       "kind": "pattern",
       "fingerprint": "international-phone:./Cargo.lock:2222:af21a1bff1718128c96522dc5f3a4136e66feeb8aee345e9676fda1199e5378e",
       "stable_id": "aegis-3f48d367aa6263d691c37bd337d74ab74b05e5e52251a5b4cd1134ce943e3e15"
+    },
+    {
+      "id": "000000000000000018e4a1bee683046d",
+      "pattern": "zip-code",
+      "category": "pii",
+      "severity": "low",
+      "confidence": "high",
+      "location": {
+        "file": "./crates/app-cli/src/mcp.rs",
+        "line": 41,
+        "column": 32
+      },
+      "description": "US ZIP code detected",
+      "tags": [],
+      "kind": "pattern",
+      "fingerprint": "zip-code:./crates/app-cli/src/mcp.rs:41:20d70708103e5223b6f2fb00f00947832fb93d12ebef11eb10bc5599efefe184",
+      "stable_id": "aegis-de4c3e3ab477ec95588eae5b8b6baa268a7a2a54cc96a815a93d551eb0688082"
+    },
+    {
+      "id": "000000000000000018e4a1bee6832641",
+      "pattern": "zip-code",
+      "category": "pii",
+      "severity": "low",
+      "confidence": "high",
+      "location": {
+        "file": "./crates/app-cli/src/mcp.rs",
+        "line": 42,
+        "column": 30
+      },
+      "description": "US ZIP code detected",
+      "tags": [],
+      "kind": "pattern",
+      "fingerprint": "zip-code:./crates/app-cli/src/mcp.rs:42:0e5c81ceee464db1c0cb9ed801d134fab0dd2a28c0dc62e35aa21a8e13ff0ebc",
+      "stable_id": "aegis-606aabdc7e733d067acf4ce359fe79c6239c970a7ff255ae6c68519628ffed9f"
+    },
+    {
+      "id": "000000000000000018e4a1bee6833ce6",
+      "pattern": "zip-code",
+      "category": "pii",
+      "severity": "low",
+      "confidence": "high",
+      "location": {
+        "file": "./crates/app-cli/src/mcp.rs",
+        "line": 43,
+        "column": 27
+      },
+      "description": "US ZIP code detected",
+      "tags": [],
+      "kind": "pattern",
+      "fingerprint": "zip-code:./crates/app-cli/src/mcp.rs:43:e27c72fe629f258a871404eed323c0cf57a7a26c19dc8d5a6ac90770241af8f5",
+      "stable_id": "aegis-f5efa1911bb66a07d59e84b2f55fc45a777df2e1090072f9bbcf13aa3774db75"
     }
   ],
   "stats": {

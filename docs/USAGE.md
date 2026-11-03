@@ -46,6 +46,33 @@ Notes:
 - Every mutation goes through the engine registry — the CLI and the
   GUI are the same surface.
 
+### The MCP server
+
+`firecraft-cli mcp doc.fw.png` is a Model Context Protocol server
+(JSON-RPC 2.0 over newline-delimited stdio, protocol version
+`2025-06-18`) that gives an AI agent full control of the document
+through the same registry every other surface drives:
+
+| Tool | Arguments | What it does |
+|---|---|---|
+| `firecraft.apply` | `command`, `args` | One registry command through `Session::apply` (the 245-command door). |
+| `firecraft.runScript` | `path` | Run a `.jsf` script; queued mutations drain on completion (scripting builds). |
+| `firecraft.info` | — | Document summary (frames, canvas, pages, object counts) as JSON. |
+| `firecraft.export` | `path`, `quality?` | Render page 0 and write it; the extension picks the codec (same set as `export`). |
+| `firecraft.undo` / `firecraft.redo` | — | One undo-stack step per call; the step label comes back. |
+| `firecraft.listCommands` | — | Every bound registry id, one per line. |
+
+It also exposes one resource, `document://current` — the live
+document summary as `application/json`, readable without a tool
+round-trip. Tool-level failures (unknown command, empty undo stack,
+bad export path) are `isError` results; protocol violations are typed
+JSON-RPC errors; malformed frames never panic. Point any MCP client
+at the binary, e.g.:
+
+```json
+{ "command": "/path/to/firecraft-cli", "args": ["mcp", "doc.fw.png"] }
+```
+
 ## The GUI
 
 ### Documents

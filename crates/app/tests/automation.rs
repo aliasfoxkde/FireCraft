@@ -314,3 +314,153 @@ fn hostile_json_is_typed_never_panic() {
     assert_eq!(parse["error"]["code"], serde_json::json!(-32700));
     assert!(parse["id"].is_null());
 }
+
+/// The expansion battery: info / listCommands / undo / redo / export
+/// tools and the `document://current` resource, all over one session
+/// that starts from the untitled seed and mutates exactly once.
+#[test]
+fn mcp_expanded_tools_and_resource() {
+    let base = Editor::untitled().session.document().clone();
+    let mut session = Session::new(base);
+    let fs = Rc::new(MemoryFs::new());
+
+    let call = |session: &mut Session, name: &str, arguments: serde_json::Value| {
+        mcp::handle(
+            session,
+            Rc::new(MemoryFs::new()) as Rc<dyn FileSystem>,
+            &serde_json::json!({
+                "jsonrpc": "2.0", "id": 1, "method": "tools/call",
+                "params": { "name": name, "arguments": arguments },
+            }),
+        )
+        .expect("tools/call answers")
+    };
+    let text_of = |reply: &serde_json::Value| -> serde_json::Value {
+        let text = reply["result"]["content"][0]["text"]
+            .as_str()
+            .expect("text");
+        serde_json::from_str(text).expect("tool payload is JSON")
+    };
+
+    // Mutate, then info sees the object; listCommands carries the id.
+    let reply = call(
+        &mut session,
+        "firecraft.apply",
+        serde_json::json!(
+        { "command": CREATE, "args": create_args() }),
+    );
+    assert!(
+        reply["result"]["isError"] == serde_json::json!(false),
+        "{reply}"
+    );
+
+    let reply = call(&mut session, "firecraft.info", serde_json::json!({}));
+    let summary = text_of(&reply);
+    assert_eq!(
+        summary["objects"]["live"],
+        serde_json::json!(1),
+        "{summary}"
+    );
+
+    let reply = call(
+        &mut session,
+        "firecraft.listCommands",
+        serde_json::json!({}),
+    );
+    let text = reply["result"]["content"][0]["text"]
+        .as_str()
+        .expect("text");
+    assert!(text.split('\n').any(|line| line == CREATE), "{text}");
+
+    // undo steps back to zero objects, redo restores them.
+    let reply = call(&mut session, "firecraft.undo", serde_json::json!({}));
+    let result = text_of(&reply);
+    assert_eq!(result["ok"], serde_json::json!(true), "{result}");
+    assert_eq!(session.undo_len(), 0, "the undo stack is empty");
+    assert_eq!(session.document().registry.len(), 0);
+    let reply = call(&mut session, "firecraft.redo", serde_json::json!({}));
+    let result = text_of(&reply);
+    assert_eq!(result["ok"], serde_json::json!(true), "{result}");
+    assert_eq!(session.document().registry.len(), 1);
+    // Undo again (legal — redo put the step back), then a further undo
+    // past the now-empty stack is a tool-level failure, not a panic.
+    let reply = call(&mut session, "firecraft.undo", serde_json::json!({}));
+    assert_eq!(
+        reply["result"]["isError"],
+        serde_json::json!(false),
+        "{reply}"
+    );
+    let reply = call(&mut session, "firecraft.undo", serde_json::json!({}));
+    assert_eq!(
+        reply["result"]["isError"],
+        serde_json::json!(true),
+        "{reply}"
+    );
+
+    // export renders and writes through the injected file system.
+    let export_fs: Rc<dyn FileSystem> = Rc::new(MemoryFs::new());
+    let reply = mcp::handle(
+        &mut session,
+        export_fs.clone(),
+        &serde_json::json!({
+            "jsonrpc": "2.0", "id": 2, "method": "tools/call",
+            "params": { "name": "firecraft.export",
+                        "arguments": { "path": "test://out.png" } },
+        }),
+    )
+    .expect("tools/call answers");
+    assert!(
+        reply["result"]["isError"] == serde_json::json!(false),
+        "{reply}"
+    );
+    // Parameter validation surfaces as tool-level errors.
+    let reply = call(
+        &mut session,
+        "firecraft.export",
+        serde_json::json!({ "path": "x.png", "quality": 0 }),
+    );
+    assert_eq!(
+        reply["result"]["isError"],
+        serde_json::json!(true),
+        "{reply}"
+    );
+
+    // The resource: document://current reads back the same summary.
+    let resources = mcp::handle(
+        &mut session,
+        fs,
+        &serde_json::json!({ "jsonrpc": "2.0", "id": 3, "method": "resources/list" }),
+    )
+    .expect("resources/list answers");
+    assert_eq!(
+        resources["result"]["resources"][0]["uri"],
+        "document://current"
+    );
+    let read = mcp::handle(
+        &mut session,
+        Rc::new(MemoryFs::new()) as Rc<dyn FileSystem>,
+        &serde_json::json!({
+            "jsonrpc": "2.0", "id": 4, "method": "resources/read",
+            "params": { "uri": "document://current" },
+        }),
+    )
+    .expect("resources/read answers");
+    let text = read["result"]["contents"][0]["text"]
+        .as_str()
+        .expect("text");
+    let summary: serde_json::Value = serde_json::from_str(text).expect("summary is JSON");
+    // The session is back at zero objects after the extra undo above;
+    // the point is the resource reflects the *live* session state.
+    assert_eq!(summary["objects"]["live"], serde_json::json!(0));
+    // Unknown resources are typed errors.
+    let read = mcp::handle(
+        &mut session,
+        Rc::new(MemoryFs::new()) as Rc<dyn FileSystem>,
+        &serde_json::json!({
+            "jsonrpc": "2.0", "id": 5, "method": "resources/read",
+            "params": { "uri": "document://nope" },
+        }),
+    )
+    .expect("resources/read answers");
+    assert!(read["error"].is_object(), "{read}");
+}
