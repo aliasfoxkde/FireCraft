@@ -4,7 +4,8 @@
 //! goes through the injected [`engine::platform`] traits ([`EnvDialogs`]
 //! in [`dialogs`]; real modal dialogs land with desktop integration).
 pub(crate) use dialogs::{
-    DisplayState, EnvDialogs, ExportDialog, FeatherDialog, NumericTransformDialog,
+    CanvasColorDialog, CanvasSizeDialog, DisplayState, EnvDialogs, ExportDialog, FeatherDialog,
+    NumericTransformDialog,
 };
 pub(crate) use filters_ui::{
     FILTER_BOOL_KEYS, FILTER_FAMILIES, FILTER_PARAMS, FilterPreset, filter_preset,
@@ -65,7 +66,7 @@ pub struct Shell {
     /// 262k-pixel-wide raster, so the effective scale clamps to 4×).
     raster_scale: f64,
     /// Injected platform services.
-    fs: Box<dyn engine::platform::FileSystem>,
+    fs: std::rc::Rc<dyn engine::platform::FileSystem>,
     dialogs: Box<dyn engine::platform::Dialogs>,
     /// Last status line (errors, save confirmations).
     pub status: String,
@@ -75,6 +76,10 @@ pub struct Shell {
     pub(crate) numeric_transform: Option<NumericTransformDialog>,
     /// Open Feather dialog, if any.
     pub(crate) feather: Option<FeatherDialog>,
+    /// Open Canvas Size dialog, if any.
+    pub(crate) canvas_size: Option<CanvasSizeDialog>,
+    /// Open Canvas Color dialog, if any.
+    pub(crate) canvas_color: Option<CanvasColorDialog>,
     /// The command palette state.
     pub(crate) palette: palette::CommandPalette,
     /// Display name of the open document (tab strip).
@@ -86,6 +91,8 @@ pub struct Shell {
     close_requested: bool,
     /// The Auto Shape flyout is open (toggled by its tool button).
     autoshape_flyout: bool,
+    /// The Help ▸ About `FireCraft` window is open.
+    pub(crate) about_open: bool,
     /// The keyboard-shortcuts help panel is open (F1 / Help menu).
     help_open: bool,
     /// The Styles panel's new-style name field.
@@ -128,7 +135,7 @@ impl Shell {
         apply_cs6_theme(&cc.egui_ctx);
         Self::with_platform(
             Editor::untitled(),
-            Box::new(app_cli::io::StdFs),
+            std::rc::Rc::new(app_cli::io::StdFs),
             Box::new(EnvDialogs::default()),
         )
     }
@@ -137,7 +144,7 @@ impl Shell {
     #[must_use]
     pub fn with_platform(
         editor: Editor,
-        fs: Box<dyn engine::platform::FileSystem>,
+        fs: std::rc::Rc<dyn engine::platform::FileSystem>,
         dialogs: Box<dyn engine::platform::Dialogs>,
     ) -> Self {
         Self {
@@ -151,11 +158,14 @@ impl Shell {
             export_dialog: None,
             numeric_transform: None,
             feather: None,
+            canvas_size: None,
+            canvas_color: None,
             palette: palette::CommandPalette::default(),
             doc_name: "untitled".to_owned(),
             canvas_rect: None,
             close_requested: false,
             autoshape_flyout: false,
+            about_open: false,
             help_open: false,
             style_name: String::new(),
             rename_layer: None,
@@ -239,7 +249,7 @@ impl Shell {
         let Some(path) = self.dialogs.open_path(
             "Open document",
             &[
-                ("Fireworks PNG".to_owned(), vec!["png".to_owned()]),
+                ("FireCraft document".to_owned(), vec!["png".to_owned()]),
                 (
                     "Images".to_owned(),
                     vec![
@@ -307,7 +317,7 @@ impl Shell {
     fn run_script_file(&mut self) {
         let Some(path) = self.dialogs.open_path(
             "Run script",
-            &[("Fireworks script".to_owned(), vec!["jsf".to_owned()])],
+            &[("FireCraft script".to_owned(), vec!["jsf".to_owned()])],
         ) else {
             return;
         };
@@ -328,14 +338,15 @@ impl Shell {
                 return;
             }
         };
-        let report = scripting::run_with_file_system(std::rc::Rc::new(&self.fs), || {
+        // The run needs an `Rc`; the shell keeps its own — cloning is
+        // all it takes, no swap, and the shell's handle survives the
+        // script machinery's clones.
+        let fs_for_run = std::rc::Rc::clone(&self.fs);
+        let report = scripting::run_with_file_system(fs_for_run, || {
             scripting::run_in_session(&mut self.editor.session, &mut engine, &name, &source)
         });
         if report.completed() {
-            self.status = format!(
-                "ran {name} ({} host call(s))",
-                report.host_calls
-            );
+            self.status = format!("ran {name} ({} host call(s))", report.host_calls);
             self.raster = None;
             self.raster_scale = 1.0;
         } else {
@@ -354,10 +365,11 @@ impl Shell {
         self.run_script_file();
     }
 
-    fn save_document(&mut self) {        let Some(path) = self.dialogs.save_path(
+    fn save_document(&mut self) {
+        let Some(path) = self.dialogs.save_path(
             "Save document",
             "untitled.fw.png",
-            &[("Fireworks PNG".to_owned(), vec!["png".to_owned()])],
+            &[("FireCraft document".to_owned(), vec!["png".to_owned()])],
         ) else {
             return;
         };
@@ -436,7 +448,7 @@ impl Shell {
                 return;
             }
         };
-        let doc_filters = [("Fireworks PNG".to_owned(), vec!["png".to_owned()])];
+        let doc_filters = [("FireCraft document".to_owned(), vec!["png".to_owned()])];
         let Some(doc_path) = self
             .dialogs
             .open_path("Base document for replay", &doc_filters)
@@ -592,6 +604,28 @@ impl Shell {
             menus::ShellAction::NumericTransform => {
                 self.numeric_transform = Some(NumericTransformDialog::default());
             }
+            menus::ShellAction::CanvasSize => {
+                let canvas = &self.editor.session.document().pages[0].info.canvas;
+                self.canvas_size = Some(CanvasSizeDialog {
+                    width: canvas.width,
+                    height: canvas.height,
+                    ..CanvasSizeDialog::default()
+                });
+            }
+            menus::ShellAction::CanvasColor => {
+                let raw = self.editor.session.document().pages[0]
+                    .info
+                    .canvas
+                    .background_raw;
+                self.canvas_color = Some(CanvasColorDialog {
+                    // ABGR raw: R = raw & 0xFF, G = (raw >> 8) & 0xFF, B = (raw >> 16) & 0xFF.
+                    color: [
+                        (raw & 0xFF) as u8,
+                        ((raw >> 8) & 0xFF) as u8,
+                        ((raw >> 16) & 0xFF) as u8,
+                    ],
+                });
+            }
             menus::ShellAction::FeatherDialog => {
                 if self.editor.has_pixel_selection() {
                     self.feather = Some(FeatherDialog {
@@ -668,12 +702,7 @@ impl Shell {
                     self.view.fit(world, size);
                 }
             }
-            menus::ShellAction::About => {
-                self.status = "FireCraft — a clean-room reimplementation of \
-                    Adobe Fireworks CS6 (Apache-2.0)"
-                    .to_owned();
-            }
-            menus::ShellAction::ManageExtensions => self.open_extension_manager(),
+            menus::ShellAction::About => self.about_open = true,
             menus::ShellAction::ShowShortcuts => self.help_open = !self.help_open,
             menus::ShellAction::PickTool(tool) => {
                 self.editor.tool = tool;
@@ -811,6 +840,13 @@ impl Shell {
     /// selection or document shape.
     fn run_sel(&mut self, action: menus::SelAction) {
         match action {
+            menus::SelAction::Clone | menus::SelAction::Duplicate => {
+                // CS6's Clone and Duplicate share the engine verb;
+                // both land the copy on the original, ready to drag.
+                if let Some(id) = self.editor.selected_live() {
+                    self.run_command("object.duplicate", serde_json::json!({ "id": id }));
+                }
+            }
             menus::SelAction::Delete => {
                 if let Some(id) = self.editor.selection {
                     self.run_command("object.delete", serde_json::json!({ "id": id }));
@@ -821,6 +857,14 @@ impl Shell {
                     self.run_command(
                         "object.setVisible",
                         serde_json::json!({ "id": id, "visible": false }),
+                    );
+                }
+            }
+            menus::SelAction::LockSelection => {
+                if let Some(id) = self.editor.selection {
+                    self.run_command(
+                        "object.setLocked",
+                        serde_json::json!({ "id": id, "locked": true }),
                     );
                 }
             }
@@ -1279,11 +1323,29 @@ impl eframe::App for Shell {
                 .collapsible(false)
                 .show(ui.ctx(), |ui| self.feather_dialog_ui(ui));
         }
+        if self.canvas_size.is_some() {
+            egui::Window::new("Canvas Size")
+                .resizable(false)
+                .collapsible(false)
+                .show(ui.ctx(), |ui| self.canvas_size_dialog_ui(ui));
+        }
+        if self.canvas_color.is_some() {
+            egui::Window::new("Canvas Color")
+                .resizable(false)
+                .collapsible(false)
+                .show(ui.ctx(), |ui| self.canvas_color_dialog_ui(ui));
+        }
         if self.grid_dialog.is_some() {
             egui::Window::new("Edit Grid")
                 .resizable(false)
                 .collapsible(false)
                 .show(ui.ctx(), |ui| self.grid_dialog_ui(ui));
+        }
+        if self.about_open {
+            egui::Window::new("About FireCraft")
+                .resizable(false)
+                .collapsible(false)
+                .show(ui.ctx(), |ui| self.about_ui(ui));
         }
         self.palette_ui(ui);
         if self.help_open {
@@ -1308,6 +1370,7 @@ impl eframe::App for Shell {
 #[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 mod tests {
     use super::*;
+    use crate::editor::union_selection_bounds;
     use engine::platform::{FileSystem, MemoryFs};
 
     /// Scripted dialogs: the steps path answers the replay/save
@@ -1363,7 +1426,7 @@ mod tests {
             steps: "/mem/steps.fwsteps".to_owned(),
             doc: "/mem/doc.fw.png".to_owned(),
         };
-        Shell::with_platform(editor, Box::new(MemoryFs::new()), Box::new(dialogs))
+        Shell::with_platform(editor, std::rc::Rc::new(MemoryFs::new()), Box::new(dialogs))
     }
 
     /// The action dispatch wiring: Select All picks up the cell's
@@ -1951,7 +2014,7 @@ mod tests {
         };
         let mut saver = Shell::with_platform(
             gui_editor(),
-            Box::new(MemoryFs::new()),
+            std::rc::Rc::new(MemoryFs::new()),
             Box::new(FixedDialogs {
                 steps: dialogs.steps.clone(),
                 doc: dialogs.doc.clone(),
@@ -1966,7 +2029,7 @@ mod tests {
         fs.write_file("session.fwsteps", steps.as_bytes()).unwrap();
         fs.write_file("base.fw.png", &base).unwrap();
         let mut replayer =
-            Shell::with_platform(Editor::untitled(), Box::new(fs), Box::new(dialogs));
+            Shell::with_platform(Editor::untitled(), std::rc::Rc::new(fs), Box::new(dialogs));
         replayer.replay_steps();
         assert!(replayer.status.contains("replayed"), "{}", replayer.status);
         assert_eq!(
@@ -2004,7 +2067,8 @@ mod tests {
             steps: "export.html".to_owned(),
             doc: String::new(),
         };
-        let mut shell = Shell::with_platform(editor, Box::new(MemoryFs::new()), Box::new(dialogs));
+        let mut shell =
+            Shell::with_platform(editor, std::rc::Rc::new(MemoryFs::new()), Box::new(dialogs));
         shell.export_dialog = Some(ExportDialog {
             web: Some(1), // HTML + images
             ..ExportDialog::default()
@@ -2459,6 +2523,108 @@ mod tests {
         // The next open seeds from the last applied radius.
         shell.run_action(&menus::Action::Shell(menus::ShellAction::FeatherDialog));
         assert_eq!(shell.feather, Some(FeatherDialog { radius: 8 }));
+    }
+
+    /// Help ▸ About opens the About window; the keyboard-shortcuts
+    /// toggle still flips `help_open`.
+    #[test]
+    fn the_about_action_opens_the_about_window() {
+        let mut shell = gui_shell(gui_editor());
+        assert!(!shell.about_open);
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::About));
+        assert!(shell.about_open, "About opens the window");
+        shell.about_open = false;
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::ShowShortcuts));
+        assert!(shell.help_open);
+    }
+
+    /// The Canvas Size dialog opens seeded with the live canvas,
+    /// resizes page 0 through the engine command, and shifts content
+    /// opposite the anchor so the anchored corner stays fixed.
+    #[test]
+    fn the_canvas_size_dialog_resizes_about_the_anchor() {
+        let mut shell = gui_shell(gui_editor());
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::CanvasSize));
+        let dialog = shell
+            .canvas_size
+            .clone()
+            .expect("the dialog opens over any document");
+        assert_eq!(dialog.width, 640.0, "seeded from the live canvas");
+        assert_eq!(dialog.height, 480.0);
+
+        // Top-left anchor: growth goes right/down, content stays.
+        let dialog = CanvasSizeDialog {
+            width: 800.0,
+            height: 600.0,
+            anchor_x: 0,
+            anchor_y: 0,
+        };
+        shell.apply_canvas_size(&dialog);
+        assert!(shell.canvas_size.is_none(), "apply closes the dialog");
+        let canvas = &shell.editor.session.document().pages[0].info.canvas;
+        assert_eq!((canvas.width, canvas.height), (800.0, 600.0));
+        assert!(shell.status.contains("canvas resized to 800 × 600"));
+
+        // Center anchor: content moves left/up by half the growth.
+        let (mut shell, id) = shell_with_raster();
+        let before = union_selection_bounds(shell.editor.session.document(), &[id])
+            .expect("the raster has bounds");
+        let dialog = CanvasSizeDialog {
+            width: 1280.0,
+            height: 960.0,
+            anchor_x: 1,
+            anchor_y: 1,
+        };
+        shell.apply_canvas_size(&dialog);
+        let after = union_selection_bounds(shell.editor.session.document(), &[id])
+            .expect("the raster still has bounds");
+        assert_eq!(
+            (after.x0 - before.x0, after.y0 - before.y0),
+            (-320.0, -240.0),
+            "center anchor shifts content by half the growth"
+        );
+
+        // Out-of-range dimensions refuse and keep the old canvas.
+        let dialog = CanvasSizeDialog {
+            width: 0.0,
+            height: 480.0,
+            anchor_x: 0,
+            anchor_y: 0,
+        };
+        shell.apply_canvas_size(&dialog);
+        let canvas = &shell.editor.session.document().pages[0].info.canvas;
+        assert_eq!(canvas.width, 1280.0, "the refused resize leaves the canvas");
+        assert!(shell.status.contains("failed"));
+    }
+
+    /// The Canvas Color dialog opens with the current matte, applies
+    /// `document.setCanvasColor` document-wide, and cancels cleanly.
+    #[test]
+    fn the_canvas_color_dialog_sets_the_matte() {
+        let mut shell = gui_shell(gui_editor());
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::CanvasColor));
+        let seeded = shell.canvas_color.clone().expect("the dialog opens");
+
+        shell.apply_canvas_color(&CanvasColorDialog {
+            color: [12, 34, 56],
+        });
+        assert!(shell.canvas_color.is_none(), "apply closes the dialog");
+        for page in &shell.editor.session.document().pages {
+            let raw = page.info.canvas.background_raw;
+            assert_eq!(raw & 0xFF, 12, "R in the low byte");
+            assert_eq!((raw >> 8) & 0xFF, 34);
+            assert_eq!((raw >> 16) & 0xFF, 56);
+        }
+
+        // Re-opening seeds from the applied matte.
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::CanvasColor));
+        assert_eq!(
+            shell.canvas_color,
+            Some(CanvasColorDialog {
+                color: [12, 34, 56]
+            })
+        );
+        let _ = seeded;
     }
 
     /// Superselect/Subselect route through `selection.selectParents` /

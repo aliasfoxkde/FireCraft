@@ -123,7 +123,7 @@ Point-in-time snapshot **2026-11-02** (post-v0.2.4). Counts marked
 | **Menu reachability** | 144 inert of 293 items | *live* — derived + gated (`menus::tests::inert_count_never_rises`) |
 | **Parity** | 268 C / 3 P / 0 M / 85 N | 3 P rows are evidence-gated (Phase 12 oracle) |
 | **Decision docs** | 67 (0001–0067) | Next: 0068 |
-| **Web bundle** | 15,245,342 B (ceiling 14,000,000) | **Over ceiling** — 19b.4 re-pin with evidence before the next release |
+| **Web bundle** | 21,235,599 B (ceiling 21,500,000) | Re-pinned 2026-11-03 (19b.4, dated observation; 19.x shell growth) |
 
 ---
 

@@ -13,6 +13,7 @@ use crate::boolean::{BooleanOp, boolean};
 use crate::bridge::{
     bezpath_to_contour, canonicalize_contour, contour_segments, contour_to_bezpath,
 };
+use crate::edit::{delete_point, insert_point};
 use crate::flatten::{FLATTEN_TOLERANCE, flatten_cubic};
 use crate::intersect::{dedup_params, segment_intersection};
 use crate::knife::{knife_contour, knife_contours};
@@ -1095,4 +1096,83 @@ fn knife_contours_reports_none_only_when_nothing_was_cut() {
 
 fn piece_anchors(contour: &Contour) -> Vec<Point> {
     contour.points.iter().map(|p| p.anchor).collect()
+}
+
+#[test]
+fn insert_point_splits_a_segment_and_counts_update() {
+    let path = rect_path(0.0, 0.0, 40.0, 40.0);
+    let edited = insert_point(&path, 0, 0, Point::new(20.0, 0.0)).unwrap();
+    let c = &edited.contours[0];
+    assert_eq!(c.points.len(), 5);
+    assert_eq!(c.point_count, 5);
+    assert_eq!(c.points[1].anchor, Point::new(20.0, 0.0));
+    assert!(
+        c.points[1].primary.is_none() && !c.points[1].is_curve,
+        "the new point is a plain corner"
+    );
+    // Input is never mutated.
+    assert_eq!(path.contours[0].points.len(), 4);
+}
+
+#[test]
+fn insert_point_wraps_the_last_segment_of_a_closed_contour() {
+    let path = rect_path(0.0, 0.0, 40.0, 40.0);
+    let last = path.contours[0].points.len() - 1;
+    let edited = insert_point(&path, 0, last, Point::new(0.0, 20.0)).unwrap();
+    let c = &edited.contours[0];
+    assert_eq!(c.points.len(), 5);
+    assert_eq!(
+        c.points[4].anchor,
+        Point::new(0.0, 20.0),
+        "wrap insert lands at the tail, closing back to point 0"
+    );
+}
+
+#[test]
+fn insert_point_rejects_out_of_range_indices() {
+    let path = rect_path(0.0, 0.0, 40.0, 40.0);
+    assert!(
+        insert_point(&path, 1, 0, Point::ZERO).is_err(),
+        "no contour 1"
+    );
+    // An open contour's last point starts no segment: index 3 is the
+    // tail, and there is no wrap.
+    let open = open_path(vec![
+        anchor(0.0, 0.0),
+        anchor(40.0, 0.0),
+        anchor(40.0, 40.0),
+        anchor(0.0, 40.0),
+    ]);
+    assert!(insert_point(&open, 0, 3, Point::ZERO).is_err());
+    assert!(insert_point(&open, 0, 4, Point::ZERO).is_err());
+}
+
+#[test]
+fn delete_point_removes_one_point_and_updates_the_count() {
+    let path = rect_path(0.0, 0.0, 40.0, 40.0);
+    let edited = delete_point(&path, 0, 2).unwrap();
+    let c = &edited.contours[0];
+    assert_eq!(c.points.len(), 3);
+    assert_eq!(c.point_count, 3);
+    assert!(!c.points.iter().any(|p| p.anchor == Point::new(40.0, 40.0)));
+}
+
+#[test]
+fn delete_point_drops_a_degenerate_contour() {
+    // A closed two-point contour cannot survive a deletion.
+    let mut contour = rect_contour_x();
+    contour.points.truncate(2);
+    let path = neutral_path(vec![contour]);
+    let edited = delete_point(&path, 0, 0).unwrap();
+    assert!(
+        edited.contours.is_empty(),
+        "a closed contour below three points is degenerate and goes"
+    );
+}
+
+#[test]
+fn delete_point_rejects_out_of_range_indices() {
+    let path = rect_path(0.0, 0.0, 40.0, 40.0);
+    assert!(delete_point(&path, 0, 4).is_err());
+    assert!(delete_point(&path, 3, 0).is_err());
 }

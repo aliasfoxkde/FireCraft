@@ -148,6 +148,89 @@ pub fn redraw_span(
     Ok(redrawn)
 }
 
+/// Inserts a corner point at `at` on the segment between `index` and
+/// `index + 1` of `contour` (wrap-around on a closed contour): a
+/// straight midpoint anchor with no handles, splitting the segment in
+/// two. The CS6 Subselect double-click-on-a-segment behavior — the new
+/// point is a plain corner; dragging it later reshapes freely.
+///
+/// # Errors
+/// [`VectorError::PointOutOfBounds`] when the contour or segment index
+/// is out of range.
+pub fn insert_point(
+    path: &PathObject,
+    contour: usize,
+    segment: usize,
+    at: Point,
+) -> Result<PathObject, VectorError> {
+    let Some(c) = path.contours.get(contour) else {
+        return Err(VectorError::PointOutOfBounds { contour, point: 0 });
+    };
+    let last = c.points.len().saturating_sub(1);
+    let wraps = c.closed && segment == last;
+    if segment >= last + usize::from(wraps) {
+        return Err(VectorError::PointOutOfBounds {
+            contour,
+            point: segment,
+        });
+    }
+    let mut edited = path.clone();
+    let target = &mut edited.contours[contour];
+    target.points.insert(
+        segment + 1,
+        doc::PathPoint {
+            anchor: at,
+            primary: None,
+            secondary: None,
+            is_curve: false,
+        },
+    );
+    target.point_count = target.points.len() as i64;
+    Ok(edited)
+}
+
+/// Deletes the point at `index` of `contour`. On a closed contour with
+/// only two points left (or an open one with one) the whole contour
+/// goes with it — a degenerate remnant draws nothing. A closed contour
+/// reduced below four points loses curve handles on the survivors so
+/// the shape stays a plain polygon.
+///
+/// # Errors
+/// [`VectorError::PointOutOfBounds`] when the contour or point index
+/// is out of range, [`VectorError::InvalidParameter`] when the contour
+/// is already empty.
+pub fn delete_point(
+    path: &PathObject,
+    contour: usize,
+    index: usize,
+) -> Result<PathObject, VectorError> {
+    let Some(c) = path.contours.get(contour) else {
+        return Err(VectorError::PointOutOfBounds { contour, point: 0 });
+    };
+    if c.points.is_empty() || index >= c.points.len() {
+        return Err(VectorError::PointOutOfBounds {
+            contour,
+            point: index,
+        });
+    }
+    let mut edited = path.clone();
+    let target = &mut edited.contours[contour];
+    target.points.remove(index);
+    if target.closed && target.points.len() < 4 {
+        for point in &mut target.points {
+            point.primary = None;
+            point.secondary = None;
+            point.is_curve = false;
+        }
+    }
+    if target.points.is_empty() || (target.closed && target.points.len() < 3) {
+        edited.contours.remove(contour);
+    } else {
+        target.point_count = target.points.len() as i64;
+    }
+    Ok(edited)
+}
+
 /// Freeform push: translates every anchor within `radius` of `center`
 /// by `delta` scaled by the linear falloff `1 − d/radius`, handles
 /// riding along with their anchor.

@@ -109,6 +109,11 @@ pub enum ShellAction {
     /// Select ▸ Feather… — the feather-radius dialog over the pixel
     /// selection.
     FeatherDialog,
+    /// Modify ▸ Canvas ▸ Canvas Size… — the absolute canvas-resize
+    /// dialog with the CS6 anchor grid.
+    CanvasSize,
+    /// Modify ▸ Canvas ▸ Canvas Color… — the document matte color.
+    CanvasColor,
     /// Help ▸ Online Help — opens the project wiki in the browser.
     OnlineHelp,
     /// Help ▸ Manage Extensions… — the extension (script) manager.
@@ -136,6 +141,8 @@ pub enum SelAction {
     BreakApart,
     /// `object.setVisible` false on the selection.
     Hide,
+    /// `object.setLocked` true on the selection.
+    LockSelection,
     /// `object.group` — fold the selection into one group.
     Group,
     /// `object.ungroup` — dissolve the selected group.
@@ -200,6 +207,12 @@ pub enum SelAction {
     RestoreJpegMask,
     /// `mask.clearJPEG` — drop the stashed JPEG mask.
     ClearJpegMask,
+    /// `object.duplicate` — CS6 Edit ▸ Clone: the copy lands directly
+    /// on top of the original (a following drag moves it).
+    Clone,
+    /// `object.duplicate` — CS6 Edit ▸ Duplicate (same command; CS6's
+    /// variant differs only by the interactive placement drag).
+    Duplicate,
 }
 
 /// The Modify ▸ Arrange items; dispatch resolves the numeric index.
@@ -299,7 +312,7 @@ pub static FILE: Menu = Menu {
         Entry::Sub(
             "Send to E-mail",
             &[
-                item(35587, "Fireworks PNG...", "", Action::Inert),
+                item(35587, "Fireworks PNG (format)...", "", Action::Inert),
                 item(35588, "JPEG Compressed...", "", Action::Inert),
                 item(35420, "Use Export Settings...", "", Action::Inert),
             ],
@@ -397,8 +410,18 @@ pub static EDIT: Menu = Menu {
         ),
         item(35033, "Paste Attributes", "", Action::Inert),
         Entry::Sep,
-        item(35006, "Duplicate", "Ctrl+Alt+D", Action::Inert),
-        item(35003, "Clone", "Ctrl+Shift+C", Action::Inert),
+        item(
+            35006,
+            "Duplicate",
+            "Ctrl+Alt+D",
+            Action::Sel(SelAction::Duplicate),
+        ),
+        item(
+            35003,
+            "Clone",
+            "Ctrl+Shift+C",
+            Action::Sel(SelAction::Clone),
+        ),
         Entry::Sep,
         item(35145, "Crop Selected Bitmap", "", Action::Inert),
         item(35346, "Crop Document", "", Action::Inert),
@@ -657,8 +680,18 @@ pub static MODIFY: Menu = Menu {
             "Canvas",
             &[
                 item(35226, "Image Size...", "", Action::Inert),
-                item(35004, "Canvas Size...", "", Action::Inert),
-                item(35005, "Canvas Color...", "", Action::Inert),
+                item(
+                    35004,
+                    "Canvas Size...",
+                    "",
+                    Action::Shell(ShellAction::CanvasSize),
+                ),
+                item(
+                    35005,
+                    "Canvas Color...",
+                    "",
+                    Action::Shell(ShellAction::CanvasColor),
+                ),
                 Entry::Sep,
                 item(35250, "Trim Canvas", "", Action::Inert),
                 item(35574, "Fit Canvas", "", Action::Inert),
@@ -783,7 +816,12 @@ pub static MODIFY: Menu = Menu {
             ],
         ),
         Entry::Sep,
-        item(35784, "Lock Selection", "", Action::Inert),
+        item(
+            35784,
+            "Lock Selection",
+            "",
+            Action::Sel(SelAction::LockSelection),
+        ),
         item(
             35009,
             "Flatten Selection",
@@ -966,8 +1004,8 @@ pub static MODIFY: Menu = Menu {
         ),
         item(35849, "Snap To Pixel", "", Action::Inert),
         Entry::Sep,
-        item(35010, "Group", "Ctrl+G", Action::Inert),
-        item(35062, "Ungroup", "Ctrl+U", Action::Inert),
+        item(35010, "Group", "Ctrl+G", Action::Sel(SelAction::Group)),
+        item(35062, "Ungroup", "Ctrl+U", Action::Sel(SelAction::Ungroup)),
     ],
 };
 
@@ -1222,7 +1260,12 @@ pub static WINDOW: Menu = Menu {
 pub static HELP: Menu = Menu {
     label: "Help",
     entries: &[
-        item(57667, "Online Help", "", Action::Shell(ShellAction::OnlineHelp)),
+        item(
+            57667,
+            "Online Help",
+            "",
+            Action::Shell(ShellAction::OnlineHelp),
+        ),
         item(
             0,
             "Keyboard Shortcuts\tF1",
@@ -1230,7 +1273,12 @@ pub static HELP: Menu = Menu {
             Action::Shell(ShellAction::ShowShortcuts),
         ),
         Entry::Sep,
-        item(35637, "Manage Extensions...", "", Action::Shell(ShellAction::ManageExtensions)),
+        item(
+            35637,
+            "Manage Extensions...",
+            "",
+            Action::Shell(ShellAction::ManageExtensions),
+        ),
         Entry::Sep,
         item(
             57664,
@@ -1537,11 +1585,15 @@ pub fn action_name(action: Action) -> String {
             ShellAction::ToggleSnapToGuides => "Snap to guides".into(),
             ShellAction::ClearGuides => "Clear guides".into(),
             ShellAction::FeatherDialog => "Feather selection".into(),
+            ShellAction::CanvasSize => "Canvas Size".into(),
+            ShellAction::CanvasColor => "Canvas Color".into(),
             ShellAction::OnlineHelp => "Online Help".into(),
             ShellAction::ManageExtensions => "Manage Extensions".into(),
         },
         Action::Sel(sel) => match sel {
             SelAction::Delete => "Delete selection".into(),
+            SelAction::Clone => "Clone".into(),
+            SelAction::Duplicate => "Duplicate".into(),
             SelAction::Simplify => "Simplify paths".into(),
             SelAction::ExpandStroke => "Expand stroke".into(),
             SelAction::Inset(_) => "Inset path".into(),
@@ -1550,6 +1602,7 @@ pub fn action_name(action: Action) -> String {
             SelAction::NewPage => "New page".into(),
             SelAction::BreakApart => "Break apart".into(),
             SelAction::Hide => "Hide selection".into(),
+            SelAction::LockSelection => "Lock selection".into(),
             SelAction::Group => "Group".into(),
             SelAction::Ungroup => "Ungroup".into(),
             SelAction::FlattenSelection => "Flatten selection".into(),
@@ -1616,7 +1669,7 @@ mod tests {
     /// The highest inert-item count the docs have recorded. The
     /// `inert_count_never_rises` test refuses any regression above it;
     /// when the count falls, ratchet this down to the new number.
-    const INERT_CEILING: usize = 144;
+    const INERT_CEILING: usize = 131;
 
     fn walk(entries: &'static [Entry]) -> Vec<&'static Item> {
         let mut items = Vec::new();
@@ -1734,7 +1787,7 @@ mod tests {
     fn menu_item_total_is_pinned() {
         let (total, _) = census();
         assert_eq!(
-            total, 293,
+            total, 289,
             "menu item total changed — update the docs that quote it"
         );
     }

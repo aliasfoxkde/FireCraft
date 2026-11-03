@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Questions & design discussion
+    url: https://github.com/aliasfoxkde/FireCraft/discussions
+    about: Usage questions, ideas, and design talk belong in Discussions.
+  - name: Online Help (wiki)
+    url: https://github.com/aliasfoxkde/FireCraft/wiki
+    about: Documentation, release notes, and how-to guides.

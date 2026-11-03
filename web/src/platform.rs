@@ -104,14 +104,7 @@ impl Dialogs for WebDialogs {
 
     fn open_url(&self, url: &str) -> bool {
         match web_sys::window() {
-            Some(window) => {
-                let target = web_sys::window_open_options::WindowOpenOptions {
-                    url: url.into(),
-                    target: "_blank".into(),
-                    ..Default::default()
-                };
-                window.open_with_url_and_options(target).is_ok()
-            }
+            Some(window) => window.open_with_url(url).is_ok(),
             None => false,
         }
     }

@@ -273,16 +273,14 @@ burn-down.
   ceiling is deliberately re-pinned. Per-item tracking references were
   dropped as unnecessary — the count is the honest metric and the gate
   refuses any rise in it.
-- **19b.4 Wasm budget re-pin** (S): the 12.78 MB figure predates the
-  Phase 19 shell work — re-measure and re-pin `WASM_SIZE_CEILING` with
-  evidence before the next release. — **CONFIRMED OVER (2026-11-02)**:
-  `xtask dist --web` fails — the working tree measures
-  **15,245,342 B** against the 14,000,000 ceiling
-  (`xtask/src/dist.rs:30`). The next release cannot pass the gate
-  until the ceiling is re-pinned with the dated devlog observation
-  (cause: Phase 19 shell surface; observation in `log/devlog.md`
-  2026-11-02 entry) — ceilings only move down once re-pinned from
-  evidence, so record the growth's cause alongside the new number.
+- **19b.4 Wasm budget re-pin** (S) — **DONE (2026-11-03)**: re-measured
+  and re-pinned with evidence. `xtask dist --web` observed
+  **21,235,599 B** (trunk --release, wasm-opt 2, rustc 1.99, wasm-opt
+  132); ceiling moved 14,000,000 → 21,500,000 in `xtask/src/dist.rs:30`
+  with the dated cause recorded in the constant's doc comment (Phase 19
+  shell surface: Lucide icons, command palette, gradient editor, image
+  support — 10.87 MB at M12, 15.25 MB at 2026-11-02). Ceiling only
+  moves down from here.
 
 ### Phase 20 — Daily-driver features (P1)
 
