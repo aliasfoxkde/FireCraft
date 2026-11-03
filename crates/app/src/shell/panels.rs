@@ -127,31 +127,104 @@ impl Shell {
     /// CS6's floating docks).
     pub(super) fn right_panels(&mut self, ui: &mut egui::Ui) {
         egui::ScrollArea::vertical().show(ui, |ui| {
-            egui::CollapsingHeader::new("Properties")
-                .default_open(true)
-                .show(ui, |ui| self.properties_panel(ui));
-            egui::CollapsingHeader::new("Pages")
-                .default_open(true)
-                .show(ui, |ui| self.pages_section(ui));
-            egui::CollapsingHeader::new("States")
-                .default_open(true)
-                .show(ui, |ui| self.states_section(ui));
-            egui::CollapsingHeader::new("Layers")
-                .default_open(true)
-                .show(ui, |ui| self.layers_section(ui));
-            egui::CollapsingHeader::new("Styles")
-                .default_open(false)
-                .show(ui, |ui| self.styles_panel(ui));
-            egui::CollapsingHeader::new("Document Library")
-                .default_open(false)
-                .show(ui, |ui| self.library_panel(ui));
-            egui::CollapsingHeader::new("History")
-                .default_open(false)
-                .show(ui, |ui| self.history_section(ui));
+            if self.panel_shown("Properties") {
+                egui::CollapsingHeader::new("Properties")
+                    .default_open(true)
+                    .show(ui, |ui| self.properties_panel(ui));
+            }
+            if self.panel_shown("Pages") {
+                egui::CollapsingHeader::new("Pages")
+                    .default_open(true)
+                    .show(ui, |ui| self.pages_section(ui));
+            }
+            if self.panel_shown("States") {
+                egui::CollapsingHeader::new("States")
+                    .default_open(true)
+                    .show(ui, |ui| self.states_section(ui));
+            }
+            if self.panel_shown("Layers") {
+                egui::CollapsingHeader::new("Layers")
+                    .default_open(true)
+                    .show(ui, |ui| self.layers_section(ui));
+            }
+            if self.panel_shown("Styles") {
+                egui::CollapsingHeader::new("Styles")
+                    .default_open(false)
+                    .show(ui, |ui| self.styles_panel(ui));
+            }
+            if self.panel_shown("Document Library") {
+                egui::CollapsingHeader::new("Document Library")
+                    .default_open(false)
+                    .show(ui, |ui| self.library_panel(ui));
+            }
+            if self.panel_shown("History") {
+                egui::CollapsingHeader::new("History")
+                    .default_open(false)
+                    .show(ui, |ui| self.history_section(ui));
+            }
+            // The Web Layer panel has no Window-menu item in CS6; it
+            // stays always-visible.
             egui::CollapsingHeader::new("Web Layer")
                 .default_open(false)
                 .show(ui, |ui| self.web_panel(ui));
         });
+    }
+
+    /// Window-menu panel visibility (absent from `panel_hidden` =
+    /// shown; CS6 opens everything by default).
+    pub(crate) fn panel_shown(&self, name: &str) -> bool {
+        !self.panel_hidden.contains(&name)
+    }
+
+    /// Toggle one Window-menu panel by its menu label; a panel not in
+    /// the right dock (Tools, Optimize, Color Mixer, ...) is reported,
+    /// not silently accepted.
+    pub(crate) fn toggle_panel(&mut self, name: &'static str) {
+        const DOCKED: &[&str] = &[
+            "Properties",
+            "Pages",
+            "States",
+            "Layers",
+            "Styles",
+            "Document Library",
+            "History",
+        ];
+        if DOCKED.contains(&name) {
+            if let Some(pos) = self.panel_hidden.iter().position(|n| *n == name) {
+                self.panel_hidden.remove(pos);
+                self.status = format!("{name} panel shown.");
+            } else {
+                self.panel_hidden.push(name);
+                self.status = format!("{name} panel hidden.");
+            }
+        } else if name == "Info" || name == "Optimize" {
+            self.status = format!("{name}: panel not yet implemented.");
+        } else {
+            self.status = format!("{name}: no docked panel in this shell.");
+        }
+    }
+
+    /// Window ▸ Hide Panels (the CS6 Tab key): fold/unfold the whole
+    /// right dock at once, leaving per-panel visibility untouched.
+    pub(crate) fn toggle_all_panels(&mut self) {
+        self.panels_hidden = !self.panels_hidden;
+        self.status = if self.panels_hidden {
+            "Panels hidden — press Tab or Window ▸ Hide Panels to show."
+        } else {
+            "Panels shown."
+        }
+        .to_owned();
+    }
+
+    /// Window ▸ Toolbars ▸ Main: the context options bar.
+    pub(crate) fn toggle_options_bar(&mut self) {
+        self.options_bar_hidden = !self.options_bar_hidden;
+        self.status = if self.options_bar_hidden {
+            "Main toolbar hidden."
+        } else {
+            "Main toolbar shown."
+        }
+        .to_owned();
     }
 
     /// Pages section: one selectable row per page.

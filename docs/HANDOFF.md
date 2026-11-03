@@ -29,7 +29,7 @@
   (`docs/planning/generated/dom-parity.md`, regenerate per §5.)
 - **Where the frontier is:** the *engine* is complete; the *shell* is
   not. A judge-panel audit (2026-10-31) found the engine's 243
-  commands reach only a fraction of the interface — **129 of 289 CS6
+  commands reach only a fraction of the interface — **120 of 289 CS6
   menu items still render `Action::Inert`** (derived —
   `cargo test -p app reachability_census -- --nocapture` prints it —
   and gated by `menus::tests::inert_count_never_rises`) — so the active program is
@@ -151,7 +151,7 @@ verifiable.
 
 **The engine is complete; the shell is not.** A judge-panel audit
 against Fireworks CS6 and Photopea found the structural gap: 243
-registered commands, **129 of 289 CS6 menu items still rendering
+registered commands, **120 of 289 CS6 menu items still rendering
 `Action::Inert`** (derived via `reachability_census`, gated by the
 ceiling test). The program is reachability and canvas competence,
 not repair.
@@ -168,7 +168,9 @@ one. Summary:
   (selection/mask) landed 2026-11-02 (`e9ece7d`, with the context
   menu and Lucide icons): inert 171 → 144; batch 2 (canvas dialogs,
   Duplicate/Clone) + 19b.1 (path-node add/delete) landed 2026-11-03
-  (`bf1b547`): inert → **129 of 289**.
+  (`bf1b547`): inert → 129 of 289; batch 3 (Window-menu panel
+  toggles — Hide Panels/Tab, Main toolbar, 7 docked panels) landed
+  2026-11-03: inert → **120 of 289**.
 - **19b**: path-node add/delete **DONE** (`bf1b547`); the
   wasm-budget re-pin **DONE** (2026-11-03: measured 21,235,599 B,
   ceiling moved to 21,500,000 with the dated cause — 19b.4). The

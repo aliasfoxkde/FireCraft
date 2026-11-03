@@ -121,6 +121,14 @@ pub struct Shell {
     /// position it opened at (the popup re-anchors there each frame,
     /// so a later pointer move does not drag it).
     pub(crate) context_menu: Option<Pos2>,
+    /// Window-menu panel visibility: names of right-dock panels the
+    /// user closed. Absent = shown (CS6 default is everything open).
+    panel_hidden: Vec<&'static str>,
+    /// Window ▸ Hide Panels (Tab): all right-dock panels folded at
+    /// once, independent of per-panel visibility.
+    panels_hidden: bool,
+    /// Window ▸ Toolbars ▸ Main: the context options bar is hidden.
+    options_bar_hidden: bool,
     /// The live egui context, stashed each frame so code outside the
     /// frame loop (the web bridge) can request a repaint after it
     /// mutates the shell — without one, a bridge-loaded document sat
@@ -177,6 +185,9 @@ impl Shell {
             grid_dialog: None,
             guide_draft: None,
             context_menu: None,
+            panel_hidden: Vec::new(),
+            panels_hidden: false,
+            options_bar_hidden: false,
             ctx: None,
         }
     }
@@ -646,6 +657,9 @@ impl Shell {
                 };
             }
             menus::ShellAction::ManageExtensions => self.open_extension_manager(),
+            menus::ShellAction::TogglePanel(name) => self.toggle_panel(name),
+            menus::ShellAction::ToggleHidePanels => self.toggle_all_panels(),
+            menus::ShellAction::ToggleMainToolbar => self.toggle_options_bar(),
             menus::ShellAction::Quit => self.close_requested = true,
             menus::ShellAction::Undo => match self.editor.undo() {
                 Ok(name) => self.status = format!("undid {name}"),
@@ -1266,15 +1280,19 @@ impl eframe::App for Shell {
         // detached options strip floating at the lower left — the CS6
         // and Photopea arrangement puts it in the right dock.
         egui::Panel::top(egui::Id::new("menu")).show(ui, |ui| self.menu_bar(ui));
-        egui::Panel::top(egui::Id::new("options")).show(ui, |ui| self.options_bar(ui));
+        if !self.options_bar_hidden {
+            egui::Panel::top(egui::Id::new("options")).show(ui, |ui| self.options_bar(ui));
+        }
         egui::Panel::left(egui::Id::new("tools"))
             .exact_size(34.0)
             .show(ui, |ui| self.tools_panel(ui));
-        egui::Panel::right(egui::Id::new("panels"))
-            .default_size(250.0)
-            .size_range(180.0..=460.0)
-            .resizable(true)
-            .show(ui, |ui| self.right_panels(ui));
+        if !self.panels_hidden {
+            egui::Panel::right(egui::Id::new("panels"))
+                .default_size(250.0)
+                .size_range(180.0..=460.0)
+                .resizable(true)
+                .show(ui, |ui| self.right_panels(ui));
+        }
         egui::Panel::bottom(egui::Id::new("status")).show(ui, |ui| {
             ui.horizontal(|ui| {
                 ui.label(&self.status);
@@ -1474,6 +1492,60 @@ mod tests {
             Tool::Pointer,
         )));
         assert_eq!(shell.editor.tool, Tool::Pointer);
+    }
+
+    /// Window-menu panel toggles: each docked panel hides and resur-
+    /// faces by name, Hide Panels folds the whole dock at once without
+    /// disturbing per-panel visibility, and the Main toolbar toggle is
+    /// independent. None of it touches the document journal.
+    #[test]
+    fn window_menu_toggles_panels() {
+        let mut shell = gui_shell(gui_editor());
+        let journal = shell.editor.session.journal_len();
+
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::TogglePanel(
+            "Layers",
+        )));
+        assert!(!shell.panel_shown("Layers"), "Layers hides");
+        assert!(shell.status.contains("Layers panel hidden"));
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::TogglePanel(
+            "Layers",
+        )));
+        assert!(shell.panel_shown("Layers"), "Layers resurfaces");
+
+        // A panel with no dock implementation reports, not crashes.
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::TogglePanel(
+            "Color Mixer",
+        )));
+        assert!(shell.status.contains("Color Mixer"));
+
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::TogglePanel(
+            "Properties",
+        )));
+        assert!(!shell.panel_shown("Properties"));
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::ToggleHidePanels));
+        assert!(shell.panels_hidden, "Hide Panels folds the dock");
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::ToggleHidePanels));
+        assert!(!shell.panels_hidden);
+        assert!(
+            !shell.panel_shown("Properties"),
+            "per-panel visibility survives the fold"
+        );
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::TogglePanel(
+            "Properties",
+        )));
+        assert!(shell.panel_shown("Properties"));
+
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::ToggleMainToolbar));
+        assert!(shell.options_bar_hidden);
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::ToggleMainToolbar));
+        assert!(!shell.options_bar_hidden);
+
+        assert_eq!(
+            shell.editor.session.journal_len(),
+            journal,
+            "panel toggles are view state, not document history"
+        );
     }
 
     /// The palette covers the whole registry: every catalog id is

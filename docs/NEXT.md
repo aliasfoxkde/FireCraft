@@ -221,7 +221,7 @@ of replacing it, fill/stroke swatch panel bound to
 Phase 19 batches 19.1–19.5 landed 2026-10-31 → 11-01: transform
 handles + Numeric Transform, Subselect path-node editing, the gradient
 fill editor, the command palette, and the grid/guides/snap set. The
-inert count is 129 of 289 items (was 190); 19.6 is the remaining
+inert count is 120 of 289 items (was 190); 19.6 is the remaining
 burn-down.
 
 ### Phase 19 — Canvas competence (P0, feeds usability directly)
@@ -251,9 +251,10 @@ burn-down.
   GAPS order (selection/mask → page/frame → symbol/animation → text);
   every wired item proven by a shell test through the journal. — **IN
   FLIGHT**: 190 → 178 (19.1) → 171 (19.5) → 144 (19.6 batch 1,
-  selection/mask) → **129 inert of 289 items** (19b.1 + batch 2 —
-  canvas dialogs, Duplicate/Clone; 2026-11-03). Next batch:
-  page/frame.
+  selection/mask) → 129 (19b.1 + batch 2 — canvas dialogs,
+  Duplicate/Clone; 2026-11-03) → **120 inert of 289 items** (batch 3 —
+  Window menu: Hide Panels/Tab, Main toolbar, and 7 docked-panel
+  toggles; 2026-11-03). Next batch: page/frame.
 
 ### Phase 19b — Follow-ups from the landed batches
 

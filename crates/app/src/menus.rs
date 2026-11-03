@@ -118,6 +118,12 @@ pub enum ShellAction {
     OnlineHelp,
     /// Help ▸ Manage Extensions… — the extension (script) manager.
     ManageExtensions,
+    /// Window ▸ (panel name) — toggle one right-dock panel.
+    TogglePanel(&'static str),
+    /// Window ▸ Hide Panels — fold/unfold the whole right dock.
+    ToggleHidePanels,
+    /// Window ▸ Toolbars ▸ Main — the context options bar.
+    ToggleMainToolbar,
 }
 
 /// Engine commands with a selection- or document-derived payload.
@@ -1215,33 +1221,82 @@ pub static FILTERS: Menu = Menu {
 };
 
 /// Window — the CS6 panel roster. Every name here is the authoritative
-/// panel list; toggles are inert while the layout is fixed.
+/// panel list; docked panels toggle their right-dock section, tools
+/// that have no panel yet report so instead of rendering inert.
 pub static WINDOW: Menu = Menu {
     label: "Window",
     entries: &[
         item(57648, "Duplicate Window", "", Action::Inert),
-        item(35298, "Hide Panels", "", Action::Inert),
+        item(
+            35298,
+            "Hide Panels",
+            "",
+            Action::Shell(ShellAction::ToggleHidePanels),
+        ),
         Entry::Sep,
         Entry::Sub("Extensions", &[item(35848, " ", "", Action::Inert)]),
         Entry::Sep,
-        Entry::Sub("Toolbars", &[item(35059, "Main", "", Action::Inert)]),
+        Entry::Sub(
+            "Toolbars",
+            &[item(
+                35059,
+                "Main",
+                "",
+                Action::Shell(ShellAction::ToggleMainToolbar),
+            )],
+        ),
         item(35058, "Tools", "", Action::Inert),
-        item(35586, "Properties", "", Action::Inert),
+        item(
+            35586,
+            "Properties",
+            "",
+            Action::Shell(ShellAction::TogglePanel("Properties")),
+        ),
         Entry::Sep,
         item(43409, "Optimize", "", Action::Inert),
-        item(43412, "Layers", "", Action::Inert),
+        item(
+            43412,
+            "Layers",
+            "",
+            Action::Shell(ShellAction::TogglePanel("Layers")),
+        ),
         Entry::Sep,
         item(45816, "Common Library", "", Action::Inert),
         Entry::Sep,
         item(49125, "CSS Properties", "", Action::Inert),
         Entry::Sep,
-        item(35798, "Pages", "", Action::Inert),
-        item(43410, "States", "", Action::Inert),
-        item(43418, "History", "", Action::Inert),
+        item(
+            35798,
+            "Pages",
+            "",
+            Action::Shell(ShellAction::TogglePanel("Pages")),
+        ),
+        item(
+            43410,
+            "States",
+            "",
+            Action::Shell(ShellAction::TogglePanel("States")),
+        ),
+        item(
+            43418,
+            "History",
+            "",
+            Action::Shell(ShellAction::TogglePanel("History")),
+        ),
         Entry::Sep,
         item(43422, "Auto Shapes", "", Action::Inert),
-        item(43415, "Styles", "", Action::Inert),
-        item(43416, "Document Library", "", Action::Inert),
+        item(
+            43415,
+            "Styles",
+            "",
+            Action::Shell(ShellAction::TogglePanel("Styles")),
+        ),
+        item(
+            43416,
+            "Document Library",
+            "",
+            Action::Shell(ShellAction::TogglePanel("Document Library")),
+        ),
         item(43414, "URL", "", Action::Inert),
         Entry::Sep,
         item(43405, "Color Mixer", "", Action::Inert),
@@ -1362,6 +1417,12 @@ pub static SHORTCUTS: &[Shortcut] = &[
     key(CTRL_SHIFT, egui::Key::R, Action::Shell(ShellAction::Export)),
     // The command palette: every registered engine command, one door.
     key(CTRL, egui::Key::P, Action::Shell(ShellAction::Palette)),
+    // Window ▸ Hide Panels — the CS6 Tab toggle.
+    key(
+        NONE,
+        egui::Key::Tab,
+        Action::Shell(ShellAction::ToggleHidePanels),
+    ),
     key(
         CTRL_SHIFT,
         egui::Key::X,
@@ -1589,6 +1650,9 @@ pub fn action_name(action: Action) -> String {
             ShellAction::CanvasColor => "Canvas Color".into(),
             ShellAction::OnlineHelp => "Online Help".into(),
             ShellAction::ManageExtensions => "Manage Extensions".into(),
+            ShellAction::TogglePanel(name) => format!("{name} panel"),
+            ShellAction::ToggleHidePanels => "Hide/show panels".into(),
+            ShellAction::ToggleMainToolbar => "Main toolbar".into(),
         },
         Action::Sel(sel) => match sel {
             SelAction::Delete => "Delete selection".into(),
@@ -1669,7 +1733,7 @@ mod tests {
     /// The highest inert-item count the docs have recorded. The
     /// `inert_count_never_rises` test refuses any regression above it;
     /// when the count falls, ratchet this down to the new number.
-    const INERT_CEILING: usize = 131;
+    const INERT_CEILING: usize = 120;
 
     fn walk(entries: &'static [Entry]) -> Vec<&'static Item> {
         let mut items = Vec::new();
@@ -1773,6 +1837,7 @@ mod tests {
     #[test]
     fn inert_count_never_rises() {
         let (total, inert) = census();
+        eprintln!("reachability: {inert} inert of {total} items");
         assert!(
             inert <= INERT_CEILING,
             "inert items rose to {inert} of {total} (ceiling {INERT_CEILING})"
