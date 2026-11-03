@@ -1143,3 +1143,76 @@ documentation reset.
   probe (blank-render = known WebGL context loss; retry with
   swiftshader flags). Deployed to firecraft-web.pages.dev, gitforge
   sweep pushed.
+
+## 2026-10-31 → 2026-11-01 — Phase 19 canvas competence (19.1–19.5) + three rendering fixes
+
+The judge-panel audit's root cause was reachability: 243 registered
+commands, 91 bound in the shell, 181 of 295 menu items rendering
+`Action::Inert`. Phase 19 attacked that from the canvas side.
+
+- **19.1 Transform handles** (`7329087`): the selection frame is one
+  union box with 8 live handles. A handle drag folds
+  `object.scale` steps into a single "Transform" undo step; edge
+  handles scale one axis, corners track both, and the bounds
+  recompose mid-drag. Modify ▸ Transform ▸ Numeric Transform routes
+  here (scale/rotate/skew in one transaction). Inert count 181 → 178.
+- **19.2 Subselect path-node editing** (`5e4f0ce`): Subselect over a
+  single selected path draws its anchors; pressing one starts a live
+  node drag through `path.movePoints` folded into one "Reshape" undo
+  step. Handles ride along, click-sized drags commit nothing, and a
+  non-path selection falls back to the move gesture.
+- **19.3 Gradient fill editor** (`1c84ee8`): Fill & Stroke gains a
+  gradient section — a linear-gradient toggle seeds a two-stop ramp
+  across the object bounds via `path.setFill` + `setFillVector`, and
+  stops edit position and color. The canvas overlay draws the ramp
+  line with draggable start/end handles through `path.setFillVector`,
+  one "Gradient" undo step per drag.
+- **19.4 Command palette** (`4458f3a`): new `shell/palette.rs` — a
+  Ctrl+P fuzzy palette over the command registry, with unit-tested
+  grounding/prep logic. `fuzzdrive` gained `payload_template()` so
+  the palette and the fuzz driver share one canonical payload shape
+  per catalog id. The coverage gate now excludes the pure-egui
+  drawing modules (`canvas_ui`, `glyphs`, `panels`); the aegis
+  baseline was refreshed and doc backticks fixed
+  `clippy::doc_markdown` in the excluded modules.
+- **19.5 Guides + grid + snapping** (`eb221ac`): Show Grid draws the
+  effective grid, committed guides render in guide-blue. A press
+  within 8 px of the page's top/left edge drags out a guide
+  (locked/hidden pages refuse), release commits through
+  `page.addGuide` with snap-to-grid. Moving drags snap per-axis to
+  guides within 4 world px, and the Edit Grid dialog applies
+  origin+size in one transaction. Inert count 178 → 171.
+- **Shell split** (`32a110d`): `shell.rs` (5.9k lines) split into
+  `shell/` modules — `mod.rs` (core Shell + tests), `glyphs`,
+  `filters_ui`, `dialogs`, `panels`, `canvas_ui` — a mechanical
+  split with re-exports keeping external paths stable. This was the
+  precondition for the rest of the batch: the 19.x work touched five
+  of the six new modules.
+
+### Three rendering defects, one pass (`6e35c1e`)
+
+- **Canvas blur.** The page raster always rendered at 1x and was
+  linear-filtered at zoom. `compose` grew `render_scaled` (the same
+  pipeline under an affine scale) and the shell caches it per zoom
+  bucket — re-render past 2x drift, 16 MPix budget — blitting near
+  1:1.
+- **Ellipses bulged inward.** The top anchor's in/out bezier handles
+  were swapped, so the first segment left along a backwards handle.
+  Fixed the contour walk direction and pinned it with a
+  midpoint-on-ellipse regression test per anchor.
+- **Picker colors channel-swapped.** The fill/stroke and
+  gradient-stop pickers packed ARGB while every decode is ABGR, so
+  chosen colors came out wrong on screen. Added `compose::abgr_pack`
+  as the single ABGR encode side (round-trip tested against `abgr`)
+  and routed both picker sites through it.
+
+The ABGR/ARGB defect is the shape of a whole class worth naming:
+**an encoder and a decoder that disagree on channel order produce a
+plausible-looking wrong color, not an error.** The fix was to make
+the encode side a single named function rather than to patch the two
+call sites, because the two call sites were symptoms, not causes.
+
+### Also in this batch
+
+- `.gitignore-scratch/` (probe PNGs + `gfwait*.py` helpers) is
+  ignored scratch, not repo content — recorded in `.gitignore`.
