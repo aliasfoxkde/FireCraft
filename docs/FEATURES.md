@@ -35,8 +35,9 @@ verbs.
 Surfaces that drive it:
 
 - **GUI** — the shell (`crates/app/src/shell/`); menus map CS6 menu
-  ids to actions (`crates/app/src/menus.rs`; 171 of 295 items still
-  render inert — the 19.6 burn-down is closing them), and the Ctrl+P
+  ids to actions (`crates/app/src/menus.rs`; 144 of 293 items still
+  render inert — the 19.6 burn-down is closing them, and the census
+  is test-gated), and the Ctrl+P
   command palette makes **every** registry command executable from
   the GUI regardless of menu state.
 - **CLI** (`firecraft-cli`) — every verb drivable headless.

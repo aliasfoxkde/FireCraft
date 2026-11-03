@@ -39,9 +39,7 @@ install -m 644 packaging/appimage/firecraft.desktop \
 {
     echo "FireCraft ${VERSION} is dual-licensed MIT OR Apache-2.0."
     echo
-    cat LICENSE-MIT
-    echo
-    cat LICENSE-APACHE
+    cat LICENSE
 } > "${STAGE}/usr/share/doc/firecraft/copyright"
 
 # No icon ships in-tree (asset rule: docs/ATTRIBUTION.md) — linuxdeploy

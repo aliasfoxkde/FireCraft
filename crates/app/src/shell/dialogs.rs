@@ -107,6 +107,21 @@ impl engine::platform::Dialogs for EnvDialogs {
     fn message(&self, title: &str, text: &str) {
         eprintln!("[firecraft] {title}: {text}");
     }
+
+    fn open_url(&self, url: &str) -> bool {
+        if url.split("://").next() == Some(url) || url.contains("://") {
+            // Best-effort desktop handoff; false when no launcher ran.
+            std::process::Command::new("xdg-open")
+                .arg(url)
+                .stdin(std::process::Stdio::null())
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .spawn()
+                .is_ok()
+        } else {
+            false
+        }
+    }
 }
 
 /// The export formats the dialog offers, in menu order. The index is

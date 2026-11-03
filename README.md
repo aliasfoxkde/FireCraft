@@ -1,5 +1,9 @@
 # FireCraft
 
+<p align="center">
+  <img src="docs/img/logo.svg" alt="FireCraft logo" width="128"/>
+</p>
+
 An open-source, clean-room reimplementation of Adobe Fireworks in pure Rust.
 
 FireCraft aims to replicate Adobe Fireworks CS6 — the beloved hybrid vector +
@@ -10,6 +14,14 @@ via OS decoders), and first-class Fireworks PNG (`.fw.png`) document support
 with full read/write fidelity. A WebAssembly build is a primary release
 target, alongside native desktop and headless CLI releases.
 
+<p align="center">
+  <a href="https://firecraft-web.pages.dev"><img src="docs/img/app-main.png" alt="FireCraft running in the desktop shell — the demo document with a gradient brand band, vector shapes, and type" width="880"/></a>
+</p>
+<p align="center"><em>FireCraft running the demo document
+(<code>docs/img/firecraft-demo.fw.png</code>, regenerable with
+<code>cargo run -p xtask -- hero-gen</code>) — gradient fills, vector
+shapes, and live type over the CS6-style graphite chrome.</em></p>
+
 > **Trademark notice:** Adobe, Fireworks, Photoshop, Illustrator, and
 > Macromedia are trademarks or registered trademarks of Adobe Inc. FireCraft
 > is an independent, open-source project and is not affiliated with,
@@ -18,7 +30,7 @@ target, alongside native desktop and headless CLI releases.
 
 ## Status
 
-**v0.2.3 released (2026-10-24).** All roadmap milestones (M0–M15) are
+**v0.2.4 released (2026-11-02).** All roadmap milestones (M0–M15) are
 closed and the post-roadmap CS6 DOM parity campaign is complete: the
 document model with full `.fw.png` read/write fidelity, a
 deterministic CPU compositor with golden-image gates, the vector and
@@ -63,7 +75,5 @@ cargo run -p firecraft-cli -- import photo.jpg doc.fw.png
 
 Dual-licensed under either of:
 
-- MIT license ([LICENSE-MIT](LICENSE-MIT))
-- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE))
-
-at your option.
+Dual-licensed (MIT OR Apache-2.0); the full texts of both live in
+[LICENSE](LICENSE) — use this project under either, at your option.

@@ -1216,3 +1216,70 @@ call sites, because the two call sites were symptoms, not causes.
 
 - `.gitignore-scratch/` (probe PNGs + `gfwait*.py` helpers) is
   ignored scratch, not repo content — recorded in `.gitignore`.
+
+## 2026-11-02 — v0.2.4 released; 19.6 batch 1, doc-audit corrections, reachability gate
+
+### v0.2.4 (`6c256bf`)
+
+19.6 selection/mask reachability batch + Lucide icons + context menu
+(`e9ece7d`), shipped with all 8 version stamps, changelog, release
+notes. See `releases/v0.2.4.md`.
+
+### Web session persistence
+
+The web shell now mirrors the canonical save bytes into
+localStorage on every mutation and restores them at startup; File ▸
+New clears the stored session. Refresh no longer loses the working
+document. Desktop gates green; the wasm path compiles through the
+same `webexport` bridge.
+
+### Reachability gate + inert-drift test (19b.2/19b.3, landed in a
+stronger form than planned)
+
+`menus::tests::inert_count_never_rises` derives the inert census
+from the `MENUBAR` table (no hand-maintained number) and refuses any
+rise above `INERT_CEILING`; `reachability_census` prints the live
+figure for the docs. Ceiling pinned at 144. Per-item tracking
+references (the original 19b.3 design) dropped — the gated count is
+the honest metric, and a newly inert row fails CI until the ceiling
+is deliberately re-pinned.
+
+### The derived truth: 293 items, 144 inert, 149 wired
+
+The docs said "171 of 295" — a hand-maintained figure that had
+drifted. The census test now derives it: **293 menu items total,
+144 inert, 149 wired**. The item total itself moved (295 → 293)
+because the count now comes from the table, not the RT_MENU
+transcription notes. All quoting docs (CLAUDE.md, HANDOFF, NEXT,
+PROGRESS, FEATURES, GAPS) updated to the derived figure.
+
+### Doc audit punch list (background agent, all dispositioned)
+
+- **Version stamps corrected**: v0.2.3 → v0.2.4 in CLAUDE.md,
+  HANDOFF ship-state, PROGRESS (released row + milestone table).
+- **GAPS.md**: §2 state snapshot refreshed to measured values
+  (128,967 Rust lines, 67 decision docs, floors 81.0/78.5 from
+  `coverage.rs`); §15 "Next action: Phase 11.4/11.5" replaced with a
+  superseded-pointer to NEXT.md; the 190-of-265 evidence line marked
+  as audit-time.
+- **NEXT.md**: 14.1 residuals verified covered and closed (styles.rs
+  battery, replay test, nine-slice toggles); 16.1–16.4 marked done
+  per decision 0067 (16.2 an honest refusal — eframe web discards
+  accesskit); 18.2–18.4 marked done after verifying the banners,
+  TOOLCHAINS/RELEASING content, and the CLAUDE.md status line.
+- **ROADMAP M16/M17**: marked *unplanned — superseded* with a
+  pointer to NEXT.md Phases 19–21, resolving the contradiction with
+  PROGRESS/HANDOFF ("M0–M15 all closed").
+- **Web bundle over ceiling**: the working tree measures
+  **15,245,342 B** against the 14,000,000 `WASM_SIZE_CEILING`
+  (`xtask/src/dist.rs:30`) — the Phase 19 shell work grew the
+  bundle past the budget. 19b.4 re-pin required before the next
+  release; `xtask dist --web` is the authority (it enforces the
+  budget and runs the bridge smoke).
+
+### Lesson
+
+Point-in-time counts quoted in prose rot; derived-and-gated counts
+do not. The inert figure had been quoted by hand in seven files and
+drifted in all of them. The fix was not more careful quoting — it
+was a test that prints the number and refuses regressions in it.

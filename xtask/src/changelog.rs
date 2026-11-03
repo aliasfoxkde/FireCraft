@@ -117,9 +117,9 @@ fn generate() -> Result<(String, usize), String> {
     Ok((doc, total))
 }
 
-/// The dual claim against the actual license files: `LICENSE` states
-/// the OR, `LICENSE-MIT`/`LICENSE-APACHE` are the real texts, and the
-/// workspace manifest carries the SPDX identifier.
+/// The dual claim against the combined license file: `LICENSE` states
+/// the OR and carries both full texts; the workspace manifest carries
+/// the SPDX identifier.
 fn verify_licenses() -> Result<(), String> {
     let lic = std::fs::read_to_string(workspace_root().join("LICENSE"))
         .map_err(|e| format!("read LICENSE: {e}"))?;
@@ -129,16 +129,6 @@ fn verify_licenses() -> Result<(), String> {
                 "LICENSE no longer states the dual claim ({needle} missing)"
             ));
         }
-    }
-    let mit = std::fs::read_to_string(workspace_root().join("LICENSE-MIT"))
-        .map_err(|e| format!("read LICENSE-MIT: {e}"))?;
-    if !mit.starts_with("MIT License") {
-        return Err("LICENSE-MIT is not the MIT license text".to_owned());
-    }
-    let apache = std::fs::read_to_string(workspace_root().join("LICENSE-APACHE"))
-        .map_err(|e| format!("read LICENSE-APACHE: {e}"))?;
-    if !apache.contains("Version 2.0, January 2004") {
-        return Err("LICENSE-APACHE is not the Apache-2.0 license text".to_owned());
     }
     Ok(())
 }

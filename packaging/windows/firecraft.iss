@@ -15,7 +15,7 @@ OutputBaseFilename=firecraft-__APPVERSION__-windows-x86_64-setup
 Compression=lzma2
 SolidCompression=yes
 ArchitecturesInstallIn64BitMode=x64compatible
-LicenseFile=..\..\LICENSE-MIT
+LicenseFile=..\..\LICENSE
 UninstallDisplayIcon={app}\bin\firecraft.exe
 
 [Files]

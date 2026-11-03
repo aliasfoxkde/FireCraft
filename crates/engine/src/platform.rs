@@ -46,6 +46,13 @@ pub trait Dialogs {
 
     /// Shows an informational message.
     fn message(&self, title: &str, text: &str);
+
+    /// Opens a URL in the platform's viewer; `false` when the
+    /// platform cannot (the caller then shows the URL as text).
+    fn open_url(&self, url: &str) -> bool {
+        let _ = url;
+        false
+    }
 }
 
 /// Clipboard text access.

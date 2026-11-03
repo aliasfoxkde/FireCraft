@@ -19,6 +19,7 @@ mod dist;
 mod floor;
 mod fuzz;
 mod golden;
+mod hero;
 mod layers;
 mod library;
 mod perf;
@@ -33,7 +34,7 @@ mod webgolden;
 
 use std::process::ExitCode;
 
-const USAGE: &str = "usage: cargo run -p xtask -- <ci [--full]|ci-no-fmt|aegis|coverage [--bless|--measure]|layers|wasm|corpus [--report]|corpus-gen|library-gen|styles-gen|scripts|floor|golden [--bless]|svg-golden [--bless]|svg-roundtrip [--measure]|web-golden [--bless|--measure]|perf [--bless|--measure]|dist --web|--native|fuzz|fuzz-quick|panic-hunt|parity|scorecard>";
+const USAGE: &str = "usage: cargo run -p xtask -- <ci [--full]|ci-no-fmt|aegis|coverage [--bless|--measure]|layers|wasm|corpus [--report]|corpus-gen|library-gen|hero-gen|styles-gen|scripts|floor|golden [--bless]|svg-golden [--bless]|svg-roundtrip [--measure]|web-golden [--bless|--measure]|perf [--bless|--measure]|dist --web|--native|fuzz|fuzz-quick|panic-hunt|parity|scorecard>";
 
 /// Run Aegis scan with the committed production-profile baseline.
 /// Runs from the workspace root so the baseline path (.aegis-baseline.json)
@@ -104,6 +105,7 @@ fn main() -> ExitCode {
         Some("corpus-gen") => finish("corpus-gen", corpus::gen_fixtures()),
         Some("floor") => finish("floor", floor::run()),
         Some("library-gen") => finish("library-gen", library::run()),
+        Some("hero-gen") => finish("hero-gen", hero::run()),
         Some("styles-gen") => finish("styles-gen", styles::run()),
         Some("scripts") => finish("scripts", scripts::run()),
         Some("golden") => match std::env::args().nth(2).as_deref() {

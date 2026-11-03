@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <linearGradient id="brand" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#E87A2E"/>
+      <stop offset="1" stop-color="#2F6FD8"/>
+    </linearGradient>
+  </defs>
+  <!-- rounded-square badge -->
+  <rect x="4" y="4" width="120" height="120" rx="24" fill="url(#brand)"/>
+  <!-- stylized pen-nib spark: the FireCraft mark -->
+  <path d="M64 24 L88 48 L76 48 L76 88 L52 88 L52 48 L40 48 Z"
+        fill="#F4F1EA"/>
+  <circle cx="64" cy="72" r="8" fill="#2B313D"/>
+</svg>

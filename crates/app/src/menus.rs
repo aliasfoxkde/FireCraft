@@ -109,6 +109,10 @@ pub enum ShellAction {
     /// Select ▸ Feather… — the feather-radius dialog over the pixel
     /// selection.
     FeatherDialog,
+    /// Help ▸ Online Help — opens the project wiki in the browser.
+    OnlineHelp,
+    /// Help ▸ Manage Extensions… — the extension (script) manager.
+    ManageExtensions,
 }
 
 /// Engine commands with a selection- or document-derived payload.
@@ -1069,8 +1073,18 @@ pub static COMMANDS: Menu = Menu {
     label: "Commands",
     entries: &[
         item(35386, "Manage Saved Commands...", "", Action::Inert),
-        item(35590, "Manage Extensions...", "", Action::Inert),
-        item(35319, "Run Script...", "", Action::Inert),
+        item(
+            35590,
+            "Manage Extensions...",
+            "",
+            Action::Shell(ShellAction::ManageExtensions),
+        ),
+        item(
+            35319,
+            "Run Script...",
+            "",
+            Action::Shell(ShellAction::ManageExtensions),
+        ),
         Entry::Sep,
     ],
 };
@@ -1208,30 +1222,19 @@ pub static WINDOW: Menu = Menu {
 pub static HELP: Menu = Menu {
     label: "Help",
     entries: &[
-        item(57667, "Fireworks Help", "", Action::Inert),
+        item(57667, "Online Help", "", Action::Shell(ShellAction::OnlineHelp)),
         item(
             0,
             "Keyboard Shortcuts\tF1",
             "",
             Action::Shell(ShellAction::ShowShortcuts),
         ),
-        item(35323, "Fireworks Support Center", "", Action::Inert),
         Entry::Sep,
-        item(
-            7028,
-            "Adobe Product Improvement Program...",
-            "",
-            Action::Inert,
-        ),
-        Entry::Sep,
-        item(7013, "Fireworks Exchange", "", Action::Inert),
-        item(35637, "Manage Extensions...", "", Action::Inert),
-        Entry::Sep,
-        item(35580, "Adobe Online Forums", "", Action::Inert),
+        item(35637, "Manage Extensions...", "", Action::Shell(ShellAction::ManageExtensions)),
         Entry::Sep,
         item(
             57664,
-            "About Fireworks...",
+            "About FireCraft...",
             "",
             Action::Shell(ShellAction::About),
         ),
@@ -1534,6 +1537,8 @@ pub fn action_name(action: Action) -> String {
             ShellAction::ToggleSnapToGuides => "Snap to guides".into(),
             ShellAction::ClearGuides => "Clear guides".into(),
             ShellAction::FeatherDialog => "Feather selection".into(),
+            ShellAction::OnlineHelp => "Online Help".into(),
+            ShellAction::ManageExtensions => "Manage Extensions".into(),
         },
         Action::Sel(sel) => match sel {
             SelAction::Delete => "Delete selection".into(),
@@ -1607,6 +1612,11 @@ pub fn action_name(action: Action) -> String {
 #[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 mod tests {
     use super::*;
+
+    /// The highest inert-item count the docs have recorded. The
+    /// `inert_count_never_rises` test refuses any regression above it;
+    /// when the count falls, ratchet this down to the new number.
+    const INERT_CEILING: usize = 144;
 
     fn walk(entries: &'static [Entry]) -> Vec<&'static Item> {
         let mut items = Vec::new();
@@ -1686,6 +1696,47 @@ mod tests {
                 "{name} does not resolve"
             );
         }
+    }
+
+    /// (total items, inert items) over the whole bar.
+    fn census() -> (usize, usize) {
+        let mut total = 0usize;
+        let mut inert = 0usize;
+        for menu in MENUBAR {
+            for item in walk(menu.entries) {
+                total += 1;
+                if matches!(item.action, Action::Inert) {
+                    inert += 1;
+                }
+            }
+        }
+        (total, inert)
+    }
+
+    /// The reachability ceiling: the bar's inert count may fall but
+    /// never rise. The docs quote this number, so it is derived here
+    /// rather than maintained by hand — a new inert row is a
+    /// regression the test refuses.
+    #[test]
+    fn inert_count_never_rises() {
+        let (total, inert) = census();
+        assert!(
+            inert <= INERT_CEILING,
+            "inert items rose to {inert} of {total} (ceiling {INERT_CEILING})"
+        );
+    }
+
+    /// The item total is pinned exactly: it is the CS6 surface the
+    /// transcription carries, and the docs quote it alongside the
+    /// inert count. A change here means the surface changed —
+    /// update the docs in the same change.
+    #[test]
+    fn menu_item_total_is_pinned() {
+        let (total, _) = census();
+        assert_eq!(
+            total, 293,
+            "menu item total changed — update the docs that quote it"
+        );
     }
 
     /// Every item carries a label and (except the placeholder Font row

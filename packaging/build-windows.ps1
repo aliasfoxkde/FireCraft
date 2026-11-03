@@ -43,8 +43,7 @@ $Lic = "$Stage\firecraft-$Version\share\licenses"
 New-Item -ItemType Directory -Force -Path $Bin, $Lic | Out-Null
 Copy-Item "target\$Target\release\firecraft.exe" $Bin
 Copy-Item "target\$Target\release\firecraft-cli.exe" $Bin
-Copy-Item LICENSE-MIT "$Lic\LICENSE-MIT"
-Copy-Item LICENSE-APACHE "$Lic\LICENSE-APACHE"
+Copy-Item LICENSE "$Lic\LICENSE"
 
 Write-Host "==> portable zip $Portable"
 Compress-Archive -Path "$Stage\firecraft-$Version" -DestinationPath $Portable -Force

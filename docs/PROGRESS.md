@@ -26,12 +26,11 @@
   (ARGB packed where ABGR is decoded — fixed by making
   `compose::abgr_pack` the single encode side).
 - **Released:** v0.2.0 + **v0.2.1** + **v0.2.2** + **v0.2.3**
-  (2026-10-24), repo public. v0.2.3 shipped: Phase 11.4 pixel
-  selection (marquee/ellipse/lasso/polygonal/wand + marching ants,
-  adjustPixelSel, moveSelectionMaskBy), brush/eraser hardening,
-  fwpng tile-decode fixes, lossy-WebP CLI plumbing. Web bundle live
-  at <https://firecraft-web.pages.dev> (v0.2.3). Notes:
-  [`releases/v0.2.3.md`](releases/v0.2.3.md).
+  (2026-10-24) + **v0.2.4** (2026-11-02, `6c256bf`), repo public.
+  v0.2.4 shipped: 19.6 selection/mask reachability, Lucide icons,
+  canvas context menu, web session persistence. Web bundle live
+  at <https://firecraft-web.pages.dev>. Notes:
+  [`releases/v0.2.4.md`](releases/v0.2.4.md).
 - **Web file doors closed (2026-10-31):** picker `accept` covers
   every sniffed format; drag-and-drop loads through the same
   `load_document_bytes` door (`dfd7f46`); sink is `Rc` +
@@ -53,9 +52,11 @@
   (excludes `target/` / `web/dist/` / `fuzz/`).
 - **Roadmap:** M0–M15 **all closed**; the post-roadmap DOM parity
   campaign is **complete** (no M families). Decision docs 0001–0067.
-- **Menu reachability:** 295 CS6 menu items; **171 render inert**.
-  The count fell 181 → 178 (19.1) → 171 (19.5). 19.6 burns it down
-  in family batches.
+- **Menu reachability:** 293 CS6 menu items; **144 render inert**
+  (149 wired). The count fell 181 → 178 (19.1) → 171 (19.5) → 144
+  (19.6 batch 1, selection/mask). The census is derived from the
+  menu table and gated (`menus::tests::inert_count_never_rises`);
+  19.6 burns it down in family batches.
 - **WebP:** import since M8; `.webp` export is VP8L lossless by default.
   Native builds can opt into lossy VP8 via `--quality N` (feature
   `lossy-webp`).
@@ -85,6 +86,7 @@
 | — | **v0.2.1 released** | 2026-10-15 | web bridge + repaint + honest smoke fix |
 | — | **v0.2.2 released** | 2026-10-19 | AVIF/HEIC decisions, WebOS dry-run, smoke budget, 54 tests |
 | — | **v0.2.3 released** | 2026-10-24 | Phase 11.4 pixel selection + marching ants, paint/IO batch, CI image re-ship |
+| — | **v0.2.4 released** | 2026-11-02 | 19.6 selection/mask reachability, Lucide icons, context menu, web session persistence |
 
 ## Post-roadmap parity campaign (the current work)
 
@@ -146,6 +148,7 @@
 | #139 | 19.4 command palette (Ctrl+P) over `engine::catalog::ids()` + fuzz-shared payload templates | 4458f3a | 100% registry coverage |
 | #140 | 19.5 grid + guides overlays, drag-out guides, snap-to, Edit Grid dialog | eb221ac | inert 178 → 171 |
 | #141 | rendering fixes: crisp zoom (`compose::render_scaled`), ellipse shape, ABGR picker colors | 6e35c1e | — (defects) |
+| #142 | 19.6 batch 1: selection/mask reachability, context menu, Lucide icons, web session persistence | e9ece7d | inert 171 → 144 |
 
 **Campaign complete** (2026-10-14): no remaining M families; the
 Phase 9 debt list closed the same day (#126–#132). The 3 P rows are
@@ -166,7 +169,7 @@ the shell-reachability program, not parity rows.
 | ~~Path→image rasterizer (filterSelection on non-image selection)~~ **DONE** — landed in #130 (decision 0059) | 8.8 bake family | #110 (decision 0040) |
 | Out-of-bounds effect growth (bake clips to the image surface) — **evidence-gated**: the live render already grows (compose applies kernels canvas-spanning, M14); the destructive bake clips by settled posture (0031/0040/0059). Reopening needs a CS6 filter/flatten bounds oracle (Wine corpus) — any growth rule without one is invented | tile-bank growth parity | #110 (decision 0040) |
 | ~~Shared-layer link-resolution render~~ **DONE** — landed in #131 (decision 0060) | shared layers render empty | #93 (decision 0022) |
-| 171 inert CS6 menu items (295 items total) — **open**, burn-down in family batches (selection/mask → page/frame → symbol/animation → text); 19.6 | daily-driver reachability | NEXT.md 19.6 |
+| 144 inert CS6 menu items (293 items total) — **open**, burn-down in family batches (selection/mask done → page/frame → symbol/animation → text); 19.6 | daily-driver reachability | NEXT.md 19.6 |
 
 ## Parity timeline
 

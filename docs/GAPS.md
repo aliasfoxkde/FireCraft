@@ -37,13 +37,14 @@ UI. After the Tier-1 batch (Phases 8–10 and the Phase 16 slice) the
 shell reaches 72; after Phase 11's paint family it reaches 77;
 166 commands (68%) are still unreachable.**
 
-> **Note (2026-11-01):** the reachability picture above is a
+> **Note (2026-11-02):** the reachability picture above is a
 > point-in-time audit snapshot. The command palette (19.4,
 > `4458f3a`) makes **every** registry command executable from the
-> GUI, and the inert count has fallen 190 → 171 of 295 menu items
-> (19.1–19.5). The family table below is superseded by
-> [`NEXT.md`](NEXT.md) Phases 19–21 as the work list; this file's
-> phases remain useful as per-family detail.
+> GUI, and the inert count has fallen 190 → **144 of 293** menu
+> items (19.1–19.6 batch 1; derived + gated by
+> `menus::tests::inert_count_never_rises`). The family table below is
+> superseded by [`NEXT.md`](NEXT.md) Phases 19–21 as the work list;
+> this file's phases remain useful as per-family detail.
 
 ```
 $ comm -23 <(engine::catalog::ids()) <(command names in crates/app/src)
@@ -68,8 +69,9 @@ $ comm -23 <(engine::catalog::ids()) <(command names in crates/app/src)
 
 Supporting evidence:
 
-- **190 of 265 CS6 menu items render disabled** (`Action::Inert`,
-  `crates/app/src/menus.rs`). The shell refuses to pretend.
+- **190 of 265 CS6 menu items rendered disabled** (`Action::Inert`,
+  `crates/app/src/menus.rs`) **at audit time** — now 144 of 293, and
+  the census is test-gated. The shell refuses to pretend.
 - **The app could not open a raster image.** *(fixed 2026-10-21)*
   `File > Open` called `Editor::open` → `app_cli::io::open`, which
   parses only a Fireworks PNG (`mkTS` node tree) and rejected
@@ -107,17 +109,21 @@ Supporting evidence:
 
 ## 2. State snapshot
 
+Point-in-time snapshot **2026-11-02** (post-v0.2.4). Counts marked
+*live* have an authoritative source that supersedes this table.
+
 | Dimension | Status | Notes |
 |---|---|---|
-| **Shipped** | v0.2.2 on GitHub (5 assets) | ✅ |
-| **CI** | GitHub Actions: `fmt` (fast) + `gate` (`xtask ci-no-fmt`) | ✅ |
+| **Shipped** | v0.2.4 on GitHub (2026-11-02) | ✅ |
+| **CI** | GitHub Actions: `fmt` (fast) + `gate` (`xtask ci-no-fmt`); GitForge 7-job pipeline | ✅ |
 | **aegis** | Baseline clean; scan 0.17 s | `.aegisignore` excludes `target/`, `web/dist/`, `fuzz/` |
-| **Coverage** | 80.3 % lines / 78.0 % funcs (floor 60 %) | Local `llvm-cov` fails on stale artifacts; CI works |
-| **Code** | 110,928 Rust lines | No `unwrap()`/`panic!()` outside `#[cfg(test)]`; no `todo!`/`unimplemented!` |
-| **Registry** | 243 commands | 77 reachable from the UI (54 at audit time) — **the gap** |
+| **Coverage** | floors 81.0 % lines / 78.5 % funcs (`xtask/src/coverage.rs`) | Local `llvm-cov` fails on stale artifacts; CI works |
+| **Code** | 128,967 Rust lines | No `unwrap()`/`panic!()` outside `#[cfg(test)]`; no `todo!`/`unimplemented!` |
+| **Registry** | 243 commands | Every command executable from the GUI via the Ctrl+P palette (19.4); menu reachability is the remaining gap |
+| **Menu reachability** | 144 inert of 293 items | *live* — derived + gated (`menus::tests::inert_count_never_rises`) |
 | **Parity** | 268 C / 3 P / 0 M / 85 N | 3 P rows are evidence-gated (Phase 12 oracle) |
-| **Decision docs** | 66 (0001–0066) | Next: 0067 |
-| **Web bundle** | 12,778,687 B (ceiling 14,000,000) | Re-measure if it grows >1 MB |
+| **Decision docs** | 67 (0001–0067) | Next: 0068 |
+| **Web bundle** | 15,245,342 B (ceiling 14,000,000) | **Over ceiling** — 19b.4 re-pin with evidence before the next release |
 
 ---
 
@@ -390,15 +396,14 @@ model.
 
 ## 15. Next action
 
-**Phase 11.4 / 11.5 — the pixel-selection tools and the pixel-edit
-surfaces.** The paint family is in: the tool strip, the strokes and
-the brush slots landed in Phase 11. What is still missing is the
-*selection* side of the raster tools — CS6's marquee, ellipse, lasso,
-polygon and wand, and the pixel edits that ride on a selection
-(`bitmap.feather`, `bitmap.movePixels`,
-`bitmap.moveSelectionMaskBy`, `bitmap.setPixelMask`,
-`bitmap.adjustPixelSel`). The engine commands all exist; they need a
-tool strip row, canvas drags and a panel that shows the mask.
+**Superseded (2026-11-02).** This file's phase sections (§3–§15) were
+the work plan through the parity campaign; Phases 8–13 landed (see
+[`PROGRESS.md`](PROGRESS.md)), and the active work list is
+[`NEXT.md`](NEXT.md) — Phase 19.6 inert-menu burn-down (144 of 293
+items remaining, selection/mask batch landed), then the daily-driver
+features (Phase 20) and differentiators (Phase 21). The per-family
+detail above remains useful as historical evidence; do not take a
+task from this file without checking NEXT.md first.
 
 ---
 

@@ -216,13 +216,21 @@ selection model (modifier arithmetic, feather, edges), brush/eraser/
 retouch engine depth, path redraw/freeform/reshape/scrubber, gradients,
 style model. **Gate:** interaction suite + oracle diffs green.
 
-## M16 — Panel & document parity
+## M16 — Panel & document parity *(unplanned — superseded)*
 Complete panel set (Optimize, Color Mixer, Swatches, Styles, Info,
 Behaviors, Align, Auto Shape/Path panels, onion skinning) and document
 surfaces (shared layers, nested pages, state animation model).
 **Gate:** structure tests pin every panel against the extracted tables.
 
-## M17 — Automation parity
+> **Status (2026-11-02):** M16/M17 were never ticketed; the campaign
+> closed at M15 and the daily-driver work (panels, animation, text
+> depth) now lives in [`docs/NEXT.md`](../../NEXT.md) Phases 19–21 as
+> owner-driven batches rather than milestone tickets. These two
+> entries remain as the original intent record — do not start them as
+> M-tickets; fold their content into NEXT.md when the corresponding
+> owner feature lands.
+
+## M17 — Automation parity *(unplanned — superseded)*
 89/89 shipped `.jsf` scripts headless (floor rises from 19), the full
 `fw`/`dom` API surface from the RE'd inventory, batch processing and the
 Project Log. **Gate:** script-corpus floor at 89, byte-exact DOM effects.

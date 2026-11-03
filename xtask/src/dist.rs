@@ -269,10 +269,8 @@ fn stage_archive(
     std::fs::create_dir_all(&bin).map_err(|e| format!("mkdir {}: {e}", root.display()))?;
     let licenses = root.join("share/licenses");
     std::fs::create_dir_all(&licenses).map_err(|e| format!("mkdir {licenses:?}: {e}"))?;
-    for name in ["LICENSE-MIT", "LICENSE-APACHE"] {
-        std::fs::copy(workspace_root().join(name), licenses.join(name))
-            .map_err(|e| format!("copy {name}: {e}"))?;
-    }
+    std::fs::copy(workspace_root().join("LICENSE"), licenses.join("LICENSE"))
+        .map_err(|e| format!("copy LICENSE: {e}"))?;
     for (rel, source) in files {
         let target = root.join(rel);
         std::fs::copy(source, &target).map_err(|e| format!("stage {rel}: {e}"))?;
@@ -396,13 +394,11 @@ fn build_deb(
          FireCraft is dual-licensed under the MIT License and the Apache\n\
          License 2.0 (SPDX-License-Identifier: MIT OR Apache-2.0).\n",
     );
-    for name in ["LICENSE-MIT", "LICENSE-APACHE"] {
-        copyright.push_str(&format!("\n----- {name} -----\n"));
-        copyright.push_str(
-            &std::fs::read_to_string(workspace_root().join(name))
-                .map_err(|e| format!("read {name}: {e}"))?,
-        );
-    }
+    copyright.push_str("\n----- full license text -----\n");
+    copyright.push_str(
+        &std::fs::read_to_string(workspace_root().join("LICENSE"))
+            .map_err(|e| format!("read LICENSE: {e}"))?,
+    );
     std::fs::write(doc.join("copyright"), copyright)
         .map_err(|e| format!("write copyright: {e}"))?;
     // dpkg-deb refuses setgid on the control directory (and the NAS

@@ -11,7 +11,8 @@
 
 ## 1. State snapshot (2026-11-01)
 
-- **Ship state:** v0.2.3 released (2026-10-24); repo public. Desktop
+- **Ship state:** v0.2.4 released (2026-11-02, `6c256bf` — stamps +
+  changelog + notes); repo public. Desktop
   + CLI + web bundle + deb all cut from `xtask dist`. The web bundle
   is live at <https://firecraft-web.pages.dev> (Cloudflare Pages,
   direct upload — deploy door in §6).
@@ -28,8 +29,9 @@
   (`docs/planning/generated/dom-parity.md`, regenerate per §5.)
 - **Where the frontier is:** the *engine* is complete; the *shell* is
   not. A judge-panel audit (2026-10-31) found the engine's 243
-  commands reach only a fraction of the interface — **171 of 295 CS6
-  menu items still render `Action::Inert`** — so the active program is
+  commands reach only a fraction of the interface — **144 of 293 CS6
+  menu items still render `Action::Inert`** (derived, gated by
+  `menus::tests::inert_count_never_rises`) — so the active program is
   **reachability and canvas competence**, i.e. `docs/NEXT.md`
   Phases 19–21 (19.1–19.5 landed: transform handles, path-node
   editing, gradient editor, command palette, grid/guides/snap; 19.6
@@ -148,7 +150,7 @@ verifiable.
 
 **The engine is complete; the shell is not.** A judge-panel audit
 against Fireworks CS6 and Photopea found the structural gap: 243
-registered commands, **171 of 295 CS6 menu items still rendering
+registered commands, **144 of 293 CS6 menu items still rendering
 `Action::Inert`**. The program is reachability and canvas competence,
 not repair.
 
@@ -160,9 +162,14 @@ one. Summary:
   Numeric Transform, Subselect path-node editing, gradient fill
   editor, command palette, grid/guides/snap. Inert count 181 → 171.
 - **19.6 IN FLIGHT**: the inert-menu burn-down, in family batches
-  (selection/mask → page/frame → symbol/animation → text).
-- **19b open**: path-node add/delete, the reachability gate, the
-  inert-drift test, the wasm-budget re-pin.
+  (selection/mask → page/frame → symbol/animation → text). Batch 1
+  (selection/mask) landed 2026-11-02 (`e9ece7d`, with the context
+  menu and Lucide icons): inert 171 → **144 of 293**.
+- **19b open**: path-node add/delete, the wasm-budget re-pin (the
+  working tree measures 15.2 MB against the 14 MB ceiling — verify
+  with `xtask dist web` before the next release). The reachability
+  gate and inert-drift test landed 2026-11-02
+  (`menus::tests::inert_count_never_rises` + the derived census).
 - **20 / 21 queued**: daily-driver features (in-canvas text, Optimize
   panel, animation timeline, mask stack, tabs, history rewind, slice
   behaviors) and differentiators (autosave, HiDPI, palette v2,

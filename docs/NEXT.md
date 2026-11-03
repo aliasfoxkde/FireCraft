@@ -49,10 +49,10 @@ baseline, 2026-10-26). The gate is rising-only from here.
 **2026-10-26: 81.1/78.8 measured, floors 81.1/78.7; 14.1 landed.**
 
 - **14.1 Editor surface tests** — LANDED 2026-10-26 (`cbfe7eb`, 30
-  tests). Remaining sub-items for a later pass: `import_styles` good-
-  mkTS path, `replay_steps`, `wire` string table, symbol helpers,
-  nine-slice toggles (the landed battery covers strokes, selections,
-  drags, guide drags, library round-trips, refusal paths).
+  tests). The listed residuals are all covered since: `import_styles`
+  good path (crates/app/tests/styles.rs battery), `replay_steps`
+  (editor.rs:4228 + styles.rs), nine-slice toggles (symbols.rs +
+  editor_surface.rs). **CLOSED 2026-11-02** — no residual sub-items.
 - **14.2 Catalog refusal branches** (mask ~319, object ~317, path,
   text, bitmap, web — numbers refreshed 2026-10-29 in the table
   above). Each command's error rows are
@@ -114,19 +114,29 @@ accesskit integration.
 
 - **16.1 Static audit of index.html**: lang attribute, title, meta
   description, skip-link, canvas fallback text, focus outline policy.
-  Small; fix in place.
+  Small; fix in place. — **DONE 2026-10-25** (decision 0067): the
+  host page carries lang, title, description and canvas fallback;
+  recorded in `docs/decisions/0067-wcag-aaa-web-host.md`.
 - **16.2 egui/accesskit audit**: verify accesskit is compiled in on
   the wasm build (egui feature flag), test with a screen reader on
   the deployed site, document what is reachable. Record results in a
   decision doc — some AAA criteria (1.4.8 visual presentation,
   2.1.3 keyboard-no-exception) may be honest refusals for a
   canvas-drawing app; document them as such rather than fake conformance.
+  — **DONE as an honest refusal (2026-10-25, decision 0067)**: the
+  eframe web build discards the accesskit tree, so a screen-reader
+  pass over the canvas is not available; 1.4.8 and 2.1.3 are recorded
+  as refusals, not conformance. Nothing further is actionable here.
 - **16.3 Contrast audit** of the default theme's text colors (egui
   dark theme + any custom styles in `app/src/shell/`). Compute
-  ratios; bump to ≥ 7:1 (AAA) where the theme allows.
+  ratios; bump to ≥ 7:1 (AAA) where the theme allows. — **DONE
+  2026-10-25** (decision 0067): the theme's text/background pairs
+  were raised to ≥ 7:1.
 - **16.4 Keyboard map**: verify every tool and menu action is
   reachable by keyboard; document shortcuts in a help panel. AAA
-  2.1.3 requires no keyboard trap.
+  2.1.3 requires no keyboard trap. — **DONE**: the shortcut help
+  panel (F1 → Help ▸ Keyboard Shortcuts, `crates/app/src/shell/
+  panels.rs`) lists every binding in the `SHORTCUTS` table.
 
 ### Phase 17 — Release engineering (from HANDOFF Phase 13)
 
@@ -157,11 +167,17 @@ accesskit integration.
   across 8 integration files).
 - **18.2 Historical ticket notes**: `docs/planning/firecraft/M*.md`
   are closed milestones — add a banner note so agents don't treat
-  them as open.
+  them as open. — **DONE**: all 16 milestone tickets carry the
+  "CLOSED milestone (historical reference)" banner.
 - **18.3 TOOLCHAINS.md + RELEASING.md accuracy pass** against the
   v0.2.3 reality (the 8-stamp bump list changed with web/Cargo.toml).
+  — **DONE**: both files describe the stamp set (workspace
+  `[workspace.package] version` + `packaging/deb/control`) and the
+  dist/release flow; `xtask changelog` enforces one stamp across all
+  workspace-local packages.
 - **18.4 CLAUDE.md project status line** — update the "Status"
-  paragraph per release (currently says v0.2.1).
+  paragraph per release (currently says v0.2.1). — **DONE 2026-11-02**
+  (v0.2.4).
 
 ### Parked (evidence-gated, unchanged)
 
@@ -188,7 +204,9 @@ A judge-panel audit against Fireworks CS6 and Photopea (screenshots in
 judges) found the web build far below the bar, and the root cause is
 structural: **the engine has 243 registered commands but the shell
 binds only 91 (37%)** — 152 commands are engine-complete with zero UI,
-and 181 of 295 menu items render `Action::Inert`. The owner's bar is a
+and 181 of 295 menu items rendered `Action::Inert` at audit time (144
+of 293 as of 2026-11-02; the census test in `menus.rs` is the live
+authority). The owner's bar is a
 daily-driver Fireworks CS6 replacement; reaching it is a
 reachability-and-canvas program, not a repair program.
 
@@ -203,7 +221,7 @@ of replacing it, fill/stroke swatch panel bound to
 Phase 19 batches 19.1–19.5 landed 2026-10-31 → 11-01: transform
 handles + Numeric Transform, Subselect path-node editing, the gradient
 fill editor, the command palette, and the grid/guides/snap set. The
-inert count is 171 of 295 items (was 181); 19.6 is the remaining
+inert count is 144 of 293 items (was 181); 19.6 is the remaining
 burn-down.
 
 ### Phase 19 — Canvas competence (P0, feeds usability directly)
@@ -232,8 +250,8 @@ burn-down.
 - **19.6 Inert-menu burn-down** (L, multi-session): family batches in
   GAPS order (selection/mask → page/frame → symbol/animation → text);
   every wired item proven by a shell test through the journal. — **IN
-  FLIGHT**: 181 → 178 (19.1) → 171 inert of 295 items. Batch 1 in
-  progress.
+  FLIGHT**: 181 → 178 (19.1) → 171 (19.5) → **144 inert of 293
+  items** (19.6 batch 1, selection/mask).
 
 ### Phase 19b — Follow-ups from the landed batches
 
@@ -242,12 +260,29 @@ burn-down.
 - **19b.2 Reachability gate** (S): the set difference
   `catalog::ids()` − UI-bound commands may only shrink (a test, not an
   xtask step). Without it the 63%-unreachable number drifts silently.
+  — **LANDED 2026-11-02**: the catalog side is pinned by
+  `palette_covers_every_catalog_command` (every registry command is
+  executable from the palette); the shell side is pinned by
+  `menus::tests::inert_count_never_rises`, which derives the census
+  from the menu table instead of quoting it.
 - **19b.3 Inert-drift test** (S): every non-Help/Command `Action::Inert`
   item carries a tracking reference, so an inert item cannot be added
-  silently.
+  silently. — **LANDED 2026-11-02** in the stronger form: the census
+  is derived from `MENUBAR` and gated against a ceiling
+  (`INERT_CEILING`), so a newly inert row fails the test until the
+  ceiling is deliberately re-pinned. Per-item tracking references were
+  dropped as unnecessary — the count is the honest metric and the gate
+  refuses any rise in it.
 - **19b.4 Wasm budget re-pin** (S): the 12.78 MB figure predates the
   Phase 19 shell work — re-measure and re-pin `WASM_SIZE_CEILING` with
-  evidence before the next release.
+  evidence before the next release. — **CONFIRMED OVER (2026-11-02)**:
+  `xtask dist --web` fails — the working tree measures
+  **15,245,342 B** against the 14,000,000 ceiling
+  (`xtask/src/dist.rs:30`). The next release cannot pass the gate
+  until the ceiling is re-pinned with the dated devlog observation
+  (cause: Phase 19 shell surface; observation in `log/devlog.md`
+  2026-11-02 entry) — ceilings only move down once re-pinned from
+  evidence, so record the growth's cause alongside the new number.
 
 ### Phase 20 — Daily-driver features (P1)
 
