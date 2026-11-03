@@ -2598,15 +2598,43 @@ impl Editor {
         true
     }
 
-    /// The topmost live object in the edited cell hit by `world` — the
-    /// definition's cell in symbol scope, the page cell otherwise.
-    /// Every geometry kind hits (paths by contours, text and slices by
-    /// frame, images by location, groups and symbol instances by their
-    /// content bounds); groups hit as wholes.
+    /// The topmost live object under `world` — the definition's cell
+    /// in symbol scope; on the page, every visible layer of the
+    /// current frame (CS6 picks through layers; the topmost layer
+    /// wins). Hidden layers (`display` off or the frame's visibility
+    /// flag) and locked cells are unpickable; groups hit as wholes.
     #[must_use]
     pub fn hit_at(&self, world: geom::Point) -> Option<ObjectId> {
-        let cell = self.editing_cell()?;
-        let candidates: Vec<ObjectId> = cell.elements.iter().copied().rev().collect();
+        let candidates: Vec<ObjectId> = match self.editing_definition() {
+            Some(_) => self
+                .editing_cell()?
+                .elements
+                .iter()
+                .copied()
+                .rev()
+                .collect(),
+            None => {
+                let page = self.document().pages.get(self.page)?;
+                let mut ids = Vec::new();
+                for layer in page.layers.layers.iter().rev() {
+                    if !layer.display {
+                        continue;
+                    }
+                    if let Some(flags) = &layer.visibility_per_frame
+                        && !flags.get(self.frame).copied().unwrap_or(true)
+                    {
+                        continue;
+                    }
+                    if let Some(cell) = layer.cells.get(self.frame)
+                        && cell.visible
+                        && !cell.locked
+                    {
+                        ids.extend(cell.elements.iter().rev().copied());
+                    }
+                }
+                ids
+            }
+        };
         candidates.into_iter().find(|id| {
             self.document()
                 .registry
@@ -2662,6 +2690,16 @@ impl Editor {
             return Ok(());
         }
         self.apply("selection.set", serde_json::json!({ "ids": ids }))
+    }
+
+    /// Pulls the document's object selection back into the view. The
+    /// reverse of [`Self::sync_selection`]: commands like
+    /// `selection.selectParents` rewrite
+    /// `Document::object_selection` directly, and the view's
+    /// selection state would otherwise go stale.
+    pub fn adopt_document_selection(&mut self) {
+        let ids = self.document().object_selection.clone();
+        self.set_selection(ids);
     }
 
     /// The two operands for `path.boolean`: the live pair ordered
@@ -3020,7 +3058,12 @@ mod tests {
         editor.begin_drag(geom::Point::new(x, y));
         editor.drag_to(geom::Point::new(x + 40.0, y + 20.0));
         editor.end_drag().unwrap();
-        editor.current_cell().unwrap().elements[0]
+        *editor
+            .current_cell()
+            .unwrap()
+            .elements
+            .last()
+            .expect("the creation drag made an object")
     }
 
     fn first_anchor(editor: &Editor, id: doc::ObjectId) -> (f64, f64) {
@@ -3451,6 +3494,84 @@ mod tests {
         let id = rect_at(&mut editor, 10.0, 10.0);
         assert_eq!(editor.hit_at(geom::Point::new(30.0, 20.0)), Some(id));
         assert_eq!(editor.hit_at(geom::Point::new(200.0, 200.0)), None);
+    }
+
+    /// CS6 picks through layers: the pointer hits an object on any
+    /// visible layer of the frame, topmost layer first. A hidden
+    /// layer and a locked cell are unpickable.
+    #[test]
+    fn hit_at_picks_through_layers() {
+        let mut editor = Editor::untitled();
+        // Two layers: 0 holds the rect, 1 is the active one.
+        editor
+            .apply("layer.add", serde_json::json!({ "page": 0 }))
+            .unwrap();
+        let lower = rect_at(&mut editor, 10.0, 10.0);
+        editor.set_active_layer(1);
+        let upper = rect_at(&mut editor, 60.0, 10.0);
+        assert_ne!(lower, upper);
+
+        // A point over the lower layer's rect still hits it — the
+        // active layer's own cell is empty there.
+        assert_eq!(editor.hit_at(geom::Point::new(30.0, 20.0)), Some(lower));
+
+        // Overlapping objects: the topmost layer wins.
+        let over = rect_at(&mut editor, 10.0, 10.0);
+        assert_eq!(editor.hit_at(geom::Point::new(30.0, 20.0)), Some(over));
+
+        // A hidden layer is unpickable, a locked cell too.
+        editor
+            .apply(
+                "layer.setDisplay",
+                serde_json::json!({ "page": 0, "layer": 1, "display": false }),
+            )
+            .unwrap();
+        assert_eq!(editor.hit_at(geom::Point::new(30.0, 20.0)), Some(lower));
+
+        editor
+            .apply(
+                "layer.setDisplay",
+                serde_json::json!({ "page": 0, "layer": 1, "display": true }),
+            )
+            .unwrap();
+        editor
+            .apply(
+                "layer.setLocked",
+                serde_json::json!({ "page": 0, "layer": 1, "frame": 0, "locked": true }),
+            )
+            .unwrap();
+        assert_eq!(editor.hit_at(geom::Point::new(30.0, 20.0)), Some(lower));
+    }
+
+    /// A picked cross-layer object is selectable and movable: the
+    /// selection verbs act on it even though it lives on a layer
+    /// other than the active one.
+    #[test]
+    fn a_cross_layer_selection_is_movable() {
+        let mut editor = Editor::untitled();
+        editor
+            .apply("layer.add", serde_json::json!({ "page": 0 }))
+            .unwrap();
+        let lower = rect_at(&mut editor, 10.0, 10.0);
+        editor.set_active_layer(1);
+
+        // The pointer picks the lower layer's object.
+        assert_eq!(editor.select_at(geom::Point::new(30.0, 20.0)), Some(lower));
+        editor.sync_selection().unwrap();
+        assert_eq!(
+            editor.document().object_selection,
+            vec![lower],
+            "the document carries the cross-layer selection"
+        );
+
+        // Dragging it moves it — the gesture does not need the object
+        // to sit on the active layer.
+        editor
+            .begin_move_drag(geom::Point::new(30.0, 20.0), vec![lower])
+            .unwrap();
+        editor.drag_to(geom::Point::new(40.0, 30.0));
+        editor.end_drag().unwrap();
+        assert_eq!(first_anchor(&editor, lower), (20.0, 20.0));
     }
 
     #[test]

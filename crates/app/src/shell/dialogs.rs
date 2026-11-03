@@ -57,6 +57,21 @@ impl Default for NumericTransformDialog {
     }
 }
 
+/// The Feather dialog's field — Select ▸ Feather…: softens the active
+/// pixel selection's edge by a radius in pixels (1..=64, the engine's
+/// kernel cap).
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct FeatherDialog {
+    /// Feather radius in pixels.
+    pub radius: u8,
+}
+
+impl Default for FeatherDialog {
+    fn default() -> Self {
+        Self { radius: 2 }
+    }
+}
+
 /// Desktop file routing for v1: the open/save path comes from
 /// `FIRECRAFT_DOC` (default `untitled.fw.png` in the working
 /// directory), messages go to stderr. No dialog library yet — the
@@ -643,6 +658,48 @@ impl Shell {
             }
         });
         self.numeric_transform = Some(dialog);
+    }
+
+    /// The Feather dialog: the radius slider over the active pixel
+    /// selection. OK applies `bitmap.feather` and closes; Cancel
+    /// closes without touching the document.
+    pub(super) fn feather_dialog_ui(&mut self, ui: &mut egui::Ui) {
+        let Some(dialog) = self.feather.take() else {
+            return;
+        };
+        let mut radius = f32::from(dialog.radius);
+        let mut apply = false;
+        ui.add(egui::Slider::new(&mut radius, 1.0..=64.0).text("feather radius"));
+        let dialog = FeatherDialog {
+            radius: radius.round().clamp(1.0, 64.0) as u8,
+        };
+        ui.separator();
+        ui.horizontal(|ui| {
+            apply |= ui.button("OK").clicked();
+            if ui.button("Cancel").clicked() {
+                self.feather = None;
+                self.status = "feather cancelled".to_owned();
+            }
+        });
+        if apply {
+            self.feather = None;
+            self.apply_feather(dialog.radius);
+            return;
+        }
+        self.feather = Some(dialog);
+    }
+
+    /// Applies the feather radius to the active pixel selection and
+    /// records the radius as the next dialog's default. The dialog
+    /// closes either way — a refusal lands on the status line.
+    pub(super) fn apply_feather(&mut self, radius: u8) {
+        self.feather = None;
+        if let Err(error) = self.editor.feather_selection(radius) {
+            self.status = format!("feather failed: {error}");
+            return;
+        }
+        self.editor.feather_radius = radius;
+        self.status = format!("feathered selection by {radius}px");
     }
 
     /// Composes scale → rotate → skew about the selection bounds
