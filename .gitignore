@@ -12,6 +12,8 @@
 # Runtime scratch (per AGENTS.md: plan/ and log/ are untracked handoff state)
 /plan/
 /log/
+# Probe artifacts + throwaway helper scripts (headless-probe PNGs, gfwait*.py)
+/.gitignore-scratch/
 # Real Fireworks files never enter the repo; generated fixtures/ and
 # MANIFEST.tsv are tracked.
 /corpus/incoming/
