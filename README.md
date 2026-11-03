@@ -54,7 +54,7 @@ partial (evidence-gated) / 0 missing**.
 ### Roadmap — daily-driver expansion (docs/NEXT.md, Phases 19–21)
 
 1. **Reachability** (in flight): the engine binds 245 commands but the
-   shell still leaves ~120 of 289 CS6 menu items inert; the burn-down
+   shell still leaves ~114 of 289 CS6 menu items inert; the burn-down
    (`menus::tests::inert_count_never_rises` is the gate) continues with
    page/frame verbs next.
 2. **Daily-driver features**: live text editing on canvas, Optimize

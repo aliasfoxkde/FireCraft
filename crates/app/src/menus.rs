@@ -44,6 +44,24 @@ pub enum Action {
     /// its filter registry — the static `RT_MENU` resource carries only
     /// Repeat Filter — and `FireCraft` mirrors exactly that.
     Filter(&'static str),
+    /// A page-scoped document verb (canvas/rotation family); the
+    /// payload derives from the active page, not the selection.
+    Document(DocumentAction),
+}
+
+/// Page-scoped document verbs — Modify ▸ Canvas and friends. Each
+/// maps to one registry command whose payload names the active page.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DocumentAction {
+    /// `document.setDocumentCanvasSizeToDocumentExtents` — shrink the
+    /// canvas to hug all page content (CS6's Trim Canvas).
+    TrimCanvas,
+    /// `document.setDocumentCanvasSizeToSelection` — canvas hugs the
+    /// selection's extents (CS6's Fit Canvas).
+    FitCanvas,
+    /// `document.rotate` — rotate the page clockwise by degrees
+    /// (90/180/270 only; CS6's 90° CCW is 270 CW).
+    Rotate(i64),
 }
 
 /// Shell-level behaviors — plumbing that never goes through the engine.
@@ -143,6 +161,9 @@ pub enum SelAction {
     NewLayer,
     /// `page.add` appended.
     NewPage,
+    /// `frame.add` — one empty state appended after the current one
+    /// (CS6's Insert ▸ State).
+    NewFrame,
     /// `symbol.breakApart` on the selection.
     BreakApart,
     /// `object.setVisible` false on the selection.
@@ -389,7 +410,7 @@ pub static EDIT: Menu = Menu {
                 item(35582, "Bitmap Via Cut", "", Action::Inert),
                 Entry::Sep,
                 item(35309, "Layer", "", Action::Sel(SelAction::NewLayer)),
-                item(35301, "State", "", Action::Inert),
+                item(35301, "State", "", Action::Sel(SelAction::NewFrame)),
                 item(35809, "Page", "", Action::Sel(SelAction::NewPage)),
             ],
         ),
@@ -699,12 +720,37 @@ pub static MODIFY: Menu = Menu {
                     Action::Shell(ShellAction::CanvasColor),
                 ),
                 Entry::Sep,
-                item(35250, "Trim Canvas", "", Action::Inert),
-                item(35574, "Fit Canvas", "", Action::Inert),
+                item(
+                    35250,
+                    "Trim Canvas",
+                    "",
+                    Action::Document(DocumentAction::TrimCanvas),
+                ),
+                item(
+                    35574,
+                    "Fit Canvas",
+                    "",
+                    Action::Document(DocumentAction::FitCanvas),
+                ),
                 Entry::Sep,
-                item(35348, "Rotate 180°", "", Action::Inert),
-                item(35349, "Rotate 90° CW", "", Action::Inert),
-                item(35350, "Rotate 90° CCW", "", Action::Inert),
+                item(
+                    35348,
+                    "Rotate 180°",
+                    "",
+                    Action::Document(DocumentAction::Rotate(180)),
+                ),
+                item(
+                    35349,
+                    "Rotate 90° CW",
+                    "",
+                    Action::Document(DocumentAction::Rotate(90)),
+                ),
+                item(
+                    35350,
+                    "Rotate 90° CCW",
+                    "",
+                    Action::Document(DocumentAction::Rotate(270)),
+                ),
             ],
         ),
         Entry::Sep,
@@ -1664,6 +1710,7 @@ pub fn action_name(action: Action) -> String {
             SelAction::NewSymbol => "New symbol".into(),
             SelAction::NewLayer => "New layer".into(),
             SelAction::NewPage => "New page".into(),
+            SelAction::NewFrame => "New state".into(),
             SelAction::BreakApart => "Break apart".into(),
             SelAction::Hide => "Hide selection".into(),
             SelAction::LockSelection => "Lock selection".into(),
@@ -1722,6 +1769,11 @@ pub fn action_name(action: Action) -> String {
         Action::TextSize(_) => "Text size".into(),
         Action::TextFlag(flag) => format!("Text {flag}"),
         Action::Filter(preset) => format!("Filter: {preset}"),
+        Action::Document(document) => match document {
+            DocumentAction::TrimCanvas => "Trim canvas to content".into(),
+            DocumentAction::FitCanvas => "Fit canvas to selection".into(),
+            DocumentAction::Rotate(deg) => format!("Rotate document {deg}° CW"),
+        },
     }
 }
 
@@ -1733,7 +1785,7 @@ mod tests {
     /// The highest inert-item count the docs have recorded. The
     /// `inert_count_never_rises` test refuses any regression above it;
     /// when the count falls, ratchet this down to the new number.
-    const INERT_CEILING: usize = 120;
+    const INERT_CEILING: usize = 114;
 
     fn walk(entries: &'static [Entry]) -> Vec<&'static Item> {
         let mut items = Vec::new();

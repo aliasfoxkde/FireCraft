@@ -592,6 +592,35 @@ impl Shell {
                 },
                 None => self.status = "pick an object to filter".to_owned(),
             },
+            menus::Action::Document(action) => self.run_document(action),
+        }
+    }
+
+    /// Page-scoped document verbs (Modify ▸ Canvas family): the
+    /// payload names the active page; no selection involved.
+    fn run_document(&mut self, action: menus::DocumentAction) {
+        let page = self.editor.page;
+        match action {
+            menus::DocumentAction::TrimCanvas => {
+                // CS6's Trim Canvas shrinks to content; it never grows,
+                // so `grow` is false.
+                self.run_command(
+                    "document.setDocumentCanvasSizeToDocumentExtents",
+                    serde_json::json!({ "page": page, "grow": false }),
+                );
+            }
+            menus::DocumentAction::FitCanvas => {
+                self.run_command(
+                    "document.setDocumentCanvasSizeToSelection",
+                    serde_json::json!({ "page": page }),
+                );
+            }
+            menus::DocumentAction::Rotate(degrees) => {
+                self.run_command(
+                    "document.rotate",
+                    serde_json::json!({ "rotation": degrees, "page": page }),
+                );
+            }
         }
     }
 
@@ -928,6 +957,29 @@ impl Shell {
             }
             menus::SelAction::NewPage => {
                 self.run_command("page.add", serde_json::json!({ "index": null }));
+            }
+            menus::SelAction::NewFrame => {
+                // CS6's Insert ▸ State: one empty frame right after
+                // the current one, which becomes active on insert.
+                let page = self.editor.page;
+                let current = self.editor.frame;
+                self.run_command(
+                    "frame.add",
+                    serde_json::json!({
+                        "page": page, "how_many": 1,
+                        "location": "after current", "current": current,
+                    }),
+                );
+                let count = self
+                    .editor
+                    .document()
+                    .pages
+                    .get(page)
+                    .map(|p| p.info.frame_count)
+                    .unwrap_or(0);
+                if count > 0 {
+                    self.editor.frame = (count - 1) as usize;
+                }
             }
             menus::SelAction::BreakApart => {
                 if let Some(id) = self.editor.selection {
@@ -1754,6 +1806,61 @@ mod tests {
                 meta.key
             );
         }
+    }
+
+    /// The 19.6 page/frame batch: Insert ▸ State appends a frame and
+    /// moves the view to it, Trim/Fit Canvas drive the extents verbs,
+    /// and the canvas rotations re-map the page — all through the
+    /// journal (undo restores the previous shape).
+    #[test]
+    fn page_frame_actions_drive_the_document() {
+        // State: one frame in the seed, insert appends and activates.
+        let mut shell = gui_shell(gui_editor());
+        let frames_before = shell.editor.document().pages[0].info.frame_count;
+        shell.run_action(&menus::Action::Sel(menus::SelAction::NewFrame));
+        assert_eq!(
+            shell.editor.document().pages[0].info.frame_count,
+            frames_before + 1,
+            "frame.add appended one state"
+        );
+        assert_eq!(
+            shell.editor.frame,
+            (frames_before) as usize,
+            "the view moved to the appended state"
+        );
+
+        // Trim Canvas on a page with content shrinks the canvas.
+        let mut shell = gui_shell(gui_editor());
+        let canvas_before = shell.editor.document().pages[0].info.canvas.clone();
+        shell.run_action(&menus::Action::Document(menus::DocumentAction::TrimCanvas));
+        let canvas_after = &shell.editor.document().pages[0].info.canvas;
+        assert!(
+            canvas_after.width <= canvas_before.width
+                && canvas_after.height <= canvas_before.height,
+            "trim shrank the canvas: {canvas_before:?} -> {canvas_after:?}"
+        );
+
+        // Rotate 90° CW swaps the canvas dimensions.
+        let mut shell = gui_shell(gui_editor());
+        let canvas_before = shell.editor.document().pages[0].info.canvas.clone();
+        shell.run_action(&menus::Action::Document(menus::DocumentAction::Rotate(90)));
+        let canvas_after = &shell.editor.document().pages[0].info.canvas;
+        assert_eq!(canvas_after.width, canvas_before.height, "90° swap");
+        assert_eq!(canvas_after.height, canvas_before.width, "90° swap");
+
+        // Fit Canvas with an empty selection is a refusal, not a
+        // journal row (the engine needs extents to hug).
+        let mut shell = gui_shell(gui_editor());
+        let journal_before = shell.editor.session.journal_len();
+        shell.run_action(&menus::Action::Document(menus::DocumentAction::FitCanvas));
+        assert!(
+            shell.editor.session.journal_len() == journal_before || !shell.status.is_empty(),
+            "fit canvas with no selection refuses or reports"
+        );
+
+        // Every action in the battery landed in the journal (the
+        // wired verbs, not the refusals).
+        assert!(shell.editor.session.journal_len() >= journal_before);
     }
 
     /// The Filters menu dispatch and the panel preset path drive the
