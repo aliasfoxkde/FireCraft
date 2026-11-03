@@ -19,7 +19,7 @@
 | Surface | State | Evidence |
 |---|---|---|
 | Fireworks PNG format | Complete | `crates/fwpng`, `crates/doc/src/fwmap.rs`; node tree round-trips |
-| Engine command registry | **243 commands** | `engine::catalog::ids()` — 243 |
+| Engine command registry | **245 commands** | `engine::catalog::ids()` — 245 as of 2026-11-03 |
 | CS6 DOM verb parity | **268 C / 3 P / 0 M / 85 N** | `docs/planning/generated/dom-parity.md` (356 verbs) |
 | ExtendScript host | Complete | `crates/scripting` — runs the CS6 `.jsf` corpus headless |
 | Web bridge | Exposes **all** commands | `web/src/main.rs` — `apply(name, payload)` |
@@ -40,8 +40,8 @@ shell reaches 72; after Phase 11's paint family it reaches 77;
 > **Note (2026-11-02):** the reachability picture above is a
 > point-in-time audit snapshot. The command palette (19.4,
 > `4458f3a`) makes **every** registry command executable from the
-> GUI, and the inert count has fallen 190 → **144 of 293** menu
-> items (19.1–19.6 batch 1; derived + gated by
+> GUI, and the inert count has fallen 190 → **129 of 289** menu
+> items (19.1–19.6 batch 1 + 19b.1/batch 2; derived + gated by
 > `menus::tests::inert_count_never_rises`). The family table below is
 > superseded by [`NEXT.md`](NEXT.md) Phases 19–21 as the work list;
 > this file's phases remain useful as per-family detail.
@@ -70,7 +70,7 @@ $ comm -23 <(engine::catalog::ids()) <(command names in crates/app/src)
 Supporting evidence:
 
 - **190 of 265 CS6 menu items rendered disabled** (`Action::Inert`,
-  `crates/app/src/menus.rs`) **at audit time** — now 144 of 293, and
+  `crates/app/src/menus.rs`) **at audit time** — now 129 of 289, and
   the census is test-gated. The shell refuses to pretend.
 - **The app could not open a raster image.** *(fixed 2026-10-21)*
   `File > Open` called `Editor::open` → `app_cli::io::open`, which
@@ -119,8 +119,8 @@ Point-in-time snapshot **2026-11-02** (post-v0.2.4). Counts marked
 | **aegis** | Baseline clean; scan 0.17 s | `.aegisignore` excludes `target/`, `web/dist/`, `fuzz/` |
 | **Coverage** | floors 81.0 % lines / 78.5 % funcs (`xtask/src/coverage.rs`) | Local `llvm-cov` fails on stale artifacts; CI works |
 | **Code** | 128,967 Rust lines | No `unwrap()`/`panic!()` outside `#[cfg(test)]`; no `todo!`/`unimplemented!` |
-| **Registry** | 243 commands | Every command executable from the GUI via the Ctrl+P palette (19.4); menu reachability is the remaining gap |
-| **Menu reachability** | 144 inert of 293 items | *live* — derived + gated (`menus::tests::inert_count_never_rises`) |
+| **Registry** | 245 commands | Every command executable from the GUI via the Ctrl+P palette (19.4); menu reachability is the remaining gap |
+| **Menu reachability** | 129 inert of 289 items | *live* — derived + gated (`menus::tests::inert_count_never_rises`) |
 | **Parity** | 268 C / 3 P / 0 M / 85 N | 3 P rows are evidence-gated (Phase 12 oracle) |
 | **Decision docs** | 67 (0001–0067) | Next: 0068 |
 | **Web bundle** | 21,235,599 B (ceiling 21,500,000) | Re-pinned 2026-11-03 (19b.4, dated observation; 19.x shell growth) |
@@ -399,7 +399,7 @@ model.
 **Superseded (2026-11-02).** This file's phase sections (§3–§15) were
 the work plan through the parity campaign; Phases 8–13 landed (see
 [`PROGRESS.md`](PROGRESS.md)), and the active work list is
-[`NEXT.md`](NEXT.md) — Phase 19.6 inert-menu burn-down (144 of 293
+[`NEXT.md`](NEXT.md) — Phase 19.6 inert-menu burn-down (129 of 289
 items remaining, selection/mask batch landed), then the daily-driver
 features (Phase 20) and differentiators (Phase 21). The per-family
 detail above remains useful as historical evidence; do not take a

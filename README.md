@@ -37,7 +37,7 @@ deterministic CPU compositor with golden-image gates, the vector and
 bitmap tool surface (including the paint family and pixel selection),
 text, symbols, scripting (`.jsf`), and import/export (SVG, PSD, GIF,
 WebP, and the rest of the raster matrix). The command registry
-carries **243 commands** (`engine::catalog::ids()` is the live
+carries **245 commands** (`engine::catalog::ids()` is the live
 authority); the CS6 DOM parity matrix stands at **268 carried / 3
 partial (evidence-gated) / 0 missing**.
 

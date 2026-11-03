@@ -221,7 +221,7 @@ of replacing it, fill/stroke swatch panel bound to
 Phase 19 batches 19.1–19.5 landed 2026-10-31 → 11-01: transform
 handles + Numeric Transform, Subselect path-node editing, the gradient
 fill editor, the command palette, and the grid/guides/snap set. The
-inert count is 144 of 293 items (was 181); 19.6 is the remaining
+inert count is 129 of 289 items (was 190); 19.6 is the remaining
 burn-down.
 
 ### Phase 19 — Canvas competence (P0, feeds usability directly)
@@ -250,8 +250,10 @@ burn-down.
 - **19.6 Inert-menu burn-down** (L, multi-session): family batches in
   GAPS order (selection/mask → page/frame → symbol/animation → text);
   every wired item proven by a shell test through the journal. — **IN
-  FLIGHT**: 181 → 178 (19.1) → 171 (19.5) → **144 inert of 293
-  items** (19.6 batch 1, selection/mask).
+  FLIGHT**: 190 → 178 (19.1) → 171 (19.5) → 144 (19.6 batch 1,
+  selection/mask) → **129 inert of 289 items** (19b.1 + batch 2 —
+  canvas dialogs, Duplicate/Clone; 2026-11-03). Next batch:
+  page/frame.
 
 ### Phase 19b — Follow-ups from the landed batches
 
@@ -367,8 +369,8 @@ burn-down.
 
 | Fact | Value |
 |---|---|
-| Live site | <https://firecraft-web.pages.dev> (v0.2.3) |
-| Latest release | v0.2.3 (2026-10-24) |
+| Live site | <https://firecraft-web.pages.dev> (v0.2.5 pending deploy) |
+| Latest release | v0.2.5 (2026-11-03) |
 | Coverage floors | 81.1% lines / 78.7% functions (rising-only; `xtask/src/coverage.rs`) |
 | CI image | `firecraft-ci-rust:1` — rebuild + re-ship when ANY lockfile moves |
 | GitForge API | 127.0.0.1:42780, bearer via `~/.config/gitforge/mkinney-credentials.env` |
