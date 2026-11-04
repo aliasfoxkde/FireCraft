@@ -222,6 +222,28 @@ pub enum ShellAction {
     /// batch processor, templates, e-mail). The message names the gap
     /// plainly instead of the row sitting inert.
     ReportGap(&'static str),
+    /// Edit ▸ Insert ▸ Hotspot / Rectangular Slice / Polygon Slice /
+    /// New Button…: insert a web object or button definition sized to
+    /// the selection bounds (canvas center when nothing is selected).
+    /// The polygon variant traces the selection's rectangle (CS6 asks
+    /// for the vertices interactively — the drag tool does that).
+    InsertWeb {
+        /// What to insert.
+        what: InsertWebKind,
+    },
+}
+
+/// What Edit ▸ Insert lands on the canvas.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum InsertWebKind {
+    /// A link-only hotspot area (`hotspot.create`).
+    Hotspot,
+    /// A bounding-box slice (`slice.create`).
+    RectSlice,
+    /// A polygon slice (`slice.create`, polygon shape).
+    PolygonSlice,
+    /// A multi-state button definition (`library.add`, button type).
+    Button,
 }
 
 /// Engine commands with a selection- or document-derived payload.
@@ -674,7 +696,14 @@ pub static EDIT: Menu = Menu {
         Entry::Sub(
             "Insert",
             &[
-                item(35191, "New Button...", "", Action::Inert),
+                item(
+                    35191,
+                    "New Button...",
+                    "",
+                    Action::Shell(ShellAction::InsertWeb {
+                        what: InsertWebKind::Button,
+                    }),
+                ),
                 item(
                     35195,
                     "New Symbol...",
@@ -682,9 +711,30 @@ pub static EDIT: Menu = Menu {
                     Action::Sel(SelAction::NewSymbol),
                 ),
                 Entry::Sep,
-                item(35179, "Hotspot", "", Action::Inert),
-                item(35237, "Rectangular Slice", "", Action::Inert),
-                item(35786, "Polygon Slice", "", Action::Inert),
+                item(
+                    35179,
+                    "Hotspot",
+                    "",
+                    Action::Shell(ShellAction::InsertWeb {
+                        what: InsertWebKind::Hotspot,
+                    }),
+                ),
+                item(
+                    35237,
+                    "Rectangular Slice",
+                    "",
+                    Action::Shell(ShellAction::InsertWeb {
+                        what: InsertWebKind::RectSlice,
+                    }),
+                ),
+                item(
+                    35786,
+                    "Polygon Slice",
+                    "",
+                    Action::Shell(ShellAction::InsertWeb {
+                        what: InsertWebKind::PolygonSlice,
+                    }),
+                ),
                 Entry::Sep,
                 item(
                     35180,
@@ -710,12 +760,33 @@ pub static EDIT: Menu = Menu {
                 item(35809, "Page", "", Action::Sel(SelAction::NewPage)),
             ],
         ),
-        item(43402, "Find and Replace...", "", Action::Inert),
+        item(
+            43402,
+            "Find and Replace...",
+            "",
+            Action::Shell(ShellAction::ReportGap(
+                "Find and Replace needs the text-search service, which this build does not ship",
+            )),
+        ),
         Entry::Sep,
         item(57635, "Cut", "Ctrl+X", Action::Shell(ShellAction::Cut)),
         item(57634, "Copy", "Ctrl+C", Action::Shell(ShellAction::Copy)),
-        item(35411, "Copy as Vectors", "", Action::Inert),
-        item(35415, "Copy HTML Code...", "", Action::Inert),
+        item(
+            35411,
+            "Copy as Vectors",
+            "",
+            Action::Shell(ShellAction::ReportGap(
+                "Copy as Vectors needs the vector-clipboard serializer, which this build does not ship",
+            )),
+        ),
+        item(
+            35415,
+            "Copy HTML Code...",
+            "",
+            Action::Shell(ShellAction::ReportGap(
+                "Copy HTML Code needs the HTML clipboard serializer, which this build does not ship",
+            )),
+        ),
         item(57637, "Paste", "Ctrl+V", Action::Shell(ShellAction::Paste)),
         item(57632, "Clear", "Del", Action::Sel(SelAction::Delete)),
         Entry::Sep,
@@ -731,7 +802,14 @@ pub static EDIT: Menu = Menu {
             "",
             Action::Shell(ShellAction::PasteInside),
         ),
-        item(35033, "Paste Attributes", "", Action::Inert),
+        item(
+            35033,
+            "Paste Attributes",
+            "",
+            Action::Shell(ShellAction::ReportGap(
+                "Paste Attributes needs the attributes clipboard, which this build does not ship",
+            )),
+        ),
         Entry::Sep,
         item(
             35006,
@@ -746,7 +824,14 @@ pub static EDIT: Menu = Menu {
             Action::Sel(SelAction::Clone),
         ),
         Entry::Sep,
-        item(35145, "Crop Selected Bitmap", "", Action::Inert),
+        item(
+            35145,
+            "Crop Selected Bitmap",
+            "",
+            Action::Shell(ShellAction::ReportGap(
+                "Crop Selected Bitmap needs the bitmap-crop verb, which this build does not ship",
+            )),
+        ),
         item(
             35346,
             "Crop Document",
@@ -754,8 +839,22 @@ pub static EDIT: Menu = Menu {
             Action::Sel(SelAction::CropDocument),
         ),
         Entry::Sep,
-        item(35034, "Preferences...", "", Action::Inert),
-        item(35429, "Keyboard Shortcuts...", "", Action::Inert),
+        item(
+            35034,
+            "Preferences...",
+            "",
+            Action::Shell(ShellAction::ReportGap(
+                "Preferences needs the preferences dialog, which this build does not ship",
+            )),
+        ),
+        item(
+            35429,
+            "Keyboard Shortcuts...",
+            "",
+            Action::Shell(ShellAction::ReportGap(
+                "Keyboard Shortcuts needs the shortcut editor, which this build does not ship",
+            )),
+        ),
     ],
 };
 
@@ -1474,7 +1573,14 @@ pub static TEXT: Menu = Menu {
         Entry::Sub(
             "Size",
             &[
-                item(35230, "Other...", "", Action::Inert),
+                item(
+                    35230,
+                    "Other...",
+                    "",
+                    Action::Shell(ShellAction::ReportGap(
+                        "a custom font size needs the size-entry dialog, which this build does not ship",
+                    )),
+                ),
                 item(35635, "Smaller", "", Action::TextStep(-1)),
                 item(35636, "Larger", "", Action::TextStep(1)),
                 Entry::Sep,
@@ -1525,10 +1631,38 @@ pub static TEXT: Menu = Menu {
                 item(35045, "Right", "", Action::TextJustify(2)),
                 item(35043, "Justified", "", Action::TextJustify(3)),
                 Entry::Sep,
-                item(35114, "Top", "", Action::Inert),
-                item(35115, "Centered Vertically", "", Action::Inert),
-                item(35116, "Bottom", "", Action::Inert),
-                item(35117, "Justified Vertically", "", Action::Inert),
+                item(
+                    35114,
+                    "Top",
+                    "",
+                    Action::Shell(ShellAction::ReportGap(
+                        "vertical text alignment needs an engine verb the format does not yet document",
+                    )),
+                ),
+                item(
+                    35115,
+                    "Centered Vertically",
+                    "",
+                    Action::Shell(ShellAction::ReportGap(
+                        "vertical text alignment needs an engine verb the format does not yet document",
+                    )),
+                ),
+                item(
+                    35116,
+                    "Bottom",
+                    "",
+                    Action::Shell(ShellAction::ReportGap(
+                        "vertical text alignment needs an engine verb the format does not yet document",
+                    )),
+                ),
+                item(
+                    35117,
+                    "Justified Vertically",
+                    "",
+                    Action::Shell(ShellAction::ReportGap(
+                        "vertical text alignment needs an engine verb the format does not yet document",
+                    )),
+                ),
             ],
         ),
         Entry::Sep,
@@ -1573,8 +1707,22 @@ pub static TEXT: Menu = Menu {
             Action::Sel(SelAction::ConvertToPaths),
         ),
         Entry::Sep,
-        item(35591, "Check Spelling...", "", Action::Inert),
-        item(35594, "Spelling Setup...", "", Action::Inert),
+        item(
+            35591,
+            "Check Spelling...",
+            "",
+            Action::Shell(ShellAction::ReportGap(
+                "Check Spelling needs the spelling engine, which this build does not ship",
+            )),
+        ),
+        item(
+            35594,
+            "Spelling Setup...",
+            "",
+            Action::Shell(ShellAction::ReportGap(
+                "Spelling Setup needs the spelling engine, which this build does not ship",
+            )),
+        ),
     ],
 };
 
@@ -2173,6 +2321,12 @@ pub fn action_name(action: Action) -> String {
             ShellAction::SingleDocument => "Single-document window command".into(),
             ShellAction::ReportGap(_) => "Not available in this build".into(),
             ShellAction::PreviewInBrowser { .. } => "Preview in browser".into(),
+            ShellAction::InsertWeb { what } => match what {
+                InsertWebKind::Hotspot => "Insert hotspot".into(),
+                InsertWebKind::RectSlice => "Insert rectangular slice".into(),
+                InsertWebKind::PolygonSlice => "Insert polygon slice".into(),
+                InsertWebKind::Button => "New button symbol".into(),
+            },
             ShellAction::ToggleHidePanels => "Hide/show panels".into(),
             ShellAction::ToggleMainToolbar => "Main toolbar".into(),
         },
@@ -2285,7 +2439,7 @@ mod tests {
     /// The highest inert-item count the docs have recorded. The
     /// `inert_count_never_rises` test refuses any regression above it;
     /// when the count falls, ratchet this down to the new number.
-    const INERT_CEILING: usize = 42;
+    const INERT_CEILING: usize = 24;
 
     fn walk(entries: &'static [Entry]) -> Vec<&'static Item> {
         let mut items = Vec::new();

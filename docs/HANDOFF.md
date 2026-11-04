@@ -206,6 +206,16 @@ one. Summary:
   Revert reloads the last-saved file, File Info reports
   pages/layers/objects/canvas, and the export rows open the export
   dialog on the named format. Inert → **42 of 289** (batch 14).
+  Batch 15 (2026-11-04): the Edit remainder + Text rows — Insert ▸
+  New Button (a button-definition `library.add`), Hotspot /
+  Rectangular / Polygon Slice (`hotspot.create` / `slice.create`
+  over the selection bounds, canvas center when empty; the polygon
+  variant traces the rect's corners), and honest `ReportGap` messages
+  for Find and Replace, Copy as Vectors, Copy HTML Code, Paste
+  Attributes, Crop Selected Bitmap, Preferences, Keyboard Shortcuts,
+  Text ▸ Size ▸ Other, the four vertical-align rows (still
+  evidence-gated — no documented wire node), and both spelling rows.
+  Inert → **24 of 289**.
 - **19b**: path-node add/delete **DONE** (`bf1b547`); the
   wasm-budget re-pin **DONE** (2026-11-03: measured 21,235,599 B,
   ceiling moved to 21,500,000 with the dated cause — 19b.4). The

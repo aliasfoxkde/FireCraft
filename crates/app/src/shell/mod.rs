@@ -1144,6 +1144,7 @@ impl Shell {
             menus::ShellAction::ToggleHidePanels => self.toggle_all_panels(),
             menus::ShellAction::ToggleMainToolbar => self.toggle_options_bar(),
             menus::ShellAction::ReportGap(message) => self.status = message.to_owned(),
+            menus::ShellAction::InsertWeb { what } => self.insert_web(what),
             menus::ShellAction::PreviewInBrowser {
                 secondary,
                 all_pages,
@@ -1969,6 +1970,87 @@ impl Shell {
             return;
         }
         self.run_command("flatten.selection", serde_json::json!({}));
+    }
+
+    /// Edit ▸ Insert ▸ Hotspot / slice rows / New Button…: the target
+    /// rect is the selection's bounds (canvas center when nothing is
+    /// selected); the button row appends a definition to the library.
+    fn insert_web(&mut self, what: menus::InsertWebKind) {
+        let page = self.editor.page;
+        let bounds = crate::editor::union_selection_bounds(
+            self.editor.document(),
+            &self.editor.live_selection(),
+        );
+        let canvas = &self.editor.document().pages[page].info.canvas;
+        let (x, y, width, height) = bounds.map_or_else(
+            || {
+                // Half the canvas, centered — an insertion rect a
+                // drag can refine, matching the empty-canvas default
+                // of the Slice/Hotspot tools.
+                (
+                    canvas.x + canvas.width / 4.0,
+                    canvas.y + canvas.height / 4.0,
+                    canvas.width / 2.0,
+                    canvas.height / 2.0,
+                )
+            },
+            |bounds| (bounds.x0, bounds.y0, bounds.width(), bounds.height()),
+        );
+        match what {
+            menus::InsertWebKind::Button => {
+                let count = self.editor.document().symbols.len();
+                self.run_command(
+                    "library.add",
+                    serde_json::json!({
+                        "name": format!("Button {}", count + 1),
+                        "symbol_type": "button",
+                    }),
+                );
+            }
+            menus::InsertWebKind::Hotspot => {
+                self.run_command(
+                    "hotspot.create",
+                    serde_json::json!({
+                        "shape": "rect",
+                        "x": x, "y": y, "width": width, "height": height,
+                        "points": null, "page": page,
+                        "name": null, "link": null, "alt": null,
+                    }),
+                );
+            }
+            menus::InsertWebKind::RectSlice => {
+                self.run_command(
+                    "slice.create",
+                    serde_json::json!({
+                        "shape": "rect",
+                        "x": x, "y": y, "width": width, "height": height,
+                        "points": null, "page": page,
+                        "name": null, "link": null, "alt": null,
+                    }),
+                );
+            }
+            menus::InsertWebKind::PolygonSlice => {
+                // The selection rectangle's corners as a polygon —
+                // CS6's row is followed by an interactive vertex drag,
+                // which the Slice tool's polygon drag covers; this
+                // gives the menu row a correct, editable result.
+                let points = [
+                    serde_json::json!({ "x": x, "y": y }),
+                    serde_json::json!({ "x": x + width, "y": y }),
+                    serde_json::json!({ "x": x + width, "y": y + height }),
+                    serde_json::json!({ "x": x, "y": y + height }),
+                ];
+                self.run_command(
+                    "slice.create",
+                    serde_json::json!({
+                        "shape": "polygon",
+                        "x": x, "y": y, "width": width, "height": height,
+                        "points": points, "page": page,
+                        "name": null, "link": null, "alt": null,
+                    }),
+                );
+            }
+        }
     }
 
     /// Modify ▸ Merge Down: merges the selection into the bitmap
@@ -4354,5 +4436,91 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// Edit ▸ Insert ▸ Hotspot / slice rows land a web object over
+    /// the selection bounds (canvas center when nothing is selected),
+    /// and New Button appends a button definition to the library.
+    #[test]
+    fn insert_web_rows_create_web_objects_and_buttons() {
+        let (mut shell, id) = shell_with_raster();
+        shell.editor.selection_set = vec![id];
+        shell.editor.selection = Some(id);
+        let bounds =
+            union_selection_bounds(shell.editor.session.document(), &[id])
+                .expect("the raster has bounds");
+
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::InsertWeb {
+            what: menus::InsertWebKind::Hotspot,
+        }));
+        let document = shell.editor.session.document();
+        let hotspot = document
+            .registry
+            .iter()
+            .find_map(|(_, object)| match object {
+                doc::ObjectData::Slice(slice) if slice.slice_type.is_none() => Some(slice),
+                _ => None,
+            })
+            .expect("the hotspot was created");
+        assert_eq!(hotspot.frame.x0, bounds.x0);
+        assert_eq!(hotspot.frame.y0, bounds.y0);
+        assert_eq!(hotspot.frame.width(), bounds.width());
+        assert_eq!(hotspot.frame.height(), bounds.height());
+
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::InsertWeb {
+            what: menus::InsertWebKind::RectSlice,
+        }));
+        let document = shell.editor.session.document();
+        let slice = document
+            .registry
+            .iter()
+            .find_map(|(_, object)| match object {
+                doc::ObjectData::Slice(slice) if slice.slice_type == Some(0) => Some(slice),
+                _ => None,
+            })
+            .expect("the slice was created");
+        assert_eq!((slice.frame.width(), slice.frame.height()), (bounds.width(), bounds.height()));
+
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::InsertWeb {
+            what: menus::InsertWebKind::PolygonSlice,
+        }));
+        let document = shell.editor.session.document();
+        let polygon = document
+            .registry
+            .iter()
+            .find_map(|(_, object)| match object {
+                doc::ObjectData::Slice(slice) if slice.shape == 2 => Some(slice),
+                _ => None,
+            })
+            .expect("the polygon slice was created");
+        assert_eq!(polygon.contours.len(), 1);
+        assert_eq!(polygon.contours[0].point_count, 4, "the rect's corners");
+
+        // Nothing selected: the canvas-center default.
+        let mut shell = gui_shell(Editor::untitled());
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::InsertWeb {
+            what: menus::InsertWebKind::RectSlice,
+        }));
+        let document = shell.editor.session.document();
+        let canvas = &document.pages[0].info.canvas;
+        let slice = document
+            .registry
+            .iter()
+            .find_map(|(_, object)| match object {
+                doc::ObjectData::Slice(slice) => Some(slice),
+                _ => None,
+            })
+            .expect("the slice was created");
+        assert_eq!(slice.frame.x0, canvas.x + canvas.width / 4.0);
+        assert_eq!(slice.frame.width(), canvas.width / 2.0);
+
+        // New Button: a button definition in the library.
+        let mut shell = gui_shell(Editor::untitled());
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::InsertWeb {
+            what: menus::InsertWebKind::Button,
+        }));
+        let document = shell.editor.session.document();
+        assert_eq!(document.symbols.len(), 1);
+        assert_eq!(document.symbols[0].symbol_type, doc::SymbolType::Button);
     }
 }

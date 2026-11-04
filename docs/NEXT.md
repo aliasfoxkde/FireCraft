@@ -221,7 +221,7 @@ of replacing it, fill/stroke swatch panel bound to
 Phase 19 batches 19.1–19.5 landed 2026-10-31 → 11-01: transform
 handles + Numeric Transform, Subselect path-node editing, the gradient
 fill editor, the command palette, and the grid/guides/snap set. The
-inert count is 42 of 289 items (was 190); 19.6 is the remaining
+inert count is 24 of 289 items (was 190); 19.6 is the remaining
 burn-down.
 
 ### Phase 19 — Canvas competence (P0, feeds usability directly)
@@ -313,8 +313,19 @@ burn-down.
   (All Pages exports one PNG per page); Bridge/TWAIN/templates/
   browser-configuration/printing/HTML round-trip/batch-process/recent
   files report their gap plainly via `ShellAction::ReportGap` instead
-  of sitting inert). Next batch: the remaining Modify rows and the
-  Text remainder.
+  of sitting inert) → **24 inert of 289 items** (batch 15, 2026-11-04 —
+  the Edit remainder + Text rows: Insert ▸ New Button appends a
+  button definition via `library.add`; Hotspot and Rectangular Slice
+  call `hotspot.create` / `slice.create` over the selection bounds
+  (canvas-center rect when nothing is selected); Polygon Slice
+  traces the same rect's four corners as a polygon; Find and
+  Replace, Copy as Vectors, Copy HTML Code, Paste Attributes, Crop
+  Selected Bitmap, Preferences, Keyboard Shortcuts, Text ▸ Size ▸
+  Other, the four vertical-align rows (still evidence-gated — no
+  documented wire node), and both spelling rows report their gap
+  plainly via `ShellAction::ReportGap`). Next batch: the Modify
+  remainder (symbol rows, pop-up menus, fill edge modes, Snap to
+  Pixel).
 
 ### Phase 19b — Follow-ups from the landed batches
 
