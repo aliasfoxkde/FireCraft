@@ -387,6 +387,16 @@ pub enum SelAction {
     /// true — CS6 Edit ▸ Crop Document: shrink the canvas to the
     /// content extents.
     CropDocument,
+    /// `path.setFillEdgeMode` on every selected path — Modify ▸
+    /// Alter Path ▸ Hard / Anti-Alias / Feather Fill.
+    FillEdge {
+        /// "hard" / "antialias" / "feather".
+        mode: &'static str,
+    },
+    /// Enter the selected instance's definition — Modify ▸ Symbol ▸
+    /// Edit Symbol / Edit in Place (a view-state change; the two rows
+    /// differ only in CS6's presentation).
+    EditSymbol,
 }
 
 /// The Modify ▸ Arrange items; dispatch resolves the numeric index.
@@ -1218,7 +1228,14 @@ pub static MODIFY: Menu = Menu {
                     "",
                     Action::Sel(SelAction::AnimateSelection),
                 ),
-                item(35463, "Settings...", "", Action::Inert),
+                item(
+                    35463,
+                    "Settings...",
+                    "",
+                    Action::Shell(ShellAction::ReportGap(
+                        "animation settings need the animation dialog, which this build does not ship",
+                    )),
+                ),
                 Entry::Sep,
                 item(
                     35472,
@@ -1238,8 +1255,13 @@ pub static MODIFY: Menu = Menu {
                     Action::Sel(SelAction::ConvertToSymbol),
                 ),
                 Entry::Sep,
-                item(35334, "Edit Symbol", "", Action::Inert),
-                item(35842, "Edit in Place", "", Action::Inert),
+                item(35334, "Edit Symbol", "", Action::Sel(SelAction::EditSymbol)),
+                item(
+                    35842,
+                    "Edit in Place",
+                    "",
+                    Action::Sel(SelAction::EditSymbol),
+                ),
                 item(
                     35188,
                     "Tween Instances...",
@@ -1247,16 +1269,44 @@ pub static MODIFY: Menu = Menu {
                     Action::Sel(SelAction::TweenInstances),
                 ),
                 item(35190, "Break Apart", "", Action::Sel(SelAction::BreakApart)),
-                item(35807, "Swap Symbol...", "", Action::Inert),
+                item(
+                    35807,
+                    "Swap Symbol...",
+                    "",
+                    Action::Shell(ShellAction::ReportGap(
+                        "Swap Symbol needs an instance re-target verb, which this build does not ship",
+                    )),
+                ),
             ],
         ),
         Entry::Sub(
             "Pop-up Menu",
             &[
-                item(35445, "Add Pop-up Menu...", "", Action::Inert),
-                item(35592, "Edit Pop-up Menu...", "", Action::Inert),
+                item(
+                    35445,
+                    "Add Pop-up Menu...",
+                    "",
+                    Action::Shell(ShellAction::ReportGap(
+                        "Pop-up menus need the behavior structure editor, which this build does not ship",
+                    )),
+                ),
+                item(
+                    35592,
+                    "Edit Pop-up Menu...",
+                    "",
+                    Action::Shell(ShellAction::ReportGap(
+                        "Pop-up menus need the behavior structure editor, which this build does not ship",
+                    )),
+                ),
                 Entry::Sep,
-                item(35593, "Delete Pop-up Menu", "", Action::Inert),
+                item(
+                    35593,
+                    "Delete Pop-up Menu",
+                    "",
+                    Action::Shell(ShellAction::ReportGap(
+                        "Pop-up menus need the behavior structure editor, which this build does not ship",
+                    )),
+                ),
             ],
         ),
         Entry::Sep,
@@ -1282,7 +1332,14 @@ pub static MODIFY: Menu = Menu {
                     "",
                     Action::Shell(ShellAction::PasteAsMask),
                 ),
-                item(35128, "Group as Mask", "", Action::Inert),
+                item(
+                    35128,
+                    "Group as Mask",
+                    "",
+                    Action::Shell(ShellAction::ReportGap(
+                        "Group as Mask needs a mask-group verb, which this build does not ship",
+                    )),
+                ),
                 Entry::Sep,
                 item(
                     35433,
@@ -1332,7 +1389,14 @@ pub static MODIFY: Menu = Menu {
                     "",
                     Action::Sel(SelAction::RestoreJpegMask),
                 ),
-                item(35576, "Settings...", "", Action::Inert),
+                item(
+                    35576,
+                    "Settings...",
+                    "",
+                    Action::Shell(ShellAction::ReportGap(
+                        "JPEG mask settings need the selective-JPEG dialog, which this build does not ship",
+                    )),
+                ),
                 Entry::Sep,
                 item(
                     35471,
@@ -1544,12 +1608,34 @@ pub static MODIFY: Menu = Menu {
                     Action::Sel(SelAction::Inset(2.0)),
                 ),
                 Entry::Sep,
-                item(35183, "Hard Fill", "", Action::Inert),
-                item(35184, "Anti-Alias Fill", "", Action::Inert),
-                item(35185, "Feather Fill", "", Action::Inert),
+                item(
+                    35183,
+                    "Hard Fill",
+                    "",
+                    Action::Sel(SelAction::FillEdge { mode: "hard" }),
+                ),
+                item(
+                    35184,
+                    "Anti-Alias Fill",
+                    "",
+                    Action::Sel(SelAction::FillEdge { mode: "antialias" }),
+                ),
+                item(
+                    35185,
+                    "Feather Fill",
+                    "",
+                    Action::Sel(SelAction::FillEdge { mode: "feather" }),
+                ),
             ],
         ),
-        item(35849, "Snap To Pixel", "", Action::Inert),
+        item(
+            35849,
+            "Snap To Pixel",
+            "",
+            Action::Shell(ShellAction::ReportGap(
+                "Snap To Pixel needs a view snap mode, which this build does not ship",
+            )),
+        ),
         Entry::Sep,
         item(35010, "Group", "Ctrl+G", Action::Sel(SelAction::Group)),
         item(35062, "Ungroup", "Ctrl+U", Action::Sel(SelAction::Ungroup)),
@@ -2398,6 +2484,8 @@ pub fn action_name(action: Action) -> String {
             SelAction::BitmapViaCopy => "Bitmap via copy".into(),
             SelAction::BitmapViaCut => "Bitmap via cut".into(),
             SelAction::CropDocument => "Crop document".into(),
+            SelAction::FillEdge { mode } => format!("Fill edge ({mode})"),
+            SelAction::EditSymbol => "Edit symbol definition".into(),
             SelAction::ReversePathText => "Reverse text on path".into(),
             SelAction::ConvertToPaths => "Convert text to paths".into(),
         },
@@ -2439,7 +2527,7 @@ mod tests {
     /// The highest inert-item count the docs have recorded. The
     /// `inert_count_never_rises` test refuses any regression above it;
     /// when the count falls, ratchet this down to the new number.
-    const INERT_CEILING: usize = 24;
+    const INERT_CEILING: usize = 11;
 
     fn walk(entries: &'static [Entry]) -> Vec<&'static Item> {
         let mut items = Vec::new();

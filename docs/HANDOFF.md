@@ -215,7 +215,16 @@ one. Summary:
   Attributes, Crop Selected Bitmap, Preferences, Keyboard Shortcuts,
   Text ▸ Size ▸ Other, the four vertical-align rows (still
   evidence-gated — no documented wire node), and both spelling rows.
-  Inert → **24 of 289**.
+  Inert → **24 of 289**. Batch 16 (same day): the Modify remainder —
+  Edit Symbol / Edit in Place enter the selected instance's
+  definition scope (`enter_symbol`, view state); Hard / Anti-Alias /
+  Feather Fill drive `path.setFillEdgeMode` on every selected path
+  (feather rides the panel's radius); the animation/JPEG Settings,
+  Swap Symbol, Group as Mask, the three Pop-up Menu rows, and Snap
+  To Pixel report their gap plainly. Inert → **11 of 289** — the
+  remaining rows are the scripting family (Commands/Filters/Window
+  panels), the Text Font placeholder (a verbatim CS6 resource
+  artifact), and the Window panel rows pending their features.
 - **19b**: path-node add/delete **DONE** (`bf1b547`); the
   wasm-budget re-pin **DONE** (2026-11-03: measured 21,235,599 B,
   ceiling moved to 21,500,000 with the dated cause — 19b.4). The

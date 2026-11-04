@@ -10,6 +10,8 @@ Current version: **0.2.5**.
 
 ### Features
 
+- **app**: inert-menu burn-down batch 15 (24; Edit + Text remainder) (b3562e4)
+- **app**: inert-menu burn-down batch 14 (42; File remainder) (eca0a84)
 - **app**: CS6 shell panel windows, wasm-opt=4, gate receipt (c31127c)
 - **app**: CS6 shell fidelity — panel windows, tool flyouts, geometry strip (eef253c)
 - **app**: inert-menu burn-down batch 12 (67; Remove Animation) (1754c98)

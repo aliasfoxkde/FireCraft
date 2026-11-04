@@ -221,7 +221,7 @@ of replacing it, fill/stroke swatch panel bound to
 Phase 19 batches 19.1–19.5 landed 2026-10-31 → 11-01: transform
 handles + Numeric Transform, Subselect path-node editing, the gradient
 fill editor, the command palette, and the grid/guides/snap set. The
-inert count is 24 of 289 items (was 190); 19.6 is the remaining
+inert count is 11 of 289 items (was 190); 19.6 is the remaining
 burn-down.
 
 ### Phase 19 — Canvas competence (P0, feeds usability directly)
@@ -323,9 +323,21 @@ burn-down.
   Selected Bitmap, Preferences, Keyboard Shortcuts, Text ▸ Size ▸
   Other, the four vertical-align rows (still evidence-gated — no
   documented wire node), and both spelling rows report their gap
-  plainly via `ShellAction::ReportGap`). Next batch: the Modify
-  remainder (symbol rows, pop-up menus, fill edge modes, Snap to
-  Pixel).
+  plainly via `ShellAction::ReportGap`) → **11 inert of 289 items**
+  (batch 16, 2026-11-04 — the Modify remainder: Edit Symbol / Edit
+  in Place enter the selected instance's definition scope
+  (`enter_symbol`, view state, no journal row); Hard / Anti-Alias /
+  Feather Fill drive `path.setFillEdgeMode` on every selected path
+  (feather rides the panel radius); the animation and selective-JPEG
+  Settings rows, Swap Symbol, Group as Mask, the three Pop-up Menu
+  rows, and Snap To Pixel report their gap via `ReportGap`). The
+  11 remaining inert rows: the Text Font placeholder (a verbatim CS6
+  resource artifact), Commands ▸ Manage Saved Commands and Filters ▸
+  Repeat Filter (the scripting family), and the Window panels
+  (Optimize / Common Library / CSS Properties / Auto Shapes / URL /
+  Behaviors / Find and Replace) that land with their features
+  (Phases 20–22). 19.6's programmable surface is done; the rest is
+  feature-gated, not reachability debt.
 
 ### Phase 19b — Follow-ups from the landed batches
 

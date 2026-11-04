@@ -1655,6 +1655,49 @@ impl Shell {
                     serde_json::json!({ "page": self.editor.page, "grow": false }),
                 );
             }
+            menus::SelAction::FillEdge { mode } => {
+                // One command per selected path — the verb is
+                // single-target, and the panel applies the same way.
+                let ids = self.editor.live_selection();
+                if ids.is_empty() {
+                    self.status = "nothing selected".to_owned();
+                    return;
+                }
+                for id in ids {
+                    let payload = if mode == "feather" {
+                        serde_json::json!({
+                            "id": id, "mode": mode,
+                            "feather": i64::from(self.editor.feather_radius),
+                        })
+                    } else {
+                        serde_json::json!({ "id": id, "mode": mode })
+                    };
+                    self.run_command("path.setFillEdgeMode", payload);
+                }
+            }
+            menus::SelAction::EditSymbol => {
+                // The selection's symbol instance names its definition;
+                // entering scope is view state (no journal row).
+                let symbol = self.editor.selection.and_then(|id| {
+                    match self.editor.session.document().registry.get(id) {
+                        Some(doc::ObjectData::SymbolInstance(instance)) => {
+                            Some(instance.symbol_number)
+                        }
+                        _ => None,
+                    }
+                });
+                match symbol {
+                    Some(symbol) => {
+                        if let Err(error) = self.editor.enter_symbol(symbol) {
+                            self.status = format!("edit symbol failed: {error}");
+                        }
+                    }
+                    None => {
+                        self.status =
+                            "Edit Symbol needs a symbol instance in the selection".to_owned();
+                    }
+                }
+            }
             menus::SelAction::NewPage => {
                 self.run_command("page.add", serde_json::json!({ "index": null }));
             }
@@ -4446,9 +4489,8 @@ mod tests {
         let (mut shell, id) = shell_with_raster();
         shell.editor.selection_set = vec![id];
         shell.editor.selection = Some(id);
-        let bounds =
-            union_selection_bounds(shell.editor.session.document(), &[id])
-                .expect("the raster has bounds");
+        let bounds = union_selection_bounds(shell.editor.session.document(), &[id])
+            .expect("the raster has bounds");
 
         shell.run_action(&menus::Action::Shell(menus::ShellAction::InsertWeb {
             what: menus::InsertWebKind::Hotspot,
@@ -4479,7 +4521,10 @@ mod tests {
                 _ => None,
             })
             .expect("the slice was created");
-        assert_eq!((slice.frame.width(), slice.frame.height()), (bounds.width(), bounds.height()));
+        assert_eq!(
+            (slice.frame.width(), slice.frame.height()),
+            (bounds.width(), bounds.height())
+        );
 
         shell.run_action(&menus::Action::Shell(menus::ShellAction::InsertWeb {
             what: menus::InsertWebKind::PolygonSlice,
@@ -4522,5 +4567,98 @@ mod tests {
         let document = shell.editor.session.document();
         assert_eq!(document.symbols.len(), 1);
         assert_eq!(document.symbols[0].symbol_type, doc::SymbolType::Button);
+    }
+
+    /// The Modify-remainder batch: fill-edge rows command every
+    /// selected path, Edit Symbol enters the selected instance's
+    /// definition scope, and non-instance selections report instead.
+    #[test]
+    fn fill_edge_and_edit_symbol_rows_drive_the_selection() {
+        let mut shell = gui_shell(gui_editor());
+        assert!(
+            shell
+                .editor
+                .apply(
+                    "object.createPath",
+                    serde_json::json!({
+                        "kind": "rect", "x": 10.0, "y": 10.0,
+                        "width": 50.0, "height": 50.0,
+                        "page": 0, "layer": 0, "cell": 0,
+                        "name": null,
+                    }),
+                )
+                .is_ok(),
+            "the path lands"
+        );
+        let id = shell.editor.current_cell().unwrap().elements[0];
+        shell.editor.selection_set = vec![id];
+        shell.editor.selection = Some(id);
+
+        shell.run_action(&menus::Action::Sel(menus::SelAction::FillEdge {
+            mode: "hard",
+        }));
+        let document = shell.editor.session.document();
+        let path = match document.registry.get(id) {
+            Some(doc::ObjectData::Path(path)) => path,
+            _ => panic!("the object is a path"),
+        };
+        let fill = path
+            .paint
+            .as_ref()
+            .and_then(|paint| paint.fill.as_ref())
+            .expect("the edge materialized a fill");
+        assert!(fill.hard_edge, "hard mode set FRDb");
+
+        shell.run_action(&menus::Action::Sel(menus::SelAction::FillEdge {
+            mode: "feather",
+        }));
+        let document = shell.editor.session.document();
+        let path = match document.registry.get(id) {
+            Some(doc::ObjectData::Path(path)) => path,
+            _ => panic!("the object is a path"),
+        };
+        let fill = path.paint.as_ref().and_then(|p| p.fill.as_ref()).unwrap();
+        assert!(!fill.hard_edge);
+        assert_eq!(fill.feather, i64::from(shell.editor.feather_radius));
+
+        // Edit Symbol with no instance: report, not command.
+        let mut shell = gui_shell(gui_editor());
+        shell.run_action(&menus::Action::Sel(menus::SelAction::EditSymbol));
+        assert!(shell.status.contains("symbol instance"));
+
+        // With an instance: the editor enters its definition's scope.
+        // gui_editor() seeds a rect, so the instance appended after it
+        // is the cell's second element.
+        let mut shell = gui_shell(gui_editor());
+        assert!(
+            shell
+                .editor
+                .apply(
+                    "library.add",
+                    serde_json::json!({
+                        "name": "def", "symbol_type": "graphic",
+                    })
+                )
+                .is_ok()
+        );
+        let symbol = shell.editor.document().symbols[0].symbol_number;
+        assert!(
+            shell
+                .editor
+                .apply(
+                    "symbol.createInstance",
+                    serde_json::json!({
+                        "page": 0, "layer": 0, "cell": 0, "symbol": symbol,
+                        "x": 10.0, "y": 10.0,
+                    })
+                )
+                .is_ok()
+        );
+        let elements = &shell.editor.current_cell().unwrap().elements;
+        let id = elements[elements.len() - 1];
+        shell.editor.selection_set = vec![id];
+        shell.editor.selection = Some(id);
+        shell.run_action(&menus::Action::Sel(menus::SelAction::EditSymbol));
+        assert_eq!(shell.editor.symbol_scope, Some(symbol));
     }
 }
