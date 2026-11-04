@@ -1120,6 +1120,65 @@ impl Shell {
                     self.run_command("text.detachPath", serde_json::json!({ "id": id }));
                 }
             }
+            menus::SelAction::AttachToPath => {
+                // CS6 requires exactly one text and one path in the
+                // selection; the path becomes the rail.
+                let selection = self.editor.selection_set.clone();
+                let mut text_id = None;
+                let mut rail = None;
+                for id in &selection {
+                    match self.editor.session.document().registry.get(*id) {
+                        Some(doc::ObjectData::Text(_)) if text_id.is_none() => {
+                            text_id = Some(*id);
+                        }
+                        Some(doc::ObjectData::Path(path)) if rail.is_none() => {
+                            rail = Some(path.contours.clone());
+                        }
+                        _ => {}
+                    }
+                }
+                match (text_id, rail) {
+                    (Some(id), Some(contours)) => {
+                        let path: Vec<_> = contours
+                            .iter()
+                            .map(|contour| {
+                                serde_json::json!({
+                                    "closed": contour.closed,
+                                    "points": contour.points.iter().map(|point| {
+                                        let mut wire = serde_json::json!({
+                                            "x": point.anchor.x, "y": point.anchor.y,
+                                            "curve": point.is_curve,
+                                        });
+                                        if let Some(primary) = &point.primary {
+                                            wire["primary"] = serde_json::json!({
+                                                "x": primary.x, "y": primary.y,
+                                            });
+                                        }
+                                        if let Some(secondary) = &point.secondary {
+                                            wire["secondary"] = serde_json::json!({
+                                                "x": secondary.x, "y": secondary.y,
+                                            });
+                                        }
+                                        wire
+                                    }).collect::<Vec<_>>(),
+                                })
+                            })
+                            .collect();
+                        self.run_command(
+                            "text.attachPath",
+                            serde_json::json!({ "id": id, "path": path }),
+                        );
+                    }
+                    (None, _) => {
+                        self.status =
+                            "Attach to Path needs a text object in the selection".to_owned();
+                    }
+                    (_, None) => {
+                        self.status =
+                            "Attach to Path needs a path object in the selection".to_owned();
+                    }
+                }
+            }
             menus::SelAction::ReversePathText => {
                 if self.editor.selection.is_some() {
                     if let Err(error) = self.editor.sync_selection() {
@@ -1866,6 +1925,65 @@ mod tests {
             ),
             "the text became a path"
         );
+    }
+
+    /// Attach to Path: selecting one text and one path and running
+    /// the action lays the text along the path's contours; a
+    /// selection missing either half reports, and does not command.
+    #[test]
+    fn attach_to_path_needs_a_text_and_a_rail() {
+        let (mut shell, text_id) = text_shell("along");
+
+        // Missing the rail: text-only selection reports.
+        let before = shell.editor.session.journal_len();
+        shell.run_action(&menus::Action::Sel(menus::SelAction::AttachToPath));
+        assert!(shell.status.contains("path object"));
+        assert_eq!(shell.editor.session.journal_len(), before);
+
+        // Add a line path to the same cell and select both.
+        shell
+            .editor
+            .apply(
+                "object.createPath",
+                serde_json::json!({
+                    "kind": "line", "x": 0.0, "y": 100.0,
+                    "width": 300.0, "height": 0.0,
+                    "page": 0, "layer": shell.editor.active_layer(), "cell": 0,
+                    "name": null,
+                }),
+            )
+            .unwrap();
+        let path_id = shell.editor.current_cell().unwrap().elements[1];
+        shell.editor.set_selection(vec![text_id, path_id]);
+
+        shell.run_action(&menus::Action::Sel(menus::SelAction::AttachToPath));
+        let text = match shell.editor.session.document().registry.get(text_id) {
+            Some(doc::ObjectData::Text(text)) => text,
+            other => panic!("expected a text object, got {other:?}"),
+        };
+        let on_path = text.on_path.as_ref().expect("text rides the rail now");
+        assert_eq!(on_path.path.len(), 1);
+        assert_eq!(on_path.path[0].points.len(), 2);
+        assert_eq!(text.flow, Some(2));
+
+        // Missing the text: path-only selection reports.
+        let (mut shell, _text_id) = text_shell("solo");
+        shell
+            .editor
+            .apply(
+                "object.createPath",
+                serde_json::json!({
+                    "kind": "line", "x": 0.0, "y": 100.0,
+                    "width": 300.0, "height": 0.0,
+                    "page": 0, "layer": shell.editor.active_layer(), "cell": 0,
+                    "name": null,
+                }),
+            )
+            .unwrap();
+        let path_id = shell.editor.current_cell().unwrap().elements[1];
+        shell.editor.set_selection(vec![path_id]);
+        shell.run_action(&menus::Action::Sel(menus::SelAction::AttachToPath));
+        assert!(shell.status.contains("text object"));
     }
 
     /// The action dispatch wiring: Select All picks up the cell's

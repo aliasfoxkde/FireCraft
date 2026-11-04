@@ -285,6 +285,10 @@ pub enum SelAction {
     Duplicate,
     /// `text.detachPath` — remove the selected text's on-path guide.
     DetachFromPath,
+    /// `text.attachPath` — lay the selected text along a selected
+    /// path (`TAPv`): the selection must carry exactly one text and
+    /// one path object; the path becomes the rail.
+    AttachToPath,
     /// `text.reversePathTextDirection` — flip the selected text's
     /// travel direction along its rail.
     ReversePathText,
@@ -1257,8 +1261,18 @@ pub static TEXT: Menu = Menu {
             ],
         ),
         Entry::Sep,
-        item(49005, "Attach In Path", "", Action::Inert),
-        item(35118, "Attach to Path", "", Action::Inert),
+        item(
+            49005,
+            "Attach In Path",
+            "",
+            Action::Sel(SelAction::AttachToPath),
+        ),
+        item(
+            35118,
+            "Attach to Path",
+            "",
+            Action::Sel(SelAction::AttachToPath),
+        ),
         item(
             35119,
             "Detach from Path",
@@ -1908,6 +1922,7 @@ pub fn action_name(action: Action) -> String {
             SelAction::AnimateSelection => "Animate selection".into(),
             SelAction::TweenInstances => "Tween instances".into(),
             SelAction::DetachFromPath => "Detach text from path".into(),
+            SelAction::AttachToPath => "Attach text to path".into(),
             SelAction::ReversePathText => "Reverse text on path".into(),
             SelAction::ConvertToPaths => "Convert text to paths".into(),
         },
@@ -1949,7 +1964,7 @@ mod tests {
     /// The highest inert-item count the docs have recorded. The
     /// `inert_count_never_rises` test refuses any regression above it;
     /// when the count falls, ratchet this down to the new number.
-    const INERT_CEILING: usize = 85;
+    const INERT_CEILING: usize = 83;
 
     fn walk(entries: &'static [Entry]) -> Vec<&'static Item> {
         let mut items = Vec::new();

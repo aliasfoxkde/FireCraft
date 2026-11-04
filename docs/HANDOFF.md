@@ -179,8 +179,14 @@ one. Summary:
   Smart Guides, 9-Slice guides, Edges) and batch 7 (Text menu —
   Plain, Align, Smaller/Larger, Orientation, Detach from Path,
   Reverse Direction, Convert to Paths) landed 2026-11-03: inert →
-  **85 of 289**. Next batch: the remaining Text rows (vertical align,
-  Attach to Path), then the Modify and File families.
+  85; batch 8 (Attach In Path / Attach to Path via
+  `text.attachPath`, the rail derived from a selected path object)
+  landed 2026-11-03: inert → **83 of 289**. The Text vertical-align
+  rows (Top / Centered Vertically / Bottom / Justified Vertically)
+  are **evidence-gated**: the node dictionary documents no text
+  vertical-justification node (`JSTi` is horizontal-only), so wiring
+  them would invent model state — the same posture as the 3 P parity
+  rows. Next batch: the Modify and File families.
 - **19b**: path-node add/delete **DONE** (`bf1b547`); the
   wasm-budget re-pin **DONE** (2026-11-03: measured 21,235,599 B,
   ceiling moved to 21,500,000 with the dated cause — 19b.4). The

@@ -221,7 +221,7 @@ of replacing it, fill/stroke swatch panel bound to
 Phase 19 batches 19.1–19.5 landed 2026-10-31 → 11-01: transform
 handles + Numeric Transform, Subselect path-node editing, the gradient
 fill editor, the command palette, and the grid/guides/snap set. The
-inert count is 85 of 289 items (was 190); 19.6 is the remaining
+inert count is 83 of 289 items (was 190); 19.6 is the remaining
 burn-down.
 
 ### Phase 19 — Canvas competence (P0, feeds usability directly)
@@ -269,8 +269,14 @@ burn-down.
   menu: Plain, the four horizontal Align rows over `JSTi`, Smaller/
   Larger over the size presets, the four Orientation rows over
   `TAMi`, Detach from Path, Reverse Direction, Convert to Paths;
-  2026-11-03). Next batch: the remaining Text rows (vertical align,
-  Attach to Path), then the Modify and File families.
+  2026-11-03) → **83 inert of 289 items** (batch 8 — Attach In Path/
+  Attach to Path over `text.attachPath`: the selection must carry one
+  text and one path, the path's contours become the rail; missing
+  either half reports instead of commanding. The vertical-align rows
+  (Top/Centered Vertically/Bottom/Justified Vertically) are
+  evidence-gated — the dictionary documents no text
+  vertical-justification node, and wiring them would invent model
+  state; 2026-11-03). Next batch: the Modify and File families.
 
 ### Phase 19b — Follow-ups from the landed batches
 
