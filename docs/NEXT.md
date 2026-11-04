@@ -221,7 +221,7 @@ of replacing it, fill/stroke swatch panel bound to
 Phase 19 batches 19.1–19.5 landed 2026-10-31 → 11-01: transform
 handles + Numeric Transform, Subselect path-node editing, the gradient
 fill editor, the command palette, and the grid/guides/snap set. The
-inert count is 83 of 289 items (was 190); 19.6 is the remaining
+inert count is 79 of 289 items (was 190); 19.6 is the remaining
 burn-down.
 
 ### Phase 19 — Canvas competence (P0, feeds usability directly)
@@ -276,7 +276,15 @@ burn-down.
   (Top/Centered Vertically/Bottom/Justified Vertically) are
   evidence-gated — the dictionary documents no text
   vertical-justification node, and wiring them would invent model
-  state; 2026-11-03). Next batch: the Modify and File families.
+  state; 2026-11-03) → **79 inert of 289 items** (batch 9 — Modify ▸
+  Transform: Free Transform and Distort set the handle mode
+  (`TransformMode`; Distort drags one corner independently via
+  `object.setQuadrangle`, the other three corners frozen at drag
+  start), Split via `path.splitPaths`, Remove Transformations via
+  `object.transform` with each stored `MTXv`'s inverse; Group as
+  Mask/Repeat Filter/fill-edge rows stay inert — no engine verbs yet;
+  2026-11-03). Next batch: the File family and the remaining Modify
+  rows.
 
 ### Phase 19b — Follow-ups from the landed batches
 

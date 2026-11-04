@@ -573,6 +573,12 @@ pub enum TransformHandle {
 }
 
 impl TransformHandle {
+    /// True for the four corner handles (Distort moves these).
+    #[must_use]
+    pub fn is_corner(self) -> bool {
+        !matches!(self, Self::Top | Self::Bottom | Self::Left | Self::Right)
+    }
+
     /// The fixed (opposite) anchor the drag scales away from, in
     /// normalized bounds coordinates — CS6's handle semantics: the
     /// opposite corner/edge stays put while the grabbed one follows
@@ -592,6 +598,16 @@ impl TransformHandle {
     }
 }
 
+/// How the selection's transform handles behave (Modify ▸ Transform).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TransformMode {
+    /// Free Transform: handles scale away from the opposite anchor.
+    Scale,
+    /// Distort: the grabbed corner moves independently; the selection
+    /// fills the parallelogram the moved corner defines.
+    Distort,
+}
+
 /// A handle drag in progress: the selection is being scaled live by
 /// one `object.scale`/`object.transform` step per pointer move, folded
 /// into a single "Transform" undo step like a move drag.
@@ -608,6 +624,10 @@ pub struct TransformDrag {
     /// Whether any scale step applied (a click-sized drag commits
     /// nothing, mirroring `MoveDrag::moved`).
     pub applied: bool,
+    /// Distort mode: the three unmoved corners, in world coordinates,
+    /// captured at drag start — percents are re-derived per step
+    /// because the command's reference bounds move with the object.
+    pub fixed_corners: Option<[(f64, f64); 3]>,
 }
 
 /// A path-node drag in progress (Subselect tool): one anchor of one
@@ -686,6 +706,9 @@ pub struct Editor {
     pub guide_drag: Option<GuideDrag>,
     /// Selection-handle transform drag in progress.
     pub transform_drag: Option<TransformDrag>,
+    /// How transform handles behave (Free Transform scales; Distort
+    /// lets corner handles move independently).
+    pub transform_mode: TransformMode,
     /// Path-node drag in progress (Subselect).
     pub node_drag: Option<NodeDrag>,
     /// Gradient-handle drag in progress.
@@ -768,6 +791,7 @@ impl Editor {
             symbol_layer: 0,
             guide_drag: None,
             transform_drag: None,
+            transform_mode: TransformMode::Scale,
             node_drag: None,
             gradient_drag: None,
             brush: BrushSettings::default(),
@@ -1756,12 +1780,26 @@ impl Editor {
             detail: "the selection carries no bounds to scale".to_owned(),
         })?;
         self.session.begin_transaction("Transform")?;
+        let fixed_corners = if self.transform_mode == TransformMode::Distort && handle.is_corner() {
+            let (x0, y0, x1, y1) = (bounds.x0, bounds.y0, bounds.x1, bounds.y1);
+            let corners = match handle {
+                TransformHandle::TopLeft => [(x1, y0), (x1, y1), (x0, y1)],
+                TransformHandle::TopRight => [(x0, y0), (x1, y1), (x0, y1)],
+                TransformHandle::BottomRight => [(x0, y0), (x1, y0), (x0, y1)],
+                TransformHandle::BottomLeft => [(x0, y0), (x1, y0), (x1, y1)],
+                _ => [(x0, y0), (x1, y0), (x1, y1)],
+            };
+            Some(corners)
+        } else {
+            None
+        };
         self.transform_drag = Some(TransformDrag {
             ids,
             handle,
             bounds,
             current: world,
             applied: false,
+            fixed_corners,
         });
         Ok(())
     }
@@ -1776,6 +1814,10 @@ impl Editor {
         let Some(drag) = &self.transform_drag else {
             return;
         };
+        if drag.handle.is_corner() && self.transform_mode == TransformMode::Distort {
+            self.distort_drag_to(world);
+            return;
+        }
         let (ax, ay) = drag.handle.anchor_norm();
         let b = drag.bounds;
         let anchor = geom::Point::new(b.x0 + ax * b.width(), b.y0 + ay * b.height());
@@ -1857,6 +1899,68 @@ impl Editor {
             self.session.commit_transaction().map(|_label| ())
         } else {
             self.session.abort_transaction()
+        }
+    }
+
+    /// One Distort step: the grabbed corner moves to the pointer while
+    /// the other three stay put — the bounds rectangle becomes the
+    /// parallelogram that corner defines, via `object.setQuadrangle`
+    /// (percent coordinates). Bounds recompose after each step like the
+    /// scale drag.
+    fn distort_drag_to(&mut self, world: geom::Point) {
+        let Some(drag) = &self.transform_drag else {
+            return;
+        };
+        // The three fixed corners are the drag-start world positions;
+        // they must not drift as bounds recompose per step.
+        let Some(fixed) = drag.fixed_corners else {
+            return;
+        };
+        let b = drag.bounds;
+        let to_percent =
+            |point: (f64, f64)| [(point.0 - b.x0) / b.width(), (point.1 - b.y0) / b.height()];
+        let (tl, tr, br, bl) = (
+            to_percent(fixed[0]),
+            to_percent(fixed[1]),
+            to_percent(fixed[2]),
+            [world.x, world.y],
+        );
+        let (top_left, top_right, bottom_right, bottom_left) = match drag.handle {
+            TransformHandle::TopLeft => ([world.x, world.y], tr, br, bl),
+            TransformHandle::TopRight => (tl, [world.x, world.y], br, bl),
+            TransformHandle::BottomRight => (tl, tr, [world.x, world.y], bl),
+            TransformHandle::BottomLeft => (tl, tr, br, [world.x, world.y]),
+            _ => (tl, tr, br, bl),
+        };
+        let ids = drag.ids.clone();
+        let payload = serde_json::json!({
+            "ids": ids,
+            "top_left": top_left,
+            "top_right": top_right,
+            "bottom_right": bottom_right,
+            "bottom_left": bottom_left,
+        });
+        match self.apply("object.setQuadrangle", payload) {
+            Ok(()) => {
+                let ids = self
+                    .transform_drag
+                    .as_ref()
+                    .map(|drag| drag.ids.clone())
+                    .unwrap_or_default();
+                let document = self.document();
+                let bounds = union_selection_bounds(document, &ids);
+                if let Some(drag) = &mut self.transform_drag {
+                    drag.current = world;
+                    drag.applied = true;
+                    if let Some(bounds) = bounds {
+                        drag.bounds = bounds;
+                    }
+                }
+            }
+            Err(_) => {
+                let _ = self.session.abort_transaction();
+                self.transform_drag = None;
+            }
         }
     }
 

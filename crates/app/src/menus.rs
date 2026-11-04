@@ -88,6 +88,10 @@ pub enum ShellAction {
     /// Modify ▸ Transform ▸ Numeric Transform (Scale/Skew route here
     /// too): opens the numeric dialog over the live selection.
     NumericTransform,
+    /// Set how the selection's transform handles behave: CS6's Free
+    /// Transform (scale, the default) vs Distort (corner handles move
+    /// independently, setting the quadrangle).
+    TransformMode(TransformMode),
     /// The command palette (Ctrl+P): every registered engine command.
     Palette,
     Quit,
@@ -289,6 +293,12 @@ pub enum SelAction {
     /// path (`TAPv`): the selection must carry exactly one text and
     /// one path object; the path becomes the rail.
     AttachToPath,
+    /// `path.splitPaths` — CS6 Modify ▸ Split: separate each selected
+    /// path's contours into independent path objects.
+    SplitPaths,
+    /// Reset every selected object's `MTXv` to identity (CS6 Modify ▸
+    /// Transform ▸ Remove Transformations).
+    RemoveTransformations,
     /// `text.reversePathTextDirection` — flip the selected text's
     /// travel direction along its rail.
     ReversePathText,
@@ -304,6 +314,15 @@ pub enum Arrange {
     Forward,
     Backward,
     Back,
+}
+
+/// How the selection's transform handles behave (Modify ▸ Transform).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TransformMode {
+    /// Free Transform: handles scale (the default).
+    Scale,
+    /// Distort: corner handles move independently (the quadrangle).
+    Distort,
 }
 
 /// One command row: resource id, display label, accelerator text, action.
@@ -1021,7 +1040,12 @@ pub static MODIFY: Menu = Menu {
         Entry::Sub(
             "Transform",
             &[
-                item(35178, "Free Transform", "", Action::Inert),
+                item(
+                    35178,
+                    "Free Transform",
+                    "",
+                    Action::Shell(ShellAction::TransformMode(TransformMode::Scale)),
+                ),
                 Entry::Sep,
                 item(
                     35060,
@@ -1035,7 +1059,12 @@ pub static MODIFY: Menu = Menu {
                     "",
                     Action::Shell(ShellAction::NumericTransform),
                 ),
-                item(35090, "Distort", "", Action::Inert),
+                item(
+                    35090,
+                    "Distort",
+                    "",
+                    Action::Shell(ShellAction::TransformMode(TransformMode::Distort)),
+                ),
                 item(
                     35201,
                     "Numeric Transform...",
@@ -1081,7 +1110,12 @@ pub static MODIFY: Menu = Menu {
                     }),
                 ),
                 Entry::Sep,
-                item(35152, "Remove Transformations", "", Action::Inert),
+                item(
+                    35152,
+                    "Remove Transformations",
+                    "",
+                    Action::Sel(SelAction::RemoveTransformations),
+                ),
             ],
         ),
         Entry::Sub(
@@ -1149,7 +1183,12 @@ pub static MODIFY: Menu = Menu {
             "Combine Paths",
             &[
                 item(35094, "Join", "Ctrl+J", Action::Boolean("union")),
-                item(35095, "Split", "Ctrl+Shift+J", Action::Inert),
+                item(
+                    35095,
+                    "Split",
+                    "Ctrl+Shift+J",
+                    Action::Sel(SelAction::SplitPaths),
+                ),
                 Entry::Sep,
                 item(35211, "Union", "", Action::Boolean("union")),
                 item(35212, "Intersect", "", Action::Boolean("intersect")),
@@ -1815,6 +1854,8 @@ pub fn action_name(action: Action) -> String {
             ShellAction::Export => "Export".into(),
             ShellAction::ExportPreview => "Export preview".into(),
             ShellAction::NumericTransform => "Numeric Transform".into(),
+            ShellAction::TransformMode(TransformMode::Scale) => "Free Transform".into(),
+            ShellAction::TransformMode(TransformMode::Distort) => "Distort".into(),
             ShellAction::Palette => "Command palette".into(),
             ShellAction::Quit => "Quit".into(),
             ShellAction::Undo => "Undo".into(),
@@ -1923,6 +1964,8 @@ pub fn action_name(action: Action) -> String {
             SelAction::TweenInstances => "Tween instances".into(),
             SelAction::DetachFromPath => "Detach text from path".into(),
             SelAction::AttachToPath => "Attach text to path".into(),
+            SelAction::SplitPaths => "Split paths".into(),
+            SelAction::RemoveTransformations => "Remove transformations".into(),
             SelAction::ReversePathText => "Reverse text on path".into(),
             SelAction::ConvertToPaths => "Convert text to paths".into(),
         },
@@ -1964,7 +2007,7 @@ mod tests {
     /// The highest inert-item count the docs have recorded. The
     /// `inert_count_never_rises` test refuses any regression above it;
     /// when the count falls, ratchet this down to the new number.
-    const INERT_CEILING: usize = 83;
+    const INERT_CEILING: usize = 79;
 
     fn walk(entries: &'static [Entry]) -> Vec<&'static Item> {
         let mut items = Vec::new();

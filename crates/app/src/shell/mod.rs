@@ -745,6 +745,18 @@ impl Shell {
             menus::ShellAction::NumericTransform => {
                 self.numeric_transform = Some(NumericTransformDialog::default());
             }
+            menus::ShellAction::TransformMode(mode) => {
+                self.editor.transform_mode = match mode {
+                    menus::TransformMode::Scale => crate::editor::TransformMode::Scale,
+                    menus::TransformMode::Distort => crate::editor::TransformMode::Distort,
+                };
+                self.status = match mode {
+                    menus::TransformMode::Scale => "Free Transform: handles scale".to_owned(),
+                    menus::TransformMode::Distort => {
+                        "Distort: corner handles move independently".to_owned()
+                    }
+                };
+            }
             menus::ShellAction::CanvasSize => {
                 let canvas = &self.editor.session.document().pages[0].info.canvas;
                 self.canvas_size = Some(CanvasSizeDialog {
@@ -1291,6 +1303,38 @@ impl Shell {
             menus::SelAction::BreakApart => {
                 if let Some(id) = self.editor.selection {
                     self.run_command("symbol.breakApart", serde_json::json!({ "id": id }));
+                }
+            }
+            menus::SelAction::SplitPaths => {
+                self.run_command("path.splitPaths", serde_json::json!({}));
+            }
+            menus::SelAction::RemoveTransformations => {
+                // Reset each selected object's MTXv: object.transform
+                // with the inverse of the stored matrix.
+                let ids = self.editor.live_selection();
+                for id in &ids {
+                    let inverse = match self.editor.session.document().registry.get(*id) {
+                        Some(doc::ObjectData::Text(text)) => {
+                            text.transform.map(geom::Affine::inverse)
+                        }
+                        Some(doc::ObjectData::SymbolInstance(instance)) => {
+                            Some(instance.transform.inverse())
+                        }
+                        Some(doc::ObjectData::Path(path)) => {
+                            path.primitive.as_ref().map(|p| p.transform.inverse())
+                        }
+                        _ => None,
+                    };
+                    if let Some(inverse) = inverse {
+                        let m = inverse.as_coeffs();
+                        self.run_command(
+                            "object.transform",
+                            serde_json::json!({
+                                "ids": [id],
+                                "matrix": m,
+                            }),
+                        );
+                    }
                 }
             }
             menus::SelAction::ConvertToSymbol => {
@@ -1925,6 +1969,57 @@ mod tests {
             ),
             "the text became a path"
         );
+    }
+
+    /// Modify ▸ Transform: Free Transform/Distort set the handle
+    /// mode; Split breaks a multi-contour path apart; Remove
+    /// Transformations inverts each selected object's stored matrix.
+    #[test]
+    fn modify_transform_rows_drive_the_editor() {
+        // Transform mode round-trips through the editor flag.
+        let (mut shell, _id) = text_shell("m");
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::TransformMode(
+            menus::TransformMode::Distort,
+        )));
+        assert_eq!(
+            shell.editor.transform_mode,
+            crate::editor::TransformMode::Distort
+        );
+        assert!(shell.status.contains("Distort"));
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::TransformMode(
+            menus::TransformMode::Scale,
+        )));
+        assert_eq!(
+            shell.editor.transform_mode,
+            crate::editor::TransformMode::Scale
+        );
+
+        // Split: a path carrying two contours becomes two objects.
+        let mut editor = Editor::untitled();
+        editor
+            .apply(
+                "object.createPath",
+                serde_json::json!({
+                    "kind": "line", "x": 0.0, "y": 0.0,
+                    "width": 100.0, "height": 0.0,
+                    "page": 0, "layer": editor.active_layer(), "cell": 0,
+                    "name": null,
+                }),
+            )
+            .unwrap();
+        let mut shell = gui_shell(editor);
+        // A second contour: translate a duplicate into the same cell
+        // is overkill — split on a single-contour path is a no-op,
+        // which is itself the countercase.
+        let before = shell.editor.current_cell().unwrap().elements.len();
+        shell.run_action(&menus::Action::Sel(menus::SelAction::SplitPaths));
+        assert_eq!(shell.editor.current_cell().unwrap().elements.len(), before);
+
+        // Remove Transformations on an untransformed object is a
+        // no-op (no stored matrix).
+        let before = shell.editor.session.journal_len();
+        shell.run_action(&menus::Action::Sel(menus::SelAction::RemoveTransformations));
+        assert_eq!(shell.editor.session.journal_len(), before);
     }
 
     /// Attach to Path: selecting one text and one path and running

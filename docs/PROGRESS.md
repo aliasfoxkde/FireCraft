@@ -171,7 +171,7 @@ the shell-reachability program, not parity rows.
 | ~~Path→image rasterizer (filterSelection on non-image selection)~~ **DONE** — landed in #130 (decision 0059) | 8.8 bake family | #110 (decision 0040) |
 | Out-of-bounds effect growth (bake clips to the image surface) — **evidence-gated**: the live render already grows (compose applies kernels canvas-spanning, M14); the destructive bake clips by settled posture (0031/0040/0059). Reopening needs a CS6 filter/flatten bounds oracle (Wine corpus) — any growth rule without one is invented | tile-bank growth parity | #110 (decision 0040) |
 | ~~Shared-layer link-resolution render~~ **DONE** — landed in #131 (decision 0060) | shared layers render empty | #93 (decision 0022) |
-| 83 inert CS6 menu items (289 items total) — **open**, burn-down in family batches (selection/mask + Window panel toggles + page/frame + symbol/animation + View + Text + Attach to Path done; vertical-align rows evidence-gated → Modify/File families); 19.6 | daily-driver reachability | NEXT.md 19.6 |
+| 79 inert CS6 menu items (289 items total) — **open**, burn-down in family batches (selection/mask + Window panel toggles + page/frame + symbol/animation + View + Text + Attach to Path + Free Transform/Distort/Split/Remove Transformations done; vertical-align rows evidence-gated → File/remaining Modify families); 19.6 | daily-driver reachability | NEXT.md 19.6 |
 
 ## Parity timeline
 

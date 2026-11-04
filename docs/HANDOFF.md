@@ -187,6 +187,12 @@ one. Summary:
   vertical-justification node (`JSTi` is horizontal-only), so wiring
   them would invent model state — the same posture as the 3 P parity
   rows. Next batch: the Modify and File families.
+  Batch 9 (Modify ▸ Transform: Free Transform and Distort set the
+  handle mode — Distort drags a corner independently via
+  `object.setQuadrangle` with drag-start fixed corners; Split via
+  `path.splitPaths`; Remove Transformations via `object.transform`
+  with each stored `MTXv`'s inverse) landed 2026-11-03: inert →
+  **79 of 289**.
 - **19b**: path-node add/delete **DONE** (`bf1b547`); the
   wasm-budget re-pin **DONE** (2026-11-03: measured 21,235,599 B,
   ceiling moved to 21,500,000 with the dated cause — 19b.4). The
