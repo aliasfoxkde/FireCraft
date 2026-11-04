@@ -38,6 +38,15 @@ pub enum Action {
     TextSize(f64),
     /// `text.setAttrs` boolean attribute (bold/italic/underline).
     TextFlag(&'static str),
+    /// `text.setAttrs` with the style flags cleared (Text ▸ Plain).
+    TextPlain,
+    /// `text.setAttrs` justification, `JSTi` 0..=3.
+    TextJustify(i64),
+    /// `text.setAttrs` size nudged one step from the current value
+    /// (Text ▸ Smaller/Larger; CS6's step is the next preset down/up).
+    TextStep(i64),
+    /// `text.setTextOnPathMode` with a `TAMi` 0..=3 mode.
+    TextOnPathMode(i64),
     /// `filter.add` from the Filters menu: the preset's internal name,
     /// resolved through the same registry the Live Filters panel uses
     /// (`shell::filter_preset`). CS6 builds this menu at runtime from
@@ -124,6 +133,28 @@ pub enum ShellAction {
     ToggleSnapToGuides,
     /// View ▸ Guides ▸ Clear Guides — `page.removeAllGuides`.
     ClearGuides,
+    /// View ▸ Fit Selection — zoom/pan to the selection bounds.
+    FitSelection,
+    /// View ▸ Smart Guides ▸ Show Smart Guides.
+    ToggleSmartGuides,
+    /// View ▸ Smart Guides ▸ Snap to Smart Guides.
+    ToggleSnapToSmartGuides,
+    /// View ▸ 9-Slice Scaling Guides ▸ Lock Guides.
+    ToggleSliceLock,
+    /// View ▸ Slice Guides.
+    ToggleSliceGuides,
+    /// View ▸ Slice Overlay.
+    ToggleSliceOverlay,
+    /// View ▸ Edges — object edge highlighting.
+    ToggleEdges,
+    /// View ▸ Rulers.
+    ToggleRulers,
+    /// View ▸ Tooltips.
+    ToggleTooltips,
+    /// View ▸ Show All — re-show everything Hide Selection folded.
+    ShowAllHidden,
+    /// View ▸ Gamma 1.8 — the 1.8 gamma preview toggle.
+    ToggleGamma,
     /// Select ▸ Feather… — the feather-radius dialog over the pixel
     /// selection.
     FeatherDialog,
@@ -252,6 +283,14 @@ pub enum SelAction {
     /// `object.duplicate` — CS6 Edit ▸ Duplicate (same command; CS6's
     /// variant differs only by the interactive placement drag).
     Duplicate,
+    /// `text.detachPath` — remove the selected text's on-path guide.
+    DetachFromPath,
+    /// `text.reversePathTextDirection` — flip the selected text's
+    /// travel direction along its rail.
+    ReversePathText,
+    /// `text.convertToPaths` — freeze the selected text into glyph
+    /// outline paths (in place, same registry ids).
+    ConvertToPaths,
 }
 
 /// The Modify ▸ Arrange items; dispatch resolves the numeric index.
@@ -506,7 +545,12 @@ pub static VIEW: Menu = Menu {
             ],
         ),
         Entry::Sep,
-        item(35066, "Fit Selection", "Ctrl+0", Action::Inert),
+        item(
+            35066,
+            "Fit Selection",
+            "Ctrl+0",
+            Action::Shell(ShellAction::FitSelection),
+        ),
         item(
             35065,
             "Fit All",
@@ -514,7 +558,12 @@ pub static VIEW: Menu = Menu {
             Action::Shell(ShellAction::FitAll),
         ),
         Entry::Sep,
-        item(35367, "Gamma 1.8", "", Action::Inert),
+        item(
+            35367,
+            "Gamma 1.8",
+            "",
+            Action::Shell(ShellAction::ToggleGamma),
+        ),
         Entry::Sep,
         item(
             35071,
@@ -522,10 +571,25 @@ pub static VIEW: Menu = Menu {
             "Ctrl+M",
             Action::Sel(SelAction::Hide),
         ),
-        item(35826, "Tooltips", "", Action::Inert),
-        item(35072, "Show All", "", Action::Inert),
+        item(
+            35826,
+            "Tooltips",
+            "",
+            Action::Shell(ShellAction::ToggleTooltips),
+        ),
+        item(
+            35072,
+            "Show All",
+            "",
+            Action::Shell(ShellAction::ShowAllHidden),
+        ),
         Entry::Sep,
-        item(35130, "Rulers", "", Action::Inert),
+        item(
+            35130,
+            "Rulers",
+            "",
+            Action::Shell(ShellAction::ToggleRulers),
+        ),
         Entry::Sub(
             "Grid",
             &[
@@ -581,18 +645,43 @@ pub static VIEW: Menu = Menu {
         Entry::Sub(
             "Smart Guides",
             &[
-                item(35815, "Show Smart Guides", "", Action::Inert),
-                item(35821, "Snap to Smart Guides", "", Action::Inert),
+                item(
+                    35815,
+                    "Show Smart Guides",
+                    "",
+                    Action::Shell(ShellAction::ToggleSmartGuides),
+                ),
+                item(
+                    35821,
+                    "Snap to Smart Guides",
+                    "",
+                    Action::Shell(ShellAction::ToggleSnapToSmartGuides),
+                ),
             ],
         ),
         Entry::Sub(
             "9-Slice Scaling Guides",
-            &[item(35812, "Lock Guides", "", Action::Inert)],
+            &[item(
+                35812,
+                "Lock Guides",
+                "",
+                Action::Shell(ShellAction::ToggleSliceLock),
+            )],
         ),
-        item(35299, "Slice Guides", "", Action::Inert),
-        item(35426, "Slice Overlay", "", Action::Inert),
+        item(
+            35299,
+            "Slice Guides",
+            "",
+            Action::Shell(ShellAction::ToggleSliceGuides),
+        ),
+        item(
+            35426,
+            "Slice Overlay",
+            "",
+            Action::Shell(ShellAction::ToggleSliceOverlay),
+        ),
         Entry::Sep,
-        item(35088, "Edges", "", Action::Inert),
+        item(35088, "Edges", "", Action::Shell(ShellAction::ToggleEdges)),
     ],
 };
 
@@ -1111,8 +1200,8 @@ pub static TEXT: Menu = Menu {
             "Size",
             &[
                 item(35230, "Other...", "", Action::Inert),
-                item(35635, "Smaller", "", Action::Inert),
-                item(35636, "Larger", "", Action::Inert),
+                item(35635, "Smaller", "", Action::TextStep(-1)),
+                item(35636, "Larger", "", Action::TextStep(1)),
                 Entry::Sep,
                 item(35196, "8", "", Action::TextSize(8.0)),
                 item(35197, "9", "", Action::TextSize(9.0)),
@@ -1131,7 +1220,7 @@ pub static TEXT: Menu = Menu {
         Entry::Sub(
             "Style",
             &[
-                item(35057, "Plain", "", Action::Inert),
+                item(35057, "Plain", "", Action::TextPlain),
                 Entry::Sep,
                 item(
                     35055,
@@ -1156,10 +1245,10 @@ pub static TEXT: Menu = Menu {
         Entry::Sub(
             "Align",
             &[
-                item(35044, "Left", "", Action::Inert),
-                item(35042, "Centered Horizontally", "", Action::Inert),
-                item(35045, "Right", "", Action::Inert),
-                item(35043, "Justified", "", Action::Inert),
+                item(35044, "Left", "", Action::TextJustify(0)),
+                item(35042, "Centered Horizontally", "", Action::TextJustify(1)),
+                item(35045, "Right", "", Action::TextJustify(2)),
+                item(35043, "Justified", "", Action::TextJustify(3)),
                 Entry::Sep,
                 item(35114, "Top", "", Action::Inert),
                 item(35115, "Centered Vertically", "", Action::Inert),
@@ -1170,19 +1259,34 @@ pub static TEXT: Menu = Menu {
         Entry::Sep,
         item(49005, "Attach In Path", "", Action::Inert),
         item(35118, "Attach to Path", "", Action::Inert),
-        item(35119, "Detach from Path", "", Action::Inert),
+        item(
+            35119,
+            "Detach from Path",
+            "",
+            Action::Sel(SelAction::DetachFromPath),
+        ),
         Entry::Sub(
             "Orientation",
             &[
-                item(35120, "Rotate Around Path", "", Action::Inert),
-                item(35121, "Vertical", "", Action::Inert),
-                item(35122, "Skew Vertical", "", Action::Inert),
-                item(35123, "Skew Horizontal", "", Action::Inert),
+                item(35120, "Rotate Around Path", "", Action::TextOnPathMode(0)),
+                item(35121, "Vertical", "", Action::TextOnPathMode(1)),
+                item(35122, "Skew Vertical", "", Action::TextOnPathMode(2)),
+                item(35123, "Skew Horizontal", "", Action::TextOnPathMode(3)),
             ],
         ),
-        item(35124, "Reverse Direction", "", Action::Inert),
+        item(
+            35124,
+            "Reverse Direction",
+            "",
+            Action::Sel(SelAction::ReversePathText),
+        ),
         Entry::Sep,
-        item(35125, "Convert to Paths", "", Action::Inert),
+        item(
+            35125,
+            "Convert to Paths",
+            "",
+            Action::Sel(SelAction::ConvertToPaths),
+        ),
         Entry::Sep,
         item(35591, "Check Spelling...", "", Action::Inert),
         item(35594, "Spelling Setup...", "", Action::Inert),
@@ -1723,6 +1827,17 @@ pub fn action_name(action: Action) -> String {
             ShellAction::ToggleGuidesLocked => "Lock guides".into(),
             ShellAction::ToggleSnapToGuides => "Snap to guides".into(),
             ShellAction::ClearGuides => "Clear guides".into(),
+            ShellAction::FitSelection => "Fit selection".into(),
+            ShellAction::ToggleSmartGuides => "Show/hide smart guides".into(),
+            ShellAction::ToggleSnapToSmartGuides => "Snap to smart guides".into(),
+            ShellAction::ToggleSliceLock => "Lock 9-slice guides".into(),
+            ShellAction::ToggleSliceGuides => "Show/hide slice guides".into(),
+            ShellAction::ToggleSliceOverlay => "Show/hide slice overlay".into(),
+            ShellAction::ToggleEdges => "Show/hide edges".into(),
+            ShellAction::ToggleRulers => "Show/hide rulers".into(),
+            ShellAction::ToggleTooltips => "Show/hide tooltips".into(),
+            ShellAction::ShowAllHidden => "Show all".into(),
+            ShellAction::ToggleGamma => "Toggle gamma 1.8".into(),
             ShellAction::FeatherDialog => "Feather selection".into(),
             ShellAction::CanvasSize => "Canvas Size".into(),
             ShellAction::ImageSize => "Image Size".into(),
@@ -1792,6 +1907,9 @@ pub fn action_name(action: Action) -> String {
             SelAction::ConvertToSymbol => "Convert to symbol".into(),
             SelAction::AnimateSelection => "Animate selection".into(),
             SelAction::TweenInstances => "Tween instances".into(),
+            SelAction::DetachFromPath => "Detach text from path".into(),
+            SelAction::ReversePathText => "Reverse text on path".into(),
+            SelAction::ConvertToPaths => "Convert text to paths".into(),
         },
         Action::Align(mode) => format!("Align {mode}"),
         Action::Distribute(axis) => format!("Distribute {axis}"),
@@ -1804,6 +1922,16 @@ pub fn action_name(action: Action) -> String {
         },
         Action::TextSize(_) => "Text size".into(),
         Action::TextFlag(flag) => format!("Text {flag}"),
+        Action::TextPlain => "Plain text".into(),
+        Action::TextJustify(justification) => format!("Justify text ({justification})"),
+        Action::TextStep(step) => {
+            if step < 0 {
+                "Smaller text".into()
+            } else {
+                "Larger text".into()
+            }
+        }
+        Action::TextOnPathMode(mode) => format!("Text on-path mode ({mode})"),
         Action::Filter(preset) => format!("Filter: {preset}"),
         Action::Document(document) => match document {
             DocumentAction::TrimCanvas => "Trim canvas to content".into(),
@@ -1821,7 +1949,7 @@ mod tests {
     /// The highest inert-item count the docs have recorded. The
     /// `inert_count_never_rises` test refuses any regression above it;
     /// when the count falls, ratchet this down to the new number.
-    const INERT_CEILING: usize = 111;
+    const INERT_CEILING: usize = 85;
 
     fn walk(entries: &'static [Entry]) -> Vec<&'static Item> {
         let mut items = Vec::new();
@@ -1916,6 +2044,19 @@ mod tests {
             }
         }
         (total, inert)
+    }
+
+    /// Prints every inert row with its menu, id, and label — the
+    /// burn-down worklist.
+    #[test]
+    fn inert_worklist() {
+        for menu in MENUBAR {
+            for item in walk(menu.entries) {
+                if matches!(item.action, Action::Inert) {
+                    eprintln!("INERT\t{}\t{}\t{}", menu.label, item.id, item.label);
+                }
+            }
+        }
     }
 
     /// The reachability ceiling: the bar's inert count may fall but

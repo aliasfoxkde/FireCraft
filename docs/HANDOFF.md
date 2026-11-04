@@ -174,8 +174,13 @@ one. Summary:
   Trim/Fit Canvas, canvas rotations via the new `Action::Document`
   arm) landed 2026-11-03; batch 5 (symbol/animation — Convert to
   Symbol and Animate Selection via `symbol.create`, Tween Instances
-  via `symbol.tween`) landed 2026-11-03: inert → **111 of 289**.
-  Next batch: Image Size dialog (35226) then text.
+  via `symbol.tween`) landed 2026-11-03: inert → 111; batch 6
+  (View menu — Fit Selection, Gamma 1.8, Tooltips, Show All, Rulers,
+  Smart Guides, 9-Slice guides, Edges) and batch 7 (Text menu —
+  Plain, Align, Smaller/Larger, Orientation, Detach from Path,
+  Reverse Direction, Convert to Paths) landed 2026-11-03: inert →
+  **85 of 289**. Next batch: the remaining Text rows (vertical align,
+  Attach to Path), then the Modify and File families.
 - **19b**: path-node add/delete **DONE** (`bf1b547`); the
   wasm-budget re-pin **DONE** (2026-11-03: measured 21,235,599 B,
   ceiling moved to 21,500,000 with the dated cause — 19b.4). The

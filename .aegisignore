@@ -57,3 +57,9 @@ source/
 # rules, and every session appends — line-keyed baseline entries can
 # never stick.
 log/
+
+# The baseline file itself — machine-generated from a scan, and the
+# findings it records (numeric literals, prose) land back in it. Every
+# regeneration rewrites its content, so its own entries would be
+# invalidated by the regeneration that produced them.
+.aegis-baseline.json

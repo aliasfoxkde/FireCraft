@@ -31,6 +31,7 @@ use egui::{Color32, ColorImage, Pos2, Rect, Sense, TextureHandle, TextureOptions
 use base64::Engine as _;
 
 use crate::canvas::View;
+use crate::editor::union_selection_bounds;
 use crate::editor::{
     AutoShape, DragConstraint, Editor, GradientHandle, NineSliceEdge, PixelSelectMode, StampShape,
     Tool, TransformHandle,
@@ -115,6 +116,23 @@ pub struct Shell {
     guides_locked: bool,
     snap_to_guides: bool,
     grid_dialog: Option<GridDialog>,
+    /// View ▸ Smart Guides ▸ Show / Snap to. Display-only alignment
+    /// hints; nothing in the document reads them yet.
+    smart_guides: bool,
+    snap_to_smart_guides: bool,
+    /// View ▸ 9-Slice Scaling Guides ▸ Lock Guides (display intent
+    /// until slice rendering lands).
+    slice_locked: bool,
+    /// View ▸ Slice Guides / Slice Overlay.
+    slice_guides: bool,
+    slice_overlay: bool,
+    /// View ▸ Edges — object edge highlight.
+    show_edges: bool,
+    /// View ▸ Rulers / Tooltips / Gamma 1.8 (display intent; rulers
+    /// and tooltips render in the frame loop, gamma is a preview flag).
+    show_rulers: bool,
+    show_tooltips: bool,
+    gamma_18: bool,
     /// A guide being dragged out from a canvas-edge press: the axis
     /// and the live world position. Committed to `page.addGuide` (or
     /// discarded) at release; locked guides refuse new guides.
@@ -186,6 +204,15 @@ impl Shell {
             guides_locked: false,
             snap_to_guides: false,
             grid_dialog: None,
+            smart_guides: true,
+            snap_to_smart_guides: true,
+            slice_locked: false,
+            slice_guides: true,
+            slice_overlay: true,
+            show_edges: true,
+            show_rulers: false,
+            show_tooltips: true,
+            gamma_18: false,
             guide_draft: None,
             context_menu: None,
             panel_hidden: Vec::new(),
@@ -588,6 +615,77 @@ impl Shell {
                     );
                 }
             }
+            menus::Action::TextPlain => {
+                if let Some(id) = self.editor.selection {
+                    self.run_command(
+                        "text.setAttrs",
+                        serde_json::json!({
+                            "id": id, "bold": false, "italic": false, "underline": false,
+                        }),
+                    );
+                }
+            }
+            menus::Action::TextJustify(justification) => {
+                if let Some(id) = self.editor.selection {
+                    self.run_command(
+                        "text.setAttrs",
+                        serde_json::json!({ "id": id, "justification": justification }),
+                    );
+                }
+            }
+            menus::Action::TextStep(step) => {
+                // CS6's Smaller/Larger step through the size presets:
+                // the next preset below/above the current size, clamped
+                // to the 8..120 row ends.
+                const PRESETS: [f64; 12] = [
+                    8.0, 9.0, 10.0, 12.0, 14.0, 18.0, 24.0, 36.0, 48.0, 72.0, 96.0, 120.0,
+                ];
+                let Some(id) = self.editor.selection else {
+                    return;
+                };
+                let current = self
+                    .editor
+                    .document()
+                    .registry
+                    .get(id)
+                    .and_then(|object| match object {
+                        ObjectData::Text(text) => text.style.as_ref().and_then(|style| style.size),
+                        _ => None,
+                    })
+                    .unwrap_or(12.0);
+                let next = if step < 0 {
+                    PRESETS
+                        .iter()
+                        .rev()
+                        .find(|preset| **preset < current)
+                        .copied()
+                        .unwrap_or(PRESETS[0])
+                } else {
+                    PRESETS
+                        .iter()
+                        .find(|preset| **preset > current)
+                        .copied()
+                        .unwrap_or(PRESETS[PRESETS.len() - 1])
+                };
+                self.run_command(
+                    "text.setAttrs",
+                    serde_json::json!({ "id": id, "size": next }),
+                );
+            }
+            menus::Action::TextOnPathMode(mode) => {
+                // The on-path setters walk the document's selection, so
+                // the view's selection must land there first.
+                if self.editor.selection.is_some() {
+                    if let Err(error) = self.editor.sync_selection() {
+                        self.status = format!("selection failed: {error}");
+                        return;
+                    }
+                    self.run_command(
+                        "text.setTextOnPathMode",
+                        serde_json::json!({ "mode": mode }),
+                    );
+                }
+            }
             menus::Action::Filter(name) => match self.editor.selection {
                 Some(id) => match filter_preset(name) {
                     Some(preset) => self.apply_filter_preset(id, *preset),
@@ -760,6 +858,118 @@ impl Shell {
                     self.view.fit(world, size);
                 }
             }
+            menus::ShellAction::FitSelection => {
+                let size = self
+                    .canvas_rect
+                    .map_or_else(|| egui::Vec2::ZERO, |rect| rect.size());
+                let selected: Vec<_> = self.editor.selected_live().into_iter().collect();
+                let world = union_selection_bounds(self.editor.document(), &selected);
+                if let Some(world) = world {
+                    self.view.fit(world, size);
+                    self.status = "fit selection".to_owned();
+                } else {
+                    self.status = "nothing selected".to_owned();
+                }
+            }
+            menus::ShellAction::ToggleSmartGuides => {
+                self.smart_guides = !self.smart_guides;
+                self.status = if self.smart_guides {
+                    "smart guides shown".to_owned()
+                } else {
+                    "smart guides hidden".to_owned()
+                };
+            }
+            menus::ShellAction::ToggleSnapToSmartGuides => {
+                self.snap_to_smart_guides = !self.snap_to_smart_guides;
+                self.status = if self.snap_to_smart_guides {
+                    "snap to smart guides on".to_owned()
+                } else {
+                    "snap to smart guides off".to_owned()
+                };
+            }
+            menus::ShellAction::ToggleSliceLock => {
+                self.slice_locked = !self.slice_locked;
+                self.status = if self.slice_locked {
+                    "9-slice guides locked".to_owned()
+                } else {
+                    "9-slice guides unlocked".to_owned()
+                };
+            }
+            menus::ShellAction::ToggleSliceGuides => {
+                self.slice_guides = !self.slice_guides;
+                self.status = if self.slice_guides {
+                    "slice guides shown".to_owned()
+                } else {
+                    "slice guides hidden".to_owned()
+                };
+            }
+            menus::ShellAction::ToggleSliceOverlay => {
+                self.slice_overlay = !self.slice_overlay;
+                self.status = if self.slice_overlay {
+                    "slice overlay shown".to_owned()
+                } else {
+                    "slice overlay hidden".to_owned()
+                };
+            }
+            menus::ShellAction::ToggleEdges => {
+                self.show_edges = !self.show_edges;
+                self.status = if self.show_edges {
+                    "edges shown".to_owned()
+                } else {
+                    "edges hidden".to_owned()
+                };
+            }
+            menus::ShellAction::ToggleRulers => {
+                self.show_rulers = !self.show_rulers;
+                self.status = if self.show_rulers {
+                    "rulers shown".to_owned()
+                } else {
+                    "rulers hidden".to_owned()
+                };
+            }
+            menus::ShellAction::ToggleTooltips => {
+                self.show_tooltips = !self.show_tooltips;
+                self.status = if self.show_tooltips {
+                    "tooltips on".to_owned()
+                } else {
+                    "tooltips off".to_owned()
+                };
+            }
+            menus::ShellAction::ShowAllHidden => {
+                // CS6's Show All: every hidden object on every page
+                // becomes visible again. `object.setVisible` refuses
+                // kinds without the display quartet, and those kinds
+                // cannot be hidden anyway, so the scan only collects
+                // carriers.
+                let hidden: Vec<doc::ObjectId> = self
+                    .editor
+                    .document()
+                    .registry
+                    .iter()
+                    .filter_map(|(id, object)| match object {
+                        ObjectData::Path(path) => (!path.visible).then_some(id),
+                        ObjectData::Group(group) => (!group.visible).then_some(id),
+                        ObjectData::Image(image) => (!image.visible).then_some(id),
+                        ObjectData::Text(text) => (!text.visible).then_some(id),
+                        _ => None,
+                    })
+                    .collect();
+                for id in hidden {
+                    self.run_command(
+                        "object.setVisible",
+                        serde_json::json!({ "id": id, "visible": true }),
+                    );
+                }
+                self.status = "show all".to_owned();
+            }
+            menus::ShellAction::ToggleGamma => {
+                self.gamma_18 = !self.gamma_18;
+                self.status = if self.gamma_18 {
+                    "gamma 1.8 preview on".to_owned()
+                } else {
+                    "gamma 1.8 preview off".to_owned()
+                };
+            }
             menus::ShellAction::About => self.about_open = true,
             menus::ShellAction::ShowShortcuts => self.help_open = !self.help_open,
             menus::ShellAction::PickTool(tool) => {
@@ -903,6 +1113,29 @@ impl Shell {
                 // both land the copy on the original, ready to drag.
                 if let Some(id) = self.editor.selected_live() {
                     self.run_command("object.duplicate", serde_json::json!({ "id": id }));
+                }
+            }
+            menus::SelAction::DetachFromPath => {
+                if let Some(id) = self.editor.selection {
+                    self.run_command("text.detachPath", serde_json::json!({ "id": id }));
+                }
+            }
+            menus::SelAction::ReversePathText => {
+                if self.editor.selection.is_some() {
+                    if let Err(error) = self.editor.sync_selection() {
+                        self.status = format!("selection failed: {error}");
+                        return;
+                    }
+                    self.run_command("text.reversePathTextDirection", serde_json::json!({}));
+                }
+            }
+            menus::SelAction::ConvertToPaths => {
+                if self.editor.selection.is_some() {
+                    if let Err(error) = self.editor.sync_selection() {
+                        self.status = format!("selection failed: {error}");
+                        return;
+                    }
+                    self.run_command("text.convertToPaths", serde_json::json!({}));
                 }
             }
             menus::SelAction::Delete => {
@@ -1565,6 +1798,76 @@ mod tests {
         Shell::with_platform(editor, std::rc::Rc::new(MemoryFs::new()), Box::new(dialogs))
     }
 
+    /// A shell whose selection is a text object carrying `text`.
+    fn text_shell(text: &str) -> (Shell, doc::ObjectId) {
+        let mut editor = Editor::untitled();
+        editor
+            .apply(
+                "text.createText",
+                serde_json::json!({
+                    "page": 0, "layer": editor.active_layer(), "cell": 0,
+                    "x": 10.0, "y": 10.0, "width": 200.0, "height": 40.0,
+                    "text": text, "name": null,
+                }),
+            )
+            .unwrap();
+        let id = editor.current_cell().unwrap().elements[0];
+        editor.set_selection(vec![id]);
+        (gui_shell(editor), id)
+    }
+
+    /// The Text menu's style/alignment/convert family: Plain clears
+    /// the style flags, the align rows write `JSTi`, Smaller/Larger
+    /// step the size presets, and Convert to Paths freezes the glyphs
+    /// into a path object.
+    #[test]
+    fn text_menu_actions_reach_the_engine() {
+        let (mut shell, id) = text_shell("hello");
+        shell
+            .editor
+            .apply(
+                "text.setAttrs",
+                serde_json::json!({ "id": id, "bold": true, "italic": true, "underline": true }),
+            )
+            .unwrap();
+
+        shell.run_action(&menus::Action::TextPlain);
+        let style = match shell.editor.session.document().registry.get(id) {
+            Some(doc::ObjectData::Text(text)) => text.style.clone(),
+            other => panic!("expected a text object, got {other:?}"),
+        }
+        .expect("the text carries a style");
+        assert_eq!(style.bold, Some(false));
+        assert_eq!(style.italic, Some(false));
+        assert_eq!(style.underline, Some(false));
+
+        shell.run_action(&menus::Action::TextJustify(2));
+        let style = match shell.editor.session.document().registry.get(id) {
+            Some(doc::ObjectData::Text(text)) => text.style.clone(),
+            other => panic!("expected a text object, got {other:?}"),
+        }
+        .expect("the text carries a style");
+        assert_eq!(style.justification, Some(2));
+
+        // Larger steps up the preset ladder from 12pt to 14pt.
+        shell.run_action(&menus::Action::TextStep(1));
+        let style = match shell.editor.session.document().registry.get(id) {
+            Some(doc::ObjectData::Text(text)) => text.style.clone(),
+            other => panic!("expected a text object, got {other:?}"),
+        }
+        .expect("the text carries a style");
+        assert_eq!(style.size, Some(14.0));
+
+        shell.run_action(&menus::Action::Sel(menus::SelAction::ConvertToPaths));
+        assert!(
+            matches!(
+                shell.editor.session.document().registry.get(id),
+                Some(doc::ObjectData::Path(_))
+            ),
+            "the text became a path"
+        );
+    }
+
     /// The action dispatch wiring: Select All picks up the cell's
     /// objects, Delete removes through the registry, Arrange reorders
     /// with a post-removal index, and Inert renders but does nothing.
@@ -1610,6 +1913,51 @@ mod tests {
             Tool::Pointer,
         )));
         assert_eq!(shell.editor.tool, Tool::Pointer);
+    }
+
+    /// View ▸ Show All re-shows every hidden carrier in the document,
+    /// driving `object.setVisible` per object through the registry.
+    #[test]
+    fn show_all_resurrects_hidden_objects() {
+        let mut shell = gui_shell(gui_editor());
+        let first = shell.editor.current_cell().unwrap().elements[0];
+        shell
+            .editor
+            .apply(
+                "object.setVisible",
+                serde_json::json!({ "id": first, "visible": false }),
+            )
+            .unwrap();
+        // A second page's object hides too: Show All is document-wide.
+        shell
+            .editor
+            .apply("page.add", serde_json::json!({ "index": null }))
+            .unwrap();
+        let page = shell.editor.page;
+        shell.editor.page = 1;
+        shell.editor.tool = Tool::Rect;
+        shell.editor.begin_drag(geom::Point::new(0.0, 0.0));
+        shell.editor.drag_to(geom::Point::new(40.0, 40.0));
+        shell.editor.end_drag().unwrap();
+        let second = shell.editor.current_cell().unwrap().elements[0];
+        shell
+            .editor
+            .apply(
+                "object.setVisible",
+                serde_json::json!({ "id": second, "visible": false }),
+            )
+            .unwrap();
+        shell.editor.page = page;
+
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::ShowAllHidden));
+        let doc = shell.editor.session.document();
+        for id in [first, second] {
+            let visible = match doc.registry.get(id) {
+                Some(doc::ObjectData::Path(path)) => path.visible,
+                other => panic!("expected a path, got {other:?}"),
+            };
+            assert!(visible, "object {id:?} is visible again");
+        }
     }
 
     /// Window-menu panel toggles: each docked panel hides and resur-

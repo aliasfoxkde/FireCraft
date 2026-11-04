@@ -221,7 +221,7 @@ of replacing it, fill/stroke swatch panel bound to
 Phase 19 batches 19.1–19.5 landed 2026-10-31 → 11-01: transform
 handles + Numeric Transform, Subselect path-node editing, the gradient
 fill editor, the command palette, and the grid/guides/snap set. The
-inert count is 111 of 289 items (was 190); 19.6 is the remaining
+inert count is 85 of 289 items (was 190); 19.6 is the remaining
 burn-down.
 
 ### Phase 19 — Canvas competence (P0, feeds usability directly)
@@ -262,7 +262,15 @@ burn-down.
   Animate Selection via `symbol.create` with the animation type,
   Tween Instances via `symbol.tween`; Edit Symbol/Edit in Place/
   Swap Symbol/Remove Animation stay inert — no engine verbs yet;
-  2026-11-03). Next batch: Image Size dialog (35226) then text.
+  2026-11-03) → **99 inert of 289 items** (batch 6 — View menu:
+  Fit Selection, Gamma 1.8, Tooltips, Show All, Rulers, Smart Guides
+  (show + snap), 9-Slice Lock Guides, Slice Guides, Slice Overlay,
+  Edges; 2026-11-03) → **85 inert of 289 items** (batch 7 — Text
+  menu: Plain, the four horizontal Align rows over `JSTi`, Smaller/
+  Larger over the size presets, the four Orientation rows over
+  `TAMi`, Detach from Path, Reverse Direction, Convert to Paths;
+  2026-11-03). Next batch: the remaining Text rows (vertical align,
+  Attach to Path), then the Modify and File families.
 
 ### Phase 19b — Follow-ups from the landed batches
 

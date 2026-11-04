@@ -10,6 +10,7 @@ Current version: **0.2.5**.
 
 ### Features
 
+- **app**: wire Image Size dialog (35226) (9eab633)
 - **app**: inert-menu burn-down batch 5 (111; symbol/animation) (31344cf)
 - **app**: inert-menu burn-down batch 4 (114 -> 6 more wired) (c18ed9d)
 - **app-cli**: MCP tools for info/export/undo/redo/discovery (ef7e60d)
@@ -309,6 +310,7 @@ Current version: **0.2.5**.
 
 ### Chores
 
+- regen changelog from gate (64e269a)
 - regen changelog from gate (7d8b68e)
 - regen changelog hashes, scripts report from gate (77c497f)
 - **release**: v0.2.5 stamps, notes, operator checklist, aegis hygiene (3a4832b)
