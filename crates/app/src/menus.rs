@@ -206,6 +206,22 @@ pub enum ShellAction {
     ToggleHidePanels,
     /// Window ▸ Toolbars ▸ Main — the context options bar.
     ToggleMainToolbar,
+    /// File ▸ Preview in Browser (primary/secondary/all pages):
+    /// export the document to a PNG next to it (or in the temp dir for
+    /// an unsaved document) and open it in the system browser.
+    PreviewInBrowser {
+        /// `true` = the user's secondary browser row; CS6 lets the OS
+        /// default decide when no secondary is configured, and so does
+        /// this build (both rows open the default handler today).
+        secondary: bool,
+        /// Preview All Pages: one PNG per page, all opened.
+        all_pages: bool,
+    },
+    /// A File row whose CS6 backing service does not exist in this
+    /// build (Bridge, TWAIN scanners, printer stack, HTML round-trip,
+    /// batch processor, templates, e-mail). The message names the gap
+    /// plainly instead of the row sitting inert.
+    ReportGap(&'static str),
 }
 
 /// Engine commands with a selection- or document-derived payload.
@@ -412,19 +428,54 @@ pub static FILE: Menu = Menu {
     label: "File",
     entries: &[
         item(57600, "New", "Ctrl+N", Action::Shell(ShellAction::New)),
-        item(37866, "New from Template...", "", Action::Inert),
+        item(
+            37866,
+            "New from Template...",
+            "",
+            Action::Shell(ShellAction::ReportGap(
+                "Document templates are not available in this build.",
+            )),
+        ),
         item(57601, "Open...", "Ctrl+O", Action::Shell(ShellAction::Open)),
-        item(35795, "Browse in Bridge...", "", Action::Inert),
+        item(
+            35795,
+            "Browse in Bridge...",
+            "",
+            Action::Shell(ShellAction::ReportGap(
+                "Adobe Bridge is not available in this build.",
+            )),
+        ),
         Entry::Sub(
             "Open Recent",
-            &[item(57616, "Recent File", "", Action::Inert)],
+            &[item(
+                57616,
+                "Recent File",
+                "",
+                Action::Shell(ShellAction::ReportGap(
+                    "The recent-files list is not kept in this build; use File ▸ Open.",
+                )),
+            )],
         ),
         Entry::Sub(
             "Scan",
             &[
-                item(35199, "Twain Acquire...", "", Action::Inert),
+                item(
+                    35199,
+                    "Twain Acquire...",
+                    "",
+                    Action::Shell(ShellAction::ReportGap(
+                        "TWAIN scanner acquisition is not available in this build.",
+                    )),
+                ),
                 Entry::Sep,
-                item(35200, "Twain Select...", "", Action::Inert),
+                item(
+                    35200,
+                    "Twain Select...",
+                    "",
+                    Action::Shell(ShellAction::ReportGap(
+                        "TWAIN scanner selection is not available in this build.",
+                    )),
+                ),
             ],
         ),
         item(
@@ -448,7 +499,14 @@ pub static FILE: Menu = Menu {
             Action::Shell(ShellAction::SaveAs),
         ),
         item(35850, "Save All", "", Action::Shell(ShellAction::SaveAll)),
-        item(37867, "Save As Template...", "", Action::Inert),
+        item(
+            37867,
+            "Save As Template...",
+            "",
+            Action::Shell(ShellAction::ReportGap(
+                "Document templates are not available in this build.",
+            )),
+        ),
         item(35036, "Revert", "", Action::Shell(ShellAction::Revert)),
         Entry::Sep,
         item(35012, "Import...", "", Action::Shell(ShellAction::Import)),
@@ -479,10 +537,24 @@ pub static FILE: Menu = Menu {
                     "",
                     Action::Shell(ShellAction::ExportJpeg),
                 ),
-                item(35420, "Use Export Settings...", "", Action::Inert),
+                item(
+                    35420,
+                    "Use Export Settings...",
+                    "",
+                    Action::Shell(ShellAction::ReportGap(
+                        "Saved export-settings presets are not available in this build.",
+                    )),
+                ),
             ],
         ),
-        item(35416, "Update HTML...", "", Action::Inert),
+        item(
+            35416,
+            "Update HTML...",
+            "",
+            Action::Shell(ShellAction::ReportGap(
+                "HTML export and re-export are not available in this build.",
+            )),
+        ),
         Entry::Sep,
         item(
             35792,
@@ -497,28 +569,89 @@ pub static FILE: Menu = Menu {
             "",
             Action::Shell(ShellAction::ExportWizard),
         ),
-        item(35302, "Batch Process...", "", Action::Inert),
+        item(
+            35302,
+            "Batch Process...",
+            "",
+            Action::Shell(ShellAction::ReportGap(
+                "Batch processing of multiple files is not available in this build.",
+            )),
+        ),
         Entry::Sub(
             "Preview in Browser",
             &[
-                item(35313, "Preview in Primary Browser", "", Action::Inert),
-                item(35315, "Preview in Secondary Browser", "", Action::Inert),
+                item(
+                    35313,
+                    "Preview in Primary Browser",
+                    "",
+                    Action::Shell(ShellAction::PreviewInBrowser {
+                        secondary: false,
+                        all_pages: false,
+                    }),
+                ),
+                item(
+                    35315,
+                    "Preview in Secondary Browser",
+                    "",
+                    Action::Shell(ShellAction::PreviewInBrowser {
+                        secondary: true,
+                        all_pages: false,
+                    }),
+                ),
                 Entry::Sep,
                 item(
                     49003,
                     "Preview All Pages in Primary Browser",
                     "",
-                    Action::Inert,
+                    Action::Shell(ShellAction::PreviewInBrowser {
+                        secondary: false,
+                        all_pages: true,
+                    }),
                 ),
                 Entry::Sep,
-                item(35314, "Set Primary Browser...", "", Action::Inert),
-                item(35316, "Set Secondary Browser...", "", Action::Inert),
+                item(
+                    35314,
+                    "Set Primary Browser...",
+                    "",
+                    Action::Shell(ShellAction::ReportGap(
+                        "Browser selection is not configurable in this build; the system default is used.",
+                    )),
+                ),
+                item(
+                    35316,
+                    "Set Secondary Browser...",
+                    "",
+                    Action::Shell(ShellAction::ReportGap(
+                        "Browser selection is not configurable in this build; the system default is used.",
+                    )),
+                ),
             ],
         ),
         Entry::Sep,
-        item(57605, "Page Setup...", "", Action::Inert),
-        item(57607, "Print...", "Ctrl+P", Action::Inert),
-        item(35452, "HTML Setup...", "", Action::Inert),
+        item(
+            57605,
+            "Page Setup...",
+            "",
+            Action::Shell(ShellAction::ReportGap(
+                "Printing and page setup are not available in this build.",
+            )),
+        ),
+        item(
+            57607,
+            "Print...",
+            "Ctrl+P",
+            Action::Shell(ShellAction::ReportGap(
+                "Printing is not available in this build.",
+            )),
+        ),
+        item(
+            35452,
+            "HTML Setup...",
+            "",
+            Action::Shell(ShellAction::ReportGap(
+                "HTML export options are not available in this build.",
+            )),
+        ),
         Entry::Sep,
         item(57665, "Exit", "Alt+F4", Action::Shell(ShellAction::Quit)),
     ],
@@ -2038,6 +2171,8 @@ pub fn action_name(action: Action) -> String {
             ShellAction::TogglePanel(name) => format!("{name} panel"),
             ShellAction::ToggleTools => "Tools panel".into(),
             ShellAction::SingleDocument => "Single-document window command".into(),
+            ShellAction::ReportGap(_) => "Not available in this build".into(),
+            ShellAction::PreviewInBrowser { .. } => "Preview in browser".into(),
             ShellAction::ToggleHidePanels => "Hide/show panels".into(),
             ShellAction::ToggleMainToolbar => "Main toolbar".into(),
         },
@@ -2150,7 +2285,7 @@ mod tests {
     /// The highest inert-item count the docs have recorded. The
     /// `inert_count_never_rises` test refuses any regression above it;
     /// when the count falls, ratchet this down to the new number.
-    const INERT_CEILING: usize = 59;
+    const INERT_CEILING: usize = 42;
 
     fn walk(entries: &'static [Entry]) -> Vec<&'static Item> {
         let mut items = Vec::new();

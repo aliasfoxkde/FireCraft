@@ -588,6 +588,61 @@ impl Shell {
         )
     }
 
+    /// File ▸ Preview in Browser: export the document to PNG file(s)
+    /// and open them in the system browser. Saved documents write next
+    /// to the document file; unsaved ones use a temp directory. The
+    /// secondary-browser row opens the same default handler — CS6's
+    /// per-browser configuration is not kept in this build (the Set
+    /// Browser rows say so).
+    fn preview_in_browser(&mut self, secondary: bool, all_pages: bool) {
+        let _ = secondary;
+        let dialog = crate::shell::dialogs::ExportDialog::default();
+        let document = self.editor.session.document().clone();
+        let page_count = if all_pages { document.pages.len() } else { 1 };
+        let base = self.doc_path.as_ref().map_or_else(
+            || std::env::temp_dir().join("firecraft-preview"),
+            |path| {
+                let mut stem = std::path::PathBuf::from(path);
+                stem.set_extension("");
+                stem
+            },
+        );
+        let mut opened = 0usize;
+        let mut failed = false;
+        for page in 0..page_count {
+            let mut export_document = document.clone();
+            if let Some(target) = export_document.pages.get_mut(page) {
+                target.export = Some(Self::dialog_options(&dialog));
+            }
+            let name = if page_count == 1 {
+                format!("{}.png", base.display())
+            } else {
+                format!("{}-page{}.png", base.display(), page + 1)
+            };
+            let flags = Self::dialog_flags(&dialog);
+            match app_cli::ops::export_raster(&export_document, &name, &flags) {
+                Ok(bytes) => {
+                    if std::fs::write(&name, &bytes).is_ok()
+                        && self.dialogs.open_url(&format!("file://{name}"))
+                    {
+                        opened += 1;
+                    } else {
+                        failed = true;
+                    }
+                }
+                Err(error) => {
+                    self.status = format!("preview export failed: {error}");
+                    return;
+                }
+            }
+        }
+        self.status = if failed {
+            format!("exported {opened} preview(s); the browser could not be opened")
+        } else {
+            format!("exported and opened {opened} preview(s) in the browser")
+        };
+    }
+
     /// File ▸ Revert: reload the document from the file it was last
     /// saved to, discarding the in-memory edits.
     fn revert_document(&mut self) {
@@ -1088,6 +1143,11 @@ impl Shell {
             }
             menus::ShellAction::ToggleHidePanels => self.toggle_all_panels(),
             menus::ShellAction::ToggleMainToolbar => self.toggle_options_bar(),
+            menus::ShellAction::ReportGap(message) => self.status = message.to_owned(),
+            menus::ShellAction::PreviewInBrowser {
+                secondary,
+                all_pages,
+            } => self.preview_in_browser(secondary, all_pages),
             menus::ShellAction::Quit => self.close_requested = true,
             menus::ShellAction::Undo => match self.editor.undo() {
                 Ok(name) => self.status = format!("undid {name}"),

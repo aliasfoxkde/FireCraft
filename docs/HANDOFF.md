@@ -205,7 +205,7 @@ one. Summary:
   to discard unsaved edits), Save All saves the one open document,
   Revert reloads the last-saved file, File Info reports
   pages/layers/objects/canvas, and the export rows open the export
-  dialog on the named format. Inert → **59 of 289**.
+  dialog on the named format. Inert → **42 of 289** (batch 14).
 - **19b**: path-node add/delete **DONE** (`bf1b547`); the
   wasm-budget re-pin **DONE** (2026-11-03: measured 21,235,599 B,
   ceiling moved to 21,500,000 with the dated cause — 19b.4). The

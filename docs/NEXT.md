@@ -221,7 +221,7 @@ of replacing it, fill/stroke swatch panel bound to
 Phase 19 batches 19.1–19.5 landed 2026-10-31 → 11-01: transform
 handles + Numeric Transform, Subselect path-node editing, the gradient
 fill editor, the command palette, and the grid/guides/snap set. The
-inert count is 59 of 289 items (was 190); 19.6 is the remaining
+inert count is 42 of 289 items (was 190); 19.6 is the remaining
 burn-down.
 
 ### Phase 19 — Canvas competence (P0, feeds usability directly)
@@ -306,8 +306,15 @@ burn-down.
   saves the one open document, Revert reloads the file the document
   was last saved to, File Info reports pages/layers/objects/canvas,
   Export Wizard and the Send to E-mail format rows open the export
-  dialog on that format with the e-mail delivery gap stated plainly).
-  Next batch: the remaining Modify rows and the Text remainder.
+  dialog on that format with the e-mail delivery gap stated plainly)
+  → **42 inert of 289 items** (batch 14 — the File remainder: the
+  Preview-in-Browser rows actually export PNG(s) — next to the saved
+  document or in the temp dir — and open them via the system handler
+  (All Pages exports one PNG per page); Bridge/TWAIN/templates/
+  browser-configuration/printing/HTML round-trip/batch-process/recent
+  files report their gap plainly via `ShellAction::ReportGap` instead
+  of sitting inert). Next batch: the remaining Modify rows and the
+  Text remainder.
 
 ### Phase 19b — Follow-ups from the landed batches
 
