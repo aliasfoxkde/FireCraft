@@ -311,6 +311,20 @@ pub enum SelAction {
     /// `text.convertToPaths` — freeze the selected text into glyph
     /// outline paths (in place, same registry ids).
     ConvertToPaths,
+    /// `bitmap.addImage` — CS6 Edit ▸ Insert ▸ Empty Bitmap: an empty
+    /// image the size of the canvas on the active layer.
+    EmptyBitmap,
+    /// `bitmap.addImageViaCopy` — CS6 Edit ▸ Insert ▸ Bitmap Via
+    /// Copy: the pixel selection of the selected bitmap becomes a new
+    /// image above it.
+    BitmapViaCopy,
+    /// `bitmap.addImageViaCut` — the copy that also clears the
+    /// selection from the source bitmap.
+    BitmapViaCut,
+    /// `document.setDocumentCanvasSizeToDocumentExtents` with `grow`
+    /// true — CS6 Edit ▸ Crop Document: shrink the canvas to the
+    /// content extents.
+    CropDocument,
 }
 
 /// The Modify ▸ Arrange items; dispatch resolves the numeric index.
@@ -485,9 +499,24 @@ pub static EDIT: Menu = Menu {
                 item(35237, "Rectangular Slice", "", Action::Inert),
                 item(35786, "Polygon Slice", "", Action::Inert),
                 Entry::Sep,
-                item(35180, "Empty Bitmap", "", Action::Inert),
-                item(35581, "Bitmap Via Copy", "", Action::Inert),
-                item(35582, "Bitmap Via Cut", "", Action::Inert),
+                item(
+                    35180,
+                    "Empty Bitmap",
+                    "",
+                    Action::Sel(SelAction::EmptyBitmap),
+                ),
+                item(
+                    35581,
+                    "Bitmap Via Copy",
+                    "",
+                    Action::Sel(SelAction::BitmapViaCopy),
+                ),
+                item(
+                    35582,
+                    "Bitmap Via Cut",
+                    "",
+                    Action::Sel(SelAction::BitmapViaCut),
+                ),
                 Entry::Sep,
                 item(35309, "Layer", "", Action::Sel(SelAction::NewLayer)),
                 item(35301, "State", "", Action::Sel(SelAction::NewFrame)),
@@ -531,7 +560,12 @@ pub static EDIT: Menu = Menu {
         ),
         Entry::Sep,
         item(35145, "Crop Selected Bitmap", "", Action::Inert),
-        item(35346, "Crop Document", "", Action::Inert),
+        item(
+            35346,
+            "Crop Document",
+            "",
+            Action::Sel(SelAction::CropDocument),
+        ),
         Entry::Sep,
         item(35034, "Preferences...", "", Action::Inert),
         item(35429, "Keyboard Shortcuts...", "", Action::Inert),
@@ -2004,6 +2038,10 @@ pub fn action_name(action: Action) -> String {
             SelAction::AttachToPath => "Attach text to path".into(),
             SelAction::SplitPaths => "Split paths".into(),
             SelAction::RemoveTransformations => "Remove transformations".into(),
+            SelAction::EmptyBitmap => "Insert empty bitmap".into(),
+            SelAction::BitmapViaCopy => "Bitmap via copy".into(),
+            SelAction::BitmapViaCut => "Bitmap via cut".into(),
+            SelAction::CropDocument => "Crop document".into(),
             SelAction::ReversePathText => "Reverse text on path".into(),
             SelAction::ConvertToPaths => "Convert text to paths".into(),
         },
@@ -2045,7 +2083,7 @@ mod tests {
     /// The highest inert-item count the docs have recorded. The
     /// `inert_count_never_rises` test refuses any regression above it;
     /// when the count falls, ratchet this down to the new number.
-    const INERT_CEILING: usize = 72;
+    const INERT_CEILING: usize = 68;
 
     fn walk(entries: &'static [Entry]) -> Vec<&'static Item> {
         let mut items = Vec::new();

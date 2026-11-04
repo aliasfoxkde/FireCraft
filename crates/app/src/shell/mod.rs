@@ -1283,6 +1283,52 @@ impl Shell {
                 let top = self.editor.layer_count().saturating_sub(1);
                 self.editor.set_active_layer(top);
             }
+            menus::SelAction::EmptyBitmap => {
+                let canvas = &self.editor.document().pages[self.editor.page].info.canvas;
+                let layer = self.editor.active_layer();
+                // Land in the last existing cell — or the first fresh
+                // one the engine appends for an empty layer.
+                let cell = self.editor.document().pages[self.editor.page]
+                    .layers
+                    .layers
+                    .get(layer)
+                    .map_or(0, |l| l.cells.len().saturating_sub(1));
+                let _placed = self.run_command(
+                    "bitmap.addImage",
+                    serde_json::json!({
+                        "x": canvas.x, "y": canvas.y,
+                        "width": canvas.width, "height": canvas.height,
+                        "page": self.editor.page, "layer": layer, "cell": cell,
+                        "name": null,
+                    }),
+                );
+            }
+            menus::SelAction::BitmapViaCopy | menus::SelAction::BitmapViaCut => {
+                let command = match action {
+                    menus::SelAction::BitmapViaCut => "bitmap.addImageViaCut",
+                    _ => "bitmap.addImageViaCopy",
+                };
+                let source = self.editor.live_selection().into_iter().find(|id| {
+                    matches!(
+                        self.editor.document().registry.get(*id),
+                        Some(doc::ObjectData::Image(_))
+                    )
+                });
+                match source {
+                    Some(source) => {
+                        self.run_command(command, serde_json::json!({ "source": source }));
+                    }
+                    None => {
+                        self.status = "Select a bitmap with a pixel selection first.".to_owned();
+                    }
+                }
+            }
+            menus::SelAction::CropDocument => {
+                self.run_command(
+                    "document.setDocumentCanvasSizeToDocumentExtents",
+                    serde_json::json!({ "page": self.editor.page, "grow": false }),
+                );
+            }
             menus::SelAction::NewPage => {
                 self.run_command("page.add", serde_json::json!({ "index": null }));
             }
@@ -3033,6 +3079,58 @@ mod tests {
             1,
             "the active layer took the import"
         );
+    }
+
+    /// Edit ▸ Insert ▸ Empty Bitmap: a canvas-sized empty image lands
+    /// on the active layer; Via Copy / Via Cut on a selected bitmap
+    /// mint a sibling image (the cut also clears the source); with no
+    /// bitmap selected they report instead of commanding. Crop
+    /// Document shrinks the canvas to the content extents.
+    #[test]
+    fn edit_bitmap_rows_drive_the_engine() {
+        // Empty Bitmap.
+        let mut shell = gui_shell(Editor::untitled());
+        shell.run_action(&menus::Action::Sel(menus::SelAction::EmptyBitmap));
+        assert!(
+            shell.status.is_empty() || !shell.status.contains("failed"),
+            "{}",
+            shell.status
+        );
+        let document = shell.editor.document();
+        let layer = &document.pages[0].layers.layers[0];
+        assert_eq!(layer.cells[0].elements.len(), 1, "one image added");
+        let id = layer.cells[0].elements[0];
+        let Some(ObjectData::Image(image)) = document.registry.get(id) else {
+            panic!("empty bitmap is an image")
+        };
+        let canvas = &document.pages[0].info.canvas;
+        assert_eq!(
+            image.pixels,
+            (canvas.width as i64, canvas.height as i64),
+            "the image spans the canvas"
+        );
+
+        // Via Copy: import a raster, select it, mint a copy.
+        shell.import_raster(&red_png(), "red.png").expect("import");
+        let raster = shell.editor.current_cell().expect("cell").elements[0];
+        shell.editor.set_selection(vec![raster]);
+        shell.run_action(&menus::Action::Sel(menus::SelAction::BitmapViaCopy));
+        let elements = &shell.editor.document().pages[0].layers.layers[0].cells[0].elements;
+        assert_eq!(elements.len(), 2, "the copy joined the cell");
+        assert_ne!(elements[0], elements[1], "a new object id");
+
+        // Via Cut with no bitmap selected reports, not commands.
+        let mut shell = gui_shell(Editor::untitled());
+        shell.run_action(&menus::Action::Sel(menus::SelAction::BitmapViaCut));
+        assert!(shell.status.contains("Select a bitmap"));
+
+        // Crop Document shrinks the canvas to the content extents.
+        let mut shell = gui_shell(Editor::untitled());
+        shell.import_raster(&red_png(), "red.png").expect("import");
+        let before = shell.editor.document().pages[0].info.canvas.width;
+        shell.run_action(&menus::Action::Sel(menus::SelAction::CropDocument));
+        let after = shell.editor.document().pages[0].info.canvas.width;
+        assert!(after < before, "canvas shrank from {before} to {after}");
     }
 
     /// The pixel at image coordinates (x, y) — the paint tools' read

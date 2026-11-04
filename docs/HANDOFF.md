@@ -192,10 +192,13 @@ one. Summary:
   `object.setQuadrangle` with drag-start fixed corners; Split via
   `path.splitPaths`; Remove Transformations via `object.transform`
   with each stored `MTXv`'s inverse) landed 2026-11-03: inert →
-  **72 of 289**. Batch 10 (same day): the Window family — Tools
+  **68 of 289**. Batch 10 (same day): the Window family — Tools
   folds the left dock; Color Mixer, Swatches, and Info dock as
   toggled right-dock panels; Duplicate Window/Cascade/Tile report
-  the single-document shell honestly.
+  the single-document shell honestly. Batch 11 (same day): Edit ▸
+  Insert bitmap rows — Empty Bitmap (`bitmap.addImage` spanning the
+  canvas), Bitmap Via Copy/Cut (`bitmap.addImageViaCopy`/`Cut` on a
+  selected bitmap), Crop Document (extents, `grow: false`).
 - **19b**: path-node add/delete **DONE** (`bf1b547`); the
   wasm-budget re-pin **DONE** (2026-11-03: measured 21,235,599 B,
   ceiling moved to 21,500,000 with the dated cause — 19b.4). The
