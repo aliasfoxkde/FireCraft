@@ -176,6 +176,12 @@ pub enum ShellAction {
     ManageExtensions,
     /// Window ▸ (panel name) — toggle one right-dock panel.
     TogglePanel(&'static str),
+    /// Window ▸ Tools: fold/unfold the left tools dock.
+    ToggleTools,
+    /// A Window row whose CS6 semantics need multiple open documents
+    /// (Duplicate Window, Cascade, Tile). The shell is single-document
+    /// today; report that instead of sitting inert.
+    SingleDocument,
     /// Window ▸ Hide Panels — fold/unfold the whole right dock.
     ToggleHidePanels,
     /// Window ▸ Toolbars ▸ Main — the context options bar.
@@ -1461,7 +1467,12 @@ pub static FILTERS: Menu = Menu {
 pub static WINDOW: Menu = Menu {
     label: "Window",
     entries: &[
-        item(57648, "Duplicate Window", "", Action::Inert),
+        item(
+            57648,
+            "Duplicate Window",
+            "",
+            Action::Shell(ShellAction::SingleDocument),
+        ),
         item(
             35298,
             "Hide Panels",
@@ -1480,7 +1491,7 @@ pub static WINDOW: Menu = Menu {
                 Action::Shell(ShellAction::ToggleMainToolbar),
             )],
         ),
-        item(35058, "Tools", "", Action::Inert),
+        item(35058, "Tools", "", Action::Shell(ShellAction::ToggleTools)),
         item(
             35586,
             "Properties",
@@ -1534,15 +1545,40 @@ pub static WINDOW: Menu = Menu {
         ),
         item(43414, "URL", "", Action::Inert),
         Entry::Sep,
-        item(43405, "Color Mixer", "", Action::Inert),
-        item(43408, "Swatches", "", Action::Inert),
+        item(
+            43405,
+            "Color Mixer",
+            "",
+            Action::Shell(ShellAction::TogglePanel("Color Mixer")),
+        ),
+        item(
+            43408,
+            "Swatches",
+            "",
+            Action::Shell(ShellAction::TogglePanel("Swatches")),
+        ),
         Entry::Sep,
-        item(43404, "Info", "", Action::Inert),
+        item(
+            43404,
+            "Info",
+            "",
+            Action::Shell(ShellAction::TogglePanel("Info")),
+        ),
         item(43413, "Behaviors", "", Action::Inert),
         item(43402, "Find and Replace", "", Action::Inert),
         Entry::Sep,
-        item(57650, "Cascade", "", Action::Inert),
-        item(57652, "Tile", "", Action::Inert),
+        item(
+            57650,
+            "Cascade",
+            "",
+            Action::Shell(ShellAction::SingleDocument),
+        ),
+        item(
+            57652,
+            "Tile",
+            "",
+            Action::Shell(ShellAction::SingleDocument),
+        ),
     ],
 };
 
@@ -1900,6 +1936,8 @@ pub fn action_name(action: Action) -> String {
             ShellAction::OnlineHelp => "Online Help".into(),
             ShellAction::ManageExtensions => "Manage Extensions".into(),
             ShellAction::TogglePanel(name) => format!("{name} panel"),
+            ShellAction::ToggleTools => "Tools panel".into(),
+            ShellAction::SingleDocument => "Single-document window command".into(),
             ShellAction::ToggleHidePanels => "Hide/show panels".into(),
             ShellAction::ToggleMainToolbar => "Main toolbar".into(),
         },
@@ -2007,7 +2045,7 @@ mod tests {
     /// The highest inert-item count the docs have recorded. The
     /// `inert_count_never_rises` test refuses any regression above it;
     /// when the count falls, ratchet this down to the new number.
-    const INERT_CEILING: usize = 79;
+    const INERT_CEILING: usize = 72;
 
     fn walk(entries: &'static [Entry]) -> Vec<&'static Item> {
         let mut items = Vec::new();

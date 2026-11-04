@@ -162,6 +162,21 @@ impl Shell {
                     .default_open(false)
                     .show(ui, |ui| self.history_section(ui));
             }
+            if self.panel_shown("Color Mixer") {
+                egui::CollapsingHeader::new("Color Mixer")
+                    .default_open(false)
+                    .show(ui, |ui| self.fill_stroke_panel(ui));
+            }
+            if self.panel_shown("Swatches") {
+                egui::CollapsingHeader::new("Swatches")
+                    .default_open(false)
+                    .show(ui, |ui| self.swatches_panel(ui));
+            }
+            if self.panel_shown("Info") {
+                egui::CollapsingHeader::new("Info")
+                    .default_open(false)
+                    .show(ui, |ui| self.info_panel(ui));
+            }
             // The Web Layer panel has no Window-menu item in CS6; it
             // stays always-visible.
             egui::CollapsingHeader::new("Web Layer")
@@ -188,6 +203,9 @@ impl Shell {
             "Styles",
             "Document Library",
             "History",
+            "Color Mixer",
+            "Swatches",
+            "Info",
         ];
         if DOCKED.contains(&name) {
             if let Some(pos) = self.panel_hidden.iter().position(|n| *n == name) {
@@ -197,11 +215,22 @@ impl Shell {
                 self.panel_hidden.push(name);
                 self.status = format!("{name} panel hidden.");
             }
-        } else if name == "Info" || name == "Optimize" {
+        } else if name == "Optimize" {
             self.status = format!("{name}: panel not yet implemented.");
         } else {
             self.status = format!("{name}: no docked panel in this shell.");
         }
+    }
+
+    /// Window ▸ Tools: fold/unfold the left tools dock.
+    pub(crate) fn toggle_tools(&mut self) {
+        self.tools_hidden = !self.tools_hidden;
+        self.status = if self.tools_hidden {
+            "Tools panel hidden."
+        } else {
+            "Tools panel shown."
+        }
+        .to_owned();
     }
 
     /// Window ▸ Hide Panels (the CS6 Tab key): fold/unfold the whole
@@ -747,6 +776,72 @@ impl Shell {
                     }
                 }
             });
+        }
+    }
+
+    /// Window ▸ Swatches: the same ABGR palette the Properties
+    /// essentials use, applied to the selection's fill channel — the
+    /// CS6 panel's core gesture (click a swatch, paint the selection).
+    pub(super) fn swatches_panel(&mut self, ui: &mut egui::Ui) {
+        let ids = self.editor.live_selection();
+        if ids.is_empty() {
+            ui.label("(select a vector object to apply a swatch)");
+            return;
+        }
+        egui::Grid::new("swatches")
+            .num_columns(6usize)
+            .show(ui, |ui| {
+                for (index, (name, color_raw)) in Self::FILL_STROKE_PALETTE.iter().enumerate() {
+                    let raw = *color_raw as u32;
+                    let swatch = Color32::from_rgba_unmultiplied(
+                        (raw & 0xFF) as u8,
+                        ((raw >> 8) & 0xFF) as u8,
+                        ((raw >> 16) & 0xFF) as u8,
+                        ((raw >> 24) & 0xFF) as u8,
+                    );
+                    let size = egui::Vec2::splat(18.0);
+                    let (response, painter) = ui.allocate_painter(size, egui::Sense::click());
+                    painter.rect_filled(response.rect, 2.0, swatch);
+                    painter.rect_stroke(
+                        response.rect,
+                        2.0,
+                        (1.0, Color32::from_rgb(0x77, 0x77, 0x77)),
+                        egui::StrokeKind::Outside,
+                    );
+                    if response.clicked() {
+                        for id in &ids {
+                            self.run_command(
+                                Self::paint_command("fill"),
+                                serde_json::json!({ "id": id, "color_raw": raw }),
+                            );
+                        }
+                        self.status = format!("fill → {name}");
+                    }
+                    if index % 6 == 5 {
+                        ui.end_row();
+                    }
+                }
+            });
+    }
+
+    /// Window ▸ Info: document and selection facts (canvas size,
+    /// selection count and bounding box) — read-only.
+    pub(super) fn info_panel(&mut self, ui: &mut egui::Ui) {
+        let document = self.editor.document();
+        let canvas = &document.pages[0].info.canvas;
+        ui.label(format!("canvas: {} × {}", canvas.width, canvas.height));
+        let ids = self.editor.live_selection();
+        ui.label(format!("selected: {} object(s)", ids.len()));
+        if let Some(bounds) = crate::editor::union_selection_bounds(document, &ids) {
+            ui.label(format!(
+                "bounds: {:.1}, {:.1} → {:.1}, {:.1} ({} × {})",
+                bounds.x0,
+                bounds.y0,
+                bounds.x1,
+                bounds.y1,
+                bounds.width(),
+                bounds.height()
+            ));
         }
     }
 

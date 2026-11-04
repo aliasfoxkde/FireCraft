@@ -221,7 +221,7 @@ of replacing it, fill/stroke swatch panel bound to
 Phase 19 batches 19.1–19.5 landed 2026-10-31 → 11-01: transform
 handles + Numeric Transform, Subselect path-node editing, the gradient
 fill editor, the command palette, and the grid/guides/snap set. The
-inert count is 79 of 289 items (was 190); 19.6 is the remaining
+inert count is 72 of 289 items (was 190); 19.6 is the remaining
 burn-down.
 
 ### Phase 19 — Canvas competence (P0, feeds usability directly)
@@ -283,6 +283,14 @@ burn-down.
   start), Split via `path.splitPaths`, Remove Transformations via
   `object.transform` with each stored `MTXv`'s inverse; Group as
   Mask/Repeat Filter/fill-edge rows stay inert — no engine verbs yet;
+  2026-11-03) → **72 inert of 289 items** (batch 10 — Window family:
+  Tools folds the left dock, Color Mixer/Swatches/Info dock as
+  toggled right-dock panels (Swatches = the ABGR palette as a grid
+  over fill, Info = canvas/selection facts), Duplicate Window/
+  Cascade/Tile report the single-document shell honestly instead of
+  sitting inert; Optimize/Common Library/CSS Properties/Auto
+  Shapes/URL/Behaviors/Find and Replace stay inert until their
+  features land)
   2026-11-03). Next batch: the File family and the remaining Modify
   rows.
 

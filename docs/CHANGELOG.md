@@ -10,6 +10,9 @@ Current version: **0.2.5**.
 
 ### Features
 
+- **app**: inert-menu burn-down batch 9 (79; transform family) (5feca40)
+- **app**: inert-menu burn-down batch 8 (83; attach to path) (a8c86af)
+- **app**: inert-menu burn-down batches 6-7 (85; View+Text) (72aa1d7)
 - **app**: wire Image Size dialog (35226) (9eab633)
 - **app**: inert-menu burn-down batch 5 (111; symbol/animation) (31344cf)
 - **app**: inert-menu burn-down batch 4 (114 -> 6 more wired) (c18ed9d)
@@ -205,6 +208,7 @@ Current version: **0.2.5**.
 
 ### Documentation
 
+- add TASKS.md board + docs/tasks/ ticket scaffold (466ab7f)
 - 19b.1 quoting corrections, v0.2.4 receipts, license consolidation (2b849f5)
 - refresh stack for the daily-driver turn (19.1-19.5 landed) (dc62449)
 - session log for 19.1-19.5 + rendering fixes; ignore scratch (da108e7)
@@ -310,6 +314,7 @@ Current version: **0.2.5**.
 
 ### Chores
 
+- regen aegis baseline from batch 8-9 shifts (ce29c59)
 - regen changelog from gate (64e269a)
 - regen changelog from gate (7d8b68e)
 - regen changelog hashes, scripts report from gate (77c497f)

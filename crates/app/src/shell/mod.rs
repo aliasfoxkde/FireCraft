@@ -147,6 +147,8 @@ pub struct Shell {
     /// Window ▸ Hide Panels (Tab): all right-dock panels folded at
     /// once, independent of per-panel visibility.
     panels_hidden: bool,
+    /// Window ▸ Tools: the left tools dock is folded.
+    tools_hidden: bool,
     /// Window ▸ Toolbars ▸ Main: the context options bar is hidden.
     options_bar_hidden: bool,
     /// The live egui context, stashed each frame so code outside the
@@ -217,6 +219,7 @@ impl Shell {
             context_menu: None,
             panel_hidden: Vec::new(),
             panels_hidden: false,
+            tools_hidden: false,
             options_bar_hidden: false,
             ctx: None,
         }
@@ -812,6 +815,12 @@ impl Shell {
             }
             menus::ShellAction::ManageExtensions => self.open_extension_manager(),
             menus::ShellAction::TogglePanel(name) => self.toggle_panel(name),
+            menus::ShellAction::ToggleTools => self.toggle_tools(),
+            menus::ShellAction::SingleDocument => {
+                self.status = "This command needs multiple open documents; the shell is \
+                     single-document."
+                    .to_owned();
+            }
             menus::ShellAction::ToggleHidePanels => self.toggle_all_panels(),
             menus::ShellAction::ToggleMainToolbar => self.toggle_options_bar(),
             menus::ShellAction::Quit => self.close_requested = true,
@@ -1731,9 +1740,11 @@ impl eframe::App for Shell {
         if !self.options_bar_hidden {
             egui::Panel::top(egui::Id::new("options")).show(ui, |ui| self.options_bar(ui));
         }
-        egui::Panel::left(egui::Id::new("tools"))
-            .exact_size(34.0)
-            .show(ui, |ui| self.tools_panel(ui));
+        if !self.tools_hidden {
+            egui::Panel::left(egui::Id::new("tools"))
+                .exact_size(34.0)
+                .show(ui, |ui| self.tools_panel(ui));
+        }
         if !self.panels_hidden {
             egui::Panel::right(egui::Id::new("panels"))
                 .default_size(250.0)
@@ -2192,11 +2203,33 @@ mod tests {
         )));
         assert!(shell.panel_shown("Layers"), "Layers resurfaces");
 
-        // A panel with no dock implementation reports, not crashes.
+        // Color Mixer / Swatches / Info dock now (batch 10).
         shell.run_action(&menus::Action::Shell(menus::ShellAction::TogglePanel(
             "Color Mixer",
         )));
-        assert!(shell.status.contains("Color Mixer"));
+        assert!(!shell.panel_shown("Color Mixer"), "Color Mixer hides");
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::TogglePanel(
+            "Color Mixer",
+        )));
+        assert!(shell.panel_shown("Color Mixer"));
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::TogglePanel(
+            "Swatches",
+        )));
+        assert!(!shell.panel_shown("Swatches"));
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::TogglePanel(
+            "Info",
+        )));
+        assert!(!shell.panel_shown("Info"));
+
+        // Tools folds the left dock.
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::ToggleTools));
+        assert!(shell.tools_hidden);
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::ToggleTools));
+        assert!(!shell.tools_hidden);
+
+        // Single-document rows report honestly instead of acting.
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::SingleDocument));
+        assert!(shell.status.contains("single-document"));
 
         shell.run_action(&menus::Action::Shell(menus::ShellAction::TogglePanel(
             "Properties",
