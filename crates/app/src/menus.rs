@@ -305,6 +305,10 @@ pub enum SelAction {
     /// Reset every selected object's `MTXv` to identity (CS6 Modify ▸
     /// Transform ▸ Remove Transformations).
     RemoveTransformations,
+    /// `symbol.breakApart` on the selected symbol instance — CS6
+    /// Modify ▸ Animation ▸ Remove Animation: dissolve the animation
+    /// back to plain objects.
+    RemoveAnimation,
     /// `text.reversePathTextDirection` — flip the selected text's
     /// travel direction along its rail.
     ReversePathText,
@@ -934,7 +938,12 @@ pub static MODIFY: Menu = Menu {
                 ),
                 item(35463, "Settings...", "", Action::Inert),
                 Entry::Sep,
-                item(35472, "Remove Animation", "", Action::Inert),
+                item(
+                    35472,
+                    "Remove Animation",
+                    "",
+                    Action::Sel(SelAction::RemoveAnimation),
+                ),
             ],
         ),
         Entry::Sub(
@@ -2037,6 +2046,7 @@ pub fn action_name(action: Action) -> String {
             SelAction::DetachFromPath => "Detach text from path".into(),
             SelAction::AttachToPath => "Attach text to path".into(),
             SelAction::SplitPaths => "Split paths".into(),
+            SelAction::RemoveAnimation => "Remove animation".into(),
             SelAction::RemoveTransformations => "Remove transformations".into(),
             SelAction::EmptyBitmap => "Insert empty bitmap".into(),
             SelAction::BitmapViaCopy => "Bitmap via copy".into(),
@@ -2083,7 +2093,7 @@ mod tests {
     /// The highest inert-item count the docs have recorded. The
     /// `inert_count_never_rises` test refuses any regression above it;
     /// when the count falls, ratchet this down to the new number.
-    const INERT_CEILING: usize = 68;
+    const INERT_CEILING: usize = 67;
 
     fn walk(entries: &'static [Entry]) -> Vec<&'static Item> {
         let mut items = Vec::new();

@@ -1424,6 +1424,26 @@ impl Shell {
                     }),
                 );
             }
+            menus::SelAction::RemoveAnimation => {
+                // CS6 dissolves the animation symbol back to plain
+                // objects — the break-apart verb, scoped to the
+                // animation-symbol instance under the selection.
+                let document = self.editor.session.document();
+                let target = self.editor.live_selection().into_iter().find(|id| {
+                    matches!(
+                        document.registry.get(*id),
+                        Some(doc::ObjectData::SymbolInstance(_))
+                    )
+                });
+                match target {
+                    Some(id) => {
+                        self.run_command("symbol.breakApart", serde_json::json!({ "id": id }));
+                    }
+                    None => {
+                        self.status = "no symbol instance in the selection".to_owned();
+                    }
+                }
+            }
             menus::SelAction::TweenInstances => {
                 if self.editor.live_selection().len() < 2 {
                     self.status = "tween needs two instances of one symbol".to_owned();
@@ -2601,6 +2621,26 @@ mod tests {
             shell.editor.document().symbols[0].symbol_type,
             doc::SymbolType::Animation,
             "animate selection makes an animation symbol"
+        );
+
+        // Remove Animation with a symbol instance: breakApart dissolves
+        // it; with no instance in the selection it refuses.
+        let mut shell = gui_shell(gui_editor());
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::SelectAll));
+        shell.run_action(&menus::Action::Sel(menus::SelAction::AnimateSelection));
+        // The instance replaced the source objects in the cell; select
+        // the cell's live contents before removing the animation.
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::SelectAll));
+        shell.run_action(&menus::Action::Sel(menus::SelAction::RemoveAnimation));
+        assert!(
+            !shell.status.contains("no symbol"),
+            "the animation instance was found and broken apart"
+        );
+        let mut shell = gui_shell(gui_editor());
+        shell.run_action(&menus::Action::Sel(menus::SelAction::RemoveAnimation));
+        assert!(
+            shell.status.contains("no symbol instance"),
+            "remove animation without an instance refuses"
         );
 
         // Tween Instances with fewer than two instances is a refusal.
