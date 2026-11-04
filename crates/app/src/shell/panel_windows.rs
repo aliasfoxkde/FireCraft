@@ -121,17 +121,17 @@ impl Shell {
             .resizable(true)
             .default_width(250.0)
             .default_height(240.0)
-            .anchor(
-                egui::Align2::RIGHT_TOP,
-                egui::vec2(-8.0, 8.0 + DOCK_STEP * PANELS.len() as f32),
-            )
+            .default_pos(self.dock_pos(PANELS.len()))
             .show(ctx, |ui| {
                 ui.set_min_height(180.0);
                 self.web_panel(ui);
             });
     }
 
-    /// One panel window, anchored in the right-hand dock column.
+    /// One panel window, docked by default in the right-hand column.
+    /// `default_pos` (not `anchor`) is the CS6 affordance: the panel
+    /// opens docked, but a drag moves it free — and egui's persisted
+    /// area memory then restores wherever the user left it.
     fn one_panel_window(&mut self, ctx: &egui::Context, spec: &PanelSpec, index: usize) {
         let mut open = self.panel_shown(spec.name);
         egui::Window::new(spec.name)
@@ -140,10 +140,7 @@ impl Shell {
             .resizable(true)
             .default_width(250.0)
             .default_height(240.0)
-            .anchor(
-                egui::Align2::RIGHT_TOP,
-                egui::vec2(-8.0, 8.0 + DOCK_STEP * index as f32),
-            )
+            .default_pos(self.dock_pos(index))
             .show(ctx, |ui| {
                 ui.set_min_height(180.0);
                 match spec.kind {
@@ -172,6 +169,17 @@ impl Shell {
             self.panel_hidden.remove(pos);
         }
         self.panel_hidden.push(name);
+    }
+
+    /// The default dock position for the panel at `index`: a
+    /// right-edge column. Needs the screen size, so it is computed at
+    /// draw time from the context the windows are shown into.
+    fn dock_pos(&self, index: usize) -> egui::Pos2 {
+        let screen = self
+            .ctx
+            .as_ref()
+            .map_or(egui::Rect::NOTHING, |ctx| ctx.viewport_rect());
+        egui::Pos2::new(screen.right() - 258.0, 8.0 + DOCK_STEP * index as f32)
     }
 
     /// The panels CS6 opens on a fresh document — the initial value of

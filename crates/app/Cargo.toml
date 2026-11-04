@@ -29,12 +29,20 @@ egui_extras = { version = "0.36", default-features = false, features = ["svg"] }
 eframe = { version = "0.36", default-features = false, features = [
     "default_fonts",
     "glow",
+    "persistence",
     "wayland",
     "x11",
 ] }
+serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["float_roundtrip"] }
 base64 = "0.22"
 scripting = { path = "../scripting" }
+
+[dev-dependencies]
+# The test-side mirror of eframe's own persistence encoding (its
+# `ron` dep is private), so the layout round-trip test exercises the
+# exact on-disk shape.
+ron = "0.12"
 
 [lints]
 workspace = true

@@ -180,11 +180,15 @@ pub async fn start() -> Result<(), wasm_bindgen::JsValue> {
                 // has to be applied here — without it the deployed app
                 // rendered egui's default light chrome.
                 app::shell::apply_cs6_theme(&cc.egui_ctx);
-                Ok(Box::new(app::shell::Shell::with_platform(
+                let mut shell = app::shell::Shell::with_platform(
                     app::editor::Editor::untitled(),
                     std::rc::Rc::new(platform::WebFs),
                     Box::new(platform::WebDialogs),
-                )))
+                );
+                // The persisted panel set and dock folds come back from
+                // localStorage, the same way they do on the desktop.
+                shell.restore_layout(cc.storage);
+                Ok(Box::new(shell))
             }),
         )
         .await?;

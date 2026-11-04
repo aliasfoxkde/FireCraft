@@ -403,13 +403,18 @@ scope, so no license path is attempted.
   left↔right, collapsed, and reopened, and the layout survives a
   restart. — **PARTLY LANDED 2026-11-03**: the panel stack is now
   one window per panel (`shell::panel_windows`) — draggable,
-  collapsible, resizable, closable, anchored in the right-hand
-  column, with CS6's fresh-document roster (Properties/Pages/States/
-  Layers open, the rest closed until asked for) and the Window menu
-  toggling each. Still open: dock-side switching, geometry
-  persistence, and the panels this build does not implement yet
-  (Optimize, Common Library, CSS Properties, Auto Shapes, URL,
-  Behaviors, Find and Replace, Slices).
+  collapsible, resizable, closable, docked by default in the
+  right-hand column (`default_pos`, so a drag moves a panel free and
+  egui's persisted area memory keeps the new spot), with CS6's
+  fresh-document roster (Properties/Pages/States/Layers open, the
+  rest closed until asked for) and the Window menu toggling each.
+  The layout now persists across restarts (`eframe`'s `persistence`
+  feature): a `ShellLayout` snapshot (panel set, dock folds, display
+  toggles) saved through `App::save` — native to `storage_dir`, web
+  to localStorage — and restored at startup, filtered against the
+  current panel inventory. Still open: the panels this build does
+  not implement yet (Optimize, Common Library, CSS Properties, Auto
+  Shapes, URL, Behaviors, Find and Replace, Slices).
 - **22.2 CS6 tool strip** (M): the CS6 tool set in CS6 order with
   tool flyouts (shape tools, the modify sub-tools, the fill/stroke
   pair, zoom/hand, and the eyedropper), each with an open-license

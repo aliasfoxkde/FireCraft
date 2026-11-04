@@ -1325,26 +1325,10 @@ impl Shell {
         let mut w = bounds.width() as f32;
         let mut h = bounds.height() as f32;
         ui.horizontal(|ui| {
-            let x_field = ui.add(
-                egui::DragValue::new(&mut x)
-                    .speed(1.0)
-                    .prefix("X "),
-            );
-            let y_field = ui.add(
-                egui::DragValue::new(&mut y)
-                    .speed(1.0)
-                    .prefix("Y "),
-            );
-            let w_field = ui.add(
-                egui::DragValue::new(&mut w)
-                    .speed(1.0)
-                    .prefix("W "),
-            );
-            let h_field = ui.add(
-                egui::DragValue::new(&mut h)
-                    .speed(1.0)
-                    .prefix("H "),
-            );
+            let x_field = ui.add(egui::DragValue::new(&mut x).speed(1.0).prefix("X "));
+            let y_field = ui.add(egui::DragValue::new(&mut y).speed(1.0).prefix("Y "));
+            let w_field = ui.add(egui::DragValue::new(&mut w).speed(1.0).prefix("W "));
+            let h_field = ui.add(egui::DragValue::new(&mut h).speed(1.0).prefix("H "));
             let applied = [x_field, y_field, w_field, h_field]
                 .into_iter()
                 .any(|field| field.lost_focus() && field.changed());

@@ -39,11 +39,11 @@ use crate::editor::{
 };
 use crate::menus;
 
-/// The web drop sink ([`Shell::set_drop_sink`]): the web crate's async
-/// file reader, installed at startup. Wasm only — the desktop shell
-/// reads dropped bytes directly. No `Send`/`Sync` bound: wasm is
-/// single-threaded and the sink captures `Rc<WebRunner>`, so the
-/// holder is a `thread_local` (a `static Mutex` would demand `Send`).
+// The web drop sink ([`Shell::set_drop_sink`]): the web crate's async
+// file reader, installed at startup. Wasm only — the desktop shell
+// reads dropped bytes directly. No `Send`/`Sync` bound: wasm is
+// single-threaded and the sink captures `Rc<WebRunner>`, so the
+// holder is a `thread_local` (a `static Mutex` would demand `Send`).
 #[cfg(target_arch = "wasm32")]
 thread_local! {
     static DROP_SINK: std::cell::RefCell<Option<std::rc::Rc<dyn Fn(&egui::DroppedFileHandle, egui::Context)>>> =
@@ -101,6 +101,13 @@ pub struct Shell {
     /// The open tool-group flyout: the group's name, its tools, and
     /// the screen position it opened at (CS6's press-and-hold list).
     tool_flyout: Option<(&'static str, Vec<Tool>, Pos2)>,
+    /// The pending press-and-hold on a tool-group leader: when the
+    /// press started and where.
+    tool_press: Option<ToolPress>,
+    /// The persisted shell layout (panel visibility, dock folds) —
+    /// saved through `App::save` and restored at startup. The window
+    /// *geometry* itself persists through egui's own area memory.
+    layout: ShellLayout,
     /// The Help ▸ About `FireCraft` window is open.
     pub(crate) about_open: bool,
     /// The keyboard-shortcuts help panel is open (F1 / Help menu).
@@ -165,16 +172,85 @@ pub struct Shell {
     ctx: Option<egui::Context>,
 }
 
+/// A press-and-hold in progress on a tool-group leader: when it
+/// started (egui input time) and where the pointer was.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct ToolPress {
+    /// The egui input time the press started at.
+    pub(crate) at: f64,
+    /// The pointer position at the press.
+    pub(crate) pos: Pos2,
+}
+
+/// How long a tool-group leader must be held before its flyout
+/// opens — CS6's press-and-hold dwell.
+pub(crate) const TOOL_HOLD_SECONDS: f64 = 0.45;
+
+/// The hold decision, as a pure function of the elapsed time: the
+/// clock and the pointer state are read at the edge and passed in.
+pub(crate) fn hold_opens_flyout(elapsed: f64) -> bool {
+    elapsed >= TOOL_HOLD_SECONDS
+}
+
+/// The persisted shell layout: the panel-visibility set and the dock
+/// folds. Serialized (RON, via eframe's storage) on shutdown and
+/// every ~30 s; restored at startup so the CS6 arrangement survives a
+/// restart. Window *geometry* persists through egui's own area memory
+/// (the `persistence` feature), which is keyed on the window ids.
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
+struct ShellLayout {
+    /// The panel names currently hidden from the dock.
+    panel_hidden: Vec<String>,
+    /// The Tab-key fold of the whole panel group.
+    panels_hidden: bool,
+    /// The left tool dock fold.
+    tools_hidden: bool,
+    /// The context options bar fold.
+    options_bar_hidden: bool,
+    /// Display toggles worth carrying across sessions.
+    show_grid: bool,
+    show_guides: bool,
+    show_rulers: bool,
+    smart_guides: bool,
+}
+
+impl Default for ShellLayout {
+    fn default() -> Self {
+        Self {
+            panel_hidden: Shell::default_open_panels()
+                .into_iter()
+                .map(str::to_owned)
+                .collect(),
+            panels_hidden: false,
+            tools_hidden: false,
+            options_bar_hidden: false,
+            show_grid: false,
+            show_guides: true,
+            show_rulers: false,
+            smart_guides: true,
+        }
+    }
+}
+
 impl Shell {
-    /// Builds the shell with desktop platform defaults.
+    /// Builds the shell with desktop platform defaults. A persisted
+    /// layout (from the previous session's `App::save`) restores the
+    /// panel set and dock folds.
     #[must_use]
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         apply_cs6_theme(&cc.egui_ctx);
-        Self::with_platform(
+        let layout = cc
+            .storage
+            .and_then(|storage| eframe::get_value::<ShellLayout>(storage, "shell_layout"))
+            .unwrap_or_default();
+        let mut shell = Self::with_platform(
             Editor::untitled(),
             std::rc::Rc::new(app_cli::io::StdFs),
             Box::new(EnvDialogs::default()),
-        )
+        );
+        shell.layout = layout;
+        shell.apply_layout();
+        shell
     }
 
     /// Builds the shell over an editor and explicit platform services.
@@ -205,6 +281,7 @@ impl Shell {
             close_requested: false,
             autoshape_flyout: false,
             tool_flyout: None,
+            tool_press: None,
             about_open: false,
             help_open: false,
             style_name: String::new(),
@@ -232,7 +309,64 @@ impl Shell {
             panels_hidden: false,
             tools_hidden: false,
             options_bar_hidden: false,
+            layout: ShellLayout::default(),
             ctx: None,
+        }
+    }
+
+    /// Restores a persisted layout (panel set, dock folds, display
+    /// toggles) from platform storage. The web build constructs the
+    /// shell without a `CreationContext`, so it calls this with the
+    /// storage its runner exposes.
+    pub fn restore_layout(&mut self, storage: Option<&dyn eframe::Storage>) {
+        if let Some(layout) =
+            storage.and_then(|storage| eframe::get_value::<ShellLayout>(storage, "shell_layout"))
+        {
+            self.layout = layout;
+            self.apply_layout();
+        }
+    }
+
+    /// Copies the persisted layout into the live session fields.
+    /// Panel names are intersected with the current inventory so a
+    /// layout saved by a build with different panels cannot resurrect
+    /// panels this build cannot draw (or orphan one it gained).
+    fn apply_layout(&mut self) {
+        let saved: Vec<&str> = self
+            .layout
+            .panel_hidden
+            .iter()
+            .map(String::as_str)
+            .collect();
+        self.panel_hidden = panel_windows::PANELS
+            .iter()
+            .filter(|panel| saved.contains(&panel.name))
+            .map(|panel| panel.name)
+            .collect();
+        self.panels_hidden = self.layout.panels_hidden;
+        self.tools_hidden = self.layout.tools_hidden;
+        self.options_bar_hidden = self.layout.options_bar_hidden;
+        self.show_grid = self.layout.show_grid;
+        self.show_guides = self.layout.show_guides;
+        self.show_rulers = self.layout.show_rulers;
+        self.smart_guides = self.layout.smart_guides;
+    }
+
+    /// Snapshots the live layout fields for `App::save`.
+    fn capture_layout(&self) -> ShellLayout {
+        ShellLayout {
+            panel_hidden: self
+                .panel_hidden
+                .iter()
+                .map(|name| (*name).to_owned())
+                .collect(),
+            panels_hidden: self.panels_hidden,
+            tools_hidden: self.tools_hidden,
+            options_bar_hidden: self.options_bar_hidden,
+            show_grid: self.show_grid,
+            show_guides: self.show_guides,
+            show_rulers: self.show_rulers,
+            smart_guides: self.smart_guides,
         }
     }
 
@@ -1919,6 +2053,14 @@ impl Shell {
 }
 
 impl eframe::App for Shell {
+    /// Persists the shell layout (and egui's own window geometry
+    /// memory) — on native to `storage_dir`, on web to localStorage.
+    /// Layout only: documents are saved explicitly through the File
+    /// menu, never as a side effect of closing the window.
+    fn save(&mut self, storage: &mut dyn eframe::Storage) {
+        eframe::set_value(storage, "shell_layout", &self.capture_layout());
+    }
+
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         // Keep the context reachable for out-of-frame mutators (the
         // web bridge's request_repaint).
@@ -2504,6 +2646,70 @@ mod tests {
             journal,
             "panel toggles are view state, not document history"
         );
+    }
+
+    /// The persisted layout round-trips: capture → (RON via serde,
+    /// the shape eframe stores) → apply reproduces the panel set and
+    /// dock folds, and a layout naming a panel this build does not
+    /// have is dropped rather than resurrected.
+    #[test]
+    fn shell_layout_round_trips_through_save() {
+        let mut shell = gui_shell(gui_editor());
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::TogglePanel(
+            "Properties",
+        )));
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::TogglePanel(
+            "History",
+        )));
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::ToggleTools));
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::ToggleMainToolbar));
+        let saved = shell.capture_layout();
+
+        // Same encode path eframe uses on native and web (RON).
+        let encoded = ron_mid_encoded(&saved);
+        let decoded: ShellLayout = ron::from_str(&encoded).expect("layout decodes");
+        let mut restored = gui_shell(gui_editor());
+        restored.layout = decoded;
+        restored.apply_layout();
+        assert!(!restored.panel_shown("Properties"));
+        assert!(restored.panel_shown("History"));
+        assert!(restored.tools_hidden);
+        assert!(restored.options_bar_hidden);
+
+        // A layout from a build with panels this build lacks: the
+        // unknown name is dropped, the known ones survive.
+        let mut foreign = shell.capture_layout();
+        foreign.panel_hidden.push("Not A Panel".to_owned());
+        let mut restored = gui_shell(gui_editor());
+        restored.layout = foreign;
+        restored.apply_layout();
+        assert_eq!(
+            restored
+                .panel_hidden
+                .iter()
+                .filter(|name| panel_windows::PANELS.iter().any(|p| p.name == **name))
+                .count(),
+            restored.panel_hidden.len(),
+            "no unknown panel names survive apply_layout"
+        );
+    }
+
+    /// The tool-flyout hold decision is a pure function of elapsed
+    /// time: below the dwell it stays closed, at and past it the
+    /// flyout opens, and a short press never opens it no matter how
+    /// it is chopped up.
+    #[test]
+    fn tool_hold_opens_only_past_the_dwell() {
+        assert!(!hold_opens_flyout(0.0), "the instant of the press");
+        assert!(!hold_opens_flyout(TOOL_HOLD_SECONDS - 0.01), "just under");
+        assert!(hold_opens_flyout(TOOL_HOLD_SECONDS), "exactly at");
+        assert!(hold_opens_flyout(TOOL_HOLD_SECONDS + 5.0), "long past");
+    }
+
+    /// Encodes a `ShellLayout` the way `eframe::set_value` does
+    /// (RON text) — without needing a `dyn Storage` in the test.
+    fn ron_mid_encoded(layout: &ShellLayout) -> String {
+        ron::ser::to_string(layout).expect("layout encodes")
     }
 
     /// The palette covers the whole registry: every catalog id is

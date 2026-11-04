@@ -70,10 +70,33 @@ impl Shell {
                 // The group leader carries the flyout arrow.
                 let leader = position == 0 && group.len() > 1;
                 let response = self.tool_button(ui, *tool, leader);
-                if leader && response.secondary_clicked() {
+                if !leader {
+                    continue;
+                }
+                if response.secondary_clicked() {
                     if let Some(pos) = response.interact_pointer_pos() {
                         self.tool_flyout = Some((*name, group.to_vec(), pos));
+                        self.tool_press = None;
                     }
+                    continue;
+                }
+                // Press-and-hold: CS6 opens the group's list when the
+                // leader is held, not only when its arrow is clicked.
+                let now = ui.input(|input| input.time);
+                let holding = response.is_pointer_button_down_on();
+                match self.tool_press {
+                    Some(_) if !holding => self.tool_press = None,
+                    Some(press) if hold_opens_flyout(now - press.at) => {
+                        self.tool_flyout = Some((*name, group.to_vec(), press.pos));
+                        self.tool_press = None;
+                    }
+                    Some(_) => {}
+                    None if holding => {
+                        if let Some(pos) = response.interact_pointer_pos() {
+                            self.tool_press = Some(ToolPress { at: now, pos });
+                        }
+                    }
+                    None => {}
                 }
             }
         }

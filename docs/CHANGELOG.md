@@ -10,6 +10,10 @@ Current version: **0.2.5**.
 
 ### Features
 
+- **app**: CS6 shell fidelity — panel windows, tool flyouts, geometry strip (eef253c)
+- **app**: inert-menu burn-down batch 12 (67; Remove Animation) (1754c98)
+- **app**: inert-menu burn-down batch 11 (68; Edit bitmap rows) (634558d)
+- **app**: inert-menu burn-down batch 10 (72; Window family) (e7dbed6)
 - **app**: inert-menu burn-down batch 9 (79; transform family) (5feca40)
 - **app**: inert-menu burn-down batch 8 (83; attach to path) (a8c86af)
 - **app**: inert-menu burn-down batches 6-7 (85; View+Text) (72aa1d7)
@@ -314,6 +318,8 @@ Current version: **0.2.5**.
 
 ### Chores
 
+- regen aegis baseline after batch 11 doc moves (f8bc9a2)
+- regen aegis baseline after batch 10 doc edits (ce07c70)
 - regen aegis baseline from batch 8-9 shifts (ce29c59)
 - regen changelog from gate (64e269a)
 - regen changelog from gate (7d8b68e)
