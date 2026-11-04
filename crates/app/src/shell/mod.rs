@@ -20,6 +20,7 @@ mod glyphs;
 mod guides_ui;
 mod icons;
 mod palette;
+mod panel_windows;
 mod panels;
 
 pub use glyphs::apply_cs6_theme;
@@ -87,6 +88,9 @@ pub struct Shell {
     pub(crate) palette: palette::CommandPalette,
     /// Display name of the open document (tab strip).
     doc_name: String,
+    /// The path the document was last opened/saved from — Revert
+    /// reads this; `None` for a never-saved document.
+    doc_path: Option<String>,
     /// Last canvas widget rect — the anchor for view commands that
     /// arrive outside the canvas (menu/shortcut zoom and fit).
     canvas_rect: Option<Rect>,
@@ -94,6 +98,9 @@ pub struct Shell {
     close_requested: bool,
     /// The Auto Shape flyout is open (toggled by its tool button).
     autoshape_flyout: bool,
+    /// The open tool-group flyout: the group's name, its tools, and
+    /// the screen position it opened at (CS6's press-and-hold list).
+    tool_flyout: Option<(&'static str, Vec<Tool>, Pos2)>,
     /// The Help ▸ About `FireCraft` window is open.
     pub(crate) about_open: bool,
     /// The keyboard-shortcuts help panel is open (F1 / Help menu).
@@ -193,9 +200,11 @@ impl Shell {
             image_size: None,
             palette: palette::CommandPalette::default(),
             doc_name: "untitled".to_owned(),
+            doc_path: None,
             canvas_rect: None,
             close_requested: false,
             autoshape_flyout: false,
+            tool_flyout: None,
             about_open: false,
             help_open: false,
             style_name: String::new(),
@@ -217,7 +226,9 @@ impl Shell {
             gamma_18: false,
             guide_draft: None,
             context_menu: None,
-            panel_hidden: Vec::new(),
+            // CS6's fresh-document roster: Properties/Pages/States/
+            // Layers open, the rest of the panel inventory closed.
+            panel_hidden: Self::default_open_panels(),
             panels_hidden: false,
             tools_hidden: false,
             options_bar_hidden: false,
@@ -325,6 +336,7 @@ impl Shell {
                 self.raster_scale = 1.0;
                 self.editor = editor;
                 self.view = View::default();
+                self.doc_path = Some(path.clone());
                 self.doc_name = std::path::Path::new(&path)
                     .file_name()
                     .map_or_else(|| path.clone(), |name| name.to_string_lossy().into_owned());
@@ -409,6 +421,71 @@ impl Shell {
         self.run_script_file();
     }
 
+    /// File ▸ File Info: the document's facts on one line — name,
+    /// pages, layers, objects, canvas.
+    fn file_info_summary(&self) -> String {
+        let document = self.editor.session.document();
+        let pages = document.pages.len();
+        let layers: usize = document
+            .pages
+            .iter()
+            .map(|page| page.layers.layers.len())
+            .sum();
+        let objects = document.registry.len();
+        let canvas = &document.pages[self.editor.page].info.canvas;
+        format!(
+            "{} — {pages} page(s), {layers} layer(s), {objects} object(s), canvas {}×{}",
+            self.doc_name, canvas.width, canvas.height
+        )
+    }
+
+    /// File ▸ Send to E-mail ▸ Fireworks PNG (format)…: the PNG
+    /// format facts of the live document — the canvas the format
+    /// stores, its color depth, and the object count it carries.
+    fn png_format_summary(&self) -> String {
+        let document = self.editor.session.document();
+        let canvas = &document.pages[self.editor.page].info.canvas;
+        format!(
+            "Fireworks PNG — {}×{} px, 32-bit RGBA, {} object(s); e-mail delivery is not \
+             available in this build",
+            canvas.width,
+            canvas.height,
+            document.registry.len()
+        )
+    }
+
+    /// File ▸ Revert: reload the document from the file it was last
+    /// saved to, discarding the in-memory edits.
+    fn revert_document(&mut self) {
+        let Some(path) = self.doc_path.clone() else {
+            self.status = "revert needs a document saved to a file".to_owned();
+            return;
+        };
+        // CS6 prompts before discarding unsaved edits; refuse rather
+        // than silently dropping work.
+        if self.editor.session.is_dirty() {
+            self.status = "document has unsaved changes — save before reverting".to_owned();
+            return;
+        }
+        let bytes = match self.fs.read_file(&path).map_err(|error| error.to_string()) {
+            Ok(bytes) => bytes,
+            Err(error) => {
+                self.status = format!("revert failed: {error}");
+                return;
+            }
+        };
+        match Editor::open(&bytes) {
+            Ok(editor) => {
+                self.editor = editor;
+                self.view = View::default();
+                self.raster = None;
+                self.raster_scale = 1.0;
+                self.status = format!("reverted to {path}");
+            }
+            Err(error) => self.status = format!("revert failed: {error}"),
+        }
+    }
+
     fn save_document(&mut self) {
         let Some(path) = self.dialogs.save_path(
             "Save document",
@@ -421,6 +498,7 @@ impl Shell {
             Ok(bytes) => match self.fs.write_file(&path, &bytes) {
                 Ok(()) => {
                     self.editor.session.mark_clean();
+                    self.doc_path = Some(path.clone());
                     self.doc_name = std::path::Path::new(&path)
                         .file_name()
                         .map_or_else(|| path.clone(), |name| name.to_string_lossy().into_owned());
@@ -744,6 +822,59 @@ impl Shell {
             menus::ShellAction::Save | menus::ShellAction::SaveAs => self.save_document(),
             menus::ShellAction::Export | menus::ShellAction::ExportPreview => {
                 self.export_dialog = Some(ExportDialog::default());
+            }
+            menus::ShellAction::ExportWizard => {
+                self.export_dialog = Some(ExportDialog::default());
+                self.status = "export wizard".to_owned();
+            }
+            menus::ShellAction::ExportJpeg => {
+                // The JPEG row of CS6's Send to E-mail submenu: the
+                // JPEG export options. E-mail delivery itself is not
+                // wired in this build — say so instead of pretending.
+                let mut dialog = ExportDialog::default();
+                if let Some(index) = crate::shell::dialogs::EXPORT_FORMATS
+                    .iter()
+                    .position(|format| *format == "jpg")
+                {
+                    dialog.format = index;
+                }
+                self.export_dialog = Some(dialog);
+                self.status =
+                    "JPEG export options — e-mail delivery is not available in this build."
+                        .to_owned();
+            }
+            menus::ShellAction::FileInfo => {
+                self.status = self.file_info_summary();
+            }
+            menus::ShellAction::PngFormatInfo => {
+                self.status = self.png_format_summary();
+            }
+            menus::ShellAction::CloseDocument => {
+                // CS6 prompts before discarding unsaved edits; this
+                // build has no prompt yet, so refuse instead of
+                // silently dropping work.
+                if self.editor.session.is_dirty() {
+                    self.status = "document has unsaved changes — save before closing".to_owned();
+                } else {
+                    self.editor = Editor::untitled();
+                    self.view = View::default();
+                    self.raster = None;
+                    self.raster_scale = 1.0;
+                    self.doc_name = "untitled".to_owned();
+                    self.doc_path = None;
+                    self.status = "closed the document".to_owned();
+                }
+            }
+            menus::ShellAction::SaveAll => {
+                // One open document: Save All saves it.
+                if self.editor.session.is_dirty() {
+                    self.save_document();
+                } else {
+                    self.status = "nothing to save".to_owned();
+                }
+            }
+            menus::ShellAction::Revert => {
+                self.revert_document();
             }
             menus::ShellAction::NumericTransform => {
                 self.numeric_transform = Some(NumericTransformDialog::default());
@@ -1811,13 +1942,10 @@ impl eframe::App for Shell {
                 .exact_size(34.0)
                 .show(ui, |ui| self.tools_panel(ui));
         }
-        if !self.panels_hidden {
-            egui::Panel::right(egui::Id::new("panels"))
-                .default_size(250.0)
-                .size_range(180.0..=460.0)
-                .resizable(true)
-                .show(ui, |ui| self.right_panels(ui));
-        }
+        // The CS6 panel group: one window per panel, docked along the
+        // right edge (drawn after the CentralPanel reservation below —
+        // egui windows float above panels regardless of call order, but
+        // the fold flag is honored here).
         egui::Panel::bottom(egui::Id::new("status")).show(ui, |ui| {
             ui.horizontal(|ui| {
                 ui.label(&self.status);
@@ -1900,6 +2028,9 @@ impl eframe::App for Shell {
         if self.help_open {
             self.help_panel(ui.ctx());
         }
+        // The CS6 panel group — drawn last so the windows float over
+        // the canvas like CS6's docked panels do.
+        self.panel_windows(ui.ctx());
         if self.close_requested {
             self.close_requested = false;
             ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
@@ -2045,6 +2176,46 @@ mod tests {
                 Some(doc::ObjectData::Path(_))
             ),
             "the text became a path"
+        );
+    }
+
+    /// File ▸ File Info / PNG format facts report the live
+    /// document; Close refuses to discard unsaved edits; Revert
+    /// reloads the file the document was opened from.
+    #[test]
+    fn file_rows_report_and_guard_the_document() {
+        let mut shell = gui_shell(Editor::untitled());
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::FileInfo));
+        assert!(
+            shell.status.contains("page(s)") && shell.status.contains("canvas"),
+            "file info reports the document: {}",
+            shell.status
+        );
+
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::PngFormatInfo));
+        assert!(
+            shell.status.contains("Fireworks PNG") && shell.status.contains("RGBA"),
+            "the PNG row reports the format facts: {}",
+            shell.status
+        );
+
+        // A dirty document is not closed out from under the user.
+        let mut editor = Editor::untitled();
+        editor.tool = Tool::Rect;
+        editor.begin_drag(geom::Point::new(10.0, 10.0));
+        editor.drag_to(geom::Point::new(90.0, 50.0));
+        editor.end_drag().unwrap();
+        let mut shell = gui_shell(editor);
+        assert!(shell.editor.session.is_dirty());
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::CloseDocument));
+        assert!(
+            shell.status.contains("unsaved changes"),
+            "close refuses a dirty document: {}",
+            shell.status
+        );
+        assert!(
+            !shell.editor.session.document().registry.is_empty(),
+            "the document survived the refused close"
         );
     }
 
@@ -2269,23 +2440,32 @@ mod tests {
         )));
         assert!(shell.panel_shown("Layers"), "Layers resurfaces");
 
-        // Color Mixer / Swatches / Info dock now (batch 10).
+        // Color Mixer starts closed (CS6's roster) and the Window
+        // menu opens it; a second toggle closes it again.
+        assert!(!shell.panel_shown("Color Mixer"));
         shell.run_action(&menus::Action::Shell(menus::ShellAction::TogglePanel(
             "Color Mixer",
         )));
-        assert!(!shell.panel_shown("Color Mixer"), "Color Mixer hides");
+        assert!(shell.panel_shown("Color Mixer"), "Color Mixer opens");
         shell.run_action(&menus::Action::Shell(menus::ShellAction::TogglePanel(
             "Color Mixer",
         )));
-        assert!(shell.panel_shown("Color Mixer"));
+        assert!(!shell.panel_shown("Color Mixer"));
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::TogglePanel(
+            "Color Mixer",
+        )));
+        // Swatches and Info start closed (CS6's fresh-document
+        // roster) and the Window menu opens them.
+        assert!(!shell.panel_shown("Swatches"));
+        assert!(!shell.panel_shown("Info"));
         shell.run_action(&menus::Action::Shell(menus::ShellAction::TogglePanel(
             "Swatches",
         )));
-        assert!(!shell.panel_shown("Swatches"));
+        assert!(shell.panel_shown("Swatches"));
         shell.run_action(&menus::Action::Shell(menus::ShellAction::TogglePanel(
             "Info",
         )));
-        assert!(!shell.panel_shown("Info"));
+        assert!(shell.panel_shown("Info"));
 
         // Tools folds the left dock.
         shell.run_action(&menus::Action::Shell(menus::ShellAction::ToggleTools));
@@ -3845,5 +4025,68 @@ mod tests {
         // the menu still opens, its rows just disable.
         shell.context_menu_pick(geom::Point::new(200.0, 200.0));
         assert_eq!(shell.editor.selected_live(), Some(second));
+    }
+
+    /// The canvas popup adapts to the selection class: the empty
+    /// class offers Import/Export and disables the selection verbs; a
+    /// text selection offers the text verbs; a multi-selection the
+    /// group verbs; and no row is ever an unwired placeholder.
+    #[test]
+    fn the_context_menu_rows_adapt_to_the_selection_class() {
+        use crate::shell::canvas_ui::{SelectionClass, context_rows};
+
+        let empty = context_rows(SelectionClass::Empty, false);
+        assert!(empty.iter().any(|r| r.label == "Import..."));
+        assert!(
+            empty.iter().all(|r| !matches!(
+                r.action,
+                crate::menus::Action::Sel(_) | crate::menus::Action::Arrange(_)
+            ) || !r.enabled
+                || matches!(
+                    r.action,
+                    crate::menus::Action::Shell(crate::menus::ShellAction::Paste)
+                )),
+            "selection verbs are disabled without a selection"
+        );
+
+        let text = context_rows(SelectionClass::Text, true);
+        let labels: Vec<_> = text.iter().map(|r| r.label.as_str()).collect();
+        for verb in ["Attach to Path", "Detach from Path", "Convert to Paths"] {
+            assert!(labels.contains(&verb), "text popup lacks {verb}");
+        }
+        assert!(
+            !labels.contains(&"Simplify"),
+            "the text popup has no path verbs"
+        );
+
+        let bitmap = context_rows(SelectionClass::Bitmap, true);
+        let labels: Vec<_> = bitmap.iter().map(|r| r.label.as_str()).collect();
+        assert!(labels.contains(&"Select Similar"));
+        assert!(labels.contains(&"Flatten Selection"));
+
+        let multi = context_rows(SelectionClass::Multi, true);
+        let labels: Vec<_> = multi.iter().map(|r| r.label.as_str()).collect();
+        assert!(labels.contains(&"Group\tCtrl+G"));
+        assert!(labels.contains(&"Select Children"));
+
+        // No class ever shows an unwired row.
+        for class in [
+            SelectionClass::Empty,
+            SelectionClass::Bitmap,
+            SelectionClass::Path,
+            SelectionClass::Text,
+            SelectionClass::Instance,
+            SelectionClass::Slice,
+            SelectionClass::Group,
+            SelectionClass::Multi,
+        ] {
+            for row in context_rows(class, true) {
+                assert!(
+                    !matches!(row.action, crate::menus::Action::Inert),
+                    "{} renders an inert row",
+                    row.label
+                );
+            }
+        }
     }
 }

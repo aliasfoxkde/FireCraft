@@ -221,7 +221,7 @@ of replacing it, fill/stroke swatch panel bound to
 Phase 19 batches 19.1–19.5 landed 2026-10-31 → 11-01: transform
 handles + Numeric Transform, Subselect path-node editing, the gradient
 fill editor, the command palette, and the grid/guides/snap set. The
-inert count is 67 of 289 items (was 190); 19.6 is the remaining
+inert count is 59 of 289 items (was 190); 19.6 is the remaining
 burn-down.
 
 ### Phase 19 — Canvas competence (P0, feeds usability directly)
@@ -300,8 +300,14 @@ burn-down.
   Animation ▸ Remove Animation dissolves the selected symbol instance
   via `symbol.breakApart`; no instance in the selection reports
   instead of commanding)
-  2026-11-03). Next batch: the File family and the remaining Modify
-  rows.
+  2026-11-03) → **59 inert of 289 items** (batch 13 — the File family:
+  Close / Close All start a fresh document (refusing to discard
+  unsaved edits — CS6 prompts, this build does not yet), Save All
+  saves the one open document, Revert reloads the file the document
+  was last saved to, File Info reports pages/layers/objects/canvas,
+  Export Wizard and the Send to E-mail format rows open the export
+  dialog on that format with the e-mail delivery gap stated plainly).
+  Next batch: the remaining Modify rows and the Text remainder.
 
 ### Phase 19b — Follow-ups from the landed batches
 
@@ -366,6 +372,76 @@ burn-down.
 - **21.5 accesskit** desktop + web re-audit (0067 records the web
   blocker).
 - **21.6 In-app scripting** (S): Commands menu → run `.jsf`/`.fwsteps`.
+
+### Phase 22 — CS6 shell fidelity (P0, the "looks and acts like Fireworks" phase)
+
+Set 2026-11-03 by user directive: the shell must present as CS6 — same
+dockable panel system, same panel inventory, same tool-strip look,
+same adaptive context menus — not FireCraft's own chrome. CS6 was
+abandoned in 2013; the point of this phase is that the abandoned app
+is usable again, with modern capabilities underneath.
+
+**Reference material (clean-room boundary).** Behavior comes from the
+CS6 install's own `Configuration/` Extendscript specs, the exe's
+string tables (e.g. the `string:contextmenu.*` verb family: 18
+panel/document/tab/drawer verbs), and observed UI behavior. Adobe's
+*assets* (icons, bitmaps, panel artwork) are **not** copied — they
+are replaced with open-license equivalents per the icon survey
+(`docs/planning/generated/icon-resources-survey.md`) with
+`docs/ATTRIBUTION.md` rows in the same change. The CS6 install cannot
+be launched as an oracle: under Wine it fails its own configuration
+check ("Error: 1"), and the activation machinery is explicitly out of
+scope, so no license path is attempted.
+
+- **22.1 CS6 panel inventory + docking** (L): the left tool dock and
+  the right panel stack with the CS6 panel set (Properties, Layers,
+  Pages, Swatches, Color Mixer, Info, History, Optimize, Symbols,
+  Styles, Common Library, CSS Properties, Auto Shapes, URL,
+  Behaviors, Find and Replace, Slices). Panels are dockable left or
+  right, collapsible, resizable, and re-openable from the Window
+  menu; the dock geometry persists. Accept: a panel can be moved
+  left↔right, collapsed, and reopened, and the layout survives a
+  restart. — **PARTLY LANDED 2026-11-03**: the panel stack is now
+  one window per panel (`shell::panel_windows`) — draggable,
+  collapsible, resizable, closable, anchored in the right-hand
+  column, with CS6's fresh-document roster (Properties/Pages/States/
+  Layers open, the rest closed until asked for) and the Window menu
+  toggling each. Still open: dock-side switching, geometry
+  persistence, and the panels this build does not implement yet
+  (Optimize, Common Library, CSS Properties, Auto Shapes, URL,
+  Behaviors, Find and Replace, Slices).
+- **22.2 CS6 tool strip** (M): the CS6 tool set in CS6 order with
+  tool flyouts (shape tools, the modify sub-tools, the fill/stroke
+  pair, zoom/hand, and the eyedropper), each with an open-license
+  icon. Accept: every tool in the strip selects a working tool; the
+  flyout opens on press-and-hold.
+- **22.3 Adaptive canvas context menu** (M): the right-click menu
+  changes with the selection — nothing selected, a bitmap, a vector
+  path, a text object, an instance, a multi-selection, and inside a
+  slice. Each variant is a CS6 verb subset over the same engine
+  commands the menus use. Accept: right-clicking each selection
+  class yields that class's verbs, and every one of them executes. —
+  **LANDED 2026-11-03** (`shell::canvas_ui::context_rows`): the popup
+  classifies the live selection (empty / bitmap / path / text /
+  instance / slice / group / multi) and offers that class's verb set;
+  no row is an inert placeholder.
+- **22.4 Property inspector** (L): the Properties panel shows the
+  selection's real attributes (fill, stroke, stroke style, effects,
+  text attributes) and edits them through the engine — not a
+  read-only summary. — **PARTLY LANDED 2026-11-03**: the Properties
+  panel edits opacity, blend, visibility, lock, name, text runs and
+  font attributes, and the live effect list; the CS6 X/Y/W/H
+  geometry strip now applies through `object.setBounds`. Still open:
+  the fill/stroke editors for bitmaps, and the CS6 inspector's
+  per-kind field sets.
+- **22.5 CS6 chrome** (M): menu bar order, tool strip placement,
+  document tab strip, status bar, panel headers with the CS6
+  collapse/close affordances, and the CS6 color scheme (a dark
+  neutral chrome, not egui's default light look).
+- **22.6 Icon pack integration** (M): ship the surveyed open-license
+  icon set, subset it to the Fireworks verb set, and record the
+  attribution rows. Accept: the wasm bundle grows by a documented,
+  measured amount and stays under the pinned ceiling.
 
 ### Quality gates for UI work (new)
 

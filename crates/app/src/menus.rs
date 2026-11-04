@@ -85,6 +85,26 @@ pub enum ShellAction {
     SaveAs,
     Export,
     ExportPreview,
+    /// File ▸ Export Wizard…: the export dialog, opened by its own
+    /// CS6 row (the same dialog as File ▸ Export).
+    ExportWizard,
+    /// File ▸ Export ▸ JPEG Compressed…: the export dialog opened on
+    /// the JPEG format with its compression options.
+    ExportJpeg,
+    /// File ▸ File Info…: the document's facts (pages, layers,
+    /// objects, canvas).
+    FileInfo,
+    /// File ▸ Export ▸ Fireworks PNG (format)…: the PNG format facts
+    /// of the live document (canvas, color depth, object count).
+    PngFormatInfo,
+    /// File ▸ Close / Close All: discard the open document and start
+    /// a fresh one.
+    CloseDocument,
+    /// File ▸ Save All: save the open document (the shell holds one).
+    SaveAll,
+    /// File ▸ Revert: reload the document from the file it was last
+    /// saved to.
+    Revert,
     /// Modify ▸ Transform ▸ Numeric Transform (Scale/Skew route here
     /// too): opens the numeric dialog over the live selection.
     NumericTransform,
@@ -407,8 +427,18 @@ pub static FILE: Menu = Menu {
                 item(35200, "Twain Select...", "", Action::Inert),
             ],
         ),
-        item(57602, "Close", "Ctrl+F4", Action::Inert),
-        item(35789, "Close All", "", Action::Inert),
+        item(
+            57602,
+            "Close",
+            "Ctrl+F4",
+            Action::Shell(ShellAction::CloseDocument),
+        ),
+        item(
+            35789,
+            "Close All",
+            "",
+            Action::Shell(ShellAction::CloseDocument),
+        ),
         Entry::Sep,
         item(57603, "Save", "Ctrl+S", Action::Shell(ShellAction::Save)),
         item(
@@ -417,9 +447,9 @@ pub static FILE: Menu = Menu {
             "Ctrl+Shift+S",
             Action::Shell(ShellAction::SaveAs),
         ),
-        item(35850, "Save All", "", Action::Inert),
+        item(35850, "Save All", "", Action::Shell(ShellAction::SaveAll)),
         item(37867, "Save As Template...", "", Action::Inert),
-        item(35036, "Revert", "", Action::Inert),
+        item(35036, "Revert", "", Action::Shell(ShellAction::Revert)),
         Entry::Sep,
         item(35012, "Import...", "", Action::Shell(ShellAction::Import)),
         item(
@@ -437,16 +467,36 @@ pub static FILE: Menu = Menu {
         Entry::Sub(
             "Send to E-mail",
             &[
-                item(35587, "Fireworks PNG (format)...", "", Action::Inert),
-                item(35588, "JPEG Compressed...", "", Action::Inert),
+                item(
+                    35587,
+                    "Fireworks PNG (format)...",
+                    "",
+                    Action::Shell(ShellAction::PngFormatInfo),
+                ),
+                item(
+                    35588,
+                    "JPEG Compressed...",
+                    "",
+                    Action::Shell(ShellAction::ExportJpeg),
+                ),
                 item(35420, "Use Export Settings...", "", Action::Inert),
             ],
         ),
         item(35416, "Update HTML...", "", Action::Inert),
         Entry::Sep,
-        item(35792, "File Info...", "", Action::Inert),
+        item(
+            35792,
+            "File Info...",
+            "",
+            Action::Shell(ShellAction::FileInfo),
+        ),
         Entry::Sep,
-        item(35181, "Export Wizard...", "", Action::Inert),
+        item(
+            35181,
+            "Export Wizard...",
+            "",
+            Action::Shell(ShellAction::ExportWizard),
+        ),
         item(35302, "Batch Process...", "", Action::Inert),
         Entry::Sub(
             "Preview in Browser",
@@ -1932,6 +1982,13 @@ pub fn action_name(action: Action) -> String {
             ShellAction::SaveAs => "Save As".into(),
             ShellAction::Export => "Export".into(),
             ShellAction::ExportPreview => "Export preview".into(),
+            ShellAction::ExportWizard => "Export wizard".into(),
+            ShellAction::ExportJpeg => "JPEG compressed export".into(),
+            ShellAction::FileInfo => "File info".into(),
+            ShellAction::PngFormatInfo => "Fireworks PNG format".into(),
+            ShellAction::CloseDocument => "Close document".into(),
+            ShellAction::SaveAll => "Save all".into(),
+            ShellAction::Revert => "Revert".into(),
             ShellAction::NumericTransform => "Numeric Transform".into(),
             ShellAction::TransformMode(TransformMode::Scale) => "Free Transform".into(),
             ShellAction::TransformMode(TransformMode::Distort) => "Distort".into(),
@@ -2093,7 +2150,7 @@ mod tests {
     /// The highest inert-item count the docs have recorded. The
     /// `inert_count_never_rises` test refuses any regression above it;
     /// when the count falls, ratchet this down to the new number.
-    const INERT_CEILING: usize = 67;
+    const INERT_CEILING: usize = 59;
 
     fn walk(entries: &'static [Entry]) -> Vec<&'static Item> {
         let mut items = Vec::new();

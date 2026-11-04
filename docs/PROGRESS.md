@@ -52,17 +52,24 @@
   (excludes `target/` / `web/dist/` / `fuzz/`).
 - **Roadmap:** M0–M15 **all closed**; the post-roadmap DOM parity
   campaign is **complete** (no M families). Decision docs 0001–0067.
-- **Menu reachability:** 289 CS6 menu items; **67 render inert**
-  (222 wired). The count fell 190 → 178 (19.1) → 171 (19.5) → 144
+- **Menu reachability:** 289 CS6 menu items; **59 render inert**
+  (230 wired). The count fell 190 → 178 (19.1) → 171 (19.5) → 144
   (19.6 batch 1, selection/mask) → 129 (19b.1 + batch 2) → 120
   (batch 3: Window-menu panel toggles) → 85 (batches 6–7, View+Text)
   → 83 (batch 8, attach to path) → 79 (batch 9, transform) → 72
   (batch 10, Window panels: Tools/Color Mixer/Swatches/Info +
   single-document rows report honestly) → 68 (batch 11, Edit ▸ Insert
-  bitmap rows + Crop Document) → 67 (batch 12, Remove Animation). The census
+  bitmap rows + Crop Document) → 67 (batch 12, Remove Animation) → 59
+  (batch 13, the File family). The census
   is derived from the menu table (`reachability_census` prints it)
   and gated (`menus::tests::inert_count_never_rises`); 19.6 burns it
   down in family batches.
+- **CS6 shell fidelity (Phase 22, new 2026-11-03):** user directive —
+  the shell must present as CS6 (dockable panels, CS6 tool strip,
+  adaptive context menus, property inspector, CS6 chrome). Scoped in
+  `docs/NEXT.md` Phase 22. Icons come from an open-license survey
+  (`docs/planning/generated/icon-resources-survey.md`), never from
+  Adobe's assets.
 - **WebP:** import since M8; `.webp` export is VP8L lossless by default.
   Native builds can opt into lossy VP8 via `--quality N` (feature
   `lossy-webp`).

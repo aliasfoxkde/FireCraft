@@ -122,69 +122,6 @@ impl Shell {
         self.help_open = open;
     }
 
-    /// The right panel stack: the CS6 panel roster from the Window
-    /// menu, as collapsible sections (the fixed-layout stand-in for
-    /// CS6's floating docks).
-    pub(super) fn right_panels(&mut self, ui: &mut egui::Ui) {
-        egui::ScrollArea::vertical().show(ui, |ui| {
-            if self.panel_shown("Properties") {
-                egui::CollapsingHeader::new("Properties")
-                    .default_open(true)
-                    .show(ui, |ui| self.properties_panel(ui));
-            }
-            if self.panel_shown("Pages") {
-                egui::CollapsingHeader::new("Pages")
-                    .default_open(true)
-                    .show(ui, |ui| self.pages_section(ui));
-            }
-            if self.panel_shown("States") {
-                egui::CollapsingHeader::new("States")
-                    .default_open(true)
-                    .show(ui, |ui| self.states_section(ui));
-            }
-            if self.panel_shown("Layers") {
-                egui::CollapsingHeader::new("Layers")
-                    .default_open(true)
-                    .show(ui, |ui| self.layers_section(ui));
-            }
-            if self.panel_shown("Styles") {
-                egui::CollapsingHeader::new("Styles")
-                    .default_open(false)
-                    .show(ui, |ui| self.styles_panel(ui));
-            }
-            if self.panel_shown("Document Library") {
-                egui::CollapsingHeader::new("Document Library")
-                    .default_open(false)
-                    .show(ui, |ui| self.library_panel(ui));
-            }
-            if self.panel_shown("History") {
-                egui::CollapsingHeader::new("History")
-                    .default_open(false)
-                    .show(ui, |ui| self.history_section(ui));
-            }
-            if self.panel_shown("Color Mixer") {
-                egui::CollapsingHeader::new("Color Mixer")
-                    .default_open(false)
-                    .show(ui, |ui| self.fill_stroke_panel(ui));
-            }
-            if self.panel_shown("Swatches") {
-                egui::CollapsingHeader::new("Swatches")
-                    .default_open(false)
-                    .show(ui, |ui| self.swatches_panel(ui));
-            }
-            if self.panel_shown("Info") {
-                egui::CollapsingHeader::new("Info")
-                    .default_open(false)
-                    .show(ui, |ui| self.info_panel(ui));
-            }
-            // The Web Layer panel has no Window-menu item in CS6; it
-            // stays always-visible.
-            egui::CollapsingHeader::new("Web Layer")
-                .default_open(false)
-                .show(ui, |ui| self.web_panel(ui));
-        });
-    }
-
     /// Window-menu panel visibility (absent from `panel_hidden` =
     /// shown; CS6 opens everything by default).
     pub(crate) fn panel_shown(&self, name: &str) -> bool {
@@ -195,19 +132,10 @@ impl Shell {
     /// the right dock (Tools, Optimize, Color Mixer, ...) is reported,
     /// not silently accepted.
     pub(crate) fn toggle_panel(&mut self, name: &'static str) {
-        const DOCKED: &[&str] = &[
-            "Properties",
-            "Pages",
-            "States",
-            "Layers",
-            "Styles",
-            "Document Library",
-            "History",
-            "Color Mixer",
-            "Swatches",
-            "Info",
-        ];
-        if DOCKED.contains(&name) {
+        let known = super::panel_windows::PANELS
+            .iter()
+            .any(|panel| panel.name == name);
+        if known {
             if let Some(pos) = self.panel_hidden.iter().position(|n| *n == name) {
                 self.panel_hidden.remove(pos);
                 self.status = format!("{name} panel shown.");
@@ -1259,6 +1187,7 @@ impl Shell {
         path: &PathObject,
     ) {
         ui.label(format!("object {} (gen {})", id.index(), id.generation()));
+        self.geometry_fields(ui, id);
         self.display_controls(
             ui,
             id,
@@ -1381,6 +1310,53 @@ impl Shell {
                 name: text.name.clone(),
             },
         );
+        self.geometry_fields(ui, id);
+    }
+
+    /// CS6's Properties X/Y/W/H strip: the selection's union box,
+    /// applied on Enter through `object.setBounds`.
+    pub(super) fn geometry_fields(&mut self, ui: &mut egui::Ui, id: doc::ObjectId) {
+        let document = self.editor.session.document();
+        let Some(bounds) = crate::editor::union_selection_bounds(document, &[id]) else {
+            return;
+        };
+        let mut x = bounds.x0 as f32;
+        let mut y = bounds.y0 as f32;
+        let mut w = bounds.width() as f32;
+        let mut h = bounds.height() as f32;
+        ui.horizontal(|ui| {
+            let x_field = ui.add(
+                egui::DragValue::new(&mut x)
+                    .speed(1.0)
+                    .prefix("X "),
+            );
+            let y_field = ui.add(
+                egui::DragValue::new(&mut y)
+                    .speed(1.0)
+                    .prefix("Y "),
+            );
+            let w_field = ui.add(
+                egui::DragValue::new(&mut w)
+                    .speed(1.0)
+                    .prefix("W "),
+            );
+            let h_field = ui.add(
+                egui::DragValue::new(&mut h)
+                    .speed(1.0)
+                    .prefix("H "),
+            );
+            let applied = [x_field, y_field, w_field, h_field]
+                .into_iter()
+                .any(|field| field.lost_focus() && field.changed());
+            if applied && w > 0.0 && h > 0.0 {
+                let _ = self.editor.apply(
+                    "object.setBounds",
+                    serde_json::json!({
+                        "ids": [id], "left": x, "top": y, "width": w, "height": h,
+                    }),
+                );
+            }
+        });
     }
 
     /// The display quartet plus the object name — shared by every

@@ -200,7 +200,12 @@ one. Summary:
   canvas), Bitmap Via Copy/Cut (`bitmap.addImageViaCopy`/`Cut` on a
   selected bitmap), Crop Document (extents, `grow: false`). Batch 12
   (same day): Modify ▸ Animation ▸ Remove Animation via
-  `symbol.breakApart` on the selected instance.
+  `symbol.breakApart` on the selected instance. Batch 13 (same day):
+  the File family — Close/Close All start a fresh document (refusing
+  to discard unsaved edits), Save All saves the one open document,
+  Revert reloads the last-saved file, File Info reports
+  pages/layers/objects/canvas, and the export rows open the export
+  dialog on the named format. Inert → **59 of 289**.
 - **19b**: path-node add/delete **DONE** (`bf1b547`); the
   wasm-budget re-pin **DONE** (2026-11-03: measured 21,235,599 B,
   ceiling moved to 21,500,000 with the dated cause — 19b.4). The

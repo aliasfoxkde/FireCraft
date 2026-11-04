@@ -25,43 +25,109 @@ impl Shell {
 
     /// The CS6 tool strip: vertical, grouped, glyph buttons painted
     /// with `Painter` primitives (original art, never the Adobe icons).
+    ///
+    /// CS6 groups the tools into flyouts — a group leader button
+    /// carries a small arrow, and press-and-hold (or a secondary
+    /// click) opens the group's tools. The groups here follow CS6's
+    /// own grouping.
     pub(super) fn tools_panel(&mut self, ui: &mut egui::Ui) {
-        let groups: &[&[Tool]] = &[
-            &[Tool::Pointer, Tool::Subselect],
-            &[Tool::Rect, Tool::Ellipse, Tool::Line, Tool::Text],
-            &[
-                Tool::Paintbrush,
-                Tool::Pencil,
-                Tool::Eraser,
-                Tool::PaintBucket,
-                Tool::Gradient,
-                Tool::Eyedropper,
-            ],
-            &[
-                Tool::Marquee,
-                Tool::EllipticalMarquee,
-                Tool::Lasso,
-                Tool::PolygonalMarquee,
-                Tool::MagicWand,
-            ],
-            &[Tool::Slice, Tool::Hotspot],
-            &[Tool::Zoom, Tool::Hand],
+        let groups: &[(&str, &[Tool])] = &[
+            ("Select", &[Tool::Pointer, Tool::Subselect]),
+            (
+                "Shape",
+                &[Tool::Rect, Tool::Ellipse, Tool::Line, Tool::Text],
+            ),
+            (
+                "Draw",
+                &[
+                    Tool::Paintbrush,
+                    Tool::Pencil,
+                    Tool::Eraser,
+                    Tool::PaintBucket,
+                    Tool::Gradient,
+                    Tool::Eyedropper,
+                ],
+            ),
+            (
+                "Marquee",
+                &[
+                    Tool::Marquee,
+                    Tool::EllipticalMarquee,
+                    Tool::Lasso,
+                    Tool::PolygonalMarquee,
+                    Tool::MagicWand,
+                ],
+            ),
+            ("Web", &[Tool::Slice, Tool::Hotspot]),
+            ("View", &[Tool::Zoom, Tool::Hand]),
         ];
         ui.add_space(4.0);
-        for (index, group) in groups.iter().enumerate() {
+        for (index, (name, group)) in groups.iter().enumerate() {
             if index > 0 {
                 ui.separator();
             }
-            for tool in *group {
-                self.tool_button(ui, *tool);
+            for (position, tool) in group.iter().enumerate() {
+                // The group leader carries the flyout arrow.
+                let leader = position == 0 && group.len() > 1;
+                let response = self.tool_button(ui, *tool, leader);
+                if leader && response.secondary_clicked() {
+                    if let Some(pos) = response.interact_pointer_pos() {
+                        self.tool_flyout = Some((*name, group.to_vec(), pos));
+                    }
+                }
             }
         }
         ui.separator();
         self.autoshape_button(ui);
+        self.tool_flyout_ui(ui);
+    }
+
+    /// The open tool flyout: CS6's press-and-hold tool list.
+    fn tool_flyout_ui(&mut self, ui: &mut egui::Ui) {
+        let Some((name, tools, at)) = self.tool_flyout.clone() else {
+            return;
+        };
+        let mut open = true;
+        let mut picked: Option<Tool> = None;
+        let popup_id = egui::Id::new("tool_flyout");
+        egui::Popup::new(popup_id, ui.ctx().clone(), at, ui.layer_id())
+            .kind(egui::PopupKind::Menu)
+            .layout(egui::Layout::top_down_justified(egui::Align::Min))
+            .gap(0.0)
+            .anchor(at)
+            .open_bool(&mut open)
+            .close_behavior(egui::PopupCloseBehavior::CloseOnClick)
+            .show(|ui| {
+                for tool in &tools {
+                    if ui
+                        .selectable_label(self.editor.tool == *tool, tool_label(*tool))
+                        .clicked()
+                    {
+                        picked = Some(*tool);
+                    }
+                }
+            });
+        if let Some(tool) = picked {
+            self.editor.tool = tool;
+            self.status = format!("tool: {}", tool_label(tool));
+            open = false;
+        }
+        // `open_bool` writes `false` back when the popup's close
+        // behavior fires; either way the flyout is done once closed.
+        if !open {
+            self.tool_flyout = None;
+        } else {
+            self.tool_flyout = Some((name, tools, at));
+        }
     }
 
     /// One painted tool button; clicking picks the tool.
-    pub(super) fn tool_button(&mut self, ui: &mut egui::Ui, tool: Tool) {
+    pub(super) fn tool_button(
+        &mut self,
+        ui: &mut egui::Ui,
+        tool: Tool,
+        leader: bool,
+    ) -> egui::Response {
         let (rect, response) = ui.allocate_exact_size(egui::Vec2::splat(26.0), Sense::click());
         let active = self.editor.tool == tool;
         if response.clicked() {
@@ -89,12 +155,24 @@ impl Shell {
             Color32::from_rgb(0xc4, 0xc4, 0xc4)
         };
         icons::paint(ui, rect, icons::tool_icon(tool), 17.0, ink);
-        let key = tool_key(tool);
-        if key.is_empty() {
-            response.on_hover_text(tool_label(tool));
-        } else {
-            response.on_hover_text(format!("{} ({key})", tool_label(tool)));
+        // CS6's flyout corner triangle on group leaders.
+        if leader {
+            let corner = Pos2::new(rect.right() - 3.0, rect.bottom() - 3.0);
+            painter.text(
+                corner,
+                egui::Align2::RIGHT_BOTTOM,
+                "▸",
+                egui::FontId::proportional(8.0),
+                ink,
+            );
         }
+        let key = tool_key(tool);
+        let tip = if key.is_empty() {
+            tool_label(tool).to_owned()
+        } else {
+            format!("{} ({key})", tool_label(tool))
+        };
+        response.on_hover_text(tip)
     }
 
     /// The Auto Shape flyout: the star button toggles a popup listing
@@ -1138,71 +1216,290 @@ impl Shell {
         }
     }
 
-    /// The canvas context menu's rows: selection verbs mirroring the
-    /// CS6 canvas popup (clipboard, transform, arrange, group), routed
-    /// through `run_action` like every other menu surface. An empty
-    /// selection leaves only the paste/view rows enabled.
+    /// The canvas context menu's rows: CS6's adaptive popup. The verb
+    /// set changes with the selection class — nothing selected keeps
+    /// the clipboard/file rows; a bitmap adds the bitmap verbs; a text
+    /// object the text verbs; a path the path verbs; an instance the
+    /// symbol verbs; a multi-selection the group/arrange verbs. Every
+    /// row routes through `run_action` like the menus, so each one
+    /// executes.
     fn context_menu_ui(&mut self, ui: &mut egui::Ui) {
-        use crate::menus::{Action, Arrange, SelAction, ShellAction};
-        let has_selection = !self.editor.selection_set.is_empty();
-        let rows: &[(&str, bool, Action)] = &[
-            ("Cut", has_selection, Action::Shell(ShellAction::Cut)),
-            ("Copy", has_selection, Action::Shell(ShellAction::Copy)),
-            ("Paste", true, Action::Shell(ShellAction::Paste)),
-        ];
-        for (label, wired, action) in rows {
-            if ui.add_enabled(*wired, egui::Button::new(*label)).clicked() {
-                self.run_action(action);
-                ui.close();
-            }
-        }
-        if ui
-            .add_enabled(has_selection, egui::Button::new("Duplicate\tCtrl+Alt+D"))
-            .clicked()
-        {
-            for id in self.editor.live_selection() {
-                self.run_command("object.duplicate", serde_json::json!({ "id": id }));
-            }
-            ui.close();
-        }
-        ui.separator();
-        let sel_rows: &[(&str, Action)] = &[
-            (
-                "Numeric Transform...",
-                Action::Shell(ShellAction::NumericTransform),
-            ),
-            (
-                "Flip Horizontal",
-                Action::Sel(SelAction::Reflect {
-                    horizontal: true,
-                    vertical: false,
-                }),
-            ),
-            (
-                "Flip Vertical",
-                Action::Sel(SelAction::Reflect {
-                    horizontal: false,
-                    vertical: true,
-                }),
-            ),
-            ("Rotate 90° CW", Action::Sel(SelAction::Rotate(90.0))),
-            ("Bring to Front", Action::Arrange(Arrange::Front)),
-            ("Send to Back", Action::Arrange(Arrange::Back)),
-            ("Group\tCtrl+G", Action::Sel(SelAction::Group)),
-            ("Ungroup\tCtrl+U", Action::Sel(SelAction::Ungroup)),
-            ("Hide\tCtrl+M", Action::Sel(SelAction::Hide)),
-            ("Select All", Action::Shell(ShellAction::SelectAll)),
-            ("Deselect\tCtrl+D", Action::Shell(ShellAction::Deselect)),
-        ];
-        for (label, action) in sel_rows {
+        let selection = self.editor.live_selection();
+        let class = match selection.as_slice() {
+            [] => SelectionClass::Empty,
+            [only] => object_class(self.editor.session.document(), *only),
+            _ => SelectionClass::Multi,
+        };
+        for row in context_rows(class, !selection.is_empty()) {
             if ui
-                .add_enabled(has_selection, egui::Button::new(*label))
+                .add_enabled(row.enabled, egui::Button::new(row.label))
                 .clicked()
             {
-                self.run_action(action);
+                self.run_action(&row.action);
                 ui.close();
             }
         }
+    }
+}
+
+/// One row of the canvas popup.
+pub(crate) struct ContextRow {
+    /// The row's label, with the CS6 accelerator suffix.
+    pub(crate) label: String,
+    /// Whether the row can run (a verb that needs a selection is
+    /// disabled without one).
+    pub(crate) enabled: bool,
+    /// What the row does.
+    pub(crate) action: crate::menus::Action,
+}
+
+/// The canvas popup's rows for a selection class.
+///
+/// The verb sets mirror CS6's adaptive right-click menu: the clipboard
+/// and transform rows are common, the middle block is what the
+/// selection class owns, and the arrange/visibility rows close it.
+/// Every action here is wired — a row that cannot run is not offered.
+pub(crate) fn context_rows(class: SelectionClass, has_selection: bool) -> Vec<ContextRow> {
+    use crate::menus::{Action, Arrange, SelAction, ShellAction};
+
+    let mut rows = vec![
+        ContextRow {
+            label: "Cut".into(),
+            enabled: has_selection,
+            action: Action::Shell(ShellAction::Cut),
+        },
+        ContextRow {
+            label: "Copy".into(),
+            enabled: has_selection,
+            action: Action::Shell(ShellAction::Copy),
+        },
+        ContextRow {
+            label: "Paste".into(),
+            enabled: true,
+            action: Action::Shell(ShellAction::Paste),
+        },
+    ];
+    if has_selection {
+        rows.push(ContextRow {
+            label: "Duplicate\tCtrl+Alt+D".into(),
+            enabled: true,
+            action: Action::Sel(SelAction::Duplicate),
+        });
+        rows.push(ContextRow {
+            label: "Numeric Transform...".into(),
+            enabled: true,
+            action: Action::Shell(ShellAction::NumericTransform),
+        });
+        rows.push(ContextRow {
+            label: "Flip Horizontal".into(),
+            enabled: true,
+            action: Action::Sel(SelAction::Reflect {
+                horizontal: true,
+                vertical: false,
+            }),
+        });
+        rows.push(ContextRow {
+            label: "Flip Vertical".into(),
+            enabled: true,
+            action: Action::Sel(SelAction::Reflect {
+                horizontal: false,
+                vertical: true,
+            }),
+        });
+        rows.push(ContextRow {
+            label: "Rotate 90° CW".into(),
+            enabled: true,
+            action: Action::Sel(SelAction::Rotate(90.0)),
+        });
+    }
+
+    let class_rows: Vec<ContextRow> = match class {
+        SelectionClass::Empty => vec![
+            ContextRow {
+                label: "Import...".into(),
+                enabled: true,
+                action: Action::Shell(ShellAction::Import),
+            },
+            ContextRow {
+                label: "Export...".into(),
+                enabled: true,
+                action: Action::Shell(ShellAction::Export),
+            },
+        ],
+        SelectionClass::Bitmap => vec![
+            ContextRow {
+                label: "Select Similar".into(),
+                enabled: true,
+                action: Action::Sel(SelAction::SelectSimilar),
+            },
+            ContextRow {
+                label: "Feather...".into(),
+                enabled: true,
+                action: Action::Shell(ShellAction::FeatherDialog),
+            },
+            ContextRow {
+                label: "Smooth Pixel Selection".into(),
+                enabled: true,
+                action: Action::Sel(SelAction::AdjustPixelSel {
+                    what: "smooth",
+                    amount: 0,
+                }),
+            },
+            ContextRow {
+                label: "Flatten Selection".into(),
+                enabled: true,
+                action: Action::Sel(SelAction::FlattenSelection),
+            },
+        ],
+        SelectionClass::Path => vec![
+            ContextRow {
+                label: "Simplify".into(),
+                enabled: true,
+                action: Action::Sel(SelAction::Simplify),
+            },
+            ContextRow {
+                label: "Expand Stroke".into(),
+                enabled: true,
+                action: Action::Sel(SelAction::ExpandStroke),
+            },
+            ContextRow {
+                label: "Convert to Symbol...".into(),
+                enabled: true,
+                action: Action::Sel(SelAction::ConvertToSymbol),
+            },
+            ContextRow {
+                label: "Convert to Bitmap".into(),
+                enabled: true,
+                action: Action::Sel(SelAction::FlattenSelection),
+            },
+        ],
+        SelectionClass::Text => vec![
+            ContextRow {
+                label: "Attach to Path".into(),
+                enabled: true,
+                action: Action::Sel(SelAction::AttachToPath),
+            },
+            ContextRow {
+                label: "Detach from Path".into(),
+                enabled: true,
+                action: Action::Sel(SelAction::DetachFromPath),
+            },
+            ContextRow {
+                label: "Reverse Text on Path".into(),
+                enabled: true,
+                action: Action::Sel(SelAction::ReversePathText),
+            },
+            ContextRow {
+                label: "Convert to Paths".into(),
+                enabled: true,
+                action: Action::Sel(SelAction::ConvertToPaths),
+            },
+        ],
+        SelectionClass::Instance => vec![
+            ContextRow {
+                label: "Break Apart".into(),
+                enabled: true,
+                action: Action::Sel(SelAction::BreakApart),
+            },
+            ContextRow {
+                label: "Convert to Symbol...".into(),
+                enabled: true,
+                action: Action::Sel(SelAction::ConvertToSymbol),
+            },
+            ContextRow {
+                label: "Tween Instances".into(),
+                enabled: true,
+                action: Action::Sel(SelAction::TweenInstances),
+            },
+            ContextRow {
+                label: "Animate Selection".into(),
+                enabled: true,
+                action: Action::Sel(SelAction::AnimateSelection),
+            },
+        ],
+        SelectionClass::Slice => vec![ContextRow {
+            label: "Fit Selection".into(),
+            enabled: true,
+            action: Action::Shell(ShellAction::FitSelection),
+        }],
+        SelectionClass::Group => vec![
+            ContextRow {
+                label: "Group\tCtrl+G".into(),
+                enabled: true,
+                action: Action::Sel(SelAction::Group),
+            },
+            ContextRow {
+                label: "Ungroup\tCtrl+U".into(),
+                enabled: true,
+                action: Action::Sel(SelAction::Ungroup),
+            },
+        ],
+        SelectionClass::Multi => vec![
+            ContextRow {
+                label: "Group\tCtrl+G".into(),
+                enabled: true,
+                action: Action::Sel(SelAction::Group),
+            },
+            ContextRow {
+                label: "Select Children".into(),
+                enabled: true,
+                action: Action::Sel(SelAction::SelectChildren),
+            },
+        ],
+    };
+    rows.extend(class_rows);
+
+    rows.push(ContextRow {
+        label: "Bring to Front".into(),
+        enabled: has_selection,
+        action: Action::Arrange(Arrange::Front),
+    });
+    rows.push(ContextRow {
+        label: "Send to Back".into(),
+        enabled: has_selection,
+        action: Action::Arrange(Arrange::Back),
+    });
+    rows.push(ContextRow {
+        label: "Hide\tCtrl+M".into(),
+        enabled: has_selection,
+        action: Action::Sel(SelAction::Hide),
+    });
+    rows.push(ContextRow {
+        label: "Select All".into(),
+        enabled: true,
+        action: Action::Shell(ShellAction::SelectAll),
+    });
+    rows.push(ContextRow {
+        label: "Deselect\tCtrl+D".into(),
+        enabled: has_selection,
+        action: Action::Shell(ShellAction::Deselect),
+    });
+    rows
+}
+
+/// The selection classes of CS6's canvas popup.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum SelectionClass {
+    Empty,
+    Bitmap,
+    Path,
+    Text,
+    Instance,
+    Slice,
+    Group,
+    Multi,
+}
+
+/// A single selected object's class, from the registry.
+fn object_class(document: &doc::Document, id: doc::ObjectId) -> SelectionClass {
+    match document.registry.get(id) {
+        Some(doc::ObjectData::Image(_)) => SelectionClass::Bitmap,
+        Some(doc::ObjectData::Path(_)) => SelectionClass::Path,
+        Some(doc::ObjectData::Text(_)) => SelectionClass::Text,
+        Some(doc::ObjectData::SymbolInstance(_)) => SelectionClass::Instance,
+        Some(doc::ObjectData::Slice(_)) => SelectionClass::Slice,
+        Some(doc::ObjectData::Group(_)) => SelectionClass::Group,
+        None => SelectionClass::Empty,
     }
 }
 
