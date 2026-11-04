@@ -22,6 +22,7 @@ mod icons;
 mod palette;
 mod panel_windows;
 mod panels;
+mod panels_web;
 
 pub use glyphs::apply_cs6_theme;
 pub(crate) use glyphs::{draw_autoshape_glyph, symbol_type_label, tool_key, tool_label};
@@ -158,6 +159,12 @@ pub struct Shell {
     /// Window-menu panel visibility: names of right-dock panels the
     /// user closed. Absent = shown (CS6 default is everything open).
     panel_hidden: Vec<&'static str>,
+    /// The URL panel's edit-in-progress state — the object it edits
+    /// and the link/alt text being typed.
+    url_draft: Option<panels_web::UrlDraft>,
+    /// The Behaviors panel's chosen swap-image target (the slice's
+    /// name; `None` = not chosen yet).
+    swap_target: Option<String>,
     /// Window ▸ Hide Panels (Tab): all right-dock panels folded at
     /// once, independent of per-panel visibility.
     panels_hidden: bool,
@@ -306,6 +313,8 @@ impl Shell {
             // CS6's fresh-document roster: Properties/Pages/States/
             // Layers open, the rest of the panel inventory closed.
             panel_hidden: Self::default_open_panels(),
+            url_draft: None,
+            swap_target: None,
             panels_hidden: false,
             tools_hidden: false,
             options_bar_hidden: false,
@@ -2831,6 +2840,159 @@ mod tests {
             journal,
             "panel toggles are view state, not document history"
         );
+    }
+
+    /// A shell holding one named slice on the Web Layer, selected.
+    /// The slice is created through the engine's own command, so the
+    /// panels read exactly what the document holds.
+    fn slice_shell(name: &str) -> (Shell, doc::ObjectId) {
+        let mut editor = Editor::untitled();
+        editor
+            .apply(
+                "slice.create",
+                serde_json::json!({
+                    "shape": "rect",
+                    "x": 8.0, "y": 8.0, "width": 64.0, "height": 32.0,
+                    "points": null, "page": 0,
+                    "name": name, "link": null, "alt": null,
+                }),
+            )
+            .expect("the slice is created");
+        let id = editor
+            .document()
+            .registry
+            .iter()
+            .find_map(|(id, data)| match data {
+                doc::ObjectData::Slice(slice) if slice.name.as_deref() == Some(name) => Some(id),
+                _ => None,
+            })
+            .expect("the slice is registered");
+        editor.set_selection(vec![id]);
+        (gui_shell(editor), id)
+    }
+
+    /// The Auto Shapes panel inserts through the engine: the gallery's
+    /// click reaches `autoshape.*` / `object.createPath`, the object
+    /// lands on the active layer's cell, and the journal records the
+    /// command — so the panel is a real edit, not a view.
+    #[test]
+    fn the_auto_shapes_panel_inserts_through_the_engine() {
+        let mut shell = gui_shell(Editor::untitled());
+        let journal = shell.editor.session.journal_len();
+        let before = shell
+            .editor
+            .current_cell()
+            .expect("the page has a cell")
+            .elements
+            .len();
+
+        shell.insert_shape(
+            super::panels_web::ShapeKind::Auto(crate::editor::AutoShape::Star),
+            "Star",
+        );
+
+        assert_eq!(
+            shell.editor.session.journal_len(),
+            journal + 1,
+            "the insert is one journaled command"
+        );
+        assert_eq!(
+            shell
+                .editor
+                .current_cell()
+                .expect("the page has a cell")
+                .elements
+                .len(),
+            before + 1,
+            "the shape lands on the active layer"
+        );
+
+        // The primitive half of the gallery uses the path command.
+        let before = shell
+            .editor
+            .current_cell()
+            .expect("the page has a cell")
+            .elements
+            .len();
+        shell.insert_shape(
+            super::panels_web::ShapeKind::Primitive("ellipse"),
+            "Ellipse",
+        );
+        assert_eq!(
+            shell
+                .editor
+                .current_cell()
+                .expect("the page has a cell")
+                .elements
+                .len(),
+            before + 1,
+            "the primitive lands too"
+        );
+    }
+
+    /// The URL panel writes the anchor link and the alt text onto the
+    /// selected slice, and an empty field clears the stored value.
+    #[test]
+    fn the_url_panel_stores_and_clears_the_link() {
+        let (mut shell, id) = slice_shell("banner");
+
+        assert!(shell.apply_link(id, "https://example.test/", "A banner"));
+        let slice = match shell.editor.document().registry.get(id) {
+            Some(doc::ObjectData::Slice(slice)) => slice,
+            other => panic!("the slice is still a slice: {other:?}"),
+        };
+        assert_eq!(slice.link.as_deref(), Some("https://example.test/"));
+        assert_eq!(slice.alt.as_deref(), Some("A banner"));
+
+        // An empty field clears the stored value.
+        assert!(shell.apply_link(id, "", ""));
+        let slice = match shell.editor.document().registry.get(id) {
+            Some(doc::ObjectData::Slice(slice)) => slice,
+            other => panic!("the slice is still a slice: {other:?}"),
+        };
+        assert_eq!(slice.link, None);
+        assert_eq!(slice.alt, None);
+    }
+
+    /// The Behaviors panel adds, removes, and configures behaviors
+    /// through the engine — the stored kinds and the swap target are
+    /// the document's own, not panel state.
+    #[test]
+    fn the_behaviors_panel_adds_and_removes_behaviors() {
+        let (mut shell, id) = slice_shell("banner");
+
+        assert!(shell.add_behavior(id, 9));
+        let kinds = |shell: &Shell| -> Vec<i64> {
+            match shell.editor.document().registry.get(id) {
+                Some(doc::ObjectData::Slice(slice)) => slice
+                    .behaviors
+                    .iter()
+                    .map(|behavior| behavior.kind)
+                    .collect(),
+                other => panic!("the slice is still a slice: {other:?}"),
+            }
+        };
+        assert_eq!(kinds(&shell), vec![9]);
+
+        assert!(shell.add_behavior(id, 7));
+        assert_eq!(kinds(&shell), vec![9, 7]);
+
+        assert!(shell.remove_behavior(id, 0));
+        assert_eq!(kinds(&shell), vec![7]);
+
+        // The swap-image behavior names its target through the
+        // export key, then appends the behavior kind.
+        assert!(shell.add_swap_behavior(id, "hero.png"));
+        assert_eq!(kinds(&shell), vec![7, 2]);
+        match shell.editor.document().registry.get(id) {
+            Some(doc::ObjectData::Slice(slice)) => {
+                assert_eq!(
+                    slice.custom_data.get("swapTarget").map(String::as_str),
+                    Some("hero.png")
+                );
+            }
+            other => panic!("the slice is still a slice: {other:?}"),
+        }
     }
 
     /// The persisted layout round-trips: capture → (RON via serde,

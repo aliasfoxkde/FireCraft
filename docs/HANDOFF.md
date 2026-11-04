@@ -29,9 +29,10 @@
   (`docs/planning/generated/dom-parity.md`, regenerate per §5.)
 - **Where the frontier is:** the *engine* is complete; the *shell* is
   not. A judge-panel audit (2026-10-31) found the engine's 243
-  commands reach only a fraction of the interface — **114 of 289 CS6
+  commands reach only a fraction of the interface — **8 of 289 CS6
   menu items still render `Action::Inert`** (derived —
-  `cargo test -p app reachability_census -- --nocapture` prints it —
+  `cargo test -p app inert_worklist -- --nocapture` prints them, and
+  `inert_count_never_rises` prints the count —
   and gated by `menus::tests::inert_count_never_rises`) — so the active program is
   **reachability and canvas competence**, i.e. `docs/NEXT.md`
   Phases 19–21 (19.1–19.5 landed: transform handles, path-node
@@ -151,10 +152,10 @@ verifiable.
 
 **The engine is complete; the shell is not.** A judge-panel audit
 against Fireworks CS6 and Photopea found the structural gap: 243
-registered commands, **114 of 289 CS6 menu items still rendering
-`Action::Inert`** (derived via `reachability_census`, gated by the
-ceiling test). The program is reachability and canvas competence,
-not repair.
+registered commands, **8 of 289 CS6 menu items still rendering
+`Action::Inert`** (derived via `menus::tests::inert_worklist`, gated
+by the ceiling test). The program is reachability and canvas
+competence, not repair.
 
 The full plan, with the landed/open state of every item, lives in
 [`NEXT.md`](NEXT.md) — **read that file for the work list**, not this
@@ -221,10 +222,16 @@ one. Summary:
   Feather Fill drive `path.setFillEdgeMode` on every selected path
   (feather rides the panel's radius); the animation/JPEG Settings,
   Swap Symbol, Group as Mask, the three Pop-up Menu rows, and Snap
-  To Pixel report their gap plainly. Inert → **11 of 289** — the
-  remaining rows are the scripting family (Commands/Filters/Window
-  panels), the Text Font placeholder (a verbatim CS6 resource
-  artifact), and the Window panel rows pending their features.
+  To Pixel report their gap plainly. Inert → **11 of 289**. Batch 17
+  (same day): the CS6 web panels — Auto Shapes, URL, and Behaviors
+  become real panels (`shell::panels_web`, decision 0069) whose every
+  action is one engine command (`object.createPath` / `autoshape.*`,
+  `slice.setLink`, `slice.addBehavior` / `slice.removeBehavior` /
+  `slice.setData`). Inert → **8 of 289** — the remaining rows are the
+  scripting family (Commands ▸ Manage Saved Commands, Filters ▸
+  Repeat Filter), the Text Font placeholder (a verbatim CS6 resource
+  artifact), and the Window panel rows pending their features
+  (Optimize / Common Library / CSS Properties / Find and Replace).
 - **19b**: path-node add/delete **DONE** (`bf1b547`); the
   wasm-budget re-pin **DONE** (2026-11-03: measured 21,235,599 B,
   ceiling moved to 21,500,000 with the dated cause — 19b.4). The

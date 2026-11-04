@@ -1283,3 +1283,109 @@ Point-in-time counts quoted in prose rot; derived-and-gated counts
 do not. The inert figure had been quoted by hand in seven files and
 drifted in all of them. The fix was not more careful quoting — it
 was a test that prints the number and refuses regressions in it.
+
+## 2026-11-04 — 19.6 batch 17: the CS6 web panels (Auto Shapes, URL, Behaviors)
+
+Phase 22.1 had turned the CS6 panel inventory into real windows, but
+three of the panels the Window menu names had no content — so their
+menu rows still rendered `Action::Inert` even though the engine verbs
+they would need already existed.
+
+### What landed
+
+- **`shell::panels_web`** — the three CS6 web panels. Every panel
+  action is one engine command: the Auto Shapes gallery issues
+  `object.createPath` (the two primitives) or the matching
+  `autoshape.*` command (the ten tools); the URL panel issues
+  `slice.setLink`; the Behaviors panel issues `slice.addBehavior` /
+  `slice.removeBehavior`, and a swap-image behavior additionally
+  issues `slice.setData` with the `swapTarget` key. The panels hold
+  view state only — the URL draft and the chosen swap target — and
+  re-read the document whenever the selection changes.
+- **`AutoShape::payload_in_rect`** — a no-drag placement entry point
+  beside the drag path, so a gallery click and a tool drag share one
+  payload builder (`payload_from`) and cannot disagree about a
+  shape's center/radius, box, or endpoints.
+- **Menu wiring** — the Window-menu rows for Auto Shapes, URL, and
+  Behaviors now toggle their panels; `INERT_CEILING` re-pinned 11 → 8.
+
+### The derived figure
+
+`cargo test -p app inert_count_never_rises -- --nocapture` prints
+**8 inert of 289 items** (was 11). The remaining eight are
+feature-gated, not reachability debt: Optimize, Common Library, CSS
+Properties, and Find and Replace need engine work that does not exist
+yet; the Text Font placeholder is a verbatim CS6 resource artifact;
+Commands ▸ Manage Saved Commands and Filters ▸ Repeat Filter are the
+scripting family.
+
+### Tests
+
+Three shell-level tests in `crates/app/src/shell/mod.rs`: the gallery
+insert lands an object and one journal row (both the auto-shape and
+the primitive halves), the URL panel stores and clears the link and
+alt text, and the behaviors add/remove/swap round-trip through the
+journal with the swap target on the `swapTarget` export key.
+
+### Doc drift corrected in the same change
+
+The docs pointed at a census test (`reachability_census`) that no
+longer exists — the live names are `menus::tests::inert_worklist`
+(prints the rows) and `menus::tests::inert_count_never_rises`
+(prints the count). Every quoting file (CLAUDE.md, HANDOFF, NEXT,
+PROGRESS, FEATURES, GAPS, this log) now names the test that
+actually runs. Decision 0069 records why the panels drive the engine
+rather than keeping a panel-side model.
+
+### Browser proof (§6.2)
+
+`xtask dist --web` green (wasm 21,274,323 B under the 21,500,000 B
+ceiling, bridge smoke honest — script bodies stripped before the
+verdict). Served `dist/web` on 127.0.0.1:8391 and drove it with
+playwright + system Chrome (`channel` chrome; no Playwright browsers
+are downloaded on this host):
+
+- `ping` → `ready` ok=true — the downcast holds.
+- `postMessage openDocument` with `corpus/fixtures/composed.fw.png`
+  and **zero input events** → `opened` ok=true, screenshot taken.
+- The batch-17 engine commands over the same bridge: `object.createPath`,
+  `autoshape.rect`, `autoshape.star` → all `applied` ok=true;
+  `exportPng` 140 B, `exportDocument` 1,122 B.
+- `Ctrl+O` → `expect_file_chooser` accepted the real `.fw.png` →
+  second `opened` ok=true (the browser open door works).
+- `Ctrl+S` → `expect_download` fired: `untitled.fw.png`, 612 B.
+- `pageerror`: **none** (`unreachable` would be a wasm panic). The
+  only console entry is the loopback server's missing `favicon.ico`
+  (404), not an app error.
+
+The three new panels were also proved to *render*: the CS6 right dock
+stacks its twelve panel windows 260 pt apart, so the Auto Shapes /
+URL / Behaviors windows (roster slots 9–11) fall below a 900 px
+viewport. At a 3200 px tall viewport, with the persisted
+`shell_layout` seeding the dock open, all three windows draw; hiding
+the three by name and re-shooting changes **95,559 px** in the dock
+column (Auto Shapes 66,952 px, URL 25,080 px, Behaviors 3,527 px) —
+the panels are on screen, not merely registered.
+
+### Scan gate: the scratch dir was being scanned
+
+The secret-scan step failed the gate on the proof's own helper
+scripts: they live under `.gitignore-scratch/`, are git-ignored, and
+are rewritten on every run, so their findings could never stick to
+the line-keyed baseline. `.gitignore-scratch/` is now excluded in
+`.aegisignore` alongside `temp/` and `log/` — untracked working
+files, not source. The baseline was then regenerated from a full
+scan: 519 → 520 findings, the one addition being the loopback
+address quoted in this entry above.
+
+### Lesson
+
+A panel is not a feature. The three inert rows looked like missing
+features, but the verbs were already there — what was missing was the
+surface that called them. Checking "does the engine already own this
+data?" before "does this need new engine work?" turned three
+feature-sized items into a panel-sized change.
+
+The same lesson applies to the proof: "the panel is in the inventory"
+and "the panel is on screen" are different claims. Only the pixel
+diff distinguishes them.

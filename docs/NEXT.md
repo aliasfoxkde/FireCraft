@@ -221,7 +221,7 @@ of replacing it, fill/stroke swatch panel bound to
 Phase 19 batches 19.1–19.5 landed 2026-10-31 → 11-01: transform
 handles + Numeric Transform, Subselect path-node editing, the gradient
 fill editor, the command palette, and the grid/guides/snap set. The
-inert count is 11 of 289 items (was 190); 19.6 is the remaining
+inert count is 8 of 289 items (was 190); 19.6 is the remaining
 burn-down.
 
 ### Phase 19 — Canvas competence (P0, feeds usability directly)
@@ -330,14 +330,19 @@ burn-down.
   Feather Fill drive `path.setFillEdgeMode` on every selected path
   (feather rides the panel radius); the animation and selective-JPEG
   Settings rows, Swap Symbol, Group as Mask, the three Pop-up Menu
-  rows, and Snap To Pixel report their gap via `ReportGap`). The
-  11 remaining inert rows: the Text Font placeholder (a verbatim CS6
-  resource artifact), Commands ▸ Manage Saved Commands and Filters ▸
-  Repeat Filter (the scripting family), and the Window panels
-  (Optimize / Common Library / CSS Properties / Auto Shapes / URL /
-  Behaviors / Find and Replace) that land with their features
-  (Phases 20–22). 19.6's programmable surface is done; the rest is
-  feature-gated, not reachability debt.
+  rows, and Snap To Pixel report their gap via `ReportGap`) → **8 inert
+  of 289 items** (batch 17, 2026-11-04 — the CS6 web panels: Auto
+  Shapes, URL, and Behaviors become real panels
+  (`shell::panels_web`) whose every action is one engine command —
+  `object.createPath` / `autoshape.*` for the gallery, `slice.setLink`
+  for the URL, `slice.addBehavior` / `slice.removeBehavior` /
+  `slice.setData` for the behaviors; decision 0069). The 8 remaining
+  inert rows: the Text Font placeholder (a verbatim CS6 resource
+  artifact), Commands ▸ Manage Saved Commands and Filters ▸ Repeat
+  Filter (the scripting family), and the Window panels (Optimize /
+  Common Library / CSS Properties / Find and Replace) that land with
+  their features (Phases 20–22). 19.6's programmable surface is done;
+  the rest is feature-gated, not reachability debt.
 
 ### Phase 19b — Follow-ups from the landed batches
 
@@ -442,9 +447,11 @@ scope, so no license path is attempted.
   feature): a `ShellLayout` snapshot (panel set, dock folds, display
   toggles) saved through `App::save` — native to `storage_dir`, web
   to localStorage — and restored at startup, filtered against the
-  current panel inventory. Still open: the panels this build does
-  not implement yet (Optimize, Common Library, CSS Properties, Auto
-  Shapes, URL, Behaviors, Find and Replace, Slices).
+  current panel inventory. The web panels landed 2026-11-04
+  (`shell::panels_web`, decision 0069): Auto Shapes, URL, and
+  Behaviors are real panels whose actions are engine commands. Still
+  open: the panels this build does not implement yet (Optimize,
+  Common Library, CSS Properties, Find and Replace, Slices).
 - **22.2 CS6 tool strip** (M): the CS6 tool set in CS6 order with
   tool flyouts (shape tools, the modify sub-tools, the fill/stroke
   pair, zoom/hand, and the eyedropper), each with an open-license

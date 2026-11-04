@@ -154,6 +154,23 @@ pub struct Stroke {
     pub start: geom::Point,
 }
 
+/// The geometry an Auto Shape is placed from: the box it occupies
+/// and, for the line-based shapes, its two endpoints.
+struct Placement {
+    /// Box origin, world coordinates.
+    x: f64,
+    /// Box origin, world coordinates.
+    y: f64,
+    /// Box width.
+    width: f64,
+    /// Box height.
+    height: f64,
+    /// The first endpoint (the line-based shapes).
+    start: (f64, f64),
+    /// The second endpoint (the line-based shapes).
+    end: (f64, f64),
+}
+
 /// The Auto Shape tool group: one drag-to-create tool per shape,
 /// each issuing its `autoshape.*` registry command with pinned
 /// defaults derived from the drag frame (per-shape corpus gating of
@@ -238,16 +255,66 @@ impl AutoShape {
     fn payload(self, drag: &Drag, page: usize, layer: usize, frame: usize) -> serde_json::Value {
         let (sx, sy) = (drag.start.x, drag.start.y);
         let (cx, cy) = (drag.current.x, drag.current.y);
+        // Frame origin/size, normalized so drags in any direction
+        // produce positive extents.
+        let placement = Placement {
+            x: sx.min(cx),
+            y: sy.min(cy),
+            width: (cx - sx).abs(),
+            height: (cy - sy).abs(),
+            start: (sx, sy),
+            end: (cx, cy),
+        };
+        self.payload_from(&placement, page, layer, frame)
+    }
+
+    /// The payload for a shape inserted without a drag — the Auto
+    /// Shapes panel's path: a `size`-square box at (`x`, `y`). The
+    /// line-based shapes run along the box's horizontal midline.
+    #[must_use]
+    pub fn payload_in_rect(
+        self,
+        page: usize,
+        layer: usize,
+        frame: usize,
+        x: f64,
+        y: f64,
+        size: f64,
+    ) -> serde_json::Value {
+        let mid = y + size / 2.0;
+        let placement = Placement {
+            x,
+            y,
+            width: size,
+            height: size,
+            start: (x, mid),
+            end: (x + size, mid),
+        };
+        self.payload_from(&placement, page, layer, frame)
+    }
+
+    /// The registry payload for one shape placement. Every shape
+    /// family reads the placement it is defined by: the box's center
+    /// and radius (circle-bound), the box itself (frame-bound), or
+    /// the endpoints (line-bound).
+    #[must_use]
+    fn payload_from(
+        self,
+        place: &Placement,
+        page: usize,
+        layer: usize,
+        frame: usize,
+    ) -> serde_json::Value {
         let frame_json = serde_json::json!({
             "page": page, "layer": layer, "cell": frame, "name": null,
         });
-        // Frame origin/size, normalized so drags in any direction
-        // produce positive extents.
-        let (x, y) = (sx.min(cx), sy.min(cy));
-        let (width, height) = ((cx - sx).abs(), (cy - sy).abs());
+        let (x, y) = (place.x, place.y);
+        let (width, height) = (place.width, place.height);
         // Center + radius (circle-bound shapes).
-        let (center_x, center_y) = ((sx + cx) / 2.0, (sy + cy) / 2.0);
+        let (center_x, center_y) = (x + width / 2.0, y + height / 2.0);
         let radius = width.max(height) / 2.0;
+        let (sx, sy) = place.start;
+        let (cx, cy) = place.end;
         // Placement rides on every payload.
         let mut value = match self {
             AutoShape::Star => serde_json::json!({

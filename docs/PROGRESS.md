@@ -51,17 +51,21 @@
   404s); GitHub Actions green on all pushes. Local aegis scan fixed
   (excludes `target/` / `web/dist/` / `fuzz/`).
 - **Roadmap:** M0–M15 **all closed**; the post-roadmap DOM parity
-  campaign is **complete** (no M families). Decision docs 0001–0067.
-- **Menu reachability:** 289 CS6 menu items; **59 render inert**
-  (230 wired). The count fell 190 → 178 (19.1) → 171 (19.5) → 144
+  campaign is **complete** (no M families). Decision docs 0001–0069.
+- **Menu reachability:** 289 CS6 menu items; **8 render inert**
+  (281 wired). The count fell 190 → 178 (19.1) → 171 (19.5) → 144
   (19.6 batch 1, selection/mask) → 129 (19b.1 + batch 2) → 120
   (batch 3: Window-menu panel toggles) → 85 (batches 6–7, View+Text)
   → 83 (batch 8, attach to path) → 79 (batch 9, transform) → 72
   (batch 10, Window panels: Tools/Color Mixer/Swatches/Info +
   single-document rows report honestly) → 68 (batch 11, Edit ▸ Insert
   bitmap rows + Crop Document) → 67 (batch 12, Remove Animation) → 59
-  (batch 13, the File family). The census
-  is derived from the menu table (`reachability_census` prints it)
+  (batch 13, the File family) → 42 (batch 14, the File remainder) → 24
+  (batch 15, Edit + Text remainder) → 11 (batch 16, the Modify
+  remainder) → 8 (batch 17, the CS6 web panels: Auto Shapes / URL /
+  Behaviors). The census
+  is derived from the menu table (`menus::tests::inert_worklist` prints
+  the rows, `inert_count_never_rises` prints the count)
   and gated (`menus::tests::inert_count_never_rises`); 19.6 burns it
   down in family batches.
 - **CS6 shell fidelity (Phase 22, new 2026-11-03):** user directive —
@@ -182,7 +186,7 @@ the shell-reachability program, not parity rows.
 | ~~Path→image rasterizer (filterSelection on non-image selection)~~ **DONE** — landed in #130 (decision 0059) | 8.8 bake family | #110 (decision 0040) |
 | Out-of-bounds effect growth (bake clips to the image surface) — **evidence-gated**: the live render already grows (compose applies kernels canvas-spanning, M14); the destructive bake clips by settled posture (0031/0040/0059). Reopening needs a CS6 filter/flatten bounds oracle (Wine corpus) — any growth rule without one is invented | tile-bank growth parity | #110 (decision 0040) |
 | ~~Shared-layer link-resolution render~~ **DONE** — landed in #131 (decision 0060) | shared layers render empty | #93 (decision 0022) |
-| 79 inert CS6 menu items (289 items total) — **open**, burn-down in family batches (selection/mask + Window panel toggles + page/frame + symbol/animation + View + Text + Attach to Path + Free Transform/Distort/Split/Remove Transformations done; vertical-align rows evidence-gated → File/remaining Modify families); 19.6 | daily-driver reachability | NEXT.md 19.6 |
+| 8 inert CS6 menu items (289 items total) — **open**, burn-down in family batches (selection/mask + Window panel toggles + page/frame + symbol/animation + View + Text + Attach to Path + Free Transform/Distort/Split/Remove Transformations + File + Edit + Modify + the CS6 web panels done; vertical-align rows evidence-gated → the scripting family and the Optimize/Common Library/CSS Properties/Find and Replace panels, which need their features); 19.6 | daily-driver reachability | NEXT.md 19.6 |
 
 ## Parity timeline
 

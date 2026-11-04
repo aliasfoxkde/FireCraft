@@ -65,6 +65,21 @@ pub(crate) const PANELS: &[PanelSpec] = &[
         kind: PanelKind::Info,
         open_by_default: false,
     },
+    PanelSpec {
+        name: "Auto Shapes",
+        kind: PanelKind::AutoShapes,
+        open_by_default: false,
+    },
+    PanelSpec {
+        name: "URL",
+        kind: PanelKind::Url,
+        open_by_default: false,
+    },
+    PanelSpec {
+        name: "Behaviors",
+        kind: PanelKind::Behaviors,
+        open_by_default: false,
+    },
 ];
 
 /// The Web Layer panel has no Window-menu row in CS6 — it is always
@@ -95,6 +110,9 @@ pub(crate) enum PanelKind {
     ColorMixer,
     Swatches,
     Info,
+    AutoShapes,
+    Url,
+    Behaviors,
 }
 
 /// The vertical step between the anchored panels, in points — the
@@ -154,6 +172,9 @@ impl Shell {
                     PanelKind::ColorMixer => self.fill_stroke_panel(ui),
                     PanelKind::Swatches => self.swatches_panel(ui),
                     PanelKind::Info => self.info_panel(ui),
+                    PanelKind::AutoShapes => self.auto_shapes_panel(ui),
+                    PanelKind::Url => self.url_panel(ui),
+                    PanelKind::Behaviors => self.behaviors_panel(ui),
                 }
             });
         // The close button and the Window menu are the same switch.
@@ -215,6 +236,9 @@ mod tests {
             "Color Mixer",
             "Swatches",
             "Info",
+            "Auto Shapes",
+            "URL",
+            "Behaviors",
         ] {
             assert!(names.contains(&menu_name), "{menu_name} has no panel");
         }
@@ -247,7 +271,10 @@ mod tests {
                 "History",
                 "Color Mixer",
                 "Swatches",
-                "Info"
+                "Info",
+                "Auto Shapes",
+                "URL",
+                "Behaviors"
             ]
         );
     }

@@ -1990,7 +1990,12 @@ pub static WINDOW: Menu = Menu {
             Action::Shell(ShellAction::TogglePanel("History")),
         ),
         Entry::Sep,
-        item(43422, "Auto Shapes", "", Action::Inert),
+        item(
+            43422,
+            "Auto Shapes",
+            "",
+            Action::Shell(ShellAction::TogglePanel("Auto Shapes")),
+        ),
         item(
             43415,
             "Styles",
@@ -2003,7 +2008,12 @@ pub static WINDOW: Menu = Menu {
             "",
             Action::Shell(ShellAction::TogglePanel("Document Library")),
         ),
-        item(43414, "URL", "", Action::Inert),
+        item(
+            43414,
+            "URL",
+            "",
+            Action::Shell(ShellAction::TogglePanel("URL")),
+        ),
         Entry::Sep,
         item(
             43405,
@@ -2024,7 +2034,12 @@ pub static WINDOW: Menu = Menu {
             "",
             Action::Shell(ShellAction::TogglePanel("Info")),
         ),
-        item(43413, "Behaviors", "", Action::Inert),
+        item(
+            43413,
+            "Behaviors",
+            "",
+            Action::Shell(ShellAction::TogglePanel("Behaviors")),
+        ),
         item(43402, "Find and Replace", "", Action::Inert),
         Entry::Sep,
         item(
@@ -2527,7 +2542,7 @@ mod tests {
     /// The highest inert-item count the docs have recorded. The
     /// `inert_count_never_rises` test refuses any regression above it;
     /// when the count falls, ratchet this down to the new number.
-    const INERT_CEILING: usize = 11;
+    const INERT_CEILING: usize = 8;
 
     fn walk(entries: &'static [Entry]) -> Vec<&'static Item> {
         let mut items = Vec::new();
