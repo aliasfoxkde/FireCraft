@@ -7,6 +7,7 @@
 
 use super::*;
 use compose::abgr_pack;
+use doc::{GroupObject, ImageObject, SliceObject};
 
 impl Shell {
     /// Edit ▸ Paste as Mask / Paste Inside: the clipboard becomes the
@@ -868,8 +869,18 @@ impl Shell {
                 self.symbol_instance_properties(ui, id, &instance);
                 return;
             }
-            Some(_) => {
-                ui.label("selection has no editable properties yet");
+            Some(ObjectData::Group(group)) => {
+                self.group_properties(ui, id, &group);
+                group.effects
+            }
+            Some(ObjectData::Image(image)) => {
+                self.image_properties(ui, id, &image);
+                image.effects
+            }
+            Some(ObjectData::Slice(slice)) => {
+                // A slice carries no `EFLv` spine, so the effect list
+                // below has nothing to read.
+                self.slice_properties(ui, id, &slice);
                 return;
             }
             None => {
@@ -1313,6 +1324,162 @@ impl Shell {
         self.geometry_fields(ui, id);
     }
 
+    /// Group properties: the shared display controls, the group's
+    /// geometry, and the objects it holds.
+    ///
+    /// CS6's Properties panel shows the group's own attributes; the
+    /// membership list lives here because the Layers panel shows the
+    /// page's layer stack, not a group's contents.
+    pub(super) fn group_properties(
+        &mut self,
+        ui: &mut egui::Ui,
+        id: doc::ObjectId,
+        group: &GroupObject,
+    ) {
+        ui.label(format!("object {} (gen {})", id.index(), id.generation()));
+        self.geometry_fields(ui, id);
+        self.display_controls(
+            ui,
+            id,
+            DisplayState {
+                opacity: group.opacity,
+                blend: group.blend,
+                visible: group.visible,
+                locked: group.locked,
+                name: group.name.clone(),
+            },
+        );
+        ui.heading("Contents");
+        if group.children.is_empty() {
+            ui.label("(empty group)");
+        }
+        // Snapshot the child labels: the registry is borrowed
+        // read-only while the panel draws.
+        let children: Vec<String> = group
+            .children
+            .iter()
+            .map(|child| {
+                self.editor
+                    .document()
+                    .registry
+                    .get(*child)
+                    .map(object_label)
+                    .unwrap_or_else(|| format!("object {} (stale)", child.index()))
+            })
+            .collect();
+        for label in children {
+            ui.label(label);
+        }
+    }
+
+    /// Bitmap properties: the pixel geometry as a readout, then the
+    /// shared display controls.
+    ///
+    /// The X/Y/W/H strip is read-only here and the CS6 fill/stroke
+    /// editors are absent: `object.setBounds` refuses images (a
+    /// transform that rewrites geometry needs the resample pass —
+    /// decision 0019) and `IMGv` carries no fill/stroke nodes in this
+    /// build. Both are recorded as open work in `docs/CS6-PARITY.md`
+    /// rather than faked.
+    pub(super) fn image_properties(
+        &mut self,
+        ui: &mut egui::Ui,
+        id: doc::ObjectId,
+        image: &ImageObject,
+    ) {
+        ui.label(format!("object {} (gen {})", id.index(), id.generation()));
+        ui.label(format!(
+            "bitmap {}x{} px, {} tile(s) of {} px",
+            image.pixels.0,
+            image.pixels.1,
+            image.tiles.len(),
+            image.tile_size
+        ));
+        ui.label(format!(
+            "at ({:.1}, {:.1}), offset ({:.1}, {:.1})",
+            image.location.x, image.location.y, image.offset.x, image.offset.y
+        ));
+        self.display_controls(
+            ui,
+            id,
+            DisplayState {
+                opacity: image.opacity,
+                blend: image.blend,
+                visible: image.visible,
+                locked: image.locked,
+                name: image.name.clone(),
+            },
+        );
+    }
+
+    /// Slice properties: the name, the slice type, the frame
+    /// geometry, and the anchor link and alt text.
+    ///
+    /// The link fields are the shared editor the Window ▸ URL panel
+    /// renders, so the two surfaces cannot show different values.
+    pub(super) fn slice_properties(
+        &mut self,
+        ui: &mut egui::Ui,
+        id: doc::ObjectId,
+        slice: &SliceObject,
+    ) {
+        ui.label(format!("object {} (gen {})", id.index(), id.generation()));
+        // The name (`object.rename` covers slices).
+        let mut name = slice.name.clone().unwrap_or_default();
+        if ui
+            .add(egui::TextEdit::singleline(&mut name).hint_text("object name"))
+            .lost_focus()
+            && ui.input(|input| input.key_pressed(egui::Key::Enter))
+        {
+            let value = if name.is_empty() {
+                serde_json::Value::Null
+            } else {
+                serde_json::json!(name)
+            };
+            let _ = self.editor.apply(
+                "object.rename",
+                serde_json::json!({ "id": id, "name": value }),
+            );
+        }
+        // The type: foreground (`0`), background (`2`), or hotspot
+        // (no `TSLi` node).
+        let current = match slice.slice_type {
+            Some(0) => "foreground",
+            Some(2) => "background",
+            _ => "hotspot",
+        };
+        egui::ComboBox::from_label("type")
+            .selected_text(current)
+            .show_ui(ui, |ui| {
+                for (choice, label) in [
+                    ("foreground", "foreground"),
+                    ("background", "background"),
+                    ("hotspot", "hotspot"),
+                ] {
+                    if ui.selectable_label(current == choice, label).clicked() {
+                        let value = match choice {
+                            "foreground" => serde_json::json!(0),
+                            "background" => serde_json::json!(2),
+                            _ => serde_json::Value::Null,
+                        };
+                        let _ = self.editor.apply(
+                            "slice.setType",
+                            serde_json::json!({ "id": id, "slice_type": value }),
+                        );
+                    }
+                }
+            });
+        let shape = match slice.shape {
+            0 => "rectangle".to_owned(),
+            1 => "ellipse".to_owned(),
+            2 => "polygon".to_owned(),
+            other => format!("unknown ({other})"),
+        };
+        ui.label(format!("shape: {shape}"));
+        self.geometry_fields(ui, id);
+        self.slice_link_editor(ui, id, slice.link.as_ref(), slice.alt.as_ref(), false);
+    }
+
     /// CS6's Properties X/Y/W/H strip: the selection's union box,
     /// applied on Enter through `object.setBounds`.
     pub(super) fn geometry_fields(&mut self, ui: &mut egui::Ui, id: doc::ObjectId) {
@@ -1732,5 +1899,23 @@ impl Shell {
             "path.setFill",
             serde_json::json!({ "id": id, "shape": "linear", "stops": payload, "alpha": [] }),
         );
+    }
+}
+
+/// A display label for one object: its stored name when it has one,
+/// then its kind. The kind is always shown so an unnamed object is
+/// still identifiable in a list.
+fn object_label(object: &ObjectData) -> String {
+    let (kind, name) = match object {
+        ObjectData::Path(path) => ("path", path.name.clone()),
+        ObjectData::Text(text) => ("text", text.name.clone()),
+        ObjectData::Group(group) => ("group", group.name.clone()),
+        ObjectData::Image(image) => ("bitmap", image.name.clone()),
+        ObjectData::Slice(slice) => ("slice", slice.name.clone()),
+        ObjectData::SymbolInstance(instance) => ("instance", instance.name.clone()),
+    };
+    match name {
+        Some(name) if !name.is_empty() => format!("{name} ({kind})"),
+        _ => format!("(unnamed {kind})"),
     }
 }

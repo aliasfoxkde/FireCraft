@@ -1,15 +1,23 @@
-//! CS6's panel system: each panel is its own window, as in the
-//! reference application — draggable, collapsible, resizable, and
-//! closable, with the Window menu as the second way in.
+//! CS6's panel system: one dock column of stacked, collapsible panels
+//! along the right edge, with the Window menu as the second way in.
 //!
-//! CS6 keeps a *group* of docked panels along the right edge and lets
-//! them float free. egui has no dock system, so a panel is an
-//! [`egui::Window`] anchored in a tidy right-hand column: the
-//! placement reads as a dock until the user drags a panel away, which
-//! is the same affordance CS6 offers.
+//! CS6 keeps a *group* of docked panels along the right edge, each
+//! with its own header, stacked one above the next; the column
+//! scrolls when the stack is taller than the window. egui has no dock
+//! system, so the column is a [`egui::SidePanel`] on the right: the
+//! panels are stacked inside it in CS6's order, each under a CS6
+//! header (collapse arrow, name, close button).
+//!
+//! Why a side panel and not free-floating windows: the dock must
+//! *reserve* its width. As floating windows the panels covered the
+//! canvas, and their fixed vertical step meant the lower ones fell
+//! below the fold — at 1280×800 only the first two panels were
+//! reachable. A side panel shrinks the canvas instead of covering it,
+//! and the column scrolls, so every panel stays reachable at any
+//! viewport height.
 //!
 //! Panel *content* lives in [`super::panels`]; this module owns the
-//! inventory, the placement, and the open/closed bookkeeping.
+//! inventory, the dock, and the open/closed bookkeeping.
 
 use super::*;
 
@@ -86,7 +94,16 @@ pub(crate) const PANELS: &[PanelSpec] = &[
 /// present, so it is listed separately.
 pub(crate) const WEB_PANEL: &str = "Web Layer";
 
+/// The Web Layer panel's spec — the one panel with no Window-menu row
+/// and no close button (nothing could reopen it).
+const WEB_PANEL_SPEC: PanelSpec = PanelSpec {
+    name: WEB_PANEL,
+    kind: PanelKind::WebLayer,
+    open_by_default: true,
+};
+
 /// One panel of the CS6 panel inventory.
+#[derive(Clone, Copy)]
 pub(crate) struct PanelSpec {
     /// The panel's title, as CS6 names it (and as the Window menu
     /// row names it).
@@ -113,72 +130,93 @@ pub(crate) enum PanelKind {
     AutoShapes,
     Url,
     Behaviors,
+    WebLayer,
 }
 
-/// The vertical step between the anchored panels, in points — the
-/// height each dock window is opened at.
-const DOCK_STEP: f32 = 260.0;
+/// The width of the right dock, in points — CS6's dock is a narrow
+/// column; the canvas keeps the rest.
+pub(crate) const DOCK_WIDTH: f32 = 258.0;
+
+/// The width reserved for a panel's content inside the dock, after the
+/// dock frame, the scroll bar, and the panel's own padding.
+const DOCK_CONTENT_WIDTH: f32 = DOCK_WIDTH - 26.0;
 
 impl Shell {
-    /// Draws the panel windows.
+    /// Draws the CS6 right dock: the column of stacked panels.
     ///
-    /// `Hide Panels` (the CS6 Tab key) folds the whole group; the
+    /// `Hide Panels` (the CS6 Tab key) folds the whole dock; the
     /// Window menu toggles one panel at a time, and a panel closed
-    /// with its own close button leaves the group the same way.
-    pub(crate) fn panel_windows(&mut self, ctx: &egui::Context) {
+    /// with its own close button leaves the rest of the dock alone.
+    pub(crate) fn dock(&mut self, ui: &mut egui::Ui) {
         if self.panels_hidden {
             return;
         }
-        for (index, spec) in PANELS.iter().enumerate() {
-            self.one_panel_window(ctx, spec, index);
-        }
-        // The Web Layer panel has no Window-menu row, so it carries no
-        // close button — nothing could reopen it.
-        egui::Window::new(WEB_PANEL)
-            .collapsible(true)
+        egui::Panel::right(egui::Id::new("cs6_dock"))
             .resizable(true)
-            .default_width(250.0)
-            .default_height(240.0)
-            .default_pos(self.dock_pos(PANELS.len()))
-            .show(ctx, |ui| {
-                ui.set_min_height(180.0);
-                self.web_panel(ui);
+            .default_size(DOCK_WIDTH)
+            .show_separator_line(true)
+            .show(ui, |ui| {
+                // The column scrolls: CS6's dock does too when the
+                // stack is taller than the window, and it is what keeps
+                // every panel reachable at a short viewport.
+                egui::ScrollArea::vertical()
+                    .id_salt("cs6_dock_scroll")
+                    .auto_shrink([false, false])
+                    .show(ui, |ui| {
+                        for spec in PANELS {
+                            if self.panel_shown(spec.name) {
+                                self.dock_section(ui, spec, true);
+                            }
+                        }
+                        // The Web Layer panel is always present and
+                        // carries no close button.
+                        self.dock_section(ui, &WEB_PANEL_SPEC, false);
+                    });
             });
     }
 
-    /// One panel window, docked by default in the right-hand column.
-    /// `default_pos` (not `anchor`) is the CS6 affordance: the panel
-    /// opens docked, but a drag moves it free — and egui's persisted
-    /// area memory then restores wherever the user left it.
-    fn one_panel_window(&mut self, ctx: &egui::Context, spec: &PanelSpec, index: usize) {
-        let mut open = self.panel_shown(spec.name);
-        egui::Window::new(spec.name)
-            .open(&mut open)
-            .collapsible(true)
-            .resizable(true)
-            .default_width(250.0)
-            .default_height(240.0)
-            .default_pos(self.dock_pos(index))
-            .show(ctx, |ui| {
-                ui.set_min_height(180.0);
-                match spec.kind {
-                    PanelKind::Properties => self.properties_panel(ui),
-                    PanelKind::Pages => self.pages_section(ui),
-                    PanelKind::States => self.states_section(ui),
-                    PanelKind::Layers => self.layers_section(ui),
-                    PanelKind::Styles => self.styles_panel(ui),
-                    PanelKind::Library => self.library_panel(ui),
-                    PanelKind::History => self.history_section(ui),
-                    PanelKind::ColorMixer => self.fill_stroke_panel(ui),
-                    PanelKind::Swatches => self.swatches_panel(ui),
-                    PanelKind::Info => self.info_panel(ui),
-                    PanelKind::AutoShapes => self.auto_shapes_panel(ui),
-                    PanelKind::Url => self.url_panel(ui),
-                    PanelKind::Behaviors => self.behaviors_panel(ui),
-                }
-            });
+    /// One panel in the dock: a CS6 header (collapse arrow, name,
+    /// close button) over the panel's content.
+    ///
+    /// The header's expanded state is egui's own, keyed on the
+    /// panel's name, so it survives a restart the way CS6's collapsed
+    /// panels do.
+    fn dock_section(&mut self, ui: &mut egui::Ui, spec: &PanelSpec, closable: bool) {
+        let mut close = false;
+        let state = egui::collapsing_header::CollapsingState::load_with_default_open(
+            ui.ctx(),
+            egui::Id::new(("cs6_dock_panel", spec.name)),
+            true,
+        );
+        let header = state.show_header(ui, |ui| {
+            ui.strong(spec.name);
+            if closable {
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    close = ui.small_button("×").clicked();
+                });
+            }
+        });
+        header.body_unindented(|ui| {
+            ui.set_min_width(DOCK_CONTENT_WIDTH);
+            match spec.kind {
+                PanelKind::Properties => self.properties_panel(ui),
+                PanelKind::Pages => self.pages_section(ui),
+                PanelKind::States => self.states_section(ui),
+                PanelKind::Layers => self.layers_section(ui),
+                PanelKind::Styles => self.styles_panel(ui),
+                PanelKind::Library => self.library_panel(ui),
+                PanelKind::History => self.history_section(ui),
+                PanelKind::ColorMixer => self.fill_stroke_panel(ui),
+                PanelKind::Swatches => self.swatches_panel(ui),
+                PanelKind::Info => self.info_panel(ui),
+                PanelKind::AutoShapes => self.auto_shapes_panel(ui),
+                PanelKind::Url => self.url_panel(ui),
+                PanelKind::Behaviors => self.behaviors_panel(ui),
+                PanelKind::WebLayer => self.web_panel(ui),
+            }
+        });
         // The close button and the Window menu are the same switch.
-        if !open {
+        if close {
             self.hide_panel(spec.name);
         }
     }
@@ -190,17 +228,6 @@ impl Shell {
             self.panel_hidden.remove(pos);
         }
         self.panel_hidden.push(name);
-    }
-
-    /// The default dock position for the panel at `index`: a
-    /// right-edge column. Needs the screen size, so it is computed at
-    /// draw time from the context the windows are shown into.
-    fn dock_pos(&self, index: usize) -> egui::Pos2 {
-        let screen = self
-            .ctx
-            .as_ref()
-            .map_or(egui::Rect::NOTHING, |ctx| ctx.viewport_rect());
-        egui::Pos2::new(screen.right() - 258.0, 8.0 + DOCK_STEP * index as f32)
     }
 
     /// The panels CS6 opens on a fresh document — the initial value of
@@ -277,5 +304,13 @@ mod tests {
                 "Behaviors"
             ]
         );
+    }
+
+    /// The dock is narrow enough to leave the canvas room and wide
+    /// enough for CS6's panel content.
+    #[test]
+    fn the_dock_width_is_cs6s() {
+        const { assert!(DOCK_WIDTH >= 240.0) };
+        const { assert!(DOCK_WIDTH <= 300.0) };
     }
 }

@@ -2278,10 +2278,11 @@ impl eframe::App for Shell {
                 .exact_size(34.0)
                 .show(ui, |ui| self.tools_panel(ui));
         }
-        // The CS6 panel group: one window per panel, docked along the
-        // right edge (drawn after the CentralPanel reservation below —
-        // egui windows float above panels regardless of call order, but
-        // the fold flag is honored here).
+        // The CS6 panel group: the right dock, one column of stacked
+        // panels. A side panel *reserves* its width, so the canvas
+        // shrinks instead of being covered, and the column scrolls so
+        // every panel stays reachable at any viewport height.
+        self.dock(ui);
         egui::Panel::bottom(egui::Id::new("status")).show(ui, |ui| {
             ui.horizontal(|ui| {
                 ui.label(&self.status);
@@ -2364,9 +2365,6 @@ impl eframe::App for Shell {
         if self.help_open {
             self.help_panel(ui.ctx());
         }
-        // The CS6 panel group — drawn last so the windows float over
-        // the canvas like CS6's docked panels do.
-        self.panel_windows(ui.ctx());
         if self.close_requested {
             self.close_requested = false;
             ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);

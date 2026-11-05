@@ -63,8 +63,16 @@ fn behavior_label(kind: i64) -> String {
     }
 }
 
-/// The URL panel's edit-in-progress state: the object it belongs to
-/// and the two fields it edits.
+/// The link editor's edit-in-progress state: the object it belongs
+/// to, the two fields it edits, and the stored values it was seeded
+/// from.
+///
+/// The draft is shared by the Window ▸ URL panel and the Properties
+/// inspector, so the two surfaces can never disagree about a slice's
+/// link. The seed values are what make that safe: when the document
+/// changes underneath the draft — the inspector applied a new link —
+/// the stored value no longer matches the seed and the draft follows
+/// it.
 pub(crate) struct UrlDraft {
     /// The slice or hotspot the draft edits.
     pub(crate) target: doc::ObjectId,
@@ -72,22 +80,26 @@ pub(crate) struct UrlDraft {
     pub(crate) link: String,
     /// The alt text being edited.
     pub(crate) alt: String,
+    /// The stored link the draft was seeded from.
+    pub(crate) source_link: Option<String>,
+    /// The stored alt text the draft was seeded from.
+    pub(crate) source_alt: Option<String>,
 }
 
 /// A snapshot of the selected web object — the panel reads the
 /// document read-only, so the fields it shows are copied out before
 /// any command runs.
-struct WebSnapshot {
+pub(super) struct WebSnapshot {
     /// The slice or hotspot.
-    id: doc::ObjectId,
+    pub(super) id: doc::ObjectId,
     /// Its display name.
-    name: String,
+    pub(super) name: String,
     /// Its anchor URL.
-    link: Option<String>,
+    pub(super) link: Option<String>,
     /// Its alt text.
-    alt: Option<String>,
+    pub(super) alt: Option<String>,
     /// Its behavior kinds, in order.
-    behaviors: Vec<i64>,
+    pub(super) behaviors: Vec<i64>,
 }
 
 impl Shell {
@@ -172,29 +184,66 @@ impl Shell {
             return;
         };
         ui.label(format!("Target: {}", snapshot.name));
-        // The draft follows the selection: a new target re-reads the
-        // stored link and alt text.
-        if self.url_draft.as_ref().map(|draft| draft.target) != Some(snapshot.id) {
+        self.slice_link_editor(
+            ui,
+            snapshot.id,
+            snapshot.link.as_ref(),
+            snapshot.alt.as_ref(),
+            true,
+        );
+    }
+
+    /// The shared anchor-link and alt-text editor.
+    ///
+    /// CS6 shows these two fields in the `Properties` panel, and
+    /// `FireCraft`'s URL panel is the same data seen from the web side.
+    /// Both surfaces render *this* editor, so there is one draft and
+    /// one writer: the fields can never show different links, and an
+    /// apply from either surface is visible in the other.
+    ///
+    /// `with_button` adds the explicit Apply button the URL panel
+    /// has; the inspector applies on Enter instead, matching the
+    /// other inspector fields.
+    pub(super) fn slice_link_editor(
+        &mut self,
+        ui: &mut egui::Ui,
+        target: doc::ObjectId,
+        link: Option<&String>,
+        alt: Option<&String>,
+        with_button: bool,
+    ) {
+        // The draft follows the selection and the stored values: a
+        // new target re-seeds it, and so does a stored value that
+        // changed under it (the inspector applied a link).
+        let stale = draft_is_stale(self.url_draft.as_ref(), target, link, alt);
+        if stale {
             self.url_draft = Some(UrlDraft {
-                target: snapshot.id,
-                link: snapshot.link.clone().unwrap_or_default(),
-                alt: snapshot.alt.clone().unwrap_or_default(),
+                target,
+                link: link.cloned().unwrap_or_default(),
+                alt: alt.cloned().unwrap_or_default(),
+                source_link: link.cloned(),
+                source_alt: alt.cloned(),
             });
         }
         let mut apply = false;
+        let mut enter = false;
         if let Some(draft) = self.url_draft.as_mut() {
             ui.label("URL");
-            ui.text_edit_singleline(&mut draft.link);
+            let link_field = ui.text_edit_singleline(&mut draft.link);
             ui.label("Alt text");
-            ui.text_edit_singleline(&mut draft.alt);
-            apply = ui.button("Apply").clicked();
+            let alt_field = ui.text_edit_singleline(&mut draft.alt);
+            enter = (link_field.lost_focus() || alt_field.lost_focus())
+                && ui.input(|input| input.key_pressed(egui::Key::Enter));
+            if with_button {
+                apply = ui.button("Apply").clicked();
+            }
         }
-        if apply {
+        if apply || enter {
             let (link, alt) = self.url_draft.as_ref().map_or_else(
                 || (String::new(), String::new()),
                 |draft| (draft.link.trim().to_owned(), draft.alt.trim().to_owned()),
             );
-            self.apply_link(snapshot.id, &link, &alt);
+            self.apply_link(target, &link, &alt);
         }
     }
 
@@ -315,7 +364,7 @@ impl Shell {
 
     /// The selected slice or hotspot, snapshotted for a panel to
     /// read and then command.
-    fn selected_web_object(&self) -> Option<WebSnapshot> {
+    pub(super) fn selected_web_object(&self) -> Option<WebSnapshot> {
         let id = self.editor.live_selection().into_iter().find(|id| {
             matches!(
                 self.editor.document().registry.get(*id),
@@ -357,6 +406,25 @@ fn optional_field(value: &str) -> serde_json::Value {
     }
 }
 
+/// Whether the link draft must re-seed from the stored values.
+///
+/// The draft is stale when it edits another object, or when the
+/// stored link or alt text changed under it — the Properties
+/// inspector and the URL panel share one draft, so an apply in
+/// either place must show up in the other.
+fn draft_is_stale(
+    draft: Option<&UrlDraft>,
+    target: doc::ObjectId,
+    link: Option<&String>,
+    alt: Option<&String>,
+) -> bool {
+    draft.is_none_or(|draft| {
+        draft.target != target
+            || draft.source_link.as_ref() != link
+            || draft.source_alt.as_ref() != alt
+    })
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 mod tests {
@@ -388,6 +456,51 @@ mod tests {
         assert_eq!(behavior_label(POPUP_MENU_BEHAVIOR), "Popup menu");
         assert_eq!(behavior_label(SWAP_IMAGE_BEHAVIOR), "Swap image");
         assert_eq!(behavior_label(7), "Behavior 7");
+    }
+
+    /// The link draft follows the selection: a different object
+    /// re-seeds it.
+    #[test]
+    fn the_link_draft_follows_the_selection() {
+        let first = doc::ObjectId::from_parts(1, 0);
+        let second = doc::ObjectId::from_parts(2, 0);
+        let link = "https://example.invalid/".to_owned();
+        let draft = UrlDraft {
+            target: first,
+            link: link.clone(),
+            alt: String::new(),
+            source_link: Some(link.clone()),
+            source_alt: None,
+        };
+        assert!(!draft_is_stale(Some(&draft), first, Some(&link), None,));
+        assert!(draft_is_stale(Some(&draft), second, Some(&link), None));
+    }
+
+    /// A stored value that changed under the draft — the Properties
+    /// inspector applied a link while the URL panel was open —
+    /// re-seeds the draft, so the two surfaces cannot show different
+    /// links.
+    #[test]
+    fn the_link_draft_follows_a_stored_value_change() {
+        let target = doc::ObjectId::from_parts(1, 0);
+        let seeded = "https://example.invalid/old".to_owned();
+        let applied = "https://example.invalid/new".to_owned();
+        let draft = UrlDraft {
+            target,
+            link: seeded.clone(),
+            alt: String::new(),
+            source_link: Some(seeded.clone()),
+            source_alt: None,
+        };
+        assert!(draft_is_stale(Some(&draft), target, Some(&applied), None));
+        assert!(!draft_is_stale(Some(&draft), target, Some(&seeded), None));
+    }
+
+    /// With no draft at all, the editor seeds one.
+    #[test]
+    fn a_missing_link_draft_is_stale() {
+        let target = doc::ObjectId::from_parts(1, 0);
+        assert!(draft_is_stale(None, target, None, None));
     }
 
     /// A panel-inserted shape carries the placement fields its
