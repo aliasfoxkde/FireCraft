@@ -47,6 +47,11 @@ corpus/scripts-report.json
 # working files, not source; their content churns constantly.
 temp/
 
+# Throwaway probe helpers (headless browser drivers and their throwaway
+# scripts). Git-ignored working files, not source; every run rewrites
+# them, so their findings can never stick to the baseline.
+.gitignore-scratch/
+
 # Proprietary Adobe reference install (git-ignored working material,
 # see CLAUDE.md source/ rules). Third-party binaries and vendor JS —
 # every finding there is noise by definition, and the files churn.
@@ -57,3 +62,9 @@ source/
 # rules, and every session appends — line-keyed baseline entries can
 # never stick.
 log/
+
+# The baseline file itself — machine-generated from a scan, and the
+# findings it records (numeric literals, prose) land back in it. Every
+# regeneration rewrites its content, so its own entries would be
+# invalidated by the regeneration that produced them.
+.aegis-baseline.json

@@ -11,6 +11,18 @@
 //! - `firecraft.runScript` — `{path}` run through the scripting host
 //!   with the command queue drained into the same session (native
 //!   builds with the `scripting` feature only).
+//! - `firecraft.info` — the document summary (the `info` verb's JSON)
+//!   as text.
+//! - `firecraft.export` — `{path, format?, quality?}` renders the
+//!   current document and writes it to `path` (same format set as the
+//!   CLI `export` verb).
+//! - `firecraft.undo` / `firecraft.redo` — step the session's undo
+//!   stack; the step label comes back as text.
+//! - `firecraft.listCommands` — every registry command id the session
+//!   binds (`engine::catalog::ids()` authority), one per line.
+//!
+//! Resources: `document://current` is the `info` summary as
+//! `application/json` — agents can read it without a tool round-trip.
 //!
 //! Transport lives in the binary's `mcp` verb (stdio loop); this
 //! module is the pure dispatch so tests drive exactly what runs.
@@ -58,7 +70,7 @@ pub fn handle(
             id,
             serde_json::json!({
                 "protocolVersion": PROTOCOL_VERSION,
-                "capabilities": { "tools": {} },
+                "capabilities": { "tools": {}, "resources": {} },
                 "serverInfo": {
                     "name": "firecraft",
                     "version": env!("CARGO_PKG_VERSION"),
@@ -68,6 +80,8 @@ pub fn handle(
         "ping" => Some(ok_reply(id, serde_json::json!({}))),
         "tools/list" => Some(ok_reply(id, tools_value())),
         "tools/call" => Some(tool_call(session, fs, id, request)),
+        "resources/list" => Some(ok_reply(id, resources_value())),
+        "resources/read" => Some(resource_read(session, id, request)),
         other => Some(error_reply(
             id,
             METHOD_NOT_FOUND,
@@ -111,7 +125,89 @@ fn tools_value() -> serde_json::Value {
             "required": ["path"],
         },
     }));
+    tools.push(serde_json::json!({
+        "name": "firecraft.info",
+        "description": "Summarize the open document (frames, canvas, pages, \
+                        object counts by kind) as JSON text.",
+        "inputSchema": { "type": "object", "properties": {} },
+    }));
+    tools.push(serde_json::json!({
+        "name": "firecraft.export",
+        "description": "Render the open document and write it to a file, \
+                        same format set as the CLI export verb.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "path": { "type": "string", "description": "Output file path; \
+                          the extension picks the codec." },
+                "quality": { "type": "integer", "description": "1-100, codec \
+                             formats only." },
+            },
+            "required": ["path"],
+        },
+    }));
+    tools.push(serde_json::json!({
+        "name": "firecraft.undo",
+        "description": "Step the document back one undo level; returns the \
+                        undone step label.",
+        "inputSchema": { "type": "object", "properties": {} },
+    }));
+    tools.push(serde_json::json!({
+        "name": "firecraft.redo",
+        "description": "Step the document forward one redo level; returns the \
+                        redone step label.",
+        "inputSchema": { "type": "object", "properties": {} },
+    }));
+    tools.push(serde_json::json!({
+        "name": "firecraft.listCommands",
+        "description": "List every registry command id the session binds, \
+                        one per line.",
+        "inputSchema": { "type": "object", "properties": {} },
+    }));
     serde_json::json!({ "tools": tools })
+}
+
+/// The resource table: the open document's summary, refreshable by
+/// re-reading (MCP resources carry no change notification here).
+fn resources_value() -> serde_json::Value {
+    serde_json::json!({
+        "resources": [{
+            "uri": "document://current",
+            "name": "Current document",
+            "description": "FireCraft document summary (frames, canvas, \
+                            pages, object counts by kind).",
+            "mimeType": "application/json",
+        }]
+    })
+}
+
+/// `resources/read`: only `document://current` exists; anything else is
+/// a typed tool-style error envelope with the resource's URI.
+fn resource_read(
+    session: &Session,
+    id: serde_json::Value,
+    request: &serde_json::Value,
+) -> serde_json::Value {
+    let Some(uri) = request
+        .pointer("/params/uri")
+        .and_then(serde_json::Value::as_str)
+    else {
+        return error_reply(id, INVALID_PARAMS, "resources/read needs params.uri");
+    };
+    if uri != "document://current" {
+        return error_reply(id, INVALID_PARAMS, &format!("unknown resource: {uri}"));
+    }
+    serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "result": {
+            "contents": [{
+                "uri": uri,
+                "mimeType": "application/json",
+                "text": crate::info::summarize(session.document()).to_string(),
+            }],
+        },
+    })
 }
 
 /// Dispatches `tools/call`. `fs` is only consumed by the feature-gated
@@ -134,6 +230,11 @@ fn tool_call(
         .unwrap_or(serde_json::Value::Null);
     match name {
         "firecraft.apply" => apply_tool(session, id, &arguments),
+        "firecraft.info" => info_tool(session, id),
+        "firecraft.export" => export_tool(session, &fs, id, &arguments),
+        "firecraft.undo" => undo_tool(session, id, false),
+        "firecraft.redo" => undo_tool(session, id, true),
+        "firecraft.listCommands" => list_commands_tool(session, id),
         #[cfg(feature = "scripting")]
         "firecraft.runScript" => run_script_tool(session, fs, id, &arguments),
         other => error_reply(id, INVALID_PARAMS, &format!("unknown tool: {other}")),
@@ -165,6 +266,79 @@ fn apply_tool(
         ),
         Err(error) => tool_result(id, true, &error.to_string()),
     }
+}
+
+/// `firecraft.info`: the `info` verb's summary as JSON text.
+fn info_tool(session: &Session, id: serde_json::Value) -> serde_json::Value {
+    tool_result(
+        id,
+        false,
+        &crate::info::summarize(session.document()).to_string(),
+    )
+}
+
+/// `firecraft.export`: renders and writes through the injected file
+/// system, so tests inspect the write without touching disk. Quality
+/// is codec-only (1..=100); the extension picks the format exactly as
+/// the CLI `export` verb does.
+fn export_tool(
+    session: &Session,
+    fs: &Rc<dyn FileSystem>,
+    id: serde_json::Value,
+    arguments: &serde_json::Value,
+) -> serde_json::Value {
+    let Some(path) = arguments.get("path").and_then(serde_json::Value::as_str) else {
+        return tool_result(
+            id,
+            true,
+            "firecraft.export needs a string \"path\" argument",
+        );
+    };
+    let quality = arguments.get("quality").and_then(serde_json::Value::as_u64);
+    if let Some(q) = quality {
+        if !(1..=100).contains(&q) {
+            return tool_result(id, true, "firecraft.export: quality must be 1..=100");
+        }
+    }
+    let flags = crate::ops::ExportFlags {
+        quality: quality.map(|q| u8::try_from(q).unwrap_or(100)),
+        progressive: false,
+        matte: ::io::Matte::White,
+    };
+    let bytes = match crate::ops::export_raster(session.document(), path, &flags) {
+        Ok(bytes) => bytes,
+        Err(error) => return tool_result(id, true, &format!("firecraft.export: {error}")),
+    };
+    match fs.write_file(path, &bytes) {
+        Ok(()) => tool_result(
+            id,
+            false,
+            &serde_json::json!({ "ok": true, "path": path, "bytes": bytes.len() }).to_string(),
+        ),
+        Err(error) => tool_result(id, true, &format!("firecraft.export: {error}")),
+    }
+}
+
+/// `firecraft.undo` / `firecraft.redo`: one stack step per call; the
+/// step label comes back, failures (empty stack) are `isError`.
+fn undo_tool(session: &mut Session, id: serde_json::Value, redo: bool) -> serde_json::Value {
+    let outcome = if redo { session.redo() } else { session.undo() };
+    match outcome {
+        Ok(label) => tool_result(
+            id,
+            false,
+            &serde_json::json!({ "ok": true, "label": label }).to_string(),
+        ),
+        Err(error) => tool_result(id, true, &error.to_string()),
+    }
+}
+
+/// `firecraft.listCommands`: the registry ids the session binds, one
+/// per line (sorted — discovery wants scan order, not insertion order).
+fn list_commands_tool(session: &Session, id: serde_json::Value) -> serde_json::Value {
+    let mut names = session.command_names();
+    names.sort_unstable();
+    tool_result(id, false, &names.join("\n"))
 }
 
 /// `firecraft.runScript`: the script runs against the session through

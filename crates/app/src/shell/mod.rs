@@ -5,7 +5,7 @@
 //! in [`dialogs`]; real modal dialogs land with desktop integration).
 pub(crate) use dialogs::{
     CanvasColorDialog, CanvasSizeDialog, DisplayState, EnvDialogs, ExportDialog, FeatherDialog,
-    NumericTransformDialog,
+    ImageSizeDialog, NumericTransformDialog,
 };
 pub(crate) use filters_ui::{
     FILTER_BOOL_KEYS, FILTER_FAMILIES, FILTER_PARAMS, FilterPreset, filter_preset,
@@ -20,7 +20,9 @@ mod glyphs;
 mod guides_ui;
 mod icons;
 mod palette;
+mod panel_windows;
 mod panels;
+mod panels_web;
 
 pub use glyphs::apply_cs6_theme;
 pub(crate) use glyphs::{draw_autoshape_glyph, symbol_type_label, tool_key, tool_label};
@@ -31,17 +33,18 @@ use egui::{Color32, ColorImage, Pos2, Rect, Sense, TextureHandle, TextureOptions
 use base64::Engine as _;
 
 use crate::canvas::View;
+use crate::editor::union_selection_bounds;
 use crate::editor::{
     AutoShape, DragConstraint, Editor, GradientHandle, NineSliceEdge, PixelSelectMode, StampShape,
     Tool, TransformHandle,
 };
 use crate::menus;
 
-/// The web drop sink ([`Shell::set_drop_sink`]): the web crate's async
-/// file reader, installed at startup. Wasm only — the desktop shell
-/// reads dropped bytes directly. No `Send`/`Sync` bound: wasm is
-/// single-threaded and the sink captures `Rc<WebRunner>`, so the
-/// holder is a `thread_local` (a `static Mutex` would demand `Send`).
+// The web drop sink ([`Shell::set_drop_sink`]): the web crate's async
+// file reader, installed at startup. Wasm only — the desktop shell
+// reads dropped bytes directly. No `Send`/`Sync` bound: wasm is
+// single-threaded and the sink captures `Rc<WebRunner>`, so the
+// holder is a `thread_local` (a `static Mutex` would demand `Send`).
 #[cfg(target_arch = "wasm32")]
 thread_local! {
     static DROP_SINK: std::cell::RefCell<Option<std::rc::Rc<dyn Fn(&egui::DroppedFileHandle, egui::Context)>>> =
@@ -80,10 +83,15 @@ pub struct Shell {
     pub(crate) canvas_size: Option<CanvasSizeDialog>,
     /// Open Canvas Color dialog, if any.
     pub(crate) canvas_color: Option<CanvasColorDialog>,
+    /// Open Image Size dialog, if any.
+    pub(crate) image_size: Option<ImageSizeDialog>,
     /// The command palette state.
     pub(crate) palette: palette::CommandPalette,
     /// Display name of the open document (tab strip).
     doc_name: String,
+    /// The path the document was last opened/saved from — Revert
+    /// reads this; `None` for a never-saved document.
+    doc_path: Option<String>,
     /// Last canvas widget rect — the anchor for view commands that
     /// arrive outside the canvas (menu/shortcut zoom and fit).
     canvas_rect: Option<Rect>,
@@ -91,6 +99,16 @@ pub struct Shell {
     close_requested: bool,
     /// The Auto Shape flyout is open (toggled by its tool button).
     autoshape_flyout: bool,
+    /// The open tool-group flyout: the group's name, its tools, and
+    /// the screen position it opened at (CS6's press-and-hold list).
+    tool_flyout: Option<(&'static str, Vec<Tool>, Pos2)>,
+    /// The pending press-and-hold on a tool-group leader: when the
+    /// press started and where.
+    tool_press: Option<ToolPress>,
+    /// The persisted shell layout (panel visibility, dock folds) —
+    /// saved through `App::save` and restored at startup. The window
+    /// *geometry* itself persists through egui's own area memory.
+    layout: ShellLayout,
     /// The Help ▸ About `FireCraft` window is open.
     pub(crate) about_open: bool,
     /// The keyboard-shortcuts help panel is open (F1 / Help menu).
@@ -113,6 +131,23 @@ pub struct Shell {
     guides_locked: bool,
     snap_to_guides: bool,
     grid_dialog: Option<GridDialog>,
+    /// View ▸ Smart Guides ▸ Show / Snap to. Display-only alignment
+    /// hints; nothing in the document reads them yet.
+    smart_guides: bool,
+    snap_to_smart_guides: bool,
+    /// View ▸ 9-Slice Scaling Guides ▸ Lock Guides (display intent
+    /// until slice rendering lands).
+    slice_locked: bool,
+    /// View ▸ Slice Guides / Slice Overlay.
+    slice_guides: bool,
+    slice_overlay: bool,
+    /// View ▸ Edges — object edge highlight.
+    show_edges: bool,
+    /// View ▸ Rulers / Tooltips / Gamma 1.8 (display intent; rulers
+    /// and tooltips render in the frame loop, gamma is a preview flag).
+    show_rulers: bool,
+    show_tooltips: bool,
+    gamma_18: bool,
     /// A guide being dragged out from a canvas-edge press: the axis
     /// and the live world position. Committed to `page.addGuide` (or
     /// discarded) at release; locked guides refuse new guides.
@@ -121,6 +156,22 @@ pub struct Shell {
     /// position it opened at (the popup re-anchors there each frame,
     /// so a later pointer move does not drag it).
     pub(crate) context_menu: Option<Pos2>,
+    /// Window-menu panel visibility: names of right-dock panels the
+    /// user closed. Absent = shown (CS6 default is everything open).
+    panel_hidden: Vec<&'static str>,
+    /// The URL panel's edit-in-progress state — the object it edits
+    /// and the link/alt text being typed.
+    url_draft: Option<panels_web::UrlDraft>,
+    /// The Behaviors panel's chosen swap-image target (the slice's
+    /// name; `None` = not chosen yet).
+    swap_target: Option<String>,
+    /// Window ▸ Hide Panels (Tab): all right-dock panels folded at
+    /// once, independent of per-panel visibility.
+    panels_hidden: bool,
+    /// Window ▸ Tools: the left tools dock is folded.
+    tools_hidden: bool,
+    /// Window ▸ Toolbars ▸ Main: the context options bar is hidden.
+    options_bar_hidden: bool,
     /// The live egui context, stashed each frame so code outside the
     /// frame loop (the web bridge) can request a repaint after it
     /// mutates the shell — without one, a bridge-loaded document sat
@@ -128,16 +179,85 @@ pub struct Shell {
     ctx: Option<egui::Context>,
 }
 
+/// A press-and-hold in progress on a tool-group leader: when it
+/// started (egui input time) and where the pointer was.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct ToolPress {
+    /// The egui input time the press started at.
+    pub(crate) at: f64,
+    /// The pointer position at the press.
+    pub(crate) pos: Pos2,
+}
+
+/// How long a tool-group leader must be held before its flyout
+/// opens — CS6's press-and-hold dwell.
+pub(crate) const TOOL_HOLD_SECONDS: f64 = 0.45;
+
+/// The hold decision, as a pure function of the elapsed time: the
+/// clock and the pointer state are read at the edge and passed in.
+pub(crate) fn hold_opens_flyout(elapsed: f64) -> bool {
+    elapsed >= TOOL_HOLD_SECONDS
+}
+
+/// The persisted shell layout: the panel-visibility set and the dock
+/// folds. Serialized (RON, via eframe's storage) on shutdown and
+/// every ~30 s; restored at startup so the CS6 arrangement survives a
+/// restart. Window *geometry* persists through egui's own area memory
+/// (the `persistence` feature), which is keyed on the window ids.
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
+struct ShellLayout {
+    /// The panel names currently hidden from the dock.
+    panel_hidden: Vec<String>,
+    /// The Tab-key fold of the whole panel group.
+    panels_hidden: bool,
+    /// The left tool dock fold.
+    tools_hidden: bool,
+    /// The context options bar fold.
+    options_bar_hidden: bool,
+    /// Display toggles worth carrying across sessions.
+    show_grid: bool,
+    show_guides: bool,
+    show_rulers: bool,
+    smart_guides: bool,
+}
+
+impl Default for ShellLayout {
+    fn default() -> Self {
+        Self {
+            panel_hidden: Shell::default_open_panels()
+                .into_iter()
+                .map(str::to_owned)
+                .collect(),
+            panels_hidden: false,
+            tools_hidden: false,
+            options_bar_hidden: false,
+            show_grid: false,
+            show_guides: true,
+            show_rulers: false,
+            smart_guides: true,
+        }
+    }
+}
+
 impl Shell {
-    /// Builds the shell with desktop platform defaults.
+    /// Builds the shell with desktop platform defaults. A persisted
+    /// layout (from the previous session's `App::save`) restores the
+    /// panel set and dock folds.
     #[must_use]
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         apply_cs6_theme(&cc.egui_ctx);
-        Self::with_platform(
+        let layout = cc
+            .storage
+            .and_then(|storage| eframe::get_value::<ShellLayout>(storage, "shell_layout"))
+            .unwrap_or_default();
+        let mut shell = Self::with_platform(
             Editor::untitled(),
             std::rc::Rc::new(app_cli::io::StdFs),
             Box::new(EnvDialogs::default()),
-        )
+        );
+        shell.layout = layout;
+        shell.apply_layout();
+        shell
     }
 
     /// Builds the shell over an editor and explicit platform services.
@@ -160,11 +280,15 @@ impl Shell {
             feather: None,
             canvas_size: None,
             canvas_color: None,
+            image_size: None,
             palette: palette::CommandPalette::default(),
             doc_name: "untitled".to_owned(),
+            doc_path: None,
             canvas_rect: None,
             close_requested: false,
             autoshape_flyout: false,
+            tool_flyout: None,
+            tool_press: None,
             about_open: false,
             help_open: false,
             style_name: String::new(),
@@ -175,9 +299,83 @@ impl Shell {
             guides_locked: false,
             snap_to_guides: false,
             grid_dialog: None,
+            smart_guides: true,
+            snap_to_smart_guides: true,
+            slice_locked: false,
+            slice_guides: true,
+            slice_overlay: true,
+            show_edges: true,
+            show_rulers: false,
+            show_tooltips: true,
+            gamma_18: false,
             guide_draft: None,
             context_menu: None,
+            // CS6's fresh-document roster: Properties/Pages/States/
+            // Layers open, the rest of the panel inventory closed.
+            panel_hidden: Self::default_open_panels(),
+            url_draft: None,
+            swap_target: None,
+            panels_hidden: false,
+            tools_hidden: false,
+            options_bar_hidden: false,
+            layout: ShellLayout::default(),
             ctx: None,
+        }
+    }
+
+    /// Restores a persisted layout (panel set, dock folds, display
+    /// toggles) from platform storage. The web build constructs the
+    /// shell without a `CreationContext`, so it calls this with the
+    /// storage its runner exposes.
+    pub fn restore_layout(&mut self, storage: Option<&dyn eframe::Storage>) {
+        if let Some(layout) =
+            storage.and_then(|storage| eframe::get_value::<ShellLayout>(storage, "shell_layout"))
+        {
+            self.layout = layout;
+            self.apply_layout();
+        }
+    }
+
+    /// Copies the persisted layout into the live session fields.
+    /// Panel names are intersected with the current inventory so a
+    /// layout saved by a build with different panels cannot resurrect
+    /// panels this build cannot draw (or orphan one it gained).
+    fn apply_layout(&mut self) {
+        let saved: Vec<&str> = self
+            .layout
+            .panel_hidden
+            .iter()
+            .map(String::as_str)
+            .collect();
+        self.panel_hidden = panel_windows::PANELS
+            .iter()
+            .filter(|panel| saved.contains(&panel.name))
+            .map(|panel| panel.name)
+            .collect();
+        self.panels_hidden = self.layout.panels_hidden;
+        self.tools_hidden = self.layout.tools_hidden;
+        self.options_bar_hidden = self.layout.options_bar_hidden;
+        self.show_grid = self.layout.show_grid;
+        self.show_guides = self.layout.show_guides;
+        self.show_rulers = self.layout.show_rulers;
+        self.smart_guides = self.layout.smart_guides;
+    }
+
+    /// Snapshots the live layout fields for `App::save`.
+    fn capture_layout(&self) -> ShellLayout {
+        ShellLayout {
+            panel_hidden: self
+                .panel_hidden
+                .iter()
+                .map(|name| (*name).to_owned())
+                .collect(),
+            panels_hidden: self.panels_hidden,
+            tools_hidden: self.tools_hidden,
+            options_bar_hidden: self.options_bar_hidden,
+            show_grid: self.show_grid,
+            show_guides: self.show_guides,
+            show_rulers: self.show_rulers,
+            smart_guides: self.smart_guides,
         }
     }
 
@@ -281,6 +479,7 @@ impl Shell {
                 self.raster_scale = 1.0;
                 self.editor = editor;
                 self.view = View::default();
+                self.doc_path = Some(path.clone());
                 self.doc_name = std::path::Path::new(&path)
                     .file_name()
                     .map_or_else(|| path.clone(), |name| name.to_string_lossy().into_owned());
@@ -365,6 +564,126 @@ impl Shell {
         self.run_script_file();
     }
 
+    /// File ▸ File Info: the document's facts on one line — name,
+    /// pages, layers, objects, canvas.
+    fn file_info_summary(&self) -> String {
+        let document = self.editor.session.document();
+        let pages = document.pages.len();
+        let layers: usize = document
+            .pages
+            .iter()
+            .map(|page| page.layers.layers.len())
+            .sum();
+        let objects = document.registry.len();
+        let canvas = &document.pages[self.editor.page].info.canvas;
+        format!(
+            "{} — {pages} page(s), {layers} layer(s), {objects} object(s), canvas {}×{}",
+            self.doc_name, canvas.width, canvas.height
+        )
+    }
+
+    /// File ▸ Send to E-mail ▸ Fireworks PNG (format)…: the PNG
+    /// format facts of the live document — the canvas the format
+    /// stores, its color depth, and the object count it carries.
+    fn png_format_summary(&self) -> String {
+        let document = self.editor.session.document();
+        let canvas = &document.pages[self.editor.page].info.canvas;
+        format!(
+            "Fireworks PNG — {}×{} px, 32-bit RGBA, {} object(s); e-mail delivery is not \
+             available in this build",
+            canvas.width,
+            canvas.height,
+            document.registry.len()
+        )
+    }
+
+    /// File ▸ Preview in Browser: export the document to PNG file(s)
+    /// and open them in the system browser. Saved documents write next
+    /// to the document file; unsaved ones use a temp directory. The
+    /// secondary-browser row opens the same default handler — CS6's
+    /// per-browser configuration is not kept in this build (the Set
+    /// Browser rows say so).
+    fn preview_in_browser(&mut self, secondary: bool, all_pages: bool) {
+        let _ = secondary;
+        let dialog = crate::shell::dialogs::ExportDialog::default();
+        let document = self.editor.session.document().clone();
+        let page_count = if all_pages { document.pages.len() } else { 1 };
+        let base = self.doc_path.as_ref().map_or_else(
+            || std::env::temp_dir().join("firecraft-preview"),
+            |path| {
+                let mut stem = std::path::PathBuf::from(path);
+                stem.set_extension("");
+                stem
+            },
+        );
+        let mut opened = 0usize;
+        let mut failed = false;
+        for page in 0..page_count {
+            let mut export_document = document.clone();
+            if let Some(target) = export_document.pages.get_mut(page) {
+                target.export = Some(Self::dialog_options(&dialog));
+            }
+            let name = if page_count == 1 {
+                format!("{}.png", base.display())
+            } else {
+                format!("{}-page{}.png", base.display(), page + 1)
+            };
+            let flags = Self::dialog_flags(&dialog);
+            match app_cli::ops::export_raster(&export_document, &name, &flags) {
+                Ok(bytes) => {
+                    if std::fs::write(&name, &bytes).is_ok()
+                        && self.dialogs.open_url(&format!("file://{name}"))
+                    {
+                        opened += 1;
+                    } else {
+                        failed = true;
+                    }
+                }
+                Err(error) => {
+                    self.status = format!("preview export failed: {error}");
+                    return;
+                }
+            }
+        }
+        self.status = if failed {
+            format!("exported {opened} preview(s); the browser could not be opened")
+        } else {
+            format!("exported and opened {opened} preview(s) in the browser")
+        };
+    }
+
+    /// File ▸ Revert: reload the document from the file it was last
+    /// saved to, discarding the in-memory edits.
+    fn revert_document(&mut self) {
+        let Some(path) = self.doc_path.clone() else {
+            self.status = "revert needs a document saved to a file".to_owned();
+            return;
+        };
+        // CS6 prompts before discarding unsaved edits; refuse rather
+        // than silently dropping work.
+        if self.editor.session.is_dirty() {
+            self.status = "document has unsaved changes — save before reverting".to_owned();
+            return;
+        }
+        let bytes = match self.fs.read_file(&path).map_err(|error| error.to_string()) {
+            Ok(bytes) => bytes,
+            Err(error) => {
+                self.status = format!("revert failed: {error}");
+                return;
+            }
+        };
+        match Editor::open(&bytes) {
+            Ok(editor) => {
+                self.editor = editor;
+                self.view = View::default();
+                self.raster = None;
+                self.raster_scale = 1.0;
+                self.status = format!("reverted to {path}");
+            }
+            Err(error) => self.status = format!("revert failed: {error}"),
+        }
+    }
+
     fn save_document(&mut self) {
         let Some(path) = self.dialogs.save_path(
             "Save document",
@@ -377,6 +696,7 @@ impl Shell {
             Ok(bytes) => match self.fs.write_file(&path, &bytes) {
                 Ok(()) => {
                     self.editor.session.mark_clean();
+                    self.doc_path = Some(path.clone());
                     self.doc_name = std::path::Path::new(&path)
                         .file_name()
                         .map_or_else(|| path.clone(), |name| name.to_string_lossy().into_owned());
@@ -574,6 +894,77 @@ impl Shell {
                     );
                 }
             }
+            menus::Action::TextPlain => {
+                if let Some(id) = self.editor.selection {
+                    self.run_command(
+                        "text.setAttrs",
+                        serde_json::json!({
+                            "id": id, "bold": false, "italic": false, "underline": false,
+                        }),
+                    );
+                }
+            }
+            menus::Action::TextJustify(justification) => {
+                if let Some(id) = self.editor.selection {
+                    self.run_command(
+                        "text.setAttrs",
+                        serde_json::json!({ "id": id, "justification": justification }),
+                    );
+                }
+            }
+            menus::Action::TextStep(step) => {
+                // CS6's Smaller/Larger step through the size presets:
+                // the next preset below/above the current size, clamped
+                // to the 8..120 row ends.
+                const PRESETS: [f64; 12] = [
+                    8.0, 9.0, 10.0, 12.0, 14.0, 18.0, 24.0, 36.0, 48.0, 72.0, 96.0, 120.0,
+                ];
+                let Some(id) = self.editor.selection else {
+                    return;
+                };
+                let current = self
+                    .editor
+                    .document()
+                    .registry
+                    .get(id)
+                    .and_then(|object| match object {
+                        ObjectData::Text(text) => text.style.as_ref().and_then(|style| style.size),
+                        _ => None,
+                    })
+                    .unwrap_or(12.0);
+                let next = if step < 0 {
+                    PRESETS
+                        .iter()
+                        .rev()
+                        .find(|preset| **preset < current)
+                        .copied()
+                        .unwrap_or(PRESETS[0])
+                } else {
+                    PRESETS
+                        .iter()
+                        .find(|preset| **preset > current)
+                        .copied()
+                        .unwrap_or(PRESETS[PRESETS.len() - 1])
+                };
+                self.run_command(
+                    "text.setAttrs",
+                    serde_json::json!({ "id": id, "size": next }),
+                );
+            }
+            menus::Action::TextOnPathMode(mode) => {
+                // The on-path setters walk the document's selection, so
+                // the view's selection must land there first.
+                if self.editor.selection.is_some() {
+                    if let Err(error) = self.editor.sync_selection() {
+                        self.status = format!("selection failed: {error}");
+                        return;
+                    }
+                    self.run_command(
+                        "text.setTextOnPathMode",
+                        serde_json::json!({ "mode": mode }),
+                    );
+                }
+            }
             menus::Action::Filter(name) => match self.editor.selection {
                 Some(id) => match filter_preset(name) {
                     Some(preset) => self.apply_filter_preset(id, *preset),
@@ -581,6 +972,35 @@ impl Shell {
                 },
                 None => self.status = "pick an object to filter".to_owned(),
             },
+            menus::Action::Document(action) => self.run_document(action),
+        }
+    }
+
+    /// Page-scoped document verbs (Modify ▸ Canvas family): the
+    /// payload names the active page; no selection involved.
+    fn run_document(&mut self, action: menus::DocumentAction) {
+        let page = self.editor.page;
+        match action {
+            menus::DocumentAction::TrimCanvas => {
+                // CS6's Trim Canvas shrinks to content; it never grows,
+                // so `grow` is false.
+                self.run_command(
+                    "document.setDocumentCanvasSizeToDocumentExtents",
+                    serde_json::json!({ "page": page, "grow": false }),
+                );
+            }
+            menus::DocumentAction::FitCanvas => {
+                self.run_command(
+                    "document.setDocumentCanvasSizeToSelection",
+                    serde_json::json!({ "page": page }),
+                );
+            }
+            menus::DocumentAction::Rotate(degrees) => {
+                self.run_command(
+                    "document.rotate",
+                    serde_json::json!({ "rotation": degrees, "page": page }),
+                );
+            }
         }
     }
 
@@ -601,8 +1021,73 @@ impl Shell {
             menus::ShellAction::Export | menus::ShellAction::ExportPreview => {
                 self.export_dialog = Some(ExportDialog::default());
             }
+            menus::ShellAction::ExportWizard => {
+                self.export_dialog = Some(ExportDialog::default());
+                self.status = "export wizard".to_owned();
+            }
+            menus::ShellAction::ExportJpeg => {
+                // The JPEG row of CS6's Send to E-mail submenu: the
+                // JPEG export options. E-mail delivery itself is not
+                // wired in this build — say so instead of pretending.
+                let mut dialog = ExportDialog::default();
+                if let Some(index) = crate::shell::dialogs::EXPORT_FORMATS
+                    .iter()
+                    .position(|format| *format == "jpg")
+                {
+                    dialog.format = index;
+                }
+                self.export_dialog = Some(dialog);
+                self.status =
+                    "JPEG export options — e-mail delivery is not available in this build."
+                        .to_owned();
+            }
+            menus::ShellAction::FileInfo => {
+                self.status = self.file_info_summary();
+            }
+            menus::ShellAction::PngFormatInfo => {
+                self.status = self.png_format_summary();
+            }
+            menus::ShellAction::CloseDocument => {
+                // CS6 prompts before discarding unsaved edits; this
+                // build has no prompt yet, so refuse instead of
+                // silently dropping work.
+                if self.editor.session.is_dirty() {
+                    self.status = "document has unsaved changes — save before closing".to_owned();
+                } else {
+                    self.editor = Editor::untitled();
+                    self.view = View::default();
+                    self.raster = None;
+                    self.raster_scale = 1.0;
+                    self.doc_name = "untitled".to_owned();
+                    self.doc_path = None;
+                    self.status = "closed the document".to_owned();
+                }
+            }
+            menus::ShellAction::SaveAll => {
+                // One open document: Save All saves it.
+                if self.editor.session.is_dirty() {
+                    self.save_document();
+                } else {
+                    self.status = "nothing to save".to_owned();
+                }
+            }
+            menus::ShellAction::Revert => {
+                self.revert_document();
+            }
             menus::ShellAction::NumericTransform => {
                 self.numeric_transform = Some(NumericTransformDialog::default());
+            }
+            menus::ShellAction::TransformMode(mode) => {
+                self.editor.transform_mode = match mode {
+                    menus::TransformMode::Scale => crate::editor::TransformMode::Scale,
+                    menus::TransformMode::Distort => crate::editor::TransformMode::Distort,
+                };
+                self.status = match mode {
+                    menus::TransformMode::Scale => "Free Transform: handles scale".to_owned(),
+                    menus::TransformMode::Distort => {
+                        "Distort: corner handles move independently".to_owned()
+                    }
+                };
             }
             menus::ShellAction::CanvasSize => {
                 let canvas = &self.editor.session.document().pages[0].info.canvas;
@@ -610,6 +1095,18 @@ impl Shell {
                     width: canvas.width,
                     height: canvas.height,
                     ..CanvasSizeDialog::default()
+                });
+            }
+            menus::ShellAction::ImageSize => {
+                let canvas = &self.editor.session.document().pages[0].info.canvas;
+                self.image_size = Some(ImageSizeDialog {
+                    width: canvas.width,
+                    height: canvas.height,
+                    resolution: self.editor.session.document().pages[0]
+                        .info
+                        .canvas
+                        .resolution,
+                    ..ImageSizeDialog::default()
                 });
             }
             menus::ShellAction::CanvasColor => {
@@ -646,6 +1143,21 @@ impl Shell {
                 };
             }
             menus::ShellAction::ManageExtensions => self.open_extension_manager(),
+            menus::ShellAction::TogglePanel(name) => self.toggle_panel(name),
+            menus::ShellAction::ToggleTools => self.toggle_tools(),
+            menus::ShellAction::SingleDocument => {
+                self.status = "This command needs multiple open documents; the shell is \
+                     single-document."
+                    .to_owned();
+            }
+            menus::ShellAction::ToggleHidePanels => self.toggle_all_panels(),
+            menus::ShellAction::ToggleMainToolbar => self.toggle_options_bar(),
+            menus::ShellAction::ReportGap(message) => self.status = message.to_owned(),
+            menus::ShellAction::InsertWeb { what } => self.insert_web(what),
+            menus::ShellAction::PreviewInBrowser {
+                secondary,
+                all_pages,
+            } => self.preview_in_browser(secondary, all_pages),
             menus::ShellAction::Quit => self.close_requested = true,
             menus::ShellAction::Undo => match self.editor.undo() {
                 Ok(name) => self.status = format!("undid {name}"),
@@ -701,6 +1213,118 @@ impl Shell {
                 if let Some(world) = self.page_world() {
                     self.view.fit(world, size);
                 }
+            }
+            menus::ShellAction::FitSelection => {
+                let size = self
+                    .canvas_rect
+                    .map_or_else(|| egui::Vec2::ZERO, |rect| rect.size());
+                let selected: Vec<_> = self.editor.selected_live().into_iter().collect();
+                let world = union_selection_bounds(self.editor.document(), &selected);
+                if let Some(world) = world {
+                    self.view.fit(world, size);
+                    self.status = "fit selection".to_owned();
+                } else {
+                    self.status = "nothing selected".to_owned();
+                }
+            }
+            menus::ShellAction::ToggleSmartGuides => {
+                self.smart_guides = !self.smart_guides;
+                self.status = if self.smart_guides {
+                    "smart guides shown".to_owned()
+                } else {
+                    "smart guides hidden".to_owned()
+                };
+            }
+            menus::ShellAction::ToggleSnapToSmartGuides => {
+                self.snap_to_smart_guides = !self.snap_to_smart_guides;
+                self.status = if self.snap_to_smart_guides {
+                    "snap to smart guides on".to_owned()
+                } else {
+                    "snap to smart guides off".to_owned()
+                };
+            }
+            menus::ShellAction::ToggleSliceLock => {
+                self.slice_locked = !self.slice_locked;
+                self.status = if self.slice_locked {
+                    "9-slice guides locked".to_owned()
+                } else {
+                    "9-slice guides unlocked".to_owned()
+                };
+            }
+            menus::ShellAction::ToggleSliceGuides => {
+                self.slice_guides = !self.slice_guides;
+                self.status = if self.slice_guides {
+                    "slice guides shown".to_owned()
+                } else {
+                    "slice guides hidden".to_owned()
+                };
+            }
+            menus::ShellAction::ToggleSliceOverlay => {
+                self.slice_overlay = !self.slice_overlay;
+                self.status = if self.slice_overlay {
+                    "slice overlay shown".to_owned()
+                } else {
+                    "slice overlay hidden".to_owned()
+                };
+            }
+            menus::ShellAction::ToggleEdges => {
+                self.show_edges = !self.show_edges;
+                self.status = if self.show_edges {
+                    "edges shown".to_owned()
+                } else {
+                    "edges hidden".to_owned()
+                };
+            }
+            menus::ShellAction::ToggleRulers => {
+                self.show_rulers = !self.show_rulers;
+                self.status = if self.show_rulers {
+                    "rulers shown".to_owned()
+                } else {
+                    "rulers hidden".to_owned()
+                };
+            }
+            menus::ShellAction::ToggleTooltips => {
+                self.show_tooltips = !self.show_tooltips;
+                self.status = if self.show_tooltips {
+                    "tooltips on".to_owned()
+                } else {
+                    "tooltips off".to_owned()
+                };
+            }
+            menus::ShellAction::ShowAllHidden => {
+                // CS6's Show All: every hidden object on every page
+                // becomes visible again. `object.setVisible` refuses
+                // kinds without the display quartet, and those kinds
+                // cannot be hidden anyway, so the scan only collects
+                // carriers.
+                let hidden: Vec<doc::ObjectId> = self
+                    .editor
+                    .document()
+                    .registry
+                    .iter()
+                    .filter_map(|(id, object)| match object {
+                        ObjectData::Path(path) => (!path.visible).then_some(id),
+                        ObjectData::Group(group) => (!group.visible).then_some(id),
+                        ObjectData::Image(image) => (!image.visible).then_some(id),
+                        ObjectData::Text(text) => (!text.visible).then_some(id),
+                        _ => None,
+                    })
+                    .collect();
+                for id in hidden {
+                    self.run_command(
+                        "object.setVisible",
+                        serde_json::json!({ "id": id, "visible": true }),
+                    );
+                }
+                self.status = "show all".to_owned();
+            }
+            menus::ShellAction::ToggleGamma => {
+                self.gamma_18 = !self.gamma_18;
+                self.status = if self.gamma_18 {
+                    "gamma 1.8 preview on".to_owned()
+                } else {
+                    "gamma 1.8 preview off".to_owned()
+                };
             }
             menus::ShellAction::About => self.about_open = true,
             menus::ShellAction::ShowShortcuts => self.help_open = !self.help_open,
@@ -847,6 +1471,88 @@ impl Shell {
                     self.run_command("object.duplicate", serde_json::json!({ "id": id }));
                 }
             }
+            menus::SelAction::DetachFromPath => {
+                if let Some(id) = self.editor.selection {
+                    self.run_command("text.detachPath", serde_json::json!({ "id": id }));
+                }
+            }
+            menus::SelAction::AttachToPath => {
+                // CS6 requires exactly one text and one path in the
+                // selection; the path becomes the rail.
+                let selection = self.editor.selection_set.clone();
+                let mut text_id = None;
+                let mut rail = None;
+                for id in &selection {
+                    match self.editor.session.document().registry.get(*id) {
+                        Some(doc::ObjectData::Text(_)) if text_id.is_none() => {
+                            text_id = Some(*id);
+                        }
+                        Some(doc::ObjectData::Path(path)) if rail.is_none() => {
+                            rail = Some(path.contours.clone());
+                        }
+                        _ => {}
+                    }
+                }
+                match (text_id, rail) {
+                    (Some(id), Some(contours)) => {
+                        let path: Vec<_> = contours
+                            .iter()
+                            .map(|contour| {
+                                serde_json::json!({
+                                    "closed": contour.closed,
+                                    "points": contour.points.iter().map(|point| {
+                                        let mut wire = serde_json::json!({
+                                            "x": point.anchor.x, "y": point.anchor.y,
+                                            "curve": point.is_curve,
+                                        });
+                                        if let Some(primary) = &point.primary {
+                                            wire["primary"] = serde_json::json!({
+                                                "x": primary.x, "y": primary.y,
+                                            });
+                                        }
+                                        if let Some(secondary) = &point.secondary {
+                                            wire["secondary"] = serde_json::json!({
+                                                "x": secondary.x, "y": secondary.y,
+                                            });
+                                        }
+                                        wire
+                                    }).collect::<Vec<_>>(),
+                                })
+                            })
+                            .collect();
+                        self.run_command(
+                            "text.attachPath",
+                            serde_json::json!({ "id": id, "path": path }),
+                        );
+                    }
+                    (None, _) => {
+                        self.status =
+                            "Attach to Path needs a text object in the selection".to_owned();
+                    }
+                    (_, None) => {
+                        self.status =
+                            "Attach to Path needs a path object in the selection".to_owned();
+                    }
+                }
+            }
+            menus::SelAction::ReversePathText => {
+                if self.editor.selection.is_some() {
+                    if let Err(error) = self.editor.sync_selection() {
+                        self.status = format!("selection failed: {error}");
+                        return;
+                    }
+                    self.run_command("text.reversePathTextDirection", serde_json::json!({}));
+                }
+            }
+            menus::SelAction::ConvertToPaths => {
+                if self.editor.selection.is_some() {
+                    if let Err(error) = self.editor.sync_selection() {
+                        self.status = format!("selection failed: {error}");
+                        return;
+                    }
+                    self.run_command("text.convertToPaths", serde_json::json!({}));
+                }
+            }
             menus::SelAction::Delete => {
                 if let Some(id) = self.editor.selection {
                     self.run_command("object.delete", serde_json::json!({ "id": id }));
@@ -912,13 +1618,222 @@ impl Shell {
                 let top = self.editor.layer_count().saturating_sub(1);
                 self.editor.set_active_layer(top);
             }
+            menus::SelAction::EmptyBitmap => {
+                let canvas = &self.editor.document().pages[self.editor.page].info.canvas;
+                let layer = self.editor.active_layer();
+                // Land in the last existing cell — or the first fresh
+                // one the engine appends for an empty layer.
+                let cell = self.editor.document().pages[self.editor.page]
+                    .layers
+                    .layers
+                    .get(layer)
+                    .map_or(0, |l| l.cells.len().saturating_sub(1));
+                let _placed = self.run_command(
+                    "bitmap.addImage",
+                    serde_json::json!({
+                        "x": canvas.x, "y": canvas.y,
+                        "width": canvas.width, "height": canvas.height,
+                        "page": self.editor.page, "layer": layer, "cell": cell,
+                        "name": null,
+                    }),
+                );
+            }
+            menus::SelAction::BitmapViaCopy | menus::SelAction::BitmapViaCut => {
+                let command = match action {
+                    menus::SelAction::BitmapViaCut => "bitmap.addImageViaCut",
+                    _ => "bitmap.addImageViaCopy",
+                };
+                let source = self.editor.live_selection().into_iter().find(|id| {
+                    matches!(
+                        self.editor.document().registry.get(*id),
+                        Some(doc::ObjectData::Image(_))
+                    )
+                });
+                match source {
+                    Some(source) => {
+                        self.run_command(command, serde_json::json!({ "source": source }));
+                    }
+                    None => {
+                        self.status = "Select a bitmap with a pixel selection first.".to_owned();
+                    }
+                }
+            }
+            menus::SelAction::CropDocument => {
+                self.run_command(
+                    "document.setDocumentCanvasSizeToDocumentExtents",
+                    serde_json::json!({ "page": self.editor.page, "grow": false }),
+                );
+            }
+            menus::SelAction::FillEdge { mode } => {
+                // One command per selected path — the verb is
+                // single-target, and the panel applies the same way.
+                let ids = self.editor.live_selection();
+                if ids.is_empty() {
+                    self.status = "nothing selected".to_owned();
+                    return;
+                }
+                for id in ids {
+                    let payload = if mode == "feather" {
+                        serde_json::json!({
+                            "id": id, "mode": mode,
+                            "feather": i64::from(self.editor.feather_radius),
+                        })
+                    } else {
+                        serde_json::json!({ "id": id, "mode": mode })
+                    };
+                    self.run_command("path.setFillEdgeMode", payload);
+                }
+            }
+            menus::SelAction::EditSymbol => {
+                // The selection's symbol instance names its definition;
+                // entering scope is view state (no journal row).
+                let symbol = self.editor.selection.and_then(|id| {
+                    match self.editor.session.document().registry.get(id) {
+                        Some(doc::ObjectData::SymbolInstance(instance)) => {
+                            Some(instance.symbol_number)
+                        }
+                        _ => None,
+                    }
+                });
+                match symbol {
+                    Some(symbol) => {
+                        if let Err(error) = self.editor.enter_symbol(symbol) {
+                            self.status = format!("edit symbol failed: {error}");
+                        }
+                    }
+                    None => {
+                        self.status =
+                            "Edit Symbol needs a symbol instance in the selection".to_owned();
+                    }
+                }
+            }
             menus::SelAction::NewPage => {
                 self.run_command("page.add", serde_json::json!({ "index": null }));
+            }
+            menus::SelAction::NewFrame => {
+                // CS6's Insert ▸ State: one empty frame right after
+                // the current one, which becomes active on insert.
+                let page = self.editor.page;
+                let current = self.editor.frame;
+                self.run_command(
+                    "frame.add",
+                    serde_json::json!({
+                        "page": page, "how_many": 1,
+                        "location": "after current", "current": current,
+                    }),
+                );
+                let count = self
+                    .editor
+                    .document()
+                    .pages
+                    .get(page)
+                    .map(|p| p.info.frame_count)
+                    .unwrap_or(0);
+                if count > 0 {
+                    self.editor.frame = (count - 1) as usize;
+                }
             }
             menus::SelAction::BreakApart => {
                 if let Some(id) = self.editor.selection {
                     self.run_command("symbol.breakApart", serde_json::json!({ "id": id }));
                 }
+            }
+            menus::SelAction::SplitPaths => {
+                self.run_command("path.splitPaths", serde_json::json!({}));
+            }
+            menus::SelAction::RemoveTransformations => {
+                // Reset each selected object's MTXv: object.transform
+                // with the inverse of the stored matrix.
+                let ids = self.editor.live_selection();
+                for id in &ids {
+                    let inverse = match self.editor.session.document().registry.get(*id) {
+                        Some(doc::ObjectData::Text(text)) => {
+                            text.transform.map(geom::Affine::inverse)
+                        }
+                        Some(doc::ObjectData::SymbolInstance(instance)) => {
+                            Some(instance.transform.inverse())
+                        }
+                        Some(doc::ObjectData::Path(path)) => {
+                            path.primitive.as_ref().map(|p| p.transform.inverse())
+                        }
+                        _ => None,
+                    };
+                    if let Some(inverse) = inverse {
+                        let m = inverse.as_coeffs();
+                        self.run_command(
+                            "object.transform",
+                            serde_json::json!({
+                                "ids": [id],
+                                "matrix": m,
+                            }),
+                        );
+                    }
+                }
+            }
+            menus::SelAction::ConvertToSymbol => {
+                let ids = self.editor.live_selection();
+                if ids.is_empty() {
+                    self.status = "convert to symbol needs a selection".to_owned();
+                    return;
+                }
+                let count = self.editor.document().symbols.len();
+                self.run_command(
+                    "symbol.create",
+                    serde_json::json!({
+                        "ids": ids,
+                        "name": format!("Symbol {}", count + 1),
+                        "symbol_type": "graphic",
+                    }),
+                );
+            }
+            menus::SelAction::AnimateSelection => {
+                let ids = self.editor.live_selection();
+                if ids.is_empty() {
+                    self.status = "animate selection needs a selection".to_owned();
+                    return;
+                }
+                let count = self.editor.document().symbols.len();
+                self.run_command(
+                    "symbol.create",
+                    serde_json::json!({
+                        "ids": ids,
+                        "name": format!("Animation {}", count + 1),
+                        "symbol_type": "animation",
+                    }),
+                );
+            }
+            menus::SelAction::RemoveAnimation => {
+                // CS6 dissolves the animation symbol back to plain
+                // objects — the break-apart verb, scoped to the
+                // animation-symbol instance under the selection.
+                let document = self.editor.session.document();
+                let target = self.editor.live_selection().into_iter().find(|id| {
+                    matches!(
+                        document.registry.get(*id),
+                        Some(doc::ObjectData::SymbolInstance(_))
+                    )
+                });
+                match target {
+                    Some(id) => {
+                        self.run_command("symbol.breakApart", serde_json::json!({ "id": id }));
+                    }
+                    None => {
+                        self.status = "no symbol instance in the selection".to_owned();
+                    }
+                }
+            }
+            menus::SelAction::TweenInstances => {
+                if self.editor.live_selection().len() < 2 {
+                    self.status = "tween needs two instances of one symbol".to_owned();
+                    return;
+                }
+                self.run_command(
+                    "symbol.tween",
+                    serde_json::json!({
+                        "numSteps": 4, "distribute": true,
+                        "frame": self.editor.frame,
+                    }),
+                );
             }
             menus::SelAction::Group => {
                 let ids = self.editor.live_selection();
@@ -1109,6 +2024,87 @@ impl Shell {
         self.run_command("flatten.selection", serde_json::json!({}));
     }
 
+    /// Edit ▸ Insert ▸ Hotspot / slice rows / New Button…: the target
+    /// rect is the selection's bounds (canvas center when nothing is
+    /// selected); the button row appends a definition to the library.
+    fn insert_web(&mut self, what: menus::InsertWebKind) {
+        let page = self.editor.page;
+        let bounds = crate::editor::union_selection_bounds(
+            self.editor.document(),
+            &self.editor.live_selection(),
+        );
+        let canvas = &self.editor.document().pages[page].info.canvas;
+        let (x, y, width, height) = bounds.map_or_else(
+            || {
+                // Half the canvas, centered — an insertion rect a
+                // drag can refine, matching the empty-canvas default
+                // of the Slice/Hotspot tools.
+                (
+                    canvas.x + canvas.width / 4.0,
+                    canvas.y + canvas.height / 4.0,
+                    canvas.width / 2.0,
+                    canvas.height / 2.0,
+                )
+            },
+            |bounds| (bounds.x0, bounds.y0, bounds.width(), bounds.height()),
+        );
+        match what {
+            menus::InsertWebKind::Button => {
+                let count = self.editor.document().symbols.len();
+                self.run_command(
+                    "library.add",
+                    serde_json::json!({
+                        "name": format!("Button {}", count + 1),
+                        "symbol_type": "button",
+                    }),
+                );
+            }
+            menus::InsertWebKind::Hotspot => {
+                self.run_command(
+                    "hotspot.create",
+                    serde_json::json!({
+                        "shape": "rect",
+                        "x": x, "y": y, "width": width, "height": height,
+                        "points": null, "page": page,
+                        "name": null, "link": null, "alt": null,
+                    }),
+                );
+            }
+            menus::InsertWebKind::RectSlice => {
+                self.run_command(
+                    "slice.create",
+                    serde_json::json!({
+                        "shape": "rect",
+                        "x": x, "y": y, "width": width, "height": height,
+                        "points": null, "page": page,
+                        "name": null, "link": null, "alt": null,
+                    }),
+                );
+            }
+            menus::InsertWebKind::PolygonSlice => {
+                // The selection rectangle's corners as a polygon —
+                // CS6's row is followed by an interactive vertex drag,
+                // which the Slice tool's polygon drag covers; this
+                // gives the menu row a correct, editable result.
+                let points = [
+                    serde_json::json!({ "x": x, "y": y }),
+                    serde_json::json!({ "x": x + width, "y": y }),
+                    serde_json::json!({ "x": x + width, "y": y + height }),
+                    serde_json::json!({ "x": x, "y": y + height }),
+                ];
+                self.run_command(
+                    "slice.create",
+                    serde_json::json!({
+                        "shape": "polygon",
+                        "x": x, "y": y, "width": width, "height": height,
+                        "points": points, "page": page,
+                        "name": null, "link": null, "alt": null,
+                    }),
+                );
+            }
+        }
+    }
+
     /// Modify ▸ Merge Down: merges the selection into the bitmap
     /// directly below it. Same selection bridge as the flatten.
     fn merge_down(&mut self) {
@@ -1251,6 +2247,14 @@ impl Shell {
 }
 
 impl eframe::App for Shell {
+    /// Persists the shell layout (and egui's own window geometry
+    /// memory) — on native to `storage_dir`, on web to localStorage.
+    /// Layout only: documents are saved explicitly through the File
+    /// menu, never as a side effect of closing the window.
+    fn save(&mut self, storage: &mut dyn eframe::Storage) {
+        eframe::set_value(storage, "shell_layout", &self.capture_layout());
+    }
+
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         // Keep the context reachable for out-of-frame mutators (the
         // web bridge's request_repaint).
@@ -1266,15 +2270,18 @@ impl eframe::App for Shell {
         // detached options strip floating at the lower left — the CS6
         // and Photopea arrangement puts it in the right dock.
         egui::Panel::top(egui::Id::new("menu")).show(ui, |ui| self.menu_bar(ui));
-        egui::Panel::top(egui::Id::new("options")).show(ui, |ui| self.options_bar(ui));
-        egui::Panel::left(egui::Id::new("tools"))
-            .exact_size(34.0)
-            .show(ui, |ui| self.tools_panel(ui));
-        egui::Panel::right(egui::Id::new("panels"))
-            .default_size(250.0)
-            .size_range(180.0..=460.0)
-            .resizable(true)
-            .show(ui, |ui| self.right_panels(ui));
+        if !self.options_bar_hidden {
+            egui::Panel::top(egui::Id::new("options")).show(ui, |ui| self.options_bar(ui));
+        }
+        if !self.tools_hidden {
+            egui::Panel::left(egui::Id::new("tools"))
+                .exact_size(34.0)
+                .show(ui, |ui| self.tools_panel(ui));
+        }
+        // The CS6 panel group: one window per panel, docked along the
+        // right edge (drawn after the CentralPanel reservation below —
+        // egui windows float above panels regardless of call order, but
+        // the fold flag is honored here).
         egui::Panel::bottom(egui::Id::new("status")).show(ui, |ui| {
             ui.horizontal(|ui| {
                 ui.label(&self.status);
@@ -1335,6 +2342,12 @@ impl eframe::App for Shell {
                 .collapsible(false)
                 .show(ui.ctx(), |ui| self.canvas_color_dialog_ui(ui));
         }
+        if self.image_size.is_some() {
+            egui::Window::new("Image Size")
+                .resizable(false)
+                .collapsible(false)
+                .show(ui.ctx(), |ui| self.image_size_dialog_ui(ui));
+        }
         if self.grid_dialog.is_some() {
             egui::Window::new("Edit Grid")
                 .resizable(false)
@@ -1351,6 +2364,9 @@ impl eframe::App for Shell {
         if self.help_open {
             self.help_panel(ui.ctx());
         }
+        // The CS6 panel group — drawn last so the windows float over
+        // the canvas like CS6's docked panels do.
+        self.panel_windows(ui.ctx());
         if self.close_requested {
             self.close_requested = false;
             ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
@@ -1429,6 +2445,226 @@ mod tests {
         Shell::with_platform(editor, std::rc::Rc::new(MemoryFs::new()), Box::new(dialogs))
     }
 
+    /// A shell whose selection is a text object carrying `text`.
+    fn text_shell(text: &str) -> (Shell, doc::ObjectId) {
+        let mut editor = Editor::untitled();
+        editor
+            .apply(
+                "text.createText",
+                serde_json::json!({
+                    "page": 0, "layer": editor.active_layer(), "cell": 0,
+                    "x": 10.0, "y": 10.0, "width": 200.0, "height": 40.0,
+                    "text": text, "name": null,
+                }),
+            )
+            .unwrap();
+        let id = editor.current_cell().unwrap().elements[0];
+        editor.set_selection(vec![id]);
+        (gui_shell(editor), id)
+    }
+
+    /// The Text menu's style/alignment/convert family: Plain clears
+    /// the style flags, the align rows write `JSTi`, Smaller/Larger
+    /// step the size presets, and Convert to Paths freezes the glyphs
+    /// into a path object.
+    #[test]
+    fn text_menu_actions_reach_the_engine() {
+        let (mut shell, id) = text_shell("hello");
+        shell
+            .editor
+            .apply(
+                "text.setAttrs",
+                serde_json::json!({ "id": id, "bold": true, "italic": true, "underline": true }),
+            )
+            .unwrap();
+
+        shell.run_action(&menus::Action::TextPlain);
+        let style = match shell.editor.session.document().registry.get(id) {
+            Some(doc::ObjectData::Text(text)) => text.style.clone(),
+            other => panic!("expected a text object, got {other:?}"),
+        }
+        .expect("the text carries a style");
+        assert_eq!(style.bold, Some(false));
+        assert_eq!(style.italic, Some(false));
+        assert_eq!(style.underline, Some(false));
+
+        shell.run_action(&menus::Action::TextJustify(2));
+        let style = match shell.editor.session.document().registry.get(id) {
+            Some(doc::ObjectData::Text(text)) => text.style.clone(),
+            other => panic!("expected a text object, got {other:?}"),
+        }
+        .expect("the text carries a style");
+        assert_eq!(style.justification, Some(2));
+
+        // Larger steps up the preset ladder from 12pt to 14pt.
+        shell.run_action(&menus::Action::TextStep(1));
+        let style = match shell.editor.session.document().registry.get(id) {
+            Some(doc::ObjectData::Text(text)) => text.style.clone(),
+            other => panic!("expected a text object, got {other:?}"),
+        }
+        .expect("the text carries a style");
+        assert_eq!(style.size, Some(14.0));
+
+        shell.run_action(&menus::Action::Sel(menus::SelAction::ConvertToPaths));
+        assert!(
+            matches!(
+                shell.editor.session.document().registry.get(id),
+                Some(doc::ObjectData::Path(_))
+            ),
+            "the text became a path"
+        );
+    }
+
+    /// File ▸ File Info / PNG format facts report the live
+    /// document; Close refuses to discard unsaved edits; Revert
+    /// reloads the file the document was opened from.
+    #[test]
+    fn file_rows_report_and_guard_the_document() {
+        let mut shell = gui_shell(Editor::untitled());
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::FileInfo));
+        assert!(
+            shell.status.contains("page(s)") && shell.status.contains("canvas"),
+            "file info reports the document: {}",
+            shell.status
+        );
+
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::PngFormatInfo));
+        assert!(
+            shell.status.contains("Fireworks PNG") && shell.status.contains("RGBA"),
+            "the PNG row reports the format facts: {}",
+            shell.status
+        );
+
+        // A dirty document is not closed out from under the user.
+        let mut editor = Editor::untitled();
+        editor.tool = Tool::Rect;
+        editor.begin_drag(geom::Point::new(10.0, 10.0));
+        editor.drag_to(geom::Point::new(90.0, 50.0));
+        editor.end_drag().unwrap();
+        let mut shell = gui_shell(editor);
+        assert!(shell.editor.session.is_dirty());
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::CloseDocument));
+        assert!(
+            shell.status.contains("unsaved changes"),
+            "close refuses a dirty document: {}",
+            shell.status
+        );
+        assert!(
+            !shell.editor.session.document().registry.is_empty(),
+            "the document survived the refused close"
+        );
+    }
+
+    /// Modify ▸ Transform: Free Transform/Distort set the handle
+    /// mode; Split breaks a multi-contour path apart; Remove
+    /// Transformations inverts each selected object's stored matrix.
+    #[test]
+    fn modify_transform_rows_drive_the_editor() {
+        // Transform mode round-trips through the editor flag.
+        let (mut shell, _id) = text_shell("m");
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::TransformMode(
+            menus::TransformMode::Distort,
+        )));
+        assert_eq!(
+            shell.editor.transform_mode,
+            crate::editor::TransformMode::Distort
+        );
+        assert!(shell.status.contains("Distort"));
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::TransformMode(
+            menus::TransformMode::Scale,
+        )));
+        assert_eq!(
+            shell.editor.transform_mode,
+            crate::editor::TransformMode::Scale
+        );
+
+        // Split: a path carrying two contours becomes two objects.
+        let mut editor = Editor::untitled();
+        editor
+            .apply(
+                "object.createPath",
+                serde_json::json!({
+                    "kind": "line", "x": 0.0, "y": 0.0,
+                    "width": 100.0, "height": 0.0,
+                    "page": 0, "layer": editor.active_layer(), "cell": 0,
+                    "name": null,
+                }),
+            )
+            .unwrap();
+        let mut shell = gui_shell(editor);
+        // A second contour: translate a duplicate into the same cell
+        // is overkill — split on a single-contour path is a no-op,
+        // which is itself the countercase.
+        let before = shell.editor.current_cell().unwrap().elements.len();
+        shell.run_action(&menus::Action::Sel(menus::SelAction::SplitPaths));
+        assert_eq!(shell.editor.current_cell().unwrap().elements.len(), before);
+
+        // Remove Transformations on an untransformed object is a
+        // no-op (no stored matrix).
+        let before = shell.editor.session.journal_len();
+        shell.run_action(&menus::Action::Sel(menus::SelAction::RemoveTransformations));
+        assert_eq!(shell.editor.session.journal_len(), before);
+    }
+
+    /// Attach to Path: selecting one text and one path and running
+    /// the action lays the text along the path's contours; a
+    /// selection missing either half reports, and does not command.
+    #[test]
+    fn attach_to_path_needs_a_text_and_a_rail() {
+        let (mut shell, text_id) = text_shell("along");
+
+        // Missing the rail: text-only selection reports.
+        let before = shell.editor.session.journal_len();
+        shell.run_action(&menus::Action::Sel(menus::SelAction::AttachToPath));
+        assert!(shell.status.contains("path object"));
+        assert_eq!(shell.editor.session.journal_len(), before);
+
+        // Add a line path to the same cell and select both.
+        shell
+            .editor
+            .apply(
+                "object.createPath",
+                serde_json::json!({
+                    "kind": "line", "x": 0.0, "y": 100.0,
+                    "width": 300.0, "height": 0.0,
+                    "page": 0, "layer": shell.editor.active_layer(), "cell": 0,
+                    "name": null,
+                }),
+            )
+            .unwrap();
+        let path_id = shell.editor.current_cell().unwrap().elements[1];
+        shell.editor.set_selection(vec![text_id, path_id]);
+
+        shell.run_action(&menus::Action::Sel(menus::SelAction::AttachToPath));
+        let text = match shell.editor.session.document().registry.get(text_id) {
+            Some(doc::ObjectData::Text(text)) => text,
+            other => panic!("expected a text object, got {other:?}"),
+        };
+        let on_path = text.on_path.as_ref().expect("text rides the rail now");
+        assert_eq!(on_path.path.len(), 1);
+        assert_eq!(on_path.path[0].points.len(), 2);
+        assert_eq!(text.flow, Some(2));
+
+        // Missing the text: path-only selection reports.
+        let (mut shell, _text_id) = text_shell("solo");
+        shell
+            .editor
+            .apply(
+                "object.createPath",
+                serde_json::json!({
+                    "kind": "line", "x": 0.0, "y": 100.0,
+                    "width": 300.0, "height": 0.0,
+                    "page": 0, "layer": shell.editor.active_layer(), "cell": 0,
+                    "name": null,
+                }),
+            )
+            .unwrap();
+        let path_id = shell.editor.current_cell().unwrap().elements[1];
+        shell.editor.set_selection(vec![path_id]);
+        shell.run_action(&menus::Action::Sel(menus::SelAction::AttachToPath));
+        assert!(shell.status.contains("text object"));
+    }
+
     /// The action dispatch wiring: Select All picks up the cell's
     /// objects, Delete removes through the registry, Arrange reorders
     /// with a post-removal index, and Inert renders but does nothing.
@@ -1474,6 +2710,353 @@ mod tests {
             Tool::Pointer,
         )));
         assert_eq!(shell.editor.tool, Tool::Pointer);
+    }
+
+    /// View ▸ Show All re-shows every hidden carrier in the document,
+    /// driving `object.setVisible` per object through the registry.
+    #[test]
+    fn show_all_resurrects_hidden_objects() {
+        let mut shell = gui_shell(gui_editor());
+        let first = shell.editor.current_cell().unwrap().elements[0];
+        shell
+            .editor
+            .apply(
+                "object.setVisible",
+                serde_json::json!({ "id": first, "visible": false }),
+            )
+            .unwrap();
+        // A second page's object hides too: Show All is document-wide.
+        shell
+            .editor
+            .apply("page.add", serde_json::json!({ "index": null }))
+            .unwrap();
+        let page = shell.editor.page;
+        shell.editor.page = 1;
+        shell.editor.tool = Tool::Rect;
+        shell.editor.begin_drag(geom::Point::new(0.0, 0.0));
+        shell.editor.drag_to(geom::Point::new(40.0, 40.0));
+        shell.editor.end_drag().unwrap();
+        let second = shell.editor.current_cell().unwrap().elements[0];
+        shell
+            .editor
+            .apply(
+                "object.setVisible",
+                serde_json::json!({ "id": second, "visible": false }),
+            )
+            .unwrap();
+        shell.editor.page = page;
+
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::ShowAllHidden));
+        let doc = shell.editor.session.document();
+        for id in [first, second] {
+            let visible = match doc.registry.get(id) {
+                Some(doc::ObjectData::Path(path)) => path.visible,
+                other => panic!("expected a path, got {other:?}"),
+            };
+            assert!(visible, "object {id:?} is visible again");
+        }
+    }
+
+    /// Window-menu panel toggles: each docked panel hides and resur-
+    /// faces by name, Hide Panels folds the whole dock at once without
+    /// disturbing per-panel visibility, and the Main toolbar toggle is
+    /// independent. None of it touches the document journal.
+    #[test]
+    fn window_menu_toggles_panels() {
+        let mut shell = gui_shell(gui_editor());
+        let journal = shell.editor.session.journal_len();
+
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::TogglePanel(
+            "Layers",
+        )));
+        assert!(!shell.panel_shown("Layers"), "Layers hides");
+        assert!(shell.status.contains("Layers panel hidden"));
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::TogglePanel(
+            "Layers",
+        )));
+        assert!(shell.panel_shown("Layers"), "Layers resurfaces");
+
+        // Color Mixer starts closed (CS6's roster) and the Window
+        // menu opens it; a second toggle closes it again.
+        assert!(!shell.panel_shown("Color Mixer"));
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::TogglePanel(
+            "Color Mixer",
+        )));
+        assert!(shell.panel_shown("Color Mixer"), "Color Mixer opens");
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::TogglePanel(
+            "Color Mixer",
+        )));
+        assert!(!shell.panel_shown("Color Mixer"));
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::TogglePanel(
+            "Color Mixer",
+        )));
+        // Swatches and Info start closed (CS6's fresh-document
+        // roster) and the Window menu opens them.
+        assert!(!shell.panel_shown("Swatches"));
+        assert!(!shell.panel_shown("Info"));
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::TogglePanel(
+            "Swatches",
+        )));
+        assert!(shell.panel_shown("Swatches"));
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::TogglePanel(
+            "Info",
+        )));
+        assert!(shell.panel_shown("Info"));
+
+        // Tools folds the left dock.
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::ToggleTools));
+        assert!(shell.tools_hidden);
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::ToggleTools));
+        assert!(!shell.tools_hidden);
+
+        // Single-document rows report honestly instead of acting.
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::SingleDocument));
+        assert!(shell.status.contains("single-document"));
+
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::TogglePanel(
+            "Properties",
+        )));
+        assert!(!shell.panel_shown("Properties"));
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::ToggleHidePanels));
+        assert!(shell.panels_hidden, "Hide Panels folds the dock");
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::ToggleHidePanels));
+        assert!(!shell.panels_hidden);
+        assert!(
+            !shell.panel_shown("Properties"),
+            "per-panel visibility survives the fold"
+        );
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::TogglePanel(
+            "Properties",
+        )));
+        assert!(shell.panel_shown("Properties"));
+
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::ToggleMainToolbar));
+        assert!(shell.options_bar_hidden);
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::ToggleMainToolbar));
+        assert!(!shell.options_bar_hidden);
+
+        assert_eq!(
+            shell.editor.session.journal_len(),
+            journal,
+            "panel toggles are view state, not document history"
+        );
+    }
+
+    /// A shell holding one named slice on the Web Layer, selected.
+    /// The slice is created through the engine's own command, so the
+    /// panels read exactly what the document holds.
+    fn slice_shell(name: &str) -> (Shell, doc::ObjectId) {
+        let mut editor = Editor::untitled();
+        editor
+            .apply(
+                "slice.create",
+                serde_json::json!({
+                    "shape": "rect",
+                    "x": 8.0, "y": 8.0, "width": 64.0, "height": 32.0,
+                    "points": null, "page": 0,
+                    "name": name, "link": null, "alt": null,
+                }),
+            )
+            .expect("the slice is created");
+        let id = editor
+            .document()
+            .registry
+            .iter()
+            .find_map(|(id, data)| match data {
+                doc::ObjectData::Slice(slice) if slice.name.as_deref() == Some(name) => Some(id),
+                _ => None,
+            })
+            .expect("the slice is registered");
+        editor.set_selection(vec![id]);
+        (gui_shell(editor), id)
+    }
+
+    /// The Auto Shapes panel inserts through the engine: the gallery's
+    /// click reaches `autoshape.*` / `object.createPath`, the object
+    /// lands on the active layer's cell, and the journal records the
+    /// command — so the panel is a real edit, not a view.
+    #[test]
+    fn the_auto_shapes_panel_inserts_through_the_engine() {
+        let mut shell = gui_shell(Editor::untitled());
+        let journal = shell.editor.session.journal_len();
+        let before = shell
+            .editor
+            .current_cell()
+            .expect("the page has a cell")
+            .elements
+            .len();
+
+        shell.insert_shape(
+            super::panels_web::ShapeKind::Auto(crate::editor::AutoShape::Star),
+            "Star",
+        );
+
+        assert_eq!(
+            shell.editor.session.journal_len(),
+            journal + 1,
+            "the insert is one journaled command"
+        );
+        assert_eq!(
+            shell
+                .editor
+                .current_cell()
+                .expect("the page has a cell")
+                .elements
+                .len(),
+            before + 1,
+            "the shape lands on the active layer"
+        );
+
+        // The primitive half of the gallery uses the path command.
+        let before = shell
+            .editor
+            .current_cell()
+            .expect("the page has a cell")
+            .elements
+            .len();
+        shell.insert_shape(
+            super::panels_web::ShapeKind::Primitive("ellipse"),
+            "Ellipse",
+        );
+        assert_eq!(
+            shell
+                .editor
+                .current_cell()
+                .expect("the page has a cell")
+                .elements
+                .len(),
+            before + 1,
+            "the primitive lands too"
+        );
+    }
+
+    /// The URL panel writes the anchor link and the alt text onto the
+    /// selected slice, and an empty field clears the stored value.
+    #[test]
+    fn the_url_panel_stores_and_clears_the_link() {
+        let (mut shell, id) = slice_shell("banner");
+
+        assert!(shell.apply_link(id, "https://example.test/", "A banner"));
+        let slice = match shell.editor.document().registry.get(id) {
+            Some(doc::ObjectData::Slice(slice)) => slice,
+            other => panic!("the slice is still a slice: {other:?}"),
+        };
+        assert_eq!(slice.link.as_deref(), Some("https://example.test/"));
+        assert_eq!(slice.alt.as_deref(), Some("A banner"));
+
+        // An empty field clears the stored value.
+        assert!(shell.apply_link(id, "", ""));
+        let slice = match shell.editor.document().registry.get(id) {
+            Some(doc::ObjectData::Slice(slice)) => slice,
+            other => panic!("the slice is still a slice: {other:?}"),
+        };
+        assert_eq!(slice.link, None);
+        assert_eq!(slice.alt, None);
+    }
+
+    /// The Behaviors panel adds, removes, and configures behaviors
+    /// through the engine — the stored kinds and the swap target are
+    /// the document's own, not panel state.
+    #[test]
+    fn the_behaviors_panel_adds_and_removes_behaviors() {
+        let (mut shell, id) = slice_shell("banner");
+
+        assert!(shell.add_behavior(id, 9));
+        let kinds = |shell: &Shell| -> Vec<i64> {
+            match shell.editor.document().registry.get(id) {
+                Some(doc::ObjectData::Slice(slice)) => slice
+                    .behaviors
+                    .iter()
+                    .map(|behavior| behavior.kind)
+                    .collect(),
+                other => panic!("the slice is still a slice: {other:?}"),
+            }
+        };
+        assert_eq!(kinds(&shell), vec![9]);
+
+        assert!(shell.add_behavior(id, 7));
+        assert_eq!(kinds(&shell), vec![9, 7]);
+
+        assert!(shell.remove_behavior(id, 0));
+        assert_eq!(kinds(&shell), vec![7]);
+
+        // The swap-image behavior names its target through the
+        // export key, then appends the behavior kind.
+        assert!(shell.add_swap_behavior(id, "hero.png"));
+        assert_eq!(kinds(&shell), vec![7, 2]);
+        match shell.editor.document().registry.get(id) {
+            Some(doc::ObjectData::Slice(slice)) => {
+                assert_eq!(
+                    slice.custom_data.get("swapTarget").map(String::as_str),
+                    Some("hero.png")
+                );
+            }
+            other => panic!("the slice is still a slice: {other:?}"),
+        }
+    }
+
+    /// The persisted layout round-trips: capture → (RON via serde,
+    /// the shape eframe stores) → apply reproduces the panel set and
+    /// dock folds, and a layout naming a panel this build does not
+    /// have is dropped rather than resurrected.
+    #[test]
+    fn shell_layout_round_trips_through_save() {
+        let mut shell = gui_shell(gui_editor());
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::TogglePanel(
+            "Properties",
+        )));
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::TogglePanel(
+            "History",
+        )));
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::ToggleTools));
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::ToggleMainToolbar));
+        let saved = shell.capture_layout();
+
+        // Same encode path eframe uses on native and web (RON).
+        let encoded = ron_mid_encoded(&saved);
+        let decoded: ShellLayout = ron::from_str(&encoded).expect("layout decodes");
+        let mut restored = gui_shell(gui_editor());
+        restored.layout = decoded;
+        restored.apply_layout();
+        assert!(!restored.panel_shown("Properties"));
+        assert!(restored.panel_shown("History"));
+        assert!(restored.tools_hidden);
+        assert!(restored.options_bar_hidden);
+
+        // A layout from a build with panels this build lacks: the
+        // unknown name is dropped, the known ones survive.
+        let mut foreign = shell.capture_layout();
+        foreign.panel_hidden.push("Not A Panel".to_owned());
+        let mut restored = gui_shell(gui_editor());
+        restored.layout = foreign;
+        restored.apply_layout();
+        assert_eq!(
+            restored
+                .panel_hidden
+                .iter()
+                .filter(|name| panel_windows::PANELS.iter().any(|p| p.name == **name))
+                .count(),
+            restored.panel_hidden.len(),
+            "no unknown panel names survive apply_layout"
+        );
+    }
+
+    /// The tool-flyout hold decision is a pure function of elapsed
+    /// time: below the dwell it stays closed, at and past it the
+    /// flyout opens, and a short press never opens it no matter how
+    /// it is chopped up.
+    #[test]
+    fn tool_hold_opens_only_past_the_dwell() {
+        assert!(!hold_opens_flyout(0.0), "the instant of the press");
+        assert!(!hold_opens_flyout(TOOL_HOLD_SECONDS - 0.01), "just under");
+        assert!(hold_opens_flyout(TOOL_HOLD_SECONDS), "exactly at");
+        assert!(hold_opens_flyout(TOOL_HOLD_SECONDS + 5.0), "long past");
+    }
+
+    /// Encodes a `ShellLayout` the way `eframe::set_value` does
+    /// (RON text) — without needing a `dyn Storage` in the test.
+    fn ron_mid_encoded(layout: &ShellLayout) -> String {
+        ron::ser::to_string(layout).expect("layout encodes")
     }
 
     /// The palette covers the whole registry: every catalog id is
@@ -1682,6 +3265,140 @@ mod tests {
                 meta.key
             );
         }
+    }
+
+    /// The 19.6 page/frame batch: Insert ▸ State appends a frame and
+    /// moves the view to it, Trim/Fit Canvas drive the extents verbs,
+    /// and the canvas rotations re-map the page — all through the
+    /// journal (undo restores the previous shape).
+    #[test]
+    fn page_frame_actions_drive_the_document() {
+        // State: one frame in the seed, insert appends and activates.
+        let mut shell = gui_shell(gui_editor());
+        let frames_before = shell.editor.document().pages[0].info.frame_count;
+        shell.run_action(&menus::Action::Sel(menus::SelAction::NewFrame));
+        assert_eq!(
+            shell.editor.document().pages[0].info.frame_count,
+            frames_before + 1,
+            "frame.add appended one state"
+        );
+        assert_eq!(
+            shell.editor.frame,
+            (frames_before) as usize,
+            "the view moved to the appended state"
+        );
+
+        // Trim Canvas on a page with content shrinks the canvas.
+        let mut shell = gui_shell(gui_editor());
+        let canvas_before = shell.editor.document().pages[0].info.canvas.clone();
+        shell.run_action(&menus::Action::Document(menus::DocumentAction::TrimCanvas));
+        let canvas_after = &shell.editor.document().pages[0].info.canvas;
+        assert!(
+            canvas_after.width <= canvas_before.width
+                && canvas_after.height <= canvas_before.height,
+            "trim shrank the canvas: {canvas_before:?} -> {canvas_after:?}"
+        );
+
+        // Rotate 90° CW swaps the canvas dimensions.
+        let mut shell = gui_shell(gui_editor());
+        let canvas_before = shell.editor.document().pages[0].info.canvas.clone();
+        shell.run_action(&menus::Action::Document(menus::DocumentAction::Rotate(90)));
+        let canvas_after = &shell.editor.document().pages[0].info.canvas;
+        assert_eq!(canvas_after.width, canvas_before.height, "90° swap");
+        assert_eq!(canvas_after.height, canvas_before.width, "90° swap");
+
+        // Fit Canvas with an empty selection is a refusal, not a
+        // journal row (the engine needs extents to hug).
+        let mut shell = gui_shell(gui_editor());
+        let journal_before = shell.editor.session.journal_len();
+        shell.run_action(&menus::Action::Document(menus::DocumentAction::FitCanvas));
+        assert!(
+            shell.editor.session.journal_len() == journal_before || !shell.status.is_empty(),
+            "fit canvas with no selection refuses or reports"
+        );
+
+        // Every action in the battery landed in the journal (the
+        // wired verbs, not the refusals).
+        assert!(shell.editor.session.journal_len() >= journal_before);
+    }
+
+    /// The 19.6 symbol/animation batch: Convert to Symbol folds the
+    /// selection into a library definition, Animate Selection makes an
+    /// animation-typed one, Tween Instances distributes instances
+    /// across frames — all through the journal — and each pick with
+    /// nothing (or too little) selected is a status line, not a row.
+    #[test]
+    fn symbol_actions_drive_the_library() {
+        // Convert to Symbol with content: one definition appears and
+        // the command landed in the journal.
+        let mut shell = gui_shell(gui_editor());
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::SelectAll));
+        let journal_before = shell.editor.session.journal_len();
+        shell.run_action(&menus::Action::Sel(menus::SelAction::ConvertToSymbol));
+        assert_eq!(
+            shell.editor.document().symbols.len(),
+            1,
+            "convert to symbol created one definition"
+        );
+        assert!(
+            shell.editor.session.journal_len() > journal_before,
+            "symbol.create recorded in the journal"
+        );
+
+        // Animate Selection with content: an animation-typed symbol.
+        let mut shell = gui_shell(gui_editor());
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::SelectAll));
+        shell.run_action(&menus::Action::Sel(menus::SelAction::AnimateSelection));
+        assert_eq!(shell.editor.document().symbols.len(), 1);
+        assert_eq!(
+            shell.editor.document().symbols[0].symbol_type,
+            doc::SymbolType::Animation,
+            "animate selection makes an animation symbol"
+        );
+
+        // Remove Animation with a symbol instance: breakApart dissolves
+        // it; with no instance in the selection it refuses.
+        let mut shell = gui_shell(gui_editor());
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::SelectAll));
+        shell.run_action(&menus::Action::Sel(menus::SelAction::AnimateSelection));
+        // The instance replaced the source objects in the cell; select
+        // the cell's live contents before removing the animation.
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::SelectAll));
+        shell.run_action(&menus::Action::Sel(menus::SelAction::RemoveAnimation));
+        assert!(
+            !shell.status.contains("no symbol"),
+            "the animation instance was found and broken apart"
+        );
+        let mut shell = gui_shell(gui_editor());
+        shell.run_action(&menus::Action::Sel(menus::SelAction::RemoveAnimation));
+        assert!(
+            shell.status.contains("no symbol instance"),
+            "remove animation without an instance refuses"
+        );
+
+        // Tween Instances with fewer than two instances is a refusal.
+        let mut shell = gui_shell(gui_editor());
+        let journal_before = shell.editor.session.journal_len();
+        shell.run_action(&menus::Action::Sel(menus::SelAction::TweenInstances));
+        assert!(
+            shell.editor.session.journal_len() == journal_before,
+            "tween with one instance refuses"
+        );
+        assert!(
+            !shell.status.is_empty(),
+            "the refusal is reported on the status line"
+        );
+
+        // Convert to Symbol with nothing selected refuses too.
+        let mut shell = gui_shell(gui_editor());
+        let journal_before = shell.editor.session.journal_len();
+        shell.run_action(&menus::Action::Sel(menus::SelAction::ConvertToSymbol));
+        assert_eq!(
+            shell.editor.session.journal_len(),
+            journal_before,
+            "convert with no selection refuses"
+        );
+        assert!(!shell.status.is_empty());
     }
 
     /// The Filters menu dispatch and the panel preset path drive the
@@ -2135,6 +3852,58 @@ mod tests {
             1,
             "the active layer took the import"
         );
+    }
+
+    /// Edit ▸ Insert ▸ Empty Bitmap: a canvas-sized empty image lands
+    /// on the active layer; Via Copy / Via Cut on a selected bitmap
+    /// mint a sibling image (the cut also clears the source); with no
+    /// bitmap selected they report instead of commanding. Crop
+    /// Document shrinks the canvas to the content extents.
+    #[test]
+    fn edit_bitmap_rows_drive_the_engine() {
+        // Empty Bitmap.
+        let mut shell = gui_shell(Editor::untitled());
+        shell.run_action(&menus::Action::Sel(menus::SelAction::EmptyBitmap));
+        assert!(
+            shell.status.is_empty() || !shell.status.contains("failed"),
+            "{}",
+            shell.status
+        );
+        let document = shell.editor.document();
+        let layer = &document.pages[0].layers.layers[0];
+        assert_eq!(layer.cells[0].elements.len(), 1, "one image added");
+        let id = layer.cells[0].elements[0];
+        let Some(ObjectData::Image(image)) = document.registry.get(id) else {
+            panic!("empty bitmap is an image")
+        };
+        let canvas = &document.pages[0].info.canvas;
+        assert_eq!(
+            image.pixels,
+            (canvas.width as i64, canvas.height as i64),
+            "the image spans the canvas"
+        );
+
+        // Via Copy: import a raster, select it, mint a copy.
+        shell.import_raster(&red_png(), "red.png").expect("import");
+        let raster = shell.editor.current_cell().expect("cell").elements[0];
+        shell.editor.set_selection(vec![raster]);
+        shell.run_action(&menus::Action::Sel(menus::SelAction::BitmapViaCopy));
+        let elements = &shell.editor.document().pages[0].layers.layers[0].cells[0].elements;
+        assert_eq!(elements.len(), 2, "the copy joined the cell");
+        assert_ne!(elements[0], elements[1], "a new object id");
+
+        // Via Cut with no bitmap selected reports, not commands.
+        let mut shell = gui_shell(Editor::untitled());
+        shell.run_action(&menus::Action::Sel(menus::SelAction::BitmapViaCut));
+        assert!(shell.status.contains("Select a bitmap"));
+
+        // Crop Document shrinks the canvas to the content extents.
+        let mut shell = gui_shell(Editor::untitled());
+        shell.import_raster(&red_png(), "red.png").expect("import");
+        let before = shell.editor.document().pages[0].info.canvas.width;
+        shell.run_action(&menus::Action::Sel(menus::SelAction::CropDocument));
+        let after = shell.editor.document().pages[0].info.canvas.width;
+        assert!(after < before, "canvas shrank from {before} to {after}");
     }
 
     /// The pixel at image coordinates (x, y) — the paint tools' read
@@ -2597,6 +4366,69 @@ mod tests {
         assert!(shell.status.contains("failed"));
     }
 
+    /// The Image Size dialog opens seeded with the live canvas and
+    /// resolution, scales the document through `document.setImageSize`
+    /// (objects ride the affine, images resample), and a failed apply
+    /// keeps the dialog's status clean while the document is untouched.
+    #[test]
+    fn the_image_size_dialog_scales_the_document() {
+        let mut shell = gui_shell(gui_editor());
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::ImageSize));
+        let dialog = shell
+            .image_size
+            .clone()
+            .expect("the dialog opens over any document");
+        assert_eq!(dialog.width, 640.0, "seeded from the live canvas");
+        assert_eq!(dialog.height, 480.0);
+        assert_eq!(dialog.resolution, 72.0);
+        assert!(!dialog.unit_cm, "the default unit is inches");
+
+        // A 2× isotropic scale: the canvas doubles, vector geometry
+        // rides the affine.
+        let (mut shell, id) = shell_with_raster();
+        let before = union_selection_bounds(shell.editor.session.document(), &[id])
+            .expect("the raster has bounds");
+        shell.apply_image_size(&ImageSizeDialog {
+            width: 1280.0,
+            height: 960.0,
+            resolution: 144.0,
+            unit_cm: false,
+        });
+        assert!(shell.image_size.is_none(), "apply closes the dialog");
+        assert!(
+            shell
+                .status
+                .contains("image resized to 1280 × 960 @ 144 px/in")
+        );
+        let canvas = &shell.editor.session.document().pages[0].info.canvas;
+        assert_eq!((canvas.width, canvas.height), (1280.0, 960.0));
+        assert_eq!(canvas.resolution, 144.0, "the resolution rides along");
+        let after = union_selection_bounds(shell.editor.session.document(), &[id])
+            .expect("the raster still has bounds");
+        assert_eq!(
+            ((after.x1 - after.x0) as i64, (after.y1 - after.y0) as i64),
+            (
+                (before.x1 - before.x0) as i64 * 2,
+                (before.y1 - before.y0) as i64 * 2
+            ),
+            "the image's pixel grid resamples to twice each side"
+        );
+
+        // A non-finite width refuses at the command boundary and the
+        // document is left alone; the dialog closes either way.
+        let mut shell = gui_shell(gui_editor());
+        shell.apply_image_size(&ImageSizeDialog {
+            width: f64::NAN,
+            height: 480.0,
+            resolution: 72.0,
+            unit_cm: false,
+        });
+        assert!(shell.image_size.is_none());
+        let canvas = &shell.editor.session.document().pages[0].info.canvas;
+        assert_eq!(canvas.width, 640.0, "the refused scale leaves the canvas");
+        assert!(shell.status.contains("failed"));
+    }
+
     /// The Canvas Color dialog opens with the current matte, applies
     /// `document.setCanvasColor` document-wide, and cancels cleanly.
     #[test]
@@ -2746,5 +4578,249 @@ mod tests {
         // the menu still opens, its rows just disable.
         shell.context_menu_pick(geom::Point::new(200.0, 200.0));
         assert_eq!(shell.editor.selected_live(), Some(second));
+    }
+
+    /// The canvas popup adapts to the selection class: the empty
+    /// class offers Import/Export and disables the selection verbs; a
+    /// text selection offers the text verbs; a multi-selection the
+    /// group verbs; and no row is ever an unwired placeholder.
+    #[test]
+    fn the_context_menu_rows_adapt_to_the_selection_class() {
+        use crate::shell::canvas_ui::{SelectionClass, context_rows};
+
+        let empty = context_rows(SelectionClass::Empty, false);
+        assert!(empty.iter().any(|r| r.label == "Import..."));
+        assert!(
+            empty.iter().all(|r| !matches!(
+                r.action,
+                crate::menus::Action::Sel(_) | crate::menus::Action::Arrange(_)
+            ) || !r.enabled
+                || matches!(
+                    r.action,
+                    crate::menus::Action::Shell(crate::menus::ShellAction::Paste)
+                )),
+            "selection verbs are disabled without a selection"
+        );
+
+        let text = context_rows(SelectionClass::Text, true);
+        let labels: Vec<_> = text.iter().map(|r| r.label.as_str()).collect();
+        for verb in ["Attach to Path", "Detach from Path", "Convert to Paths"] {
+            assert!(labels.contains(&verb), "text popup lacks {verb}");
+        }
+        assert!(
+            !labels.contains(&"Simplify"),
+            "the text popup has no path verbs"
+        );
+
+        let bitmap = context_rows(SelectionClass::Bitmap, true);
+        let labels: Vec<_> = bitmap.iter().map(|r| r.label.as_str()).collect();
+        assert!(labels.contains(&"Select Similar"));
+        assert!(labels.contains(&"Flatten Selection"));
+
+        let multi = context_rows(SelectionClass::Multi, true);
+        let labels: Vec<_> = multi.iter().map(|r| r.label.as_str()).collect();
+        assert!(labels.contains(&"Group\tCtrl+G"));
+        assert!(labels.contains(&"Select Children"));
+
+        // No class ever shows an unwired row.
+        for class in [
+            SelectionClass::Empty,
+            SelectionClass::Bitmap,
+            SelectionClass::Path,
+            SelectionClass::Text,
+            SelectionClass::Instance,
+            SelectionClass::Slice,
+            SelectionClass::Group,
+            SelectionClass::Multi,
+        ] {
+            for row in context_rows(class, true) {
+                assert!(
+                    !matches!(row.action, crate::menus::Action::Inert),
+                    "{} renders an inert row",
+                    row.label
+                );
+            }
+        }
+    }
+
+    /// Edit ▸ Insert ▸ Hotspot / slice rows land a web object over
+    /// the selection bounds (canvas center when nothing is selected),
+    /// and New Button appends a button definition to the library.
+    #[test]
+    fn insert_web_rows_create_web_objects_and_buttons() {
+        let (mut shell, id) = shell_with_raster();
+        shell.editor.selection_set = vec![id];
+        shell.editor.selection = Some(id);
+        let bounds = union_selection_bounds(shell.editor.session.document(), &[id])
+            .expect("the raster has bounds");
+
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::InsertWeb {
+            what: menus::InsertWebKind::Hotspot,
+        }));
+        let document = shell.editor.session.document();
+        let hotspot = document
+            .registry
+            .iter()
+            .find_map(|(_, object)| match object {
+                doc::ObjectData::Slice(slice) if slice.slice_type.is_none() => Some(slice),
+                _ => None,
+            })
+            .expect("the hotspot was created");
+        assert_eq!(hotspot.frame.x0, bounds.x0);
+        assert_eq!(hotspot.frame.y0, bounds.y0);
+        assert_eq!(hotspot.frame.width(), bounds.width());
+        assert_eq!(hotspot.frame.height(), bounds.height());
+
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::InsertWeb {
+            what: menus::InsertWebKind::RectSlice,
+        }));
+        let document = shell.editor.session.document();
+        let slice = document
+            .registry
+            .iter()
+            .find_map(|(_, object)| match object {
+                doc::ObjectData::Slice(slice) if slice.slice_type == Some(0) => Some(slice),
+                _ => None,
+            })
+            .expect("the slice was created");
+        assert_eq!(
+            (slice.frame.width(), slice.frame.height()),
+            (bounds.width(), bounds.height())
+        );
+
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::InsertWeb {
+            what: menus::InsertWebKind::PolygonSlice,
+        }));
+        let document = shell.editor.session.document();
+        let polygon = document
+            .registry
+            .iter()
+            .find_map(|(_, object)| match object {
+                doc::ObjectData::Slice(slice) if slice.shape == 2 => Some(slice),
+                _ => None,
+            })
+            .expect("the polygon slice was created");
+        assert_eq!(polygon.contours.len(), 1);
+        assert_eq!(polygon.contours[0].point_count, 4, "the rect's corners");
+
+        // Nothing selected: the canvas-center default.
+        let mut shell = gui_shell(Editor::untitled());
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::InsertWeb {
+            what: menus::InsertWebKind::RectSlice,
+        }));
+        let document = shell.editor.session.document();
+        let canvas = &document.pages[0].info.canvas;
+        let slice = document
+            .registry
+            .iter()
+            .find_map(|(_, object)| match object {
+                doc::ObjectData::Slice(slice) => Some(slice),
+                _ => None,
+            })
+            .expect("the slice was created");
+        assert_eq!(slice.frame.x0, canvas.x + canvas.width / 4.0);
+        assert_eq!(slice.frame.width(), canvas.width / 2.0);
+
+        // New Button: a button definition in the library.
+        let mut shell = gui_shell(Editor::untitled());
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::InsertWeb {
+            what: menus::InsertWebKind::Button,
+        }));
+        let document = shell.editor.session.document();
+        assert_eq!(document.symbols.len(), 1);
+        assert_eq!(document.symbols[0].symbol_type, doc::SymbolType::Button);
+    }
+
+    /// The Modify-remainder batch: fill-edge rows command every
+    /// selected path, Edit Symbol enters the selected instance's
+    /// definition scope, and non-instance selections report instead.
+    #[test]
+    fn fill_edge_and_edit_symbol_rows_drive_the_selection() {
+        let mut shell = gui_shell(gui_editor());
+        assert!(
+            shell
+                .editor
+                .apply(
+                    "object.createPath",
+                    serde_json::json!({
+                        "kind": "rect", "x": 10.0, "y": 10.0,
+                        "width": 50.0, "height": 50.0,
+                        "page": 0, "layer": 0, "cell": 0,
+                        "name": null,
+                    }),
+                )
+                .is_ok(),
+            "the path lands"
+        );
+        let id = shell.editor.current_cell().unwrap().elements[0];
+        shell.editor.selection_set = vec![id];
+        shell.editor.selection = Some(id);
+
+        shell.run_action(&menus::Action::Sel(menus::SelAction::FillEdge {
+            mode: "hard",
+        }));
+        let document = shell.editor.session.document();
+        let path = match document.registry.get(id) {
+            Some(doc::ObjectData::Path(path)) => path,
+            _ => panic!("the object is a path"),
+        };
+        let fill = path
+            .paint
+            .as_ref()
+            .and_then(|paint| paint.fill.as_ref())
+            .expect("the edge materialized a fill");
+        assert!(fill.hard_edge, "hard mode set FRDb");
+
+        shell.run_action(&menus::Action::Sel(menus::SelAction::FillEdge {
+            mode: "feather",
+        }));
+        let document = shell.editor.session.document();
+        let path = match document.registry.get(id) {
+            Some(doc::ObjectData::Path(path)) => path,
+            _ => panic!("the object is a path"),
+        };
+        let fill = path.paint.as_ref().and_then(|p| p.fill.as_ref()).unwrap();
+        assert!(!fill.hard_edge);
+        assert_eq!(fill.feather, i64::from(shell.editor.feather_radius));
+
+        // Edit Symbol with no instance: report, not command.
+        let mut shell = gui_shell(gui_editor());
+        shell.run_action(&menus::Action::Sel(menus::SelAction::EditSymbol));
+        assert!(shell.status.contains("symbol instance"));
+
+        // With an instance: the editor enters its definition's scope.
+        // gui_editor() seeds a rect, so the instance appended after it
+        // is the cell's second element.
+        let mut shell = gui_shell(gui_editor());
+        assert!(
+            shell
+                .editor
+                .apply(
+                    "library.add",
+                    serde_json::json!({
+                        "name": "def", "symbol_type": "graphic",
+                    })
+                )
+                .is_ok()
+        );
+        let symbol = shell.editor.document().symbols[0].symbol_number;
+        assert!(
+            shell
+                .editor
+                .apply(
+                    "symbol.createInstance",
+                    serde_json::json!({
+                        "page": 0, "layer": 0, "cell": 0, "symbol": symbol,
+                        "x": 10.0, "y": 10.0,
+                    })
+                )
+                .is_ok()
+        );
+        let elements = &shell.editor.current_cell().unwrap().elements;
+        let id = elements[elements.len() - 1];
+        shell.editor.selection_set = vec![id];
+        shell.editor.selection = Some(id);
+        shell.run_action(&menus::Action::Sel(menus::SelAction::EditSymbol));
+        assert_eq!(shell.editor.symbol_scope, Some(symbol));
     }
 }

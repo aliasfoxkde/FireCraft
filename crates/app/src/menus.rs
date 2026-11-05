@@ -38,12 +38,39 @@ pub enum Action {
     TextSize(f64),
     /// `text.setAttrs` boolean attribute (bold/italic/underline).
     TextFlag(&'static str),
+    /// `text.setAttrs` with the style flags cleared (Text ▸ Plain).
+    TextPlain,
+    /// `text.setAttrs` justification, `JSTi` 0..=3.
+    TextJustify(i64),
+    /// `text.setAttrs` size nudged one step from the current value
+    /// (Text ▸ Smaller/Larger; CS6's step is the next preset down/up).
+    TextStep(i64),
+    /// `text.setTextOnPathMode` with a `TAMi` 0..=3 mode.
+    TextOnPathMode(i64),
     /// `filter.add` from the Filters menu: the preset's internal name,
     /// resolved through the same registry the Live Filters panel uses
     /// (`shell::filter_preset`). CS6 builds this menu at runtime from
     /// its filter registry — the static `RT_MENU` resource carries only
     /// Repeat Filter — and `FireCraft` mirrors exactly that.
     Filter(&'static str),
+    /// A page-scoped document verb (canvas/rotation family); the
+    /// payload derives from the active page, not the selection.
+    Document(DocumentAction),
+}
+
+/// Page-scoped document verbs — Modify ▸ Canvas and friends. Each
+/// maps to one registry command whose payload names the active page.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DocumentAction {
+    /// `document.setDocumentCanvasSizeToDocumentExtents` — shrink the
+    /// canvas to hug all page content (CS6's Trim Canvas).
+    TrimCanvas,
+    /// `document.setDocumentCanvasSizeToSelection` — canvas hugs the
+    /// selection's extents (CS6's Fit Canvas).
+    FitCanvas,
+    /// `document.rotate` — rotate the page clockwise by degrees
+    /// (90/180/270 only; CS6's 90° CCW is 270 CW).
+    Rotate(i64),
 }
 
 /// Shell-level behaviors — plumbing that never goes through the engine.
@@ -58,9 +85,33 @@ pub enum ShellAction {
     SaveAs,
     Export,
     ExportPreview,
+    /// File ▸ Export Wizard…: the export dialog, opened by its own
+    /// CS6 row (the same dialog as File ▸ Export).
+    ExportWizard,
+    /// File ▸ Export ▸ JPEG Compressed…: the export dialog opened on
+    /// the JPEG format with its compression options.
+    ExportJpeg,
+    /// File ▸ File Info…: the document's facts (pages, layers,
+    /// objects, canvas).
+    FileInfo,
+    /// File ▸ Export ▸ Fireworks PNG (format)…: the PNG format facts
+    /// of the live document (canvas, color depth, object count).
+    PngFormatInfo,
+    /// File ▸ Close / Close All: discard the open document and start
+    /// a fresh one.
+    CloseDocument,
+    /// File ▸ Save All: save the open document (the shell holds one).
+    SaveAll,
+    /// File ▸ Revert: reload the document from the file it was last
+    /// saved to.
+    Revert,
     /// Modify ▸ Transform ▸ Numeric Transform (Scale/Skew route here
     /// too): opens the numeric dialog over the live selection.
     NumericTransform,
+    /// Set how the selection's transform handles behave: CS6's Free
+    /// Transform (scale, the default) vs Distort (corner handles move
+    /// independently, setting the quadrangle).
+    TransformMode(TransformMode),
     /// The command palette (Ctrl+P): every registered engine command.
     Palette,
     Quit,
@@ -106,6 +157,28 @@ pub enum ShellAction {
     ToggleSnapToGuides,
     /// View ▸ Guides ▸ Clear Guides — `page.removeAllGuides`.
     ClearGuides,
+    /// View ▸ Fit Selection — zoom/pan to the selection bounds.
+    FitSelection,
+    /// View ▸ Smart Guides ▸ Show Smart Guides.
+    ToggleSmartGuides,
+    /// View ▸ Smart Guides ▸ Snap to Smart Guides.
+    ToggleSnapToSmartGuides,
+    /// View ▸ 9-Slice Scaling Guides ▸ Lock Guides.
+    ToggleSliceLock,
+    /// View ▸ Slice Guides.
+    ToggleSliceGuides,
+    /// View ▸ Slice Overlay.
+    ToggleSliceOverlay,
+    /// View ▸ Edges — object edge highlighting.
+    ToggleEdges,
+    /// View ▸ Rulers.
+    ToggleRulers,
+    /// View ▸ Tooltips.
+    ToggleTooltips,
+    /// View ▸ Show All — re-show everything Hide Selection folded.
+    ShowAllHidden,
+    /// View ▸ Gamma 1.8 — the 1.8 gamma preview toggle.
+    ToggleGamma,
     /// Select ▸ Feather… — the feather-radius dialog over the pixel
     /// selection.
     FeatherDialog,
@@ -114,10 +187,63 @@ pub enum ShellAction {
     CanvasSize,
     /// Modify ▸ Canvas ▸ Canvas Color… — the document matte color.
     CanvasColor,
+    /// Modify ▸ Canvas ▸ Image Size… — scale the document into a
+    /// target rect (`document.setImageSize`).
+    ImageSize,
     /// Help ▸ Online Help — opens the project wiki in the browser.
     OnlineHelp,
     /// Help ▸ Manage Extensions… — the extension (script) manager.
     ManageExtensions,
+    /// Window ▸ (panel name) — toggle one right-dock panel.
+    TogglePanel(&'static str),
+    /// Window ▸ Tools: fold/unfold the left tools dock.
+    ToggleTools,
+    /// A Window row whose CS6 semantics need multiple open documents
+    /// (Duplicate Window, Cascade, Tile). The shell is single-document
+    /// today; report that instead of sitting inert.
+    SingleDocument,
+    /// Window ▸ Hide Panels — fold/unfold the whole right dock.
+    ToggleHidePanels,
+    /// Window ▸ Toolbars ▸ Main — the context options bar.
+    ToggleMainToolbar,
+    /// File ▸ Preview in Browser (primary/secondary/all pages):
+    /// export the document to a PNG next to it (or in the temp dir for
+    /// an unsaved document) and open it in the system browser.
+    PreviewInBrowser {
+        /// `true` = the user's secondary browser row; CS6 lets the OS
+        /// default decide when no secondary is configured, and so does
+        /// this build (both rows open the default handler today).
+        secondary: bool,
+        /// Preview All Pages: one PNG per page, all opened.
+        all_pages: bool,
+    },
+    /// A File row whose CS6 backing service does not exist in this
+    /// build (Bridge, TWAIN scanners, printer stack, HTML round-trip,
+    /// batch processor, templates, e-mail). The message names the gap
+    /// plainly instead of the row sitting inert.
+    ReportGap(&'static str),
+    /// Edit ▸ Insert ▸ Hotspot / Rectangular Slice / Polygon Slice /
+    /// New Button…: insert a web object or button definition sized to
+    /// the selection bounds (canvas center when nothing is selected).
+    /// The polygon variant traces the selection's rectangle (CS6 asks
+    /// for the vertices interactively — the drag tool does that).
+    InsertWeb {
+        /// What to insert.
+        what: InsertWebKind,
+    },
+}
+
+/// What Edit ▸ Insert lands on the canvas.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum InsertWebKind {
+    /// A link-only hotspot area (`hotspot.create`).
+    Hotspot,
+    /// A bounding-box slice (`slice.create`).
+    RectSlice,
+    /// A polygon slice (`slice.create`, polygon shape).
+    PolygonSlice,
+    /// A multi-state button definition (`library.add`, button type).
+    Button,
 }
 
 /// Engine commands with a selection- or document-derived payload.
@@ -137,8 +263,20 @@ pub enum SelAction {
     NewLayer,
     /// `page.add` appended.
     NewPage,
+    /// `frame.add` — one empty state appended after the current one
+    /// (CS6's Insert ▸ State).
+    NewFrame,
     /// `symbol.breakApart` on the selection.
     BreakApart,
+    /// `symbol.create` — fold the selection into a new graphic
+    /// definition (CS6's Symbol ▸ Convert to Symbol).
+    ConvertToSymbol,
+    /// `symbol.create` with the `animation` type — CS6's
+    /// Modify ▸ Animation ▸ Animate Selection.
+    AnimateSelection,
+    /// `symbol.tween` — CS6's Symbol ▸ Tween Instances (4 steps,
+    /// distribute to frames).
+    TweenInstances,
     /// `object.setVisible` false on the selection.
     Hide,
     /// `object.setLocked` true on the selection.
@@ -213,6 +351,52 @@ pub enum SelAction {
     /// `object.duplicate` — CS6 Edit ▸ Duplicate (same command; CS6's
     /// variant differs only by the interactive placement drag).
     Duplicate,
+    /// `text.detachPath` — remove the selected text's on-path guide.
+    DetachFromPath,
+    /// `text.attachPath` — lay the selected text along a selected
+    /// path (`TAPv`): the selection must carry exactly one text and
+    /// one path object; the path becomes the rail.
+    AttachToPath,
+    /// `path.splitPaths` — CS6 Modify ▸ Split: separate each selected
+    /// path's contours into independent path objects.
+    SplitPaths,
+    /// Reset every selected object's `MTXv` to identity (CS6 Modify ▸
+    /// Transform ▸ Remove Transformations).
+    RemoveTransformations,
+    /// `symbol.breakApart` on the selected symbol instance — CS6
+    /// Modify ▸ Animation ▸ Remove Animation: dissolve the animation
+    /// back to plain objects.
+    RemoveAnimation,
+    /// `text.reversePathTextDirection` — flip the selected text's
+    /// travel direction along its rail.
+    ReversePathText,
+    /// `text.convertToPaths` — freeze the selected text into glyph
+    /// outline paths (in place, same registry ids).
+    ConvertToPaths,
+    /// `bitmap.addImage` — CS6 Edit ▸ Insert ▸ Empty Bitmap: an empty
+    /// image the size of the canvas on the active layer.
+    EmptyBitmap,
+    /// `bitmap.addImageViaCopy` — CS6 Edit ▸ Insert ▸ Bitmap Via
+    /// Copy: the pixel selection of the selected bitmap becomes a new
+    /// image above it.
+    BitmapViaCopy,
+    /// `bitmap.addImageViaCut` — the copy that also clears the
+    /// selection from the source bitmap.
+    BitmapViaCut,
+    /// `document.setDocumentCanvasSizeToDocumentExtents` with `grow`
+    /// true — CS6 Edit ▸ Crop Document: shrink the canvas to the
+    /// content extents.
+    CropDocument,
+    /// `path.setFillEdgeMode` on every selected path — Modify ▸
+    /// Alter Path ▸ Hard / Anti-Alias / Feather Fill.
+    FillEdge {
+        /// "hard" / "antialias" / "feather".
+        mode: &'static str,
+    },
+    /// Enter the selected instance's definition — Modify ▸ Symbol ▸
+    /// Edit Symbol / Edit in Place (a view-state change; the two rows
+    /// differ only in CS6's presentation).
+    EditSymbol,
 }
 
 /// The Modify ▸ Arrange items; dispatch resolves the numeric index.
@@ -222,6 +406,15 @@ pub enum Arrange {
     Forward,
     Backward,
     Back,
+}
+
+/// How the selection's transform handles behave (Modify ▸ Transform).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TransformMode {
+    /// Free Transform: handles scale (the default).
+    Scale,
+    /// Distort: corner handles move independently (the quadrangle).
+    Distort,
 }
 
 /// One command row: resource id, display label, accelerator text, action.
@@ -267,23 +460,68 @@ pub static FILE: Menu = Menu {
     label: "File",
     entries: &[
         item(57600, "New", "Ctrl+N", Action::Shell(ShellAction::New)),
-        item(37866, "New from Template...", "", Action::Inert),
+        item(
+            37866,
+            "New from Template...",
+            "",
+            Action::Shell(ShellAction::ReportGap(
+                "Document templates are not available in this build.",
+            )),
+        ),
         item(57601, "Open...", "Ctrl+O", Action::Shell(ShellAction::Open)),
-        item(35795, "Browse in Bridge...", "", Action::Inert),
+        item(
+            35795,
+            "Browse in Bridge...",
+            "",
+            Action::Shell(ShellAction::ReportGap(
+                "Adobe Bridge is not available in this build.",
+            )),
+        ),
         Entry::Sub(
             "Open Recent",
-            &[item(57616, "Recent File", "", Action::Inert)],
+            &[item(
+                57616,
+                "Recent File",
+                "",
+                Action::Shell(ShellAction::ReportGap(
+                    "The recent-files list is not kept in this build; use File ▸ Open.",
+                )),
+            )],
         ),
         Entry::Sub(
             "Scan",
             &[
-                item(35199, "Twain Acquire...", "", Action::Inert),
+                item(
+                    35199,
+                    "Twain Acquire...",
+                    "",
+                    Action::Shell(ShellAction::ReportGap(
+                        "TWAIN scanner acquisition is not available in this build.",
+                    )),
+                ),
                 Entry::Sep,
-                item(35200, "Twain Select...", "", Action::Inert),
+                item(
+                    35200,
+                    "Twain Select...",
+                    "",
+                    Action::Shell(ShellAction::ReportGap(
+                        "TWAIN scanner selection is not available in this build.",
+                    )),
+                ),
             ],
         ),
-        item(57602, "Close", "Ctrl+F4", Action::Inert),
-        item(35789, "Close All", "", Action::Inert),
+        item(
+            57602,
+            "Close",
+            "Ctrl+F4",
+            Action::Shell(ShellAction::CloseDocument),
+        ),
+        item(
+            35789,
+            "Close All",
+            "",
+            Action::Shell(ShellAction::CloseDocument),
+        ),
         Entry::Sep,
         item(57603, "Save", "Ctrl+S", Action::Shell(ShellAction::Save)),
         item(
@@ -292,9 +530,16 @@ pub static FILE: Menu = Menu {
             "Ctrl+Shift+S",
             Action::Shell(ShellAction::SaveAs),
         ),
-        item(35850, "Save All", "", Action::Inert),
-        item(37867, "Save As Template...", "", Action::Inert),
-        item(35036, "Revert", "", Action::Inert),
+        item(35850, "Save All", "", Action::Shell(ShellAction::SaveAll)),
+        item(
+            37867,
+            "Save As Template...",
+            "",
+            Action::Shell(ShellAction::ReportGap(
+                "Document templates are not available in this build.",
+            )),
+        ),
+        item(35036, "Revert", "", Action::Shell(ShellAction::Revert)),
         Entry::Sep,
         item(35012, "Import...", "", Action::Shell(ShellAction::Import)),
         item(
@@ -312,38 +557,133 @@ pub static FILE: Menu = Menu {
         Entry::Sub(
             "Send to E-mail",
             &[
-                item(35587, "Fireworks PNG (format)...", "", Action::Inert),
-                item(35588, "JPEG Compressed...", "", Action::Inert),
-                item(35420, "Use Export Settings...", "", Action::Inert),
+                item(
+                    35587,
+                    "Fireworks PNG (format)...",
+                    "",
+                    Action::Shell(ShellAction::PngFormatInfo),
+                ),
+                item(
+                    35588,
+                    "JPEG Compressed...",
+                    "",
+                    Action::Shell(ShellAction::ExportJpeg),
+                ),
+                item(
+                    35420,
+                    "Use Export Settings...",
+                    "",
+                    Action::Shell(ShellAction::ReportGap(
+                        "Saved export-settings presets are not available in this build.",
+                    )),
+                ),
             ],
         ),
-        item(35416, "Update HTML...", "", Action::Inert),
+        item(
+            35416,
+            "Update HTML...",
+            "",
+            Action::Shell(ShellAction::ReportGap(
+                "HTML export and re-export are not available in this build.",
+            )),
+        ),
         Entry::Sep,
-        item(35792, "File Info...", "", Action::Inert),
+        item(
+            35792,
+            "File Info...",
+            "",
+            Action::Shell(ShellAction::FileInfo),
+        ),
         Entry::Sep,
-        item(35181, "Export Wizard...", "", Action::Inert),
-        item(35302, "Batch Process...", "", Action::Inert),
+        item(
+            35181,
+            "Export Wizard...",
+            "",
+            Action::Shell(ShellAction::ExportWizard),
+        ),
+        item(
+            35302,
+            "Batch Process...",
+            "",
+            Action::Shell(ShellAction::ReportGap(
+                "Batch processing of multiple files is not available in this build.",
+            )),
+        ),
         Entry::Sub(
             "Preview in Browser",
             &[
-                item(35313, "Preview in Primary Browser", "", Action::Inert),
-                item(35315, "Preview in Secondary Browser", "", Action::Inert),
+                item(
+                    35313,
+                    "Preview in Primary Browser",
+                    "",
+                    Action::Shell(ShellAction::PreviewInBrowser {
+                        secondary: false,
+                        all_pages: false,
+                    }),
+                ),
+                item(
+                    35315,
+                    "Preview in Secondary Browser",
+                    "",
+                    Action::Shell(ShellAction::PreviewInBrowser {
+                        secondary: true,
+                        all_pages: false,
+                    }),
+                ),
                 Entry::Sep,
                 item(
                     49003,
                     "Preview All Pages in Primary Browser",
                     "",
-                    Action::Inert,
+                    Action::Shell(ShellAction::PreviewInBrowser {
+                        secondary: false,
+                        all_pages: true,
+                    }),
                 ),
                 Entry::Sep,
-                item(35314, "Set Primary Browser...", "", Action::Inert),
-                item(35316, "Set Secondary Browser...", "", Action::Inert),
+                item(
+                    35314,
+                    "Set Primary Browser...",
+                    "",
+                    Action::Shell(ShellAction::ReportGap(
+                        "Browser selection is not configurable in this build; the system default is used.",
+                    )),
+                ),
+                item(
+                    35316,
+                    "Set Secondary Browser...",
+                    "",
+                    Action::Shell(ShellAction::ReportGap(
+                        "Browser selection is not configurable in this build; the system default is used.",
+                    )),
+                ),
             ],
         ),
         Entry::Sep,
-        item(57605, "Page Setup...", "", Action::Inert),
-        item(57607, "Print...", "Ctrl+P", Action::Inert),
-        item(35452, "HTML Setup...", "", Action::Inert),
+        item(
+            57605,
+            "Page Setup...",
+            "",
+            Action::Shell(ShellAction::ReportGap(
+                "Printing and page setup are not available in this build.",
+            )),
+        ),
+        item(
+            57607,
+            "Print...",
+            "Ctrl+P",
+            Action::Shell(ShellAction::ReportGap(
+                "Printing is not available in this build.",
+            )),
+        ),
+        item(
+            35452,
+            "HTML Setup...",
+            "",
+            Action::Shell(ShellAction::ReportGap(
+                "HTML export options are not available in this build.",
+            )),
+        ),
         Entry::Sep,
         item(57665, "Exit", "Alt+F4", Action::Shell(ShellAction::Quit)),
     ],
@@ -366,7 +706,14 @@ pub static EDIT: Menu = Menu {
         Entry::Sub(
             "Insert",
             &[
-                item(35191, "New Button...", "", Action::Inert),
+                item(
+                    35191,
+                    "New Button...",
+                    "",
+                    Action::Shell(ShellAction::InsertWeb {
+                        what: InsertWebKind::Button,
+                    }),
+                ),
                 item(
                     35195,
                     "New Symbol...",
@@ -374,25 +721,82 @@ pub static EDIT: Menu = Menu {
                     Action::Sel(SelAction::NewSymbol),
                 ),
                 Entry::Sep,
-                item(35179, "Hotspot", "", Action::Inert),
-                item(35237, "Rectangular Slice", "", Action::Inert),
-                item(35786, "Polygon Slice", "", Action::Inert),
+                item(
+                    35179,
+                    "Hotspot",
+                    "",
+                    Action::Shell(ShellAction::InsertWeb {
+                        what: InsertWebKind::Hotspot,
+                    }),
+                ),
+                item(
+                    35237,
+                    "Rectangular Slice",
+                    "",
+                    Action::Shell(ShellAction::InsertWeb {
+                        what: InsertWebKind::RectSlice,
+                    }),
+                ),
+                item(
+                    35786,
+                    "Polygon Slice",
+                    "",
+                    Action::Shell(ShellAction::InsertWeb {
+                        what: InsertWebKind::PolygonSlice,
+                    }),
+                ),
                 Entry::Sep,
-                item(35180, "Empty Bitmap", "", Action::Inert),
-                item(35581, "Bitmap Via Copy", "", Action::Inert),
-                item(35582, "Bitmap Via Cut", "", Action::Inert),
+                item(
+                    35180,
+                    "Empty Bitmap",
+                    "",
+                    Action::Sel(SelAction::EmptyBitmap),
+                ),
+                item(
+                    35581,
+                    "Bitmap Via Copy",
+                    "",
+                    Action::Sel(SelAction::BitmapViaCopy),
+                ),
+                item(
+                    35582,
+                    "Bitmap Via Cut",
+                    "",
+                    Action::Sel(SelAction::BitmapViaCut),
+                ),
                 Entry::Sep,
                 item(35309, "Layer", "", Action::Sel(SelAction::NewLayer)),
-                item(35301, "State", "", Action::Inert),
+                item(35301, "State", "", Action::Sel(SelAction::NewFrame)),
                 item(35809, "Page", "", Action::Sel(SelAction::NewPage)),
             ],
         ),
-        item(43402, "Find and Replace...", "", Action::Inert),
+        item(
+            43402,
+            "Find and Replace...",
+            "",
+            Action::Shell(ShellAction::ReportGap(
+                "Find and Replace needs the text-search service, which this build does not ship",
+            )),
+        ),
         Entry::Sep,
         item(57635, "Cut", "Ctrl+X", Action::Shell(ShellAction::Cut)),
         item(57634, "Copy", "Ctrl+C", Action::Shell(ShellAction::Copy)),
-        item(35411, "Copy as Vectors", "", Action::Inert),
-        item(35415, "Copy HTML Code...", "", Action::Inert),
+        item(
+            35411,
+            "Copy as Vectors",
+            "",
+            Action::Shell(ShellAction::ReportGap(
+                "Copy as Vectors needs the vector-clipboard serializer, which this build does not ship",
+            )),
+        ),
+        item(
+            35415,
+            "Copy HTML Code...",
+            "",
+            Action::Shell(ShellAction::ReportGap(
+                "Copy HTML Code needs the HTML clipboard serializer, which this build does not ship",
+            )),
+        ),
         item(57637, "Paste", "Ctrl+V", Action::Shell(ShellAction::Paste)),
         item(57632, "Clear", "Del", Action::Sel(SelAction::Delete)),
         Entry::Sep,
@@ -408,7 +812,14 @@ pub static EDIT: Menu = Menu {
             "",
             Action::Shell(ShellAction::PasteInside),
         ),
-        item(35033, "Paste Attributes", "", Action::Inert),
+        item(
+            35033,
+            "Paste Attributes",
+            "",
+            Action::Shell(ShellAction::ReportGap(
+                "Paste Attributes needs the attributes clipboard, which this build does not ship",
+            )),
+        ),
         Entry::Sep,
         item(
             35006,
@@ -423,11 +834,37 @@ pub static EDIT: Menu = Menu {
             Action::Sel(SelAction::Clone),
         ),
         Entry::Sep,
-        item(35145, "Crop Selected Bitmap", "", Action::Inert),
-        item(35346, "Crop Document", "", Action::Inert),
+        item(
+            35145,
+            "Crop Selected Bitmap",
+            "",
+            Action::Shell(ShellAction::ReportGap(
+                "Crop Selected Bitmap needs the bitmap-crop verb, which this build does not ship",
+            )),
+        ),
+        item(
+            35346,
+            "Crop Document",
+            "",
+            Action::Sel(SelAction::CropDocument),
+        ),
         Entry::Sep,
-        item(35034, "Preferences...", "", Action::Inert),
-        item(35429, "Keyboard Shortcuts...", "", Action::Inert),
+        item(
+            35034,
+            "Preferences...",
+            "",
+            Action::Shell(ShellAction::ReportGap(
+                "Preferences needs the preferences dialog, which this build does not ship",
+            )),
+        ),
+        item(
+            35429,
+            "Keyboard Shortcuts...",
+            "",
+            Action::Shell(ShellAction::ReportGap(
+                "Keyboard Shortcuts needs the shortcut editor, which this build does not ship",
+            )),
+        ),
     ],
 };
 
@@ -467,7 +904,12 @@ pub static VIEW: Menu = Menu {
             ],
         ),
         Entry::Sep,
-        item(35066, "Fit Selection", "Ctrl+0", Action::Inert),
+        item(
+            35066,
+            "Fit Selection",
+            "Ctrl+0",
+            Action::Shell(ShellAction::FitSelection),
+        ),
         item(
             35065,
             "Fit All",
@@ -475,7 +917,12 @@ pub static VIEW: Menu = Menu {
             Action::Shell(ShellAction::FitAll),
         ),
         Entry::Sep,
-        item(35367, "Gamma 1.8", "", Action::Inert),
+        item(
+            35367,
+            "Gamma 1.8",
+            "",
+            Action::Shell(ShellAction::ToggleGamma),
+        ),
         Entry::Sep,
         item(
             35071,
@@ -483,10 +930,25 @@ pub static VIEW: Menu = Menu {
             "Ctrl+M",
             Action::Sel(SelAction::Hide),
         ),
-        item(35826, "Tooltips", "", Action::Inert),
-        item(35072, "Show All", "", Action::Inert),
+        item(
+            35826,
+            "Tooltips",
+            "",
+            Action::Shell(ShellAction::ToggleTooltips),
+        ),
+        item(
+            35072,
+            "Show All",
+            "",
+            Action::Shell(ShellAction::ShowAllHidden),
+        ),
         Entry::Sep,
-        item(35130, "Rulers", "", Action::Inert),
+        item(
+            35130,
+            "Rulers",
+            "",
+            Action::Shell(ShellAction::ToggleRulers),
+        ),
         Entry::Sub(
             "Grid",
             &[
@@ -542,18 +1004,43 @@ pub static VIEW: Menu = Menu {
         Entry::Sub(
             "Smart Guides",
             &[
-                item(35815, "Show Smart Guides", "", Action::Inert),
-                item(35821, "Snap to Smart Guides", "", Action::Inert),
+                item(
+                    35815,
+                    "Show Smart Guides",
+                    "",
+                    Action::Shell(ShellAction::ToggleSmartGuides),
+                ),
+                item(
+                    35821,
+                    "Snap to Smart Guides",
+                    "",
+                    Action::Shell(ShellAction::ToggleSnapToSmartGuides),
+                ),
             ],
         ),
         Entry::Sub(
             "9-Slice Scaling Guides",
-            &[item(35812, "Lock Guides", "", Action::Inert)],
+            &[item(
+                35812,
+                "Lock Guides",
+                "",
+                Action::Shell(ShellAction::ToggleSliceLock),
+            )],
         ),
-        item(35299, "Slice Guides", "", Action::Inert),
-        item(35426, "Slice Overlay", "", Action::Inert),
+        item(
+            35299,
+            "Slice Guides",
+            "",
+            Action::Shell(ShellAction::ToggleSliceGuides),
+        ),
+        item(
+            35426,
+            "Slice Overlay",
+            "",
+            Action::Shell(ShellAction::ToggleSliceOverlay),
+        ),
         Entry::Sep,
-        item(35088, "Edges", "", Action::Inert),
+        item(35088, "Edges", "", Action::Shell(ShellAction::ToggleEdges)),
     ],
 };
 
@@ -679,7 +1166,12 @@ pub static MODIFY: Menu = Menu {
         Entry::Sub(
             "Canvas",
             &[
-                item(35226, "Image Size...", "", Action::Inert),
+                item(
+                    35226,
+                    "Image Size...",
+                    "",
+                    Action::Shell(ShellAction::ImageSize),
+                ),
                 item(
                     35004,
                     "Canvas Size...",
@@ -693,43 +1185,128 @@ pub static MODIFY: Menu = Menu {
                     Action::Shell(ShellAction::CanvasColor),
                 ),
                 Entry::Sep,
-                item(35250, "Trim Canvas", "", Action::Inert),
-                item(35574, "Fit Canvas", "", Action::Inert),
+                item(
+                    35250,
+                    "Trim Canvas",
+                    "",
+                    Action::Document(DocumentAction::TrimCanvas),
+                ),
+                item(
+                    35574,
+                    "Fit Canvas",
+                    "",
+                    Action::Document(DocumentAction::FitCanvas),
+                ),
                 Entry::Sep,
-                item(35348, "Rotate 180°", "", Action::Inert),
-                item(35349, "Rotate 90° CW", "", Action::Inert),
-                item(35350, "Rotate 90° CCW", "", Action::Inert),
+                item(
+                    35348,
+                    "Rotate 180°",
+                    "",
+                    Action::Document(DocumentAction::Rotate(180)),
+                ),
+                item(
+                    35349,
+                    "Rotate 90° CW",
+                    "",
+                    Action::Document(DocumentAction::Rotate(90)),
+                ),
+                item(
+                    35350,
+                    "Rotate 90° CCW",
+                    "",
+                    Action::Document(DocumentAction::Rotate(270)),
+                ),
             ],
         ),
         Entry::Sep,
         Entry::Sub(
             "Animation",
             &[
-                item(35451, "Animate Selection...", "", Action::Inert),
-                item(35463, "Settings...", "", Action::Inert),
+                item(
+                    35451,
+                    "Animate Selection...",
+                    "",
+                    Action::Sel(SelAction::AnimateSelection),
+                ),
+                item(
+                    35463,
+                    "Settings...",
+                    "",
+                    Action::Shell(ShellAction::ReportGap(
+                        "animation settings need the animation dialog, which this build does not ship",
+                    )),
+                ),
                 Entry::Sep,
-                item(35472, "Remove Animation", "", Action::Inert),
+                item(
+                    35472,
+                    "Remove Animation",
+                    "",
+                    Action::Sel(SelAction::RemoveAnimation),
+                ),
             ],
         ),
         Entry::Sub(
             "Symbol",
             &[
-                item(35189, "Convert to Symbol...", "", Action::Inert),
+                item(
+                    35189,
+                    "Convert to Symbol...",
+                    "",
+                    Action::Sel(SelAction::ConvertToSymbol),
+                ),
                 Entry::Sep,
-                item(35334, "Edit Symbol", "", Action::Inert),
-                item(35842, "Edit in Place", "", Action::Inert),
-                item(35188, "Tween Instances...", "", Action::Inert),
+                item(35334, "Edit Symbol", "", Action::Sel(SelAction::EditSymbol)),
+                item(
+                    35842,
+                    "Edit in Place",
+                    "",
+                    Action::Sel(SelAction::EditSymbol),
+                ),
+                item(
+                    35188,
+                    "Tween Instances...",
+                    "",
+                    Action::Sel(SelAction::TweenInstances),
+                ),
                 item(35190, "Break Apart", "", Action::Sel(SelAction::BreakApart)),
-                item(35807, "Swap Symbol...", "", Action::Inert),
+                item(
+                    35807,
+                    "Swap Symbol...",
+                    "",
+                    Action::Shell(ShellAction::ReportGap(
+                        "Swap Symbol needs an instance re-target verb, which this build does not ship",
+                    )),
+                ),
             ],
         ),
         Entry::Sub(
             "Pop-up Menu",
             &[
-                item(35445, "Add Pop-up Menu...", "", Action::Inert),
-                item(35592, "Edit Pop-up Menu...", "", Action::Inert),
+                item(
+                    35445,
+                    "Add Pop-up Menu...",
+                    "",
+                    Action::Shell(ShellAction::ReportGap(
+                        "Pop-up menus need the behavior structure editor, which this build does not ship",
+                    )),
+                ),
+                item(
+                    35592,
+                    "Edit Pop-up Menu...",
+                    "",
+                    Action::Shell(ShellAction::ReportGap(
+                        "Pop-up menus need the behavior structure editor, which this build does not ship",
+                    )),
+                ),
                 Entry::Sep,
-                item(35593, "Delete Pop-up Menu", "", Action::Inert),
+                item(
+                    35593,
+                    "Delete Pop-up Menu",
+                    "",
+                    Action::Shell(ShellAction::ReportGap(
+                        "Pop-up menus need the behavior structure editor, which this build does not ship",
+                    )),
+                ),
             ],
         ),
         Entry::Sep,
@@ -755,7 +1332,14 @@ pub static MODIFY: Menu = Menu {
                     "",
                     Action::Shell(ShellAction::PasteAsMask),
                 ),
-                item(35128, "Group as Mask", "", Action::Inert),
+                item(
+                    35128,
+                    "Group as Mask",
+                    "",
+                    Action::Shell(ShellAction::ReportGap(
+                        "Group as Mask needs a mask-group verb, which this build does not ship",
+                    )),
+                ),
                 Entry::Sep,
                 item(
                     35433,
@@ -805,7 +1389,14 @@ pub static MODIFY: Menu = Menu {
                     "",
                     Action::Sel(SelAction::RestoreJpegMask),
                 ),
-                item(35576, "Settings...", "", Action::Inert),
+                item(
+                    35576,
+                    "Settings...",
+                    "",
+                    Action::Shell(ShellAction::ReportGap(
+                        "JPEG mask settings need the selective-JPEG dialog, which this build does not ship",
+                    )),
+                ),
                 Entry::Sep,
                 item(
                     35471,
@@ -844,7 +1435,12 @@ pub static MODIFY: Menu = Menu {
         Entry::Sub(
             "Transform",
             &[
-                item(35178, "Free Transform", "", Action::Inert),
+                item(
+                    35178,
+                    "Free Transform",
+                    "",
+                    Action::Shell(ShellAction::TransformMode(TransformMode::Scale)),
+                ),
                 Entry::Sep,
                 item(
                     35060,
@@ -858,7 +1454,12 @@ pub static MODIFY: Menu = Menu {
                     "",
                     Action::Shell(ShellAction::NumericTransform),
                 ),
-                item(35090, "Distort", "", Action::Inert),
+                item(
+                    35090,
+                    "Distort",
+                    "",
+                    Action::Shell(ShellAction::TransformMode(TransformMode::Distort)),
+                ),
                 item(
                     35201,
                     "Numeric Transform...",
@@ -904,7 +1505,12 @@ pub static MODIFY: Menu = Menu {
                     }),
                 ),
                 Entry::Sep,
-                item(35152, "Remove Transformations", "", Action::Inert),
+                item(
+                    35152,
+                    "Remove Transformations",
+                    "",
+                    Action::Sel(SelAction::RemoveTransformations),
+                ),
             ],
         ),
         Entry::Sub(
@@ -972,7 +1578,12 @@ pub static MODIFY: Menu = Menu {
             "Combine Paths",
             &[
                 item(35094, "Join", "Ctrl+J", Action::Boolean("union")),
-                item(35095, "Split", "Ctrl+Shift+J", Action::Inert),
+                item(
+                    35095,
+                    "Split",
+                    "Ctrl+Shift+J",
+                    Action::Sel(SelAction::SplitPaths),
+                ),
                 Entry::Sep,
                 item(35211, "Union", "", Action::Boolean("union")),
                 item(35212, "Intersect", "", Action::Boolean("intersect")),
@@ -997,12 +1608,34 @@ pub static MODIFY: Menu = Menu {
                     Action::Sel(SelAction::Inset(2.0)),
                 ),
                 Entry::Sep,
-                item(35183, "Hard Fill", "", Action::Inert),
-                item(35184, "Anti-Alias Fill", "", Action::Inert),
-                item(35185, "Feather Fill", "", Action::Inert),
+                item(
+                    35183,
+                    "Hard Fill",
+                    "",
+                    Action::Sel(SelAction::FillEdge { mode: "hard" }),
+                ),
+                item(
+                    35184,
+                    "Anti-Alias Fill",
+                    "",
+                    Action::Sel(SelAction::FillEdge { mode: "antialias" }),
+                ),
+                item(
+                    35185,
+                    "Feather Fill",
+                    "",
+                    Action::Sel(SelAction::FillEdge { mode: "feather" }),
+                ),
             ],
         ),
-        item(35849, "Snap To Pixel", "", Action::Inert),
+        item(
+            35849,
+            "Snap To Pixel",
+            "",
+            Action::Shell(ShellAction::ReportGap(
+                "Snap To Pixel needs a view snap mode, which this build does not ship",
+            )),
+        ),
         Entry::Sep,
         item(35010, "Group", "Ctrl+G", Action::Sel(SelAction::Group)),
         item(35062, "Ungroup", "Ctrl+U", Action::Sel(SelAction::Ungroup)),
@@ -1026,9 +1659,16 @@ pub static TEXT: Menu = Menu {
         Entry::Sub(
             "Size",
             &[
-                item(35230, "Other...", "", Action::Inert),
-                item(35635, "Smaller", "", Action::Inert),
-                item(35636, "Larger", "", Action::Inert),
+                item(
+                    35230,
+                    "Other...",
+                    "",
+                    Action::Shell(ShellAction::ReportGap(
+                        "a custom font size needs the size-entry dialog, which this build does not ship",
+                    )),
+                ),
+                item(35635, "Smaller", "", Action::TextStep(-1)),
+                item(35636, "Larger", "", Action::TextStep(1)),
                 Entry::Sep,
                 item(35196, "8", "", Action::TextSize(8.0)),
                 item(35197, "9", "", Action::TextSize(9.0)),
@@ -1047,7 +1687,7 @@ pub static TEXT: Menu = Menu {
         Entry::Sub(
             "Style",
             &[
-                item(35057, "Plain", "", Action::Inert),
+                item(35057, "Plain", "", Action::TextPlain),
                 Entry::Sep,
                 item(
                     35055,
@@ -1072,36 +1712,103 @@ pub static TEXT: Menu = Menu {
         Entry::Sub(
             "Align",
             &[
-                item(35044, "Left", "", Action::Inert),
-                item(35042, "Centered Horizontally", "", Action::Inert),
-                item(35045, "Right", "", Action::Inert),
-                item(35043, "Justified", "", Action::Inert),
+                item(35044, "Left", "", Action::TextJustify(0)),
+                item(35042, "Centered Horizontally", "", Action::TextJustify(1)),
+                item(35045, "Right", "", Action::TextJustify(2)),
+                item(35043, "Justified", "", Action::TextJustify(3)),
                 Entry::Sep,
-                item(35114, "Top", "", Action::Inert),
-                item(35115, "Centered Vertically", "", Action::Inert),
-                item(35116, "Bottom", "", Action::Inert),
-                item(35117, "Justified Vertically", "", Action::Inert),
+                item(
+                    35114,
+                    "Top",
+                    "",
+                    Action::Shell(ShellAction::ReportGap(
+                        "vertical text alignment needs an engine verb the format does not yet document",
+                    )),
+                ),
+                item(
+                    35115,
+                    "Centered Vertically",
+                    "",
+                    Action::Shell(ShellAction::ReportGap(
+                        "vertical text alignment needs an engine verb the format does not yet document",
+                    )),
+                ),
+                item(
+                    35116,
+                    "Bottom",
+                    "",
+                    Action::Shell(ShellAction::ReportGap(
+                        "vertical text alignment needs an engine verb the format does not yet document",
+                    )),
+                ),
+                item(
+                    35117,
+                    "Justified Vertically",
+                    "",
+                    Action::Shell(ShellAction::ReportGap(
+                        "vertical text alignment needs an engine verb the format does not yet document",
+                    )),
+                ),
             ],
         ),
         Entry::Sep,
-        item(49005, "Attach In Path", "", Action::Inert),
-        item(35118, "Attach to Path", "", Action::Inert),
-        item(35119, "Detach from Path", "", Action::Inert),
+        item(
+            49005,
+            "Attach In Path",
+            "",
+            Action::Sel(SelAction::AttachToPath),
+        ),
+        item(
+            35118,
+            "Attach to Path",
+            "",
+            Action::Sel(SelAction::AttachToPath),
+        ),
+        item(
+            35119,
+            "Detach from Path",
+            "",
+            Action::Sel(SelAction::DetachFromPath),
+        ),
         Entry::Sub(
             "Orientation",
             &[
-                item(35120, "Rotate Around Path", "", Action::Inert),
-                item(35121, "Vertical", "", Action::Inert),
-                item(35122, "Skew Vertical", "", Action::Inert),
-                item(35123, "Skew Horizontal", "", Action::Inert),
+                item(35120, "Rotate Around Path", "", Action::TextOnPathMode(0)),
+                item(35121, "Vertical", "", Action::TextOnPathMode(1)),
+                item(35122, "Skew Vertical", "", Action::TextOnPathMode(2)),
+                item(35123, "Skew Horizontal", "", Action::TextOnPathMode(3)),
             ],
         ),
-        item(35124, "Reverse Direction", "", Action::Inert),
+        item(
+            35124,
+            "Reverse Direction",
+            "",
+            Action::Sel(SelAction::ReversePathText),
+        ),
         Entry::Sep,
-        item(35125, "Convert to Paths", "", Action::Inert),
+        item(
+            35125,
+            "Convert to Paths",
+            "",
+            Action::Sel(SelAction::ConvertToPaths),
+        ),
         Entry::Sep,
-        item(35591, "Check Spelling...", "", Action::Inert),
-        item(35594, "Spelling Setup...", "", Action::Inert),
+        item(
+            35591,
+            "Check Spelling...",
+            "",
+            Action::Shell(ShellAction::ReportGap(
+                "Check Spelling needs the spelling engine, which this build does not ship",
+            )),
+        ),
+        item(
+            35594,
+            "Spelling Setup...",
+            "",
+            Action::Shell(ShellAction::ReportGap(
+                "Spelling Setup needs the spelling engine, which this build does not ship",
+            )),
+        ),
     ],
 };
 
@@ -1215,44 +1922,138 @@ pub static FILTERS: Menu = Menu {
 };
 
 /// Window — the CS6 panel roster. Every name here is the authoritative
-/// panel list; toggles are inert while the layout is fixed.
+/// panel list; docked panels toggle their right-dock section, tools
+/// that have no panel yet report so instead of rendering inert.
 pub static WINDOW: Menu = Menu {
     label: "Window",
     entries: &[
-        item(57648, "Duplicate Window", "", Action::Inert),
-        item(35298, "Hide Panels", "", Action::Inert),
+        item(
+            57648,
+            "Duplicate Window",
+            "",
+            Action::Shell(ShellAction::SingleDocument),
+        ),
+        item(
+            35298,
+            "Hide Panels",
+            "",
+            Action::Shell(ShellAction::ToggleHidePanels),
+        ),
         Entry::Sep,
         Entry::Sub("Extensions", &[item(35848, " ", "", Action::Inert)]),
         Entry::Sep,
-        Entry::Sub("Toolbars", &[item(35059, "Main", "", Action::Inert)]),
-        item(35058, "Tools", "", Action::Inert),
-        item(35586, "Properties", "", Action::Inert),
+        Entry::Sub(
+            "Toolbars",
+            &[item(
+                35059,
+                "Main",
+                "",
+                Action::Shell(ShellAction::ToggleMainToolbar),
+            )],
+        ),
+        item(35058, "Tools", "", Action::Shell(ShellAction::ToggleTools)),
+        item(
+            35586,
+            "Properties",
+            "",
+            Action::Shell(ShellAction::TogglePanel("Properties")),
+        ),
         Entry::Sep,
         item(43409, "Optimize", "", Action::Inert),
-        item(43412, "Layers", "", Action::Inert),
+        item(
+            43412,
+            "Layers",
+            "",
+            Action::Shell(ShellAction::TogglePanel("Layers")),
+        ),
         Entry::Sep,
         item(45816, "Common Library", "", Action::Inert),
         Entry::Sep,
         item(49125, "CSS Properties", "", Action::Inert),
         Entry::Sep,
-        item(35798, "Pages", "", Action::Inert),
-        item(43410, "States", "", Action::Inert),
-        item(43418, "History", "", Action::Inert),
+        item(
+            35798,
+            "Pages",
+            "",
+            Action::Shell(ShellAction::TogglePanel("Pages")),
+        ),
+        item(
+            43410,
+            "States",
+            "",
+            Action::Shell(ShellAction::TogglePanel("States")),
+        ),
+        item(
+            43418,
+            "History",
+            "",
+            Action::Shell(ShellAction::TogglePanel("History")),
+        ),
         Entry::Sep,
-        item(43422, "Auto Shapes", "", Action::Inert),
-        item(43415, "Styles", "", Action::Inert),
-        item(43416, "Document Library", "", Action::Inert),
-        item(43414, "URL", "", Action::Inert),
+        item(
+            43422,
+            "Auto Shapes",
+            "",
+            Action::Shell(ShellAction::TogglePanel("Auto Shapes")),
+        ),
+        item(
+            43415,
+            "Styles",
+            "",
+            Action::Shell(ShellAction::TogglePanel("Styles")),
+        ),
+        item(
+            43416,
+            "Document Library",
+            "",
+            Action::Shell(ShellAction::TogglePanel("Document Library")),
+        ),
+        item(
+            43414,
+            "URL",
+            "",
+            Action::Shell(ShellAction::TogglePanel("URL")),
+        ),
         Entry::Sep,
-        item(43405, "Color Mixer", "", Action::Inert),
-        item(43408, "Swatches", "", Action::Inert),
+        item(
+            43405,
+            "Color Mixer",
+            "",
+            Action::Shell(ShellAction::TogglePanel("Color Mixer")),
+        ),
+        item(
+            43408,
+            "Swatches",
+            "",
+            Action::Shell(ShellAction::TogglePanel("Swatches")),
+        ),
         Entry::Sep,
-        item(43404, "Info", "", Action::Inert),
-        item(43413, "Behaviors", "", Action::Inert),
+        item(
+            43404,
+            "Info",
+            "",
+            Action::Shell(ShellAction::TogglePanel("Info")),
+        ),
+        item(
+            43413,
+            "Behaviors",
+            "",
+            Action::Shell(ShellAction::TogglePanel("Behaviors")),
+        ),
         item(43402, "Find and Replace", "", Action::Inert),
         Entry::Sep,
-        item(57650, "Cascade", "", Action::Inert),
-        item(57652, "Tile", "", Action::Inert),
+        item(
+            57650,
+            "Cascade",
+            "",
+            Action::Shell(ShellAction::SingleDocument),
+        ),
+        item(
+            57652,
+            "Tile",
+            "",
+            Action::Shell(ShellAction::SingleDocument),
+        ),
     ],
 };
 
@@ -1362,6 +2163,12 @@ pub static SHORTCUTS: &[Shortcut] = &[
     key(CTRL_SHIFT, egui::Key::R, Action::Shell(ShellAction::Export)),
     // The command palette: every registered engine command, one door.
     key(CTRL, egui::Key::P, Action::Shell(ShellAction::Palette)),
+    // Window ▸ Hide Panels — the CS6 Tab toggle.
+    key(
+        NONE,
+        egui::Key::Tab,
+        Action::Shell(ShellAction::ToggleHidePanels),
+    ),
     key(
         CTRL_SHIFT,
         egui::Key::X,
@@ -1557,7 +2364,16 @@ pub fn action_name(action: Action) -> String {
             ShellAction::SaveAs => "Save As".into(),
             ShellAction::Export => "Export".into(),
             ShellAction::ExportPreview => "Export preview".into(),
+            ShellAction::ExportWizard => "Export wizard".into(),
+            ShellAction::ExportJpeg => "JPEG compressed export".into(),
+            ShellAction::FileInfo => "File info".into(),
+            ShellAction::PngFormatInfo => "Fireworks PNG format".into(),
+            ShellAction::CloseDocument => "Close document".into(),
+            ShellAction::SaveAll => "Save all".into(),
+            ShellAction::Revert => "Revert".into(),
             ShellAction::NumericTransform => "Numeric Transform".into(),
+            ShellAction::TransformMode(TransformMode::Scale) => "Free Transform".into(),
+            ShellAction::TransformMode(TransformMode::Distort) => "Distort".into(),
             ShellAction::Palette => "Command palette".into(),
             ShellAction::Quit => "Quit".into(),
             ShellAction::Undo => "Undo".into(),
@@ -1584,11 +2400,36 @@ pub fn action_name(action: Action) -> String {
             ShellAction::ToggleGuidesLocked => "Lock guides".into(),
             ShellAction::ToggleSnapToGuides => "Snap to guides".into(),
             ShellAction::ClearGuides => "Clear guides".into(),
+            ShellAction::FitSelection => "Fit selection".into(),
+            ShellAction::ToggleSmartGuides => "Show/hide smart guides".into(),
+            ShellAction::ToggleSnapToSmartGuides => "Snap to smart guides".into(),
+            ShellAction::ToggleSliceLock => "Lock 9-slice guides".into(),
+            ShellAction::ToggleSliceGuides => "Show/hide slice guides".into(),
+            ShellAction::ToggleSliceOverlay => "Show/hide slice overlay".into(),
+            ShellAction::ToggleEdges => "Show/hide edges".into(),
+            ShellAction::ToggleRulers => "Show/hide rulers".into(),
+            ShellAction::ToggleTooltips => "Show/hide tooltips".into(),
+            ShellAction::ShowAllHidden => "Show all".into(),
+            ShellAction::ToggleGamma => "Toggle gamma 1.8".into(),
             ShellAction::FeatherDialog => "Feather selection".into(),
             ShellAction::CanvasSize => "Canvas Size".into(),
+            ShellAction::ImageSize => "Image Size".into(),
             ShellAction::CanvasColor => "Canvas Color".into(),
             ShellAction::OnlineHelp => "Online Help".into(),
             ShellAction::ManageExtensions => "Manage Extensions".into(),
+            ShellAction::TogglePanel(name) => format!("{name} panel"),
+            ShellAction::ToggleTools => "Tools panel".into(),
+            ShellAction::SingleDocument => "Single-document window command".into(),
+            ShellAction::ReportGap(_) => "Not available in this build".into(),
+            ShellAction::PreviewInBrowser { .. } => "Preview in browser".into(),
+            ShellAction::InsertWeb { what } => match what {
+                InsertWebKind::Hotspot => "Insert hotspot".into(),
+                InsertWebKind::RectSlice => "Insert rectangular slice".into(),
+                InsertWebKind::PolygonSlice => "Insert polygon slice".into(),
+                InsertWebKind::Button => "New button symbol".into(),
+            },
+            ShellAction::ToggleHidePanels => "Hide/show panels".into(),
+            ShellAction::ToggleMainToolbar => "Main toolbar".into(),
         },
         Action::Sel(sel) => match sel {
             SelAction::Delete => "Delete selection".into(),
@@ -1600,6 +2441,7 @@ pub fn action_name(action: Action) -> String {
             SelAction::NewSymbol => "New symbol".into(),
             SelAction::NewLayer => "New layer".into(),
             SelAction::NewPage => "New page".into(),
+            SelAction::NewFrame => "New state".into(),
             SelAction::BreakApart => "Break apart".into(),
             SelAction::Hide => "Hide selection".into(),
             SelAction::LockSelection => "Lock selection".into(),
@@ -1645,6 +2487,22 @@ pub fn action_name(action: Action) -> String {
             SelAction::SaveJpegMask => "Save selection as JPEG mask".into(),
             SelAction::RestoreJpegMask => "Restore JPEG mask as selection".into(),
             SelAction::ClearJpegMask => "Remove JPEG mask".into(),
+            SelAction::ConvertToSymbol => "Convert to symbol".into(),
+            SelAction::AnimateSelection => "Animate selection".into(),
+            SelAction::TweenInstances => "Tween instances".into(),
+            SelAction::DetachFromPath => "Detach text from path".into(),
+            SelAction::AttachToPath => "Attach text to path".into(),
+            SelAction::SplitPaths => "Split paths".into(),
+            SelAction::RemoveAnimation => "Remove animation".into(),
+            SelAction::RemoveTransformations => "Remove transformations".into(),
+            SelAction::EmptyBitmap => "Insert empty bitmap".into(),
+            SelAction::BitmapViaCopy => "Bitmap via copy".into(),
+            SelAction::BitmapViaCut => "Bitmap via cut".into(),
+            SelAction::CropDocument => "Crop document".into(),
+            SelAction::FillEdge { mode } => format!("Fill edge ({mode})"),
+            SelAction::EditSymbol => "Edit symbol definition".into(),
+            SelAction::ReversePathText => "Reverse text on path".into(),
+            SelAction::ConvertToPaths => "Convert text to paths".into(),
         },
         Action::Align(mode) => format!("Align {mode}"),
         Action::Distribute(axis) => format!("Distribute {axis}"),
@@ -1657,7 +2515,22 @@ pub fn action_name(action: Action) -> String {
         },
         Action::TextSize(_) => "Text size".into(),
         Action::TextFlag(flag) => format!("Text {flag}"),
+        Action::TextPlain => "Plain text".into(),
+        Action::TextJustify(justification) => format!("Justify text ({justification})"),
+        Action::TextStep(step) => {
+            if step < 0 {
+                "Smaller text".into()
+            } else {
+                "Larger text".into()
+            }
+        }
+        Action::TextOnPathMode(mode) => format!("Text on-path mode ({mode})"),
         Action::Filter(preset) => format!("Filter: {preset}"),
+        Action::Document(document) => match document {
+            DocumentAction::TrimCanvas => "Trim canvas to content".into(),
+            DocumentAction::FitCanvas => "Fit canvas to selection".into(),
+            DocumentAction::Rotate(deg) => format!("Rotate document {deg}° CW"),
+        },
     }
 }
 
@@ -1669,7 +2542,7 @@ mod tests {
     /// The highest inert-item count the docs have recorded. The
     /// `inert_count_never_rises` test refuses any regression above it;
     /// when the count falls, ratchet this down to the new number.
-    const INERT_CEILING: usize = 131;
+    const INERT_CEILING: usize = 8;
 
     fn walk(entries: &'static [Entry]) -> Vec<&'static Item> {
         let mut items = Vec::new();
@@ -1766,6 +2639,19 @@ mod tests {
         (total, inert)
     }
 
+    /// Prints every inert row with its menu, id, and label — the
+    /// burn-down worklist.
+    #[test]
+    fn inert_worklist() {
+        for menu in MENUBAR {
+            for item in walk(menu.entries) {
+                if matches!(item.action, Action::Inert) {
+                    eprintln!("INERT\t{}\t{}\t{}", menu.label, item.id, item.label);
+                }
+            }
+        }
+    }
+
     /// The reachability ceiling: the bar's inert count may fall but
     /// never rise. The docs quote this number, so it is derived here
     /// rather than maintained by hand — a new inert row is a
@@ -1773,6 +2659,7 @@ mod tests {
     #[test]
     fn inert_count_never_rises() {
         let (total, inert) = census();
+        eprintln!("reachability: {inert} inert of {total} items");
         assert!(
             inert <= INERT_CEILING,
             "inert items rose to {inert} of {total} (ceiling {INERT_CEILING})"

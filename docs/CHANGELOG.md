@@ -10,14 +10,30 @@ Current version: **0.2.5**.
 
 ### Features
 
-- **app**: path-node add/delete, canvas dialogs, Duplicate/Clone (19b.1 + 19.6) (bf1b547)
-- **app**: Lucide tool icons, context menu, selection/mask verbs (19.6) (e9ece7d)
-- **app**: grid + guides overlays, drag-out, snap, Edit Grid (19.5) (eb221ac)
-- **app**: command palette with fuzz-shared payload templates (19.4) (4458f3a)
-- **app**: gradient fill editor + on-canvas handles (19.3) (1c84ee8)
-- **app**: Subselect path-node editing (19.2) (5e4f0ce)
-- **app**: transform handles + Numeric Transform dialog (19.1) (7329087)
-- **app**: options bar, Properties dock, fill/stroke picker, pan cursor (f6203ed)
+- **app**: inert-menu burn-down batch 16 (11; Modify remainder) (c8b0d92)
+- **app**: inert-menu burn-down batch 15 (24; Edit + Text remainder) (b3562e4)
+- **app**: inert-menu burn-down batch 14 (42; File remainder) (eca0a84)
+- **app**: CS6 shell panel windows, wasm-opt=4, gate receipt (c31127c)
+- **app**: CS6 shell fidelity — panel windows, tool flyouts, geometry strip (eef253c)
+- **app**: inert-menu burn-down batch 12 (67; Remove Animation) (1754c98)
+- **app**: inert-menu burn-down batch 11 (68; Edit bitmap rows) (634558d)
+- **app**: inert-menu burn-down batch 10 (72; Window family) (e7dbed6)
+- **app**: inert-menu burn-down batch 9 (79; transform family) (5feca40)
+- **app**: inert-menu burn-down batch 8 (83; attach to path) (a8c86af)
+- **app**: inert-menu burn-down batches 6-7 (85; View+Text) (72aa1d7)
+- **app**: wire Image Size dialog (35226) (9eab633)
+- **app**: inert-menu burn-down batch 5 (111; symbol/animation) (31344cf)
+- **app**: inert-menu burn-down batch 4 (114 -> 6 more wired) (c18ed9d)
+- **app-cli**: MCP tools for info/export/undo/redo/discovery (ef7e60d)
+- **app**: Window menu panel toggles (19.6 batch 3) (3bf96ac)
+- **app**: path-node add/delete, canvas dialogs, Duplicate/Clone (19b.1 + 19.6) (8ce5762)
+- **app**: Lucide tool icons, context menu, selection/mask verbs (19.6) (2923392)
+- **app**: grid + guides overlays, drag-out, snap, Edit Grid (19.5) (8465b43)
+- **app**: command palette with fuzz-shared payload templates (19.4) (2f4b762)
+- **app**: gradient fill editor + on-canvas handles (19.3) (30981bf)
+- **app**: Subselect path-node editing (19.2) (8bf2d86)
+- **app**: transform handles + Numeric Transform dialog (19.1) (0170c99)
+- **app**: options bar, Properties dock, fill/stroke picker, pan cursor (6519ee0)
 - **xtask**: FIRECRAFT_DIST_SKIP_SMOKE door + xtask lint sweep (4486f5f)
 - **web**: WCAG 2.1 AAA host audit — focus ring, fallback, contrast (91c2a27)
 - **app**: Phase 11.4 pixel-selection tools + paint/IO batch (8ac178d)
@@ -169,11 +185,11 @@ Current version: **0.2.5**.
 
 ### Fixes
 
-- **app**: crisp zoomed canvas, ellipse shape, picker colors (6e35c1e)
-- **app**: web theme, selection handles, image import placement (32e0490)
-- **ci**: verify dist manifests from their own directory (a1edef2)
-- **xtask**: dist honors CARGO_TARGET_DIR for release bins (01b6291)
-- **ci**: fuzz job timeout 30m -> 60m (a54e2ef)
+- **app**: crisp zoomed canvas, ellipse shape, picker colors (99f254c)
+- **app**: web theme, selection handles, image import placement (9c8f9d6)
+- **ci**: verify dist manifests from their own directory (c61883f)
+- **xtask**: dist honors CARGO_TARGET_DIR for release bins (50852e2)
+- **ci**: fuzz job timeout 30m -> 60m (ae2a466)
 - **ci**: quote release step name; docs: stale claims (06cc1c9)
 - **io**: unused variable in svg test (601491c)
 - **io**: lock libwebp-sys and expose lossy WebP (f37c7b2)
@@ -200,10 +216,11 @@ Current version: **0.2.5**.
 
 ### Documentation
 
-- 19b.1 quoting corrections, v0.2.4 receipts, license consolidation (3fc43e8)
-- session log for 19.1-19.5 + rendering fixes; ignore scratch (cc0652c)
-- refresh stack for the daily-driver turn (19.1-19.5 landed) (8beacf0)
-- live deployment audit closed; input verified end-to-end (e80ef64)
+- add TASKS.md board + docs/tasks/ ticket scaffold (466ab7f)
+- 19b.1 quoting corrections, v0.2.4 receipts, license consolidation (2b849f5)
+- refresh stack for the daily-driver turn (19.1-19.5 landed) (dc62449)
+- session log for 19.1-19.5 + rendering fixes; ignore scratch (da108e7)
+- live deployment audit closed; input verified end-to-end (5116355)
 - session log, NEXT.md status, devlog for 2026-10-26 batch (2b83929)
 - 2026-10-25 session log — audit, ratchet, WCAG, plan (8d860f2)
 - v0.2.3 release notes, status board + session log refresh (7b18807)
@@ -279,7 +296,7 @@ Current version: **0.2.5**.
 
 ### Refactoring
 
-- **app**: split shell.rs (5.9k lines) into shell/ modules (32a110d)
+- **app**: split shell.rs (5.9k lines) into shell/ modules (08ed613)
 
 ### Style
 
@@ -305,9 +322,14 @@ Current version: **0.2.5**.
 
 ### Chores
 
-- **release**: v0.2.4 version stamps + changelog + notes (6c256bf)
-- **ci**: retrigger sweep after runner /tmp cleanup (a30caec)
-- **ci**: retrigger sweep on re-shipped firecraft-ci-rust:1 (0027859)
+- regen aegis baseline after batch 11 doc moves (f8bc9a2)
+- regen aegis baseline after batch 10 doc edits (ce07c70)
+- regen aegis baseline from batch 8-9 shifts (ce29c59)
+- regen changelog from gate (64e269a)
+- regen changelog from gate (7d8b68e)
+- regen changelog hashes, scripts report from gate (77c497f)
+- **release**: v0.2.5 stamps, notes, operator checklist, aegis hygiene (3a4832b)
+- **release**: v0.2.4 version stamps + changelog + notes (291d658)
 - **xtask**: ratchet coverage floors to 81.0/78.5 (6b0c46f)
 - **xtask**: ratchet coverage floors to 80.5/78.0 (dc89221)
 - **release**: bump workspace to 0.2.3, refresh fuzz lockfile (00d2bf8)

@@ -114,6 +114,32 @@ impl Default for FeatherDialog {
     }
 }
 
+/// The Image Size dialog's fields — Modify ▸ Image Size (CS6
+/// command 35226): scales the document into the target rectangle
+/// (`document.setImageSize`) and sets the resolution.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct ImageSizeDialog {
+    /// New width in document units.
+    pub width: f64,
+    /// New height in document units.
+    pub height: f64,
+    /// Pixels per unit for the document resolution.
+    pub resolution: f64,
+    /// Whether the resolution unit is cm (false = inch).
+    pub unit_cm: bool,
+}
+
+impl Default for ImageSizeDialog {
+    fn default() -> Self {
+        Self {
+            width: 640.0,
+            height: 480.0,
+            resolution: 72.0,
+            unit_cm: false,
+        }
+    }
+}
+
 /// Desktop file routing for v1: the open/save path comes from
 /// `FIRECRAFT_DOC` (default `untitled.fw.png` in the working
 /// directory), messages go to stderr. No dialog library yet — the
@@ -863,6 +889,85 @@ impl Shell {
             );
         }
         self.status = format!("canvas resized to {} × {}", dialog.width, dialog.height);
+    }
+
+    /// The Image Size dialog: target width/height plus the document
+    /// resolution. OK applies `document.setImageSize`; Cancel closes
+    /// without touching the document.
+    pub(super) fn image_size_dialog_ui(&mut self, ui: &mut egui::Ui) {
+        let Some(dialog) = self.image_size.take() else {
+            return;
+        };
+        let mut dialog = dialog;
+        egui::Grid::new("image_size")
+            .num_columns(2)
+            .spacing([8.0, 6.0])
+            .show(ui, |ui| {
+                ui.add(
+                    egui::DragValue::new(&mut dialog.width)
+                        .range(1.0..=65_535.0)
+                        .suffix(" px"),
+                );
+                ui.label("Width");
+                ui.add(
+                    egui::DragValue::new(&mut dialog.height)
+                        .range(1.0..=65_535.0)
+                        .suffix(" px"),
+                );
+                ui.label("Height");
+                ui.add(egui::DragValue::new(&mut dialog.resolution).range(1.0..=10_000.0));
+                ui.horizontal(|ui| {
+                    if ui.selectable_label(!dialog.unit_cm, "px/in").clicked() {
+                        dialog.unit_cm = false;
+                    }
+                    if ui.selectable_label(dialog.unit_cm, "px/cm").clicked() {
+                        dialog.unit_cm = true;
+                    }
+                });
+                ui.label("Resolution");
+            });
+        ui.separator();
+        let mut apply = false;
+        ui.horizontal(|ui| {
+            apply |= ui.button("OK").clicked();
+            if ui.button("Cancel").clicked() {
+                self.image_size = None;
+                self.status = "image size cancelled".to_owned();
+            }
+        });
+        if apply {
+            self.image_size = None;
+            self.apply_image_size(&dialog);
+            return;
+        }
+        self.image_size = Some(dialog);
+    }
+
+    /// Applies the image-size scale: the target rect is the new
+    /// document bounds (left/top-anchored, the corpus `BatchTemplate`
+    /// convention) and the resolution rides along.
+    pub(super) fn apply_image_size(&mut self, dialog: &ImageSizeDialog) {
+        self.image_size = None;
+        if self.run_command(
+            "document.setImageSize",
+            serde_json::json!({
+                "rect": {
+                    "left": 0.0, "top": 0.0,
+                    "right": dialog.width, "bottom": dialog.height,
+                },
+                "resolution": dialog.resolution,
+                "unit": if dialog.unit_cm { "cm" } else { "inch" },
+                "page": 0,
+            }),
+        ) {
+            self.status = format!(
+                "image resized to {} × {} @ {} px/{}",
+                dialog.width,
+                dialog.height,
+                dialog.resolution,
+                if dialog.unit_cm { "cm" } else { "in" }
+            );
+        }
     }
 
     /// The Canvas Color dialog: an egui color picker over the

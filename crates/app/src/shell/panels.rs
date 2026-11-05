@@ -122,36 +122,66 @@ impl Shell {
         self.help_open = open;
     }
 
-    /// The right panel stack: the CS6 panel roster from the Window
-    /// menu, as collapsible sections (the fixed-layout stand-in for
-    /// CS6's floating docks).
-    pub(super) fn right_panels(&mut self, ui: &mut egui::Ui) {
-        egui::ScrollArea::vertical().show(ui, |ui| {
-            egui::CollapsingHeader::new("Properties")
-                .default_open(true)
-                .show(ui, |ui| self.properties_panel(ui));
-            egui::CollapsingHeader::new("Pages")
-                .default_open(true)
-                .show(ui, |ui| self.pages_section(ui));
-            egui::CollapsingHeader::new("States")
-                .default_open(true)
-                .show(ui, |ui| self.states_section(ui));
-            egui::CollapsingHeader::new("Layers")
-                .default_open(true)
-                .show(ui, |ui| self.layers_section(ui));
-            egui::CollapsingHeader::new("Styles")
-                .default_open(false)
-                .show(ui, |ui| self.styles_panel(ui));
-            egui::CollapsingHeader::new("Document Library")
-                .default_open(false)
-                .show(ui, |ui| self.library_panel(ui));
-            egui::CollapsingHeader::new("History")
-                .default_open(false)
-                .show(ui, |ui| self.history_section(ui));
-            egui::CollapsingHeader::new("Web Layer")
-                .default_open(false)
-                .show(ui, |ui| self.web_panel(ui));
-        });
+    /// Window-menu panel visibility (absent from `panel_hidden` =
+    /// shown; CS6 opens everything by default).
+    pub(crate) fn panel_shown(&self, name: &str) -> bool {
+        !self.panel_hidden.contains(&name)
+    }
+
+    /// Toggle one Window-menu panel by its menu label; a panel not in
+    /// the right dock (Tools, Optimize, Color Mixer, ...) is reported,
+    /// not silently accepted.
+    pub(crate) fn toggle_panel(&mut self, name: &'static str) {
+        let known = super::panel_windows::PANELS
+            .iter()
+            .any(|panel| panel.name == name);
+        if known {
+            if let Some(pos) = self.panel_hidden.iter().position(|n| *n == name) {
+                self.panel_hidden.remove(pos);
+                self.status = format!("{name} panel shown.");
+            } else {
+                self.panel_hidden.push(name);
+                self.status = format!("{name} panel hidden.");
+            }
+        } else if name == "Optimize" {
+            self.status = format!("{name}: panel not yet implemented.");
+        } else {
+            self.status = format!("{name}: no docked panel in this shell.");
+        }
+    }
+
+    /// Window ▸ Tools: fold/unfold the left tools dock.
+    pub(crate) fn toggle_tools(&mut self) {
+        self.tools_hidden = !self.tools_hidden;
+        self.status = if self.tools_hidden {
+            "Tools panel hidden."
+        } else {
+            "Tools panel shown."
+        }
+        .to_owned();
+    }
+
+    /// Window ▸ Hide Panels (the CS6 Tab key): fold/unfold the whole
+    /// right dock at once, leaving per-panel visibility untouched.
+    pub(crate) fn toggle_all_panels(&mut self) {
+        self.panels_hidden = !self.panels_hidden;
+        self.status = if self.panels_hidden {
+            "Panels hidden — press Tab or Window ▸ Hide Panels to show."
+        } else {
+            "Panels shown."
+        }
+        .to_owned();
+    }
+
+    /// Window ▸ Toolbars ▸ Main: the context options bar.
+    pub(crate) fn toggle_options_bar(&mut self) {
+        self.options_bar_hidden = !self.options_bar_hidden;
+        self.status = if self.options_bar_hidden {
+            "Main toolbar hidden."
+        } else {
+            "Main toolbar shown."
+        }
+        .to_owned();
     }
 
     /// Pages section: one selectable row per page.
@@ -677,6 +707,72 @@ impl Shell {
         }
     }
 
+    /// Window ▸ Swatches: the same ABGR palette the Properties
+    /// essentials use, applied to the selection's fill channel — the
+    /// CS6 panel's core gesture (click a swatch, paint the selection).
+    pub(super) fn swatches_panel(&mut self, ui: &mut egui::Ui) {
+        let ids = self.editor.live_selection();
+        if ids.is_empty() {
+            ui.label("(select a vector object to apply a swatch)");
+            return;
+        }
+        egui::Grid::new("swatches")
+            .num_columns(6usize)
+            .show(ui, |ui| {
+                for (index, (name, color_raw)) in Self::FILL_STROKE_PALETTE.iter().enumerate() {
+                    let raw = *color_raw as u32;
+                    let swatch = Color32::from_rgba_unmultiplied(
+                        (raw & 0xFF) as u8,
+                        ((raw >> 8) & 0xFF) as u8,
+                        ((raw >> 16) & 0xFF) as u8,
+                        ((raw >> 24) & 0xFF) as u8,
+                    );
+                    let size = egui::Vec2::splat(18.0);
+                    let (response, painter) = ui.allocate_painter(size, egui::Sense::click());
+                    painter.rect_filled(response.rect, 2.0, swatch);
+                    painter.rect_stroke(
+                        response.rect,
+                        2.0,
+                        (1.0, Color32::from_rgb(0x77, 0x77, 0x77)),
+                        egui::StrokeKind::Outside,
+                    );
+                    if response.clicked() {
+                        for id in &ids {
+                            self.run_command(
+                                Self::paint_command("fill"),
+                                serde_json::json!({ "id": id, "color_raw": raw }),
+                            );
+                        }
+                        self.status = format!("fill → {name}");
+                    }
+                    if index % 6 == 5 {
+                        ui.end_row();
+                    }
+                }
+            });
+    }
+
+    /// Window ▸ Info: document and selection facts (canvas size,
+    /// selection count and bounding box) — read-only.
+    pub(super) fn info_panel(&mut self, ui: &mut egui::Ui) {
+        let document = self.editor.document();
+        let canvas = &document.pages[0].info.canvas;
+        ui.label(format!("canvas: {} × {}", canvas.width, canvas.height));
+        let ids = self.editor.live_selection();
+        ui.label(format!("selected: {} object(s)", ids.len()));
+        if let Some(bounds) = crate::editor::union_selection_bounds(document, &ids) {
+            ui.label(format!(
+                "bounds: {:.1}, {:.1} → {:.1}, {:.1} ({} × {})",
+                bounds.x0,
+                bounds.y0,
+                bounds.x1,
+                bounds.y1,
+                bounds.width(),
+                bounds.height()
+            ));
+        }
+    }
+
     /// Right panel: the align/distribute group, then properties of the
     /// selection.
     pub(super) fn properties_panel(&mut self, ui: &mut egui::Ui) {
@@ -1091,6 +1187,7 @@ impl Shell {
         path: &PathObject,
     ) {
         ui.label(format!("object {} (gen {})", id.index(), id.generation()));
+        self.geometry_fields(ui, id);
         self.display_controls(
             ui,
             id,
@@ -1213,6 +1310,37 @@ impl Shell {
                 name: text.name.clone(),
             },
         );
+        self.geometry_fields(ui, id);
+    }
+
+    /// CS6's Properties X/Y/W/H strip: the selection's union box,
+    /// applied on Enter through `object.setBounds`.
+    pub(super) fn geometry_fields(&mut self, ui: &mut egui::Ui, id: doc::ObjectId) {
+        let document = self.editor.session.document();
+        let Some(bounds) = crate::editor::union_selection_bounds(document, &[id]) else {
+            return;
+        };
+        let mut x = bounds.x0 as f32;
+        let mut y = bounds.y0 as f32;
+        let mut w = bounds.width() as f32;
+        let mut h = bounds.height() as f32;
+        ui.horizontal(|ui| {
+            let x_field = ui.add(egui::DragValue::new(&mut x).speed(1.0).prefix("X "));
+            let y_field = ui.add(egui::DragValue::new(&mut y).speed(1.0).prefix("Y "));
+            let w_field = ui.add(egui::DragValue::new(&mut w).speed(1.0).prefix("W "));
+            let h_field = ui.add(egui::DragValue::new(&mut h).speed(1.0).prefix("H "));
+            let applied = [x_field, y_field, w_field, h_field]
+                .into_iter()
+                .any(|field| field.lost_focus() && field.changed());
+            if applied && w > 0.0 && h > 0.0 {
+                let _ = self.editor.apply(
+                    "object.setBounds",
+                    serde_json::json!({
+                        "ids": [id], "left": x, "top": y, "width": w, "height": h,
+                    }),
+                );
+            }
+        });
     }
 
     /// The display quartet plus the object name — shared by every

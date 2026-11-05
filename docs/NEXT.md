@@ -221,7 +221,7 @@ of replacing it, fill/stroke swatch panel bound to
 Phase 19 batches 19.1–19.5 landed 2026-10-31 → 11-01: transform
 handles + Numeric Transform, Subselect path-node editing, the gradient
 fill editor, the command palette, and the grid/guides/snap set. The
-inert count is 129 of 289 items (was 190); 19.6 is the remaining
+inert count is 8 of 289 items (was 190); 19.6 is the remaining
 burn-down.
 
 ### Phase 19 — Canvas competence (P0, feeds usability directly)
@@ -251,9 +251,98 @@ burn-down.
   GAPS order (selection/mask → page/frame → symbol/animation → text);
   every wired item proven by a shell test through the journal. — **IN
   FLIGHT**: 190 → 178 (19.1) → 171 (19.5) → 144 (19.6 batch 1,
-  selection/mask) → **129 inert of 289 items** (19b.1 + batch 2 —
-  canvas dialogs, Duplicate/Clone; 2026-11-03). Next batch:
-  page/frame.
+  selection/mask) → 129 (19b.1 + batch 2 — canvas dialogs,
+  Duplicate/Clone; 2026-11-03) → 120 (batch 3 — Window menu: Hide
+  Panels/Tab, Main toolbar, and 7 docked-panel toggles; 2026-11-03) →
+  **114 inert of 289 items** (batch 4 — page/frame: Insert ▸ State
+  via `frame.add`, Trim/Fit Canvas via the extents verbs, canvas
+  Rotate 180/90CW/90CCW via `document.rotate` through the new
+  `Action::Document` arm; 2026-11-03) → **111 inert of 289 items**
+  (batch 5 — symbol/animation: Convert to Symbol via `symbol.create`,
+  Animate Selection via `symbol.create` with the animation type,
+  Tween Instances via `symbol.tween`; Edit Symbol/Edit in Place/
+  Swap Symbol/Remove Animation stay inert — no engine verbs yet;
+  2026-11-03) → **99 inert of 289 items** (batch 6 — View menu:
+  Fit Selection, Gamma 1.8, Tooltips, Show All, Rulers, Smart Guides
+  (show + snap), 9-Slice Lock Guides, Slice Guides, Slice Overlay,
+  Edges; 2026-11-03) → **85 inert of 289 items** (batch 7 — Text
+  menu: Plain, the four horizontal Align rows over `JSTi`, Smaller/
+  Larger over the size presets, the four Orientation rows over
+  `TAMi`, Detach from Path, Reverse Direction, Convert to Paths;
+  2026-11-03) → **83 inert of 289 items** (batch 8 — Attach In Path/
+  Attach to Path over `text.attachPath`: the selection must carry one
+  text and one path, the path's contours become the rail; missing
+  either half reports instead of commanding. The vertical-align rows
+  (Top/Centered Vertically/Bottom/Justified Vertically) are
+  evidence-gated — the dictionary documents no text
+  vertical-justification node, and wiring them would invent model
+  state; 2026-11-03) → **79 inert of 289 items** (batch 9 — Modify ▸
+  Transform: Free Transform and Distort set the handle mode
+  (`TransformMode`; Distort drags one corner independently via
+  `object.setQuadrangle`, the other three corners frozen at drag
+  start), Split via `path.splitPaths`, Remove Transformations via
+  `object.transform` with each stored `MTXv`'s inverse; Group as
+  Mask/Repeat Filter/fill-edge rows stay inert — no engine verbs yet;
+  2026-11-03) → **72 inert of 289 items** (batch 10 — Window family:
+  Tools folds the left dock, Color Mixer/Swatches/Info dock as
+  toggled right-dock panels (Swatches = the ABGR palette as a grid
+  over fill, Info = canvas/selection facts), Duplicate Window/
+  Cascade/Tile report the single-document shell honestly instead of
+  sitting inert; Optimize/Common Library/CSS Properties/Auto
+  Shapes/URL/Behaviors/Find and Replace stay inert until their
+  features land; 2026-11-03) → **68 inert of 289 items** (batch 11 —
+  Edit ▸ Insert: Empty Bitmap over `bitmap.addImage` spanning the
+  canvas on the active layer; Bitmap Via Copy / Via Cut over
+  `bitmap.addImageViaCopy`/`Cut` on a selected bitmap (Cut clears the
+  source per the fresh-tile law); Crop Document reuses
+  `document.setDocumentCanvasSizeToDocumentExtents` with `grow`
+  false; 2026-11-03) → **67 inert of 289 items** (batch 12 — Modify ▸
+  Animation ▸ Remove Animation dissolves the selected symbol instance
+  via `symbol.breakApart`; no instance in the selection reports
+  instead of commanding)
+  2026-11-03) → **59 inert of 289 items** (batch 13 — the File family:
+  Close / Close All start a fresh document (refusing to discard
+  unsaved edits — CS6 prompts, this build does not yet), Save All
+  saves the one open document, Revert reloads the file the document
+  was last saved to, File Info reports pages/layers/objects/canvas,
+  Export Wizard and the Send to E-mail format rows open the export
+  dialog on that format with the e-mail delivery gap stated plainly)
+  → **42 inert of 289 items** (batch 14 — the File remainder: the
+  Preview-in-Browser rows actually export PNG(s) — next to the saved
+  document or in the temp dir — and open them via the system handler
+  (All Pages exports one PNG per page); Bridge/TWAIN/templates/
+  browser-configuration/printing/HTML round-trip/batch-process/recent
+  files report their gap plainly via `ShellAction::ReportGap` instead
+  of sitting inert) → **24 inert of 289 items** (batch 15, 2026-11-04 —
+  the Edit remainder + Text rows: Insert ▸ New Button appends a
+  button definition via `library.add`; Hotspot and Rectangular Slice
+  call `hotspot.create` / `slice.create` over the selection bounds
+  (canvas-center rect when nothing is selected); Polygon Slice
+  traces the same rect's four corners as a polygon; Find and
+  Replace, Copy as Vectors, Copy HTML Code, Paste Attributes, Crop
+  Selected Bitmap, Preferences, Keyboard Shortcuts, Text ▸ Size ▸
+  Other, the four vertical-align rows (still evidence-gated — no
+  documented wire node), and both spelling rows report their gap
+  plainly via `ShellAction::ReportGap`) → **11 inert of 289 items**
+  (batch 16, 2026-11-04 — the Modify remainder: Edit Symbol / Edit
+  in Place enter the selected instance's definition scope
+  (`enter_symbol`, view state, no journal row); Hard / Anti-Alias /
+  Feather Fill drive `path.setFillEdgeMode` on every selected path
+  (feather rides the panel radius); the animation and selective-JPEG
+  Settings rows, Swap Symbol, Group as Mask, the three Pop-up Menu
+  rows, and Snap To Pixel report their gap via `ReportGap`) → **8 inert
+  of 289 items** (batch 17, 2026-11-04 — the CS6 web panels: Auto
+  Shapes, URL, and Behaviors become real panels
+  (`shell::panels_web`) whose every action is one engine command —
+  `object.createPath` / `autoshape.*` for the gallery, `slice.setLink`
+  for the URL, `slice.addBehavior` / `slice.removeBehavior` /
+  `slice.setData` for the behaviors; decision 0069). The 8 remaining
+  inert rows: the Text Font placeholder (a verbatim CS6 resource
+  artifact), Commands ▸ Manage Saved Commands and Filters ▸ Repeat
+  Filter (the scripting family), and the Window panels (Optimize /
+  Common Library / CSS Properties / Find and Replace) that land with
+  their features (Phases 20–22). 19.6's programmable surface is done;
+  the rest is feature-gated, not reachability debt.
 
 ### Phase 19b — Follow-ups from the landed batches
 
@@ -318,6 +407,83 @@ burn-down.
 - **21.5 accesskit** desktop + web re-audit (0067 records the web
   blocker).
 - **21.6 In-app scripting** (S): Commands menu → run `.jsf`/`.fwsteps`.
+
+### Phase 22 — CS6 shell fidelity (P0, the "looks and acts like Fireworks" phase)
+
+Set 2026-11-03 by user directive: the shell must present as CS6 — same
+dockable panel system, same panel inventory, same tool-strip look,
+same adaptive context menus — not FireCraft's own chrome. CS6 was
+abandoned in 2013; the point of this phase is that the abandoned app
+is usable again, with modern capabilities underneath.
+
+**Reference material (clean-room boundary).** Behavior comes from the
+CS6 install's own `Configuration/` Extendscript specs, the exe's
+string tables (e.g. the `string:contextmenu.*` verb family: 18
+panel/document/tab/drawer verbs), and observed UI behavior. Adobe's
+*assets* (icons, bitmaps, panel artwork) are **not** copied — they
+are replaced with open-license equivalents per the icon survey
+(`docs/planning/generated/icon-resources-survey.md`) with
+`docs/ATTRIBUTION.md` rows in the same change. The CS6 install cannot
+be launched as an oracle: under Wine it fails its own configuration
+check ("Error: 1"), and the activation machinery is explicitly out of
+scope, so no license path is attempted.
+
+- **22.1 CS6 panel inventory + docking** (L): the left tool dock and
+  the right panel stack with the CS6 panel set (Properties, Layers,
+  Pages, Swatches, Color Mixer, Info, History, Optimize, Symbols,
+  Styles, Common Library, CSS Properties, Auto Shapes, URL,
+  Behaviors, Find and Replace, Slices). Panels are dockable left or
+  right, collapsible, resizable, and re-openable from the Window
+  menu; the dock geometry persists. Accept: a panel can be moved
+  left↔right, collapsed, and reopened, and the layout survives a
+  restart. — **PARTLY LANDED 2026-11-03**: the panel stack is now
+  one window per panel (`shell::panel_windows`) — draggable,
+  collapsible, resizable, closable, docked by default in the
+  right-hand column (`default_pos`, so a drag moves a panel free and
+  egui's persisted area memory keeps the new spot), with CS6's
+  fresh-document roster (Properties/Pages/States/Layers open, the
+  rest closed until asked for) and the Window menu toggling each.
+  The layout now persists across restarts (`eframe`'s `persistence`
+  feature): a `ShellLayout` snapshot (panel set, dock folds, display
+  toggles) saved through `App::save` — native to `storage_dir`, web
+  to localStorage — and restored at startup, filtered against the
+  current panel inventory. The web panels landed 2026-11-04
+  (`shell::panels_web`, decision 0069): Auto Shapes, URL, and
+  Behaviors are real panels whose actions are engine commands. Still
+  open: the panels this build does not implement yet (Optimize,
+  Common Library, CSS Properties, Find and Replace, Slices).
+- **22.2 CS6 tool strip** (M): the CS6 tool set in CS6 order with
+  tool flyouts (shape tools, the modify sub-tools, the fill/stroke
+  pair, zoom/hand, and the eyedropper), each with an open-license
+  icon. Accept: every tool in the strip selects a working tool; the
+  flyout opens on press-and-hold.
+- **22.3 Adaptive canvas context menu** (M): the right-click menu
+  changes with the selection — nothing selected, a bitmap, a vector
+  path, a text object, an instance, a multi-selection, and inside a
+  slice. Each variant is a CS6 verb subset over the same engine
+  commands the menus use. Accept: right-clicking each selection
+  class yields that class's verbs, and every one of them executes. —
+  **LANDED 2026-11-03** (`shell::canvas_ui::context_rows`): the popup
+  classifies the live selection (empty / bitmap / path / text /
+  instance / slice / group / multi) and offers that class's verb set;
+  no row is an inert placeholder.
+- **22.4 Property inspector** (L): the Properties panel shows the
+  selection's real attributes (fill, stroke, stroke style, effects,
+  text attributes) and edits them through the engine — not a
+  read-only summary. — **PARTLY LANDED 2026-11-03**: the Properties
+  panel edits opacity, blend, visibility, lock, name, text runs and
+  font attributes, and the live effect list; the CS6 X/Y/W/H
+  geometry strip now applies through `object.setBounds`. Still open:
+  the fill/stroke editors for bitmaps, and the CS6 inspector's
+  per-kind field sets.
+- **22.5 CS6 chrome** (M): menu bar order, tool strip placement,
+  document tab strip, status bar, panel headers with the CS6
+  collapse/close affordances, and the CS6 color scheme (a dark
+  neutral chrome, not egui's default light look).
+- **22.6 Icon pack integration** (M): ship the surveyed open-license
+  icon set, subset it to the Fireworks verb set, and record the
+  attribution rows. Accept: the wasm bundle grows by a documented,
+  measured amount and stays under the pinned ceiling.
 
 ### Quality gates for UI work (new)
 
