@@ -226,6 +226,304 @@ list. The X/Y/W/H strip is a readout, not an editor. The Image Editing
 panel itself (retouch tools) is **not** in Phase 22's scope and is
 recorded as a CS6 surface FireCraft does not carry.
 
+## The CS6 tool strip (Phase 22, ticket 22.2)
+
+The strip's order, its groups, and its flyout memberships are CS6's,
+not FireCraft's. Three sources fix them: the CS6 help set (a text
+extract of the help PDFs, `fwref.txt` in the scratch workspace), the
+book's Table 1-1 ("Fireworks Tools"), and the CS6 keymap file.
+
+### The six categories
+
+The help set, verbatim:
+
+> The Tools panel is organized into six categories: Select, Bitmap,
+> Vector, Web, Colors, and View. When you select a tool, the Property
+> inspector displays tool options.
+>
+> — CS6 Help, "The Tools panel" (fwref.txt:1703)
+
+The book says the same thing in its own words — "The Tools panel is
+sorted into six categories: Select, Bitmap, Vector, Web, Colors, and
+View" (Wiley, *Fireworks CS6 Introducing*, ch. 1) — with a second
+independent witness to the order.
+
+### The group mechanic
+
+> A small triangle in the lower right corner of a tool in the Tools
+> panel indicates that it is part of a tool group.
+>
+> 1. Click the tool icon and hold down the mouse button.
+> 2. Drag the pointer to highlight the tool you want, and release the
+>    mouse button.
+>
+>    To quickly select a hidden tool, repeatedly press the group
+>    keyboard shortcut until the tool you want appears. (Shortcuts are
+>    displayed in parentheses next to tool names.)
+>
+> — CS6 Help, "Select a tool from a tool group" (fwref.txt:1714–1723)
+
+Two consequences that the implementation depends on:
+
+1. A **group carries one shortcut**, and repeated presses of it *cycle
+   within the group*. This is the rule FireCraft's `PickToolGroup`
+   action implements: the key advances from the group's current member,
+   or picks the leader when another tool is active.
+2. The triangle is on the **leader** button, so the strip shows one
+   button per group and the group's other members live behind the
+   flyout.
+
+### The book on the same mechanic
+
+> The Brush and the Pencil both answer to B — "B (toggle with
+> Pencil)" and "B (toggle with Brush)". Likewise the Hide/Show Slices
+> control and the Show Slices and Hotspots control share the key 2.
+>
+> — Wiley, Table 1-1
+
+So "toggle with X" is the same mechanic as the triangle: two tools,
+one key.
+
+### Table 1-1 — "Fireworks Tools" (verbatim)
+
+The book's tool table, read off the printed pages (Wiley, *Fireworks
+CS6 Introducing*, pp. 880–883). The column that matters here is the
+last one.
+
+| Category | Tool | What you can do with it | Key |
+|---|---|---|---|
+| Select | Pointer | Select paths and objects | V or 0 |
+| Select | Subselection | Adjust paths, much as you do with the Direct Select tool in Illustrator and Photoshop | A or 1 |
+| Select | Scale | Scale objects or selections | Q |
+| Select | Crop | Crop images | C |
+| Bitmap | Marquee | Make rectangular selections | M |
+| Bitmap | Lasso | Make freeform selections | L |
+| Bitmap | Magic Wand | Select similar colors | W |
+| Bitmap | Brush | Paint on image | B (toggle with Pencil) |
+| Bitmap | Pencil | Draw bitmap paths | B (toggle with Brush) |
+| Bitmap | Eraser | Erase bitmap data | E |
+| Bitmap | Blur | Blur image | R |
+| Bitmap | Rubber Stamp | Clone image data | S |
+| Vector | Line | Create vector lines | N |
+| Vector | Pen | Create Bézier paths | P |
+| Vector | Rectangle | Create vector shapes | U |
+| Vector | Type | Create text | T |
+| Vector | Freeform | Create freeform paths | O |
+| Vector | Knife | Cut paths | Y |
+| Web | Rectangle Hotspot | Create image map hotspots | J |
+| Web | Slice | Create slices for tables or CSS | K |
+| Web | Hide Slices and Hotspots | Hide slices and image map hotspots | 2 |
+| Web | Show Slices and Hotspots | Display slices and image map hotspots | 2 |
+| Color | Eyedropper | Sample color | I |
+| Color | Paint Bucket | Fill color | G |
+| Color | Stroke | Stroke color | — |
+| Color | Fill | Fill color | — |
+| View | Hand | Pan the artboard | H |
+| View | Zoom | Zoom in and out of artboard | Z |
+
+The book prints the *tool* names CS6 shows; the tool strip in CS6 also
+carries tools the table does not list (Oval Marquee, Polygon Lasso,
+Dodge, Burn, the Modify trio's Skew and Distort, the Web hotspot and
+slice variants). Those come from the help set, which names each of
+them in prose.
+
+### The book's two shortcuts the keymap does not have
+
+`O` (Freeform) and `2` (Hide/Show Slices) appear in the book but not in
+the keymap's tool-shortcut table (below). The likely reading: CS6's
+`Fireworks.xml` shipped with the *default* set, in which `O` was taken
+by another binding and the slice toggle was on the numeric keypad.
+Either way the two are corroborated by the book alone, and the
+implementation follows the book.
+
+### The keymap's tool section — what it gives and what it withholds
+
+`English/Keyboard Shortcuts/Fireworks.xml` carries a `<tools>`
+section: **37 `<one_tool>` blocks, 40 `<shortcut>` entries** in all.
+
+```xml
+<tools >
+    <one_tool count="1" id="{4ce6b6a5-57b4-4d5a-aff4ab88cf6c2ba9}" >
+        <shortcut text="0 81" />
+    </one_tool>
+    <one_tool count="2" id="{4e54aeee-c168-11d0-ba0200059a80e4fd}" >
+        <shortcut text="0 86" />
+        <shortcut text="0 48" />
+    </one_tool>
+    ...
+```
+
+The encoding is **decimal**: `MODS` then `VK`, with `0` = no
+modifier. Every one of the 40 entries is plain (mods `0`). The
+`count` attribute is the number of shortcuts the tool has.
+
+**The blocks carry no tool name** — only a bare GUID. The
+GUID→tool-name mapping is therefore *not* recoverable from this file,
+and no other static source in the install resolves it. What the file
+does give is the **shape** of the assignment: the VK histogram.
+
+| VK | count | | VK | count | | VK | count |
+|---|---|---|---|---|---|---|---|
+| 48 (`0`) | 2 | | 72 (`H`) | 1 | | 81 (`Q`) | **4** |
+| 49 (`1`) | 1 | | 73 (`I`) | 1 | | 82 (`R`) | 2 |
+| 65 (`A`) | 1 | | 74 (`J`) | 1 | | 83 (`S`) | **3** |
+| 66 (`B`) | 2 | | 75 (`K`) | 1 | | 84 (`T`) | 1 |
+| 67 (`C`) | 1 | | 76 (`L`) | 2 | | 85 (`U`) | 2 |
+| 68 (`D`) | 1 | | 77 (`M`) | 2 | | 86 (`V`) | 2 |
+| 69 (`E`) | 1 | | 78 (`N`) | 1 | | 87 (`W`) | 1 |
+| 70 (`F`) | 2 | | 80 (`P`) | 1 | | 88 (`X`) | 1 |
+| 71 (`G`) | 1 | | | | | 89 (`Y`) | 1 |
+| | | | | | | 90 (`Z`) | 1 |
+
+The multiplicities are what corroborate the group sizes the help set
+describes in prose: `S`×3 (Rubber Stamp / Red-eye Removal / Replace
+Color), `Q`×4 (Scale / Skew / Distort — and the book's own "V or 0" /
+"A or 1" style double-letters show a single tool can hold two
+shortcuts), `B`×2 (Brush/Pencil), `L`×2 (Lasso/Polygon Lasso), `M`×2
+(Marquee/Oval Marquee), `U`×2 (Rectangle/Ellipse), `R`×2 (Blur/Sharpen).
+
+**What this file cannot settle**: which GUID is which tool. The
+FireCraft strip therefore takes its *names* and its *order* from the
+help set and the book, and its *shortcuts* from the book, and does not
+claim the keymap as the authority for any specific tool's key. This is
+recorded as an open evidence gap rather than guessed.
+
+### The flyouts, as the help set names them
+
+Each of these is a help article that names the pop-up menu a tool
+lives in:
+
+| Pop-up | Members | Evidence |
+|---|---|---|
+| Rubber Stamp | Red-eye Removal, Replace Color | "If the tool isn't visible, hold down the Rubber Stamp tool until a pop-menu appears" (fwref.txt:3607, 3628) |
+| Paint Bucket | Gradient | "Click the Paint Bucket tool in the Tools panel and select the Gradient tool from the pop-up menu." (fwref.txt:3370) |
+| Pen | Vector Path, Redraw Path | "The Vector Path tool, located in the Pen tool pop-up menu" (fwref.txt:4161); "From the Pen tool pop-up menu, select the Redraw Path tool" (fwref.txt:4532) |
+| Freeform | Reshape Area | "From the Freeform tool pop-up menu, select the Reshape Area tool." (fwref.txt:4508) |
+| Vector section | Auto Shapes | "In the Vector section of the Tools panel, select an Auto Shape tool from the pop-up menu." (fwref.txt:3718) |
+
+### The Modify trio
+
+> Transform a selected object, group, or a pixel selection by using
+> the Scale, Skew, and Distort tools and menu commands
+>
+> — CS6 Help (fwref.txt:1951)
+
+Scale, Skew and Distort are one group behind one button — the book's
+`Q` is Scale's key.
+
+### The pixel-selection family
+
+> The Marquee tool selects a rectangular area of pixels in an image.
+> The Oval Marquee tool selects an elliptical area of pixels in an
+> image. The Lasso tool selects a free-form area of pixels in an
+> image. The Polygon Lasso tool selects a straight-edged free-form
+> area of pixels in an image. The Magic Wand tool selects an area of
+> similarly colored pixels in an image.
+>
+> — CS6 Help (fwref.txt:2430–2445)
+
+Marquee/Oval Marquee and Lasso/Polygon Lasso are the two flyout pairs
+the book does not spell out; Magic Wand stands alone.
+
+### The retouch trio and the Alt toggle
+
+> 1. Select the Blur, Sharpen, or Smudge tool.
+> 2. Set brush options in the Property inspector: Size … Edge … Shape
+>    … Intensity … Smudge options: Pressure … Smudge Color … Use
+>    Entire Document
+> 3. Drag the tool over the pixels you want to sharpen, blur, or
+>    smudge.
+>
+>    Hold down Alt (Windows) or Option (Mac OS) to change from one tool
+>    behavior to the other.
+>
+> — CS6 Help, "Blur, sharpen, and smudge images" (fwref.txt:3530–3555)
+
+The same Alt-toggle sentence appears for Dodge/Burn (fwref.txt:2553).
+So Blur/Sharpen/Smudge and Dodge/Burn are *behaviors* reachable from
+one tool — CS6 lets the user cycle them the same way the group
+shortcut does. FireCraft models them as separate tools in one group,
+which reproduces the cycling; the Alt-hold variant is **not**
+implemented (it is a pointer-modifier behavior, and the engine's
+retouch commands take an explicit tool name).
+
+Note also the option names: *Intensity* is the CS6 name for what the
+engine calls `strength`, and *Size* is the brush diameter — the
+engine's `brush_of` takes a diameter, while the retouch payloads take
+a radius.
+
+### The Colors section's anatomy
+
+Four separate behaviors live in the Colors section, and the help set
+names each button:
+
+| Control | CS6's instruction |
+|---|---|
+| The icon left of the Stroke/Fill Color box | "In the Colors section of the Tools panel, click the icon to the left of the Stroke Color or Fill Color box." (fwref.txt:5409) — *activates* stroke or fill |
+| Set Default Stroke/Fill Colors | "Click the Set Default Stroke/Fill Colors button in the Tools panel or the Color Mixer." (fwref.txt:5419) |
+| No Stroke Or Fill | "Click the No Stroke Or Fill button in the Colors section of the Tools panel. To set the inactive characteristic to None, click the No Stroke Or Fill button again." (fwref.txt:5423) |
+| Swap Stroke/Fill Colors | "Click the Swap Stroke/Fill Colors button in the Tools panel or Color Mixer." (fwref.txt:5429) |
+
+These are **panel buttons**, not canvas tools: they act on click and
+never become the active tool. FireCraft models them that way
+(`toolstrip::is_panel_button`).
+
+The book's table lists the Color section as four rows — Eyedropper
+(`I`), Paint Bucket (`G`), Stroke, Fill — with the last two being the
+*color boxes* rather than tools.
+
+### The view modes
+
+> In the Tools panel, select from one of three view modes to control
+> the layout of your workspace.
+>
+> - **Standard Screen mode** — The default document window view.
+> - **Full Screen with Menus mode** — A maximized document window view
+>   set against a gray background. Menus, toolbars, scroll bars, and
+>   panels are visible.
+> - **Full Screen mode** — A maximized document window view set
+>   against a black background. No menus, toolbars, or title bars are
+>   visible.
+>
+> — CS6 Help (fwref.txt:1178–1185)
+
+And the fit gesture: "Double-click the Hand tool in the Tools panel."
+(fwref.txt:1175).
+
+FireCraft's screen-mode control toggles the workspace chrome
+(`ShellAction::ToggleHidePanels`), which is the Full Screen mode's
+effect; the three-mode cycle itself is **not** implemented, and the
+double-click-to-fit gesture is **not** implemented.
+
+### The Tools panel is a single column
+
+The workspace layouts put the tool strip in the left dock as a
+`<toolbar app-data="ToolPalette">`. CS6's Tools panel is one column of
+buttons with the flyouts opening beside it; there is no row/column
+choice to make.
+
+### The ARGB-vs-ABGR finding
+
+The engine's **bitmap** and **retouch** commands read colors as **ARGB**
+(`0xAARRGGBB`); its **path** fill and stroke commands read them as
+**ABGR** (`0xAABBGGRR`). Both are verified in the engine's own
+documentation and code (`retouch.rs`, `object.setFill`'s "ABGR
+layout", `autoshape.rs`'s "ABGR opaque black" `0xFF00_0000`, `bake.rs`'s
+"ABGR: alpha 255, red 128" `0xFF_00_0080`).
+
+FireCraft's shell had **one** color helper, `argb_raw`, and used it
+for the path paint too — so "Set Default Stroke/Fill Colors" wrote the
+red and blue channels swapped. The bug was in the shell, not the
+engine: the two conventions coexist in the engine by design. The shell
+now has both helpers, `argb_raw` (bitmap/retouch) and `abgr_raw`
+(path paint), and each call site names the convention it means.
+
+### The `slice-knife` glyph
+
+`assets/icons/slice-knife.svg` is an **original** FireCraft drawing,
+not a Lucide file — Lucide has no `slice-knife` icon. It is excluded
+from the Lucide row in `docs/ATTRIBUTION.md` and carries its own row.
+
 ## Clean-room statement
 
 Evidence extracted from the local `source/` install is used to

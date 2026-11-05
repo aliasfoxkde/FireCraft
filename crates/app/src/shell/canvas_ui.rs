@@ -23,59 +23,38 @@ impl Shell {
             })
     }
 
-    /// The CS6 tool strip: vertical, grouped, glyph buttons painted
-    /// with `Painter` primitives (original art, never the Adobe icons).
+    /// The CS6 tool strip: a single column of the six CS6 categories
+    /// — Select, Bitmap, Vector, Web, Colors, View — in CS6's order.
     ///
-    /// CS6 groups the tools into flyouts — a group leader button
-    /// carries a small arrow, and press-and-hold (or a secondary
-    /// click) opens the group's tools. The groups here follow CS6's
-    /// own grouping.
+    /// The order and the groups live in [`crate::toolstrip`]. A group
+    /// leader carries CS6's corner triangle, and press-and-hold (or a
+    /// secondary click) opens the group's pop-up, exactly as the help
+    /// set describes: "Click the tool icon and hold down the mouse
+    /// button. Drag the pointer to highlight the tool you want, and
+    /// release the mouse button."
     pub(super) fn tools_panel(&mut self, ui: &mut egui::Ui) {
-        let groups: &[(&str, &[Tool])] = &[
-            ("Select", &[Tool::Pointer, Tool::Subselect]),
-            (
-                "Shape",
-                &[Tool::Rect, Tool::Ellipse, Tool::Line, Tool::Text],
-            ),
-            (
-                "Draw",
-                &[
-                    Tool::Paintbrush,
-                    Tool::Pencil,
-                    Tool::Eraser,
-                    Tool::PaintBucket,
-                    Tool::Gradient,
-                    Tool::Eyedropper,
-                ],
-            ),
-            (
-                "Marquee",
-                &[
-                    Tool::Marquee,
-                    Tool::EllipticalMarquee,
-                    Tool::Lasso,
-                    Tool::PolygonalMarquee,
-                    Tool::MagicWand,
-                ],
-            ),
-            ("Web", &[Tool::Slice, Tool::Hotspot]),
-            ("View", &[Tool::Zoom, Tool::Hand]),
-        ];
         ui.add_space(4.0);
-        for (index, (name, group)) in groups.iter().enumerate() {
+        for (index, category) in toolstrip::CATEGORIES.iter().enumerate() {
             if index > 0 {
                 ui.separator();
             }
-            for (position, tool) in group.iter().enumerate() {
-                // The group leader carries the flyout arrow.
-                let leader = position == 0 && group.len() > 1;
-                let response = self.tool_button(ui, *tool, leader);
-                if !leader {
+            for group in category.groups {
+                let leader = group.leader();
+                if toolstrip::is_panel_button(leader.tool) {
+                    // CS6's Colors section buttons, the Hide/Show
+                    // Slices control and the screen-mode control act
+                    // when clicked; they never become the tool.
+                    self.panel_button(ui, leader.tool);
                     continue;
                 }
+                let response = self.tool_button(ui, leader.tool, group.is_flyout());
+                if !group.is_flyout() {
+                    continue;
+                }
+                let tools: Vec<Tool> = group.tools.iter().map(|entry| entry.tool).collect();
                 if response.secondary_clicked() {
                     if let Some(pos) = response.interact_pointer_pos() {
-                        self.tool_flyout = Some((*name, group.to_vec(), pos));
+                        self.tool_flyout = Some((category.name, tools, pos));
                         self.tool_press = None;
                     }
                     continue;
@@ -87,7 +66,7 @@ impl Shell {
                 match self.tool_press {
                     Some(_) if !holding => self.tool_press = None,
                     Some(press) if hold_opens_flyout(now - press.at) => {
-                        self.tool_flyout = Some((*name, group.to_vec(), press.pos));
+                        self.tool_flyout = Some((category.name, tools, press.pos));
                         self.tool_press = None;
                     }
                     Some(_) => {}
@@ -99,10 +78,88 @@ impl Shell {
                     None => {}
                 }
             }
+            if category.auto_shapes {
+                // The Vector section's pop-up: CS6's Auto Shapes.
+                self.autoshape_button(ui);
+            }
+            if category.name == "Colors" {
+                // CS6's Colors section carries the stroke and fill
+                // color boxes under the tools.
+                self.colors_boxes(ui);
+            }
         }
-        ui.separator();
-        self.autoshape_button(ui);
         self.tool_flyout_ui(ui);
+    }
+
+    /// CS6's panel buttons — the Colors section's three controls, the
+    /// Hide/Show Slices control and the screen-mode control. They act
+    /// when clicked; they never become the active tool.
+    fn panel_button(&mut self, ui: &mut egui::Ui, tool: Tool) {
+        let (rect, response) = ui.allocate_exact_size(egui::Vec2::splat(26.0), Sense::click());
+        if response.clicked() {
+            self.run_panel_button(tool);
+        }
+        let painter = ui.painter();
+        if response.hovered() {
+            painter.rect_filled(rect, 2.0, Color32::from_rgb(0x4a, 0x4a, 0x4a));
+        }
+        icons::paint(
+            ui,
+            rect,
+            icons::tool_icon(tool),
+            17.0,
+            Color32::from_rgb(0xc4, 0xc4, 0xc4),
+        );
+        response.on_hover_text(tool_label(tool));
+    }
+
+    /// What CS6's panel buttons do.
+    pub(super) fn run_panel_button(&mut self, tool: Tool) {
+        let outcome = match tool {
+            Tool::DefaultStrokeFill => {
+                let (fill, stroke) = (self.editor.fill_color, self.editor.stroke_color);
+                self.editor.apply_default_stroke_fill(fill, stroke)
+            }
+            Tool::SwapStrokeFill => self.editor.swap_stroke_fill(),
+            Tool::NoStrokeFill => self.editor.clear_stroke_fill(),
+            Tool::HideShowSlices => self.editor.toggle_web_objects(),
+            Tool::ToggleScreenMode => {
+                // CS6's screen mode hides the workspace chrome; the
+                // shell's panel toggle is the same gesture.
+                self.run_shell(menus::ShellAction::ToggleHidePanels);
+                return;
+            }
+            _ => return,
+        };
+        match outcome {
+            Ok(true) => self.status = format!("{}: done", tool_label(tool)),
+            Ok(false) => self.status = format!("{}: nothing to do", tool_label(tool)),
+            Err(error) => self.status = format!("{} failed: {error}", tool_label(tool)),
+        }
+    }
+
+    /// CS6's Colors section color boxes: "In the Colors section of
+    /// the Tools panel, click the icon to the left of the Stroke
+    /// Color or Fill Color box."
+    fn colors_boxes(&mut self, ui: &mut egui::Ui) {
+        for channel in ["stroke", "fill"] {
+            let color = if channel == "stroke" {
+                self.editor.stroke_color
+            } else {
+                self.editor.fill_color
+            };
+            let mut rgba = Color32::from_rgba_unmultiplied(color[0], color[1], color[2], color[3]);
+            let response = ui.color_edit_button_srgba(&mut rgba);
+            if response.changed() {
+                let updated = [rgba.r(), rgba.g(), rgba.b(), rgba.a()];
+                if channel == "stroke" {
+                    self.editor.stroke_color = updated;
+                } else {
+                    self.editor.fill_color = updated;
+                }
+            }
+            response.on_hover_text(format!("{channel} color"));
+        }
     }
 
     /// The open tool flyout: CS6's press-and-hold tool list.
@@ -358,24 +415,55 @@ impl Shell {
         } else {
             match self.editor.tool {
                 Tool::Pointer | Tool::Subselect => egui::CursorIcon::Default,
-                Tool::Rect | Tool::Ellipse | Tool::Line | Tool::Slice | Tool::Hotspot => {
-                    egui::CursorIcon::Crosshair
-                }
                 Tool::Text => egui::CursorIcon::Text,
                 Tool::Zoom => egui::CursorIcon::ZoomIn,
                 Tool::Hand => egui::CursorIcon::Grab,
-                Tool::AutoShape(_) => egui::CursorIcon::Crosshair,
-                Tool::Paintbrush
+                // CS6's panel buttons, not canvas tools: the pointer
+                // keeps the arrow over the artwork.
+                Tool::HideShowSlices
+                | Tool::DefaultStrokeFill
+                | Tool::SwapStrokeFill
+                | Tool::NoStrokeFill
+                | Tool::ToggleScreenMode => egui::CursorIcon::Default,
+                Tool::Rect
+                | Tool::Ellipse
+                | Tool::Line
+                | Tool::Scale
+                | Tool::Skew
+                | Tool::Distort
+                | Tool::Crop
+                | Tool::Slice
+                | Tool::Hotspot
+                | Tool::AutoShape(_)
+                | Tool::Paintbrush
                 | Tool::Pencil
                 | Tool::Eraser
                 | Tool::PaintBucket
                 | Tool::Gradient
-                | Tool::Eyedropper => egui::CursorIcon::Crosshair,
-                Tool::Marquee
+                | Tool::Eyedropper
+                | Tool::Marquee
                 | Tool::EllipticalMarquee
                 | Tool::Lasso
                 | Tool::PolygonalMarquee
-                | Tool::MagicWand => egui::CursorIcon::Crosshair,
+                | Tool::MagicWand
+                | Tool::SelectSimilar
+                | Tool::Blur
+                | Tool::Sharpen
+                | Tool::Smudge
+                | Tool::Dodge
+                | Tool::Burn
+                | Tool::RubberStamp
+                | Tool::RedEyeRemoval
+                | Tool::ReplaceColor
+                | Tool::Pen
+                | Tool::VectorPath
+                | Tool::RedrawPath
+                | Tool::Freeform
+                | Tool::ReshapeArea
+                | Tool::Knife
+                | Tool::PolygonSlice
+                | Tool::PolygonHotspot
+                | Tool::CircleHotspot => egui::CursorIcon::Crosshair,
             }
         };
         let response = response.on_hover_cursor(cursor);
@@ -854,9 +942,25 @@ impl Shell {
                             }
                         } else if !space_held {
                             match self.editor.tool {
-                                Tool::Paintbrush | Tool::Pencil | Tool::Eraser | Tool::Gradient => {
+                                Tool::Paintbrush
+                                | Tool::Pencil
+                                | Tool::Eraser
+                                | Tool::Gradient
+                                | Tool::Blur
+                                | Tool::Sharpen
+                                | Tool::Smudge
+                                | Tool::Dodge
+                                | Tool::Burn
+                                | Tool::RubberStamp
+                                | Tool::RedEyeRemoval
+                                | Tool::ReplaceColor => {
                                     // A paint stroke: the dabs land on
-                                    // the image under the pointer.
+                                    // the image under the pointer. The
+                                    // retouch tools are brush dabs too
+                                    // — CS6's Blur, Sharpen, Smudge,
+                                    // Dodge, Burn, Rubber Stamp, Red-eye
+                                    // Removal and Replace Color all
+                                    // paint through the brush.
                                     if let Err(error) = self.editor.begin_stroke(world) {
                                         self.status = format!("paint failed: {error}");
                                     }
@@ -922,6 +1026,19 @@ impl Shell {
                                 Tool::PolygonalMarquee => {
                                     // The polygon's vertices are
                                     // clicks, not a drag.
+                                }
+                                Tool::Pen
+                                | Tool::VectorPath
+                                | Tool::PolygonSlice
+                                | Tool::PolygonHotspot => {
+                                    // CS6 plots these with clicks:
+                                    // the Pen's vertices, the vector
+                                    // path's nodes, the polygon's
+                                    // points.
+                                }
+                                Tool::SelectSimilar | Tool::Knife => {
+                                    // Click-only tools: the press
+                                    // itself is the whole gesture.
                                 }
                                 _ => self.editor.begin_drag(world),
                             }
@@ -1074,6 +1191,53 @@ impl Shell {
                             PixelSelectMode::from_modifiers(ui.input(|i| i.modifiers));
                         if let Err(error) = self.editor.add_polygon_point(world) {
                             self.status = format!("polygon failed: {error}");
+                        }
+                    }
+                    Tool::SelectSimilar => {
+                        // CS6's Select Similar: the click seeds the
+                        // selection and every similarly colored pixel
+                        // joins it.
+                        let world = self.view.to_world(local);
+                        let tolerance = self.editor.wand_tolerance;
+                        if let Err(error) = self.editor.select_similar_at(world, tolerance) {
+                            self.status = format!("select similar failed: {error}");
+                        }
+                    }
+                    Tool::Knife => {
+                        // CS6's Knife: the click cuts the path under
+                        // the pointer into pieces.
+                        let world = self.view.to_world(local);
+                        if let Err(error) = self.editor.knife_at(world) {
+                            self.status = format!("knife failed: {error}");
+                        }
+                    }
+                    Tool::Pen | Tool::PolygonSlice | Tool::PolygonHotspot => {
+                        // CS6 plots these with clicks: one click, one
+                        // vector point.
+                        let world = self.view.to_world(local);
+                        self.editor.add_draft_point(world);
+                        self.status = format!(
+                            "point {} plotted",
+                            self.editor
+                                .draft
+                                .as_ref()
+                                .map_or(0, |draft| draft.points.len())
+                        );
+                    }
+                    Tool::VectorPath => {
+                        // CS6's Vector Path: the click grabs the node
+                        // under the pointer and drags it.
+                        let world = self.view.to_world(local);
+                        let grabbed = self.editor.selected_live().and_then(|id| {
+                            self.editor
+                                .node_at(world, f64::from(6.0 / self.view.zoom))
+                                .map(|(contour, point)| (id, contour, point))
+                        });
+                        if let Some((id, contour, point)) = grabbed
+                            && let Err(error) =
+                                self.editor.begin_node_drag(id, contour, point, world)
+                        {
+                            self.status = format!("reshape failed: {error}");
                         }
                     }
                     Tool::Zoom => {

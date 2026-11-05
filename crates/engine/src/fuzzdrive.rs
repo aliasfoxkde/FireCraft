@@ -556,6 +556,7 @@ pub const CALLS: &[&str] = &[
     "object.resize",
     "object.setBounds",
     "object.createPath",
+    "object.createPolyline",
     "object.setGroupType",
     "object.align",
     "object.distribute",
@@ -644,6 +645,10 @@ pub const CALLS: &[&str] = &[
     "retouch.clone",
     "retouch.eraser",
     "retouch.redEye",
+    "retouch.sharpen",
+    "retouch.dodge",
+    "retouch.burn",
+    "retouch.replaceColor",
     "text.createText",
     "text.setText",
     "text.setAttrs",
@@ -672,6 +677,7 @@ pub const CALLS: &[&str] = &[
     "text.setTextCustomAntiAliasStrength",
     "document.setDocumentCanvasSizeToDocumentExtents",
     "document.setDocumentCanvasSizeToSelection",
+    "document.setDocumentCanvasRect",
     "document.deleteAllInDocument",
     "filter.setEffectName",
     "symbol.create",
@@ -1025,6 +1031,28 @@ pub fn payload_template(name: &str, rng: &mut FuzzRng, document: &Document) -> s
                 serde_json::json!("fuzz path")
             },
         }),
+        "object.createPolyline" => {
+            let count = 2 + rng.below(4);
+            let mut points = Vec::new();
+            for _ in 0..count {
+                points.push(serde_json::json!([
+                    -(rng.below(400) as f64),
+                    -(rng.below(400) as f64),
+                ]));
+            }
+            serde_json::json!({
+                "points": points,
+                "closed": rng.chance(50),
+                "page": any_index(rng, pages),
+                "layer": any_index(rng, 3),
+                "cell": any_index(rng, frames),
+                "name": if rng.chance(50) {
+                    serde_json::Value::Null
+                } else {
+                    serde_json::json!("fuzz polyline")
+                },
+            })
+        }
         "autoshape.rect" => serde_json::json!({
             "x": -(rng.below(400) as f64),
             "y": -(rng.below(400) as f64),
@@ -1970,7 +1998,8 @@ pub fn payload_template(name: &str, rng: &mut FuzzRng, document: &Document) -> s
         "bitmap.addImageViaCopy" | "bitmap.addImageViaCut" => serde_json::json!({
             "source": any_id(rng),
         }),
-        "retouch.blur" | "retouch.eraser" => serde_json::json!({
+        "retouch.blur" | "retouch.eraser" | "retouch.sharpen" | "retouch.dodge"
+        | "retouch.burn" => serde_json::json!({
             "id": any_id(rng),
             "x": -(rng.below(300) as f64),
             "y": -(rng.below(300) as f64),
@@ -1999,6 +2028,16 @@ pub fn payload_template(name: &str, rng: &mut FuzzRng, document: &Document) -> s
             "x": -(rng.below(300) as f64),
             "y": -(rng.below(300) as f64),
             "radius": rng.below(520),
+        }),
+        "retouch.replaceColor" => serde_json::json!({
+            "id": any_id(rng),
+            "x": -(rng.below(300) as f64),
+            "y": -(rng.below(300) as f64),
+            "radius": rng.below(520),
+            "strength": rng.below(105),
+            "from_color_raw": rng.below(0x100_0000),
+            "to_color_raw": rng.below(0x100_0000),
+            "tolerance": rng.below(256),
         }),
         "text.createText" => serde_json::json!({
             "page": any_index(rng, pages),
@@ -2902,6 +2941,13 @@ pub fn payload_template(name: &str, rng: &mut FuzzRng, document: &Document) -> s
         "document.setDocumentCanvasSizeToSelection" => {
             serde_json::json!({ "page": rng.below(3) })
         }
+        "document.setDocumentCanvasRect" => serde_json::json!({
+            "page": rng.below(3),
+            "x": -(rng.below(400) as f64),
+            "y": -(rng.below(400) as f64),
+            "width": rng.below(400) as f64,
+            "height": rng.below(400) as f64,
+        }),
         "document.deleteAllInDocument" => serde_json::json!({}),
         "document.setImageSize" => {
             let width = 8.0 + rng.below(64) as f64;

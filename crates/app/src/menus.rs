@@ -142,6 +142,10 @@ pub enum ShellAction {
     ShowShortcuts,
     /// One-key tool select (the CS6 tool letters).
     PickTool(Tool),
+    /// One-key tool *group* select: CS6 gives a group one shortcut
+    /// and cycles through the group's tools on repeated presses. The
+    /// tool named is the group's leader.
+    PickToolGroup(Tool),
     /// View ▸ Grid ▸ Show Grid — the page overlay.
     ToggleGrid,
     /// View ▸ Grid ▸ Snap to Grid.
@@ -2219,93 +2223,135 @@ pub static SHORTCUTS: &[Shortcut] = &[
     key(CTRL_ALT_SHIFT, egui::Key::B, Action::TextFlag("bold")),
     key(CTRL_ALT_SHIFT, egui::Key::I, Action::TextFlag("italic")),
     key(CTRL_ALT_SHIFT, egui::Key::U, Action::TextFlag("underline")),
-    // Tools (one-key selects)
+    // Tools: one shortcut per CS6 tool *group*. CS6's help set is
+    // explicit — "To quickly select a hidden tool, repeatedly press
+    // the group keyboard shortcut until the tool you want appears" —
+    // so the letter picks the group's leader and cycles through the
+    // group on repeated presses.
     key(
         NONE,
         egui::Key::V,
-        Action::Shell(ShellAction::PickTool(Tool::Pointer)),
+        Action::Shell(ShellAction::PickToolGroup(Tool::Pointer)),
     ),
     key(
         NONE,
-        egui::Key::R,
-        Action::Shell(ShellAction::PickTool(Tool::Rect)),
+        egui::Key::A,
+        Action::Shell(ShellAction::PickToolGroup(Tool::Subselect)),
     ),
     key(
         NONE,
-        egui::Key::E,
-        Action::Shell(ShellAction::PickTool(Tool::Ellipse)),
+        egui::Key::Q,
+        Action::Shell(ShellAction::PickToolGroup(Tool::Scale)),
     ),
     key(
         NONE,
-        egui::Key::O,
-        Action::Shell(ShellAction::PickTool(Tool::Line)),
+        egui::Key::C,
+        Action::Shell(ShellAction::PickToolGroup(Tool::Crop)),
     ),
-    key(
-        NONE,
-        egui::Key::T,
-        Action::Shell(ShellAction::PickTool(Tool::Text)),
-    ),
-    key(
-        NONE,
-        egui::Key::Z,
-        Action::Shell(ShellAction::PickTool(Tool::Zoom)),
-    ),
-    key(
-        NONE,
-        egui::Key::H,
-        Action::Shell(ShellAction::PickTool(Tool::Hand)),
-    ),
-    key(
-        NONE,
-        egui::Key::B,
-        Action::Shell(ShellAction::PickTool(Tool::Paintbrush)),
-    ),
-    key(
-        NONE,
-        egui::Key::N,
-        Action::Shell(ShellAction::PickTool(Tool::Pencil)),
-    ),
-    key(
-        NONE,
-        egui::Key::Y,
-        Action::Shell(ShellAction::PickTool(Tool::Eraser)),
-    ),
-    key(
-        NONE,
-        egui::Key::G,
-        Action::Shell(ShellAction::PickTool(Tool::PaintBucket)),
-    ),
-    key(
-        NONE,
-        egui::Key::D,
-        Action::Shell(ShellAction::PickTool(Tool::Gradient)),
-    ),
-    key(
-        NONE,
-        egui::Key::I,
-        Action::Shell(ShellAction::PickTool(Tool::Eyedropper)),
-    ),
-    // Pixel-selection tools (CS6's keymap: L is the Lasso; the Line
-    // tool has no letter and carries O here).
     key(
         NONE,
         egui::Key::M,
-        Action::Shell(ShellAction::PickTool(Tool::Marquee)),
+        Action::Shell(ShellAction::PickToolGroup(Tool::Marquee)),
     ),
     key(
         NONE,
         egui::Key::L,
-        Action::Shell(ShellAction::PickTool(Tool::Lasso)),
-    ),
-    key(
-        NONE,
-        egui::Key::P,
-        Action::Shell(ShellAction::PickTool(Tool::PolygonalMarquee)),
+        Action::Shell(ShellAction::PickToolGroup(Tool::Lasso)),
     ),
     key(
         NONE,
         egui::Key::W,
-        Action::Shell(ShellAction::PickTool(Tool::MagicWand)),
+        Action::Shell(ShellAction::PickToolGroup(Tool::MagicWand)),
+    ),
+    key(
+        NONE,
+        egui::Key::B,
+        Action::Shell(ShellAction::PickToolGroup(Tool::Paintbrush)),
+    ),
+    key(
+        NONE,
+        egui::Key::E,
+        Action::Shell(ShellAction::PickToolGroup(Tool::Eraser)),
+    ),
+    key(
+        NONE,
+        egui::Key::R,
+        Action::Shell(ShellAction::PickToolGroup(Tool::Blur)),
+    ),
+    key(
+        NONE,
+        egui::Key::D,
+        Action::Shell(ShellAction::PickToolGroup(Tool::Dodge)),
+    ),
+    key(
+        NONE,
+        egui::Key::S,
+        Action::Shell(ShellAction::PickToolGroup(Tool::RubberStamp)),
+    ),
+    key(
+        NONE,
+        egui::Key::N,
+        Action::Shell(ShellAction::PickToolGroup(Tool::Line)),
+    ),
+    key(
+        NONE,
+        egui::Key::P,
+        Action::Shell(ShellAction::PickToolGroup(Tool::Pen)),
+    ),
+    key(
+        NONE,
+        egui::Key::U,
+        Action::Shell(ShellAction::PickToolGroup(Tool::Rect)),
+    ),
+    key(
+        NONE,
+        egui::Key::T,
+        Action::Shell(ShellAction::PickToolGroup(Tool::Text)),
+    ),
+    key(
+        NONE,
+        egui::Key::O,
+        Action::Shell(ShellAction::PickToolGroup(Tool::Freeform)),
+    ),
+    key(
+        NONE,
+        egui::Key::Y,
+        Action::Shell(ShellAction::PickToolGroup(Tool::Knife)),
+    ),
+    key(
+        NONE,
+        egui::Key::J,
+        Action::Shell(ShellAction::PickToolGroup(Tool::Hotspot)),
+    ),
+    key(
+        NONE,
+        egui::Key::K,
+        Action::Shell(ShellAction::PickToolGroup(Tool::Slice)),
+    ),
+    key(
+        NONE,
+        egui::Key::Num2,
+        Action::Shell(ShellAction::PickToolGroup(Tool::HideShowSlices)),
+    ),
+    key(
+        NONE,
+        egui::Key::I,
+        Action::Shell(ShellAction::PickToolGroup(Tool::Eyedropper)),
+    ),
+    key(
+        NONE,
+        egui::Key::G,
+        Action::Shell(ShellAction::PickToolGroup(Tool::PaintBucket)),
+    ),
+    key(
+        NONE,
+        egui::Key::H,
+        Action::Shell(ShellAction::PickToolGroup(Tool::Hand)),
+    ),
+    key(
+        NONE,
+        egui::Key::Z,
+        Action::Shell(ShellAction::PickToolGroup(Tool::Zoom)),
     ),
     // Help — the shortcut-map panel. Not part of the CS6 keymap
     // (Fireworks had no help binding); F1 is the desktop convention.
@@ -2393,6 +2439,7 @@ pub fn action_name(action: Action) -> String {
             ShellAction::About => "About".into(),
             ShellAction::ShowShortcuts => "Shortcut map".into(),
             ShellAction::PickTool(tool) => format!("Tool: {tool:?}"),
+            ShellAction::PickToolGroup(leader) => format!("Tool group: {leader:?}"),
             ShellAction::ToggleGrid => "Show/hide grid".into(),
             ShellAction::ToggleSnapToGrid => "Snap to grid".into(),
             ShellAction::EditGrid => "Edit grid".into(),

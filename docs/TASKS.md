@@ -19,7 +19,7 @@
 | Item | State at `5fac7a2` | Remaining evidence/work |
 |---|---|---|
 | 22.1 Panel inventory and docking | Partial | A right-side stack of independent windows exists. Improve fit and navigation at standard viewport sizes; finish missing Optimize, Common Library, CSS Properties, Find and Replace, and Slices surfaces. |
-| 22.2 Tool strip and flyouts | Open | Compare order, grouping, flyout interaction, and keyboard behavior against the documented reference. |
+| 22.2 Tool strip and flyouts | Complete | The strip is CS6's, as data in `crates/app/src/toolstrip.rs`: six categories in CS6's order, twenty-four groups with their one-key shortcuts, the flyout memberships, and CS6's group-cycling rule. Evidence in [`research/fw-ui-evidence.md`](research/fw-ui-evidence.md); landed 2026-11-05. |
 | 22.3 Adaptive canvas context menu | Complete | Selection-specific rows dispatch through the existing command surface. |
 | 22.4 Property inspector | Partial | Per-kind field sets landed 2026-11-04 (group, bitmap, slice). Open: the bitmap transform strip and fill/stroke, the document-level and multi-selection field sets, and enter-group. |
 | 22.5 CS6 chrome | Partial | Audit tab/status/header layout and responsive behavior against the approved reference. |

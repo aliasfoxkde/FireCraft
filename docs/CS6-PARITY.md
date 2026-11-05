@@ -108,9 +108,18 @@ panel (`S/mod.rs:2277`, `S/canvas_ui.rs:33`).
 | Web tools (slice, hotspot) | Slice, Hotspot | **implemented** | `E:18` | — |
 | View tools (zoom, hand) | Zoom, Hand | **implemented** | `E:18` | — |
 | **Flyout mechanics** (press-and-hold opens the group's list) | implemented for the strip groups and the Auto Shape gallery | **implemented** | `S/canvas_ui.rs:78-100`, `S/mod.rs:198` | — |
-| **Tool one-key selects** | V, R, E, O, T, Z, H, B, N, Y, G, D, I, M, L, P, W | **partial** — the letters exist; CS6's `one_tool` GUID table has ~24 entries and the mapping of each GUID to a tool is **not** yet established | **R** (keymap section), `S/glyphs.rs:79` | 22.2 |
-| **CS6 tool strip ORDER** | FireCraft's group order is its own | **missing** — CS6's order is not recorded from evidence | **R** (no order evidence yet) | 22.2 |
-| CS6 tools FireCraft has no counterpart for (retouch blur/sharpen/smudge/dodge/burn, Knife, Freeform, 3D, Screen) | absent | **missing** | — | 22.2 |
+| **Tool one-key selects** | 24 group keys (V, A, Q, C, M, L, W, B, E, R, D, S, N, P, U, T, O, Y, J, K, 2, I, G, H, Z); CS6 gives a *group* one key and repeated presses cycle within it | **implemented** — the group-cycling rule and every key come from the book's Table 1-1 and the CS6 help; CS6's `one_tool` GUID table has no tool names, so the GUID→tool mapping stays an open evidence gap | `R:fw-ui-evidence.md` (tool-strip section), `S/toolstrip.rs` | — |
+| **CS6 tool strip ORDER** | the strip is CS6's: Select, Bitmap, Vector, Web, Colors, View — each with its groups in CS6's order | **implemented** | `R:fw-ui-evidence.md` (help 1703 + the book's ch. 1), `S/toolstrip.rs` | — |
+| **CS6 tool strip as data** | `crates/app/src/toolstrip.rs` holds the categories, groups, labels, keys and flyout memberships; the shell renders from it | **implemented** | `S/toolstrip.rs` | — |
+| **The Modify trio** (Scale, Skew, Distort) | one group behind the Scale button; Skew and Distort drag the selection | **implemented** | `R` (help 1951), `S/editor.rs` | — |
+| **Retouch trio** (Blur, Sharpen, Smudge) and **Dodge/Burn** | all five, in the Bitmap section, sharing the paint brush options | **implemented** | `R` (help 3530–3555), `S/editor.rs` | — |
+| **Knife** | clicks cut the path under the pointer | **implemented** | `S/editor.rs` | — |
+| **Freeform** | the Freeform tool draws and the Reshape Area flyout member distorts the selected path | **implemented** | `R` (help 4508), `S/editor.rs` | — |
+| **Colors section** (the activate-stroke-or-fill icon, Set Default, No Stroke Or Fill, Swap Stroke/Fill, and the two color boxes) | all five, as panel *buttons* that act on click rather than becoming the tool | **implemented** | `R` (help 5409–5429), `S/canvas_ui.rs` | — |
+| **Hide/Show Slices** control | a panel button on the book's `2` key | **implemented** | `R` (book Table 1-1), `S/canvas_ui.rs` | — |
+| **Screen mode** (Standard Screen / Full Screen with Menus / Full Screen) | one control that toggles the workspace chrome — CS6's Full Screen mode | **partial** — the three-mode cycle and the double-click-to-fit gesture are not implemented | `R` (help 1175–1185) | 22.5 |
+| **3D tools** | absent | **missing** — CS6's 3D tool is a legacy feature FireCraft does not carry | `R` (book ch. 1) | — |
+| **Alt-hold tool variants** (Alt between Blur/Sharpen/Smudge and Dodge/Burn) | the tools are separate entries in their group; the Alt-hold gesture is not implemented | **partial** | `R` (help 3555) | 22.5 |
 
 ---
 
@@ -244,7 +253,7 @@ dispatches at `S/panels.rs:853-881`.
 | Menu accelerators (Ctrl+N/O/S/Z, Ctrl+Shift+S/R, Alt+F4 …) | carried on the menu rows | **implemented** | `M:459` | — |
 | A working shortcut table (52 bindings) | present and dispatched, and skipped while a text field has focus | **implemented** | `M:2157`, `S/mod.rs:2157` | — |
 | F1 lists the bindings | present, in 11 labelled groups | **partial** — the group's declared row counts sum to 49 against a 52-row table, so the help window and the table disagree | `S/panels.rs:91-103` | 22.5 |
-| **Tool one-key selects** | 17 letters bound | **partial** — see §B | `S/glyphs.rs:79` | 22.2 |
+| **Tool one-key selects** | 24 group keys bound; repeated presses cycle within the group, as CS6's help describes | **implemented** — see §B | `S/toolstrip.rs`, `S/menus.rs` | — |
 | **CS6's full keymap** (the `Fireworks.xml` set: 128 command ids) | 52 of CS6's 128 command shortcuts are bound | **partial** — the remaining 76 have no binding | **R** (keymap section) | 22.5 |
 | Four alternative keymap sets (Illustrator / Photoshop / FreeHand / Web Standard) | none | **missing** | **R** | 21.4 |
 | Screen-reader navigation | **not available** — the accesskit tree is unreachable on the web build; recorded refusal, not a gap | **not applicable** | `D` 0067 | 21.5 |
@@ -297,7 +306,7 @@ acceptance hook. Ordered by how much of the product it unlocks.
 | 2 | The inspector's remaining per-kind gaps: document-level fields, multi-selection fields, the image transform strip, and enter-group | D, I | 22.4 | P0 |
 | 3 | The right dock's five-tab-group structure and the bottom Properties dock | C | 22.1 | P0 |
 | 4 | In-canvas text editing | E, H, I | 20.1 | P0 |
-| 5 | The CS6 tool strip: order, the retouch/Knife/Freeform/3D tools, the `one_tool` mapping | B | 22.2 | P0 |
+| 5 | The CS6 tool strip: the 3D tool, the three-mode screen switch, and the Alt-hold tool variants | B | 22.5 | P2 |
 | 6 | Multi-document tabs (and the Window rows that collapse to them) | E | 20.5 | P1 |
 | 7 | The animation timeline (States panel) | C | 20.3 | P1 |
 | 8 | History click-to-rewind | C, E | 20.6 | P1 |

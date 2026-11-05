@@ -39,6 +39,7 @@ use crate::editor::{
     Tool, TransformHandle,
 };
 use crate::menus;
+use crate::toolstrip;
 
 // The web drop sink ([`Shell::set_drop_sink`]): the web crate's async
 // file reader, installed at startup. Wasm only — the desktop shell
@@ -1332,6 +1333,41 @@ impl Shell {
                 self.editor.tool = tool;
                 self.status = format!("tool: {}", tool_label(tool));
             }
+            menus::ShellAction::PickToolGroup(leader) => {
+                // CS6: "To quickly select a hidden tool, repeatedly
+                // press the group keyboard shortcut until the tool you
+                // want appears." The shortcut picks the group's leader
+                // and steps through the group from there.
+                //
+                // The Hide/Show Slices control is the exception: the
+                // book's Table 1-1 gives it the "2" key, but it is a
+                // panel button, so the key *acts* on it instead of
+                // making it the active tool.
+                if toolstrip::is_panel_button(leader) {
+                    self.run_panel_button(leader);
+                    return;
+                }
+                let group = toolstrip::group_of(leader);
+                let index = match group {
+                    Some(group) => {
+                        let current = group
+                            .tools
+                            .iter()
+                            .position(|entry| entry.tool == self.editor.tool);
+                        match current {
+                            Some(index) => (index + 1) % group.tools.len(),
+                            None => 0,
+                        }
+                    }
+                    None => 0,
+                };
+                let tool = match group {
+                    Some(group) => group.tools[index].tool,
+                    None => leader,
+                };
+                self.editor.tool = tool;
+                self.status = format!("tool: {}", tool_label(tool));
+            }
             menus::ShellAction::ToggleGrid => {
                 self.show_grid = !self.show_grid;
                 self.status = if self.show_grid {
@@ -2157,6 +2193,7 @@ impl Shell {
     fn shortcuts(&mut self, ctx: &egui::Context) {
         let text_focus = ctx.egui_wants_keyboard_input();
         let mut fired: Vec<menus::Action> = Vec::new();
+        let mut draft_key = None;
         ctx.input(|input| {
             for event in &input.events {
                 let egui::Event::Key {
@@ -2169,6 +2206,24 @@ impl Shell {
                 else {
                     continue;
                 };
+                // CS6 closes a plotted path with Enter and abandons it
+                // with Escape. The Pen, the Polygon Slice, the Polygon
+                // Hotspot and the Polygonal Marquee all build their
+                // shape with clicks, so these two keys are how the
+                // shape becomes real.
+                if !modifiers.ctrl && !modifiers.alt && !modifiers.shift && !text_focus {
+                    match key {
+                        egui::Key::Enter => {
+                            draft_key = Some(true);
+                            continue;
+                        }
+                        egui::Key::Escape => {
+                            draft_key = Some(false);
+                            continue;
+                        }
+                        _ => {}
+                    }
+                }
                 for shortcut in menus::SHORTCUTS {
                     if shortcut.key != *key
                         || shortcut.mods.ctrl != modifiers.ctrl
@@ -2186,6 +2241,39 @@ impl Shell {
         });
         for action in fired {
             self.run_action(&action);
+        }
+        match draft_key {
+            Some(true) => self.finish_draft(),
+            Some(false) => self.cancel_draft(),
+            None => {}
+        }
+    }
+
+    /// Enter: commits the shape being plotted — the pen's polyline, a
+    /// polygon slice or hotspot, or the polygonal marquee.
+    fn finish_draft(&mut self) {
+        if self.editor.polygon.is_some() {
+            match self.editor.commit_polygon() {
+                Ok(true) => self.status = "polygon selected".to_owned(),
+                Ok(false) => self.status = "polygon needs three points".to_owned(),
+                Err(error) => self.status = format!("polygon failed: {error}"),
+            }
+            return;
+        }
+        if self.editor.draft.is_some() {
+            match self.editor.commit_draft() {
+                Ok(true) => self.status = "shape created".to_owned(),
+                Ok(false) => self.status = "shape needs more points".to_owned(),
+                Err(error) => self.status = format!("shape failed: {error}"),
+            }
+        }
+    }
+
+    /// Escape: abandons the shape being plotted, leaving the document
+    /// as it was.
+    fn cancel_draft(&mut self) {
+        if self.editor.draft.take().is_some() || self.editor.polygon.take().is_some() {
+            self.status = "shape discarded".to_owned();
         }
     }
 

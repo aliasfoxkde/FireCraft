@@ -777,6 +777,7 @@ impl Shell {
     /// Right panel: the align/distribute group, then properties of the
     /// selection.
     pub(super) fn properties_panel(&mut self, ui: &mut egui::Ui) {
+        self.draft_panel(ui);
         self.fill_stroke_panel(ui);
         ui.separator();
         if matches!(
@@ -792,6 +793,14 @@ impl Shell {
                 | Tool::Lasso
                 | Tool::PolygonalMarquee
                 | Tool::MagicWand
+                | Tool::Blur
+                | Tool::Sharpen
+                | Tool::Smudge
+                | Tool::Dodge
+                | Tool::Burn
+                | Tool::RubberStamp
+                | Tool::RedEyeRemoval
+                | Tool::ReplaceColor
         ) {
             self.brush_panel(ui);
             ui.separator();
@@ -890,6 +899,56 @@ impl Shell {
         };
         // The live effect list: every kind that carries an `EFLv` spine.
         self.filter_panel(ui, id, &effects);
+    }
+
+    /// The in-progress shape's panel. CS6's Pen, Polygon Slice,
+    /// Polygon Hotspot and Polygonal Marquee all build their shape
+    /// with clicks, and the shape is only real once it is finished —
+    /// so the panel carries the finish button and the point count.
+    pub(super) fn draft_panel(&mut self, ui: &mut egui::Ui) {
+        let polygon_points = self
+            .editor
+            .polygon
+            .as_ref()
+            .map_or(0, |draft| draft.points.len());
+        let path_points = self
+            .editor
+            .draft
+            .as_ref()
+            .map_or(0, |draft| draft.points.len());
+        if polygon_points == 0 && path_points == 0 {
+            return;
+        }
+        ui.heading("Shape in progress");
+        if polygon_points > 0 {
+            ui.label(format!("marquee: {polygon_points} points"));
+        }
+        if path_points > 0 {
+            ui.label(format!("path: {path_points} points"));
+        }
+        ui.horizontal(|ui| {
+            if ui.button("finish shape").clicked() {
+                if polygon_points > 0 {
+                    match self.editor.commit_polygon() {
+                        Ok(true) => self.status = "polygon selected".to_owned(),
+                        Ok(false) => self.status = "polygon needs three points".to_owned(),
+                        Err(error) => self.status = format!("polygon failed: {error}"),
+                    }
+                } else {
+                    match self.editor.commit_draft() {
+                        Ok(true) => self.status = "shape created".to_owned(),
+                        Ok(false) => self.status = "shape needs more points".to_owned(),
+                        Err(error) => self.status = format!("shape failed: {error}"),
+                    }
+                }
+            }
+            if ui.button("cancel").clicked() {
+                self.editor.draft = None;
+                self.editor.polygon = None;
+                self.status = "shape discarded".to_owned();
+            }
+        });
+        ui.separator();
     }
 
     /// The paint tools' slots: the Edit Brush dialog's size, edge,

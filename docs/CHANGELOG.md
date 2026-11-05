@@ -10,6 +10,7 @@ Current version: **0.2.5**.
 
 ### Features
 
+- **app**: right dock column and per-kind inspector (1b10a5d)
 - **app**: CS6 shell fidelity + inert-menu burn-down batches 4-17 (#7) (5fac7a2)
 - **app**: path-node add/delete, canvas dialogs, Duplicate/Clone (19b.1 + 19.6) (8ce5762)
 - **app**: Lucide tool icons, context menu, selection/mask verbs (19.6) (2923392)
@@ -201,6 +202,7 @@ Current version: **0.2.5**.
 
 ### Documentation
 
+- CS6 parity matrix, wiki set, and CS6 UI evidence (151e2fc)
 - 19b.1 quoting corrections, v0.2.4 receipts, license consolidation (2b849f5)
 - refresh stack for the daily-driver turn (19.1-19.5 landed) (dc62449)
 - session log for 19.1-19.5 + rendering fixes; ignore scratch (da108e7)

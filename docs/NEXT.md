@@ -466,7 +466,19 @@ scope, so no license path is attempted.
   tool flyouts (shape tools, the modify sub-tools, the fill/stroke
   pair, zoom/hand, and the eyedropper), each with an open-license
   icon. Accept: every tool in the strip selects a working tool; the
-  flyout opens on press-and-hold.
+  flyout opens on press-and-hold. — **LANDED 2026-11-05**
+  (`app/src/toolstrip.rs`): the strip is CS6's, as data — the six
+  categories in CS6's order (Select, Bitmap, Vector, Web, Colors,
+  View), the twenty-four groups with their one-key shortcuts, and the
+  flyout memberships, all read from the CS6 help set and the book's
+  Table 1-1 (evidence in
+  [`research/fw-ui-evidence.md`](research/fw-ui-evidence.md)). CS6's
+  group-cycling rule is implemented: a group's key advances within
+  the group. The Modify trio (Scale/Skew/Distort), the retouch trio
+  (Blur/Sharpen/Smudge), Dodge/Burn, Knife, Freeform/Reshape Area and
+  the Colors section's four panel buttons are all in the strip. Open:
+  the Alt-hold tool variants and the three-mode screen switch
+  (ticket 22.5).
 - **22.3 Adaptive canvas context menu** (M): the right-click menu
   changes with the selection — nothing selected, a bitmap, a vector
   path, a text object, an instance, a multi-selection, and inside a
