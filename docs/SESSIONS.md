@@ -1389,3 +1389,102 @@ feature-sized items into a panel-sized change.
 The same lesson applies to the proof: "the panel is in the inventory"
 and "the panel is on screen" are different claims. Only the pixel
 diff distinguishes them.
+
+## 2026-11-04 — Batch 17 shipped: CI repaired and PR merged
+
+### The CI image was the CI failure
+
+The first GitForge sweep on `56ee1bf` failed at `fmt-layers` with
+`no matching package named 'egui_extras' found ... offline mode`. The
+image cache was stale after the lockfile change. The image was rebuilt
+from the current lockfile and re-shipped; retry `ce94c14f` passed all
+eight jobs. Rebuild and re-ship `firecraft-ci-rust:1` whenever
+`Cargo.lock` moves.
+
+### PR #7 merged
+
+The direct push to `main` was refused by the Safeguards ruleset, so the
+branch went through PR #7. After `gate` passed, the PR merged by squash
+as `5fac7a2` to preserve linear history.
+
+### UI evidence and follow-up
+
+The batch 17 browser proof recorded in the local devlog used a 3200 px
+viewport to show every panel in the right-side stack. That proves the
+panel content renders, but also exposed a usability gap at ordinary
+window sizes: lower panels need a better navigation/docking treatment.
+The tracked `docs/img/app-main.png` predates this merge and must not be
+used as a current screenshot. Follow-up is tracked in
+[`tasks/T22-screenshot-ui.md`](tasks/T22-screenshot-ui.md).
+
+The previously empty GitHub Wiki landing page was replaced with user
+and contributor navigation (`Home.md`, `_Sidebar.md`), pushed to the
+wiki repository at `4fd9c7a`. The source copy is under `docs/wiki/`.
+
+The public Pages manifest was fetched read-only at 20:01 local time.
+Its `appinfo.json` and `host.html` hashes match local `dist/web`, but
+the JavaScript, wasm, and index hashes differ. The deployed source
+revision is unknown; T18 now tracks reconciliation rather than assuming
+the live site matches the local build.
+
+## 2026-11-04 — CS6 shell dock, per-kind inspector, and the T22 screenshot audit
+
+### The right dock replaces the floating panel windows
+
+The panel group was a stack of independently positioned egui windows
+along the right edge. As floating windows they covered the canvas, and
+their fixed vertical step put the lower panels below the fold at
+ordinary sizes. The group is now one right-side `egui::Panel` — a
+column of stacked, collapsible panels under CS6-style headers — so the
+dock *reserves* its width, the canvas shrinks instead of being covered,
+and the column scrolls when the stack outgrows the window.
+
+### The inspector grew per-kind field sets
+
+`properties_panel` used to answer "selection has no editable properties
+yet" for anything that was not a path or a text object. It now dispatches
+every object kind the document model has — path, text, symbol instance,
+group, bitmap, slice — and the group and bitmap kinds reach the live
+effect list as well. A bitmap selection shows its pixel size, tile
+count, location and offset; a slice shows its type, shape, geometry and
+its link and alt text.
+
+The slice link editor is now one shared component used by both the URL
+panel and the inspector, so the two cannot disagree: a single draft is
+reseeded whenever the selected object or the stored value changes
+underneath it.
+
+The bitmap's fill and stroke editors are **not** UI work — the `IMGv`
+node carries no fill/stroke node, `object.setFill`/`object.setStroke`
+are path-only, and `object.setBounds` refuses bitmaps (decision 0019).
+CS6's bitmap tools live in a separate *Image Editing* command panel,
+evidenced in the CS6 install. That gap is recorded as evidence-gated
+rather than faked.
+
+### The screenshot audit, and an invalid first round
+
+T22's first capture round was invalid: the bundle in `dist/web` predated
+the inspector work, so the captures showed the pre-change fallback text.
+Rebuilding the bundle and recapturing produced the real field sets —
+the path's X/Y/W/H/opacity/blend/visible/locked, and the bitmap's
+`bitmap 32x32 px, 1 tile(s) of 128 px`, `at (100.0, 100.0), offset (0.0,
+0.0)`, name, display controls and effect list.
+
+Six captures (empty, vector, bitmap at 1280×800 and 1920×1080) were
+taken against the fresh optimized bundle, with the objects created
+through the page's own command surface and the WebGL context alive in
+every one. Measured at 1280×800: the tool strip ends at x=70, the canvas
+runs 71–961, the dock occupies 962–1279, and the dock's drawn content
+ends at row 682 of 800 — every open panel inside the viewport. At a
+deliberately short 1280×400 viewport a wheel event over the dock moves
+the content, so panels stay reachable when the stack is taller than the
+window.
+
+The tracked `docs/img/app-main.png` was replaced with the 1280×800
+vector capture and labelled for its build and state.
+
+### Outcome
+
+`cargo run -p xtask -- ci` green (exit 0). The tracked screenshot, the
+T22 ticket's receipts, the parity matrix's sampling note, and the task
+board are reconciled with what the captures actually showed.

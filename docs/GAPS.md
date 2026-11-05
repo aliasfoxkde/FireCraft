@@ -1,8 +1,9 @@
 # FireCraft — Gaps, Improvements & Next Steps
 
-> Audited 2026-10-21. Replaces the "Now" snapshot in PROGRESS.md until
-> the next session close. A living document — update in-place, do not
-> maintain a separate stale copy.
+> **Historical audit, dated 2026-10-21.** This file preserves the
+> findings and family-level evidence from that audit. It is not a live
+> status page or task list. Use [`PROGRESS.md`](PROGRESS.md) for the
+> current snapshot and [`TASKS.md`](TASKS.md) for current work.
 >
 > **This revision answers the standing question**: *is FireCraft fully
 > reverse engineered, fully functional, working end to end, and
@@ -396,14 +397,13 @@ model.
 
 ## 15. Next action
 
-**Superseded (2026-11-02).** This file's phase sections (§3–§15) were
-the work plan through the parity campaign; Phases 8–13 landed (see
-[`PROGRESS.md`](PROGRESS.md)), and the active work list is
-[`NEXT.md`](NEXT.md) — Phase 19.6 inert-menu burn-down (8 of 289
-items remaining, batches 1–17 landed), then the daily-driver
-features (Phase 20) and differentiators (Phase 21). The per-family
-detail above remains useful as historical evidence; do not take a
-task from this file without checking NEXT.md first.
+**Superseded (2026-11-04).** This file's phase sections (§3–§15) were
+the work plan through the parity campaign. Phases 8–13 and the 19.6
+menu wiring campaign are complete. The current UI front is Phase 22;
+the canonical task list is [`TASKS.md`](TASKS.md), with detailed
+acceptance criteria in [`NEXT.md`](NEXT.md). Keep the per-family
+details above as historical evidence; do not take current status from
+this dated audit.
 
 ---
 

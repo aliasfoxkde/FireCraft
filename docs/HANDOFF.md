@@ -1,60 +1,45 @@
 # FireCraft — Agent Handoff
 
-> **Start here.** This is the entry point for any agent (or human)
-> picking up FireCraft work. It answers: where things stand, where
-> everything lives, how to work here, and exactly what to do next.
-> Day-to-day rules: [`../AGENTS.md`](../AGENTS.md). Master plan:
-> [`PLANNING.md`](PLANNING.md). Live status: [`PROGRESS.md`](PROGRESS.md).
-> Session log: [`SESSIONS.md`](SESSIONS.md). Project arc: [`HISTORY.md`](HISTORY.md).
+> **Agent orientation.** Start with [`../AGENTS.md`](../AGENTS.md) for
+> project rules, then [`TASKS.md`](TASKS.md) for the authoritative live
+> task list. [`NEXT.md`](NEXT.md) holds phase detail. This document
+> contains the current snapshot and operational runbooks; it is not a
+> second backlog. See [`README.md`](README.md) for the documentation map.
 
 ---
 
-## 1. State snapshot (2026-11-01)
+## 1. State snapshot (2026-11-04)
 
-- **Ship state:** v0.2.4 released (2026-11-02, `6c256bf` — stamps +
-  changelog + notes); repo public. Desktop
-  + CLI + web bundle + deb all cut from `xtask dist`. The web bundle
-  is live at <https://firecraft-web.pages.dev> (Cloudflare Pages,
-  direct upload — deploy door in §6).
-- **Engine registry:** 245 commands (`engine::catalog::ids()` — the
-  live authority; point-in-time counts in the docs trail it), pinned
-  equal to the fuzz call table by `the_call_table_covers_the_catalog`.
-- **CS6 DOM verb-surface parity:** **268 C / 3 P / 0 M / 85 N** — the
-  M table has been empty since 2026-10-14. The 3 P rows are terminal
-  at today's evidence: `setAnimInstanceStartFrame` and
-  `setSliceAutonaming` are permanent (no wire node exists — refusing
-  is the faithful behavior), and `setFillNColorNTexture` is
-  evidence-gated (no observed `TXFv` shape, no mintable texture
-  rasters). Do not reopen without new evidence.
-  (`docs/planning/generated/dom-parity.md`, regenerate per §5.)
-- **Where the frontier is:** the *engine* is complete; the *shell* is
-  not. A judge-panel audit (2026-10-31) found the engine's 243
-  commands reach only a fraction of the interface — **8 of 289 CS6
-  menu items still render `Action::Inert`** (derived —
-  `cargo test -p app inert_worklist -- --nocapture` prints them, and
-  `inert_count_never_rises` prints the count —
-  and gated by `menus::tests::inert_count_never_rises`) — so the active program is
-  **reachability and canvas competence**, i.e. `docs/NEXT.md`
-  Phases 19–21 (19.1–19.5 landed: transform handles, path-node
-  editing, gradient editor, command palette, grid/guides/snap; 19.6
-  inert-menu burn-down in flight). The quality ratchet (Phases
-  14–18) is the parallel backlog. WebOS packaging (`docs/WEBOS.md`)
-  is the standing primary-target goal.
-- **Clean-room invariants (never violate):** `source/` is Adobe's
-  copyrighted material — git-ignored, never committed, never copied
-  from. Adobe-derived text extracts are uncommitted working notes
-  under `/var/tmp/`. Adobe-authored corpus files are test oracles
-  only. The `AMT/` tree is out of scope entirely. Assets need a
-  `docs/ATTRIBUTION.md` row in the same change.
+- **Source state:** `main` is at `5fac7a2` (v0.2.5-era development;
+  the latest tag is `v0.2.5`). The tag and current `main` are different
+  snapshots. See [`PROGRESS.md`](PROGRESS.md) for build and release
+  evidence and [`TASKS.md`](TASKS.md) for current work.
+- **Engine and parity:** 245 registry commands; 268 carried / 3
+  partial / 0 missing DOM verbs. Live generated files and source calls
+  are authoritative for counts.
+- **Menu census:** 8 of 289 menu rows remain non-dispatching. The 19.6
+  wiring campaign is complete; remaining rows belong to future feature
+  work or evidence gates. The live census is derived and gated by
+  `menus::tests::inert_count_never_rises`.
+- **Current UI front:** Phase 22 shell fidelity and screenshot-driven
+  responsive review. The tracked screenshot was replaced on 2026-11-04
+  with a capture of the current shell; its receipts and limits are in
+  [`tasks/T22-screenshot-ui.md`](tasks/T22-screenshot-ui.md).
+- **Clean-room invariants:** `source/` and Adobe-derived local extracts
+  are reference-only and never committed. Adobe-authored corpus files
+  are test oracles. Assets require an attribution row in
+  [`ATTRIBUTION.md`](ATTRIBUTION.md).
 
 ## 2. Where everything lives
 
 | Path | What |
 |---|---|
 | `AGENTS.md` | Operating manual: commands, gates, commit rules, day-to-day method |
-| `docs/PLANNING.md` | Master plan: format spec (§6), architecture (§7), method |
+| `docs/README.md` | Documentation map and source-of-truth rules |
+| `docs/TASKS.md` | Authoritative active/queued/blocked task ledger |
+| `docs/PLANNING.md` | Deep plan: format spec (§6), architecture (§7), method |
 | `docs/planning/firecraft/` | `ROADMAP.md` + tickets M0–M15 (all closed; reference for how tickets are written) |
-| `docs/decisions/` | Decision records 0001–0067 — **write one per family/batch** |
+| `docs/decisions/` | Decision records — **write one per family/batch** |
 | `docs/planning/generated/` | `parity.md`, `scorecard.md` (xtask-owned) + `dom-parity.md` (generator-owned, see §5) |
 | `docs/research/fireworks-png-nodes.md` | The node dictionary — the format Rosetta stone (observational; corpus wins on conflict) |
 | `docs/WEBOS.md` | The web embedding contract + the smoke host page (load-bearing — see the warning there) |
@@ -67,7 +52,7 @@
 
 ## 3. How to work here (the family loop)
 
-1. **Pick the next phase** from §4. For parity rows, read the CS6 API
+1. **Pick the next task** from [`TASKS.md`](TASKS.md). For parity rows, read the CS6 API
    text for its verbs (regeneration recipe: `PLANNING.md` §5.4; the
    extract lives at `/var/tmp/fw_ext_full.txt`).
 2. **Write the decision doc first** (`docs/decisions/00NN-<topic>.md`):
@@ -148,103 +133,23 @@ verifiable.
   0001–0063`. Phase 9's recorded debts are all closed; the one
   evidence-gated hold is in §4 Phase 12.
 
-### Phase 19–21 — The daily-driver expansion (the active front, 2026-10-31 →)
+### Current program: Phases 20–22
 
-**The engine is complete; the shell is not.** A judge-panel audit
-against Fireworks CS6 and Photopea found the structural gap: 243
-registered commands, **8 of 289 CS6 menu items still rendering
-`Action::Inert`** (derived via `menus::tests::inert_worklist`, gated
-by the ceiling test). The program is reachability and canvas
-competence, not repair.
+Phase 19's canvas work and menu wiring campaign (batches 1–17) are
+complete. The live menu census is 8 of 289, with the remaining rows
+tracked as future feature work or evidence gates. Path-node add/delete,
+the reachability gate, and the wasm budget re-pin are also complete.
 
-The full plan, with the landed/open state of every item, lives in
-[`NEXT.md`](NEXT.md) — **read that file for the work list**, not this
-one. Summary:
-
-- **19.1–19.5 LANDED** (2026-10-31 → 11-01): transform handles +
-  Numeric Transform, Subselect path-node editing, gradient fill
-  editor, command palette, grid/guides/snap. Inert count 181 → 171.
-- **19.6 IN FLIGHT**: the inert-menu burn-down, in family batches
-  (selection/mask → page/frame → symbol/animation → text). Batch 1
-  (selection/mask) landed 2026-11-02 (`e9ece7d`, with the context
-  menu and Lucide icons): inert 171 → 144; batch 2 (canvas dialogs,
-  Duplicate/Clone) + 19b.1 (path-node add/delete) landed 2026-11-03
-  (`bf1b547`): inert → 129 of 289; batch 3 (Window-menu panel
-  toggles — Hide Panels/Tab, Main toolbar, 7 docked panels) landed
-  2026-11-03: inert → 120; batch 4 (page/frame — Insert ▸ State,
-  Trim/Fit Canvas, canvas rotations via the new `Action::Document`
-  arm) landed 2026-11-03; batch 5 (symbol/animation — Convert to
-  Symbol and Animate Selection via `symbol.create`, Tween Instances
-  via `symbol.tween`) landed 2026-11-03: inert → 111; batch 6
-  (View menu — Fit Selection, Gamma 1.8, Tooltips, Show All, Rulers,
-  Smart Guides, 9-Slice guides, Edges) and batch 7 (Text menu —
-  Plain, Align, Smaller/Larger, Orientation, Detach from Path,
-  Reverse Direction, Convert to Paths) landed 2026-11-03: inert →
-  85; batch 8 (Attach In Path / Attach to Path via
-  `text.attachPath`, the rail derived from a selected path object)
-  landed 2026-11-03: inert → **83 of 289**. The Text vertical-align
-  rows (Top / Centered Vertically / Bottom / Justified Vertically)
-  are **evidence-gated**: the node dictionary documents no text
-  vertical-justification node (`JSTi` is horizontal-only), so wiring
-  them would invent model state — the same posture as the 3 P parity
-  rows. Next batch: the Modify and File families.
-  Batch 9 (Modify ▸ Transform: Free Transform and Distort set the
-  handle mode — Distort drags a corner independently via
-  `object.setQuadrangle` with drag-start fixed corners; Split via
-  `path.splitPaths`; Remove Transformations via `object.transform`
-  with each stored `MTXv`'s inverse) landed 2026-11-03: inert →
-  **67 of 289**. Batch 10 (same day): the Window family — Tools
-  folds the left dock; Color Mixer, Swatches, and Info dock as
-  toggled right-dock panels; Duplicate Window/Cascade/Tile report
-  the single-document shell honestly. Batch 11 (same day): Edit ▸
-  Insert bitmap rows — Empty Bitmap (`bitmap.addImage` spanning the
-  canvas), Bitmap Via Copy/Cut (`bitmap.addImageViaCopy`/`Cut` on a
-  selected bitmap), Crop Document (extents, `grow: false`). Batch 12
-  (same day): Modify ▸ Animation ▸ Remove Animation via
-  `symbol.breakApart` on the selected instance. Batch 13 (same day):
-  the File family — Close/Close All start a fresh document (refusing
-  to discard unsaved edits), Save All saves the one open document,
-  Revert reloads the last-saved file, File Info reports
-  pages/layers/objects/canvas, and the export rows open the export
-  dialog on the named format. Inert → **42 of 289** (batch 14).
-  Batch 15 (2026-11-04): the Edit remainder + Text rows — Insert ▸
-  New Button (a button-definition `library.add`), Hotspot /
-  Rectangular / Polygon Slice (`hotspot.create` / `slice.create`
-  over the selection bounds, canvas center when empty; the polygon
-  variant traces the rect's corners), and honest `ReportGap` messages
-  for Find and Replace, Copy as Vectors, Copy HTML Code, Paste
-  Attributes, Crop Selected Bitmap, Preferences, Keyboard Shortcuts,
-  Text ▸ Size ▸ Other, the four vertical-align rows (still
-  evidence-gated — no documented wire node), and both spelling rows.
-  Inert → **24 of 289**. Batch 16 (same day): the Modify remainder —
-  Edit Symbol / Edit in Place enter the selected instance's
-  definition scope (`enter_symbol`, view state); Hard / Anti-Alias /
-  Feather Fill drive `path.setFillEdgeMode` on every selected path
-  (feather rides the panel's radius); the animation/JPEG Settings,
-  Swap Symbol, Group as Mask, the three Pop-up Menu rows, and Snap
-  To Pixel report their gap plainly. Inert → **11 of 289**. Batch 17
-  (same day): the CS6 web panels — Auto Shapes, URL, and Behaviors
-  become real panels (`shell::panels_web`, decision 0069) whose every
-  action is one engine command (`object.createPath` / `autoshape.*`,
-  `slice.setLink`, `slice.addBehavior` / `slice.removeBehavior` /
-  `slice.setData`). Inert → **8 of 289** — the remaining rows are the
-  scripting family (Commands ▸ Manage Saved Commands, Filters ▸
-  Repeat Filter), the Text Font placeholder (a verbatim CS6 resource
-  artifact), and the Window panel rows pending their features
-  (Optimize / Common Library / CSS Properties / Find and Replace).
-- **19b**: path-node add/delete **DONE** (`bf1b547`); the
-  wasm-budget re-pin **DONE** (2026-11-03: measured 21,235,599 B,
-  ceiling moved to 21,500,000 with the dated cause — 19b.4). The
-  reachability gate and inert-drift test landed 2026-11-02
-  (`menus::tests::inert_count_never_rises` + the derived census).
-- **20 / 21 queued**: daily-driver features (in-canvas text, Optimize
-  panel, animation timeline, mask stack, tabs, history rewind, slice
-  behaviors) and differentiators (autosave, HiDPI, palette v2,
-  preferences, in-app scripting).
-
-The shell was split out of one 5.9k-line `shell.rs` into `shell/`
-modules (`32a110d`) before this work — six canvas surfaces were about
-to accrete onto it.
+The next UI work is Phase 22: finish the shell against the clean-room
+reference notes and audit it at ordinary viewport sizes. The screenshot
+audit itself is done — the tracked screenshot was replaced on 2026-11-04
+with a capture of the current shell, and the remaining Phase 22 items
+are the panel inventory, the tool strip, and the chrome. Phase 20
+contains daily-driver editing features; Phase 21 contains modern
+differentiators.
+The current task ledger is [`TASKS.md`](TASKS.md), the full roadmap is
+[`NEXT.md`](NEXT.md), and screenshot acceptance criteria are in
+[`tasks/T22-screenshot-ui.md`](tasks/T22-screenshot-ui.md).
 
 ### Phase 10 — Browser shell surface — LANDED 2026-10-15 (commit `67532fa`, v0.2.1)
 The v0.2.0 web bundle could not open, import, or save anything: every
@@ -320,13 +225,10 @@ touching `web/` or the smoke.**
 
 ### Suggested order
 
-**Current front:** 19.6 (inert burn-down) → 19b gates → Phase 20 →
-Phase 21 — see [`NEXT.md`](NEXT.md) for the live order and per-item
-state; it supersedes the ordering below, which dates from the
-Phases 11–13 era (Phases 11.1–11.4 and 13.1–13.4 are closed; Phase 12
-stays parked unless the Wine oracle materializes). Re-verify the
-deployed site after any `web/` change (§6.2) — the browser is the
-primary target and the only place its failure modes live.
+**Current front:** Phase 22 shell fidelity and the screenshot-driven
+responsive audit. After that, take queued Phase 20/21 work from
+[`TASKS.md`](TASKS.md). Phase 19 and 19b are complete. Re-verify the
+browser path after any `web/` change (§6.2).
 
 ## 5. Parity-matrix regeneration recipe
 
