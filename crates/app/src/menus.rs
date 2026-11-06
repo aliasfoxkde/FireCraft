@@ -45,6 +45,13 @@ pub enum Action {
     /// `text.setAttrs` size nudged one step from the current value
     /// (Text ▸ Smaller/Larger; CS6's step is the next preset down/up).
     TextStep(i64),
+    /// `text.setFont` with a family name (Text ▸ Font; the same
+    /// list the inspector's font combo offers).
+    TextFont(&'static str),
+    /// Filters ▸ Repeat Filter: re-applies the last filter preset the
+    /// session applied (menu row or live-filters panel) to the current
+    /// selection. CS6's `dom.applyFilter` repeat behavior.
+    RepeatFilter,
     /// `text.setTextOnPathMode` with a `TAMi` 0..=3 mode.
     TextOnPathMode(i64),
     /// `filter.add` from the Filters menu: the preset's internal name,
@@ -1656,12 +1663,22 @@ pub static TEXT: Menu = Menu {
     entries: &[
         Entry::Sub(
             "Font",
-            &[item(
-                35343,
-                "placeholder - do not remove",
-                "",
-                Action::Inert,
-            )],
+            // The families the renderer actually carries; the
+            // inspector's combo offers the same list. CS6 builds this
+            // menu from the system font inventory — a live enumeration
+            // is the evidence gap recorded in CS6-PARITY row 52.
+            &[
+                item(35343, "Liberation Sans", "", Action::TextFont("Liberation Sans")),
+                item(35344, "Arial", "", Action::TextFont("Arial")),
+                item(35345, "Verdana", "", Action::TextFont("Verdana")),
+                item(
+                    35346,
+                    "Times New Roman",
+                    "",
+                    Action::TextFont("Times New Roman"),
+                ),
+                item(35347, "Courier New", "", Action::TextFont("Courier New")),
+            ],
         ),
         Entry::Sub(
             "Size",
@@ -1851,7 +1868,7 @@ pub static COMMANDS: Menu = Menu {
 pub static FILTERS: Menu = Menu {
     label: "Filters",
     entries: &[
-        item(35035, "Repeat Filter", "", Action::Inert),
+        item(35035, "Repeat Filter", "", Action::RepeatFilter),
         Entry::Sep,
         Entry::Sub(
             "Adjust Color",
@@ -1966,7 +1983,12 @@ pub static WINDOW: Menu = Menu {
             Action::Shell(ShellAction::TogglePanel("Properties")),
         ),
         Entry::Sep,
-        item(43409, "Optimize", "", Action::Inert),
+        item(
+            43409,
+            "Optimize",
+            "",
+            Action::Shell(ShellAction::TogglePanel("Optimize")),
+        ),
         item(
             43412,
             "Layers",
@@ -1974,9 +1996,19 @@ pub static WINDOW: Menu = Menu {
             Action::Shell(ShellAction::TogglePanel("Layers")),
         ),
         Entry::Sep,
-        item(45816, "Common Library", "", Action::Inert),
+        item(
+            45816,
+            "Common Library",
+            "",
+            Action::Shell(ShellAction::TogglePanel("Common Library")),
+        ),
         Entry::Sep,
-        item(49125, "CSS Properties", "", Action::Inert),
+        item(
+            49125,
+            "CSS Properties",
+            "",
+            Action::Shell(ShellAction::TogglePanel("CSS Properties")),
+        ),
         Entry::Sep,
         item(
             35798,
@@ -2047,7 +2079,12 @@ pub static WINDOW: Menu = Menu {
             "",
             Action::Shell(ShellAction::TogglePanel("Behaviors")),
         ),
-        item(43402, "Find and Replace", "", Action::Inert),
+        item(
+            43402,
+            "Find and Replace",
+            "",
+            Action::Shell(ShellAction::TogglePanel("Find and Replace")),
+        ),
         Entry::Sep,
         item(
             57650,
@@ -2167,8 +2204,7 @@ const fn key(mods: Mods, k: egui::Key, action: Action) -> Shortcut {
 /// The Fireworks.xml keymap bindings this shell implements. Tool
 /// letters are the CS6 one-key tool selects; plain keys only fire when
 /// no text field has keyboard focus.
-pub static SHORTCUTS: &[Shortcut] = &[
-    // File
+pub static SHORTCUTS: &[Shortcut] = &[    // File
     key(CTRL, egui::Key::N, Action::Shell(ShellAction::New)),
     key(CTRL, egui::Key::O, Action::Shell(ShellAction::Open)),
     key(CTRL, egui::Key::S, Action::Shell(ShellAction::Save)),
@@ -2369,6 +2405,27 @@ pub static SHORTCUTS: &[Shortcut] = &[
         egui::Key::F1,
         Action::Shell(ShellAction::ShowShortcuts),
     ),
+];
+
+/// The F1 help window's group layout over `SHORTCUTS` — (title, row
+/// count) pairs whose counts are asserted to sum to `SHORTCUTS.len()`
+/// (`the_shortcut_groups_cover_the_table`), so a table row can never
+/// be silently skipped by the help walker again. This is the fix for
+/// CS6-PARITY's F1 grouping mismatch: the old counts summed to 49
+/// against a 60-row table.
+pub static SHORTCUT_GROUPS: &[(&str, usize)] = &[
+    ("File", 5),
+    ("Command palette", 1),
+    ("Window", 4),
+    ("Edit", 7),
+    ("Clipboard", 3),
+    ("Modify ▸ Group", 3),
+    ("View", 3),
+    ("Modify ▸ Arrange", 4),
+    ("Modify ▸ Combine Paths", 1),
+    ("Text styles", 3),
+    ("Tools (one-key selects)", 25),
+    ("Help", 1),
 ];
 
 impl Shortcut {
@@ -2581,6 +2638,8 @@ pub fn action_name(action: Action) -> String {
                 "Larger text".into()
             }
         }
+        Action::TextFont(family) => format!("Font: {family}"),
+        Action::RepeatFilter => "Repeat the last filter".into(),
         Action::TextOnPathMode(mode) => format!("Text on-path mode ({mode})"),
         Action::Filter(preset) => format!("Filter: {preset}"),
         Action::Document(document) => match document {
@@ -2599,7 +2658,7 @@ mod tests {
     /// The highest inert-item count the docs have recorded. The
     /// `inert_count_never_rises` test refuses any regression above it;
     /// when the count falls, ratchet this down to the new number.
-    const INERT_CEILING: usize = 8;
+    const INERT_CEILING: usize = 4;
 
     fn walk(entries: &'static [Entry]) -> Vec<&'static Item> {
         let mut items = Vec::new();
@@ -2652,7 +2711,7 @@ mod tests {
     fn filters_submenu_is_the_panel_registry() {
         assert_eq!(
             FILTERS.entries[0],
-            item(35035, "Repeat Filter", "", Action::Inert)
+            item(35035, "Repeat Filter", "", Action::RepeatFilter)
         );
         let mut menu_names = Vec::new();
         for entry in FILTERS.entries {
@@ -2723,6 +2782,19 @@ mod tests {
         );
     }
 
+    /// The F1 help groups exactly tile `SHORTCUTS` — no row skipped,
+    /// no row shown twice (the CS6-PARITY F1 grouping mismatch fix).
+    #[test]
+    fn the_shortcut_groups_cover_the_table() {
+        let sum: usize = SHORTCUT_GROUPS.iter().map(|(_, count)| count).sum();
+        assert_eq!(
+            sum,
+            SHORTCUTS.len(),
+            "SHORTCUT_GROUPS does not tile SHORTCUTS ({sum} vs {})",
+            SHORTCUTS.len()
+        );
+    }
+
     /// The item total is pinned exactly: it is the CS6 surface the
     /// transcription carries, and the docs quote it alongside the
     /// inert count. A change here means the surface changed —
@@ -2731,7 +2803,7 @@ mod tests {
     fn menu_item_total_is_pinned() {
         let (total, _) = census();
         assert_eq!(
-            total, 290,
+            total, 294,
             "menu item total changed — update the docs that quote it"
         );
     }
@@ -2762,6 +2834,39 @@ mod tests {
                 Action::Shell(ShellAction::SingleDocument)
             ));
         }
+    }
+
+    /// Text ▸ Font: the resource ships the submenu as a single
+    /// `placeholder - do not remove` popup (CS6 populates it at
+    /// runtime from the system font inventory — `RT_MENU` 128, read
+    /// directly from the resource DLL 2026-11-06). The transcription
+    /// carries five renderer-known families through `text.setFont`,
+    /// the same list the inspector's font combo offers.
+    #[test]
+    fn the_text_font_submenu_dispatches_set_font() {
+        let text = MENUBAR
+            .iter()
+            .find(|menu| menu.label == "Text")
+            .expect("the bar carries a Text menu");
+        let font = text
+            .entries
+            .iter()
+            .find_map(|entry| match entry {
+                Entry::Sub("Font", items) => Some(items),
+                _ => None,
+            })
+            .expect("a Font submenu");
+        let families: Vec<&str> = walk(font)
+            .into_iter()
+            .map(|item| match item.action {
+                Action::TextFont(family) => family,
+                other => panic!("non-TextFont row in Font: {other:?}"),
+            })
+            .collect();
+        assert_eq!(
+            families,
+            ["Liberation Sans", "Arial", "Verdana", "Times New Roman", "Courier New"],
+        );
     }
 
     /// Every item carries a label and (except the placeholder Font row

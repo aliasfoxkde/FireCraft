@@ -114,6 +114,15 @@ impl Shell {
     }
 
     /// What CS6's panel buttons do.
+    /// User picked a tool (leader button or flyout row): an open
+    /// text-edit session commits first — CS6 commits the type edit
+    /// when you leave the Text tool.
+    pub(super) fn pick_tool(&mut self, tool: Tool) {
+        self.commit_text_edit();
+        self.editor.tool = tool;
+        self.status = format!("tool: {}", tool_label(tool));
+    }
+
     pub(super) fn run_panel_button(&mut self, tool: Tool) {
         let outcome = match tool {
             Tool::DefaultStrokeFill => {
@@ -189,9 +198,7 @@ impl Shell {
                 }
             });
         if let Some(tool) = picked {
-            self.editor.tool = tool;
-            self.status = format!("tool: {}", tool_label(tool));
-            open = false;
+            self.pick_tool(tool);
         }
         // `open_bool` writes `false` back when the popup's close
         // behavior fires; either way the flyout is done once closed.
@@ -212,8 +219,7 @@ impl Shell {
         let (rect, response) = ui.allocate_exact_size(egui::Vec2::splat(26.0), Sense::click());
         let active = self.editor.tool == tool;
         if response.clicked() {
-            self.editor.tool = tool;
-            self.status = format!("tool: {}", tool_label(tool));
+            self.pick_tool(tool);
         }
         // CS6's tool-button double-clicks: Zoom resets to 100%, Hand
         // fits the page in the window.
@@ -1048,6 +1054,23 @@ impl Shell {
                                     // Click-only tools: the press
                                     // itself is the whole gesture.
                                 }
+                                Tool::Text
+                                    if self
+                                        .editor
+                                        .hit_at(world)
+                                        .is_some_and(|id| {
+                                            matches!(
+                                                self.editor.document().registry.get(id),
+                                                Some(doc::ObjectData::Text(_))
+                                            )
+                                        }) =>
+                                {
+                                    // A press on a text object edits it
+                                    // in place (20.1) — the release
+                                    // click opens the editor; a drag
+                                    // here must not also stamp a new
+                                    // frame.
+                                }
                                 _ => self.editor.begin_drag(world),
                             }
                         }
@@ -1256,6 +1279,20 @@ impl Shell {
                         };
                         self.view.zoom_about(local, factor);
                     }
+                    Tool::Text => {
+                        // CS6: a Text-tool click on an existing text
+                        // object enters in-canvas editing instead of
+                        // stamping a new empty frame (20.1).
+                        let world = self.view.to_world(local);
+                        if let Some(id) = self.editor.hit_at(world)
+                            && matches!(
+                                self.editor.document().registry.get(id),
+                                Some(doc::ObjectData::Text(_))
+                            )
+                        {
+                            self.begin_text_edit(id);
+                        }
+                    }
                     _ => {}
                 }
             }
@@ -1274,7 +1311,9 @@ impl Shell {
                     .get(id)
                     .map(|data| (id, data))
             });
-            if let Some((_id, ObjectData::SymbolInstance(instance))) = entered {
+            if let Some((id, ObjectData::Text(_))) = entered {
+                self.begin_text_edit(id);
+            } else if let Some((_id, ObjectData::SymbolInstance(instance))) = entered {
                 let number = instance.symbol_number;
                 match self.editor.enter_symbol(number) {
                     Ok(()) => self.status = format!("editing symbol {number}"),
@@ -1357,6 +1396,66 @@ impl Shell {
                     .zoom_about(anchor, if scroll > 0.0 { 1.1 } else { 1.0 / 1.1 });
             }
         }
+
+        // In-canvas text editing (20.1): the overlay TextEdit sits on
+        // the object's frame. Esc cancels; any other commit path
+        // (click-away, tool switch) goes through `commit_text_edit`.
+        if self.text_edit.is_some() {
+            let esc = ui.input(|i| i.key_pressed(egui::Key::Escape));
+            if esc {
+                self.cancel_text_edit();
+            } else {
+                self.text_edit_overlay(ui, rect);
+            }
+        }
+    }
+
+    /// The in-canvas text-edit overlay (20.1): a frameless, opaque
+    /// `TextEdit` pinned to the text object's frame in canvas space,
+    /// sized to fit the live buffer. Request focus so typing lands in
+    /// it immediately; losing focus (a click elsewhere) commits.
+    fn text_edit_overlay(&mut self, ui: &mut egui::Ui, canvas_rect: Rect) {
+        let Some(edit) = self.text_edit.clone() else {
+            return;
+        };
+        let Some(doc::ObjectData::Text(text)) = self.editor.document().registry.get(edit.id) else {
+            // The object vanished (undo, delete) — close the editor.
+            self.text_edit = None;
+            return;
+        };
+        let frame = text.frame;
+        let min = self.screen_of(geom::Point::new(frame.x0, frame.y0));
+        let size = egui::vec2(
+            ((frame.x1 - frame.x0) * f64::from(self.view.zoom)).max(60.0) as f32,
+            ((frame.y1 - frame.y0) * f64::from(self.view.zoom)).max(24.0) as f32,
+        );
+        let screen = Rect::from_min_size(min, size);
+        if !screen.intersects(canvas_rect) {
+            return;
+        }
+        let editor_id = egui::Id::new(("text_edit", edit.id));
+        let mut buffer = edit.buffer;
+        ui.allocate_rect(screen, egui::Sense::hover());
+        egui::Area::new(editor_id)
+            .fixed_pos(screen.min)
+            .order(egui::Order::Foreground)
+            .show(ui.ctx(), |ui| {
+                let response = egui::TextEdit::multiline(&mut buffer)
+                    .id(editor_id)
+                    .desired_width(size.x)
+                    .desired_rows(1)
+                    .frame(egui::Frame::NONE)
+                    .show(ui);
+                if response.response.changed() {
+                    if let Some(edit) = self.text_edit.as_mut() {
+                        edit.buffer = buffer.clone();
+                    }
+                }
+                if response.response.lost_focus() {
+                    self.commit_text_edit();
+                }
+            });
+        ui.memory_mut(|memory| memory.request_focus(editor_id));
     }
 
     /// The CS6 context options bar under the menu: the active tool's

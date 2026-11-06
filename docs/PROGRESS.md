@@ -27,8 +27,10 @@
   audit; see the latest session evidence before relying on those claims.
 - **Engine and parity:** 245 command IDs (source is authoritative);
   268 carried / 3 partial / 0 missing of the 356 DOM verbs.
-- **Menu reachability:** 8 of 289 rows remain non-dispatching. The
-  19.6 campaign (batches 1–17) is complete; the remaining rows are
+- **Menu reachability:** 4 of 289 rows remain non-dispatching. The
+  19.6 campaign (batches 1–17) is complete, and the Window menu's
+  panel rows (including Optimize, CSS Properties, Find and Replace,
+  and Common Library) all dispatch; the remaining rows are
   feature work or explicit evidence gates. Census source:
   `menus::tests::inert_worklist`; ceiling:
   `menus::tests::inert_count_never_rises`.

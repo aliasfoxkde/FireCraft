@@ -749,6 +749,7 @@ pub const CALLS: &[&str] = &[
     "bitmap.movePixelMaskBy",
     "bitmap.setPixelMask",
     "page.setName",
+    "page.setExport",
     "page.reorder",
     "page.setMaster",
     "page.unsetMaster",
@@ -2877,6 +2878,15 @@ pub fn payload_template(name: &str, rng: &mut FuzzRng, document: &Document) -> s
         "page.setName" => serde_json::json!({
             "page": any_index(rng, pages),
             "name": rng.pick(&["Cover", "Page A", ""]).copied(),
+        }),
+        "page.setExport" => serde_json::json!({
+            "page": any_index(rng, pages),
+            "format": rng.below(4),
+            "jpeg_quality": rng.below(101),
+            "jpeg_progressive": rng.chance(50),
+            "dither": rng.below(101),
+            "frame_loop": rng.below(10),
+            "interlaced": rng.chance(50),
         }),
         "page.reorder" => serde_json::json!({
             "from": any_index(rng, pages),

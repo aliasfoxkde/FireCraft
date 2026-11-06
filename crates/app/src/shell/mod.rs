@@ -157,6 +157,16 @@ pub struct Shell {
     /// position it opened at (the popup re-anchors there each frame,
     /// so a later pointer move does not drag it).
     pub(crate) context_menu: Option<Pos2>,
+    /// In-canvas text editing (20.1): the object being edited and the
+    /// live buffer. `Some` while the egui `TextEdit` overlay sits on the
+    /// text frame; commit writes `text.setText`, cancel (Esc or
+    /// switching tools) discards the buffer.
+    text_edit: Option<TextEditState>,
+    /// Filters ▸ Repeat Filter: the internal name of the last filter
+    /// applied from the Filters menu or the live-filters panel.
+    /// CS6 applies it to the current selection; with none applied
+    /// yet the row reports the CS6 "no filters to repeat" state.
+    last_filter: Option<&'static str>,
     /// Window-menu panel visibility: names of right-dock panels the
     /// user closed. Absent = shown (CS6 default is everything open).
     panel_hidden: Vec<&'static str>,
@@ -166,6 +176,10 @@ pub struct Shell {
     /// The Behaviors panel's chosen swap-image target (the slice's
     /// name; `None` = not chosen yet).
     swap_target: Option<String>,
+    /// The Find and Replace panel's query; `None` = not typed yet.
+    find_query: Option<String>,
+    /// The Find and Replace panel's replacement text.
+    find_replacement: Option<String>,
     /// Window ▸ Hide Panels (Tab): all right-dock panels folded at
     /// once, independent of per-panel visibility.
     panels_hidden: bool,
@@ -182,6 +196,20 @@ pub struct Shell {
     /// mutates the shell — without one, a bridge-loaded document sat
     /// behind a stale untitled canvas until the next input event.
     ctx: Option<egui::Context>,
+}
+
+/// In-canvas text editing (20.1): the live editor state for one text
+/// object. `buffer` is what the overlay `TextEdit` shows; commit sends
+/// it through `text.setText` when it differs from `original`; cancel
+/// (Esc, or switching tools) drops it without touching the document.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct TextEditState {
+    /// The text object being edited.
+    pub(crate) id: doc::ObjectId,
+    /// The characters before editing started.
+    pub(crate) original: String,
+    /// The live edit buffer.
+    pub(crate) buffer: String,
 }
 
 /// A press-and-hold in progress on a tool-group leader: when it
@@ -367,11 +395,15 @@ impl Shell {
             gamma_18: false,
             guide_draft: None,
             context_menu: None,
+            text_edit: None,
+            last_filter: None,
             // CS6's fresh-document roster: Properties/Pages/States/
             // Layers open, the rest of the panel inventory closed.
             panel_hidden: Self::default_open_panels(),
             url_draft: None,
             swap_target: None,
+            find_query: None,
+            find_replacement: None,
             panels_hidden: false,
             tools_hidden: false,
             options_bar_hidden: false,
@@ -779,6 +811,51 @@ impl Shell {
         }
     }
 
+    /// Begin in-canvas editing of the text object under `id` (20.1):
+    /// snapshot its characters and open the overlay. Re-opening on the
+    /// same object keeps the live buffer (a click back into the edit
+    /// must not wipe what was typed).
+    pub(crate) fn begin_text_edit(&mut self, id: doc::ObjectId) {
+        if self.text_edit.as_ref().is_some_and(|edit| edit.id == id) {
+            return;
+        }
+        let original = match self.editor.document().registry.get(id) {
+            Some(doc::ObjectData::Text(text)) => text
+                .runs
+                .iter()
+                .map(|run| run.text.as_str())
+                .collect::<String>(),
+            _ => return,
+        };
+        self.text_edit = Some(TextEditState {
+            id,
+            buffer: original.clone(),
+            original,
+        });
+    }
+
+    /// Commit the text-edit overlay: `text.setText` with the buffer
+    /// when it changed; then the session closes the editor either way.
+    pub(crate) fn commit_text_edit(&mut self) {
+        let Some(edit) = self.text_edit.take() else {
+            return;
+        };
+        if edit.buffer == edit.original {
+            return;
+        }
+        if !self.run_command(
+            "text.setText",
+            serde_json::json!({ "id": edit.id, "text": edit.buffer }),
+        ) {
+            self.status = "text edit failed".to_owned();
+        }
+    }
+
+    /// Cancel the text-edit overlay without touching the document.
+    pub(crate) fn cancel_text_edit(&mut self) {
+        self.text_edit = None;
+    }
+
     /// History → Save Steps…: the session journal written as a
     /// `.fwsteps` command file (JSON lines) through the injected
     /// traits. The file replays through [`Session::reopen`] — the same
@@ -1009,6 +1086,16 @@ impl Shell {
                     serde_json::json!({ "id": id, "size": next }),
                 );
             }
+            menus::Action::TextFont(family) => {
+                // Text ▸ Font (22.5): the same family list the
+                // inspector's combo offers, through `text.setFont`.
+                if let Some(id) = self.editor.selection {
+                    self.run_command(
+                        "text.setFont",
+                        serde_json::json!({ "id": id, "font": family }),
+                    );
+                }
+            }
             menus::Action::TextOnPathMode(mode) => {
                 // The on-path setters walk the document's selection, so
                 // the view's selection must land there first.
@@ -1025,10 +1112,21 @@ impl Shell {
             }
             menus::Action::Filter(name) => match self.editor.selection {
                 Some(id) => match filter_preset(name) {
-                    Some(preset) => self.apply_filter_preset(id, *preset),
+                    Some(preset) => {
+                        self.last_filter = Some(preset.name);
+                        self.apply_filter_preset(id, *preset);
+                    }
                     None => self.status = format!("no such filter: {name}"),
                 },
                 None => self.status = "pick an object to filter".to_owned(),
+            },
+            menus::Action::RepeatFilter => match (self.last_filter, self.editor.selection) {
+                (Some(name), Some(id)) => match filter_preset(name) {
+                    Some(preset) => self.apply_filter_preset(id, *preset),
+                    None => self.status = format!("no such filter: {name}"),
+                },
+                (Some(_), None) => self.status = "pick an object to filter".to_owned(),
+                (None, _) => self.status = "no filters to repeat".to_owned(),
             },
             menus::Action::Document(action) => self.run_document(action),
         }
@@ -5012,5 +5110,179 @@ mod tests {
         shell.editor.selection = Some(id);
         shell.run_action(&menus::Action::Sel(menus::SelAction::EditSymbol));
         assert_eq!(shell.editor.symbol_scope, Some(symbol));
+    }
+
+    /// 20.1: beginning an edit snapshots the runs, the buffer tracks
+    /// keystrokes, commit writes `text.setText` once, and re-opening
+    /// the same object keeps the live buffer.
+    #[test]
+    fn text_edit_session_buffers_and_commits() {
+        let (mut shell, id) = text_shell("hello");
+        shell.begin_text_edit(id);
+        assert_eq!(shell.text_edit.as_ref().unwrap().original, "hello");
+        shell.text_edit.as_mut().unwrap().buffer.push_str(" world");
+        // Re-open on the same object mid-edit keeps the buffer.
+        shell.begin_text_edit(id);
+        assert_eq!(shell.text_edit.as_ref().unwrap().buffer, "hello world");
+        shell.commit_text_edit();
+        assert!(shell.text_edit.is_none());
+        assert_eq!(text_of(&shell.editor, id), "hello world");
+        // An unchanged buffer commits nothing — no journal row.
+        let journal = shell.editor.session.journal_len();
+        shell.begin_text_edit(id);
+        shell.commit_text_edit();
+        assert_eq!(shell.editor.session.journal_len(), journal);
+    }
+
+    /// 20.1: cancel restores nothing and writes nothing; a vanished
+    /// object (deleted under the editor) closes the session silently.
+    #[test]
+    fn text_edit_cancel_and_lost_object() {
+        let (mut shell, id) = text_shell("keep");
+        shell.begin_text_edit(id);
+        shell.text_edit.as_mut().unwrap().buffer = "changed".to_owned();
+        shell.cancel_text_edit();
+        assert!(shell.text_edit.is_none());
+        assert_eq!(text_of(&shell.editor, id), "keep");
+        // Commit on a no-op session stays clean.
+        shell.commit_text_edit();
+        assert_eq!(text_of(&shell.editor, id), "keep");
+        // A vanished object refuses to open an edit session.
+        shell.begin_text_edit(doc::ObjectId::from_parts(9_999, 0));
+        assert!(shell.text_edit.is_none());
+    }
+
+    /// 20.1 focus paths: a tool switch commits (CS6 commits the edit
+    /// when you leave the Text tool); Esc closes without writing.
+    #[test]
+    fn text_edit_focus_paths() {
+        let (mut shell, id) = text_shell("keep");
+        // Tool switch commits a changed buffer exactly once.
+        shell.begin_text_edit(id);
+        shell.text_edit.as_mut().unwrap().buffer = "typed".to_owned();
+        shell.pick_tool(Tool::Pointer);
+        assert!(shell.text_edit.is_none());
+        assert_eq!(text_of(&shell.editor, id), "typed");
+        let journal = shell.editor.session.journal_len();
+        // Esc cancels — the buffer change is discarded.
+        shell.begin_text_edit(id);
+        shell.text_edit.as_mut().unwrap().buffer = "scratch".to_owned();
+        shell.cancel_text_edit();
+        assert!(shell.text_edit.is_none());
+        assert_eq!(text_of(&shell.editor, id), "typed");
+        assert_eq!(shell.editor.session.journal_len(), journal);
+        // A no-op tool switch writes nothing.
+        shell.begin_text_edit(id);
+        shell.pick_tool(Tool::Pointer);
+        assert_eq!(shell.editor.session.journal_len(), journal);
+    }
+
+    /// 22.4: the document field set writes through `document.*` —
+    /// canvas geometry, resolution with unit, canvas color — and the
+    /// multi-selection set fans a display edit out to every member.
+    #[test]
+    fn inspector_document_and_multi_selection_sets() {
+        // Document set: canvas color and resolution round-trip.
+        let (mut shell, _) = text_shell("doc");
+        assert!(shell.run_command(
+            "document.setCanvasColor",
+            serde_json::json!({ "color_raw": 0xFF20_4A87i64 })
+        ));
+        assert_eq!(
+            shell.editor.session.document().info.canvas.background_raw,
+            0xFF20_4A87
+        );
+        assert!(shell.run_command(
+            "document.setResolution",
+            serde_json::json!({ "resolution": 96.0, "unit": "inch" }),
+        ));
+        assert!((shell.editor.session.document().info.canvas.resolution - 96.0).abs() < 1e-9);
+
+        // Multi-selection set: two paths, one shared opacity edit.
+        let (mut shell, first) = two_path_shell();
+        let second = *shell
+            .editor
+            .current_cell()
+            .unwrap()
+            .elements
+            .last()
+            .unwrap();
+        assert_ne!(first, second);
+        shell.editor.set_selection(vec![first, second]);
+        assert_eq!(shell.editor.live_selection().len(), 2);
+        for id in [first, second] {
+            assert!(shell.run_command(
+                "object.setOpacity",
+                serde_json::json!({ "id": id, "opacity": 500 }),
+            ));
+        }
+        for id in [first, second] {
+            match shell.editor.document().registry.get(id) {
+                Some(doc::ObjectData::Path(path)) => assert_eq!(path.opacity, 500),
+                other => panic!("expected path, got {other:?}"),
+            }
+        }
+    }
+
+    /// A shell holding two rectangles — the multi-selection fixture.
+    fn two_path_shell() -> (Shell, doc::ObjectId) {
+        let mut editor = Editor::untitled();
+        for (name, x) in [("a", 0.0), ("b", 40.0)] {
+            editor
+                .apply(
+                    "object.createPath",
+                    serde_json::json!({
+                        "kind": "rect",
+                        "x": x, "y": 0.0, "width": 20.0, "height": 10.0,
+                        "page": 0, "layer": editor.active_layer(), "cell": 0,
+                        "name": name,
+                    }),
+                )
+                .unwrap();
+        }
+        let cell = editor.current_cell().unwrap().clone();
+        let ids: Vec<doc::ObjectId> = cell.elements.clone();
+        editor.set_selection(ids.clone());
+        (gui_shell(editor), ids[0])
+    }
+
+    /// 22.5: Repeat Filter re-applies the last filter preset to the
+    /// selection; with nothing applied yet it reports, never acts.
+    #[test]
+    fn repeat_filter_reapplies_the_last_preset() {
+        let (mut shell, id) = two_path_shell();
+        // Nothing applied yet — the CS6 "no filters to repeat" report.
+        shell.run_action(&menus::Action::RepeatFilter);
+        assert_eq!(shell.status, "no filters to repeat");
+        let journal = shell.editor.session.journal_len();
+        // Apply invert from the Filters menu; the session remembers it.
+        shell.run_action(&menus::Action::Filter("invert"));
+        assert_eq!(shell.last_filter, Some("invert"));
+        let after_one = shell.editor.session.journal_len();
+        assert!(after_one > journal);
+        // Repeat lands a second, identical filter row. The filter
+        // targets the session's primary selection (the last id).
+        let selected = shell.editor.selection.unwrap();
+        shell.run_action(&menus::Action::RepeatFilter);
+        assert_eq!(shell.editor.session.journal_len(), after_one + 1);
+        match shell.editor.document().registry.get(selected) {
+            Some(doc::ObjectData::Path(path)) => assert_eq!(path.effects.len(), 2),
+            other => panic!("expected path, got {other:?}"),
+        }
+        // No selection — the repeat reports instead of acting.
+        shell.editor.selection = None;
+        shell.run_action(&menus::Action::RepeatFilter);
+        assert_eq!(shell.status, "pick an object to filter");
+    }
+
+    fn text_of(editor: &Editor, id: doc::ObjectId) -> String {
+        match editor.document().registry.get(id) {
+            Some(doc::ObjectData::Text(text)) => text
+                .runs
+                .iter()
+                .map(|run| run.text.as_str())
+                .collect::<String>(),
+            _ => panic!("not a text object"),
+        }
     }
 }

@@ -25,7 +25,8 @@ pub(crate) fn install(registry: &mut CommandRegistry) -> Result<(), EngineError>
     registry.register(ReorderPages)?;
     registry.register(SetMasterPage)?;
     registry.register(UnsetMasterPage)?;
-    registry.register(AddMasterLayer)
+    registry.register(AddMasterLayer)?;
+    registry.register(SetPageExport)
 }
 
 /// Which axis a guide runs along (CS6's `guidekind` string).
@@ -847,6 +848,110 @@ impl TypedCommand for AddMasterLayer {
     }
 }
 
+/// `page.setExport` — CS6's Optimize panel: writes the page's
+/// `EXPv` export/optimization settings (`Page.export`, model.rs:92).
+/// Fields absent from the payload keep their current value, so the
+/// panel can edit one control at a time; `clear` removes the page's
+/// settings entirely (the writer then emits no `EXPv`).
+struct SetPageExport;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct SetPageExportPayload {
+    /// Page index.
+    page: usize,
+    /// `FMTi` — 0 gif, 1 jpeg, 2 png, 3 other, 4 animated gif.
+    format: Option<i64>,
+    /// `JPQi` — JPEG quality 0..=100.
+    jpeg_quality: Option<Option<i64>>,
+    /// `JPPb` — progressive JPEG scans.
+    jpeg_progressive: Option<bool>,
+    /// `FCLi` — matte color, ABGR raw.
+    matte_raw: Option<Option<i64>>,
+    /// `GFIb` — interlaced output.
+    interlaced: Option<bool>,
+    /// `PLDi` — palette dither level 0..=100.
+    dither: Option<Option<i64>>,
+    /// `FLPi` — GIF frame loop: 0 infinite, -1 never, n repeat n times.
+    frame_loop: Option<Option<i64>>,
+    /// Remove the page's export settings.
+    clear: Option<bool>,
+}
+
+impl TypedCommand for SetPageExport {
+    type Payload = SetPageExportPayload;
+
+    fn name(&self) -> &'static str {
+        "page.setExport"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "page.setExport";
+        if payload
+            .jpeg_quality
+            .is_some_and(|q| q.is_some_and(|q| !(0..=100).contains(&q)))
+        {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: "quality must be 0..=100".to_owned(),
+            });
+        }
+        if payload
+            .dither
+            .is_some_and(|d| d.is_some_and(|d| !(0..=100).contains(&d)))
+        {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: "dither must be 0..=100".to_owned(),
+            });
+        }
+        if payload.format.is_some_and(|f| !(-1..=4).contains(&f)) {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: "format is outside the EXPv domain".to_owned(),
+            });
+        }
+        let before = access::page(document, NAME, payload.page)?.clone();
+        let target = access::page_mut(document, NAME, payload.page)?;
+        if payload.clear.unwrap_or(false) {
+            target.export = None;
+        } else {
+            let export = target
+                .export
+                .get_or_insert_with(doc::ExportOptions::default);
+            if let Some(format) = payload.format {
+                export.format = Some(format);
+            }
+            if let Some(quality) = payload.jpeg_quality {
+                export.jpeg_quality = quality;
+            }
+            if let Some(progressive) = payload.jpeg_progressive {
+                export.jpeg_progressive = Some(progressive);
+            }
+            if let Some(matte) = payload.matte_raw {
+                export.matte_raw = matte;
+            }
+            if let Some(interlaced) = payload.interlaced {
+                export.interlaced = Some(interlaced);
+            }
+            if let Some(dither) = payload.dither {
+                export.dither = dither;
+            }
+            if let Some(loop_) = payload.frame_loop {
+                export.frame_loop = loop_;
+            }
+        }
+        Ok(Delta::PageBody {
+            page: payload.page,
+            before: Box::new(before),
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
@@ -1248,5 +1353,63 @@ mod structure_tests {
         );
         delta.apply_inverse(&mut document).unwrap();
         assert_eq!(document.pages[0].layers.layers.len(), 2);
+    }
+
+    #[test]
+    fn set_export_writes_and_clears_the_page_settings() {
+        let (mut document, _) = testdoc::sample_document();
+        SetPageExport
+            .apply_json(
+                &mut document,
+                json!({ "page": 0, "format": 1, "jpeg_quality": 82 }),
+            )
+            .unwrap();
+        let export = document.pages[0].export.as_ref().expect("settings minted");
+        assert_eq!(export.format, Some(1));
+        assert_eq!(export.jpeg_quality, Some(82));
+        assert_eq!(
+            export.jpeg_progressive, None,
+            "untouched field stays absent"
+        );
+        let delta = SetPageExport
+            .apply_json(&mut document, json!({ "page": 0, "clear": true }))
+            .unwrap();
+        assert!(document.pages[0].export.is_none());
+        delta.apply_inverse(&mut document).unwrap();
+        let export = document.pages[0].export.as_ref().expect("undo restores");
+        assert_eq!(export.format, Some(1));
+        assert_eq!(export.jpeg_quality, Some(82));
+    }
+
+    #[test]
+    fn set_export_partial_write_preserves_other_fields() {
+        let (mut document, _) = testdoc::sample_document();
+        SetPageExport
+            .apply_json(
+                &mut document,
+                json!({ "page": 0, "format": 4, "dither": 40, "frame_loop": 0 }),
+            )
+            .unwrap();
+        SetPageExport
+            .apply_json(&mut document, json!({ "page": 0, "format": 1 }))
+            .unwrap();
+        let export = document.pages[0].export.as_ref().expect("settings kept");
+        assert_eq!(export.format, Some(1), "the edited field");
+        assert_eq!(export.dither, Some(40), "sibling fields survive");
+        assert_eq!(export.frame_loop, Some(0));
+    }
+
+    #[test]
+    fn set_export_rejects_out_of_domain_values() {
+        let (mut document, _) = testdoc::sample_document();
+        for bad in [
+            json!({ "page": 0, "jpeg_quality": 101 }),
+            json!({ "page": 0, "dither": -1 }),
+            json!({ "page": 0, "format": 5 }),
+        ] {
+            let error = SetPageExport.apply_json(&mut document, bad).unwrap_err();
+            assert!(matches!(error, EngineError::InvalidState { .. }));
+        }
+        assert!(document.pages[0].export.is_none(), "refusals never mint");
     }
 }

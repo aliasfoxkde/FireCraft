@@ -10,6 +10,10 @@ use compose::abgr_pack;
 use doc::{GroupObject, ImageObject, SliceObject};
 
 impl Shell {
+    /// The Optimize panel's format names in `FMTi` order (0 gif,
+    /// 1 jpeg, 2 png — the dictionary's documented domain).
+    pub(crate) const FMT_NAMES: [&str; 3] = ["GIF", "JPEG", "PNG"];
+
     /// Edit ▸ Paste as Mask / Paste Inside: the clipboard becomes the
     /// selection's mask. Both commands read the document's selection,
     /// so it is synced first.
@@ -87,21 +91,10 @@ impl Shell {
                             .wrap(),
                         );
                         ui.separator();
-                        // (title, row count) — mirrors the SHORTCUTS table's
-                        // section comments; the sums are asserted in tests.
-                        let groups: &[(&str, usize)] = &[
-                            ("File", 7),
-                            ("Edit", 6),
-                            ("Clipboard", 3),
-                            ("Modify ▸ Group", 3),
-                            ("View", 3),
-                            ("Modify ▸ Arrange", 4),
-                            ("Modify ▸ Combine Paths", 1),
-                            ("Text styles", 3),
-                            ("Tools (one-key selects)", 14),
-                            ("Pixel-selection tools", 4),
-                            ("Help", 1),
-                        ];
+                        // (title, row count) — `SHORTCUT_GROUPS` tiles the
+                        // SHORTCUTS table exactly; the sum is asserted by
+                        // `the_shortcut_groups_cover_the_table`.
+                        let groups: &[(&str, usize)] = menus::SHORTCUT_GROUPS;
                         let mut row = 0usize;
                         for (title, count) in groups {
                             ui.heading(*title);
@@ -130,8 +123,8 @@ impl Shell {
     }
 
     /// Toggle one Window-menu panel by its menu label; a panel not in
-    /// the right dock (Tools, Optimize, Color Mixer, ...) is reported,
-    /// not silently accepted.
+    /// the right dock (Tools, Color Mixer, ...) is reported, not
+    /// silently accepted.
     pub(crate) fn toggle_panel(&mut self, name: &'static str) {
         let known = super::panel_windows::PANELS
             .iter()
@@ -144,8 +137,6 @@ impl Shell {
                 self.panel_hidden.push(name);
                 self.status = format!("{name} panel hidden.");
             }
-        } else if name == "Optimize" {
-            self.status = format!("{name}: panel not yet implemented.");
         } else {
             self.status = format!("{name}: no docked panel in this shell.");
         }
@@ -763,6 +754,91 @@ impl Shell {
             });
     }
 
+    /// Window ▸ Optimize: the page's export settings (`EXPv`) as
+    /// CS6's panel edits them — format, JPEG quality/progressive,
+    /// GIF loop/dither, interlace. Written through `page.setExport`,
+    /// so each change is one undoable step and Export stamps the same
+    /// settings onto its output.
+    pub(super) fn optimize_panel(&mut self, ui: &mut egui::Ui) {
+        let page = self.editor.page;
+        let export = self
+            .editor
+            .document()
+            .pages
+            .get(page)
+            .and_then(|p| p.export.clone())
+            .unwrap_or_default();
+        let mut format = export.format.unwrap_or(2).clamp(0, 2);
+        let mut jpeg_quality = export.jpeg_quality.unwrap_or(90).clamp(0, 100);
+        let mut jpeg_progressive = export.jpeg_progressive.unwrap_or(false);
+        let mut dither = export.dither.unwrap_or(0).clamp(0, 100);
+        let mut frame_loop = export.frame_loop.unwrap_or(0);
+        let mut interlaced = export.interlaced.unwrap_or(false);
+        let mut changed = false;
+        egui::Grid::new("optimize").num_columns(2).show(ui, |ui| {
+            ui.label("format");
+            let before = format;
+            egui::ComboBox::new("optimize_format", "")
+                .selected_text(Self::FMT_NAMES[format.clamp(0, 2) as usize])
+                .show_ui(ui, |ui| {
+                    for (id, name) in Self::FMT_NAMES.iter().enumerate() {
+                        ui.selectable_value(&mut format, id as i64, *name);
+                    }
+                });
+            changed |= format != before;
+            let jpeg = format == 1;
+            let gif = format == 0;
+            if jpeg {
+                ui.label("quality");
+                let before = jpeg_quality;
+                ui.add(egui::Slider::new(&mut jpeg_quality, 0..=100i64).text("%"));
+                changed |= jpeg_quality != before;
+                ui.label("progressive");
+                changed |= ui.checkbox(&mut jpeg_progressive, "").changed();
+            }
+            if gif {
+                ui.label("loop");
+                let before = frame_loop;
+                egui::ComboBox::new("optimize_loop", "")
+                    .selected_text(match frame_loop {
+                        0 => "infinite".to_owned(),
+                        -1 => "never".to_owned(),
+                        n => format!("×{n}"),
+                    })
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(&mut frame_loop, 0, "infinite");
+                        ui.selectable_value(&mut frame_loop, -1, "never");
+                        ui.selectable_value(&mut frame_loop, 3, "×3");
+                    });
+                changed |= frame_loop != before;
+                ui.label("dither");
+                let before = dither;
+                ui.add(egui::Slider::new(&mut dither, 0..=100i64).text("%"));
+                changed |= dither != before;
+            }
+            ui.label("interlaced");
+            changed |= ui.checkbox(&mut interlaced, "").changed();
+        });
+        if changed {
+            let jpeg = format == 1;
+            let gif = format == 0;
+            if self.run_command(
+                "page.setExport",
+                serde_json::json!({
+                    "page": page,
+                    "format": format,
+                    "jpeg_quality": jpeg.then_some(jpeg_quality),
+                    "jpeg_progressive": jpeg.then_some(jpeg_progressive),
+                    "dither": gif.then_some(dither),
+                    "frame_loop": gif.then_some(frame_loop),
+                    "interlaced": interlaced,
+                }),
+            ) {
+                self.status = "Optimize settings applied to the page.".to_owned();
+            }
+        }
+    }
+
     /// Window ▸ Info: document and selection facts (canvas size,
     /// selection count and bounding box) — read-only.
     pub(super) fn info_panel(&mut self, ui: &mut egui::Ui) {
@@ -870,8 +946,13 @@ impl Shell {
         ui.separator();
 
         ui.heading("Properties");
+        let ids = self.editor.live_selection();
+        if ids.len() >= 2 {
+            self.multi_selection_properties(ui, &ids);
+            return;
+        }
         let Some(id) = self.editor.selection else {
-            ui.label("nothing selected");
+            self.document_properties(ui);
             return;
         };
         let object = self.editor.document().registry.get(id).cloned();
@@ -1393,6 +1474,174 @@ impl Shell {
         self.geometry_fields(ui, id);
     }
 
+    /// Document properties (22.4): the field set the inspector shows
+    /// when nothing is selected — CS6's document tab. The canvas
+    /// geometry, the resolution with its unit, and the canvas
+    /// background color, each writing through its document.* command.
+    pub(super) fn document_properties(&mut self, ui: &mut egui::Ui) {
+        ui.label("Document");
+        let document = self.editor.session.document();
+        let canvas = &document.info.canvas;
+        let mut width = canvas.width as f32;
+        let mut height = canvas.height as f32;
+        let mut resolution = canvas.resolution as f32;
+        let mut unit_cm = canvas.resolution_unit == 1;
+        let mut background_raw = canvas.background_raw;
+        let mut applied = false;
+        ui.horizontal(|ui| {
+            let w = ui.add(egui::DragValue::new(&mut width).speed(1.0).prefix("W "));
+            let h = ui.add(egui::DragValue::new(&mut height).speed(1.0).prefix("H "));
+            applied |= (w.lost_focus() && w.changed()) || (h.lost_focus() && h.changed());
+        });
+        if applied && width > 0.0 && height > 0.0 {
+            self.run_command(
+                "document.setCanvasRect",
+                serde_json::json!({
+                    "page": self.editor.frame,
+                    "x": canvas.x, "y": canvas.y,
+                    "width": width, "height": height,
+                }),
+            );
+        }
+        ui.horizontal(|ui| {
+            let res = ui
+                .add(egui::DragValue::new(&mut resolution).speed(1.0).suffix(" px"))
+                .on_hover_text("document resolution");
+            if ui.checkbox(&mut unit_cm, "per cm").changed() {
+                self.run_command(
+                    "document.setResolution",
+                    serde_json::json!({
+                        "resolution": resolution,
+                        "unit": if unit_cm { "cm" } else { "inch" },
+                    }),
+                );
+            }
+            if res.lost_focus() && res.changed() && resolution > 0.0 {
+                self.run_command(
+                    "document.setResolution",
+                    serde_json::json!({
+                        "resolution": resolution,
+                        "unit": if unit_cm { "cm" } else { "inch" },
+                    }),
+                );
+            }
+        });
+        ui.horizontal(|ui| {
+            ui.label("canvas color");
+            for (name, color_raw) in Self::FILL_STROKE_PALETTE {
+                let raw = color_raw as u32;
+                let swatch = Color32::from_rgba_unmultiplied(
+                    (raw & 0xFF) as u8,
+                    ((raw >> 8) & 0xFF) as u8,
+                    ((raw >> 16) & 0xFF) as u8,
+                    ((raw >> 24) & 0xFF) as u8,
+                );
+                if ui
+                    .add(egui::Button::new(
+                        egui::RichText::new("  ").background_color(swatch),
+                    ))
+                    .on_hover_text(name)
+                    .clicked()
+                {
+                    self.run_command(
+                        "document.setCanvasColor",
+                        serde_json::json!({ "color_raw": color_raw }),
+                    );
+                }
+            }
+            let _ = &mut background_raw;
+        });
+    }
+
+    /// Multi-selection properties (22.4): a count and union-bounds
+    /// readout, plus the shared display quartet — each edit fans out
+    /// to every selected object. Renames stay a per-object affordance
+    /// (CS6 renames the active element only).
+    pub(super) fn multi_selection_properties(&mut self, ui: &mut egui::Ui, ids: &[doc::ObjectId]) {
+        ui.label(format!("{} objects selected", ids.len()));
+        let document = self.editor.session.document();
+        if let Some(bounds) = crate::editor::union_selection_bounds(document, ids) {
+            ui.label(format!(
+                "bounds {:.1}, {:.1} — {:.1} x {:.1}",
+                bounds.x0,
+                bounds.y0,
+                bounds.width(),
+                bounds.height(),
+            ));
+        }
+        ui.separator();
+        // The display quartet, fanned out per id: opacity shows the
+        // selection minimum, blend the minimum index, visible the AND,
+        // locked the OR — so the controls read as "mixed" until every
+        // member agrees, and any edit rewrites all members.
+        let members: Vec<(doc::ObjectId, i64, i64, bool, bool)> = ids
+            .iter()
+            .filter_map(|id| {
+                let fields = match self.editor.document().registry.get(*id) {
+                    Some(ObjectData::Path(path)) => (path.opacity, path.blend, path.visible, path.locked),
+                    Some(ObjectData::Text(text)) => (text.opacity, text.blend, text.visible, text.locked),
+                    Some(ObjectData::Group(group)) => (group.opacity, group.blend, group.visible, group.locked),
+                    Some(ObjectData::Image(image)) => (image.opacity, image.blend, image.visible, image.locked),
+                    _ => return None,
+                };
+                Some((*id, fields.0, fields.1, fields.2, fields.3))
+            })
+            .collect();
+        let opacity = members.iter().map(|&(_, o, ..)| o).min().unwrap_or(1000);
+        let blend = members.iter().map(|&(_, _, b, ..)| b).min().unwrap_or(0);
+        let visible = members.iter().all(|&(_, _, _, v, _)| v);
+        let locked = members.iter().any(|&(_, _, _, _, l)| l);
+        let mut opacity = opacity;
+        if ui
+            .add(egui::Slider::new(&mut opacity, 0..=1000).text("opacity"))
+            .changed()
+        {
+            for (id, ..) in &members {
+                self.run_command(
+                    "object.setOpacity",
+                    serde_json::json!({ "id": id, "opacity": opacity }),
+                );
+            }
+        }
+        let blend_names: Vec<&str> = color::BlendMode::ALL
+            .iter()
+            .map(|mode| mode.as_str())
+            .collect();
+        let blend = (blend as usize).min(blend_names.len() - 1);
+        egui::ComboBox::from_label("blend")
+            .selected_text(blend_names[blend])
+            .show_ui(ui, |ui| {
+                for (index, mode) in blend_names.iter().enumerate() {
+                    if ui.selectable_label(index == blend, *mode).clicked() {
+                        for (id, ..) in &members {
+                            self.run_command(
+                                "object.setBlend",
+                                serde_json::json!({ "id": id, "blend": index }),
+                            );
+                        }
+                    }
+                }
+            });
+        ui.horizontal(|ui| {
+            if ui.checkbox(&mut { visible }, "visible").changed() {
+                for (id, ..) in &members {
+                    self.run_command(
+                        "object.setVisible",
+                        serde_json::json!({ "id": id, "visible": !visible }),
+                    );
+                }
+            }
+            if ui.checkbox(&mut { locked }, "locked").changed() {
+                for (id, ..) in &members {
+                    self.run_command(
+                        "object.setLocked",
+                        serde_json::json!({ "id": id, "locked": !locked }),
+                    );
+                }
+            }
+        });
+    }
+
     /// Group properties: the shared display controls, the group's
     /// geometry, and the objects it holds.
     ///
@@ -1424,20 +1673,26 @@ impl Shell {
         }
         // Snapshot the child labels: the registry is borrowed
         // read-only while the panel draws.
-        let children: Vec<String> = group
+        let children: Vec<(doc::ObjectId, String)> = group
             .children
             .iter()
             .map(|child| {
-                self.editor
+                let label = self
+                    .editor
                     .document()
                     .registry
                     .get(*child)
                     .map(object_label)
-                    .unwrap_or_else(|| format!("object {} (stale)", child.index()))
+                    .unwrap_or_else(|| format!("object {} (stale)", child.index()));
+                (*child, label)
             })
             .collect();
-        for label in children {
-            ui.label(label);
+        for (child, label) in children {
+            // CS6: clicking a member row selects that child inside the
+            // group — enter-group by selection.
+            if ui.selectable_label(false, &label).clicked() {
+                self.editor.set_selection(vec![child]);
+            }
         }
     }
 
@@ -1724,6 +1979,7 @@ impl Shell {
             "filter.add",
             serde_json::json!({ "id": id, "name": preset.name, "params": params }),
         );
+        self.last_filter = Some(preset.name);
         self.status = format!("filter: {}", preset.label);
     }
 

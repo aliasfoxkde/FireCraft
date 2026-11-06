@@ -12,6 +12,7 @@
 
 use super::*;
 use crate::editor::AutoShape;
+use crate::shell::panel_windows::DOCK_CONTENT_WIDTH;
 
 /// The size, in world units, of a shape inserted from the Auto Shapes
 /// panel.
@@ -385,6 +386,277 @@ impl Shell {
                 .map(|behavior| behavior.kind)
                 .collect(),
         })
+    }
+
+    /// Window ▸ Slices: every slice in the document, with its type,
+    /// link, and export override — the panel the `slice.*` verbs were
+    /// written for. Clicking a row selects the slice on the canvas.
+    pub(super) fn slices_panel(&mut self, ui: &mut egui::Ui) {
+        ui.label("Click a slice to select it; edit its link in URL.");
+        ui.separator();
+        let rows: Vec<(doc::ObjectId, String, String, String)> = self
+            .editor
+            .document()
+            .registry
+            .iter()
+            .filter_map(|(id, data)| match data {
+                doc::ObjectData::Slice(slice) => {
+                    let kind = match slice.shape {
+                        1 => "ellipse".to_owned(),
+                        2 => "polygon".to_owned(),
+                        _ => "rect".to_owned(),
+                    };
+                    let kind = if slice.slice_type == Some(2) {
+                        format!("{kind} · background")
+                    } else {
+                        format!("{kind} · foreground")
+                    };
+                    let link = slice.link.clone().unwrap_or_else(|| "—".to_owned());
+                    let export = slice.export.as_ref().map_or_else(
+                        || "page default".to_owned(),
+                        |export| {
+                            let format = match export.format.unwrap_or(2) {
+                                0 => "gif",
+                                1 => "jpeg",
+                                _ => "png",
+                            };
+                            format!("override: {format}")
+                        },
+                    );
+                    Some((id, slice_name(slice), kind, format!("{link} · {export}")))
+                }
+                _ => None,
+            })
+            .collect();
+        if rows.is_empty() {
+            ui.label("(no slices — insert one with Edit ▸ Insert)");
+            return;
+        }
+        let selected = self.editor.live_selection();
+        for (id, name, kind, detail) in &rows {
+            let active = selected.contains(id);
+            let row = ui.selectable_label(active, format!("{name} · {kind}"));
+            if row.clicked() {
+                self.editor.set_selection(vec![*id]);
+            }
+            ui.label(detail);
+        }
+    }
+
+    /// Window ▸ CSS Properties: the CSS the selected slice's
+    /// background knobs and link produce, as CS6's panel shows it.
+    /// Read-only — the edit surfaces are the slice verbs.
+    pub(super) fn css_properties_panel(&mut self, ui: &mut egui::Ui) {
+        let Some(snapshot) = self.selected_web_object() else {
+            ui.label("Select a slice to see its CSS.");
+            return;
+        };
+        ui.label(format!("Target: {}", snapshot.name));
+        let Some(doc::ObjectData::Slice(slice)) = self.editor.document().registry.get(snapshot.id)
+        else {
+            return;
+        };
+        let css = slice_css(slice);
+        if css.is_empty() {
+            ui.label("(no CSS properties — this slice carries no background)");
+            return;
+        }
+        ui.add(
+            egui::TextEdit::multiline(&mut css.as_str())
+                .desired_width(DOCK_CONTENT_WIDTH)
+                .desired_rows(6)
+                .interactive(false),
+        );
+    }
+
+    /// Window ▸ Find and Replace: searches text objects and replaces
+    /// through `text.setText` — CS6's dialog narrowed to the model
+    /// this build carries (whole text-object runs).
+    pub(super) fn find_replace_panel(&mut self, ui: &mut egui::Ui) {
+        let mut query = self.find_query.clone().unwrap_or_default();
+        ui.label("Find (text objects)");
+        ui.text_edit_singleline(&mut query);
+        self.find_query = Some(query.clone());
+        if query.is_empty() {
+            ui.label("(type to search text objects)");
+            return;
+        }
+        let matches: Vec<(doc::ObjectId, String)> = self
+            .editor
+            .document()
+            .registry
+            .iter()
+            .filter_map(|(id, data)| match data {
+                doc::ObjectData::Text(text) => {
+                    let characters = text_characters(text);
+                    characters.contains(&query).then_some((id, characters))
+                }
+                _ => None,
+            })
+            .collect();
+        if matches.is_empty() {
+            ui.label(format!("no text matches \"{query}\""));
+            return;
+        }
+        ui.label(format!("{} match(es)", matches.len()));
+        let mut replacement = self.find_replacement.clone().unwrap_or_default();
+        ui.label("Replace with (empty removes the text)");
+        ui.text_edit_singleline(&mut replacement);
+        self.find_replacement = Some(replacement.clone());
+        let mut replace_all = false;
+        for (id, text) in &matches {
+            ui.horizontal(|ui| {
+                ui.label(format!("\"{}\"", truncate_for_panel(text, 32)));
+                if ui.small_button("replace").clicked() {
+                    self.replace_text(*id, &query, &replacement);
+                }
+                if ui.small_button("all").clicked() {
+                    replace_all = true;
+                }
+            });
+        }
+        if replace_all {
+            for (id, _) in &matches {
+                self.replace_text(*id, &query, &replacement);
+            }
+            self.status = format!("replaced in {} text object(s)", matches.len());
+        }
+    }
+
+    /// Replaces every occurrence of `query` in a text object
+    /// (`text.setText` with the rewritten run).
+    fn replace_text(&mut self, id: doc::ObjectId, query: &str, replacement: &str) {
+        let Some(doc::ObjectData::Text(text)) = self.editor.document().registry.get(id) else {
+            return;
+        };
+        let updated = text_characters(text).replace(query, replacement);
+        self.run_command(
+            "text.setText",
+            serde_json::json!({ "id": id, "text": updated }),
+        );
+    }
+
+    /// Window ▸ Common Library: CS6's shipped symbol libraries. The
+    /// libraries ship as proprietary CS6 resources, so this build
+    /// seeds the panel from the document's own symbols instead — the
+    /// same drag-to-place the Document Library panel carries, minus
+    /// the packaged content.
+    pub(super) fn common_library_panel(&mut self, ui: &mut egui::Ui) {
+        ui.weak(
+            "The CS6 shipped libraries are proprietary resources; \
+             this panel lists the document's own symbols.",
+        );
+        ui.separator();
+        let rows: Vec<(i64, String, i64)> = self
+            .editor
+            .document()
+            .symbols
+            .iter()
+            .map(|definition| {
+                (
+                    definition.symbol_number,
+                    definition.name.clone(),
+                    definition.frame_count,
+                )
+            })
+            .collect();
+        if rows.is_empty() {
+            ui.label("(no symbols — create one in Document Library)");
+            return;
+        }
+        for (number, name, states) in &rows {
+            ui.horizontal(|ui| {
+                let row = ui.selectable_label(false, format!("{name} · {states}"));
+                if row.drag_started() {
+                    egui::DragAndDrop::set_payload(ui.ctx(), *number);
+                }
+                if row.clicked() {
+                    let (x, y, size) = self.insert_box();
+                    let placed = self.run_command(
+                        "symbol.createInstance",
+                        serde_json::json!({
+                            "symbol": number,
+                            "x": x, "y": y,
+                            "width": size, "height": size,
+                            "page": self.editor.page,
+                            "layer": self.editor.active_layer(),
+                            "cell": self.editor.frame,
+                        }),
+                    );
+                    if placed {
+                        self.status = format!("{name} instance inserted.");
+                    }
+                }
+            });
+        }
+    }
+}
+
+/// The slice's CSS: the background knobs (`CBTb` family) and the
+/// link, as declarations. Empty when the slice carries nothing the
+/// panel can express.
+fn slice_css(slice: &doc::SliceObject) -> String {
+    let mut rules: Vec<String> = Vec::new();
+    if let Some(background) = &slice.background {
+        if let Some(repeat) = background.repeat {
+            rules.push(match repeat {
+                1 => "background-repeat: repeat".to_owned(),
+                2 => "background-repeat: repeat-x".to_owned(),
+                3 => "background-repeat: repeat-y".to_owned(),
+                _ => "background-repeat: no-repeat".to_owned(),
+            });
+        }
+        if let Some(attachment) = background.attachment {
+            rules.push(match attachment {
+                1 => "background-attachment: scroll".to_owned(),
+                _ => "background-attachment: fixed".to_owned(),
+            });
+        }
+        if let Some(h) = background.h_position {
+            let value = match h {
+                0 => "left".to_owned(),
+                1 => "center".to_owned(),
+                2 => "right".to_owned(),
+                _ => background
+                    .h_value
+                    .map_or_else(|| "0%".to_owned(), |v| format!("{v}px")),
+            };
+            rules.push(format!("background-position-x: {value}"));
+        }
+        if let Some(v) = background.v_position {
+            let value = match v {
+                0 => "top".to_owned(),
+                1 => "center".to_owned(),
+                2 => "bottom".to_owned(),
+                _ => background
+                    .v_value
+                    .map_or_else(|| "0%".to_owned(), |v| format!("{v}px")),
+            };
+            rules.push(format!("background-position-y: {value}"));
+        }
+    }
+    if let Some(link) = &slice.link {
+        rules.push(format!("/* link: {link} */"));
+    }
+    let mut css = rules.join(";\n");
+    if !css.is_empty() {
+        css.push(';');
+    }
+    css
+}
+
+/// A text object's characters: its runs concatenated.
+fn text_characters(text: &doc::TextObject) -> String {
+    text.runs.iter().map(|run| run.text.as_str()).collect()
+}
+
+/// Shortens panel row text to `max` characters.
+fn truncate_for_panel(text: &str, max: usize) -> String {
+    if text.chars().count() <= max {
+        text.to_owned()
+    } else {
+        let cut: String = text.chars().take(max).collect();
+        format!("{cut}…")
     }
 }
 

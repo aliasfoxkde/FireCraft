@@ -221,8 +221,8 @@ of replacing it, fill/stroke swatch panel bound to
 Phase 19 batches 19.1–19.5 landed 2026-10-31 → 11-01: transform
 handles + Numeric Transform, Subselect path-node editing, the gradient
 fill editor, the command palette, and the grid/guides/snap set. The
-inert count is 8 of 290 items (was 190); 19.6's menu-wiring
-campaign is complete. The remaining rows require separate feature or
+inert count is 3 of 294 items (was 190); 19.6's menu-wiring
+campaign is complete and the Text ▸ Font submenu landed 2026-11-06. The remaining rows require separate feature or
 evidence work, tracked outside that campaign.
 
 ### Phase 19 — Canvas competence (P0, feeds usability directly)
@@ -283,7 +283,8 @@ evidence work, tracked outside that campaign.
   `object.setQuadrangle`, the other three corners frozen at drag
   start), Split via `path.splitPaths`, Remove Transformations via
   `object.transform` with each stored `MTXv`'s inverse; Group as
-  Mask/Repeat Filter/fill-edge rows stay inert — no engine verbs yet;
+  Mask/fill-edge rows stay inert — no engine verbs yet (Repeat Filter
+  landed 2026-11-06: the session's last preset re-applied);
   2026-11-03) → **72 inert of 289 items** (batch 10 — Window family:
   Tools folds the left dock, Color Mixer/Swatches/Info dock as
   toggled right-dock panels (Swatches = the ABGR palette as a grid
@@ -337,12 +338,14 @@ evidence work, tracked outside that campaign.
   (`shell::panels_web`) whose every action is one engine command —
   `object.createPath` / `autoshape.*` for the gallery, `slice.setLink`
   for the URL, `slice.addBehavior` / `slice.removeBehavior` /
-  `slice.setData` for the behaviors; decision 0069). The 8 remaining
-  inert rows: the Text Font placeholder (a verbatim CS6 resource
-  artifact), Commands ▸ Manage Saved Commands and Filters ▸ Repeat
-  Filter (the scripting family), and the Window panels (Optimize /
-  Common Library / CSS Properties / Find and Replace) that land with
-  their features (Phases 20–22). 19.6's programmable surface is done;
+  `slice.setData` for the behaviors; decision 0069). The remaining
+  inert rows: Commands ▸ Manage Saved Commands (the scripting
+  family) and Window ▸ Extensions, plus the Window panels that land
+  with their features (Phases 20–22). The Text Font placeholder and
+  Filters ▸ Repeat Filter were wired 2026-11-06 — RT_MENU 128 ships
+  Font as a runtime-populated popup, so the static transcription
+  carries five renderer-known families through `text.setFont`, and
+  Repeat Filter re-applies the session's last preset. 19.6's programmable surface is done;
   the rest is feature-gated, not reachability debt.
 
 ### Phase 19b — Follow-ups from the landed batches
@@ -376,8 +379,11 @@ evidence work, tracked outside that campaign.
 
 ### Phase 20 — Daily-driver features (P1)
 
-- **20.1 In-canvas text editing** (L): egui TextEdit overlay at the
-  text frame; budget kittest focus-regression tests.
+- **20.1 In-canvas text editing** (L): **LANDED 2026-11-06** — egui
+  `TextEdit` overlay at the text frame; Text-tool click or Pointer
+  double-click enters, Esc cancels, focus loss / tool switch commits
+  ([T20](tasks/T20-text-editing.md)). Kittest focus tests deferred —
+  see the ticket's residual note.
 - **20.2 Optimize panel** (M): palette/bitrate over `ExportOptions` +
   live preview (export preview exists).
 - **20.3 Animation timeline** (M): frames strip, per-frame timing,
@@ -506,8 +512,21 @@ scope, so no license path is attempted.
   bitmap's X/Y/W/H strip (`object.setBounds` refuses bitmaps —
   decision 0019) and any bitmap fill/stroke editor (`IMGv` carries
   no fill/stroke node; CS6's bitmap tools are the separate Image
-  Editing command panel), the document-level field set, the
-  multi-selection field set, and enter-group.
+  Editing command panel), the
+  document-level field set, the multi-selection field set, and
+  enter-group. — **DOC/MULTI/ENTER LANDED 2026-11-06**: nothing
+  selected shows the document field set (canvas W/H through
+  `document.setCanvasRect`, resolution + per-cm unit through
+  `document.setResolution`, canvas color through
+  `document.setCanvasColor` over the shared ABGR palette); a
+  2+-object selection shows the multi-selection set (count, union
+  bounds, opacity-min/blend-min/visible-AND/locked-OR with every
+  edit fanned out per id); a group's member rows select the child
+  (enter-group by selection). Test
+  `inspector_document_and_multi_selection_sets`. Remaining 22.4:
+  the bitmap X/Y/W/H strip and bitmap fill/stroke, both blocked by
+  decision 0019 and the absent `IMGv` fill/stroke nodes — recorded,
+  not faked.
 - **22.5 CS6 chrome** (M): menu bar order, tool strip placement,
   document tab strip, status bar, panel headers with the CS6
   collapse/close affordances, and the CS6 color scheme (a dark
@@ -517,9 +536,15 @@ scope, so no license path is attempted.
   aliases Tab), the Alt-hold retouch swap (Blur↔Sharpen,
   Dodge↔Burn, fwref 3555/3580; Smudge has no variant), and the
   Window-menu arrangement trio (57650/57651/57652 with CS6's
-  labels; census 289→290). Remaining on 22.5: the Text ▸ Font
-  submenu, *Repeat Filter*, the F1 grouping mismatch, and the 76
-  unbound keymap rows.
+  labels; census 289→290). **Also landed 2026-11-06:** the Text ▸ Font
+  submenu (RT_MENU 128 ships a runtime-populated placeholder; the
+  transcription carries five renderer-known families through
+  `text.setFont`, census 290→294, gated by
+  `the_text_font_submenu_dispatches_set_font`). **Repeat Filter landed 2026-11-06** (`Action::RepeatFilter` re-applies
+  the session's last preset through `filter.add`, gated by
+  `repeat_filter_reapplies_the_last_preset`; inert census 3→2).
+  Remaining on 22.5: the F1 grouping mismatch and the 76 unbound
+  keymap rows.
 - **22.6 Icon pack integration** (M): ship the surveyed open-license
   icon set, subset it to the Fireworks verb set, and record the
   attribution rows. Accept: the wasm bundle grows by a documented,

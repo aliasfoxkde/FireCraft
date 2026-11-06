@@ -88,6 +88,31 @@ pub(crate) const PANELS: &[PanelSpec] = &[
         kind: PanelKind::Behaviors,
         open_by_default: false,
     },
+    PanelSpec {
+        name: "Optimize",
+        kind: PanelKind::Optimize,
+        open_by_default: false,
+    },
+    PanelSpec {
+        name: "Slices",
+        kind: PanelKind::Slices,
+        open_by_default: false,
+    },
+    PanelSpec {
+        name: "CSS Properties",
+        kind: PanelKind::CssProperties,
+        open_by_default: false,
+    },
+    PanelSpec {
+        name: "Find and Replace",
+        kind: PanelKind::FindReplace,
+        open_by_default: false,
+    },
+    PanelSpec {
+        name: "Common Library",
+        kind: PanelKind::CommonLibrary,
+        open_by_default: false,
+    },
 ];
 
 /// The Web Layer panel has no Window-menu row in CS6 — it is always
@@ -131,6 +156,11 @@ pub(crate) enum PanelKind {
     Url,
     Behaviors,
     WebLayer,
+    Optimize,
+    Slices,
+    CssProperties,
+    FindReplace,
+    CommonLibrary,
 }
 
 /// The width of the right dock, in points — CS6's dock is a narrow
@@ -139,7 +169,7 @@ pub(crate) const DOCK_WIDTH: f32 = 258.0;
 
 /// The width reserved for a panel's content inside the dock, after the
 /// dock frame, the scroll bar, and the panel's own padding.
-const DOCK_CONTENT_WIDTH: f32 = DOCK_WIDTH - 26.0;
+pub(crate) const DOCK_CONTENT_WIDTH: f32 = DOCK_WIDTH - 26.0;
 
 impl Shell {
     /// Draws the CS6 right dock: the column of stacked panels.
@@ -213,6 +243,11 @@ impl Shell {
                 PanelKind::Url => self.url_panel(ui),
                 PanelKind::Behaviors => self.behaviors_panel(ui),
                 PanelKind::WebLayer => self.web_panel(ui),
+                PanelKind::Optimize => self.optimize_panel(ui),
+                PanelKind::Slices => self.slices_panel(ui),
+                PanelKind::CssProperties => self.css_properties_panel(ui),
+                PanelKind::FindReplace => self.find_replace_panel(ui),
+                PanelKind::CommonLibrary => self.common_library_panel(ui),
             }
         });
         // The close button and the Window menu are the same switch.
@@ -266,6 +301,11 @@ mod tests {
             "Auto Shapes",
             "URL",
             "Behaviors",
+            "Optimize",
+            "Slices",
+            "CSS Properties",
+            "Find and Replace",
+            "Common Library",
         ] {
             assert!(names.contains(&menu_name), "{menu_name} has no panel");
         }
@@ -301,7 +341,12 @@ mod tests {
                 "Info",
                 "Auto Shapes",
                 "URL",
-                "Behaviors"
+                "Behaviors",
+                "Optimize",
+                "Slices",
+                "CSS Properties",
+                "Find and Replace",
+                "Common Library"
             ]
         );
     }

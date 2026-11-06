@@ -49,19 +49,19 @@ all ten in the same order (`M:2095`).
 | View | 22 | 22 rows; Magnification 6%–6400%, Grid/Guides/Smart Guides submenus all dispatch | **implemented** | `M:872` | — |
 | Select | 19 | 19 rows; the four marquee modes and the bitmap-selection save/restore submenu dispatch | **implemented** | `M:1049` | — |
 | Modify | 25 | 25 rows, 11 submenus; Canvas/Animation/Symbol/Pop-up Menu/Mask/Selective JPEG/Transform/Arrange/Align/Combine Paths/Alter Path all present | **partial** | `M:1163` | 22.4 |
-| Text | 15 | 15 rows, 5 submenus; **Font submenu is a single inert placeholder** | **partial** | `M:1647`, `M:1652` | 22.5 |
+| Text | 15 | 15 rows, 5 submenus; the Font submenu dispatches `text.setFont` over the renderer's five families (CS6 populates it at runtime from the system inventory) | **implemented (static list)** | `M:1647`, `M:1652`, RT_MENU 128 re-read 2026-11-06 | 22.5 |
 | Commands | 4 | 4 rows; *Manage Saved Commands…* is inert | **partial** | `M:1817` | 21.6 |
-| Filters | 10 | 10 rows; 30 filter rows over 6 submenus; *Repeat Filter* is inert | **partial** | `M:1844`, `S/filters_ui.rs:30` | 22.5 |
+| Filters | 10 | 10 rows; 30 filter rows over 6 submenus; *Repeat Filter* re-applies the session's last preset | **implemented** | `M:1844`, `S/filters_ui.rs:30` | — |
 | Window | 34 | 34 rows; the four unimplemented panels are inert rows | **partial** | `M:1927` | 22.5, 22.1 |
 | Help | 6 | 6 rows; Online Help opens the hosted wiki, Keyboard Shortcuts opens the binding table | **implemented** | `M:2061`, `S/panels.rs:70` | — |
 
-**Inert-row census.** Eight of 289 rows render inert, pinned by
-`menus::tests::inert_count_never_rises` (`INERT_CEILING = 8`). They are
-**Window ▸ Optimize**, **Window ▸ Common Library**, **Window ▸ CSS
-Properties**, **Window ▸ Find and Replace**, **Window ▸ Extensions**,
-**Text ▸ Font** (placeholder), **Commands ▸ Manage Saved Commands…**,
-**Filters ▸ Repeat Filter**. Four of these are the unimplemented CS6
-panels (22.1); the other four are 21.6/22.5 work.
+**Inert-row census.** Two of 294 rows render inert, pinned by
+`menus::tests::inert_count_never_rises`. They are **Window ▸
+Extensions** (the unimplemented CS6 panels row, 22.1) and
+**Commands ▸ Manage Saved Commands…** (the scripting family, 21.6).
+The Text ▸ Font placeholder and Filters ▸ Repeat Filter were wired
+2026-11-06; the four unimplemented Window panels land with their
+features (22.1).
 
 **Gap-reporting rows.** Thirty-six rows dispatch to
 `ShellAction::ReportGap` — they *are* clickable and say plainly that
@@ -251,7 +251,7 @@ dispatches at `S/panels.rs:853-881`.
 |---|---|---|---|---|
 | Menu accelerators (Ctrl+N/O/S/Z, Ctrl+Shift+S/R, Alt+F4 …) | carried on the menu rows | **implemented** | `M:459` | — |
 | A working shortcut table (52 bindings) | present and dispatched, and skipped while a text field has focus | **implemented** | `M:2157`, `S/mod.rs:2157` | — |
-| F1 lists the bindings | present, in 11 labelled groups | **partial** — the group's declared row counts sum to 49 against a 52-row table, so the help window and the table disagree | `S/panels.rs:91-103` | 22.5 |
+| F1 lists the bindings | present, in 11 labelled groups | **implemented** — the group layout is `menus::SHORTCUT_GROUPS`, asserted to tile the 60-row table exactly (`the_shortcut_groups_cover_the_table`; the mismatch that summed to 49 was fixed 2026-11-06) | `S/panels.rs:94`, `S/menus.rs` | — |
 | **Tool one-key selects** | 24 group keys bound; repeated presses cycle within the group, as CS6's help describes | **implemented** — see §B | `S/toolstrip.rs`, `S/menus.rs` | — |
 | **CS6's full keymap** (the `Fireworks.xml` set: 128 command ids) | 52 of CS6's 128 command shortcuts are bound | **partial** — the remaining 76 have no binding | **R** (keymap section) | 22.5 |
 | Four alternative keymap sets (Illustrator / Photoshop / FreeHand / Web Standard) | none | **missing** | **R** | 21.4 |
@@ -314,7 +314,7 @@ acceptance hook. Ordered by how much of the product it unlocks.
 | 11 | The Preferences dialog and the Keyboard Shortcuts editor; the four alternative keymaps | E, H | 21.4 | P1 |
 | 12 | The in-app script console and saved commands | A, E | 21.6 | P1 |
 | 13 | Command palette v2 (fuzzy, recents, save-steps) | G | 21.3 | P2 |
-| 14 | The Text ▸ Font submenu, *Repeat Filter*, the F1 grouping mismatch | A, H | 22.5 | P2 |
+| 14 | ~~The Text ▸ Font submenu, *Repeat Filter*, the F1 grouping mismatch~~ **CLOSED 2026-11-06** — Font dispatches `text.setFont` over the renderer's five families (`RT_MENU` 128 ships a runtime-populated placeholder; the static list is the substitute, recorded as the evidence gap); Repeat Filter re-applies the session's last preset; the F1 groups now tile the table exactly via `SHORTCUT_GROUPS`. | A, H | — | — |
 | 15 | ~~The Window menu's window-arrangement rows~~ **CLOSED 2026-11-06** — the trio (57650/57651/57652) is transcribed with CS6's labels (see §A) | A | — | — |
 | 16 | HiDPI `pixels_per_point` rendering | — | 21.2 | P2 |
 | 17 | accesskit desktop + web re-audit | H | 21.5 | P2 |
