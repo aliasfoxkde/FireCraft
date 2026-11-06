@@ -124,9 +124,10 @@ impl Shell {
             Tool::NoStrokeFill => self.editor.clear_stroke_fill(),
             Tool::HideShowSlices => self.editor.toggle_web_objects(),
             Tool::ToggleScreenMode => {
-                // CS6's screen mode hides the workspace chrome; the
-                // shell's panel toggle is the same gesture.
-                self.run_shell(menus::ShellAction::ToggleHidePanels);
+                // CS6's screen-mode control cycles the three view
+                // modes (fwref 1178–1185); the layout reads the mode
+                // each frame.
+                self.run_shell(menus::ShellAction::CycleScreenMode);
                 return;
             }
             _ => return,
@@ -407,6 +408,10 @@ impl Shell {
         // switches to the temporary Hand (the CS6 space-drag pan). While
         // a pan drag is actively moving, the cursor closes (Grabbing).
         let space_held = ui.input(|input| input.key_down(egui::Key::Space));
+        // Alt held this frame — the CS6 Alt-hold retouch swap reads it
+        // at the dab edge (editor.paint_dab); the active tool itself
+        // never changes.
+        self.editor.alt_held = ui.input(|input| input.modifiers.alt);
         let pan_dragging = space_held && response.dragged();
         let cursor = if pan_dragging {
             egui::CursorIcon::Grabbing
@@ -552,8 +557,11 @@ impl Shell {
         };
 
         // Checker-dark backdrop, then the page texture through the view.
+        // The backdrop behind the page: the shell's usual dark matte,
+        // or CS6's gray/black in the two Full Screen modes (fwref
+        // 1181–1184).
         ui.painter()
-            .rect_filled(rect, 0.0, Color32::from_rgb(32, 32, 32));
+            .rect_filled(rect, 0.0, self.screen_mode.backdrop());
         // The raster may have been rendered at `raster_scale`, so its
         // world size is texture_size / scale, not texture_size.
         let world_w = texture.size()[0] as f64 / self.raster_scale;

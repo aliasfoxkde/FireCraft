@@ -10,6 +10,7 @@ Current version: **0.2.5**.
 
 ### Features
 
+- **app**: CS6 tool strip order and flyouts (1203ecc)
 - **app**: right dock column and per-kind inspector (1b10a5d)
 - **app**: CS6 shell fidelity + inert-menu burn-down batches 4-17 (#7) (5fac7a2)
 - **app**: path-node add/delete, canvas dialogs, Duplicate/Clone (19b.1 + 19.6) (8ce5762)

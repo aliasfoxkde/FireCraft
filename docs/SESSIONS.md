@@ -1598,3 +1598,176 @@ The lesson worth keeping: the rebaseline is not paperwork, it is the
 step that makes the gate mean anything. A gate that fails on noise is
 a gate nobody runs, and a gate that is quietly red is worse than no
 gate at all.
+
+## 2026-11-06 — The Aegis gate, rebuilt on rule classes and content digests
+
+### The question that started it
+
+Two questions were asked about the release machinery rather than about
+Fireworks: *what exactly is the 21.5 MB ceiling, and could the WASM
+just be loaded from GitHub instead?* and *is Aegis (Rust) or the older
+Atheon-Enhanced scanner (Go) the faster and more reliable of the two?*
+
+Both were answered from measurement, and both produced changes.
+
+### The 21.5 MB number is ours, not the platform's
+
+`xtask/src/dist.rs` pins `WASM_SIZE_CEILING: u64 = 21_500_000` and
+fails the build past it. That is FireCraft's own regression tripwire —
+not a WASM 3.0 limit, not GitHub's, not Cloudflare's — and it is
+re-pinned deliberately whenever the bundle grows. The binding external
+limit is Cloudflare Pages' **25 MiB per-asset cap**; the shipped
+bundle is 21,271,259 B raw and 7,376,731 B gzipped, so it sits ~4.94 MB
+under the cap.
+
+Loading the WASM from GitHub is possible but worse: GitHub's raw host
+serves `.wasm` as `application/octet-stream`, which makes
+`WebAssembly.instantiateStreaming` throw, and its URLs are ref-mutable
+rather than immutable. Decision 0071 records the measurements and the
+answer — Pages stays; if the bundle ever outgrows 25 MiB the move is
+object storage behind a Worker that serves `application/wasm`.
+
+### Aegis versus Atheon-Enhanced
+
+Same corpus, same box, three interleaved runs each:
+
+| scanner | median wall clock | findings |
+|---|---|---|
+| Aegis 0.6.3 (Rust) | **12.12 s** | **373** |
+| Atheon-Enhanced (Go) | **216.3 s** | **18,021** |
+
+Atheon-Enhanced is 17.8× slower and 48× noisier, and its rules
+mis-attribute (terraform, azure and dockerfile rules firing on Rust
+lines). On a planted corpus both missed `ghp_` and `xoxb_` tokens;
+Atheon-Enhanced caught a Stripe key Aegis missed, which does not
+outweigh 48× the noise. Aegis stays the scanner.
+
+### What the comparison exposed, and the gate it broke
+
+Aegis has two suppression channels and only one of them works. Its
+`--baseline` keys a finding as `pattern:file:line:content-digest`, so
+a suppression dies with the line it names; a JSON profile's
+`disabled_patterns` field is silently ignored (measured: 7
+`eval-usage` findings with and without it); the only working per-rule
+switch is the state file at `$HOME/.config/aegis/pattern-state.json`,
+which is keyed on the *rule name* and survives every edit.
+
+That distinction is why the gate failed on 2026-11-06: the 22.2
+receipt prose quotes the rule names it describes, so the receipt trips
+the rules it is about — and because the baseline is line-keyed, an
+unrelated edit above a finding invalidates its entry. The recorded
+repair was to regenerate a 19.4 MB baseline over the whole tree, which
+takes a full-tree scan. A gate whose routine response to an unrelated
+edit is a fifteen-minute regeneration is a gate that gets skipped.
+
+### What changed
+
+The baseline is gone; 644 line-keyed entries in 19.4 MB are replaced by
+12 rule names and 8 content digests.
+
+- **`.aegis-pattern-state.json`** suppresses whole rule classes that
+  cannot fire in this tree — `zip-code` (523 hits: every 5-digit
+  constant), `pci-cardholder-data` (52: the word "pan" in "pan-zoom"),
+  `phone-number` (21: `4294967295` and CRC values), `eval-usage` (15:
+  Rust `.eval(t)`), `ssrf-localhost` (8: the workspace has no HTTP
+  client), `sql-query` (7: English prose), the JavaScript-shaped
+  `path-traversal` rules, and three digit-run PII rules. The evidence
+  for each is in decision 0070. The five `credit-card-*` rules stay
+  **armed**, so a real card number is still caught.
+- **`.aegis-allowlist.json`** suppresses the ten remaining
+  per-finding false positives, keyed `pattern:file:content-digest` —
+  the line is deliberately omitted, so an entry survives every edit
+  that does not touch the matched content, and dies when the content
+  itself changes, which is exactly when a human should look again.
+  Each entry carries its own note saying why it is a false positive.
+- **`xtask`** installs the pattern state into a private `HOME` (so the
+  developer's own Aegis configuration is never touched) and filters the
+  scanner's findings itself; `cargo run -p xtask -- aegis --report`
+  prints the uncovered findings with the key an allowlist entry would
+  need. The gate never writes the allowlist: suppressing a finding is a
+  human decision that requires seeing the finding first.
+
+### Receipts
+
+- The gate is green in the new form: `[xtask] aegis ok`, exit 0.
+- The gate still fails when it should. A planted AWS example access-key
+  id (the key AWS publishes in its own documentation) in the tree
+  produced `aws-access-key aegis-gate-selftest.txt:1 [critical]` and
+  exit 1; the file was removed immediately afterwards.
+- The `.aegis-baseline.json` file is deleted from the repository.
+
+The lesson is the one the previous session recorded, now with the tool
+fixed rather than the procedure: the rebaseline was a procedure
+compensating for a line-keyed baseline, and a procedure that encodes a
+defect survives the defect's fix.
+
+## 2026-11-06 — 22.5: the screen-mode cycle, the Alt-hold retouch swap, and the Window arrangement trio
+
+Ticket 22.5's evidence-backed items landed as one batch. Three of
+them came straight out of the reference extracts; the fourth was a
+comment that asserted the opposite of the layout XML.
+
+### The three-mode screen cycle (fwref 1178–1185)
+
+The screen-mode control in the View section of the tool strip used to
+alias `ToggleHidePanels` — a Tab press wearing a monitor icon. CS6's
+help names three view modes: *Standard Screen mode* (the default),
+*Full Screen with Menus mode* ("A maximized document window view set
+against a gray background. Menus, toolbars, scroll bars, and panels
+are visible"), and *Full Screen mode* ("A maximized document window
+view set against a black background. No menus, toolbars, or title
+bars are visible"). `ScreenMode` now cycles those three in order; the
+layout in `Shell::ui` folds chrome by mode, the canvas backdrop
+switches to CS6's gray (0x999999) / black in the two full-screen
+modes, and the document tab strip drops in Full Screen (no title
+bars). The cycle is view state: the journal never moves.
+
+### The Alt-hold retouch swap (fwref 3555, 3580)
+
+CS6's help twice: "Hold down Alt (Windows) or Option (Mac OS) to
+change from one tool behavior to the other" (the Blur/Sharpen/Smudge
+section), and "To temporarily switch between the Dodge tool and the
+Burn tool, hold down Alt (Windows)". `toolstrip::alt_variant` is the
+pure pair-swap (Blur↔Sharpen, Dodge↔Burn; Smudge has no variant),
+and `Editor::paint_dab` resolves the effective tool at the dab edge
+through a shell-supplied `alt_held` flag — the editor never reads
+the window system, and the active tool never changes. The swap is
+an involution gated by
+`toolstrip::tests::the_alt_swap_is_an_involution_on_two_pairs` and
+proven end-to-end by `editor_surface::alt_hold_swaps_the_retouch_pair_at_the_dab`
+(journal command names differ under Alt).
+
+### The Window arrangement trio (57650/57651/57652)
+
+The transcription carried 57650 *Cascade* and 57652 *Tile* and no
+57651 — `ID_WINDOW_TILE_HORZ` from `MENU_DESCRIPTION_MAP`. The
+"Tile Horizontally" row is now transcribed between them and 57652 is
+relabeled *Tile Vertically* (the resource's `ID_WINDOW_TILE_VERT`);
+`menus::tests::the_window_arrangement_trio_matches_the_resource`
+pins all three. The pinned item census rose 289 → 290: the row was
+always part of the CS6 surface; the transcription was short one. The
+live doc quotes (CLAUDE.md, GAPS, HANDOFF, NEXT) moved with it; the
+dated batch history in NEXT keeps its period counts. The §A open
+evidence item in CS6-PARITY closed on this evidence — no bar-resource
+decode was needed.
+
+### The wrong comment
+
+`Shell::ui` claimed "the CS6 and Photopea arrangement puts it [the
+Properties block] in the right dock". CS6's own `Expanded Mode.xml`
+puts Properties (palette app-data 35586) in the **bottom** dock at
+923×105. The comment is replaced by the screen-mode layout note; the
+placement itself is 22.1's item (recorded, not silently kept).
+
+### Receipts
+
+- `cargo test -p app --lib toolstrip::tests::the_alt_swap_is_an_involution_on_two_pairs` — pass
+- `cargo test -p app --lib menus::tests::the_window_arrangement_trio_matches_the_resource` — pass
+- `cargo test -p app --lib shell::tests::the_screen_mode_cycles_through_the_three_view_modes` — pass
+- `cargo test -p app --test editor_surface alt_hold_swaps_the_retouch_pair_at_the_dab` — pass
+- Full workspace gate: `/var/tmp/fc-ci-225.log` (`cargo run -p xtask -- ci`)
+- Deferred from 22.5 with reasons: dock tab-groups and the Properties
+  bottom dock (22.1's structure), Text ▸ Font submenu and *Repeat
+  Filter* (rows 52/54, rank 14), the F1 grouping mismatch (row 255),
+  the 76 unbound keymap rows (row 257), the 3D tool (deliberately not
+  carried), the Main toolbar's contents (row 164).

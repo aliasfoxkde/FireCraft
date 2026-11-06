@@ -210,6 +210,9 @@ pub enum ShellAction {
     ToggleHidePanels,
     /// Window ▸ Toolbars ▸ Main — the context options bar.
     ToggleMainToolbar,
+    /// The Tools panel's screen-mode control: cycle Standard Screen /
+    /// Full Screen with Menus / Full Screen (fwref 1178–1185).
+    CycleScreenMode,
     /// File ▸ Preview in Browser (primary/secondary/all pages):
     /// export the document to a PNG next to it (or in the temp dir for
     /// an unsaved document) and open it in the system browser.
@@ -2053,8 +2056,14 @@ pub static WINDOW: Menu = Menu {
             Action::Shell(ShellAction::SingleDocument),
         ),
         item(
+            57651,
+            "Tile Horizontally",
+            "",
+            Action::Shell(ShellAction::SingleDocument),
+        ),
+        item(
             57652,
-            "Tile",
+            "Tile Vertically",
             "",
             Action::Shell(ShellAction::SingleDocument),
         ),
@@ -2477,6 +2486,7 @@ pub fn action_name(action: Action) -> String {
             },
             ShellAction::ToggleHidePanels => "Hide/show panels".into(),
             ShellAction::ToggleMainToolbar => "Main toolbar".into(),
+            ShellAction::CycleScreenMode => "Screen mode".into(),
         },
         Action::Sel(sel) => match sel {
             SelAction::Delete => "Delete selection".into(),
@@ -2721,9 +2731,37 @@ mod tests {
     fn menu_item_total_is_pinned() {
         let (total, _) = census();
         assert_eq!(
-            total, 289,
+            total, 290,
             "menu item total changed — update the docs that quote it"
         );
+    }
+
+    /// The Window menu's arrangement trio matches the CS6 resource:
+    /// Cascade (57650), Tile Horizontally (57651, once missing from
+    /// the transcription) and Tile Vertically (57652, once mislabeled
+    /// "Tile"). All three report the single-document limitation
+    /// instead of acting.
+    #[test]
+    fn the_window_arrangement_trio_matches_the_resource() {
+        let window = MENUBAR
+            .iter()
+            .find(|menu| menu.label == "Window")
+            .expect("the bar carries a Window menu");
+        let find = |id: u32| {
+            walk(window.entries)
+                .into_iter()
+                .find(|item| item.id == id)
+                .unwrap_or_else(|| panic!("no Window row {id}"))
+        };
+        assert_eq!(find(57650).label, "Cascade");
+        assert_eq!(find(57651).label, "Tile Horizontally");
+        assert_eq!(find(57652).label, "Tile Vertically");
+        for id in [57650, 57651, 57652] {
+            assert!(matches!(
+                find(id).action,
+                Action::Shell(ShellAction::SingleDocument)
+            ));
+        }
     }
 
     /// Every item carries a label and (except the placeholder Font row

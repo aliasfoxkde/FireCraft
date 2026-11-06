@@ -173,6 +173,10 @@ pub struct Shell {
     tools_hidden: bool,
     /// Window ▸ Toolbars ▸ Main: the context options bar is hidden.
     options_bar_hidden: bool,
+    /// The screen-mode control's cycle position (CS6's three view
+    /// modes: Standard, Full Screen with Menus, Full Screen). Display
+    /// state, not document state.
+    screen_mode: ScreenMode,
     /// The live egui context, stashed each frame so code outside the
     /// frame loop (the web bridge) can request a repaint after it
     /// mutates the shell — without one, a bridge-loaded document sat
@@ -198,6 +202,58 @@ pub(crate) const TOOL_HOLD_SECONDS: f64 = 0.45;
 /// clock and the pointer state are read at the edge and passed in.
 pub(crate) fn hold_opens_flyout(elapsed: f64) -> bool {
     elapsed >= TOOL_HOLD_SECONDS
+}
+
+/// CS6's three view modes — the help set: "In the Tools panel,
+/// select from one of three view modes to control the layout of your
+/// workspace. Standard Screen mode: The default document window view.
+/// Full Screen with Menus mode: A maximized document window view set
+/// against a gray background. Menus, toolbars, scroll bars, and
+/// panels are visible. Full Screen mode: A maximized document window
+/// view set against a black background. No menus, toolbars, or title
+/// bars are visible." (fwref 1178–1185.) The screen-mode control
+/// cycles through them.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) enum ScreenMode {
+    /// The default document window view — every chrome element shown.
+    #[default]
+    Standard,
+    /// Maximized against a gray backdrop; menus stay.
+    FullScreenWithMenus,
+    /// Maximized against a black backdrop; no menus, toolbars, or
+    /// title bars.
+    FullScreen,
+}
+
+impl ScreenMode {
+    /// The next mode in CS6's cycle order.
+    fn next(self) -> Self {
+        match self {
+            ScreenMode::Standard => ScreenMode::FullScreenWithMenus,
+            ScreenMode::FullScreenWithMenus => ScreenMode::FullScreen,
+            ScreenMode::FullScreen => ScreenMode::Standard,
+        }
+    }
+
+    /// The status line the cycle reports.
+    fn label(self) -> &'static str {
+        match self {
+            ScreenMode::Standard => "Standard Screen mode",
+            ScreenMode::FullScreenWithMenus => "Full Screen with Menus mode",
+            ScreenMode::FullScreen => "Full Screen mode",
+        }
+    }
+
+    /// The backdrop CS6 paints behind the maximized document: gray in
+    /// Full Screen with Menus, black in Full Screen, and the shell's
+    /// usual dark canvas matte in Standard.
+    fn backdrop(self) -> egui::Color32 {
+        match self {
+            ScreenMode::Standard => egui::Color32::from_rgb(32, 32, 32),
+            ScreenMode::FullScreenWithMenus => egui::Color32::from_rgb(0x99, 0x99, 0x99),
+            ScreenMode::FullScreen => egui::Color32::BLACK,
+        }
+    }
 }
 
 /// The persisted shell layout: the panel-visibility set and the dock
@@ -319,6 +375,7 @@ impl Shell {
             panels_hidden: false,
             tools_hidden: false,
             options_bar_hidden: false,
+            screen_mode: ScreenMode::Standard,
             layout: ShellLayout::default(),
             ctx: None,
         }
@@ -1153,6 +1210,7 @@ impl Shell {
             }
             menus::ShellAction::ToggleHidePanels => self.toggle_all_panels(),
             menus::ShellAction::ToggleMainToolbar => self.toggle_options_bar(),
+            menus::ShellAction::CycleScreenMode => self.cycle_screen_mode(),
             menus::ShellAction::ReportGap(message) => self.status = message.to_owned(),
             menus::ShellAction::InsertWeb { what } => self.insert_web(what),
             menus::ShellAction::PreviewInBrowser {
@@ -2354,14 +2412,20 @@ impl eframe::App for Shell {
         // Panels first, CentralPanel last (egui's required order), in
         // the CS6 arrangement: menu, context options bar, tool strip,
         // panel stack (Properties included), status strip, canvas.
-        // The Properties block lived in a bottom dock, which read as a
-        // detached options strip floating at the lower left — the CS6
-        // and Photopea arrangement puts it in the right dock.
-        egui::Panel::top(egui::Id::new("menu")).show(ui, |ui| self.menu_bar(ui));
-        if !self.options_bar_hidden {
+        // The screen mode folds chrome on top of the dock folds: Full
+        // Screen hides menus, toolbars, tools, panels, status and the
+        // document tab strip against a black backdrop; Full Screen
+        // with Menus keeps the menu bar and paints the gray backdrop
+        // (fwref 1178–1185).
+        let full_screen = self.screen_mode == ScreenMode::FullScreen;
+        let menus_visible = !full_screen;
+        if menus_visible {
+            egui::Panel::top(egui::Id::new("menu")).show(ui, |ui| self.menu_bar(ui));
+        }
+        if !self.options_bar_hidden && !full_screen {
             egui::Panel::top(egui::Id::new("options")).show(ui, |ui| self.options_bar(ui));
         }
-        if !self.tools_hidden {
+        if !self.tools_hidden && !full_screen {
             egui::Panel::left(egui::Id::new("tools"))
                 .exact_size(34.0)
                 .show(ui, |ui| self.tools_panel(ui));
@@ -2370,35 +2434,42 @@ impl eframe::App for Shell {
         // panels. A side panel *reserves* its width, so the canvas
         // shrinks instead of being covered, and the column scrolls so
         // every panel stays reachable at any viewport height.
-        self.dock(ui);
-        egui::Panel::bottom(egui::Id::new("status")).show(ui, |ui| {
-            ui.horizontal(|ui| {
-                ui.label(&self.status);
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    ui.label(format!(
-                        "{} · page {} · state {} · undo {} · redo {} · journal {}",
-                        self.doc_name,
-                        self.editor.page + 1,
-                        self.editor.frame + 1,
-                        self.editor.session.undo_len(),
-                        self.editor.session.redo_len(),
-                        self.editor.session.journal_len(),
-                    ));
+        if !self.panels_hidden && !full_screen {
+            self.dock(ui);
+        }
+        if !full_screen {
+            egui::Panel::bottom(egui::Id::new("status")).show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    ui.label(&self.status);
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        ui.label(format!(
+                            "{} · page {} · state {} · undo {} · redo {} · journal {}",
+                            self.doc_name,
+                            self.editor.page + 1,
+                            self.editor.frame + 1,
+                            self.editor.session.undo_len(),
+                            self.editor.session.redo_len(),
+                            self.editor.session.journal_len(),
+                        ));
+                    });
                 });
             });
-        });
+        }
         egui::CentralPanel::default()
             .frame(egui::Frame::NONE)
             .show(ui, |ui| {
                 // The document tab strip: a single-document window, so
                 // the CS6 MDI tab strip reduced to its one member.
-                ui.horizontal(|ui| {
-                    ui.add(
-                        egui::Button::new(egui::RichText::new(&self.doc_name).size(11.0))
-                            .selected(true),
-                    );
-                    ui.weak("FireCraft");
-                });
+                // Full Screen drops the title bar, tab strip included.
+                if !full_screen {
+                    ui.horizontal(|ui| {
+                        ui.add(
+                            egui::Button::new(egui::RichText::new(&self.doc_name).size(11.0))
+                                .selected(true),
+                        );
+                        ui.weak("FireCraft");
+                    });
+                }
                 self.canvas(ui);
             });
         if self.export_dialog.is_some() {
@@ -2925,6 +2996,39 @@ mod tests {
             shell.editor.session.journal_len(),
             journal,
             "panel toggles are view state, not document history"
+        );
+    }
+
+    /// The screen-mode control cycles CS6's three view modes in the
+    /// documented order (fwref 1178–1185) and back to Standard; the
+    /// cycle is view state — the journal never moves.
+    #[test]
+    fn the_screen_mode_cycles_through_the_three_view_modes() {
+        let mut shell = gui_shell(Editor::untitled());
+        let journal = shell.editor.session.journal_len();
+
+        assert_eq!(shell.screen_mode, ScreenMode::Standard);
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::CycleScreenMode));
+        assert_eq!(shell.screen_mode, ScreenMode::FullScreenWithMenus);
+        assert!(shell.status.contains("Full Screen with Menus"));
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::CycleScreenMode));
+        assert_eq!(shell.screen_mode, ScreenMode::FullScreen);
+        assert!(shell.status.contains("Full Screen mode"));
+        // The third press returns to Standard — a cycle, not a toggle.
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::CycleScreenMode));
+        assert_eq!(shell.screen_mode, ScreenMode::Standard);
+        assert_eq!(
+            shell.editor.session.journal_len(),
+            journal,
+            "the screen mode is view state, not document history"
+        );
+
+        // The Full Screen backdrop is black; Full Screen with Menus is
+        // CS6's gray; Standard keeps the usual dark matte.
+        assert_eq!(ScreenMode::FullScreen.backdrop(), egui::Color32::BLACK);
+        assert_eq!(
+            ScreenMode::FullScreenWithMenus.backdrop(),
+            egui::Color32::from_rgb(0x99, 0x99, 0x99)
         );
     }
 

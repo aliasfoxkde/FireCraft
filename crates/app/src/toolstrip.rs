@@ -420,7 +420,7 @@ pub static CATEGORIES: &[ToolCategory] = &[
             ToolGroup {
                 key: "",
                 tools: &[ToolEntry {
-                    label: "Toggle Screen Mode",
+                    label: "Screen Mode",
                     tool: Tool::ToggleScreenMode,
                 }],
             },
@@ -457,6 +457,24 @@ pub fn group_of(tool: Tool) -> Option<&'static ToolGroup> {
 #[must_use]
 pub fn key_of(tool: Tool) -> &'static str {
     group_of(tool).map_or("", |group| group.key)
+}
+
+/// The tool's Alt-hold variant, or `None` when the tool has none.
+/// CS6's help: "Hold down Alt (Windows) or Option (Mac OS) to change
+/// from one tool behavior to the other" (fwref 3555, the Blur/
+/// Sharpen/Smudge trio) and "To temporarily switch between the Dodge
+/// tool and the Burn tool, hold down Alt (Windows)" (fwref 3580).
+/// Both are pair-swaps within the group: Blur↔Sharpen and Dodge↔Burn.
+/// Smudge has no second behavior to swap to, so it stays itself.
+#[must_use]
+pub fn alt_variant(tool: Tool) -> Option<Tool> {
+    match tool {
+        Tool::Blur => Some(Tool::Sharpen),
+        Tool::Sharpen => Some(Tool::Blur),
+        Tool::Dodge => Some(Tool::Burn),
+        Tool::Burn => Some(Tool::Dodge),
+        _ => None,
+    }
 }
 
 /// Whether the tool is one of CS6's panel *buttons* — the controls
@@ -520,6 +538,35 @@ mod tests {
                     continue;
                 }
                 assert_eq!(key_of(group.leader().tool), group.key);
+            }
+        }
+    }
+
+    /// CS6's Alt-hold swap (help 3555, 3580) is a pair-swap inside
+    /// the two retouch groups: Blur↔Sharpen and Dodge↔Burn, involution
+    /// (holding Alt twice returns the tool), and every other tool —
+    /// Smudge included — has no variant to swap to.
+    #[test]
+    fn the_alt_swap_is_an_involution_on_two_pairs() {
+        assert_eq!(alt_variant(Tool::Blur), Some(Tool::Sharpen));
+        assert_eq!(alt_variant(Tool::Sharpen), Some(Tool::Blur));
+        assert_eq!(alt_variant(Tool::Dodge), Some(Tool::Burn));
+        assert_eq!(alt_variant(Tool::Burn), Some(Tool::Dodge));
+        for category in CATEGORIES {
+            for group in category.groups {
+                for entry in group.tools {
+                    if !matches!(
+                        entry.tool,
+                        Tool::Blur | Tool::Sharpen | Tool::Dodge | Tool::Burn
+                    ) {
+                        assert_eq!(
+                            alt_variant(entry.tool),
+                            None,
+                            "{} has no documented Alt variant",
+                            entry.label
+                        );
+                    }
+                }
             }
         }
     }

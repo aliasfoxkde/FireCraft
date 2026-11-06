@@ -221,7 +221,7 @@ of replacing it, fill/stroke swatch panel bound to
 Phase 19 batches 19.1–19.5 landed 2026-10-31 → 11-01: transform
 handles + Numeric Transform, Subselect path-node editing, the gradient
 fill editor, the command palette, and the grid/guides/snap set. The
-inert count is 8 of 289 items (was 190); 19.6's menu-wiring
+inert count is 8 of 290 items (was 190); 19.6's menu-wiring
 campaign is complete. The remaining rows require separate feature or
 evidence work, tracked outside that campaign.
 
@@ -511,7 +511,15 @@ scope, so no license path is attempted.
 - **22.5 CS6 chrome** (M): menu bar order, tool strip placement,
   document tab strip, status bar, panel headers with the CS6
   collapse/close affordances, and the CS6 color scheme (a dark
-  neutral chrome, not egui's default light look).
+  neutral chrome, not egui's default light look). **Landed
+  2026-11-06:** the three-mode screen cycle (Standard / Full Screen
+  with Menus / Full Screen, fwref 1178–1185 — the control no longer
+  aliases Tab), the Alt-hold retouch swap (Blur↔Sharpen,
+  Dodge↔Burn, fwref 3555/3580; Smudge has no variant), and the
+  Window-menu arrangement trio (57650/57651/57652 with CS6's
+  labels; census 289→290). Remaining on 22.5: the Text ▸ Font
+  submenu, *Repeat Filter*, the F1 grouping mismatch, and the 76
+  unbound keymap rows.
 - **22.6 Icon pack integration** (M): ship the surveyed open-license
   icon set, subset it to the Fireworks verb set, and record the
   attribution rows. Accept: the wasm bundle grows by a documented,
@@ -549,16 +557,20 @@ scope, so no license path is attempted.
 - Do not run `cargo test --workspace` locally (hook-denied; use
   GitForge or per-crate commands).
 - Do not touch `source/`, do not commit `dist/`, do not force-push.
-- Do not add aegis baseline entries without verifying each finding is
-  a false positive ("pan" in pan/zoom prose trips PCI; 65535-style
-  literals trip zip-code — those two are the known classes).
+- Do not add aegis allowlist entries without verifying each finding is
+  a false positive, and do not add a rule class to
+  `.aegis-pattern-state.json` without the same check. The classes that
+  are suppressed and the evidence for each are listed in decision
+  0070; a new entry needs the same kind of evidence, not a
+  convenience.
 
 ## Quick reference
 
 | Gate | Command | Timeout |
 |---|---|---|
 | Full CI | `cargo run -p xtask -- ci` | ~20 min |
-| Aegis | `cargo run -p xtask -- aegis` | ~10s |
+| Aegis | `cargo run -p xtask -- aegis` | ~15s |
+| Aegis report | `cargo run -p xtask -- aegis --report` | ~15s |
 | Coverage measure | `cargo llvm-cov --summary-only` (hook: use GitForge) | ~6 min |
 | Coverage gate | `cargo run -p xtask -- coverage` | ~6 min |
 | Wasm only | `cargo run -p xtask -- wasm` | ~5 min |

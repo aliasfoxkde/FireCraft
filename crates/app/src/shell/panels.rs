@@ -185,6 +185,16 @@ impl Shell {
         .to_owned();
     }
 
+    /// The Tools panel's screen-mode control: cycle Standard Screen /
+    /// Full Screen with Menus / Full Screen (fwref 1178–1185). The
+    /// layout in `ui()` reads the mode each frame: Full Screen folds
+    /// every chrome element, Full Screen with Menus keeps the menu bar
+    /// and paints the gray backdrop, Standard restores everything.
+    pub(crate) fn cycle_screen_mode(&mut self) {
+        self.screen_mode = self.screen_mode.next();
+        self.status = self.screen_mode.label().to_owned();
+    }
+
     /// Pages section: one selectable row per page.
     pub(super) fn pages_section(&mut self, ui: &mut egui::Ui) {
         let pages = self.editor.document().pages.len();

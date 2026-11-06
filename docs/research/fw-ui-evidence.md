@@ -185,13 +185,15 @@ here as an open evidence gap rather than guessed.
 2. The Window-menu roster (below) is the authority for *which
    panels are toggleable*. The `486xx` instances are additional
    panel instances CS6 creates without a Window-menu row.
-3. The Window-menu transcription in `crates/app/src/menus.rs` is
+3. The Window-menu transcription in `crates/app/src/menus.rs` was
    missing **`57651` (Tile Horizontally)** — the CS6 Window menu has
    *Cascade* (57650), *Tile Horizontally* (57651) and *Tile
-   Vertically* (57652). The transcription carries 57650 "Cascade"
+   Vertically* (57652). The transcription carried 57650 "Cascade"
    and 57652 "Tile"; the CS6 resource names 57652
-   `ID_WINDOW_TILE_VERT`. This is a real gap in the transcription,
-   tracked as ticket **22.5**.
+   `ID_WINDOW_TILE_VERT`. **Closed 2026-11-06**: the transcription
+   now carries all three rows with the CS6 labels, and the pinned
+   menu-item census rose 289 → 290 (the row was always part of the
+   CS6 surface; the transcription was short one).
 - **Panel roster** (Window menu authority): Tools, Properties,
   Optimize, Layers, Common Library, CSS Properties, Pages, States,
   History, Auto Shapes, Styles, Document Library, URL, Color Mixer,

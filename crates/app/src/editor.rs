@@ -959,6 +959,10 @@ pub struct Editor {
     pub stroke: Option<Stroke>,
     /// The pixel selection being drawn, if any.
     pub pixel_selection: Option<PixelSelection>,
+    /// Alt held this frame — the shell passes the modifier through so
+    /// CS6's Alt-hold tool swap can resolve at the dab edge without
+    /// the editor reading the window system.
+    pub alt_held: bool,
     /// The pixel polygon being built, if any.
     pub polygon: Option<PolygonDraft>,
     /// The page-space path being plotted click by click — CS6's Pen,
@@ -1044,6 +1048,7 @@ impl Editor {
             brush: BrushSettings::default(),
             stroke: None,
             pixel_selection: None,
+            alt_held: false,
             polygon: None,
             draft: None,
             fill_color: [0, 0, 0, 255],
@@ -2852,7 +2857,16 @@ impl Editor {
             .stroke
             .as_ref()
             .map_or((point, point), |stroke| (stroke.start, stroke.last));
-        match self.tool {
+        // CS6's Alt-hold behavior swap (fwref 3555, 3580): while Alt
+        // is down a retouch pair member paints as its partner. The
+        // active tool never changes — the swap lasts exactly as long
+        // as the hold.
+        let effective = if self.alt_held {
+            crate::toolstrip::alt_variant(self.tool).unwrap_or(self.tool)
+        } else {
+            self.tool
+        };
+        match effective {
             Tool::Pencil => self.apply(
                 "bitmap.pencil",
                 serde_json::json!({

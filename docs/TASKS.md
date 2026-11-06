@@ -22,7 +22,7 @@
 | 22.2 Tool strip and flyouts | Complete | The strip is CS6's, as data in `crates/app/src/toolstrip.rs`: six categories in CS6's order, twenty-four groups with their one-key shortcuts, the flyout memberships, and CS6's group-cycling rule. Evidence in [`research/fw-ui-evidence.md`](research/fw-ui-evidence.md); landed 2026-11-05. |
 | 22.3 Adaptive canvas context menu | Complete | Selection-specific rows dispatch through the existing command surface. |
 | 22.4 Property inspector | Partial | Per-kind field sets landed 2026-11-04 (group, bitmap, slice). Open: the bitmap transform strip and fill/stroke, the document-level and multi-selection field sets, and enter-group. |
-| 22.5 CS6 chrome | Partial | Audit tab/status/header layout and responsive behavior against the approved reference. |
+| 22.5 CS6 chrome | Partial | Landed 2026-11-06: the three-mode screen cycle (Standard / Full Screen with Menus / Full Screen, fwref 1178–1185), the Alt-hold retouch swap (Blur↔Sharpen, Dodge↔Burn, fwref 3555/3580), and the Window-menu arrangement trio (57650/57651/57652; the census rose 289→290). Still open: the Text ▸ Font submenu, *Repeat Filter*, the F1 grouping mismatch, the 76 unbound keymap rows, and the Main toolbar's contents (rows 52/54, 255, 257, 164 in [CS6-PARITY](CS6-PARITY.md)). |
 | 22.6 Open-license icon pack | Complete | Attribution and measured wasm-budget effects are recorded in the phase history. |
 | Screenshot capture and comparison | Complete | Captured and inspected at 1280×800 and 1920×1080 in the empty, vector, and bitmap states against a fresh optimized bundle on 2026-11-04; the tracked screenshot was replaced and labelled for its build. Receipts in [T22](tasks/T22-screenshot-ui.md). |
 

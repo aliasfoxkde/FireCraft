@@ -69,26 +69,25 @@ the feature is absent (`M`). This is the honest middle state between
 "inert" and "implemented", and it is why the matrix does not read the
 inert census as a coverage number.
 
-### Open evidence item: the Window menu's window-arrangement rows
+### Open evidence item: the Window menu's window-arrangement rows — CLOSED 2026-11-06
 
 `MENU_DESCRIPTION_MAP` names `57650 = cmd_CascadeWindows`,
 `57651 = ID_WINDOW_TILE_HORZ`, `57652 = ID_WINDOW_TILE_VERT` (**R**).
-FireCraft's transcription carries 57650 *Cascade* and 57652 *Tile*,
-and no 57651 (**M:2046**, `M:2052`). Two things are not yet
-established and are therefore **not** treated as a defect:
+FireCraft's transcription carried 57650 *Cascade* and 57652 *Tile*,
+and no 57651 (**M:2046**, `M:2052`). The two open questions resolved
+without decoding the bar resource:
 
-1. Whether CS6's Window menu actually carries a 57651 row — the
-   resource defines the id; the menu may not use it.
-2. The CS6 *label* for 57652 — the resource name says "TILE_VERT"
-   while the transcription says "Tile".
-
-The CS6 `RT_MENU` 128 resource does not decode with the classic Win32
-`MENUITEMTEMPLATE` layout: its item strings sit one byte off the item
-headers (the CJK-mojibake tell the evidence note describes), so a
-straight decode desynchronizes after the first popup. The per-popup
-resources (type 4, ids 6906–7037) *do* decode cleanly and were used
-for the panel ids. Resolving the bar resource is a bounded RE task
-for ticket 22.5.
+1. The transcription now carries the full trio — 57650 *Cascade*,
+   57651 *Tile Horizontally*, 57652 *Tile Vertically* — gated by
+   `menus::tests::the_window_arrangement_trio_matches_the_resource`;
+   the pinned item census rose 289 → 290 in the same change (the row
+   was always part of the CS6 surface; the transcription was short
+   one).
+2. The 57652 label is CS6's documented *Tile Vertically*
+   (`ID_WINDOW_TILE_VERT`); the earlier "Tile" was the
+   transcription's shorthand, dropped in favor of the resource's
+   name. All three rows report the single-document limitation
+   instead of acting, as before.
 
 ---
 
@@ -117,9 +116,9 @@ panel (`S/mod.rs:2277`, `S/canvas_ui.rs:33`).
 | **Freeform** | the Freeform tool draws and the Reshape Area flyout member distorts the selected path | **implemented** | `R` (help 4508), `S/editor.rs` | — |
 | **Colors section** (the activate-stroke-or-fill icon, Set Default, No Stroke Or Fill, Swap Stroke/Fill, and the two color boxes) | all five, as panel *buttons* that act on click rather than becoming the tool | **implemented** | `R` (help 5409–5429), `S/canvas_ui.rs` | — |
 | **Hide/Show Slices** control | a panel button on the book's `2` key | **implemented** | `R` (book Table 1-1), `S/canvas_ui.rs` | — |
-| **Screen mode** (Standard Screen / Full Screen with Menus / Full Screen) | one control that toggles the workspace chrome — CS6's Full Screen mode | **partial** — the three-mode cycle and the double-click-to-fit gesture are not implemented | `R` (help 1175–1185) | 22.5 |
+| **Screen mode** (Standard Screen / Full Screen with Menus / Full Screen) | one control that **cycles the three view modes** (fwref 1178–1185): Standard, Full Screen with Menus (menus kept, gray backdrop), Full Screen (all chrome folded, black backdrop, no tab strip) | **implemented** | `R` (help 1175–1185), `S/mod.rs` (`ScreenMode`), `S/panels.rs` | — |
 | **3D tools** | absent | **missing** — CS6's 3D tool is a legacy feature FireCraft does not carry | `R` (book ch. 1) | — |
-| **Alt-hold tool variants** (Alt between Blur/Sharpen/Smudge and Dodge/Burn) | the tools are separate entries in their group; the Alt-hold gesture is not implemented | **partial** | `R` (help 3555) | 22.5 |
+| **Alt-hold tool variants** (Alt between Blur/Sharpen/Smudge and Dodge/Burn) | Alt swaps the retouch pair at the dab edge (Blur↔Sharpen, Dodge↔Burn; Smudge has no variant); the active tool never changes | **implemented** | `R` (help 3555, 3580), `S/toolstrip.rs::alt_variant`, `S/editor.rs` | — |
 
 ---
 
@@ -306,7 +305,7 @@ acceptance hook. Ordered by how much of the product it unlocks.
 | 2 | The inspector's remaining per-kind gaps: document-level fields, multi-selection fields, the image transform strip, and enter-group | D, I | 22.4 | P0 |
 | 3 | The right dock's five-tab-group structure and the bottom Properties dock | C | 22.1 | P0 |
 | 4 | In-canvas text editing | E, H, I | 20.1 | P0 |
-| 5 | The CS6 tool strip: the 3D tool, the three-mode screen switch, and the Alt-hold tool variants | B | 22.5 | P2 |
+| 5 | The CS6 tool strip's remaining items: the 3D tool (the screen-mode cycle and the Alt-hold variants **landed 2026-11-06**) | B | 22.5 | P2 |
 | 6 | Multi-document tabs (and the Window rows that collapse to them) | E | 20.5 | P1 |
 | 7 | The animation timeline (States panel) | C | 20.3 | P1 |
 | 8 | History click-to-rewind | C, E | 20.6 | P1 |
@@ -316,7 +315,7 @@ acceptance hook. Ordered by how much of the product it unlocks.
 | 12 | The in-app script console and saved commands | A, E | 21.6 | P1 |
 | 13 | Command palette v2 (fuzzy, recents, save-steps) | G | 21.3 | P2 |
 | 14 | The Text ▸ Font submenu, *Repeat Filter*, the F1 grouping mismatch | A, H | 22.5 | P2 |
-| 15 | The Window menu's window-arrangement rows (**evidence-gated** — see the open evidence item in §A) | A | 22.5 | P2 |
+| 15 | ~~The Window menu's window-arrangement rows~~ **CLOSED 2026-11-06** — the trio (57650/57651/57652) is transcribed with CS6's labels (see §A) | A | — | — |
 | 16 | HiDPI `pixels_per_point` rendering | — | 21.2 | P2 |
 | 17 | accesskit desktop + web re-audit | H | 21.5 | P2 |
 
