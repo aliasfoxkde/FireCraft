@@ -18,6 +18,7 @@ gate exercised. A recipe shipped in `packaging/` has been parse-checked
 | `packaging/webos/` (`appinfo.json`, `host.html`) | WebOS packaging stamped `@VERSION@` into `dist/web/` | none (text copy + stamp) | release fleet (`xtask dist --web`) |
 | `packaging/deb/control` | `firecraft_<v>_amd64.deb` | dpkg-deb | release fleet (`xtask dist --native`) |
 | `packaging/build-appimage.sh` | `firecraft-<v>-linux-x86_64.AppImage` | linuxdeploy-x86_64.AppImage (FUSE or `--appimage-extract-and-run`), GNU coreutils | any Linux x86_64 host with linuxdeploy |
+| `packaging/build-flatpak.sh` + `packaging/flatpak/dev.firecraft.FireCraft.yml` | `firecraft-<v>-linux-x86_64.flatpak` | flatpak + flatpak-builder, org.freedesktop.Sdk//24.08 | any Linux x86_64 host with the Flatpak SDK |
 | `packaging/build-macos-dmg.sh` | `firecraft-<v>-macos-universal.dmg` | macOS + Xcode CLT, rustup targets aarch64/x86_64-apple-darwin, lipo, codesign, hdiutil | macOS only |
 | `packaging/build-windows.ps1` + `packaging/windows/firecraft.iss` | portable zip + optional Inno Setup installer | Windows, PowerShell 5.1+/7, MSVC (rustup target x86_64-pc-windows-msvc + VS Build Tools), optional Inno Setup 6 | Windows only |
 
@@ -26,13 +27,15 @@ gate exercised. A recipe shipped in `packaging/` has been parse-checked
 - **web / tar.gz / deb / CLI archives** — verified by the dist gate
   itself (manifest `sha256sum -c`, `dpkg-deb --info`/`--contents`,
   bridge smoke on the release bytes).
-- **AppImage, dmg, Windows zip/installer** — built and verified by the
+- **AppImage, Flatpak, dmg, Windows zip/installer** — built and verified by the
   operator from these recipes; record the sha256 of what you ship in
   the release notes. The dist manifest covers only what the fleet
   built.
-- **Parse status of the recipes**: `build-appimage.sh` and
+- **Parse status of the recipes**: `build-appimage.sh`,
+  `build-flatpak.sh` and
   `build-macos-dmg.sh` are `bash -n`-checked by `xtask dist --native`
-  on every run, so a broken recipe fails the gate. The PowerShell and
+  on every run, so a broken recipe fails the gate; the Flatpak
+  manifest is YAML-parsed by the same gate. The PowerShell and
   Inno Setup recipes cannot be parsed on this fleet (no pwsh, no ISCC);
   their syntax is verified on the target platform by whoever first
   runs them — if you do, fold the parse check into the recipe run.
@@ -49,7 +52,9 @@ The comprehensive target matrix and execution criteria live in
 [`docs/RELEASE-ENGINEERING-PLAN.md`](RELEASE-ENGINEERING-PLAN.md)
 (ticket [T27](tasks/T27-cross-platform-release.md)). In particular:
 
-- Flatpak and RPM are planned package work, not currently verified outputs.
+- Flatpak is recipe-only (manifest parse-checked) until a bundle is
+  built and sandbox-smoked on a host with the Flatpak SDK. RPM is
+  unsupported by decision 0070 (docs/decisions/0070-rpm-deferred.md).
 - Android is a feasibility-gated native port; no native Android support
   should be claimed until an APK is installed and exercised on a device.
 - Existing Windows and macOS scripts are recipes until their output

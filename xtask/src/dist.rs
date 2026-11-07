@@ -492,7 +492,7 @@ fn verify_deb(deb: &Path, version: &str) -> Result<(), String> {
 /// platform (docs/TOOLCHAINS.md); the gate requires they exist.
 fn parse_recipes() -> Result<usize, String> {
     let mut checked = 0;
-    for name in ["build-appimage.sh", "build-macos-dmg.sh"] {
+    for name in ["build-appimage.sh", "build-flatpak.sh", "build-macos-dmg.sh"] {
         let script = workspace_root().join("packaging").join(name);
         let status = std::process::Command::new("bash")
             .args(["-n"])
@@ -507,6 +507,17 @@ fn parse_recipes() -> Result<usize, String> {
         }
         checked += 1;
     }
+    // The Flatpak manifest is data, not a script: a YAML parse proves
+    // structure. The serde_yaml dependency lives in xtask's Cargo.toml.
+    let manifest = workspace_root().join("packaging/flatpak/dev.firecraft.FireCraft.yml");
+    let yaml = std::fs::read_to_string(&manifest)
+        .map_err(|e| format!("read {}: {e}", manifest.display()))?;
+    serde_yaml::from_str::<serde_yaml::Value>(&yaml).map_err(|e| {
+        format!(
+            "packaging/flatpak/dev.firecraft.FireCraft.yml does not parse: {e}"
+        )
+    })?;
+    checked += 1;
     for name in ["build-windows.ps1", "windows/firecraft.iss"] {
         let recipe = workspace_root().join("packaging").join(name);
         if !recipe.is_file() {

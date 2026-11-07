@@ -13,8 +13,8 @@
 | Linux x86_64 | tar.gz (CLI) | **required, tested** | `firecraft-cli-{v}-linux-x86_64.tar.gz` | `xtask dist --native` | built; manifest |
 | Linux x86_64 | DEB | **required, tested** | `firecraft_{v}_amd64.deb` | `xtask dist --native` (pinned `packaging/deb/control`) | built; read back with `dpkg-deb`; **no clean install/upgrade/remove test on Ubuntu/Debian yet** |
 | Linux x86_64 | AppImage | **required, recipe-only** | `firecraft-{v}-linux-x86_64.AppImage` | `packaging/build-appimage.sh` (operator, linuxdeploy) | parse-checked by `dist --native`; **never built/runtime-tested** |
-| Linux x86_64 | Flatpak | **planned, no recipe** | `firecraft-{v}-x86_64.flatpak` | RP-01 to create | nothing exists |
-| Linux x86_64 | RPM | **pending decision** | `firecraft-{v}-1.x86_64.rpm` | RP-01 decision | nothing exists |
+| Linux x86_64 | Flatpak | **required, recipe-only** | `firecraft-{v}-linux-x86_64.flatpak` | `packaging/build-flatpak.sh` + manifest `packaging/flatpak/dev.firecraft.FireCraft.yml` | manifest YAML-parse-checked by `dist --native`; **never built** (no Flatpak SDK on fleet) |
+| Linux x86_64 | RPM | **unsupported** ([decision 0070](../decisions/0070-rpm-deferred.md)) | — | — | nothing; revisit on demonstrated demand |
 | Linux aarch64 | any | **unassessed** | — | RP-01 assessment | nothing |
 | Windows x86_64 | portable zip | **required, recipe-only** | `firecraft-{v}-windows-x86_64.zip` | `packaging/build-windows.ps1` (operator, off-fleet) | parse-checked; **never built** |
 | Windows x86_64 | Inno Setup installer | **required, recipe-only** | `firecraft-{v}-windows-x86_64-setup.exe` | same script, ISCC present | parse-checked; **never built** |
@@ -40,9 +40,10 @@
   is primary.
 - Recipes (operator-owned, off-fleet per `packaging/TOOLCHAINS.md`):
   `build-windows.ps1`, `build-macos-dmg.sh`, `build-appimage.sh`.
-- Missing entirely: Flatpak manifest, RPM spec, Android, SBOM,
-  provenance, signing config, tag-driven fail-closed aggregate job,
-  install/launch smoke on packaged artifacts.
+- Missing entirely: Android, SBOM, provenance, signing config,
+  tag-driven fail-closed aggregate job, install/launch smoke on
+  packaged artifacts. (Flatpak recipe landed RP-01; RPM declined by
+  [decision 0070](../decisions/0070-rpm-deferred.md).)
 
 ## Known gaps against RP-00 acceptance
 

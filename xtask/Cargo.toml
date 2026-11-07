@@ -13,6 +13,8 @@ description = "FireCraft verification gates: ci, layers, wasm, corpus, parity, s
 flate2 = "1"
 png = "0.18"
 serde_json = "1"
+# Flatpak manifest parse-check in the dist gate (RP-01).
+serde_yaml = "0.9"
 sha2 = "0.10"
 # Bridge-smoke host page embeds the corpus fixture inline (same
 # version io already pins — no lockfile movement).
