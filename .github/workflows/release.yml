@@ -1,11 +1,12 @@
 # GitHub Actions release workflow — triggered on tag push (e.g. v0.2.2).
 #
 # What it does:
-#   1. Builds native artifacts (desktop tar.gz, cli tar.gz, deb)
-#   2. Builds web bundle (wasm)
-#   3. Zips web bundle
-#   4. Generates SHA-256 checksums
-#   5. Creates a draft GitHub release with all 5 assets
+#   1. Builds native artifacts (desktop tar.gz, CLI tar.gz, DEB)
+#   2. Builds the optimized web bundle and ZIP
+#   3. Builds a clean-extract-verified source archive
+#   4. Generates a CycloneDX 1.5 SBOM
+#   5. Generates release-wide SHA-256 checksums and validates all 8 assets
+#   6. Creates a draft GitHub Release with the validated assets
 #
 # What it does NOT do (operator handles):
 #   - Bumping versions (8 stamps in Cargo.toml files)
@@ -29,7 +30,9 @@ env:
 jobs:
   build:
     name: build artifacts
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -51,9 +54,18 @@ jobs:
         # the web bundle step dies with "trunk not on PATH".
         run: cargo install trunk --locked
 
-      - name: Install chromium
-        # The bridge smoke inside `dist --web` drives a headless browser.
-        run: sudo apt-get update && sudo apt-get install -y chromium-browser
+      - name: Verify headless Chrome
+        # ubuntu-24.04 runner images provide Google Chrome. Ubuntu's
+        # chromium-browser package is only a Snap-transition package.
+        run: |
+          if command -v google-chrome-stable >/dev/null 2>&1; then
+            google-chrome-stable --version
+          elif command -v google-chrome >/dev/null 2>&1; then
+            google-chrome --version
+          else
+            echo "::error::headless Chrome is required for the dist --web bridge smoke"
+            exit 1
+          fi
 
       - name: Build native artifacts
         run: cargo run --quiet --package xtask -- dist --native
@@ -122,8 +134,10 @@ jobs:
 
   release:
     name: create draft release
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [build]
+    permissions:
+      contents: write
     steps:
       - name: Download artifacts
         uses: actions/download-artifact@v4
