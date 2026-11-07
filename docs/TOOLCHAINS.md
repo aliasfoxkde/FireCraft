@@ -42,3 +42,22 @@ gate exercised. A recipe shipped in `packaging/` has been parse-checked
 Every recipe derives its version from `[workspace.package] version` in
 the root `Cargo.toml` — the same number `packaging/deb/control` pins
 literally (the dist gate fails on drift between the two).
+
+## Planned release targets — not yet verified by this inventory
+
+The comprehensive target matrix and execution criteria live in
+[`docs/RELEASE-ENGINEERING-PLAN.md`](RELEASE-ENGINEERING-PLAN.md)
+(ticket [T27](tasks/T27-cross-platform-release.md)). In particular:
+
+- Flatpak and RPM are planned package work, not currently verified outputs.
+- Android is a feasibility-gated native port; no native Android support
+  should be claimed until an APK is installed and exercised on a device.
+- Existing Windows and macOS scripts are recipes until their output
+  is built and launch-tested on native runners.
+- AppImage is recipe-only until an actual image is built and runtime-tested.
+- Source archives, SBOM, provenance, and signed release metadata must
+  be produced and independently verified by the release pipeline.
+
+Update this inventory only when a target has concrete toolchain,
+artifact, and verification evidence. Keep "recipe exists", "built",
+"installed", "launched", and "published" as separate states.
