@@ -417,11 +417,14 @@ evidence work, tracked outside that campaign.
 - **21.2 Zoom-aware/HiDPI rendering** (L): re-render vectors at
   `zoom × pixels_per_point`; extend `compose::cache::EffectCache` to
   view transforms. The single-texture blit is blurry above 100%. —
-  **PARTLY LANDED 2026-11-01** (`6e35c1e`): `compose::render_scaled`
+  **LANDED 2026-11-07** in two steps: `compose::render_scaled`
   renders the page under an affine scale and the shell caches it per
-  zoom bucket (re-render past 2× drift, 16 MPix budget), so the canvas
-  is crisp past 100%. **Still open**: `pixels_per_point` (HiDPI)
-  plumbing — the scale is zoom-only today.
+  zoom bucket (re-render past 2× drift, 16 MiPix budget), so the
+  canvas is crisp past 100% (`6e35c1e`); the render scale now rides
+  `zoom × pixels_per_point`, so the blit is crisp on hidpi displays
+  too (this session, `render_scale_rides_pixels_per_point_under_the_budget`).
+  The `EffectCache` view-transform extension remains open for
+  effect-heavy pages; the canvas path itself is done.
 - **21.3 Command palette v2** (S after 19.4): fuzzy, recents,
   save-steps-as-command. — **LANDED 2026-11-07**: substring
   filtering (`4458f3a`), then fuzzy subsequence scoring with a

@@ -316,7 +316,7 @@ acceptance hook. Ordered by how much of the product it unlocks.
 | 13 | ~~Command palette v2 (fuzzy, recents, save-steps)~~ **CLOSED 2026-11-07** — fuzzy subsequence scoring with a position bonus; recents persisted in `ShellLayout`; save-steps-as-command is the History panel's Save Steps…/Replay… journal file pair. | G | 21.3 | P2 |
 | 14 | ~~The Text ▸ Font submenu, *Repeat Filter*, the F1 grouping mismatch~~ **CLOSED 2026-11-06** — Font dispatches `text.setFont` over the renderer's five families (`RT_MENU` 128 ships a runtime-populated placeholder; the static list is the substitute, recorded as the evidence gap); Repeat Filter re-applies the session's last preset; the F1 groups now tile the table exactly via `SHORTCUT_GROUPS`. | A, H | — | — |
 | 15 | ~~The Window menu's window-arrangement rows~~ **CLOSED 2026-11-06** — the trio (57650/57651/57652) is transcribed with CS6's labels (see §A) | A | — | — |
-| 16 | HiDPI `pixels_per_point` rendering | — | 21.2 | P2 |
+| 16 | ~~HiDPI `pixels_per_point` rendering~~ **CLOSED 2026-11-07** — the canvas raster renders at zoom × pixels_per_point under the 16 MiPix budget; the canvas is crisp on hidpi displays at any zoom | — | 21.2 | P2 |
 | 17 | accesskit desktop + web re-audit | H | 21.5 | P2 |
 
 ## L. Verification performed for this matrix
