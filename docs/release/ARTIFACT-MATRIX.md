@@ -12,11 +12,11 @@
 | Linux x86_64 | tar.gz (desktop) | **required, tested** | `firecraft-{v}-linux-x86_64.tar.gz` | `xtask dist --native` | built each release; sha256-manifested |
 | Linux x86_64 | tar.gz (CLI) | **required, tested** | `firecraft-cli-{v}-linux-x86_64.tar.gz` | `xtask dist --native` | built; manifest |
 | Linux x86_64 | DEB | **required, tested** | `firecraft_{v}_amd64.deb` | `xtask dist --native` (pinned `packaging/deb/control`; xtask verifies the libc6 floor against the binaries' max GLIBC symbol version via objdump) | built; `dpkg-deb` read-back; **clean-container smoke passed 2026-11-06** (Debian 12 image: apt install → functional CLI import/convert/export round trip → reinstall → remove → purge; caught and fixed a floor of 2.31 vs binaries needing 2.35) |
-| Linux x86_64 | AppImage | **required, recipe-only** | `firecraft-{v}-linux-x86_64.AppImage` | `packaging/build-appimage.sh` (operator, linuxdeploy) | parse-checked by `dist --native`; **never built/runtime-tested** |
+| Linux x86_64 | AppImage | **required, recipe + staged** | `firecraft-{v}-linux-x86_64.AppImage` | `packaging/build-appimage.sh` (operator, linuxdeploy) | parse-checked by `dist --native`; **linuxdeploy smoke on fleet 2026-11-06 failed-then-fixed**: continuous build hard-fails on a missing `Icon=` desktop entry ("ERROR: Icon entry missing", no output image) — fix landed (`a4d74a0`: in-tree original icon + `Icon=firecraft` + staging); full linuxdeploy run pending re-execution |
 | Linux x86_64 | Flatpak | **required, recipe-only** | `firecraft-{v}-linux-x86_64.flatpak` | `packaging/build-flatpak.sh` + manifest `packaging/flatpak/dev.firecraft.FireCraft.yml` | manifest YAML-parse-checked by `dist --native`; **never built** (no Flatpak SDK on fleet) |
 | Linux x86_64 | RPM | **unsupported** ([decision 0070](../decisions/0070-rpm-deferred.md)) | — | — | nothing; revisit on demonstrated demand |
 | Linux aarch64 | any | **unassessed** | — | RP-01 assessment | nothing |
-| Windows x86_64 | portable zip | **required, recipe-only** | `firecraft-{v}-windows-x86_64.zip` | `packaging/build-windows.ps1` (operator, off-fleet) | parse-checked; **never built** |
+| Windows x86_64 | portable zip | **required, built + wine-smoked** | `firecraft-{v}-windows-x86_64.zip` | cross-built on fleet (`x86_64-pc-windows-gnu`, cargo 19m39s); zip staged per the `build-windows.ps1` layout | **built 2026-11-06**: `0cd17a87…710f72`, 72 MB (both exes + LICENSE); **wine 10.0 smoke passed**: CLI `import`→`export` PNG round trip functional; GUI launched, real 1024×768 "FireCraft" window on Xvfb. Note: fleet zip is GNU-toolchain — the MSVC operator build remains the release-path authority |
 | Windows x86_64 | Inno Setup installer | **required, recipe-only** | `firecraft-{v}-windows-x86_64-setup.exe` | same script, ISCC present | parse-checked; **never built** |
 | Windows ARM64 | any | **unassessed** | — | RP-02 assessment | nothing |
 | macOS universal | DMG | **required, recipe-only** | `firecraft-{v}-macos-universal.dmg` | `packaging/build-macos-dmg.sh` (operator, off-fleet) | parse-checked; **never built**; notarization/signing not configured |
@@ -50,8 +50,12 @@
 
 ## Known gaps against RP-00 acceptance
 
-1. Windows/macOS/AppImage outputs never built — fleet has no toolchain;
-   operator recipes only (documented in TOOLCHAINS.md, not hidden).
+1. ~~Windows/macOS/AppImage outputs never built — fleet has no toolchain;~~
+   **partially closed 2026-11-06**: Windows portable zip cross-built on
+   fleet (GNU toolchain) and wine-smoked (CLI round trip + GUI window);
+   AppImage icon-blocker found via a real linuxdeploy run and fixed in
+   the recipe (`a4d74a0`); full AppImage re-run and Inno installer still
+   pending. macOS DMG remains operator-recipe-only.
 2. ~~DEB has no clean-VM install/upgrade/remove test~~ — closed 2026-11-06: clean-container smoke passed (Debian 12; install/functional/reinstall/remove/purge), and `dist --native` now fail-closes on a control-file libc6 floor below the binaries' real GLIBC requirement.
 3. Live web deployment not reconciled with a release bundle.
 4. No source archive recipe.
