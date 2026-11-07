@@ -106,6 +106,16 @@ pub(crate) fn brush_of(
     })
 }
 
+/// Converts a radius payload to the diameter consumed by `Brush`.
+/// Refuse overflow explicitly rather than allowing a wrapped value to
+/// reach the brush validator.
+fn brush_diameter(name: &'static str, radius: u32) -> Result<u32, EngineError> {
+    radius.checked_mul(2).ok_or_else(|| EngineError::BadPayload {
+        name: name.to_owned(),
+        detail: format!("brush radius {radius} overflows its diameter"),
+    })
+}
+
 /// Registers the retouch commands.
 pub(crate) fn install(registry: &mut CommandRegistry) -> Result<(), EngineError> {
     registry.register(RetouchBlur)?;
@@ -639,7 +649,7 @@ impl TypedCommand for RetouchSharpen {
             NAME,
             payload.x,
             payload.y,
-            payload.radius.saturating_mul(2),
+            brush_diameter(NAME, payload.radius)?,
             &payload.brush,
         )?;
         let (brush, pressure) = (options.brush, options.pressure);
@@ -727,7 +737,7 @@ impl TypedCommand for RetouchDodge {
             NAME,
             payload.x,
             payload.y,
-            payload.radius.saturating_mul(2),
+            brush_diameter(NAME, payload.radius)?,
             &payload.brush,
         )?;
         let (brush, pressure) = (options.brush, options.pressure);
@@ -799,7 +809,7 @@ impl TypedCommand for RetouchBurn {
             NAME,
             payload.x,
             payload.y,
-            payload.radius.saturating_mul(2),
+            brush_diameter(NAME, payload.radius)?,
             &payload.brush,
         )?;
         let (brush, pressure) = (options.brush, options.pressure);
@@ -893,7 +903,7 @@ impl TypedCommand for RetouchReplaceColor {
             NAME,
             payload.x,
             payload.y,
-            payload.radius.saturating_mul(2),
+            brush_diameter(NAME, payload.radius)?,
             &payload.brush,
         )?;
         let (brush, pressure) = (options.brush, options.pressure);
