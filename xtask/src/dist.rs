@@ -621,6 +621,46 @@ fn tar_gz(stage: &Path, top: &str, out: &Path) -> Result<(), String> {
     }
 }
 
+/// Checks that the control file's `libc6 (>= X)` floor is not below
+/// the binary's highest GLIBC symbol-version requirement. A floor
+/// below the real requirement produces a package that installs on
+/// older systems and then fails at exec time — the exact defect a
+/// clean-container smoke exposed (floor said 2.31, binaries needed
+/// 2.35, found 2026-11-06). Parsed with `objdump -T` (binutils), not
+/// recalled from a table.
+fn verify_deb_glibc_floor(control: &str, binary: &Path) -> Result<(), String> {
+    let floor = control
+        .lines()
+        .find(|l| l.starts_with("Depends:"))
+        .and_then(|l| l.split("libc6 (>= ").nth(1))
+        .and_then(|s| s.split(')').next())
+        .and_then(|s| s.trim().parse::<f64>().ok())
+        .ok_or_else(|| "packaging/deb/control: no parsable libc6 floor in Depends".to_owned())?;
+    let out = std::process::Command::new("objdump")
+        .args(["-T"])
+        .arg(binary)
+        .output()
+        .map_err(|e| format!("spawn objdump on {binary:?}: {e}"))?;
+    if !out.status.success() {
+        return Err(format!(
+            "objdump -T {binary:?} failed: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        ));
+    }
+    let needed = String::from_utf8_lossy(&out.stdout)
+        .split_whitespace()
+        .filter_map(|tok| tok.strip_prefix("GLIBC_"))
+        .filter_map(|v| v.parse::<f64>().ok())
+        .fold(f64::MIN, f64::max);
+    if needed > floor {
+        return Err(format!(
+            "{binary:?} needs GLIBC_{needed} but packaging/deb/control floors libc6 at \
+             {floor} — raise the Depends floor (or lower the binary's glibc use)"
+        ));
+    }
+    Ok(())
+}
+
 /// Builds the `.deb` from the pinned control file
 /// (`packaging/deb/control`, whose Version must equal the workspace
 /// version) over the standard payload: both binaries in `usr/bin`,
@@ -644,6 +684,8 @@ fn build_deb(
              {version} — bump the control file with the workspace version"
         ));
     }
+    verify_deb_glibc_floor(&control, shell)?;
+    verify_deb_glibc_floor(&control, cli)?;
 
     let deb = stage.join("deb");
     let debian = deb.join("DEBIAN");

@@ -11,7 +11,7 @@
 |---|---|---|---|---|---|
 | Linux x86_64 | tar.gz (desktop) | **required, tested** | `firecraft-{v}-linux-x86_64.tar.gz` | `xtask dist --native` | built each release; sha256-manifested |
 | Linux x86_64 | tar.gz (CLI) | **required, tested** | `firecraft-cli-{v}-linux-x86_64.tar.gz` | `xtask dist --native` | built; manifest |
-| Linux x86_64 | DEB | **required, tested** | `firecraft_{v}_amd64.deb` | `xtask dist --native` (pinned `packaging/deb/control`) | built; read back with `dpkg-deb`; **no clean install/upgrade/remove test on Ubuntu/Debian yet** |
+| Linux x86_64 | DEB | **required, tested** | `firecraft_{v}_amd64.deb` | `xtask dist --native` (pinned `packaging/deb/control`; xtask verifies the libc6 floor against the binaries' max GLIBC symbol version via objdump) | built; `dpkg-deb` read-back; **clean-container smoke passed 2026-11-06** (Debian 12 image: apt install → functional CLI import/convert/export round trip → reinstall → remove → purge; caught and fixed a floor of 2.31 vs binaries needing 2.35) |
 | Linux x86_64 | AppImage | **required, recipe-only** | `firecraft-{v}-linux-x86_64.AppImage` | `packaging/build-appimage.sh` (operator, linuxdeploy) | parse-checked by `dist --native`; **never built/runtime-tested** |
 | Linux x86_64 | Flatpak | **required, recipe-only** | `firecraft-{v}-linux-x86_64.flatpak` | `packaging/build-flatpak.sh` + manifest `packaging/flatpak/dev.firecraft.FireCraft.yml` | manifest YAML-parse-checked by `dist --native`; **never built** (no Flatpak SDK on fleet) |
 | Linux x86_64 | RPM | **unsupported** ([decision 0070](../decisions/0070-rpm-deferred.md)) | — | — | nothing; revisit on demonstrated demand |
@@ -52,7 +52,7 @@
 
 1. Windows/macOS/AppImage outputs never built — fleet has no toolchain;
    operator recipes only (documented in TOOLCHAINS.md, not hidden).
-2. DEB has no clean-VM install/upgrade/remove test.
+2. ~~DEB has no clean-VM install/upgrade/remove test~~ — closed 2026-11-06: clean-container smoke passed (Debian 12; install/functional/reinstall/remove/purge), and `dist --native` now fail-closes on a control-file libc6 floor below the binaries' real GLIBC requirement.
 3. Live web deployment not reconciled with a release bundle.
 4. No source archive recipe.
 5. No SBOM/provenance/signature pipeline.
