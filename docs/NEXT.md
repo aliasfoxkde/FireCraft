@@ -444,6 +444,13 @@ evidence work, tracked outside that campaign.
 - **21.5 accesskit** desktop + web re-audit (0067 records the web
   blocker).
 - **21.6 In-app scripting** (S): Commands menu → run `.jsf`/`.fwsteps`.
+  — **LANDED 2026-11-07**: `.jsf` running through the scripting host
+  had landed with the automation milestone (Commands ▸ Run Script /
+  Help ▸ Manage Extensions); this session added the `.fwsteps` arm —
+  the Commands picker takes both formats, a steps file replays onto
+  the live document through the same door the History panel uses,
+  and a malformed journal is refused with the document untouched.
+  Gate: `run_script_runs_a_steps_file_through_the_replay_door`.
 
 ### Phase 22 — CS6 shell fidelity (P0, the "looks and acts like Fireworks" phase)
 

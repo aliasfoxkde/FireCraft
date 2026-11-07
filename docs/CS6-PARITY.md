@@ -312,7 +312,7 @@ acceptance hook. Ordered by how much of the product it unlocks.
 | 9 | Slice/hotspot behaviour editing and the HTML preview surface | C, F, I | 20.7 | P1 |
 | 10 | Autosave and crash recovery — **LANDED 2026-11-07** — web: whole-document localStorage persistence with boot restore; desktop: journal sidecar snapshot with Recover/Discard prompt, undo intact across the crash boundary | E | 21.1 | P1 |
 | 11 | The Preferences dialog and the Keyboard Shortcuts editor; the four alternative keymaps | E, H | 21.4 | P1 |
-| 12 | The in-app script console and saved commands | A, E | 21.6 | P1 |
+| 12 | The in-app script console and saved commands — **LANDED 2026-11-07**: Commands ▸ Run Script runs `.jsf` (scripting host, landed with automation) and `.fwsteps` (journal replay onto the live document); CS6's broader extension installer remains a recorded gap | A, E | 21.6 | P1 |
 | 13 | ~~Command palette v2 (fuzzy, recents, save-steps)~~ **CLOSED 2026-11-07** — fuzzy subsequence scoring with a position bonus; recents persisted in `ShellLayout`; save-steps-as-command is the History panel's Save Steps…/Replay… journal file pair. | G | 21.3 | P2 |
 | 14 | ~~The Text ▸ Font submenu, *Repeat Filter*, the F1 grouping mismatch~~ **CLOSED 2026-11-06** — Font dispatches `text.setFont` over the renderer's five families (`RT_MENU` 128 ships a runtime-populated placeholder; the static list is the substitute, recorded as the evidence gap); Repeat Filter re-applies the session's last preset; the F1 groups now tile the table exactly via `SHORTCUT_GROUPS`. | A, H | — | — |
 | 15 | ~~The Window menu's window-arrangement rows~~ **CLOSED 2026-11-06** — the trio (57650/57651/57652) is transcribed with CS6's labels (see §A) | A | — | — |

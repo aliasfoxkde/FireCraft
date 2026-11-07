@@ -1834,4 +1834,22 @@ implemented by `StdFs` and `MemoryFs`, the web `WebFs` refuses).
 - Full workspace gate: `cargo run -p xtask -- ci` (background run
   bm6zxgv3g)
 
+## 2026-11-07 — 21.2 closed: the canvas renders in device pixels
+
+The zoom-bucket raster (landed 2026-11-01) rendered at `zoom` scale
+only — on a 2× display the blit had half the device pixels it could.
+The render scale now rides `zoom × pixels_per_point` under the same
+16 MiPix budget, extracted as the pure functions `render_scale` and
+`render_at_one` (the 1× shortcut fires only at 100% zoom on a 1×
+display). The `EffectCache` view-transform extension stays open for
+effect-heavy pages; the canvas blit path itself is done.
+
+### Receipts
+
+- `cargo test -p app --lib` — 173 passed (including
+  `render_scale_rides_pixels_per_point_under_the_budget`)
+- Full workspace gate: `cargo run -p xtask -- ci` (background run
+  bjhefp81n, over commits 498af8a + ac17e25)
+
+
 

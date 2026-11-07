@@ -755,14 +755,20 @@ impl Shell {
 
     /// File → Save through the injected traits.
     /// Help ▸ Manage Extensions / Commands ▸ Run Script: pick a
-    /// `.jsf` script and run it against the live document through the
-    /// same engine the CLI's `run-script` verb drives. A script that
-    /// throws or hits a limit leaves the document untouched and
+    /// `.jsf` script or a `.fwsteps` journal and run it against the
+    /// live document — the script through the same engine the CLI's
+    /// `run-script` verb drives, the steps through the same replay
+    /// path the History panel's Replay uses (21.6: one door, both
+    /// automation formats). A script that throws or hits a limit, or
+    /// a journal that refuses, leaves the document untouched and
     /// reports the failure on the status line.
     fn run_script_file(&mut self) {
         let Some(path) = self.dialogs.open_path(
             "Run script",
-            &[("FireCraft script".to_owned(), vec!["jsf".to_owned()])],
+            &[
+                ("FireCraft script".to_owned(), vec!["jsf".to_owned()]),
+                ("FireCraft steps".to_owned(), vec!["fwsteps".to_owned()]),
+            ],
         ) else {
             return;
         };
@@ -776,6 +782,18 @@ impl Shell {
         let name = std::path::Path::new(&path)
             .file_name()
             .map_or_else(|| path.clone(), |n| n.to_string_lossy().into_owned());
+        if path.ends_with(".fwsteps") {
+            match self.editor.replay_steps(&source) {
+                Ok(()) => {
+                    let rows = self.editor.session.journal_len();
+                    self.status = format!("ran steps {name} ({rows} journal row(s))");
+                    self.raster = None;
+                    self.raster_scale = 1.0;
+                }
+                Err(error) => self.status = format!("steps {name} failed: {error}"),
+            }
+            return;
+        }
         let mut engine = match scripting::ScriptEngine::new(scripting::Limits::default()) {
             Ok(engine) => engine,
             Err(error) => {
@@ -4723,6 +4741,72 @@ mod tests {
             serde_json::to_vec(replayer.editor.session.document()).unwrap(),
             serde_json::to_vec(editor.session.document()).unwrap(),
             "the replayed session equals the original, byte for byte"
+        );
+    }
+
+    /// Commands ▸ Run Script accepts a `.fwsteps` journal as well as
+    /// a `.jsf` (21.6): the steps run through the same replay door
+    /// the History panel uses, onto the live document — journal,
+    /// history and all. A malformed steps file reports the refusal
+    /// and leaves the document untouched.
+    #[test]
+    fn run_script_runs_a_steps_file_through_the_replay_door() {
+        // Record a real journal, then run it as a script.
+        let mut author = gui_shell(gui_editor());
+        author
+            .editor
+            .apply(
+                "autoshape.rect",
+                serde_json::json!({
+                    "x": 10.0, "y": 10.0, "width": 40.0, "height": 30.0,
+                    "corner": 0.0, "kind": "bevel",
+                    "page": 0, "layer": 0, "cell": 0, "name": null,
+                }),
+            )
+            .unwrap();
+        let steps = author.editor.steps_text();
+
+        let fs = MemoryFs::new();
+        fs.write_file("batch.fwsteps", steps.as_bytes()).unwrap();
+        let dialogs = FixedDialogs {
+            steps: String::new(),
+            doc: "batch.fwsteps".to_owned(),
+        };
+        // Run Script's dialog title is not "Replay…", so FixedDialogs
+        // hands back the `doc` slot.
+        let mut runner =
+            Shell::with_platform(Editor::untitled(), std::rc::Rc::new(fs), Box::new(dialogs));
+        runner.run_script_file();
+        assert!(
+            runner.status.contains("ran steps"),
+            "the steps file ran as a script: {}",
+            runner.status
+        );
+        assert_eq!(
+            runner.editor.session.journal_len(),
+            author.editor.session.journal_len(),
+            "the replayed journal equals the recorded one"
+        );
+
+        // A malformed journal is refused, document untouched.
+        let fs = MemoryFs::new();
+        fs.write_file("broken.fwsteps", b"not json\n".as_slice()).unwrap();
+        let dialogs = FixedDialogs {
+            steps: String::new(),
+            doc: "broken.fwsteps".to_owned(),
+        };
+        let mut runner =
+            Shell::with_platform(Editor::untitled(), std::rc::Rc::new(fs), Box::new(dialogs));
+        runner.run_script_file();
+        assert!(
+            runner.status.contains("failed"),
+            "the refusal is reported: {}",
+            runner.status
+        );
+        assert_eq!(
+            runner.editor.session.journal_len(),
+            2,
+            "the refused journal left the seed steps untouched"
         );
     }
 
