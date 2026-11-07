@@ -179,8 +179,9 @@ jobs:
           done
           # Every digested file must still match its recorded hash —
           # a mismatch after download means a corrupted/mislabeled asset.
-          grep -v 'MANIFEST.sha256$' artifacts/RELEASE_SHA256.txt | \
-            (cd artifacts && sha256sum -c -) || fail=1
+          # The aggregate includes the native manifest's own digest;
+          # it is not recursive, so verify it along with every other file.
+          (cd artifacts && sha256sum -c RELEASE_SHA256.txt) || fail=1
           # Version consistency: no artifact of one version may carry a
           # different version string in its name than the tag.
           for f in artifacts/*; do
