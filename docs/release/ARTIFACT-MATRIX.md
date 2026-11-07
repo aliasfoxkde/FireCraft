@@ -23,7 +23,7 @@
 | Android ARM64 | APK/AAB | **gated feasibility spike (RP-04)** | `FireCraft-{v}-android-arm64.apk` | RP-04 | nothing; no native claim permitted |
 | Web (WASM) | zip bundle | **required, tested** | `firecraft-web-{v}.zip` | `xtask dist --web` (trunk + headless bridge smoke) | built each release; deployed to Cloudflare Pages — **live deployment is stale vs tag (RP-05 reconciliation)** |
 | WebOS | `appinfo.json` + host page | **required, tested** | (inside web bundle) | `packaging/webos/` | built |
-| Source | tar.gz | **planned** | `FireCraft-{v}-source.tar.gz` | RP-05 | GitHub auto-archive exists implicitly; verified-clean-extract archive not produced |
+| Source | tar.gz | **required, tested** | `FireCraft-{v}-source.tar.gz` | `xtask dist --source` (git archive of HEAD; clean-extract + `cargo metadata --locked` verified; wired into release.yml) | built + verified on fleet |
 | Metadata | manifest/checksums | **partial** | `MANIFEST.sha256`, `RELEASE_SHA256.txt` | `dist --native` + release.yml | present; no SBOM, no provenance, no signatures |
 | Metadata | SBOM / provenance / signing | **planned** | — | RP-06 | nothing |
 
