@@ -52,6 +52,7 @@
 | 22 | Screenshot-driven frontend audit + systematic refinement | — |
 | 24 | docs/TASKS.md + docs/tasks/ tracking scaffold | — (this change) |
 | 25 | Responsive/adaptive layout audit + fixes | — |
+| 27 | Cross-platform release engineering: Windows, macOS, Linux package matrix, Android feasibility, source, SBOM/provenance, signing, CI aggregation and certification | [tasks/T27-cross-platform-release.md](tasks/T27-cross-platform-release.md) | in flight — P0; RP-00 matrix + RP-01 Flatpak/RPM-decision + **DEB clean-container smoke passed** (floor fix 2.31→2.35, xtask now verifies the floor) + RP-05 source archive + RP-06 SBOM + RP-07 fail-closed aggregate landed 2026-11-06; Windows/macOS/AppImage/Flatpak actual builds + install smokes hardware-bound; Android spike in research |
 
 ## Closed (this board's lifetime)
 

@@ -1,0 +1,27 @@
+id: dev.firecraft.FireCraft
+runtime: org.freedesktop.Platform
+runtime-version: '24.08'
+sdk: org.freedesktop.Sdk
+command: firecraft
+finish-args:
+  # GPU-accelerated eframe/wgpu rendering.
+  - --device=dri
+  - --share=ipc
+  - --socket=x11
+  - --socket=wayland
+  - --socket=fallback-x11
+  # File open/save/export goes through the portal file chooser.
+  - --filesystem=xdg-documents
+  - --talk-name=org.freedesktop.portal.Desktop
+modules:
+  - name: firecraft
+    buildsystem: simple
+    build-commands:
+      - cargo build --release --locked -p app -p app-cli
+      - install -Dm755 target/release/firecraft /app/bin/firecraft
+      - install -Dm755 target/release/firecraft-cli /app/bin/firecraft-cli
+      - install -Dm644 packaging/appimage/firecraft.desktop /app/share/applications/dev.firecraft.FireCraft.desktop
+      - install -Dm644 LICENSE /app/share/licenses/firecraft/LICENSE
+    sources:
+      - type: dir
+        path: ..

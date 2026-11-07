@@ -61,6 +61,15 @@ jobs:
       - name: Build web bundle
         run: cargo run --quiet --package xtask -- dist --web
 
+      - name: Build source archive
+        # git archive of the checkout's HEAD (the tag SHA), verified by
+        # clean extraction + `cargo metadata --locked` inside xtask.
+        run: cargo run --quiet --package xtask -- dist --source
+
+      - name: Build SBOM
+        # CycloneDX 1.5 over the full locked dependency graph.
+        run: cargo run --quiet --package xtask -- dist --sbom
+
       - name: Zip web bundle
         env:
           TAG: ${{ github.ref_name }}
@@ -77,13 +86,17 @@ jobs:
           # Name each file explicitly. The globs over-match:
           # `firecraft-*.tar.gz` also matches `firecraft-cli-*.tar.gz`,
           # and `firecraft-web-*.zip` picks up older versions left in dist/.
+          # Bare filenames (sed strips the dist/ prefix) so the aggregate
+          # job's `sha256sum -c` works against the flat artifacts/ dir.
           (
             sha256sum "dist/native/firecraft-${TAG#v}-linux-x86_64.tar.gz"
             sha256sum "dist/native/firecraft-cli-${TAG#v}-linux-x86_64.tar.gz"
             sha256sum "dist/native/firecraft_${TAG#v}_amd64.deb"
             sha256sum "dist/firecraft-web-${TAG#v}.zip"
+            sha256sum "dist/source/FireCraft-${TAG#v}-source.tar.gz"
+            sha256sum "dist/sbom/firecraft-${TAG#v}-sbom.cdx.json"
             sha256sum dist/native/MANIFEST.sha256
-          ) > dist/RELEASE_SHA256.txt
+          ) | sed 's# dist/native/# #; s# dist/source/# #; s# dist/sbom/# #; s# dist/# #' > dist/RELEASE_SHA256.txt
         env:
           TAG: ${{ github.ref_name }}
 
@@ -97,6 +110,8 @@ jobs:
             dist/native/firecraft_*.deb
             dist/native/MANIFEST.sha256
             dist/firecraft-web-*.zip
+            dist/source/FireCraft-*-source.tar.gz
+            dist/sbom/firecraft-*-sbom.cdx.json
             dist/RELEASE_SHA256.txt
           retention-days: 5
           # A clean runner has no stale artifacts, but a self-hosted or
@@ -118,6 +133,54 @@ jobs:
 
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Fail-closed aggregate validation
+        # RP-07: the aggregate must reject a release that is missing any
+        # required artifact, misnamed, empty, or whose digests disagree
+        # with RELEASE_SHA256.txt — before gh release create runs.
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          expected=(
+            "firecraft-${TAG#v}-linux-x86_64.tar.gz"
+            "firecraft-cli-${TAG#v}-linux-x86_64.tar.gz"
+            "firecraft_${TAG#v}_amd64.deb"
+            "firecraft-web-${TAG#v}.zip"
+            "FireCraft-${TAG#v}-source.tar.gz"
+            "firecraft-${TAG#v}-sbom.cdx.json"
+            "MANIFEST.sha256"
+            "RELEASE_SHA256.txt"
+          )
+          fail=0
+          for name in "${expected[@]}"; do
+            path="artifacts/$name"
+            if [ ! -f "$path" ]; then
+              echo "::error::required artifact missing: $name"
+              fail=1
+            elif [ ! -s "$path" ]; then
+              echo "::error::required artifact empty: $name"
+              fail=1
+            fi
+          done
+          # Every digested file must still match its recorded hash —
+          # a mismatch after download means a corrupted/mislabeled asset.
+          grep -v 'MANIFEST.sha256$' artifacts/RELEASE_SHA256.txt | \
+            (cd artifacts && sha256sum -c -) || fail=1
+          # Version consistency: no artifact of one version may carry a
+          # different version string in its name than the tag.
+          for f in artifacts/*; do
+            case "$(basename "$f")" in
+              *"${TAG#v}"*) ;;
+              *.sha256|*.txt) ;;
+              *) echo "::error::artifact name does not carry the tag version: $(basename "$f")"; fail=1 ;;
+            esac
+          done
+          if [ "$fail" -ne 0 ]; then
+            echo "::error::aggregate validation failed — refusing to create the release"
+            exit 1
+          fi
+          echo "aggregate validation ok: ${#expected[@]} required artifacts present, digests verified"
 
       - name: Create draft release
         env:

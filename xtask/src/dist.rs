@@ -139,6 +139,252 @@ pub fn native() -> Result<(), String> {
     Ok(())
 }
 
+/// Produces the source archive under `dist/source/` (T27 RP-05): a
+/// `git archive` of the exact HEAD (the tree the gate itself runs on —
+/// not a mutable branch), extracted to a scratch dir and verified by
+/// a clean extraction check (Cargo.toml + Cargo.lock + every workspace
+/// member present, no `source/` Adobe material) and `cargo metadata
+/// --locked` parse inside the extraction. An archive that cannot be
+/// re-extracted into a buildable tree is not shipped.
+pub fn source() -> Result<(), String> {
+    let version = workspace_version()?;
+    let out = workspace_root().join("dist/source");
+    if out.exists() {
+        std::fs::remove_dir_all(&out).map_err(|e| format!("clear {}: {e}", out.display()))?;
+    }
+    std::fs::create_dir_all(&out).map_err(|e| format!("mkdir {}: {e}", out.display()))?;
+    let archive = out.join(format!("FireCraft-{version}-source.tar.gz"));
+
+    // git archive pins the commit identity inside the tar (pax header)
+    // implicitly; the report below names HEAD so the receipt is
+    // attributable to an exact commit even without re-deriving it.
+    run_in(None, "git", &["rev-parse", "HEAD"])?;
+
+    run_in(
+        None,
+        "git",
+        &[
+            "archive",
+            "--format=tar.gz",
+            "--prefix=FireCraft/",
+            "-o",
+            &archive.display().to_string(),
+            "HEAD",
+        ],
+    )?;
+
+    // Verification: clean extract into scratch (outside the tree), then
+    // structural checks + `cargo metadata --locked` in the extraction.
+    let scratch = out.join(".verify");
+    std::fs::create_dir_all(&scratch).map_err(|e| format!("mkdir verify: {e}"))?;
+    run_in(
+        Some(&scratch),
+        "tar",
+        &[
+            "-xzf",
+            &archive.display().to_string(),
+        ],
+    )?;
+    let extracted = scratch.join("FireCraft");
+    for must in ["Cargo.toml", "Cargo.lock", "LICENSE", "crates", "xtask", "web"] {
+        if !extracted.join(must).exists() {
+            return Err(format!("source archive missing {must} after extraction"));
+        }
+    }
+    if extracted.join("source").exists() {
+        return Err("source archive leaked the git-ignored source/ tree".to_owned());
+    }
+    let meta = std::process::Command::new("cargo")
+        .args(["metadata", "--locked", "--format-version", "1", "--no-deps"])
+        .current_dir(&extracted)
+        .output()
+        .map_err(|e| format!("spawn cargo metadata: {e}"))?;
+    if !meta.status.success() {
+        return Err(format!(
+            "cargo metadata failed in extracted source archive:\n{}",
+            String::from_utf8_lossy(&meta.stderr).trim()
+        ));
+    }
+
+    std::fs::remove_dir_all(&scratch).map_err(|e| format!("clean verify scratch: {e}"))?;
+    let digest = sha256_hex_file(&archive)?;
+    eprintln!(
+        "[xtask] dist source: FireCraft-{version}-source.tar.gz ({digest}), \
+         clean-extract + cargo metadata --locked verified"
+    );
+    Ok(())
+}
+
+/// sha256 of a file (hex), same digest form write_manifest uses.
+fn sha256_hex_file(path: &Path) -> Result<String, String> {
+    let bytes =
+        std::fs::read(path).map_err(|e| format!("read {}: {e}", path.display()))?;
+    Ok(sha256_hex(&bytes))
+}
+
+/// Emits the dependency SBOM under `dist/sbom/` (T27 RP-06): CycloneDX
+/// 1.5 JSON over the **full** locked dependency graph (`cargo metadata
+/// --locked`), each component a purl. No signing/provenance claims are
+/// made here — this is the component inventory only; attestation is
+/// RP-06's separate deliverable once signing credentials exist.
+pub fn sbom() -> Result<(), String> {
+    let out = workspace_root().join("dist/sbom");
+    if out.exists() {
+        std::fs::remove_dir_all(&out).map_err(|e| format!("clear {}: {e}", out.display()))?;
+    }
+    std::fs::create_dir_all(&out).map_err(|e| format!("mkdir {}: {e}", out.display()))?;
+
+    let raw = std::process::Command::new("cargo")
+        .args(["metadata", "--locked", "--format-version", "1"])
+        .current_dir(workspace_root())
+        .output()
+        .map_err(|e| format!("spawn cargo metadata: {e}"))?;
+    if !raw.status.success() {
+        return Err(format!(
+            "cargo metadata failed:\n{}",
+            String::from_utf8_lossy(&raw.stderr).trim()
+        ));
+    }
+    let meta: serde_json::Value = serde_json::from_slice(&raw.stdout)
+        .map_err(|e| format!("parse cargo metadata: {e}"))?;
+    let version = workspace_version()?;
+
+    let mut components = Vec::new();
+    let packages = meta["packages"]
+        .as_array()
+        .ok_or("cargo metadata: no packages array")?;
+    for pkg in packages {
+        let name = pkg["name"]
+            .as_str()
+            .ok_or("cargo metadata: package without name")?;
+        let ver = pkg["version"]
+            .as_str()
+            .ok_or("cargo metadata: package without version")?;
+        // A purl needs the registry source; path/git deps use the
+        // generic type without a purl (CycloneDX allows type-only
+        // components). Workspace members are type "library"/"application"
+        // with a local scope flag.
+        let mut component = serde_json::json!({
+            "type": "library",
+            "name": name,
+            "version": ver,
+            "purl": format!("pkg:cargo/{name}@{ver}"),
+        });
+        if let Some(license) = pkg["license"].as_str() {
+            component["licenses"] = serde_json::json!([
+                { "license": { "id": license } }
+            ]);
+        }
+        if pkg["source"].is_null() {
+            component["scope"] = serde_json::json!("excluded");
+        }
+        components.push(component);
+    }
+
+    let serial = uuid_from_graph(packages)?;
+    let bom = serde_json::json!({
+        "bomFormat": "CycloneDX",
+        "specVersion": "1.5",
+        "serialNumber": format!("urn:uuid:{serial}"),
+        "version": 1,
+        "metadata": {
+            "timestamp": build_timestamp(),
+            "component": {
+                "type": "application",
+                "name": "firecraft",
+                "version": version,
+                "purl": format!("pkg:cargo/firecraft@{version}"),
+            },
+            "tools": [{
+                "vendor": "FireCraft",
+                "name": "xtask dist --sbom",
+                "version": version,
+            }],
+        },
+        "components": components,
+    });
+    let path = out.join(format!("firecraft-{version}-sbom.cdx.json"));
+    let text = serde_json::to_string_pretty(&bom).map_err(|e| format!("encode sbom: {e}"))?;
+    std::fs::write(&path, text.as_bytes())
+        .map_err(|e| format!("write {}: {e}", path.display()))?;
+    let digest = sha256_hex_file(&path)?;
+    eprintln!(
+        "[xtask] dist sbom: {} ({} components, {digest})",
+        path.display(),
+        components.len()
+    );
+    Ok(())
+}
+
+/// Deterministic serial from the locked graph: uuid v5-shaped digest of
+/// the sorted (name, version) list, so the same lockfile yields the
+/// same serial and a dependency change is visible in the identifier.
+fn uuid_from_graph(packages: &[serde_json::Value]) -> Result<String, String> {
+    use sha2::Digest as _;
+    let mut names: Vec<String> = packages
+        .iter()
+        .map(|p| {
+            format!(
+                "{}@{}",
+                p["name"].as_str().unwrap_or("?"),
+                p["version"].as_str().unwrap_or("?")
+            )
+        })
+        .collect();
+    names.sort();
+    names.dedup();
+    let mut hasher = sha2::Sha256::new();
+    for n in &names {
+        hasher.update(n.as_bytes());
+        hasher.update(b"\n");
+    }
+    let digest = hasher.finalize();
+    // Format the first 16 bytes as a UUID; set version nibble to 8
+    // (UUIDv8-style custom, deterministic) per RFC 9562.
+    let mut b = [0u8; 16];
+    b.copy_from_slice(&digest[..16]);
+    b[6] = (b[6] & 0x0f) | 0x80;
+    b[8] = (b[8] & 0x3f) | 0x80;
+    let hex = |bytes: &[u8]| bytes.iter().map(|x| format!("{x:02x}")).collect::<String>();
+    Ok(format!(
+        "{}-{}-{}-{}-{}",
+        hex(&b[..4]),
+        hex(&b[4..6]),
+        hex(&b[6..8]),
+        hex(&b[8..10]),
+        hex(&b[10..16])
+    ))
+}
+
+/// UTC timestamp for the SBOM metadata block (std-only, no chrono).
+fn build_timestamp() -> String {
+    // days since epoch -> civil date (Howard Hinnant's algorithm).
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs() as i64;
+    let days = now.div_euclid(86_400);
+    let secs = now.rem_euclid(86_400);
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z.rem_euclid(146_097);
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146_096) / 365;
+    let y = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = if m <= 2 { y + 1 } else { y };
+    format!(
+        "{y:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z",
+        m,
+        d,
+        secs / 3600,
+        (secs % 3600) / 60,
+        secs % 60
+    )
+}
+
 /// Builds the release bundle with trunk and stages a fresh copy under
 /// `dist/web/` — the staging directory starts empty every run, so a
 /// dist artifact can never carry leftovers from an older tree.
@@ -375,6 +621,46 @@ fn tar_gz(stage: &Path, top: &str, out: &Path) -> Result<(), String> {
     }
 }
 
+/// Checks that the control file's `libc6 (>= X)` floor is not below
+/// the binary's highest GLIBC symbol-version requirement. A floor
+/// below the real requirement produces a package that installs on
+/// older systems and then fails at exec time — the exact defect a
+/// clean-container smoke exposed (floor said 2.31, binaries needed
+/// 2.35, found 2026-11-06). Parsed with `objdump -T` (binutils), not
+/// recalled from a table.
+fn verify_deb_glibc_floor(control: &str, binary: &Path) -> Result<(), String> {
+    let floor = control
+        .lines()
+        .find(|l| l.starts_with("Depends:"))
+        .and_then(|l| l.split("libc6 (>= ").nth(1))
+        .and_then(|s| s.split(')').next())
+        .and_then(|s| s.trim().parse::<f64>().ok())
+        .ok_or_else(|| "packaging/deb/control: no parsable libc6 floor in Depends".to_owned())?;
+    let out = std::process::Command::new("objdump")
+        .args(["-T"])
+        .arg(binary)
+        .output()
+        .map_err(|e| format!("spawn objdump on {binary:?}: {e}"))?;
+    if !out.status.success() {
+        return Err(format!(
+            "objdump -T {binary:?} failed: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        ));
+    }
+    let needed = String::from_utf8_lossy(&out.stdout)
+        .split_whitespace()
+        .filter_map(|tok| tok.strip_prefix("GLIBC_"))
+        .filter_map(|v| v.parse::<f64>().ok())
+        .fold(f64::MIN, f64::max);
+    if needed > floor {
+        return Err(format!(
+            "{binary:?} needs GLIBC_{needed} but packaging/deb/control floors libc6 at \
+             {floor} — raise the Depends floor (or lower the binary's glibc use)"
+        ));
+    }
+    Ok(())
+}
+
 /// Builds the `.deb` from the pinned control file
 /// (`packaging/deb/control`, whose Version must equal the workspace
 /// version) over the standard payload: both binaries in `usr/bin`,
@@ -398,6 +684,8 @@ fn build_deb(
              {version} — bump the control file with the workspace version"
         ));
     }
+    verify_deb_glibc_floor(&control, shell)?;
+    verify_deb_glibc_floor(&control, cli)?;
 
     let deb = stage.join("deb");
     let debian = deb.join("DEBIAN");
@@ -492,7 +780,7 @@ fn verify_deb(deb: &Path, version: &str) -> Result<(), String> {
 /// platform (docs/TOOLCHAINS.md); the gate requires they exist.
 fn parse_recipes() -> Result<usize, String> {
     let mut checked = 0;
-    for name in ["build-appimage.sh", "build-macos-dmg.sh"] {
+    for name in ["build-appimage.sh", "build-flatpak.sh", "build-macos-dmg.sh"] {
         let script = workspace_root().join("packaging").join(name);
         let status = std::process::Command::new("bash")
             .args(["-n"])
@@ -507,6 +795,17 @@ fn parse_recipes() -> Result<usize, String> {
         }
         checked += 1;
     }
+    // The Flatpak manifest is data, not a script: a YAML parse proves
+    // structure. The serde_yaml dependency lives in xtask's Cargo.toml.
+    let manifest = workspace_root().join("packaging/flatpak/dev.firecraft.FireCraft.yml");
+    let yaml = std::fs::read_to_string(&manifest)
+        .map_err(|e| format!("read {}: {e}", manifest.display()))?;
+    serde_yaml::from_str::<serde_yaml::Value>(&yaml).map_err(|e| {
+        format!(
+            "packaging/flatpak/dev.firecraft.FireCraft.yml does not parse: {e}"
+        )
+    })?;
+    checked += 1;
     for name in ["build-windows.ps1", "windows/firecraft.iss"] {
         let recipe = workspace_root().join("packaging").join(name);
         if !recipe.is_file() {
