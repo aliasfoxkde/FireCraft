@@ -24,6 +24,39 @@ Produce a complete, version-consistent release set for FireCraft with:
 
 The release should be reproducible from a clean, tagged source tree and must never mix outputs from different commits or versions.
 
+## 1.1 MVP v1 candidate — recommended first release cut
+
+The complete matrix below is the cross-platform roadmap, not a reason to
+hold the first stable release indefinitely. For an initial public MVP,
+the recommended candidate scope is:
+
+- **Web/WASM:** optimized tagged build, bridge smoke against the release
+  bytes, Cloudflare Pages deployment, and a live manifest/hash comparison
+  proving the deployed bundle is the one being released.
+- **Linux x86_64:** desktop tar.gz and DEB, plus CLI archive. Require
+  install/launch checks and a small open → edit → save/export smoke on a
+  clean supported Linux environment; require CLI version/help and one
+  import/export round trip.
+- **Release metadata:** exact-tag source archive, CycloneDX SBOM,
+  SHA-256 manifest and release-wide checksum list, release notes, and a
+  known-limitations/install guide.
+- **Release gate:** the current PR remediation must be merged, the
+  canonical `cargo run -p xtask -- ci` gate must pass, packaged artifacts
+  must be verified, and the deployed web hashes must match the tagged
+  build before publishing.
+
+For this MVP candidate, Windows GNU cross-builds are preview evidence,
+not a production Windows release. A native MSVC build/launch, macOS
+DMG/signing, AppImage, Flatpak, Android, ARM64, and RPM remain separate
+follow-on targets and must not be advertised as supported production
+packages until their target-specific acceptance evidence exists. RPM is
+deferred by decision 0070.
+
+This is a recommended scope cut for maintainer approval, not an automatic
+change to the long-term cross-platform target matrix. If v1 is required to
+include every platform in that matrix, retain the full matrix as a release
+blocker and plan the corresponding native-runner work explicitly.
+
 ## 2. Baseline inventory and constraints
 
 The repository currently has a useful release foundation:
