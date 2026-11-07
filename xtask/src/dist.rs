@@ -181,13 +181,17 @@ pub fn source() -> Result<(), String> {
     run_in(
         Some(&scratch),
         "tar",
-        &[
-            "-xzf",
-            &archive.display().to_string(),
-        ],
+        &["-xzf", &archive.display().to_string()],
     )?;
     let extracted = scratch.join("FireCraft");
-    for must in ["Cargo.toml", "Cargo.lock", "LICENSE", "crates", "xtask", "web"] {
+    for must in [
+        "Cargo.toml",
+        "Cargo.lock",
+        "LICENSE",
+        "crates",
+        "xtask",
+        "web",
+    ] {
         if !extracted.join(must).exists() {
             return Err(format!("source archive missing {must} after extraction"));
         }
@@ -218,8 +222,7 @@ pub fn source() -> Result<(), String> {
 
 /// sha256 of a file (hex), same digest form write_manifest uses.
 fn sha256_hex_file(path: &Path) -> Result<String, String> {
-    let bytes =
-        std::fs::read(path).map_err(|e| format!("read {}: {e}", path.display()))?;
+    let bytes = std::fs::read(path).map_err(|e| format!("read {}: {e}", path.display()))?;
     Ok(sha256_hex(&bytes))
 }
 
@@ -247,8 +250,8 @@ pub fn sbom() -> Result<(), String> {
             String::from_utf8_lossy(&raw.stderr).trim()
         ));
     }
-    let meta: serde_json::Value = serde_json::from_slice(&raw.stdout)
-        .map_err(|e| format!("parse cargo metadata: {e}"))?;
+    let meta: serde_json::Value =
+        serde_json::from_slice(&raw.stdout).map_err(|e| format!("parse cargo metadata: {e}"))?;
     let version = workspace_version()?;
 
     let mut components = Vec::new();
@@ -312,8 +315,7 @@ pub fn sbom() -> Result<(), String> {
     });
     let path = out.join(format!("firecraft-{version}-sbom.cdx.json"));
     let text = serde_json::to_string_pretty(&bom).map_err(|e| format!("encode sbom: {e}"))?;
-    std::fs::write(&path, text.as_bytes())
-        .map_err(|e| format!("write {}: {e}", path.display()))?;
+    std::fs::write(&path, text.as_bytes()).map_err(|e| format!("write {}: {e}", path.display()))?;
     let digest = sha256_hex_file(&path)?;
     eprintln!(
         "[xtask] dist sbom: {} ({} components, {digest})",
@@ -326,9 +328,7 @@ pub fn sbom() -> Result<(), String> {
 /// Stable CycloneDX identity for one Cargo package. Only crates.io
 /// registry packages receive a Cargo purl; path and git packages are
 /// identified by a bom-ref derived from their source identity.
-fn package_bom_ref(
-    package: &serde_json::Value,
-) -> Result<(String, Option<String>), String> {
+fn package_bom_ref(package: &serde_json::Value) -> Result<(String, Option<String>), String> {
     let name = package["name"]
         .as_str()
         .ok_or("cargo metadata: package without name")?;
@@ -877,7 +877,11 @@ fn verify_deb(deb: &Path, version: &str) -> Result<(), String> {
 /// platform (docs/TOOLCHAINS.md); the gate requires they exist.
 fn parse_recipes() -> Result<usize, String> {
     let mut checked = 0;
-    for name in ["build-appimage.sh", "build-flatpak.sh", "build-macos-dmg.sh"] {
+    for name in [
+        "build-appimage.sh",
+        "build-flatpak.sh",
+        "build-macos-dmg.sh",
+    ] {
         let script = workspace_root().join("packaging").join(name);
         let status = std::process::Command::new("bash")
             .args(["-n"])
@@ -897,11 +901,8 @@ fn parse_recipes() -> Result<usize, String> {
     let manifest = workspace_root().join("packaging/flatpak/dev.firecraft.FireCraft.yml");
     let yaml = std::fs::read_to_string(&manifest)
         .map_err(|e| format!("read {}: {e}", manifest.display()))?;
-    serde_yaml::from_str::<serde_yaml::Value>(&yaml).map_err(|e| {
-        format!(
-            "packaging/flatpak/dev.firecraft.FireCraft.yml does not parse: {e}"
-        )
-    })?;
+    serde_yaml::from_str::<serde_yaml::Value>(&yaml)
+        .map_err(|e| format!("packaging/flatpak/dev.firecraft.FireCraft.yml does not parse: {e}"))?;
     checked += 1;
     for name in ["build-windows.ps1", "windows/firecraft.iss"] {
         let recipe = workspace_root().join("packaging").join(name);
@@ -1126,7 +1127,10 @@ mod sbom_tests {
         });
         assert_eq!(
             package_bom_ref(&registry).unwrap(),
-            ("pkg:cargo/serde@1.0.0".to_owned(), Some("pkg:cargo/serde@1.0.0".to_owned()))
+            (
+                "pkg:cargo/serde@1.0.0".to_owned(),
+                Some("pkg:cargo/serde@1.0.0".to_owned())
+            )
         );
 
         let local = serde_json::json!({
