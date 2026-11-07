@@ -639,7 +639,7 @@ impl TypedCommand for RetouchSharpen {
             NAME,
             payload.x,
             payload.y,
-            payload.radius * 2,
+            payload.radius.saturating_mul(2),
             &payload.brush,
         )?;
         let (brush, pressure) = (options.brush, options.pressure);
@@ -727,7 +727,7 @@ impl TypedCommand for RetouchDodge {
             NAME,
             payload.x,
             payload.y,
-            payload.radius * 2,
+            payload.radius.saturating_mul(2),
             &payload.brush,
         )?;
         let (brush, pressure) = (options.brush, options.pressure);
@@ -799,7 +799,7 @@ impl TypedCommand for RetouchBurn {
             NAME,
             payload.x,
             payload.y,
-            payload.radius * 2,
+            payload.radius.saturating_mul(2),
             &payload.brush,
         )?;
         let (brush, pressure) = (options.brush, options.pressure);
@@ -893,7 +893,7 @@ impl TypedCommand for RetouchReplaceColor {
             NAME,
             payload.x,
             payload.y,
-            payload.radius * 2,
+            payload.radius.saturating_mul(2),
             &payload.brush,
         )?;
         let (brush, pressure) = (options.brush, options.pressure);
@@ -1117,6 +1117,26 @@ mod tests {
             strip(&document, image),
             [[112, 80, 60, 255], [80, 80, 90, 255], [255, 255, 255, 255],]
         );
+    }
+
+    #[test]
+    fn retouch_commands_reject_overflowing_brush_diameters() {
+        let (mut document, image) =
+            strip_document([[100, 100, 100, 255], [120, 120, 120, 255], [140, 140, 140, 255]]);
+        let payload = json!({
+            "id": image, "x": 1.5, "y": 0.5,
+            "radius": u32::MAX, "strength": 50,
+        });
+        assert!(RetouchSharpen.apply_json(&mut document, payload.clone()).is_err());
+        assert!(RetouchDodge.apply_json(&mut document, payload.clone()).is_err());
+        assert!(RetouchBurn.apply_json(&mut document, payload.clone()).is_err());
+        assert!(RetouchReplaceColor
+            .apply_json(&mut document, json!({
+                "id": image, "x": 1.5, "y": 0.5,
+                "radius": u32::MAX, "strength": 50,
+                "from_color_raw": 0xFFFF0000_i64, "to_color_raw": 0xFF00FFFF_i64,
+            }))
+            .is_err());
     }
 
     #[test]
