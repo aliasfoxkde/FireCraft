@@ -5,7 +5,7 @@
 > Historical narrative: [`HISTORY.md`](HISTORY.md) and
 > [`SESSIONS.md`](SESSIONS.md).
 
-## Now (2026-11-04, `main` at `5fac7a2`)
+## Snapshot (2026-11-07, PR #8 branch; based on `main` at `5fac7a2`)
 
 <!-- coderabbit-ai-generated:v1 -->
 
