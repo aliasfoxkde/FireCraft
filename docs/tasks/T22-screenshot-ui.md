@@ -1,6 +1,6 @@
 # T22 — Screenshot-driven shell and responsive UI audit
 
-**Status:** in progress. The tracked screenshot (`docs/img/app-main.png`) has been replaced with a fresh 1280×800 capture of the current shell with a vector selection; the 1920×1080 capture and the empty/vector/bitmap state set are recorded below. The remaining open item is the panel-inventory work that Phase 22.1 still owns.
+**Status:** screenshot audit complete. The tracked screenshot (`docs/img/app-main.png`), 1920×1080 capture, and empty/vector/bitmap state set are recorded below. Panel inventory (22.1) and tool strip (22.2) are complete in the current PR branch; the remaining Phase 22 work is the separate CS6 chrome audit (22.5).
 
 **Objective:** align the editor's working shell with the clean-room CS6 reference notes while keeping controls visible and usable at ordinary browser sizes.
 
@@ -16,7 +16,7 @@
 4. Link the fresh screenshot from README/docs and label it as evidence for its exact build/state.
 5. Verify a fresh optimized `xtask dist --web` and the browser path before publishing replacement screenshots or changing `web/`.
 
-**Observed starting gaps:** [`panel_windows.rs`](../../crates/app/src/shell/panel_windows.rs) implemented independently positioned windows in a right-side column; session evidence shows lower panels required a 3200 px viewport. The tracked screenshot predated the latest mainline changes and should be replaced after the comparison captures are reviewed.
+**Historical starting gaps at ticket creation:** [`panel_windows.rs`](../../crates/app/src/shell/panel_windows.rs) implemented independently positioned windows in a right-side column; session evidence shows lower panels required a 3200 px viewport. The tracked screenshot predated the latest mainline changes and should be replaced after the comparison captures are reviewed.
 
 ## Receipts — 2026-11-04
 
@@ -87,10 +87,10 @@ state.
 `xtask dist --web` rebuilt the bundle; the browser path was exercised
 against that bundle for all six captures.
 
-**Still open (owned elsewhere):** the CS6 chrome audit (22.5) and the
-missing panel surfaces (22.1). The tool strip's order and flyouts
-(22.2) **landed 2026-11-05** — see the receipt below. This ticket's own
-acceptance criteria are met.
+**Still open (owned elsewhere):** the CS6 chrome audit (22.5). The
+panel inventory (22.1) and tool strip/flyouts (22.2) have since landed
+in this PR branch. This ticket's own screenshot acceptance criteria
+are met; it does not claim the broader chrome audit is complete.
 
 **Verification:** browser captures at both sizes, visual inspection, targeted interaction checks, and `cargo run -p xtask -- ci` before a code change lands. See [`TASKS.md`](../TASKS.md) for the live priority.
 
