@@ -68,6 +68,38 @@ impl Shell {
         });
     }
 
+    /// Edit ▸ Preferences (21.4): the persisted user settings. The
+    /// UI-scale drag writes `ui_scale` live (applied to the context
+    /// each frame); the value rides the shell layout, so it survives
+    /// restarts like the panel set does.
+    pub(super) fn preferences_ui(&mut self, ui: &mut egui::Ui) {
+        ui.add_space(4.0);
+        ui.heading("General");
+        ui.horizontal(|ui| {
+            ui.label("UI scale:");
+            let mut scale = self.ui_scale.unwrap_or(1.0);
+            let changed = ui
+                .add(
+                    egui::DragValue::new(&mut scale)
+                        .speed(0.01)
+                        .range(0.5..=3.0)
+                        .suffix("×"),
+                )
+                .changed();
+            if changed {
+                self.ui_scale = Some(scale);
+            }
+            if ui.button("Reset").clicked() {
+                self.ui_scale = None;
+            }
+        });
+        ui.weak("Scales the whole interface (HiDPI displays). Persists across sessions.");
+        ui.add_space(6.0);
+        if ui.button("Close").clicked() {
+            self.preferences_open = false;
+        }
+    }
+
     /// The keyboard-shortcuts help panel: every binding in the
     /// SHORTCUTS table, grouped by the table's section structure.
     pub(super) fn help_panel(&mut self, ctx: &egui::Context) {

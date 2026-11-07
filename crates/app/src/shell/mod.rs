@@ -114,6 +114,11 @@ pub struct Shell {
     pub(crate) about_open: bool,
     /// The keyboard-shortcuts help panel is open (F1 / Help menu).
     help_open: bool,
+    /// The Preferences dialog (21.4) is open.
+    preferences_open: bool,
+    /// The user's UI scale factor (`pixels_per_point`): `None` follows
+    /// the platform default. Persisted with the layout.
+    ui_scale: Option<f32>,
     /// The Styles panel's new-style name field.
     style_name: String,
     /// The layer whose name is being edited in the Layers panel
@@ -322,6 +327,9 @@ struct ShellLayout {
     show_guides: bool,
     show_rulers: bool,
     smart_guides: bool,
+    /// The user's UI scale (`pixels_per_point`); `None` follows the
+    /// platform default.
+    ui_scale: Option<f32>,
 }
 
 impl Default for ShellLayout {
@@ -338,6 +346,7 @@ impl Default for ShellLayout {
             show_guides: true,
             show_rulers: false,
             smart_guides: true,
+            ui_scale: None,
         }
     }
 }
@@ -394,6 +403,8 @@ impl Shell {
             tool_press: None,
             about_open: false,
             help_open: false,
+            preferences_open: false,
+            ui_scale: None,
             style_name: String::new(),
             rename_layer: None,
             show_grid: false,
@@ -468,6 +479,7 @@ impl Shell {
         self.show_guides = self.layout.show_guides;
         self.show_rulers = self.layout.show_rulers;
         self.smart_guides = self.layout.smart_guides;
+        self.ui_scale = self.layout.ui_scale;
     }
 
     /// Snapshots the live layout fields for `App::save`.
@@ -485,6 +497,7 @@ impl Shell {
             show_guides: self.show_guides,
             show_rulers: self.show_rulers,
             smart_guides: self.smart_guides,
+            ui_scale: self.ui_scale,
         }
     }
 
@@ -1593,6 +1606,7 @@ impl Shell {
                 };
             }
             menus::ShellAction::About => self.about_open = true,
+            menus::ShellAction::ShowPreferences => self.preferences_open = true,
             menus::ShellAction::ShowShortcuts => self.help_open = !self.help_open,
             menus::ShellAction::PickTool(tool) => {
                 self.editor.tool = tool;
@@ -2697,6 +2711,17 @@ impl eframe::App for Shell {
         // Keep the context reachable for out-of-frame mutators (the
         // web bridge's request_repaint).
         self.ctx = Some(ui.ctx().clone());
+        // Preferences UI scale (21.4): apply the user factor when it
+        // differs from what the context currently runs at. `None`
+        // means "follow the platform default" — restore it when the
+        // user resets.
+        let native_ppp = ui.ctx().native_pixels_per_point();
+        let wanted = self.ui_scale.map_or(native_ppp.unwrap_or(1.0), |scale| {
+            scale * native_ppp.unwrap_or(1.0)
+        });
+        if (ui.ctx().pixels_per_point() - wanted).abs() > 0.001 {
+            ui.ctx().set_pixels_per_point(wanted);
+        }
         // Menu/shortcut actions run before layout so their effects are
         // visible the same frame.
         self.shortcuts(ui.ctx());
@@ -2838,6 +2863,12 @@ impl eframe::App for Shell {
                 .resizable(false)
                 .collapsible(false)
                 .show(ui.ctx(), |ui| self.about_ui(ui));
+        }
+        if self.preferences_open {
+            egui::Window::new("Preferences")
+                .resizable(false)
+                .collapsible(false)
+                .show(ui.ctx(), |ui| self.preferences_ui(ui));
         }
         self.palette_ui(ui);
         if self.help_open {
@@ -4814,6 +4845,26 @@ mod tests {
         shell.about_open = false;
         shell.run_action(&menus::Action::Shell(menus::ShellAction::ShowShortcuts));
         assert!(shell.help_open);
+    }
+
+    /// Edit ▸ Preferences opens the dialog (21.4); the chosen UI
+    /// scale lands in `ui_scale`, rides the persisted layout, and
+    /// restores with it — so the setting survives a restart.
+    #[test]
+    fn preferences_scale_round_trips_the_layout() {
+        let mut shell = gui_shell(gui_editor());
+        assert!(!shell.preferences_open);
+        assert_eq!(shell.ui_scale, None);
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::ShowPreferences));
+        assert!(shell.preferences_open, "Preferences opens the dialog");
+        shell.ui_scale = Some(1.5);
+        let saved = shell.capture_layout();
+        assert_eq!(saved.ui_scale, Some(1.5));
+        // A fresh shell restores the factor with the layout.
+        let mut other = gui_shell(gui_editor());
+        other.layout = saved;
+        other.apply_layout();
+        assert_eq!(other.ui_scale, Some(1.5));
     }
 
     /// The Canvas Size dialog opens seeded with the live canvas,

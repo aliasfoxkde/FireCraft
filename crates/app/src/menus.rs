@@ -147,6 +147,9 @@ pub enum ShellAction {
     About,
     /// Help ▸ Keyboard Shortcuts — the shortcut map panel (F1).
     ShowShortcuts,
+    /// Edit ▸ Preferences… — the preferences dialog (UI scale and
+    /// other persisted user settings).
+    ShowPreferences,
     /// One-key tool select (the CS6 tool letters).
     PickTool(Tool),
     /// One-key tool *group* select: CS6 gives a group one shortcut
@@ -887,9 +890,7 @@ pub static EDIT: Menu = Menu {
             35034,
             "Preferences...",
             "",
-            Action::Shell(ShellAction::ReportGap(
-                "Preferences needs the preferences dialog, which this build does not ship",
-            )),
+            Action::Shell(ShellAction::ShowPreferences),
         ),
         item(
             35429,
@@ -2928,6 +2929,7 @@ pub fn action_name(action: Action) -> String {
             ShellAction::FitAll => "Fit all".into(),
             ShellAction::About => "About".into(),
             ShellAction::ShowShortcuts => "Shortcut map".into(),
+            ShellAction::ShowPreferences => "Preferences".into(),
             ShellAction::PickTool(tool) => format!("Tool: {tool:?}"),
             ShellAction::PickToolGroup(leader) => format!("Tool group: {leader:?}"),
             ShellAction::ToggleGrid => "Show/hide grid".into(),
@@ -3086,7 +3088,7 @@ mod tests {
     /// The highest inert-item count the docs have recorded. The
     /// `inert_count_never_rises` test refuses any regression above it;
     /// when the count falls, ratchet this down to the new number.
-    const INERT_CEILING: usize = 4;
+    const INERT_CEILING: usize = 2;
 
     fn walk(entries: &'static [Entry]) -> Vec<&'static Item> {
         let mut items = Vec::new();

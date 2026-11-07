@@ -221,7 +221,7 @@ of replacing it, fill/stroke swatch panel bound to
 Phase 19 batches 19.1–19.5 landed 2026-10-31 → 11-01: transform
 handles + Numeric Transform, Subselect path-node editing, the gradient
 fill editor, the command palette, and the grid/guides/snap set. The
-inert count is 3 of 294 items (was 190); 19.6's menu-wiring
+inert count is 2 of 294 items (was 190); 19.6's menu-wiring
 campaign is complete and the Text ▸ Font submenu landed 2026-11-06. The remaining rows require separate feature or
 evidence work, tracked outside that campaign.
 
@@ -417,8 +417,12 @@ evidence work, tracked outside that campaign.
   save-steps-as-command. — **PARTLY LANDED 2026-10-31** (`4458f3a`):
   the palette filters by substring (case-insensitive). Still open:
   fuzzy scoring, recents, save-steps-as-command.
-- **21.4 Preferences dialog + `pixels_per_point`** (S), persisting via
-  platform storage (decision 0067 follow-up).
+- **21.4 Preferences dialog + `pixels_per_point`** (S): **LANDED
+  2026-11-07** — Edit ▸ Preferences… opens the dialog; a UI-scale
+  drag (0.5×–3×, Reset to platform default) applies to the context
+  each frame and rides `ShellLayout`, so it persists like the panel
+  set. Gate: `preferences_scale_round_trips_the_layout`. The
+  Preferences menu row also left the inert census, now 2 of 294.
 - **21.5 accesskit** desktop + web re-audit (0067 records the web
   blocker).
 - **21.6 In-app scripting** (S): Commands menu → run `.jsf`/`.fwsteps`.
