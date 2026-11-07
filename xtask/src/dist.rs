@@ -244,7 +244,7 @@ pub(crate) fn workspace_version() -> Result<String, String> {
 /// exists there.
 fn release_bin(name: &str) -> Result<PathBuf, String> {
     let target = std::env::var_os("CARGO_TARGET_DIR")
-        .map(PathBuf::from)
+        .map(|target| workspace_root().join(target))
         .unwrap_or_else(|| workspace_root().join("target"));
     let path = target.join("release").join(name);
     if path.is_file() {

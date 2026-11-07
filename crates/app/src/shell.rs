@@ -1429,9 +1429,21 @@ impl Shell {
     /// Whether the current document holds anything — the test that
     /// separates "open this file" from "place this file".
     fn document_has_content(&self) -> bool {
-        self.editor
-            .current_cell()
-            .is_some_and(|cell| !cell.elements.is_empty())
+        let document = self.editor.document();
+        document
+            .pages
+            .iter()
+            .map(|page| &page.layers)
+            .chain(std::iter::once(&document.shared_layers))
+            .flat_map(|layers| &layers.layers)
+            .chain(
+                document
+                    .shared_layer_defs
+                    .iter()
+                    .map(|definition| &definition.layer),
+            )
+            .flat_map(|layer| &layer.cells)
+            .any(|cell| !cell.elements.is_empty())
     }
 
     /// Places a raster into the current document as a new image
@@ -1735,8 +1747,16 @@ impl Shell {
     /// Applies through the editor and reports failures on the status
     /// line — the one idiom every menu/panel action shares.
     fn run_command(&mut self, name: &str, payload: serde_json::Value) {
-        if let Err(error) = self.editor.apply(name, payload) {
-            self.status = format!("{name} failed: {error}");
+        self.run_command_checked(name, payload);
+    }
+
+    fn run_command_checked(&mut self, name: &str, payload: serde_json::Value) -> bool {
+        match self.editor.apply(name, payload) {
+            Ok(_) => true,
+            Err(error) => {
+                self.status = format!("{name} failed: {error}");
+                false
+            }
         }
     }
 
@@ -3330,7 +3350,17 @@ impl Shell {
     /// stuck opaque black.
     fn fill_stroke_panel(&mut self, ui: &mut egui::Ui) {
         ui.heading("Fill & Stroke");
-        let ids = self.editor.live_selection();
+        let ids: Vec<_> = self
+            .editor
+            .live_selection()
+            .into_iter()
+            .filter(|id| {
+                matches!(
+                    self.editor.document().registry.get(*id),
+                    Some(ObjectData::Path(_))
+                )
+            })
+            .collect();
         if ids.is_empty() {
             ui.label("(select a vector object to edit its colors)");
             return;
@@ -3358,12 +3388,14 @@ impl Shell {
                     );
                     if response.clicked() {
                         for id in &ids {
-                            self.run_command(
+                            if !self.run_command_checked(
                                 Self::paint_command(channel),
                                 serde_json::json!({ "id": id, "color_raw": color_raw }),
-                            );
+                            ) {
+                                break;
+                            }
+                            self.status = format!("{channel} → {name}");
                         }
-                        self.status = format!("{channel} → {name}");
                     }
                 }
             });
@@ -5754,12 +5786,88 @@ mod tests {
         );
     }
 
+    #[test]
+    fn load_raster_preserves_artwork_on_an_inactive_layer() {
+        let mut shell = gui_shell(gui_editor());
+        let before = shell.editor.document().clone();
+        shell
+            .editor
+            .apply("layer.add", serde_json::json!({ "page": 0 }))
+            .unwrap();
+        shell.editor.set_active_layer(1);
+        assert!(shell.editor.current_cell().unwrap().elements.is_empty());
+
+        shell.load_document_bytes(&red_png()).expect("place raster");
+
+        let document = shell.editor.document();
+        assert_eq!(document.pages[0].info.canvas, before.pages[0].info.canvas);
+        assert_eq!(
+            document.pages[0].layers.layers[0],
+            before.pages[0].layers.layers[0]
+        );
+        for id in &before.pages[0].layers.layers[0].cells[0].elements {
+            assert_eq!(document.registry.get(*id), before.registry.get(*id));
+        }
+        let cell = shell.editor.current_cell().unwrap();
+        assert_eq!(cell.elements.len(), 1);
+        assert!(matches!(
+            document.registry.get(cell.elements[0]),
+            Some(ObjectData::Image(_))
+        ));
+    }
+
     /// `document_has_content` separates the two doors: empty page
     /// (fresh editor) is content-free, a drag-created rect is not.
     #[test]
-    fn document_has_content_follows_the_cell() {
+    fn document_has_content_detects_artwork() {
         assert!(!gui_shell(Editor::untitled()).document_has_content());
         assert!(gui_shell(gui_editor()).document_has_content());
+    }
+
+    #[test]
+    fn document_has_content_checks_other_states_pages_and_shared_layers() {
+        let original = gui_editor().document().clone();
+        let mut other_state = original.clone();
+        let layer = &mut other_state.pages[0].layers.layers[0];
+        let artwork = layer.cells[0].clone();
+        layer.cells[0].elements.clear();
+        layer.cells.push(artwork);
+        assert!(gui_shell(Editor::from_document(other_state)).document_has_content());
+
+        let mut other_page = original.clone();
+        other_page
+            .pages
+            .insert(0, Editor::untitled().document().pages[0].clone());
+        assert!(gui_shell(Editor::from_document(other_page)).document_has_content());
+
+        let mut shared = original.clone();
+        shared.shared_layers = shared.pages[0].layers.clone();
+        shared.pages[0].layers.layers[0].cells[0].elements.clear();
+        assert!(gui_shell(Editor::from_document(shared)).document_has_content());
+
+        let mut shared_definition = original;
+        let layer = shared_definition.pages[0].layers.layers[0].clone();
+        shared_definition.pages[0].layers.layers[0].cells.clear();
+        shared_definition
+            .shared_layer_defs
+            .push(doc::SharedLayerDef {
+                uid: "shared-artwork".to_owned(),
+                is_primary: true,
+                layer,
+            });
+        assert!(gui_shell(Editor::from_document(shared_definition)).document_has_content());
+    }
+
+    #[test]
+    fn checked_command_reports_success_and_preserves_failure_status() {
+        let mut shell = gui_shell(gui_editor());
+        let id = shell.editor.current_cell().unwrap().elements[0];
+        assert!(shell.run_command_checked(
+            Shell::paint_command("fill"),
+            serde_json::json!({ "id": id, "color_raw": 0 }),
+        ));
+        assert!(!shell.run_command_checked("missing.command", serde_json::json!({})));
+        assert!(shell.status.starts_with("missing.command failed:"));
     }
 
     /// The palette commands route to the right engine verbs, and the
