@@ -156,6 +156,10 @@ Eighteen have a Window-menu row; five do not.
 
 ### Panel *arrangement* (not just inventory)
 
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:0c1446a9b30ab23bd07e88006585270440cb68d1cc11b623a7dd8c298846a8dd -->
+
 | Property | CS6 | FireCraft | Verdict | Evidence | Ticket |
 |---|---|---|---|---|---|
 | Right dock is **five stacked tab-groups** | yes | one flat column of 13 collapsible panels + the Web Layer panel | **missing** | **R** (`Expanded Mode.xml`) | 22.1 |
@@ -165,7 +169,9 @@ Eighteen have a Window-menu row; five do not.
 | Panels dockable left↔right, collapsible, resizable | yes | resizable + collapsible + reopenable from the Window menu; **not** left↔right movable | **partial** | `S/panel_windows.rs:150` | 22.1 |
 | Dock geometry persists across restart | yes | eframe `persistence` + `ShellLayout` snapshot | **implemented** | `D` 0067/0069, `S/mod.rs` | — |
 | The dock **reserves** width so the canvas shrinks rather than being covered | yes (a dock) | yes — `egui::Panel::right`, 258 pt, scrolling column | **implemented** | `S/panel_windows.rs:154` | 22.5 |
-| Every panel reachable at 1280×800 | yes | **evidence-gated** — pending the T22 screenshot capture | — | 22.5 / T22 |
+| Every panel reachable at 1280×800 | yes | Pending the T22 screenshot capture | **evidence-gated** | — | 22.5 / T22 |
+
+<!-- /coderabbit-ai-generated:v1 -->
 
 ---
 

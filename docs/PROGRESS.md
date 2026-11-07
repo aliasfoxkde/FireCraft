@@ -7,20 +7,26 @@
 
 ## Now (2026-11-04, `main` at `5fac7a2`)
 
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:96efdab11c7df4b57fb72854f016b25100c7ae63868aab068c0acecdf0dbaf8c -->
+
 - **Release:** `v0.2.5` is the latest tag. `main` has additional work
   since that tag. The public Pages manifest was checked on 2026-11-04
   20:01 local time; its JavaScript, wasm, and index hashes differ from
   the verified local optimized distribution. The deployed source
   revision is unknown.
-- **Build evidence:** `dist/web/` contains an optimized distribution
-  built 2026-11-04 16:45 local time (wasm 21,274,323 bytes, below the
-  21,500,000-byte ceiling; manifest present). It was built from
-  `56ee1bf`; that commit and `5fac7a2` have the same Git tree, so the
-  optimized artifact contains the exact source tree now on `main`.
-  The 18:21 `web/dist/` output is a raw 95,583,065-byte wasm bundle,
+- **Build evidence:** the earlier optimized `dist/web/` distribution,
+  built 2026-11-04 16:45 local time, had a 21,274,323-byte wasm
+  (below the 21,500,000-byte ceiling). It was built from `56ee1bf`,
+  whose Git tree matches `5fac7a2`; all five entries in its
+  `MANIFEST.sha256` verified. The deployment comparison and earlier
+  bridge smoke covered that artifact. The later [T22 rebuild](tasks/T22-screenshot-ui.md#receipts--2026-11-04)
+  used `5fac7a2` plus uncommitted dock and inspector changes, producing
+  a 21,271,259-byte optimized wasm in `dist/web/`; T22's six browser
+  captures and interaction checks covered this rebuilt artifact.
+  The 18:21 `web/dist/` output was a raw 95,583,065-byte wasm bundle,
   not a release distribution. Neither directory is tracked by Git.
-  All five entries in the optimized distribution's `MANIFEST.sha256`
-  verify successfully.
 - **CI evidence:** PR #7's GitForge 8-job receipt and GitHub Actions
   gate are recorded in the session notes. A clean
   local `xtask ci` has not been run as part of this documentation
@@ -51,10 +57,13 @@
 
 | Artifact or check | Observed | Meaning |
 |---|---|---|
-| Optimized `dist/web/` | 2026-11-04 16:45 local; 21,274,323-byte wasm; manifest | Recent release-style build from `56ee1bf`, whose Git tree matches `5fac7a2` |
+| Earlier optimized `dist/web/` | 2026-11-04 16:45 local; 21,274,323-byte wasm; manifest verified | Build from `56ee1bf`, whose Git tree matches `5fac7a2`; deployment comparison and earlier bridge smoke |
+| T22 optimized rebuild in `dist/web/` | 2026-11-04; 21,271,259-byte wasm | `5fac7a2` plus dock and inspector changes; six browser captures and interaction checks in [T22](tasks/T22-screenshot-ui.md#receipts--2026-11-04) |
 | Raw `web/dist/` | 2026-11-04 18:21 local; 95,583,065-byte wasm | Development output; not the optimized distribution |
-| Browser smoke | Recorded in `log/devlog.md` / session history for the optimized artifact | Local end-to-end proof; live deployed revision still unverified |
-| Live Pages | Manifest fetched 2026-11-04 20:01 local | JS/wasm/index hashes differ from the local optimized distribution; deployed revision unknown |
+| Browser smoke | Earlier optimized artifact: bridge smoke in session history; T22 rebuild: six captures and interaction checks in T22 | Local end-to-end proof for each recorded artifact; live deployed revision still unverified |
+| Live Pages | Manifest fetched 2026-11-04 20:01 local | JS/wasm/index hashes differ from the earlier 21,274,323-byte optimized distribution; deployed revision unknown |
+
+<!-- /coderabbit-ai-generated:v1 -->
 
 ## Milestones
 

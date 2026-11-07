@@ -2,7 +2,11 @@
 
 FireCraft is a clean-room, open-source reimplementation of Adobe Fireworks CS6 in Rust. It edits native `.fw.png` documents and runs as a browser app, desktop app, or headless CLI.
 
-> FireCraft is independent of Adobe. Adobe and Fireworks are trademarks of Adobe Inc.; names are used only to describe compatible workflows and formats.
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:06ef3fb450bd08a6a2b6b281f3bff32256e992572e6459415ee63c40a68bbef2 -->
+
+> FireCraft is not affiliated with, sponsored by, or endorsed by Adobe Inc. Adobe and Fireworks are trademarks of Adobe Inc.; names are used only to describe compatible workflows and formats.
 
 ## Project status
 
@@ -22,9 +26,11 @@ The [app screenshot](docs/img/app-main.png) is a 1280×800 capture of the curren
 
 ```sh
 cargo run -p xtask -- ci
-cargo run -p firecraft-cli -- info document.fw.png
-cargo run -p firecraft-cli -- convert input.fw.png output.fw.png
+cargo run -p app-cli -- info document.fw.png
+cargo run -p app-cli -- convert input.fw.png output.fw.png
 ```
+
+<!-- /coderabbit-ai-generated:v1 -->
 
 See [USAGE.md](docs/USAGE.md) for CLI, GUI shortcuts, and browser embedding. See [RELEASING.md](docs/RELEASING.md) for artifact and deployment procedures.
 

@@ -156,6 +156,10 @@ authority for what each CS6 panel command id *is*:
 
 Two consequences:
 
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:e4e9ac71ed503310b0af9ac80b9ca85126eaae43b211c4e3c78325ed6ed86089 -->
+
 1. The two ids the exe table carried that the Window-menu
    transcription did not — **43421** (Answers) and **35425**
    (What's New) — are **not Window-menu panel rows**. They are
@@ -163,8 +167,11 @@ Two consequences:
    missing menu rows and must not be invented as such.
 2. The CS6 panel set is **twenty-three**, not eighteen. The
    Window-menu roster below is the eighteen that have a menu row; the
-   other five (Project, Site, Answers, What's New, and the
-   ToolPalette) are opened elsewhere or are toolbars.
+   other five (Project, Site, Answers, What's New, and Slices) have
+   no Window-menu row. ToolPalette is the workspace name for Tools,
+   which is already included in the eighteen-item Window-menu roster.
+
+<!-- /coderabbit-ai-generated:v1 -->
 
 ### The `486xx` ids remain unidentified
 

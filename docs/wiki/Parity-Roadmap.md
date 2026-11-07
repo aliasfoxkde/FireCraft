@@ -25,11 +25,17 @@ Until the inventory refresh is complete, this roadmap is the known backlog, not 
 
 This is the current UI priority. The context menu and open-license icon pack are complete; the remaining work is:
 
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:f4fd3ecf7aeee82ab02450c0773aca0a8b3c825c71dd41fdae98bc0cad0612a6 -->
+
 1. **Panel reachability and layout (22.1):** make active panels usable at normal viewport sizes, finish the documented Optimize, Common Library, CSS Properties, Find and Replace, and Slices surfaces, and verify persistence and movement.
 2. **Tool strip and flyouts (22.2):** align tool order, grouping, flyout behavior, and keyboard access with the reference notes.
-3. **Property inspector (22.4):** finish per-object fields, including bitmap fill/stroke editing.
+3. **Property inspector (22.4):** finish per-object fields and close the documented bitmap transform/resample gap (decision 0019); X/Y/W/H remains read-only. Bitmap fill/stroke editing requires a separate format decision because `IMGv` carries no fill or stroke nodes. See the [bitmap evidence](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/research/fw-ui-evidence.md#where-the-bitmap-specific-surface-lives-phase-22-ticket-224).
 4. **CS6 chrome (22.5):** review menu, tabs, status area, panel headers, and the overall shell layout.
 5. **Screenshot and responsive proof:** capture representative empty, vector, and bitmap states at 1280×800 and 1920×1080; record the build and replace the stale sample only after review.
+
+<!-- /coderabbit-ai-generated:v1 -->
 
 Detailed acceptance criteria are in [Phase 22](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/NEXT.md#phase-22--cs6-shell-fidelity-p0-the-looks-and-acts-like-fireworks-phase); release and gate receipts are in [PROGRESS.md](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/PROGRESS.md).
 

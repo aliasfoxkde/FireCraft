@@ -436,19 +436,23 @@ be launched as an oracle: under Wine it fails its own configuration
 check ("Error: 1"), and the activation machinery is explicitly out of
 scope, so no license path is attempted.
 
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:19fbbfb1d9d36f65a8dd3a8fe55432b036d9c133916d7f44105247380d2ccdca -->
+
 - **22.1 CS6 panel inventory + docking** (L): the left tool dock and
   the right panel stack with the CS6 panel set (Properties, Layers,
   Pages, Swatches, Color Mixer, Info, History, Optimize, Symbols,
   Styles, Common Library, CSS Properties, Auto Shapes, URL,
   Behaviors, Find and Replace, Slices). Panels are dockable left or
   right, collapsible, resizable, and re-openable from the Window
-  menu; the dock geometry persists. Accept: a panel can be moved
-  left↔right, collapsed, and reopened, and the layout survives a
-  restart. — **PARTLY LANDED 2026-11-03**: the panel stack is now
-  one window per panel (`shell::panel_windows`) — draggable,
-  collapsible, resizable, closable, docked by default in the
-  right-hand column (`default_pos`, so a drag moves a panel free and
-  egui's persisted area memory keeps the new spot), with CS6's
+  menu; the dock geometry persists. Accept: a panel can be collapsed
+  and reopened, the right dock can be resized, and the layout survives
+  a restart. Left↔right movement remains open work toward the CS6 target.
+  — **PARTLY LANDED 2026-11-04**: `shell::panel_windows` uses a
+  width-reserving `egui::Panel::right` dock (258 pt default width),
+  with a scrolling column of collapsible, closable panel sections
+  and CS6's
   fresh-document roster (Properties/Pages/States/Layers open, the
   rest closed until asked for) and the Window menu toggling each.
   The layout now persists across restarts (`eframe`'s `persistence`
@@ -460,8 +464,8 @@ scope, so no license path is attempted.
   Behaviors are real panels whose actions are engine commands. Still
   open: the panels this build does not implement yet (Optimize,
   Common Library, CSS Properties, Find and Replace, Slices).
-  The tall right-side stack also needs a normal-viewport reachability
-  pass; see [`tasks/T22-screenshot-ui.md`](tasks/T22-screenshot-ui.md).
+  The normal-viewport reachability pass is recorded in
+  [`tasks/T22-screenshot-ui.md`](tasks/T22-screenshot-ui.md).
   — **REACHABILITY MEASURED 2026-11-04**: the stack is now a dock that
   reserves its width rather than a set of floating windows, and the
   capture round measured it — at 1280×800 every open panel is inside
@@ -549,6 +553,8 @@ scope, so no license path is attempted.
   icon set, subset it to the Fireworks verb set, and record the
   attribution rows. Accept: the wasm bundle grows by a documented,
   measured amount and stays under the pinned ceiling.
+
+<!-- /coderabbit-ai-generated:v1 -->
 
 ### Quality gates for UI work (new)
 
