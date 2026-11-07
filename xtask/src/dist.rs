@@ -139,6 +139,89 @@ pub fn native() -> Result<(), String> {
     Ok(())
 }
 
+/// Produces the source archive under `dist/source/` (T27 RP-05): a
+/// `git archive` of the exact HEAD (the tree the gate itself runs on —
+/// not a mutable branch), extracted to a scratch dir and verified by
+/// a clean extraction check (Cargo.toml + Cargo.lock + every workspace
+/// member present, no `source/` Adobe material) and `cargo metadata
+/// --locked` parse inside the extraction. An archive that cannot be
+/// re-extracted into a buildable tree is not shipped.
+pub fn source() -> Result<(), String> {
+    let version = workspace_version()?;
+    let out = workspace_root().join("dist/source");
+    if out.exists() {
+        std::fs::remove_dir_all(&out).map_err(|e| format!("clear {}: {e}", out.display()))?;
+    }
+    std::fs::create_dir_all(&out).map_err(|e| format!("mkdir {}: {e}", out.display()))?;
+    let archive = out.join(format!("FireCraft-{version}-source.tar.gz"));
+
+    // git archive pins the commit identity inside the tar (pax header)
+    // implicitly; the report below names HEAD so the receipt is
+    // attributable to an exact commit even without re-deriving it.
+    run_in(None, "git", &["rev-parse", "HEAD"])?;
+
+    run_in(
+        None,
+        "git",
+        &[
+            "archive",
+            "--format=tar.gz",
+            "--prefix=FireCraft/",
+            "-o",
+            &archive.display().to_string(),
+            "HEAD",
+        ],
+    )?;
+
+    // Verification: clean extract into scratch (outside the tree), then
+    // structural checks + `cargo metadata --locked` in the extraction.
+    let scratch = out.join(".verify");
+    std::fs::create_dir_all(&scratch).map_err(|e| format!("mkdir verify: {e}"))?;
+    run_in(
+        Some(&scratch),
+        "tar",
+        &[
+            "-xzf",
+            &archive.display().to_string(),
+        ],
+    )?;
+    let extracted = scratch.join("FireCraft");
+    for must in ["Cargo.toml", "Cargo.lock", "LICENSE", "crates", "xtask", "web"] {
+        if !extracted.join(must).exists() {
+            return Err(format!("source archive missing {must} after extraction"));
+        }
+    }
+    if extracted.join("source").exists() {
+        return Err("source archive leaked the git-ignored source/ tree".to_owned());
+    }
+    let meta = std::process::Command::new("cargo")
+        .args(["metadata", "--locked", "--format-version", "1", "--no-deps"])
+        .current_dir(&extracted)
+        .output()
+        .map_err(|e| format!("spawn cargo metadata: {e}"))?;
+    if !meta.status.success() {
+        return Err(format!(
+            "cargo metadata failed in extracted source archive:\n{}",
+            String::from_utf8_lossy(&meta.stderr).trim()
+        ));
+    }
+
+    std::fs::remove_dir_all(&scratch).map_err(|e| format!("clean verify scratch: {e}"))?;
+    let digest = sha256_hex_file(&archive)?;
+    eprintln!(
+        "[xtask] dist source: FireCraft-{version}-source.tar.gz ({digest}), \
+         clean-extract + cargo metadata --locked verified"
+    );
+    Ok(())
+}
+
+/// sha256 of a file (hex), same digest form write_manifest uses.
+fn sha256_hex_file(path: &Path) -> Result<String, String> {
+    let bytes =
+        std::fs::read(path).map_err(|e| format!("read {}: {e}", path.display()))?;
+    Ok(sha256_hex(&bytes))
+}
+
 /// Builds the release bundle with trunk and stages a fresh copy under
 /// `dist/web/` — the staging directory starts empty every run, so a
 /// dist artifact can never carry leftovers from an older tree.

@@ -61,6 +61,11 @@ jobs:
       - name: Build web bundle
         run: cargo run --quiet --package xtask -- dist --web
 
+      - name: Build source archive
+        # git archive of the checkout's HEAD (the tag SHA), verified by
+        # clean extraction + `cargo metadata --locked` inside xtask.
+        run: cargo run --quiet --package xtask -- dist --source
+
       - name: Zip web bundle
         env:
           TAG: ${{ github.ref_name }}
@@ -82,6 +87,7 @@ jobs:
             sha256sum "dist/native/firecraft-cli-${TAG#v}-linux-x86_64.tar.gz"
             sha256sum "dist/native/firecraft_${TAG#v}_amd64.deb"
             sha256sum "dist/firecraft-web-${TAG#v}.zip"
+            sha256sum "dist/source/FireCraft-${TAG#v}-source.tar.gz"
             sha256sum dist/native/MANIFEST.sha256
           ) > dist/RELEASE_SHA256.txt
         env:
@@ -97,6 +103,7 @@ jobs:
             dist/native/firecraft_*.deb
             dist/native/MANIFEST.sha256
             dist/firecraft-web-*.zip
+            dist/source/FireCraft-*-source.tar.gz
             dist/RELEASE_SHA256.txt
           retention-days: 5
           # A clean runner has no stale artifacts, but a self-hosted or
