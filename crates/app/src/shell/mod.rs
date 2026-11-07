@@ -179,7 +179,6 @@ pub struct Shell {
     /// position it opened at (the popup re-anchors there each frame,
     /// so a later pointer move does not drag it).
     pub(crate) context_menu: Option<Pos2>,
-<<<<<<< HEAD
     /// In-canvas text editing (20.1): the object being edited and the
     /// live buffer. `Some` while the egui `TextEdit` overlay sits on the
     /// text frame; commit writes `text.setText`, cancel (Esc or
@@ -451,7 +450,6 @@ impl Shell {
             gamma_18: false,
             guide_draft: None,
             context_menu: None,
-<<<<<<< HEAD
             text_edit: None,
             last_filter: None,
             // CS6's fresh-document roster: Properties/Pages/States/
