@@ -177,6 +177,17 @@ impl Shell {
         (left, top, size)
     }
 
+    /// Align the definition's content center with the insertion box center.
+    fn symbol_insert_translation(&self, number: i64) -> (f64, f64) {
+        let (x, y, size) = self.insert_box();
+        self.editor
+            .definition_content_bounds(number)
+            .map_or((x, y), |bounds| {
+                let center = bounds.center();
+                (x + size / 2.0 - center.x, y + size / 2.0 - center.y)
+            })
+    }
+
     /// Window ▸ URL: the selected slice's or hotspot's anchor link
     /// and alt text (`slice.setLink`).
     pub(super) fn url_panel(&mut self, ui: &mut egui::Ui) {
@@ -571,7 +582,7 @@ impl Shell {
                     egui::DragAndDrop::set_payload(ui.ctx(), *number);
                 }
                 if row.clicked() {
-                    let (x, y, _size) = self.insert_box();
+                    let (x, y) = self.symbol_insert_translation(*number);
                     let placed = self.run_command(
                         "symbol.createInstance",
                         serde_json::json!({
@@ -772,6 +783,27 @@ mod tests {
     fn a_missing_link_draft_is_stale() {
         let target = doc::ObjectId::from_parts(1, 0);
         assert!(draft_is_stale(None, target, None, None));
+    }
+
+    #[test]
+    fn symbol_placement_centers_offset_content_on_the_canvas() {
+        let mut shell = super::super::tests::gui_shell(super::super::tests::gui_editor());
+        let id = shell.editor.current_cell().unwrap().elements[0];
+        shell
+            .editor
+            .apply(
+                "symbol.create",
+                serde_json::json!({
+                    "ids": [id], "name": "offset rectangle", "symbol_type": "graphic",
+                }),
+            )
+            .unwrap();
+        let number = shell.editor.document().symbols[0].symbol_number;
+        let bounds = shell.editor.definition_content_bounds(number).unwrap();
+        let (x, y) = shell.symbol_insert_translation(number);
+        let canvas = &shell.editor.document().pages[0].info.canvas;
+        assert_eq!(x + bounds.center().x, canvas.x + canvas.width / 2.0);
+        assert_eq!(y + bounds.center().y, canvas.y + canvas.height / 2.0);
     }
 
     /// A panel-inserted shape carries the placement fields its

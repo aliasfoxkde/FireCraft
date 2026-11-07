@@ -158,7 +158,7 @@ Eighteen have a Window-menu row; five do not.
 
 <!-- coderabbit-ai-generated:v1 -->
 
-<!-- coderabbit-ai-generated-section:v1:0c1446a9b30ab23bd07e88006585270440cb68d1cc11b623a7dd8c298846a8dd -->
+<!-- coderabbit-ai-generated-section:v1:fafccb9d7a47b510bd460b2e19723cfca2dee9e2a8f482cccf8b94df53067946 -->
 
 | Property | CS6 | FireCraft | Verdict | Evidence | Ticket |
 |---|---|---|---|---|---|
@@ -169,10 +169,9 @@ Eighteen have a Window-menu row; five do not.
 | Panels dockable left↔right, collapsible, resizable | yes | resizable + collapsible + reopenable from the Window menu; **not** left↔right movable | **partial** | `S/panel_windows.rs:150` | 22.1 |
 | Dock geometry persists across restart | yes | eframe `persistence` + `ShellLayout` snapshot | **implemented** | `D` 0067/0069, `S/mod.rs` | — |
 | The dock **reserves** width so the canvas shrinks rather than being covered | yes (a dock) | yes — `egui::Panel::right`, 258 pt, scrolling column | **implemented** | `S/panel_windows.rs:154` | 22.5 |
-| Every panel reachable at 1280×800 | yes | Pending the T22 screenshot capture | **evidence-gated** | — | 22.5 / T22 |
+| Every panel reachable at 1280×800 | yes | T22 captures and reachability check complete for the recorded build; dock scroll verified at 1280×400. The newer dock/panel inventory still needs a capture. | **verified for captured build; newer dock evidence-gated** | [T22 receipts](tasks/T22-screenshot-ui.md#receipts--2026-11-04) | 22.5 / T22 |
 
 <!-- /coderabbit-ai-generated:v1 -->
-
 ---
 
 ## D. Property inspector, per selection kind

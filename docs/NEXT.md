@@ -438,7 +438,7 @@ scope, so no license path is attempted.
 
 <!-- coderabbit-ai-generated:v1 -->
 
-<!-- coderabbit-ai-generated-section:v1:19fbbfb1d9d36f65a8dd3a8fe55432b036d9c133916d7f44105247380d2ccdca -->
+<!-- coderabbit-ai-generated-section:v1:42ecf8717bacd73d9fd56477bf4610ea61f6985566267456938b76e4d56354c9 -->
 
 - **22.1 CS6 panel inventory + docking** (L): the left tool dock and
   the right panel stack with the CS6 panel set (Properties, Layers,
@@ -461,9 +461,10 @@ scope, so no license path is attempted.
   to localStorage — and restored at startup, filtered against the
   current panel inventory. The web panels landed 2026-11-04
   (`shell::panels_web`, decision 0069): Auto Shapes, URL, and
-  Behaviors are real panels whose actions are engine commands. Still
-  open: the panels this build does not implement yet (Optimize,
-  Common Library, CSS Properties, Find and Replace, Slices).
+  Behaviors are real panels whose actions are engine commands. The
+  remaining panel surfaces (Optimize, Common Library, CSS Properties,
+  Find and Replace, Slices) landed 2026-11-06; the panel inventory is
+  complete (see `TASKS.md`). Left↔right docking movement remains open.
   The normal-viewport reachability pass is recorded in
   [`tasks/T22-screenshot-ui.md`](tasks/T22-screenshot-ui.md).
   — **REACHABILITY MEASURED 2026-11-04**: the stack is now a dock that
@@ -472,6 +473,7 @@ scope, so no license path is attempted.
   the viewport, and at a deliberately short 1280×400 a wheel over the
   dock moves the stack. The receipts, and the limits of the check, are
   in the ticket.
+
 - **22.2 CS6 tool strip** (M): the CS6 tool set in CS6 order with
   tool flyouts (shape tools, the modify sub-tools, the fill/stroke
   pair, zoom/hand, and the eyedropper), each with an open-license

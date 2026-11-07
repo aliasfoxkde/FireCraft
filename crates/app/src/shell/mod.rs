@@ -2763,7 +2763,7 @@ mod tests {
     }
 
     /// A GUI-shaped session: seeds + drag-created rect + a rename.
-    fn gui_editor() -> Editor {
+    pub(super) fn gui_editor() -> Editor {
         let mut editor = Editor::untitled();
         editor.tool = Tool::Rect;
         editor.begin_drag(geom::Point::new(10.0, 10.0));
@@ -2780,7 +2780,7 @@ mod tests {
     }
 
     /// A shell with scripted dialogs over a memory filesystem.
-    fn gui_shell(editor: Editor) -> Shell {
+    pub(super) fn gui_shell(editor: Editor) -> Shell {
         let dialogs = FixedDialogs {
             steps: "/mem/steps.fwsteps".to_owned(),
             doc: "/mem/doc.fw.png".to_owned(),

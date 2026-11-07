@@ -10,9 +10,9 @@ The canvas supports document navigation, object selection, vector editing, bitma
 
 <!-- coderabbit-ai-generated:v1 -->
 
-<!-- coderabbit-ai-generated-section:v1:5f5ab7bd885498b503df78b9964752671eac3d2e6908011a19a6c175b3417eb3 -->
+<!-- coderabbit-ai-generated-section:v1:280615906579c9e46e7f62eae0d633238bcbeb01e7923dd3f346a2c5d6a81702 -->
 
-The current shell has a left tool area and a resizable right-side dock with a default width of 258 pt, containing a scrolling column of collapsible panel sections. Panel inventory, inspector completeness, and behavior at ordinary viewport sizes remain active work. Some lower panels were only visible in a very tall capture; that is a layout issue, not proof that the normal editor layout is complete.
+The current shell has a left tool area and a resizable right-side dock with a default width of 258 pt, containing a scrolling column of collapsible panel sections. The earlier floating-window layout required very tall captures to see lower panels. [T22](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/tasks/T22-screenshot-ui.md) records all open panels reachable at 1280×800 and working dock scroll at 1280×400. Together with the completed panel inventory in [TASKS.md](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/TASKS.md), this supports reachability at ordinary viewport sizes. The newer dock and inventory still need a fresh capture; inspector completeness and the CS6 chrome audit remain separate work.
 
 <!-- /coderabbit-ai-generated:v1 -->
 

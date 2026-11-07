@@ -158,18 +158,22 @@ Two consequences:
 
 <!-- coderabbit-ai-generated:v1 -->
 
-<!-- coderabbit-ai-generated-section:v1:e4e9ac71ed503310b0af9ac80b9ca85126eaae43b211c4e3c78325ed6ed86089 -->
+<!-- coderabbit-ai-generated-section:v1:16020a4d80f0a856913e0b16d903252ff5c1fa6859d990f9d4ffe1c5dfe0c092 -->
 
 1. The two ids the exe table carried that the Window-menu
    transcription did not — **43421** (Answers) and **35425**
    (What's New) — are **not Window-menu panel rows**. They are
    panels CS6 opens from elsewhere (the Help menu). They are not
    missing menu rows and must not be invented as such.
-2. The CS6 panel set is **twenty-three**, not eighteen. The
-   Window-menu roster below is the eighteen that have a menu row; the
-   other five (Project, Site, Answers, What's New, and Slices) have
-   no Window-menu row. ToolPalette is the workspace name for Tools,
-   which is already included in the eighteen-item Window-menu roster.
+
+2. The total CS6 panel count remains **evidence-gated**. The
+   Window-menu roster below lists eighteen menu entries. Of the
+   additional names previously listed (Project, Site, Answers, What's
+   New, and Slices), the cited sources do not establish a separate
+   **Slices panel**; its existence and parity verdict remain
+   **evidence-gated**, rather than a confirmed missing panel. Do not
+   use that list to assert a settled total. ToolPalette is the
+   workspace name for Tools, already included in the Window-menu roster.
 
 <!-- /coderabbit-ai-generated:v1 -->
 

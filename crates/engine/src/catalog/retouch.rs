@@ -1142,33 +1142,29 @@ mod tests {
             "id": image, "x": 1.5, "y": 0.5,
             "radius": u32::MAX, "strength": 50,
         });
-        assert!(
-            RetouchSharpen
-                .apply_json(&mut document, payload.clone())
-                .is_err()
-        );
-        assert!(
-            RetouchDodge
-                .apply_json(&mut document, payload.clone())
-                .is_err()
-        );
-        assert!(
-            RetouchBurn
-                .apply_json(&mut document, payload.clone())
-                .is_err()
-        );
-        assert!(
-            RetouchReplaceColor
-                .apply_json(
-                    &mut document,
-                    json!({
-                        "id": image, "x": 1.5, "y": 0.5,
-                        "radius": u32::MAX, "strength": 50,
-                        "from_color_raw": 0xFFFF0000_i64, "to_color_raw": 0xFF00FFFF_i64,
-                    })
-                )
-                .is_err()
-        );
+        assert!(matches!(
+            RetouchSharpen.apply_json(&mut document, payload.clone()),
+            Err(EngineError::BadPayload { .. })
+        ));
+        assert!(matches!(
+            RetouchDodge.apply_json(&mut document, payload.clone()),
+            Err(EngineError::BadPayload { .. })
+        ));
+        assert!(matches!(
+            RetouchBurn.apply_json(&mut document, payload.clone()),
+            Err(EngineError::BadPayload { .. })
+        ));
+        assert!(matches!(
+            RetouchReplaceColor.apply_json(
+                &mut document,
+                json!({
+                    "id": image, "x": 1.5, "y": 0.5,
+                    "radius": u32::MAX, "strength": 50,
+                    "from_color_raw": 0xFFFF0000_i64, "to_color_raw": 0xFF00FFFF_i64,
+                })
+            ),
+            Err(EngineError::BadPayload { .. })
+        ));
     }
 
     #[test]
