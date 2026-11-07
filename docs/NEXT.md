@@ -414,9 +414,15 @@ evidence work, tracked outside that campaign.
   is crisp past 100%. **Still open**: `pixels_per_point` (HiDPI)
   plumbing — the scale is zoom-only today.
 - **21.3 Command palette v2** (S after 19.4): fuzzy, recents,
-  save-steps-as-command. — **PARTLY LANDED 2026-10-31** (`4458f3a`):
-  the palette filters by substring (case-insensitive). Still open:
-  fuzzy scoring, recents, save-steps-as-command.
+  save-steps-as-command. — **LANDED 2026-11-07**: substring
+  filtering (`4458f3a`), then fuzzy subsequence scoring with a
+  position bonus (tighter matches outrank spread-out ones), recents
+  (10 most recent successful runs, listed before the catalog on an
+  empty filter) persisted in `ShellLayout` with stale-name
+  dropping, and save-steps-as-command via the History panel's Save
+  Steps…/Replay… (the journal's own `.fwsteps` file). Gates:
+  `palette_fuzzy_scores_subsequences_with_position_bonus`,
+  `palette_recents_round_trip_through_the_layout`.
 - **21.4 Preferences dialog + `pixels_per_point`** (S): **LANDED
   2026-11-07** — Edit ▸ Preferences… opens the dialog; a UI-scale
   drag (0.5×–3×, Reset to platform default) applies to the context

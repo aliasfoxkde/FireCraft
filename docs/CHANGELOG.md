@@ -10,6 +10,11 @@ Current version: **0.2.5**.
 
 ### Features
 
+- **app**: 21.4 preferences dialog with persisted UI scale (bec3032)
+- **app**: 20.5 multi-document tabs, clean raster opens (02c4460)
+- **app**: 20.6 Ctrl+0 Fit Selection and rewind selection tests (c275951)
+- **app**: in-canvas text editing and menu burn-down to 2 inert (ed82eae)
+- **app**: CS6 screen modes, Alt retouch swap, aegis gate (49a4e61)
 - **app**: CS6 tool strip order and flyouts (1203ecc)
 - **app**: right dock column and per-kind inspector (1b10a5d)
 - **app**: CS6 shell fidelity + inert-menu burn-down batches 4-17 (#7) (5fac7a2)
@@ -172,6 +177,7 @@ Current version: **0.2.5**.
 
 ### Fixes
 
+- **app**: wire Ctrl+0 Fit Selection, keymap group counts, fmt (cefe01c)
 - **app**: crisp zoomed canvas, ellipse shape, picker colors (99f254c)
 - **app**: web theme, selection handles, image import placement (9c8f9d6)
 - **ci**: verify dist manifests from their own directory (c61883f)
@@ -263,6 +269,7 @@ Current version: **0.2.5**.
 
 ### Tests
 
+- **engine**: stale-id refusal tests for filter commands (fb3a92f)
 - **app**: editor gesture-surface battery — 30 tests (cbfe7eb)
 - **io**: webp dimension-mismatch + corrected format gates (cb432c4)
 - **io**: gif still-frame + gate battery (1a1b9a4)

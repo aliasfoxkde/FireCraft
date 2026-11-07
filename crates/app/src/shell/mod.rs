@@ -330,6 +330,9 @@ struct ShellLayout {
     /// The user's UI scale (`pixels_per_point`); `None` follows the
     /// platform default.
     ui_scale: Option<f32>,
+    /// The palette's recently-run commands, most recent first.
+    #[serde(default)]
+    palette_recents: Vec<String>,
 }
 
 impl Default for ShellLayout {
@@ -347,6 +350,7 @@ impl Default for ShellLayout {
             show_rulers: false,
             smart_guides: true,
             ui_scale: None,
+            palette_recents: Vec::new(),
         }
     }
 }
@@ -480,6 +484,15 @@ impl Shell {
         self.show_rulers = self.layout.show_rulers;
         self.smart_guides = self.layout.smart_guides;
         self.ui_scale = self.layout.ui_scale;
+        // Recents naming a command this build lacks are dropped —
+        // same rule as the panel inventory above.
+        self.palette.recents = self
+            .layout
+            .palette_recents
+            .iter()
+            .filter(|recent| engine::catalog::ids().contains(&recent.as_str()))
+            .cloned()
+            .collect();
     }
 
     /// Snapshots the live layout fields for `App::save`.
@@ -498,6 +511,7 @@ impl Shell {
             show_rulers: self.show_rulers,
             smart_guides: self.smart_guides,
             ui_scale: self.ui_scale,
+            palette_recents: self.palette.recents.clone(),
         }
     }
 
@@ -3599,7 +3613,84 @@ mod tests {
         ron::ser::to_string(layout).expect("layout encodes")
     }
 
-    /// The palette covers the whole registry: every catalog id is
+    /// The palette's fuzzy scoring is subsequence-based with a
+    /// position bonus: a query need not be a contiguous substring,
+    /// tighter (earlier) matches outrank spread-out ones, and
+    /// non-matches are filtered rather than ranked last. Equal scores
+    /// keep catalog order (stable sort).
+    #[test]
+    fn palette_fuzzy_scores_subsequences_with_position_bonus() {
+        use crate::shell::palette::fuzzy_score as palette_fuzzy_score;
+
+        // Non-contiguous subsequence matches where substring fails.
+        assert!(palette_fuzzy_score("object.setOpacity", "ooc").is_some());
+        assert!(palette_fuzzy_score("object.setOpacity", "xyz").is_none());
+        // Earlier/tighter matches outrank spread-out ones: the query
+        // "sel" sits at positions 7-9 in bitmap.selectRect but 0-2
+        // in selection.save.
+        let spread = palette_fuzzy_score("bitmap.selectRect", "sel").expect("scores");
+        let tight = palette_fuzzy_score("selection.save", "sel").expect("scores");
+        assert!(tight > spread, "tighter match outranks the spread one");
+        // Ranking: the tight match sorts before the spread one.
+        let mut shell = gui_shell(gui_editor());
+        shell.palette.filter = "strect".to_owned();
+        let hits = shell.palette_matches();
+        assert!(
+            hits.contains(&"bitmap.selectRect"),
+            "subsequence hits the intended command: {hits:?}"
+        );
+    }
+
+    /// Recents survive a layout round trip: a successful palette run
+    /// records the command at the front (deduplicated), capture →
+    /// RON → restore carries it, and a stale name a newer build
+    /// dropped from the catalog is discarded rather than resurrected.
+    #[test]
+    fn palette_recents_round_trip_through_the_layout() {
+        let mut shell = gui_shell(gui_editor());
+        assert!(
+            shell.run_palette_command("object.setOpacity"),
+            "the run succeeds on a fresh editor"
+        );
+        shell.palette.record_recent("object.setOpacity");
+        shell.palette.record_recent("autoshape.rect");
+        // Re-running the older recent promotes it and deduplicates.
+        shell.palette.record_recent("object.setOpacity");
+        assert_eq!(shell.palette.recents[0], "object.setOpacity");
+        assert_eq!(shell.palette.recents.len(), 2);
+
+        let saved = shell.capture_layout();
+        let encoded = ron_mid_encoded(&saved);
+        let decoded: ShellLayout = ron::from_str(&encoded).expect("layout decodes");
+        let mut restored = gui_shell(gui_editor());
+        restored.layout = decoded;
+        restored.apply_layout();
+        assert_eq!(restored.palette.recents, shell.palette.recents);
+
+        // A foreign layout naming commands this build lacks: dropped.
+        let mut foreign = shell.capture_layout();
+        foreign
+            .palette_recents
+            .push("command.goneForever".to_owned());
+        let mut restored = gui_shell(gui_editor());
+        restored.layout = foreign;
+        restored.apply_layout();
+        assert!(
+            !restored
+                .palette
+                .recents
+                .iter()
+                .any(|recent| recent == "command.goneForever"),
+            "no stale command names survive apply_layout"
+        );
+
+        // The empty filter lists recents before the catalog.
+        restored.palette.filter.clear();
+        let hits = restored.palette_matches();
+        assert_eq!(&hits[..2], ["object.setOpacity", "autoshape.rect"]);
+        assert_eq!(hits.len(), engine::catalog::ids().len());
+    }
+
     /// reachable by an empty filter, carries a non-null payload
     /// template, and runs without taking the shell down — a command
     /// may refuse (the palette then names the refusal), but it never
@@ -3641,7 +3732,10 @@ mod tests {
 
         shell.palette.filter = "rect".to_owned();
         for name in shell.palette_matches() {
-            assert!(name.to_lowercase().contains("rect"));
+            assert!(
+                crate::shell::palette::fuzzy_score(name, "rect").is_some(),
+                "{name} matches the fuzzy query"
+            );
         }
         assert!(shell.palette_matches().len() < total, "filter narrows");
 

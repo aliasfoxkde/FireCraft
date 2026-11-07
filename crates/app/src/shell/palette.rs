@@ -15,6 +15,30 @@ pub(crate) struct CommandPalette {
     pub(super) open: bool,
     pub(super) filter: String,
     pub(super) selected: usize,
+    /// Recently run commands, most recent first (persisted with the
+    /// layout). Names not in the catalog are dropped on restore.
+    pub(super) recents: Vec<String>,
+}
+
+/// Fuzzy score of `name` against `query`: a subsequence match scored
+/// by how tightly the query characters cluster — a hit at position
+/// `p` earns `SCORE.saturating_sub(p * PENALTY)`, so earlier is
+/// better and a deep spread-out match decays toward the floor.
+/// Returns `None` when `query` is not a subsequence of `name`. Both
+/// sides lowercase before calling.
+pub(crate) fn fuzzy_score(name: &str, query: &str) -> Option<i64> {
+    const SCORE: i64 = 100;
+    const PENALTY: i64 = 10;
+    let name = name.to_lowercase();
+    let mut score = 0i64;
+    let mut cursor = 0usize;
+    for ch in query.chars() {
+        let found = name[cursor..].find(ch)?;
+        let position = cursor + found;
+        score += SCORE.saturating_sub((position as i64) * PENALTY);
+        cursor = position + 1;
+    }
+    Some(score)
 }
 
 impl Shell {
@@ -27,15 +51,50 @@ impl Shell {
         }
     }
 
-    /// The command ids matching the current filter, in catalog order.
+    /// The command ids matching the current filter, best-scored
+    /// first. An empty filter shows the recents, then the catalog in
+    /// order. Ties and unscored names keep catalog order (stable
+    /// sort).
     pub(super) fn palette_matches(&self) -> Vec<&'static str> {
         let query = self.palette.filter.to_lowercase();
-        engine::catalog::ids()
+        let catalog = engine::catalog::ids();
+        if query.is_empty() {
+            // Recents first (deduplicated, catalog-resident only),
+            // then the remaining catalog in order.
+            let mut hits: Vec<&'static str> = self
+                .palette
+                .recents
+                .iter()
+                .filter_map(|recent| catalog.iter().copied().find(|name| name == recent))
+                .collect();
+            for name in &catalog {
+                if !hits.contains(name) {
+                    hits.push(name);
+                }
+            }
+            return hits;
+        }
+        let mut scored: Vec<(i64, usize, &'static str)> = catalog
             .into_iter()
-            .filter(|name| name.contains(query.as_str()))
-            .collect()
+            .enumerate()
+            .filter_map(|(index, name)| fuzzy_score(name, &query).map(|score| (score, index, name)))
+            .collect();
+        scored.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)));
+        scored.into_iter().map(|(_, _, name)| name).collect()
     }
+}
 
+impl CommandPalette {
+    /// Records a successful run at the front of the recents list
+    /// (deduplicated, capped at 10).
+    pub(super) fn record_recent(&mut self, name: &str) {
+        self.recents.retain(|recent| recent != name);
+        self.recents.insert(0, name.to_owned());
+        self.recents.truncate(10);
+    }
+}
+
+impl Shell {
     /// The payload template for one command, drawn from the fuzzdrive
     /// table against the live document.
     pub(super) fn payload_for(&self, name: &str) -> serde_json::Value {
@@ -275,6 +334,9 @@ impl Shell {
                     ui.weak("(no matching command)");
                     return;
                 }
+                if self.palette.filter.is_empty() && !self.palette.recents.is_empty() {
+                    ui.weak("recent:");
+                }
                 if ui.input(|i| i.key_pressed(egui::Key::ArrowDown)) {
                     self.palette.selected = (self.palette.selected + 1).min(names.len() - 1);
                 }
@@ -319,6 +381,7 @@ impl Shell {
             if let Some(name) = names.get(run_index) {
                 let name = *name;
                 if self.run_palette_command(name) {
+                    self.palette.record_recent(name);
                     self.status = format!("palette: {name}");
                 }
             }

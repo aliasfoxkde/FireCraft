@@ -1771,3 +1771,33 @@ placement itself is 22.1's item (recorded, not silently kept).
   Filter* (rows 52/54, rank 14), the F1 grouping mismatch (row 255),
   the 76 unbound keymap rows (row 257), the 3D tool (deliberately not
   carried), the Main toolbar's contents (row 164).
+
+## 2026-11-07 — 21.3 closed: command palette v2 (fuzzy + recents)
+
+The last two open items of 21.3. Save-steps-as-command had already
+landed as the History panel's Save Steps…/Replay… pair (the session
+journal as a `.fwsteps` file, exact inverse of replay by
+construction), so this session added:
+
+- **Fuzzy scoring** (`palette::fuzzy_score`): the query must be a
+  subsequence of the command id (case-insensitive); each hit scores
+  `100 - 10 × position`, so tighter, earlier matches outrank
+  spread-out ones, and ties keep catalog order (stable sort). The
+  old substring filter is a strict subset of this.
+- **Recents**: the 10 most recent *successful* palette runs,
+  deduplicated, re-runs promoting; listed before the catalog on an
+  empty filter under a "recent:" hint. Persisted in `ShellLayout`
+  as `palette_recents` (`#[serde(default)]` — older layouts load
+  fine); names not in the current catalog are dropped on restore,
+  same rule as the panel inventory.
+- CS6-PARITY gap row 13 closed; the parity workflow row unchanged.
+
+### Receipts
+
+- `cargo test -p app --lib palette` — 8 passed (including the two
+  new gates `palette_fuzzy_scores_subsequences_with_position_bonus`
+  and `palette_recents_round_trip_through_the_layout`)
+- `cargo clippy --workspace --all-targets -- -D warnings` — clean
+- Full workspace gate: `cargo run -p xtask -- ci` (background run
+  bagx52wr2)
+
