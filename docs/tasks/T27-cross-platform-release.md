@@ -1,6 +1,6 @@
 # T27 — Cross-platform release engineering and certification
 
-> **Status:** Planned / execution not yet started  
+> **Status:** In progress — RP-00 inventory, RP-05 source/SBOM work, and RP-07 workflow hardening are implemented in PR #9; end-to-end certification remains pending  
 > **Priority:** P0 release infrastructure  
 > **Plan:** [RELEASE-ENGINEERING-PLAN.md](../RELEASE-ENGINEERING-PLAN.md)
 
@@ -11,6 +11,7 @@ Deliver a complete, verifiable FireCraft release for all explicitly supported ta
 ## Inputs and authority
 
 - [Cross-platform release engineering plan](../RELEASE-ENGINEERING-PLAN.md) — authoritative work packages, target matrix, acceptance criteria, and agent protocol.
+- The plan's [MVP v1 candidate lane](../RELEASE-ENGINEERING-PLAN.md#11-mvp-v1-candidate--recommended-first-release-cut) is a proposed reduced first-release scope; maintainer approval is required before changing the full cross-platform acceptance matrix.
 - [Releasing FireCraft](../RELEASING.md) — current release commands and tag procedure.
 - [Toolchains](../TOOLCHAINS.md) — current packaging recipes and verification boundaries.
 - [HANDOFF.md](../HANDOFF.md) — project operating rules and deploy doors.
