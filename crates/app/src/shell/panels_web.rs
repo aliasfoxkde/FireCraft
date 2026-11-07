@@ -571,13 +571,12 @@ impl Shell {
                     egui::DragAndDrop::set_payload(ui.ctx(), *number);
                 }
                 if row.clicked() {
-                    let (x, y, size) = self.insert_box();
+                    let (x, y, _size) = self.insert_box();
                     let placed = self.run_command(
                         "symbol.createInstance",
                         serde_json::json!({
                             "symbol": number,
                             "x": x, "y": y,
-                            "width": size, "height": size,
                             "page": self.editor.page,
                             "layer": self.editor.active_layer(),
                             "cell": self.editor.frame,
