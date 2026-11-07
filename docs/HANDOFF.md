@@ -137,14 +137,14 @@ verifiable.
 ### Current program: Phases 20–22
 
 Phase 19's canvas work and menu wiring campaign (batches 1–17) are
-complete. The live menu census is 2 inert of 294; eight additional rows remain feature- or evidence-gated, with the remaining rows
-tracked as future feature work or evidence gates. Path-node add/delete,
+complete. The live menu census is 2 inert rows of 294; eight other rows have explicit feature/evidence gates and are not considered inert. Path-node add/delete,
 the reachability gate, and the wasm budget re-pin are also complete.
 
-The next UI work is Phase 22: finish the shell against the clean-room
-reference notes and audit it at ordinary viewport sizes. The screenshot
-audit itself is done — the tracked screenshot was replaced on 2026-11-04
-with a capture of the current shell, and the remaining Phase 22 items
+The next UI work is Phase 22.5: finish the CS6 chrome audit against the
+clean-room reference notes. Phase 22.1 (panel inventory) and 22.2 (tool
+strip) are complete in PR #8; screenshot acceptance is complete, and
+22.4 still has evidence-gated bitmap transform/fill-stroke work. The
+remaining Phase 22 items
 are the panel inventory, the tool strip, and the chrome. Phase 20
 contains daily-driver editing features; Phase 21 contains modern
 differentiators.
