@@ -1,13 +1,13 @@
 # FireCraft task board
 
-> **Live ledger.** Last reconciled against `main` at `5fac7a2` on 2026-11-04. Use [`NEXT.md`](NEXT.md) for phase detail and [`tasks/`](tasks/) for task tickets. Historical plans and session notes are not current status sources.
+> **Live ledger.** Reconciled on the PR #8 working branch (2026-11-07), based on `main` at `5fac7a2`. Changes remain unmerged until PR approval. Use [`NEXT.md`](NEXT.md) for phase detail and [`tasks/`](tasks/) for task tickets. Historical plans and session notes are not current status sources.
 
 ## Active
 
 | Priority | Task | Status | Detail |
 |---|---|---|---|
 | P0 | Refresh user-visible CS6 parity matrix | **Done — matrix published** | [T26](tasks/T26-parity-matrix.md) → [`CS6-PARITY.md`](CS6-PARITY.md): every CS6 menu, tool, panel, inspector field set, workflow, import/export surface, canvas interaction, keymap area, and selection state classified with an evidence citation and an owning ticket. The browser-sampling check the ticket named was performed on 2026-11-04 against a fresh optimized bundle and is recorded in T22. |
-| P0 | Phase 22: CS6 shell fidelity and screenshot audit | In progress | [T22](tasks/T22-screenshot-ui.md) — the ticket's own acceptance criteria are met (captures at both viewports, the empty/vector/bitmap state set, the fresh bundle, and the replaced tracked screenshot); what remains is the work other Phase 22 items own: 22.1 panel inventory, 22.2 tool strip, 22.5 chrome. [Phase 22](NEXT.md#phase-22--cs6-shell-fidelity-p0-the-looks-and-acts-like-fireworks-phase) |
+| P0 | Phase 22: CS6 shell fidelity and screenshot audit | In progress | [T22](tasks/T22-screenshot-ui.md) — screenshot acceptance is complete; 22.1 panel inventory and 22.2 tool strip are complete in PR #8; 22.5 chrome remains partial, and 22.4 still has evidence-gated bitmap transform/fill-stroke work. [Phase 22](NEXT.md#phase-22--cs6-shell-fidelity-p0-the-looks-and-acts-like-fireworks-phase) |
 | P1 | Phase 20: daily-driver editing features | **In progress — 20.1 landed** | In-canvas text editing landed 2026-11-06 ([T20](tasks/T20-text-editing.md)); remaining: Optimize, animation timeline, mask stack, tabs, history rewind, slice behavior; [details](NEXT.md#phase-20--daily-driver-features-p1) |
 | P1 | Phase 21: modern differentiators | Queued | Autosave, HiDPI, palette, preferences, accessibility, scripting; [details](NEXT.md#phase-21--modern-differentiators) |
 | P1 | Reconcile live web deployment | Artifact differs | The public manifest's JS/wasm/index hashes differ from local `dist/web`; identify intended deploy and verify it before publishing. See [T18](tasks/T18-release.md). |
