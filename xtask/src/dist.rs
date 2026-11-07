@@ -419,21 +419,15 @@ fn cyclonedx_dependencies(
     Ok(dependencies)
 }
 
-/// Deterministic serial from the locked graph: uuid v5-shaped digest of
-/// the sorted (name, version) list, so the same lockfile yields the
-/// same serial and a dependency change is visible in the identifier.
+/// Deterministic serial from the locked graph: UUIDv8-shaped digest of
+/// the sorted package bom-refs, so source/version changes are reflected
+/// without depending on absolute checkout paths.
 fn uuid_from_graph(packages: &[serde_json::Value]) -> Result<String, String> {
     use sha2::Digest as _;
     let mut names: Vec<String> = packages
         .iter()
-        .map(|p| {
-            format!(
-                "{}@{}",
-                p["name"].as_str().unwrap_or("?"),
-                p["version"].as_str().unwrap_or("?")
-            )
-        })
-        .collect();
+        .map(|package| package_bom_ref(package).map(|(reference, _)| reference))
+        .collect::<Result<_, _>>()?;
     names.sort();
     names.dedup();
     let mut hasher = sha2::Sha256::new();
@@ -1140,7 +1134,7 @@ mod sbom_tests {
             "name": "engine",
             "version": "0.1.0",
             "source": null,
-            "manifest_path": workspace_root().join("crates/engine/Cargo.toml"),
+            "manifest_path": workspace_root().join("crates/engine/Cargo.toml").display().to_string(),
         });
         let (reference, purl) = package_bom_ref(&local).unwrap();
         assert!(reference.starts_with("urn:firecraft:cargo:engine@0.1.0:"));
