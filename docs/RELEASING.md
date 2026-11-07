@@ -1,5 +1,7 @@
 # Releasing FireCraft
 
+> **Full cross-platform release campaign:** the current commands below describe the existing web/Linux-x86_64 release path, not the complete target matrix. For the Windows, macOS, AppImage, DEB, Flatpak, RPM decision, Android feasibility, source archives, SBOM/provenance, signing, CI aggregation, and certification work order, see [`RELEASE-ENGINEERING-PLAN.md`](RELEASE-ENGINEERING-PLAN.md) and tracking ticket [T27](tasks/T27-cross-platform-release.md). Do not infer that a target is supported from a recipe alone.
+
 Everything below is one verb per artifact set, run from a clean tree.
 Artifacts are local; the signing ceremony is the operator's. The repo
 never carries an untested claim of a built artifact — platforms this
