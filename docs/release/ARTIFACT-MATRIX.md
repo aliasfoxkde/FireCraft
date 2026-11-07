@@ -21,7 +21,7 @@
 | Windows ARM64 | any | **unassessed** | — | RP-02 assessment | nothing |
 | macOS universal | DMG | **required, recipe-only** | `firecraft-{v}-macos-universal.dmg` | `packaging/build-macos-dmg.sh` (operator, off-fleet) | parse-checked; **never built**; notarization/signing not configured |
 | Android ARM64 | APK/AAB | **gated feasibility spike (RP-04)** | `FireCraft-{v}-android-arm64.apk` | RP-04 | nothing; no native claim permitted |
-| Web (WASM) | zip bundle | **required, tested** | `firecraft-web-{v}.zip` | `xtask dist --web` (trunk + headless bridge smoke) | built each release; deployed to Cloudflare Pages — **live deployment is stale vs tag (RP-05 reconciliation)** |
+| Web (WASM) | zip bundle | **required, tested** | `firecraft-web-{v}.zip` | `xtask dist --web` (trunk + headless bridge smoke) | built each release; deployed to Cloudflare Pages — **live deployment stale as of 2026-11-06: serves bundle `2274ac8c` vs current-tree `e44296eb`; reconciliation = task #158 (T18), publish action** |
 | WebOS | `appinfo.json` + host page | **required, tested** | (inside web bundle) | `packaging/webos/` | built |
 | Source | tar.gz | **required, tested** | `FireCraft-{v}-source.tar.gz` | `xtask dist --source` (git archive of HEAD; clean-extract + `cargo metadata --locked` verified; wired into release.yml) | built + verified on fleet |
 | Metadata | manifest/checksums | **required, tested** | `MANIFEST.sha256`, `RELEASE_SHA256.txt` | `dist --native` + release.yml | present |
