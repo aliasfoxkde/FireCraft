@@ -28,9 +28,11 @@
   The 18:21 `web/dist/` output was a raw 95,583,065-byte wasm bundle,
   not a release distribution. Neither directory is tracked by Git.
 - **CI evidence:** PR #7's GitForge 8-job receipt and GitHub Actions
-  gate are recorded in the session notes. A clean
-  local `xtask ci` has not been run as part of this documentation
-  audit; see the latest session evidence before relying on those claims.
+  gate are recorded in the session notes. PR #8 review remediation now
+  has targeted regression tests in the branch, but this audit environment
+  cannot execute the Rust suite; the current PR head has no GitHub Actions
+  run/status receipt visible. Do not treat the new tests as passing until
+  the repository CI or a local `cargo run -p xtask -- ci` completes.
 - **Engine and parity:** 245 command IDs (source is authoritative);
   268 carried / 3 partial / 0 missing of the 356 DOM verbs.
 - **Menu reachability:** 4 of 289 rows remain non-dispatching. The
@@ -40,12 +42,11 @@
   feature work or explicit evidence gates. Census source:
   `menus::tests::inert_worklist`; ceiling:
   `menus::tests::inert_count_never_rises`.
-- **Current UI priority:** Phase 22 — the panel inventory (22.1), the
-  tool strip (22.2), and the chrome audit (22.5). The screenshot audit
-  itself is done: the tracked [app screenshot](img/app-main.png) is a
-  fresh 1280×800 capture of the current shell with a vector selection,
-  built and captured on 2026-11-04. See [T22](tasks/T22-screenshot-ui.md)
-  for the receipts and the measured limits.
+- **Current UI priority:** Phase 22.1 (panel inventory) and 22.2
+  (tool strip) are complete in this PR branch; 22.5 (CS6 chrome audit)
+  remains partial. The screenshot acceptance work is complete, with
+  1280×800 and 1920×1080 captures and empty/vector/bitmap states
+  recorded in [T22](tasks/T22-screenshot-ui.md).
 - **Completed foundations:** M0–M15, DOM verb-surface campaign,
   Phases 19.1–19.5, 19.6 menu wiring, and 19b. Three partial DOM
   rows and the other evidence-gated items remain parked pending new
