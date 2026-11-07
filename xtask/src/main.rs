@@ -258,7 +258,8 @@ fn install_pattern_state(root: &std::path::Path) -> Result<ScratchHome, String> 
             Err(error) => return Err(format!("create private Aegis scratch home: {error}")),
         }
     }
-    let home = created.ok_or_else(|| "could not allocate a unique Aegis scratch home".to_owned())?;
+    let home =
+        created.ok_or_else(|| "could not allocate a unique Aegis scratch home".to_owned())?;
     let guard = ScratchHome(home);
     let config = guard.0.join(".config").join("aegis");
     std::fs::create_dir_all(&config).map_err(|e| format!("create {}: {e}", config.display()))?;
@@ -287,7 +288,11 @@ mod tests {
 
         let first = install_pattern_state(&root).unwrap();
         let first_path = first.0.clone();
-        assert!(first_path.join(".config/aegis/pattern-state.json").is_file());
+        assert!(
+            first_path
+                .join(".config/aegis/pattern-state.json")
+                .is_file()
+        );
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
