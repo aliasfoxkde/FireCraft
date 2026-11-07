@@ -22,7 +22,8 @@ the same change**, with the license file physically adjacent to the asset.
 | `docs/research/fireworks-png-nodes.md` | Fireworks Node Types (reverse-engineered node dictionary for the Fireworks PNG format) | davidje13 | [png-analyser](https://github.com/davidje13/png-analyser) `docs/FireworksNodes.md` | MIT ([png-analyser LICENSE](https://github.com/davidje13/png-analyser/blob/main/LICENSE)) |
 | `crates/text/assets/LiberationSans-Regular.ttf` | Liberation Sans (Regular) | Liberation Fonts contributors | [liberation-fonts](https://github.com/liberationfonts/liberation-fonts) 2.1.5 (as packaged in Debian `fonts-liberation`) | SIL Open Font License 1.1 ([adjacent license](../crates/text/assets/LICENSE-OFL.txt)) |
 | `crates/text/assets/LiberationSans-Bold.ttf` | Liberation Sans (Bold) | Liberation Fonts contributors | [liberation-fonts](https://github.com/liberationfonts/liberation-fonts) 2.1.5 (as packaged in Debian `fonts-liberation`) | SIL Open Font License 1.1 ([adjacent license](../crates/text/assets/LICENSE-OFL.txt)) |
-| `assets/icons/*.svg` | Lucide icon set (44 tool/UI icons, recoloured at runtime; the tool-strip icons) | Lucide contributors | [lucide](https://github.com/lucide-icons/lucide) | ISC ([adjacent license](../assets/icons/LICENSE-lucide.txt)) |
+| `assets/icons/*.svg` | Lucide icon set (72 tool/UI icons, recoloured at runtime; the tool-strip icons) | Lucide contributors | [lucide](https://github.com/lucide-icons/lucide) | ISC ([adjacent license](../assets/icons/LICENSE-lucide.txt)) |
+| `assets/icons/slice-knife.svg` | Slice tool glyph — **not** from the Lucide set (Lucide has no `slice-knife` icon); an original drawing of a knife over a cut line | FireCraft contributors | original art | MIT OR Apache-2.0 ([LICENSE](../LICENSE)) |
 
 ## Original assets (made for this repo)
 

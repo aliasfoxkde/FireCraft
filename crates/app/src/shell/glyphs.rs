@@ -48,57 +48,23 @@ pub fn apply_cs6_theme(ctx: &egui::Context) {
 }
 
 /// Display name for a tool (the CS6 tool names).
+///
+/// The names live in [`crate::toolstrip`], next to the strip's order
+/// and the groups they belong to.
 pub(crate) fn tool_label(tool: Tool) -> &'static str {
     match tool {
-        Tool::Pointer => "Pointer",
-        Tool::Subselect => "Subselection",
-        Tool::Rect => "Rectangle",
-        Tool::Ellipse => "Ellipse",
-        Tool::Line => "Line",
-        Tool::Text => "Text",
-        Tool::Zoom => "Zoom",
-        Tool::Hand => "Hand",
-        Tool::Slice => "Rectangle Slice",
-        Tool::Hotspot => "Web Hotspot",
-        Tool::AutoShape(_) => "Auto Shape",
-        Tool::Paintbrush => "Paintbrush",
-        Tool::Pencil => "Pencil",
-        Tool::Eraser => "Eraser",
-        Tool::PaintBucket => "Paint Bucket",
-        Tool::Gradient => "Gradient",
-        Tool::Eyedropper => "Eyedropper",
-        Tool::Marquee => "Marquee",
-        Tool::EllipticalMarquee => "Elliptical Marquee",
-        Tool::Lasso => "Lasso",
-        Tool::PolygonalMarquee => "Polygonal Marquee",
-        Tool::MagicWand => "Magic Wand",
+        Tool::AutoShape(shape) => shape.label(),
+        other => crate::toolstrip::label_of(other),
     }
 }
 
 /// The CS6 one-key select for a tool ("" when unbound here).
+///
+/// CS6 gives a tool *group* one shortcut and cycles through the group
+/// on repeated presses, so every member of a group carries that
+/// group's key.
 pub(crate) fn tool_key(tool: Tool) -> &'static str {
-    match tool {
-        Tool::Pointer => "V",
-        Tool::Rect => "R",
-        Tool::Ellipse => "E",
-        // CS6's keymap gives L to the Lasso tool; the Line tool has
-        // no letter there, so FireCraft gives it O.
-        Tool::Line => "O",
-        Tool::Text => "T",
-        Tool::Zoom => "Z",
-        Tool::Hand => "H",
-        Tool::Paintbrush => "B",
-        Tool::Pencil => "N",
-        Tool::Eraser => "Y",
-        Tool::PaintBucket => "G",
-        Tool::Gradient => "D",
-        Tool::Eyedropper => "I",
-        Tool::Marquee => "M",
-        Tool::Lasso => "L",
-        Tool::PolygonalMarquee => "P",
-        Tool::MagicWand => "W",
-        _ => "",
-    }
+    crate::toolstrip::key_of(tool)
 }
 
 /// Preview glyphs for the Auto Shape flyout: each of the ten

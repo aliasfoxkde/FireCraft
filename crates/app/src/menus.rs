@@ -45,6 +45,13 @@ pub enum Action {
     /// `text.setAttrs` size nudged one step from the current value
     /// (Text ▸ Smaller/Larger; CS6's step is the next preset down/up).
     TextStep(i64),
+    /// `text.setFont` with a family name (Text ▸ Font; the same
+    /// list the inspector's font combo offers).
+    TextFont(&'static str),
+    /// Filters ▸ Repeat Filter: re-applies the last filter preset the
+    /// session applied (menu row or live-filters panel) to the current
+    /// selection. CS6's `dom.applyFilter` repeat behavior.
+    RepeatFilter,
     /// `text.setTextOnPathMode` with a `TAMi` 0..=3 mode.
     TextOnPathMode(i64),
     /// `filter.add` from the Filters menu: the preset's internal name,
@@ -142,6 +149,10 @@ pub enum ShellAction {
     ShowShortcuts,
     /// One-key tool select (the CS6 tool letters).
     PickTool(Tool),
+    /// One-key tool *group* select: CS6 gives a group one shortcut
+    /// and cycles through the group's tools on repeated presses. The
+    /// tool named is the group's leader.
+    PickToolGroup(Tool),
     /// View ▸ Grid ▸ Show Grid — the page overlay.
     ToggleGrid,
     /// View ▸ Grid ▸ Snap to Grid.
@@ -206,6 +217,9 @@ pub enum ShellAction {
     ToggleHidePanels,
     /// Window ▸ Toolbars ▸ Main — the context options bar.
     ToggleMainToolbar,
+    /// The Tools panel's screen-mode control: cycle Standard Screen /
+    /// Full Screen with Menus / Full Screen (fwref 1178–1185).
+    CycleScreenMode,
     /// File ▸ Preview in Browser (primary/secondary/all pages):
     /// export the document to a PNG next to it (or in the temp dir for
     /// an unsaved document) and open it in the system browser.
@@ -231,6 +245,17 @@ pub enum ShellAction {
         /// What to insert.
         what: InsertWebKind,
     },
+    /// Move the state (frame) pointer by a step — the keymap's `,`/`.`
+    /// Frames rows (`cmd_Frame_Previous` / `cmd_Frame_Next`).
+    SelectFrame(i64),
+    /// Move the page pointer by a step — the keymap's PageUp/PageDown
+    /// rows (`cmd_Page_Previous` / `cmd_Page_Next`).
+    SelectPage(i64),
+    /// Enter edit on the selected object: a text object opens the
+    /// in-canvas text overlay; any other selection reports that the
+    /// kind has no editor. The keymap's Text Editor / Edit Image
+    /// Object rows.
+    EditTextSelection,
 }
 
 /// What Edit ▸ Insert lands on the canvas.
@@ -304,6 +329,15 @@ pub enum SelAction {
     SelectParents,
     /// `selection.selectChildren` — expand each selected group.
     SelectChildren,
+    /// Move the selection by whole pixels — the keymap's nudge arrows
+    /// (1 px plain, 10 px big-nudge modifiers; fwref `cmd_Nudge*`,
+    /// `cmd_BigNudge*`).
+    Nudge {
+        /// Horizontal pixels to move.
+        dx: f64,
+        /// Vertical pixels to move.
+        dy: f64,
+    },
     /// `bitmap.selectSimilar` — select matching pixels image-wide.
     SelectSimilar,
     /// `bitmap.feather` — feather the pixel selection.
@@ -1649,12 +1683,27 @@ pub static TEXT: Menu = Menu {
     entries: &[
         Entry::Sub(
             "Font",
-            &[item(
-                35343,
-                "placeholder - do not remove",
-                "",
-                Action::Inert,
-            )],
+            // The families the renderer actually carries; the
+            // inspector's combo offers the same list. CS6 builds this
+            // menu from the system font inventory — a live enumeration
+            // is the evidence gap recorded in CS6-PARITY row 52.
+            &[
+                item(
+                    35343,
+                    "Liberation Sans",
+                    "",
+                    Action::TextFont("Liberation Sans"),
+                ),
+                item(35344, "Arial", "", Action::TextFont("Arial")),
+                item(35345, "Verdana", "", Action::TextFont("Verdana")),
+                item(
+                    35346,
+                    "Times New Roman",
+                    "",
+                    Action::TextFont("Times New Roman"),
+                ),
+                item(35347, "Courier New", "", Action::TextFont("Courier New")),
+            ],
         ),
         Entry::Sub(
             "Size",
@@ -1844,7 +1893,7 @@ pub static COMMANDS: Menu = Menu {
 pub static FILTERS: Menu = Menu {
     label: "Filters",
     entries: &[
-        item(35035, "Repeat Filter", "", Action::Inert),
+        item(35035, "Repeat Filter", "", Action::RepeatFilter),
         Entry::Sep,
         Entry::Sub(
             "Adjust Color",
@@ -1959,7 +2008,12 @@ pub static WINDOW: Menu = Menu {
             Action::Shell(ShellAction::TogglePanel("Properties")),
         ),
         Entry::Sep,
-        item(43409, "Optimize", "", Action::Inert),
+        item(
+            43409,
+            "Optimize",
+            "",
+            Action::Shell(ShellAction::TogglePanel("Optimize")),
+        ),
         item(
             43412,
             "Layers",
@@ -1967,9 +2021,19 @@ pub static WINDOW: Menu = Menu {
             Action::Shell(ShellAction::TogglePanel("Layers")),
         ),
         Entry::Sep,
-        item(45816, "Common Library", "", Action::Inert),
+        item(
+            45816,
+            "Common Library",
+            "",
+            Action::Shell(ShellAction::TogglePanel("Common Library")),
+        ),
         Entry::Sep,
-        item(49125, "CSS Properties", "", Action::Inert),
+        item(
+            49125,
+            "CSS Properties",
+            "",
+            Action::Shell(ShellAction::TogglePanel("CSS Properties")),
+        ),
         Entry::Sep,
         item(
             35798,
@@ -2040,7 +2104,12 @@ pub static WINDOW: Menu = Menu {
             "",
             Action::Shell(ShellAction::TogglePanel("Behaviors")),
         ),
-        item(43402, "Find and Replace", "", Action::Inert),
+        item(
+            43402,
+            "Find and Replace",
+            "",
+            Action::Shell(ShellAction::TogglePanel("Find and Replace")),
+        ),
         Entry::Sep,
         item(
             57650,
@@ -2049,8 +2118,14 @@ pub static WINDOW: Menu = Menu {
             Action::Shell(ShellAction::SingleDocument),
         ),
         item(
+            57651,
+            "Tile Horizontally",
+            "",
+            Action::Shell(ShellAction::SingleDocument),
+        ),
+        item(
             57652,
-            "Tile",
+            "Tile Vertically",
             "",
             Action::Shell(ShellAction::SingleDocument),
         ),
@@ -2134,6 +2209,12 @@ pub const NONE: Mods = Mods {
     alt: false,
     shift: false,
 };
+/// Shift only — the XML's mod 2 rows (Shift+L, Shift+F).
+pub const SHIFT: Mods = Mods {
+    ctrl: false,
+    alt: false,
+    shift: true,
+};
 
 /// One bound key.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -2160,7 +2241,6 @@ pub static SHORTCUTS: &[Shortcut] = &[
     key(CTRL, egui::Key::O, Action::Shell(ShellAction::Open)),
     key(CTRL, egui::Key::S, Action::Shell(ShellAction::Save)),
     key(CTRL_SHIFT, egui::Key::S, Action::Shell(ShellAction::SaveAs)),
-    key(CTRL_SHIFT, egui::Key::R, Action::Shell(ShellAction::Export)),
     // The command palette: every registered engine command, one door.
     key(CTRL, egui::Key::P, Action::Shell(ShellAction::Palette)),
     // Window ▸ Hide Panels — the CS6 Tab toggle.
@@ -2190,8 +2270,6 @@ pub static SHORTCUTS: &[Shortcut] = &[
     key(NONE, egui::Key::Delete, Action::Sel(SelAction::Delete)),
     key(NONE, egui::Key::Backspace, Action::Sel(SelAction::Delete)),
     key(CTRL, egui::Key::A, Action::Shell(ShellAction::SelectAll)),
-    key(CTRL, egui::Key::D, Action::Shell(ShellAction::Deselect)),
-    key(CTRL, egui::Key::M, Action::Sel(SelAction::Hide)),
     // Edit ▸ clipboard
     key(CTRL, egui::Key::C, Action::Shell(ShellAction::Copy)),
     key(CTRL, egui::Key::X, Action::Shell(ShellAction::Cut)),
@@ -2199,7 +2277,7 @@ pub static SHORTCUTS: &[Shortcut] = &[
     // Modify ▸ group
     key(CTRL, egui::Key::G, Action::Sel(SelAction::Group)),
     key(CTRL, egui::Key::U, Action::Sel(SelAction::Ungroup)),
-    key(CTRL_ALT, egui::Key::E, Action::Sel(SelAction::MergeDown)),
+    key(CTRL_SHIFT, egui::Key::E, Action::Sel(SelAction::MergeDown)),
     // View
     key(CTRL, egui::Key::Equals, Action::Shell(ShellAction::ZoomIn)),
     key(CTRL, egui::Key::Minus, Action::Shell(ShellAction::ZoomOut)),
@@ -2219,93 +2297,135 @@ pub static SHORTCUTS: &[Shortcut] = &[
     key(CTRL_ALT_SHIFT, egui::Key::B, Action::TextFlag("bold")),
     key(CTRL_ALT_SHIFT, egui::Key::I, Action::TextFlag("italic")),
     key(CTRL_ALT_SHIFT, egui::Key::U, Action::TextFlag("underline")),
-    // Tools (one-key selects)
+    // Tools: one shortcut per CS6 tool *group*. CS6's help set is
+    // explicit — "To quickly select a hidden tool, repeatedly press
+    // the group keyboard shortcut until the tool you want appears" —
+    // so the letter picks the group's leader and cycles through the
+    // group on repeated presses.
     key(
         NONE,
         egui::Key::V,
-        Action::Shell(ShellAction::PickTool(Tool::Pointer)),
+        Action::Shell(ShellAction::PickToolGroup(Tool::Pointer)),
     ),
     key(
         NONE,
-        egui::Key::R,
-        Action::Shell(ShellAction::PickTool(Tool::Rect)),
+        egui::Key::A,
+        Action::Shell(ShellAction::PickToolGroup(Tool::Subselect)),
     ),
     key(
         NONE,
-        egui::Key::E,
-        Action::Shell(ShellAction::PickTool(Tool::Ellipse)),
+        egui::Key::Q,
+        Action::Shell(ShellAction::PickToolGroup(Tool::Scale)),
     ),
     key(
         NONE,
-        egui::Key::O,
-        Action::Shell(ShellAction::PickTool(Tool::Line)),
+        egui::Key::C,
+        Action::Shell(ShellAction::PickToolGroup(Tool::Crop)),
     ),
-    key(
-        NONE,
-        egui::Key::T,
-        Action::Shell(ShellAction::PickTool(Tool::Text)),
-    ),
-    key(
-        NONE,
-        egui::Key::Z,
-        Action::Shell(ShellAction::PickTool(Tool::Zoom)),
-    ),
-    key(
-        NONE,
-        egui::Key::H,
-        Action::Shell(ShellAction::PickTool(Tool::Hand)),
-    ),
-    key(
-        NONE,
-        egui::Key::B,
-        Action::Shell(ShellAction::PickTool(Tool::Paintbrush)),
-    ),
-    key(
-        NONE,
-        egui::Key::N,
-        Action::Shell(ShellAction::PickTool(Tool::Pencil)),
-    ),
-    key(
-        NONE,
-        egui::Key::Y,
-        Action::Shell(ShellAction::PickTool(Tool::Eraser)),
-    ),
-    key(
-        NONE,
-        egui::Key::G,
-        Action::Shell(ShellAction::PickTool(Tool::PaintBucket)),
-    ),
-    key(
-        NONE,
-        egui::Key::D,
-        Action::Shell(ShellAction::PickTool(Tool::Gradient)),
-    ),
-    key(
-        NONE,
-        egui::Key::I,
-        Action::Shell(ShellAction::PickTool(Tool::Eyedropper)),
-    ),
-    // Pixel-selection tools (CS6's keymap: L is the Lasso; the Line
-    // tool has no letter and carries O here).
     key(
         NONE,
         egui::Key::M,
-        Action::Shell(ShellAction::PickTool(Tool::Marquee)),
+        Action::Shell(ShellAction::PickToolGroup(Tool::Marquee)),
     ),
     key(
         NONE,
         egui::Key::L,
-        Action::Shell(ShellAction::PickTool(Tool::Lasso)),
-    ),
-    key(
-        NONE,
-        egui::Key::P,
-        Action::Shell(ShellAction::PickTool(Tool::PolygonalMarquee)),
+        Action::Shell(ShellAction::PickToolGroup(Tool::Lasso)),
     ),
     key(
         NONE,
         egui::Key::W,
-        Action::Shell(ShellAction::PickTool(Tool::MagicWand)),
+        Action::Shell(ShellAction::PickToolGroup(Tool::MagicWand)),
+    ),
+    key(
+        NONE,
+        egui::Key::B,
+        Action::Shell(ShellAction::PickToolGroup(Tool::Paintbrush)),
+    ),
+    key(
+        NONE,
+        egui::Key::E,
+        Action::Shell(ShellAction::PickToolGroup(Tool::Eraser)),
+    ),
+    key(
+        NONE,
+        egui::Key::R,
+        Action::Shell(ShellAction::PickToolGroup(Tool::Blur)),
+    ),
+    key(
+        NONE,
+        egui::Key::D,
+        Action::Shell(ShellAction::PickToolGroup(Tool::Dodge)),
+    ),
+    key(
+        NONE,
+        egui::Key::S,
+        Action::Shell(ShellAction::PickToolGroup(Tool::RubberStamp)),
+    ),
+    key(
+        NONE,
+        egui::Key::N,
+        Action::Shell(ShellAction::PickToolGroup(Tool::Line)),
+    ),
+    key(
+        NONE,
+        egui::Key::P,
+        Action::Shell(ShellAction::PickToolGroup(Tool::Pen)),
+    ),
+    key(
+        NONE,
+        egui::Key::U,
+        Action::Shell(ShellAction::PickToolGroup(Tool::Rect)),
+    ),
+    key(
+        NONE,
+        egui::Key::T,
+        Action::Shell(ShellAction::PickToolGroup(Tool::Text)),
+    ),
+    key(
+        NONE,
+        egui::Key::O,
+        Action::Shell(ShellAction::PickToolGroup(Tool::Freeform)),
+    ),
+    key(
+        NONE,
+        egui::Key::Y,
+        Action::Shell(ShellAction::PickToolGroup(Tool::Knife)),
+    ),
+    key(
+        NONE,
+        egui::Key::J,
+        Action::Shell(ShellAction::PickToolGroup(Tool::Hotspot)),
+    ),
+    key(
+        NONE,
+        egui::Key::K,
+        Action::Shell(ShellAction::PickToolGroup(Tool::Slice)),
+    ),
+    key(
+        NONE,
+        egui::Key::Num2,
+        Action::Shell(ShellAction::PickToolGroup(Tool::HideShowSlices)),
+    ),
+    key(
+        NONE,
+        egui::Key::I,
+        Action::Shell(ShellAction::PickToolGroup(Tool::Eyedropper)),
+    ),
+    key(
+        NONE,
+        egui::Key::G,
+        Action::Shell(ShellAction::PickToolGroup(Tool::PaintBucket)),
+    ),
+    key(
+        NONE,
+        egui::Key::H,
+        Action::Shell(ShellAction::PickToolGroup(Tool::Hand)),
+    ),
+    key(
+        NONE,
+        egui::Key::Z,
+        Action::Shell(ShellAction::PickToolGroup(Tool::Zoom)),
     ),
     // Help — the shortcut-map panel. Not part of the CS6 keymap
     // (Fireworks had no help binding); F1 is the desktop convention.
@@ -2314,6 +2434,422 @@ pub static SHORTCUTS: &[Shortcut] = &[
         egui::Key::F1,
         Action::Shell(ShellAction::ShowShortcuts),
     ),
+    // ——— Fireworks.xml menu_commands rows not bound above ———
+    // Mod codes in the XML: 0 none / 2 Shift / 4 Ctrl / 5 Ctrl+Shift /
+    // 6 Ctrl+Alt / 7 Ctrl+Alt+Shift; second number is the Windows VK.
+    // Frames / States navigation (2 188 / 2 190 — ',' and '.').
+    key(
+        NONE,
+        egui::Key::Comma,
+        Action::Shell(ShellAction::SelectFrame(-1)),
+    ),
+    key(
+        NONE,
+        egui::Key::Period,
+        Action::Shell(ShellAction::SelectFrame(1)),
+    ),
+    // Text ▸ Align (7 = Ctrl+Alt+Shift): J/C/R + L justify group.
+    key(CTRL_ALT_SHIFT, egui::Key::J, Action::TextJustify(3)),
+    key(CTRL_ALT_SHIFT, egui::Key::C, Action::TextJustify(1)),
+    key(CTRL_ALT_SHIFT, egui::Key::R, Action::TextJustify(2)),
+    key(CTRL_ALT_SHIFT, egui::Key::L, Action::TextJustify(0)),
+    key(CTRL_ALT_SHIFT, egui::Key::S, Action::TextFlag("stretch")),
+    // Select ▸ None / Inverse / Similar / children / parent.
+    key(CTRL, egui::Key::D, Action::Shell(ShellAction::Deselect)),
+    key(
+        CTRL_SHIFT,
+        egui::Key::I,
+        Action::Shell(ShellAction::SelectInverse),
+    ),
+    key(
+        CTRL_ALT_SHIFT,
+        egui::Key::H,
+        Action::Sel(SelAction::SelectParents),
+    ),
+    key(
+        CTRL,
+        egui::Key::ArrowDown,
+        Action::Sel(SelAction::SelectChildren),
+    ),
+    key(
+        CTRL,
+        egui::Key::ArrowUp,
+        Action::Sel(SelAction::SelectParents),
+    ),
+    // Text editor dialog (6 69 = Ctrl+Alt+E): reuse the in-canvas
+    // text overlay — select the text object and enter edit.
+    key(
+        CTRL_ALT,
+        egui::Key::E,
+        Action::Shell(ShellAction::EditTextSelection),
+    ),
+    // Copy selection's slice/link definition (Ctrl+Alt+U).
+    key(
+        CTRL_ALT,
+        egui::Key::U,
+        Action::Shell(ShellAction::ReportGap(
+            "Copy to URL (no URL library surface in this build)",
+        )),
+    ),
+    // Modify ▸ Align / Distribute (5 = Ctrl+Shift).
+    key(CTRL_SHIFT, egui::Key::Num5, Action::Align("centerX")),
+    key(CTRL_SHIFT, egui::Key::Num6, Action::Align("bottom")),
+    key(CTRL_SHIFT, egui::Key::Num4, Action::Align("top")),
+    key(CTRL_SHIFT, egui::Key::Num2, Action::Align("centerY")),
+    key(
+        CTRL_SHIFT,
+        egui::Key::Num7,
+        Action::Distribute("horizontal"),
+    ),
+    key(CTRL_SHIFT, egui::Key::Num9, Action::Distribute("vertical")),
+    key(CTRL_SHIFT, egui::Key::Num3, Action::Align("right")),
+    key(CTRL_SHIFT, egui::Key::Num1, Action::Align("left")),
+    // Pages navigation (4 33/4 34 — PageUp/PageDown).
+    key(
+        CTRL,
+        egui::Key::PageUp,
+        Action::Shell(ShellAction::SelectPage(-1)),
+    ),
+    key(
+        CTRL,
+        egui::Key::PageDown,
+        Action::Shell(ShellAction::SelectPage(1)),
+    ),
+    // Hide / Show selection (4 77 / 6 77).
+    key(CTRL, egui::Key::M, Action::Sel(SelAction::Hide)),
+    key(
+        CTRL_ALT,
+        egui::Key::M,
+        Action::Shell(ShellAction::ShowAllHidden),
+    ),
+    // URL manager panel (5 85).
+    key(
+        CTRL_SHIFT,
+        egui::Key::U,
+        Action::Shell(ShellAction::TogglePanel("URL")),
+    ),
+    // View ▸ Rulers (5 82).
+    key(
+        CTRL_SHIFT,
+        egui::Key::R,
+        Action::Shell(ShellAction::ToggleRulers),
+    ),
+    // Edit ▸ Edit Image Object (4 69) — enter the bitmap edit mode;
+    // this build's equivalent is selecting the bitmap and opening the
+    // text-overlay-free edit path, i.e. focus the image properties.
+    key(
+        CTRL,
+        egui::Key::E,
+        Action::Shell(ShellAction::EditTextSelection),
+    ),
+    // Mask enable/disable (6 75).
+    key(
+        CTRL_ALT,
+        egui::Key::K,
+        Action::Sel(SelAction::EnableMask(true)),
+    ),
+    // Hide Edges (4 72).
+    key(CTRL, egui::Key::H, Action::Shell(ShellAction::ToggleEdges)),
+    // File info (7 70).
+    key(
+        CTRL_ALT_SHIFT,
+        egui::Key::F,
+        Action::Shell(ShellAction::FileInfo),
+    ),
+    // Nudge / big nudge (arrows; 0/2 code, VK 37..40).
+    key(
+        NONE,
+        egui::Key::ArrowLeft,
+        Action::Sel(SelAction::Nudge { dx: -1.0, dy: 0.0 }),
+    ),
+    key(
+        NONE,
+        egui::Key::ArrowRight,
+        Action::Sel(SelAction::Nudge { dx: 1.0, dy: 0.0 }),
+    ),
+    key(
+        NONE,
+        egui::Key::ArrowUp,
+        Action::Sel(SelAction::Nudge { dx: 0.0, dy: -1.0 }),
+    ),
+    key(
+        NONE,
+        egui::Key::ArrowDown,
+        Action::Sel(SelAction::Nudge { dx: 0.0, dy: 1.0 }),
+    ),
+    key(
+        NONE,
+        egui::Key::OpenBracket,
+        Action::Sel(SelAction::Nudge { dx: -10.0, dy: 0.0 }),
+    ),
+    // Duplicate (5 68 = Ctrl+Shift+D).
+    key(CTRL_SHIFT, egui::Key::D, Action::Sel(SelAction::Duplicate)),
+    // Print (4 80) — the print stack is a recorded gap row; Ctrl+P
+    // stays with the command palette, so print has no key here.
+    // Tween instances (7 84).
+    key(
+        CTRL_ALT_SHIFT,
+        egui::Key::T,
+        Action::Sel(SelAction::TweenInstances),
+    ),
+    // Slice guides (7 186 = Ctrl+Alt+Shift+;).
+    key(
+        CTRL_ALT_SHIFT,
+        egui::Key::Semicolon,
+        Action::Shell(ShellAction::ToggleSliceGuides),
+    ),
+    // Grid (4 222 = Ctrl+'), Smart guides (4 220 = Ctrl+`).
+    key(
+        CTRL,
+        egui::Key::Comma,
+        Action::Shell(ShellAction::ToggleGrid),
+    ),
+    key(
+        CTRL,
+        egui::Key::Backtick,
+        Action::Shell(ShellAction::ToggleSmartGuides),
+    ),
+    // Guides show (4 186 = Ctrl+;), snap guides (6 186), lock (5 186).
+    key(
+        CTRL,
+        egui::Key::Semicolon,
+        Action::Shell(ShellAction::ToggleGuides),
+    ),
+    key(
+        CTRL_ALT,
+        egui::Key::Semicolon,
+        Action::Shell(ShellAction::ToggleSnapToGuides),
+    ),
+    key(
+        CTRL_SHIFT,
+        egui::Key::Semicolon,
+        Action::Shell(ShellAction::ToggleGuidesLocked),
+    ),
+    // Snap to grid (6 222 = Ctrl+Alt+').
+    key(
+        CTRL_ALT,
+        egui::Key::Comma,
+        Action::Shell(ShellAction::ToggleSnapToGrid),
+    ),
+    // Tooltips (4 221 = Ctrl+[).
+    key(
+        CTRL,
+        egui::Key::OpenBracket,
+        Action::Shell(ShellAction::ToggleTooltips),
+    ),
+    // Fit selection / fit in window (4 48 / 5 48 — Ctrl+0 / Ctrl+Shift+0).
+    key(
+        CTRL,
+        egui::Key::Num0,
+        Action::Shell(ShellAction::FitSelection),
+    ),
+    key(
+        CTRL_SHIFT,
+        egui::Key::Num0,
+        Action::Shell(ShellAction::FitAll),
+    ),
+    // Close (4 87 = Ctrl+W).
+    key(
+        CTRL,
+        egui::Key::W,
+        Action::Shell(ShellAction::CloseDocument),
+    ),
+    // Rotate 90/180/270 (4 57 / 4 55 / 4 54 — Ctrl+9/7/6).
+    key(CTRL, egui::Key::Num9, Action::Sel(SelAction::Rotate(90.0))),
+    key(CTRL, egui::Key::Num7, Action::Sel(SelAction::Rotate(180.0))),
+    key(CTRL, egui::Key::Num6, Action::Sel(SelAction::Rotate(270.0))),
+    // Clone (6 67 = Ctrl+Alt+C), Duplicate elsewhere above.
+    key(CTRL_ALT, egui::Key::C, Action::Sel(SelAction::Clone)),
+    // Flatten selection (7 90), flatten document (7 69).
+    key(
+        CTRL_ALT_SHIFT,
+        egui::Key::Z,
+        Action::Sel(SelAction::FlattenSelection),
+    ),
+    key(
+        CTRL_ALT_SHIFT,
+        egui::Key::E,
+        Action::Sel(SelAction::FlattenLayers),
+    ),
+    // Paste attributes (7 86) — no attribute-clipboard surface yet.
+    key(
+        CTRL_ALT_SHIFT,
+        egui::Key::V,
+        Action::Shell(ShellAction::ReportGap(
+            "Paste Attributes (no attribute clipboard in this build)",
+        )),
+    ),
+    // Paste inside (6 86 = Ctrl+Alt+V), paste as mask (5 86).
+    key(
+        CTRL_ALT,
+        egui::Key::V,
+        Action::Shell(ShellAction::PasteInside),
+    ),
+    key(
+        CTRL_SHIFT,
+        egui::Key::V,
+        Action::Shell(ShellAction::PasteAsMask),
+    ),
+    // Split (6 74 = Ctrl+Alt+J), join (4 74 = Ctrl+J rebinds to the
+    // boolean union already; CS6's plain Join is the same key).
+    key(CTRL_ALT, egui::Key::J, Action::Sel(SelAction::SplitPaths)),
+    // Mask group (6 71 = Ctrl+Alt+G), convert to paths (6 80),
+    // attach text to path (6 89).
+    key(
+        CTRL_ALT,
+        egui::Key::G,
+        Action::Sel(SelAction::AddMask {
+            mode: "reveal selection",
+        }),
+    ),
+    key(
+        CTRL_ALT,
+        egui::Key::P,
+        Action::Sel(SelAction::ConvertToPaths),
+    ),
+    key(CTRL_ALT, egui::Key::Y, Action::Sel(SelAction::AttachToPath)),
+    // Numeric transform (6 84), transform (4 84 = Ctrl+T: free
+    // transform mode toggle).
+    key(
+        CTRL_ALT,
+        egui::Key::T,
+        Action::Shell(ShellAction::NumericTransform),
+    ),
+    key(
+        CTRL,
+        egui::Key::T,
+        Action::Shell(ShellAction::TransformMode(TransformMode::Scale)),
+    ),
+    // Create image (5 89 = Ctrl+Shift+Y: flatten-flavored insert).
+    key(
+        CTRL_SHIFT,
+        egui::Key::Y,
+        Action::Sel(SelAction::EmptyBitmap),
+    ),
+    // Crop selected object (5 67 = Ctrl+Shift+C).
+    key(
+        CTRL_SHIFT,
+        egui::Key::C,
+        Action::Sel(SelAction::CropDocument),
+    ),
+    // New symbol (4 119 = Ctrl+F8), convert to master row is the
+    // page-master concept this build records as a gap.
+    key(CTRL, egui::Key::F8, Action::Sel(SelAction::NewSymbol)),
+    key(
+        NONE,
+        egui::Key::F8,
+        Action::Shell(ShellAction::ReportGap(
+            "Convert to Master (page-master pages not in this build)",
+        )),
+    ),
+    // Exit image edit (6 68 = Ctrl+Alt+D).
+    key(CTRL_ALT, egui::Key::D, Action::Shell(ShellAction::Deselect)),
+    // Insert layer / frame (2 76 / 2 70 = Shift+L / Shift+F).
+    key(SHIFT, egui::Key::L, Action::Sel(SelAction::NewLayer)),
+    key(SHIFT, egui::Key::F, Action::Sel(SelAction::NewFrame)),
+    // Preview in browser (0 123 F12), secondary (2 123), all pages (4 123).
+    key(
+        NONE,
+        egui::Key::F12,
+        Action::Shell(ShellAction::PreviewInBrowser {
+            secondary: false,
+            all_pages: false,
+        }),
+    ),
+    key(
+        CTRL,
+        egui::Key::F12,
+        Action::Shell(ShellAction::PreviewInBrowser {
+            secondary: true,
+            all_pages: false,
+        }),
+    ),
+    key(
+        CTRL_SHIFT,
+        egui::Key::F12,
+        Action::Shell(ShellAction::PreviewInBrowser {
+            secondary: false,
+            all_pages: true,
+        }),
+    ),
+    // Import (4 82 = Ctrl+R per CS6; this build binds Ctrl+Shift+R to
+    // Export already — CS6's Import key is Ctrl+R, Export Wizard Shift+F12).
+    key(CTRL, egui::Key::R, Action::Shell(ShellAction::Import)),
+    // Export preview (6 88 = Ctrl+Alt+X), export (6 82 = Ctrl+Alt+R).
+    key(
+        CTRL_ALT,
+        egui::Key::X,
+        Action::Shell(ShellAction::ExportPreview),
+    ),
+    key(CTRL_ALT, egui::Key::R, Action::Shell(ShellAction::Export)),
+    // Previous/next selection (6 37 / 6 39 = Ctrl+Alt+arrows) — the
+    // selection-history walk this build reports as a gap row.
+    key(
+        CTRL_ALT,
+        egui::Key::ArrowLeft,
+        Action::Shell(ShellAction::ReportGap(
+            "Previous Selection (selection history not in this build)",
+        )),
+    ),
+    key(
+        CTRL_ALT,
+        egui::Key::ArrowRight,
+        Action::Shell(ShellAction::ReportGap(
+            "Next Selection (selection history not in this build)",
+        )),
+    ),
+];
+
+/// The F1 help window's group layout over `SHORTCUTS` — (title, row
+/// count) pairs whose counts are asserted to sum to `SHORTCUTS.len()`
+/// (`the_shortcut_groups_cover_the_table`), so a table row can never
+/// be silently skipped by the help walker again. This is the fix for
+/// CS6-PARITY's F1 grouping mismatch: the old counts summed to 49
+/// against a 60-row table.
+pub static SHORTCUT_GROUPS: &[(&str, usize)] = &[
+    ("File", 4),
+    ("Command palette", 1),
+    ("Window", 4),
+    ("Edit", 5),
+    ("Clipboard", 3),
+    ("Modify ▸ Group", 3),
+    ("View", 3),
+    ("Modify ▸ Arrange", 4),
+    ("Modify ▸ Combine Paths", 1),
+    ("Text styles", 3),
+    ("Tools (one-key selects)", 25),
+    ("Help", 1),
+    ("States navigation", 2),
+    ("Text ▸ Align", 5),
+    ("Select", 5),
+    ("Edit selection", 1),
+    ("Web", 1),
+    ("Modify ▸ Align / Distribute", 8),
+    ("Pages navigation", 2),
+    ("Hide / Show", 2),
+    ("Panels", 1),
+    ("View ▸ Rulers", 1),
+    ("Bitmap edit", 1),
+    ("Mask", 1),
+    ("View ▸ Edges", 1),
+    ("File Info", 1),
+    ("Nudge", 5),
+    ("Duplicate", 1),
+    ("Animation", 1),
+    ("Guides and grid", 8),
+    ("Fit and close", 3),
+    ("Rotate", 3),
+    ("Clone and flatten", 3),
+    ("Paste variants", 3),
+    ("Combine paths (extra)", 1),
+    ("Mask group and paths", 3),
+    ("Transform", 2),
+    ("Insert", 2),
+    ("Symbols", 2),
+    ("Layers and states", 3),
+    ("Preview in browser", 3),
+    ("Import and export", 3),
+    ("Selection history", 2),
 ];
 
 impl Shortcut {
@@ -2393,6 +2929,7 @@ pub fn action_name(action: Action) -> String {
             ShellAction::About => "About".into(),
             ShellAction::ShowShortcuts => "Shortcut map".into(),
             ShellAction::PickTool(tool) => format!("Tool: {tool:?}"),
+            ShellAction::PickToolGroup(leader) => format!("Tool group: {leader:?}"),
             ShellAction::ToggleGrid => "Show/hide grid".into(),
             ShellAction::ToggleSnapToGrid => "Snap to grid".into(),
             ShellAction::EditGrid => "Edit grid".into(),
@@ -2430,6 +2967,10 @@ pub fn action_name(action: Action) -> String {
             },
             ShellAction::ToggleHidePanels => "Hide/show panels".into(),
             ShellAction::ToggleMainToolbar => "Main toolbar".into(),
+            ShellAction::CycleScreenMode => "Screen mode".into(),
+            ShellAction::SelectFrame(_) => "Go to previous/next state".into(),
+            ShellAction::SelectPage(_) => "Go to previous/next page".into(),
+            ShellAction::EditTextSelection => "Edit selection".into(),
         },
         Action::Sel(sel) => match sel {
             SelAction::Delete => "Delete selection".into(),
@@ -2462,6 +3003,7 @@ pub fn action_name(action: Action) -> String {
             },
             SelAction::SelectParents => "Superselect".into(),
             SelAction::SelectChildren => "Subselect".into(),
+            SelAction::Nudge { .. } => "Nudge selection".into(),
             SelAction::SelectSimilar => "Select similar".into(),
             SelAction::Feather(radius) => format!("Feather {radius}px"),
             SelAction::AdjustPixelSel { what, amount } => {
@@ -2524,6 +3066,8 @@ pub fn action_name(action: Action) -> String {
                 "Larger text".into()
             }
         }
+        Action::TextFont(family) => format!("Font: {family}"),
+        Action::RepeatFilter => "Repeat the last filter".into(),
         Action::TextOnPathMode(mode) => format!("Text on-path mode ({mode})"),
         Action::Filter(preset) => format!("Filter: {preset}"),
         Action::Document(document) => match document {
@@ -2542,7 +3086,7 @@ mod tests {
     /// The highest inert-item count the docs have recorded. The
     /// `inert_count_never_rises` test refuses any regression above it;
     /// when the count falls, ratchet this down to the new number.
-    const INERT_CEILING: usize = 8;
+    const INERT_CEILING: usize = 4;
 
     fn walk(entries: &'static [Entry]) -> Vec<&'static Item> {
         let mut items = Vec::new();
@@ -2595,7 +3139,7 @@ mod tests {
     fn filters_submenu_is_the_panel_registry() {
         assert_eq!(
             FILTERS.entries[0],
-            item(35035, "Repeat Filter", "", Action::Inert)
+            item(35035, "Repeat Filter", "", Action::RepeatFilter)
         );
         let mut menu_names = Vec::new();
         for entry in FILTERS.entries {
@@ -2666,6 +3210,19 @@ mod tests {
         );
     }
 
+    /// The F1 help groups exactly tile `SHORTCUTS` — no row skipped,
+    /// no row shown twice (the CS6-PARITY F1 grouping mismatch fix).
+    #[test]
+    fn the_shortcut_groups_cover_the_table() {
+        let sum: usize = SHORTCUT_GROUPS.iter().map(|(_, count)| count).sum();
+        assert_eq!(
+            sum,
+            SHORTCUTS.len(),
+            "SHORTCUT_GROUPS does not tile SHORTCUTS ({sum} vs {})",
+            SHORTCUTS.len()
+        );
+    }
+
     /// The item total is pinned exactly: it is the CS6 surface the
     /// transcription carries, and the docs quote it alongside the
     /// inert count. A change here means the surface changed —
@@ -2674,8 +3231,75 @@ mod tests {
     fn menu_item_total_is_pinned() {
         let (total, _) = census();
         assert_eq!(
-            total, 289,
+            total, 294,
             "menu item total changed — update the docs that quote it"
+        );
+    }
+
+    /// The Window menu's arrangement trio matches the CS6 resource:
+    /// Cascade (57650), Tile Horizontally (57651, once missing from
+    /// the transcription) and Tile Vertically (57652, once mislabeled
+    /// "Tile"). All three report the single-document limitation
+    /// instead of acting.
+    #[test]
+    fn the_window_arrangement_trio_matches_the_resource() {
+        let window = MENUBAR
+            .iter()
+            .find(|menu| menu.label == "Window")
+            .expect("the bar carries a Window menu");
+        let find = |id: u32| {
+            walk(window.entries)
+                .into_iter()
+                .find(|item| item.id == id)
+                .unwrap_or_else(|| panic!("no Window row {id}"))
+        };
+        assert_eq!(find(57650).label, "Cascade");
+        assert_eq!(find(57651).label, "Tile Horizontally");
+        assert_eq!(find(57652).label, "Tile Vertically");
+        for id in [57650, 57651, 57652] {
+            assert!(matches!(
+                find(id).action,
+                Action::Shell(ShellAction::SingleDocument)
+            ));
+        }
+    }
+
+    /// Text ▸ Font: the resource ships the submenu as a single
+    /// `placeholder - do not remove` popup (CS6 populates it at
+    /// runtime from the system font inventory — `RT_MENU` 128, read
+    /// directly from the resource DLL 2026-11-06). The transcription
+    /// carries five renderer-known families through `text.setFont`,
+    /// the same list the inspector's font combo offers.
+    #[test]
+    fn the_text_font_submenu_dispatches_set_font() {
+        let text = MENUBAR
+            .iter()
+            .find(|menu| menu.label == "Text")
+            .expect("the bar carries a Text menu");
+        let font = text
+            .entries
+            .iter()
+            .find_map(|entry| match entry {
+                Entry::Sub("Font", items) => Some(items),
+                _ => None,
+            })
+            .expect("a Font submenu");
+        let families: Vec<&str> = walk(font)
+            .into_iter()
+            .map(|item| match item.action {
+                Action::TextFont(family) => family,
+                other => panic!("non-TextFont row in Font: {other:?}"),
+            })
+            .collect();
+        assert_eq!(
+            families,
+            [
+                "Liberation Sans",
+                "Arial",
+                "Verdana",
+                "Times New Roman",
+                "Courier New"
+            ],
         );
     }
 
@@ -2752,8 +3376,13 @@ mod tests {
         );
         assert_eq!(
             find(true, false, false, egui::Key::Num0),
-            None,
-            "Ctrl+0 is Fit Selection in CS6 — not wired, must not bind Fit All"
+            Some(&Action::Shell(ShellAction::FitSelection)),
+            "Ctrl+0 is Fit Selection in CS6"
+        );
+        assert_eq!(
+            find(true, true, false, egui::Key::Num0),
+            Some(&Action::Shell(ShellAction::FitAll)),
+            "Ctrl+Shift+0 is Fit All"
         );
     }
 

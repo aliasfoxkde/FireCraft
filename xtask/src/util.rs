@@ -48,7 +48,22 @@ pub fn run(program: &str, args: &[&str]) -> Result<(), String> {
 
 /// Runs a program from `dir` (or the workspace root when `None`).
 pub fn run_in(dir: Option<&std::path::Path>, program: &str, args: &[&str]) -> Result<(), String> {
-    let output = spawn(dir, program, args)?;
+    run_in_with_env(dir, program, args, &[])
+}
+
+/// Runs a program from `dir` with extra environment variables set.
+///
+/// The Aegis gate needs a private `HOME`: the scanner reads its
+/// pattern-suppression state from `$HOME/.config/aegis/`, and the gate
+/// installs the committed suppression there rather than in the
+/// developer's own home.
+pub fn run_in_with_env(
+    dir: Option<&std::path::Path>,
+    program: &str,
+    args: &[&str],
+    envs: &[(&str, &str)],
+) -> Result<(), String> {
+    let output = spawn_with_env(dir, program, args, envs)?;
     if output.status.success() {
         Ok(())
     } else {
@@ -58,6 +73,21 @@ pub fn run_in(dir: Option<&std::path::Path>, program: &str, args: &[&str]) -> Re
             output_tail(&output)
         ))
     }
+}
+
+/// Runs a program from `dir` with extra environment variables and
+/// returns its raw output, whatever its exit status.
+///
+/// The Aegis gate needs this: the scanner exits non-zero when it finds
+/// anything, which is not an error for a gate that filters the findings
+/// itself.
+pub fn capture_with_env(
+    dir: Option<&std::path::Path>,
+    program: &str,
+    args: &[&str],
+    envs: &[(&str, &str)],
+) -> Result<Output, String> {
+    spawn_with_env(dir, program, args, envs)
 }
 
 /// Runs `cargo metadata --no-deps` and parses the JSON document.
@@ -74,8 +104,20 @@ pub fn cargo_metadata() -> Result<serde_json::Value, String> {
 }
 
 fn spawn(dir: Option<&std::path::Path>, program: &str, args: &[&str]) -> Result<Output, String> {
+    spawn_with_env(dir, program, args, &[])
+}
+
+fn spawn_with_env(
+    dir: Option<&std::path::Path>,
+    program: &str,
+    args: &[&str],
+    envs: &[(&str, &str)],
+) -> Result<Output, String> {
     let mut cmd = Command::new(program);
     cmd.args(args);
+    for (key, value) in envs {
+        cmd.env(key, value);
+    }
     match dir {
         Some(d) => cmd.current_dir(d),
         None => cmd.current_dir(workspace_root()),

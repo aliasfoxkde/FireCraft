@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "_comment": "Per-finding Aegis suppressions. The key is pattern:file:content-digest and deliberately omits the line number, so an entry survives every edit that does not touch the matched content. A finding is only listed here after it has been verified to be a false positive; see docs/decisions/0070-aegis-gate-suppression.md.",
+  "entries": [
+    {
+      "pattern": "bearer-token-url",
+      "file": "docs/NEXT.md",
+      "digest": "e2c69d19c5b81831c31fa61fe8fd0b18ce2c7ae21cf1062aadcb8e67b49daf34",
+      "note": "The GitForge API row names the credential file that holds the bearer token. The row describes the credential's location; it contains no token."
+    },
+    {
+      "pattern": "credit-card-amex",
+      "file": "crates/text/tests/layout.rs",
+      "digest": "ae9b46ed1c3eff9a64786a2171b0f694350bb589478b4327f5f82836c23e8da9",
+      "note": "A glyph-position golden value (27.345314025878906). Its 15-digit run matches the Amex shape; it is a float literal, not a card number."
+    },
+    {
+      "pattern": "credit-card-number-generic",
+      "file": "crates/text/tests/layout.rs",
+      "digest": "ae9b46ed1c3eff9a64786a2171b0f694350bb589478b4327f5f82836c23e8da9",
+      "note": "Same float literal as the Amex entry above — the generic rule sees the same digit run."
+    },
+    {
+      "pattern": "xml-external-entity",
+      "file": "crates/io/tests/svgimport.rs",
+      "digest": "f6cfc5faea5abe6ee5bd8667967edfc5cbe43d95f0f04d7a560afb01613823d5",
+      "note": "The 'entity expansion' fixture. The test asserts that the SVG importer refuses an external entity, so the payload must name one."
+    },
+    {
+      "pattern": "security-hardening-xml-external-entity",
+      "file": "crates/io/tests/svgimport.rs",
+      "digest": "f6cfc5faea5abe6ee5bd8667967edfc5cbe43d95f0f04d7a560afb01613823d5",
+      "note": "Same deliberate fixture, seen by the hardening rule."
+    },
+    {
+      "pattern": "xml-external-entity",
+      "file": "packaging/build-macos-dmg.sh",
+      "digest": "7b16906a7de9206c7488979eb86e8393ba62a45c0e769c79cf070a16c1858d49",
+      "note": "The Apple plist doctype ('PUBLIC \"-//Apple//DTD PLIST 1.0//EN\"'). The rule matches the quoted public identifier; the plist declares no entity."
+    },
+    {
+      "pattern": "security-hardening-xml-external-entity",
+      "file": "packaging/build-macos-dmg.sh",
+      "digest": "7b16906a7de9206c7488979eb86e8393ba62a45c0e769c79cf070a16c1858d49",
+      "note": "Same Apple plist doctype, seen by the hardening rule."
+    },
+    {
+      "pattern": "stack-trace-exposure",
+      "file": "infrastructure/docker/ci-rust.Dockerfile",
+      "digest": "17ee41935f062dffb434b86c2a8d432567df47fc5988eb4cf2bbae1b690e4747",
+      "note": "A comment quoting a V8 crash dump observed in CI ('Stacktrace: ptr1=...'). It is documentation of a failure, not a stack trace the build prints."
+    }
+  ]
+}

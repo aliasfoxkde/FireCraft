@@ -14,46 +14,32 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::io::Read as _;
 
 /// Which tool the pointer carries.
+///
+/// The variants follow CS6's Tools panel: the six categories (Select,
+/// Bitmap, Vector, Web, Colors, View) in CS6's own order, with the
+/// flyout members (the tools a group leader hides) as variants of
+/// their own. The strip's order and membership live in
+/// `shell::canvas_ui`; this enum is the vocabulary.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Tool {
+    // ── Select ────────────────────────────────────────────────
     /// Select and inspect whole objects.
     Pointer,
     /// Reach into groups.
     Subselect,
-    /// Drag to create a rectangle.
-    Rect,
-    /// Drag to create an ellipse.
-    Ellipse,
-    /// Drag to create a line (corner to corner).
-    Line,
-    /// Drag to create an empty text frame; characters are typed into
-    /// the properties panel (in-canvas editing lands with text tool
-    /// polish in a later milestone).
-    Text,
-    /// Drag = marquee zoom, click = zoom in, alt-click = zoom out.
-    Zoom,
-    /// Drag to create a foreground slice on the page's Web Layer
-    /// (`slice.create`).
-    Slice,
-    /// Drag to create a link-only hotspot area (`hotspot.create`).
-    Hotspot,
-    /// Drag to pan.
-    Hand,
-    /// Drag to create an Auto Shape with the tool's default
-    /// parameters (shape chosen in the Tools menu).
-    AutoShape(AutoShape),
-    /// Paint with the brush: soft-edged dabs along the drag.
-    Paintbrush,
-    /// Draw with the pencil: hard one-pixel dabs.
-    Pencil,
-    /// Erase with the brush-shaped eraser.
-    Eraser,
-    /// Fill the selection (or the whole image) with the paint color.
-    PaintBucket,
-    /// Drag a linear gradient across the image.
-    Gradient,
-    /// Pick the paint color from the canvas.
-    Eyedropper,
+    /// CS6's Scale tool: drag a rectangle and the selection scales
+    /// to it (`object.scale`).
+    Scale,
+    /// CS6's Skew tool: the modify group's leaning transform
+    /// (`object.skew`).
+    Skew,
+    /// CS6's Distort tool: the modify group's corner pull
+    /// (`object.setQuadrangle`).
+    Distort,
+    /// CS6's Crop tool: drag a rectangle and the page's canvas is
+    /// cropped to it (`document.setDocumentCanvasRect`).
+    Crop,
+    // ── Bitmap: selection ─────────────────────────────────────
     /// Drag a rectangular pixel marquee over an image.
     Marquee,
     /// Drag an elliptical pixel marquee over an image.
@@ -64,6 +50,100 @@ pub enum Tool {
     PolygonalMarquee,
     /// Click to select the pixels that match the one clicked.
     MagicWand,
+    /// CS6's Select Similar: select every pixel near the selection's
+    /// average color (`bitmap.selectSimilar`).
+    SelectSimilar,
+    // ── Bitmap: paint ─────────────────────────────────────────
+    /// Paint with the brush: soft-edged dabs along the drag.
+    Paintbrush,
+    /// Draw with the pencil: hard one-pixel dabs.
+    Pencil,
+    /// Erase with the brush-shaped eraser.
+    Eraser,
+    // ── Bitmap: retouch ───────────────────────────────────────
+    /// CS6's Blur tool (`retouch.blur`).
+    Blur,
+    /// CS6's Sharpen tool (`retouch.sharpen`).
+    Sharpen,
+    /// CS6's Smudge tool (`retouch.smudge`).
+    Smudge,
+    /// CS6's Dodge tool (`retouch.dodge`).
+    Dodge,
+    /// CS6's Burn tool (`retouch.burn`).
+    Burn,
+    /// CS6's Rubber Stamp tool (`retouch.clone`).
+    RubberStamp,
+    /// CS6's Red-eye Removal tool (`retouch.redEye`).
+    RedEyeRemoval,
+    /// CS6's Replace Color tool (`retouch.replaceColor`).
+    ReplaceColor,
+    // ── Vector ────────────────────────────────────────────────
+    /// Drag to create a line (corner to corner).
+    Line,
+    /// CS6's Pen tool: click to plot points, the path runs through
+    /// them (`object.createPolyline`).
+    Pen,
+    /// CS6's Vector Path tool: the Pen group's path editor.
+    VectorPath,
+    /// CS6's Redraw Path tool (`path.redrawPath`).
+    RedrawPath,
+    /// Drag to create a rectangle.
+    Rect,
+    /// Drag to create an ellipse.
+    Ellipse,
+    /// Drag to create an empty text frame; characters are typed into
+    /// the properties panel (in-canvas editing lands with text tool
+    /// polish in a later milestone).
+    Text,
+    /// CS6's Freeform tool: push and pull a path's segments
+    /// (`path.reshapeArea`).
+    Freeform,
+    /// CS6's Reshape Area tool: the Freeform group's area variant.
+    ReshapeArea,
+    /// CS6's Knife tool: cut a path into pieces
+    /// (`path.knifeElementsFromPoint`).
+    Knife,
+    // ── Web ───────────────────────────────────────────────────
+    /// Drag to create a foreground slice on the page's Web Layer
+    /// (`slice.create`).
+    Slice,
+    /// CS6's Polygon Slice tool: click the vertices of a non
+    /// rectangular slice.
+    PolygonSlice,
+    /// Drag to create a rectangular hotspot area (`hotspot.create`).
+    Hotspot,
+    /// CS6's Circle Hotspot tool.
+    CircleHotspot,
+    /// CS6's Polygon Hotspot tool.
+    PolygonHotspot,
+    /// CS6's Hide/Show Slices control
+    /// (`page.setWebObjectsVisibility`).
+    HideShowSlices,
+    // ── Colors ────────────────────────────────────────────────
+    /// Pick the paint color from the canvas.
+    Eyedropper,
+    /// Fill the selection (or the whole image) with the paint color.
+    PaintBucket,
+    /// Drag a linear gradient across the image.
+    Gradient,
+    /// CS6's Default Stroke and Fill Colors control: the selected
+    /// objects take the shell's stroke and fill colors.
+    DefaultStrokeFill,
+    /// CS6's Swap Stroke and Fill Colors control.
+    SwapStrokeFill,
+    /// CS6's No Stroke or Fill control.
+    NoStrokeFill,
+    // ── View ──────────────────────────────────────────────────
+    /// CS6's Toggle Screen Mode control: the document window cycles
+    /// between the standard and full-screen presentations.
+    ToggleScreenMode,
+    /// Drag to pan.
+    Hand,
+    /// Drag = marquee zoom, click = zoom in, alt-click = zoom out.
+    Zoom,
+    /// Drag to create an Auto Shape with the tool's default
+    /// parameters (shape chosen in the Tools menu).
+    AutoShape(AutoShape),
 }
 
 /// The engine's ARGB raw-int color convention (the low 32 bits are
@@ -73,6 +153,19 @@ fn argb_raw(color: [u8; 4]) -> i64 {
         | (u32::from(color[0]) << 16)
         | (u32::from(color[1]) << 8)
         | u32::from(color[2]);
+    i64::from(raw)
+}
+
+/// The path paint convention: `0xAABBGGRR` — alpha high, red low.
+/// The engine's `object.setFill`/`object.setStroke` document the
+/// channel order their rasterizer reads, which is the node
+/// dictionary's ABGR layout; the bitmap commands read ARGB instead
+/// ([`argb_raw`]).
+fn abgr_raw(color: [u8; 4]) -> i64 {
+    let raw = (u32::from(color[3]) << 24)
+        | (u32::from(color[2]) << 16)
+        | (u32::from(color[1]) << 8)
+        | u32::from(color[0]);
     i64::from(raw)
 }
 
@@ -438,6 +531,11 @@ fn drag_class(tool: Tool) -> DragClass {
         | Tool::Text
         | Tool::Slice
         | Tool::Hotspot
+        | Tool::CircleHotspot
+        | Tool::Scale
+        | Tool::Skew
+        | Tool::Distort
+        | Tool::Crop
         | Tool::AutoShape(_) => DragClass::Box,
         Tool::Line => DragClass::Line,
         Tool::Pointer
@@ -454,8 +552,72 @@ fn drag_class(tool: Tool) -> DragClass {
         | Tool::EllipticalMarquee
         | Tool::Lasso
         | Tool::PolygonalMarquee
-        | Tool::MagicWand => DragClass::None,
+        | Tool::MagicWand
+        | Tool::SelectSimilar
+        | Tool::Blur
+        | Tool::Sharpen
+        | Tool::Smudge
+        | Tool::Dodge
+        | Tool::Burn
+        | Tool::RubberStamp
+        | Tool::RedEyeRemoval
+        | Tool::ReplaceColor
+        | Tool::Pen
+        | Tool::VectorPath
+        | Tool::RedrawPath
+        | Tool::Freeform
+        | Tool::ReshapeArea
+        | Tool::Knife
+        | Tool::PolygonSlice
+        | Tool::PolygonHotspot
+        | Tool::HideShowSlices
+        | Tool::DefaultStrokeFill
+        | Tool::SwapStrokeFill
+        | Tool::NoStrokeFill
+        | Tool::ToggleScreenMode => DragClass::None,
     }
+}
+
+/// The quadrangle CS6's Distort tool pulls: the corner nearest the
+/// drag's start travels with the pointer, and its opposite corner
+/// travels with it, so the quad stays a parallelogram — the engine's
+/// transform path carries an affine and refuses anything else.
+///
+/// The corners come back as unit-square percentages of `bounds`, in
+/// the engine's order: top-left, top-right, bottom-right,
+/// bottom-left.
+fn drag_quadrangle(bounds: &geom::Rect, start: geom::Point, current: geom::Point) -> [[f64; 2]; 4] {
+    let (x0, y0, x1, y1) = (bounds.x0, bounds.y0, bounds.x1, bounds.y1);
+    let width = (x1 - x0).abs().max(f64::MIN_POSITIVE);
+    let height = (y1 - y0).abs().max(f64::MIN_POSITIVE);
+    let corners = [
+        (x0, y0), // top-left
+        (x1, y0), // top-right
+        (x1, y1), // bottom-right
+        (x0, y1), // bottom-left
+    ];
+    // The corner the drag grabbed: the nearest one to the press.
+    let mut grabbed = 0usize;
+    let mut best = f64::MAX;
+    for (index, (cx, cy)) in corners.iter().enumerate() {
+        let distance = (cx - start.x).powi(2) + (cy - start.y).powi(2);
+        if distance < best {
+            best = distance;
+            grabbed = index;
+        }
+    }
+    let opposite = (grabbed + 2) % 4;
+    let delta = (current.x - start.x, current.y - start.y);
+    let mut out = [[0.0, 0.0]; 4];
+    for (index, (cx, cy)) in corners.iter().enumerate() {
+        let (px, py) = if index == grabbed || index == opposite {
+            (cx + delta.0, cy + delta.1)
+        } else {
+            (*cx, *cy)
+        };
+        out[index] = [(px - x0) / width, (py - y0) / height];
+    }
+    out
 }
 
 /// How a new pixel selection combines with the active one — CS6's
@@ -520,6 +682,16 @@ pub struct PolygonDraft {
     /// The image the vertices are in.
     pub target: ObjectId,
     /// The vertices, in image pixel coordinates.
+    pub points: Vec<geom::Point>,
+}
+
+/// A page-space path being plotted click by click — CS6's Pen plots
+/// its vertices with clicks, and so do the Polygon Slice and the
+/// Polygon Hotspot ("Click to place the vector points of the
+/// polygon", CS6 Help).
+#[derive(Clone, Debug, PartialEq)]
+pub struct PointDraft {
+    /// The vertices, in page coordinates.
     pub points: Vec<geom::Point>,
 }
 
@@ -787,8 +959,20 @@ pub struct Editor {
     pub stroke: Option<Stroke>,
     /// The pixel selection being drawn, if any.
     pub pixel_selection: Option<PixelSelection>,
+    /// Alt held this frame — the shell passes the modifier through so
+    /// CS6's Alt-hold tool swap can resolve at the dab edge without
+    /// the editor reading the window system.
+    pub alt_held: bool,
     /// The pixel polygon being built, if any.
     pub polygon: Option<PolygonDraft>,
+    /// The page-space path being plotted click by click — CS6's Pen,
+    /// Polygon Slice and Polygon Hotspot all place their vector
+    /// points with clicks.
+    pub draft: Option<PointDraft>,
+    /// CS6's Colors section: the current fill color.
+    pub fill_color: [u8; 4],
+    /// CS6's Colors section: the current stroke color.
+    pub stroke_color: [u8; 4],
     /// The image the active pixel selection belongs to — the
     /// selection plane is document-wide, so the overlay needs to know
     /// which image it is drawn over.
@@ -864,7 +1048,11 @@ impl Editor {
             brush: BrushSettings::default(),
             stroke: None,
             pixel_selection: None,
+            alt_held: false,
             polygon: None,
+            draft: None,
+            fill_color: [0, 0, 0, 255],
+            stroke_color: [0, 0, 0, 255],
             pixel_target: None,
             pixel_mode: PixelSelectMode::Replace,
             wand_tolerance: 32,
@@ -2145,24 +2333,127 @@ impl Editor {
                 )?;
                 true
             }
-            Tool::Slice | Tool::Hotspot => {
+            Tool::Slice | Tool::Hotspot | Tool::CircleHotspot => {
                 // Web objects normalize any-direction drags to a
                 // positive frame and live on the Web Layer — never in
                 // the current cell, so no symbol-scope lift.
-                let command = match drag.tool {
-                    Tool::Slice => "slice.create",
-                    _ => "hotspot.create",
+                let (command, shape) = match drag.tool {
+                    Tool::Slice => ("slice.create", "rect"),
+                    Tool::CircleHotspot => ("hotspot.create", "ellipse"),
+                    _ => ("hotspot.create", "rect"),
                 };
                 self.apply(
                     command,
                     serde_json::json!({
-                        "shape": "rect",
+                        "shape": shape,
                         "x": x.min(drag.current.x), "y": y.min(drag.current.y),
                         "width": width.abs(), "height": height.abs(),
                         "page": self.page,
                         "name": null, "link": null, "alt": null,
                     }),
                 )?;
+                false
+            }
+            Tool::Crop => {
+                // CS6's Crop tool: the page's canvas window moves to
+                // the dragged rectangle, so what falls outside it is
+                // cropped away.
+                self.apply(
+                    "document.setDocumentCanvasRect",
+                    serde_json::json!({
+                        "page": self.page,
+                        "x": x.min(drag.current.x), "y": y.min(drag.current.y),
+                        "width": width.abs().max(1.0),
+                        "height": height.abs().max(1.0),
+                    }),
+                )?;
+                false
+            }
+            Tool::Scale => {
+                // CS6's Scale tool: the selection scales into the
+                // dragged rectangle, anchored at its top-left corner.
+                let ids = self.document().object_selection.clone();
+                let Some(bounds) = union_selection_bounds(self.document(), &ids) else {
+                    return Err(EngineError::InvalidState {
+                        name: "object.scale".to_owned(),
+                        detail: "nothing is selected to scale".to_owned(),
+                    });
+                };
+                let source_width = bounds.width().abs().max(f64::MIN_POSITIVE);
+                let source_height = bounds.height().abs().max(f64::MIN_POSITIVE);
+                self.apply(
+                    "object.scale",
+                    serde_json::json!({
+                        "ids": ids,
+                        "sx": width.abs() / source_width,
+                        "sy": height.abs() / source_height,
+                        "pivot": [x.min(drag.current.x), y.min(drag.current.y)],
+                    }),
+                )?;
+                false
+            }
+            Tool::Freeform | Tool::ReshapeArea => {
+                // CS6's Freeform and Reshape Area: the drag pushes or
+                // pulls the selected path's points.
+                self.reshape_selection(width, height)?;
+                false
+            }
+            Tool::Skew => {
+                // CS6's Skew tool: the drag leans the selection. The
+                // horizontal drag leans it sideways, the vertical one
+                // forward, at half a degree per pixel.
+                let ids = self.document().object_selection.clone();
+                if ids.is_empty() {
+                    return Err(EngineError::InvalidState {
+                        name: "object.skew".to_owned(),
+                        detail: "nothing is selected to skew".to_owned(),
+                    });
+                }
+                self.apply(
+                    "object.skew",
+                    serde_json::json!({
+                        "ids": ids,
+                        "skew_x": (width * 0.5).clamp(-45.0, 45.0),
+                        "skew_y": (height * 0.5).clamp(-45.0, 45.0),
+                        "pivot": null,
+                    }),
+                )?;
+                false
+            }
+            Tool::Distort => {
+                // CS6's Distort tool: the drag pulls a corner of the
+                // selection's quadrangle. The engine's transform path
+                // carries an affine, so only parallelogram quads are
+                // accepted — the opposite corner travels with the
+                // dragged one.
+                let ids = self.document().object_selection.clone();
+                if ids.is_empty() {
+                    return Err(EngineError::InvalidState {
+                        name: "object.setQuadrangle".to_owned(),
+                        detail: "nothing is selected to distort".to_owned(),
+                    });
+                }
+                let Some(bounds) = union_selection_bounds(self.document(), &ids) else {
+                    return Err(EngineError::InvalidState {
+                        name: "object.setQuadrangle".to_owned(),
+                        detail: "the selection has no bounds".to_owned(),
+                    });
+                };
+                let quad = drag_quadrangle(&bounds, drag.start, drag.current);
+                self.apply(
+                    "object.setQuadrangle",
+                    serde_json::json!({
+                        "ids": ids,
+                        "top_left": quad[0], "top_right": quad[1],
+                        "bottom_right": quad[2], "bottom_left": quad[3],
+                    }),
+                )?;
+                false
+            }
+            Tool::RedrawPath => {
+                // CS6's Redraw Path: the drag's trace replaces the
+                // selected path's contour.
+                self.redraw_selected_path(drag.start, drag.current)?;
                 false
             }
             Tool::Pointer
@@ -2179,12 +2470,239 @@ impl Editor {
             | Tool::EllipticalMarquee
             | Tool::Lasso
             | Tool::PolygonalMarquee
-            | Tool::MagicWand => false,
+            | Tool::MagicWand
+            | Tool::SelectSimilar
+            | Tool::Blur
+            | Tool::Sharpen
+            | Tool::Smudge
+            | Tool::Dodge
+            | Tool::Burn
+            | Tool::RubberStamp
+            | Tool::RedEyeRemoval
+            | Tool::ReplaceColor
+            | Tool::Pen
+            | Tool::VectorPath
+            | Tool::Knife
+            | Tool::PolygonSlice
+            | Tool::PolygonHotspot
+            | Tool::HideShowSlices
+            | Tool::DefaultStrokeFill
+            | Tool::SwapStrokeFill
+            | Tool::NoStrokeFill
+            | Tool::ToggleScreenMode => false,
         };
         if created && self.symbol_scope.is_some() {
             self.lift_creation_into_scope(&before)?;
         }
         Ok(())
+    }
+
+    /// The selected path, if the selection holds one.
+    fn selected_path(&self) -> Option<ObjectId> {
+        let document = self.document();
+        self.live_selection()
+            .into_iter()
+            .find(|id| matches!(document.registry.get(*id), Some(ObjectData::Path(_))))
+    }
+
+    /// CS6's Freeform and Reshape Area: the drag pushes or pulls the
+    /// points of the selected path.
+    ///
+    /// # Errors
+    /// The engine refuses the command; the document is untouched.
+    fn reshape_selection(&mut self, dx: f64, dy: f64) -> Result<(), EngineError> {
+        let Some(id) = self.selected_path() else {
+            return Err(EngineError::InvalidState {
+                name: "path.reshapeArea".to_owned(),
+                detail: "no path is selected".to_owned(),
+            });
+        };
+        let Some(bounds) = union_selection_bounds(self.document(), &[id]) else {
+            return Err(EngineError::InvalidState {
+                name: "path.reshapeArea".to_owned(),
+                detail: "the selected path has no bounds".to_owned(),
+            });
+        };
+        self.apply(
+            "path.reshapeArea",
+            serde_json::json!({
+                "id": id,
+                "x0": bounds.x0, "y0": bounds.y0,
+                "x1": bounds.x1, "y1": bounds.y1,
+                "falloff": 0.0,
+                "dx": dx, "dy": dy,
+            }),
+        )
+    }
+
+    /// CS6's Redraw Path: the drag's trace replaces the selected
+    /// path's contour.
+    ///
+    /// # Errors
+    /// The engine refuses the command; the document is untouched.
+    fn redraw_selected_path(
+        &mut self,
+        start: geom::Point,
+        current: geom::Point,
+    ) -> Result<(), EngineError> {
+        let Some(id) = self.selected_path() else {
+            return Err(EngineError::InvalidState {
+                name: "path.redrawPath".to_owned(),
+                detail: "no path is selected".to_owned(),
+            });
+        };
+        let point_count = match self.document().registry.get(id) {
+            Some(ObjectData::Path(path)) => path
+                .contours
+                .first()
+                .map_or(0, |contour| contour.points.len()),
+            _ => 0,
+        };
+        if point_count == 0 {
+            return Err(EngineError::InvalidState {
+                name: "path.redrawPath".to_owned(),
+                detail: "the selected path has no contour".to_owned(),
+            });
+        }
+        self.apply(
+            "path.redrawPath",
+            serde_json::json!({
+                "id": id, "contour": 0,
+                "from": 0, "to": point_count,
+                "points": [
+                    { "x": start.x, "y": start.y },
+                    { "x": current.x, "y": current.y },
+                ],
+            }),
+        )
+    }
+
+    /// CS6's Knife tool: the click cuts the path under the pointer
+    /// into separate objects.
+    ///
+    /// # Errors
+    /// The engine refuses the command; the document is untouched.
+    pub fn knife_at(&mut self, world: geom::Point) -> Result<(), EngineError> {
+        self.apply(
+            "path.knifeElementsFromPoint",
+            serde_json::json!({
+                "from": [world.x, world.y],
+                "tolerance": 4.0,
+            }),
+        )
+    }
+
+    /// CS6's Select Similar tool: the click seeds a selection and
+    /// every similarly colored pixel joins it.
+    ///
+    /// # Errors
+    /// The engine refuses the command; the document is untouched.
+    pub fn select_similar_at(
+        &mut self,
+        world: geom::Point,
+        tolerance: u8,
+    ) -> Result<(), EngineError> {
+        self.begin_pixel_selection(world)?;
+        self.select_similar(tolerance)
+    }
+
+    /// CS6's Hide/Show Slices control: the page's Web Layer toggles.
+    ///
+    /// # Errors
+    /// The engine refuses the command; the document is untouched.
+    pub fn toggle_web_objects(&mut self) -> Result<bool, EngineError> {
+        let page = self.page;
+        let visible = self.document().pages.get(page).is_some_and(|page| {
+            page.layers
+                .layers
+                .iter()
+                .any(|layer| layer.name == "Web Layer" && layer.display)
+        });
+        self.apply(
+            "page.setWebObjectsVisibility",
+            serde_json::json!({ "page": page, "value": !visible }),
+        )?;
+        Ok(!visible)
+    }
+
+    /// CS6's Default Stroke and Fill Colors control: the selected
+    /// objects take the shell's stroke and fill colors.
+    ///
+    /// # Errors
+    /// The engine refuses the command; the document is untouched.
+    pub fn apply_default_stroke_fill(
+        &mut self,
+        fill: [u8; 4],
+        stroke: [u8; 4],
+    ) -> Result<bool, EngineError> {
+        let ids = self.live_selection();
+        if ids.is_empty() {
+            return Ok(false);
+        }
+        for id in ids {
+            self.apply(
+                "object.setFill",
+                serde_json::json!({ "id": id, "color_raw": abgr_raw(fill) }),
+            )?;
+            self.apply(
+                "object.setStroke",
+                serde_json::json!({ "id": id, "color_raw": abgr_raw(stroke) }),
+            )?;
+        }
+        Ok(true)
+    }
+
+    /// CS6's Swap Stroke and Fill Colors control: the selected
+    /// objects' stroke and fill trade places.
+    ///
+    /// # Errors
+    /// The engine refuses the command; the document is untouched.
+    pub fn swap_stroke_fill(&mut self) -> Result<bool, EngineError> {
+        let ids = self.live_selection();
+        if ids.is_empty() {
+            return Ok(false);
+        }
+        for id in ids {
+            let paint = match self.document().registry.get(id) {
+                Some(ObjectData::Path(path)) => path.paint.clone(),
+                _ => None,
+            };
+            let Some(paint) = paint else {
+                continue;
+            };
+            self.apply(
+                "object.setFill",
+                serde_json::json!({ "id": id, "color_raw": paint.stroke_raw }),
+            )?;
+            self.apply(
+                "object.setStroke",
+                serde_json::json!({ "id": id, "color_raw": paint.fill_raw }),
+            )?;
+        }
+        Ok(true)
+    }
+
+    /// CS6's No Stroke or Fill control: the selected objects lose
+    /// both.
+    ///
+    /// # Errors
+    /// The engine refuses the command; the document is untouched.
+    pub fn clear_stroke_fill(&mut self) -> Result<bool, EngineError> {
+        let ids = self.live_selection();
+        if ids.is_empty() {
+            return Ok(false);
+        }
+        for id in ids {
+            self.apply(
+                "object.setFill",
+                serde_json::json!({ "id": id, "color_raw": 0 }),
+            )?;
+            self.apply(
+                "object.setStroke",
+                serde_json::json!({ "id": id, "color_raw": 0 }),
+            )?;
+        }
+        Ok(true)
     }
 
     /// The image under `world` and the point in its own pixel space —
@@ -2325,6 +2843,7 @@ impl Editor {
     fn paint_dab(&mut self, target: ObjectId, point: geom::Point) -> Result<(), EngineError> {
         let brush = self.brush;
         let color_raw = argb_raw(brush.color);
+        let radius = (brush.size / 2).clamp(1, 512);
         let slots = serde_json::json!({
             "edge": brush.edge,
             "shape": brush.shape.wire(),
@@ -2332,7 +2851,22 @@ impl Editor {
             "angle": brush.angle,
             "pressure": brush.pressure,
         });
-        match self.tool {
+        // The stroke's own two ends: Smudge needs the drag's
+        // direction and the Rubber Stamp its sample point.
+        let (stroke_start, stroke_last) = self
+            .stroke
+            .as_ref()
+            .map_or((point, point), |stroke| (stroke.start, stroke.last));
+        // CS6's Alt-hold behavior swap (fwref 3555, 3580): while Alt
+        // is down a retouch pair member paints as its partner. The
+        // active tool never changes — the swap lasts exactly as long
+        // as the hold.
+        let effective = if self.alt_held {
+            crate::toolstrip::alt_variant(self.tool).unwrap_or(self.tool)
+        } else {
+            self.tool
+        };
+        match effective {
             Tool::Pencil => self.apply(
                 "bitmap.pencil",
                 serde_json::json!({
@@ -2346,11 +2880,107 @@ impl Editor {
                 "retouch.eraser",
                 serde_json::json!({
                     "id": target, "x": point.x, "y": point.y,
-                    "radius": (brush.size / 2).clamp(1, 512),
+                    "radius": radius,
                     "strength": brush.strength,
                     "brush": slots,
                 }),
             ),
+            Tool::Blur => self.apply(
+                "retouch.blur",
+                serde_json::json!({
+                    "id": target, "x": point.x, "y": point.y,
+                    "radius": radius,
+                    "strength": brush.strength,
+                    "brush": slots,
+                }),
+            ),
+            Tool::Sharpen => self.apply(
+                "retouch.sharpen",
+                serde_json::json!({
+                    "id": target, "x": point.x, "y": point.y,
+                    "radius": radius,
+                    "strength": brush.strength,
+                    "brush": slots,
+                }),
+            ),
+            Tool::Dodge => self.apply(
+                "retouch.dodge",
+                serde_json::json!({
+                    "id": target, "x": point.x, "y": point.y,
+                    "radius": radius,
+                    "strength": brush.strength,
+                    "brush": slots,
+                }),
+            ),
+            Tool::Burn => self.apply(
+                "retouch.burn",
+                serde_json::json!({
+                    "id": target, "x": point.x, "y": point.y,
+                    "radius": radius,
+                    "strength": brush.strength,
+                    "brush": slots,
+                }),
+            ),
+            Tool::Smudge => {
+                // The engine refuses a zero smear direction: the dab
+                // takes the pointer's travel, falling back to the
+                // stroke's own travel for the first dab.
+                let (mut dx, mut dy) = (point.x - stroke_last.x, point.y - stroke_last.y);
+                if dx == 0.0 && dy == 0.0 {
+                    dx = point.x - stroke_start.x;
+                    dy = point.y - stroke_start.y;
+                }
+                if dx == 0.0 && dy == 0.0 {
+                    dx = 1.0;
+                }
+                self.apply(
+                    "retouch.smudge",
+                    serde_json::json!({
+                        "id": target, "x": point.x, "y": point.y,
+                        "radius": radius,
+                        "strength": brush.strength,
+                        "dx": dx.round() as i32, "dy": dy.round() as i32,
+                        "brush": slots,
+                    }),
+                )
+            }
+            Tool::RubberStamp => self.apply(
+                "retouch.clone",
+                serde_json::json!({
+                    "id": target,
+                    "source_x": stroke_start.x, "source_y": stroke_start.y,
+                    "target_x": point.x, "target_y": point.y,
+                    "radius": radius,
+                    "brush": slots,
+                }),
+            ),
+            Tool::RedEyeRemoval => self.apply(
+                "retouch.redEye",
+                serde_json::json!({
+                    "id": target, "x": point.x, "y": point.y,
+                    "radius": radius,
+                    "brush": slots,
+                }),
+            ),
+            Tool::ReplaceColor => {
+                // CS6's Replace Color: the color under the pointer is
+                // the one that goes, the paint color is what lands.
+                let from = self
+                    .sample_color(target, point)
+                    .map(argb_raw)
+                    .unwrap_or(color_raw);
+                self.apply(
+                    "retouch.replaceColor",
+                    serde_json::json!({
+                        "id": target, "x": point.x, "y": point.y,
+                        "radius": radius,
+                        "strength": brush.strength,
+                        "from_color_raw": from,
+                        "to_color_raw": color_raw,
+                        "brush": slots,
+                    }),
+                )
+            }
             _ => self.apply(
                 "bitmap.brush",
                 serde_json::json!({
@@ -2362,6 +2992,21 @@ impl Editor {
                 }),
             ),
         }
+    }
+
+    /// The color of the pixel at `point` inside the image `target` —
+    /// the eyedropper's read, and Replace Color's "color that goes".
+    fn sample_color(&self, target: ObjectId, point: geom::Point) -> Option<[u8; 4]> {
+        let data = self.document().registry.get(target)?;
+        let ObjectData::Image(image) = data else {
+            return None;
+        };
+        // The point is inside the image's bounds (the hit test said
+        // so), so the floor fits an `i64` and the cast saturates
+        // rather than wrapping.
+        let x = point.x.floor() as i64;
+        let y = point.y.floor() as i64;
+        engine::bitmap::sample_pixel(image, &self.document().tiles, x, y)
     }
 
     /// Paints the gradient the drag described: the stroke's two
@@ -2405,16 +3050,7 @@ impl Editor {
     #[must_use]
     pub fn pick_color(&mut self, world: geom::Point) -> Option<[u8; 4]> {
         let (target, point) = self.paint_target(world)?;
-        let data = self.document().registry.get(target)?;
-        let ObjectData::Image(image) = data else {
-            return None;
-        };
-        // The point is inside the image's bounds (the hit test said
-        // so), so the floor fits an `i64` and the cast saturates
-        // rather than wrapping.
-        let x = point.x.floor() as i64;
-        let y = point.y.floor() as i64;
-        let color = engine::bitmap::sample_pixel(image, &self.document().tiles, x, y)?;
+        let color = self.sample_color(target, point)?;
         self.brush.color = color;
         Some(color)
     }
@@ -2607,6 +3243,98 @@ impl Editor {
                 "id": draft.target, "points": points, "mode": mode,
             }),
         )?;
+        Ok(true)
+    }
+
+    /// Adds a vertex to the path being plotted. CS6's Pen, Polygon
+    /// Slice and Polygon Hotspot all place their points with clicks,
+    /// one click each.
+    pub fn add_draft_point(&mut self, world: geom::Point) {
+        match self.draft.as_mut() {
+            Some(draft) => draft.points.push(world),
+            None => {
+                self.draft = Some(PointDraft {
+                    points: vec![world],
+                });
+            }
+        }
+    }
+
+    /// Commits the plotted path: the Pen's polyline, a polygon slice
+    /// or a polygon hotspot. A refused commit keeps the draft, so the
+    /// next click adds the point that was missing.
+    ///
+    /// # Errors
+    /// The engine refuses the creation; the document is untouched.
+    pub fn commit_draft(&mut self) -> Result<bool, EngineError> {
+        let Some(draft) = self.draft.as_ref() else {
+            return Ok(false);
+        };
+        let minimum = match self.tool {
+            Tool::Pen => 2,
+            Tool::PolygonSlice | Tool::PolygonHotspot => 3,
+            _ => return Ok(false),
+        };
+        if draft.points.len() < minimum {
+            return Ok(false);
+        }
+        let Some(draft) = self.draft.take() else {
+            return Ok(false);
+        };
+        let points: Vec<[f64; 2]> = draft
+            .points
+            .iter()
+            .map(|point| [point.x, point.y])
+            .collect();
+        match self.tool {
+            Tool::Pen => {
+                self.apply(
+                    "object.createPolyline",
+                    serde_json::json!({
+                        "points": points,
+                        "closed": false,
+                        "page": self.page,
+                        "layer": self.active_layer(),
+                        "cell": self.frame,
+                        "name": null,
+                    }),
+                )?;
+            }
+            Tool::PolygonSlice | Tool::PolygonHotspot => {
+                let command = if self.tool == Tool::PolygonSlice {
+                    "slice.create"
+                } else {
+                    "hotspot.create"
+                };
+                let mut x = f64::MAX;
+                let mut y = f64::MAX;
+                let mut right = f64::MIN;
+                let mut bottom = f64::MIN;
+                let anchors: Vec<serde_json::Value> = draft
+                    .points
+                    .iter()
+                    .map(|point| {
+                        x = x.min(point.x);
+                        y = y.min(point.y);
+                        right = right.max(point.x);
+                        bottom = bottom.max(point.y);
+                        serde_json::json!({ "x": point.x, "y": point.y })
+                    })
+                    .collect();
+                self.apply(
+                    command,
+                    serde_json::json!({
+                        "shape": "polygon",
+                        "x": x, "y": y,
+                        "width": right - x, "height": bottom - y,
+                        "points": anchors,
+                        "page": self.page,
+                        "name": null, "link": null, "alt": null,
+                    }),
+                )?;
+            }
+            _ => {}
+        }
         Ok(true)
     }
 
