@@ -1,11 +1,13 @@
 # AGENTS.md — FireCraft operating manual
 
-How any agent (or human) works in this repo. Start at
-`docs/HANDOFF.md` (state snapshot + the active phased plan + runbooks);
-the master plan is `docs/PLANNING.md`, roadmap and closed milestone
-tickets live in `docs/planning/firecraft/`, live status in
-`docs/PROGRESS.md`. Read those before your first change; this file is
-the day-to-day rules.
+How any agent (or human) works in this repo. This is the operating
+manual. Start here, then read `docs/TASKS.md` for active work,
+`docs/NEXT.md` for phase criteria, and `docs/HANDOFF.md` for the
+current snapshot and operational runbooks. The master plan is
+`docs/PLANNING.md`; closed milestone tickets live in
+`docs/planning/firecraft/`. When snapshots conflict, current source,
+tests, and generated evidence take precedence; reconcile the docs in
+the same change rather than choosing whichever copy looks newest.
 
 ## What FireCraft is
 
@@ -46,7 +48,7 @@ L0  fwpng geom color raster     # foundations — zero cross-deps
 L1  doc                         # document model
 L2  vector filters text ops     # feature engines
 L3  compose gpu engine          # rendering + orchestration
-L4  io                          # import/export codecs
+L4  io scripting webexport     # import/export codecs + scripting/web export
 L5  app app-cli automation      # shells
 L6  testkit                     # test-only, may depend on anything
 L7  xtask                       # verification tooling
@@ -107,6 +109,13 @@ contract is "untrusted bytes must never panic".
 parsed, round-trip identity, wasm-clean crates). A floor moves up, never
 down. Lowering one means the milestone that set it regressed — fix that
 instead.
+
+## Claude Code session and task-list isolation
+
+- Do not set `CLAUDE_CODE_TASK_LIST_ID` globally, in shell startup files, or in tracked project settings as a convenience.
+- Use Claude Code's default session task list unless deliberate cross-session/project sharing has been explicitly requested.
+- If a project-local task-list ID is needed, configure it only in an ignored local settings file and confirm the effective setting and working directory with Claude Code `/status`.
+- If `TaskList` shows tasks from another repository, stop before modifying them. Check the current working directory, parent-shell environment, wrapper environment files, and loaded settings. Do not delete or rewrite task-list storage to hide the symptom.
 
 ## Workflow
 
