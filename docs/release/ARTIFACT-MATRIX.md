@@ -1,8 +1,8 @@
 # Release artifact matrix — RP-00 inventory (T27)
 
-> Status: inventory of **current** outputs as of 2026-11-06, baseline
-> `5fac7a2` + T27 plan commit. Recipe ≠ built ≠ installed ≠ launched ≠
-> published — states are tracked separately and never collapsed.
+> Status: inventory of implementation and verification evidence as of 2026-11-07.
+> The implementation branch is based on `5fac7a2`; recipe ≠ built ≠ installed
+> ≠ launched ≠ published — states are tracked separately and never collapsed.
 > Authority: [RELEASE-ENGINEERING-PLAN.md](../RELEASE-ENGINEERING-PLAN.md).
 
 ## Target matrix
@@ -41,12 +41,14 @@
   is primary.
 - Recipes (operator-owned, off-fleet per `packaging/TOOLCHAINS.md`):
   `build-windows.ps1`, `build-macos-dmg.sh`, `build-appimage.sh`.
-- Missing entirely: Android, provenance/attestation, signing config
-  (no credentials — see secrets inventory), tag-driven fail-closed
-  aggregate job, install/launch smoke on packaged artifacts.
-  (Flatpak recipe landed RP-01; RPM declined by
-  [decision 0070](../decisions/0070-rpm-deferred.md); source archive
-  and SBOM landed RP-05/RP-06.)
+- Still missing or incomplete: native Android build; provenance/attestation;
+  signing configuration (no credentials); target-native install/launch
+  smoke for every recipe-built package; and a successful end-to-end tag
+  release run. The tag workflow now includes a fail-closed artifact
+  aggregate and draft-release upload. Flatpak remains recipe-only;
+  RPM is explicitly deferred by [decision 0070](../decisions/0070-rpm-deferred.md).
+  Source archive and CycloneDX SBOM generation are implemented and wired
+  into the tag workflow, but still require an end-to-end release run.
 
 ## Known gaps against RP-00 acceptance
 
@@ -58,11 +60,13 @@
    pending. macOS DMG remains operator-recipe-only.
 2. ~~DEB has no clean-VM install/upgrade/remove test~~ — closed 2026-11-06: clean-container smoke passed (Debian 12; install/functional/reinstall/remove/purge), and `dist --native` now fail-closes on a control-file libc6 floor below the binaries' real GLIBC requirement.
 3. Live web deployment not reconciled with a release bundle.
-4. No source archive recipe.
-5. No SBOM/provenance/signature pipeline.
-6. Release workflow aggregates 5 assets without a required/optional
-   matrix or fail-closed validation of naming/version/digests.
-7. No RPM decision recorded.
+4. Source archive generation exists and is wired into the tag workflow;
+   validate it on an actual tagged release.
+5. CycloneDX SBOM generation exists; provenance and signing remain open.
+6. The tag workflow validates the required eight-asset aggregate and
+   recorded digests; execute an end-to-end tag run before certification.
+7. RPM is explicitly deferred by decision 0070; no RPM package is planned
+   for MVP v1.
 
 ## Toolchain / secrets inventory
 
