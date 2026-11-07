@@ -389,8 +389,15 @@ evidence work, tracked outside that campaign.
 - **20.3 Animation timeline** (M): frames strip, per-frame timing,
   onion skinning, `symbol.tween`.
 - **20.4 Mask stack UI** (M): add/remove/mode/link/move.
-- **20.5 Multi-document tabs** (M). Window-menu panel toggles landed in
-  Phase 19.6 batches 3 and 10.
+- **20.5 Multi-document tabs** (M): **LANDED 2026-11-07** — Open/New
+  park the active document as a `DocTab`; Close promotes the newest
+  parked tab (refuses dirty documents); the tab strip shows the
+  active doc plus parked tabs, click to switch, a dot marks unsaved
+  edits. Gate: `open_parks_the_previous_document`,
+  `activate_tab_swaps_state`, `close_promotes_the_last_parked_tab`,
+  `new_parks_the_current_document`,
+  `close_refuses_a_dirty_document`. (Window-menu panel toggles landed
+  in Phase 19.6 batches 3 and 10.)
 - **20.6 History panel click-to-rewind** (S): journal replay to seq N.
 - **20.7 Slice/hotspot behavior editing + HTML preview** (M).
 

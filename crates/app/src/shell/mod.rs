@@ -196,6 +196,24 @@ pub struct Shell {
     /// mutates the shell — without one, a bridge-loaded document sat
     /// behind a stale untitled canvas until the next input event.
     ctx: Option<egui::Context>,
+    /// Background document tabs (20.5). The active document lives in
+    /// the shell's own `editor`/`view`/`raster`/`doc_name`/`doc_path`
+    /// fields; switching swaps those with the parked tab's, so every
+    /// existing code path keeps operating on "the current document"
+    /// unchanged.
+    tabs: Vec<DocTab>,
+}
+
+/// One parked (background) document tab: the state that must survive
+/// switching away — the editing core, its view, the cached raster, and
+/// the file identity the tab strip and save path read.
+struct DocTab {
+    editor: Editor,
+    view: View,
+    raster: Option<(TextureHandle, (usize, usize, usize))>,
+    raster_scale: f64,
+    doc_name: String,
+    doc_path: Option<String>,
 }
 
 /// In-canvas text editing (20.1): the live editor state for one text
@@ -410,6 +428,7 @@ impl Shell {
             screen_mode: ScreenMode::Standard,
             layout: ShellLayout::default(),
             ctx: None,
+            tabs: Vec::new(),
         }
     }
 
@@ -530,6 +549,44 @@ impl Shell {
         )
     }
 
+    /// Parks the active document as a new tab and swaps in `tab`'s
+    /// state. This is the whole switch mechanic: the active fields
+    /// (`editor`, `view`, `raster`, …) are canonical, so a switch is
+    /// a mutual exchange with the parked slot. The transient
+    /// `Editor::untitled()` placeholders exist only between the two
+    /// `replace`s and are both overwritten before the call returns.
+    fn activate_tab(&mut self, index: usize) {
+        if index >= self.tabs.len() {
+            return;
+        }
+        let active = DocTab {
+            editor: std::mem::replace(&mut self.editor, Editor::untitled()),
+            view: self.view,
+            raster: self.raster.take(),
+            raster_scale: self.raster_scale,
+            doc_name: std::mem::take(&mut self.doc_name),
+            doc_path: self.doc_path.take(),
+        };
+        let parked = std::mem::replace(
+            &mut self.tabs[index],
+            DocTab {
+                editor: active.editor,
+                view: active.view,
+                raster: active.raster,
+                raster_scale: active.raster_scale,
+                doc_name: active.doc_name,
+                doc_path: active.doc_path,
+            },
+        );
+        self.editor = parked.editor;
+        self.view = parked.view;
+        self.raster = parked.raster;
+        self.raster_scale = parked.raster_scale;
+        self.doc_name = parked.doc_name;
+        self.doc_path = parked.doc_path;
+        self.status = format!("switched to {}", self.doc_name);
+    }
+
     /// File → Open through the injected traits. A Fireworks PNG
     /// opens as a document; any other supported raster opens as a
     /// document sized to the image — one door, no guessing.
@@ -565,9 +622,19 @@ impl Shell {
         match Editor::open(&bytes) {
             Ok(editor) => {
                 self.status = format!("opened {path}");
+                // Park the previous document rather than dropping it
+                // (20.5 multi-document tabs).
+                let previous = DocTab {
+                    editor: std::mem::replace(&mut self.editor, editor),
+                    view: self.view,
+                    raster: self.raster.take(),
+                    raster_scale: self.raster_scale,
+                    doc_name: std::mem::take(&mut self.doc_name),
+                    doc_path: self.doc_path.take(),
+                };
+                self.tabs.push(previous);
                 self.raster = None;
                 self.raster_scale = 1.0;
-                self.editor = editor;
                 self.view = View::default();
                 self.doc_path = Some(path.clone());
                 self.doc_name = std::path::Path::new(&path)
@@ -581,15 +648,34 @@ impl Shell {
                 let name = std::path::Path::new(&path)
                     .file_name()
                     .map_or_else(|| path.clone(), |name| name.to_string_lossy().into_owned());
+                // `open_raster_document` overwrites the active
+                // editor, so park the previous document first and
+                // restore it if the decode fails.
+                let previous = DocTab {
+                    editor: std::mem::replace(&mut self.editor, Editor::untitled()),
+                    view: self.view,
+                    raster: self.raster.take(),
+                    raster_scale: self.raster_scale,
+                    doc_name: std::mem::take(&mut self.doc_name),
+                    doc_path: self.doc_path.take(),
+                };
                 match self.open_raster_document(&bytes, &name) {
                     Ok(()) => {
+                        self.tabs.push(previous);
                         self.status = format!("opened {path} as an image");
                         self.raster = None;
                         self.raster_scale = 1.0;
                         self.view = View::default();
                         self.doc_name = name;
+                        self.doc_path = Some(path.clone());
                     }
                     Err(_) => {
+                        self.editor = previous.editor;
+                        self.view = previous.view;
+                        self.raster = previous.raster;
+                        self.raster_scale = previous.raster_scale;
+                        self.doc_name = previous.doc_name;
+                        self.doc_path = previous.doc_path;
                         self.status = format!("open failed: {document_error}");
                     }
                 }
@@ -1164,11 +1250,22 @@ impl Shell {
     fn run_shell(&mut self, action: menus::ShellAction) {
         match action {
             menus::ShellAction::New => {
-                self.editor = Editor::untitled();
+                // Park the current document (20.5 tabs); a new
+                // untitled document becomes active.
+                let previous = DocTab {
+                    editor: std::mem::replace(&mut self.editor, Editor::untitled()),
+                    view: self.view,
+                    raster: self.raster.take(),
+                    raster_scale: self.raster_scale,
+                    doc_name: std::mem::take(&mut self.doc_name),
+                    doc_path: self.doc_path.take(),
+                };
+                self.tabs.push(previous);
                 self.view = View::default();
                 self.raster = None;
                 self.raster_scale = 1.0;
                 self.doc_name = "untitled".to_owned();
+                self.doc_path = None;
                 self.status = "new document".to_owned();
             }
             menus::ShellAction::Open => self.open_document(),
@@ -1209,6 +1306,15 @@ impl Shell {
                 // silently dropping work.
                 if self.editor.session.is_dirty() {
                     self.status = "document has unsaved changes — save before closing".to_owned();
+                } else if let Some(tab) = self.tabs.pop() {
+                    // Promote the most recently parked document.
+                    self.editor = tab.editor;
+                    self.view = tab.view;
+                    self.raster = tab.raster;
+                    self.raster_scale = tab.raster_scale;
+                    self.doc_name = tab.doc_name;
+                    self.doc_path = tab.doc_path;
+                    self.status = format!("closed; switched to {}", self.doc_name);
                 } else {
                     self.editor = Editor::untitled();
                     self.view = View::default();
@@ -2644,15 +2750,42 @@ impl eframe::App for Shell {
         egui::CentralPanel::default()
             .frame(egui::Frame::NONE)
             .show(ui, |ui| {
-                // The document tab strip: a single-document window, so
-                // the CS6 MDI tab strip reduced to its one member.
-                // Full Screen drops the title bar, tab strip included.
+                // The document tab strip (20.5): the active document
+                // plus every parked tab, click to switch. A dot marks
+                // a tab with unsaved edits. Full Screen drops the
+                // title bar, tab strip included.
                 if !full_screen {
                     ui.horizontal(|ui| {
-                        ui.add(
-                            egui::Button::new(egui::RichText::new(&self.doc_name).size(11.0))
-                                .selected(true),
-                        );
+                        let tab_button =
+                            |ui: &mut egui::Ui, name: &str, is_dirty: bool, selected: bool| {
+                                let label = if is_dirty {
+                                    format!("{name} •")
+                                } else {
+                                    name.to_owned()
+                                };
+                                ui.add(
+                                    egui::Button::new(egui::RichText::new(label).size(11.0))
+                                        .selected(selected),
+                                )
+                            };
+                        tab_button(ui, &self.doc_name, self.editor.session.is_dirty(), true);
+                        // Snapshot labels/dirty flags so the switch
+                        // (a `&mut self` call) can't fight the
+                        // iterator.
+                        let parked: Vec<(String, bool)> = self
+                            .tabs
+                            .iter()
+                            .map(|tab| (tab.doc_name.clone(), tab.editor.session.is_dirty()))
+                            .collect();
+                        // Most recently parked first (CS6 stacks
+                        // newest-rightmost; `tabs` holds oldest
+                        // first).
+                        for index in (0..parked.len()).rev() {
+                            let (name, is_dirty) = &parked[index];
+                            if tab_button(ui, name, *is_dirty, false).clicked() {
+                                self.activate_tab(index);
+                            }
+                        }
                         ui.weak("FireCraft");
                     });
                 }
@@ -5372,5 +5505,116 @@ mod tests {
                 .collect::<String>(),
             _ => panic!("not a text object"),
         }
+    }
+
+    /// A shell whose open dialog hands back a red PNG at `path` and
+    /// whose filesystem already holds it — File ▸ Open round-trips.
+    fn open_shell(path: &str) -> Shell {
+        let mut shell = gui_shell(Editor::untitled());
+        shell.fs.write_file(path, &red_png()).unwrap();
+        let dialogs = FixedDialogs {
+            steps: "/mem/steps.fwsteps".to_owned(),
+            doc: path.to_owned(),
+        };
+        shell.dialogs = Box::new(dialogs);
+        shell
+    }
+
+    /// 20.5 tabs: opening a second document parks the first and the
+    /// tab strip state follows the active document.
+    #[test]
+    fn open_parks_the_previous_document() {
+        let mut shell = open_shell("/mem/first.png");
+        shell.open_document();
+        assert!(shell.status.contains("opened"), "{}", shell.status);
+        assert_eq!(shell.doc_name, "first.png");
+        assert_eq!(shell.tabs.len(), 1, "the untitled start parked");
+        assert_eq!(shell.tabs[0].doc_name, "untitled");
+    }
+
+    /// Switching to a parked tab restores its editor, name, and path.
+    #[test]
+    fn activate_tab_swaps_state() {
+        let mut shell = open_shell("/mem/first.png");
+        shell.open_document();
+        shell.open_document();
+        // The untitled start and the first open are both parked; the
+        // active document is the second open of first.png.
+        assert_eq!(shell.tabs.len(), 2);
+        assert_eq!(shell.tabs[1].doc_name, "first.png");
+        let parked_clean = !shell.tabs[1].editor.session.is_dirty();
+        shell.activate_tab(1);
+        assert_eq!(shell.doc_name, "first.png");
+        assert_eq!(shell.doc_path.as_deref(), Some("/mem/first.png"));
+        assert_eq!(
+            !shell.editor.session.is_dirty(),
+            parked_clean,
+            "cleanliness rides with the editor"
+        );
+        // And back: the once-active document is now parked again.
+        assert_eq!(shell.tabs.len(), 2);
+        assert_eq!(shell.tabs[1].doc_name, "first.png");
+        assert_eq!(shell.doc_name, "first.png");
+    }
+
+    /// Close promotes the most recently parked document; with no
+    /// tabs left it falls back to a fresh untitled.
+    fn open_promote_dialogs() -> FixedDialogs {
+        FixedDialogs {
+            steps: "/mem/steps.fwsteps".to_owned(),
+            doc: "/mem/second.png".to_owned(),
+        }
+    }
+
+    #[test]
+    fn close_promotes_the_last_parked_tab() {
+        let mut shell = open_shell("/mem/first.png");
+        shell.open_document();
+        // A second, distinct open so each close promotes a different tab.
+        shell.fs.write_file("/mem/second.png", &red_png()).unwrap();
+        shell.dialogs = Box::new(open_promote_dialogs());
+        shell.open_document();
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::CloseDocument));
+        assert!(
+            shell.status.contains("closed; switched"),
+            "{}",
+            shell.status
+        );
+        assert_eq!(shell.doc_name, "first.png", "the last parked tab promoted");
+        assert_eq!(shell.tabs.len(), 1);
+        assert_eq!(shell.tabs[0].doc_name, "untitled");
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::CloseDocument));
+        assert_eq!(shell.doc_name, "untitled", "the start document back");
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::CloseDocument));
+        assert_eq!(shell.doc_name, "untitled");
+        assert_eq!(shell.tabs.len(), 0);
+    }
+
+    /// New parks the current document rather than discarding it.
+    #[test]
+    fn new_parks_the_current_document() {
+        let mut shell = open_shell("/mem/first.png");
+        shell.open_document();
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::New));
+        assert_eq!(shell.doc_name, "untitled");
+        assert_eq!(shell.doc_path, None);
+        assert_eq!(shell.tabs.len(), 2);
+        assert_eq!(shell.tabs[1].doc_name, "first.png");
+    }
+
+    /// A dirty active document still refuses to close (the 20.5
+    /// countercase to `close_promotes_the_last_parked_tab`).
+    #[test]
+    fn dirty_active_document_refuses_close_even_with_tabs() {
+        let mut shell = open_shell("/mem/first.png");
+        shell.open_document();
+        shell.open_document();
+        let tabs_before = shell.tabs.len();
+        shell.editor
+            .apply("autoshape.rect", serde_json::json!({"x":0.0,"y":0.0,"width":40.0,"height":20.0,"corner":0.0,"kind":"bevel","page":0,"layer":0,"cell":0,"name":null}))
+            .expect("mark dirty");
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::CloseDocument));
+        assert_eq!(shell.tabs.len(), tabs_before, "close refused");
+        assert!(shell.status.contains("unsaved"), "{}", shell.status);
     }
 }

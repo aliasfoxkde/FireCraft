@@ -496,6 +496,9 @@ impl Shell {
         editor
             .apply("bitmap.importFile", payload)
             .map_err(|error| error.to_string())?;
+        // The construction applies are not user edits: a just-opened
+        // file is clean, or Close would refuse it.
+        editor.session.mark_clean();
         self.editor = editor;
         Ok(())
     }
