@@ -1873,6 +1873,29 @@ untouched after refusal" asserts journal_len == 2, not 0.
 - Full workspace gate: `cargo run -p xtask -- ci` (background run
   bcm82bd0p, over the 21.6 commit)
 
+## 2026-11-07 — 21.5 desktop arm: accesskit compiled in
+
+eframe's `accesskit` feature is now on in `crates/app/Cargo.toml`,
+so the winit adapter ships with the desktop build and the egui tree
+reaches screen readers natively. The web arm stays the recorded
+upstream refusal — eframe 0.36.2 still has `accesskit_update: _`
+in `src/web/app_runner.rs` (decision 0067).
+
+Two wasm-target fixes along the way: the cherry-picked persist code
+had left a duplicate `persisted` initializer visible only to wasm,
+and `recover_steps` needed the same `#[cfg(not(wasm32))]` guard as
+its siblings.
+
+### Receipts
+
+- `cargo check --target wasm32-unknown-unknown -p firecraft-web` — ok
+- `cargo clippy -p app --all-targets -- -D warnings` — clean
+- `cargo test -p app --lib` — 174 passed
+- Full workspace gate: `cargo run -p xtask -- ci` (background run
+  bdunpbu0d; note the Cargo.lock moved with accesskit — the CI image
+  needs re-shipping before the next GitForge push per the runner rule)
+
+
 
 
 
