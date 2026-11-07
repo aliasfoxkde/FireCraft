@@ -1804,9 +1804,10 @@ impl Editor {
         };
         if let Some(drag) = &mut self.drag {
             if drag.tool == Tool::RedrawPath {
-                let changed = drag.trace.last().is_none_or(|last| {
-                    last.x != constrained.x || last.y != constrained.y
-                });
+                let changed = drag
+                    .trace
+                    .last()
+                    .is_none_or(|last| last.x != constrained.x || last.y != constrained.y);
                 if changed {
                     drag.trace.push(constrained);
                 }
@@ -4076,7 +4077,10 @@ mod tests {
             panic!("redrawn object remains a path");
         };
         assert_eq!(path.contours[0].points.len(), 3);
-        assert_eq!(path.contours[0].points[1].anchor, geom::Point::new(20.0, 5.0));
+        assert_eq!(
+            path.contours[0].points[1].anchor,
+            geom::Point::new(20.0, 5.0)
+        );
     }
 
     fn first_anchor(editor: &Editor, id: doc::ObjectId) -> (f64, f64) {
