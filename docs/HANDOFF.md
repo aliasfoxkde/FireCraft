@@ -8,23 +8,24 @@
 
 ---
 
-## 1. State snapshot (2026-11-04)
+## 1. State snapshot (2026-11-07; PR #8 working branch)
 
-- **Source state:** `main` is at `5fac7a2` (v0.2.5-era development;
-  the latest tag is `v0.2.5`). The tag and current `main` are different
-  snapshots. See [`PROGRESS.md`](PROGRESS.md) for build and release
-  evidence and [`TASKS.md`](TASKS.md) for current work.
+- **Source state:** `main` baseline is `5fac7a2` (latest tag
+  `v0.2.5`). PR #8's `feat/dock-inspector-parity-matrix` branch carries
+  the current dock/editor remediation; it is not merged into `main`.
+  See [`PROGRESS.md`](PROGRESS.md) for branch-specific evidence and
+  [`TASKS.md`](TASKS.md) for the live task board.
 - **Engine and parity:** 245 registry commands; 268 carried / 3
   partial / 0 missing DOM verbs. Live generated files and source calls
   are authoritative for counts.
-- **Menu census:** 8 of 290 menu rows remain non-dispatching. The 19.6
-  wiring campaign is complete; remaining rows belong to future feature
-  work or evidence gates. The live census is derived and gated by
-  `menus::tests::inert_count_never_rises`.
-- **Current UI front:** Phase 22 shell fidelity and screenshot-driven
-  responsive review. The tracked screenshot was replaced on 2026-11-04
-  with a capture of the current shell; its receipts and limits are in
-  [`tasks/T22-screenshot-ui.md`](tasks/T22-screenshot-ui.md).
+- **Menu census:** 2 of 294 rows currently use `Action::Inert`, pinned
+  by `menus::tests::inert_count_never_rises`. Eight additional rows
+  remain feature- or evidence-gated; these are not all inert and must
+  not be wired without model/reference support.
+- **Current UI front:** Phase 22.1 panel inventory and 22.2 tool strip
+  are complete in PR #8; 22.5 CS6 chrome remains partial. Screenshot
+  acceptance at both viewports and empty/vector/bitmap states is
+  complete; receipts are in [`tasks/T22-screenshot-ui.md`](tasks/T22-screenshot-ui.md).
 - **Clean-room invariants:** `source/` and Adobe-derived local extracts
   are reference-only and never committed. Adobe-authored corpus files
   are test oracles. Assets require an attribution row in
@@ -136,7 +137,7 @@ verifiable.
 ### Current program: Phases 20–22
 
 Phase 19's canvas work and menu wiring campaign (batches 1–17) are
-complete. The live menu census is 8 of 290, with the remaining rows
+complete. The live menu census is 2 inert of 294; eight additional rows remain feature- or evidence-gated, with the remaining rows
 tracked as future feature work or evidence gates. Path-node add/delete,
 the reachability gate, and the wasm budget re-pin are also complete.
 
