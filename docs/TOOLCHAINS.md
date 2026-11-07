@@ -60,8 +60,11 @@ The comprehensive target matrix and execution criteria live in
 - Existing Windows and macOS scripts are recipes until their output
   is built and launch-tested on native runners.
 - AppImage is recipe-only until an actual image is built and runtime-tested.
-- Source archives, SBOM, provenance, and signed release metadata must
-  be produced and independently verified by the release pipeline.
+- Source archive and CycloneDX SBOM generation are implemented in
+  `xtask dist --source` and `xtask dist --sbom`, and are wired into the
+  tag workflow. They still need an end-to-end tag-release receipt.
+  Provenance/attestation and signed release metadata remain unimplemented
+  until the required credentials and verification path are configured.
 
 Update this inventory only when a target has concrete toolchain,
 artifact, and verification evidence. Keep "recipe exists", "built",
