@@ -901,8 +901,9 @@ fn parse_recipes() -> Result<usize, String> {
     let manifest = workspace_root().join("packaging/flatpak/dev.firecraft.FireCraft.yml");
     let yaml = std::fs::read_to_string(&manifest)
         .map_err(|e| format!("read {}: {e}", manifest.display()))?;
-    serde_yaml::from_str::<serde_yaml::Value>(&yaml)
-        .map_err(|e| format!("packaging/flatpak/dev.firecraft.FireCraft.yml does not parse: {e}"))?;
+    serde_yaml::from_str::<serde_yaml::Value>(&yaml).map_err(|e| {
+        format!("packaging/flatpak/dev.firecraft.FireCraft.yml does not parse: {e}")
+    })?;
     checked += 1;
     for name in ["build-windows.ps1", "windows/firecraft.iss"] {
         let recipe = workspace_root().join("packaging").join(name);
