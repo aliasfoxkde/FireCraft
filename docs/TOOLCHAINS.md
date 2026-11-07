@@ -61,3 +61,8 @@ The comprehensive target matrix and execution criteria live in
 Update this inventory only when a target has concrete toolchain,
 artifact, and verification evidence. Keep "recipe exists", "built",
 "installed", "launched", and "published" as separate states.
+
+Per-target status (required/optional/recipe-only/unbuilt) and the
+secrets inventory live in
+[`docs/release/ARTIFACT-MATRIX.md`](release/ARTIFACT-MATRIX.md)
+(RP-00 output, ticket [T27](tasks/T27-cross-platform-release.md)).
