@@ -478,8 +478,6 @@ impl Shell {
             options_bar_hidden: false,
             screen_mode: ScreenMode::Standard,
             layout: ShellLayout::default(),
-            #[cfg(target_arch = "wasm32")]
-            persisted: None,
             ctx: None,
             tabs: Vec::new(),
         }
@@ -2848,6 +2846,7 @@ impl Shell {
     /// Replays the recovery journal onto the fresh untitled session
     /// (the crash-recovery path of `Editor::replay_steps`: history is
     /// reconstructed, so undo works across the crash boundary).
+    #[cfg(not(target_arch = "wasm32"))]
     fn recover_steps(&mut self) -> Result<usize, String> {
         let path = self.recovery_path_str();
         let text = self
@@ -3875,7 +3874,7 @@ mod tests {
     }
 
     /// The raster render scale (21.2 HiDPI): the scale is
-    /// zoom × pixels_per_point under the 16 MPix budget, so a 2×
+    /// `zoom` × `pixels_per_point` under the 16-MiPix budget, so a 2×
     /// display at 100% zoom renders 2× (crisp), and deep zoom on a
     /// large page clamps to the budget. The unscaled 1× shortcut only
     /// fires at 100% zoom on a 1× display.
@@ -4790,7 +4789,8 @@ mod tests {
 
         // A malformed journal is refused, document untouched.
         let fs = MemoryFs::new();
-        fs.write_file("broken.fwsteps", b"not json\n".as_slice()).unwrap();
+        fs.write_file("broken.fwsteps", b"not json\n".as_slice())
+            .unwrap();
         let dialogs = FixedDialogs {
             steps: String::new(),
             doc: "broken.fwsteps".to_owned(),

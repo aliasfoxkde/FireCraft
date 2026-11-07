@@ -498,7 +498,7 @@ impl Shell {
         // zoom moved off the cached render scale. The raster renders
         // at a multiple of the document resolution so the view blits
         // it near 1:1 instead of linear-filtering a 1× raster (the
-        // always-1× blur). Scale clamps to a 16 MPix budget so deep
+        // always-1× blur). Scale clamps to a 16-MiPix budget so deep
         // zoom on a large page stays sane.
         let page = self
             .editor
@@ -509,8 +509,8 @@ impl Shell {
         // HiDPI (21.2): egui sizes in points, but the blit's pixels are
         // device pixels — at `pixels_per_point` 2 a zoom-scale raster
         // has half the resolution the screen can show. Render in device
-        // pixels: the scale rides `zoom × pixels_per_point` under the
-        // same 16 MPix budget. The world-size math below divides the
+        // pixels: the scale rides ``zoom` × `pixels_per_point`` under the
+        // same 16-MiPix budget. The world-size math below divides the
         // texture by this same scale, so the geometry is unchanged; only
         // the texture's resolution rises.
         let device_ppp = ui.ctx().pixels_per_point();
@@ -1532,8 +1532,8 @@ impl Shell {
 }
 
 /// One row of the canvas popup.
-/// The raster render scale (21.2): `zoom × pixels_per_point`, clamped
-/// to the 16 MPix budget against the page size, so the blit has one
+/// The raster render scale (21.2): ``zoom` × `pixels_per_point``, clamped
+/// to the 16-MiPix budget against the page size, so the blit has one
 /// texture pixel per device pixel at any zoom on any display. A pure
 /// function of (page, zoom, ppp) — the frame loop calls it, tests
 /// call it directly.

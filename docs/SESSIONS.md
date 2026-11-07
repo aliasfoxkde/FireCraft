@@ -1851,5 +1851,28 @@ effect-heavy pages; the canvas blit path itself is done.
 - Full workspace gate: `cargo run -p xtask -- ci` (background run
   bjhefp81n, over commits 498af8a + ac17e25)
 
+## 2026-11-07 — 21.6 closed: Commands runs .fwsteps alongside .jsf
+
+The `.jsf` arm of Commands ▸ Run Script had landed with the
+automation milestone; the spec's other half — `.fwsteps` — now runs
+too: the same picker accepts both extensions, a steps file replays
+onto the live document through `Editor::replay_steps` (the History
+panel's door; journal, undo history and all), and a malformed
+journal is refused with the seed session untouched.
+
+A test-fixture correction worth keeping: `Editor::untitled()` seeds
+two journal rows (`page.add`, `page.setCanvasSize`), so "document
+untouched after refusal" asserts journal_len == 2, not 0.
+
+### Receipts
+
+- `cargo test -p app --lib` — 174 passed (including
+  `run_script_runs_a_steps_file_through_the_replay_door`)
+- Coverage-target sweep `cargo test --tests --all --target-dir
+  target/llvm-cov-target` — 60 suites ok
+- Full workspace gate: `cargo run -p xtask -- ci` (background run
+  bcm82bd0p, over the 21.6 commit)
+
+
 
 
