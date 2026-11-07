@@ -110,10 +110,12 @@ pub(crate) fn brush_of(
 /// Refuse overflow explicitly rather than allowing a wrapped value to
 /// reach the brush validator.
 fn brush_diameter(name: &'static str, radius: u32) -> Result<u32, EngineError> {
-    radius.checked_mul(2).ok_or_else(|| EngineError::BadPayload {
-        name: name.to_owned(),
-        detail: format!("brush radius {radius} overflows its diameter"),
-    })
+    radius
+        .checked_mul(2)
+        .ok_or_else(|| EngineError::BadPayload {
+            name: name.to_owned(),
+            detail: format!("brush radius {radius} overflows its diameter"),
+        })
 }
 
 /// Registers the retouch commands.
@@ -1131,22 +1133,42 @@ mod tests {
 
     #[test]
     fn retouch_commands_reject_overflowing_brush_diameters() {
-        let (mut document, image) =
-            strip_document([[100, 100, 100, 255], [120, 120, 120, 255], [140, 140, 140, 255]]);
+        let (mut document, image) = strip_document([
+            [100, 100, 100, 255],
+            [120, 120, 120, 255],
+            [140, 140, 140, 255],
+        ]);
         let payload = json!({
             "id": image, "x": 1.5, "y": 0.5,
             "radius": u32::MAX, "strength": 50,
         });
-        assert!(RetouchSharpen.apply_json(&mut document, payload.clone()).is_err());
-        assert!(RetouchDodge.apply_json(&mut document, payload.clone()).is_err());
-        assert!(RetouchBurn.apply_json(&mut document, payload.clone()).is_err());
-        assert!(RetouchReplaceColor
-            .apply_json(&mut document, json!({
-                "id": image, "x": 1.5, "y": 0.5,
-                "radius": u32::MAX, "strength": 50,
-                "from_color_raw": 0xFFFF0000_i64, "to_color_raw": 0xFF00FFFF_i64,
-            }))
-            .is_err());
+        assert!(
+            RetouchSharpen
+                .apply_json(&mut document, payload.clone())
+                .is_err()
+        );
+        assert!(
+            RetouchDodge
+                .apply_json(&mut document, payload.clone())
+                .is_err()
+        );
+        assert!(
+            RetouchBurn
+                .apply_json(&mut document, payload.clone())
+                .is_err()
+        );
+        assert!(
+            RetouchReplaceColor
+                .apply_json(
+                    &mut document,
+                    json!({
+                        "id": image, "x": 1.5, "y": 0.5,
+                        "radius": u32::MAX, "strength": 50,
+                        "from_color_raw": 0xFFFF0000_i64, "to_color_raw": 0xFF00FFFF_i64,
+                    })
+                )
+                .is_err()
+        );
     }
 
     #[test]
