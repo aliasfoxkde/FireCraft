@@ -1801,3 +1801,37 @@ construction), so this session added:
 - Full workspace gate: `cargo run -p xtask -- ci` (background run
   bagx52wr2)
 
+## 2026-11-07 — 21.1 closed: autosave + crash recovery, both surfaces
+
+The web half came in from the `web-autosave-wip` branch (a stale
+agent worktree's uncommitted work, kept as a branch in 2026-11-03's
+session): change-stamp-debounced whole-document persistence to
+localStorage through a wasm-only `PersistSink`, boot restore through
+the standard `Editor::open` door, clear on File ▸ New. Cherry-picked
+onto the current stack; the two conflicts were this session's own
+additions (the `DropSink` type alias landed upstream in the meantime,
+and the 20.5 tab strip reworked the same `with_platform`
+initializer).
+
+The desktop half is new: `recovery_tick` snapshots the session
+journal (`steps_text`, the replay-exact JSON lines) to a sidecar
+each frame, debounced by the same stamp; `Shell::new` checks the
+sidecar and arms a Recover/Discard window; Recover replays through
+`Editor::replay_steps` (undo works across the crash boundary), and a
+clean save or File ▸ New clears it. The sidecar path resolves once
+at construction (`FIRECRAFT_RECOVERY` override, else the platform
+temp dir) — the tick reads a field, never the environment, per the
+decision-cores-take-their-environment-as-data rule. `FileSystem`
+gained a defaulted `remove_file` (refusing default like `read_dir`;
+implemented by `StdFs` and `MemoryFs`, the web `WebFs` refuses).
+
+### Receipts
+
+- `cargo test -p app --lib` — 172 passed (including
+  `recovery_snapshot_round_trips_through_the_sidecar`)
+- `cargo run -p xtask -- wasm` — ok (the wasm-only persist path
+  compiles for `wasm32-unknown-unknown`)
+- Full workspace gate: `cargo run -p xtask -- ci` (background run
+  bm6zxgv3g)
+
+

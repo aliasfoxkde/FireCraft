@@ -310,7 +310,7 @@ acceptance hook. Ordered by how much of the product it unlocks.
 | 7 | The animation timeline (States panel) | C | 20.3 | P1 |
 | 8 | History click-to-rewind | C, E | 20.6 | P1 |
 | 9 | Slice/hotspot behaviour editing and the HTML preview surface | C, F, I | 20.7 | P1 |
-| 10 | Autosave and crash recovery | E | 21.1 | P1 |
+| 10 | Autosave and crash recovery — **LANDED 2026-11-07** — web: whole-document localStorage persistence with boot restore; desktop: journal sidecar snapshot with Recover/Discard prompt, undo intact across the crash boundary | E | 21.1 | P1 |
 | 11 | The Preferences dialog and the Keyboard Shortcuts editor; the four alternative keymaps | E, H | 21.4 | P1 |
 | 12 | The in-app script console and saved commands | A, E | 21.6 | P1 |
 | 13 | ~~Command palette v2 (fuzzy, recents, save-steps)~~ **CLOSED 2026-11-07** — fuzzy subsequence scoring with a position bonus; recents persisted in `ShellLayout`; save-steps-as-command is the History panel's Save Steps…/Replay… journal file pair. | G | 21.3 | P2 |

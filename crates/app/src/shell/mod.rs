@@ -133,6 +133,15 @@ pub struct Shell {
     help_open: bool,
     /// The Preferences dialog (21.4) is open.
     preferences_open: bool,
+    /// The crash-recovery offer (21.1, desktop) is open: a journal
+    /// snapshot from a previous session exists and the user has not
+    /// chosen recover/discard yet.
+    recover_open: bool,
+    /// The desktop crash-recovery sidecar path (21.1). Resolved once
+    /// at shell construction — `FIRECRAFT_RECOVERY` overrides, else
+    /// the platform temp dir — so the recovery tick reads a field,
+    /// never the process environment.
+    recovery_path: std::path::PathBuf,
     /// The user's UI scale factor (`pixels_per_point`): `None` follows
     /// the platform default. Persisted with the layout.
     ui_scale: Option<f32>,
@@ -213,10 +222,10 @@ pub struct Shell {
     /// modes: Standard, Full Screen with Menus, Full Screen). Display
     /// state, not document state.
     screen_mode: ScreenMode,
-    /// The last change stamp written to the persist sink (wasm only):
-    /// `None` until the first write, so an untouched untitled document
-    /// never seeds storage.
-    #[cfg(target_arch = "wasm32")]
+    /// The last change stamp written by the persistence path: the web
+    /// persist sink and the desktop recovery sidecar share it, so the
+    /// debounce is one field. `None` until the first write, so an
+    /// untouched untitled document never seeds storage.
     persisted: Option<(usize, usize, usize)>,
     /// The live egui context, stashed each frame so code outside the
     /// frame loop (the web bridge) can request a repaint after it
@@ -395,6 +404,8 @@ impl Shell {
         );
         shell.layout = layout;
         shell.apply_layout();
+        #[cfg(not(target_arch = "wasm32"))]
+        shell.check_recovery();
         shell
     }
 
@@ -430,6 +441,8 @@ impl Shell {
             about_open: false,
             help_open: false,
             preferences_open: false,
+            recover_open: false,
+            recovery_path: Self::default_recovery_path(),
             ui_scale: None,
             style_name: String::new(),
             rename_layer: None,
@@ -450,6 +463,7 @@ impl Shell {
             gamma_18: false,
             guide_draft: None,
             context_menu: None,
+            persisted: None,
             text_edit: None,
             last_filter: None,
             // CS6's fresh-document roster: Properties/Pages/States/
@@ -928,6 +942,8 @@ impl Shell {
             Ok(bytes) => match self.fs.write_file(&path, &bytes) {
                 Ok(()) => {
                     self.editor.session.mark_clean();
+                    #[cfg(not(target_arch = "wasm32"))]
+                    self.clear_recovery();
                     self.doc_path = Some(path.clone());
                     self.doc_name = std::path::Path::new(&path)
                         .file_name()
@@ -1325,6 +1341,8 @@ impl Shell {
                 self.status = "new document".to_owned();
                 #[cfg(target_arch = "wasm32")]
                 self.clear_persisted();
+                #[cfg(not(target_arch = "wasm32"))]
+                self.clear_recovery();
             }
             menus::ShellAction::Open => self.open_document(),
             menus::ShellAction::Import => self.import_raster_dialog(),
@@ -2741,6 +2759,131 @@ impl Shell {
         self.persisted = None;
     }
 
+    /// The default recovery sidecar path: `FIRECRAFT_RECOVERY` when
+    /// set, else the platform temp dir. Called once, at construction.
+    fn default_recovery_path() -> std::path::PathBuf {
+        if let Ok(path) = std::env::var("FIRECRAFT_RECOVERY") {
+            return std::path::PathBuf::from(path);
+        }
+        std::env::temp_dir().join("firecraft-autorecover.fwsteps")
+    }
+
+    /// The recovery sidecar path as a `&str` for the injected
+    /// [`engine::platform::FileSystem`].
+    fn recovery_path_str(&self) -> String {
+        self.recovery_path.to_string_lossy().into_owned()
+    }
+
+    /// Periodic journal snapshot to the recovery sidecar (desktop;
+    /// the web build persists the whole document through the browser
+    /// instead). Debounced by the same change stamp the web persist
+    /// uses: a write happens only when the session actually moved.
+    /// An empty journal clears the sidecar — an untitled document's
+    /// first steps must not resurrect a discarded recovery file, and
+    /// a cleared journal must not outlive its session.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn recovery_tick(&mut self) {
+        let stamp = self.stamp();
+        if self.persisted == Some(stamp) {
+            return;
+        }
+        let path = self.recovery_path_str();
+        let outcome = if self.editor.session.journal_len() == 0 {
+            if self.fs.exists(&path) {
+                self.fs.remove_file(&path)
+            } else {
+                Ok(())
+            }
+        } else {
+            self.fs
+                .write_file(&path, self.editor.steps_text().as_bytes())
+        };
+        if outcome.is_ok() {
+            self.persisted = Some(stamp);
+        }
+    }
+
+    /// Removes the recovery sidecar after a clean save or File ▸ New:
+    /// the document now has a durable home, so a crash-recovery
+    /// replay would only resurrect stale steps.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn clear_recovery(&mut self) {
+        let path = self.recovery_path_str();
+        if self.fs.exists(&path) {
+            let _ = self.fs.remove_file(&path);
+        }
+        self.persisted = None;
+    }
+
+    /// Checks for a leftover recovery journal and, when found, arms
+    /// the restore-offer window. Called from `Shell::new` only — a
+    /// mid-session appearance would mean this very session crashed,
+    /// which it cannot have.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn check_recovery(&mut self) {
+        let path = self.recovery_path_str();
+        if self.fs.exists(&path) {
+            self.recover_open = true;
+        }
+    }
+
+    /// Replays the recovery journal onto the fresh untitled session
+    /// (the crash-recovery path of `Editor::replay_steps`: history is
+    /// reconstructed, so undo works across the crash boundary).
+    fn recover_steps(&mut self) -> Result<usize, String> {
+        let path = self.recovery_path_str();
+        let text = self
+            .fs
+            .read_file(&path)
+            .map_err(|error| error.to_string())
+            .and_then(|bytes| String::from_utf8(bytes).map_err(|error| error.to_string()))?;
+        self.editor
+            .replay_steps(&text)
+            .map_err(|error| error.to_string())?;
+        let rows = self.editor.session.journal_len();
+        self.clear_recovery();
+        Ok(rows)
+    }
+
+    /// The recovery-offer window: what was found, Recover (replay
+    /// onto this session) or Discard (delete the sidecar).
+    #[cfg(not(target_arch = "wasm32"))]
+    fn recovery_ui(&mut self, ui: &mut egui::Ui) {
+        if !self.recover_open {
+            return;
+        }
+        egui::Window::new("Recover unsaved work?")
+            .anchor(egui::Align2::CENTER_TOP, [0.0, 80.0])
+            .resizable(false)
+            .collapsible(false)
+            .show(ui.ctx(), |ui| {
+                ui.label(format!(
+                    "A journal snapshot from a previous session exists:\n{}",
+                    self.recovery_path.display()
+                ));
+                ui.label("Recover replays its steps onto this session; undo history comes back with them.");
+                ui.horizontal(|ui| {
+                    if ui.button("Recover").clicked() {
+                        match self.recover_steps() {
+                            Ok(rows) => {
+                                self.status = format!("recovered {rows} step(s) from the snapshot");
+                                self.view = View::default();
+                                self.raster = None;
+                                self.raster_scale = 1.0;
+                            }
+                            Err(error) => self.status = format!("recovery failed: {error}"),
+                        }
+                        self.recover_open = false;
+                    }
+                    if ui.button("Discard").clicked() {
+                        self.clear_recovery();
+                        self.recover_open = false;
+                        self.status = "recovery snapshot discarded".to_owned();
+                    }
+                });
+            });
+    }
+
     /// Files dropped onto the window open through the same one-door
     /// path as File ▸ Open: a Fireworks PNG replaces the document,
     /// any other supported raster opens as a document sized to the
@@ -2813,6 +2956,8 @@ impl eframe::App for Shell {
         self.dropped_files(ui.ctx());
         #[cfg(target_arch = "wasm32")]
         self.persist_tick();
+        #[cfg(not(target_arch = "wasm32"))]
+        self.recovery_tick();
         // Panels first, CentralPanel last (egui's required order), in
         // the CS6 arrangement: menu, context options bar, tool strip,
         // panel stack (Properties included), status strip, canvas.
@@ -2957,6 +3102,8 @@ impl eframe::App for Shell {
                 .collapsible(false)
                 .show(ui.ctx(), |ui| self.preferences_ui(ui));
         }
+        #[cfg(not(target_arch = "wasm32"))]
+        self.recovery_ui(ui);
         self.palette_ui(ui);
         if self.help_open {
             self.help_panel(ui.ctx());
@@ -3620,6 +3767,122 @@ mod tests {
             }
             other => panic!("the slice is still a slice: {other:?}"),
         }
+    }
+
+    /// The desktop crash-recovery cycle (21.1): a dirty session's
+    /// recovery tick writes the journal to the sidecar; a fresh shell
+    /// over the same sidecar arms the offer; Recover replays the
+    /// steps onto an untitled session with undo intact; Discard
+    /// removes the sidecar. An empty journal never resurrects a
+    /// discarded file, and a clean save clears the sidecar.
+    #[test]
+    fn recovery_snapshot_round_trips_through_the_sidecar() {
+        let mut shell = gui_shell(gui_editor());
+        shell.recovery_path = std::path::PathBuf::from("/mem/autorecover.fwsteps");
+        // No sidecar at start: no offer.
+        shell.check_recovery();
+        assert!(!shell.recover_open);
+
+        // Draw something (dirty session) and tick: the sidecar
+        // appears, with journal content.
+        shell
+            .editor
+            .apply(
+                "autoshape.rect",
+                serde_json::json!({
+                    "x": 10.0, "y": 10.0, "width": 40.0, "height": 30.0,
+                    "corner": 0.0, "kind": "bevel",
+                    "page": 0, "layer": 0, "cell": 0, "name": null,
+                }),
+            )
+            .expect("rect draws");
+        shell.recovery_tick();
+        let path = shell.recovery_path_str();
+        let fs = shell.fs.clone();
+        let stored = String::from_utf8(fs.read_file(&path).expect("sidecar exists")).expect("utf8");
+        assert!(stored.contains("autoshape.rect"), "journal rows recorded");
+
+        // A fresh shell over that sidecar arms the offer…
+        let mut fresh = gui_shell(Editor::untitled());
+        fresh.recovery_path = shell.recovery_path.clone();
+        fresh.fs = fs.clone();
+        fresh.check_recovery();
+        assert!(fresh.recover_open, "a leftover snapshot arms the offer");
+
+        // …and Recover replays onto the fresh session with undo.
+        let rows = fresh.recover_steps().expect("replay succeeds");
+        assert!(rows > 0, "journal rows replayed");
+        assert_eq!(
+            fresh.editor.session.journal_len(),
+            rows,
+            "the replayed journal is the session's journal"
+        );
+        fresh.editor.undo().expect("undo works across the crash");
+        assert!(!fresh.fs.exists(&path), "the sidecar is consumed");
+
+        // Discard on a fresh snapshot removes it without touching
+        // the session. (The tick re-writes only after the session
+        // moved again — clear the debounce to stand in for another
+        // edit between ticks.)
+        shell.persisted = None;
+        shell.recovery_tick();
+        assert!(fs.exists(&path));
+        shell.clear_recovery();
+        assert!(!fs.exists(&path));
+
+        // A tick with an empty journal does not resurrect it.
+        let mut empty = gui_shell(Editor::untitled());
+        empty.recovery_path = shell.recovery_path.clone();
+        empty.recovery_tick();
+        assert!(!fs.exists(&path), "an empty journal clears, not seeds");
+        assert!(empty.persisted.is_some(), "the clear is debounced too");
+
+        // Saving clean clears a fresh sidecar.
+        shell
+            .editor
+            .apply(
+                "autoshape.rect",
+                serde_json::json!({
+                    "x": 60.0, "y": 10.0, "width": 20.0, "height": 20.0,
+                    "corner": 0.0, "kind": "bevel",
+                    "page": 0, "layer": 0, "cell": 0, "name": null,
+                }),
+            )
+            .expect("second rect draws");
+        shell.recovery_tick();
+        assert!(fs.exists(&path));
+        shell.editor.session.mark_clean();
+        shell.clear_recovery();
+        assert!(!fs.exists(&path), "a clean save clears the sidecar");
+    }
+
+    /// The raster render scale (21.2 HiDPI): the scale is
+    /// zoom × pixels_per_point under the 16 MPix budget, so a 2×
+    /// display at 100% zoom renders 2× (crisp), and deep zoom on a
+    /// large page clamps to the budget. The unscaled 1× shortcut only
+    /// fires at 100% zoom on a 1× display.
+    #[test]
+    fn render_scale_rides_pixels_per_point_under_the_budget() {
+        use crate::shell::canvas_ui::{render_at_one, render_scale};
+
+        let (pw, ph) = (800.0, 600.0); // 0.48 MPix
+        assert_eq!(render_scale(pw, ph, 1.0, 1.0), 1.0);
+        assert_eq!(render_scale(pw, ph, 1.0, 2.0), 2.0, "hidpi at 100%");
+        assert_eq!(render_scale(pw, ph, 3.0, 1.0), 3.0);
+        assert_eq!(render_scale(pw, ph, 2.0, 2.0), 4.0);
+        // Budget: 16 MiPix / 0.48 MPix → max scale ~5.91; 800% on 2×
+        // asks 16.0 and clamps.
+        let clamped = render_scale(pw, ph, 8.0, 2.0);
+        assert!(clamped < 16.0, "budget clamps: {clamped}");
+        let budget = 16.0 * 1024.0 * 1024.0;
+        assert!((clamped - (budget / (pw * ph)).sqrt()).abs() < 1e-9);
+        // A huge page clamps to 1× (never below).
+        let tiny = render_scale(20000.0, 20000.0, 1.0, 2.0);
+        assert!((tiny - 1.0).abs() < 1e-9, "budget floor is 1×: {tiny}");
+
+        assert!(render_at_one(1.0, 1.0), "1× display at 100% zoom");
+        assert!(!render_at_one(2.0, 2.0), "hidpi at 100% renders scaled");
+        assert!(!render_at_one(2.0, 1.0), "200% zoom renders scaled");
     }
 
     /// The persisted layout round-trips: capture → (RON via serde,

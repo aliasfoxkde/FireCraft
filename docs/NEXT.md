@@ -404,7 +404,16 @@ evidence work, tracked outside that campaign.
 ### Phase 21 — Modern differentiators (P2)
 
 - **21.1 Autosave + crash recovery** (M): periodic journal snapshot to
-  a sidecar; restore prompt on open.
+  a sidecar; restore prompt on open. — **LANDED 2026-11-07**, per
+  surface: the web build persists the whole document (canonical save
+  bytes, base64) into localStorage on every change stamp and
+  restores it at boot, clearing on File ▸ New; the desktop build
+  snapshots the session journal to a temp-dir sidecar
+  (`FIRECRAFT_RECOVERY` overrides, resolved once at construction so
+  the tick never reads the environment), offers Recover/Discard at
+  startup, replays with undo intact across the crash boundary, and
+  clears on a clean save or File ▸ New. Gate:
+  `recovery_snapshot_round_trips_through_the_sidecar`.
 - **21.2 Zoom-aware/HiDPI rendering** (L): re-render vectors at
   `zoom × pixels_per_point`; extend `compose::cache::EffectCache` to
   view transforms. The single-texture blit is blurry above 100%. —
