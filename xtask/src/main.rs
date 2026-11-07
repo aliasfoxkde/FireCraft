@@ -34,7 +34,7 @@ mod webgolden;
 
 use std::process::ExitCode;
 
-const USAGE: &str = "usage: cargo run -p xtask -- <ci [--full]|ci-no-fmt|aegis|coverage [--bless|--measure]|layers|wasm|corpus [--report]|corpus-gen|library-gen|hero-gen|styles-gen|scripts|floor|golden [--bless]|svg-golden [--bless]|svg-roundtrip [--measure]|web-golden [--bless|--measure]|perf [--bless|--measure]|dist --web|--native|--source|fuzz|fuzz-quick|panic-hunt|parity|scorecard>";
+const USAGE: &str = "usage: cargo run -p xtask -- <ci [--full]|ci-no-fmt|aegis|coverage [--bless|--measure]|layers|wasm|corpus [--report]|corpus-gen|library-gen|hero-gen|styles-gen|scripts|floor|golden [--bless]|svg-golden [--bless]|svg-roundtrip [--measure]|web-golden [--bless|--measure]|perf [--bless|--measure]|dist --web|--native|--source|--sbom|fuzz|fuzz-quick|panic-hunt|parity|scorecard>";
 
 /// Run Aegis scan with the committed production-profile baseline.
 /// Runs from the workspace root so the baseline path (.aegis-baseline.json)
@@ -145,6 +145,7 @@ fn main() -> ExitCode {
             Some("--web") => finish("dist --web", dist::web()),
             Some("--native") => finish("dist --native", dist::native()),
             Some("--source") => finish("dist --source", dist::source()),
+            Some("--sbom") => finish("dist --sbom", dist::sbom()),
             _ => {
                 eprintln!("{USAGE}");
                 ExitCode::FAILURE

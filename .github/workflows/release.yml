@@ -66,6 +66,10 @@ jobs:
         # clean extraction + `cargo metadata --locked` inside xtask.
         run: cargo run --quiet --package xtask -- dist --source
 
+      - name: Build SBOM
+        # CycloneDX 1.5 over the full locked dependency graph.
+        run: cargo run --quiet --package xtask -- dist --sbom
+
       - name: Zip web bundle
         env:
           TAG: ${{ github.ref_name }}
@@ -88,6 +92,7 @@ jobs:
             sha256sum "dist/native/firecraft_${TAG#v}_amd64.deb"
             sha256sum "dist/firecraft-web-${TAG#v}.zip"
             sha256sum "dist/source/FireCraft-${TAG#v}-source.tar.gz"
+            sha256sum "dist/sbom/firecraft-${TAG#v}-sbom.cdx.json"
             sha256sum dist/native/MANIFEST.sha256
           ) > dist/RELEASE_SHA256.txt
         env:
@@ -104,6 +109,7 @@ jobs:
             dist/native/MANIFEST.sha256
             dist/firecraft-web-*.zip
             dist/source/FireCraft-*-source.tar.gz
+            dist/sbom/firecraft-*-sbom.cdx.json
             dist/RELEASE_SHA256.txt
           retention-days: 5
           # A clean runner has no stale artifacts, but a self-hosted or

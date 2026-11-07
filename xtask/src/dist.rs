@@ -222,6 +222,169 @@ fn sha256_hex_file(path: &Path) -> Result<String, String> {
     Ok(sha256_hex(&bytes))
 }
 
+/// Emits the dependency SBOM under `dist/sbom/` (T27 RP-06): CycloneDX
+/// 1.5 JSON over the **full** locked dependency graph (`cargo metadata
+/// --locked`), each component a purl. No signing/provenance claims are
+/// made here — this is the component inventory only; attestation is
+/// RP-06's separate deliverable once signing credentials exist.
+pub fn sbom() -> Result<(), String> {
+    let out = workspace_root().join("dist/sbom");
+    if out.exists() {
+        std::fs::remove_dir_all(&out).map_err(|e| format!("clear {}: {e}", out.display()))?;
+    }
+    std::fs::create_dir_all(&out).map_err(|e| format!("mkdir {}: {e}", out.display()))?;
+
+    let raw = std::process::Command::new("cargo")
+        .args(["metadata", "--locked", "--format-version", "1"])
+        .current_dir(workspace_root())
+        .output()
+        .map_err(|e| format!("spawn cargo metadata: {e}"))?;
+    if !raw.status.success() {
+        return Err(format!(
+            "cargo metadata failed:\n{}",
+            String::from_utf8_lossy(&raw.stderr).trim()
+        ));
+    }
+    let meta: serde_json::Value = serde_json::from_slice(&raw.stdout)
+        .map_err(|e| format!("parse cargo metadata: {e}"))?;
+    let version = workspace_version()?;
+
+    let mut components = Vec::new();
+    let packages = meta["packages"]
+        .as_array()
+        .ok_or("cargo metadata: no packages array")?;
+    for pkg in packages {
+        let name = pkg["name"]
+            .as_str()
+            .ok_or("cargo metadata: package without name")?;
+        let ver = pkg["version"]
+            .as_str()
+            .ok_or("cargo metadata: package without version")?;
+        // A purl needs the registry source; path/git deps use the
+        // generic type without a purl (CycloneDX allows type-only
+        // components). Workspace members are type "library"/"application"
+        // with a local scope flag.
+        let mut component = serde_json::json!({
+            "type": "library",
+            "name": name,
+            "version": ver,
+            "purl": format!("pkg:cargo/{name}@{ver}"),
+        });
+        if let Some(license) = pkg["license"].as_str() {
+            component["licenses"] = serde_json::json!([
+                { "license": { "id": license } }
+            ]);
+        }
+        if pkg["source"].is_null() {
+            component["scope"] = serde_json::json!("excluded");
+        }
+        components.push(component);
+    }
+
+    let serial = uuid_from_graph(packages)?;
+    let bom = serde_json::json!({
+        "bomFormat": "CycloneDX",
+        "specVersion": "1.5",
+        "serialNumber": format!("urn:uuid:{serial}"),
+        "version": 1,
+        "metadata": {
+            "timestamp": build_timestamp(),
+            "component": {
+                "type": "application",
+                "name": "firecraft",
+                "version": version,
+                "purl": format!("pkg:cargo/firecraft@{version}"),
+            },
+            "tools": [{
+                "vendor": "FireCraft",
+                "name": "xtask dist --sbom",
+                "version": version,
+            }],
+        },
+        "components": components,
+    });
+    let path = out.join(format!("firecraft-{version}-sbom.cdx.json"));
+    let text = serde_json::to_string_pretty(&bom).map_err(|e| format!("encode sbom: {e}"))?;
+    std::fs::write(&path, text.as_bytes())
+        .map_err(|e| format!("write {}: {e}", path.display()))?;
+    let digest = sha256_hex_file(&path)?;
+    eprintln!(
+        "[xtask] dist sbom: {} ({} components, {digest})",
+        path.display(),
+        components.len()
+    );
+    Ok(())
+}
+
+/// Deterministic serial from the locked graph: uuid v5-shaped digest of
+/// the sorted (name, version) list, so the same lockfile yields the
+/// same serial and a dependency change is visible in the identifier.
+fn uuid_from_graph(packages: &[serde_json::Value]) -> Result<String, String> {
+    use sha2::Digest as _;
+    let mut names: Vec<String> = packages
+        .iter()
+        .map(|p| {
+            format!(
+                "{}@{}",
+                p["name"].as_str().unwrap_or("?"),
+                p["version"].as_str().unwrap_or("?")
+            )
+        })
+        .collect();
+    names.sort();
+    names.dedup();
+    let mut hasher = sha2::Sha256::new();
+    for n in &names {
+        hasher.update(n.as_bytes());
+        hasher.update(b"\n");
+    }
+    let digest = hasher.finalize();
+    // Format the first 16 bytes as a UUID; set version nibble to 8
+    // (UUIDv8-style custom, deterministic) per RFC 9562.
+    let mut b = [0u8; 16];
+    b.copy_from_slice(&digest[..16]);
+    b[6] = (b[6] & 0x0f) | 0x80;
+    b[8] = (b[8] & 0x3f) | 0x80;
+    let hex = |bytes: &[u8]| bytes.iter().map(|x| format!("{x:02x}")).collect::<String>();
+    Ok(format!(
+        "{}-{}-{}-{}-{}",
+        hex(&b[..4]),
+        hex(&b[4..6]),
+        hex(&b[6..8]),
+        hex(&b[8..10]),
+        hex(&b[10..16])
+    ))
+}
+
+/// UTC timestamp for the SBOM metadata block (std-only, no chrono).
+fn build_timestamp() -> String {
+    // days since epoch -> civil date (Howard Hinnant's algorithm).
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs() as i64;
+    let days = now.div_euclid(86_400);
+    let secs = now.rem_euclid(86_400);
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z.rem_euclid(146_097);
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146_096) / 365;
+    let y = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = if m <= 2 { y + 1 } else { y };
+    format!(
+        "{y:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z",
+        m,
+        d,
+        secs / 3600,
+        (secs % 3600) / 60,
+        secs % 60
+    )
+}
+
 /// Builds the release bundle with trunk and stages a fresh copy under
 /// `dist/web/` — the staging directory starts empty every run, so a
 /// dist artifact can never carry leftovers from an older tree.

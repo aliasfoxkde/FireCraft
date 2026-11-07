@@ -24,8 +24,9 @@
 | Web (WASM) | zip bundle | **required, tested** | `firecraft-web-{v}.zip` | `xtask dist --web` (trunk + headless bridge smoke) | built each release; deployed to Cloudflare Pages — **live deployment is stale vs tag (RP-05 reconciliation)** |
 | WebOS | `appinfo.json` + host page | **required, tested** | (inside web bundle) | `packaging/webos/` | built |
 | Source | tar.gz | **required, tested** | `FireCraft-{v}-source.tar.gz` | `xtask dist --source` (git archive of HEAD; clean-extract + `cargo metadata --locked` verified; wired into release.yml) | built + verified on fleet |
-| Metadata | manifest/checksums | **partial** | `MANIFEST.sha256`, `RELEASE_SHA256.txt` | `dist --native` + release.yml | present; no SBOM, no provenance, no signatures |
-| Metadata | SBOM / provenance / signing | **planned** | — | RP-06 | nothing |
+| Metadata | manifest/checksums | **required, tested** | `MANIFEST.sha256`, `RELEASE_SHA256.txt` | `dist --native` + release.yml | present |
+| Metadata | SBOM (CycloneDX 1.5) | **required, tested** | `firecraft-{v}-sbom.cdx.json` | `xtask dist --sbom` (full locked graph, deterministic serial; wired into release.yml) | built + JSON-validated on fleet |
+| Metadata | provenance / signing | **planned** | — | RP-06 remaining scope | no signing credentials configured anywhere; attestation blocked until they exist |
 
 ## Build surfaces (what actually exists)
 
@@ -40,10 +41,12 @@
   is primary.
 - Recipes (operator-owned, off-fleet per `packaging/TOOLCHAINS.md`):
   `build-windows.ps1`, `build-macos-dmg.sh`, `build-appimage.sh`.
-- Missing entirely: Android, SBOM, provenance, signing config,
-  tag-driven fail-closed aggregate job, install/launch smoke on
-  packaged artifacts. (Flatpak recipe landed RP-01; RPM declined by
-  [decision 0070](../decisions/0070-rpm-deferred.md).)
+- Missing entirely: Android, provenance/attestation, signing config
+  (no credentials — see secrets inventory), tag-driven fail-closed
+  aggregate job, install/launch smoke on packaged artifacts.
+  (Flatpak recipe landed RP-01; RPM declined by
+  [decision 0070](../decisions/0070-rpm-deferred.md); source archive
+  and SBOM landed RP-05/RP-06.)
 
 ## Known gaps against RP-00 acceptance
 
