@@ -25,7 +25,7 @@
 | WebOS | `appinfo.json` + host page | **required, tested** | (inside web bundle) | `packaging/webos/` | built |
 | Source | tar.gz | **required, tested** | `FireCraft-{v}-source.tar.gz` | `xtask dist --source` (git archive of HEAD; clean-extract + `cargo metadata --locked` verified; wired into release.yml) | built + verified on fleet |
 | Metadata | manifest/checksums | **required, tested** | `MANIFEST.sha256`, `RELEASE_SHA256.txt` | `dist --native` + release.yml | present |
-| Metadata | SBOM (CycloneDX 1.5) | **required, tested** | `firecraft-{v}-sbom.cdx.json` | `xtask dist --sbom` (full locked graph, deterministic serial; wired into release.yml) | built + JSON-validated on fleet |
+| Metadata | SBOM (CycloneDX 1.5) | **required, implementation updated; verification pending** | `firecraft-{v}-sbom.cdx.json` | `xtask dist --sbom` (locked Cargo package inventory, source-appropriate bom-refs, resolved dependency edges; wired into release.yml) | earlier artifact was JSON-validated on fleet; rebuild and validate the updated graph output before release certification |
 | Metadata | provenance / signing | **planned** | — | RP-06 remaining scope | no signing credentials configured anywhere; attestation blocked until they exist |
 
 ## Build surfaces (what actually exists)
