@@ -1,6 +1,6 @@
 # FireCraft Cross-Platform Release Engineering Plan
 
-> **Status:** Approved execution plan; implementation not yet certified  
+> **Status:** Approved execution plan; implementation in progress and not release-certified  
 > **Created:** 2026-11-06  
 > **Repository baseline:** `main` at `5fac7a2267ebc6b61432d5302ab6b02a1ff15c0f` (`v0.2.5`)  
 > **Owner:** FireCraft maintainers  
@@ -34,8 +34,8 @@ The repository currently has a useful release foundation:
 - `cargo run -p xtask -- dist --native` currently targets Linux x86_64 and produces desktop+CLI tar.gz, CLI-only tar.gz, and .deb packages.
 - Existing packaging recipes: `packaging/build-appimage.sh`, `packaging/build-macos-dmg.sh`, `packaging/build-windows.ps1`, and `packaging/windows/firecraft.iss`.
 - `docs/TOOLCHAINS.md` documents those recipes as off-fleet/operator-built outputs rather than verified release artifacts.
-- `.github/workflows/release.yml` already stages web/native release outputs on tag builds, but GitHub Release upload/signing remains an operator step.
-- No Flatpak manifest/verified Flatpak artifact or Android native build is established by this baseline inventory.
+- `.github/workflows/release.yml` stages Linux native, web, source-archive, and SBOM outputs on tag builds, validates the aggregate, and creates a draft GitHub Release. Signing and Cloudflare Pages deployment remain outside the automated release path.
+- A Flatpak manifest and build recipe exist, but no verified Flatpak artifact is established. No native Android build is established; Android remains feasibility-gated.
 - The public Pages deployment previously differed from local `dist/web` hashes. Deployment reconciliation remains a release blocker.
 - The release process currently treats signing as an operator ceremony. Secrets and credentials must remain outside the repository.
 
