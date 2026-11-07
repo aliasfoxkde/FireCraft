@@ -1055,15 +1055,12 @@ impl Shell {
                                     // itself is the whole gesture.
                                 }
                                 Tool::Text
-                                    if self
-                                        .editor
-                                        .hit_at(world)
-                                        .is_some_and(|id| {
-                                            matches!(
-                                                self.editor.document().registry.get(id),
-                                                Some(doc::ObjectData::Text(_))
-                                            )
-                                        }) =>
+                                    if self.editor.hit_at(world).is_some_and(|id| {
+                                        matches!(
+                                            self.editor.document().registry.get(id),
+                                            Some(doc::ObjectData::Text(_))
+                                        )
+                                    }) =>
                                 {
                                     // A press on a text object edits it
                                     // in place (20.1) — the release

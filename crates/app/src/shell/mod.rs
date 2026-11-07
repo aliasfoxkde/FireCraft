@@ -1311,6 +1311,9 @@ impl Shell {
             menus::ShellAction::CycleScreenMode => self.cycle_screen_mode(),
             menus::ShellAction::ReportGap(message) => self.status = message.to_owned(),
             menus::ShellAction::InsertWeb { what } => self.insert_web(what),
+            menus::ShellAction::SelectFrame(step) => self.select_frame_relative(step),
+            menus::ShellAction::SelectPage(step) => self.select_page_relative(step),
+            menus::ShellAction::EditTextSelection => self.edit_text_selection(),
             menus::ShellAction::PreviewInBrowser {
                 secondary,
                 all_pages,
@@ -2090,6 +2093,18 @@ impl Shell {
                 self.run_command("selection.selectChildren", serde_json::json!({}));
                 self.editor.adopt_document_selection();
             }
+            menus::SelAction::Nudge { dx, dy } => {
+                let ids = self.editor.live_selection();
+                if ids.is_empty() {
+                    self.status = "nothing selected to nudge".to_owned();
+                    return;
+                }
+                self.run_command(
+                    "object.translate",
+                    serde_json::json!({ "ids": ids, "dx": dx, "dy": dy }),
+                );
+                self.status = format!("nudged {} object(s)", ids.len());
+            }
             menus::SelAction::SelectSimilar => {
                 let tolerance = self.editor.wand_tolerance;
                 if let Err(error) = self.editor.select_similar(tolerance) {
@@ -2214,6 +2229,79 @@ impl Shell {
             return;
         }
         self.run_command("flatten.selection", serde_json::json!({}));
+    }
+
+    /// The `,`/`.` state-step rows: move the frame pointer within the
+    /// page's state count, clamped (fwref `cmd_Frame_Previous`/`Next`).
+    fn select_frame_relative(&mut self, step: i64) {
+        let page = self.editor.page;
+        let count = self
+            .editor
+            .document()
+            .pages
+            .get(page)
+            .map(|p| p.info.frame_count)
+            .unwrap_or(0);
+        if count == 0 {
+            self.status = "the document has no states".to_owned();
+            return;
+        }
+        let current = i64::try_from(self.editor.frame).unwrap_or(0);
+        let next = (current + step).clamp(0, count - 1);
+        if usize::try_from(next) == Ok(self.editor.frame) {
+            self.status = if step < 0 {
+                "already at the first state".to_owned()
+            } else {
+                "already at the last state".to_owned()
+            };
+            return;
+        }
+        self.editor.frame = usize::try_from(next).unwrap_or(0);
+        self.status = format!("state {}", self.editor.frame + 1);
+    }
+
+    /// PageUp/PageDown: move the page pointer within the document's
+    /// page count, clamped (fwref `cmd_Page_Previous`/`Next`).
+    fn select_page_relative(&mut self, step: i64) {
+        let count = self.editor.document().pages.len();
+        if count == 0 {
+            self.status = "the document has no pages".to_owned();
+            return;
+        }
+        let current = i64::try_from(self.editor.page).unwrap_or(0);
+        let next = (current + step).clamp(0, i64::try_from(count - 1).unwrap_or(0));
+        if usize::try_from(next) == Ok(self.editor.page) {
+            self.status = if step < 0 {
+                "already at the first page".to_owned()
+            } else {
+                "already at the last page".to_owned()
+            };
+            return;
+        }
+        self.editor.page = usize::try_from(next).unwrap_or(0);
+        self.editor.frame = 0;
+        self.status = format!("page {}", self.editor.page + 1);
+    }
+
+    /// The Text Editor / Edit Image Object row (fwref `cmd_TextEditor`,
+    /// `cmd_EditImageObject`): a selected text object opens the
+    /// in-canvas text overlay; anything else reports that the kind has
+    /// no editor in this build.
+    fn edit_text_selection(&mut self) {
+        let Some(id) = self.editor.selection else {
+            self.status = "select a text object to edit it".to_owned();
+            return;
+        };
+        let is_text = matches!(
+            self.editor.session.document().registry.get(id),
+            Some(doc::ObjectData::Text(_))
+        );
+        if is_text {
+            self.begin_text_edit(id);
+            self.status = "editing text".to_owned();
+        } else {
+            self.status = "the selected kind has no editor in this build".to_owned();
+        }
     }
 
     /// Edit ▸ Insert ▸ Hotspot / slice rows / New Button…: the target
@@ -5250,7 +5338,7 @@ mod tests {
     /// selection; with nothing applied yet it reports, never acts.
     #[test]
     fn repeat_filter_reapplies_the_last_preset() {
-        let (mut shell, id) = two_path_shell();
+        let (mut shell, _id) = two_path_shell();
         // Nothing applied yet — the CS6 "no filters to repeat" report.
         shell.run_action(&menus::Action::RepeatFilter);
         assert_eq!(shell.status, "no filters to repeat");

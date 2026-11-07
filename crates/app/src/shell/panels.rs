@@ -1505,7 +1505,11 @@ impl Shell {
         }
         ui.horizontal(|ui| {
             let res = ui
-                .add(egui::DragValue::new(&mut resolution).speed(1.0).suffix(" px"))
+                .add(
+                    egui::DragValue::new(&mut resolution)
+                        .speed(1.0)
+                        .suffix(" px"),
+                )
                 .on_hover_text("document resolution");
             if ui.checkbox(&mut unit_cm, "per cm").changed() {
                 self.run_command(
@@ -1578,10 +1582,18 @@ impl Shell {
             .iter()
             .filter_map(|id| {
                 let fields = match self.editor.document().registry.get(*id) {
-                    Some(ObjectData::Path(path)) => (path.opacity, path.blend, path.visible, path.locked),
-                    Some(ObjectData::Text(text)) => (text.opacity, text.blend, text.visible, text.locked),
-                    Some(ObjectData::Group(group)) => (group.opacity, group.blend, group.visible, group.locked),
-                    Some(ObjectData::Image(image)) => (image.opacity, image.blend, image.visible, image.locked),
+                    Some(ObjectData::Path(path)) => {
+                        (path.opacity, path.blend, path.visible, path.locked)
+                    }
+                    Some(ObjectData::Text(text)) => {
+                        (text.opacity, text.blend, text.visible, text.locked)
+                    }
+                    Some(ObjectData::Group(group)) => {
+                        (group.opacity, group.blend, group.visible, group.locked)
+                    }
+                    Some(ObjectData::Image(image)) => {
+                        (image.opacity, image.blend, image.visible, image.locked)
+                    }
                     _ => return None,
                 };
                 Some((*id, fields.0, fields.1, fields.2, fields.3))
