@@ -505,6 +505,8 @@ pub struct Drag {
     pub start: geom::Point,
     /// Current world position.
     pub current: geom::Point,
+    /// Pointer samples for gesture tools such as Redraw Path.
+    pub trace: Vec<geom::Point>,
     /// `Some` while a pointer drag moves objects: the ids were fixed
     /// at drag start (the press selects its target first), and
     /// `moved` records whether any translate applied — a click-sized
@@ -579,9 +581,8 @@ fn drag_class(tool: Tool) -> DragClass {
 }
 
 /// The quadrangle CS6's Distort tool pulls: the corner nearest the
-/// drag's start travels with the pointer, and its opposite corner
-/// travels with it, so the quad stays a parallelogram — the engine's
-/// transform path carries an affine and refuses anything else.
+/// drag's start and the next adjacent corner travel together, shearing
+/// the shape while preserving the parallelogram required by the engine.
 ///
 /// The corners come back as unit-square percentages of `bounds`, in
 /// the engine's order: top-left, top-right, bottom-right,
@@ -606,11 +607,11 @@ fn drag_quadrangle(bounds: &geom::Rect, start: geom::Point, current: geom::Point
             grabbed = index;
         }
     }
-    let opposite = (grabbed + 2) % 4;
+    let adjacent = (grabbed + 1) % 4;
     let delta = (current.x - start.x, current.y - start.y);
     let mut out = [[0.0, 0.0]; 4];
     for (index, (cx, cy)) in corners.iter().enumerate() {
-        let (px, py) = if index == grabbed || index == opposite {
+        let (px, py) = if index == grabbed || index == adjacent {
             (cx + delta.0, cy + delta.1)
         } else {
             (*cx, *cy)
@@ -1706,6 +1707,7 @@ impl Editor {
             constraint: DragConstraint::default(),
             start: world,
             current: world,
+            trace: vec![world],
             moving: None,
         });
     }
@@ -1729,6 +1731,7 @@ impl Editor {
             constraint: DragConstraint::default(),
             start: world,
             current: world,
+            trace: vec![world],
             moving: Some(MoveDrag { ids, moved: false }),
         });
         Ok(())
@@ -1772,6 +1775,7 @@ impl Editor {
             constraint: DragConstraint::default(),
             start: world,
             current: world,
+            trace: vec![world],
             moving: Some(MoveDrag {
                 ids: created.clone(),
                 moved: false,
@@ -1798,6 +1802,16 @@ impl Editor {
             Some(drag) => constrain_geometry(drag.tool, drag.start, world, constraint),
             None => return,
         };
+        if let Some(drag) = &mut self.drag {
+            if drag.tool == Tool::RedrawPath {
+                let changed = drag.trace.last().is_none_or(|last| {
+                    last.x != constrained.x || last.y != constrained.y
+                });
+                if changed {
+                    drag.trace.push(constrained);
+                }
+            }
+        }
         self.drag_step(constrained);
     }
 
@@ -2372,7 +2386,7 @@ impl Editor {
             Tool::Scale => {
                 // CS6's Scale tool: the selection scales into the
                 // dragged rectangle, anchored at its top-left corner.
-                let ids = self.document().object_selection.clone();
+                let ids = self.live_selection();
                 let Some(bounds) = union_selection_bounds(self.document(), &ids) else {
                     return Err(EngineError::InvalidState {
                         name: "object.scale".to_owned(),
@@ -2402,7 +2416,7 @@ impl Editor {
                 // CS6's Skew tool: the drag leans the selection. The
                 // horizontal drag leans it sideways, the vertical one
                 // forward, at half a degree per pixel.
-                let ids = self.document().object_selection.clone();
+                let ids = self.live_selection();
                 if ids.is_empty() {
                     return Err(EngineError::InvalidState {
                         name: "object.skew".to_owned(),
@@ -2424,9 +2438,9 @@ impl Editor {
                 // CS6's Distort tool: the drag pulls a corner of the
                 // selection's quadrangle. The engine's transform path
                 // carries an affine, so only parallelogram quads are
-                // accepted — the opposite corner travels with the
+                // accepted — the adjacent corner travels with the
                 // dragged one.
-                let ids = self.document().object_selection.clone();
+                let ids = self.live_selection();
                 if ids.is_empty() {
                     return Err(EngineError::InvalidState {
                         name: "object.setQuadrangle".to_owned(),
@@ -2453,7 +2467,7 @@ impl Editor {
             Tool::RedrawPath => {
                 // CS6's Redraw Path: the drag's trace replaces the
                 // selected path's contour.
-                self.redraw_selected_path(drag.start, drag.current)?;
+                self.redraw_selected_path(&drag.trace)?;
                 false
             }
             Tool::Pointer
@@ -2540,11 +2554,7 @@ impl Editor {
     ///
     /// # Errors
     /// The engine refuses the command; the document is untouched.
-    fn redraw_selected_path(
-        &mut self,
-        start: geom::Point,
-        current: geom::Point,
-    ) -> Result<(), EngineError> {
+    fn redraw_selected_path(&mut self, trace: &[geom::Point]) -> Result<(), EngineError> {
         let Some(id) = self.selected_path() else {
             return Err(EngineError::InvalidState {
                 name: "path.redrawPath".to_owned(),
@@ -2564,15 +2574,22 @@ impl Editor {
                 detail: "the selected path has no contour".to_owned(),
             });
         }
+        if trace.len() < 2 {
+            return Err(EngineError::InvalidState {
+                name: "path.redrawPath".to_owned(),
+                detail: "the redraw gesture needs at least two pointer samples".to_owned(),
+            });
+        }
+        let points: Vec<serde_json::Value> = trace
+            .iter()
+            .map(|point| serde_json::json!({ "x": point.x, "y": point.y }))
+            .collect();
         self.apply(
             "path.redrawPath",
             serde_json::json!({
                 "id": id, "contour": 0,
                 "from": 0, "to": point_count,
-                "points": [
-                    { "x": start.x, "y": start.y },
-                    { "x": current.x, "y": current.y },
-                ],
+                "points": points,
             }),
         )
     }
@@ -4009,6 +4026,57 @@ mod tests {
             .elements
             .last()
             .expect("the creation drag made an object")
+    }
+
+    #[test]
+    fn distort_drag_preserves_the_affine_parallelogram() {
+        let bounds = geom::Rect {
+            x0: 0.0,
+            y0: 0.0,
+            x1: 100.0,
+            y1: 60.0,
+        };
+        let quad = drag_quadrangle(
+            &bounds,
+            geom::Point::new(0.0, 0.0),
+            geom::Point::new(12.0, 7.0),
+        );
+        for axis in 0..2 {
+            let left = quad[0][axis] + quad[2][axis];
+            let right = quad[1][axis] + quad[3][axis];
+            assert!((left - right).abs() < 1e-9, "axis {axis}: {quad:?}");
+        }
+    }
+
+    #[test]
+    fn scale_drag_uses_the_live_view_selection() {
+        let mut editor = Editor::untitled();
+        let id = rect_at(&mut editor, 10.0, 10.0);
+        editor.set_selection(vec![id]);
+        editor.tool = Tool::Scale;
+        editor.begin_drag(geom::Point::new(10.0, 10.0));
+        editor.drag_to(geom::Point::new(90.0, 50.0));
+        editor.end_drag().unwrap();
+        let bounds = union_selection_bounds(editor.document(), &[id]).unwrap();
+        assert!((bounds.width() - 80.0).abs() < 0.001, "{bounds:?}");
+        assert!((bounds.height() - 40.0).abs() < 0.001, "{bounds:?}");
+    }
+
+    #[test]
+    fn redraw_path_uses_the_sampled_pointer_trace() {
+        let mut editor = Editor::untitled();
+        let id = rect_at(&mut editor, 10.0, 10.0);
+        editor.set_selection(vec![id]);
+        editor.tool = Tool::RedrawPath;
+        editor.begin_drag(geom::Point::new(10.0, 10.0));
+        editor.drag_to(geom::Point::new(20.0, 5.0));
+        editor.drag_to(geom::Point::new(30.0, 10.0));
+        editor.end_drag().unwrap();
+        let Some(ObjectData::Path(path)) = editor.document().registry.get(id) else {
+            panic!("redrawn object remains a path");
+        };
+        assert_eq!(path.contours[0].points.len(), 3);
+        assert_eq!(path.contours[0].points[1].anchor, geom::Point::new(20.0, 5.0));
     }
 
     fn first_anchor(editor: &Editor, id: doc::ObjectId) -> (f64, f64) {
