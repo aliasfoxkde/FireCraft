@@ -62,6 +62,6 @@ These items extend the discontinued product rather than reproduce a CS6 feature.
 
 ## Known menu and model gaps
 
-- 8 of 289 menu rows remain non-dispatching. The menu wiring campaign is complete; each remaining row needs its feature or evidence before it can be wired honestly.
+- 2 of 294 menu rows are currently inert. Eight additional rows remain feature- or evidence-gated; the menu wiring campaign is complete and each remaining row needs its feature or evidence before it can be wired honestly.
 - The DOM verb matrix has 3 partial, evidence-gated verbs and 85 entries classified as not applicable to the current API surface. See the [generated parity matrix](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/planning/generated/dom-parity.md).
 - For detailed phase criteria and dated validation receipts, use [NEXT.md](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/NEXT.md) and [PROGRESS.md](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/PROGRESS.md).
