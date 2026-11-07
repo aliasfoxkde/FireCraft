@@ -5,7 +5,7 @@
 > everything lives, how to work here, and exactly what to do next.
 > Day-to-day rules: [`../AGENTS.md`](../AGENTS.md). Master plan:
 > [`PLANNING.md`](PLANNING.md). Live status: [`PROGRESS.md`](PROGRESS.md).
-> Session log: [`SESSIONS.md`](SESSIONS.md). Project arc: [`HISTORY.md`](HISTORY.md).
+> Session log: [`SESSIONS.md`](SESSIONS.md). Project arc: [`HISTORY.md`](HISTORY.md). Cross-platform release work order: [`RELEASE-ENGINEERING-PLAN.md`](RELEASE-ENGINEERING-PLAN.md) (ticket [T27](tasks/T27-cross-platform-release.md)).
 
 ---
 
@@ -406,6 +406,8 @@ Phase 10 defects passed every desktop gate. The working pattern
    diagnosing anything (edge propagation lags a few minutes).
 
 ### 6.3 Release + deploy doors
+
+**Cross-platform release campaign:** before starting packaging work, read [`RELEASE-ENGINEERING-PLAN.md`](RELEASE-ENGINEERING-PLAN.md) and ticket [`T27`](tasks/T27-cross-platform-release.md). The existing steps below describe the current release path and must not be mistaken for completed Windows/macOS/Flatpak/Android support. Keep platform recipes, actual builds, install/launch receipts, and published assets as separate evidence states.
 
 - **Version stamps (8):** workspace `Cargo.toml`, the six member
   `Cargo.toml`s incl. `web/`, the `xtask` `compose` dep pin,
