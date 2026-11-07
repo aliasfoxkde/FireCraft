@@ -16,6 +16,7 @@
 
 use crate::util::{run_in, sha256_hex, workspace_root};
 use base64::Engine as _;
+use std::collections::{BTreeMap, BTreeSet};
 use std::io::{Read as _, Write as _};
 use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
@@ -223,10 +224,11 @@ fn sha256_hex_file(path: &Path) -> Result<String, String> {
 }
 
 /// Emits the dependency SBOM under `dist/sbom/` (T27 RP-06): CycloneDX
-/// 1.5 JSON over the **full** locked dependency graph (`cargo metadata
-/// --locked`), each component a purl. No signing/provenance claims are
-/// made here — this is the component inventory only; attestation is
-/// RP-06's separate deliverable once signing credentials exist.
+/// 1.5 from the complete locked Cargo package inventory and resolved
+/// dependency edges. Registry packages use Cargo purls; workspace,
+/// path, and git packages use stable FireCraft bom-refs instead. No
+/// signing/provenance claims are made here — those remain separate
+/// deliverables once signing credentials exist.
 pub fn sbom() -> Result<(), String> {
     let out = workspace_root().join("dist/sbom");
     if out.exists() {
@@ -253,6 +255,7 @@ pub fn sbom() -> Result<(), String> {
     let packages = meta["packages"]
         .as_array()
         .ok_or("cargo metadata: no packages array")?;
+    let mut package_refs = BTreeMap::new();
     for pkg in packages {
         let name = pkg["name"]
             .as_str()
@@ -260,27 +263,30 @@ pub fn sbom() -> Result<(), String> {
         let ver = pkg["version"]
             .as_str()
             .ok_or("cargo metadata: package without version")?;
-        // A purl needs the registry source; path/git deps use the
-        // generic type without a purl (CycloneDX allows type-only
-        // components). Workspace members are type "library"/"application"
-        // with a local scope flag.
+        let (bom_ref, purl) = package_bom_ref(pkg)?;
+        let id = pkg["id"]
+            .as_str()
+            .ok_or("cargo metadata: package without id")?;
+        package_refs.insert(id.to_owned(), bom_ref.clone());
         let mut component = serde_json::json!({
             "type": "library",
             "name": name,
             "version": ver,
-            "purl": format!("pkg:cargo/{name}@{ver}"),
+            "bom-ref": bom_ref,
         });
+        if let Some(purl) = purl {
+            component["purl"] = serde_json::json!(purl);
+        }
         if let Some(license) = pkg["license"].as_str() {
             component["licenses"] = serde_json::json!([
                 { "license": { "id": license } }
             ]);
         }
-        if pkg["source"].is_null() {
-            component["scope"] = serde_json::json!("excluded");
-        }
         components.push(component);
     }
 
+    let root_ref = format!("urn:firecraft:application:firecraft@{version}");
+    let dependencies = cyclonedx_dependencies(&meta, &package_refs, &root_ref)?;
     let serial = uuid_from_graph(packages)?;
     let bom = serde_json::json!({
         "bomFormat": "CycloneDX",
@@ -293,7 +299,7 @@ pub fn sbom() -> Result<(), String> {
                 "type": "application",
                 "name": "firecraft",
                 "version": version,
-                "purl": format!("pkg:cargo/firecraft@{version}"),
+                "bom-ref": root_ref,
             },
             "tools": [{
                 "vendor": "FireCraft",
@@ -302,6 +308,7 @@ pub fn sbom() -> Result<(), String> {
             }],
         },
         "components": components,
+        "dependencies": dependencies,
     });
     let path = out.join(format!("firecraft-{version}-sbom.cdx.json"));
     let text = serde_json::to_string_pretty(&bom).map_err(|e| format!("encode sbom: {e}"))?;
@@ -314,6 +321,102 @@ pub fn sbom() -> Result<(), String> {
         components.len()
     );
     Ok(())
+}
+
+/// Stable CycloneDX identity for one Cargo package. Only crates.io
+/// registry packages receive a Cargo purl; path and git packages are
+/// identified by a bom-ref derived from their source identity.
+fn package_bom_ref(
+    package: &serde_json::Value,
+) -> Result<(String, Option<String>), String> {
+    let name = package["name"]
+        .as_str()
+        .ok_or("cargo metadata: package without name")?;
+    let version = package["version"]
+        .as_str()
+        .ok_or("cargo metadata: package without version")?;
+    let source = package["source"].as_str();
+    const CRATES_IO: &str = "registry+https://github.com/rust-lang/crates.io-index";
+    if source == Some(CRATES_IO) {
+        let purl = format!("pkg:cargo/{name}@{version}");
+        return Ok((purl.clone(), Some(purl)));
+    }
+
+    let source_identity = if let Some(source) = source {
+        source.to_owned()
+    } else {
+        let manifest = package["manifest_path"]
+            .as_str()
+            .ok_or_else(|| format!("cargo metadata: {name} has no manifest_path"))?;
+        let path = Path::new(manifest);
+        let relative = path
+            .strip_prefix(workspace_root())
+            .unwrap_or(path)
+            .to_string_lossy()
+            .replace('\\', "/");
+        format!("path:{relative}")
+    };
+    let digest = sha256_hex(source_identity.as_bytes());
+    Ok((
+        format!("urn:firecraft:cargo:{name}@{version}:{digest}"),
+        None,
+    ))
+}
+
+/// Emits the CycloneDX dependency edges from Cargo's resolved graph,
+/// plus a FireCraft application root pointing at all workspace members.
+fn cyclonedx_dependencies(
+    metadata: &serde_json::Value,
+    package_refs: &BTreeMap<String, String>,
+    root_ref: &str,
+) -> Result<Vec<serde_json::Value>, String> {
+    let nodes = metadata["resolve"]["nodes"]
+        .as_array()
+        .ok_or("cargo metadata: resolve.nodes is missing")?;
+    let mut dependencies = Vec::with_capacity(nodes.len() + 1);
+    for node in nodes {
+        let id = node["id"]
+            .as_str()
+            .ok_or("cargo metadata: resolve node without id")?;
+        let reference = package_refs
+            .get(id)
+            .ok_or_else(|| format!("cargo metadata: no bom-ref for resolved package {id}"))?;
+        let mut depends_on = BTreeSet::new();
+        if let Some(edges) = node["deps"].as_array() {
+            for edge in edges {
+                let package_id = edge["pkg"]
+                    .as_str()
+                    .ok_or("cargo metadata: dependency edge without package id")?;
+                let dependency_ref = package_refs.get(package_id).ok_or_else(|| {
+                    format!("cargo metadata: no bom-ref for dependency {package_id}")
+                })?;
+                depends_on.insert(dependency_ref.clone());
+            }
+        }
+        dependencies.push(serde_json::json!({
+            "ref": reference,
+            "dependsOn": depends_on.into_iter().collect::<Vec<_>>(),
+        }));
+    }
+
+    let members = metadata["workspace_members"]
+        .as_array()
+        .ok_or("cargo metadata: workspace_members is missing")?;
+    let mut workspace_refs = BTreeSet::new();
+    for member in members {
+        let id = member
+            .as_str()
+            .ok_or("cargo metadata: workspace member id is not a string")?;
+        let reference = package_refs
+            .get(id)
+            .ok_or_else(|| format!("cargo metadata: no bom-ref for workspace member {id}"))?;
+        workspace_refs.insert(reference.clone());
+    }
+    dependencies.push(serde_json::json!({
+        "ref": root_ref,
+        "dependsOn": workspace_refs.into_iter().collect::<Vec<_>>(),
+    }));
+    Ok(dependencies)
 }
 
 /// Deterministic serial from the locked graph: uuid v5-shaped digest of
@@ -1013,6 +1116,66 @@ fn respond(mut stream: TcpStream, routes: &[Route]) {
         body.len()
     );
     let _ = stream.write_all(body);
+}
+
+#[cfg(test)]
+mod sbom_tests {
+    use super::*;
+
+    #[test]
+    fn registry_packages_get_cargo_purls_but_local_packages_do_not() {
+        let registry = serde_json::json!({
+            "id": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.0",
+            "name": "serde",
+            "version": "1.0.0",
+            "source": "registry+https://github.com/rust-lang/crates.io-index",
+        });
+        assert_eq!(
+            package_bom_ref(&registry).unwrap(),
+            ("pkg:cargo/serde@1.0.0".to_owned(), Some("pkg:cargo/serde@1.0.0".to_owned()))
+        );
+
+        let local = serde_json::json!({
+            "id": "path+file:///workspace/crates/engine#engine@0.1.0",
+            "name": "engine",
+            "version": "0.1.0",
+            "source": null,
+            "manifest_path": workspace_root().join("crates/engine/Cargo.toml"),
+        });
+        let (reference, purl) = package_bom_ref(&local).unwrap();
+        assert!(reference.starts_with("urn:firecraft:cargo:engine@0.1.0:"));
+        assert!(purl.is_none());
+    }
+
+    #[test]
+    fn cyclonedx_dependencies_preserve_workspace_and_package_edges() {
+        let workspace_id = "path+file:///workspace/crates/app#app@0.1.0";
+        let registry_id = "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.0";
+        let metadata = serde_json::json!({
+            "workspace_members": [workspace_id],
+            "resolve": { "nodes": [
+                { "id": workspace_id, "deps": [{ "pkg": registry_id }] },
+                { "id": registry_id, "deps": [] }
+            ]}
+        });
+        let refs = BTreeMap::from([
+            (workspace_id.to_owned(), "urn:firecraft:app".to_owned()),
+            (registry_id.to_owned(), "pkg:cargo/serde@1.0.0".to_owned()),
+        ]);
+        let dependencies = cyclonedx_dependencies(
+            &metadata,
+            &refs,
+            "urn:firecraft:application:firecraft@0.1.0",
+        )
+        .unwrap();
+        let app = dependencies
+            .iter()
+            .find(|entry| entry["ref"] == "urn:firecraft:app")
+            .unwrap();
+        assert_eq!(app["dependsOn"][0], "pkg:cargo/serde@1.0.0");
+        let root = dependencies.last().unwrap();
+        assert_eq!(root["dependsOn"][0], "urn:firecraft:app");
+    }
 }
 
 /// Runs `browser` with `args`, killing it if it outlives
