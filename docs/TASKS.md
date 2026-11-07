@@ -52,6 +52,7 @@
 | 22 | Screenshot-driven frontend audit + systematic refinement | — |
 | 24 | docs/TASKS.md + docs/tasks/ tracking scaffold | — (this change) |
 | 25 | Responsive/adaptive layout audit + fixes | — |
+| 27 | Cross-platform release engineering: Windows, macOS, Linux package matrix, Android feasibility, source, SBOM/provenance, signing, CI aggregation and certification | [tasks/T27-cross-platform-release.md](tasks/T27-cross-platform-release.md) | planned — P0
 
 ## Closed (this board's lifetime)
 
