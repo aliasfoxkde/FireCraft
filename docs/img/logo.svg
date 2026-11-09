@@ -1,53 +1,53 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">FireCraft</title>
+  <desc id="desc">A stylized fox formed from an ember-orange flame, representing creative tools and precision editing.</desc>
   <defs>
-    <linearGradient id="brand" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#E87A2E"/>
-      <stop offset="1" stop-color="#2F6FD8"/>
+    <linearGradient id="ember" x1="28" y1="24" x2="218" y2="230" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFD36A"/>
+      <stop offset=".42" stop-color="#FF9A24"/>
+      <stop offset="1" stop-color="#E84B22"/>
     </linearGradient>
-    <linearGradient id="flame" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#FFB65C"/>
-      <stop offset="1" stop-color="#F4F1EA"/>
+    <linearGradient id="light" x1="74" y1="88" x2="190" y2="190" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFF4D8"/>
+      <stop offset="1" stop-color="#FFC45B"/>
     </linearGradient>
   </defs>
-  <!-- rounded-square badge -->
-  <rect x="4" y="4" width="120" height="120" rx="24" fill="url(#brand)"/>
-  <!-- flame body: a closed vector path, as if mid-edit -->
-  <path d="M64 26
-           C 78 38, 86 50, 84 66
-           C 83 76, 76 82, 76 90
-           C 76 98, 70 104, 64 104
-           C 58 104, 52 98, 52 90
-           C 52 82, 45 76, 44 66
-           C 42 50, 50 38, 64 26 Z"
-        fill="url(#flame)"
-        stroke="#2B313D" stroke-width="2"/>
-  <!-- inner flame cut -->
-  <path d="M64 62
-           C 70 70, 72 76, 70 84
-           C 69 90, 66 94, 64 94
-           C 62 94, 59 90, 58 84
-           C 56 76, 58 70, 64 62 Z"
-        fill="#E87A2E"/>
-  <!-- vector-edit overlay: anchor points -->
-  <g stroke="#2B313D" stroke-width="1.5">
-    <rect x="61" y="23" width="6" height="6" fill="#2F6FD8"/>
-    <circle cx="84" cy="66" r="3.5" fill="#FFFFFF"/>
-    <circle cx="76" cy="90" r="3.5" fill="#FFFFFF"/>
-    <circle cx="64" cy="104" r="3.5" fill="#FFFFFF"/>
-    <circle cx="52" cy="90" r="3.5" fill="#FFFFFF"/>
-    <circle cx="44" cy="66" r="3.5" fill="#FFFFFF"/>
-  </g>
-  <!-- Bézier direction handles on the apex anchor -->
-  <g stroke="#2B313D" stroke-width="1.5">
-    <line x1="64" y1="26" x2="50" y2="20"/>
-    <line x1="64" y1="26" x2="78" y2="20"/>
-  </g>
-  <g fill="#2B313D">
-    <circle cx="50" cy="20" r="2.5"/>
-    <circle cx="78" cy="20" r="2.5"/>
-  </g>
-  <!-- selection bounding box, thin dashes -->
-  <rect x="36" y="16" width="56" height="96" rx="4"
-        fill="none" stroke="#2F6FD8" stroke-width="1.5"
-        stroke-dasharray="4 3" opacity="0.9"/>
+  <rect x="8" y="8" width="240" height="240" rx="54" fill="#171B24"/>
+  <path d="M128 24
+    C115 47 91 57 67 61
+    C70 82 61 98 43 112
+    C26 126 25 154 39 177
+    C57 207 91 229 128 234
+    C165 229 199 207 217 177
+    C231 154 230 126 213 112
+    C195 98 186 82 189 61
+    C165 57 141 47 128 24Z" fill="url(#ember)"/>
+  <path d="M75 91
+    C88 103 101 109 117 111
+    C107 119 98 131 93 145
+    C88 159 91 176 103 188
+    C114 199 130 205 146 202
+    C164 199 179 187 188 171
+    C177 179 163 182 151 178
+    C137 174 129 163 130 150
+    C131 136 143 126 158 125
+    C171 124 183 130 191 139
+    C193 119 183 100 166 89
+    C151 80 132 78 116 84
+    C101 89 87 92 75 91Z" fill="#171B24"/>
+  <path d="M89 99
+    C103 108 116 111 130 109
+    C117 120 108 135 108 150
+    C108 166 118 179 134 184
+    C147 188 163 184 174 174
+    C164 193 145 204 125 199
+    C103 194 88 176 86 155
+    C84 135 91 117 105 104Z" fill="url(#light)"/>
+  <path d="M155 128 C166 121 181 122 192 132
+    C183 134 175 139 168 147
+    C162 140 158 134 155 128Z" fill="#FFF4D8"/>
+  <path d="M177 148 C184 145 191 145 198 149
+    C192 157 183 160 174 157Z" fill="#171B24"/>
+  <path d="M96 117 C105 109 117 105 130 105" fill="none" stroke="#FFE4A6" stroke-width="5" stroke-linecap="round" opacity=".85"/>
+  <path d="M55 154 C57 180 75 202 99 214" fill="none" stroke="#FFD36A" stroke-width="5" stroke-linecap="round" opacity=".7"/>
 </svg>
