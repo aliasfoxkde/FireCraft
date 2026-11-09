@@ -65,13 +65,10 @@ source/
 # rules, and every session appends new prose — its findings churn.
 log/
 
-# The gate's own suppression files. Both are read by the scanner as
-# text: one names the rules it suppresses, the other records content
-# digests and the prose explaining each one. Their own contents land
-# back in the findings, so they are excluded like the generated files
-# above.
+# The gate's own suppression file. It is read by the scanner as text
+# (it names the rules it suppresses), and its own contents land back
+# in the findings, so it is excluded like the generated files above.
 .aegis-pattern-state.json
-.aegis-allowlist.json
 # The baseline file itself — machine-generated from a scan. It lists
 # every finding's path and content digest, so scanning it feeds those
 # paths and digests back into the very report they belong to.

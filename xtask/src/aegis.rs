@@ -31,6 +31,11 @@ use crate::util;
 /// The committed baseline: one record per content key, tab-separated.
 pub const BASELINE: &str = ".aegis-baseline.tsv";
 
+/// The committed rule-class suppression (decision 0070): the rule
+/// classes that cannot be true positives in this tree, installed into
+/// the scanner's private `HOME` for the duration of a scan.
+pub const PATTERN_STATE: &str = ".aegis-pattern-state.json";
+
 /// Header written above the baseline records.
 const HEADER: &str = "\
 # Aegis content baseline — content-keyed and line-independent.
@@ -255,21 +260,108 @@ pub fn bless() -> Result<(), String> {
     Ok(())
 }
 
+/// Prints the findings the baseline does not cover, with their keys.
+///
+/// Read-only: admitting a finding is a human decision, so this mode
+/// never writes the baseline.
+pub fn report() -> Result<(), String> {
+    let baseline = read_baseline()?;
+    for finding in uncovered(&scan()?, &baseline) {
+        eprintln!(
+            "{}:{}\t{}\t{}",
+            finding.pattern, finding.file, finding.digest, finding.line
+        );
+    }
+    Ok(())
+}
+
 /// Scans the workspace and returns the findings.
+///
+/// The scan runs against a private `HOME` carrying the committed
+/// `.aegis-pattern-state.json`, so the rule classes decision 0070
+/// adjudicated as noise are skipped by the scanner itself and the
+/// developer's own Aegis configuration is never touched.
 fn scan() -> Result<Vec<Finding>, String> {
     let root = util::workspace_root();
-    let (stdout, stderr) = util::capture_in(
+    let home = install_pattern_state(&root)?;
+    let home_path = home.0.to_string_lossy().into_owned();
+    let output = util::capture_with_env(
         Some(root.as_path()),
         &aegis_binary()?,
         &["--format", "json", "-c", "production", "scan", ".", "-q"],
+        &[("HOME", home_path.as_str())],
     )?;
+    let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
+    let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
     if stdout.trim().is_empty() {
         return Err(format!(
-            "aegis wrote no JSON to stdout (exit diagnostics follow):\n{}",
-            stderr.trim()
+            "aegis wrote no JSON to stdout (exit diagnostics follow):\n{stderr}"
         ));
     }
     parse_scan(&stdout)
+}
+
+/// A per-invocation Aegis `HOME`. Drop removes the scratch tree even
+/// when scanning or report parsing fails.
+struct ScratchHome(std::path::PathBuf);
+
+impl Drop for ScratchHome {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+/// Installs the committed pattern-state suppression into a unique,
+/// owner-private scratch home and returns its cleanup guard.
+///
+/// The home is a scratch directory outside the tree: the scanner only
+/// reads `$HOME/.config/aegis/pattern-state.json` from it, and the
+/// developer's own Aegis configuration is never touched.
+fn install_pattern_state(root: &std::path::Path) -> Result<ScratchHome, String> {
+    let source = root.join(PATTERN_STATE);
+    let state =
+        std::fs::read_to_string(&source).map_err(|e| format!("read {}: {e}", source.display()))?;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+    let stamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|e| format!("clock before Unix epoch: {e}"))?
+        .as_nanos();
+    let base = std::env::temp_dir();
+    let mut created = None;
+    for _ in 0..32 {
+        let sequence = NEXT.fetch_add(1, Ordering::Relaxed);
+        let candidate = base.join(format!(
+            "firecraft-aegis-{}-{stamp:x}-{sequence:x}",
+            std::process::id()
+        ));
+        #[cfg(unix)]
+        let result = {
+            use std::os::unix::fs::DirBuilderExt;
+            let mut builder = std::fs::DirBuilder::new();
+            builder.mode(0o700).create(&candidate)
+        };
+        #[cfg(not(unix))]
+        let result = std::fs::create_dir(&candidate);
+        match result {
+            Ok(()) => {
+                created = Some(candidate);
+                break;
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(format!("create private Aegis scratch home: {error}")),
+        }
+    }
+    let home =
+        created.ok_or_else(|| "could not allocate a unique Aegis scratch home".to_owned())?;
+    let guard = ScratchHome(home);
+    let config = guard.0.join(".config").join("aegis");
+    std::fs::create_dir_all(&config).map_err(|e| format!("create {}: {e}", config.display()))?;
+    std::fs::write(config.join("pattern-state.json"), state)
+        .map_err(|e| format!("write the Aegis pattern state: {e}"))?;
+    Ok(guard)
 }
 
 /// The Aegis scanner's CLI. An unrelated tool also ships under the
@@ -651,5 +743,40 @@ mod tests {
     fn a_scan_document_without_findings_is_refused() {
         assert!(parse_scan("{}").is_err());
         assert!(parse_scan("not json").is_err());
+    }
+
+    /// The scratch `HOME` the scanner runs under is private, unique
+    /// per invocation, and removed when the guard drops — the scanner
+    /// must never see the developer's own Aegis configuration.
+    #[test]
+    fn the_pattern_state_home_is_private_unique_and_cleaned() {
+        let root = std::env::temp_dir().join(format!(
+            "firecraft-aegis-test-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir(&root).unwrap();
+        std::fs::write(root.join(PATTERN_STATE), r#"{"disabled":[]}"#).unwrap();
+
+        let first = install_pattern_state(&root).unwrap();
+        let first_path = first.0.clone();
+        assert!(first_path.join(".config/aegis/pattern-state.json").is_file());
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(
+                std::fs::metadata(&first_path).unwrap().permissions().mode() & 0o077,
+                0
+            );
+        }
+        let second = install_pattern_state(&root).unwrap();
+        assert_ne!(first.0, second.0);
+        drop(first);
+        assert!(!first_path.exists());
+        drop(second);
+        std::fs::remove_dir_all(root).unwrap();
     }
 }

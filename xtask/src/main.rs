@@ -1,7 +1,7 @@
 //! `FireCraft` verification gates (`cargo run -p xtask -- <gate>`).
 //!
 //! Gates: `ci [--full]` (everything; `--full` adds the libfuzzer
-//! compile check), `aegis [--bless]` (secret/PII scan against the
+//! compile check), `aegis [--bless|--report]` (secret/PII scan against the
 //! content-keyed baseline; `--bless` rewrites it), `layers` (workspace
 //! dependency tiers), `wasm`
 //! (wasm32 check for pure crates), `corpus` (pinned corpus digests),
@@ -37,7 +37,7 @@ mod webgolden;
 
 use std::process::ExitCode;
 
-const USAGE: &str = "usage: cargo run -p xtask -- <ci [--full]|ci-no-fmt|aegis [--bless]|coverage [--bless|--measure]|layers|wasm|corpus [--report]|corpus-gen|library-gen|hero-gen|styles-gen|scripts|floor|golden [--bless]|svg-golden [--bless]|svg-roundtrip [--measure]|web-golden [--bless|--measure]|perf [--bless|--measure]|dist --web|--native|fuzz|fuzz-quick|panic-hunt|parity|scorecard>";
+const USAGE: &str = "usage: cargo run -p xtask -- <ci [--full]|ci-no-fmt|aegis [--bless|--report]|coverage [--bless|--measure]|layers|wasm|corpus [--report]|corpus-gen|library-gen|hero-gen|styles-gen|scripts|floor|golden [--bless]|svg-golden [--bless]|svg-roundtrip [--measure]|web-golden [--bless|--measure]|perf [--bless|--measure]|dist --web|--native|fuzz|fuzz-quick|panic-hunt|parity|scorecard>";
 
 fn main() -> ExitCode {
     match std::env::args().nth(1).as_deref() {
@@ -45,6 +45,7 @@ fn main() -> ExitCode {
         Some("ci-no-fmt") => run_ci(std::env::args().nth(2).as_deref(), true),
         Some("aegis") => match std::env::args().nth(2).as_deref() {
             Some("--bless") => finish("aegis --bless", aegis::bless()),
+            Some("--report") => finish("aegis --report", aegis::report()),
             _ => finish("aegis", aegis::run()),
         },
         Some("coverage") => match std::env::args().nth(2).as_deref() {
