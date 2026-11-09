@@ -268,48 +268,6 @@ fn install_pattern_state(root: &std::path::Path) -> Result<ScratchHome, String> 
     Ok(guard)
 }
 
-#[cfg(test)]
-mod tests {
-    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
-    use super::*;
-
-    #[test]
-    fn aegis_pattern_state_home_is_private_unique_and_cleaned() {
-        let root = std::env::temp_dir().join(format!(
-            "firecraft-aegis-test-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
-        std::fs::create_dir(&root).unwrap();
-        std::fs::write(root.join(".aegis-pattern-state.json"), r#"{"disabled":[]}"#).unwrap();
-
-        let first = install_pattern_state(&root).unwrap();
-        let first_path = first.0.clone();
-        assert!(
-            first_path
-                .join(".config/aegis/pattern-state.json")
-                .is_file()
-        );
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            assert_eq!(
-                std::fs::metadata(&first_path).unwrap().permissions().mode() & 0o077,
-                0
-            );
-        }
-        let second = install_pattern_state(&root).unwrap();
-        assert_ne!(first.0, second.0);
-        drop(first);
-        assert!(!first_path.exists());
-        drop(second);
-        std::fs::remove_dir_all(root).unwrap();
-    }
-}
-
 /// The Aegis scanner's CLI. An unrelated tool also ships under the
 /// bare name `aegis` (a security-file generator), so the versioned
 /// scanner binary is preferred and the plain name is used only when
@@ -504,5 +462,47 @@ fn finish(name: &str, result: Result<(), String>) -> ExitCode {
             eprintln!("{err}");
             ExitCode::FAILURE
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+    use super::*;
+
+    #[test]
+    fn aegis_pattern_state_home_is_private_unique_and_cleaned() {
+        let root = std::env::temp_dir().join(format!(
+            "firecraft-aegis-test-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir(&root).unwrap();
+        std::fs::write(root.join(".aegis-pattern-state.json"), r#"{"disabled":[]}"#).unwrap();
+
+        let first = install_pattern_state(&root).unwrap();
+        let first_path = first.0.clone();
+        assert!(
+            first_path
+                .join(".config/aegis/pattern-state.json")
+                .is_file()
+        );
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(
+                std::fs::metadata(&first_path).unwrap().permissions().mode() & 0o077,
+                0
+            );
+        }
+        let second = install_pattern_state(&root).unwrap();
+        assert_ne!(first.0, second.0);
+        drop(first);
+        assert!(!first_path.exists());
+        drop(second);
+        std::fs::remove_dir_all(root).unwrap();
     }
 }

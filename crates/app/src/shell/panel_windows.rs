@@ -96,6 +96,11 @@ pub(crate) const PANELS: &[PanelSpec] = &[
     PanelSpec {
         name: "Slices",
         kind: PanelKind::Slices,
+        open_by_default: true,
+    },
+    PanelSpec {
+        name: "HTML Preview",
+        kind: PanelKind::HtmlPreview,
         open_by_default: false,
     },
     PanelSpec {
@@ -158,6 +163,7 @@ pub(crate) enum PanelKind {
     WebLayer,
     Optimize,
     Slices,
+    HtmlPreview,
     CssProperties,
     FindReplace,
     CommonLibrary,
@@ -245,6 +251,7 @@ impl Shell {
                 PanelKind::WebLayer => self.web_panel(ui),
                 PanelKind::Optimize => self.optimize_panel(ui),
                 PanelKind::Slices => self.slices_panel(ui),
+                PanelKind::HtmlPreview => self.html_preview_panel(ui),
                 PanelKind::CssProperties => self.css_properties_panel(ui),
                 PanelKind::FindReplace => self.find_replace_panel(ui),
                 PanelKind::CommonLibrary => self.common_library_panel(ui),
@@ -303,6 +310,7 @@ mod tests {
             "Behaviors",
             "Optimize",
             "Slices",
+            "HTML Preview",
             "CSS Properties",
             "Find and Replace",
             "Common Library",
@@ -327,6 +335,10 @@ mod tests {
     /// The default-open set matches CS6's fresh-document roster:
     /// Properties/Pages/States/Layers visible, the rest closed until
     /// asked for.
+    ///
+    /// The Slices panel is the one deviation: CS6's Window menu has
+    /// no row for it, so a closed Slices panel could never be
+    /// reopened — it stays open until the menu carries the row.
     #[test]
     fn the_default_open_set_is_the_cs6_roster() {
         let hidden = Shell::default_open_panels();
@@ -343,12 +355,15 @@ mod tests {
                 "URL",
                 "Behaviors",
                 "Optimize",
-                "Slices",
+                "HTML Preview",
                 "CSS Properties",
                 "Find and Replace",
                 "Common Library"
             ]
         );
+        // The Slices panel is reachable: it is open, and the Window
+        // menu's row for it is the one this build still owes.
+        assert!(!hidden.contains(&"Slices"));
     }
 
     /// The dock is narrow enough to leave the canvas room and wide
