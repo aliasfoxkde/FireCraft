@@ -580,6 +580,36 @@ fn drag_class(tool: Tool) -> DragClass {
     }
 }
 
+/// What a creation drag has to accomplish before its tool commits
+/// anything.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum DragGesture {
+    /// The drag draws a box: a rectangle, an ellipse, a text frame, a
+    /// slice. Both axes have to clear the threshold, because a shape
+    /// with no extent on an axis is not a shape.
+    Box,
+    /// The drag draws a stroke or a one-axis transform: a line, a
+    /// Redraw Path trace, a Freeform push, a skew. One axis is enough
+    /// — a perfectly horizontal line is a line, and a flat stroke is a
+    /// stroke — so only the drag's total travel counts.
+    Stroke,
+}
+
+/// The gesture a tool's creation drag performs.
+///
+/// The distinction matters at commit time: a blanket "both axes must
+/// move" rule silently drops the horizontal line, the flat Redraw Path
+/// stroke, the one-axis reshape and the one-axis skew, because the
+/// user did exactly what they meant to.
+fn drag_gesture(tool: Tool) -> DragGesture {
+    match tool {
+        Tool::Line | Tool::RedrawPath | Tool::Freeform | Tool::ReshapeArea | Tool::Skew => {
+            DragGesture::Stroke
+        }
+        _ => DragGesture::Box,
+    }
+}
+
 /// The quadrangle CS6's Distort tool pulls: the corner nearest the
 /// drag's start and the next adjacent corner travel together, shearing
 /// the shape while preserving the parallelogram required by the engine.
@@ -2301,8 +2331,16 @@ impl Editor {
         }
         let (x, y) = (drag.start.x, drag.start.y);
         let (width, height) = (drag.current.x - drag.start.x, drag.current.y - drag.start.y);
-        // A click is not a shape.
-        if width.abs() < 0.5 || height.abs() < 0.5 {
+        // A click is not a shape. A stroke-like gesture — a line, a
+        // Redraw Path trace, a one-axis reshape or skew — travels on
+        // one axis only, so it measures the drag's length rather than
+        // its box: a horizontal line is a line, and a flat stroke is a
+        // stroke.
+        let too_small = match drag_gesture(drag.tool) {
+            DragGesture::Box => width.abs() < 0.5 || height.abs() < 0.5,
+            DragGesture::Stroke => width.hypot(height) < 0.5,
+        };
+        if too_small {
             return Ok(());
         }
         // The page cell creation writes into, snapshotted before the
@@ -4081,6 +4119,109 @@ mod tests {
             path.contours[0].points[1].anchor,
             geom::Point::new(20.0, 5.0)
         );
+    }
+
+    #[test]
+    fn the_stroke_tools_measure_travel_not_a_box() {
+        // A line, a Redraw Path trace, a reshape and a skew are all
+        // one-axis gestures: the user may draw a perfectly flat one,
+        // and the tool has to honour it.
+        for tool in [
+            Tool::Line,
+            Tool::RedrawPath,
+            Tool::Freeform,
+            Tool::ReshapeArea,
+            Tool::Skew,
+        ] {
+            assert_eq!(drag_gesture(tool), DragGesture::Stroke, "{tool:?}");
+        }
+        for tool in [
+            Tool::Rect,
+            Tool::Ellipse,
+            Tool::Text,
+            Tool::Slice,
+            Tool::Hotspot,
+            Tool::CircleHotspot,
+            Tool::Crop,
+            Tool::Scale,
+        ] {
+            assert_eq!(drag_gesture(tool), DragGesture::Box, "{tool:?}");
+        }
+    }
+
+    #[test]
+    fn a_horizontal_line_is_drawn() {
+        let mut editor = Editor::untitled();
+        editor.tool = Tool::Line;
+        editor.begin_drag(geom::Point::new(10.0, 10.0));
+        editor.drag_to(geom::Point::new(30.0, 10.0));
+        editor.end_drag().unwrap();
+
+        let cell = editor.current_cell().unwrap();
+        assert_eq!(cell.elements.len(), 1, "the flat drag made a line");
+        let id = cell.elements[0];
+        let Some(ObjectData::Path(path)) = editor.document().registry.get(id) else {
+            panic!("a line is a path");
+        };
+        assert_eq!(path.contours[0].points.len(), 2);
+        assert_eq!(
+            path.contours[0].points[0].anchor,
+            geom::Point::new(10.0, 10.0)
+        );
+        assert_eq!(
+            path.contours[0].points[1].anchor,
+            geom::Point::new(30.0, 10.0)
+        );
+    }
+
+    #[test]
+    fn a_one_axis_reshape_commits() {
+        let mut editor = Editor::untitled();
+        let id = rect_at(&mut editor, 10.0, 10.0);
+        editor.set_selection(vec![id]);
+        let before = all_anchors(&editor, id);
+
+        editor.tool = Tool::ReshapeArea;
+        editor.begin_drag(geom::Point::new(10.0, 10.0));
+        editor.drag_to(geom::Point::new(30.0, 10.0));
+        editor.end_drag().unwrap();
+
+        assert_ne!(
+            before,
+            all_anchors(&editor, id),
+            "the horizontal-only reshape committed"
+        );
+    }
+
+    #[test]
+    fn a_one_axis_skew_commits() {
+        let mut editor = Editor::untitled();
+        let id = rect_at(&mut editor, 10.0, 10.0);
+        editor.set_selection(vec![id]);
+        let before = all_anchors(&editor, id);
+
+        editor.tool = Tool::Skew;
+        editor.begin_drag(geom::Point::new(10.0, 10.0));
+        editor.drag_to(geom::Point::new(10.0, 50.0));
+        editor.end_drag().unwrap();
+
+        assert_ne!(
+            before,
+            all_anchors(&editor, id),
+            "the vertical-only skew committed"
+        );
+    }
+
+    /// Every anchor of a path object, in order.
+    fn all_anchors(editor: &Editor, id: doc::ObjectId) -> Vec<geom::Point> {
+        match editor.document().registry.get(id) {
+            Some(ObjectData::Path(path)) => path
+                .contours
+                .iter()
+                .flat_map(|contour| contour.points.iter().map(|point| point.anchor))
+                .collect(),
+            _ => Vec::new(),
+        }
     }
 
     fn first_anchor(editor: &Editor, id: doc::ObjectId) -> (f64, f64) {
