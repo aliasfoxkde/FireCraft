@@ -17,6 +17,7 @@
 | # | Task | Ticket | Status |
 |---|---|---|---|
 | 5 | 19.6 inert-menu burn-down — Modify/File families (83 of 289; batch 8 = Attach to Path landed 2026-11-03) | [tasks/T5-inert-burndown.md](tasks/T5-inert-burndown.md) | in progress |
+| 194 | Aegis gate: content-keyed baseline, so a doc edit no longer fails the gate (decision 0074) | [decisions/0074-aegis-content-keyed-baseline.md](decisions/0074-aegis-content-keyed-baseline.md) | in progress |
 
 ## Queued (Phase 20 — daily-driver features)
 
