@@ -117,6 +117,7 @@ tree that produced it is named with the artifact.
 | `node` | v24.16.0 | host page smoke tooling |
 | `wine` | present | supplementary Windows compatibility only, never certification |
 | `docker` | present | available for a clean-image test |
+| RustSec advisory DB (`~/.cargo/advisory-db`) | present but **effectively empty** — 20 toolchain advisories, no `time` entry | `cargo-audit` cannot adjudicate a crate advisory offline; the `time` advisory was confirmed from the GitHub Dependabot API instead (B-19) |
 | `pwsh` | **absent** | `packaging/build-windows.ps1` cannot run here |
 | `ISCC` (Inno Setup 6) | **absent** | the Windows installer cannot be compiled here |
 | `linuxdeploy` | **absent** | the AppImage cannot be assembled here |
@@ -198,9 +199,11 @@ targets have no host toolchain to link against.
 the observation that supports the status.
 
 **Every published artifact below was built from a tree that pins `time
-0.3.45`** — the version the repository itself flags as security-affected,
-with the fix living only on PR #15's branch (B-19). "Published" below
-describes reach on the evidence ladder, not fitness to ship.
+0.3.45`** — the version covered by the repository's **open** GitHub
+Dependabot alert #1 (`GHSA-r6v5-fh4h-64xc`, medium, vulnerable range
+`>= 0.3.6, < 0.3.47`), with the fix living only on PR #15's branch
+(B-19). "Published" below describes reach on the evidence ladder, not
+fitness to ship.
 
 | # | Artifact | What exists today | Status | Rung | Evidence for the status | Verified blocker |
 |---|---|---|---|---|---|---|
@@ -333,7 +336,7 @@ it, and what it blocks. Nothing here is inferred from "not done".
 | B-16 | The canonical gate writes a tracked file: the `changelog` step of `xtask ci` rewrites `docs/CHANGELOG.md`. The committed copy on `main` still lists the pre-squash commits, and the regenerated copy differs (it collapses the squash-merged batches 4–17 into a single `#7` entry). | `xtask/src/changelog.rs:33` (`std::fs::write`); the uncommitted `docs/CHANGELOG.md` diff in the audit worktree; `git log --oneline main` shows the squashed history | A green gate leaves a dirty working tree; the changelog shipped on `main` does not describe `main`'s history. The regenerated copy was inspected and deliberately left uncommitted by this audit |
 | B-17 | The **release-wide** checksum file is missing and no published asset carries a per-asset digest, so only the artifacts that happen to be covered by the native `MANIFEST.sha256` or the web ZIP's inner manifest can be independently verified. | every asset in all six GitHub releases reports `digest: null`; `RELEASE_SHA256.txt` is written by `release.yml` but was never attached. **Correction to an earlier reading**: the published v0.2.5 `MANIFEST.sha256` (398 B, 3 native files) *does* verify against the downloaded artifacts — `sha256sum -c` passes on all three — and the web ZIP carries its own inner `MANIFEST.sha256` that likewise passes on all 5 entries. What is missing is a single file that covers the **release as a whole**, including the ZIPs themselves | The three native artifacts and the web bundle reach rung 11 today, but only because they happen to carry an inner manifest. A consumer who downloads the release page has no way to check the ZIP's own bytes, and nothing binds the release set to a single source commit |
 | B-18 | The published artifacts are **not reproducible** from the current baseline: a rebuild of `5fac7a2` produces different bytes from the published v0.2.5 assets. | local rebuild (P0.4.3): desktop tar.gz 22,561,250 B / sha256 `54edd74f…` vs published 22,084,726 B / `707ca850…`; CLI tar.gz 8,101,143 B / `bf71e2a1…` vs published 8,072,377 B / `199eb1b8…`; DEB 15,120,848 B / `553befbd…` vs published 14,819,904 B / `a81a9ad4…`. The two sources differ (`3a4832b` vs `5fac7a2`), so part of the size difference is explained — but nothing in the pipeline records the compiler, linker, glibc or build flags, so the difference cannot be attributed. The **web** side shows the same class with the source held constant: the audit's `xtask dist --web` on `5fac7a2` produced a 21,274,323 B wasm, while `xtask/src/dist.rs` records 21,235,599 B for "the same" nominal toolchain (trunk 0.21.14, rustc 1.99, wasm-opt 132) — a 38,724 B delta with no recorded cause | Even with a published checksum file, an independent verifier cannot reproduce the artifact to compare against; the build is not hermetic and no build-provenance is recorded. Independent of B-17 |
-| B-19 | The audited baseline `main` — the tree every published artifact is built from — pins a dependency version that the repository itself has flagged as security-affected, and the remediation does not exist on `main`. | `origin/main:Cargo.lock` → `time 0.3.45`. Commits `c74b179` / `e9747b8` ("build: raise MSRV to 1.95 and bump time past CVE-2026-25727") record a Dependabot stack-exhaustion denial-of-service advisory (CVE-2026-25727) requiring `time >= 0.3.47`, and record that the bump cannot be applied without raising the workspace `rust-version` from 1.85 to **1.95** (cargo's MSRV-aware resolver floors on the lowest `rust-version` in the workspace, so the lockfile silently regressed to 0.3.45 until the floor moved). `git branch -a --contains c74b179` lists only `feat/dock-inspector-parity-matrix` and `feat/phase-21-daily-driver` — both pushed to origin **and** gitforge, neither merged into `main`; the latter is open as PR #15 at head `9bb43b2` | Every published v0.2.5 artifact, and any rebuild of `main`, carries the flagged version. The bump and the 1.95 MSRV must land on `main` or on the release branch before the next artifact is built. Note the coupling: this changes the toolchain floor, so it will move the glibc floor (B-7) and the reproducibility baseline (B-18) again — the next release must be **rebuilt and re-measured**, not re-tagged |
+| B-19 | The audited baseline `main` — the tree every published artifact is built from — pins a dependency version that the repository itself has flagged as security-affected, and the remediation does not exist on `main`. | `origin/main:Cargo.lock` → `time 0.3.45`. Commits `c74b179` / `e9747b8` ("build: raise MSRV to 1.95 and bump time past CVE-2026-25727") record a Dependabot stack-exhaustion denial-of-service advisory (CVE-2026-25727) requiring `time >= 0.3.47`, and record that the bump cannot be applied without raising the workspace `rust-version` from 1.85 to **1.95** (cargo's MSRV-aware resolver floors on the lowest `rust-version` in the workspace, so the lockfile silently regressed to 0.3.45 until the floor moved). `git branch -a --contains c74b179` lists only `feat/dock-inspector-parity-matrix` and `feat/phase-21-daily-driver` — both pushed to origin **and** gitforge, neither merged into `main`; the latter is open as PR #15 at head `9bb43b2`. **The advisory itself is confirmed from the authoritative source**: GitHub's Dependabot API reports alert **#1, state `open`, severity `medium`**, package `time` in `Cargo.lock`, `GHSA-r6v5-fh4h-64xc` / `CVE-2026-25727`, summary "time vulnerable to stack exhaustion Denial of Service attack", vulnerable range `>= 0.3.6, < 0.3.47`, first patched version `0.3.47`. `main` pins `0.3.45` — inside the vulnerable range — and the alert is open against the default branch | Every published v0.2.5 artifact, and any rebuild of `main`, carries the flagged version. The bump and the 1.95 MSRV must land on `main` or on the release branch before the next artifact is built. Note the coupling: this changes the toolchain floor, so it will move the glibc floor (B-7) and the reproducibility baseline (B-18) again — the next release must be **rebuilt and re-measured**, not re-tagged |
 
 ---
 
@@ -387,14 +390,6 @@ Recorded as unverified rather than assumed true or false:
    content.** The regenerated copy was inspected and found consistent with
    `main`'s squashed history; it was left uncommitted, so the decision to
    adopt it belongs to the maintainer.
-8. **The advisory identity behind the `time` bump (B-19 / F-15).** The
-   RustSec database on this host holds 20 toolchain advisories and no
-   `time` entry, and `cargo-audit` cannot confirm the advisory offline, so
-   CVE-2026-25727 was **not** independently verified here. What *is*
-   observed is the version delta (`time 0.3.45` on `main` → `0.3.47` on
-   the fix branches), the commit record, and the MSRV coupling; the
-   advisory's existence and severity rest on the repository's own
-   Dependabot/commit record.
 
 ---
 
@@ -439,7 +434,7 @@ re-measured on the new tree rather than carried over.
 | F-12 | the campaign's live task ledger is `docs/TASKS.md` | `docs/TASKS.md` on `main` carries no T27 row; the campaign board exists only on PR #12 | medium |
 | F-13 | the campaign mandate is a repository document | `docs/planning/release-compaign/Cross-Platform Releas.txt` is **untracked** in the operator's checkout — the mandate for this campaign is not in version control | medium |
 | F-14 | the release plan treats the source archive and SBOM as MVP-lane deliverables | neither has ever been published, and the publishing workflow (B-4) cannot carry them | high |
-| F-15 | the audited baseline `main` is what gets built and shipped, and nothing in the release procedure checks the dependency set for security advisories | `origin/main:Cargo.lock` pins **`time 0.3.45`**. The repository contains commits `c74b179` and `e9747b8` — "build: raise MSRV to 1.95 and bump time past CVE-2026-25727" — recording that `time` 0.3.45 is affected by a Dependabot **stack-exhaustion denial of service** requiring `time >= 0.3.47`, and that the fix additionally forces the workspace `rust-version` from `1.85` to `1.95` (`time` 0.3.47 needs 1.88, and cargo's MSRV-aware resolver floors on the *lowest* `rust-version` anywhere in the workspace, so the lockfile silently slid back to 0.3.45 until the floor moved). Those commits live on `feat/dock-inspector-parity-matrix` and `feat/phase-21-daily-driver` (pushed to origin **and** gitforge, 23–29 commits ahead of `main`) — **not on `main`**. Every published v0.2.5 artifact and the audited baseline therefore carry the flagged version. The advisory identity itself is **UNVERIFIED** (§6): the RustSec database on this host holds 20 toolchain advisories and no `time` entry, and `cargo-audit` cannot confirm it offline; the finding rests on the repository's own Dependabot/commit record | high |
+| F-15 | the audited baseline `main` is what gets built and shipped, and nothing in the release procedure checks the dependency set for security advisories | `origin/main:Cargo.lock` pins **`time 0.3.45`**. The repository contains commits `c74b179` and `e9747b8` — "build: raise MSRV to 1.95 and bump time past CVE-2026-25727" — recording that `time` 0.3.45 is affected by a Dependabot **stack-exhaustion denial of service** requiring `time >= 0.3.47`, and that the fix additionally forces the workspace `rust-version` from `1.85` to `1.95` (`time` 0.3.47 needs 1.88, and cargo's MSRV-aware resolver floors on the *lowest* `rust-version` anywhere in the workspace, so the lockfile silently slid back to 0.3.45 until the floor moved). Those commits live on `feat/dock-inspector-parity-matrix` and `feat/phase-21-daily-driver` (pushed to origin **and** gitforge, 23–29 commits ahead of `main`) — **not on `main`**. Every published v0.2.5 artifact and the audited baseline therefore carry the flagged version. The advisory is confirmed independently of the commit message: GitHub's Dependabot API reports alert **#1, state `open`, severity `medium`**, package `time` in `Cargo.lock`, `GHSA-r6v5-fh4h-64xc` / `CVE-2026-25727`, summary "time vulnerable to stack exhaustion Denial of Service attack", vulnerable range `>= 0.3.6, < 0.3.47`, first patched version `0.3.47`; `main`'s `0.3.45` is inside that range and the alert is open against the default branch | high |
 
 ---
 
@@ -473,25 +468,24 @@ re-measured on the new tree rather than carried over.
 
 ## 10. Secret-scanner findings adjudicated
 
-The Aegis 0.6.3 production scan of this tree returns **three** findings
-for this document. All three are `zip-code` (category `pii`, severity
-`low`), and all three fire on the same thing: the five-digit suffix of
-the CVE identifier quoted in §6 item 8, §8 F-15 and §4 B-19.
+The Aegis 0.6.3 production scan of this tree returns **two** findings
+for this document. Both are `zip-code` (category `pii`, severity `low`),
+and both fire on the same thing: the five-digit suffix of the CVE
+identifier quoted in §4 B-19 and §8 F-15.
 
 | Location | Pattern | Adjudication |
 |---|---|---|
-| §4 B-19 | `zip-code` | **False positive.** The scanner reads the trailing digit group of a security-advisory identifier as a US ZIP code. The text is an advisory identifier, not a postal address, and the identifier is quoted verbatim from the repository's own commit message and release notes. **Not reworded**: altering the digits would misquote the identifier, which is worse than baselining it. |
-| §6 item 8 | `zip-code` | same — same identifier, same reason |
+| §4 B-19 | `zip-code` | **False positive.** The scanner reads the trailing digit group of a security-advisory identifier as a US ZIP code. The text is an advisory identifier, not a postal address, and the identifier is quoted verbatim from the GitHub Dependabot alert and from the repository's own commit message. **Not reworded**: altering the digits would misquote the identifier, which is worse than baselining it. |
 | §8 F-15 | `zip-code` | same — same identifier, same reason |
 
-The three entries are recorded in `.aegis-baseline.json`. That file was
+The two entries are recorded in `.aegis-baseline.json`. That file was
 regenerated on 2026-11-09 with the sanctioned recipe — a **full,
 unfiltered** production scan of the tree, never a filtered one — and the
 regeneration was diffed against the committed baseline: it **adds exactly
-these three entries and removes none** (520 → 523). The regeneration also
+these two entries and removes none** (520 → 522). The regeneration also
 rewrites the inspection ledger, which shrinks from 76,440 to 4,644 units
 because the ledger enumerates every build artifact that was present on
 disk when the previous baseline was taken; suppression depends on the
-findings set, which is unchanged apart from the three additions. The
+findings set, which is unchanged apart from the two additions. The
 scanner's other categories — payment-card, personal-information and
 loopback-address rules — do not fire anywhere in this document.
