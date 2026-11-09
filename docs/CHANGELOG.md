@@ -10,22 +10,7 @@ Current version: **0.2.5**.
 
 ### Features
 
-- **app**: inert-menu burn-down batch 16 (11; Modify remainder) (c8b0d92)
-- **app**: inert-menu burn-down batch 15 (24; Edit + Text remainder) (b3562e4)
-- **app**: inert-menu burn-down batch 14 (42; File remainder) (eca0a84)
-- **app**: CS6 shell panel windows, wasm-opt=4, gate receipt (c31127c)
-- **app**: CS6 shell fidelity — panel windows, tool flyouts, geometry strip (eef253c)
-- **app**: inert-menu burn-down batch 12 (67; Remove Animation) (1754c98)
-- **app**: inert-menu burn-down batch 11 (68; Edit bitmap rows) (634558d)
-- **app**: inert-menu burn-down batch 10 (72; Window family) (e7dbed6)
-- **app**: inert-menu burn-down batch 9 (79; transform family) (5feca40)
-- **app**: inert-menu burn-down batch 8 (83; attach to path) (a8c86af)
-- **app**: inert-menu burn-down batches 6-7 (85; View+Text) (72aa1d7)
-- **app**: wire Image Size dialog (35226) (9eab633)
-- **app**: inert-menu burn-down batch 5 (111; symbol/animation) (31344cf)
-- **app**: inert-menu burn-down batch 4 (114 -> 6 more wired) (c18ed9d)
-- **app-cli**: MCP tools for info/export/undo/redo/discovery (ef7e60d)
-- **app**: Window menu panel toggles (19.6 batch 3) (3bf96ac)
+- **app**: CS6 shell fidelity + inert-menu burn-down batches 4-17 (#7) (5fac7a2)
 - **app**: path-node add/delete, canvas dialogs, Duplicate/Clone (19b.1 + 19.6) (8ce5762)
 - **app**: Lucide tool icons, context menu, selection/mask verbs (19.6) (2923392)
 - **app**: grid + guides overlays, drag-out, snap, Edit Grid (19.5) (8465b43)
@@ -216,7 +201,6 @@ Current version: **0.2.5**.
 
 ### Documentation
 
-- add TASKS.md board + docs/tasks/ ticket scaffold (466ab7f)
 - 19b.1 quoting corrections, v0.2.4 receipts, license consolidation (2b849f5)
 - refresh stack for the daily-driver turn (19.1-19.5 landed) (dc62449)
 - session log for 19.1-19.5 + rendering fixes; ignore scratch (da108e7)
@@ -322,12 +306,6 @@ Current version: **0.2.5**.
 
 ### Chores
 
-- regen aegis baseline after batch 11 doc moves (f8bc9a2)
-- regen aegis baseline after batch 10 doc edits (ce07c70)
-- regen aegis baseline from batch 8-9 shifts (ce29c59)
-- regen changelog from gate (64e269a)
-- regen changelog from gate (7d8b68e)
-- regen changelog hashes, scripts report from gate (77c497f)
 - **release**: v0.2.5 stamps, notes, operator checklist, aegis hygiene (3a4832b)
 - **release**: v0.2.4 version stamps + changelog + notes (291d658)
 - **xtask**: ratchet coverage floors to 81.0/78.5 (6b0c46f)

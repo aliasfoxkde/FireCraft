@@ -465,6 +465,10 @@ bump that `main` still lacks (B-19), and it changes the toolchain floor,
 so the glibc floor and the reproducibility baseline have to be
 re-measured on the new tree rather than carried over.
 
+**Superseded:** §11 records the current state — #17 is now the
+release-scoped carrier of the bump, PR #14 carries the offline-wall
+fix (B-20), and the Aegis gate itself was defective (PR #18).
+
 ---
 
 ## 8. Documented behavior vs actual implementation (P0.3.12)
@@ -548,3 +552,116 @@ disk when the previous baseline was taken; suppression depends on the
 findings set, which is unchanged apart from the two additions. The
 scanner's other categories — payment-card, personal-information and
 loopback-address rules — do not fire anywhere in this document.
+
+---
+
+## 11. Reconciliation — 2026-11-09, after the audit was written
+
+This section supersedes §4 and §7 where they disagree. It records
+what changed after the audit was taken, with the evidence for each
+claim.
+
+### 11.1 B-19 — the security bump now has a release-scoped carrier
+
+The audit found `main` pinning `time 0.3.45`, inside the vulnerable
+range of CVE-2026-25727, with the remediation living only inside
+feature branches. It now lives in three places:
+
+| Branch | PR | Head | `time` | Scope |
+|---|---|---|---|---|
+| `fix/time-cve-2026-25727` | **#17** | `f7470f8` | `0.3.47` | `Cargo.lock`, the six `Cargo.toml` manifests, `crates/io/src/jpeg.rs`, `docs/PLANNING.md` — the bump alone, based on `main` |
+| `feat/phase-21-daily-driver` | #15 | `9bb43b2` | `0.3.47` | the bump **plus** the whole Phase 21 feature |
+| `feat/dock-inspector-parity-matrix` | #8 | `092a91c` | `0.3.47` | the bump plus the shell-fidelity work |
+
+**#17 is the carrier to land.** It is the only one of the three whose
+diff is the dependency fix and nothing else, so landing it does not
+drag a feature into the release path. After #17 lands, #15 and #8 must
+rebase: both carry the same `Cargo.lock` change, so a merge of either
+onto the new `main` conflicts on the lockfile and on the six manifests.
+The rebase should **drop** their copy of the bump and keep their own
+scope.
+
+B-19 itself therefore moves from "the remediation does not exist on
+`main`" to "the remediation exists, is reviewable on its own, and is
+waiting on a merge". It closes when #17 is merged, and the toolchain
+floor, the glibc floor (B-7) and the reproducibility baseline (B-18)
+must be re-measured on the new tree — not carried over.
+
+### 11.2 B-20 — the offline wall is in the repository, not in the image
+
+The audit attributed B-20 to the runner image's cargo cache. That
+attribution was wrong in its cause, and the correction matters for the
+fix. The cache is a *consequence*: the effective offline setting is
+baked into the image **built from the repository's own Dockerfile**,
+`infrastructure/docker/ci-rust.Dockerfile`, which on `main` carries
+`ENV CARGO_NET_OFFLINE=true` (line 108). Every branch therefore
+rebuilds the sandbox with the offline wall unless it changes that
+file. The runner host's two tags are the two states of that file:
+
+```
+firecraft-ci-rust:1   ENV CARGO_NET_OFFLINE=false   (built 2026-11-09 08:54)
+firecraft-ci-rust:2   ENV CARGO_NET_OFFLINE=true    (built 2026-11-09 08:54)
+```
+
+Both images carry `time-0.3.41`, `time-0.3.47` and `time-0.3.55` in
+their registry cache, and neither carries `time-0.3.45` — which is why
+a `main`-lockfile branch fails in the offline image and succeeds in the
+online one.
+
+**PR #14 carries the fix.** Its `ci-rust.Dockerfile` sets
+`CARGO_NET_OFFLINE=false` (line 130) and its `.gitforge.yml` drops the
+comment block that described the wall as a feature. The proof is
+GitForge run **`9acd8b5a`** (commit `aefe5ac`, started
+2026-11-09T17:02Z, finished 20:29Z, **succeeded**): all eight
+jobs passed, and `fmt-layers` logged `Downloading crates ... Downloaded
+time-core v0.1.7` — the sandbox fetched, which it cannot do under the
+wall. That run pins `time 0.3.45`, the same version `main` pins.
+
+So B-20's remediation is a two-line repository change, not an image
+rebuild: the image no longer needs to be re-shipped when a lockfile
+moves. **Until PR #14 lands, `main` still cannot be validated on
+GitForge** — its own Dockerfile keeps the wall in place.
+
+### 11.3 B-21 — still open, and now owned
+
+Nothing in this session changes B-21: the published v0.2.5 web bundle
+still has no build receipt, and the release was still published by a
+path the workflow does not contain. PR #14's
+`packaging/release-assets.sh` and its fail-closed aggregate validation
+are the mechanism that stops the *next* release from repeating the
+hand-publish, so B-21 stays open until that workflow has produced a
+release with a receipt attached.
+
+### 11.4 The Aegis gate itself was defective
+
+Four PRs (#10, #11, #14, #17) are red on a gate that is broken, not on
+their own content. Aegis's `--baseline` filter matches on
+`pattern:file:line:digest`, so any prose edit that shifts a line makes
+a baselined finding reappear as new; the repository's own `.aegisignore`
+had already recorded the symptom. PR #18 (`fix/aegis-content-keyed-
+baseline`) replaces the filter with a gate that keys a finding on
+`(pattern, file, content digest)` and compares multisets itself, so a
+moved finding stays the same finding while a new literal, a new file
+or an extra copy of a known literal still fails. No rule class is
+switched off: every rule the scanner has stays armed, and each
+baselined occurrence carries the reason it was adjudicated.
+
+This changes the PR dispositions above in one respect: the red gates
+on #10, #11, #14 and #17 were not evidence against their content. They
+are re-run against the corrected gate.
+
+### 11.5 Merge order
+
+1. **#18** — the corrected gate. Every other PR's aegis result depends
+   on it, and it changes no behaviour other than finding identity.
+2. **#17** — the security bump on its own (B-19). Nothing else may
+   build an artifact before it lands.
+3. **#14** — the release-workflow repair and the offline-wall fix
+   (B-20, B-4).
+4. **#9 / #12** — consolidate the plan, the board and the two `dist`
+   verbs into one release branch (B-3), then merge it.
+5. **#15**, then **#8** — rebase onto the new `main` and drop their
+   duplicate copies of the bump (§11.1).
+6. **#13**, **#11**, **#10** — outside the release scope; merge after
+   the rebase, re-checking the `xtask/src/main.rs` overlap that #13
+   and #14 share.
