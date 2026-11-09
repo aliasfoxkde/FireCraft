@@ -60,6 +60,25 @@ pub fn run_in(dir: Option<&std::path::Path>, program: &str, args: &[&str]) -> Re
     }
 }
 
+/// Runs a program from `dir` and returns its stdout and stderr without
+/// interpreting the exit status.
+///
+/// The Aegis scanner exits non-zero whenever it reports findings, so
+/// the gate parses the document it prints rather than reading the
+/// status; a scanner that dies without printing leaves stdout empty,
+/// which the caller reports with the stderr diagnostics.
+pub fn capture_in(
+    dir: Option<&std::path::Path>,
+    program: &str,
+    args: &[&str],
+) -> Result<(String, String), String> {
+    let output = spawn(dir, program, args)?;
+    Ok((
+        String::from_utf8_lossy(&output.stdout).into_owned(),
+        String::from_utf8_lossy(&output.stderr).into_owned(),
+    ))
+}
+
 /// Runs `cargo metadata --no-deps` and parses the JSON document.
 pub fn cargo_metadata() -> Result<serde_json::Value, String> {
     let output = spawn(
