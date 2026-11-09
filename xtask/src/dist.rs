@@ -220,16 +220,16 @@ pub fn source() -> Result<(), String> {
     Ok(())
 }
 
-/// sha256 of a file (hex), same digest form write_manifest uses.
+/// sha256 of a file (hex), same digest form `write_manifest` uses.
 fn sha256_hex_file(path: &Path) -> Result<String, String> {
     let bytes = std::fs::read(path).map_err(|e| format!("read {}: {e}", path.display()))?;
     Ok(sha256_hex(&bytes))
 }
 
-/// Emits the dependency SBOM under `dist/sbom/` (T27 RP-06): CycloneDX
+/// Emits the dependency SBOM under `dist/sbom/` (T27 RP-06): `CycloneDX`
 /// 1.5 from the complete locked Cargo package inventory and resolved
 /// dependency edges. Registry packages use Cargo purls; workspace,
-/// path, and git packages use stable FireCraft bom-refs instead. No
+/// path, and git packages use stable `FireCraft` bom-refs instead. No
 /// signing/provenance claims are made here — those remain separate
 /// deliverables once signing credentials exist.
 pub fn sbom() -> Result<(), String> {
@@ -325,7 +325,7 @@ pub fn sbom() -> Result<(), String> {
     Ok(())
 }
 
-/// Stable CycloneDX identity for one Cargo package. Only crates.io
+/// Stable `CycloneDX` identity for one Cargo package. Only crates.io
 /// registry packages receive a Cargo purl; path and git packages are
 /// identified by a bom-ref derived from their source identity.
 fn package_bom_ref(package: &serde_json::Value) -> Result<(String, Option<String>), String> {
@@ -363,8 +363,8 @@ fn package_bom_ref(package: &serde_json::Value) -> Result<(String, Option<String
     ))
 }
 
-/// Emits the CycloneDX dependency edges from Cargo's resolved graph,
-/// plus a FireCraft application root pointing at all workspace members.
+/// Emits the `CycloneDX` dependency edges from Cargo's resolved graph,
+/// plus a `FireCraft` application root pointing at all workspace members.
 fn cyclonedx_dependencies(
     metadata: &serde_json::Value,
     package_refs: &BTreeMap<String, String>,
@@ -1114,8 +1114,56 @@ fn respond(mut stream: TcpStream, routes: &[Route]) {
     let _ = stream.write_all(body);
 }
 
+/// Runs `browser` with `args`, killing it if it outlives
+/// [`SMOKE_TIMEOUT`] (a hung WebGL init must not hang `dist`).
+fn spawned_with_timeout(browser: &str, args: &[&str]) -> Result<std::process::Output, String> {
+    let child = std::process::Command::new(browser)
+        .args(args)
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("spawn {browser}: {e}"))?;
+    let (sender, receiver) = mpsc::channel();
+    let waiter = std::thread::spawn(move || {
+        let output = child.wait_with_output();
+        let _ = sender.send(output);
+    });
+    match receiver.recv_timeout(SMOKE_TIMEOUT) {
+        Ok(output) => {
+            let _ = waiter.join();
+            output.map_err(|e| format!("wait {browser}: {e}"))
+        }
+        Err(_) => Err(format!(
+            "{browser} outlived the {}s smoke timeout",
+            SMOKE_TIMEOUT.as_secs()
+        )),
+    }
+}
+
+/// Finds a chromium-family browser on PATH.
+fn chromium_path() -> Option<PathBuf> {
+    for name in [
+        "chromium",
+        "chromium-browser",
+        "google-chrome",
+        "google-chrome-stable",
+    ] {
+        if which(name) {
+            return Some(PathBuf::from(name));
+        }
+    }
+    None
+}
+
+/// PATH lookup for one name.
+fn which(name: &str) -> bool {
+    std::env::var_os("PATH")
+        .is_some_and(|paths| std::env::split_paths(&paths).any(|dir| dir.join(name).is_file()))
+}
+
 #[cfg(test)]
 mod sbom_tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
     use super::*;
 
     #[test]
@@ -1175,51 +1223,4 @@ mod sbom_tests {
         let root = dependencies.last().unwrap();
         assert_eq!(root["dependsOn"][0], "urn:firecraft:app");
     }
-}
-
-/// Runs `browser` with `args`, killing it if it outlives
-/// [`SMOKE_TIMEOUT`] (a hung WebGL init must not hang `dist`).
-fn spawned_with_timeout(browser: &str, args: &[&str]) -> Result<std::process::Output, String> {
-    let child = std::process::Command::new(browser)
-        .args(args)
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
-        .map_err(|e| format!("spawn {browser}: {e}"))?;
-    let (sender, receiver) = mpsc::channel();
-    let waiter = std::thread::spawn(move || {
-        let output = child.wait_with_output();
-        let _ = sender.send(output);
-    });
-    match receiver.recv_timeout(SMOKE_TIMEOUT) {
-        Ok(output) => {
-            let _ = waiter.join();
-            output.map_err(|e| format!("wait {browser}: {e}"))
-        }
-        Err(_) => Err(format!(
-            "{browser} outlived the {}s smoke timeout",
-            SMOKE_TIMEOUT.as_secs()
-        )),
-    }
-}
-
-/// Finds a chromium-family browser on PATH.
-fn chromium_path() -> Option<PathBuf> {
-    for name in [
-        "chromium",
-        "chromium-browser",
-        "google-chrome",
-        "google-chrome-stable",
-    ] {
-        if which(name) {
-            return Some(PathBuf::from(name));
-        }
-    }
-    None
-}
-
-/// PATH lookup for one name.
-fn which(name: &str) -> bool {
-    std::env::var_os("PATH")
-        .is_some_and(|paths| std::env::split_paths(&paths).any(|dir| dir.join(name).is_file()))
 }
