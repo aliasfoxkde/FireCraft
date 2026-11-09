@@ -355,6 +355,12 @@ the absolute repo path.
 
 - **Push order:** `git push gitforge main && git push origin main`
   (tags ride `--tags` when releasing).
+- **Which host runs the jobs:** the active runner is `swarmone-docker`
+  (this host, the local docker daemon). `fedora-docker` is registered
+  but offline — a job that fails to start on the fedora host is not
+  this fleet's problem. Read the truth from the store:
+  `sudo sqlite3 /var/lib/gitforge/gitforge.db "SELECT id,name,status,
+  capacity,last_heartbeat FROM runners;"`.
 - **Find the run:** `GET /api/pipeline-runs?limit=15` — match
   `commit_hash` (field name is `commit_hash`, *not* `sha`; both are
   `None` in the list view — fetch jobs to identify a run by its 7-job
@@ -370,12 +376,19 @@ the absolute repo path.
   - *"mkdir: file exists"* infra failure = sshfs race on the fedora
     runner → retrigger via an empty commit in a quiet window (no
     retry API).
-  - *Silent mid-compile death* = offline-refusal from a stale image
-    cache → check the job-log ledger FIRST. Re-ship the image
-    (`infrastructure/docker/ci-rust.Dockerfile`; `docker save |
-    ssh <host> docker load` to BOTH hosts) whenever an **external**
-    crate version in either lockfile moves — workspace-only version
-    bumps leave `cargo fetch` output unchanged (verified v0.2.0).
+  - *"failed to create sandbox … Timeout error"* = the runner's
+    60-second sandbox-acquisition cap; the job never started, so its
+    `result_json` carries no step results. Retrigger.
+  - *"failed to download `<crate>` … --offline was specified"* = the
+    CI image's registry cache lacked a crate the lockfile pinned.
+    **Fixed 2026-11-09**: the image now sets `CARGO_NET_OFFLINE=false`
+    (`infrastructure/docker/ci-rust.Dockerfile`), so the baked cache is
+    a fast floor and a missing crate is fetched on demand. A lockfile
+    move no longer breaks the fleet and no longer requires an image
+    re-ship. Re-ship only when a pinned tool version or the Rust minor
+    moves.
+  - *Silent mid-compile death* = a stale image cache or an offline
+    refusal → check the job-log ledger FIRST.
 - **Local gates before any push:** the full gate is
   `cargo run -p xtask -- ci` (fmt, clippy `-D warnings`, tests, layers,
   wasm, corpus, goldens, perf, fuzz-quick, parity, scorecard,
