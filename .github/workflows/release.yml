@@ -23,6 +23,14 @@ on:
   push:
     tags: ["v*"]
 
+# Least privilege by default (read-only checkout + artifact upload);
+# the `release` job widens to `contents: write` because `gh release
+# create` needs it. Declaring this keeps the default `GITHUB_TOKEN`
+# from inheriting a broader grant — the rule
+# `actions/missing-workflow-permissions` fires without it.
+permissions:
+  contents: read
+
 env:
   CARGO_TERM_COLOR: always
 
@@ -108,6 +116,10 @@ jobs:
   release:
     name: create draft release
     runs-on: ubuntu-latest
+    # `gh release create` writes a release (and its assets) — the one
+    # place this workflow needs more than read.
+    permissions:
+      contents: write
     needs: [build]
     steps:
       - name: Download artifacts
