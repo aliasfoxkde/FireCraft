@@ -531,26 +531,27 @@ fix (B-20), and the Aegis gate itself was defective (PR #18).
 
 ## 10. Secret-scanner findings adjudicated
 
-The Aegis 0.6.3 production scan of this tree returns **two** findings
-for this document. Both are `zip-code` (category `pii`, severity `low`),
-and both fire on the same thing: the five-digit suffix of the CVE
-identifier quoted in §4 B-19 and §8 F-15.
+The Aegis 0.6.3 production scan of this tree returns **four** findings
+for this document. All are `zip-code` (category `pii`, severity `low`),
+and all fire on the same thing: the five-digit suffix of the CVE
+identifier quoted in §4 B-19, §8 F-15 and §11.1. The scanner anchors
+one match per source line, so the count is the number of lines that
+quote the identifier — four, even though the identifier appears six
+times.
 
 | Location | Pattern | Adjudication |
 |---|---|---|
 | §4 B-19 | `zip-code` | **False positive.** The scanner reads the trailing digit group of a security-advisory identifier as a US ZIP code. The text is an advisory identifier, not a postal address, and the identifier is quoted verbatim from the GitHub Dependabot alert and from the repository's own commit message. **Not reworded**: altering the digits would misquote the identifier, which is worse than baselining it. |
 | §8 F-15 | `zip-code` | same — same identifier, same reason |
+| §11.1 (two lines) | `zip-code` | same — the identifier is quoted again when the reconciliation names the advisory |
 
-The two entries are recorded in `.aegis-baseline.json`. That file was
-regenerated on 2026-11-09 with the sanctioned recipe — a **full,
-unfiltered** production scan of the tree, never a filtered one — and the
-regeneration was diffed against the committed baseline: it **adds exactly
-these two entries and removes none** (520 → 522). The regeneration also
-rewrites the inspection ledger, which shrinks from 76,440 to 4,644 units
-because the ledger enumerates every build artifact that was present on
-disk when the previous baseline was taken; suppression depends on the
-findings set, which is unchanged apart from the two additions. The
-scanner's other categories — payment-card, personal-information and
+The entries are recorded in `.aegis-baseline.tsv`, keyed on the
+matched literal's content digest rather than on a line number, with a
+count of four. That file was regenerated on 2026-11-09 with the
+sanctioned recipe — a **full, unfiltered** production scan of the tree,
+never a filtered one — and the regeneration was diffed against the
+committed baseline: it **adds exactly these entries and removes none**.
+The scanner's other categories — payment-card, personal-information and
 loopback-address rules — do not fire anywhere in this document.
 
 ---
