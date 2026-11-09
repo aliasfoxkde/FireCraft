@@ -192,6 +192,18 @@ targets have no host toolchain to link against.
 | P0.4.7 Inspect manifests and checksums | IMPLEMENTED | 5 | native `MANIFEST.sha256` covers exactly 3 files (desktop tar.gz, CLI tar.gz, deb); web `MANIFEST.sha256` covers 5 files (bundle `.js`, bundle `.wasm`, `appinfo.json`, `host.html`, `index.html`); published v0.2.5 `MANIFEST.sha256` is 398 bytes and covers the 3 native artifacts only; `sha256sum -c` passes on both locally | the web ZIP and the manifest itself are covered by **no** published checksum list; `RELEASE_SHA256.txt` is produced by `release.yml` but has never been published |
 | P0.4.8 Record exact failures and environmental limitations | IMPLEMENTED | n/a | §4 (verified blockers) and §6 (unverified) | — |
 
+### 1.5 Row-status tally
+
+All 36 campaign rows are accounted for; none is `NOT STARTED`,
+`READY`, `IN PROGRESS`, `INSTALLED`, `LAUNCHED`, `SMOKE TESTED`,
+`PUBLISHED`, `CERTIFIED` or `REJECTED`.
+
+| Status | Rows | Which |
+|---|---|---|
+| `IMPLEMENTED` | 32 | every P0.1, P0.2 and P0.3 row, plus P0.4.1, P0.4.2, P0.4.7 and P0.4.8 — the audit action was performed and its evidence is in the row |
+| `BUILD VERIFIED` | 2 | P0.4.3 (native distribution build, rung 5) and P0.4.4 (web distribution build with bridge smoke, rung 8) |
+| `BLOCKED` | 2 | P0.4.5 (source archive) and P0.4.6 (SBOM) — the verbs do not exist on `main`, so the subject cannot advance on this baseline (F-9, B-13) |
+
 ---
 
 ## 2. Artifact matrix — what exists today (2026-11-09)
