@@ -596,6 +596,13 @@ scope, so no license path is attempted.
   are suppressed and the evidence for each are listed in decision
   0070; a new entry needs the same kind of evidence, not a
   convenience.
+- Do not add aegis baseline entries without verifying each finding is
+  a false positive ("pan" in pan/zoom prose trips PCI; 65535-style
+  literals trip zip-code — those two are the known classes). The
+  baseline is `.aegis-baseline.tsv`, keyed on content (pattern, file,
+  digest) rather than on line (decision 0074); regenerate it with
+  `cargo run -p xtask -- aegis --bless`, which prints every added key
+  for review before the rewrite is committed.
 
 ## Quick reference
 
@@ -604,6 +611,8 @@ scope, so no license path is attempted.
 | Full CI | `cargo run -p xtask -- ci` | ~20 min |
 | Aegis | `cargo run -p xtask -- aegis` | ~15s |
 | Aegis report | `cargo run -p xtask -- aegis --report` | ~15s |
+| Aegis | `cargo run -p xtask -- aegis` | ~10s |
+| Aegis baseline regen | `cargo run -p xtask -- aegis --bless` | ~10s |
 | Coverage measure | `cargo llvm-cov --summary-only` (hook: use GitForge) | ~6 min |
 | Coverage gate | `cargo run -p xtask -- coverage` | ~6 min |
 | Wasm only | `cargo run -p xtask -- wasm` | ~5 min |

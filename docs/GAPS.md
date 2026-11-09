@@ -118,6 +118,7 @@ Point-in-time snapshot **2026-11-02** (post-v0.2.4). Counts marked
 | **Shipped** | v0.2.4 on GitHub (2026-11-02) | ✅ |
 | **CI** | GitHub Actions: `fmt` (fast) + `gate` (`xtask ci-no-fmt`); GitForge 7-job pipeline | ✅ |
 | **aegis** | Suppression clean; scan ~12 s | `.aegisignore` excludes `target/`, `web/dist/`, `fuzz/`; rule classes and per-finding digests suppressed (decision 0070) |
+| **aegis** | Baseline clean; scan 0.17 s | `.aegisignore` excludes `target/`, `web/dist/`, `fuzz/`; baseline is content-keyed (decision 0074) |
 | **Coverage** | floors 81.0 % lines / 78.5 % funcs (`xtask/src/coverage.rs`) | Local `llvm-cov` fails on stale artifacts; CI works |
 | **Code** | 128,967 Rust lines | No `unwrap()`/`panic!()` outside `#[cfg(test)]`; no `todo!`/`unimplemented!` |
 | **Registry** | 245 commands | Every command executable from the GUI via the Ctrl+P palette (19.4); menu reachability is the remaining gap |
