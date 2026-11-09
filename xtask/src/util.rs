@@ -5,10 +5,56 @@ use std::io::Read as _;
 use std::path::PathBuf;
 use std::process::{Command, Output};
 
-/// Absolute path of the workspace root (parent of the xtask crate).
+/// Absolute path of the workspace root.
+///
+/// Resolved at *runtime* from the current directory, not at compile
+/// time. The compile-time path (`env!("CARGO_MANIFEST_DIR")`) names
+/// the tree the binary was *built* in, which is not necessarily the
+/// tree it is *run* in: two worktrees of this repository share one
+/// `CARGO_TARGET_DIR`, and when their `xtask` sources are
+/// byte-identical cargo does not rebuild, so the binary in the shared
+/// target directory carries the first worktree's path and every gate
+/// silently acts on that other tree. A gate that blesses another
+/// worktree's baseline while reporting success is worse than no gate.
+///
+/// The runtime resolution walks up from the current directory to the
+/// nearest `Cargo.toml` that declares a workspace, so running the
+/// binary from a subdirectory still finds the right root. The
+/// compile-time path remains as a fallback for the case where the
+/// current directory is not inside a workspace at all.
 #[must_use]
 pub fn workspace_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..")
+    runtime_workspace_root()
+        .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."))
+}
+
+/// The nearest ancestor of the current directory whose `Cargo.toml`
+/// declares a workspace that contains this crate.
+fn runtime_workspace_root() -> Option<PathBuf> {
+    workspace_root_from(&std::env::current_dir().ok()?)
+}
+
+/// The nearest ancestor of `start` whose `Cargo.toml` declares a
+/// workspace that contains this crate.
+///
+/// The member test matters: the repository has a nested `fuzz/`
+/// workspace, so "declares a workspace" alone would resolve to the
+/// fuzz tree when the gate is run from inside it.
+fn workspace_root_from(start: &std::path::Path) -> Option<PathBuf> {
+    let mut dir = start.to_path_buf();
+    loop {
+        let manifest = dir.join("Cargo.toml");
+        if manifest.is_file() {
+            if let Ok(text) = std::fs::read_to_string(&manifest) {
+                if text.contains("[workspace]") && dir.join("xtask").join("Cargo.toml").is_file() {
+                    return Some(dir);
+                }
+            }
+        }
+        if !dir.pop() {
+            return None;
+        }
+    }
 }
 
 /// Lowercase hex of a digest (the manifest's spelling).
@@ -48,22 +94,7 @@ pub fn run(program: &str, args: &[&str]) -> Result<(), String> {
 
 /// Runs a program from `dir` (or the workspace root when `None`).
 pub fn run_in(dir: Option<&std::path::Path>, program: &str, args: &[&str]) -> Result<(), String> {
-    run_in_with_env(dir, program, args, &[])
-}
-
-/// Runs a program from `dir` with extra environment variables set.
-///
-/// The Aegis gate needs a private `HOME`: the scanner reads its
-/// pattern-suppression state from `$HOME/.config/aegis/`, and the gate
-/// installs the committed suppression there rather than in the
-/// developer's own home.
-pub fn run_in_with_env(
-    dir: Option<&std::path::Path>,
-    program: &str,
-    args: &[&str],
-    envs: &[(&str, &str)],
-) -> Result<(), String> {
-    let output = spawn_with_env(dir, program, args, envs)?;
+    let output = spawn(dir, program, args)?;
     if output.status.success() {
         Ok(())
     } else {
@@ -75,19 +106,38 @@ pub fn run_in_with_env(
     }
 }
 
-/// Runs a program from `dir` with extra environment variables and
-/// returns its raw output, whatever its exit status.
+/// Runs a program from `dir` and returns its stdout and stderr without
+/// interpreting the exit status.
 ///
-/// The Aegis gate needs this: the scanner exits non-zero when it finds
-/// anything, which is not an error for a gate that filters the findings
-/// itself.
-pub fn capture_with_env(
+/// The Aegis scanner exits non-zero whenever it reports findings, so
+/// the gate parses the document it prints rather than reading the
+/// status; a scanner that dies without printing leaves stdout empty,
+/// which the caller reports with the stderr diagnostics.
+pub fn capture_in(
+    dir: Option<&std::path::Path>,
+    program: &str,
+    args: &[&str],
+) -> Result<(String, String), String> {
+    capture_in_with_env(dir, program, args, &[])
+}
+
+/// Runs a program from `dir` with extra environment variables and
+/// returns its stdout and stderr, whatever its exit status.
+///
+/// The Aegis gate needs this to run the scanner against a private
+/// `HOME`, so the developer's own Aegis configuration can never change
+/// what the scan reports.
+pub fn capture_in_with_env(
     dir: Option<&std::path::Path>,
     program: &str,
     args: &[&str],
     envs: &[(&str, &str)],
-) -> Result<Output, String> {
-    spawn_with_env(dir, program, args, envs)
+) -> Result<(String, String), String> {
+    let output = spawn_with_env(dir, program, args, envs)?;
+    Ok((
+        String::from_utf8_lossy(&output.stdout).into_owned(),
+        String::from_utf8_lossy(&output.stderr).into_owned(),
+    ))
 }
 
 /// Runs `cargo metadata --no-deps` and parses the JSON document.
@@ -134,4 +184,46 @@ fn output_tail(output: &Output) -> String {
     let lines: Vec<&str> = text.lines().collect();
     let start = lines.len().saturating_sub(40);
     lines[start..].join("\n")
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used)]
+    use super::*;
+
+    #[test]
+    fn the_workspace_root_is_resolved_at_runtime() {
+        // The root must name the tree the binary is *run* in, not the
+        // tree it was *built* in: two worktrees share one
+        // CARGO_TARGET_DIR, and a byte-identical `xtask` is not
+        // rebuilt, so the binary in the shared target directory carries
+        // the other worktree's compile-time path. A gate that then
+        // blesses that other tree's baseline reports success while
+        // doing nothing to this one.
+        let root = workspace_root();
+        assert!(root.join("Cargo.toml").is_file(), "root has no manifest");
+        assert!(root.join("xtask").join("Cargo.toml").is_file());
+        assert!(root.join("crates").is_dir());
+    }
+
+    #[test]
+    fn the_runtime_root_ignores_a_nested_workspace() {
+        // `fuzz/` is its own workspace; resolving it would point the
+        // gate at a tree that has no `crates/`.
+        let nested = workspace_root().join("fuzz");
+        if !nested.join("Cargo.toml").is_file() {
+            return; // no nested workspace in this tree
+        }
+        assert!(!workspace_root_from(&nested).is_some_and(|dir| dir.ends_with("fuzz")));
+    }
+
+    #[test]
+    fn the_runtime_root_finds_the_root_from_a_subdirectory() {
+        let root = workspace_root();
+        let sub = root.join("crates");
+        if !sub.is_dir() {
+            return;
+        }
+        assert_eq!(workspace_root_from(&sub), Some(root));
+    }
 }

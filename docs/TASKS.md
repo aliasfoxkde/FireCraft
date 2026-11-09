@@ -13,6 +13,7 @@
 | P1 | Reconcile live web deployment | Artifact differs | The public manifest's JS/wasm/index hashes differ from local `dist/web`; identify intended deploy and verify it before publishing. See [T18](tasks/T18-release.md). |
 | P2 | Next-release asset breadth and platform verification | Open | [T23](tasks/T23-release-assets.md); recipes exist, but non-Linux artifacts need real platform build/launch receipts. |
 | P2 | Coverage and test quality ratchet | Open | Replace the old aspirational 99% label with measured per-crate targets and snapshots; [NEXT.md](NEXT.md). |
+| P2 | Aegis gate: content-keyed baseline, so a doc edit no longer fails the gate (decision 0074) | **Done** | The gate keys a finding on `(pattern, file, content digest)` rather than on `pattern:file:line:digest`, so a prose edit above a documented false positive no longer invalidates its suppression. The baseline is `.aegis-baseline.tsv`, one reviewable record per key, with the reason each rule class was adjudicated written next to its rows. [decisions/0074-aegis-content-keyed-baseline.md](decisions/0074-aegis-content-keyed-baseline.md) |
 
 ## Phase 22 detail
 
