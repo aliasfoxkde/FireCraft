@@ -38,7 +38,7 @@
 ## Blocked or evidence-gated
 
 - The 3 partial CS6 DOM rows remain evidence-gated; see [`planning/generated/dom-parity.md`](planning/generated/dom-parity.md) and the specific decisions.
-- The remaining 8 menu rows are tracked with explicit reasons by the live `inert_worklist`; do not wire behavior without a model/engine or reference basis.
+- The remaining 2 menu rows are tracked with explicit reasons by the live `inert_worklist`; do not wire behavior without a model/engine or reference basis.
 - Non-Linux release artifacts remain unverified until built and launched on their target platforms.
 
 ## Ledger rules

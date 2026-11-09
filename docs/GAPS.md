@@ -20,12 +20,12 @@
 | Surface | State | Evidence |
 |---|---|---|
 | Fireworks PNG format | Complete | `crates/fwpng`, `crates/doc/src/fwmap.rs`; node tree round-trips |
-| Engine command registry | **245 commands** | `engine::catalog::ids()` — 245 as of 2026-11-03 |
+| Engine command registry | **252 commands** | `engine::catalog::ids()` — 252 as of 2026-11-07 |
 | CS6 DOM verb parity | **268 C / 3 P / 0 M / 85 N** | `docs/planning/generated/dom-parity.md` (356 verbs) |
 | ExtendScript host | Complete | `crates/scripting` — runs the CS6 `.jsf` corpus headless |
 | Web bridge | Exposes **all** commands | `web/src/main.rs` — `apply(name, payload)` |
 | CLI | Complete | `crates/app-cli` — every verb drivable headless |
-| Browser build + smoke | **Green** | `xtask dist --web` — wasm 12,778,687 B, "bridge smoke green" |
+| Browser build + smoke | **Green** | `xtask dist --web` — bridge smoke green; wasm measured 12,778,687 B at the 2026-10-21 audit, 21,274,323 B at 2026-11-04 (ceiling 21,500,000) |
 | Smoke is not vacuous | Fixed | `xtask/src/dist.rs:strip_script_bodies` — verdict read outside `<script>` |
 | Live effects rendered | 6 (shadow×2, glow×2, bevel, fill) | `crates/compose/src/effects.rs:924` |
 | Filters exposed | 30 | `crates/app/src/menus.rs` — `Action::Filter` |
@@ -41,7 +41,7 @@ shell reaches 72; after Phase 11's paint family it reaches 77;
 > **Note (2026-11-02):** the reachability picture above is a
 > point-in-time audit snapshot. The command palette (19.4,
 > `4458f3a`) makes **every** registry command executable from the
-> GUI, and the inert count has fallen 190 → **8 of 290** menu
+> GUI, and the inert count has fallen 190 → **2 of 294** menu
 > items (19.1–19.6 batches 1–17 + 19b.1/batch 2; derived + gated by
 > `menus::tests::inert_count_never_rises`). The family table below is
 > superseded by [`NEXT.md`](NEXT.md) Phases 19–21 as the work list;
@@ -71,7 +71,7 @@ $ comm -23 <(engine::catalog::ids()) <(command names in crates/app/src)
 Supporting evidence:
 
 - **190 of 265 CS6 menu items rendered disabled** (`Action::Inert`,
-  `crates/app/src/menus.rs`) **at audit time** — now 8 of 290, and
+  `crates/app/src/menus.rs`) **at audit time** — now 2 of 294, and
   the census is test-gated. The shell refuses to pretend.
 - **The app could not open a raster image.** *(fixed 2026-10-21)*
   `File > Open` called `Editor::open` → `app_cli::io::open`, which
@@ -110,21 +110,22 @@ Supporting evidence:
 
 ## 2. State snapshot
 
-Point-in-time snapshot **2026-11-02** (post-v0.2.4). Counts marked
-*live* have an authoritative source that supersedes this table.
+Point-in-time snapshot **2026-11-07** (post-v0.2.5; the 2026-11-02
+revision is preserved in git history). Counts marked *live* have an
+authoritative source that supersedes this table.
 
 | Dimension | Status | Notes |
 |---|---|---|
-| **Shipped** | v0.2.4 on GitHub (2026-11-02) | ✅ |
+| **Shipped** | v0.2.5 on GitHub (2026-11-03) | ✅ `v0.2.4` was released without a tag; see PROGRESS |
 | **CI** | GitHub Actions: `fmt` (fast) + `gate` (`xtask ci-no-fmt`); GitForge 7-job pipeline | ✅ |
 | **aegis** | Suppression clean; scan ~12 s | `.aegisignore` excludes `target/`, `web/dist/`, `fuzz/`; rule classes and per-finding digests suppressed (decision 0070) |
-| **Coverage** | floors 81.0 % lines / 78.5 % funcs (`xtask/src/coverage.rs`) | Local `llvm-cov` fails on stale artifacts; CI works |
-| **Code** | 128,967 Rust lines | No `unwrap()`/`panic!()` outside `#[cfg(test)]`; no `todo!`/`unimplemented!` |
-| **Registry** | 245 commands | Every command executable from the GUI via the Ctrl+P palette (19.4); menu reachability is the remaining gap |
-| **Menu reachability** | 8 inert of 290 items | *live* — derived + gated (`menus::tests::inert_count_never_rises`) |
+| **Coverage** | floors 81.1 % lines / 78.7 % funcs (`xtask/src/coverage.rs`) | Local `llvm-cov` fails on stale artifacts; CI works |
+| **Code** | 141,945 Rust lines | No `unwrap()`/`panic!()` outside `#[cfg(test)]`; no `todo!`/`unimplemented!` |
+| **Registry** | 252 commands | Every command executable from the GUI via the Ctrl+P palette (19.4); menu reachability is the remaining gap |
+| **Menu reachability** | 2 inert of 294 items | *live* — derived + gated (`menus::tests::inert_count_never_rises`) |
 | **Parity** | 268 C / 3 P / 0 M / 85 N | 3 P rows are evidence-gated (Phase 12 oracle) |
 | **Decision docs** | 71 (0001–0071) | Next: 0072 |
-| **Web bundle** | 21,235,599 B (ceiling 21,500,000) | Re-pinned 2026-11-03 (19b.4, dated observation; 19.x shell growth) |
+| **Web bundle** | 21,274,323 B (ceiling 21,500,000) | Re-pinned 2026-11-04; ceiling only moves down |
 
 ---
 

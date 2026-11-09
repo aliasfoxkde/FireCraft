@@ -14,10 +14,11 @@
   the latest tag is `v0.2.5`). The tag and current `main` are different
   snapshots. See [`PROGRESS.md`](PROGRESS.md) for build and release
   evidence and [`TASKS.md`](TASKS.md) for current work.
-- **Engine and parity:** 245 registry commands; 268 carried / 3
-  partial / 0 missing DOM verbs. Live generated files and source calls
-  are authoritative for counts.
-- **Menu census:** 8 of 290 menu rows remain non-dispatching. The 19.6
+- **Engine and parity:** 252 registry commands (`engine::catalog::ids()`
+  is the live authority); 268 carried / 3 partial / 0 missing of the 356
+  DOM verbs. Live generated files and source calls are authoritative
+  for counts.
+- **Menu census:** 2 of 294 menu rows remain non-dispatching. The 19.6
   wiring campaign is complete; remaining rows belong to future feature
   work or evidence gates. The live census is derived and gated by
   `menus::tests::inert_count_never_rises`.
@@ -136,7 +137,7 @@ verifiable.
 ### Current program: Phases 20–22
 
 Phase 19's canvas work and menu wiring campaign (batches 1–17) are
-complete. The live menu census is 8 of 290, with the remaining rows
+complete. The live menu census is 2 of 294, with the remaining rows
 tracked as future feature work or evidence gates. Path-node add/delete,
 the reachability gate, and the wasm budget re-pin are also complete.
 

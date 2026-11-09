@@ -25,9 +25,10 @@
   gate are recorded in the session notes. A clean
   local `xtask ci` has not been run as part of this documentation
   audit; see the latest session evidence before relying on those claims.
-- **Engine and parity:** 245 command IDs (source is authoritative);
-  268 carried / 3 partial / 0 missing of the 356 DOM verbs.
-- **Menu reachability:** 4 of 289 rows remain non-dispatching. The
+- **Engine and parity:** 252 command IDs (`engine::catalog::ids()` is
+  the live authority); 268 carried / 3 partial / 0 missing of the 356
+  DOM verbs.
+- **Menu reachability:** 2 of 294 rows remain non-dispatching. The
   19.6 campaign (batches 1–17) is complete, and the Window menu's
   panel rows (including Optimize, CSS Properties, Find and Replace,
   and Common Library) all dispatch; the remaining rows are

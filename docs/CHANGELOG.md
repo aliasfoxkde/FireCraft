@@ -10,6 +10,11 @@ Current version: **0.2.5**.
 
 ### Features
 
+- **app**: 21.5 desktop accesskit feature enabled (88cf40c)
+- **app**: 21.6 Commands runs .fwsteps alongside .jsf (1e6fb7a)
+- **app**: 21.2 render in device pixels (HiDPI) (ac17e25)
+- **app**: 21.1 autosave and crash recovery on both surfaces (498af8a)
+- **app**: 21.3 palette fuzzy scoring and persisted recents (bc8b637)
 - **app**: 21.4 preferences dialog with persisted UI scale (bec3032)
 - **app**: 20.5 multi-document tabs, clean raster opens (02c4460)
 - **app**: 20.6 Ctrl+0 Fit Selection and rewind selection tests (c275951)
@@ -177,6 +182,9 @@ Current version: **0.2.5**.
 
 ### Fixes
 
+- **xtask**: point Aegis at the scratch config on CI runners (99ac326)
+- **app**: guard recover_steps for wasm, single persisted init (7449cbe)
+- resolve leftover conflict markers from the 21.1 cherry-pick (fe24e9a)
 - **app**: wire Ctrl+0 Fit Selection, keymap group counts, fmt (cefe01c)
 - **app**: crisp zoomed canvas, ellipse shape, picker colors (99f254c)
 - **app**: web theme, selection handles, image import placement (9c8f9d6)
@@ -209,6 +217,8 @@ Current version: **0.2.5**.
 
 ### Documentation
 
+- 21.5 ledger entries (f3e4c09)
+- close 21.2 HiDPI in the ledgers (970b1bc)
 - CS6 parity matrix, wiki set, and CS6 UI evidence (151e2fc)
 - 19b.1 quoting corrections, v0.2.4 receipts, license consolidation (2b849f5)
 - refresh stack for the daily-driver turn (19.1-19.5 landed) (dc62449)
@@ -340,5 +350,6 @@ Current version: **0.2.5**.
 
 ### Other
 
+- wip(app,web): localStorage session persistence (21.1 partial) (7014638)
 - Web file doors complete, dist gate verified, session close (#4) (7c82997)
 - Initial commit (498f8c9)

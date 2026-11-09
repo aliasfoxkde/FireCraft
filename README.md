@@ -6,7 +6,7 @@ FireCraft is a clean-room, open-source reimplementation of Adobe Fireworks CS6 i
 
 ## Project status
 
-The latest tagged release is **v0.2.5**. Work on `main` has continued since that tag. The editor has 245 registered commands and 8 of 289 menu rows still report an unsupported or evidence-gated action. The current UI priorities are completing CS6 shell fidelity and improving panel behavior at normal browser sizes. A recent optimized web distribution and browser smoke are recorded in the [status page](docs/PROGRESS.md); the public Pages manifest currently differs from that local build, and generated artifacts are ignored by Git.
+The latest tagged release is **v0.2.5**. Work on `main` has continued since that tag. The editor has 252 registered commands and 2 of 294 menu rows still report an unsupported or evidence-gated action. The current UI priorities are completing CS6 shell fidelity and improving panel behavior at normal browser sizes. A recent optimized web distribution and browser smoke are recorded in the [status page](docs/PROGRESS.md); the public Pages manifest currently differs from that local build, and generated artifacts are ignored by Git.
 
 The [app screenshot](docs/img/app-main.png) is a 1280×800 capture of the current shell with a vector object selected, taken from the optimized web bundle built on 2026-11-04. It is evidence for that build and state, not a general parity claim — see the [screenshot audit](docs/tasks/T22-screenshot-ui.md) for the captures, measurements, and their limits.
 
