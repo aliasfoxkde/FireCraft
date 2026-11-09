@@ -237,6 +237,7 @@ pub fn random_document(rng: &mut FuzzRng) -> Document {
                         .map(|child| document.registry.insert(draw_leaf(rng, *child)))
                         .collect();
                     document.registry.insert(ObjectData::Group(GroupObject {
+                        stack_mode: None,
                         group_type: 0,
                         name: Some("group".to_owned()),
                         children: child_ids,
@@ -2674,6 +2675,7 @@ pub fn payload_template(name: &str, rng: &mut FuzzRng, document: &Document) -> s
             let mut library = Document::default();
             let leaf = library.registry.insert(random_path(rng, 0));
             let group = library.registry.insert(ObjectData::Group(GroupObject {
+                stack_mode: None,
                 group_type: 0,
                 name: None,
                 children: vec![leaf],

@@ -708,6 +708,7 @@ impl TypedCommand for AddMask {
         };
         let mask_id = document.registry.insert(ObjectData::Image(mask_image));
         let group_id = document.registry.insert(ObjectData::Group(GroupObject {
+            stack_mode: None,
             group_type: GRAYSCALE_MASK,
             name: None,
             children: vec![mask_id, target_id],
@@ -1960,6 +1961,7 @@ mod tests {
         );
         let mask_id = document.registry.insert(ObjectData::Image(mask_image));
         let group_id = document.registry.insert(ObjectData::Group(GroupObject {
+            stack_mode: None,
             group_type: GRAYSCALE_MASK,
             name: None,
             children: vec![mask_id, image_id],
@@ -2218,6 +2220,7 @@ mod tests {
         // Shape-mask group over the image: path covering the left half.
         let path_id = document.registry.insert(square_path(0.0, 0.0, 4.0));
         let group_id = document.registry.insert(ObjectData::Group(GroupObject {
+            stack_mode: None,
             group_type: SHAPE_MASK,
             name: None,
             children: vec![path_id, image_id],

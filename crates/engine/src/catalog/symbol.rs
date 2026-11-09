@@ -3586,6 +3586,7 @@ mod tests {
 
     fn group_named(name: Option<&str>, children: Vec<ObjectId>) -> ObjectData {
         ObjectData::Group(GroupObject {
+            stack_mode: None,
             group_type: 0,
             name: name.map(str::to_owned),
             children,

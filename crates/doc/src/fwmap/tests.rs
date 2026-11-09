@@ -334,6 +334,7 @@ fn sample_document() -> Document {
         }),
     }));
     let group_id = doc.registry.insert(ObjectData::Group(GroupObject {
+        stack_mode: None,
         group_type: 1,
         name: Some("grp".into()),
         children: vec![text_id, slice_id],
@@ -1459,6 +1460,7 @@ fn model_structs_are_fully_constructed() {
         effects: Vec::new(),
     };
     let _group = GroupObject {
+        stack_mode: None,
         group_type: 0,
         name: None,
         children: Vec::new(),

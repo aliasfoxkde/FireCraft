@@ -2104,6 +2104,7 @@ impl TypedCommand for GroupObjects {
         let group_id = document
             .registry
             .insert(ObjectData::Group(doc::GroupObject {
+                stack_mode: None,
                 group_type: 0,
                 name: payload.name.clone(),
                 children,
@@ -3011,6 +3012,7 @@ mod tests {
         let group_id = document
             .registry
             .insert(ObjectData::Group(doc::GroupObject {
+                stack_mode: None,
                 group_type: 0,
                 name: None,
                 children: vec![ids[1]],
@@ -3075,6 +3077,7 @@ mod tests {
         let group_id = document
             .registry
             .insert(ObjectData::Group(doc::GroupObject {
+                stack_mode: None,
                 group_type: 0,
                 name: None,
                 children: vec![ids[0], ids[1]],
@@ -3452,6 +3455,7 @@ mod tests {
     }
 
     fn group_of(document: &Document, id: ObjectId) -> doc::GroupObject {
+        stack_mode: None,
         match document.registry.get(id).unwrap() {
             ObjectData::Group(group) => group.clone(),
             other => panic!("not a group: {other:?}"),
@@ -3779,6 +3783,7 @@ mod tests {
         let group_id = document
             .registry
             .insert(ObjectData::Group(doc::GroupObject {
+                stack_mode: None,
                 group_type: 0,
                 name: None,
                 children: vec![ids[0], ids[1]],

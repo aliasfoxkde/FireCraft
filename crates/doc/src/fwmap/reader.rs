@@ -12,10 +12,10 @@ use crate::fwmap::unknown::UnknownBag;
 use crate::model::{
     Canvas, Cell, Contour, Dither, Document, DocumentInfo, Effect, EffectProperty, EffectValue,
     ExportOptions, Fill, FillShape, Gradient, GradientStop, Grid, GroupObject, Guides, ImageObject,
-    Layer, LayerList, NineSliceGuides, Page, PageInfo, PaintStyle, PathObject, PathPoint,
-    PatternTile, PrimitiveSource, SharedLayerDef, SharedLayerLink, SliceBackground, SliceBehavior,
-    SliceObject, StyleEntry, StyleText, SymbolAnimation, SymbolDefinition, SymbolInstanceObject,
-    SymbolType, TextObject, TextOnPath, TextRun, TextStyle, TileRef,
+    Layer, LayerList, MaskCombineMode, NineSliceGuides, Page, PageInfo, PaintStyle, PathObject,
+    PathPoint, PatternTile, PrimitiveSource, SharedLayerDef, SharedLayerLink, SliceBackground,
+    SliceBehavior, SliceObject, StyleEntry, StyleText, SymbolAnimation, SymbolDefinition,
+    SymbolInstanceObject, SymbolType, TextObject, TextOnPath, TextRun, TextStyle, TileRef,
 };
 use crate::registry::{ObjectData, ObjectId, Registry};
 use fwpng::nodetree::{Node, NodeValue};
@@ -2160,10 +2160,43 @@ impl Reader {
         })
     }
 
+    /// `DTAv` children → the mask level's combine mode (decision
+    /// 0072). The node itself stays bagged either way — foreign data
+    /// round-trips verbatim — but a `DCEv "mode"` entry is read into
+    /// the model. An unknown spelling canonicalizes to the default
+    /// (the absent mode).
+    fn read_stack_mode(children: &[Node]) -> Option<MaskCombineMode> {
+        for child in children {
+            if child.fourcc != *b"DCEv" {
+                continue;
+            }
+            let Some(kids) = child.as_children() else {
+                continue;
+            };
+            if kids.len() != 2 || kids[0].fourcc != *b"DCKs" || kids[1].fourcc != *b"DCVs" {
+                continue;
+            }
+            let Some(key) = kids[0].as_str() else {
+                continue;
+            };
+            if key != "mode" {
+                continue;
+            }
+            let Some(value) = kids[1].as_str() else {
+                continue;
+            };
+            if let Some(mode) = MaskCombineMode::parse(value) {
+                return Some(mode);
+            }
+        }
+        None
+    }
+
     fn read_group(&mut self, children: &[Node], path: &str) -> Result<ObjectData, MapError> {
         let (mut group_type, mut opacity, mut blend) = (None, None, None);
         let (mut visible, mut locked, mut mask_hidden) = (None, None, None);
         let (mut name, mut element_ids, mut mask_linked) = (None, None, None);
+        let mut stack_mode = None;
         let mut effects = Vec::new();
 
         for (i, child) in children.iter().enumerate() {
@@ -2198,6 +2231,7 @@ impl Reader {
         }
 
         Ok(ObjectData::Group(GroupObject {
+            stack_mode: None,
             group_type: group_type.unwrap_or(0),
             name,
             children: element_ids.unwrap_or_default(),
