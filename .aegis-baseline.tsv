@@ -7,13 +7,37 @@
 # recorded count. Moving a baselined finding to another line is not new;
 # a new literal, a new file, or an extra copy of a known literal is.
 #
+# No rule class is switched off: every rule the scanner has stays armed,
+# and a new occurrence of any of these literals fails the gate. The
+# comments below each group record why those particular occurrences were
+# adjudicated as false positives, so a reviewer can read the reason
+# next to the rows it covers.
+#
 # Regenerate with: cargo run -p xtask -- aegis --bless
 # Only after verifying each newly added key is a false positive.
+# Matches the 9-digit observed value range in the PNG node dictionary
+# (0..141663582); this repository holds no tax identifiers.
 australian-tfn	./docs/research/fireworks-png-nodes.md	1004a585bc60d363038c5889d022bd6f58278338fe66f97483316133e316f41a	1
+australian-tfn	./xtask/src/aegis.rs	1004a585bc60d363038c5889d022bd6f58278338fe66f97483316133e316f41a	1
+# Matches the same 9-digit observed value range in the PNG node
+# dictionary; this repository holds no banking data.
 bank-routing-number	./docs/research/fireworks-png-nodes.md	1004a585bc60d363038c5889d022bd6f58278338fe66f97483316133e316f41a	1
+bank-routing-number	./xtask/src/aegis.rs	1004a585bc60d363038c5889d022bd6f58278338fe66f97483316133e316f41a	1
+# The GitForge API row names the credential file that holds the bearer
+# token; the row contains no token.
 bearer-token-url	./docs/NEXT.md	e2c69d19c5b81831c31fa61fe8fd0b18ce2c7ae21cf1062aadcb8e67b49daf34	1
+bearer-token-url	./xtask/src/aegis.rs	0063f0d1147604f6ef4939d76884d546fb4d0d94c48f9e92f6b2b38296f1432c	1
+# A glyph-position golden value (27.345314025878906); its digit run
+# matches the Amex shape, and it is a float literal, not a card number.
 credit-card-amex	./crates/text/tests/layout.rs	ae9b46ed1c3eff9a64786a2171b0f694350bb589478b4327f5f82836c23e8da9	1
+credit-card-amex	./xtask/src/aegis.rs	ae9b46ed1c3eff9a64786a2171b0f694350bb589478b4327f5f82836c23e8da9	1
+# The same glyph-position golden value, seen by the generic card-number
+# rule.
 credit-card-number-generic	./crates/text/tests/layout.rs	ae9b46ed1c3eff9a64786a2171b0f694350bb589478b4327f5f82836c23e8da9	1
+credit-card-number-generic	./xtask/src/aegis.rs	ae9b46ed1c3eff9a64786a2171b0f694350bb589478b4327f5f82836c23e8da9	1
+# The scripting crate's own boa context.eval() call — that crate
+# implements the CS6 scripting DOM's eval() — plus Rust curve-segment
+# .eval(u) calls.
 eval-usage	./crates/scripting/src/dom.rs	a475ee49c7acce90b0c9124fcaaf388999e9ef2c94d490d52a855d24c2d97deb	3
 eval-usage	./crates/scripting/src/lib.rs	a475ee49c7acce90b0c9124fcaaf388999e9ef2c94d490d52a855d24c2d97deb	3
 eval-usage	./crates/scripting/src/marshal.rs	a475ee49c7acce90b0c9124fcaaf388999e9ef2c94d490d52a855d24c2d97deb	1
@@ -21,10 +45,19 @@ eval-usage	./crates/scripting/src/widget.rs	a475ee49c7acce90b0c9124fcaaf388999e9
 eval-usage	./crates/vector/src/boolean.rs	a475ee49c7acce90b0c9124fcaaf388999e9ef2c94d490d52a855d24c2d97deb	2
 eval-usage	./crates/vector/src/offset.rs	a475ee49c7acce90b0c9124fcaaf388999e9ef2c94d490d52a855d24c2d97deb	1
 eval-usage	./crates/vector/src/tests.rs	a475ee49c7acce90b0c9124fcaaf388999e9ef2c94d490d52a855d24c2d97deb	4
+eval-usage	./xtask/src/aegis.rs	a475ee49c7acce90b0c9124fcaaf388999e9ef2c94d490d52a855d24c2d97deb	3
+# Matches the build metadata of a Cargo.lock version string
+# (0.6.0+11769913).
 international-phone	./Cargo.lock	af21a1bff1718128c96522dc5f3a4136e66feeb8aee345e9676fda1199e5378e	1
+international-phone	./xtask/src/aegis.rs	af21a1bff1718128c96522dc5f3a4136e66feeb8aee345e9676fda1199e5378e	1
+# The rule's regex is JavaScript-shaped (open / fs. / readFile, then
+# user / input / query) and fires on English prose; this repository has
+# no server-side file read.
 path-traversal	./docs/HANDOFF.md	8a69ab888f99a99e70366c051f330d9512cabc8d710f849e6eeb0de25711be66	1
 path-traversal	./docs/planning/generated/scorecard.md	d24059df4850652d14de7bcd5b2d806833567be8055cdc8f60cdc0005bd96de4	1
 path-traversal	./xtask/src/status.rs	d24059df4850652d14de7bcd5b2d806833567be8055cdc8f60cdc0005bd96de4	1
+# Matches the word "pan" in pan-zoom and hand-pan identifiers; the five
+# credit-card-* rules stay armed.
 pci-cardholder-data	./crates/app/src/canvas.rs	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	15
 pci-cardholder-data	./crates/app/src/canvas.rs	fd92d952db92eff57586865ef7b6ae62897642d1abedbe203d56e2d4ced964ed	1
 pci-cardholder-data	./crates/app/src/editor.rs	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	1
@@ -42,9 +75,12 @@ pci-cardholder-data	./docs/planning/firecraft/ROADMAP.md	00e37ffae0562ab6818d8f4
 pci-cardholder-data	./docs/planning/generated/parity.md	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	3
 pci-cardholder-data	./docs/planning/generated/scorecard.md	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	2
 pci-cardholder-data	./docs/research/fw-code-notes.md	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	1
+pci-cardholder-data	./xtask/src/aegis.rs	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	1
 pci-cardholder-data	./xtask/src/perf.rs	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	2
 pci-cardholder-data	./xtask/src/perf.rs	fd92d952db92eff57586865ef7b6ae62897642d1abedbe203d56e2d4ced964ed	1
 pci-cardholder-data	./xtask/src/status.rs	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	5
+# Matches any 10-digit run: u32::MAX, CRC and chunk values, observed PNG
+# value ranges.
 phone-number	./crates/doc/src/model.rs	f807212b6748a8300fc3702322caa515edf0a6ed9bbc86e94c451e351b080c60	1
 phone-number	./crates/io/src/bmp.rs	972dcafa6fb4c2c88bce752fca4ab18c6bd88599330a4ad9813915b05bfbe76d	1
 phone-number	./crates/io/src/expv.rs	f807212b6748a8300fc3702322caa515edf0a6ed9bbc86e94c451e351b080c60	1
@@ -62,19 +98,35 @@ phone-number	./docs/research/fireworks-png-nodes.md	ebebc7bc31b4fd88112f19c0e000
 phone-number	./docs/research/fireworks-png-nodes.md	f3e0457469e6aea7d9ba1b0d8851a4bee518b0163cb0e141a778bcda96f3742f	1
 phone-number	./docs/research/fireworks-png-nodes.md	f807212b6748a8300fc3702322caa515edf0a6ed9bbc86e94c451e351b080c60	3
 phone-number	./docs/research/fireworks-png-nodes.md	f83e39c0ea6003e6777a7c158434b5489b13ce5c0926b72f7743d0572779db85	2
+# The same JavaScript-shaped regex, seen by the hardening rule.
 security-hardening-path-traversal	./docs/PLANNING.md	8970fe80e5b5b5afefbcb8f72dbd3ec6561a516a7b9364ec2518217dd2fc7298	1
+# The same two fixtures, seen by the hardening rule.
 security-hardening-xml-external-entity	./crates/io/tests/svgimport.rs	f6cfc5faea5abe6ee5bd8667967edfc5cbe43d95f0f04d7a560afb01613823d5	2
 security-hardening-xml-external-entity	./packaging/build-macos-dmg.sh	7b16906a7de9206c7488979eb86e8393ba62a45c0e769c79cf070a16c1858d49	1
+# Matches the same 9-digit observed value range in the PNG node
+# dictionary; this repository holds no social-security numbers.
 ssn-no-dashes	./docs/research/fireworks-png-nodes.md	1004a585bc60d363038c5889d022bd6f58278338fe66f97483316133e316f41a	1
+ssn-no-dashes	./xtask/src/aegis.rs	1004a585bc60d363038c5889d022bd6f58278338fe66f97483316133e316f41a	1
+# A loopback listener in the release smoke test, a localhost maintainer
+# address, and prose naming the local GitForge API; the workspace has no
+# HTTP client dependency.
 ssrf-localhost	./docs/NEXT.md	12ca17b49af2289436f303e0166030a21e525d266e209267433801a8fd4071a0	1
 ssrf-localhost	./docs/PLANNING.md	12ca17b49af2289436f303e0166030a21e525d266e209267433801a8fd4071a0	2
 ssrf-localhost	./docs/SESSIONS.md	12ca17b49af2289436f303e0166030a21e525d266e209267433801a8fd4071a0	1
 ssrf-localhost	./docs/decisions/0074-aegis-content-keyed-baseline.md	49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763	1
 ssrf-localhost	./packaging/deb/control	49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763	1
+ssrf-localhost	./xtask/src/aegis.rs	49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763	2
 ssrf-localhost	./xtask/src/dist.rs	12ca17b49af2289436f303e0166030a21e525d266e209267433801a8fd4071a0	1
+# A comment quoting a V8 crash dump observed in CI; it documents a
+# failure, and the build prints nothing.
 stack-trace-exposure	./infrastructure/docker/ci-rust.Dockerfile	17ee41935f062dffb434b86c2a8d432567df47fc5988eb4cf2bbae1b690e4747	1
+# The SVG importer's entity-expansion fixture, which must declare an
+# external entity so the test can observe the importer refusing it, and
+# the Apple plist doctype's quoted public identifier.
 xml-external-entity	./crates/io/tests/svgimport.rs	f6cfc5faea5abe6ee5bd8667967edfc5cbe43d95f0f04d7a560afb01613823d5	2
 xml-external-entity	./packaging/build-macos-dmg.sh	7b16906a7de9206c7488979eb86e8393ba62a45c0e769c79cf070a16c1858d49	1
+# Matches any 5-digit run: CS6 command ids, the JPEG dimension ceiling
+# (65535), menu ids. This repository holds no postal data.
 zip-code	./crates/app-cli/src/mcp.rs	0e5c81ceee464db1c0cb9ed801d134fab0dd2a28c0dc62e35aa21a8e13ff0ebc	1
 zip-code	./crates/app-cli/src/mcp.rs	20d70708103e5223b6f2fb00f00947832fb93d12ebef11eb10bc5599efefe184	1
 zip-code	./crates/app-cli/src/mcp.rs	e27c72fe629f258a871404eed323c0cf57a7a26c19dc8d5a6ac90770241af8f5	1
@@ -416,6 +468,7 @@ zip-code	./docs/research/fw-ui-evidence.md	78f54f73431f4924a4c5ac3647c0dccca95e2
 zip-code	./docs/research/fw-ui-evidence.md	7f2c767b903ed755fb208e264d4ddf2bd2e5ff9f9985e3062a46cbd810c2b762	2
 zip-code	./docs/research/fw-ui-evidence.md	b255720517f7c131dbb0f14d63e793b120464a6c27762b858c2f7d34ba4ccabb	2
 zip-code	./docs/research/fw-ui-evidence.md	e846a3867ee2598139c1957e15fafe06f2357059c177aaa944cb5769bf1a5ae1	2
+zip-code	./xtask/src/aegis.rs	f2f89ede8e7d4b3d2243dea1ca96b8ece56f793811d9708b4a0181bf81a50011	1
 zip-code	./xtask/src/dist.rs	d55d01d0341ed0ba2cd99b322e8c5b609254f47d10c7cd12b99b4922effeba44	1
 zip-code	./xtask/src/perf.rs	0eaa217986d49cd21dd15615c9531ffa6e1fe7e4f3a869748f4810aadb3d5ba9	1
 zip-code	./xtask/src/perf.rs	15c6c15ecd64a425cf7d303534d6d887a808657fc67e11539710261583a601b6	1

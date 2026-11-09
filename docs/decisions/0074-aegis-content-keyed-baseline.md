@@ -73,6 +73,33 @@ Per the repo's rule, the tool gets fixed and the procedure goes away.
   finding in the first place.
 - The `log/` and generated-file exclusions in `.aegisignore` stay:
   their content churns, not just their line numbers.
+- Each rule class's rows carry the **reason** those occurrences were
+  adjudicated, as a comment above the group. The reason travels with
+  the rows it covers, so a reviewer reading the baseline sees why a
+  finding is suppressed without leaving the file. The gate's own
+  source quotes the literals it explains, so it carries rows of its
+  own; they are adjudicated like any other.
+
+### Why no rule class is switched off
+
+Decision 0070 (branch `feat/phase-21-daily-driver`) solves the same
+defect with a different suppression model: it names whole rule classes
+in `.aegis-pattern-state.json` and lets the scanner skip them, keeping
+only a handful of per-finding entries.
+
+This branch keeps **every rule class armed** and adjudicates each
+occurrence individually. The two differ on one axis that matters: 0070
+turns a rule off for the whole tree, so a genuine `path-traversal` or
+`ssrf` in a later change is not scanned at all, while this branch
+fails on the first new occurrence of a literal and on any new literal
+of an armed class. 0070's class-level evidence (which classes cannot
+fire here, and why) is preserved as the reasons written next to the
+rows in this branch's baseline; the suppression itself stays narrow.
+
+The cost is that the baseline lists every occurrence rather than a
+handful of classes, and that a new numeric literal in any file needs
+adjudicating before it can be baselined. That cost is visible and
+bounded; the coverage that class suppression gives up is not.
 
 ### What the fix does not cover
 
