@@ -1,78 +1,165 @@
 # Release artifact matrix — RP-00 inventory (T27)
 
-> Status: inventory of implementation and verification evidence as of 2026-11-07.
-> The implementation branch is based on `5fac7a2`; recipe ≠ built ≠ installed
-> ≠ launched ≠ published — states are tracked separately and never collapsed.
-> Authority: [RELEASE-ENGINEERING-PLAN.md](../RELEASE-ENGINEERING-PLAN.md).
+> **Reconciled 2026-11-09** against the Phase 0 baseline audit
+> ([PHASE-0-AUDIT.md](PHASE-0-AUDIT.md), PR #16, branch
+> `docs/phase-0-baseline-audit`). The audit is the evidence authority
+> for what exists; [decision 0075](../decisions/0075-release-scope-mvp.md)
+> is the release-scope authority.
+>
+> One row per artifact. Each row states **what exists today**, **how it
+> is produced**, and **its evidence state** — a status word from the
+> campaign vocabulary plus the receipt that supports it.
+>
+> Status vocabulary (campaign §3.2): `NOT STARTED` · `READY` ·
+> `IN PROGRESS` · `BLOCKED` · `IMPLEMENTED` · `BUILD VERIFIED` ·
+> `INSTALLED` · `LAUNCHED` · `SMOKE TESTED` · `PUBLISHED` · `CERTIFIED` ·
+> `DEFERRED` · `REJECTED`.
+>
+> **Recipe ≠ built ≠ installed ≠ launched ≠ published ≠ certified.**
+> Those are separate states and are never collapsed. A row with no
+> receipt is `IMPLEMENTED` or `BLOCKED`, never `PUBLISHED` or
+> `CERTIFIED`.
+
+## Reading the matrix
+
+- **Status** is the artifact's state on the campaign's 11-rung evidence
+  ladder (audit §3): 1 recipe exists → 11 downloaded published artifact
+  independently verified.
+- **Receipt** names what was observed, on what host, on what date. A
+  build receipt without a date is not a receipt.
+- **Blocker** is the verified blocker ID from the audit's register
+  (§4). A blocker ID means the condition was *observed*, not inferred.
+- The evidence ladder has a hard ceiling at **rung 8** for everything in
+  this repository: no artifact is signed and no provenance/attestation
+  exists (B-14), so **no artifact can reach rung 9**, and therefore
+  **nothing is `CERTIFIED`**.
 
 ## Target matrix
 
-| Target | Format | Status | Artifact name | Built by | Verification state |
-|---|---|---|---|---|---|
-| Linux x86_64 | tar.gz (desktop) | **required, tested** | `firecraft-{v}-linux-x86_64.tar.gz` | `xtask dist --native` | built each release; sha256-manifested |
-| Linux x86_64 | tar.gz (CLI) | **required, tested** | `firecraft-cli-{v}-linux-x86_64.tar.gz` | `xtask dist --native` | built; manifest |
-| Linux x86_64 | DEB | **required, tested** | `firecraft_{v}_amd64.deb` | `xtask dist --native` (pinned `packaging/deb/control`; xtask verifies the libc6 floor against the binaries' max GLIBC symbol version via objdump) | built; `dpkg-deb` read-back; **clean-container smoke passed 2026-11-06** (Debian 12 image: apt install → functional CLI import/convert/export round trip → reinstall → remove → purge; caught and fixed a floor of 2.31 vs binaries needing 2.35) |
-| Linux x86_64 | AppImage | **required, recipe + staged** | `firecraft-{v}-linux-x86_64.AppImage` | `packaging/build-appimage.sh` (operator, linuxdeploy) | parse-checked by `dist --native`; **linuxdeploy smoke on fleet 2026-11-06 failed-then-fixed**: continuous build hard-fails on a missing `Icon=` desktop entry ("ERROR: Icon entry missing", no output image) — fix landed (`a4d74a0`: in-tree original icon + `Icon=firecraft` + staging); full linuxdeploy run pending re-execution |
-| Linux x86_64 | Flatpak | **required, recipe-only** | `firecraft-{v}-linux-x86_64.flatpak` | `packaging/build-flatpak.sh` + manifest `packaging/flatpak/dev.firecraft.FireCraft.yml` | manifest YAML-parse-checked by `dist --native`; **never built** (no Flatpak SDK on fleet) |
-| Linux x86_64 | RPM | **unsupported** ([decision 0070](../decisions/0070-rpm-deferred.md)) | — | — | nothing; revisit on demonstrated demand |
-| Linux aarch64 | any | **unassessed** | — | RP-01 assessment | nothing |
-| Windows x86_64 | portable zip | **required, built + wine-smoked** | `firecraft-{v}-windows-x86_64.zip` | cross-built on fleet (`x86_64-pc-windows-gnu`, cargo 19m39s); zip staged per the `build-windows.ps1` layout | **built 2026-11-06**: `0cd17a87…710f72`, 72 MB (both exes + LICENSE); **wine 10.0 smoke passed**: CLI `import`→`export` PNG round trip functional; GUI launched, real 1024×768 "FireCraft" window on Xvfb. Note: fleet zip is GNU-toolchain — the MSVC operator build remains the release-path authority |
-| Windows x86_64 | Inno Setup installer | **required, recipe-only** | `firecraft-{v}-windows-x86_64-setup.exe` | same script, ISCC present | parse-checked; **never built** |
-| Windows ARM64 | any | **unassessed** | — | RP-02 assessment | nothing |
-| macOS universal | DMG | **required, recipe-only** | `firecraft-{v}-macos-universal.dmg` | `packaging/build-macos-dmg.sh` (operator, off-fleet) | parse-checked; **never built**; notarization/signing not configured |
-| Android ARM64 | APK/AAB | **experimental** — feasibility: "feasible with bounded work" ([report](../research/android-feasibility.md)); support claim gated on ARM64 device + Android SDK runner | `FireCraft-{v}-android-arm64.apk` | not started (no entrypoint, no CI image) | report only |
-| Web (WASM) | zip bundle | **required, tested** | `firecraft-web-{v}.zip` | `xtask dist --web` (trunk + headless bridge smoke) | built each release; deployed to Cloudflare Pages — **live deployment stale as of 2026-11-06: serves bundle `2274ac8c` vs current-tree `e44296eb`; reconciliation = task #158 (T18), publish action**. Fresh 2026-11-06 build green: `728936e0…fa447f`, wasm 21.27 MB (ceiling 21.5), 5 files, smoke green |
-| WebOS | `appinfo.json` + host page | **required, tested** | (inside web bundle) | `packaging/webos/` | built |
-| Source | tar.gz | **required, tested** | `FireCraft-{v}-source.tar.gz` | `xtask dist --source` (git archive of HEAD; clean-extract + `cargo metadata --locked` verified; wired into release.yml) | built + verified on fleet |
-| Metadata | manifest/checksums | **required, tested** | `MANIFEST.sha256`, `RELEASE_SHA256.txt` | `dist --native` + release.yml | present |
-| Metadata | SBOM (CycloneDX 1.5) | **required, implementation updated; verification pending** | `firecraft-{v}-sbom.cdx.json` | `xtask dist --sbom` (locked Cargo package inventory, source-appropriate bom-refs, resolved dependency edges; wired into release.yml) | earlier artifact was JSON-validated on fleet; rebuild and validate the updated graph output before release certification |
-| Metadata | provenance / signing | **planned** | — | RP-06 remaining scope | no signing credentials configured anywhere; attestation blocked until they exist |
+| # | Target | Format | What exists today | How it is produced | Status | Rung | Receipt | Blocker |
+|---|---|---|---|---|---|---|---|---|
+| 1 | Linux x86_64 | tar.gz (desktop) | `firecraft-0.2.5-linux-x86_64.tar.gz` | `xtask dist --native` → `dist/native/` | `PUBLISHED` | 11 | GitHub release v0.2.5 asset, 22,084,726 B. Downloaded and checksum-verified 2026-11-09; `sha256sum -c` passes against the published `MANIFEST.sha256`; unpacks to `firecraft-0.2.5/bin/{firecraft,firecraft-cli}` + `share/licenses/LICENSE` | B-18 (a rebuild of the current tree does not reproduce these bytes), B-21 (published out of band, not by the release workflow) |
+| 2 | Linux x86_64 | tar.gz (CLI) | `firecraft-cli-0.2.5-linux-x86_64.tar.gz` | `xtask dist --native` → `dist/native/` | `PUBLISHED` | 11 | GitHub release v0.2.5 asset, 8,072,377 B. Downloaded and checksum-verified 2026-11-09; the extracted `firecraft-cli` **launches** and prints its usage | B-18, B-21 |
+| 3 | Linux x86_64 | DEB | `firecraft_0.2.5_amd64.deb` | `xtask dist --native` from the pinned `packaging/deb/control`; the gate reads the package back with `dpkg-deb` and fail-closes on the declared libc6 floor against the binaries' max GLIBC symbol version (via `objdump`) | `PUBLISHED` | 11 | GitHub release v0.2.5 asset, 14,819,904 B. Downloaded and checksum-verified 2026-11-09; `dpkg-deb --info` reads `Version: 0.2.5`, `Architecture: amd64`; the extracted `firecraft-cli` launches | **B-7 — OPEN DEFECT.** The declared glibc floor is below the binaries' real requirement, confirmed on the **published** artifact by `objdump -p`, not only on a local rebuild. The floor numbers and the `objdump` floor logic are owned by the stacked `fix/deb-glibc-floor` PR; this row deliberately does not restate them. A package built from this tree under-declares its dependency, so it installs cleanly and then fails to start on older distributions. **This is a defect, not a settled fact.** |
+| 4 | Linux x86_64 | AppImage | recipe only — `packaging/build-appimage.sh` | operator-run on a host with `linuxdeploy`; the script is `bash -n` parse-checked by `dist --native` | `NOT STARTED` | 1 | recipe exists and passes the gate's `bash -n` check; **never executed** | B-8 (`linuxdeploy` absent, no pinned copy vendored), B-9 (no icon ships in-tree for the desktop entry), B-10 (the script stages `target/release/…` and ignores `CARGO_TARGET_DIR`) |
+| 5 | Linux x86_64 | Flatpak | recipe only — `packaging/build-flatpak.sh` + `packaging/flatpak/dev.firecraft.FireCraft.yml` (both added on this branch; **no recipe on `main`**) | operator-run on a host with the Flatpak SDK; the script is `bash -n` parse-checked and the manifest is YAML-parse-checked by `dist --native` | `NOT STARTED` | 1 | recipe and manifest exist on this branch and the gate parse-checks them; **never built** | B-11 (`flatpak` and `flatpak-builder` absent) |
+| 6 | Windows x86_64 | portable ZIP | recipe only — `packaging/build-windows.ps1` | operator-run on a Windows host with MSVC | `NOT STARTED` | 1 | recipe exists; the gate **existence-checks** it only — it cannot parse PowerShell on this fleet; **never executed** | B-12 (`pwsh` absent; no MSVC linker on this host). A GNU cross-build and a wine smoke are recorded on the PR #9 branch — preview evidence only, never native certification (campaign §8) |
+| 7 | Windows x86_64 | Inno Setup installer | recipe only — `packaging/windows/firecraft.iss` | compiled by the PowerShell recipe on a Windows host with Inno Setup 6 | `NOT STARTED` | 1 | recipe exists and is existence-checked by the gate; the `__APPVERSION__` placeholder is substituted by the PowerShell recipe, which has never run; **never built** | B-12 (`ISCC` absent). The PowerShell recipe *skips* the installer when `ISCC` is missing, so a Windows run without Inno Setup ships no installer and says nothing |
+| 8 | macOS universal | DMG | recipe only — `packaging/build-macos-dmg.sh` | operator-run on macOS: two `apple-darwin` slices → `lipo` → `hdiutil` | `NOT STARTED` | 1 | recipe exists and is `bash -n` parse-checked by the gate; **never executed** | needs macOS + Xcode CLT; `lipo`/`hdiutil` are absent on this Linux host, so the recipe is off-fleet by design |
+| 9 | Web (WASM) | ZIP bundle | `firecraft-web-0.2.5.zip` | `xtask dist --web` → `dist/web/`, then zipped | `PUBLISHED` | 11 | GitHub release v0.2.5 asset, 7,174,826 B. Downloaded 2026-11-09: 6 entries (bundle `firecraft-web-f9dbe2f14305b2d9{,_bg.wasm}`, `index.html`, `host.html`, `appinfo.json`, inner `MANIFEST.sha256`); `sha256sum -c` passes on all 5 manifest entries | **B-21 / F-16 — the published bundle was never built by the release workflow.** Its entries are stamped 2026-11-03 12:08, six hours before the workflow's own build finished at 18:15:59Z, and its wasm is a different size than the workflow's. No recorded bridge smoke ever ran against the published bytes. Separately, the **live deployment** serves a fourth bundle (`2274ac8c2925b61d`) that matches no release — B-6 |
+| 10 | WebOS | `appinfo.json` + `host.html` | staged into `dist/web/` by `dist --web` from `packaging/webos/` | `xtask dist --web` | `BUILD VERIFIED` | 5 | staged `appinfo.json` reads 0.2.5; the web manifest covers `appinfo.json` and `host.html`; the live site serves the same `appinfo.json` bytes | device/runtime smoke is `UNVERIFIED` (audit §6); the Pages deploy is manual and currently stale (B-6) |
+| 11 | CLI binaries | `firecraft-cli` (inside #1 and #2) | `firecraft-cli` | `xtask dist --native` | `PUBLISHED` | 11 | the **published** `firecraft-cli` was downloaded and extracted 2026-11-09 and **launches**, printing its full usage string; the locally rebuilt one does the same | — |
+| 12 | Source | tar.gz | `FireCraft-0.2.5-source.tar.gz` — **not on `main`** | `xtask dist --source` (git archive of HEAD; the verb verifies a clean extraction and runs `cargo metadata --locked` inside it). The verb exists on this branch and on the PR #9 / #12 trees | `BUILD VERIFIED` | 3 | produced 2026-11-09 on `docs/release-execution-board` @ `08eae4a`: 3.35 MB, 661 entries, sha256 `a0fcaafe…`; clean-extract + `cargo metadata --locked` verified inside the verb | F-9 (the verb is absent from `main`), B-13 (never published) |
+| 13 | SBOM | CycloneDX 1.5 JSON | `firecraft-0.2.5-sbom.cdx.json` — **not on `main`** | `xtask dist --sbom` over the locked dependency graph; the serial is a deterministic UUIDv8 derived from the locked graph. The verb exists on this branch and on the PR #9 / #12 trees | `BUILD VERIFIED` | 3 | produced 2026-11-09 on `docs/release-execution-board` @ `08eae4a`: 249 KB, 493 components, 494 dependency edges, sha256 `837a731b…` | F-9 (the verb is absent from `main`), B-13 (never published) |
+| 14 | Metadata | checksums / manifest | `dist/native/MANIFEST.sha256` (3 native artifacts) and `dist/web/MANIFEST.sha256` (5 bundle files) | `xtask dist --native` / `dist --web`; `release.yml` additionally writes a release-wide `RELEASE_SHA256.txt` over 8 assets | `PUBLISHED` | 11 | `MANIFEST.sha256` attached to release v0.2.5 (398 B, 3 native files) and embedded in the web ZIP (532 B). Both checked against the published downloads on 2026-11-09 — 3/3 and 5/5 pass | B-17 (neither list covers the ZIP files themselves and no release-wide `RELEASE_SHA256.txt` was ever published, although `release.yml` writes one), B-21 (the manifest and the assets it covers were published out of band, so the list is self-consistent but not independently attested) |
+| 15 | Metadata | provenance / attestation | **nothing on any branch** | no generator, no `gh attestation` step, no in-toto/SLSA material anywhere in the repository | `NOT STARTED` | 0 | nothing exists | B-14 |
+| 16 | Metadata | release manifest (JSON) | **nothing on any branch** | the campaign and the plan require a machine-readable artifact manifest; none exists | `NOT STARTED` | 0 | nothing exists | B-14 |
+| 17 | Metadata | signature (Authenticode / Developer ID / GPG) | **nothing**; no signing identity is configured anywhere | no signing step in any workflow; signing remains an operator ceremony | `NOT STARTED` | 0 | nothing exists | B-14 — no artifact can reach rung 9 until this is resolved, so **no artifact can be `CERTIFIED`** |
+| 18 | Android arm64 | APK/AAB | feasibility report only — [android-feasibility.md](../research/android-feasibility.md) | not started: no native entrypoint, no NDK/SDK CI image | `DEFERRED` | 0 | the report concludes "feasible with bounded work", disposition experimental | the feasibility-gate decision is unrecorded; no NDK/SDK image, no device |
+| 19 | Linux | RPM | no spec, no recipe | — | `DEFERRED` | 0 | [decision 0070](../decisions/0070-rpm-deferred.md), accepted 2026-11-06 | decision 0070 is not on `main`; RPM is **not** reopened by [decision 0075](../decisions/0075-release-scope-mvp.md) |
+| 20 | Linux aarch64 | any | nothing | RP-01 assessment | `DEFERRED` | 0 | no ARM64 host and no ARM64 test environment on the fleet | extended scope (decision 0075) |
+| 21 | Windows ARM64 | any | nothing | RP-02 assessment | `DEFERRED` | 0 | no ARM64 host and no ARM64 test environment on the fleet | extended scope (decision 0075) |
+
+### Status counts
+
+| Status | Count | Artifacts |
+|---|---|---|
+| `NOT STARTED` | 8 | AppImage, Flatpak, Windows ZIP, Windows installer, macOS DMG, provenance/attestation, release manifest JSON, signature |
+| `READY` | 0 | — |
+| `IN PROGRESS` | 0 | — |
+| `BLOCKED` | 0 | — |
+| `IMPLEMENTED` | 0 | — |
+| `BUILD VERIFIED` | 3 | WebOS package, source archive, SBOM |
+| `INSTALLED` | 0 | — |
+| `LAUNCHED` | 0 | — |
+| `SMOKE TESTED` | 0 | — |
+| `PUBLISHED` | 6 | desktop tar.gz, CLI tar.gz, DEB, web bundle, CLI binaries, checksums/manifest |
+| `CERTIFIED` | 0 | — |
+| `DEFERRED` | 4 | Android arm64, Linux RPM, Linux aarch64, Windows ARM64 |
+| `REJECTED` | 0 | — |
+
+**No artifact has reached `CERTIFIED`.** Five artifacts (desktop tar.gz,
+CLI tar.gz, DEB, web bundle, CLI binaries) reach **rung 11** — they were
+downloaded from the published release and verified against their
+published checksum lists on 2026-11-09, and the CLI binary was launched.
+Nothing has reached rung 9: no artifact is signed and no provenance
+exists.
 
 ## Build surfaces (what actually exists)
 
-- `xtask dist --native` — pinned Linux x86_64: builds `--locked`, stages,
-  produces desktop tar.gz, CLI tar.gz, DEB (verified via `dpkg-deb`),
-  writes `MANIFEST.sha256`, parse-checks the three packaging recipes.
-- `xtask dist --web` — trunk wasm build + headless browser bridge smoke.
-- `.github/workflows/release.yml` — tag-driven: native + web artifacts,
-  explicit-file checksums, draft GH release with notes from
-  `docs/releases/{tag}.md`. Cloudflare Pages deploy is **commented out**.
-- `.github/workflows/ci.yml` — backup CI (fmt + gate); GitForge pipeline
-  is primary.
-- Recipes (operator-owned, off-fleet per `packaging/TOOLCHAINS.md`):
-  `build-windows.ps1`, `build-macos-dmg.sh`, `build-appimage.sh`.
-- Still missing or incomplete: native Android build; provenance/attestation;
-  signing configuration (no credentials); target-native install/launch
-  smoke for every recipe-built package; and a successful end-to-end tag
-  release run. The tag workflow now includes a fail-closed artifact
-  aggregate and draft-release upload. Flatpak remains recipe-only;
-  RPM is explicitly deferred by [decision 0070](../decisions/0070-rpm-deferred.md).
-  Source archive and CycloneDX SBOM generation are implemented and wired
-  into the tag workflow, but still require an end-to-end release run.
+- `xtask dist --native` — pinned Linux x86_64: builds `--locked`,
+  stages, produces desktop tar.gz, CLI tar.gz and DEB (read back with
+  `dpkg-deb --info`/`--contents`), writes `MANIFEST.sha256`, and
+  parse-checks the packaging recipes.
+- `xtask dist --web` — trunk wasm build, wasm size ceiling, manifest,
+  and the headless bridge smoke. `FIRECRAFT_DIST_SKIP_SMOKE=1` skips
+  the smoke — that is how the GitForge release job builds (B-5).
+- `xtask dist --source` and `xtask dist --sbom` — **on this branch and
+  the PR #9 / #12 trees; not on `main`** (F-9). Both are wired into
+  `release.yml`.
+- `.github/workflows/release.yml` — tag-driven: native + web + source +
+  SBOM artifacts, a release-wide `RELEASE_SHA256.txt`, a fail-closed
+  eight-asset aggregate validation, and a **draft** GitHub release whose
+  assets are passed positionally. The Cloudflare Pages deploy step is
+  **commented out** — deployment is manual.
+- `.github/workflows/ci.yml` — backup CI (`fmt` + `gate`). The job's
+  `Web bundle smoke` step is **tag-gated** (`if: startsWith(github.ref,
+  'refs/tags/v')`) and is therefore **skipped on branch pushes**.
+- `.gitforge.yml` — the eight-job pipeline; its `release` job builds
+  the web bundle with `FIRECRAFT_DIST_SKIP_SMOKE=1`, so that path
+  publishes bytes that were never exercised through the bridge (B-5).
+- Recipes (operator-owned, off-fleet): `build-windows.ps1`,
+  `build-macos-dmg.sh`, `build-appimage.sh`, `build-flatpak.sh`.
 
 ## Known gaps against RP-00 acceptance
 
-1. ~~Windows/macOS/AppImage outputs never built — fleet has no toolchain;~~
-   **partially closed 2026-11-06**: Windows portable zip cross-built on
-   fleet (GNU toolchain) and wine-smoked (CLI round trip + GUI window);
-   AppImage icon-blocker found via a real linuxdeploy run and fixed in
-   the recipe (`a4d74a0`); full AppImage re-run and Inno installer still
-   pending. macOS DMG remains operator-recipe-only.
-2. ~~DEB has no clean-VM install/upgrade/remove test~~ — closed 2026-11-06: clean-container smoke passed (Debian 12; install/functional/reinstall/remove/purge), and `dist --native` now fail-closes on a control-file libc6 floor below the binaries' real GLIBC requirement.
-3. Live web deployment not reconciled with a release bundle.
-4. Source archive generation exists and is wired into the tag workflow;
-   validate it on an actual tagged release.
-5. CycloneDX SBOM generation exists; provenance and signing remain open.
-6. The tag workflow validates the required eight-asset aggregate and
-   recorded digests; execute an end-to-end tag run before certification.
-7. RPM is explicitly deferred by decision 0070; no RPM package is planned
-   for MVP v1.
+1. **Windows/macOS/AppImage/Flatpak outputs are recipe-only.** No
+   artifact of those kinds has ever been produced on a target-native
+   host. The GNU cross-build and wine smoke recorded on the PR #9 branch
+   are preview evidence, never native certification (campaign §8).
+2. **The DEB's declared glibc floor is below the binaries' real
+   requirement** — confirmed on the published artifact (B-7). This is an
+   open defect with an owner (the stacked `fix/deb-glibc-floor` PR), not
+   a closed item. The floor numbers and the `objdump` check are that
+   PR's to correct; this matrix deliberately does not restate them.
+3. **The live web deployment is not reconciled with a release bundle**
+   (B-6), and its own checksum list cannot verify it — Cloudflare
+   Pages rewrites the two HTML files after the manifest is written, so
+   `sha256sum -c` against the live site fails on those two entries by
+   construction.
+4. **The release workflow has never produced a release** (B-4, B-21).
+   All six published releases were operator-published by hand.
+5. **The source archive and the SBOM have never been published** (B-13),
+   and their verbs do not exist on `main` (F-9).
+6. **No release-wide checksum file has ever been published** (B-17),
+   and every published asset reports a null GitHub digest.
+7. **Nothing is signed and no provenance exists** (B-14), so nothing
+   can be `CERTIFIED`.
+8. **RPM is deferred** by [decision 0070](../decisions/0070-rpm-deferred.md)
+   and is **not** reinstated by
+   [decision 0075](../decisions/0075-release-scope-mvp.md).
+9. **The published artifacts are not reproducible** from the current
+   tree (B-18), and the bundler version is not recorded in any build
+   receipt (F-17). Four builds of nominally the same release differ by
+   42,806 B.
 
 ## Toolchain / secrets inventory
 
-- Fleet (Linux x86_64): rustup stable, trunk, dpkg-deb, chromium (web smoke).
-- Off-fleet operator: Windows MSVC + ISCC; macOS Xcode CLT + hdiutil + lipo;
-  linuxdeploy for AppImage. Pinning rules in `docs/TOOLCHAINS.md`.
-- Secrets: `CLOUDFLARE_API_TOKEN` (optional, deploy step disabled).
-  No signing credentials configured anywhere — Windows Authenticode,
-  macOS Developer ID, GPG/nonce provenance all absent (RP-06 scope).
+- Fleet (Linux x86_64, Debian 13): rustup stable, trunk, dpkg-deb,
+  chromium (bridge smoke). Per-artifact detail and the
+  parse-check status of every recipe: [TOOLCHAINS.md](../TOOLCHAINS.md).
+- Off-fleet operator: Windows MSVC + Inno Setup; macOS Xcode CLT +
+  `hdiutil` + `lipo`; `linuxdeploy` for AppImage; Flatpak SDK for
+  Flatpak. None of these hosts exists on this fleet.
+- Secrets: `CLOUDFLARE_API_TOKEN` — optional, deploy step disabled.
+  Whether it is configured in repository secrets is `UNVERIFIED` (audit
+  §6). No signing credentials are configured anywhere — Windows
+  Authenticode, macOS Developer ID, and GPG/nonce provenance are all
+  absent (RP-06 scope, B-14).
+
+## Scope note
+
+This matrix describes **evidence state**, not release scope. Which of
+these artifacts constitute an acceptable release cut is decided by
+[decision 0075](../decisions/0075-release-scope-mvp.md), whose approval
+state is *recommended — awaiting maintainer approval*.
