@@ -136,11 +136,18 @@ pub struct Shell {
     /// The crash-recovery offer (21.1, desktop) is open: a journal
     /// snapshot from a previous session exists and the user has not
     /// chosen recover/discard yet.
+    ///
+    /// `cfg(gated)`: the offer exists only in the desktop shell —
+    /// `recovery_ui()` (its only reader) is `cfg(not(wasm32))`.
+    #[cfg(not(target_arch = "wasm32"))]
     recover_open: bool,
     /// The desktop crash-recovery sidecar path (21.1). Resolved once
     /// at shell construction — `FIRECRAFT_RECOVERY` overrides, else
     /// the platform temp dir — so the recovery tick reads a field,
-    /// never the process environment.
+    /// never the process environment. Desktop-only: the web build
+    /// persists through the browser instead, so the field (and its
+    /// helpers) are compiled out of wasm rather than left dead.
+    #[cfg(not(target_arch = "wasm32"))]
     recovery_path: std::path::PathBuf,
     /// The user's UI scale factor (`pixels_per_point`): `None` follows
     /// the platform default. Persisted with the layout.
@@ -441,7 +448,9 @@ impl Shell {
             about_open: false,
             help_open: false,
             preferences_open: false,
+            #[cfg(not(target_arch = "wasm32"))]
             recover_open: false,
+            #[cfg(not(target_arch = "wasm32"))]
             recovery_path: Self::default_recovery_path(),
             ui_scale: None,
             style_name: String::new(),
@@ -2777,6 +2786,7 @@ impl Shell {
 
     /// The default recovery sidecar path: `FIRECRAFT_RECOVERY` when
     /// set, else the platform temp dir. Called once, at construction.
+    #[cfg(not(target_arch = "wasm32"))]
     fn default_recovery_path() -> std::path::PathBuf {
         if let Ok(path) = std::env::var("FIRECRAFT_RECOVERY") {
             return std::path::PathBuf::from(path);
@@ -2786,6 +2796,7 @@ impl Shell {
 
     /// The recovery sidecar path as a `&str` for the injected
     /// [`engine::platform::FileSystem`].
+    #[cfg(not(target_arch = "wasm32"))]
     fn recovery_path_str(&self) -> String {
         self.recovery_path.to_string_lossy().into_owned()
     }
@@ -3792,6 +3803,14 @@ mod tests {
     /// steps onto an untitled session with undo intact; Discard
     /// removes the sidecar. An empty journal never resurrects a
     /// discarded file, and a clean save clears the sidecar.
+    ///
+    /// Desktop-only: the whole recovery offer (`recovery_path`,
+    /// `recover_open`, `check_recovery`, `recovery_tick`,
+    /// `recover_steps`, `clear_recovery`) is `cfg(not(wasm32))` — the
+    /// web shell persists through the browser instead — so this test
+    /// must be gated with them or `wasm32 --all-targets` stops
+    /// compiling.
+    #[cfg(not(target_arch = "wasm32"))]
     #[test]
     fn recovery_snapshot_round_trips_through_the_sidecar() {
         let mut shell = gui_shell(gui_editor());
