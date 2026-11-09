@@ -1,17 +1,5 @@
 {
   "version": 1,
-  "disabled_patterns": [
-    "zip-code",
-    "pci-cardholder-data",
-    "phone-number",
-    "international-phone",
-    "australian-tfn",
-    "bank-routing-number",
-    "ssn-no-dashes",
-    "eval-usage",
-    "sql-query",
-    "ssrf-localhost",
-    "path-traversal",
-    "security-hardening-path-traversal"
-  ]
+  "_comment": "The scanner's rule-class state. It is installed into the private HOME the Aegis gate scans under, so the developer's own Aegis configuration can never switch a rule off and silently change what CI sees. The list below is empty on purpose: decision 0074 keeps every rule class armed and adjudicates each occurrence individually in .aegis-baseline.tsv, and decision 0070's class-level evidence survives as the reason written next to each class's rows. Adding a class here would suppress it for the whole tree, including findings a later change introduces.",
+  "disabled_patterns": []
 }
