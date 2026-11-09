@@ -141,6 +141,17 @@ fn main() -> ExitCode {
                 ExitCode::FAILURE
             }
         },
+        // Hidden probe verb: `perf-selfexec` reproduces the CI shape
+        // where the gate's own binary is replaced underneath the
+        // running gate, then runs the memory probe through the same
+        // re-exec resolution. See `perf::selfexec`.
+        Some("perf-selfexec") => match std::env::args().nth(2) {
+            Some(path) => finish("perf-selfexec", perf::selfexec(&path)),
+            None => {
+                eprintln!("{USAGE}");
+                ExitCode::FAILURE
+            }
+        },
         Some("dist") => match std::env::args().nth(2).as_deref() {
             Some("--web") => finish("dist --web", dist::web()),
             Some("--native") => finish("dist --native", dist::native()),
