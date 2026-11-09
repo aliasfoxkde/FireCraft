@@ -133,7 +133,12 @@ impl Surface {
             });
         }
         let mut converted = vec![0u8; expected];
-        for (src, dst) in pixels.chunks_exact(4).zip(converted.chunks_exact_mut(4)) {
+        for (src, dst) in pixels
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .zip(converted.as_chunks_mut::<4>().0.iter_mut())
+        {
             let px = premultiply(Rgba8::new(src[0], src[1], src[2], src[3]));
             dst.copy_from_slice(&[px[0] as u8, px[1] as u8, px[2] as u8, px[3] as u8]);
         }
@@ -148,7 +153,13 @@ impl Surface {
     #[must_use]
     pub fn to_straight(&self) -> Vec<u8> {
         let mut out = vec![0u8; self.pixels.len()];
-        for (src, dst) in self.pixels.chunks_exact(4).zip(out.chunks_exact_mut(4)) {
+        for (src, dst) in self
+            .pixels
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .zip(out.as_chunks_mut::<4>().0.iter_mut())
+        {
             let px = unpremultiply([
                 u16::from(src[0]),
                 u16::from(src[1]),
@@ -216,7 +227,7 @@ impl Surface {
     /// through.
     pub(crate) fn map_straight(&self, mut f: impl FnMut(Rgba8) -> Rgba8) -> Surface {
         let mut out = self.clone();
-        for px in out.pixels.chunks_exact_mut(4) {
+        for px in out.pixels.as_chunks_mut::<4>().0.iter_mut() {
             let straight = unpremultiply([
                 u16::from(px[0]),
                 u16::from(px[1]),

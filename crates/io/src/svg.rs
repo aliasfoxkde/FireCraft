@@ -163,10 +163,10 @@ impl SvgWriter<'_> {
             if !layer.display {
                 continue;
             }
-            if let Some(flags) = &layer.visibility_per_frame {
-                if !flags.get(frame).copied().unwrap_or(true) {
-                    continue;
-                }
+            if let Some(flags) = &layer.visibility_per_frame
+                && !flags.get(frame).copied().unwrap_or(true)
+            {
+                continue;
             }
             let Some(cell) = layer.cells.get(frame) else {
                 continue;
@@ -1013,7 +1013,7 @@ fn ramp_lut(kernel: impl Fn(&Surface) -> Surface) -> Option<[[u8; 256]; 3]> {
     let surface = Surface::from_straight(256, 1, &ramp).ok()?;
     let out = kernel(&surface);
     let mut tables = [[0u8; 256]; 3];
-    for (i, px) in out.pixels().chunks_exact(4).take(256).enumerate() {
+    for (i, px) in out.pixels().as_chunks::<4>().0.iter().take(256).enumerate() {
         tables[0][i] = px[0];
         tables[1][i] = px[1];
         tables[2][i] = px[2];

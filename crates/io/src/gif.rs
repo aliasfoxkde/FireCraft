@@ -538,7 +538,7 @@ fn delay_for(page: &Page, frame: usize) -> u16 {
 fn global_palette(states: &[Vec<u8>]) -> Vec<u8> {
     let mut training = Vec::new();
     for state in states {
-        for pixel in state.chunks_exact(4) {
+        for pixel in state.as_chunks::<4>().0.iter() {
             if pixel[3] >= 128 {
                 training.extend_from_slice(&[pixel[0], pixel[1], pixel[2], 255]);
             }
@@ -567,7 +567,7 @@ fn quantize(state: &[u8], nearest: &NearestPalette, width: usize, amount: f32) -
     let mut indexed = Vec::with_capacity(state.len() / 4);
     if amount <= 0.0 {
         let mut memo: HashMap<[u8; 4], u8> = HashMap::new();
-        for pixel in state.chunks_exact(4) {
+        for pixel in state.as_chunks::<4>().0.iter() {
             if pixel[3] < 128 {
                 indexed.push(0);
                 continue;
@@ -582,7 +582,7 @@ fn quantize(state: &[u8], nearest: &NearestPalette, width: usize, amount: f32) -
     // below accumulate into their own slots).
     let height = state.len() / 4 / width.max(1);
     let mut error = vec![0.0f32; state.len() / 4 * 3];
-    for (at, pixel) in state.chunks_exact(4).enumerate() {
+    for (at, pixel) in state.as_chunks::<4>().0.iter().enumerate() {
         if pixel[3] < 128 {
             indexed.push(0);
             continue;
@@ -661,7 +661,9 @@ impl NearestPalette {
     fn new(palette: &[u8]) -> Self {
         Self {
             entries: palette
-                .chunks_exact(3)
+                .as_chunks::<3>()
+                .0
+                .iter()
                 .map(|rgb| [rgb[0], rgb[1], rgb[2]])
                 .collect(),
         }
@@ -705,7 +707,7 @@ fn distance(pixel: &[u8], entry: &[u8; 3]) -> u32 {
 fn palette_error(state: &[u8], indexed: &[u8], nearest: &NearestPalette) -> f64 {
     let mut total = 0u64;
     let mut count = 0u64;
-    for (index, pixel) in state.chunks_exact(4).enumerate() {
+    for (index, pixel) in state.as_chunks::<4>().0.iter().enumerate() {
         if pixel[3] < 128 {
             continue;
         }

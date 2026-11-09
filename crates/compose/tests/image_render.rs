@@ -106,7 +106,7 @@ fn tile(color: [u8; 4], block: Option<(usize, usize)>) -> Tile {
             }
         }
         None => {
-            for px in pixels.chunks_exact_mut(4) {
+            for px in pixels.as_chunks_mut::<4>().0.iter_mut() {
                 px.copy_from_slice(&color);
             }
         }
@@ -130,7 +130,14 @@ fn pixel(render: &compose::Render, x: u32, y: u32) -> [u8; 4] {
 /// Asserts every pixel of the render is the bare canvas matte —
 /// "renders nothing" since the background landed (`BGCi` white).
 fn assert_all_matte(render: &compose::Render) {
-    assert!(render.pixels.chunks_exact(4).all(|px| px == BACKGROUND));
+    assert!(
+        render
+            .pixels
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .all(|px| *px == BACKGROUND)
+    );
 }
 
 // --- proofs --------------------------------------------------------------

@@ -339,7 +339,13 @@ fn nine_slice_definition_grids_its_raster() {
     // transform — exact seams are the engine's hand-derived oracle in
     // compose_proof); here the pin is that the path ran without
     // falling back to a plain transform paint.
-    let painted = render.pixels.chunks_exact(4).filter(|p| p[3] != 0).count();
+    let painted = render
+        .pixels
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .filter(|p| p[3] != 0)
+        .count();
     assert!(painted > 0, "nine-slice painted something");
 }
 
@@ -456,7 +462,13 @@ fn text_renders_glyphs_through_the_synthetic_path() {
     document.pages.push(page);
 
     let render = render(&document, 0, 0).expect("text renders");
-    let painted = render.pixels.chunks_exact(4).filter(|p| p[3] > 0).count();
+    let painted = render
+        .pixels
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .filter(|p| p[3] > 0)
+        .count();
     assert!(painted > 0, "glyph contours painted something");
 }
 
@@ -491,7 +503,7 @@ fn hidden_text_and_hidden_images_draw_nothing() {
     document.pages.push(page);
     let render = render_transparent(&document, 0, 0).expect("renders");
     assert!(
-        render.pixels.chunks_exact(4).all(|p| p[3] == 0),
+        render.pixels.as_chunks::<4>().0.iter().all(|p| p[3] == 0),
         "hidden objects draw nothing"
     );
 }
@@ -533,5 +545,5 @@ fn slice_objects_draw_nothing() {
     page.layers.layers[0].cells[0].elements.push(slice);
     document.pages.push(page);
     let render = render_transparent(&document, 0, 0).expect("slice renders as nothing");
-    assert!(render.pixels.chunks_exact(4).all(|p| p[3] == 0));
+    assert!(render.pixels.as_chunks::<4>().0.iter().all(|p| p[3] == 0));
 }

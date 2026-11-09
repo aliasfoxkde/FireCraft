@@ -622,7 +622,7 @@ mod tests {
 
     fn red_tile() -> raster::Tile {
         let mut pixels = [0u8; TILE_BYTES];
-        for rgba in pixels.chunks_exact_mut(4) {
+        for rgba in pixels.as_chunks_mut::<4>().0.iter_mut() {
             rgba.copy_from_slice(&[255, 0, 0, 255]);
         }
         raster::Tile::from_rgba8(pixels)

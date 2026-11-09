@@ -151,10 +151,10 @@ pub fn spiral(p: SpiralParams) -> PathObject {
             an = a0 - quarter + b;
             let (dx, dy) = (cpdist * an.sin(), cpdist * an.cos());
             let sign = if p.clockwise { 1.0 } else { -1.0 };
-            if let Some(last) = nodes.last_mut() {
-                if let Some(succ) = last.secondary.as_mut() {
-                    *succ = Point::new(last.anchor.x - sign * dx, last.anchor.y + dy);
-                }
+            if let Some(last) = nodes.last_mut()
+                && let Some(succ) = last.secondary.as_mut()
+            {
+                *succ = Point::new(last.anchor.x - sign * dx, last.anchor.y + dy);
             }
             nodes.push(point_on_spiral(&p, radius, theta, b, cpdist));
             break;

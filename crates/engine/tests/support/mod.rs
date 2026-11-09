@@ -129,9 +129,15 @@ pub fn sample_document() -> (Document, Vec<doc::ObjectId>) {
 pub fn sample_bitmap_document() -> (Document, doc::ObjectId) {
     let mut document = Document::default();
     let mut tile = raster::Tile::new();
-    for (index, pixel) in tile.pixels_mut().chunks_exact_mut(4).enumerate() {
+    for (index, pixel) in tile
+        .pixels_mut()
+        .as_chunks_mut::<4>()
+        .0
+        .iter_mut()
+        .enumerate()
+    {
         let column = (index % raster::TILE_SIDE) as u8;
-        pixel.copy_from_slice(if column % 2 == 0 {
+        pixel.copy_from_slice(if column.is_multiple_of(2) {
             &[255, 0, 0, 255]
         } else {
             &[0, 0, 255, 255]

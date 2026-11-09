@@ -295,10 +295,10 @@ fn export_tool(
         );
     };
     let quality = arguments.get("quality").and_then(serde_json::Value::as_u64);
-    if let Some(q) = quality {
-        if !(1..=100).contains(&q) {
-            return tool_result(id, true, "firecraft.export: quality must be 1..=100");
-        }
+    if let Some(q) = quality
+        && !(1..=100).contains(&q)
+    {
+        return tool_result(id, true, "firecraft.export: quality must be 1..=100");
     }
     let flags = crate::ops::ExportFlags {
         quality: quality.map(|q| u8::try_from(q).unwrap_or(100)),

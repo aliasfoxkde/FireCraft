@@ -122,19 +122,18 @@ impl Shell {
             "path.boolean" => Some(&["a", "b"]),
             _ => None,
         };
-        if let Some(keys) = object_pair {
-            if let Some((id, _)) = self
+        if let Some(keys) = object_pair
+            && let Some((id, _)) = self
                 .editor
                 .document()
                 .registry
                 .iter()
                 .find(|(_, object)| matches!(object, doc::ObjectData::Path(_)))
-            {
-                let id = serde_json::json!(id);
-                for key in keys {
-                    if let Some(slot) = map.get_mut(*key) {
-                        *slot = id.clone();
-                    }
+        {
+            let id = serde_json::json!(id);
+            for key in keys {
+                if let Some(slot) = map.get_mut(*key) {
+                    *slot = id.clone();
                 }
             }
         }
@@ -265,21 +264,20 @@ impl Shell {
                         "name": null,
                     }),
                 );
-                if placed.is_ok() {
-                    if let Some(id) = self
+                if placed.is_ok()
+                    && let Some(id) = self
                         .editor
                         .current_cell()
                         .and_then(|cell| cell.elements.iter().find(|id| !before.contains(id)))
                         .copied()
-                    {
-                        let _sel = self.editor.apply(
-                            "bitmap.selectRect",
-                            serde_json::json!({
-                                "id": id, "x": 0.0, "y": 0.0,
-                                "width": 8.0, "height": 8.0, "mode": "replace",
-                            }),
-                        );
-                    }
+                {
+                    let _sel = self.editor.apply(
+                        "bitmap.selectRect",
+                        serde_json::json!({
+                            "id": id, "x": 0.0, "y": 0.0,
+                            "width": 8.0, "height": 8.0, "mode": "replace",
+                        }),
+                    );
                 }
                 let _ = self.editor.apply(
                     "selection.save",

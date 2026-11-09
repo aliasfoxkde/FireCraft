@@ -2051,8 +2051,8 @@ mod tests {
         let width = u32::from(render.width);
         let mut opaque = 0usize;
         let mut bounds = Option::<(u32, u32, u32, u32)>::None; // x0 y0 x1 y1
-        for (index, pixel) in render.pixels.chunks_exact(4).enumerate() {
-            if pixel == [255, 255, 255, 255] {
+        for (index, pixel) in render.pixels.as_chunks::<4>().0.iter().enumerate() {
+            if *pixel == [255, 255, 255, 255] {
                 continue;
             }
             opaque += 1;
