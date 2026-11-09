@@ -8788,41 +8788,6 @@
       "stable_id": "aegis-5686a0606d0b01002dd1d803d3eee4eb28617f1ce0f2acdaf6a71f962f4e432d"
     },
     {
-      "id": "000000000000000018e4fac15ec3e0a2",
-      "pattern": "zip-code",
-      "category": "pii",
-      "severity": "low",
-      "confidence": "high",
-      "location": {
-        "file": "./xtask/src/dist.rs",
-        "line": 562,
-        "column": 36
-      },
-      "description": "US ZIP code detected",
-      "tags": [],
-      "kind": "pattern",
-      "fingerprint": "zip-code:./xtask/src/dist.rs:562:d55d01d0341ed0ba2cd99b322e8c5b609254f47d10c7cd12b99b4922effeba44",
-      "stable_id": "aegis-bd45c34796943e9433a2b2b147fa5d7ec815e624d0462143c2249945e7391205"
-    },
-    {
-      "id": "000000000000000018e4fac17a4e8d39",
-      "pattern": "ssrf-localhost",
-      "category": "web-security",
-      "severity": "medium",
-      "confidence": "medium",
-      "location": {
-        "file": "./xtask/src/dist.rs",
-        "line": 642,
-        "column": 29
-      },
-      "description": "Potential SSRF targeting internal resources",
-      "reference": "https://owasp.org/www-community/attacks/Server_Side_Request_Forgery",
-      "tags": [],
-      "kind": "pattern",
-      "fingerprint": "ssrf-localhost:./xtask/src/dist.rs:642:12ca17b49af2289436f303e0166030a21e525d266e209267433801a8fd4071a0",
-      "stable_id": "aegis-23253d62961a75cab50c3d3d33fe9420de5cb57336f0814cfdbafb63d108dabb"
-    },
-    {
       "id": "000000000000000018e4fac0756bffe6",
       "pattern": "stack-trace-exposure",
       "category": "web-security",
@@ -8909,6 +8874,94 @@
       "kind": "pattern",
       "fingerprint": "international-phone:./Cargo.lock:2250:af21a1bff1718128c96522dc5f3a4136e66feeb8aee345e9676fda1199e5378e",
       "stable_id": "aegis-4afcc1f394c0e0e7dd24cae9d3336dc7289de96e128f28ca78ab930fa9b888bc"
+    },
+    {
+      "id": "000000000000000018e64124be4e9c6f",
+      "pattern": "pci-cardholder-data",
+      "category": "compliance",
+      "severity": "high",
+      "confidence": "high",
+      "location": {
+        "file": "./docs/research/android-feasibility.md",
+        "line": 62,
+        "column": 118
+      },
+      "description": "PCI cardholder data reference detected",
+      "reference": "https://www.pcisecuritystandards.org/pci_security/",
+      "tags": [],
+      "kind": "pattern",
+      "fingerprint": "pci-cardholder-data:./docs/research/android-feasibility.md:62:00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a",
+      "stable_id": "aegis-4cd91aa50300112bdfffe1f7491210fb087e4da61557dbec85ed6f91e9ace38e"
+    },
+    {
+      "id": "000000000000000018e64124b7bdd004",
+      "pattern": "gdpr-personal-data",
+      "category": "pii",
+      "severity": "low",
+      "confidence": "high",
+      "location": {
+        "file": "./docs/RELEASE-ENGINEERING-PLAN.md",
+        "line": 155,
+        "column": 238
+      },
+      "description": "Reference to personal data detected",
+      "reference": "https://gdpr.eu/article-4-definitions/",
+      "tags": [],
+      "kind": "pattern",
+      "fingerprint": "gdpr-personal-data:./docs/RELEASE-ENGINEERING-PLAN.md:155:d85533ba786e27667c68f55c37f3d5a70d6cd7a1e1157262ac3353dd6b11b193",
+      "stable_id": "aegis-3d8189409a50b0f9194329857979ef2a166aec10e5c8c4f53881c05a45cf572a"
+    },
+    {
+      "id": "000000000000000018e64124d55a5c43",
+      "pattern": "zip-code",
+      "category": "pii",
+      "severity": "low",
+      "confidence": "high",
+      "location": {
+        "file": "./xtask/src/dist.rs",
+        "line": 468,
+        "column": 41
+      },
+      "description": "US ZIP code detected",
+      "tags": [],
+      "kind": "pattern",
+      "fingerprint": "zip-code:./xtask/src/dist.rs:468:6f21ec723dd82aa7bd36bc81cc4008e4f6359fe8ce68f793af23b7123bdbf3a6",
+      "stable_id": "aegis-e14eaef1439228e32684ab1cba093c85222e1cbe2b6b73b6c2c5ec513ed893f6"
+    },
+    {
+      "id": "000000000000000018e64124d55a875e",
+      "pattern": "zip-code",
+      "category": "pii",
+      "severity": "low",
+      "confidence": "high",
+      "location": {
+        "file": "./xtask/src/dist.rs",
+        "line": 960,
+        "column": 36
+      },
+      "description": "US ZIP code detected",
+      "tags": [],
+      "kind": "pattern",
+      "fingerprint": "zip-code:./xtask/src/dist.rs:960:d55d01d0341ed0ba2cd99b322e8c5b609254f47d10c7cd12b99b4922effeba44",
+      "stable_id": "aegis-34bf79e1904672b3e72ce38de8f10be523bff75dec50c7f2e13331017588ff2c"
+    },
+    {
+      "id": "000000000000000018e64124ee39c44e",
+      "pattern": "ssrf-localhost",
+      "category": "web-security",
+      "severity": "medium",
+      "confidence": "medium",
+      "location": {
+        "file": "./xtask/src/dist.rs",
+        "line": 1040,
+        "column": 29
+      },
+      "description": "Potential SSRF targeting internal resources",
+      "reference": "https://owasp.org/www-community/attacks/Server_Side_Request_Forgery",
+      "tags": [],
+      "kind": "pattern",
+      "fingerprint": "ssrf-localhost:./xtask/src/dist.rs:1040:12ca17b49af2289436f303e0166030a21e525d266e209267433801a8fd4071a0",
+      "stable_id": "aegis-e210ad4defb435e6e277d0b9a700a814c26af0d8c97862fb2b052674d3b411fa"
     }
   ],
   "stats": {
@@ -8916,7 +8969,7 @@
     "files_skipped": 75540,
     "files_failed": 0,
     "bytes_scanned": 6163973,
-    "finding_count": 520,
+    "finding_count": 523,
     "suppressed_count": 0,
     "patterns_matched": 97,
     "scan_time_ms": 10149,
@@ -8924,16 +8977,16 @@
     "workers_used": 16,
     "files_by_extension": {},
     "findings_by_severity": {
-      "medium": 7,
-      "low": 434,
-      "high": 71,
-      "critical": 8
+      "critical": 8,
+      "high": 72,
+      "low": 436,
+      "medium": 7
     },
     "findings_by_category": {
-      "compliance": 49,
-      "pii": 438,
-      "web-security": 13,
-      "security-hardening": 20
+      "compliance": 50,
+      "pii": 440,
+      "security-hardening": 20,
+      "web-security": 13
     },
     "inspection_ledger": {
       "schema_version": 1,
