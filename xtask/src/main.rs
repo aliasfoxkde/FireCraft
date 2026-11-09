@@ -115,11 +115,22 @@ fn live_findings() -> Result<Vec<AegisFinding>, String> {
     let root = util::workspace_root();
     let home = install_pattern_state(&root)?;
     let home_path = home.0.to_string_lossy().into_owned();
+    // Aegis resolves its config through `dirs::config_dir()`, which
+    // prefers `XDG_CONFIG_HOME` over `HOME` — and GitHub's runner
+    // images set `XDG_CONFIG_HOME=$HOME/.config` in /etc/environment.
+    // Overriding HOME alone therefore leaves the scanner reading the
+    // runner's (empty) config and the committed pattern-state is
+    // silently ignored: the gate then fails on the very noise
+    // decision 0070 suppresses. Point XDG at the same scratch config.
+    let xdg = format!("{home_path}/.config");
     let output = util::capture_with_env(
         Some(root.as_path()),
         &aegis_binary()?,
         &["--format", "json", "-c", "production", "scan", ".", "-q"],
-        &[("HOME", home_path.as_str())],
+        &[
+            ("HOME", home_path.as_str()),
+            ("XDG_CONFIG_HOME", xdg.as_str()),
+        ],
     )?;
     let report: serde_json::Value = serde_json::from_slice(&output.stdout)
         .map_err(|e| format!("aegis produced unreadable JSON: {e}"))?;
