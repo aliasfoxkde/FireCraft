@@ -1862,8 +1862,13 @@ pub static TEXT: Menu = Menu {
     ],
 };
 
-/// Commands — the CS6 automation surface; scripts land with the
-/// automation milestone, so all three are inert here.
+/// Commands — the CS6 automation surface. `Run Script...` (35319)
+/// and `Manage Extensions...` (35590) both dispatch to
+/// `ShellAction::ManageExtensions`, whose shell side *is* the script
+/// runner (`shell::open_extension_manager` → `run_script_file`).
+/// Only `Manage Saved Commands...` (35386) is inert: CS6's
+/// saved-command manager has no counterpart yet (recorded gap, and
+/// the reason `inert_count_never_rises` pins the census at 2).
 pub static COMMANDS: Menu = Menu {
     label: "Commands",
     entries: &[
@@ -2278,7 +2283,7 @@ pub static SHORTCUTS: &[Shortcut] = &[
     // Modify ▸ group
     key(CTRL, egui::Key::G, Action::Sel(SelAction::Group)),
     key(CTRL, egui::Key::U, Action::Sel(SelAction::Ungroup)),
-    key(CTRL_SHIFT, egui::Key::E, Action::Sel(SelAction::MergeDown)),
+    key(CTRL_ALT, egui::Key::E, Action::Sel(SelAction::MergeDown)),
     // View
     key(CTRL, egui::Key::Equals, Action::Shell(ShellAction::ZoomIn)),
     key(CTRL, egui::Key::Minus, Action::Shell(ShellAction::ZoomOut)),
@@ -2436,16 +2441,16 @@ pub static SHORTCUTS: &[Shortcut] = &[
         Action::Shell(ShellAction::ShowShortcuts),
     ),
     // ——— Fireworks.xml menu_commands rows not bound above ———
-    // Mod codes in the XML: 0 none / 2 Shift / 4 Ctrl / 5 Ctrl+Shift /
-    // 6 Ctrl+Alt / 7 Ctrl+Alt+Shift; second number is the Windows VK.
-    // Frames / States navigation (2 188 / 2 190 — ',' and '.').
+    // Mod codes in the XML: 0 none / 2 Shift / 4 Ctrl / 5 Ctrl+Alt /
+    // 6 Ctrl+Shift / 7 Ctrl+Shift+Alt; second number is the Windows VK.
+    // Frames / States navigation (2 188 / 2 190 = Shift+, / Shift+.).
     key(
-        NONE,
+        SHIFT,
         egui::Key::Comma,
         Action::Shell(ShellAction::SelectFrame(-1)),
     ),
     key(
-        NONE,
+        SHIFT,
         egui::Key::Period,
         Action::Shell(ShellAction::SelectFrame(1)),
     ),
@@ -2477,34 +2482,26 @@ pub static SHORTCUTS: &[Shortcut] = &[
         egui::Key::ArrowUp,
         Action::Sel(SelAction::SelectParents),
     ),
-    // Text editor dialog (6 69 = Ctrl+Alt+E): reuse the in-canvas
+    // Text editor dialog (6 69 = Ctrl+Shift+E): reuse the in-canvas
     // text overlay — select the text object and enter edit.
     key(
-        CTRL_ALT,
+        CTRL_SHIFT,
         egui::Key::E,
         Action::Shell(ShellAction::EditTextSelection),
     ),
-    // Copy selection's slice/link definition (Ctrl+Alt+U).
-    key(
-        CTRL_ALT,
-        egui::Key::U,
-        Action::Shell(ShellAction::ReportGap(
-            "Copy to URL (no URL library surface in this build)",
-        )),
-    ),
-    // Modify ▸ Align / Distribute (5 = Ctrl+Shift).
-    key(CTRL_SHIFT, egui::Key::Num5, Action::Align("centerX")),
-    key(CTRL_SHIFT, egui::Key::Num6, Action::Align("bottom")),
-    key(CTRL_SHIFT, egui::Key::Num4, Action::Align("top")),
-    key(CTRL_SHIFT, egui::Key::Num2, Action::Align("centerY")),
-    key(
-        CTRL_SHIFT,
-        egui::Key::Num7,
-        Action::Distribute("horizontal"),
-    ),
-    key(CTRL_SHIFT, egui::Key::Num9, Action::Distribute("vertical")),
-    key(CTRL_SHIFT, egui::Key::Num3, Action::Align("right")),
-    key(CTRL_SHIFT, egui::Key::Num1, Action::Align("left")),
+    // "Copy to URL" carries no `Fireworks.xml` mod/VK entry, so it is
+    // deliberately unbound: the evidenced `5 85` (Ctrl+Alt+U) row below
+    // belongs to the URL panel, and inventing a key here would shadow it.
+    // The gap itself is unchanged — see CS6-PARITY §F.
+    // Modify ▸ Align / Distribute (5 = Ctrl+Alt).
+    key(CTRL_ALT, egui::Key::Num5, Action::Align("centerX")),
+    key(CTRL_ALT, egui::Key::Num6, Action::Align("bottom")),
+    key(CTRL_ALT, egui::Key::Num4, Action::Align("top")),
+    key(CTRL_ALT, egui::Key::Num2, Action::Align("centerY")),
+    key(CTRL_ALT, egui::Key::Num7, Action::Distribute("horizontal")),
+    key(CTRL_ALT, egui::Key::Num9, Action::Distribute("vertical")),
+    key(CTRL_ALT, egui::Key::Num3, Action::Align("right")),
+    key(CTRL_ALT, egui::Key::Num1, Action::Align("left")),
     // Pages navigation (4 33/4 34 — PageUp/PageDown).
     key(
         CTRL,
@@ -2519,19 +2516,19 @@ pub static SHORTCUTS: &[Shortcut] = &[
     // Hide / Show selection (4 77 / 6 77).
     key(CTRL, egui::Key::M, Action::Sel(SelAction::Hide)),
     key(
-        CTRL_ALT,
+        CTRL_SHIFT,
         egui::Key::M,
         Action::Shell(ShellAction::ShowAllHidden),
     ),
-    // URL manager panel (5 85).
+    // URL manager panel (5 85 = Ctrl+Alt+U).
     key(
-        CTRL_SHIFT,
+        CTRL_ALT,
         egui::Key::U,
         Action::Shell(ShellAction::TogglePanel("URL")),
     ),
-    // View ▸ Rulers (5 82).
+    // View ▸ Rulers (5 82 = Ctrl+Alt+R).
     key(
-        CTRL_SHIFT,
+        CTRL_ALT,
         egui::Key::R,
         Action::Shell(ShellAction::ToggleRulers),
     ),
@@ -2545,7 +2542,7 @@ pub static SHORTCUTS: &[Shortcut] = &[
     ),
     // Mask enable/disable (6 75).
     key(
-        CTRL_ALT,
+        CTRL_SHIFT,
         egui::Key::K,
         Action::Sel(SelAction::EnableMask(true)),
     ),
@@ -2583,8 +2580,8 @@ pub static SHORTCUTS: &[Shortcut] = &[
         egui::Key::OpenBracket,
         Action::Sel(SelAction::Nudge { dx: -10.0, dy: 0.0 }),
     ),
-    // Duplicate (5 68 = Ctrl+Shift+D).
-    key(CTRL_SHIFT, egui::Key::D, Action::Sel(SelAction::Duplicate)),
+    // Duplicate (5 68 = Ctrl+Alt+D).
+    key(CTRL_ALT, egui::Key::D, Action::Sel(SelAction::Duplicate)),
     // Print (4 80) — the print stack is a recorded gap row; Ctrl+P
     // stays with the command palette, so print has no key here.
     // Tween instances (7 84).
@@ -2610,25 +2607,26 @@ pub static SHORTCUTS: &[Shortcut] = &[
         egui::Key::Backtick,
         Action::Shell(ShellAction::ToggleSmartGuides),
     ),
-    // Guides show (4 186 = Ctrl+;), snap guides (6 186), lock (5 186).
+    // Guides show (4 186 = Ctrl+;), snap guides (6 186 = Ctrl+Shift+;),
+    // lock (5 186 = Ctrl+Alt+;).
     key(
         CTRL,
         egui::Key::Semicolon,
         Action::Shell(ShellAction::ToggleGuides),
     ),
     key(
-        CTRL_ALT,
+        CTRL_SHIFT,
         egui::Key::Semicolon,
         Action::Shell(ShellAction::ToggleSnapToGuides),
     ),
     key(
-        CTRL_SHIFT,
+        CTRL_ALT,
         egui::Key::Semicolon,
         Action::Shell(ShellAction::ToggleGuidesLocked),
     ),
-    // Snap to grid (6 222 = Ctrl+Alt+').
+    // Snap to grid (6 222 = Ctrl+Shift+').
     key(
-        CTRL_ALT,
+        CTRL_SHIFT,
         egui::Key::Comma,
         Action::Shell(ShellAction::ToggleSnapToGrid),
     ),
@@ -2638,16 +2636,13 @@ pub static SHORTCUTS: &[Shortcut] = &[
         egui::Key::OpenBracket,
         Action::Shell(ShellAction::ToggleTooltips),
     ),
-    // Fit selection / fit in window (4 48 / 5 48 — Ctrl+0 / Ctrl+Shift+0).
+    // Fit selection / fit in window (4 48 = Ctrl+0, 5 48 = Ctrl+Alt+0).
+    // FitAll (5 48) is bound once in the core table above; repeating it
+    // here would shadow the same (mods, key) pair.
     key(
         CTRL,
         egui::Key::Num0,
         Action::Shell(ShellAction::FitSelection),
-    ),
-    key(
-        CTRL_SHIFT,
-        egui::Key::Num0,
-        Action::Shell(ShellAction::FitAll),
     ),
     // Close (4 87 = Ctrl+W).
     key(
@@ -2659,8 +2654,8 @@ pub static SHORTCUTS: &[Shortcut] = &[
     key(CTRL, egui::Key::Num9, Action::Sel(SelAction::Rotate(90.0))),
     key(CTRL, egui::Key::Num7, Action::Sel(SelAction::Rotate(180.0))),
     key(CTRL, egui::Key::Num6, Action::Sel(SelAction::Rotate(270.0))),
-    // Clone (6 67 = Ctrl+Alt+C), Duplicate elsewhere above.
-    key(CTRL_ALT, egui::Key::C, Action::Sel(SelAction::Clone)),
+    // Clone (6 67 = Ctrl+Shift+C), Duplicate elsewhere above.
+    key(CTRL_SHIFT, egui::Key::C, Action::Sel(SelAction::Clone)),
     // Flatten selection (7 90), flatten document (7 69).
     key(
         CTRL_ALT_SHIFT,
@@ -2680,39 +2675,43 @@ pub static SHORTCUTS: &[Shortcut] = &[
             "Paste Attributes (no attribute clipboard in this build)",
         )),
     ),
-    // Paste inside (6 86 = Ctrl+Alt+V), paste as mask (5 86).
+    // Paste inside (6 86 = Ctrl+Shift+V), paste as mask (5 86 = Ctrl+Alt+V).
     key(
-        CTRL_ALT,
+        CTRL_SHIFT,
         egui::Key::V,
         Action::Shell(ShellAction::PasteInside),
     ),
     key(
-        CTRL_SHIFT,
+        CTRL_ALT,
         egui::Key::V,
         Action::Shell(ShellAction::PasteAsMask),
     ),
-    // Split (6 74 = Ctrl+Alt+J), join (4 74 = Ctrl+J rebinds to the
+    // Split (6 74 = Ctrl+Shift+J), join (4 74 = Ctrl+J rebinds to the
     // boolean union already; CS6's plain Join is the same key).
-    key(CTRL_ALT, egui::Key::J, Action::Sel(SelAction::SplitPaths)),
-    // Mask group (6 71 = Ctrl+Alt+G), convert to paths (6 80),
+    key(CTRL_SHIFT, egui::Key::J, Action::Sel(SelAction::SplitPaths)),
+    // Mask group (6 71 = Ctrl+Shift+G), convert to paths (6 80),
     // attach text to path (6 89).
     key(
-        CTRL_ALT,
+        CTRL_SHIFT,
         egui::Key::G,
         Action::Sel(SelAction::AddMask {
             mode: "reveal selection",
         }),
     ),
     key(
-        CTRL_ALT,
+        CTRL_SHIFT,
         egui::Key::P,
         Action::Sel(SelAction::ConvertToPaths),
     ),
-    key(CTRL_ALT, egui::Key::Y, Action::Sel(SelAction::AttachToPath)),
+    key(
+        CTRL_SHIFT,
+        egui::Key::Y,
+        Action::Sel(SelAction::AttachToPath),
+    ),
     // Numeric transform (6 84), transform (4 84 = Ctrl+T: free
     // transform mode toggle).
     key(
-        CTRL_ALT,
+        CTRL_SHIFT,
         egui::Key::T,
         Action::Shell(ShellAction::NumericTransform),
     ),
@@ -2721,18 +2720,10 @@ pub static SHORTCUTS: &[Shortcut] = &[
         egui::Key::T,
         Action::Shell(ShellAction::TransformMode(TransformMode::Scale)),
     ),
-    // Create image (5 89 = Ctrl+Shift+Y: flatten-flavored insert).
-    key(
-        CTRL_SHIFT,
-        egui::Key::Y,
-        Action::Sel(SelAction::EmptyBitmap),
-    ),
-    // Crop selected object (5 67 = Ctrl+Shift+C).
-    key(
-        CTRL_SHIFT,
-        egui::Key::C,
-        Action::Sel(SelAction::CropDocument),
-    ),
+    // Create image (5 89 = Ctrl+Alt+Y: flatten-flavored insert).
+    key(CTRL_ALT, egui::Key::Y, Action::Sel(SelAction::EmptyBitmap)),
+    // Crop selected object (5 67 = Ctrl+Alt+C).
+    key(CTRL_ALT, egui::Key::C, Action::Sel(SelAction::CropDocument)),
     // New symbol (4 119 = Ctrl+F8), convert to master row is the
     // page-master concept this build records as a gap.
     key(CTRL, egui::Key::F8, Action::Sel(SelAction::NewSymbol)),
@@ -2743,8 +2734,12 @@ pub static SHORTCUTS: &[Shortcut] = &[
             "Convert to Master (page-master pages not in this build)",
         )),
     ),
-    // Exit image edit (6 68 = Ctrl+Alt+D).
-    key(CTRL_ALT, egui::Key::D, Action::Shell(ShellAction::Deselect)),
+    // Exit image edit (6 68 = Ctrl+Shift+D).
+    key(
+        CTRL_SHIFT,
+        egui::Key::D,
+        Action::Shell(ShellAction::Deselect),
+    ),
     // Insert layer / frame (2 76 / 2 70 = Shift+L / Shift+F).
     key(SHIFT, egui::Key::L, Action::Sel(SelAction::NewLayer)),
     key(SHIFT, egui::Key::F, Action::Sel(SelAction::NewFrame)),
@@ -2758,7 +2753,7 @@ pub static SHORTCUTS: &[Shortcut] = &[
         }),
     ),
     key(
-        CTRL,
+        SHIFT,
         egui::Key::F12,
         Action::Shell(ShellAction::PreviewInBrowser {
             secondary: true,
@@ -2766,34 +2761,30 @@ pub static SHORTCUTS: &[Shortcut] = &[
         }),
     ),
     key(
-        CTRL_SHIFT,
+        CTRL,
         egui::Key::F12,
         Action::Shell(ShellAction::PreviewInBrowser {
             secondary: false,
             all_pages: true,
         }),
     ),
-    // Import (4 82 = Ctrl+R per CS6; this build binds Ctrl+Shift+R to
-    // Export already — CS6's Import key is Ctrl+R, Export Wizard Shift+F12).
+    // Import (4 82 = Ctrl+R) and export (6 82 = Ctrl+Shift+R) are the
+    // CS6 keys; the Export Wizard stays on its own row above.
     key(CTRL, egui::Key::R, Action::Shell(ShellAction::Import)),
-    // Export preview (6 88 = Ctrl+Alt+X), export (6 82 = Ctrl+Alt+R).
-    key(
-        CTRL_ALT,
-        egui::Key::X,
-        Action::Shell(ShellAction::ExportPreview),
-    ),
-    key(CTRL_ALT, egui::Key::R, Action::Shell(ShellAction::Export)),
-    // Previous/next selection (6 37 / 6 39 = Ctrl+Alt+arrows) — the
+    // Export preview (6 88 = Ctrl+Shift+X) is bound in the core table
+    // above; export (6 82 = Ctrl+Shift+R) lives here.
+    key(CTRL_SHIFT, egui::Key::R, Action::Shell(ShellAction::Export)),
+    // Previous/next selection (6 37 / 6 39 = Ctrl+Shift+arrows) — the
     // selection-history walk this build reports as a gap row.
     key(
-        CTRL_ALT,
+        CTRL_SHIFT,
         egui::Key::ArrowLeft,
         Action::Shell(ShellAction::ReportGap(
             "Previous Selection (selection history not in this build)",
         )),
     ),
     key(
-        CTRL_ALT,
+        CTRL_SHIFT,
         egui::Key::ArrowRight,
         Action::Shell(ShellAction::ReportGap(
             "Next Selection (selection history not in this build)",
@@ -2824,7 +2815,6 @@ pub static SHORTCUT_GROUPS: &[(&str, usize)] = &[
     ("Text ▸ Align", 5),
     ("Select", 5),
     ("Edit selection", 1),
-    ("Web", 1),
     ("Modify ▸ Align / Distribute", 8),
     ("Pages navigation", 2),
     ("Hide / Show", 2),
@@ -2838,7 +2828,7 @@ pub static SHORTCUT_GROUPS: &[(&str, usize)] = &[
     ("Duplicate", 1),
     ("Animation", 1),
     ("Guides and grid", 8),
-    ("Fit and close", 3),
+    ("Fit and close", 2),
     ("Rotate", 3),
     ("Clone and flatten", 3),
     ("Paste variants", 3),
@@ -2849,7 +2839,7 @@ pub static SHORTCUT_GROUPS: &[(&str, usize)] = &[
     ("Symbols", 2),
     ("Layers and states", 3),
     ("Preview in browser", 3),
-    ("Import and export", 3),
+    ("Import and export", 2),
     ("Selection history", 2),
 ];
 
@@ -3384,7 +3374,7 @@ mod tests {
         assert_eq!(
             find(true, true, false, egui::Key::Num0),
             Some(&Action::Shell(ShellAction::FitAll)),
-            "Ctrl+Shift+0 is Fit All"
+            "Ctrl+Alt+0 is Fit All"
         );
     }
 
