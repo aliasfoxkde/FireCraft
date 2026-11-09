@@ -66,7 +66,7 @@ These items extend the discontinued product rather than reproduce a CS6 feature.
 
 <!-- coderabbit-ai-generated-section:v1:b03ee491f097e349a36553c458dc7f5872ace2f771a8f25075ae1299da49fb24 -->
 
-- 2 of 294 menu rows are currently inert. Eight additional rows remain feature- or evidence-gated. Clickable `ReportGap` rows, such as printing and document templates, report missing features without implementing them. The inert-row count is not a census of all menu gaps; see the [parity matrix](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/CS6-PARITY.md) for the distinction. The menu wiring campaign is complete; remaining features need implementation or supporting evidence.
+- 2 of 296 menu rows are currently inert. Eight additional rows remain feature- or evidence-gated. Clickable `ReportGap` rows, such as printing and document templates, report missing features without implementing them. The inert-row count is not a census of all menu gaps; see the [parity matrix](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/CS6-PARITY.md) for the distinction. The menu wiring campaign is complete; remaining features need implementation or supporting evidence.
 
 <!-- /coderabbit-ai-generated:v1 -->
 - The DOM verb matrix has 3 partial, evidence-gated verbs and 85 entries classified as not applicable to the current API surface. See the [generated parity matrix](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/planning/generated/dom-parity.md).

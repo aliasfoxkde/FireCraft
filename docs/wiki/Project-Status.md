@@ -13,7 +13,7 @@ The source snapshot has a recent optimized web distribution whose manifest verif
 <!-- coderabbit-ai-generated-section:v1:53e1babaf030bba0ca85e43bacab55a245bc04312570811385e3712883f14109 -->
 
 - M0–M15 and the DOM verb-surface campaign are complete.
-- The 19.6 menu-wiring campaign is complete; 2 of 294 rows are inert and eight additional rows remain feature- or evidence-gated.
+- The 19.6 menu-wiring campaign is complete; 2 of 296 rows are inert and eight additional rows remain feature- or evidence-gated.
 - Phase 22 shell fidelity is the active UI front. Phase 20 daily-driver features and Phase 21 modern additions are queued.
 - T22 recorded a replacement 1280×800 vector screenshot and empty, vector, and bitmap captures at both 1280×800 and 1920×1080. See the [build and capture receipts](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/tasks/T22-screenshot-ui.md#receipts--2026-11-04) for the tested artifact and limits.
 

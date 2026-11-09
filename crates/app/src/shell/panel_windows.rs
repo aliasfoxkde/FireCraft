@@ -96,7 +96,7 @@ pub(crate) const PANELS: &[PanelSpec] = &[
     PanelSpec {
         name: "Slices",
         kind: PanelKind::Slices,
-        open_by_default: true,
+        open_by_default: false,
     },
     PanelSpec {
         name: "HTML Preview",
@@ -336,9 +336,9 @@ mod tests {
     /// Properties/Pages/States/Layers visible, the rest closed until
     /// asked for.
     ///
-    /// The Slices panel is the one deviation: CS6's Window menu has
-    /// no row for it, so a closed Slices panel could never be
-    /// reopened — it stays open until the menu carries the row.
+    /// The two web panels — Slices and HTML Preview — are closed by
+    /// default too, and the Window menu carries a row for each, so
+    /// both are reachable.
     #[test]
     fn the_default_open_set_is_the_cs6_roster() {
         let hidden = Shell::default_open_panels();
@@ -355,15 +355,13 @@ mod tests {
                 "URL",
                 "Behaviors",
                 "Optimize",
+                "Slices",
                 "HTML Preview",
                 "CSS Properties",
                 "Find and Replace",
                 "Common Library"
             ]
         );
-        // The Slices panel is reachable: it is open, and the Window
-        // menu's row for it is the one this build still owes.
-        assert!(!hidden.contains(&"Slices"));
     }
 
     /// The dock is narrow enough to leave the canvas room and wide

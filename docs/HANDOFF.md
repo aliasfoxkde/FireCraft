@@ -18,7 +18,7 @@
 - **Engine and parity:** 245 registry commands; 268 carried / 3
   partial / 0 missing DOM verbs. Live generated files and source calls
   are authoritative for counts.
-- **Menu census:** 2 of 294 rows currently use `Action::Inert`, pinned
+- **Menu census:** 2 of 296 rows currently use `Action::Inert`, pinned
   by `menus::tests::inert_count_never_rises`. Eight additional rows
   remain feature- or evidence-gated; these are not all inert and must
   not be wired without model/reference support.
@@ -137,7 +137,7 @@ verifiable.
 ### Current program: Phases 20–22
 
 Phase 19's canvas work and menu wiring campaign (batches 1–17) are
-complete. The live menu census is 2 inert rows of 294; eight other rows have explicit feature/evidence gates and are not considered inert. Path-node add/delete,
+complete. The live menu census is 2 inert rows of 296; eight other rows have explicit feature/evidence gates and are not considered inert. Path-node add/delete,
 the reachability gate, and the wasm budget re-pin are also complete.
 
 <!-- coderabbit-ai-generated:v1 -->

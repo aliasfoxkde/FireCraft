@@ -2110,6 +2110,22 @@ pub static WINDOW: Menu = Menu {
             "",
             Action::Shell(ShellAction::TogglePanel("Find and Replace")),
         ),
+        // FireCraft's own web panels. CS6 has no Window-menu row for
+        // either of them — CS6 manages slices in the Properties panel
+        // — so these two ids are FireCraft-local, not CS6 resource
+        // ids.
+        item(
+            43403,
+            "Slices",
+            "",
+            Action::Shell(ShellAction::TogglePanel("Slices")),
+        ),
+        item(
+            43406,
+            "HTML Preview",
+            "",
+            Action::Shell(ShellAction::TogglePanel("HTML Preview")),
+        ),
         Entry::Sep,
         item(
             57650,
@@ -3227,11 +3243,14 @@ mod tests {
     /// transcription carries, and the docs quote it alongside the
     /// inert count. A change here means the surface changed —
     /// update the docs in the same change.
+    ///
+    /// The two web-panel rows (Slices, HTML Preview) are this build's
+    /// own, so the total is two above the CS6 transcription.
     #[test]
     fn menu_item_total_is_pinned() {
         let (total, _) = census();
         assert_eq!(
-            total, 294,
+            total, 296,
             "menu item total changed — update the docs that quote it"
         );
     }
@@ -3408,6 +3427,8 @@ mod tests {
             "Swatches",
             "Info",
             "Behaviors",
+            "Slices",
+            "HTML Preview",
         ] {
             assert!(labels.contains(&expected), "Window menu missing {expected}");
         }
