@@ -46,12 +46,15 @@
 # Size guard: keep the image within a few GB — both known daemons run
 # overlay2, so the practical limits are LAN transfer time and fleet disk.
 #
-# Rebuild whenever Cargo.lock or fuzz/Cargo.lock changes, when a pinned
-# tool version below moves, or when the Rust minor moves (keep CI on the
-# toolchain local dev uses — see the FROM note; this pin matches
-# backend-ci-rust:1 so both pipelines judge the same rustc). The
+# Rebuild when a pinned tool version below moves or the Rust minor moves
+# (keep CI on the toolchain local dev uses — see the FROM note; this pin
+# matches backend-ci-rust:1 so both pipelines judge the same rustc). The
 # wasm-bindgen-cli pin MUST equal the wasm-bindgen version in
 # Cargo.lock — a mismatched smoke runner rejects the generated bindings.
+#
+# Do NOT rebuild merely because a lockfile moved. The baked registry is a
+# fast floor, not a wall — see the CARGO_NET_OFFLINE note at the bottom
+# for why, and for the failure it replaces.
 FROM rust:1.99-slim-bookworm AS fetch
 # WORKDIR must precede the COPYs: with the default cwd of /, "./" lands
 # the manifests at / and cargo fetch resolves the workspace from
@@ -102,8 +105,28 @@ RUN tar -xzf /tmp/node.tar.gz --strip-components=1 -C /usr/local \
 
 COPY --from=fetch /usr/local/cargo/registry /usr/local/cargo/registry
 
-# A missing crate fails in seconds instead of hanging on a stalled
-# crates.io transfer (the dsc pipeline lost runs to "transfer too slow"
-# retries before compiling anything).
-ENV CARGO_NET_OFFLINE=true \
+# The baked registry is a FAST FLOOR, not a wall.
+#
+# It used to be `CARGO_NET_OFFLINE=true` — a wall — and that turned every
+# lockfile move into a fleet-wide red. The image carries the crate
+# versions of exactly ONE lockfile, so any branch whose Cargo.lock pins
+# something else dies in its first cargo step with:
+#
+#   error: failed to download `time v0.3.45`
+#   Caused by: attempting to make an HTTP request, but --offline was specified
+#
+# Observed 2026-11-09 across GitForge CI: `main`, PR #8, PR #12, PR #13
+# and PR #14 all failed in `fmt-layers` that way, while only the branch
+# whose lockfile the image had been built from passed. The workaround was
+# to re-ship the image after every lockfile move — a procedure that had
+# been needed repeatedly, and each time one branch's move broke the
+# others. That is a tool defect wearing a procedure as a disguise.
+#
+# The flag was there so a job never hangs on a stalled crates.io
+# transfer. Measured from the runner host on 2026-11-09, the index
+# answers in ~0.09 s and a crate downloads in ~0.12 s, and a crate that
+# IS in the baked cache touches the network not at all. A cache miss now
+# costs one small fetch instead of a dead pipeline.
+ENV CARGO_NET_OFFLINE=false \
+    CARGO_NET_RETRY=5 \
     CARGO_TERM_COLOR=always
