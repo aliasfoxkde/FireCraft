@@ -62,3 +62,4 @@
 | 19.6 batch 6 — View menu (10 inerts) | 2026-11-03 (`72aa1d7`) |
 | 19.6 batch 7 — Text menu (14 inerts) | 2026-11-03 (`72aa1d7`) |
 | 19.6 batch 8 — Attach In Path / Attach to Path (2 inerts); vertical-align rows evidence-gated | 2026-11-03 (`a8c86af`) |
+| Gate `perf` step repair — the memory probe re-execs through `/proc/self/exe` so it survives the gate's own binary being replaced mid-run ([decision 0072](decisions/0072-gate-reexec-resolution.md)) | 2026-11-09 (`7252648`) |
