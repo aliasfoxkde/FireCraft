@@ -379,6 +379,14 @@ the absolute repo path.
   - *"failed to create sandbox … Timeout error"* = the runner's
     60-second sandbox-acquisition cap; the job never started, so its
     `result_json` carries no step results. Retrigger.
+    **But check the host first**: this symptom also appears when the
+    host is starved, and the sandbox timeout is then a *consequence*,
+    not the cause. On 2026-11-09 every job failed this way because a
+    stray process cascade had put the host at load 2057. Read
+    `cat /proc/loadavg` and `ps -eo stat --no-headers | grep -c '^D'`
+    before blaming the runner — a load in the hundreds with thousands
+    of D-state processes is host starvation, and no amount of
+    retriggering clears it.
   - *"failed to download `<crate>` … --offline was specified"* = the
     CI image's registry cache lacked a crate the lockfile pinned.
     **Fixed 2026-11-09**: the image now sets `CARGO_NET_OFFLINE=false`

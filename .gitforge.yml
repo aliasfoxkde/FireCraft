@@ -17,11 +17,15 @@
 #   both EPERM'd on fedora), so all compilation lands on the
 #   container-local overlay2 disk. Steps within a job share one
 #   container, so heavy steps are grouped to reuse the warm target dir.
-# - Job sandboxes build with CARGO_NET_OFFLINE=true: the image's
-#   registry cache is the only crate source. Rebuild + re-ship the
-#   image before pushing any commit that moves either lockfile — the
-#   failure mode of a stale cache is a fast, clean offline-refusal
-#   whose message lands only in the job log ledger.
+# - Job sandboxes run with CARGO_NET_OFFLINE=false: the image's
+#   registry cache is a FAST FLOOR, not a wall. A crate already in the
+#   cache touches the network not at all; a crate that is not costs one
+#   small fetch (measured: index ~0.09 s, crate ~0.12 s) instead of a
+#   dead pipeline. Rebuild + re-ship the image only when a pinned tool
+#   version or the Rust minor moves — never merely because a lockfile
+#   moved. The old offline wall turned every lockfile move into a
+#   fleet-wide red, and the re-ship procedure that papered over it
+#   broke whichever branch moved next; see decision 0073.
 # - Images must be pre-warmed on every runner host before a commit that
 #   needs them lands (60-second sandbox acquisition cap; the runner
 #   never pulls). Ship with:
@@ -30,7 +34,9 @@
 #   failure late in a long step can be truncated. Keep steps small.
 #
 # The image recipe is infrastructure/docker/ci-rust.Dockerfile; rebuild
-# and re-ship it whenever Cargo.lock or fuzz/Cargo.lock changes.
+# and re-ship it when a pinned tool version or the Rust minor moves. A
+# lockfile move does NOT require a rebuild — the sandbox may fetch a
+# crate its cache lacks (see the CARGO_NET_OFFLINE note above).
 name: firecraft-ci
 version: "1.0"
 trigger_on:
@@ -107,13 +113,12 @@ jobs:
         # libfuzzer compile check and the wide campaign stay local
         # (nightly + cargo-fuzz are not baked into the CI image).
         #
-        # The sandbox builds with CARGO_NET_OFFLINE=true, so every
-        # fuzz/Cargo.lock crate must be in the image's registry cache
-        # — rebuilt and re-shipped whenever that lockfile moves (it
-        # did in M9 task 8: the boa family). A stale cache fails fast
-        # and clean ("attempting to make an HTTP request, but --offline
-        # was specified"); the full error only reaches the job log
-        # ledger, not the bounded receipt.
+        # The sandbox may fetch a crate its cache lacks, so a
+        # fuzz/Cargo.lock move does NOT require an image rebuild (it
+        # did in M9 task 8: the boa family — that rebuild is no longer
+        # needed). A crate missing from the cache costs one small
+        # fetch; the full error still reaches only the job log ledger,
+        # not the bounded receipt.
         run: CARGO_TARGET_DIR=/tmp/ci-target cargo run --locked -p xtask -- fuzz-quick
     # 30m proved too tight: a cold sandbox target dir spends ~20m
     # compiling before fuzz-quick starts (dfd7f46 run was killed by
