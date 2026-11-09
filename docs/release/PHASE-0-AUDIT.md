@@ -177,7 +177,7 @@ targets have no host toolchain to link against.
 | P0.3.9 Audit CI and release workflows | IMPLEMENTED | n/a | `.github/workflows/ci.yml` (2 jobs: `fmt`, `gate` = `xtask ci-no-fmt`, aegis 0.6.3 pinned by checksum; the job's `Web bundle smoke` step is tag-gated and skipped on branch pushes); `.github/workflows/release.yml` (2 jobs: `build artifacts`, `create draft release`); `.gitforge.yml` (8-job chain — `fmt-layers, clippy-test, wasm-web, corpus-golden, perf-budgets, fuzz, generated-docs, release` — on the shared `firecraft-ci-rust:1` image) | B-4, B-5, B-20, B-21 |
 | P0.3.10 Audit version stamping and changelog generation | IMPLEMENTED | n/a | 8 stamps per HANDOFF §6.3 (workspace `Cargo.toml`, six member manifests incl. `web/`, the `xtask` `compose` pin, `packaging/deb/control`); all read 0.2.5; `xtask changelog` verifies the stamps and licenses and **rewrites** `docs/CHANGELOG.md` | B-16, F-11 |
 | P0.3.11 Audit production deployment configuration | IMPLEMENTED | n/a | No Pages/wrangler config file is in the repository; deployment is a manual `wrangler pages deploy dist/web --project-name firecraft-web` (HANDOFF §6.3); the Pages step inside `release.yml` is **commented out**; the live site `https://firecraft-web.pages.dev` serves bundle `2274ac8c2925b61d` with `appinfo.json` version 0.2.5 | B-6; whether `CLOUDFLARE_API_TOKEN` is configured is UNVERIFIED (§6) |
-| P0.3.12 Compare documented behavior against actual implementation | IMPLEMENTED | n/a | §8 — 14 findings (F-1 … F-14) | — |
+| P0.3.12 Compare documented behavior against actual implementation | IMPLEMENTED | n/a | §8 — 17 findings (F-1 … F-17) | — |
 
 ### 1.4 P0.4 — Establish baseline verification
 
