@@ -42,9 +42,139 @@ const HEADER: &str = "\
 # recorded count. Moving a baselined finding to another line is not new;
 # a new literal, a new file, or an extra copy of a known literal is.
 #
+# No rule class is switched off: every rule the scanner has stays armed,
+# and a new occurrence of any of these literals fails the gate. The
+# comments below each group record why those particular occurrences were
+# adjudicated as false positives, so a reviewer can read the reason
+# next to the rows it covers.
+#
+# The gate's own source quotes the literals it explains, so it carries
+# rows of its own; they are adjudicated like any other.
+#
 # Regenerate with: cargo run -p xtask -- aegis --bless
 # Only after verifying each newly added key is a false positive.
 ";
+
+/// Why the occurrences of each rule class were adjudicated as false
+/// positives.
+///
+/// The comment is emitted above the class's records, so the reason
+/// sits next to the rows it covers. The class itself stays armed.
+const CLASS_NOTES: &[(&str, &str)] = &[
+    (
+        "australian-tfn",
+        "Matches the 9-digit observed value range in the PNG node dictionary \
+         (0..141663582); this repository holds no tax identifiers.",
+    ),
+    (
+        "bank-routing-number",
+        "Matches the same 9-digit observed value range in the PNG node \
+         dictionary; this repository holds no banking data.",
+    ),
+    (
+        "bearer-token-url",
+        "The GitForge API row names the credential file that holds the \
+         bearer token; the row contains no token.",
+    ),
+    (
+        "credit-card-amex",
+        "A glyph-position golden value (27.345314025878906); its digit run \
+         matches the Amex shape, and it is a float literal, not a card number.",
+    ),
+    (
+        "credit-card-number-generic",
+        "The same glyph-position golden value, seen by the generic \
+         card-number rule.",
+    ),
+    (
+        "eval-usage",
+        "The scripting crate's own boa context.eval() call — that crate \
+         implements the CS6 scripting DOM's eval() — plus Rust curve-segment \
+         .eval(u) calls.",
+    ),
+    (
+        "international-phone",
+        "Matches the build metadata of a Cargo.lock version string \
+         (0.6.0+11769913).",
+    ),
+    (
+        "path-traversal",
+        "The rule's regex is JavaScript-shaped (open / fs. / readFile, \
+         then user / input / query) and fires on English prose; this \
+         repository has no server-side file read.",
+    ),
+    (
+        "security-hardening-path-traversal",
+        "The same JavaScript-shaped regex, seen by the hardening rule.",
+    ),
+    (
+        "pci-cardholder-data",
+        "Matches the word \"pan\" in pan-zoom and hand-pan identifiers; the \
+         five credit-card-* rules stay armed.",
+    ),
+    (
+        "phone-number",
+        "Matches any 10-digit run: u32::MAX, CRC and chunk values, observed \
+         PNG value ranges.",
+    ),
+    (
+        "ssrf-localhost",
+        "A loopback listener in the release smoke test, a localhost \
+         maintainer address, and prose naming the local GitForge API; the \
+         workspace has no HTTP client dependency.",
+    ),
+    (
+        "ssn-no-dashes",
+        "Matches the same 9-digit observed value range in the PNG node \
+         dictionary; this repository holds no social-security numbers.",
+    ),
+    (
+        "stack-trace-exposure",
+        "A comment quoting a V8 crash dump observed in CI; it documents a \
+         failure, and the build prints nothing.",
+    ),
+    (
+        "xml-external-entity",
+        "The SVG importer's entity-expansion fixture, which must declare an \
+         external entity so the test can observe the importer refusing it, \
+         and the Apple plist doctype's quoted public identifier.",
+    ),
+    (
+        "security-hardening-xml-external-entity",
+        "The same two fixtures, seen by the hardening rule.",
+    ),
+    (
+        "zip-code",
+        "Matches any 5-digit run: CS6 command ids, the JPEG dimension \
+         ceiling (65535), menu ids. This repository holds no postal data.",
+    ),
+];
+
+/// The comment for a rule class, wrapped as comment lines.
+fn class_note(pattern: &str) -> String {
+    let note = CLASS_NOTES
+        .iter()
+        .find(|(name, _)| *name == pattern)
+        .map(|(_, note)| *note)
+        .unwrap_or("Individually adjudicated as a false positive; see decision 0074.");
+    let mut out = String::new();
+    let mut line = String::new();
+    for word in note.split_whitespace() {
+        if !line.is_empty() && line.len() + 1 + word.len() > 70 {
+            out.push_str(&format!("# {line}\n"));
+            line = word.to_owned();
+        } else if line.is_empty() {
+            line = word.to_owned();
+        } else {
+            line.push(' ');
+            line.push_str(word);
+        }
+    }
+    if !line.is_empty() {
+        out.push_str(&format!("# {line}\n"));
+    }
+    out
+}
 
 /// One scanned finding, reduced to what the baseline keys on.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -265,10 +395,16 @@ fn parse_baseline(text: &str) -> Result<BTreeMap<Key, usize>, String> {
     Ok(counts)
 }
 
-/// Renders the baseline records.
+/// Renders the baseline records, with each rule class's reason
+/// emitted above its rows.
 fn render_baseline(counts: &BTreeMap<Key, usize>) -> String {
     let mut out = String::from(HEADER);
+    let mut current = String::new();
     for ((pattern, file, digest), count) in counts {
+        if *pattern != current {
+            current = pattern.clone();
+            out.push_str(&class_note(pattern));
+        }
         out.push_str(&format!("{pattern}\t{file}\t{digest}\t{count}\n"));
     }
     out
@@ -463,6 +599,39 @@ mod tests {
     fn a_malformed_baseline_line_is_refused() {
         assert!(parse_baseline("a\tb\tc\n").is_err());
         assert!(parse_baseline("a\tb\tc\tx\n").is_err());
+    }
+
+    #[test]
+    fn a_class_reason_is_rendered_above_its_rows() {
+        let counts = baseline_of(&[
+            ("zip-code", "./crates/io/src/bitmap.rs", "aaa", 1),
+            ("zip-code", "./docs/NEXT.md", "bbb", 2),
+            ("a-rule-with-no-note", "./docs/NEXT.md", "ccc", 1),
+        ]);
+        let rendered = render_baseline(&counts);
+        let lines: Vec<&str> = rendered.lines().collect();
+        let zip = lines
+            .iter()
+            .position(|line| line.starts_with("zip-code\t"))
+            .unwrap();
+        // The reason is wrapped, so the block of comment lines above the
+        // first record carries it.
+        let mut block = Vec::new();
+        let mut cursor = zip;
+        while cursor > 0 && lines[cursor - 1].starts_with('#') {
+            block.push(lines[cursor - 1]);
+            cursor -= 1;
+        }
+        assert!(block.iter().any(|line| line.contains("5-digit")));
+        // The unknown class falls back to the generic reason rather
+        // than being rendered without one.
+        let unknown = lines
+            .iter()
+            .position(|line| line.starts_with("a-rule-with-no-note\t"))
+            .unwrap();
+        assert!(lines[unknown - 1].contains("Individually adjudicated"));
+        // Comments never become records.
+        assert_eq!(parse_baseline(&rendered).unwrap(), counts);
     }
 
     #[test]
