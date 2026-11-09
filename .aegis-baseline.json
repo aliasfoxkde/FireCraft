@@ -8788,41 +8788,6 @@
       "stable_id": "aegis-5686a0606d0b01002dd1d803d3eee4eb28617f1ce0f2acdaf6a71f962f4e432d"
     },
     {
-      "id": "000000000000000018e4fac15ec3e0a2",
-      "pattern": "zip-code",
-      "category": "pii",
-      "severity": "low",
-      "confidence": "high",
-      "location": {
-        "file": "./xtask/src/dist.rs",
-        "line": 562,
-        "column": 36
-      },
-      "description": "US ZIP code detected",
-      "tags": [],
-      "kind": "pattern",
-      "fingerprint": "zip-code:./xtask/src/dist.rs:562:d55d01d0341ed0ba2cd99b322e8c5b609254f47d10c7cd12b99b4922effeba44",
-      "stable_id": "aegis-bd45c34796943e9433a2b2b147fa5d7ec815e624d0462143c2249945e7391205"
-    },
-    {
-      "id": "000000000000000018e4fac17a4e8d39",
-      "pattern": "ssrf-localhost",
-      "category": "web-security",
-      "severity": "medium",
-      "confidence": "medium",
-      "location": {
-        "file": "./xtask/src/dist.rs",
-        "line": 642,
-        "column": 29
-      },
-      "description": "Potential SSRF targeting internal resources",
-      "reference": "https://owasp.org/www-community/attacks/Server_Side_Request_Forgery",
-      "tags": [],
-      "kind": "pattern",
-      "fingerprint": "ssrf-localhost:./xtask/src/dist.rs:642:12ca17b49af2289436f303e0166030a21e525d266e209267433801a8fd4071a0",
-      "stable_id": "aegis-23253d62961a75cab50c3d3d33fe9420de5cb57336f0814cfdbafb63d108dabb"
-    },
-    {
       "id": "000000000000000018e4fac0756bffe6",
       "pattern": "stack-trace-exposure",
       "category": "web-security",
@@ -8909,6 +8874,650 @@
       "kind": "pattern",
       "fingerprint": "international-phone:./Cargo.lock:2250:af21a1bff1718128c96522dc5f3a4136e66feeb8aee345e9676fda1199e5378e",
       "stable_id": "aegis-4afcc1f394c0e0e7dd24cae9d3336dc7289de96e128f28ca78ab930fa9b888bc"
+    },
+    {
+      "id": "000000000000000018e665b802123e7b",
+      "pattern": "gdpr-personal-data",
+      "category": "pii",
+      "severity": "low",
+      "confidence": "high",
+      "location": {
+        "file": "./docs/RELEASE-ENGINEERING-PLAN.md",
+        "line": 155,
+        "column": 238
+      },
+      "description": "Reference to personal data detected",
+      "reference": "https://gdpr.eu/article-4-definitions/",
+      "tags": [],
+      "kind": "pattern",
+      "fingerprint": "gdpr-personal-data:./docs/RELEASE-ENGINEERING-PLAN.md:155:d85533ba786e27667c68f55c37f3d5a70d6cd7a1e1157262ac3353dd6b11b193",
+      "stable_id": "aegis-3d8189409a50b0f9194329857979ef2a166aec10e5c8c4f53881c05a45cf572a"
+    },
+    {
+      "id": "000000000000000018e665b77a3cf92c",
+      "pattern": "gdpr-reference",
+      "category": "compliance",
+      "severity": "low",
+      "confidence": "medium",
+      "location": {
+        "file": "./docs/release/EXECUTION-BOARD.md",
+        "line": 51,
+        "column": 83
+      },
+      "description": "GDPR reference detected",
+      "reference": "https://gdpr.eu/",
+      "tags": [],
+      "kind": "pattern",
+      "fingerprint": "gdpr-reference:./docs/release/EXECUTION-BOARD.md:51:8b16477e3abe1de345a6e82f360db77b5e238983ad685cec9fef0d0bc009aed3",
+      "stable_id": "aegis-0920924659c7047ad4e7939e5d58ef29231aee4ce6930bfe116c10b1c45e4103"
+    },
+    {
+      "id": "000000000000000018e665b77a3d2218",
+      "pattern": "gdpr-reference",
+      "category": "compliance",
+      "severity": "low",
+      "confidence": "medium",
+      "location": {
+        "file": "./docs/release/EXECUTION-BOARD.md",
+        "line": 371,
+        "column": 224
+      },
+      "description": "GDPR reference detected",
+      "reference": "https://gdpr.eu/",
+      "tags": [],
+      "kind": "pattern",
+      "fingerprint": "gdpr-reference:./docs/release/EXECUTION-BOARD.md:371:8b16477e3abe1de345a6e82f360db77b5e238983ad685cec9fef0d0bc009aed3",
+      "stable_id": "aegis-ba875bdbbbd32059db4ffb917a9f68cd5d1060e41b162272ecd0cb03df1478cb"
+    },
+    {
+      "id": "000000000000000018e665b77a3d40ec",
+      "pattern": "pci-cardholder-data",
+      "category": "compliance",
+      "severity": "high",
+      "confidence": "high",
+      "location": {
+        "file": "./docs/release/EXECUTION-BOARD.md",
+        "line": 167,
+        "column": 307
+      },
+      "description": "PCI cardholder data reference detected",
+      "reference": "https://www.pcisecuritystandards.org/pci_security/",
+      "tags": [],
+      "kind": "pattern",
+      "fingerprint": "pci-cardholder-data:./docs/release/EXECUTION-BOARD.md:167:00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a",
+      "stable_id": "aegis-d43a40a6f2f6cadcb664a2ec0c5cd0e4cea9744bb9cb39e26e6744bf6677ffe5"
+    },
+    {
+      "id": "000000000000000018e665b78680e267",
+      "pattern": "ssrf-localhost",
+      "category": "web-security",
+      "severity": "medium",
+      "confidence": "medium",
+      "location": {
+        "file": "./docs/release/EXECUTION-BOARD.md",
+        "line": 51,
+        "column": 218
+      },
+      "description": "Potential SSRF targeting internal resources",
+      "reference": "https://owasp.org/www-community/attacks/Server_Side_Request_Forgery",
+      "tags": [],
+      "kind": "pattern",
+      "fingerprint": "ssrf-localhost:./docs/release/EXECUTION-BOARD.md:51:49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763",
+      "stable_id": "aegis-d7561d67637f256796ae0bac9447469f48f4c566fd6092e9a57548574848101a"
+    },
+    {
+      "id": "000000000000000018e665b786810b53",
+      "pattern": "ssrf-localhost",
+      "category": "web-security",
+      "severity": "medium",
+      "confidence": "medium",
+      "location": {
+        "file": "./docs/release/EXECUTION-BOARD.md",
+        "line": 371,
+        "column": 359
+      },
+      "description": "Potential SSRF targeting internal resources",
+      "reference": "https://owasp.org/www-community/attacks/Server_Side_Request_Forgery",
+      "tags": [],
+      "kind": "pattern",
+      "fingerprint": "ssrf-localhost:./docs/release/EXECUTION-BOARD.md:371:49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763",
+      "stable_id": "aegis-edcbe17f622f953d05d083114e17b1711d1a37dd0992fb472ed4a19eab062d74"
+    },
+    {
+      "id": "000000000000000018e665b7b962256e",
+      "pattern": "pci-cardholder-data",
+      "category": "compliance",
+      "severity": "high",
+      "confidence": "high",
+      "location": {
+        "file": "./docs/research/android-feasibility.md",
+        "line": 62,
+        "column": 118
+      },
+      "description": "PCI cardholder data reference detected",
+      "reference": "https://www.pcisecuritystandards.org/pci_security/",
+      "tags": [],
+      "kind": "pattern",
+      "fingerprint": "pci-cardholder-data:./docs/research/android-feasibility.md:62:00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a",
+      "stable_id": "aegis-4cd91aa50300112bdfffe1f7491210fb087e4da61557dbec85ed6f91e9ace38e"
+    },
+    {
+      "id": "000000000000000018e665b7f1bbe810",
+      "pattern": "gdpr-reference",
+      "category": "compliance",
+      "severity": "low",
+      "confidence": "medium",
+      "location": {
+        "file": "./docs/tasks/T27-11-reproduce-aegis-gate-failure.md",
+        "line": 23,
+        "column": 2
+      },
+      "description": "GDPR reference detected",
+      "reference": "https://gdpr.eu/",
+      "tags": [],
+      "kind": "pattern",
+      "fingerprint": "gdpr-reference:./docs/tasks/T27-11-reproduce-aegis-gate-failure.md:23:8b16477e3abe1de345a6e82f360db77b5e238983ad685cec9fef0d0bc009aed3",
+      "stable_id": "aegis-d58a47af91c07ef602177251164fa6f887d3806eebef0ee6c4040572d15c8955"
+    },
+    {
+      "id": "000000000000000018e665b7f3ac1523",
+      "pattern": "ssrf-localhost",
+      "category": "web-security",
+      "severity": "medium",
+      "confidence": "medium",
+      "location": {
+        "file": "./docs/tasks/T27-11-reproduce-aegis-gate-failure.md",
+        "line": 24,
+        "column": 52
+      },
+      "description": "Potential SSRF targeting internal resources",
+      "reference": "https://owasp.org/www-community/attacks/Server_Side_Request_Forgery",
+      "tags": [],
+      "kind": "pattern",
+      "fingerprint": "ssrf-localhost:./docs/tasks/T27-11-reproduce-aegis-gate-failure.md:24:49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763",
+      "stable_id": "aegis-183085caa1a8048e5d1896c7be701402818b14db5d00cbf52c2cd11b9c79dd17"
+    },
+    {
+      "id": "000000000000000018e665b722774b3d",
+      "pattern": "gdpr-personal-data",
+      "category": "pii",
+      "severity": "low",
+      "confidence": "high",
+      "location": {
+        "file": "./docs/tasks/T27-12-adjudicate-aegis-findings.md",
+        "line": 45,
+        "column": 209
+      },
+      "description": "Reference to personal data detected",
+      "reference": "https://gdpr.eu/article-4-definitions/",
+      "tags": [],
+      "kind": "pattern",
+      "fingerprint": "gdpr-personal-data:./docs/tasks/T27-12-adjudicate-aegis-findings.md:45:d85533ba786e27667c68f55c37f3d5a70d6cd7a1e1157262ac3353dd6b11b193",
+      "stable_id": "aegis-64317cfd1f951a5bcddad7af1d905aad70d1fd03f2d65ac563de302082538e90"
+    },
+    {
+      "id": "000000000000000018e665b72277799d",
+      "pattern": "gdpr-personal-data",
+      "category": "pii",
+      "severity": "low",
+      "confidence": "high",
+      "location": {
+        "file": "./docs/tasks/T27-12-adjudicate-aegis-findings.md",
+        "line": 50,
+        "column": 249
+      },
+      "description": "Reference to personal data detected",
+      "reference": "https://gdpr.eu/article-4-definitions/",
+      "tags": [],
+      "kind": "pattern",
+      "fingerprint": "gdpr-personal-data:./docs/tasks/T27-12-adjudicate-aegis-findings.md:50:d85533ba786e27667c68f55c37f3d5a70d6cd7a1e1157262ac3353dd6b11b193",
+      "stable_id": "aegis-a14cd725f89c8676b9f48903ce023774a1bea12ffad9754407fc6f3a774ca81c"
+    },
+    {
+      "id": "000000000000000018e665b722779989",
+      "pattern": "gdpr-personal-data",
+      "category": "pii",
+      "severity": "low",
+      "confidence": "high",
+      "location": {
+        "file": "./docs/tasks/T27-12-adjudicate-aegis-findings.md",
+        "line": 69,
+        "column": 222
+      },
+      "description": "Reference to personal data detected",
+      "reference": "https://gdpr.eu/article-4-definitions/",
+      "tags": [],
+      "kind": "pattern",
+      "fingerprint": "gdpr-personal-data:./docs/tasks/T27-12-adjudicate-aegis-findings.md:69:d85533ba786e27667c68f55c37f3d5a70d6cd7a1e1157262ac3353dd6b11b193",
+      "stable_id": "aegis-faaecf94c0df9cd590dd07c12d06c3d11a7ab4b665117ea74975b843f33e93bd"
+    },
+    {
+      "id": "000000000000000018e665b72277b92e",
+      "pattern": "zip-code",
+      "category": "pii",
+      "severity": "low",
+      "confidence": "high",
+      "location": {
+        "file": "./docs/tasks/T27-12-adjudicate-aegis-findings.md",
+        "line": 47,
+        "column": 72
+      },
+      "description": "US ZIP code detected",
+      "tags": [],
+      "kind": "pattern",
+      "fingerprint": "zip-code:./docs/tasks/T27-12-adjudicate-aegis-findings.md:47:6f21ec723dd82aa7bd36bc81cc4008e4f6359fe8ce68f793af23b7123bdbf3a6",
+      "stable_id": "aegis-cba5f999690002f8994841dce771bcd9df0a8615c23482290d0dd617becc9682"
+    },
+    {
+      "id": "000000000000000018e665b72277cf47",
+      "pattern": "zip-code",
+      "category": "pii",
+      "severity": "low",
+      "confidence": "high",
+      "location": {
+        "file": "./docs/tasks/T27-12-adjudicate-aegis-findings.md",
+        "line": 48,
+        "column": 71
+      },
+      "description": "US ZIP code detected",
+      "tags": [],
+      "kind": "pattern",
+      "fingerprint": "zip-code:./docs/tasks/T27-12-adjudicate-aegis-findings.md:48:d55d01d0341ed0ba2cd99b322e8c5b609254f47d10c7cd12b99b4922effeba44",
+      "stable_id": "aegis-de7ec8e5f6301d9c8d3a14fa0479daed94a97cfa10984b76750e48f43fd84e44"
+    },
+    {
+      "id": "000000000000000018e665b722fcfd41",
+      "pattern": "gdpr-reference",
+      "category": "compliance",
+      "severity": "low",
+      "confidence": "medium",
+      "location": {
+        "file": "./docs/tasks/T27-12-adjudicate-aegis-findings.md",
+        "line": 24,
+        "column": 8
+      },
+      "description": "GDPR reference detected",
+      "reference": "https://gdpr.eu/",
+      "tags": [],
+      "kind": "pattern",
+      "fingerprint": "gdpr-reference:./docs/tasks/T27-12-adjudicate-aegis-findings.md:24:8b16477e3abe1de345a6e82f360db77b5e238983ad685cec9fef0d0bc009aed3",
+      "stable_id": "aegis-46919407fce94d78681c38942d63d91b16fa47b4476ed1e595c527454a4bde5a"
+    },
+    {
+      "id": "000000000000000018e665b722fd278b",
+      "pattern": "gdpr-reference",
+      "category": "compliance",
+      "severity": "low",
+      "confidence": "medium",
+      "location": {
+        "file": "./docs/tasks/T27-12-adjudicate-aegis-findings.md",
+        "line": 45,
+        "column": 4
+      },
+      "description": "GDPR reference detected",
+      "reference": "https://gdpr.eu/",
+      "tags": [],
+      "kind": "pattern",
+      "fingerprint": "gdpr-reference:./docs/tasks/T27-12-adjudicate-aegis-findings.md:45:8b16477e3abe1de345a6e82f360db77b5e238983ad685cec9fef0d0bc009aed3",
+      "stable_id": "aegis-8198f526a89b17360bd937be74da83ad8c8a12016d62bc31b524a7099f43073d"
+    },
+    {
+      "id": "000000000000000018e665b722fd43ea",
+      "pattern": "gdpr-reference",
+      "category": "compliance",
+      "severity": "low",
+      "confidence": "medium",
+      "location": {
+        "file": "./docs/tasks/T27-12-adjudicate-aegis-findings.md",
+        "line": 50,
+        "column": 4
+      },
+      "description": "GDPR reference detected",
+      "reference": "https://gdpr.eu/",
+      "tags": [],
+      "kind": "pattern",
+      "fingerprint": "gdpr-reference:./docs/tasks/T27-12-adjudicate-aegis-findings.md:50:8b16477e3abe1de345a6e82f360db77b5e238983ad685cec9fef0d0bc009aed3",
+      "stable_id": "aegis-0a7e7e9662b31d82c78c5a9cda41d27fa13da818e29ef140d4dbcdd1d4687d8e"
+    },
+    {
+      "id": "000000000000000018e665b722fd7bd7",
+      "pattern": "gdpr-reference",
+      "category": "compliance",
+      "severity": "low",
+      "confidence": "medium",
+      "location": {
+        "file": "./docs/tasks/T27-12-adjudicate-aegis-findings.md",
+        "line": 52,
+        "column": 4
+      },
+      "description": "GDPR reference detected",
+      "reference": "https://gdpr.eu/",
+      "tags": [],
+      "kind": "pattern",
+      "fingerprint": "gdpr-reference:./docs/tasks/T27-12-adjudicate-aegis-findings.md:52:8b16477e3abe1de345a6e82f360db77b5e238983ad685cec9fef0d0bc009aed3",
+      "stable_id": "aegis-82deac0089f4203cebba28024f17e7076849cd867bbb343747881e9d7869fad1"
+    },
+    {
+      "id": "000000000000000018e665b722fdb37f",
+      "pattern": "gdpr-reference",
+      "category": "compliance",
+      "severity": "low",
+      "confidence": "medium",
+      "location": {
+        "file": "./docs/tasks/T27-12-adjudicate-aegis-findings.md",
+        "line": 55,
+        "column": 4
+      },
+      "description": "GDPR reference detected",
+      "reference": "https://gdpr.eu/",
+      "tags": [],
+      "kind": "pattern",
+      "fingerprint": "gdpr-reference:./docs/tasks/T27-12-adjudicate-aegis-findings.md:55:8b16477e3abe1de345a6e82f360db77b5e238983ad685cec9fef0d0bc009aed3",
+      "stable_id": "aegis-65489fc318ae632d405b6d6765d8ffd25f731ee8ba50e9d35c77067d2e8cd4dd"
+    },
+    {
+      "id": "000000000000000018e665b722fdd36a",
+      "pattern": "gdpr-reference",
+      "category": "compliance",
+      "severity": "low",
+      "confidence": "medium",
+      "location": {
+        "file": "./docs/tasks/T27-12-adjudicate-aegis-findings.md",
+        "line": 69,
+        "column": 4
+      },
+      "description": "GDPR reference detected",
+      "reference": "https://gdpr.eu/",
+      "tags": [],
+      "kind": "pattern",
+      "fingerprint": "gdpr-reference:./docs/tasks/T27-12-adjudicate-aegis-findings.md:69:8b16477e3abe1de345a6e82f360db77b5e238983ad685cec9fef0d0bc009aed3",
+      "stable_id": "aegis-1e616c73daf3e8512db35f9c9cb807a5284111187c94c116b51131487a26405b"
+    },
+    {
+      "id": "000000000000000018e665b722fdef3e",
+      "pattern": "gdpr-reference",
+      "category": "compliance",
+      "severity": "low",
+      "confidence": "medium",
+      "location": {
+        "file": "./docs/tasks/T27-12-adjudicate-aegis-findings.md",
+        "line": 70,
+        "column": 4
+      },
+      "description": "GDPR reference detected",
+      "reference": "https://gdpr.eu/",
+      "tags": [],
+      "kind": "pattern",
+      "fingerprint": "gdpr-reference:./docs/tasks/T27-12-adjudicate-aegis-findings.md:70:8b16477e3abe1de345a6e82f360db77b5e238983ad685cec9fef0d0bc009aed3",
+      "stable_id": "aegis-07f7b4ae76e7efae644ad0ab88e92d7b6bcdab3ebee1ed187be128cc2af2bc0f"
+    },
+    {
+      "id": "000000000000000018e665b722fe1087",
+      "pattern": "pci-cardholder-data",
+      "category": "compliance",
+      "severity": "high",
+      "confidence": "high",
+      "location": {
+        "file": "./docs/tasks/T27-12-adjudicate-aegis-findings.md",
+        "line": 13,
+        "column": 56
+      },
+      "description": "PCI cardholder data reference detected",
+      "reference": "https://www.pcisecuritystandards.org/pci_security/",
+      "tags": [],
+      "kind": "pattern",
+      "fingerprint": "pci-cardholder-data:./docs/tasks/T27-12-adjudicate-aegis-findings.md:13:00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a",
+      "stable_id": "aegis-9a94cb3f50484983bd82fdba2d0c7430f4e0001c4c82b6fa5cfffabe0b5da03b"
+    },
+    {
+      "id": "000000000000000018e665b722fe2ca0",
+      "pattern": "pci-cardholder-data",
+      "category": "compliance",
+      "severity": "high",
+      "confidence": "high",
+      "location": {
+        "file": "./docs/tasks/T27-12-adjudicate-aegis-findings.md",
+        "line": 23,
+        "column": 46
+      },
+      "description": "PCI cardholder data reference detected",
+      "reference": "https://www.pcisecuritystandards.org/pci_security/",
+      "tags": [],
+      "kind": "pattern",
+      "fingerprint": "pci-cardholder-data:./docs/tasks/T27-12-adjudicate-aegis-findings.md:23:00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a",
+      "stable_id": "aegis-8224da50d2271ec5e5243d2d16cb7e1a76f0963d37356e3c5b5c47e228849681"
+    },
+    {
+      "id": "000000000000000018e665b722fe4717",
+      "pattern": "pci-cardholder-data",
+      "category": "compliance",
+      "severity": "high",
+      "confidence": "high",
+      "location": {
+        "file": "./docs/tasks/T27-12-adjudicate-aegis-findings.md",
+        "line": 46,
+        "column": 125
+      },
+      "description": "PCI cardholder data reference detected",
+      "reference": "https://www.pcisecuritystandards.org/pci_security/",
+      "tags": [],
+      "kind": "pattern",
+      "fingerprint": "pci-cardholder-data:./docs/tasks/T27-12-adjudicate-aegis-findings.md:46:00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a",
+      "stable_id": "aegis-326ebd60289d63e8e2b1a72c0f9723d906776b2c0b05170470bd71f7ee912d6f"
+    },
+    {
+      "id": "000000000000000018e665b722fe7ebe",
+      "pattern": "pci-cardholder-data",
+      "category": "compliance",
+      "severity": "high",
+      "confidence": "high",
+      "location": {
+        "file": "./docs/tasks/T27-12-adjudicate-aegis-findings.md",
+        "line": 46,
+        "column": 205
+      },
+      "description": "PCI cardholder data reference detected",
+      "reference": "https://www.pcisecuritystandards.org/pci_security/",
+      "tags": [],
+      "kind": "pattern",
+      "fingerprint": "pci-cardholder-data:./docs/tasks/T27-12-adjudicate-aegis-findings.md:46:7c84e9e401dade7b4eb1539d1c1d3072ece79aa89418712b802340f871614197",
+      "stable_id": "aegis-d2d18dbf77dadb9c7d171826726ef8068b98d2bf69f3874b4f6284907fdd542f"
+    },
+    {
+      "id": "000000000000000018e665b722fe9a4c",
+      "pattern": "pci-cardholder-data",
+      "category": "compliance",
+      "severity": "high",
+      "confidence": "high",
+      "location": {
+        "file": "./docs/tasks/T27-12-adjudicate-aegis-findings.md",
+        "line": 72,
+        "column": 203
+      },
+      "description": "PCI cardholder data reference detected",
+      "reference": "https://www.pcisecuritystandards.org/pci_security/",
+      "tags": [],
+      "kind": "pattern",
+      "fingerprint": "pci-cardholder-data:./docs/tasks/T27-12-adjudicate-aegis-findings.md:72:7c84e9e401dade7b4eb1539d1c1d3072ece79aa89418712b802340f871614197",
+      "stable_id": "aegis-fdff52b4a19f940c975f414f273be53a0f6990cff44c45e448ae12002008ad45"
+    },
+    {
+      "id": "000000000000000018e665b727745fda",
+      "pattern": "ssrf-localhost",
+      "category": "web-security",
+      "severity": "medium",
+      "confidence": "medium",
+      "location": {
+        "file": "./docs/tasks/T27-12-adjudicate-aegis-findings.md",
+        "line": 24,
+        "column": 38
+      },
+      "description": "Potential SSRF targeting internal resources",
+      "reference": "https://owasp.org/www-community/attacks/Server_Side_Request_Forgery",
+      "tags": [],
+      "kind": "pattern",
+      "fingerprint": "ssrf-localhost:./docs/tasks/T27-12-adjudicate-aegis-findings.md:24:49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763",
+      "stable_id": "aegis-338da9dd9c7483857c4838f6f7da0cf450ce5d6fe7138b1a3696eaa8b81a144c"
+    },
+    {
+      "id": "000000000000000018e665b7277488c6",
+      "pattern": "ssrf-localhost",
+      "category": "web-security",
+      "severity": "medium",
+      "confidence": "medium",
+      "location": {
+        "file": "./docs/tasks/T27-12-adjudicate-aegis-findings.md",
+        "line": 49,
+        "column": 9
+      },
+      "description": "Potential SSRF targeting internal resources",
+      "reference": "https://owasp.org/www-community/attacks/Server_Side_Request_Forgery",
+      "tags": [],
+      "kind": "pattern",
+      "fingerprint": "ssrf-localhost:./docs/tasks/T27-12-adjudicate-aegis-findings.md:49:49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763",
+      "stable_id": "aegis-3d9a254fdc4907d9ac0e781330c3f4a51d7e84bb43c7a78be1afd998056e988f"
+    },
+    {
+      "id": "000000000000000018e665b72774a63d",
+      "pattern": "ssrf-localhost",
+      "category": "web-security",
+      "severity": "medium",
+      "confidence": "medium",
+      "location": {
+        "file": "./docs/tasks/T27-12-adjudicate-aegis-findings.md",
+        "line": 49,
+        "column": 87
+      },
+      "description": "Potential SSRF targeting internal resources",
+      "reference": "https://owasp.org/www-community/attacks/Server_Side_Request_Forgery",
+      "tags": [],
+      "kind": "pattern",
+      "fingerprint": "ssrf-localhost:./docs/tasks/T27-12-adjudicate-aegis-findings.md:49:12ca17b49af2289436f303e0166030a21e525d266e209267433801a8fd4071a0",
+      "stable_id": "aegis-fb27cc622decc23d4ba19648aba6a3cdc5da0497368cb03a65abf5ec829365a5"
+    },
+    {
+      "id": "000000000000000018e665b72774c06d",
+      "pattern": "ssrf-localhost",
+      "category": "web-security",
+      "severity": "medium",
+      "confidence": "medium",
+      "location": {
+        "file": "./docs/tasks/T27-12-adjudicate-aegis-findings.md",
+        "line": 51,
+        "column": 9
+      },
+      "description": "Potential SSRF targeting internal resources",
+      "reference": "https://owasp.org/www-community/attacks/Server_Side_Request_Forgery",
+      "tags": [],
+      "kind": "pattern",
+      "fingerprint": "ssrf-localhost:./docs/tasks/T27-12-adjudicate-aegis-findings.md:51:49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763",
+      "stable_id": "aegis-aa9419283b7962743d34bf11caf6946d39db4b601d76e16163020fac112b6d13"
+    },
+    {
+      "id": "000000000000000018e665b72774f6b8",
+      "pattern": "ssrf-localhost",
+      "category": "web-security",
+      "severity": "medium",
+      "confidence": "medium",
+      "location": {
+        "file": "./docs/tasks/T27-12-adjudicate-aegis-findings.md",
+        "line": 53,
+        "column": 9
+      },
+      "description": "Potential SSRF targeting internal resources",
+      "reference": "https://owasp.org/www-community/attacks/Server_Side_Request_Forgery",
+      "tags": [],
+      "kind": "pattern",
+      "fingerprint": "ssrf-localhost:./docs/tasks/T27-12-adjudicate-aegis-findings.md:53:49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763",
+      "stable_id": "aegis-1e5499722321e236b6ba62d303700ff69cf1382272c0271a038c489ea1c5eaf0"
+    },
+    {
+      "id": "000000000000000018e665b727752e19",
+      "pattern": "ssrf-localhost",
+      "category": "web-security",
+      "severity": "medium",
+      "confidence": "medium",
+      "location": {
+        "file": "./docs/tasks/T27-12-adjudicate-aegis-findings.md",
+        "line": 56,
+        "column": 9
+      },
+      "description": "Potential SSRF targeting internal resources",
+      "reference": "https://owasp.org/www-community/attacks/Server_Side_Request_Forgery",
+      "tags": [],
+      "kind": "pattern",
+      "fingerprint": "ssrf-localhost:./docs/tasks/T27-12-adjudicate-aegis-findings.md:56:49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763",
+      "stable_id": "aegis-e3186b937d297be2dcb2d7674647efebb0d9a3f56e380bd40e676e05a195d730"
+    },
+    {
+      "id": "000000000000000018e665b7277564aa",
+      "pattern": "ssrf-localhost",
+      "category": "web-security",
+      "severity": "medium",
+      "confidence": "medium",
+      "location": {
+        "file": "./docs/tasks/T27-12-adjudicate-aegis-findings.md",
+        "line": 71,
+        "column": 9
+      },
+      "description": "Potential SSRF targeting internal resources",
+      "reference": "https://owasp.org/www-community/attacks/Server_Side_Request_Forgery",
+      "tags": [],
+      "kind": "pattern",
+      "fingerprint": "ssrf-localhost:./docs/tasks/T27-12-adjudicate-aegis-findings.md:71:49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763",
+      "stable_id": "aegis-0ef15686b25b616d8a918d8c81c99247328ca096fc8365cf0474a0477330f2d8"
+    },
+    {
+      "id": "000000000000000018e665b959dc39b0",
+      "pattern": "ssrf-localhost",
+      "category": "web-security",
+      "severity": "medium",
+      "confidence": "medium",
+      "location": {
+        "file": "./xtask/src/dist.rs",
+        "line": 1040,
+        "column": 29
+      },
+      "description": "Potential SSRF targeting internal resources",
+      "reference": "https://owasp.org/www-community/attacks/Server_Side_Request_Forgery",
+      "tags": [],
+      "kind": "pattern",
+      "fingerprint": "ssrf-localhost:./xtask/src/dist.rs:1040:12ca17b49af2289436f303e0166030a21e525d266e209267433801a8fd4071a0",
+      "stable_id": "aegis-e210ad4defb435e6e277d0b9a700a814c26af0d8c97862fb2b052674d3b411fa"
+    },
+    {
+      "id": "000000000000000018e665b98a0d851c",
+      "pattern": "zip-code",
+      "category": "pii",
+      "severity": "low",
+      "confidence": "high",
+      "location": {
+        "file": "./xtask/src/dist.rs",
+        "line": 468,
+        "column": 41
+      },
+      "description": "US ZIP code detected",
+      "tags": [],
+      "kind": "pattern",
+      "fingerprint": "zip-code:./xtask/src/dist.rs:468:6f21ec723dd82aa7bd36bc81cc4008e4f6359fe8ce68f793af23b7123bdbf3a6",
+      "stable_id": "aegis-e14eaef1439228e32684ab1cba093c85222e1cbe2b6b73b6c2c5ec513ed893f6"
+    },
+    {
+      "id": "000000000000000018e665b98a0dbbf2",
+      "pattern": "zip-code",
+      "category": "pii",
+      "severity": "low",
+      "confidence": "high",
+      "location": {
+        "file": "./xtask/src/dist.rs",
+        "line": 960,
+        "column": 36
+      },
+      "description": "US ZIP code detected",
+      "tags": [],
+      "kind": "pattern",
+      "fingerprint": "zip-code:./xtask/src/dist.rs:960:d55d01d0341ed0ba2cd99b322e8c5b609254f47d10c7cd12b99b4922effeba44",
+      "stable_id": "aegis-34bf79e1904672b3e72ce38de8f10be523bff75dec50c7f2e13331017588ff2c"
     }
   ],
   "stats": {
@@ -8916,7 +9525,7 @@
     "files_skipped": 75540,
     "files_failed": 0,
     "bytes_scanned": 6163973,
-    "finding_count": 520,
+    "finding_count": 554,
     "suppressed_count": 0,
     "patterns_matched": 97,
     "scan_time_ms": 10149,
@@ -8924,15 +9533,15 @@
     "workers_used": 16,
     "files_by_extension": {},
     "findings_by_severity": {
-      "medium": 7,
-      "low": 434,
-      "high": 71,
+      "high": 78,
+      "low": 451,
+      "medium": 17,
       "critical": 8
     },
     "findings_by_category": {
-      "compliance": 49,
-      "pii": 438,
-      "web-security": 13,
+      "pii": 445,
+      "compliance": 66,
+      "web-security": 23,
       "security-hardening": 20
     },
     "inspection_ledger": {
