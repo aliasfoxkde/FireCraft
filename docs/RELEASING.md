@@ -15,7 +15,7 @@
 > *recommended — awaiting maintainer approval*.
 >
 > **Evidence baseline:** [PHASE-0-AUDIT.md](release/PHASE-0-AUDIT.md)
-> (PR #16, dated 2026-11-09 — the link resolves once that PR merges).
+> (PR #16, merged; dated 2026-11-09 historical baseline).
 > Per-artifact evidence state:
 > [ARTIFACT-MATRIX.md](release/ARTIFACT-MATRIX.md).
 
@@ -55,10 +55,7 @@ open → apply → exportPng → exportDocument round trip through the M5
 postMessage bridge. A dist run that cannot prove the bridge does not
 claim the artifact.
 
-`FIRECRAFT_DIST_SKIP_SMOKE=1` skips the bridge smoke. It exists for the
-GitForge CI image, which has no chromium baked. **A bundle built with
-the smoke skipped is not a release byte-set** — it has no functional
-smoke receipt, and the GitForge release job builds that way today.
+`FIRECRAFT_DIST_SKIP_SMOKE=1` is a temporary GitForge-only escape hatch while its runner image is provisioned with Chromium (tracked by PR #40). The GitHub tag workflow runs the release-byte smoke. **A bundle built with the smoke skipped is not release-certified** and must not be used as evidence of a functional release.
 
 ## Linux native set
 

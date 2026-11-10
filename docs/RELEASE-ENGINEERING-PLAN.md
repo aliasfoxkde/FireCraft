@@ -74,8 +74,6 @@ The repository currently has a useful release foundation:
 
 For application cleanup, code refactoring, WASM profiling, UI polish, agent ownership, and cross-workstream sequencing, follow [PRODUCTION-READINESS-PLAN.md](PRODUCTION-READINESS-PLAN.md).
 
-For application cleanup, code refactoring, WASM profiling, UI polish, agent ownership, and cross-workstream sequencing, follow [PRODUCTION-READINESS-PLAN.md](PRODUCTION-READINESS-PLAN.md).
-
 Before changing packaging architecture, inspect the current scripts, workflows, `xtask` distribution code, workspace features, app entrypoints, and all existing documentation. Extend working mechanisms where practical; do not create parallel packaging implementations without a reason.
 
 ## 3. Artifact matrix and completion rules

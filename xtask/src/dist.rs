@@ -1051,9 +1051,7 @@ fn enforce_wasm_budget(staged: &[PathBuf]) -> Result<u64, String> {
 fn wasm_size_warning(size: u64) -> Result<bool, String> {
     if size > WASM_SIZE_CEILING {
         return Err(format!(
-            "wasm bundle is {size} B, above the hard {WASM_SIZE_CEILING} B ceiling — \\
-             investigate the size report and optimize before requesting a policy change \\
-             (see docs/decisions/0080-wasm-bundle-size-policy.md)"
+            "wasm bundle is {size} B, above the hard {WASM_SIZE_CEILING} B ceiling; optimize before requesting a policy change (see docs/decisions/0080-wasm-bundle-size-policy.md)"
         ));
     }
     Ok(size > WASM_SIZE_WARNING)

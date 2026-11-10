@@ -1,7 +1,7 @@
 # Packaging recipes — toolchain requirements
 
 `xtask dist` builds what the release fleet can build and verify:
-`dist --web` (the static web bundle + bridge smoke), `dist --native`
+`dist --web` (the static web bundle + bridge smoke; Rust opt-level=z and Binaryen wasm-opt=z), `dist --native`
 (the Linux x86_64 tar.gz / deb / CLI set, manifest-verified),
 `dist --source` (the clean-extract-verified source archive) and
 `dist --sbom` (the CycloneDX 1.5 SBOM). Everything else under
@@ -29,7 +29,7 @@ The off-fleet packaging recipes (AppImage, Flatpak, Windows, and macOS) have not
 
 | Recipe | Target artifact | Toolchain | Runs on | Parse status on this fleet | Artifact ever produced? |
 |---|---|---|---|---|---|
-| `web/` (trunk) | `dist/web/` bundle | rustup `wasm32-unknown-unknown`, trunk, wasm-opt | release fleet (`xtask dist --web`) | n/a — it is built, not parsed | **Yes.** Built and bridge-smoked; published as the v0.2.5 web ZIP (rung 11) |
+| `web/` (trunk) | `dist/web/` bundle | rustup `wasm32-unknown-unknown`, trunk, Cargo opt-level=z, Binaryen wasm-opt=z | release fleet (`xtask dist --web`) | n/a — it is built, not parsed | **Yes.** Built and bridge-smoked; published as the v0.2.5 web ZIP (rung 11) |
 | `packaging/webos/` (`appinfo.json`, `host.html`) | WebOS packaging stamped `@VERSION@` into `dist/web/` | none (text copy + stamp) | release fleet (`xtask dist --web`) | n/a — data, not a script | **Yes.** Staged into `dist/web/` (rung 5); device/runtime smoke unverified |
 | `packaging/deb/control` | `firecraft_<v>_amd64.deb` | dpkg-deb | release fleet (`xtask dist --native`) | n/a — data, not a script | **Yes.** Published (rung 11); the declared glibc floor is an open defect (B-7) |
 | `packaging/build-appimage.sh` | `firecraft-<v>-linux-x86_64.AppImage` | linuxdeploy-x86_64.AppImage (FUSE or `--appimage-extract-and-run`), GNU coreutils | any Linux x86_64 host with linuxdeploy | `bash -n` **parse-checked** by `dist --native` | **No.** `linuxdeploy` is absent from this fleet (B-8) |
