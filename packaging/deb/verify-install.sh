@@ -53,7 +53,7 @@ pass() {
 # Reads the candidate's own metadata rather than trusting a hard-coded
 # version: the script must work for any candidate.
 deb_field() {
-    dpkg-deb --info "$CANDIDATE" "$1" 2>/dev/null | sed -n "s/^$1:[[:space:]]*//p" | head -1
+    dpkg-deb --field "$CANDIDATE" "$1"
 }
 
 VERSION="$(deb_field Version)"
