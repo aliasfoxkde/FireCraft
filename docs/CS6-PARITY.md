@@ -89,6 +89,17 @@ without decoding the bar resource:
    name. All three rows report the single-document limitation
    instead of acting, as before.
 
+**The basis of the tile-horizontally placement.** The *command
+definition* is directly evidenced by `MENU_DESCRIPTION_MAP` (**R**).
+The *Window-menu placement* is not read off a decoded menu dump — the
+bar resource was never decoded. It follows from CS6's own
+resource-naming convention: `ID_WINDOW_…` is the command-id family
+CS6 reserves for window-menu items, and the sibling
+`ID_WINDOW_TILE_VERT` is unambiguously the Window menu's *Tile
+Vertically* row. The row's Window-menu placement therefore rests on
+the naming convention, and this matrix records it that way rather
+than as a decoded-menu observation.
+
 ---
 
 ## B. Tools and flyouts

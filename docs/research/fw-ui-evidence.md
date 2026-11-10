@@ -152,7 +152,7 @@ authority for what each CS6 panel command id *is*:
 | 45816 | `cmd_commonlib_form_elements` | **Common Library** |
 | 49125 | `cmd_cssproperties` | **CSS Properties** |
 | 49126 | `cmd_jquery` | the jQuery Mobile theme command |
-| 57651 | `ID_WINDOW_TILE_HORZ` | **Tile Horizontally** (Window menu) |
+| 57651 | `ID_WINDOW_TILE_HORZ` | **Tile Horizontally** (window-arrangement command — see the evidence note below) |
 
 Two consequences:
 
@@ -197,14 +197,33 @@ here as an open evidence gap rather than guessed.
    panels are toggleable*. The `486xx` instances are additional
    panel instances CS6 creates without a Window-menu row.
 3. The Window-menu transcription in `crates/app/src/menus.rs` was
-   missing **`57651` (Tile Horizontally)** — the CS6 Window menu has
-   *Cascade* (57650), *Tile Horizontally* (57651) and *Tile
-   Vertically* (57652). The transcription carried 57650 "Cascade"
-   and 57652 "Tile"; the CS6 resource names 57652
-   `ID_WINDOW_TILE_VERT`. **Closed 2026-11-06**: the transcription
-   now carries all three rows with the CS6 labels, and the pinned
-   menu-item census rose 289 → 290 (the row was always part of the
-   CS6 surface; the transcription was short one).
+   missing **`57651` (Tile Horizontally)**. The transcription
+   carried 57650 "Cascade" and 57652 "Tile"; the CS6 resource
+   names 57652 `ID_WINDOW_TILE_VERT`. **Closed 2026-11-06**: the
+   transcription now carries all three rows with the CS6 labels,
+   and the pinned menu-item census rose 289 → 290 (the row was
+   always part of the CS6 surface; the transcription was short
+   one).
+
+   **Evidence note — what the `ID_WINDOW_TILE_HORZ` row rests on.**
+   Two claims ride on different evidence and the doc keeps them
+   apart:
+
+   - The *command definition* is directly evidenced. `MENU_DESCRIPTION_MAP`
+     names 57650 `cmd_CascadeWindows`, 57651 `ID_WINDOW_TILE_HORZ` and
+     the sibling `ID_WINDOW_TILE_VERT` (**R**).
+   - The *Window-menu placement* is an inference from CS6's own
+     resource-naming convention: `ID_WINDOW_…` is the command-id
+     family CS6 reserves for window-menu items, and the sibling
+     `ID_WINDOW_TILE_VERT` is unambiguously the Window menu's *Tile
+     Vertically* row. The bar resource was never decoded, so no
+     decoded menu listing confirms the tile-horizontally row
+     directly.
+
+   The row therefore stands on the naming convention rather than on
+   a decoded menu resource, and it is recorded that way here and in
+   `docs/CS6-PARITY.md` §A. It is **not** a claim that a decoded CS6
+   menu dump was read.
 - **Panel roster** (Window menu authority): Tools, Properties,
   Optimize, Layers, Common Library, CSS Properties, Pages, States,
   History, Auto Shapes, Styles, Document Library, URL, Color Mixer,
