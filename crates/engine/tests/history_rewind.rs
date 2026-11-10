@@ -62,6 +62,25 @@ fn a_rewind_clears_the_redo_stack() {
 }
 
 #[test]
+fn a_rewind_to_the_current_depth_changes_nothing() {
+    let (mut session, ids) = session();
+    set_opacity(&mut session, ids[0], 400);
+    set_opacity(&mut session, ids[1], 500);
+    session.undo().expect("undo");
+    assert_eq!(session.redo_len(), 1);
+    let before = DocumentBytes::of(session.document());
+    let journal_before = session.journal_len();
+
+    let undone = session.rewind_to(1).expect("rewind to the current depth");
+    assert_eq!(undone, 0);
+    assert_eq!(DocumentBytes::of(session.document()), before);
+    // Nothing was dropped, so the redo stack survives and the journal
+    // records no line.
+    assert_eq!(session.redo_len(), 1);
+    assert_eq!(session.journal_len(), journal_before);
+}
+
+#[test]
 fn a_rewind_past_the_recorded_depth_is_refused() {
     let (mut session, ids) = session();
     set_opacity(&mut session, ids[0], 400);

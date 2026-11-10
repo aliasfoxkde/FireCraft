@@ -184,7 +184,8 @@ impl History {
     /// The dropped steps are *not* filed on the redo stack: a rewind
     /// discards them, so the redo stack is cleared — redoing after a
     /// rewind would replay a step against a document that no longer
-    /// has the state it was captured in.
+    /// has the state it was captured in. A rewind to the current
+    /// depth drops nothing and leaves the redo stack alone.
     ///
     /// A `depth` past the recorded steps is refused
     /// ([`EngineError::InvalidState`]) rather than clamped: a
@@ -213,7 +214,9 @@ impl History {
             self.undo.pop();
             undone += 1;
         }
-        self.redo.clear();
+        if undone > 0 {
+            self.redo.clear();
+        }
         Ok(undone)
     }
 

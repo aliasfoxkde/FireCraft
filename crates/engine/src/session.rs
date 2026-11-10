@@ -201,6 +201,12 @@ impl Session {
     /// session replays to the same document state.
     pub fn rewind_to(&mut self, depth: usize) -> Result<usize, EngineError> {
         let undone = self.history.rewind_to(&mut self.document, depth)?;
+        if undone == 0 {
+            // Nothing was dropped: the request named the current
+            // depth. No journal line, no dirty flag — the document
+            // did not move.
+            return Ok(0);
+        }
         let payload = serde_json::json!({ "depth": depth });
         self.journal.record(REWIND_ID, &payload, None);
         self.dirty = true;
