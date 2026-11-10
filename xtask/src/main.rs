@@ -1,7 +1,9 @@
 //! `FireCraft` verification gates (`cargo run -p xtask -- <gate>`).
 //!
 //! Gates: `ci [--full]` (everything; `--full` adds the libfuzzer
-//! compile check), `layers` (workspace dependency tiers), `wasm`
+//! compile check), `aegis [--bless]` (secret/PII scan against the
+//! content-keyed baseline; `--bless` rewrites it), `layers` (workspace
+//! dependency tiers), `wasm`
 //! (wasm32 check for pure crates), `corpus` (pinned corpus digests),
 //! `golden` (render pins + semantic anchors + CS6 report), `fuzz`
 //! (libfuzzer compile check alone), `fuzz-quick` (the stable driver
@@ -12,6 +14,7 @@
 //! CHANGELOG + license/version stamps). Diagnostics go to stderr;
 //! stdout stays clean so output can be piped.
 
+mod aegis;
 mod changelog;
 mod corpus;
 mod coverage;
@@ -34,63 +37,16 @@ mod webgolden;
 
 use std::process::ExitCode;
 
-const USAGE: &str = "usage: cargo run -p xtask -- <ci [--full]|ci-no-fmt|aegis|coverage [--bless|--measure]|layers|wasm|corpus [--report]|corpus-gen|library-gen|hero-gen|styles-gen|scripts|floor|golden [--bless]|svg-golden [--bless]|svg-roundtrip [--measure]|web-golden [--bless|--measure]|perf [--bless|--measure]|dist --web|--native|--source|--sbom|fuzz|fuzz-quick|panic-hunt|parity|scorecard>";
-
-/// Run Aegis scan with the committed production-profile baseline.
-/// Runs from the workspace root so the baseline path (.aegis-baseline.json)
-/// resolves correctly.  Baseline was generated with:
-///   aegis --format json -c production scan . --output-file .aegis-baseline.json -q
-fn aegis() -> Result<(), String> {
-    util::run_in(
-        Some(util::workspace_root().as_path()),
-        &aegis_binary()?,
-        &[
-            "--format",
-            "json",
-            "-c",
-            "production",
-            "scan",
-            ".",
-            "--baseline",
-            ".aegis-baseline.json",
-            "-q",
-        ],
-    )
-}
-
-/// The Aegis scanner's CLI. An unrelated tool also ships under the
-/// bare name `aegis` (a security-file generator), so the versioned
-/// scanner binary is preferred and the plain name is used only when
-/// it really is the scanner — decided by its own `--help`, which lists
-/// the `scan` subcommand the gate needs. `FIRECRAFT_AEGIS` overrides
-/// both.
-fn aegis_binary() -> Result<String, String> {
-    let mut candidates: Vec<String> = Vec::new();
-    if let Ok(explicit) = std::env::var("FIRECRAFT_AEGIS") {
-        candidates.push(explicit);
-    }
-    candidates.push("aegis-0.6.3".to_owned());
-    candidates.push("aegis".to_owned());
-    for candidate in &candidates {
-        let Ok(output) = std::process::Command::new(candidate).arg("--help").output() else {
-            continue;
-        };
-        let help = String::from_utf8_lossy(&output.stdout);
-        if help.contains("scan") {
-            return Ok(candidate.clone());
-        }
-    }
-    Err(format!(
-        "no Aegis scanner found (looked for {}); set FIRECRAFT_AEGIS to the scanner's path",
-        candidates.join(", ")
-    ))
-}
+const USAGE: &str = "usage: cargo run -p xtask -- <ci [--full]|ci-no-fmt|aegis [--bless]|coverage [--bless|--measure]|layers|wasm|corpus [--report]|corpus-gen|library-gen|hero-gen|styles-gen|scripts|floor|golden [--bless]|svg-golden [--bless]|svg-roundtrip [--measure]|web-golden [--bless|--measure]|perf [--bless|--measure]|dist --web|--native|--source|--sbom|fuzz|fuzz-quick|panic-hunt|parity|scorecard>";
 
 fn main() -> ExitCode {
     match std::env::args().nth(1).as_deref() {
         Some("ci") => run_ci(std::env::args().nth(2).as_deref(), false),
         Some("ci-no-fmt") => run_ci(std::env::args().nth(2).as_deref(), true),
-        Some("aegis") => finish("aegis", aegis()),
+        Some("aegis") => match std::env::args().nth(2).as_deref() {
+            Some("--bless") => finish("aegis --bless", aegis::bless()),
+            _ => finish("aegis", aegis::run()),
+        },
         Some("coverage") => match std::env::args().nth(2).as_deref() {
             Some("--bless") => finish("coverage --bless", coverage::bless()),
             Some("--measure") => finish("coverage --measure", coverage::measure()),
@@ -173,23 +129,9 @@ fn run_ci(full: Option<&str>, skip_fmt: bool) -> ExitCode {
     let mut steps: Vec<Gate> = vec![
         ("aegis", || {
             // Fast (~10 s): catches PII / credential regressions before fmt.
-            // Baseline committed as `.aegis-baseline.json` (aegis 0.6.3, production profile).
-            // Re-generate only when the aegis version changes.
-            util::run_in(
-                Some(util::workspace_root().as_path()),
-                &aegis_binary()?,
-                &[
-                    "--format",
-                    "json",
-                    "-c",
-                    "production",
-                    "scan",
-                    ".",
-                    "--baseline",
-                    ".aegis-baseline.json",
-                    "-q",
-                ],
-            )
+            // The committed baseline (`.aegis-baseline.tsv`) is keyed on
+            // content, not on line — see `xtask/src/aegis.rs`.
+            aegis::run()
         }),
         ("coverage", coverage::run),
         ("fmt", || {
