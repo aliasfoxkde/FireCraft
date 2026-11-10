@@ -500,7 +500,12 @@ fn stage_web() -> Result<Vec<PathBuf>, String> {
         std::fs::remove_dir_all(&out).map_err(|e| format!("clear {}: {e}", out.display()))?;
     }
     std::fs::create_dir_all(&out).map_err(|e| format!("mkdir {}: {e}", out.display()))?;
-    run_in_with_env(Some(&web), "trunk", &["build", "--release"], &[("CARGO_PROFILE_RELEASE_OPT_LEVEL", "z")])?;
+    run_in_with_env(
+        Some(&web),
+        "trunk",
+        &["build", "--release"],
+        &[("CARGO_PROFILE_RELEASE_OPT_LEVEL", "z")],
+    )?;
 
     let mut staged = Vec::new();
     let entries =
