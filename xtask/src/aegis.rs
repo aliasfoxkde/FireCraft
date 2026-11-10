@@ -94,6 +94,20 @@ const CLASS_NOTES: &[(&str, &str)] = &[
          .eval(u) calls.",
     ),
     (
+        "gdpr-reference",
+        "Matches the lowercase abbreviation in this table's own rule-class \
+         name, in the personal-data rule's name, and in decision 0074's \
+         table of adjudicated classes; the abbreviation is a rule \
+         identifier, not a reference to anyone's data.",
+    ),
+    (
+        "gdpr-personal-data",
+        "Matches the two-word phrase naming an individual's data category \
+         in English prose. The occurrence outside this gate's own source \
+         is a release-plan checklist item that excludes personal data from \
+         the source archive; the repository holds no such data.",
+    ),
+    (
         "international-phone",
         "Matches the build metadata of a Cargo.lock version string \
          (0.6.0+11769913).",
@@ -110,8 +124,10 @@ const CLASS_NOTES: &[(&str, &str)] = &[
     ),
     (
         "pci-cardholder-data",
-        "Matches the word \"pan\" in pan-zoom and hand-pan identifiers; the \
-         five credit-card-* rules stay armed.",
+        "Matches the word \"pan\" in pan-zoom, hand-pan and two-finger pan \
+         identifiers, including the Android feasibility note's touch \
+         gesture, and in decision 0074's table of adjudicated classes; \
+         the five credit-card-* rules stay armed.",
     ),
     (
         "phone-number",
@@ -148,8 +164,10 @@ const CLASS_NOTES: &[(&str, &str)] = &[
     (
         "zip-code",
         "Matches any 5-digit run: CS6 command ids, the JPEG dimension \
-         ceiling (65535), menu ids, CVE id suffixes. This repository holds \
-         no postal data.",
+         ceiling (65535), menu ids, CVE id suffixes, and the civil-date \
+         epoch constant (36524) in the SBOM timestamp builder, and \
+         decision 0074's table of adjudicated classes. This repository \
+         holds no postal data.",
     ),
 ];
 
