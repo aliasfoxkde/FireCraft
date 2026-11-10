@@ -1684,6 +1684,9 @@ The baseline is gone; 644 line-keyed entries in 19.4 MB are replaced by
   that does not touch the matched content, and dies when the content
   itself changes, which is exactly when a human should look again.
   Each entry carries its own note saying why it is a false positive.
+  This file, and `.aegis-pattern-state.json` above, were both
+  superseded and deleted when `main` adopted the content-keyed
+  baseline (decision 0074); the branch no longer carries either.
 - **`xtask`** installs the pattern state into a private `HOME` (so the
   developer's own Aegis configuration is never touched) and filters the
   scanner's findings itself; `cargo run -p xtask -- aegis --report`
