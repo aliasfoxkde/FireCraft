@@ -10,7 +10,11 @@ finish-args:
   - --socket=x11
   - --socket=wayland
   - --socket=fallback-x11
-  # File open/save/export goes through the portal file chooser.
+  # The desktop shell's open/save path is not a document-portal
+  # chooser: `EnvDialogs` reads the document path from the environment
+  # and the host's document directory, so the sandbox is granted that
+  # one directory rather than the whole home. The portal stays
+  # allowed for the host's own file chooser.
   - --filesystem=xdg-documents
   - --talk-name=org.freedesktop.portal.Desktop
 modules:
@@ -20,7 +24,11 @@ modules:
       - cargo build --release --locked -p app -p app-cli
       - install -Dm755 target/release/firecraft /app/bin/firecraft
       - install -Dm755 target/release/firecraft-cli /app/bin/firecraft-cli
-      - install -Dm644 packaging/appimage/firecraft.desktop /app/share/applications/dev.firecraft.FireCraft.desktop
+      - install -Dm644 packaging/desktop/firecraft.desktop /app/share/applications/dev.firecraft.FireCraft.desktop
+      # The desktop entry names `Icon=firecraft`; without the icon the
+      # launcher shows a broken image. The icon ships in-tree
+      # (docs/ATTRIBUTION.md) and is an original work.
+      - install -Dm644 assets/icons/hicolor/256x256/apps/firecraft.png /app/share/icons/hicolor/256x256/apps/firecraft.png
       - install -Dm644 LICENSE /app/share/licenses/firecraft/LICENSE
     sources:
       - type: dir

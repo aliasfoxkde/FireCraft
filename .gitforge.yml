@@ -173,6 +173,19 @@ jobs:
         run: FIRECRAFT_DIST_SKIP_SMOKE=1 CARGO_TARGET_DIR=/tmp/ci-dist-target cargo run --locked -p xtask -- dist --web
       - name: Native set + deb read-back
         run: CARGO_TARGET_DIR=/tmp/ci-dist-target cargo run --locked -p xtask -- dist --native
+      - name: DEB install verification (clean Debian 12)
+        # The package must be installable, launchable and removable on
+        # the platform it declares. `packaging/deb/verify-install.sh` is
+        # that proof: install, desktop entry, icon, CLI, document round
+        # trip, GUI launch, uninstall, reinstall. This image is Debian
+        # 12, the platform the package declares (`libc6 >= 2.36`).
+        run: |
+          apt-get update -qq >/dev/null
+          apt-get install -y -qq --no-install-recommends \
+            xvfb xauth libgl1 libx11-6 libxcursor1 libxrandr2 libxi6 \
+            libxkbcommon0 desktop-file-utils >/dev/null
+          bash packaging/deb/verify-install.sh \
+            dist/native/firecraft_*_amd64.deb "" corpus/fixtures/composed.fw.png
       - name: Stage artifacts for the runner's artifact collection
         # The runner uploads everything under <workspace>/artifacts/ —
         # copy the dist outputs there so the run carries its bundles.

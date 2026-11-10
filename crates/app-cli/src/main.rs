@@ -45,6 +45,14 @@ fn main() -> ExitCode {
 fn run(args: &[String]) -> Result<(), CliError> {
     let fs = io::StdFs;
     match args.first().map(String::as_str) {
+        // `--help` prints the usage on stdout and succeeds. Without it
+        // the flag fell through to the positional parser, which made
+        // the usage an error message on stderr with a failing exit
+        // code — so a packaged CLI could not be asked what it does.
+        Some("--help") | Some("-h") => {
+            println!("{USAGE}");
+            Ok(())
+        }
         Some("info") => {
             let path = args.get(1).ok_or_else(missing("info <file>"))?;
             let bytes = fs

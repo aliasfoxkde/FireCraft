@@ -369,6 +369,10 @@ it, and what it blocks. Nothing here is inferred from "not done".
 | B-20 | **GitForge CI can no longer build `main` at all.** The single shared runner image is keyed to one lockfile — the one on PR #15 — so every branch still on `main`'s `Cargo.lock` fails the sandbox at its first cargo step, and `main` itself cannot be validated on the authoritative CI system. | The image `firecraft-ci-rust:1` on the runner host (fedora) was built **2026-11-09 08:54** and its cargo registry cache holds `time-0.3.41`, `time-0.3.47` and `time-0.3.55` — **not** `time-0.3.45`, which is what `main` pins. `.gitforge.yml` sets `CARGO_NET_OFFLINE=true`, and its own header warns "Rebuild + re-ship the image before pushing any commit that moves either lockfile". Two runs prove the consequence: a retrigger of this audit's own branch (`tmp/p0-ci-retrigger`, run `ddb0c9df`) and a probe of `main` itself (`tmp/p0-main-probe`, run on `5fac7a2`) both fail in the first job with `fmt-layers` exit 101 — "error: failed to download `time v0.3.45` / Caused by: attempting to make an HTTP request, but --offline was specified" — and every downstream job is `cancelled` | The GitForge copy of the 20-step gate cannot be run for `main` or for any branch that has not taken the PR #15 lockfile, so P0.4.2 has no GitForge receipt for the audited baseline (and could not get one). The image is shared, so re-shipping it for one branch breaks the others — the image must hold **both** lockfile states, or the sandbox must be allowed to fetch `time 0.3.45` |
 | B-21 | **The published v0.2.5 web bundle is not the bundle the release workflow built, and the release itself was published out of band.** The release workflow's `create draft release` job failed, and the release plus its assets were created 91 seconds later by a path the workflow does not contain. | Release run `41689885746`: job `126105364883` ("build artifacts") succeeded and logged "[xtask] dist web: 6 file(s), wasm 21231517 B (ceiling 21500000), manifest MANIFEST.sha256, smoke green" at **18:15:59Z**; job `126113210174` ("create draft release") then failed at **18:16:19Z** with `unknown shorthand flag: 'a' in -a` (B-4 defect (a)). The GitHub release `v0.2.5` reports `published_at 2026-11-03T18:17:51Z` with all five assets created at **18:17:49Z** — 91 seconds after the workflow died, with no job account for it. The published ZIP's own entries are stamped **2026-11-03 12:08** and its wasm is **21,238,451 B**, against the workflow's **21,231,517 B**; the ZIP holds 5 content files + manifest where the workflow staged 6 content files (a CI-built `dist/web` would zip to 7 entries) | The bytes that shipped have **no build receipt**: no log, no commit SHA, no toolchain, and no bridge smoke of *those* bytes — the smoke was green on a different bundle (F-16). Nothing in the repository can attest what the published v0.2.5 artifacts are, and the next release will inherit the same hand-publish path until B-4 is fixed |
 | B-22 | **The GitForge runner's failure path arms its container reap and backend-health checks with no timeout**, so a wedged Docker daemon wedges the runner instead of failing the job. This defect lives in the **GitForge** repository, not in FireCraft. | `/nas/Temp/repos/GitForge/crates/gitforge-runner/src/executor.rs`: the failure path calls `self.reap_attempt_containers(job_id).await` (lines 693 and 716) and `self.pool.sandbox.backend_health().await` (lines 709, 730, 769, 848, 871) with no timeout, while the preflight-teardown path wraps the same class of call in `timeout(Duration::from_secs(15), …)`. The unbounded `backend_health` reaches an unbounded bollard `list_containers` in `crates/gitforge-sandbox/src/docker.rs`. | FireCraft's authoritative CI receipt depends on the GitForge runner completing: a runner that hangs instead of failing produces **no terminal job state**, which blocks the campaign's evidence ladder for every GitForge-verified row (P2.1 "Verify authoritative GitForge CI"). Tracked as FireCraft issue **#37** and as task #202; the fix belongs in the GitForge repository. |
+| B-24 | **The published DEB carries no desktop integration at all** — no desktop entry, no icon, no MIME registration. Installed on Debian 12 it puts a `firecraft` on `$PATH` and nothing else: no menu entry, no launcher, no icon. | `dpkg-deb --contents` on the **published** `firecraft_0.2.5_amd64.deb` (downloaded 2026-11-10) lists exactly four payload entries: `./usr/bin/firecraft`, `./usr/bin/firecraft-cli`, `./usr/share/doc/firecraft/copyright` and the directories above them. The same holds for the published `firecraft_0.2.3_amd64.deb`. The build source agrees: `xtask/src/dist.rs::build_deb` staged only the two binaries and the copyright, and `packaging/deb/` contained nothing but `control`. The `packaging/appimage/firecraft.desktop` that exists in the tree was never staged into the deb — the AppImage recipe staged it, the deb did not. Verified on the *published* package in a clean Debian 12 container: the package installs cleanly and then has no desktop entry (see §11.6) | The campaign's DEB rows "validate desktop entry", "validate icon installation" and "validate MIME integration" could not be closed as "not implemented" — the package is a P0 MVP Linux deliverable and the user's first question after `apt install` is "where is the launcher?". The rows were answered with a defect instead |
+| B-25 | **The Flatpak recipe's runtime step could not run.** It invoked `flatpak run --repo="${REPO}" dev.firecraft.FireCraft --version`, but `flatpak run` has no `--repo` option, and the recipe never installed the application into an installation — so there was nothing to run. | `packaging/build-flatpak.sh` (before the fix): `flatpak run --command=firecraft --repo="${REPO}" dev.firecraft.FireCraft --version`. The documented `flatpak run` option list contains no `--repo` (it is a `flatpak-builder`/`flatpak build-bundle` option); the man page enumerates `--command`, `--cwd`, `--env`, `--filesystem`, `--installation`, `--sandbox` and the rest, with no `--repo`. Independently, the recipe's only runtime evidence was `--version` on the *GUI* binary, which takes no version flag at all — `crates/app/src/main.rs::main` calls `eframe::run_native` and parses no arguments | The Flatpak campaign rows "install the built application into a test installation", "correct `flatpak run` usage", "launch using `flatpak run`" and "test removal" had no executable path at all: the recipe's launch step was a command flatpak rejects. The recipe also invoked `flatpak-builder` without `--share=network`, so the cargo build inside the build sandbox would die at its first dependency fetch (the sandbox has no network by default) |
+| B-26 | **The Flatpak manifest shipped no icon** while the desktop entry it installs names `Icon=firecraft`, and it installed the desktop entry from a path that no longer exists. | `packaging/flatpak/dev.firecraft.FireCraft.yml` staged `packaging/appimage/firecraft.desktop` and no icon file at all; the AppImage recipe staged the same desktop file *and* `assets/icons/hicolor/256x256/apps/firecraft.png`. The manifest's `finish-args` comment claimed "File open/save/export goes through the portal file chooser", but the shell's dialogs are `EnvDialogs` (`crates/app/src/shell/dialogs.rs`), which read the document path from `FIRECRAFT_DOC` and the host's document directory — there is no portal chooser | A Flatpak launcher entry that resolves to no icon shows a broken image, and the campaign's "review `finish-args`" / "minimize filesystem permissions" rows were being audited against a comment that described a capability the app does not have |
+| B-27 | **`firecraft-cli` had no `--help`.** The flag fell through to the positional parser, so the usage line was printed as an *error message on stderr* with a failing exit code. | `crates/app-cli/src/main.rs`: the verb dispatch had no `--help` arm; an unrecognised first argument became a positional, and `missing(USAGE)` returns `CliError("missing arguments (expected: usage: …)")`, which `main` prints to stderr with `ExitCode::FAILURE`. `crates/app-cli/tests/` had no test that runs the binary | A packaged CLI that cannot be asked what it does cannot be tested on its own (the campaign row "test CLI separately"), and the package verification could not read the usage from stdout |
 
 ---
 
@@ -667,3 +671,82 @@ are re-run against the corrected gate.
 6. **#13**, **#11**, **#10** — outside the release scope; merge after
    the rebase, re-checking the `xtask/src/main.rs` overlap that #13
    and #14 share.
+
+### 11.6 Linux distribution completion — B-24, B-25, B-26, B-27
+
+The Phase 3 (RP-01) DEB rows could not be closed by inspection, so the
+package was installed and exercised in a clean Debian 12 container.
+That produced four findings, all recorded above: **B-24** (the deb
+ships no desktop integration), **B-25** (the Flatpak recipe's launch
+step is a command flatpak rejects), **B-26** (the Flatpak manifest
+ships no icon and names a desktop entry that no longer exists), and
+**B-27** (`firecraft-cli` has no `--help`). The numbering starts at
+B-24 because B-23 — "the release job's tag gate does not gate" — is
+recorded in the `ci/web-smoke-real-v2` branch (PR #40).
+
+**The negative control.** Before any fix, the verification script was
+run against a *published* package:
+
+```
+$ docker run --rm -v /var/tmp/debtest:/t firecraft-ci-rust:1 \
+      bash /t/verify-install.sh /t/firecraft_0.2.3_amd64.deb
+== candidate: /t/firecraft_0.2.3_amd64.deb (version 0.2.3, arch amd64)
+== depends:   libc6 (>= 2.31)
+== stage 1: install
+PASS: installed firecraft 0.2.3
+== stage 2: desktop entry
+FAIL: /usr/share/applications/firecraft.desktop is not installed
+```
+
+The package installs cleanly and then fails the desktop-entry stage.
+That is the defect, measured on the artifact users download — not on a
+rebuild — and it is why the check exists: a package can satisfy every
+package-manager check and still not be a desktop application.
+
+**The fixes.**
+
+- The deb payload now carries `usr/share/applications/firecraft.desktop`
+  and `usr/share/icons/hicolor/256x256/apps/firecraft.png`, and
+  `dist --native` reads the built package back with `dpkg-deb
+  --contents` and fails when either is missing. The check is on the
+  package contents, not on the staging directory.
+- The desktop entry moved to one canonical path,
+  `packaging/desktop/firecraft.desktop`, shared with the AppImage
+  recipe, so the two formats cannot drift apart.
+- The Flatpak recipe installs the bundle into a user installation,
+  launches it with `flatpak run --command=firecraft-cli`, removes it
+  again and fails if the application is still installed afterwards;
+  `flatpak-builder` gained `--share=network` for the cargo build.
+- The Flatpak manifest installs the icon and points at the canonical
+  desktop entry; its `finish-args` comment now states what the
+  filesystem permission actually grants.
+- `firecraft-cli --help` prints the usage on stdout and exits
+  successfully, with an integration test that runs the built binary.
+
+**The parts of the new check that were proven against the published
+package before the fix.** The verification script was written against
+the *published* v0.2.3 package so that each stage's mechanism is
+established independently of the packaging fix; only the desktop-entry
+and icon stages could not pass, because the published package has
+neither. In the clean Debian 12 container:
+
+- **The document round trip.** `firecraft-cli info /t/composed.fw.png`
+  prints the document JSON (canvas, 1 page, 1 group, 2 paths);
+  `firecraft-cli export /t/composed.fw.png /tmp/out.png` writes a 97 B
+  file whose first eight bytes are `89 50 4e 47 0d 0a 1a 0a` — the
+  PNG signature. The earlier check matched a seven-byte pattern and
+  was wrong; the corrected eight-byte pattern passes.
+- **The GUI launch.** `timeout 25 xvfb-run -a /usr/bin/firecraft`
+  exits **124** — the timeout's status, i.e. the binary started and was
+  still running when the launch window closed. The first attempt failed
+  with `xvfb-run: error: xauth command not found`, which is an
+  environment gap in the check, not a defect in the application: the
+  container needs `xauth` alongside `xvfb` for `xvfb-run` to work.
+
+**What is still unverified.** The Flatpak and AppImage builds need
+`flatpak`/`flatpak-builder`/`linuxdeploy`, which this fleet does not
+carry (B-8, B-11) — those recipes are corrected but their runtime
+stages remain unexecuted, and their campaign rows stay open with that
+exact reason. The deb's own clean-container receipts are recorded in
+`docs/release/ARTIFACT-MATRIX.md` and in the PR that carries this
+work.
