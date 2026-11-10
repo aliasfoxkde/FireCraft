@@ -2,7 +2,7 @@
 
 > **Status:** Approved execution plan; implementation in progress and not release-certified  
 > **Created:** 2026-11-06  
-> **Repository baseline:** `main` at `5fac7a2267ebc6b61432d5302ab6b02a1ff15c0f` (`v0.2.5`)  
+> **Repository baseline:** `main` at `2cfdeeee9c45bc3d399e1b6ddb781506e5eb7fd2` (`v0.2.5`, observed 2026-11-10)  
 > **Owner:** FireCraft maintainers  
 > **Purpose:** Give parallel agents an authoritative, evidence-driven plan for producing, validating, signing, and publishing a complete multi-platform FireCraft release.
 
