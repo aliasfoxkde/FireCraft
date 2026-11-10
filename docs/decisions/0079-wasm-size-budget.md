@@ -1,4 +1,4 @@
-# 0078 — The web bundle size budget: a shipped-bytes budget, not a falling-only floor
+# 0079 — The web bundle size budget: a shipped-bytes budget, not a falling-only floor
 
 Date: 2026-11-10 · Status: **accepted**
 

@@ -28,7 +28,7 @@ use std::sync::mpsc;
 /// daily-driver branch (`8c68b0f`, GitForge run
 /// `2bf47590-3f50-445c-9948-f0bc3587b483`) — the largest measured
 /// intended-feature bundle in flight. See
-/// `docs/decisions/0078-wasm-size-budget.md`.
+/// `docs/decisions/0079-wasm-size-budget.md`.
 ///
 /// **This budget is not a falling-only floor.** It tracks the bytes
 /// the shell actually ships, so it moves *up* when intended feature
@@ -1049,7 +1049,7 @@ fn enforce_wasm_budget(staged: &[PathBuf]) -> Result<u64, String> {
                     "wasm bundle {}: {size} B exceeds the {WASM_SIZE_CEILING} B ceiling — \
                      a size regression, or the budget needs re-pinning from a fresh \
                      measurement (the bundle-size budget tracks the shipped bytes and moves \
-                     in both directions; see docs/decisions/0078-wasm-size-budget.md)",
+                     in both directions; see docs/decisions/0079-wasm-size-budget.md)",
                     path.display()
                 ));
             }

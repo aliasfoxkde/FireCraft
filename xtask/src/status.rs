@@ -49,7 +49,7 @@ directions, always from a dated measurement — up when intended feature
 surface grows, down when it shrinks — and the gate's strictness never
 changes: a bundle above the pinned number fails the build, and the
 number is re-pinned from a measurement, never widened to make a build
-pass. See `docs/decisions/0078-wasm-size-budget.md`.
+pass. See `docs/decisions/0079-wasm-size-budget.md`.
 
 | Budget | Ceiling | Pinned from | Enforced by |
 |---|---|---|---|
