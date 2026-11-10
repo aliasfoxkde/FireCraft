@@ -166,11 +166,20 @@ jobs:
             echo "not a tag push — skipping release build"
             exit 0
           fi
-      - name: "Web bundle (bridge smoke skipped — CI image debt: no chromium)"
+      - name: "Web bundle (bridge smoke)"
         # Same container as the tag gate; the fresh job target dir
         # builds the release profile from scratch, which is the point:
         # the bundle must come from tag bytes, not a warm debug cache.
-        run: FIRECRAFT_DIST_SKIP_SMOKE=1 CARGO_TARGET_DIR=/tmp/ci-dist-target cargo run --locked -p xtask -- dist --web
+        #
+        # The bridge smoke RUNS here: `dist --web` serves the staged
+        # bundle over loopback and drives one open -> apply -> exportPng
+        # -> exportDocument round trip through the M5 postMessage bridge
+        # in the image's headless chromium, requiring a `green` verdict
+        # in the dumped DOM. The image bakes chromium (bookworm's
+        # `chromium` package), so no skip switch is needed — and none is
+        # accepted: a missing browser or a failed round trip must fail
+        # the job, not pass it quietly.
+        run: CARGO_TARGET_DIR=/tmp/ci-dist-target cargo run --locked -p xtask -- dist --web
       - name: Native set + deb read-back
         run: CARGO_TARGET_DIR=/tmp/ci-dist-target cargo run --locked -p xtask -- dist --native
       - name: Stage artifacts for the runner's artifact collection

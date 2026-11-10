@@ -652,7 +652,38 @@ This changes the PR dispositions above in one respect: the red gates
 on #10, #11, #14 and #17 were not evidence against their content. They
 are re-run against the corrected gate.
 
-### 11.5 Merge order
+### 11.5 B-5 — the GitForge release path smokes the bundle again
+
+B-5 recorded that the GitForge `release` job set
+`FIRECRAFT_DIST_SKIP_SMOKE=1`, so the authoritative CI path built the
+web bundle **without** the bridge smoke while `docs/RELEASING.md`
+claimed the opposite. That was a procedure compensating for a tool
+defect: the CI image baked no browser, so the escape hatch was the
+only way to let `dist --web` run at all.
+
+The tool defect is fixed and the procedure is gone:
+
+- `infrastructure/docker/ci-rust.Dockerfile` bakes Debian 12
+  bookworm's `chromium` package (at `/usr/bin/chromium`, the first
+  name `xtask`'s `chromium_path()` looks for) in its own layer, after
+  the toolchain layers and before the registry copy. The browser is a
+  hard dependency install (`--no-install-recommends` keeps only the
+  recommended packages out; chromium's shared libraries are hard
+  dependencies of the package itself).
+- `xtask/src/dist.rs` no longer reads `FIRECRAFT_DIST_SKIP_SMOKE`.
+  `dist --web` always runs the bridge smoke; a missing browser or a
+  round trip that does not report `green` fails the run.
+- `.gitforge.yml`'s `release` job runs the web step without the skip
+  switch, so the authoritative path smokes the bytes it publishes.
+- `docs/RELEASING.md` and `docs/release/ARTIFACT-MATRIX.md` no longer
+  describe the door.
+
+The image carrying the browser was built on Fedora and shipped to the
+runner host on 2026-11-10 (`firecraft-ci-rust:1`, chromium 156.0.8078.79
+at `/usr/bin/chromium`); a local `xtask dist --web` against it reports
+"smoke green" on the staged bytes.
+
+### 11.6 Merge order
 
 1. **#18** — the corrected gate. Every other PR's aegis result depends
    on it, and it changes no behaviour other than finding identity.
