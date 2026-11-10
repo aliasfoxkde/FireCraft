@@ -29,6 +29,31 @@ Production readiness requires evidence in seven areas:
 
 The project must not trade correctness, document compatibility, security, or debuggability for a smaller binary or a green status badge.
 
+## Long-horizon WebOS platform integration
+
+FireCraft is a first-class app in the ArtCraft WebOS portfolio, not merely
+an iframe demo. The near-term release remains standalone browser/desktop
+quality; the larger product contract must preserve a path to shared platform
+components/libraries, app-host services, WebOS CLI/MCP routing, AI-native
+command discovery, and later native installation.
+
+The host-side architecture work is tracked in
+[ArtCraft-WebOS PR #36](https://github.com/aliasfoxkde/ArtCraft-WebOS/pull/36).
+The FireCraft-side requirements, security boundary, library strategy, and
+cross-repository test matrix are in
+[WEBOS-PLATFORM-INTEGRATION.md](WEBOS-PLATFORM-INTEGRATION.md).
+
+**Important rule for WP-01:** optimize build artifacts without deleting
+required application capabilities. The native CLI and MCP transports do
+not necessarily need to be linked into the browser WASM binary, but the
+underlying command catalog, schemas, scripting semantics where required,
+and host-callable browser bridge must remain available through the
+appropriate adapters. Do not remove app-cli features based only on the
+current standalone-browser call graph; measure target-specific linkage and
+preserve a path for the WebOS host to discover and invoke FireCraft tools.
+Shared source crates do not automatically reduce the aggregate size of
+independently compiled Craft WASM apps.
+
 ## 2. Current baseline and known work in flight
 
 The initial audit and current GitHub tree establish these starting points. Refresh them at the start of each work session:

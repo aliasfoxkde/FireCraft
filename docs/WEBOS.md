@@ -57,6 +57,22 @@ ignore everything else. The bundle, in turn, ignores messages whose
 Commands through `apply` are registry ids only: there is no side
 door; the bridge replays through the same journal the GUI and CLI use.
 
+## Long-term WebOS platform integration
+
+The bridge above is the current minimal FireCraft host contract, not the
+final CLI/MCP or AI-native integration API. The longer-term target includes
+versioned command discovery, typed schemas, host-mediated CLI/MCP calls,
+per-app capabilities, agent approval/audit, shared platform components and
+domain libraries, and native host adapters. See
+[WEBOS-PLATFORM-INTEGRATION.md](WEBOS-PLATFORM-INTEGRATION.md) and the
+[ArtCraft-WebOS platform architecture roadmap PR #36](https://github.com/aliasfoxkde/ArtCraft-WebOS/pull/36).
+
+Do not interpret this roadmap as permission to expose arbitrary JavaScript
+execution or broaden the existing bridge without a threat model. Keep the
+standalone browser app working when WebOS is absent. The host owns native
+filesystem/Btrfs/installer responsibilities; FireCraft consumes portable
+storage and platform APIs.
+
 ## Worked host page
 
 This is the canonical host page. `__FIXTURE_B64__` is a stand-in for
