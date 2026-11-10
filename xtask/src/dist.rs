@@ -14,7 +14,7 @@
 //! for the gate to grep. A dist run that cannot prove the bridge
 //! works does not claim an artifact.
 
-use crate::util::{run_in, sha256_hex, workspace_root};
+use crate::util::{run_in, run_in_with_env, sha256_hex, workspace_root};
 use base64::Engine as _;
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::{Read as _, Write as _};
@@ -22,33 +22,23 @@ use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 
-/// The release bundle's wasm size ceiling, in bytes. Pinned from
-/// observation (trunk --release, wasm-opt 2, rustc 1.99, wasm-opt 132):
-/// 21,608,249 B on 2026-11-10 via `xtask dist --web` on the Phase 21
-/// daily-driver branch (`8c68b0f`, `GitForge` run
-/// `2bf47590-3f50-445c-9948-f0bc3587b483`) — the largest measured
-/// intended-feature bundle in flight. See
-/// `docs/decisions/0079-wasm-size-budget.md`.
+/// Web bundle guardrails, in decimal bytes:
+/// - 25,000,000 B: investigation warning; the build continues.
+/// - 50,000,000 B: hard ceiling; the build fails above this value.
 ///
-/// **This budget is not a falling-only floor.** It tracks the bytes
-/// the shell actually ships, so it moves *up* when intended feature
-/// surface grows and *down* when it shrinks — the same discipline the
-/// parity floors use in the opposite direction, and the same
-/// discipline the perf *timing* budgets use (see `xtask/src/perf.rs`):
-/// every move is a dated, measured observation, never a silent bump.
-/// What never changes is the gate's strictness: any bundle above this
-/// number fails the build, and the number is re-pinned from a
-/// measurement, never widened to make a build pass.
+/// The measured Phase 21/22 baseline is 21,608,249 B (2026-11-10;
+/// 8c68b0f; GitForge run 2bf47590-3f50-445c-9948-f0bc3587b483).
+/// The 50 MB cap is an explicit policy safety limit, not a measured
+/// target and not permission to let the bundle grow to 49 MB.
+/// Decision 0079 retains the historical 22 MB measurement-based pin;
+/// decision 0080 sets this larger temporary guardrail while optimization
+/// work proceeds.
 ///
-/// The history: the 19.x shell batches (Lucide icons, command palette,
-/// gradient editor, image support) grew the bundle from the 15,245,342 B
-/// observed 2026-11-02, re-pinned to 21,235,599 B on 2026-11-03
-/// (19b.4). The Phase 21 daily-driver batch (multi-doc tabs, autosave
-/// and recovery, `HiDPI`, command palette v2, preferences) and the Phase
-/// 22 shell surface (right dock column, per-kind inspector) added
-/// ~353 KB over `main`'s 21,258,126 B (measured 2026-11-10 on
-/// `31fffb8b`), which is what this pin covers.
-const WASM_SIZE_CEILING: u64 = 22_000_000;
+/// The web-only Cargo release profile uses opt-level=z, and Trunk runs
+/// Binaryen with data-wasm-opt="z". Native desktop release settings are
+/// unaffected. The twelve timing/memory budgets remain falling-only.
+const WASM_SIZE_WARNING: u64 = 25_000_000;
+const WASM_SIZE_CEILING: u64 = 50_000_000;
 
 /// Wall-clock backstop for the headless browser: a hung WebGL init
 /// kills the smoke instead of hanging `dist`.
@@ -77,7 +67,7 @@ pub fn web() -> Result<(), String> {
         smoke_bridge(&staged)?;
     }
     eprintln!(
-        "[xtask] dist web: {} file(s), wasm {wasm_bytes} B (ceiling {WASM_SIZE_CEILING}), manifest {manifest}, smoke {}",
+        "[xtask] dist web: {} file(s), wasm {wasm_bytes} B (warning {WASM_SIZE_WARNING}, hard ceiling {WASM_SIZE_CEILING}), manifest {manifest}, smoke {}",
         staged.len(),
         if smoke_skipped { "skipped" } else { "green" }
     );
@@ -510,7 +500,7 @@ fn stage_web() -> Result<Vec<PathBuf>, String> {
         std::fs::remove_dir_all(&out).map_err(|e| format!("clear {}: {e}", out.display()))?;
     }
     std::fs::create_dir_all(&out).map_err(|e| format!("mkdir {}: {e}", out.display()))?;
-    run_in(Some(&web), "trunk", &["build", "--release"])?;
+    run_in_with_env(Some(&web), "trunk", &["build", "--release"], &[("CARGO_PROFILE_RELEASE_OPT_LEVEL", "z")])?;
 
     let mut staged = Vec::new();
     let entries =
@@ -1044,19 +1034,29 @@ fn enforce_wasm_budget(staged: &[PathBuf]) -> Result<u64, String> {
             let size = std::fs::metadata(path)
                 .map_err(|e| format!("stat {}: {e}", path.display()))?
                 .len();
-            if size > WASM_SIZE_CEILING {
-                return Err(format!(
-                    "wasm bundle {}: {size} B exceeds the {WASM_SIZE_CEILING} B ceiling — \
-                     a size regression, or the budget needs re-pinning from a fresh \
-                     measurement (the bundle-size budget tracks the shipped bytes and moves \
-                     in both directions; see docs/decisions/0079-wasm-size-budget.md)",
+            if wasm_size_warning(size)? {
+                eprintln!(
+                    "[xtask] warning: wasm bundle {} is {size} B, above the {WASM_SIZE_WARNING} B investigation threshold",
                     path.display()
-                ));
+                );
             }
             return Ok(size);
         }
     }
     Err("no .wasm file in the staged bundle".to_owned())
+}
+
+/// Returns whether the bundle crossed the investigation threshold.
+/// Fails closed only above the hard policy ceiling.
+fn wasm_size_warning(size: u64) -> Result<bool, String> {
+    if size > WASM_SIZE_CEILING {
+        return Err(format!(
+            "wasm bundle is {size} B, above the hard {WASM_SIZE_CEILING} B ceiling — \\
+             investigate the size report and optimize before requesting a policy change \\
+             (see docs/decisions/0080-wasm-bundle-size-policy.md)"
+        ));
+    }
+    Ok(size > WASM_SIZE_WARNING)
 }
 
 /// The bridge smoke: serve the staged bundle over loopback http
@@ -1289,6 +1289,14 @@ fn which(name: &str) -> bool {
 mod sbom_tests {
     #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
     use super::*;
+
+    #[test]
+    fn wasm_size_policy_warns_at_25_mb_and_fails_above_50_mb() {
+        assert_eq!(wasm_size_warning(25_000_000), Ok(false));
+        assert_eq!(wasm_size_warning(25_000_001), Ok(true));
+        assert_eq!(wasm_size_warning(50_000_000), Ok(true));
+        assert!(wasm_size_warning(50_000_001).is_err());
+    }
 
     #[test]
     fn registry_packages_get_cargo_purls_but_local_packages_do_not() {

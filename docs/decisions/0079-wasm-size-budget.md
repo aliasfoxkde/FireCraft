@@ -1,5 +1,7 @@
 # 0079 — The web bundle size budget: a shipped-bytes budget, not a falling-only floor
 
+> **Historical decision:** the 22,000,000 B observation-based ceiling recorded here was superseded by [decision 0080](0080-wasm-bundle-size-policy.md), which establishes the current 25 MB warning and 50 MB hard ceiling. The 21,608,249 B measurement and analysis below remain the baseline.
+
 Date: 2026-11-10 · Status: **accepted**
 
 Relates to: decision **0071** (the bundle stays on Cloudflare Pages; the

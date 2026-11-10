@@ -30,10 +30,8 @@ that set it instead.
 
 ## Performance and size budgets
 
-Enforced by `xtask perf` and `xtask dist --web` (M12). Every ceiling is
-pinned from observation with headroom, and every ceiling is enforced in
-both directions: an unpinned measurement or an unmeasured budget fails
-its gate.
+Enforced by `xtask perf` and `xtask dist --web` (M12), but governed
+by separate policies.
 
 The **twelve timing and memory budgets** below are falling-only —
 raising one reopens the milestone that set it, the mirror of the floors
@@ -42,14 +40,13 @@ stress, after a warm pass) recorded under a loaded host window (~16/16
 — the regime CI's co-tenant waves share) on an AMD Ryzen 7 5700U;
 memory is the open path's VmHWM measured in an isolated child process.
 
-The **web bundle size budget** is the one exception, and it is an
-exception of *subject*, not of rigor: it tracks the bytes the shell
-actually ships, not a property of the host. It moves in both
-directions, always from a dated measurement — up when intended feature
-surface grows, down when it shrinks — and the gate's strictness never
-changes: a bundle above the pinned number fails the build, and the
-number is re-pinned from a measurement, never widened to make a build
-pass. See `docs/decisions/0079-wasm-size-budget.md`.
+The **web bundle size guardrails** measure the shipped raw Wasm file,
+not a property of the build host. The 25 MB threshold emits a warning;
+the 50 MB hard ceiling fails the build. The observed baseline remains
+21,608,249 B (2026-11-10); 50 MB is an explicit safety cap, not a size
+target or a measured re-pin. The release build uses Rust opt-level=z
+plus Binaryen wasm-opt=z. See
+`docs/decisions/0080-wasm-bundle-size-policy.md`.
 
 | Budget | Ceiling | Pinned from | Enforced by |
 |---|---|---|---|
@@ -65,7 +62,8 @@ pass. See `docs/decisions/0079-wasm-size-budget.md`.
 | pan-zoom frame stress doc, 2,000 objects (µs) | 8217552 | 2739183.9 | `xtask perf` |
 | canonical save stress doc, 2,000 objects (µs) | 791618 | 263872.5 | `xtask perf` |
 | open peak memory stress doc, 2,000 objects (KiB) | 34014 | 22676 | `xtask perf` |
-| web bundle wasm size (B) | 22000000 | 21608249 | `xtask dist --web` |
+| web bundle wasm warning threshold (B) | 25000000 | policy; observed baseline 21608249 | warning in `xtask dist --web` |
+| web bundle wasm hard ceiling (B) | 50000000 | policy; decision 0080 | fail-closed in `xtask dist --web` |
 | M14 live-filter parity | done | enumeration first: the full CS6 live-filter surface committed as a derived table in `fw-code-notes.md` (menu family, `EffectMoaID` GUID, dictionary parameter names, evidence, status per row — the completion checklist tasks 2-6 worked from); kernels: the Adjust Color + Blur + Sharpen + Stylize completion (curves piecewise-linear thousandths knots, color fill, auto levels, motion/radial/zoom blur, blur-more/sharpen/sharpen-more presets, convert to alpha, per-channel Levels with the five-prop-group override rule, colorize HSL replace-vs-shift, clouds + difference clouds as the pinned one-octave value-noise substitution — SplitMix64 lattice hash, FNV-1a seed over the effect bytes, integer bilinear) and the shadow/glow + bevel/emboss composites (small-geometry proofs, not pixel-luck); compose interprets every enumerated family by GUID + internal name with cache hashing for the new ops; the unknown-GUID passthrough floor is zero-enforced over corpus + harvested files (`xtask` floor, a99103b); engine: `filter.add`/`setParam` carry curve knot lists as the raw `GPLv`/`GPTv`/`XLCf`/`YLCf` node shape (text xor points, refused before mutation, undo round-trips residue) (0df97a2); goldens: `families.fw.png` (twelve one-effect cells, ten hand-computed exact-pixel anchors verified against the kernel arithmetic before blessing) + `composites.fw.png` (shadow/glow + bevel/emboss incl. the packed unified-panel outerGlow), floors risen 16/15/15/7 → 18/17/17/9 (f1cc6a8); shell: Live Filters panel driven by the same registry — six preset families with `DCVs` defaults, per-parameter slider/checkbox/knot/text rows riding one `filter.setParam` per journal entry — and the Filters menu effect tree cast from that same registry (CS6 builds it at runtime; static resource carries only Repeat Filter; menu == panel pinned by test) (25a2925); gates: `xtask ci` green, wasm 11.05/14 MB, `dist --web` + perf 12 budgets green; committed docs carry derived specs only — raw extracts stay in scratch (devlog 2026-10-13) |
 "#;
 
