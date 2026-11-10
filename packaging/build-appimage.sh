@@ -34,7 +34,7 @@ mkdir -p "${STAGE}/usr/bin" \
          "${STAGE}/usr/share/doc/firecraft"
 install -m 755 target/release/firecraft     "${STAGE}/usr/bin/firecraft"
 install -m 755 target/release/firecraft-cli "${STAGE}/usr/bin/firecraft-cli"
-install -m 644 packaging/appimage/firecraft.desktop \
+install -m 644 packaging/desktop/firecraft.desktop \
     "${STAGE}/usr/share/applications/firecraft.desktop"
 {
     echo "FireCraft ${VERSION} is dual-licensed MIT OR Apache-2.0."

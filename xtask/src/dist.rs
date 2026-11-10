@@ -867,7 +867,8 @@ fn verify_deb_glibc_floor(control: &str, binary: &Path) -> Result<(), String> {
 /// Builds the `.deb` from the pinned control file
 /// (`packaging/deb/control`, whose Version must equal the workspace
 /// version) over the standard payload: both binaries in `usr/bin`,
-/// licenses in `usr/share/doc/firecraft/copyright`.
+/// the desktop entry and the application icon, and licenses in
+/// `usr/share/doc/firecraft/copyright`.
 fn build_deb(
     stage: &Path,
     version: &str,
@@ -901,6 +902,34 @@ fn build_deb(
     for (name, source) in [("firecraft", shell), ("firecraft-cli", cli)] {
         let target = bin.join(name);
         std::fs::copy(source, &target).map_err(|e| format!("stage deb {name}: {e}"))?;
+    }
+    // Desktop integration. A package that ships only binaries installs
+    // no launcher and no icon: the host's menu shows nothing and the
+    // desktop file that names `firecraft` has nowhere to live. Both
+    // files are in-tree originals (docs/ATTRIBUTION.md), so the
+    // package carries them verbatim.
+    //
+    // The desktop entry is the single canonical file, shared with the
+    // AppImage recipe (`packaging/desktop/firecraft.desktop`): two
+    // copies would drift, and the drift would only show up as a
+    // missing icon on one format.
+    let apps = deb.join("usr/share/applications");
+    let icons = deb.join("usr/share/icons/hicolor/256x256/apps");
+    for dir in [&apps, &icons] {
+        std::fs::create_dir_all(dir).map_err(|e| format!("mkdir {dir:?}: {e}"))?;
+    }
+    for (source, target) in [
+        (
+            workspace_root().join("packaging/desktop/firecraft.desktop"),
+            apps.join("firecraft.desktop"),
+        ),
+        (
+            workspace_root().join("assets/icons/hicolor/256x256/apps/firecraft.png"),
+            icons.join("firecraft.png"),
+        ),
+    ] {
+        std::fs::copy(&source, &target)
+            .map_err(|e| format!("stage deb {}: {e}", source.display()))?;
     }
     let mut copyright = String::from(
         "Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/\n\
@@ -937,9 +966,25 @@ fn build_deb(
     Ok(out.to_owned())
 }
 
+/// The payload every FireCraft deb must carry. `verify_deb` reads the
+/// built package back with `dpkg-deb --contents` and requires each of
+/// these paths: the two binaries, the desktop entry, and the icon.
+///
+/// The desktop entry and the icon are part of the package contract,
+/// not decoration. A deb that installs the binaries but not the
+/// launcher produces a host with a `firecraft` on `$PATH` and nothing
+/// in its menus — a package that passes `dpkg -i` and fails the user's
+/// actual question ("how do I start this?").
+const REQUIRED_DEB_PAYLOAD: &[&str] = &[
+    "usr/bin/firecraft",
+    "usr/bin/firecraft-cli",
+    "usr/share/applications/firecraft.desktop",
+    "usr/share/icons/hicolor/256x256/apps/firecraft.png",
+];
+
 /// The stopping condition's read-back: `dpkg-deb --info` must parse
 /// the package (name + version fields present) and `--contents` must
-/// list both binaries.
+/// list the whole required payload.
 fn verify_deb(deb: &Path, version: &str) -> Result<(), String> {
     let info = std::process::Command::new("dpkg-deb")
         .args(["--info"])
@@ -963,13 +1008,23 @@ fn verify_deb(deb: &Path, version: &str) -> Result<(), String> {
         .output()
         .map_err(|e| format!("spawn dpkg-deb --contents: {e}"))?;
     let listing = String::from_utf8_lossy(&contents.stdout);
-    if !contents.status.success()
-        || !listing.contains("usr/bin/firecraft")
-        || !listing.contains("usr/bin/firecraft-cli")
-    {
+    if !contents.status.success() {
         return Err(format!(
-            "dpkg-deb --contents: payload binaries missing from {}:\n{}",
+            "dpkg-deb --contents failed for {}:\n{}",
             deb.display(),
+            listing.trim()
+        ));
+    }
+    let missing: Vec<&str> = REQUIRED_DEB_PAYLOAD
+        .iter()
+        .copied()
+        .filter(|path| !listing.contains(path))
+        .collect();
+    if !missing.is_empty() {
+        return Err(format!(
+            "dpkg-deb --contents: required payload missing from {}: {}\n{}",
+            deb.display(),
+            missing.join(", "),
             listing.trim()
         ));
     }
@@ -987,6 +1042,7 @@ fn parse_recipes() -> Result<usize, String> {
         "build-appimage.sh",
         "build-flatpak.sh",
         "build-macos-dmg.sh",
+        "deb/verify-install.sh",
     ] {
         let script = workspace_root().join("packaging").join(name);
         let status = std::process::Command::new("bash")
@@ -1455,5 +1511,91 @@ Depends: libc6 (>= 2.36)
         let opaque = "DYNAMIC SYMBOL TABLE:\n0000     DF *UND*  0000   ?   mystery_symbol\n";
         assert_eq!(max_glibc_requirement(opaque), None);
         assert!(has_dynamic_symbols(opaque));
+    }
+}
+
+/// The Linux desktop-integration contract: the deb payload, the
+/// canonical desktop entry, and the icon they name must agree with
+/// each other. The desktop entry is shared with the AppImage recipe,
+/// so a drift here shows up in both formats.
+#[cfg(test)]
+mod deb_desktop_tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+    use super::*;
+
+    /// The one canonical desktop entry, used by the deb payload and by
+    /// the AppImage recipe.
+    const DESKTOP_ENTRY: &str = "packaging/desktop/firecraft.desktop";
+
+    /// The application icon, installed at the hicolor path the desktop
+    /// entry's `Icon=` names.
+    const ICON_ASSET: &str = "assets/icons/hicolor/256x256/apps/firecraft.png";
+
+    fn desktop_entry() -> String {
+        std::fs::read_to_string(workspace_root().join(DESKTOP_ENTRY)).unwrap()
+    }
+
+    fn desktop_field(entry: &str, key: &str) -> String {
+        entry
+            .lines()
+            .find_map(|line| line.strip_prefix(key))
+            .unwrap_or_else(|| panic!("desktop entry has no {key} line"))
+            .trim()
+            .to_owned()
+    }
+
+    #[test]
+    fn the_desktop_entry_exec_names_a_packaged_binary() {
+        let entry = desktop_entry();
+        let exec = desktop_field(&entry, "Exec=");
+        let program = exec.split_whitespace().next().unwrap();
+        let packaged = format!("usr/bin/{program}");
+        assert!(
+            REQUIRED_DEB_PAYLOAD.contains(&packaged.as_str()),
+            "Exec={exec} names {program}, which the deb does not install"
+        );
+    }
+
+    #[test]
+    fn the_desktop_entry_icon_names_a_packaged_icon() {
+        let entry = desktop_entry();
+        let icon = desktop_field(&entry, "Icon=");
+        // The icon theme resolves `Icon=firecraft` to a file named
+        // `firecraft.png` under one of the hicolor size directories.
+        let matches = REQUIRED_DEB_PAYLOAD
+            .iter()
+            .filter(|path| path.ends_with(&format!("/{icon}.png")))
+            .count();
+        assert_eq!(
+            matches, 1,
+            "Icon={icon} does not resolve to exactly one packaged icon: {REQUIRED_DEB_PAYLOAD:?}"
+        );
+    }
+
+    #[test]
+    fn the_icon_asset_is_in_tree() {
+        assert!(
+            workspace_root().join(ICON_ASSET).is_file(),
+            "{ICON_ASSET} must exist — the deb payload copies it verbatim"
+        );
+    }
+
+    #[test]
+    fn the_required_payload_has_no_duplicate_paths() {
+        let mut seen = std::collections::BTreeSet::new();
+        for path in REQUIRED_DEB_PAYLOAD {
+            assert!(
+                seen.insert(*path),
+                "duplicate required payload path: {path}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_desktop_entry_is_a_desktop_entry() {
+        let entry = desktop_entry();
+        assert_eq!(desktop_field(&entry, "Type="), "Application");
+        assert!(!desktop_field(&entry, "Name=").is_empty());
+        assert!(!desktop_field(&entry, "Exec=").is_empty());
     }
 }
