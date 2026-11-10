@@ -35,8 +35,9 @@
 # first failure so a CI step cannot mistake a partial run for a pass.
 set -euo pipefail
 
-CANDIDATE="${1:?usage: verify-install.sh <candidate.deb> [previous.deb]}"
+CANDIDATE="${1:?usage: verify-install.sh <candidate.deb> [previous.deb] [fixture.fw.png]}"
 PREVIOUS="${2:-}"
+FIXTURE="${3:-}"
 
 readonly DESKTOP_ENTRY="/usr/share/applications/firecraft.desktop"
 readonly ICON_PATH="/usr/share/icons/hicolor/256x256/apps/firecraft.png"
@@ -101,6 +102,25 @@ fi
 echo "$CLI_OUT" | grep -q 'usage: firecraft-cli' ||
     fail "firecraft-cli printed no usage line: $CLI_OUT"
 pass "firecraft-cli runs"
+
+if [ -n "$FIXTURE" ]; then
+    # The document round trip, at the boundary the package exposes: the
+    # CLI reads a FireCraft document and writes a raster out of it.
+    # The desktop shell has no file chooser of its own, so the CLI is
+    # where "open, edit, save, export" is actually reachable.
+    echo "== stage 4b: CLI document round trip"
+    [ -f "$FIXTURE" ] || fail "the fixture $FIXTURE does not exist"
+    firecraft-cli info "$FIXTURE" >/tmp/firecraft-info.txt 2>&1 ||
+        fail "firecraft-cli info failed on $FIXTURE: $(cat /tmp/firecraft-info.txt)"
+    [ -s /tmp/firecraft-info.txt ] || fail "firecraft-cli info printed nothing"
+    firecraft-cli export "$FIXTURE" /tmp/firecraft-export.png >/dev/null 2>&1 ||
+        fail "firecraft-cli export failed on $FIXTURE"
+    [ -s /tmp/firecraft-export.png ] || fail "the export produced no bytes"
+    head -c 8 /tmp/firecraft-export.png | od -An -tx1 | tr -d ' \n' |
+        grep -q '^89504e470d0a1a0a$' ||
+        fail "the export is not a PNG"
+    pass "the CLI read the document and exported a PNG ($(wc -c </tmp/firecraft-export.png) B)"
+fi
 
 echo "== stage 5: GUI launch"
 if [ "${FIRECRAFT_DEB_SKIP_GUI:-0}" = "1" ]; then
