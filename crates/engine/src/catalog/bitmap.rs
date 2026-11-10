@@ -1921,7 +1921,7 @@ fn above_source(
 /// Scales every pixel's channels by the mask coverage — compositing's
 /// source-scale in the premultiplied domain (decision 0037).
 fn scale_by_coverage(pixels: &mut [u8], mask: &SelectionMask) {
-    for (index, pixel) in pixels.chunks_exact_mut(4).enumerate() {
+    for (index, pixel) in pixels.as_chunks_mut::<4>().0.iter_mut().enumerate() {
         let coverage = u32::from(mask.alpha[index]);
         if coverage == 255 {
             continue;
@@ -1939,7 +1939,7 @@ fn scale_by_coverage(pixels: &mut [u8], mask: &SelectionMask) {
 /// Clears every pixel under any nonzero coverage (the cut is binary
 /// at the selection edge, as in the original).
 fn clear_by_coverage(pixels: &mut [u8], mask: &SelectionMask) {
-    for (index, pixel) in pixels.chunks_exact_mut(4).enumerate() {
+    for (index, pixel) in pixels.as_chunks_mut::<4>().0.iter_mut().enumerate() {
         if mask.alpha[index] > 0 {
             pixel.fill(0);
         }
@@ -2712,7 +2712,7 @@ mod tests {
         document.pages[0].info.canvas.width = 64.0;
         document.pages[0].info.canvas.height = 48.0;
         let mut buffer = [0u8; raster::TILE_BYTES];
-        for pixel in buffer.chunks_exact_mut(4) {
+        for pixel in buffer.as_chunks_mut::<4>().0.iter_mut() {
             pixel.copy_from_slice(&[255, 0, 0, 255]);
         }
         document.tiles.insert(0, raster::Tile::from_rgba8(buffer));

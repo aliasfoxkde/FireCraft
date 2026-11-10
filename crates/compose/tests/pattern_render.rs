@@ -140,7 +140,7 @@ fn tile(color: [u8; 4], block: Option<(usize, usize)>) -> Tile {
             }
         }
         None => {
-            for px in pixels.chunks_exact_mut(4) {
+            for px in pixels.as_chunks_mut::<4>().0.iter_mut() {
                 px.copy_from_slice(&color);
             }
         }

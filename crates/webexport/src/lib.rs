@@ -199,10 +199,10 @@ pub(crate) fn web_objects<'a>(
     let mut out = Vec::new();
     for cell in &layer.cells {
         for id in &cell.elements {
-            if seen.insert(*id) {
-                if let Some(ObjectData::Slice(slice)) = document.registry.get(*id) {
-                    out.push(WebObject { slice });
-                }
+            if seen.insert(*id)
+                && let Some(ObjectData::Slice(slice)) = document.registry.get(*id)
+            {
+                out.push(WebObject { slice });
             }
         }
     }

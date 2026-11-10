@@ -139,7 +139,7 @@ fn random_call(
     step: usize,
     page_count: usize,
 ) -> (String, serde_json::Value) {
-    let bad = rng.next() % 4 == 0;
+    let bad = rng.next().is_multiple_of(4);
     let id = ids[rng.below(ids.len())];
     let stale = doc::ObjectId::from_parts(id.index() as u32, id.generation().wrapping_add(7));
     match step % 3 {
@@ -156,7 +156,7 @@ fn random_call(
                 "page": rng.below(page_count + usize::from(bad)),
                 "layer": rng.below(2),
                 "cell": rng.below(2),
-                "visible": rng.next() % 2 == 0,
+                "visible": rng.next().is_multiple_of(2),
             }),
         ),
         _ => (

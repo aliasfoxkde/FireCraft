@@ -404,7 +404,12 @@ fn mask_coverage(
             Ok(doc::SelectionMask {
                 width: dims.0,
                 height: dims.1,
-                alpha: flat.chunks_exact(4).map(|pixel| pixel[0]).collect(),
+                alpha: flat
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
+                    .map(|pixel| pixel[0])
+                    .collect(),
             })
         }
         other => Err(EngineError::InvalidState {
@@ -1235,7 +1240,12 @@ mod clipboard_tests {
         let width = bounds.width().ceil() as i64;
         let height = bounds.height().ceil() as i64;
         let mut plane = vec![0u8; (width * height * 4) as usize];
-        for pixel in plane.chunks_exact_mut(4).take((width * 2) as usize) {
+        for pixel in plane
+            .as_chunks_mut::<4>()
+            .0
+            .iter_mut()
+            .take((width * 2) as usize)
+        {
             pixel.copy_from_slice(&[255, 255, 255, 255]);
         }
         let (tiles, _minted) = crate::bitmap::retile_rgba(&mut document, &plane, width, height);
@@ -1468,7 +1478,12 @@ mod clipboard_tests {
         // own interior, so the plane is mostly opaque coverage.
         assert!(mask.pixels.0 > 0 && mask.pixels.1 > 0, "real extent");
         let plane = crate::bitmap::assemble_rgba(&document, &mask, "test").expect("assembled");
-        let covered = plane.chunks_exact(4).filter(|px| px[0] > 200).count();
+        let covered = plane
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .filter(|px| px[0] > 200)
+            .count();
         let total = plane.len() / 4;
         assert!(covered > total / 2, "the path covers its interior");
         assert!(

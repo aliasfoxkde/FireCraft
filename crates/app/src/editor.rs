@@ -1195,10 +1195,10 @@ impl Editor {
         })?;
         let mut numbers = Vec::new();
         for definition in &loaded.document.symbols {
-            if let Some(names) = names {
-                if !names.iter().any(|name| *name == definition.name) {
-                    continue;
-                }
+            if let Some(names) = names
+                && !names.iter().any(|name| *name == definition.name)
+            {
+                continue;
             }
             let members: Vec<serde_json::Value> = loaded
                 .document
@@ -1832,15 +1832,15 @@ impl Editor {
             Some(drag) => constrain_geometry(drag.tool, drag.start, world, constraint),
             None => return,
         };
-        if let Some(drag) = &mut self.drag {
-            if drag.tool == Tool::RedrawPath {
-                let changed = drag
-                    .trace
-                    .last()
-                    .is_none_or(|last| last.x != constrained.x || last.y != constrained.y);
-                if changed {
-                    drag.trace.push(constrained);
-                }
+        if let Some(drag) = &mut self.drag
+            && drag.tool == Tool::RedrawPath
+        {
+            let changed = drag
+                .trace
+                .last()
+                .is_none_or(|last| last.x != constrained.x || last.y != constrained.y);
+            if changed {
+                drag.trace.push(constrained);
             }
         }
         self.drag_step(constrained);

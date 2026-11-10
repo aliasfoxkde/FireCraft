@@ -174,7 +174,9 @@ impl TileImage {
             self.data.iter().flat_map(|&g| [g, g, g, 255]).collect()
         } else {
             self.data
-                .chunks_exact(4)
+                .as_chunks::<4>()
+                .0
+                .iter()
                 .flat_map(|px| [px[1], px[2], px[3], px[0]])
                 .collect()
         }
@@ -205,7 +207,9 @@ pub fn encode_mkbt(index: u32, rgba8: &[u8]) -> Result<Vec<Vec<u8>>, FwPngError>
         });
     }
     let argb: Vec<u8> = rgba8
-        .chunks_exact(4)
+        .as_chunks::<4>()
+        .0
+        .iter()
         .flat_map(|px| [px[3], px[0], px[1], px[2]])
         .collect();
     let mut stream = Vec::new();

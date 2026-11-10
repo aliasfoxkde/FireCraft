@@ -179,7 +179,7 @@ xml-external-entity	./crates/io/tests/svgimport.rs	f6cfc5faea5abe6ee5bd8667967ed
 xml-external-entity	./packaging/build-macos-dmg.sh	7b16906a7de9206c7488979eb86e8393ba62a45c0e769c79cf070a16c1858d49	1
 # Matches any 5-digit run: CS6 command ids, CS6 panel ids, the
 # Window-menu arrangement trio, the JPEG dimension ceiling (65535), menu
-# ids. This repository holds no postal data.
+# ids, CVE id suffixes. This repository holds no postal data.
 zip-code	./crates/app-cli/src/mcp.rs	0e5c81ceee464db1c0cb9ed801d134fab0dd2a28c0dc62e35aa21a8e13ff0ebc	1
 zip-code	./crates/app-cli/src/mcp.rs	20d70708103e5223b6f2fb00f00947832fb93d12ebef11eb10bc5599efefe184	1
 zip-code	./crates/app-cli/src/mcp.rs	e27c72fe629f258a871404eed323c0cf57a7a26c19dc8d5a6ac90770241af8f5	1
@@ -509,6 +509,7 @@ zip-code	./docs/NEXT.md	e95e07198fbc2a3fac954c1e20f99ff404edbc4a9bcc08f0ef575f1b
 zip-code	./docs/NEXT.md	f2f89ede8e7d4b3d2243dea1ca96b8ece56f793811d9708b4a0181bf81a50011	1
 zip-code	./docs/NEXT.md	fec32d6024e177ac05e94de175bfccd84ec3d389034f6f57067fb167302534b6	1
 zip-code	./docs/PLANNING.md	0f255ec16482c343fd099ba9668863778be40dc166a6856b1d470e0bc97cc6fd	1
+zip-code	./docs/PLANNING.md	3e6d8748577115dd136761901582abce3093fbb973a08c35be9efe6781fb4f4d	1
 zip-code	./docs/PLANNING.md	9766638817ec53c323baa6aaa5f8d10a6105299553621601c5e71d0c47b10e5b	3
 zip-code	./docs/PLANNING.md	ca902d4a8acbdea132ada81a004081f51c5c9279d409cee414de5a39a139fab6	1
 zip-code	./docs/SESSIONS.md	265f10e1bf87701b7aa597c197b6a25b0984777f3443a289d7a92aedd31fddcf	1
@@ -549,6 +550,7 @@ zip-code	./docs/planning/generated/parity.md	b66a7baff55a93ebb558b351aabb3c7f8df
 zip-code	./docs/planning/generated/parity.md	db4859f7fe2245f0d7160995d4d60a96d0989d9d05cd8782dd7ebe07ffc45e00	1
 zip-code	./docs/planning/generated/parity.md	eea32706ceeea18ece420ede85bbc9dc629a96c899a0782cdd0543e260698320	1
 zip-code	./docs/planning/generated/scorecard.md	848e3fb85d62f31af8c03726f527aff81df44cca545728554b1bc26b40e4de0f	1
+zip-code	./docs/release/PHASE-0-AUDIT.md	3e6d8748577115dd136761901582abce3093fbb973a08c35be9efe6781fb4f4d	4
 zip-code	./docs/research/fireworks-png-nodes.md	492f431bae35265f2e5f4ed49bd8c58dda912431be561504846988d00d05d117	2
 zip-code	./docs/research/fireworks-png-nodes.md	9a37837cdde1d7b36fc789a2d4558af7652d6bb2f7ea5d1a7451ea416f34ef5a	1
 zip-code	./docs/research/fireworks-png-nodes.md	f2f89ede8e7d4b3d2243dea1ca96b8ece56f793811d9708b4a0181bf81a50011	1

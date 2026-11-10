@@ -469,13 +469,13 @@ impl TypedCommand for SetBackground {
             ("h_position", &payload.h_position),
             ("v_position", &payload.v_position),
         ] {
-            if let Field::Set(v) = field {
-                if !(0..=3).contains(v) {
-                    return Err(EngineError::InvalidState {
-                        name: NAME.to_owned(),
-                        detail: format!("{label} must be 0..=3"),
-                    });
-                }
+            if let Field::Set(v) = field
+                && !(0..=3).contains(v)
+            {
+                return Err(EngineError::InvalidState {
+                    name: NAME.to_owned(),
+                    detail: format!("{label} must be 0..=3"),
+                });
             }
         }
         let before = access::object(document, NAME, payload.id)?.clone();

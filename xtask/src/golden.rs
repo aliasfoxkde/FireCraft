@@ -541,7 +541,7 @@ fn compare_cs6(name: &str, render: &Render, compared: &mut usize) {
 fn over_white(render: &Render) -> image::RgbImage {
     let mut image = image::RgbImage::new(u32::from(render.width), u32::from(render.height));
     let width = u32::from(render.width);
-    for (i, px) in render.pixels.chunks_exact(4).enumerate() {
+    for (i, px) in render.pixels.as_chunks::<4>().0.iter().enumerate() {
         let alpha = f64::from(px[3]) / 255.0;
         let over = |fg_premul: u8, bg: u8| -> u8 {
             let value = f64::from(fg_premul) + f64::from(bg) * (1.0 - alpha);
