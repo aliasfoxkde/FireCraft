@@ -1672,7 +1672,11 @@ The baseline is gone; 644 line-keyed entries in 19.4 MB are replaced by
   Rust `.eval(t)`), `ssrf-localhost` (8: the workspace has no HTTP
   client), `sql-query` (7: English prose), the JavaScript-shaped
   `path-traversal` rules, and three digit-run PII rules. The evidence
-  for each is in decision 0070. The five `credit-card-*` rules stay
+  for each was in decision 0070, whose rule-class suppression
+  `main` superseded with decision 0074; the same evidence now rides
+  with each baselined row in `.aegis-baseline.tsv` and in the
+  `CLASS_NOTES` table in `xtask/src/aegis.rs`. The five `credit-card-*`
+  rules stay
   **armed**, so a real card number is still caught.
 - **`.aegis-allowlist.json`** suppresses the ten remaining
   per-finding false positives, keyed `pattern:file:content-digest` —
