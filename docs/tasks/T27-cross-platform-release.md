@@ -159,6 +159,7 @@ gate this ticket:
 | B-14 | no provenance, no release manifest, no signing identity | nothing can be `CERTIFIED` |
 | B-19 | the `time` 0.3.47 / MSRV 1.95 bump is not on `main` | the next artifact must be rebuilt and re-measured, not re-tagged |
 | B-21 | the published v0.2.5 web bundle has no build receipt and the release was published out of band | the published set is not attested by anything in this repository |
+| B-22 | the GitForge runner's failure path arms its container reap and backend-health calls with no timeout, so a wedged Docker daemon wedges the runner instead of failing the job — a defect in the **GitForge** repository (`crates/gitforge-runner/src/executor.rs`), tracked as FireCraft issue #37 | every GitForge-verified row needs a terminal job state from the runner; a hang yields no terminal state, so no GitForge receipt can be attached until the calls are bounded. The fix is owned by the GitForge repository; FireCraft tracks it as issue #37 and task #202 |
 
 ## Stopping condition
 
