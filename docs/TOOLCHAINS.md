@@ -23,8 +23,7 @@ target platform, with a receipt.
 **Parse-checked is not built.** Three of the recipes below are
 `bash -n`-checked by `xtask dist --native` on every run, so a broken
 recipe fails the gate. Two of them cannot even be parsed on this fleet.
-None of the recipes has produced an artifact that was installed,
-launched, or published.
+The off-fleet packaging recipes (AppImage, Flatpak, Windows, and macOS) have not yet produced target-native artifacts with install and launch receipts. This statement does not describe the separately built and published Linux tarballs, DEB, CLI, and web bundle.
 
 ## Recipe table
 
@@ -95,7 +94,7 @@ build the artifact and has a receipt for it.
 
 ## Planned release targets — not yet verified by this inventory
 
-The comprehensive target matrix and execution criteria live in
+The cross-cutting code cleanup, WASM optimization, product QA, and agent execution sequence live in [PRODUCTION-READINESS-PLAN.md](PRODUCTION-READINESS-PLAN.md). The comprehensive target matrix and execution criteria live in
 [`docs/RELEASE-ENGINEERING-PLAN.md`](RELEASE-ENGINEERING-PLAN.md)
 (ticket [T27](tasks/T27-cross-platform-release.md)). Which of them
 constitute an acceptable release cut is decided by
@@ -109,9 +108,10 @@ constitute an acceptable release cut is decided by
 - Existing Windows and macOS scripts are recipes until their output is
   built and launch-tested on native runners.
 - AppImage is recipe-only until an actual image is built and runtime-tested.
-- Source archive and CycloneDX SBOM generation are implemented in
+- Source archive and CycloneDX SBOM generation are implemented on main in
   `xtask dist --source` and `xtask dist --sbom`, and are wired into the
-  tag workflow. They still need an end-to-end tag-release receipt.
+  tag workflow. They still need an end-to-end tag-release receipt, a clean
+  source build, and schema validation of the SBOM.
   Provenance/attestation and signed release metadata remain unimplemented
   until the required credentials and verification path are configured.
 

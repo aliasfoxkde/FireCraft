@@ -5,7 +5,7 @@
 > everything lives, how to work here, and exactly what to do next.
 > Day-to-day rules: [`../AGENTS.md`](../AGENTS.md). Master plan:
 > [`PLANNING.md`](PLANNING.md). Live status: [`PROGRESS.md`](PROGRESS.md).
-> Session log: [`SESSIONS.md`](SESSIONS.md). Project arc: [`HISTORY.md`](HISTORY.md). Cross-platform release work order: [`RELEASE-ENGINEERING-PLAN.md`](RELEASE-ENGINEERING-PLAN.md) (ticket [T27](tasks/T27-cross-platform-release.md)).
+> Session log: [`SESSIONS.md`](SESSIONS.md). Project arc: [`HISTORY.md`](HISTORY.md). Cross-platform release work order: [`RELEASE-ENGINEERING-PLAN.md`](RELEASE-ENGINEERING-PLAN.md) (ticket [T27](tasks/T27-cross-platform-release.md)). Production cleanup and agent execution: [`PRODUCTION-READINESS-PLAN.md`](PRODUCTION-READINESS-PLAN.md).
 
 ---
 
@@ -236,9 +236,10 @@ one. Summary:
   wasm-budget re-pin **DONE** (2026-11-03: measured 21,235,599 B,
   ceiling moved to 21,500,000 with the dated cause — 19b.4; and
   again 2026-11-10: measured 21,608,249 B on the Phase 21/22
-  surface, ceiling moved to 22,000,000 — decision 0078, which also
-  separates the two-direction *size* budget from the falling-only
-  perf timing budgets). The
+  surface. Decision 0079 records the historical 22,000,000 B pin;
+  decision 0080 now sets a 25,000,000 B warning and 50,000,000 B
+  hard cap while the production-readiness plan drives measured
+  reduction. The
   reachability gate and inert-drift test landed 2026-11-02
   (`menus::tests::inert_count_never_rises` + the derived census).
 - **20 / 21 queued**: daily-driver features (in-canvas text, Optimize

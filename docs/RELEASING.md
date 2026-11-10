@@ -48,7 +48,7 @@ Produces `dist/web/`:
 | `index.html`, `host.html`, `appinfo.json`, one `.js`, one `.wasm` | trunk `--release` bundle |
 | `MANIFEST.sha256` | over the bundle; `sha256sum -c` verifies |
 
-The gate enforces the wasm size ceiling (parity table) and runs the
+The web build uses a Rust opt-level=z release profile for the Trunk subprocess and Binaryen wasm-opt=z. It warns above 25,000,000 B and fails above the 50,000,000 B hard ceiling (decimal bytes; decision 0080). This ceiling is a safety cap, not a target. The gate runs the
 bridge smoke **on these release bytes**: the WEBOS.md host page loads
 the bundle in headless chromium and completes one
 open → apply → exportPng → exportDocument round trip through the M5
@@ -84,10 +84,7 @@ or `dpkg -i`.
     cargo run -p xtask -- dist --source
     cargo run -p xtask -- dist --sbom
 
-Both verbs exist on this branch and are wired into the release workflow.
-They do **not** exist on `main` — the two release branches carry
-duplicate implementations that have to be consolidated before either
-lands. `dist --source` produces `dist/source/FireCraft-<v>-source.tar.gz`
+Both verbs are present on main and wired into the tag release workflow. Their presence is implementation evidence only; a successful post-repair tag run, clean source build, schema-valid SBOM, and independent download verification are still required. `dist --source` produces `dist/source/FireCraft-<v>-source.tar.gz`
 and verifies a clean extraction plus `cargo metadata --locked` inside it;
 `dist --sbom` produces `dist/sbom/firecraft-<v>-sbom.cdx.json`
 (CycloneDX 1.5) over the locked dependency graph.

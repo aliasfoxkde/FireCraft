@@ -37,7 +37,7 @@
 |---|---|---|---|---|---|
 | 5 | 19.6 inert-menu burn-down — Modify/File families (83 of 289; batch 8 = Attach to Path landed 2026-11-03) | [tasks/T5-inert-burndown.md](tasks/T5-inert-burndown.md) | `IN PROGRESS` | UI/verb lane | continue the per-family burn-down; each batch carries its own evidence gate |
 | 194 | Aegis gate: content-keyed baseline, so a doc edit no longer fails the gate (decision 0074) | [decisions/0074-aegis-content-keyed-baseline.md](decisions/0074-aegis-content-keyed-baseline.md) | `IMPLEMENTED` — the content-keyed gate and its decision record are in the tree; the gate has been exercised on this branch's tree | CI/tooling lane | the gate is content-keyed on this branch but the baseline format is **not yet on `main`**; port it and attach a run id before claiming the fleet-wide state |
-| 27 | Cross-platform release engineering: Windows, macOS, Linux package matrix, Android feasibility, source, SBOM/provenance, signing, CI aggregation and certification | [tasks/T27-cross-platform-release.md](tasks/T27-cross-platform-release.md) | `IN PROGRESS` — implementation is ahead of verification; **no target is `CERTIFIED`** and nothing is signed | release-workflow lane | land an end-to-end tag run of the repaired workflow and attach the run id as the RP-07 receipt; consolidate the duplicated `dist --source`/`--sbom` verbs (B-3) |
+| 27 | Cross-platform release engineering: Windows, macOS, Linux package matrix, Android feasibility, source, SBOM/provenance, signing, CI aggregation and certification | [tasks/T27-cross-platform-release.md](tasks/T27-cross-platform-release.md) | `IN PROGRESS` — implementation is ahead of verification; **no target is `CERTIFIED`** and nothing is signed | release-workflow lane | execute the cross-workstream [production-readiness plan](PRODUCTION-READINESS-PLAN.md), preserve and sequence the active PR stack, then run a disposable tag through build, aggregation, download, and checksum verification |
 
 ## Queued (Phase 20 — daily-driver features)
 
@@ -73,7 +73,10 @@
 | 22 | Screenshot-driven frontend audit + systematic refinement | — | `IN PROGRESS` | frontend lane | audit against the CS6 shell-parity directive; record screenshots per panel |
 | 25 | Responsive/adaptive layout audit + fixes | — | `NOT STARTED` | frontend lane | follows the responsive audit in the current UI work |
 
-### T27 work-package detail
+### Production readiness and T27 work-package detail
+
+The cross-cutting cleanup, WASM optimization, QA, UI polish, agent ownership, and integration sequence are defined in [PRODUCTION-READINESS-PLAN.md](PRODUCTION-READINESS-PLAN.md).
+
 
 The full implementation-versus-verification table for T27 — per work
 package, the implementation state, the verification state, the owner and

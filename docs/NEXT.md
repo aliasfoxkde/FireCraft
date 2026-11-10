@@ -371,11 +371,12 @@ burn-down.
   with the dated cause recorded in the constant's doc comment (Phase 19
   shell surface: Lucide icons, command palette, gradient editor, image
   support — 10.87 MB at M12, 15.25 MB at 2026-11-02). Re-pinned
-  again 2026-11-10 (decision 0078): measured **21,608,249 B** on the
-  Phase 21/22 feature surface, ceiling moved 21,500,000 → 22,000,000.
-  The bundle-size budget tracks the shipped bytes and moves in **both**
-  directions from a dated measurement; the twelve perf
-  timing/memory budgets stay falling-only.
+  again 2026-11-10 (decision 0079): measured **21,608,249 B** on the
+  Phase 21/22 feature surface; the historical observed-size pin was
+  22,000,000 B. Decision 0080 now sets a 25,000,000 B warning and
+  50,000,000 B hard cap while the production-readiness plan drives
+  measured reduction. The cap is not a target; performance timing and
+  memory budgets remain separate and falling-only.
 
 ### Phase 20 — Daily-driver features (P1)
 

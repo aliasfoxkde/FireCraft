@@ -61,9 +61,9 @@ blocker and plan the corresponding native-runner work explicitly.
 
 The repository currently has a useful release foundation:
 
-- Workspace version is `0.2.5`; workspace package metadata uses Rust edition 2024 and `rust-version = 1.85`.
+- Workspace version is `0.2.5`; workspace package metadata uses Rust edition 2024 and `rust-version = 1.95`.
 - `cargo run -p xtask -- ci` is the canonical quality gate.
-- `cargo run -p xtask -- dist --web` stages the web bundle, checks the WASM size ceiling, writes a SHA-256 manifest, and normally runs a bridge smoke test. CI currently has a documented Chromium-image debt and can explicitly skip that smoke.
+- `cargo run -p xtask -- dist --web` stages the web bundle, checks the WASM size ceiling, writes a SHA-256 manifest, and normally runs a bridge smoke test. The web release build uses Rust opt-level=z and Binaryen wasm-opt=z. GitHub tag CI runs the browser smoke; GitForge still has a temporary smoke-skip path until PR #40's Chromium image work is integrated. A skipped smoke is not release acceptance.
 - `cargo run -p xtask -- dist --native` currently targets Linux x86_64 and produces desktop+CLI tar.gz, CLI-only tar.gz, and .deb packages.
 - Existing packaging recipes: `packaging/build-appimage.sh`, `packaging/build-macos-dmg.sh`, `packaging/build-windows.ps1`, and `packaging/windows/firecraft.iss`.
 - `docs/TOOLCHAINS.md` documents those recipes as off-fleet/operator-built outputs rather than verified release artifacts.
@@ -71,6 +71,10 @@ The repository currently has a useful release foundation:
 - A Flatpak manifest and build recipe exist, but no verified Flatpak artifact is established. No native Android build is established; Android remains feasibility-gated.
 - The public Pages deployment previously differed from local `dist/web` hashes. Deployment reconciliation remains a release blocker.
 - The release process currently treats signing as an operator ceremony. Secrets and credentials must remain outside the repository.
+
+For application cleanup, code refactoring, WASM profiling, UI polish, agent ownership, and cross-workstream sequencing, follow [PRODUCTION-READINESS-PLAN.md](PRODUCTION-READINESS-PLAN.md).
+
+For application cleanup, code refactoring, WASM profiling, UI polish, agent ownership, and cross-workstream sequencing, follow [PRODUCTION-READINESS-PLAN.md](PRODUCTION-READINESS-PLAN.md).
 
 Before changing packaging architecture, inspect the current scripts, workflows, `xtask` distribution code, workspace features, app entrypoints, and all existing documentation. Extend working mechanisms where practical; do not create parallel packaging implementations without a reason.
 
