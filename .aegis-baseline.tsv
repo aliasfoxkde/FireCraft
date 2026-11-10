@@ -74,6 +74,19 @@ eval-usage	./crates/vector/src/offset.rs	a475ee49c7acce90b0c9124fcaaf388999e9ef2
 eval-usage	./crates/vector/src/tests.rs	a475ee49c7acce90b0c9124fcaaf388999e9ef2c94d490d52a855d24c2d97deb	4
 eval-usage	./docs/SESSIONS.md	a475ee49c7acce90b0c9124fcaaf388999e9ef2c94d490d52a855d24c2d97deb	1
 eval-usage	./xtask/src/aegis.rs	a475ee49c7acce90b0c9124fcaaf388999e9ef2c94d490d52a855d24c2d97deb	3
+# Matches the two-word phrase naming an individual's data category in
+# English prose. The occurrence outside this gate's own source is a
+# release-plan checklist item that excludes personal data from the
+# source archive; the repository holds no such data.
+gdpr-personal-data	./docs/RELEASE-ENGINEERING-PLAN.md	d85533ba786e27667c68f55c37f3d5a70d6cd7a1e1157262ac3353dd6b11b193	1
+gdpr-personal-data	./docs/decisions/0074-aegis-content-keyed-baseline.md	d85533ba786e27667c68f55c37f3d5a70d6cd7a1e1157262ac3353dd6b11b193	1
+gdpr-personal-data	./xtask/src/aegis.rs	d85533ba786e27667c68f55c37f3d5a70d6cd7a1e1157262ac3353dd6b11b193	1
+# Matches the lowercase abbreviation in this table's own rule-class
+# name, in the personal-data rule's name, and in decision 0074's table
+# of adjudicated classes; the abbreviation is a rule identifier, not a
+# reference to anyone's data.
+gdpr-reference	./docs/decisions/0074-aegis-content-keyed-baseline.md	8b16477e3abe1de345a6e82f360db77b5e238983ad685cec9fef0d0bc009aed3	3
+gdpr-reference	./xtask/src/aegis.rs	8b16477e3abe1de345a6e82f360db77b5e238983ad685cec9fef0d0bc009aed3	2
 # Matches the build metadata of a Cargo.lock version string
 # (0.6.0+11769913).
 international-phone	./Cargo.lock	af21a1bff1718128c96522dc5f3a4136e66feeb8aee345e9676fda1199e5378e	1
@@ -84,9 +97,10 @@ international-phone	./xtask/src/aegis.rs	af21a1bff1718128c96522dc5f3a4136e66feeb
 path-traversal	./docs/HANDOFF.md	8a69ab888f99a99e70366c051f330d9512cabc8d710f849e6eeb0de25711be66	1
 path-traversal	./docs/planning/generated/scorecard.md	d24059df4850652d14de7bcd5b2d806833567be8055cdc8f60cdc0005bd96de4	1
 path-traversal	./xtask/src/status.rs	d24059df4850652d14de7bcd5b2d806833567be8055cdc8f60cdc0005bd96de4	1
-# Matches the word "pan" in pan-zoom and hand-pan identifiers, in the
-# Hand tool's "Pan the artboard" menu label, and in this repository's
-# own prose about that word tripping the rule; the five credit-card-*
+# Matches the word "pan" in pan-zoom, hand-pan and two-finger pan
+# identifiers, in the Hand tool's "Pan the artboard" menu label,
+# including the Android feasibility note's touch gesture, and in
+# decision 0074's table of adjudicated classes; the five credit-card-*
 # rules stay armed.
 pci-cardholder-data	./crates/app/src/canvas.rs	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	15
 pci-cardholder-data	./crates/app/src/canvas.rs	fd92d952db92eff57586865ef7b6ae62897642d1abedbe203d56e2d4ced964ed	1
@@ -97,6 +111,7 @@ pci-cardholder-data	./crates/app/src/shell/mod.rs	00e37ffae0562ab6818d8f4f97457a
 pci-cardholder-data	./docs/NEXT.md	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	1
 pci-cardholder-data	./docs/SESSIONS.md	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	5
 pci-cardholder-data	./docs/SESSIONS.md	e6205bc8ab80302276cc2b94e571d9aeafa567c0517146ac4396a4f6a8cead1a	1
+pci-cardholder-data	./docs/decisions/0074-aegis-content-keyed-baseline.md	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	1
 pci-cardholder-data	./docs/planning/firecraft/M12-parity-release.md	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	3
 pci-cardholder-data	./docs/planning/firecraft/M13-deep-re-shell-parity.md	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	1
 pci-cardholder-data	./docs/planning/firecraft/M15-tool-surface.md	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	1
@@ -104,6 +119,7 @@ pci-cardholder-data	./docs/planning/firecraft/M5-editor-shell.md	00e37ffae0562ab
 pci-cardholder-data	./docs/planning/firecraft/ROADMAP.md	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	2
 pci-cardholder-data	./docs/planning/generated/parity.md	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	3
 pci-cardholder-data	./docs/planning/generated/scorecard.md	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	2
+pci-cardholder-data	./docs/research/android-feasibility.md	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	1
 pci-cardholder-data	./docs/research/fw-code-notes.md	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	1
 pci-cardholder-data	./docs/research/fw-ui-evidence.md	fd92d952db92eff57586865ef7b6ae62897642d1abedbe203d56e2d4ced964ed	1
 pci-cardholder-data	./docs/tasks/T22-screenshot-ui.md	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	1
@@ -178,8 +194,10 @@ xml-external-entity	./crates/io/tests/svgimport.rs	f6cfc5faea5abe6ee5bd8667967ed
 xml-external-entity	./packaging/build-macos-dmg.sh	7b16906a7de9206c7488979eb86e8393ba62a45c0e769c79cf070a16c1858d49	1
 # Matches any 5-digit run: CS6 command ids, the JPEG dimension ceiling
 # (65535), menu ids, CS6 palette-instance ids (the 48xxx family), a
-# canvas dimension in a render-scale test, and the numeric suffix of a
-# CVE identifier. This repository holds no postal data.
+# canvas dimension in a render-scale test, CVE id suffixes, and the
+# civil-date epoch constant (36524) in the SBOM timestamp builder, and
+# decision 0074's table of adjudicated classes. This repository holds no
+# postal data.
 zip-code	./crates/app-cli/src/mcp.rs	0e5c81ceee464db1c0cb9ed801d134fab0dd2a28c0dc62e35aa21a8e13ff0ebc	1
 zip-code	./crates/app-cli/src/mcp.rs	20d70708103e5223b6f2fb00f00947832fb93d12ebef11eb10bc5599efefe184	1
 zip-code	./crates/app-cli/src/mcp.rs	e27c72fe629f258a871404eed323c0cf57a7a26c19dc8d5a6ac90770241af8f5	1
@@ -548,6 +566,7 @@ zip-code	./docs/decisions/0046-canvas-trim-delete-all.md	f2f89ede8e7d4b3d2243dea
 zip-code	./docs/decisions/0049-pixel-selection-adjust.md	f2f89ede8e7d4b3d2243dea1ca96b8ece56f793811d9708b4a0181bf81a50011	3
 zip-code	./docs/decisions/0055-tile-bank-load-write.md	0f255ec16482c343fd099ba9668863778be40dc166a6856b1d470e0bc97cc6fd	1
 zip-code	./docs/decisions/0066-smoke-budget.md	d55d01d0341ed0ba2cd99b322e8c5b609254f47d10c7cd12b99b4922effeba44	3
+zip-code	./docs/decisions/0074-aegis-content-keyed-baseline.md	6f21ec723dd82aa7bd36bc81cc4008e4f6359fe8ce68f793af23b7123bdbf3a6	1
 zip-code	./docs/decisions/0074-aegis-content-keyed-baseline.md	7b1f167cba373e261a8bea96004bdf27f937a89c830fceb823eec636d4a3920e	1
 zip-code	./docs/decisions/0074-aegis-content-keyed-baseline.md	b83c588da0c6931625f42e0948054a3ade722bfd02c27816305742ed7390ac6c	2
 zip-code	./docs/planning/firecraft/M8-import-export.md	f2f89ede8e7d4b3d2243dea1ca96b8ece56f793811d9708b4a0181bf81a50011	2
@@ -613,7 +632,9 @@ zip-code	./docs/research/fw-ui-evidence.md	fbb41b11b6476a0b3e188d9915f489b0e300e
 zip-code	./docs/research/fw-ui-evidence.md	fc86a70159f9843695bc28d0ebb606aac2f6200627e945ac06a517c3946b923f	3
 zip-code	./docs/research/fw-ui-evidence.md	fec32d6024e177ac05e94de175bfccd84ec3d389034f6f57067fb167302534b6	2
 zip-code	./docs/research/fw-ui-evidence.md	ffdfd59d08e67eeff2569e91641bb6adb12fc0bf42ef8f0f2c197ed14369f10d	3
+zip-code	./xtask/src/aegis.rs	6f21ec723dd82aa7bd36bc81cc4008e4f6359fe8ce68f793af23b7123bdbf3a6	1
 zip-code	./xtask/src/aegis.rs	f2f89ede8e7d4b3d2243dea1ca96b8ece56f793811d9708b4a0181bf81a50011	1
+zip-code	./xtask/src/dist.rs	6f21ec723dd82aa7bd36bc81cc4008e4f6359fe8ce68f793af23b7123bdbf3a6	1
 zip-code	./xtask/src/dist.rs	d55d01d0341ed0ba2cd99b322e8c5b609254f47d10c7cd12b99b4922effeba44	1
 zip-code	./xtask/src/perf.rs	0eaa217986d49cd21dd15615c9531ffa6e1fe7e4f3a869748f4810aadb3d5ba9	1
 zip-code	./xtask/src/perf.rs	15c6c15ecd64a425cf7d303534d6d887a808657fc67e11539710261583a601b6	1

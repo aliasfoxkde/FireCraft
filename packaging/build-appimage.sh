@@ -41,10 +41,16 @@ install -m 644 packaging/appimage/firecraft.desktop \
     echo
     cat LICENSE
 } > "${STAGE}/usr/share/doc/firecraft/copyright"
+mkdir -p "${STAGE}/usr/share/icons/hicolor/256x256/apps"
+install -m 644 assets/icons/hicolor/256x256/apps/firecraft.png \
+    "${STAGE}/usr/share/icons/hicolor/256x256/apps/firecraft.png"
 
-# No icon ships in-tree (asset rule: docs/ATTRIBUTION.md) — linuxdeploy
-# warns and proceeds; drop an icon into usr/share/icons/hicolor/.../apps/
-# before this step if the release carries operator-supplied art.
+# Icon ships in-tree at assets/icons/hicolor/256x256/apps/firecraft.png —
+# an original work drawn for this repo (see docs/ATTRIBUTION.md), not a
+# copy from the reference install. linuxdeploy hard-requires an Icon=
+# entry in the desktop file (continuous build, 2026-11-06: exits with
+# "ERROR: Icon entry missing" and no output image), so the icon is part
+# of the recipe contract, not optional decoration.
 
 echo "==> linuxdeploy -> ${OUT}"
 cd dist/appimage-stage

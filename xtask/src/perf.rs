@@ -431,23 +431,167 @@ fn save_len(
 /// `VmHWM` (KiB) of a fresh process that runs the open path on `path` —
 /// this binary re-exec'd with the probe verb.
 fn peak_memory_kib(path: &str) -> Result<f64, String> {
-    let exe = std::env::current_exe().map_err(|e| format!("current_exe: {e}"))?;
-    let output = Command::new(exe)
-        .args(["perf-child", path])
-        .output()
-        .map_err(|e| format!("spawn perf-child: {e}"))?;
-    if !output.status.success() {
-        return Err(format!(
-            "perf-child failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        ));
-    }
+    let output = spawn_verb(&["perf-child", path])?;
     // The child reports the KiB on its first stderr line; the gate's
     // own `ok` receipt follows it.
     String::from_utf8_lossy(&output.stderr)
         .lines()
         .find_map(|line| line.trim().parse::<f64>().ok())
         .ok_or_else(|| "perf-child printed no VmHWM reading".to_owned())
+}
+
+/// Spawns this binary with `args`, trying each candidate resolution in
+/// turn.
+///
+/// A candidate counts only when the child both spawned *and* exited
+/// clean: a candidate that spawns into a failure must not shadow a
+/// later candidate that would have worked.
+fn spawn_verb(args: &[&str]) -> Result<std::process::Output, String> {
+    let mut failures = Vec::new();
+    for exe in probe_exe_candidates() {
+        match Command::new(&exe).args(args).output() {
+            Ok(output) if output.status.success() => return Ok(output),
+            Ok(output) => failures.push(format!(
+                "{}: exited {}: {}",
+                exe.display(),
+                output
+                    .status
+                    .code()
+                    .map_or_else(|| "signal".to_owned(), |c| c.to_string()),
+                String::from_utf8_lossy(&output.stderr).trim()
+            )),
+            Err(e) => failures.push(format!("{}: {e}", exe.display())),
+        }
+    }
+    Err(format!(
+        "spawn {}: {}",
+        args.first().map_or("self", |v| *v),
+        if failures.is_empty() {
+            "no executable path to re-exec".to_owned()
+        } else {
+            failures.join("; ")
+        }
+    ))
+}
+
+/// The paths this process may be re-exec'd from, best first.
+///
+/// `std::env::current_exe()` resolves through `/proc/self/exe` and so
+/// reports the *inode's current path*, not the path this process was
+/// launched from. The gate runs nested `cargo` steps (coverage, test)
+/// that re-uplift `target/debug/xtask` while this process is still
+/// running: the running inode is unlinked, `current_exe()` gains a
+/// `" (deleted)"` suffix, and the spawn fails with `ENOENT` — the
+/// memory probe cannot run at all.
+///
+/// `/proc/self/exe` names the inode directly, so it survives the
+/// replacement. It is also the honest answer: the probe must measure
+/// the code this gate is running, not a build that landed underneath
+/// it mid-run.
+fn probe_exe_candidates() -> Vec<std::path::PathBuf> {
+    let proc_self = std::path::Path::new("/proc/self/exe");
+    let proc_self = if proc_self.exists() {
+        Some(proc_self.to_path_buf())
+    } else {
+        None
+    };
+    let current = std::env::current_exe().ok();
+    probe_exe_order(proc_self.as_deref(), current.as_deref())
+}
+
+/// The decision core: which re-exec path to try, and in what order.
+///
+/// The environment is read at the edge ([`probe_exe_candidates`]) and
+/// passed in here, so the stale-path case is testable without
+/// replacing a live binary.
+fn probe_exe_order(
+    proc_self: Option<&std::path::Path>,
+    current_exe: Option<&std::path::Path>,
+) -> Vec<std::path::PathBuf> {
+    let mut order: Vec<std::path::PathBuf> = Vec::new();
+    for candidate in [proc_self, current_exe].into_iter().flatten() {
+        if !order.iter().any(|seen| seen == candidate) {
+            order.push(candidate.to_path_buf());
+        }
+    }
+    order
+}
+
+/// The hidden self-exec probe: reproduce the CI shape where the gate's
+/// own binary is replaced underneath the running gate, then run the
+/// memory probe through the same re-exec resolution.
+///
+/// The gate re-execs itself to measure peak memory in a fresh process.
+/// The CI gate runs nested `cargo` steps (coverage, test) that re-uplift
+/// `target/debug/xtask` while the gate is still running, so the path the
+/// gate was launched from stops resolving and the probe died with
+/// `spawn perf-child: No such file or directory (os error 2)`. The
+/// resolution prefers `/proc/self/exe`, which names the running inode
+/// and survives the replacement; `current_exe()` does not.
+///
+/// This verb removes the path it was launched from — the running inode
+/// stays alive because the caller linked it — and then runs the ordinary
+/// memory probe. It fails when the stale path still resolves, because
+/// then the replacement was not reproduced and the probe would prove
+/// nothing.
+///
+/// The removed path is this process's own executable path, read at the
+/// edge; the verb takes no path to delete, so it cannot be pointed at
+/// anything else. Two guards keep it from removing anything of value:
+/// the opt-in env var, and the requirement that another link to the
+/// same inode exists — the probe never removes the last name of a
+/// binary.
+pub fn selfexec(doc_path: &str) -> Result<(), String> {
+    if std::env::var("FIRECRAFT_PERF_SELFEXEC").as_deref() != Ok("1") {
+        return Err(
+            "perf-selfexec deletes the binary it runs from — set FIRECRAFT_PERF_SELFEXEC=1 to \
+             opt in"
+                .to_owned(),
+        );
+    }
+    let exe = std::env::current_exe().map_err(|e| format!("perf-selfexec: current_exe: {e}"))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        let meta = std::fs::metadata(&exe)
+            .map_err(|e| format!("perf-selfexec: stat {}: {e}", exe.display()))?;
+        if meta.nlink() < 2 {
+            return Err(format!(
+                "perf-selfexec: {} is the only name of the running binary — refusing to remove it",
+                exe.display()
+            ));
+        }
+    }
+    std::fs::remove_file(&exe)
+        .map_err(|e| format!("perf-selfexec: unlink {}: {e}", exe.display()))?;
+    let stale = std::env::current_exe().map_err(|e| format!("perf-selfexec: current_exe: {e}"))?;
+    if std::fs::metadata(&stale).is_ok() {
+        return Err(format!(
+            "perf-selfexec: {} still resolves — the replaced-binary shape was not reproduced",
+            stale.display()
+        ));
+    }
+    // The CI failure, reproduced exactly: spawning the stale path is
+    // `ENOENT`, which is what the gate reported.
+    match Command::new(&stale)
+        .arg("perf-child")
+        .arg(doc_path)
+        .output()
+    {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => return Err(format!("perf-selfexec: stale spawn failed oddly: {e}")),
+        Ok(_) => {
+            return Err(
+                "perf-selfexec: the stale path still spawned — the replaced-binary shape was not \
+                 reproduced"
+                    .to_owned(),
+            );
+        }
+    }
+    // The repair: the resolution still finds a live executable.
+    let kib = peak_memory_kib(doc_path)?;
+    eprintln!("[xtask] perf-selfexec: peak {kib:.0} KiB through the replaced binary");
+    Ok(())
 }
 
 /// This process's resident-set high-water mark, KiB (Linux).
@@ -548,5 +692,60 @@ fn profile() -> &'static str {
         "dev"
     } else {
         "release"
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used)]
+    use super::probe_exe_order;
+    use std::path::{Path, PathBuf};
+
+    fn paths(order: &[PathBuf]) -> Vec<String> {
+        order.iter().map(|p| p.display().to_string()).collect()
+    }
+
+    /// The CI failure: the running binary's path was replaced, so
+    /// `current_exe()` names a path that no longer resolves. The
+    /// `/proc/self/exe` candidate must therefore be tried first — it
+    /// names the inode, which survives the replacement.
+    #[test]
+    fn the_proc_self_path_is_tried_before_the_current_exe_path() {
+        let order = probe_exe_order(
+            Some(Path::new("/proc/self/exe")),
+            Some(Path::new("/build/target/debug/xtask (deleted)")),
+        );
+        assert_eq!(
+            paths(&order),
+            vec![
+                "/proc/self/exe".to_owned(),
+                "/build/target/debug/xtask (deleted)".to_owned()
+            ]
+        );
+    }
+
+    /// The same path from both sources is one candidate, not two.
+    #[test]
+    fn a_duplicate_candidate_is_tried_once() {
+        let order = probe_exe_order(
+            Some(Path::new("/proc/self/exe")),
+            Some(Path::new("/proc/self/exe")),
+        );
+        assert_eq!(paths(&order), vec!["/proc/self/exe".to_owned()]);
+    }
+
+    /// Without `/proc` (a non-Linux host) the current path is the only
+    /// candidate.
+    #[test]
+    fn the_current_exe_path_is_the_fallback() {
+        let order = probe_exe_order(None, Some(Path::new("/build/target/debug/xtask")));
+        assert_eq!(paths(&order), vec!["/build/target/debug/xtask".to_owned()]);
+    }
+
+    /// Neither source resolved: there is nothing to re-exec, and the
+    /// caller must say so rather than spawn an empty path.
+    #[test]
+    fn no_candidate_means_no_re_exec() {
+        assert!(probe_exe_order(None, None).is_empty());
     }
 }
