@@ -790,10 +790,10 @@ fn max_glibc_requirement(objdump_stdout: &str) -> Option<GlibcVersion> {
         let end = after
             .find(|c: char| !(c.is_ascii_digit() || c == '.'))
             .unwrap_or(after.len());
-        if let Some(found) = GlibcVersion::parse(&after[..end]) {
-            if best.as_ref().is_none_or(|b| found > *b) {
-                best = Some(found);
-            }
+        if let Some(found) = GlibcVersion::parse(&after[..end])
+            && best.as_ref().is_none_or(|b| found > *b)
+        {
+            best = Some(found);
         }
         rest = &after[end..];
     }
