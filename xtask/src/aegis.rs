@@ -241,10 +241,7 @@ pub fn report() -> Result<(), String> {
     let findings = scan()?;
     let fresh = uncovered(&findings, &baseline);
     for finding in &fresh {
-        eprintln!(
-            "{}:{}:{}",
-            finding.pattern, finding.file, finding.digest
-        );
+        eprintln!("{}:{}:{}", finding.pattern, finding.file, finding.digest);
         eprintln!("  {} {}:{}", finding.pattern, finding.file, finding.line);
     }
     Ok(())
