@@ -73,6 +73,7 @@ eval-usage	./crates/vector/src/boolean.rs	a475ee49c7acce90b0c9124fcaaf388999e9ef
 eval-usage	./crates/vector/src/offset.rs	a475ee49c7acce90b0c9124fcaaf388999e9ef2c94d490d52a855d24c2d97deb	1
 eval-usage	./crates/vector/src/tests.rs	a475ee49c7acce90b0c9124fcaaf388999e9ef2c94d490d52a855d24c2d97deb	4
 eval-usage	./docs/SESSIONS.md	a475ee49c7acce90b0c9124fcaaf388999e9ef2c94d490d52a855d24c2d97deb	1
+eval-usage	./docs/decisions/0084-aegis-rebless-slice-hotspot.md	a475ee49c7acce90b0c9124fcaaf388999e9ef2c94d490d52a855d24c2d97deb	1
 eval-usage	./xtask/src/aegis.rs	a475ee49c7acce90b0c9124fcaaf388999e9ef2c94d490d52a855d24c2d97deb	3
 # Matches the two-word phrase naming an individual's data category in
 # English prose. The occurrence outside this gate's own source is a
@@ -111,6 +112,7 @@ pci-cardholder-data	./docs/NEXT.md	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57
 pci-cardholder-data	./docs/SESSIONS.md	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	5
 pci-cardholder-data	./docs/SESSIONS.md	e6205bc8ab80302276cc2b94e571d9aeafa567c0517146ac4396a4f6a8cead1a	1
 pci-cardholder-data	./docs/decisions/0074-aegis-content-keyed-baseline.md	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	1
+pci-cardholder-data	./docs/decisions/0084-aegis-rebless-slice-hotspot.md	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	3
 pci-cardholder-data	./docs/planning/firecraft/M12-parity-release.md	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	3
 pci-cardholder-data	./docs/planning/firecraft/M13-deep-re-shell-parity.md	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	1
 pci-cardholder-data	./docs/planning/firecraft/M15-tool-surface.md	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	1
@@ -545,6 +547,10 @@ zip-code	./docs/decisions/0066-smoke-budget.md	d55d01d0341ed0ba2cd99b322e8c5b609
 zip-code	./docs/decisions/0074-aegis-content-keyed-baseline.md	6f21ec723dd82aa7bd36bc81cc4008e4f6359fe8ce68f793af23b7123bdbf3a6	1
 zip-code	./docs/decisions/0074-aegis-content-keyed-baseline.md	7b1f167cba373e261a8bea96004bdf27f937a89c830fceb823eec636d4a3920e	1
 zip-code	./docs/decisions/0074-aegis-content-keyed-baseline.md	b83c588da0c6931625f42e0948054a3ade722bfd02c27816305742ed7390ac6c	2
+zip-code	./docs/decisions/0084-aegis-rebless-slice-hotspot.md	6ae29c8266e042c990b22c648de06825fb83d9a2e854ca65b4fd30f692f5aedd	1
+zip-code	./docs/decisions/0084-aegis-rebless-slice-hotspot.md	7f86696157efee849855811dbdd3b8babcbde71c5c3e17277bf4f2bf6a75106e	1
+zip-code	./docs/decisions/0084-aegis-rebless-slice-hotspot.md	e95e07198fbc2a3fac954c1e20f99ff404edbc4a9bcc08f0ef575f1b58121ac5	1
+zip-code	./docs/decisions/0084-aegis-rebless-slice-hotspot.md	fec32d6024e177ac05e94de175bfccd84ec3d389034f6f57067fb167302534b6	1
 zip-code	./docs/planning/firecraft/M8-import-export.md	f2f89ede8e7d4b3d2243dea1ca96b8ece56f793811d9708b4a0181bf81a50011	2
 zip-code	./docs/planning/firecraft/M9-scripting.md	0e5c81ceee464db1c0cb9ed801d134fab0dd2a28c0dc62e35aa21a8e13ff0ebc	1
 zip-code	./docs/planning/firecraft/M9-scripting.md	20d70708103e5223b6f2fb00f00947832fb93d12ebef11eb10bc5599efefe184	1
