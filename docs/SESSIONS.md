@@ -1662,6 +1662,13 @@ edit is a fifteen-minute regeneration is a gate that gets skipped.
 
 ### What changed
 
+> **Withdrawn.** When this branch merged `main`, this rule-class
+> suppression was dropped in favour of main's content-keyed baseline
+> (decision 0074): `.aegis-pattern-state.json`, `.aegis-allowlist.json`,
+> and decision 0070 are deleted, and every rule class stays armed with
+> each occurrence adjudicated individually. The paragraphs below record
+> the state of the branch at 2026-11-06.
+
 The baseline is gone; 644 line-keyed entries in 19.4 MB are replaced by
 12 rule names and 8 content digests.
 
@@ -1675,12 +1682,6 @@ The baseline is gone; 644 line-keyed entries in 19.4 MB are replaced by
   for each is in decision 0070. The five `credit-card-*` rules stay
   **armed**, so a real card number is still caught.
 
-  > **Withdrawn.** When this branch merged `main`, this rule-class
-  > suppression was dropped in favour of main's content-keyed baseline
-  > (decision 0074): `.aegis-pattern-state.json`, `.aegis-allowlist.json`,
-  > and decision 0070 are deleted, and every rule class stays armed with
-  > each occurrence adjudicated individually. The paragraphs below record
-  > the state of the branch at 2026-11-06.
 - **`.aegis-allowlist.json`** suppresses the ten remaining
   per-finding false positives, keyed `pattern:file:content-digest` —
   the line is deliberately omitted, so an entry survives every edit
