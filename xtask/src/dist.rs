@@ -16,6 +16,7 @@
 
 use crate::util::{run_in, sha256_hex, workspace_root};
 use base64::Engine as _;
+use std::collections::{BTreeMap, BTreeSet};
 use std::io::{Read as _, Write as _};
 use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
@@ -137,6 +138,348 @@ pub fn native() -> Result<(), String> {
         "[xtask] dist native: 3 archives, manifest {manifest}, dpkg-deb verified, recipes parse-checked ({recipes} bash)"
     );
     Ok(())
+}
+
+/// Produces the source archive under `dist/source/` (T27 RP-05): a
+/// `git archive` of the exact HEAD (the tree the gate itself runs on —
+/// not a mutable branch), extracted to a scratch dir and verified by
+/// a clean extraction check (Cargo.toml + Cargo.lock + every workspace
+/// member present, no `source/` Adobe material) and `cargo metadata
+/// --locked` parse inside the extraction. An archive that cannot be
+/// re-extracted into a buildable tree is not shipped.
+pub fn source() -> Result<(), String> {
+    let version = workspace_version()?;
+    let out = workspace_root().join("dist/source");
+    if out.exists() {
+        std::fs::remove_dir_all(&out).map_err(|e| format!("clear {}: {e}", out.display()))?;
+    }
+    std::fs::create_dir_all(&out).map_err(|e| format!("mkdir {}: {e}", out.display()))?;
+    let archive = out.join(format!("FireCraft-{version}-source.tar.gz"));
+
+    // git archive pins the commit identity inside the tar (pax header)
+    // implicitly; the report below names HEAD so the receipt is
+    // attributable to an exact commit even without re-deriving it.
+    run_in(None, "git", &["rev-parse", "HEAD"])?;
+
+    run_in(
+        None,
+        "git",
+        &[
+            "archive",
+            "--format=tar.gz",
+            "--prefix=FireCraft/",
+            "-o",
+            &archive.display().to_string(),
+            "HEAD",
+        ],
+    )?;
+
+    // Verification: clean extract into scratch (outside the tree), then
+    // structural checks + `cargo metadata --locked` in the extraction.
+    let scratch = out.join(".verify");
+    std::fs::create_dir_all(&scratch).map_err(|e| format!("mkdir verify: {e}"))?;
+    run_in(
+        Some(&scratch),
+        "tar",
+        &["-xzf", &archive.display().to_string()],
+    )?;
+    let extracted = scratch.join("FireCraft");
+    for must in [
+        "Cargo.toml",
+        "Cargo.lock",
+        "LICENSE",
+        "crates",
+        "xtask",
+        "web",
+    ] {
+        if !extracted.join(must).exists() {
+            return Err(format!("source archive missing {must} after extraction"));
+        }
+    }
+    if extracted.join("source").exists() {
+        return Err("source archive leaked the git-ignored source/ tree".to_owned());
+    }
+    let meta = std::process::Command::new("cargo")
+        .args(["metadata", "--locked", "--format-version", "1", "--no-deps"])
+        .current_dir(&extracted)
+        .output()
+        .map_err(|e| format!("spawn cargo metadata: {e}"))?;
+    if !meta.status.success() {
+        return Err(format!(
+            "cargo metadata failed in extracted source archive:\n{}",
+            String::from_utf8_lossy(&meta.stderr).trim()
+        ));
+    }
+
+    std::fs::remove_dir_all(&scratch).map_err(|e| format!("clean verify scratch: {e}"))?;
+    let digest = sha256_hex_file(&archive)?;
+    eprintln!(
+        "[xtask] dist source: FireCraft-{version}-source.tar.gz ({digest}), \
+         clean-extract + cargo metadata --locked verified"
+    );
+    Ok(())
+}
+
+/// sha256 of a file (hex), same digest form `write_manifest` uses.
+fn sha256_hex_file(path: &Path) -> Result<String, String> {
+    let bytes = std::fs::read(path).map_err(|e| format!("read {}: {e}", path.display()))?;
+    Ok(sha256_hex(&bytes))
+}
+
+/// Emits the dependency SBOM under `dist/sbom/` (T27 RP-06): `CycloneDX`
+/// 1.5 from the complete locked Cargo package inventory and resolved
+/// dependency edges. Registry packages use Cargo purls; workspace,
+/// path, and git packages use stable `FireCraft` bom-refs instead. No
+/// signing/provenance claims are made here — those remain separate
+/// deliverables once signing credentials exist.
+pub fn sbom() -> Result<(), String> {
+    let out = workspace_root().join("dist/sbom");
+    if out.exists() {
+        std::fs::remove_dir_all(&out).map_err(|e| format!("clear {}: {e}", out.display()))?;
+    }
+    std::fs::create_dir_all(&out).map_err(|e| format!("mkdir {}: {e}", out.display()))?;
+
+    let raw = std::process::Command::new("cargo")
+        .args(["metadata", "--locked", "--format-version", "1"])
+        .current_dir(workspace_root())
+        .output()
+        .map_err(|e| format!("spawn cargo metadata: {e}"))?;
+    if !raw.status.success() {
+        return Err(format!(
+            "cargo metadata failed:\n{}",
+            String::from_utf8_lossy(&raw.stderr).trim()
+        ));
+    }
+    let meta: serde_json::Value =
+        serde_json::from_slice(&raw.stdout).map_err(|e| format!("parse cargo metadata: {e}"))?;
+    let version = workspace_version()?;
+
+    let mut components = Vec::new();
+    let packages = meta["packages"]
+        .as_array()
+        .ok_or("cargo metadata: no packages array")?;
+    let mut package_refs = BTreeMap::new();
+    for pkg in packages {
+        let name = pkg["name"]
+            .as_str()
+            .ok_or("cargo metadata: package without name")?;
+        let ver = pkg["version"]
+            .as_str()
+            .ok_or("cargo metadata: package without version")?;
+        let (bom_ref, purl) = package_bom_ref(pkg)?;
+        let id = pkg["id"]
+            .as_str()
+            .ok_or("cargo metadata: package without id")?;
+        package_refs.insert(id.to_owned(), bom_ref.clone());
+        let mut component = serde_json::json!({
+            "type": "library",
+            "name": name,
+            "version": ver,
+            "bom-ref": bom_ref,
+        });
+        if let Some(purl) = purl {
+            component["purl"] = serde_json::json!(purl);
+        }
+        if let Some(license) = pkg["license"].as_str() {
+            component["licenses"] = serde_json::json!([
+                { "license": { "id": license } }
+            ]);
+        }
+        components.push(component);
+    }
+
+    let root_ref = format!("urn:firecraft:application:firecraft@{version}");
+    let dependencies = cyclonedx_dependencies(&meta, &package_refs, &root_ref)?;
+    let serial = uuid_from_graph(packages)?;
+    let bom = serde_json::json!({
+        "bomFormat": "CycloneDX",
+        "specVersion": "1.5",
+        "serialNumber": format!("urn:uuid:{serial}"),
+        "version": 1,
+        "metadata": {
+            "timestamp": build_timestamp(),
+            "component": {
+                "type": "application",
+                "name": "firecraft",
+                "version": version,
+                "bom-ref": root_ref,
+            },
+            "tools": [{
+                "vendor": "FireCraft",
+                "name": "xtask dist --sbom",
+                "version": version,
+            }],
+        },
+        "components": components,
+        "dependencies": dependencies,
+    });
+    let path = out.join(format!("firecraft-{version}-sbom.cdx.json"));
+    let text = serde_json::to_string_pretty(&bom).map_err(|e| format!("encode sbom: {e}"))?;
+    std::fs::write(&path, text.as_bytes()).map_err(|e| format!("write {}: {e}", path.display()))?;
+    let digest = sha256_hex_file(&path)?;
+    eprintln!(
+        "[xtask] dist sbom: {} ({} components, {digest})",
+        path.display(),
+        components.len()
+    );
+    Ok(())
+}
+
+/// Stable `CycloneDX` identity for one Cargo package. Only crates.io
+/// registry packages receive a Cargo purl; path and git packages are
+/// identified by a bom-ref derived from their source identity.
+fn package_bom_ref(package: &serde_json::Value) -> Result<(String, Option<String>), String> {
+    let name = package["name"]
+        .as_str()
+        .ok_or("cargo metadata: package without name")?;
+    let version = package["version"]
+        .as_str()
+        .ok_or("cargo metadata: package without version")?;
+    let source = package["source"].as_str();
+    const CRATES_IO: &str = "registry+https://github.com/rust-lang/crates.io-index";
+    if source == Some(CRATES_IO) {
+        let purl = format!("pkg:cargo/{name}@{version}");
+        return Ok((purl.clone(), Some(purl)));
+    }
+
+    let source_identity = if let Some(source) = source {
+        source.to_owned()
+    } else {
+        let manifest = package["manifest_path"]
+            .as_str()
+            .ok_or_else(|| format!("cargo metadata: {name} has no manifest_path"))?;
+        let path = Path::new(manifest);
+        let relative = path
+            .strip_prefix(workspace_root())
+            .unwrap_or(path)
+            .to_string_lossy()
+            .replace('\\', "/");
+        format!("path:{relative}")
+    };
+    let digest = sha256_hex(source_identity.as_bytes());
+    Ok((
+        format!("urn:firecraft:cargo:{name}@{version}:{digest}"),
+        None,
+    ))
+}
+
+/// Emits the `CycloneDX` dependency edges from Cargo's resolved graph,
+/// plus a `FireCraft` application root pointing at all workspace members.
+fn cyclonedx_dependencies(
+    metadata: &serde_json::Value,
+    package_refs: &BTreeMap<String, String>,
+    root_ref: &str,
+) -> Result<Vec<serde_json::Value>, String> {
+    let nodes = metadata["resolve"]["nodes"]
+        .as_array()
+        .ok_or("cargo metadata: resolve.nodes is missing")?;
+    let mut dependencies = Vec::with_capacity(nodes.len() + 1);
+    for node in nodes {
+        let id = node["id"]
+            .as_str()
+            .ok_or("cargo metadata: resolve node without id")?;
+        let reference = package_refs
+            .get(id)
+            .ok_or_else(|| format!("cargo metadata: no bom-ref for resolved package {id}"))?;
+        let mut depends_on = BTreeSet::new();
+        if let Some(edges) = node["deps"].as_array() {
+            for edge in edges {
+                let package_id = edge["pkg"]
+                    .as_str()
+                    .ok_or("cargo metadata: dependency edge without package id")?;
+                let dependency_ref = package_refs.get(package_id).ok_or_else(|| {
+                    format!("cargo metadata: no bom-ref for dependency {package_id}")
+                })?;
+                depends_on.insert(dependency_ref.clone());
+            }
+        }
+        dependencies.push(serde_json::json!({
+            "ref": reference,
+            "dependsOn": depends_on.into_iter().collect::<Vec<_>>(),
+        }));
+    }
+
+    let members = metadata["workspace_members"]
+        .as_array()
+        .ok_or("cargo metadata: workspace_members is missing")?;
+    let mut workspace_refs = BTreeSet::new();
+    for member in members {
+        let id = member
+            .as_str()
+            .ok_or("cargo metadata: workspace member id is not a string")?;
+        let reference = package_refs
+            .get(id)
+            .ok_or_else(|| format!("cargo metadata: no bom-ref for workspace member {id}"))?;
+        workspace_refs.insert(reference.clone());
+    }
+    dependencies.push(serde_json::json!({
+        "ref": root_ref,
+        "dependsOn": workspace_refs.into_iter().collect::<Vec<_>>(),
+    }));
+    Ok(dependencies)
+}
+
+/// Deterministic serial from the locked graph: UUIDv8-shaped digest of
+/// the sorted package bom-refs, so source/version changes are reflected
+/// without depending on absolute checkout paths.
+fn uuid_from_graph(packages: &[serde_json::Value]) -> Result<String, String> {
+    use sha2::Digest as _;
+    let mut names: Vec<String> = packages
+        .iter()
+        .map(|package| package_bom_ref(package).map(|(reference, _)| reference))
+        .collect::<Result<_, _>>()?;
+    names.sort();
+    names.dedup();
+    let mut hasher = sha2::Sha256::new();
+    for n in &names {
+        hasher.update(n.as_bytes());
+        hasher.update(b"\n");
+    }
+    let digest = hasher.finalize();
+    // Format the first 16 bytes as a UUID; set version nibble to 8
+    // (UUIDv8-style custom, deterministic) per RFC 9562.
+    let mut b = [0u8; 16];
+    b.copy_from_slice(&digest[..16]);
+    b[6] = (b[6] & 0x0f) | 0x80;
+    b[8] = (b[8] & 0x3f) | 0x80;
+    let hex = |bytes: &[u8]| bytes.iter().map(|x| format!("{x:02x}")).collect::<String>();
+    Ok(format!(
+        "{}-{}-{}-{}-{}",
+        hex(&b[..4]),
+        hex(&b[4..6]),
+        hex(&b[6..8]),
+        hex(&b[8..10]),
+        hex(&b[10..16])
+    ))
+}
+
+/// UTC timestamp for the SBOM metadata block (std-only, no chrono).
+fn build_timestamp() -> String {
+    // days since epoch -> civil date (Howard Hinnant's algorithm).
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs() as i64;
+    let days = now.div_euclid(86_400);
+    let secs = now.rem_euclid(86_400);
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z.rem_euclid(146_097);
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146_096) / 365;
+    let y = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = if m <= 2 { y + 1 } else { y };
+    format!(
+        "{y:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z",
+        m,
+        d,
+        secs / 3600,
+        (secs % 3600) / 60,
+        secs % 60
+    )
 }
 
 /// Builds the release bundle with trunk and stages a fresh copy under
@@ -375,6 +718,152 @@ fn tar_gz(stage: &Path, top: &str, out: &Path) -> Result<(), String> {
     }
 }
 
+/// A GLIBC symbol-version requirement, e.g. `2.34` or the historic
+/// three-component `2.2.5`.
+///
+/// Compared component-wise, not as a float: `2.9` is older than
+/// `2.10`, and a float comparison of the two would order them
+/// backwards. A missing component is zero, so `2.2` is `2.2.0`.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+struct GlibcVersion(Vec<u64>);
+
+impl GlibcVersion {
+    /// Parses a dotted version. `None` for anything that is not a
+    /// purely numeric dotted version (`GLIBC_PRIVATE`, an empty
+    /// column, a truncated string).
+    fn parse(text: &str) -> Option<Self> {
+        let mut parts = Vec::new();
+        for part in text.split('.') {
+            if part.is_empty() {
+                return None;
+            }
+            parts.push(part.parse::<u64>().ok()?);
+        }
+        if parts.is_empty() {
+            return None;
+        }
+        Some(Self(parts))
+    }
+}
+
+impl std::fmt::Display for GlibcVersion {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let rendered: Vec<String> = self.0.iter().map(|n| n.to_string()).collect();
+        write!(f, "{}", rendered.join("."))
+    }
+}
+
+/// Reads the declared `libc6 (>= X)` floor out of a control file.
+fn declared_libc_floor(control: &str) -> Result<GlibcVersion, String> {
+    let depends = control
+        .lines()
+        .find(|l| l.starts_with("Depends:"))
+        .ok_or_else(|| "packaging/deb/control: no Depends field".to_owned())?;
+    let raw = depends
+        .split("libc6 (>= ")
+        .nth(1)
+        .and_then(|s| s.split(')').next())
+        .map(str::trim)
+        .ok_or_else(|| "packaging/deb/control: no parsable libc6 floor in Depends".to_owned())?;
+    GlibcVersion::parse(raw).ok_or_else(|| {
+        format!("packaging/deb/control: libc6 floor {raw:?} is not a dotted version")
+    })
+}
+
+/// The highest GLIBC symbol version referenced by `objdump -T` output.
+///
+/// Modern binutils prints the version in parentheses — `(GLIBC_2.34)`
+/// — while older binutils printed it bare (`GLIBC_2.2.5`). Both forms
+/// are accepted here; `GLIBC_PRIVATE` carries no release meaning and
+/// is ignored.
+///
+/// Returns `None` when the output holds no versioned GLIBC reference
+/// at all: a statically linked binary has no libc dependency, so
+/// there is nothing for the floor to cover.
+fn max_glibc_requirement(objdump_stdout: &str) -> Option<GlibcVersion> {
+    let mut best: Option<GlibcVersion> = None;
+    let mut rest = objdump_stdout;
+    while let Some(idx) = rest.find("GLIBC_") {
+        // Each iteration consumes the "GLIBC_" prefix, so this always
+        // makes progress even when no version follows it.
+        let after = &rest[idx + "GLIBC_".len()..];
+        let end = after
+            .find(|c: char| !(c.is_ascii_digit() || c == '.'))
+            .unwrap_or(after.len());
+        if let Some(found) = GlibcVersion::parse(&after[..end])
+            && best.as_ref().is_none_or(|b| found > *b)
+        {
+            best = Some(found);
+        }
+        rest = &after[end..];
+    }
+    best
+}
+
+/// True when the `objdump -T` output describes a dynamic symbol
+/// table. Without one there is no libc dependency to floor.
+fn has_dynamic_symbols(objdump_stdout: &str) -> bool {
+    objdump_stdout.contains("DYNAMIC SYMBOL TABLE")
+}
+
+/// Compares the declared floor against the binary's requirement.
+fn check_glibc_floor(
+    floor: &GlibcVersion,
+    needed: &GlibcVersion,
+    binary: &Path,
+) -> Result<(), String> {
+    if needed > floor {
+        return Err(format!(
+            "{binary:?} needs GLIBC_{needed} but packaging/deb/control floors libc6 at \
+             {floor} — raise the Depends floor (or build on an older glibc host)"
+        ));
+    }
+    Ok(())
+}
+
+/// Checks that the control file's `libc6 (>= X)` floor is not below
+/// the binary's highest GLIBC symbol-version requirement. A floor
+/// below the real requirement produces a package that installs on
+/// older systems and then fails at exec time — the exact defect a
+/// clean-container smoke exposed (floor said 2.31, binaries needed
+/// 2.35, found 2026-11-06). Parsed with `objdump -T` (binutils), not
+/// recalled from a table.
+///
+/// The requirement is set by the *build host's* glibc, not by Rust's
+/// std: the same program built on Debian 12 (glibc 2.36) references
+/// `pidfd_spawnp`/`pidfd_getpid` as weak undefined symbols with no
+/// version tag, while a build on Ubuntu 24.04 (glibc 2.39) tags them
+/// `(GLIBC_2.39)` and makes the package un-installable on Debian 12.
+/// So the floor is only meaningful if the build host is pinned — see
+/// `docs/decisions/0077-deb-glibc-floor.md`.
+fn verify_deb_glibc_floor(control: &str, binary: &Path) -> Result<(), String> {
+    let floor = declared_libc_floor(control)?;
+    let out = std::process::Command::new("objdump")
+        .args(["-T"])
+        .arg(binary)
+        .output()
+        .map_err(|e| format!("spawn objdump on {binary:?}: {e}"))?;
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    if !out.status.success() {
+        // A statically linked binary has no dynamic symbol table at
+        // all and therefore no libc dependency to floor.
+        if stderr.contains("not a dynamic object") {
+            return Ok(());
+        }
+        return Err(format!("objdump -T {binary:?} failed: {}", stderr.trim()));
+    }
+    match max_glibc_requirement(&stdout) {
+        Some(needed) => check_glibc_floor(&floor, &needed, binary),
+        None if has_dynamic_symbols(&stdout) => Err(format!(
+            "{binary:?} has a dynamic symbol table but no GLIBC version could be parsed \
+             from `objdump -T` — refusing to assume the floor covers it"
+        )),
+        // No dynamic symbol table: nothing to floor.
+        None => Ok(()),
+    }
+}
+
 /// Builds the `.deb` from the pinned control file
 /// (`packaging/deb/control`, whose Version must equal the workspace
 /// version) over the standard payload: both binaries in `usr/bin`,
@@ -398,6 +887,8 @@ fn build_deb(
              {version} — bump the control file with the workspace version"
         ));
     }
+    verify_deb_glibc_floor(&control, shell)?;
+    verify_deb_glibc_floor(&control, cli)?;
 
     let deb = stage.join("deb");
     let debian = deb.join("DEBIAN");
@@ -492,7 +983,11 @@ fn verify_deb(deb: &Path, version: &str) -> Result<(), String> {
 /// platform (docs/TOOLCHAINS.md); the gate requires they exist.
 fn parse_recipes() -> Result<usize, String> {
     let mut checked = 0;
-    for name in ["build-appimage.sh", "build-macos-dmg.sh"] {
+    for name in [
+        "build-appimage.sh",
+        "build-flatpak.sh",
+        "build-macos-dmg.sh",
+    ] {
         let script = workspace_root().join("packaging").join(name);
         let status = std::process::Command::new("bash")
             .args(["-n"])
@@ -507,6 +1002,15 @@ fn parse_recipes() -> Result<usize, String> {
         }
         checked += 1;
     }
+    // The Flatpak manifest is data, not a script: a YAML parse proves
+    // structure. The serde_yaml dependency lives in xtask's Cargo.toml.
+    let manifest = workspace_root().join("packaging/flatpak/dev.firecraft.FireCraft.yml");
+    let yaml = std::fs::read_to_string(&manifest)
+        .map_err(|e| format!("read {}: {e}", manifest.display()))?;
+    serde_yaml::from_str::<serde_yaml::Value>(&yaml).map_err(|e| {
+        format!("packaging/flatpak/dev.firecraft.FireCraft.yml does not parse: {e}")
+    })?;
+    checked += 1;
     for name in ["build-windows.ps1", "windows/firecraft.iss"] {
         let recipe = workspace_root().join("packaging").join(name);
         if !recipe.is_file() {
@@ -761,4 +1265,195 @@ fn chromium_path() -> Option<PathBuf> {
 fn which(name: &str) -> bool {
     std::env::var_os("PATH")
         .is_some_and(|paths| std::env::split_paths(&paths).any(|dir| dir.join(name).is_file()))
+}
+
+#[cfg(test)]
+mod sbom_tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+    use super::*;
+
+    #[test]
+    fn registry_packages_get_cargo_purls_but_local_packages_do_not() {
+        let registry = serde_json::json!({
+            "id": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.0",
+            "name": "serde",
+            "version": "1.0.0",
+            "source": "registry+https://github.com/rust-lang/crates.io-index",
+        });
+        assert_eq!(
+            package_bom_ref(&registry).unwrap(),
+            (
+                "pkg:cargo/serde@1.0.0".to_owned(),
+                Some("pkg:cargo/serde@1.0.0".to_owned())
+            )
+        );
+
+        let local = serde_json::json!({
+            "id": "path+file:///workspace/crates/engine#engine@0.1.0",
+            "name": "engine",
+            "version": "0.1.0",
+            "source": null,
+            "manifest_path": workspace_root().join("crates/engine/Cargo.toml").display().to_string(),
+        });
+        let (reference, purl) = package_bom_ref(&local).unwrap();
+        assert!(reference.starts_with("urn:firecraft:cargo:engine@0.1.0:"));
+        assert!(purl.is_none());
+    }
+
+    #[test]
+    fn cyclonedx_dependencies_preserve_workspace_and_package_edges() {
+        let workspace_id = "path+file:///workspace/crates/app#app@0.1.0";
+        let registry_id = "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.0";
+        let metadata = serde_json::json!({
+            "workspace_members": [workspace_id],
+            "resolve": { "nodes": [
+                { "id": workspace_id, "deps": [{ "pkg": registry_id }] },
+                { "id": registry_id, "deps": [] }
+            ]}
+        });
+        let refs = BTreeMap::from([
+            (workspace_id.to_owned(), "urn:firecraft:app".to_owned()),
+            (registry_id.to_owned(), "pkg:cargo/serde@1.0.0".to_owned()),
+        ]);
+        let dependencies = cyclonedx_dependencies(
+            &metadata,
+            &refs,
+            "urn:firecraft:application:firecraft@0.1.0",
+        )
+        .unwrap();
+        let app = dependencies
+            .iter()
+            .find(|entry| entry["ref"] == "urn:firecraft:app")
+            .unwrap();
+        assert_eq!(app["dependsOn"][0], "pkg:cargo/serde@1.0.0");
+        let root = dependencies.last().unwrap();
+        assert_eq!(root["dependsOn"][0], "urn:firecraft:app");
+    }
+}
+
+#[cfg(test)]
+mod glibc_floor_tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+    use super::*;
+
+    /// A slice of real `objdump -T` output, in the parenthesized form
+    /// modern binutils prints.
+    const MODERN_OBJDUMP: &str = "\
+/bin/ls:     file format elf64-x86-64
+
+DYNAMIC SYMBOL TABLE:
+0000000000000000      DF *UND*	0000000000000000 (GLIBC_2.3)  __ctype_toupper_loc
+0000000000000000      DF *UND*	0000000000000000 (GLIBC_2.34) __libc_start_main
+0000000000000000      w DF *UND*	0000000000000000 (GLIBC_2.34) _dl_find_dso_for_object
+";
+
+    /// The older bare form, including the historic three-component
+    /// version and a `GLIBC_PRIVATE` marker that names no release.
+    const LEGACY_OBJDUMP: &str = "\
+DYNAMIC SYMBOL TABLE:
+0000000000000000     DF *UND*	0000000000000000   GLIBC_2.2.5  getenv
+0000000000000000     DF *UND*	0000000000000000   GLIBC_PRIVATE __libc_dlopen_mode
+";
+
+    const CONTROL: &str = "\
+Package: firecraft
+Version: 0.2.5
+Depends: libc6 (>= 2.36)
+";
+
+    #[test]
+    fn parenthesized_versions_are_parsed() {
+        assert_eq!(
+            max_glibc_requirement(MODERN_OBJDUMP),
+            Some(GlibcVersion(vec![2, 34]))
+        );
+    }
+
+    #[test]
+    fn bare_versions_are_parsed() {
+        assert_eq!(
+            max_glibc_requirement(LEGACY_OBJDUMP),
+            Some(GlibcVersion(vec![2, 2, 5]))
+        );
+    }
+
+    #[test]
+    fn glibc_private_is_not_a_requirement() {
+        let only_private = "DYNAMIC SYMBOL TABLE:\n\
+                            0000     DF *UND*  0000   GLIBC_PRIVATE __libc_dlopen_mode\n";
+        assert_eq!(max_glibc_requirement(only_private), None);
+    }
+
+    #[test]
+    fn three_component_versions_sort_below_their_next_minor() {
+        // 2.2.5 is older than 2.10 — a float comparison would invert
+        // this pair.
+        let older = GlibcVersion(vec![2, 2, 5]);
+        let newer = GlibcVersion(vec![2, 10]);
+        assert!(older < newer);
+        assert!(GlibcVersion(vec![2, 36]) > newer);
+    }
+
+    #[test]
+    fn declared_floor_is_read_from_the_control_file() {
+        assert_eq!(
+            declared_libc_floor(CONTROL).unwrap(),
+            GlibcVersion(vec![2, 36])
+        );
+    }
+
+    #[test]
+    fn a_control_file_without_a_libc6_floor_is_rejected() {
+        let control = "Package: firecraft\nDepends: zlib1g\n";
+        assert!(declared_libc_floor(control).is_err());
+    }
+
+    #[test]
+    fn a_floor_below_the_requirement_is_rejected() {
+        let floor = GlibcVersion(vec![2, 31]);
+        let needed = GlibcVersion(vec![2, 39]);
+        let err = check_glibc_floor(&floor, &needed, Path::new("/usr/bin/firecraft")).unwrap_err();
+        assert!(err.contains("GLIBC_2.39"), "{err}");
+        assert!(err.contains("2.31"), "{err}");
+    }
+
+    #[test]
+    fn an_adequate_floor_is_accepted() {
+        let floor = GlibcVersion(vec![2, 36]);
+        let needed = GlibcVersion(vec![2, 35]);
+        assert!(check_glibc_floor(&floor, &needed, Path::new("/usr/bin/firecraft")).is_ok());
+    }
+
+    #[test]
+    fn the_check_fails_on_a_real_binary_with_a_too_low_floor() {
+        // End-to-end through objdump. Skipped when objdump is absent —
+        // the packaging path fails loudly in that case rather than
+        // silently passing.
+        if !std::path::Path::new("/usr/bin/objdump").exists() {
+            return;
+        }
+        let binary = Path::new("/bin/ls");
+        if !binary.exists() {
+            return;
+        }
+        let low = "Package: firecraft\nDepends: libc6 (>= 2.2)\n";
+        assert!(
+            verify_deb_glibc_floor(low, binary).is_err(),
+            "a floor of 2.2 cannot cover a modern glibc — the check must fail"
+        );
+        let high = "Package: firecraft\nDepends: libc6 (>= 99.0)\n";
+        assert!(
+            verify_deb_glibc_floor(high, binary).is_ok(),
+            "an absurdly high floor must cover the real requirement"
+        );
+    }
+
+    #[test]
+    fn a_dynamic_binary_with_no_parsable_version_fails_loudly() {
+        // No version column at all — the check must not assume the
+        // floor covers a requirement it could not read.
+        let opaque = "DYNAMIC SYMBOL TABLE:\n0000     DF *UND*  0000   ?   mystery_symbol\n";
+        assert_eq!(max_glibc_requirement(opaque), None);
+        assert!(has_dynamic_symbols(opaque));
+    }
 }

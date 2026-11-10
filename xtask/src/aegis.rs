@@ -91,8 +91,21 @@ const CLASS_NOTES: &[(&str, &str)] = &[
         "eval-usage",
         "The scripting crate's own boa context.eval() call — that crate \
          implements the CS6 scripting DOM's eval() — plus Rust curve-segment \
-         .eval(u) calls, and documentation prose that names those calls when \
-         it describes the rule.",
+         .eval(u) calls.",
+    ),
+    (
+        "gdpr-reference",
+        "Matches the lowercase abbreviation in this table's own rule-class \
+         name, in the personal-data rule's name, and in decision 0074's \
+         table of adjudicated classes; the abbreviation is a rule \
+         identifier, not a reference to anyone's data.",
+    ),
+    (
+        "gdpr-personal-data",
+        "Matches the two-word phrase naming an individual's data category \
+         in English prose. The occurrence outside this gate's own source \
+         is a release-plan checklist item that excludes personal data from \
+         the source archive; the repository holds no such data.",
     ),
     (
         "international-phone",
@@ -111,9 +124,10 @@ const CLASS_NOTES: &[(&str, &str)] = &[
     ),
     (
         "pci-cardholder-data",
-        "Matches the word \"pan\" in pan-zoom and hand-pan identifiers, and \
-         in documentation prose about panning the canvas or about naming the \
-         rule itself; the five credit-card-* rules stay armed.",
+        "Matches the word \"pan\" in pan-zoom, hand-pan and two-finger pan \
+         identifiers, including the Android feasibility note's touch \
+         gesture, and in decision 0074's table of adjudicated classes; \
+         the five credit-card-* rules stay armed.",
     ),
     (
         "phone-number",
@@ -121,18 +135,11 @@ const CLASS_NOTES: &[(&str, &str)] = &[
          PNG value ranges.",
     ),
     (
-        "sql-query",
-        "The rule's regex fires on English prose that reads like a SQL \
-         clause — CS6 help text about choosing an item out of a \
-         toolbar group, quoted in the sources and in the UI comments. \
-         This repository holds no SQL and no database.",
-    ),
-    (
         "ssrf-localhost",
         "A loopback listener in the release smoke test, a localhost \
-         maintainer address, prose naming the local GitForge API or the \
-         rule itself, and the local preview URL in the site deployment \
-         guide; the workspace has no HTTP client dependency.",
+         maintainer address, prose naming the local GitForge API, and the \
+         local preview URL in the site deployment guide; the workspace has \
+         no HTTP client dependency.",
     ),
     (
         "ssn-no-dashes",
@@ -157,8 +164,10 @@ const CLASS_NOTES: &[(&str, &str)] = &[
     (
         "zip-code",
         "Matches any 5-digit run: CS6 command ids, the JPEG dimension \
-         ceiling (65535), menu ids, CVE id suffixes. This repository holds \
-         no postal data.",
+         ceiling (65535), menu ids, CVE id suffixes, and the civil-date \
+         epoch constant (36524) in the SBOM timestamp builder, and \
+         decision 0074's table of adjudicated classes. This repository \
+         holds no postal data.",
     ),
 ];
 
@@ -227,27 +236,6 @@ pub fn run() -> Result<(), String> {
         fresh.len(),
         render_findings(&fresh)
     ))
-}
-
-/// Prints the findings the baseline does not cover, with the content
-/// key a baseline entry would need. Read-only: admitting a finding is a
-/// human decision, so this never rewrites the baseline.
-pub fn report() -> Result<(), String> {
-    let baseline = read_baseline()?;
-    let findings = scan()?;
-    let fresh = uncovered(&findings, &baseline);
-    for finding in &fresh {
-        eprintln!("{}\t{}\t{}", finding.pattern, finding.file, finding.digest);
-        eprintln!(
-            "  {} {}:{} [content digest {}]",
-            finding.pattern, finding.file, finding.line, finding.digest
-        );
-    }
-    eprintln!(
-        "[xtask] aegis --report: {} finding(s) the baseline does not cover",
-        fresh.len()
-    );
-    Ok(())
 }
 
 /// Rewrites the baseline from the current tree, reporting what changed.
