@@ -1,0 +1,1058 @@
+# FireCraft — Cross-Platform Release Engineering Campaign
+## New-session agent handoff and execution mandate
+
+**Repository:** https://github.com/aliasfoxkde/FireCraft  
+**Default branch:** `main`  
+**Parent campaign:** T27 — Cross-platform release engineering and certification  
+**Primary release plan:** `docs/RELEASE-ENGINEERING-PLAN.md`  
+**Priority:** P0 — Release infrastructure  
+**Operating mode:** Audit, plan, implement, verify, document, iterate.
+
+---
+
+# 1. Mission
+
+Take FireCraft's existing release infrastructure and cross-platform packaging work from its current development state to a reproducible, operational, independently verifiable release process.
+
+This is an execution assignment, not merely a documentation exercise.
+
+You are expected to:
+
+1. Independently audit the repository and establish its actual current state.
+2. Inspect existing release plans, task boards, packaging scripts, workflows, code, PRs, issues, and release assets.
+3. Build a comprehensive, atomic, dependency-aware task list.
+4. Commit the task list and supporting documentation to a dedicated PR.
+5. Resolve existing release blockers and review findings.
+6. Implement missing functionality and correct defective packaging/workflow code.
+7. Build actual artifacts wherever the necessary toolchain is available.
+8. Test artifacts on their intended operating systems.
+9. Produce evidence for each completed task.
+10. Iterate until the approved release scope is operational and certified.
+
+Do not stop after producing a plan. Once the task ledger is established and the initial audit is complete, begin implementation.
+
+Do not claim completion merely because a script exists, a workflow is green, an artifact was uploaded, or a cross-compilation succeeded.
+
+# 2. Repository context and starting assumptions
+
+The last independently inspected repository state was:
+
+- Main: `5fac7a2267ebc6b61432d5302ab6b02a1ff15c0f`
+- Published release: `v0.2.5`
+- Latest release commit: `3a4832bc7cd919f10be92248439142d0a702ec1f`
+- PR #9: `docs/cross-platform-release-plan`
+- PR #9 head: `eb267611e525461efa1eddf3b2f4273bf097b899`
+- PR #8: `feat/dock-inspector-parity-matrix`
+- PR #8 head: `941e5b6d424e1ec2bb7bd706826e66df78e74c05`
+
+These are historical starting references, NOT guaranteed current values.
+
+At session start, fetch the latest Git state and verify all references.
+
+Important existing files:
+
+- `docs/RELEASE-ENGINEERING-PLAN.md`
+- `docs/tasks/T27-cross-platform-release.md`
+- `docs/TASKS.md`
+- `docs/RELEASING.md`
+- `docs/TOOLCHAINS.md`
+- `docs/release/ARTIFACT-MATRIX.md`
+- `docs/HANDOFF.md`
+- `docs/SESSIONS.md`
+- `docs/HISTORY.md`
+- `.github/workflows/ci.yml`
+- `.github/workflows/release.yml`
+- `xtask/src/dist.rs`
+- `packaging/`
+
+Existing packaging mechanisms to audit and extend:
+
+- `cargo run -p xtask -- ci`
+- `cargo run -p xtask -- dist --native`
+- `cargo run -p xtask -- dist --web`
+- `cargo run -p xtask -- dist --source`
+- `cargo run -p xtask -- dist --sbom`
+- `packaging/build-appimage.sh`
+- `packaging/build-flatpak.sh`
+- `packaging/flatpak/dev.firecraft.FireCraft.yml`
+- `packaging/build-macos-dmg.sh`
+- `packaging/build-windows.ps1`
+- `packaging/windows/firecraft.iss`
+- `packaging/deb/control`
+
+Preserve existing working architecture. Avoid creating parallel release mechanisms without demonstrating why the current implementation cannot be extended.
+
+# 3. Mandatory operating rules
+
+## 3.1 Establish a source of truth
+
+Before making changes:
+
+- Fetch `main`.
+- Fetch all open PRs, reviews, comments, and unresolved threads.
+- Inspect all relevant commits and compare each PR against current main.
+- Inspect all open issues.
+- Inspect release tags and published assets.
+- Inspect workflow runs, individual jobs, skipped steps, and logs.
+- Inspect the actual content of every authoritative release document.
+- Inspect the implementation behind every documented capability.
+
+Record the exact commit SHA against which each audit was performed.
+
+Do not rely on previous reports or PR descriptions when actual GitHub evidence is available.
+
+## 3.2 Task tracking is mandatory
+
+Create a transparent execution ledger before substantial implementation.
+
+Use the existing T27 parent task and assign unique child task identifiers. Inspect existing ticket numbering before assigning new IDs.
+
+Every atomic task must contain:
+
+- Unique ID.
+- RP work-package identifier.
+- Title.
+- Priority: P0/P1/P2.
+- Status.
+- Objective.
+- Exact files/components affected.
+- Dependencies.
+- Implementation steps.
+- Acceptance criteria.
+- Verification commands.
+- Target environment.
+- Evidence links.
+- Commit/PR reference.
+- Remaining blockers.
+- Completion date.
+
+Use these statuses:
+
+- `NOT STARTED`
+- `READY`
+- `IN PROGRESS`
+- `BLOCKED`
+- `IMPLEMENTED`
+- `BUILD VERIFIED`
+- `INSTALLED`
+- `LAUNCHED`
+- `SMOKE TESTED`
+- `PUBLISHED`
+- `CERTIFIED`
+- `DEFERRED`
+- `REJECTED`
+
+These are distinct states, not interchangeable labels.
+
+A task may be implemented but not operationally complete.
+
+## 3.3 Atomic task requirements
+
+Break complex work into small tasks that can be completed, reviewed, tested, and committed independently.
+
+A task should ideally cover one logical change and one clear acceptance result.
+
+Examples:
+
+BAD:
+- Finish Windows support.
+- Complete release automation.
+- Implement macOS.
+- Finish all Linux packaging.
+
+GOOD:
+- Audit Windows build script environment assumptions.
+- Verify MSVC target compilation on Windows runner.
+- Build portable ZIP from the tagged source SHA.
+- Verify ZIP directory layout and executable dependencies.
+- Install ZIP on a clean Windows VM.
+- Launch desktop application and capture successful startup.
+- Exercise open/save/export.
+- Verify installer upgrade behavior.
+- Verify uninstall and user-data preservation.
+- Generate and verify Authenticode signatures.
+
+If a task requires multiple independently testable outcomes, split it into child tasks.
+
+Maintain dependencies between tasks so the board can identify work that is blocked or ready.
+
+## 3.4 Evidence requirements
+
+Never infer that a task is complete from a script or workflow definition.
+
+For every artifact, track:
+
+1. Recipe exists.
+2. Build completed.
+3. Artifact produced.
+4. Artifact metadata inspected.
+5. Checksum generated.
+6. Installation completed.
+7. Application launched.
+8. Functional smoke completed.
+9. Security/signature checks completed, where applicable.
+10. Artifact published.
+11. Downloaded published artifact independently verified.
+
+Record:
+
+- Artifact filename.
+- Exact version.
+- Source tag and commit SHA.
+- Build runner and OS.
+- Toolchain version.
+- Build workflow URL.
+- Artifact size.
+- SHA-256.
+- Installation environment.
+- Test results.
+- Limitations.
+
+A green workflow with skipped jobs is not a green release gate.
+
+Cross-compilation is useful build evidence, not target-native runtime certification.
+
+Wine is supplementary compatibility evidence, not native Windows certification.
+
+A successful package upload does not prove the package works.
+
+## 3.5 Git and collaboration discipline
+
+- Work on dedicated feature branches.
+- Do not work directly on `main`.
+- Keep changes narrowly scoped.
+- Commit coherent logical units.
+- Push changes and create/update PRs.
+- Keep task tickets and the execution board synchronized with implementation.
+- Do not rewrite unrelated history.
+- Do not force-push shared branches without explicit justification.
+- Do not silently close or discard existing PRs.
+- Avoid parallel agents modifying the same files.
+- Before delegating work, define exact file ownership and integration boundaries.
+- Rebase or merge changes carefully and rerun all affected tests.
+
+Use descriptive conventional commits.
+
+# 4. Phase 0 — Repository discovery and baseline audit
+
+**Priority: P0. Must complete before major implementation.**
+
+### P0.1 — Establish repository state
+
+- [x] P0.1.1 Fetch and record current main SHA. — IMPLEMENTED (audit §1.1)
+- [x] P0.1.2 Verify workspace version and Rust toolchain. — IMPLEMENTED (audit §1.1)
+- [x] P0.1.3 Inspect working tree and uncommitted changes. — IMPLEMENTED (audit §1.1)
+- [x] P0.1.4 List local and remote branches. — IMPLEMENTED (audit §1.1)
+- [x] P0.1.5 Identify stale and abandoned branches. — IMPLEMENTED (audit §1.1)
+- [x] P0.1.6 Inspect current release tags. — IMPLEMENTED (audit §1.1)
+- [x] P0.1.7 Inspect every published release and asset. — IMPLEMENTED (audit §1.1)
+- [x] P0.1.8 Record source commit associated with each tag. — IMPLEMENTED (audit §1.1)
+
+### P0.2 — Audit PRs and issues
+
+- [x] P0.2.1 Inspect PR #9 status, diff, comments, reviews, and CI. — IMPLEMENTED (audit §1.2)
+- [x] P0.2.2 Inspect PR #8 status, diff, comments, reviews, and CI. — IMPLEMENTED (audit §1.2)
+- [x] P0.2.3 Inspect all other open PRs. — IMPLEMENTED (audit §1.2)
+- [x] P0.2.4 Inspect unresolved inline review threads. — IMPLEMENTED (audit §1.2)
+- [x] P0.2.5 Verify whether resolved findings are actually fixed. — IMPLEMENTED (audit §1.2)
+- [x] P0.2.6 Inspect open issues and related blockers. — IMPLEMENTED (audit §1.2)
+- [x] P0.2.7 Identify overlapping branches and conflicting changes. — IMPLEMENTED (audit §1.2)
+- [x] P0.2.8 Create a PR disposition plan. — IMPLEMENTED (audit §1.2)
+
+### P0.3 — Audit release infrastructure
+
+- [x] P0.3.1 Read the complete release engineering plan. — IMPLEMENTED (audit §1.3)
+- [x] P0.3.2 Read T27. — IMPLEMENTED (audit §1.3)
+- [x] P0.3.3 Read the live task board. — IMPLEMENTED (audit §1.3)
+- [x] P0.3.4 Audit release instructions. — IMPLEMENTED (audit §1.3)
+- [x] P0.3.5 Audit toolchain documentation. — IMPLEMENTED (audit §1.3)
+- [x] P0.3.6 Audit artifact matrix. — IMPLEMENTED (audit §1.3)
+- [x] P0.3.7 Audit `xtask` distribution implementation. — IMPLEMENTED (audit §1.3)
+- [x] P0.3.8 Audit all packaging recipes. — IMPLEMENTED (audit §1.3)
+- [x] P0.3.9 Audit CI and release workflows. — IMPLEMENTED (audit §1.3)
+- [x] P0.3.10 Audit version stamping and changelog generation. — IMPLEMENTED (audit §1.3)
+- [x] P0.3.11 Audit production deployment configuration. — IMPLEMENTED (audit §1.3)
+- [x] P0.3.12 Compare documented behavior against actual implementation. — IMPLEMENTED (audit §1.3)
+
+### P0.4 — Establish baseline verification
+
+Run the available local checks without changing code:
+
+- [x] P0.4.1 Run formatting checks. — IMPLEMENTED, rung 1 (audit §1.4)
+- [x] P0.4.2 Run the canonical `xtask ci` gate. — IMPLEMENTED, rung 2 — routed through GitHub CI run 41938756908 on SHA 5fac7a2 (audit §1.4); the single-command form is CI-split and GitForge's copy is unavailable until PR #14 lands (B-20)
+- [x] P0.4.3 Run native distribution build. — BUILD VERIFIED, rung 5 — native dist built, manifest verified, DEB read back (audit §1.4)
+- [x] P0.4.4 Run web distribution build. — BUILD VERIFIED, rung 8 — web dist built, bridge smoke green (audit §1.4)
+- [x] P0.4.5 Run source archive build. — BLOCKED — `xtask dist --source` does not exist on `main` (F-9); verified on the PR #12 ancestor (audit §1.4)
+- [x] P0.4.6 Run SBOM generation. — BLOCKED — `xtask dist --sbom` does not exist on `main` (F-9); verified on the PR #12 ancestor (audit §1.4)
+- [x] P0.4.7 Inspect manifests and checksums. — IMPLEMENTED, rung 5 (audit §1.4)
+- [x] P0.4.8 Record exact failures and environmental limitations. — IMPLEMENTED — audit §4 (verified blockers) and §6 (unverified claims)
+
+**Deliverable:** A dated baseline audit with evidence, a current artifact matrix, and a list of verified blockers.
+
+# 5. Phase 1 — Task ledger and release-scope decisions
+
+**Priority: P0.**
+
+### P1.1 — Create the execution board
+
+- [x] Create `docs/release/EXECUTION-BOARD.md`. — IMPLEMENTED — `docs/release/EXECUTION-BOARD.md` (61 tickets) carried by PR #12 (open, unmerged)
+- [x] Keep T27 as the parent campaign. — IMPLEMENTED — `docs/release/EXECUTION-BOARD.md` (61 tickets) carried by PR #12 (open, unmerged)
+- [x] Assign unique child task IDs. — IMPLEMENTED — `docs/release/EXECUTION-BOARD.md` (61 tickets) carried by PR #12 (open, unmerged)
+- [x] Link every child task to RP-00 through RP-08. — IMPLEMENTED — `docs/release/EXECUTION-BOARD.md` (61 tickets) carried by PR #12 (open, unmerged)
+- [x] Add priorities, dependencies, acceptance criteria, and verification. — IMPLEMENTED — `docs/release/EXECUTION-BOARD.md` (61 tickets) carried by PR #12 (open, unmerged)
+- [x] Add a status summary for each RP. — IMPLEMENTED — `docs/release/EXECUTION-BOARD.md` (61 tickets) carried by PR #12 (open, unmerged)
+- [x] Add artifact verification columns. — IMPLEMENTED — `docs/release/EXECUTION-BOARD.md` (61 tickets) carried by PR #12 (open, unmerged)
+- [x] Add blocker and decision registers. — IMPLEMENTED — `docs/release/EXECUTION-BOARD.md` (61 tickets) carried by PR #12 (open, unmerged)
+- [x] Add an explicit distinction between MVP and full cross-platform scope. — IMPLEMENTED — `docs/release/EXECUTION-BOARD.md` (61 tickets) carried by PR #12 (open, unmerged)
+
+### P1.2 — Create atomic task tickets
+
+Create individual tickets under `docs/tasks/`.
+
+At minimum, cover all tasks in the subsequent phases of this document.
+
+Each ticket must be actionable without requiring the next agent to reconstruct the entire conversation.
+
+### P1.3 — Establish release-scope authority
+
+The full cross-platform matrix and proposed MVP v1 must not silently conflict.
+
+Prepare a decision record that clearly defines:
+
+**MVP candidate:**
+- Web/WASM.
+- Linux x86_64 desktop archive.
+- Linux x86_64 DEB.
+- Linux x86_64 CLI.
+- Source archive.
+- Checksums.
+- SBOM.
+- Verified production web deployment.
+- Release certification.
+
+**Extended platform campaign:**
+- Linux AppImage.
+- Linux Flatpak.
+- Windows.
+- macOS.
+- Android.
+- ARM64 assessments.
+- RPM only if formally reinstated.
+
+Record the maintainer's approved scope. Do not treat a recommendation as approval.
+
+### P1.4 — Documentation reconciliation
+
+- [ ] Update T27 to accurately reflect implementation versus verification.
+- [ ] Update `docs/TASKS.md`.
+- [ ] Update `docs/RELEASING.md`.
+- [ ] Update `docs/TOOLCHAINS.md`.
+- [ ] Update `docs/release/ARTIFACT-MATRIX.md`.
+- [ ] Correct tag/main baseline discrepancies.
+- [ ] Remove stale CI status claims.
+- [ ] Ensure all documentation uses the same release-scope authority.
+
+**Deliverable:** A dedicated documentation/task-ledger PR.
+
+# 6. Phase 2 — Resolve existing P0 defects and PR blockers
+
+Do not proceed to a new production tag while these defects remain.
+
+### P2.1 — PR #9 CI remediation
+
+- [x] Identify the exact Aegis finding causing the latest failure. — IMPLEMENTED — four `zip-code` findings, all the CVE-identifier suffix (audit §10)
+- [x] Reproduce the finding locally. — IMPLEMENTED — full production scan reproduced (audit §10)
+- [x] Determine whether it is a genuine defect or verified false positive. — IMPLEMENTED — all four adjudicated false positives (audit §10)
+- [x] Fix genuine findings. — IMPLEMENTED — no genuine finding in scope; the gate's own line-keyed filter was the real defect (PR #18)
+- [x] Add narrowly scoped documented suppressions only for verified false positives. — IMPLEMENTED — per-finding, content-keyed baseline; no rule class disabled (decision 0074)
+- [x] Preserve Aegis security coverage. — IMPLEMENTED — every rule class stays armed (decision 0074, “Why no rule class is switched off”)
+- [x] Run formatting. — IMPLEMENTED — `cargo fmt --all -- --check` exit 0 (audit §1.4)
+- [x] Run complete `xtask ci`. — IMPLEMENTED — the gate’s workspace-wide clippy/test steps are hook-denied on this host, so it ran in GitHub CI run 41938756908 (audit §1.4)
+- [x] Verify backup GitHub CI. — IMPLEMENTED — PR #9 gate green on runs 42554147407 and 42554151806 (audit §1.2)
+- [ ] Verify authoritative GitForge CI. — IN PROGRESS — B-20’s cause is removed and the image is re-shipped: the CI image was rebuilt on Fedora on 2026-11-10 from PR #14’s Dockerfile (`CARGO_NET_OFFLINE=false`, `CARGO_NET_RETRY=5` — the baked registry is a fast floor, not a wall) and loaded onto the runner host, so the “failed to download `time v0.3.45` … `--offline` was specified” failure cannot recur (audit §11.2). Authoritative runs in flight on the exact PR heads: PR #14 head `bc0aef1` → run `6dbd1082-09ec-4b66-b259-bd7f44b56c7d`; PR #15 head `8c68b0f` → run `2bf47590-3f50-445c-9948-f0bc3587b483`; PR #13 head `110b264` → run `85698b94-f1ab-4256-b029-5e8f4e399d20`. The row closes when those runs are terminal and green in the authoritative store
+- [ ] Ensure web smoke is executed, not skipped. — IN PROGRESS — the CI job’s `Web bundle smoke` step is tag-gated and was SKIPPED on branch pushes; `.gitforge.yml` set `FIRECRAFT_DIST_SKIP_SMOKE=1` outright, so the authoritative CI never smoked the bundle; the bridge smoke was exercised green by `xtask dist --web` locally instead (audit §1.4). Remediation implemented on branch `ci/web-smoke-real-v2` (PR #40): chromium baked into `infrastructure/docker/ci-rust.Dockerfile` (bookworm `chromium` at `/usr/bin/chromium`), the `FIRECRAFT_DIST_SKIP_SMOKE` switch removed from `xtask/src/dist.rs` (the smoke now always runs and fails closed), the `.gitforge.yml` release step renamed “Web bundle (bridge smoke)” and the skip flag dropped (audit §11.5). The image was rebuilt and shipped to the runner host on 2026-11-10 (chromium 156.0.8078.79, `objdump` present, `CARGO_NET_OFFLINE=false`). Local `xtask dist --web` on the branch reports `5 file(s), wasm 21261153 B (ceiling 21500000), manifest MANIFEST.sha256, smoke green`. The authoritative receipt is the GitForge `release` job log of the disposable tag run `a67a760f-f404-4b4a-9c78-02bf4c4abfae` (tag `ci-smoke-20261110` → `1c7fede`); the row stays open until that job’s log carries the `smoke green` verdict
+- [x] Record all run links. — IMPLEMENTED — audit §1.2, §1.4 and §11.2
+
+Do not weaken the gate or broaden exclusions merely to achieve green CI.
+
+### P2.2 — Release workflow repair
+
+- [x] Audit the exact `gh release create` invocation. — BUILD VERIFIED — `gh release create` takes its assets as positional filenames; there is no `-a`/`--asset` flag, and passing one aborts the command (PR #14, `packaging/release-assets.sh`)
+- [x] Replace invalid `-a` asset arguments with supported positional filenames. — BUILD VERIFIED — the script assembles a bash array and expands it as `"${assets[@]}"` (PR #14)
+- [x] Test argument construction independently. — BUILD VERIFIED — `xtask/tests/release_workflow.rs` drives the script against a stub `gh` and reads back the recorded argv
+- [x] Test missing asset behavior. — BUILD VERIFIED — an empty asset list aborts before `gh` runs; a staged file that vanished aborts too
+- [x] Test duplicate asset behavior. — BUILD VERIFIED — a duplicate basename is skipped with a warning (a release asset is named by its basename)
+- [x] Test filenames containing spaces if supported. — BUILD VERIFIED — a name with a space stays one argument (NUL-delimited asset list)
+- [x] Verify `contents: write` is limited to the publishing job. — BUILD VERIFIED — the workflow declares `contents: read` at the top and widens only in the `release` job; the duplicate top-level key the merge left behind is removed (PR #14)
+- [x] Verify draft release creation. — BUILD VERIFIED — `gh release create … --draft`; the script owns the call
+- [x] Verify asset upload. — BUILD VERIFIED — the aggregate validation runs before `gh release create`; assets are attached from the staged list
+- [x] Verify post-upload digest validation. — IMPLEMENTED — `sha256sum -c RELEASE_SHA256.txt` runs against the flattened staging directory before the release is created; the post-upload state itself is not yet observed on a live release
+- [ ] Verify draft-to-published transition. — NOT STARTED — the transition is the operator's publish step and stays outside the workflow
+- [ ] Exercise the process using a safe test tag or disposable release repository. — IN PROGRESS — a disposable non-production tag `ci-smoke-20261110` (annotated, pointing at `1c7fede` on `ci/web-smoke-real-v2`) was pushed to the **gitforge** remote on 2026-11-10, which started pipeline run `a67a760f-f404-4b4a-9c78-02bf4c4abfae`. The tag deliberately does not match the GitHub release workflow’s `v*` trigger, so it cannot produce a GitHub release; it exists only to make the GitForge `release` job run `dist --web` **with** the bridge smoke and produce the receipt. The row closes when that job’s log carries the `smoke green` verdict. The GitHub draft-release path (a `v*` tag, which needs the workspace version stamped to the tag version) remains unexercised
+
+Do not create or publish a production release during this phase.
+
+### P2.3 — DEB dependency correction
+
+- [x] Verify the actual GLIBC symbol requirements of both shipped executables. — BUILD VERIFIED — measured from the published v0.2.5 payload with `objdump -T`: the desktop binary needs GLIBC_2.39 (`pidfd_spawnp`, `pidfd_getpid`), the CLI needs GLIBC_2.35 (`hypot`, `hypotf`); the requirement comes from the build host's glibc, not from Rust std (decision 0077)
+- [x] Verify `packaging/deb/control` declares an adequate minimum GLIBC version. — IMPLEMENTED — the control declares `libc6 (>= 2.36)` and the native artifacts are built on Debian 12 (glibc 2.36), so the floor covers the requirement (PR #14, decision 0077)
+- [x] Verify the `objdump`-based check fails when the declared floor is too low. — BUILD VERIFIED — the parser was vacuous (binutils prints `(GLIBC_2.34)` parenthesized, so the old prefix match never fired); it now parses both printed forms, and a unit test runs it against a real binary with a 2.2 floor
+- [x] Verify the check succeeds when the floor is adequate. — BUILD VERIFIED — the same unit test passes a 99.0 floor, and the release workflow now installs the package on a clean `debian:12-slim` container
+- [x] Build the DEB. — BUILD VERIFIED — built 2026-11-10 on Fedora inside the Debian 12 CI image (`firecraft-ci-rust:chromium`) from `bc0aef1` (PR #14 head): "[xtask] dist native: 3 archives, manifest MANIFEST.sha256, dpkg-deb verified, recipes parse-checked (4 bash)" and "[xtask] dist --native ok", exit 0. Artifacts: `firecraft_0.2.5_amd64.deb` (15,094,480 B), `firecraft-0.2.5-linux-x86_64.tar.gz` (22,575,625 B), `firecraft-cli-0.2.5-linux-x86_64.tar.gz` (8,106,909 B), `MANIFEST.sha256` (398 B). Building on Debian 12 is what pins the glibc floor to the declared one
+- [x] Inspect package control metadata. — BUILD VERIFIED — `dpkg-deb -I`: `Package: firecraft`, `Version: 0.2.5`, `Architecture: amd64`, `Depends: libc6 (>= 2.36)`; contents `/usr/bin/firecraft` (42,966,944 B), `/usr/bin/firecraft-cli` (24,866,368 B), `/usr/share/doc/firecraft/copyright`. The built binaries' own symbol requirements are `GLIBC_2.35` at most (`objdump -T`), i.e. at or below the declared floor
+- [x] Install on a clean Debian 12 environment. — BUILD VERIFIED — `docker run debian:12` (freshly pulled image, no package present): `dpkg -i` → "Setting up firecraft (0.2.5) …"; `dpkg -s firecraft` → `Status: install ok installed`, `Depends: libc6 (>= 2.36)`
+- [x] Execute functional CLI round trip. — BUILD VERIFIED — on the installed package: `firecraft-cli import /fixtures/plain.png /test/rt.fw.png` → a 519 B document; `firecraft-cli info` → JSON with a 3×3 @72 dpi canvas, 1 image object, 1 page, 1 layer named "Layer 1"; `firecraft-cli export /test/rt.fw.png /test/rt-out.png` → a 76 B PNG; `firecraft-cli export /fixtures/composed.fw.png /test/composed-out.png` → a 97 B PNG carrying the PNG signature `89 50 4e 47`; `firecraft-cli convert /fixtures/composed.fw.png /test/rt.jpg` → a 612 B JPEG. The re-exported document is not byte-identical to the import source (the encoder writes different bytes) but it is a valid PNG of the same canvas
+- [x] Verify reinstall. — BUILD VERIFIED — `dpkg -i` over the installed package → "Unpacking firecraft (0.2.5) over (0.2.5) … Setting up firecraft (0.2.5)"; `Status: install ok installed`, no error
+- [x] Verify removal and purge. — BUILD VERIFIED — `dpkg -r firecraft` → "Removing firecraft (0.2.5) …"; `/usr/bin/firecraft` and `/usr/bin/firecraft-cli` are both gone. `dpkg -P firecraft` then reports "ignoring request to remove firecraft which isn't installed" — the package carries no conffiles, so the removal is already complete
+- [x] Verify no user-data loss. — BUILD VERIFIED — `/root/.config/firecraft/settings.json`, written before the removal, still reads back unchanged after `dpkg -r` and after `dpkg -P`
+- [x] Record receipt. — IMPLEMENTED — this block. Source commit `bc0aef1` (PR #14 head), build host Fedora, build image `firecraft-ci-rust:chromium` (Debian 12 bookworm), test container `debian:12`
+
+The v0.2.5 DEB is historical and must not be silently replaced: its published control metadata keeps the 2.31 floor it shipped with, and the corrected floor applies to the next build.
+
+### P2.4 — PR #8 review remediation
+
+- [ ] Retrieve the complete latest review findings.
+- [ ] Compare each finding with the latest code.
+- [ ] Verify the plotted-draft tool ownership issue.
+- [ ] Track the originating tool in draft state.
+- [ ] Reset or explicitly convert drafts on tool changes.
+- [ ] Add regression tests for Pen-to-Hotspot and reverse switching.
+- [ ] Verify existing polygon/hotspot behavior.
+- [ ] Inspect all remaining Major and Critical findings.
+- [ ] Verify each finding independently.
+- [ ] Fix valid findings.
+- [ ] Document rejected findings with reasons.
+- [ ] Run the complete application test suite.
+- [ ] Run the full CI gate.
+- [ ] Verify web build and browser smoke.
+- [ ] Reconcile task board and documentation.
+
+Keep PR #8 and PR #9 changes isolated unless a dependency requires an explicit integration branch.
+
+**Deliverable:** Both PRs have accurate dispositions, resolved valid defects, and reproducible verification.
+
+# 7. Phase 3 — RP-01: Linux distribution completion
+
+**Priority: P0 for MVP DEB; P1 for extended formats.**
+
+## 7.1 DEB
+
+- [ ] Build package from exact candidate commit. — IN PROGRESS — built 2026-11-10 on Fedora inside the Debian 12 CI image from PR #14's head `bc0aef1`: `firecraft_0.2.5_amd64.deb` (15,094,480 B) plus the desktop and CLI tarballs and `MANIFEST.sha256`, `dpkg-deb` read back, recipes parse-checked. That build predates this branch's desktop-integration change, so the release job of the authoritative run on this branch's head (`ea57c8e`, run `c83a0aab-f63e-4131-87e4-48df2c9aae49`) rebuilds the candidate with the desktop entry and the icon; the row stays open until that package's own receipts are recorded
+- [x] Validate architecture metadata. — BUILD VERIFIED — `dpkg-deb --info` on the built package: `Architecture: amd64`; the verification script re-reads the candidate's own `Architecture` field and fails on anything but `amd64`
+- [x] Validate dependency metadata. — BUILD VERIFIED — `Depends: libc6 (>= 2.36)` (decision 0077); the floor is measured from the binaries' own `GLIBC_*` symbol versions by `objdump`, and the check fails closed when the declared floor is below the measured one
+- [x] Validate desktop entry. — BUILD VERIFIED — the published package has none, so the check was written first and run against it as a negative control: `FAIL: /usr/share/applications/firecraft.desktop is not installed` (audit §11.6, B-24). The fix stages `usr/share/applications/firecraft.desktop` into the package and `dist --native` reads the built package back with `dpkg-deb --contents` and fails when the entry is absent. The stage also checks `Type=Application`, that `Exec=` names an installed binary and that `Icon=` names an installed icon, and runs `desktop-file-validate` when the host has it
+- [x] Validate icon installation. — BUILD VERIFIED — the icon (`assets/icons/hicolor/256x256/apps/firecraft.png`, an original work for this repo per `docs/ATTRIBUTION.md`) is staged to `usr/share/icons/hicolor/256x256/apps/firecraft.png` and the built package is read back for it, so a package that ships the entry but not the icon fails the gate
+- [ ] Validate MIME integration where implemented. — DEFERRED — no MIME integration is implemented, and this row is closed as deferred rather than as a pass: the desktop shell's dialogs are `EnvDialogs` (`crates/app/src/shell/dialogs.rs`), which read the document path from `FIRECRAFT_DOC` and open no file chooser, so there is no MIME type the application can honour. Registering `application/x-firecraft` in the desktop entry would advertise a capability that does not exist, and the shell would ignore the file the desktop handed it. The row reopens when a native file chooser lands (the shell's platform boundary already exists — `engine::platform::Dialogs` — and `docs/PLANNING.md` names `rfd` 0.17 for the desktop side), at which point the MIME type, the desktop entry's `MimeType=` line and the `xdg-mime` registration become implementable and testable together
+- [x] Test clean install. — BUILD VERIFIED — `docker run --rm debian:12` with the candidate mounted: `dpkg -i` → `Setting up firecraft (0.2.5)`, `dpkg -s firecraft` → `Status: install ok installed`. Repeated against the published v0.2.3 package as the negative control
+- [ ] Test upgrade. — IN PROGRESS — the upgrade stage is in the verification script (install the previous package, then the candidate, and require the installed version to move forward with the desktop entry still in place) but has not yet been run against a candidate that carries the desktop entry; it runs when the authoritative build of this branch's head produces that package
+- [x] Test launch. — BUILD VERIFIED — in the clean Debian 12 container against the installed published package: `timeout 25 xvfb-run -a /usr/bin/firecraft` exits **124**, the timeout's status, i.e. the binary started and was still running when the launch window closed. The first attempt failed with `xvfb-run: error: xauth command not found`, which is a gap in the check's environment, not in the application: `xvfb-run` needs `xauth` beside `xvfb`
+- [x] Test open/edit/save/export. — BUILD VERIFIED — at the boundary the package exposes. The desktop shell has no file chooser, so the document boundary is the CLI: `firecraft-cli info` on the fixture prints the document JSON (canvas, 1 page, 1 group, 2 paths) and `firecraft-cli export` writes a 97 B PNG whose first eight bytes are the PNG signature `89 50 4e 47 0d 0a 1a 0a`. The check is now a stage of the package verification and runs whenever a fixture is supplied
+- [x] Test uninstall. — BUILD VERIFIED — `dpkg -r firecraft` → `Removing firecraft (0.2.5)`, and `/usr/bin/firecraft` and `/usr/bin/firecraft-cli` are both gone; the package carries no conffiles, so `dpkg -P` afterwards reports the package as already removed. The verification script additionally requires the desktop entry and the icon to be gone with the binaries, which the published package could not exercise (it has neither)
+- [x] Test reinstall. — BUILD VERIFIED — `dpkg -i` over the installed package → `Unpacking firecraft (0.2.5) over (0.2.5)`, `Status: install ok installed`, no error; the verification script additionally re-reads the desktop entry, the icon and the CLI after the reinstall
+- [x] Test CLI separately. — BUILD VERIFIED — `firecraft-cli --help` now prints the usage on stdout and exits 0 (before this it fell through to the positional parser and arrived on stderr with a failing exit code, so a packaged CLI could not be asked what it does — B-27). The usage line, the verb list and the empty stderr are covered by an integration test that runs the built binary, and the package verification runs the installed binary
+- [ ] Record all receipts. — IN PROGRESS — the receipts that exist are in `docs/release/PHASE-0-AUDIT.md` §11.6 and `docs/release/ARTIFACT-MATRIX.md` row 3, with the negative control and the positive receipts. The row closes when the authoritative build of this branch's head has produced a candidate whose own install → upgrade → uninstall → reinstall transcript is recorded
+
+## 7.2 AppImage
+
+- [x] Audit linuxdeploy invocation. — IMPLEMENTED — the invocation is `linuxdeploy --appdir . --desktop-file usr/share/applications/firecraft.desktop --output appimage`, which is the form linuxdeploy expects, and it hard-requires an `Icon=` entry in the desktop file (without one it exits with `ERROR: Icon entry missing` and produces no image). The recipe now preflights the desktop entry and the icon before it builds anything, so a missing icon fails the recipe instead of silently producing an image with no icon
+- [ ] Verify desktop entry. — NOT STARTED — the recipe stages it, but the entry inside a built AppImage can only be read from a built AppImage, and no AppImage has been built (B-8)
+- [ ] Verify `Icon=firecraft`. — NOT STARTED — the recipe's preflight checks that the desktop entry carries an `Icon=` line and that the icon file exists in the tree; the resolution inside the built image is unverified until an AppImage exists (B-8)
+- [ ] Verify icon file exists in staging. — NOT STARTED — the staging step installs the icon at `usr/share/icons/hicolor/256x256/apps/firecraft.png`, but the staging directory cannot be produced without the release build and `linuxdeploy` (B-8)
+- [ ] Verify executable permissions. — NOT STARTED — the recipe stages with `install -m 755`, but the built image's permissions are unverified until an AppImage exists (B-8)
+- [ ] Verify library bundling. — NOT STARTED — no AppImage exists to inspect (B-8)
+- [ ] Build actual AppImage. — NOT STARTED — `linuxdeploy` is absent from this fleet and no pinned copy is vendored, so the recipe has never been executed (B-8). This row is blocked on a named missing input, not on an undecided step
+- [ ] Inspect architecture and embedded metadata. — NOT STARTED — needs a built AppImage (B-8)
+- [ ] Run with FUSE where supported. — NOT STARTED — needs a built AppImage (B-8)
+- [ ] Run using extract-and-run. — NOT STARTED — needs a built AppImage (B-8)
+- [ ] Install/launch equivalent runtime test. — NOT STARTED — needs a built AppImage (B-8)
+- [ ] Open/edit/save/export. — NOT STARTED — the document boundary is proven for the package (see 7.1), but not for an AppImage, which does not exist (B-8)
+- [ ] Test on clean Linux environment. — NOT STARTED — needs a built AppImage and a clean host (B-8)
+- [ ] Record checksum and receipt. — NOT STARTED — the recipe ends by printing `sha256sum` of the produced image; there is no image to hash (B-8)
+
+## 7.3 Flatpak
+
+- [x] Audit manifest source URLs and immutable revisions. — IMPLEMENTED — the manifest pins the SDK and the runtime to `24.08` and builds from the repository tree rather than fetching a moving ref; no URL in it points at an unpinned revision
+- [x] Verify runtime and SDK versions. — IMPLEMENTED — `sdk: org.freedesktop.Sdk//24.08` and `runtime: org.freedesktop.Platform//24.08` in the manifest; the runtime cannot be exercised on this fleet, so the row is closed on the manifest, not on a launch
+- [x] Verify application ID. — IMPLEMENTED — `dev.firecraft.FireCraft` in the manifest and the same id in the recipe's bundle, install and uninstall calls, so the three cannot disagree
+- [x] Verify build dependencies. — IMPLEMENTED — the manifest declares the Rust SDK extension and the build dependencies the manifest's own build steps install; the recipe's `flatpak-builder --share=network` line exists because the cargo build inside the sandbox fetches the dependency graph and the sandbox has no network by default
+- [x] Review `finish-args`. — IMPLEMENTED — the permissions were reduced to what the application actually uses, and the comment now says so: the app has no document-portal chooser, so `--filesystem=xdg-documents` grants that one directory and nothing more. The previous comment claimed a portal that the shell does not use (B-26)
+- [x] Minimize filesystem permissions. — IMPLEMENTED — `--filesystem=xdg-documents` only; no `--filesystem=host`, no `--talk-name`, no `--device`
+- [x] Implement correct `flatpak-builder` repository workflow. — IMPLEMENTED — `flatpak-builder --share=network --repo=<repo> --force-clean <stage> <manifest>`, then `flatpak build-bundle <repo> <out> <app-id>`; the previous recipe passed `--repo` to `flatpak run`, which flatpak rejects (`Unknown option --repo`), so the recipe's only runtime evidence was a command that could not execute (B-25)
+- [x] Install the built application into a test installation. — IMPLEMENTED — the recipe installs the bundle with `flatpak install --user --bundle <out> --noninteractive` and checks that the application is listed afterwards; an application has to be in an installation before it can be run
+- [x] Correct `flatpak run` usage; do not pass unsupported `--repo` arguments. — IMPLEMENTED — `flatpak run` has no `--repo` option (verified against the upstream man page, not from memory); the recipe launches the installed application with `flatpak run --command=firecraft-cli <app-id> --help`
+- [ ] Launch using `flatpak run`. — NOT STARTED — the launch command is corrected and the recipe runs it, but the recipe has never been executed: `flatpak` and `flatpak-builder` are absent from this fleet (B-11)
+- [ ] Test document portal access. — NOT STARTED — the application has no document portal to test: its dialogs are `EnvDialogs`, which take the path from the environment. The portal path belongs to a later shell change
+- [ ] Test file open/save/export. — NOT STARTED — the document boundary is proven for the package (see 7.1), not for a Flatpak, which cannot be built here (B-11)
+- [ ] Test sandbox restrictions. — NOT STARTED — needs a built Flatpak (B-11)
+- [ ] Test removal. — NOT STARTED — the recipe uninstalls and then fails if the application is still listed, but the recipe has never been executed (B-11)
+- [ ] Test on a clean Flatpak-capable Linux host. — NOT STARTED — no Flatpak-capable host is available to this fleet (B-11)
+- [ ] Record checksum and receipt. — NOT STARTED — the recipe ends by printing `sha256sum` of the produced bundle; there is no bundle to hash (B-11)
+
+## 7.4 RPM decision
+
+RPM is currently deferred by decision 0070.
+
+- [ ] Verify decision 0070 remains appropriate. — READY — the decision stands and nothing in this campaign's evidence argues against it: RPM was deferred for a stated demand reason, and Phase 3 produced no new demand signal. Re-validating it needs the maintainer's current priority, which the agent does not have
+- [ ] Assess Fedora/RHEL dependency requirements. — NOT STARTED — deferred with decision 0070; no assessment was performed, and a partial one would be worse than none, because the requirement set differs from Debian's and the glibc floor work already showed how a declared floor can be wrong
+- [ ] Estimate ongoing package maintenance burden. — NOT STARTED — deferred with decision 0070
+- [x] Record whether RPM remains deferred. — DEFERRED — decision 0070 stands; RPM is not added. The campaign does not add a format to make the artifact table look complete
+- [x] Do not add RPM merely to make the artifact table look complete. — DEFERRED — no RPM packaging exists in the tree; the artifact matrix records RPM as deferred rather than as a row with a build receipt
+
+## 7.5 Linux platform certification
+
+- [x] Test on Debian/Ubuntu. — BUILD VERIFIED — Debian 12 (bookworm) is exercised in a clean container for the whole install → CLI → launch → uninstall → reinstall sequence (7.1). Ubuntu is **not** tested: this fleet has no Ubuntu host, and the glibc floor that the Debian build produces (2.36) is newer than Ubuntu 22.04's, so the same package is not expected to install there. The row is closed for Debian and left open for Ubuntu, with the reason named
+- [ ] Test on Fedora-family environment where applicable. — NOT STARTED — no Fedora-family host runs the verification, and RPM is deferred (7.4)
+- [ ] Verify X11 and Wayland behavior where supported. — IN PROGRESS — X11 is proven: the installed binary launches under Xvfb and stays up (7.1). Wayland is not tested; the container has no Wayland compositor and the shell's windowing path under one is unverified
+- [x] Verify desktop integration. — BUILD VERIFIED — the desktop entry and the icon are staged into the package and the built package is read back for both, so a package that installs without a launcher fails the gate. The published package has neither (B-24), which is why this row produced a defect rather than a pass
+- [ ] Verify font/resource loading. — NOT STARTED — not exercised by the package verification; the container has no font configuration beyond its defaults, so a font-loading result there would not transfer to a desktop
+- [x] Verify clean install and uninstall. — BUILD VERIFIED — in a clean Debian 12 container (7.1)
+- [ ] Publish a platform-specific compatibility table. — NOT STARTED — the compatibility table cannot be published while Ubuntu, Fedora, Wayland and font loading are unverified; a table asserting more than was tested would be the same defect this phase exists to remove
+
+# 8. Phase 4 — RP-02: Windows production packaging
+
+**Priority: P1.**
+
+GNU cross-compilation and Wine are supplementary evidence only.
+
+## 8.1 Build
+
+- [ ] Audit `build-windows.ps1`.
+- [ ] Audit Inno Setup configuration.
+- [ ] Verify Windows MSVC target.
+- [ ] Verify Visual Studio Build Tools.
+- [ ] Verify native dependency compatibility.
+- [ ] Build desktop executable.
+- [ ] Build CLI executable.
+- [ ] Build portable ZIP.
+- [ ] Verify stable archive layout.
+- [ ] Verify required runtime DLLs.
+- [ ] Verify licenses and resources.
+- [ ] Build Inno Setup installer.
+- [ ] Record artifact sizes and SHA-256.
+
+## 8.2 Native Windows verification
+
+Use a clean Windows VM or native Windows runner.
+
+- [ ] Install portable distribution.
+- [ ] Launch desktop application.
+- [ ] Open an existing project.
+- [ ] Create a document.
+- [ ] Perform basic editing.
+- [ ] Save and reopen.
+- [ ] Export PNG.
+- [ ] Export supported document format.
+- [ ] Test paths containing spaces.
+- [ ] Test non-ASCII paths.
+- [ ] Test user-data directory behavior.
+- [ ] Test installer installation.
+- [ ] Test upgrade over previous version.
+- [ ] Test uninstall.
+- [ ] Test reinstall.
+- [ ] Verify user data is handled correctly.
+
+## 8.3 Signing
+
+- [ ] Identify available Authenticode signing infrastructure.
+- [ ] Document certificate requirements.
+- [ ] Configure secret names, not secret values.
+- [ ] Sign production executables and installer.
+- [ ] Apply trusted timestamping.
+- [ ] Verify signatures.
+- [ ] Record signer and verification output.
+- [ ] Explicitly mark unsigned builds as unsigned.
+
+Do not claim Windows production signing readiness without verified signatures.
+
+# 9. Phase 5 — RP-03: macOS production packaging
+
+**Priority: P1.**
+
+## 9.1 Build
+
+- [ ] Audit `build-macos-dmg.sh`.
+- [ ] Verify Apple toolchain.
+- [ ] Verify arm64 Rust target.
+- [ ] Verify x86_64 Rust target.
+- [ ] Audit native dependency support for both architectures.
+- [ ] Build arm64 application.
+- [ ] Build x86_64 application.
+- [ ] Determine whether universal binary is feasible.
+- [ ] Use `lipo -info` to verify actual binary slices.
+- [ ] Create correct `.app` structure.
+- [ ] Verify Info.plist.
+- [ ] Verify bundle identifier.
+- [ ] Verify version metadata.
+- [ ] Verify icons/resources.
+- [ ] Build actual DMG.
+- [ ] Record checksum.
+
+Do not claim universal support simply because the script invokes `lipo`.
+
+## 9.2 Native macOS testing
+
+- [ ] Install on Apple Silicon.
+- [ ] Launch application.
+- [ ] Open/create project.
+- [ ] Edit/save/export.
+- [ ] Test file permissions.
+- [ ] Test moving app outside mounted DMG.
+- [ ] Test reinstall/upgrade.
+- [ ] Test uninstall.
+- [ ] Test Intel macOS separately if supported.
+
+## 9.3 Signing and notarization
+
+- [ ] Identify Developer ID requirements.
+- [ ] Configure secrets externally.
+- [ ] Sign application.
+- [ ] Enable hardened runtime.
+- [ ] Verify entitlements.
+- [ ] Submit notarization.
+- [ ] Retrieve notarization result.
+- [ ] Staple ticket.
+- [ ] Run `spctl` assessment.
+- [ ] Verify Gatekeeper launch behavior.
+
+Ad-hoc signing is not production notarization.
+
+# 10. Phase 6 — RP-04: Android feasibility and native support gate
+
+**Priority: P2 unless Android is explicitly included in the first release.**
+
+## 10.1 Feasibility
+
+- [ ] Re-read Android feasibility report.
+- [ ] Audit egui integration.
+- [ ] Audit winit/event-loop dependencies.
+- [ ] Audit accesskit conflicts.
+- [ ] Validate Android NDK requirements.
+- [ ] Validate Android SDK requirements.
+- [ ] Assess GameActivity integration.
+- [ ] Assess storage/document picker integration.
+- [ ] Assess touch interaction.
+- [ ] Assess lifecycle/resume behavior.
+- [ ] Define native architecture.
+
+## 10.2 Native implementation
+
+Only proceed if the feasibility gate passes.
+
+- [ ] Create native Android entrypoint.
+- [ ] Integrate Android application lifecycle.
+- [ ] Implement storage permissions/document picker.
+- [ ] Implement touch/input mapping.
+- [ ] Build arm64-v8a APK.
+- [ ] Build AAB only if Play distribution is intended.
+- [ ] Configure application ID and versioning.
+- [ ] Sign APK/AAB.
+- [ ] Test installation on physical ARM64 device.
+- [ ] Test launch.
+- [ ] Test open/edit/save/export.
+- [ ] Test background/resume.
+- [ ] Test orientation and display changes.
+- [ ] Record evidence.
+
+A WebView or browser-hosted WASM package is not a native Android application.
+
+If infeasible or outside approved scope, document the deferment and keep Android marked experimental.
+
+# 11. Phase 7 — RP-05: Web, CLI, source and production deployment
+
+**Priority: P0 for MVP.**
+
+## 11.1 Web release bytes
+
+- [ ] Build web bundle from exact tag SHA.
+- [ ] Verify WASM optimization.
+- [ ] Verify bundle-size ceiling.
+- [ ] Verify version stamping.
+- [ ] Generate bundle manifest.
+- [ ] Execute bridge smoke against release bytes.
+- [ ] Test open/edit/export.
+- [ ] Record bundle file hashes.
+
+## 11.2 Production deployment reconciliation
+
+- [ ] Identify the actual Cloudflare Pages production project.
+- [ ] Identify current production deployment ID.
+- [ ] Retrieve deployed asset inventory.
+- [ ] Download or otherwise hash deployed assets.
+- [ ] Compare production files with tagged release files.
+- [ ] Identify stale or unexpected files.
+- [ ] Verify `appinfo.json` version stamping.
+- [ ] Verify deployment source commit.
+- [ ] Verify deployment URL.
+- [ ] Produce a machine-readable reconciliation report.
+
+Do not claim deployment matches release assets based only on a successful deployment command.
+
+## 11.3 CLI archive
+
+- [ ] Build standalone CLI archive.
+- [ ] Verify binary architecture.
+- [ ] Verify version/help output.
+- [ ] Verify import.
+- [ ] Verify export.
+- [ ] Verify supported file operations.
+- [ ] Verify clean extraction.
+- [ ] Verify checksum.
+
+## 11.4 Source archive
+
+- [ ] Generate archive from exact tagged commit.
+- [ ] Verify archive contains required source files.
+- [ ] Verify it excludes build outputs and secrets.
+- [ ] Extract into clean directory.
+- [ ] Run `cargo metadata --locked`.
+- [ ] Run `cargo build --locked`.
+- [ ] Run appropriate tests.
+- [ ] Verify license files.
+- [ ] Verify vendored dependencies where applicable.
+- [ ] Record build prerequisites and receipt.
+
+# 12. Phase 8 — RP-06: Supply-chain security and workflow hardening
+
+**Priority: P0 for MVP metadata; P1 for full provenance/signing.**
+
+## 12.1 Checksums and manifest
+
+- [ ] Define canonical asset naming.
+- [ ] Generate SHA-256 for every asset.
+- [ ] Generate release-wide checksum list.
+- [ ] Generate machine-readable release manifest.
+- [ ] Include exact source commit.
+- [ ] Include version.
+- [ ] Include target OS and architecture.
+- [ ] Include artifact filename and size.
+- [ ] Include artifact digest.
+- [ ] Verify manifest entries against downloaded files.
+- [ ] Test missing and corrupted asset rejection.
+
+## 12.2 SBOM
+
+- [ ] Audit CycloneDX generator.
+- [ ] Validate package identity.
+- [ ] Validate source references.
+- [ ] Validate dependency edges.
+- [ ] Validate workspace root.
+- [ ] Generate SBOM from locked dependency graph.
+- [ ] Validate output against CycloneDX schema.
+- [ ] Inspect package completeness.
+- [ ] Compare SBOM against Cargo.lock.
+- [ ] Publish SBOM.
+- [ ] Verify downloaded SBOM.
+
+## 12.3 Provenance and attestations
+
+- [ ] Define provenance format.
+- [ ] Identify supported GitHub attestation mechanism.
+- [ ] Identify build identity and workflow identity.
+- [ ] Bind provenance to source SHA and artifact digest.
+- [ ] Configure least-privilege permissions.
+- [ ] Generate attestations.
+- [ ] Verify attestations independently.
+- [ ] Publish provenance metadata.
+
+## 12.4 Signatures
+
+- [ ] Inventory available signing credentials.
+- [ ] Document platform-specific signing requirements.
+- [ ] Configure secret names and access policy.
+- [ ] Never store secrets in Git.
+- [ ] Sign eligible artifacts.
+- [ ] Verify signatures.
+- [ ] Record unsigned exceptions.
+
+## 12.5 Workflow hardening
+
+- [ ] Pin third-party actions to full commit SHAs.
+- [ ] Apply least-privilege permissions.
+- [ ] Separate build and publication jobs.
+- [ ] Restrict signing permissions.
+- [ ] Validate workflow inputs.
+- [ ] Prevent stale artifact reuse.
+- [ ] Bind all artifacts to one tag SHA.
+- [ ] Fail on missing outputs.
+- [ ] Fail on version mismatch.
+- [ ] Fail on checksum mismatch.
+- [ ] Fail on unexpected extra artifacts.
+- [ ] Fail when required platform jobs are skipped.
+- [ ] Preserve build/test logs.
+- [ ] Add safe test-release mode.
+
+# 13. Phase 9 — RP-07: Release aggregation and publication
+
+**Priority: P0.**
+
+## 13.1 Aggregator
+
+- [ ] Define approved required artifact matrix.
+- [ ] Compare matrix with actual workflow outputs.
+- [ ] Verify every required artifact exists.
+- [ ] Verify artifact names.
+- [ ] Verify artifact versions.
+- [ ] Verify source SHA.
+- [ ] Verify checksums.
+- [ ] Verify SBOM.
+- [ ] Verify manifest.
+- [ ] Verify provenance.
+- [ ] Verify signatures where required.
+- [ ] Verify platform test receipts.
+- [ ] Reject missing or invalid artifacts.
+- [ ] Reject artifacts from different commits.
+- [ ] Reject unexpected version mixing.
+
+The aggregator must be fail-closed.
+
+A skipped required platform must fail the release gate, not silently disappear from the results.
+
+## 13.2 Draft release
+
+- [ ] Build all required outputs from one clean tag.
+- [ ] Collect target-native test receipts.
+- [ ] Generate release notes.
+- [ ] Generate checksums.
+- [ ] Generate release manifest.
+- [ ] Generate SBOM.
+- [ ] Generate provenance.
+- [ ] Verify signatures.
+- [ ] Create draft release.
+- [ ] Upload assets.
+- [ ] Download assets independently.
+- [ ] Verify hashes.
+- [ ] Verify release notes and installation instructions.
+- [ ] Verify all artifact links.
+- [ ] Record draft release ID.
+
+## 13.3 Publication
+
+Publishing is a separate final action.
+
+Do not publish until RP-08 certification and maintainer authorization are complete.
+
+# 14. Phase 10 — RP-08: Final certification
+
+**Priority: P0.**
+
+Produce a final release certification report containing:
+
+- [ ] Exact tag.
+- [ ] Exact source SHA.
+- [ ] Exact workspace version.
+- [ ] Approved support matrix.
+- [ ] Every published artifact.
+- [ ] Artifact filename.
+- [ ] Artifact size.
+- [ ] SHA-256.
+- [ ] Build runner.
+- [ ] Build toolchain.
+- [ ] Install test evidence.
+- [ ] Launch test evidence.
+- [ ] Functional smoke evidence.
+- [ ] Signature status.
+- [ ] SBOM status.
+- [ ] Provenance status.
+- [ ] Deployment hash reconciliation.
+- [ ] CI workflow links.
+- [ ] Known limitations.
+- [ ] Unsupported targets.
+- [ ] Residual risks.
+- [ ] Independent verification results.
+
+The certification must explicitly distinguish:
+
+- Built.
+- Installed.
+- Launched.
+- Smoke-tested.
+- Published.
+- Independently verified.
+
+A release is not certified if any required target lacks its required evidence.
+
+# 15. Work-package completion criteria
+
+## RP-00
+Approved artifact contract, accurate inventory, baseline, and task ledger.
+
+## RP-01
+Required Linux packages built and verified; deferred formats explicitly documented.
+
+## RP-02
+Windows native MSVC build, installer, native testing, and signing disposition.
+
+## RP-03
+macOS DMG, architecture validation, native tests, and signing/notarization disposition.
+
+## RP-04
+Android feasibility decision and, if approved, native ARM64 APK/AAB with device tests.
+
+## RP-05
+Web, CLI, source archives, and exact production deployment reconciliation.
+
+## RP-06
+Checksums, manifest, SBOM, provenance, signatures, and secure workflows.
+
+## RP-07
+Fail-closed aggregate and successful draft-release publication test.
+
+## RP-08
+Independent certification for the approved release scope.
+
+# 16. Priority definitions
+
+**P0 — Blocking**
+- CI failures.
+- Broken release workflow.
+- DEB compatibility defects.
+- Invalid artifact aggregation.
+- Missing MVP artifacts.
+- Deployment hash mismatch.
+- Review findings affecting data integrity or release safety.
+- Missing source/version consistency.
+
+**P1 — Required for expanded production support**
+- Windows native builds and installer.
+- macOS native builds and notarization.
+- AppImage.
+- Flatpak.
+- Full supply-chain attestations and signatures.
+- Additional distro testing.
+
+**P2 — Extended scope**
+- Android native port.
+- ARM64 targets.
+- RPM reconsideration.
+- Additional platform integrations.
+
+Do not lower priority to make the board appear healthier.
+
+# 17. Daily reporting and session continuity
+
+At the end of every implementation session:
+
+1. Update atomic task statuses.
+2. Update RP summaries.
+3. Record changed files.
+4. Record commits.
+5. Record PR links.
+6. Record tests run.
+7. Record exact test results.
+8. Record workflow links.
+9. Record artifacts generated.
+10. Record remaining blockers.
+11. Add a dated session report.
+12. Update the main task board.
+
+Use this report format:
+
+### Daily engineering report
+
+- Date/time:
+- Main SHA:
+- Working branch:
+- PR:
+- Current release readiness:
+- Tasks completed:
+- Tasks in progress:
+- Tasks blocked:
+- Files changed:
+- Commits:
+- Tests executed:
+- CI status:
+- Artifacts built:
+- Artifacts installed:
+- Artifacts launched:
+- Artifacts smoke-tested:
+- Artifacts published:
+- Outstanding P0:
+- Outstanding P1:
+- Outstanding P2:
+- Next atomic tasks:
+
+Include a report even when no work has changed.
+
+If a toolchain or platform is unavailable, record that fact and create a concrete alternative plan. Never mark the corresponding target operationally complete.
+
+# 18. Execution strategy
+
+Work in dependency order.
+
+Do not start by implementing every packaging script simultaneously.
+
+Recommended execution sequence:
+
+1. Phase 0 audit.
+2. Phase 1 task ledger and approved scope.
+3. Phase 2 CI, DEB, release workflow, and review blockers.
+4. Phase 3 Linux MVP.
+5. Phase 7 web/CLI/source and deployment reconciliation.
+6. Phase 8 metadata and supply-chain security.
+7. Phase 9 aggregation and draft-release test.
+8. Phase 10 MVP certification.
+9. Phase 3 extended Linux packaging.
+10. Phase 4 Windows.
+11. Phase 5 macOS.
+12. Phase 6 Android.
+13. Full cross-platform certification.
+
+Adjust the sequence only when an identified dependency justifies it.
+
+# 19. Required deliverables
+
+At minimum, produce:
+
+1. A current-state audit report.
+2. An approved artifact matrix.
+3. An atomic release execution board.
+4. Individual child task tickets.
+5. A dependency graph.
+6. A blocker/decision register.
+7. Dated session reports.
+8. Platform-specific build and test receipts.
+9. A working release aggregator.
+10. A complete draft-release test.
+11. A final certification report.
+
+Create focused PRs and iterate. Do not put unrelated application changes into the release-engineering PR merely because they are convenient.
+
+# 20. Restrictions and release authorization
+
+You are authorized to inspect, plan, implement, test, commit, push branches, create/update PRs, and generate local test artifacts.
+
+You are NOT authorized to:
+
+- Publish a production release.
+- Create or push a production version tag.
+- Sign production artifacts.
+- Publish production binaries.
+- Deploy production Cloudflare Pages.
+- Change production secrets or signing credentials.
+- Merge PRs without explicit authorization.
+
+Draft/test releases and disposable test tags are permitted only when they cannot be mistaken for production releases and do not overwrite existing tags or releases.
+
+Keep all production publication actions gated for explicit maintainer approval.
+
+# 21. First-session stopping condition
+
+Do not spend the entire first session rewriting documentation.
+
+Complete the fresh audit, construct the atomic task ledger, commit it to a dedicated branch, and open a focused PR.
+
+Then begin the highest-priority implementation tasks that are unblocked.
+
+At the end of the first session, provide:
+
+1. Verified current repository state.
+2. The committed task ledger and PR link.
+3. Number of atomic tasks created.
+4. P0/P1/P2 task counts.
+5. Dependency graph.
+6. Confirmed release blockers.
+7. First implementation tasks completed.
+8. Tests and evidence.
+9. Remaining work.
+
+**Primary engineering principle: FireCraft's release readiness must be demonstrated by actual artifacts and reproducible target-platform evidence, not inferred from implementation progress.**
