@@ -234,7 +234,11 @@ one. Summary:
   (Optimize / Common Library / CSS Properties / Find and Replace).
 - **19b**: path-node add/delete **DONE** (`bf1b547`); the
   wasm-budget re-pin **DONE** (2026-11-03: measured 21,235,599 B,
-  ceiling moved to 21,500,000 with the dated cause — 19b.4). The
+  ceiling moved to 21,500,000 with the dated cause — 19b.4; and
+  again 2026-11-10: measured 21,608,249 B on the Phase 21/22
+  surface, ceiling moved to 22,000,000 — decision 0078, which also
+  separates the two-direction *size* budget from the falling-only
+  perf timing budgets). The
   reachability gate and inert-drift test landed 2026-11-02
   (`menus::tests::inert_count_never_rises` + the derived census).
 - **20 / 21 queued**: daily-driver features (in-canvas text, Optimize

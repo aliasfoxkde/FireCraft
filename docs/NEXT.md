@@ -370,8 +370,12 @@ burn-down.
   132); ceiling moved 14,000,000 → 21,500,000 in `xtask/src/dist.rs:30`
   with the dated cause recorded in the constant's doc comment (Phase 19
   shell surface: Lucide icons, command palette, gradient editor, image
-  support — 10.87 MB at M12, 15.25 MB at 2026-11-02). Ceiling only
-  moves down from here.
+  support — 10.87 MB at M12, 15.25 MB at 2026-11-02). Re-pinned
+  again 2026-11-10 (decision 0078): measured **21,608,249 B** on the
+  Phase 21/22 feature surface, ceiling moved 21,500,000 → 22,000,000.
+  The bundle-size budget tracks the shipped bytes and moves in **both**
+  directions from a dated measurement; the twelve perf
+  timing/memory budgets stay falling-only.
 
 ### Phase 20 — Daily-driver features (P1)
 

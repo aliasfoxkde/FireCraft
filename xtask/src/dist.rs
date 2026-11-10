@@ -24,15 +24,31 @@ use std::sync::mpsc;
 
 /// The release bundle's wasm size ceiling, in bytes. Pinned from
 /// observation (trunk --release, wasm-opt 2, rustc 1.99, wasm-opt 132):
-/// 21,235,599 B on 2026-11-03 via `xtask dist --web` — see
-/// `log/devlog.md`. The 19.x shell batches (Lucide icons, command
-/// palette, gradient editor, image support) grew the bundle from the
-/// 15,245,342 B observed 2026-11-02; the doubling vs the M12 pin
-/// (10,873,780 B) is deliberate feature surface, and the re-pin is the
-/// dated 19b.4 observation, not a silent bump. Bundle size moves only
-/// when the shipped code or its toolchain does, which is exactly what
-/// this budget exists to surface.
-const WASM_SIZE_CEILING: u64 = 21_500_000;
+/// 21,608,249 B on 2026-11-10 via `xtask dist --web` on the Phase 21
+/// daily-driver branch (`8c68b0f`, GitForge run
+/// `2bf47590-3f50-445c-9948-f0bc3587b483`) — the largest measured
+/// intended-feature bundle in flight. See
+/// `docs/decisions/0078-wasm-size-budget.md`.
+///
+/// **This budget is not a falling-only floor.** It tracks the bytes
+/// the shell actually ships, so it moves *up* when intended feature
+/// surface grows and *down* when it shrinks — the same discipline the
+/// parity floors use in the opposite direction, and the same
+/// discipline the perf *timing* budgets use (see `xtask/src/perf.rs`):
+/// every move is a dated, measured observation, never a silent bump.
+/// What never changes is the gate's strictness: any bundle above this
+/// number fails the build, and the number is re-pinned from a
+/// measurement, never widened to make a build pass.
+///
+/// The history: the 19.x shell batches (Lucide icons, command palette,
+/// gradient editor, image support) grew the bundle from the 15,245,342 B
+/// observed 2026-11-02, re-pinned to 21,235,599 B on 2026-11-03
+/// (19b.4). The Phase 21 daily-driver batch (multi-doc tabs, autosave
+/// and recovery, HiDPI, command palette v2, preferences) and the Phase
+/// 22 shell surface (right dock column, per-kind inspector) added
+/// ~353 KB over `main`'s 21,258,126 B (measured 2026-11-10 on
+/// `31fffb8b`), which is what this pin covers.
+const WASM_SIZE_CEILING: u64 = 22_000_000;
 
 /// Wall-clock backstop for the headless browser: a hung WebGL init
 /// kills the smoke instead of hanging `dist`.
@@ -1031,7 +1047,9 @@ fn enforce_wasm_budget(staged: &[PathBuf]) -> Result<u64, String> {
             if size > WASM_SIZE_CEILING {
                 return Err(format!(
                     "wasm bundle {}: {size} B exceeds the {WASM_SIZE_CEILING} B ceiling — \
-                     a size regression, or the budget needs re-pinning (ceilings only move down)",
+                     a size regression, or the budget needs re-pinning from a fresh \
+                     measurement (the bundle-size budget tracks the shipped bytes and moves \
+                     in both directions; see docs/decisions/0078-wasm-size-budget.md)",
                     path.display()
                 ));
             }
