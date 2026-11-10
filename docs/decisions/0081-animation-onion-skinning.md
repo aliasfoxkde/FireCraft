@@ -34,7 +34,7 @@ Two constraints shaped the design:
    (`crates/io/src/gif.rs`), but no command set one: a delay could only
    exist in a document that had been read from a file. The unit is
    hundredths of a second — the GIF delay field's own unit, shared by
-   the `FNDi` node (decision 0009) — and the field's ceiling is 65535.
+   the `FNDi` node (decision 0009) — and the field's ceiling is 65_535.
 
 ## Decision
 
@@ -71,7 +71,7 @@ Two constraints shaped the design:
 - **`frame.setDuration` records a state's delay** in the page's
   `frame_durations` record, keeping the record positional: a record
   shorter than the page's frame count is padded with the `FNDi` default
-  of ten hundredths of a second. A delay outside `0..=65535` and a
+  of ten hundredths of a second. A delay outside `0..=65_535` and a
   frame outside the page are both refused, and the undo restores the
   page's own record. A page claiming more frames than the format
   allows — 4096, the bound `frame.add` uses — is refused as well: the
