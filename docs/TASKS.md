@@ -11,13 +11,33 @@
 > lands, starts, or is re-scoped. The board mirrors the agent session
 > task list; if the two disagree, this file is the authority to reconcile
 > from.
+>
+> **Release-task status vocabulary.** Every release-relevant row below
+> uses the cross-platform release campaign's status words
+> (campaign §3.2): `NOT STARTED` · `READY` · `IN PROGRESS` · `BLOCKED` ·
+> `IMPLEMENTED` · `BUILD VERIFIED` · `INSTALLED` · `LAUNCHED` ·
+> `SMOKE TESTED` · `PUBLISHED` · `CERTIFIED` · `DEFERRED` · `REJECTED`.
+> These are not interchangeable labels. A row may claim `INSTALLED`,
+> `LAUNCHED`, `SMOKE TESTED`, `PUBLISHED` or `CERTIFIED` only when it
+> carries a receipt naming what was observed, on what host, and on what
+> date. A row with no receipt is `IMPLEMENTED` or `BLOCKED`.
+>
+> **Scope authority** for release work:
+> [decision 0075](decisions/0075-release-scope-mvp.md) — currently
+> *recommended — awaiting maintainer approval*, so the approved release
+> scope is **unset**. **Evidence baseline** for release work:
+> [`release/PHASE-0-AUDIT.md`](release/PHASE-0-AUDIT.md) (PR #16,
+> dated 2026-11-09 — the link resolves once that PR merges).
+> Per-artifact evidence state:
+> [`release/ARTIFACT-MATRIX.md`](release/ARTIFACT-MATRIX.md).
 
 ## In flight
 
-| # | Task | Ticket | Status |
-|---|---|---|---|
-| 5 | 19.6 inert-menu burn-down — Modify/File families (83 of 289; batch 8 = Attach to Path landed 2026-11-03) | [tasks/T5-inert-burndown.md](tasks/T5-inert-burndown.md) | in progress |
-| 194 | Aegis gate: content-keyed baseline, so a doc edit no longer fails the gate (decision 0074) | [decisions/0074-aegis-content-keyed-baseline.md](decisions/0074-aegis-content-keyed-baseline.md) | in progress |
+| # | Task | Ticket | Status | Owner | Next action |
+|---|---|---|---|---|---|
+| 5 | 19.6 inert-menu burn-down — Modify/File families (83 of 289; batch 8 = Attach to Path landed 2026-11-03) | [tasks/T5-inert-burndown.md](tasks/T5-inert-burndown.md) | `IN PROGRESS` | UI/verb lane | continue the per-family burn-down; each batch carries its own evidence gate |
+| 194 | Aegis gate: content-keyed baseline, so a doc edit no longer fails the gate (decision 0074) | [decisions/0074-aegis-content-keyed-baseline.md](decisions/0074-aegis-content-keyed-baseline.md) | `IMPLEMENTED` — the content-keyed gate and its decision record are in the tree; the gate has been exercised on this branch's tree | CI/tooling lane | the gate is content-keyed on this branch but the baseline format is **not yet on `main`**; port it and attach a run id before claiming the fleet-wide state |
+| 27 | Cross-platform release engineering: Windows, macOS, Linux package matrix, Android feasibility, source, SBOM/provenance, signing, CI aggregation and certification | [tasks/T27-cross-platform-release.md](tasks/T27-cross-platform-release.md) | `IN PROGRESS` — implementation is ahead of verification; **no target is `CERTIFIED`** and nothing is signed | release-workflow lane | land an end-to-end tag run of the repaired workflow and attach the run id as the RP-07 receipt; consolidate the duplicated `dist --source`/`--sbom` verbs (B-3) |
 
 ## Queued (Phase 20 — daily-driver features)
 
@@ -44,16 +64,38 @@
 
 ## Queued (release + quality)
 
-| # | Task | Ticket |
-|---|---|---|
-| 18 | Ship v0.2.5: release assets + web deploy | [tasks/T18-release.md](tasks/T18-release.md) |
-| 23 | Broaden release assets to photocraft breadth (dmg, AppImage, Flatpak, win installer) | [tasks/T23-release-assets.md](tasks/T23-release-assets.md) |
-| 19 | Quality ratchet: coverage → 99%, `deny(missing_docs)` on geom/color, WCAG AAA | — |
-| 21 | egui_kittest snapshot gates per panel/toolbar | — |
-| 22 | Screenshot-driven frontend audit + systematic refinement | — |
-| 24 | docs/TASKS.md + docs/tasks/ tracking scaffold | — (this change) |
-| 25 | Responsive/adaptive layout audit + fixes | — |
-| 27 | Cross-platform release engineering: Windows, macOS, Linux package matrix, Android feasibility, source, SBOM/provenance, signing, CI aggregation and certification | [tasks/T27-cross-platform-release.md](tasks/T27-cross-platform-release.md) | in flight — P0; RP-00 matrix + RP-01 Flatpak/RPM-decision + **DEB clean-container smoke passed** (floor fix 2.31→2.35, xtask now verifies the floor) + RP-05 source archive + RP-06 SBOM + RP-07 fail-closed aggregate landed 2026-11-06; Windows/macOS/AppImage/Flatpak actual builds + install smokes hardware-bound; Android spike in research |
+| # | Task | Ticket | Status | Owner | Next action |
+|---|---|---|---|---|---|
+| 18 | Ship v0.2.5: release assets + web deploy | [tasks/T18-release.md](tasks/T18-release.md) | `BLOCKED` — blocked on T23's asset breadth. The v0.2.5 release exists as published artifacts, but the **live web deployment serves a bundle that corresponds to no identifiable release** (B-6), and the published set was published out of band rather than by the release workflow (B-21) | release-workflow lane | reconcile the deployed bundle against a tagged release by hashing the deployed assets individually and recording the producing commit; do not re-cut v0.2.5 — B-19 means the next artifact must be rebuilt and re-measured, not re-tagged |
+| 23 | Broaden release assets to photocraft breadth (dmg, AppImage, Flatpak, win installer) | [tasks/T23-release-assets.md](tasks/T23-release-assets.md) | `IMPLEMENTED` for the recipe set, `NOT STARTED` for every off-fleet artifact — the AppImage, Flatpak, Windows and macOS recipes exist and are parse-checked (or existence-checked) by the gate, but **none has ever been produced**: `linuxdeploy`, `flatpak`/`flatpak-builder`, `pwsh`/`ISCC`, and `lipo`/`hdiutil`/Xcode CLT are all absent from the fleet (B-8, B-11, B-12) | release-workflow lane | either provision a host with each SDK and produce the artifact, or keep the recipes recipe-only and let the scope decision in 0075 exclude those targets — do not advertise them as supported |
+| 19 | Quality ratchet: coverage → 99%, `deny(missing_docs)` on geom/color, WCAG AAA | — | `NOT STARTED` | quality lane | schedule after the release lane; the coverage floor is a workspace-wide change |
+| 21 | egui_kittest snapshot gates per panel/toolbar | — | `NOT STARTED` | quality lane | needs a stable per-panel harness |
+| 22 | Screenshot-driven frontend audit + systematic refinement | — | `IN PROGRESS` | frontend lane | audit against the CS6 shell-parity directive; record screenshots per panel |
+| 25 | Responsive/adaptive layout audit + fixes | — | `NOT STARTED` | frontend lane | follows the responsive audit in the current UI work |
+
+### T27 work-package detail
+
+The full implementation-versus-verification table for T27 — per work
+package, the implementation state, the verification state, the owner and
+the next action — lives in
+[`tasks/T27-cross-platform-release.md`](tasks/T27-cross-platform-release.md).
+The per-artifact evidence state (one row per artifact, each with a status
+word, an evidence-ladder rung and a receipt) lives in
+[`release/ARTIFACT-MATRIX.md`](release/ARTIFACT-MATRIX.md). The board
+does not restate either; where the two disagree, the ticket and the
+matrix win.
+
+Two conditions are recorded here because they are easy to misread as
+progress:
+
+- **Nothing is `CERTIFIED`.** No artifact is signed and no provenance or
+  attestation exists on any branch (B-14), so no artifact can reach
+  evidence-ladder rung 9.
+- **The release scope is not approved.** Decision 0075 records the MVP
+  candidate and the extended campaign scope, and its status is
+  *recommended — awaiting maintainer approval*. Until the maintainer
+  approves it, the plan's full target matrix remains the standing scope
+  and no cut is authorized against a narrowed one.
 
 ## Closed (this board's lifetime)
 
@@ -68,3 +110,4 @@
 | Aegis baseline re-pin for the release-workflow tree — the baseline was line-keyed, so PR #14's prose edits shifted two documented false positives and the gate failed on noise. Superseded by the content-keyed gate below; the re-pin was a procedure that existed only to route around the tool defect | 2026-11-09 (`7e7f8ad`) |
 | Aegis gate is content-keyed on this branch — a finding's identity is `(pattern, file, content digest)` rather than Aegis's line-keyed fingerprint, so a prose edit that moves a documented false positive no longer fails the gate. No rule class is switched off; each class's rows carry the reason they were adjudicated ([decision 0074](decisions/0074-aegis-content-keyed-baseline.md)) | 2026-11-09 |
 | Host fork-bomb from a throwaway `/proc/self/exe` probe — ~5800 processes at load 2057 starved the GitForge runner's sandbox; terminated by per-PID cmdline+exe verification and the probe directory moved aside | 2026-11-09 |
+| Task-board tracking scaffold — `docs/TASKS.md` plus the `docs/tasks/` per-task ticket set (one file per task, same objective/inputs/authority/stopping-condition/verification shape as the milestone tickets). The scaffold is this board and the `docs/tasks/` directory; the row it carried in the queued table is closed by this reconciliation | 2026-11-09 |
