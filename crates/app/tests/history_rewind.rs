@@ -33,18 +33,28 @@ fn import_raster(editor: &mut Editor, name: &str) -> doc::ObjectId {
         .expect("id")
 }
 
+/// The undo depth a fresh editor already has.
+///
+/// [`Editor::untitled`] seeds the document through two registry commands
+/// (`page.add`, `page.setCanvasSize`), so its undo stack is not empty:
+/// the depths a rewind names are relative to that base, not to zero.
+fn base_depth(editor: &Editor) -> usize {
+    editor.session.undo_len()
+}
+
 #[test]
 fn the_editor_door_routes_the_history_rewind_command() {
     let mut editor = Editor::untitled();
+    let base = base_depth(&editor);
     import_raster(&mut editor, "red");
     let after_first = editor.current_cell().expect("cell").elements.clone();
     import_raster(&mut editor, "green");
-    assert_eq!(editor.session.undo_len(), 2);
+    assert_eq!(editor.session.undo_len(), base + 2);
 
     editor
-        .apply("history.rewind", serde_json::json!({ "depth": 1 }))
+        .apply("history.rewind", serde_json::json!({ "depth": base + 1 }))
         .expect("rewind");
-    assert_eq!(editor.session.undo_len(), 1);
+    assert_eq!(editor.session.undo_len(), base + 1);
 
     // The page holds what it held after the first raster: the rewound
     // step's effect is gone.
@@ -54,27 +64,31 @@ fn the_editor_door_routes_the_history_rewind_command() {
 #[test]
 fn a_rewind_to_the_opened_document_drops_the_whole_edit_history() {
     let mut editor = Editor::untitled();
+    let base = base_depth(&editor);
     import_raster(&mut editor, "red");
     import_raster(&mut editor, "green");
-    assert_eq!(editor.session.undo_len(), 2);
+    assert_eq!(editor.session.undo_len(), base + 2);
 
+    // Rewinding to the base depth drops the edits and keeps the seeded
+    // document — the page, its layer and its canvas — intact.
     editor
-        .apply("history.rewind", serde_json::json!({ "depth": 0 }))
-        .expect("rewind to the opened document");
-    assert_eq!(editor.session.undo_len(), 0);
+        .apply("history.rewind", serde_json::json!({ "depth": base }))
+        .expect("rewind to the seeded document");
+    assert_eq!(editor.session.undo_len(), base);
     assert!(editor.current_cell().expect("cell").elements.is_empty());
 }
 
 #[test]
 fn a_rewind_past_the_recorded_depth_is_refused() {
     let mut editor = Editor::untitled();
+    let base = base_depth(&editor);
     import_raster(&mut editor, "red");
     let error = editor
-        .apply("history.rewind", serde_json::json!({ "depth": 9 }))
+        .apply("history.rewind", serde_json::json!({ "depth": base + 9 }))
         .expect_err("past the end refused");
     assert!(
         matches!(error, engine::EngineError::InvalidState { .. }),
         "{error}"
     );
-    assert_eq!(editor.session.undo_len(), 1);
+    assert_eq!(editor.session.undo_len(), base + 1);
 }
