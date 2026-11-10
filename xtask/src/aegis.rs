@@ -120,9 +120,8 @@ const CLASS_NOTES: &[(&str, &str)] = &[
     (
         "ssrf-localhost",
         "A loopback listener in the release smoke test, a localhost \
-         maintainer address, prose naming the local GitForge API, and the \
-         site deployment runbook's local-preview instruction to open \
-         http://localhost:8080; the workspace has no HTTP client dependency.",
+         maintainer address, and prose naming the local GitForge API; the \
+         workspace has no HTTP client dependency.",
     ),
     (
         "ssn-no-dashes",
