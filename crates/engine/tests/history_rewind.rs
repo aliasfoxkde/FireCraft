@@ -8,7 +8,7 @@ mod support;
 
 use support::{DocumentBytes, sample_document};
 
-use engine::{EngineError, Session, REWIND_ID};
+use engine::{EngineError, REWIND_ID, Session};
 use serde_json::json;
 
 fn session() -> (Session, Vec<doc::ObjectId>) {
@@ -87,10 +87,7 @@ fn a_rewind_past_the_recorded_depth_is_refused() {
     let before = DocumentBytes::of(session.document());
 
     let error = session.rewind_to(5).expect_err("past the end refused");
-    assert!(
-        matches!(error, EngineError::InvalidState { .. }),
-        "{error}"
-    );
+    assert!(matches!(error, EngineError::InvalidState { .. }), "{error}");
     assert_eq!(DocumentBytes::of(session.document()), before);
     assert_eq!(session.undo_len(), 1);
 }

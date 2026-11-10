@@ -24,7 +24,13 @@ fn import_raster(editor: &mut Editor, name: &str) -> doc::ObjectId {
             }),
         )
         .expect("import");
-    editor.current_cell().expect("cell").elements.last().copied().expect("id")
+    editor
+        .current_cell()
+        .expect("cell")
+        .elements
+        .last()
+        .copied()
+        .expect("id")
 }
 
 #[test]
