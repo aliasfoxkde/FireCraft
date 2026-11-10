@@ -966,7 +966,7 @@ fn build_deb(
     Ok(out.to_owned())
 }
 
-/// The payload every FireCraft deb must carry. `verify_deb` reads the
+/// The payload every `FireCraft` deb must carry. `verify_deb` reads the
 /// built package back with `dpkg-deb --contents` and requires each of
 /// these paths: the two binaries, the desktop entry, and the icon.
 ///
