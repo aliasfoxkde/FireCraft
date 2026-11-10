@@ -143,3 +143,34 @@ This is deliberately not a blocker for the current FireCraft browser release. Ke
 - **Native phase:** implement host adapters and validate FireCraft inside the native WebOS runtime; do not add Btrfs or installer concerns to FireCraft's document core.
 
 Acceptance requires cross-repository tests and a versioned compatibility policy. A green standalone browser smoke alone does not prove complete WebOS CLI/MCP integration.
+
+## 10. Reuse the Craft foundation and expose a stable FireCraft SDK
+
+FireCraft should take advantage of the shared work already underway in the wider Craft ecosystem without surrendering ownership of its engine, product behavior, release process, or roadmap.
+
+### Existing upstream work to evaluate
+
+- [storytold/craft-libs](https://github.com/storytold/craft-libs) is an established Rust workspace of small shared libraries under a permissive MIT OR Apache-2.0 license. It already contains relevant candidates: craft-atomic, craft-cms, craft-settings, craft-platform, craft-dialogs, craft-keymap, craft-ui, craft-ai-core, craft-web-api, and craft-web-host.
+- The web API and host crates are particularly relevant prior art for a common app-control channel and parent-page bridge. Compare their request/response, discovery, origin validation, versioning, and permission semantics with FireCraft's current bridge before considering a staged migration.
+- craft-ai-core is a shared data model and contract, not a complete agent executor or an automatic provider integration. Keep execution adapters, user consent, host policy, and FireCraft command invocation explicit.
+- The [shared-library candidate process](https://github.com/storytold/craft-libs/issues/2) deliberately distinguishes extraction, consolidation, API standardization, and component reuse. It also requires multiple consumers, a meaningful correctness/performance/maintenance benefit, and preservation of app-specific behavior.
+
+Do not adopt a crate solely because its name looks relevant. For each candidate, record its API fit, Rust/egui version compatibility, dependency and feature footprint on native and wasm32-unknown-unknown, license and asset notices, target support, tests, maintenance activity, and measured effect on FireCraft's build and runtime. Keep FireCraft's document model, Fireworks-compatibility rules, editing policy, and UX in FireCraft. Shared crates should own mechanisms and neutral contracts, not force every application to behave identically.
+
+### SDK layers and public contract
+
+The first SDK should be a thin, stable facade over the existing FireCraft engine and command registry—not a rewrite of the engine and not a universal application framework.
+
+1. **Domain/API layer:** stable component identity, version, capability discovery, document open/inspect/mutate/export operations, typed command metadata and results, errors, progress, cancellation, and compatibility negotiation.
+2. **Language-neutral contract:** versioned JSON Schema (or a reviewed equivalent such as WIT for component interfaces) for commands, manifests, events, capabilities, and errors. Treat the schema as the contract; do not make WebOS consume private Rust structs.
+3. **Runtime adapters:** native Rust API, CLI, MCP transport, browser WASM/JavaScript bridge, and WebOS host adapter. Each adapter translates to the same authoritative command service.
+4. **Developer distribution:** Cargo dependencies pinned to tested revisions initially; WASM plus its host client; API docs, examples, integration tests, licenses/attribution, and a machine-readable compatibility manifest. Add crates.io publication, a C ABI, or other language bindings only after a real downstream consumer and a support owner justify their maintenance burden.
+
+The SDK must be independently usable by a third-party host. WebOS is an important consumer and conformance target, not a hidden runtime dependency. Maintain a standalone FireCraft release and test path even when SDK packages are published alongside it.
+
+### Shared engineering and release practices
+
+Use [craft-common-actions](https://github.com/storytold/craft-common-actions) as a source of proven CI/CD patterns and reusable workflows: shared quality gates, packaging lint, cross-platform build matrices, package signing, checksums, and release aggregation. Evaluate the existing workflow's Storyteld-specific Git dependency checks, font/i18n inputs, packaging conventions, and job matrix before enabling it in FireCraft. Keep FireCraft-specific browser bridge tests, document-format corpus tests, and deployment verification mandatory.
+
+The candidate fork at [artcraft-candidates/FireCraft](https://github.com/artcraft-candidates/FireCraft) is the appropriate first compatibility environment for shared workflows and cross-app crate testing. The canonical repository remains [aliasfoxkde/FireCraft](https://github.com/aliasfoxkde/FireCraft). Reusable improvements can be contributed upstream; once verified, workflow adoption and product changes return through reviewed PRs to the canonical repo.
+
