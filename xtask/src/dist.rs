@@ -25,7 +25,7 @@ use std::sync::mpsc;
 /// The release bundle's wasm size ceiling, in bytes. Pinned from
 /// observation (trunk --release, wasm-opt 2, rustc 1.99, wasm-opt 132):
 /// 21,608,249 B on 2026-11-10 via `xtask dist --web` on the Phase 21
-/// daily-driver branch (`8c68b0f`, GitForge run
+/// daily-driver branch (`8c68b0f`, `GitForge` run
 /// `2bf47590-3f50-445c-9948-f0bc3587b483`) — the largest measured
 /// intended-feature bundle in flight. See
 /// `docs/decisions/0079-wasm-size-budget.md`.
@@ -44,7 +44,7 @@ use std::sync::mpsc;
 /// gradient editor, image support) grew the bundle from the 15,245,342 B
 /// observed 2026-11-02, re-pinned to 21,235,599 B on 2026-11-03
 /// (19b.4). The Phase 21 daily-driver batch (multi-doc tabs, autosave
-/// and recovery, HiDPI, command palette v2, preferences) and the Phase
+/// and recovery, `HiDPI`, command palette v2, preferences) and the Phase
 /// 22 shell surface (right dock column, per-kind inspector) added
 /// ~353 KB over `main`'s 21,258,126 B (measured 2026-11-10 on
 /// `31fffb8b`), which is what this pin covers.
