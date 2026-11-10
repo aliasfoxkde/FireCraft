@@ -2196,7 +2196,7 @@ impl Reader {
         let (mut group_type, mut opacity, mut blend) = (None, None, None);
         let (mut visible, mut locked, mut mask_hidden) = (None, None, None);
         let (mut name, mut element_ids, mut mask_linked) = (None, None, None);
-        let mut stack_mode = None;
+        let mut stack_mode: Option<MaskCombineMode> = None;
         let mut effects = Vec::new();
 
         for (i, child) in children.iter().enumerate() {
@@ -2220,6 +2220,18 @@ impl Reader {
                         self.bag_node(path, i, child);
                     }
                 }
+                // The mask level's combine mode rides in the group's
+                // custom data as a `DCEv "mode"` entry (decision
+                // 0072). The node is bagged as well, so foreign
+                // entries and an unknown spelling both round-trip
+                // verbatim.
+                b"DTAv" => {
+                    let kids = children_of(child, path)?;
+                    if let Some(mode) = Self::read_stack_mode(kids) {
+                        stack_mode = Some(mode);
+                    }
+                    self.bag_node(path, i, child);
+                }
                 // DTAv / IMGv / MRMv / ISSv and anything else:
                 // preserved (EFLv maps below).
                 b"EFLv" => {
@@ -2231,7 +2243,7 @@ impl Reader {
         }
 
         Ok(ObjectData::Group(GroupObject {
-            stack_mode: None,
+            stack_mode,
             group_type: group_type.unwrap_or(0),
             name,
             children: element_ids.unwrap_or_default(),
