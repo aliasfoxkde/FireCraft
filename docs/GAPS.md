@@ -123,7 +123,7 @@ Point-in-time snapshot **2026-11-02** (post-v0.2.4). Counts marked
 | **Registry** | 245 commands | Every command executable from the GUI via the Ctrl+P palette (19.4); menu reachability is the remaining gap |
 | **Menu reachability** | 8 inert of 290 items | *live* — derived + gated (`menus::tests::inert_count_never_rises`) |
 | **Parity** | 268 C / 3 P / 0 M / 85 N | 3 P rows are evidence-gated (Phase 12 oracle) |
-| **Decision docs** | 71 (0001–0071) | Next: 0072 |
+| **Decision docs** | 72 (0001–0076, with gaps) | Next: 0077 |
 | **Web bundle** | 21,235,599 B (ceiling 21,500,000) | Re-pinned 2026-11-03 (19b.4, dated observation; 19.x shell growth) |
 
 ---
