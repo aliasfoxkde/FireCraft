@@ -472,7 +472,7 @@ pub static FILE: Menu = Menu {
         item(
             35795,
             "Browse in Bridge...",
-            "",
+            "Ctrl+Shift+O",
             Action::Shell(ShellAction::ReportGap(
                 "Adobe Bridge is not available in this build.",
             )),
@@ -541,7 +541,7 @@ pub static FILE: Menu = Menu {
         ),
         item(35036, "Revert", "", Action::Shell(ShellAction::Revert)),
         Entry::Sep,
-        item(35012, "Import...", "", Action::Shell(ShellAction::Import)),
+        item(35012, "Import...", "Ctrl+R", Action::Shell(ShellAction::Import)),
         item(
             35007,
             "Export...",
@@ -591,7 +591,7 @@ pub static FILE: Menu = Menu {
         item(
             35792,
             "File Info...",
-            "",
+            "Ctrl+Alt+Shift+F",
             Action::Shell(ShellAction::FileInfo),
         ),
         Entry::Sep,
@@ -615,7 +615,7 @@ pub static FILE: Menu = Menu {
                 item(
                     35313,
                     "Preview in Primary Browser",
-                    "",
+                    "F12",
                     Action::Shell(ShellAction::PreviewInBrowser {
                         secondary: false,
                         all_pages: false,
@@ -624,7 +624,7 @@ pub static FILE: Menu = Menu {
                 item(
                     35315,
                     "Preview in Secondary Browser",
-                    "",
+                    "Shift+F12",
                     Action::Shell(ShellAction::PreviewInBrowser {
                         secondary: true,
                         all_pages: false,
@@ -634,7 +634,7 @@ pub static FILE: Menu = Menu {
                 item(
                     49003,
                     "Preview All Pages in Primary Browser",
-                    "",
+                    "Ctrl+F12",
                     Action::Shell(ShellAction::PreviewInBrowser {
                         secondary: false,
                         all_pages: true,
@@ -717,14 +717,14 @@ pub static EDIT: Menu = Menu {
                 item(
                     35195,
                     "New Symbol...",
-                    "",
+                    "Ctrl+F8",
                     Action::Sel(SelAction::NewSymbol),
                 ),
                 Entry::Sep,
                 item(
                     35179,
                     "Hotspot",
-                    "",
+                    "Ctrl+Shift+U",
                     Action::Shell(ShellAction::InsertWeb {
                         what: InsertWebKind::Hotspot,
                     }),
@@ -740,7 +740,7 @@ pub static EDIT: Menu = Menu {
                 item(
                     35786,
                     "Polygon Slice",
-                    "",
+                    "Alt+Shift+P",
                     Action::Shell(ShellAction::InsertWeb {
                         what: InsertWebKind::PolygonSlice,
                     }),
@@ -749,7 +749,7 @@ pub static EDIT: Menu = Menu {
                 item(
                     35180,
                     "Empty Bitmap",
-                    "",
+                    "Ctrl+Alt+Y",
                     Action::Sel(SelAction::EmptyBitmap),
                 ),
                 item(
@@ -765,8 +765,8 @@ pub static EDIT: Menu = Menu {
                     Action::Sel(SelAction::BitmapViaCut),
                 ),
                 Entry::Sep,
-                item(35309, "Layer", "", Action::Sel(SelAction::NewLayer)),
-                item(35301, "State", "", Action::Sel(SelAction::NewFrame)),
+                item(35309, "Layer", "Shift+L", Action::Sel(SelAction::NewLayer)),
+                item(35301, "State", "Shift+F", Action::Sel(SelAction::NewFrame)),
                 item(35809, "Page", "", Action::Sel(SelAction::NewPage)),
             ],
         ),
@@ -803,19 +803,19 @@ pub static EDIT: Menu = Menu {
         item(
             35430,
             "Paste as Mask",
-            "",
+            "Ctrl+Alt+V",
             Action::Shell(ShellAction::PasteAsMask),
         ),
         item(
             35127,
             "Paste Inside",
-            "",
+            "Ctrl+Shift+V",
             Action::Shell(ShellAction::PasteInside),
         ),
         item(
             35033,
             "Paste Attributes",
-            "",
+            "Ctrl+Alt+Shift+V",
             Action::Shell(ShellAction::ReportGap(
                 "Paste Attributes needs the attributes clipboard, which this build does not ship",
             )),
@@ -837,7 +837,7 @@ pub static EDIT: Menu = Menu {
         item(
             35145,
             "Crop Selected Bitmap",
-            "",
+            "Ctrl+Alt+C",
             Action::Shell(ShellAction::ReportGap(
                 "Crop Selected Bitmap needs the bitmap-crop verb, which this build does not ship",
             )),
@@ -933,20 +933,20 @@ pub static VIEW: Menu = Menu {
         item(
             35826,
             "Tooltips",
-            "",
+            "Ctrl+]",
             Action::Shell(ShellAction::ToggleTooltips),
         ),
         item(
             35072,
             "Show All",
-            "",
+            "Ctrl+Shift+M",
             Action::Shell(ShellAction::ShowAllHidden),
         ),
         Entry::Sep,
         item(
             35130,
             "Rulers",
-            "",
+            "Ctrl+Alt+R",
             Action::Shell(ShellAction::ToggleRulers),
         ),
         Entry::Sub(
@@ -955,19 +955,19 @@ pub static VIEW: Menu = Menu {
                 item(
                     35131,
                     "Show Grid",
-                    "Ctrl+Alt+G",
+                    "Ctrl+'",
                     Action::Shell(ShellAction::ToggleGrid),
                 ),
                 item(
                     35132,
                     "Snap to Grid",
-                    "Ctrl+Alt+Shift+G",
+                    "Ctrl+Shift+'",
                     Action::Shell(ShellAction::ToggleSnapToGrid),
                 ),
                 item(
                     35133,
                     "Edit Grid...",
-                    "",
+                    "Ctrl+Alt+G",
                     Action::Shell(ShellAction::EditGrid),
                 ),
             ],
@@ -1007,13 +1007,13 @@ pub static VIEW: Menu = Menu {
                 item(
                     35815,
                     "Show Smart Guides",
-                    "",
+                    "Ctrl+\\",
                     Action::Shell(ShellAction::ToggleSmartGuides),
                 ),
                 item(
                     35821,
                     "Snap to Smart Guides",
-                    "",
+                    "Ctrl+Shift+\\",
                     Action::Shell(ShellAction::ToggleSnapToSmartGuides),
                 ),
             ],
@@ -1030,7 +1030,7 @@ pub static VIEW: Menu = Menu {
         item(
             35299,
             "Slice Guides",
-            "",
+            "Ctrl+Alt+Shift+;",
             Action::Shell(ShellAction::ToggleSliceGuides),
         ),
         item(
@@ -1040,7 +1040,7 @@ pub static VIEW: Menu = Menu {
             Action::Shell(ShellAction::ToggleSliceOverlay),
         ),
         Entry::Sep,
-        item(35088, "Edges", "", Action::Shell(ShellAction::ToggleEdges)),
+        item(35088, "Edges", "Ctrl+H", Action::Shell(ShellAction::ToggleEdges)),
     ],
 };
 
@@ -1064,13 +1064,13 @@ pub static SELECT: Menu = Menu {
         item(
             35194,
             "Superselect",
-            "",
+            "Ctrl+↑",
             Action::Sel(SelAction::SelectParents),
         ),
         item(
             35193,
             "Subselect",
-            "",
+            "Ctrl+↓",
             Action::Sel(SelAction::SelectChildren),
         ),
         Entry::Sep,
@@ -1083,7 +1083,7 @@ pub static SELECT: Menu = Menu {
         item(
             35039,
             "Select Inverse",
-            "",
+            "Ctrl+Shift+I",
             Action::Shell(ShellAction::SelectInverse),
         ),
         item(
@@ -1251,7 +1251,7 @@ pub static MODIFY: Menu = Menu {
                 item(
                     35189,
                     "Convert to Symbol...",
-                    "",
+                    "F8",
                     Action::Sel(SelAction::ConvertToSymbol),
                 ),
                 Entry::Sep,
@@ -1265,7 +1265,7 @@ pub static MODIFY: Menu = Menu {
                 item(
                     35188,
                     "Tween Instances...",
-                    "",
+                    "Ctrl+Alt+Shift+T",
                     Action::Sel(SelAction::TweenInstances),
                 ),
                 item(35190, "Break Apart", "", Action::Sel(SelAction::BreakApart)),
@@ -1329,13 +1329,13 @@ pub static MODIFY: Menu = Menu {
                 item(
                     35430,
                     "Paste as Mask",
-                    "",
+                    "Ctrl+Alt+V",
                     Action::Shell(ShellAction::PasteAsMask),
                 ),
                 item(
                     35128,
                     "Group as Mask",
-                    "",
+                    "Ctrl+Shift+G",
                     Action::Shell(ShellAction::ReportGap(
                         "Group as Mask needs a mask-group verb, which this build does not ship",
                     )),
@@ -1361,7 +1361,7 @@ pub static MODIFY: Menu = Menu {
                 item(
                     35435,
                     "Disable Mask",
-                    "",
+                    "Ctrl+Shift+K",
                     Action::Sel(SelAction::EnableMask(false)),
                 ),
                 item(
@@ -1416,7 +1416,7 @@ pub static MODIFY: Menu = Menu {
         item(
             35009,
             "Flatten Selection",
-            "",
+            "Ctrl+Alt+Shift+Z",
             Action::Sel(SelAction::FlattenSelection),
         ),
         item(
@@ -1428,7 +1428,7 @@ pub static MODIFY: Menu = Menu {
         item(
             35008,
             "Flatten Layers",
-            "",
+            "Ctrl+Alt+Shift+E",
             Action::Sel(SelAction::FlattenLayers),
         ),
         Entry::Sep,
@@ -1438,7 +1438,7 @@ pub static MODIFY: Menu = Menu {
                 item(
                     35178,
                     "Free Transform",
-                    "",
+                    "Ctrl+T",
                     Action::Shell(ShellAction::TransformMode(TransformMode::Scale)),
                 ),
                 Entry::Sep,
@@ -1463,7 +1463,7 @@ pub static MODIFY: Menu = Menu {
                 item(
                     35201,
                     "Numeric Transform...",
-                    "",
+                    "Ctrl+Shift+T",
                     Action::Shell(ShellAction::NumericTransform),
                 ),
                 Entry::Sep,
@@ -1476,13 +1476,13 @@ pub static MODIFY: Menu = Menu {
                 item(
                     35174,
                     "Rotate 90° CW",
-                    "",
+                    "Ctrl+9",
                     Action::Sel(SelAction::Rotate(90.0)),
                 ),
                 item(
                     35175,
                     "Rotate 90° CCW",
-                    "",
+                    "Ctrl+7",
                     Action::Sel(SelAction::Rotate(-90.0)),
                 ),
                 Entry::Sep,
@@ -1545,24 +1545,24 @@ pub static MODIFY: Menu = Menu {
         Entry::Sub(
             "Align",
             &[
-                item(35073, "Left", "", Action::Align("left")),
-                item(35075, "Center Vertical", "", Action::Align("centerX")),
-                item(35074, "Right", "", Action::Align("right")),
+                item(35073, "Left", "Ctrl+Alt+1", Action::Align("left")),
+                item(35075, "Center Vertical", "Ctrl+Alt+2", Action::Align("centerX")),
+                item(35074, "Right", "Ctrl+Alt+3", Action::Align("right")),
                 Entry::Sep,
-                item(35077, "Top", "", Action::Align("top")),
-                item(35076, "Center Horizontal", "", Action::Align("centerY")),
-                item(35078, "Bottom", "", Action::Align("bottom")),
+                item(35077, "Top", "Ctrl+Alt+4", Action::Align("top")),
+                item(35076, "Center Horizontal", "Ctrl+Alt+5", Action::Align("centerY")),
+                item(35078, "Bottom", "Ctrl+Alt+6", Action::Align("bottom")),
                 Entry::Sep,
                 item(
                     35080,
                     "Distribute Widths",
-                    "",
+                    "Ctrl+Alt+7",
                     Action::Distribute("horizontal"),
                 ),
                 item(
                     35079,
                     "Distribute Heights",
-                    "",
+                    "Ctrl+Alt+9",
                     Action::Distribute("vertical"),
                 ),
             ],
@@ -1631,7 +1631,7 @@ pub static MODIFY: Menu = Menu {
         item(
             35849,
             "Snap To Pixel",
-            "",
+            "Ctrl+K",
             Action::Shell(ShellAction::ReportGap(
                 "Snap To Pixel needs a view snap mode, which this build does not ship",
             )),
@@ -1687,7 +1687,7 @@ pub static TEXT: Menu = Menu {
         Entry::Sub(
             "Style",
             &[
-                item(35057, "Plain", "", Action::TextPlain),
+                item(35057, "Plain", "Ctrl+Alt+Shift+P", Action::TextPlain),
                 Entry::Sep,
                 item(
                     35055,
@@ -1712,10 +1712,10 @@ pub static TEXT: Menu = Menu {
         Entry::Sub(
             "Align",
             &[
-                item(35044, "Left", "", Action::TextJustify(0)),
-                item(35042, "Centered Horizontally", "", Action::TextJustify(1)),
-                item(35045, "Right", "", Action::TextJustify(2)),
-                item(35043, "Justified", "", Action::TextJustify(3)),
+                item(35044, "Left", "Ctrl+Alt+Shift+L", Action::TextJustify(0)),
+                item(35042, "Centered Horizontally", "Ctrl+Alt+Shift+C", Action::TextJustify(1)),
+                item(35045, "Right", "Ctrl+Alt+Shift+R", Action::TextJustify(2)),
+                item(35043, "Justified", "Ctrl+Alt+Shift+J", Action::TextJustify(3)),
                 Entry::Sep,
                 item(
                     35114,
@@ -1761,7 +1761,7 @@ pub static TEXT: Menu = Menu {
         item(
             35118,
             "Attach to Path",
-            "",
+            "Ctrl+Shift+Y",
             Action::Sel(SelAction::AttachToPath),
         ),
         item(
@@ -1789,7 +1789,7 @@ pub static TEXT: Menu = Menu {
         item(
             35125,
             "Convert to Paths",
-            "",
+            "Ctrl+Shift+P",
             Action::Sel(SelAction::ConvertToPaths),
         ),
         Entry::Sep,
@@ -1936,7 +1936,7 @@ pub static WINDOW: Menu = Menu {
         item(
             35298,
             "Hide Panels",
-            "",
+            "Tab",
             Action::Shell(ShellAction::ToggleHidePanels),
         ),
         Entry::Sep,
@@ -1951,7 +1951,7 @@ pub static WINDOW: Menu = Menu {
                 Action::Shell(ShellAction::ToggleMainToolbar),
             )],
         ),
-        item(35058, "Tools", "", Action::Shell(ShellAction::ToggleTools)),
+        item(35058, "Tools", "Ctrl+Alt+T", Action::Shell(ShellAction::ToggleTools)),
         item(
             35586,
             "Properties",
@@ -1963,7 +1963,7 @@ pub static WINDOW: Menu = Menu {
         item(
             43412,
             "Layers",
-            "",
+            "Ctrl+Alt+L",
             Action::Shell(ShellAction::TogglePanel("Layers")),
         ),
         Entry::Sep,
@@ -1974,13 +1974,13 @@ pub static WINDOW: Menu = Menu {
         item(
             35798,
             "Pages",
-            "",
+            "Ctrl+Alt+O",
             Action::Shell(ShellAction::TogglePanel("Pages")),
         ),
         item(
             43410,
             "States",
-            "",
+            "Ctrl+Alt+K",
             Action::Shell(ShellAction::TogglePanel("States")),
         ),
         item(
@@ -1999,7 +1999,7 @@ pub static WINDOW: Menu = Menu {
         item(
             43415,
             "Styles",
-            "",
+            "Ctrl+Alt+J",
             Action::Shell(ShellAction::TogglePanel("Styles")),
         ),
         item(
@@ -2011,33 +2011,33 @@ pub static WINDOW: Menu = Menu {
         item(
             43414,
             "URL",
-            "",
+            "Ctrl+Alt+U",
             Action::Shell(ShellAction::TogglePanel("URL")),
         ),
         Entry::Sep,
         item(
             43405,
             "Color Mixer",
-            "",
+            "Ctrl+Alt+M",
             Action::Shell(ShellAction::TogglePanel("Color Mixer")),
         ),
         item(
             43408,
             "Swatches",
-            "",
+            "Ctrl+Alt+S",
             Action::Shell(ShellAction::TogglePanel("Swatches")),
         ),
         Entry::Sep,
         item(
             43404,
             "Info",
-            "",
+            "Ctrl+Alt+I",
             Action::Shell(ShellAction::TogglePanel("Info")),
         ),
         item(
             43413,
             "Behaviors",
-            "",
+            "Ctrl+Alt+H",
             Action::Shell(ShellAction::TogglePanel("Behaviors")),
         ),
         item(43402, "Find and Replace", "", Action::Inert),
