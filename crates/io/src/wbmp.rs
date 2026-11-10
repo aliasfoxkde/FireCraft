@@ -371,7 +371,7 @@ mod tests {
         assert_eq!(w, 2);
         assert_eq!(h, 2);
         // White pixels are 255 after luma threshold, all opaque → RGBA [255,255,255,255].
-        for px in rgba.chunks_exact(4) {
+        for px in rgba.as_chunks::<4>().0.iter() {
             assert_eq!(px, &[255, 255, 255, 255]);
         }
     }

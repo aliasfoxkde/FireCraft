@@ -104,29 +104,26 @@ fn owning_mask_group_deep(
             || group_type == SHAPE_MASK
             || (accept_disabled && group_type == REGULAR_GROUP)
     };
-    if let ObjectData::Group(group) = access::object(document, name, id)? {
-        if is_mask_group(group.group_type) {
-            return Ok(MaskGroup {
-                id,
-                group: group.clone(),
-            });
-        }
+    if let ObjectData::Group(group) = access::object(document, name, id)?
+        && is_mask_group(group.group_type)
+    {
+        return Ok(MaskGroup {
+            id,
+            group: group.clone(),
+        });
     }
     if let Some(Owner::Group {
         id: parent,
         position,
     }) = find_owner(document, id)
+        && position == 1
+        && let Some(ObjectData::Group(group)) = document.registry.get(parent)
+        && is_mask_group(group.group_type)
     {
-        if position == 1 {
-            if let Some(ObjectData::Group(group)) = document.registry.get(parent) {
-                if is_mask_group(group.group_type) {
-                    return Ok(MaskGroup {
-                        id: parent,
-                        group: group.clone(),
-                    });
-                }
-            }
-        }
+        return Ok(MaskGroup {
+            id: parent,
+            group: group.clone(),
+        });
     }
     Err(EngineError::InvalidState {
         name: name.to_owned(),
@@ -279,7 +276,13 @@ fn mask_gray_plane(
             Ok(SelectionMask {
                 width: dims.0,
                 height: dims.1,
-                alpha: flat.pixels.chunks_exact(4).map(|pixel| pixel[0]).collect(),
+                alpha: flat
+                    .pixels
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
+                    .map(|pixel| pixel[0])
+                    .collect(),
             })
         }
         ObjectData::Path(path) => {
@@ -741,15 +744,15 @@ impl TypedCommand for AddMask {
                 },
             });
             document.registry.remove(old.id);
-            if let Some(old_mask_id) = removed_mask {
-                if let Some(old_mask) = document.registry.remove(old_mask_id) {
-                    deltas.push(Delta::Object {
-                        id: old_mask_id,
-                        inverse: ObjectInverse::Removed {
-                            object: Box::new(old_mask),
-                        },
-                    });
-                }
+            if let Some(old_mask_id) = removed_mask
+                && let Some(old_mask) = document.registry.remove(old_mask_id)
+            {
+                deltas.push(Delta::Object {
+                    id: old_mask_id,
+                    inverse: ObjectInverse::Removed {
+                        object: Box::new(old_mask),
+                    },
+                });
             }
         }
         Ok(Delta::Group(deltas))
@@ -901,12 +904,11 @@ impl TypedCommand for MoveMaskBy {
         const NAME: &str = "mask.moveBy";
         let mut mask_ids = Vec::new();
         for id in &payload.ids {
-            if let Ok(resolved) = owning_mask_group(document, NAME, *id) {
-                if let Some(&mask_id) = resolved.group.children.first() {
-                    if !mask_ids.contains(&mask_id) {
-                        mask_ids.push(mask_id);
-                    }
-                }
+            if let Ok(resolved) = owning_mask_group(document, NAME, *id)
+                && let Some(&mask_id) = resolved.group.children.first()
+                && !mask_ids.contains(&mask_id)
+            {
+                mask_ids.push(mask_id);
             }
         }
         if mask_ids.is_empty() {
@@ -973,10 +975,10 @@ impl TypedCommand for MoveMaskContentsBy {
                     .and_then(|resolved| resolved.group.children.get(1).copied()),
                 Err(_) => None,
             };
-            if let Some(content) = content {
-                if !content_ids.contains(&content) {
-                    content_ids.push(content);
-                }
+            if let Some(content) = content
+                && !content_ids.contains(&content)
+            {
+                content_ids.push(content);
             }
         }
         if content_ids.is_empty() {
@@ -1129,7 +1131,13 @@ fn apply_coverage_to_image(
         })
         .collect();
     let mut flat = gather(image, &document.tiles, name)?;
-    for (pixel, &gray) in flat.pixels.chunks_exact_mut(4).zip(&coverage.alpha) {
+    for (pixel, &gray) in flat
+        .pixels
+        .as_chunks_mut::<4>()
+        .0
+        .iter_mut()
+        .zip(&coverage.alpha)
+    {
         pixel[3] = ((u16::from(pixel[3]) * u16::from(gray) + 127) / 255) as u8;
     }
     scatter(&flat, image, &mut document.tiles, &tile_ids, name)?;
@@ -1252,7 +1260,11 @@ impl TypedCommand for SetMaskMode {
                     u32::try_from(width).unwrap_or(0),
                     u32::try_from(height).unwrap_or(0),
                 );
-                for (slot, pixel) in plane.alpha.iter_mut().zip(flat.pixels.chunks_exact(4)) {
+                for (slot, pixel) in plane
+                    .alpha
+                    .iter_mut()
+                    .zip(flat.pixels.as_chunks::<4>().0.iter())
+                {
                     *slot = pixel[0];
                 }
                 let contours = plane_to_path(&plane, image.location);
@@ -1875,7 +1887,7 @@ mod tests {
             0,
             raster::Tile::from_rgba8({
                 let mut pixels = [0u8; raster::TILE_BYTES];
-                for pixel in pixels.chunks_exact_mut(4) {
+                for pixel in pixels.as_chunks_mut::<4>().0.iter_mut() {
                     pixel.copy_from_slice(&[255, 0, 0, 255]);
                 }
                 pixels

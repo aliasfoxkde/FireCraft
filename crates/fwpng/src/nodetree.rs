@@ -342,8 +342,10 @@ impl Parser<'_> {
             return Err(self.err_at(start, "string node is missing its closing brace"));
         }
         let units: Vec<u16> = data
-            .chunks_exact(2)
-            .map(|p| u16::from_be_bytes([p[0], p[1]]))
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|p| u16::from_be_bytes(*p))
             .collect();
         String::from_utf16(&units).map_err(|_| FwPngError::BadUtf16 { offset: start })
     }

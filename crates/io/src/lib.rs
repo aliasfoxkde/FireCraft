@@ -91,7 +91,7 @@ impl<'a> Plane<'a> {
     #[must_use]
     pub fn flatten_rgb(&self, matte: Matte) -> Vec<u8> {
         let mut rgb = Vec::with_capacity(self.rgba.len() / 4 * 3);
-        for px in self.rgba.chunks_exact(4) {
+        for px in self.rgba.as_chunks::<4>().0.iter() {
             rgb.push(flatten_channel(px[0], px[3], matte.red_channel()));
             rgb.push(flatten_channel(px[1], px[3], matte.green_channel()));
             rgb.push(flatten_channel(px[2], px[3], matte.blue_channel()));

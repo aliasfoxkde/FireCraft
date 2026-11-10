@@ -381,17 +381,17 @@ impl Shell {
         let response = response.on_hover_cursor(cursor);
 
         // First fit on a fresh raster keeps the document visible.
-        if self.raster.is_none() {
-            if let Some(page) = self.editor.document().pages.get(self.editor.page) {
-                let world = geom::Rect::new(
-                    page.info.canvas.x,
-                    page.info.canvas.y,
-                    page.info.canvas.x + page.info.canvas.width,
-                    page.info.canvas.y + page.info.canvas.height,
-                );
-                if world.width() > 0.0 && world.height() > 0.0 {
-                    self.view.fit(world, available);
-                }
+        if self.raster.is_none()
+            && let Some(page) = self.editor.document().pages.get(self.editor.page)
+        {
+            let world = geom::Rect::new(
+                page.info.canvas.x,
+                page.info.canvas.y,
+                page.info.canvas.x + page.info.canvas.width,
+                page.info.canvas.y + page.info.canvas.height,
+            );
+            if world.width() > 0.0 && world.height() > 0.0 {
+                self.view.fit(world, available);
             }
         }
 
@@ -800,186 +800,181 @@ impl Shell {
         // the view works in the same local space (top_left origin).
         // A press on a nine-slice guide handle drags that guide
         // instead of the tool.
-        if response.drag_started() {
-            if let Some(pos) = response.interact_pointer_pos() {
-                let local = pos - rect.left_top().to_vec2();
-                let world = self.view.to_world(local);
-                match self.nine_slice_edge_at(local) {
-                    Some(edge) => {
-                        if let Some(symbol) = self.editor.symbol_scope {
-                            if let Err(error) = self.editor.begin_guide_drag(symbol, edge, world) {
-                                self.status = format!("guide drag failed: {error}");
-                            }
-                        }
+        if response.drag_started()
+            && let Some(pos) = response.interact_pointer_pos()
+        {
+            let local = pos - rect.left_top().to_vec2();
+            let world = self.view.to_world(local);
+            match self.nine_slice_edge_at(local) {
+                Some(edge) => {
+                    if let Some(symbol) = self.editor.symbol_scope
+                        && let Err(error) = self.editor.begin_guide_drag(symbol, edge, world)
+                    {
+                        self.status = format!("guide drag failed: {error}");
                     }
-                    None => {
-                        // A press near the page's top/left edge drags
-                        // out a guide (CS6 ruler-edge semantics); it
-                        // outranks every tool.
-                        if let Some(draft) = self.guide_draft_at(world) {
-                            self.guide_draft = Some(draft);
-                            return;
+                }
+                None => {
+                    // A press near the page's top/left edge drags
+                    // out a guide (CS6 ruler-edge semantics); it
+                    // outranks every tool.
+                    if let Some(draft) = self.guide_draft_at(world) {
+                        self.guide_draft = Some(draft);
+                        return;
+                    }
+                    // A press on a gradient handle moves the ramp
+                    // end; it outranks the transform handles
+                    // (the gradient overlay paints above them).
+                    let grabbed_gradient = gradient_frame.and_then(|(a, b)| {
+                        if Rect::from_center_size(a, Vec2::splat(13.0)).contains(local) {
+                            Some(GradientHandle::Start)
+                        } else if Rect::from_center_size(b, Vec2::splat(13.0)).contains(local) {
+                            Some(GradientHandle::End)
+                        } else {
+                            None
                         }
-                        // A press on a gradient handle moves the ramp
-                        // end; it outranks the transform handles
-                        // (the gradient overlay paints above them).
-                        let grabbed_gradient = gradient_frame.and_then(|(a, b)| {
-                            if Rect::from_center_size(a, Vec2::splat(13.0)).contains(local) {
-                                Some(GradientHandle::Start)
-                            } else if Rect::from_center_size(b, Vec2::splat(13.0)).contains(local) {
-                                Some(GradientHandle::End)
-                            } else {
-                                None
-                            }
-                        });
-                        if let Some(handle) = grabbed_gradient
-                            && let Some((id, _, _)) = self.editor.gradient_handles()
-                        {
-                            if let Err(error) = self.editor.begin_gradient_drag(id, handle, world) {
-                                self.status = format!("gradient drag failed: {error}");
-                            }
-                            return;
+                    });
+                    if let Some(handle) = grabbed_gradient
+                        && let Some((id, _, _)) = self.editor.gradient_handles()
+                    {
+                        if let Err(error) = self.editor.begin_gradient_drag(id, handle, world) {
+                            self.status = format!("gradient drag failed: {error}");
                         }
-                        // A press on a selection handle scales the
-                        // selection live. It outranks the tool: the
-                        // handle is an affordance of the current
-                        // selection, not of the active tool.
-                        let grabbed =
-                            union_frame.and_then(|frame| transform_handle_at(frame, local));
-                        if let Some(handle) = grabbed {
-                            let ids = self.editor.live_selection();
-                            if let Err(error) = self.editor.begin_transform_drag(world, handle, ids)
-                            {
-                                self.status = format!("transform failed: {error}");
-                            }
-                        } else if !space_held {
-                            match self.editor.tool {
-                                Tool::Paintbrush | Tool::Pencil | Tool::Eraser | Tool::Gradient => {
-                                    // A paint stroke: the dabs land on
-                                    // the image under the pointer.
-                                    if let Err(error) = self.editor.begin_stroke(world) {
-                                        self.status = format!("paint failed: {error}");
-                                    }
+                        return;
+                    }
+                    // A press on a selection handle scales the
+                    // selection live. It outranks the tool: the
+                    // handle is an affordance of the current
+                    // selection, not of the active tool.
+                    let grabbed = union_frame.and_then(|frame| transform_handle_at(frame, local));
+                    if let Some(handle) = grabbed {
+                        let ids = self.editor.live_selection();
+                        if let Err(error) = self.editor.begin_transform_drag(world, handle, ids) {
+                            self.status = format!("transform failed: {error}");
+                        }
+                    } else if !space_held {
+                        match self.editor.tool {
+                            Tool::Paintbrush | Tool::Pencil | Tool::Eraser | Tool::Gradient => {
+                                // A paint stroke: the dabs land on
+                                // the image under the pointer.
+                                if let Err(error) = self.editor.begin_stroke(world) {
+                                    self.status = format!("paint failed: {error}");
                                 }
-                                Tool::Pointer | Tool::Subselect => {
-                                    // A press selects its target first,
-                                    // then moves the selection live —
-                                    // or (Alt) clones it, CS6 pointer
-                                    // semantics. Empty canvas starts a
-                                    // (no-op) rubber band. Subselect
-                                    // over one selected path grabs the
-                                    // anchor under the press instead:
-                                    // the node drag outranks the move.
-                                    if self.editor.tool == Tool::Subselect
-                                        && let Some(id) = self.editor.selected_live()
-                                        && let Some((contour, point)) = self
-                                            .editor
-                                            .node_at(world, f64::from(6.0 / self.view.zoom))
-                                        && let Err(error) =
-                                            self.editor.begin_node_drag(id, contour, point, world)
-                                    {
-                                        self.status = format!("reshape failed: {error}");
-                                    } else if let Some(hit) = self.editor.hit_at(world) {
-                                        let ids = if self.editor.selection_set.contains(&hit) {
-                                            self.editor.live_selection()
-                                        } else {
-                                            self.editor.selection = Some(hit);
-                                            self.editor.selection_set = vec![hit];
-                                            vec![hit]
-                                        };
-                                        let outcome = if ui.input(|i| i.modifiers.alt) {
-                                            self.editor
-                                                .begin_clone_drag(world, &ids)
-                                                .map(|_created| ())
-                                        } else {
-                                            self.editor.begin_move_drag(world, ids)
-                                        };
-                                        if let Err(error) = outcome {
-                                            self.status = format!("drag failed: {error}");
-                                        }
+                            }
+                            Tool::Pointer | Tool::Subselect => {
+                                // A press selects its target first,
+                                // then moves the selection live —
+                                // or (Alt) clones it, CS6 pointer
+                                // semantics. Empty canvas starts a
+                                // (no-op) rubber band. Subselect
+                                // over one selected path grabs the
+                                // anchor under the press instead:
+                                // the node drag outranks the move.
+                                if self.editor.tool == Tool::Subselect
+                                    && let Some(id) = self.editor.selected_live()
+                                    && let Some((contour, point)) =
+                                        self.editor.node_at(world, f64::from(6.0 / self.view.zoom))
+                                    && let Err(error) =
+                                        self.editor.begin_node_drag(id, contour, point, world)
+                                {
+                                    self.status = format!("reshape failed: {error}");
+                                } else if let Some(hit) = self.editor.hit_at(world) {
+                                    let ids = if self.editor.selection_set.contains(&hit) {
+                                        self.editor.live_selection()
                                     } else {
-                                        self.editor.begin_drag(world);
+                                        self.editor.selection = Some(hit);
+                                        self.editor.selection_set = vec![hit];
+                                        vec![hit]
+                                    };
+                                    let outcome = if ui.input(|i| i.modifiers.alt) {
+                                        self.editor.begin_clone_drag(world, &ids).map(|_created| ())
+                                    } else {
+                                        self.editor.begin_move_drag(world, ids)
+                                    };
+                                    if let Err(error) = outcome {
+                                        self.status = format!("drag failed: {error}");
                                     }
+                                } else {
+                                    self.editor.begin_drag(world);
                                 }
-                                Tool::PaintBucket | Tool::Eyedropper => {
-                                    // Click-only tools: the press
-                                    // itself is the whole gesture.
-                                }
-                                Tool::Marquee
-                                | Tool::EllipticalMarquee
-                                | Tool::Lasso
-                                | Tool::MagicWand => {
-                                    // A pixel selection: the shape
-                                    // lands on the image under the
-                                    // pointer, folded by the
-                                    // modifier keys.
-                                    self.editor.pixel_mode =
-                                        PixelSelectMode::from_modifiers(ui.input(|i| i.modifiers));
-                                    if let Err(error) = self.editor.begin_pixel_selection(world) {
-                                        self.status = format!("select failed: {error}");
-                                    }
-                                }
-                                Tool::PolygonalMarquee => {
-                                    // The polygon's vertices are
-                                    // clicks, not a drag.
-                                }
-                                _ => self.editor.begin_drag(world),
                             }
+                            Tool::PaintBucket | Tool::Eyedropper => {
+                                // Click-only tools: the press
+                                // itself is the whole gesture.
+                            }
+                            Tool::Marquee
+                            | Tool::EllipticalMarquee
+                            | Tool::Lasso
+                            | Tool::MagicWand => {
+                                // A pixel selection: the shape
+                                // lands on the image under the
+                                // pointer, folded by the
+                                // modifier keys.
+                                self.editor.pixel_mode =
+                                    PixelSelectMode::from_modifiers(ui.input(|i| i.modifiers));
+                                if let Err(error) = self.editor.begin_pixel_selection(world) {
+                                    self.status = format!("select failed: {error}");
+                                }
+                            }
+                            Tool::PolygonalMarquee => {
+                                // The polygon's vertices are
+                                // clicks, not a drag.
+                            }
+                            _ => self.editor.begin_drag(world),
                         }
                     }
                 }
             }
         }
-        if response.dragged() {
-            if let Some(pos) = response.interact_pointer_pos() {
-                let local = pos - rect.left_top().to_vec2();
-                let world = self.view.to_world(local);
-                if self.guide_draft.is_some() {
-                    if let Some(draft) = &mut self.guide_draft {
-                        draft.position = if draft.horizontal { world.y } else { world.x };
-                    }
-                } else if self.editor.guide_drag.is_some() {
-                    self.editor.drag_guide_to(world);
-                } else if self.editor.transform_drag.is_some() {
-                    self.editor.transform_drag_to(world);
-                } else if self.editor.node_drag.is_some() {
-                    self.editor.node_drag_to(world);
-                } else if self.editor.gradient_drag.is_some() {
-                    self.editor.gradient_drag_to(world);
-                } else if self.editor.pixel_selection.is_some() {
-                    if let Err(error) = self.editor.extend_pixel_selection(world) {
-                        self.status = format!("select failed: {error}");
-                    }
-                } else if self.editor.stroke.is_some() {
-                    if let Err(error) = self.editor.stroke_to(world) {
-                        self.status = format!("paint failed: {error}");
-                    }
-                } else if self.editor.drag.is_some() {
-                    let (shift, alt) = ui.input(|i| (i.modifiers.shift, i.modifiers.alt));
-                    // Snap-to-guides folds into the pointer position
-                    // before the constraint matrix: a moving drag whose
-                    // point lands within 4 world px of a guide line
-                    // rides that line. Locked guides don't attract.
-                    let world = if self.snap_to_guides && !self.guides_locked {
-                        self.snap_to_guides(world, 4.0)
-                    } else {
-                        world
-                    };
-                    self.editor
-                        .drag_to_with(world, DragConstraint { shift, alt });
-                } else if self.editor.tool == Tool::Hand
-                    || space_held
-                    || response.dragged_by(egui::PointerButton::Middle)
-                {
-                    // Hand tool, space-drag pan, or middle-button pan.
-                    self.view.pan_by(response.drag_delta());
+        if response.dragged()
+            && let Some(pos) = response.interact_pointer_pos()
+        {
+            let local = pos - rect.left_top().to_vec2();
+            let world = self.view.to_world(local);
+            if self.guide_draft.is_some() {
+                if let Some(draft) = &mut self.guide_draft {
+                    draft.position = if draft.horizontal { world.y } else { world.x };
                 }
-                // Any gesture that mutated state above needs the next
-                // frame now — egui otherwise sleeps between input
-                // events, and a web drag only became visible on
-                // release.
-                ui.ctx().request_repaint();
+            } else if self.editor.guide_drag.is_some() {
+                self.editor.drag_guide_to(world);
+            } else if self.editor.transform_drag.is_some() {
+                self.editor.transform_drag_to(world);
+            } else if self.editor.node_drag.is_some() {
+                self.editor.node_drag_to(world);
+            } else if self.editor.gradient_drag.is_some() {
+                self.editor.gradient_drag_to(world);
+            } else if self.editor.pixel_selection.is_some() {
+                if let Err(error) = self.editor.extend_pixel_selection(world) {
+                    self.status = format!("select failed: {error}");
+                }
+            } else if self.editor.stroke.is_some() {
+                if let Err(error) = self.editor.stroke_to(world) {
+                    self.status = format!("paint failed: {error}");
+                }
+            } else if self.editor.drag.is_some() {
+                let (shift, alt) = ui.input(|i| (i.modifiers.shift, i.modifiers.alt));
+                // Snap-to-guides folds into the pointer position
+                // before the constraint matrix: a moving drag whose
+                // point lands within 4 world px of a guide line
+                // rides that line. Locked guides don't attract.
+                let world = if self.snap_to_guides && !self.guides_locked {
+                    self.snap_to_guides(world, 4.0)
+                } else {
+                    world
+                };
+                self.editor
+                    .drag_to_with(world, DragConstraint { shift, alt });
+            } else if self.editor.tool == Tool::Hand
+                || space_held
+                || response.dragged_by(egui::PointerButton::Middle)
+            {
+                // Hand tool, space-drag pan, or middle-button pan.
+                self.view.pan_by(response.drag_delta());
             }
+            // Any gesture that mutated state above needs the next
+            // frame now — egui otherwise sleeps between input
+            // events, and a web drag only became visible on
+            // release.
+            ui.ctx().request_repaint();
         }
         if response.drag_stopped() {
             if self.guide_draft.is_some() {
@@ -1011,81 +1006,82 @@ impl Shell {
         }
         // Drop target for the Library panel's drag-to-place: the
         // payload clears itself at end of frame, release included.
-        if response.hovered() && ui.input(|input| input.pointer.any_released()) {
-            if let Some(symbol) = egui::DragAndDrop::take_payload::<i64>(ui.ctx()) {
-                let placed_at = ui
-                    .input(|input| input.pointer.latest_pos())
-                    .map_or(rect.center(), |pos| pos - rect.left_top().to_vec2());
-                if let Err(error) = self
-                    .editor
-                    .place_symbol(*symbol, self.view.to_world(placed_at))
-                {
-                    self.status = format!("place failed: {error}");
-                }
+        if response.hovered()
+            && ui.input(|input| input.pointer.any_released())
+            && let Some(symbol) = egui::DragAndDrop::take_payload::<i64>(ui.ctx())
+        {
+            let placed_at = ui
+                .input(|input| input.pointer.latest_pos())
+                .map_or(rect.center(), |pos| pos - rect.left_top().to_vec2());
+            if let Err(error) = self
+                .editor
+                .place_symbol(*symbol, self.view.to_world(placed_at))
+            {
+                self.status = format!("place failed: {error}");
             }
         }
-        if response.clicked() {
-            if let Some(pos) = response.interact_pointer_pos() {
-                let local = pos - rect.left_top().to_vec2();
-                match self.editor.tool {
-                    Tool::Pointer | Tool::Subselect => {
-                        let world = self.view.to_world(local);
-                        if ui.input(|i| i.modifiers.shift) {
-                            self.editor.toggle_select_at(world);
-                        } else {
-                            let _ = self.editor.select_at(world);
-                        }
+        if response.clicked()
+            && let Some(pos) = response.interact_pointer_pos()
+        {
+            let local = pos - rect.left_top().to_vec2();
+            match self.editor.tool {
+                Tool::Pointer | Tool::Subselect => {
+                    let world = self.view.to_world(local);
+                    if ui.input(|i| i.modifiers.shift) {
+                        self.editor.toggle_select_at(world);
+                    } else {
+                        let _ = self.editor.select_at(world);
                     }
-                    Tool::Hand => {}
-                    Tool::PaintBucket => {
-                        let world = self.view.to_world(local);
-                        match self.editor.fill_target(world) {
-                            Ok(true) => {}
-                            Ok(false) => {
-                                self.status = "no image under the pointer".to_owned();
-                            }
-                            Err(error) => self.status = format!("fill failed: {error}"),
-                        }
-                    }
-                    Tool::Eyedropper => {
-                        let world = self.view.to_world(local);
-                        if self.editor.pick_color(world).is_none() {
+                }
+                Tool::Hand => {}
+                Tool::PaintBucket => {
+                    let world = self.view.to_world(local);
+                    match self.editor.fill_target(world) {
+                        Ok(true) => {}
+                        Ok(false) => {
                             self.status = "no image under the pointer".to_owned();
                         }
+                        Err(error) => self.status = format!("fill failed: {error}"),
                     }
-                    Tool::Marquee | Tool::EllipticalMarquee | Tool::Lasso | Tool::MagicWand => {
-                        // A click without a drag is still a
-                        // gesture: the wand selects, a collapsed
-                        // marquee deselects (the engine folds an
-                        // empty shape into no selection).
-                        let world = self.view.to_world(local);
-                        self.editor.pixel_mode =
-                            PixelSelectMode::from_modifiers(ui.input(|i| i.modifiers));
-                        if self.editor.pixel_selection.is_none()
-                            && self.editor.begin_pixel_selection(world).is_ok()
-                            && let Err(error) = self.editor.end_pixel_selection()
-                        {
-                            self.status = format!("select failed: {error}");
-                        }
-                    }
-                    Tool::PolygonalMarquee => {
-                        let world = self.view.to_world(local);
-                        self.editor.pixel_mode =
-                            PixelSelectMode::from_modifiers(ui.input(|i| i.modifiers));
-                        if let Err(error) = self.editor.add_polygon_point(world) {
-                            self.status = format!("polygon failed: {error}");
-                        }
-                    }
-                    Tool::Zoom => {
-                        let factor = if ui.input(|i| i.modifiers.alt) {
-                            1.0 / 1.25
-                        } else {
-                            1.25
-                        };
-                        self.view.zoom_about(local, factor);
-                    }
-                    _ => {}
                 }
+                Tool::Eyedropper => {
+                    let world = self.view.to_world(local);
+                    if self.editor.pick_color(world).is_none() {
+                        self.status = "no image under the pointer".to_owned();
+                    }
+                }
+                Tool::Marquee | Tool::EllipticalMarquee | Tool::Lasso | Tool::MagicWand => {
+                    // A click without a drag is still a
+                    // gesture: the wand selects, a collapsed
+                    // marquee deselects (the engine folds an
+                    // empty shape into no selection).
+                    let world = self.view.to_world(local);
+                    self.editor.pixel_mode =
+                        PixelSelectMode::from_modifiers(ui.input(|i| i.modifiers));
+                    if self.editor.pixel_selection.is_none()
+                        && self.editor.begin_pixel_selection(world).is_ok()
+                        && let Err(error) = self.editor.end_pixel_selection()
+                    {
+                        self.status = format!("select failed: {error}");
+                    }
+                }
+                Tool::PolygonalMarquee => {
+                    let world = self.view.to_world(local);
+                    self.editor.pixel_mode =
+                        PixelSelectMode::from_modifiers(ui.input(|i| i.modifiers));
+                    if let Err(error) = self.editor.add_polygon_point(world) {
+                        self.status = format!("polygon failed: {error}");
+                    }
+                }
+                Tool::Zoom => {
+                    let factor = if ui.input(|i| i.modifiers.alt) {
+                        1.0 / 1.25
+                    } else {
+                        1.25
+                    };
+                    self.view.zoom_about(local, factor);
+                }
+                _ => {}
             }
         }
         // Double-click enters a symbol instance's definition (CS6's
@@ -1137,16 +1133,15 @@ impl Shell {
                         .segment_at(world, radius * 2.0)
                         .map(|c| (id, c.0, c.1))
                 })
-            {
-                if self.run_command(
+                && self.run_command(
                     "path.insertPoint",
                     serde_json::json!({
                         "id": id, "contour": contour, "segment": segment,
                         "x": world.x, "y": world.y
                     }),
-                ) {
-                    self.status = format!("added node on segment {segment} (contour {contour})");
-                }
+                )
+            {
+                self.status = format!("added node on segment {segment} (contour {contour})");
             }
         }
         // The right-click context menu (CS6's canvas popup): a
@@ -1154,12 +1149,12 @@ impl Shell {
         // missed the current selection, then opens a popup of
         // selection verbs — every row routed through `run_action`,
         // the same door the menu bar uses.
-        if response.secondary_clicked() {
-            if let Some(pos) = response.interact_pointer_pos() {
-                let world = self.view.to_world(pos - rect.left_top().to_vec2());
-                self.context_menu_pick(world);
-                self.context_menu = Some(pos);
-            }
+        if response.secondary_clicked()
+            && let Some(pos) = response.interact_pointer_pos()
+        {
+            let world = self.view.to_world(pos - rect.left_top().to_vec2());
+            self.context_menu_pick(world);
+            self.context_menu = Some(pos);
         }
         if let Some(open_at) = self.context_menu {
             let mut open = self.context_menu.is_some();
@@ -1198,10 +1193,10 @@ impl Shell {
             }
             ui.separator();
             // Zoom readout + in/out, always at hand.
-            if ui.small_button("−").clicked() {
-                if let Some(rect) = self.canvas_rect {
-                    self.view.zoom_about(rect.center(), 1.0 / 1.25);
-                }
+            if ui.small_button("−").clicked()
+                && let Some(rect) = self.canvas_rect
+            {
+                self.view.zoom_about(rect.center(), 1.0 / 1.25);
             }
             ui.label(format!("{}%", (self.view.zoom * 100.0).round() as i64));
             if ui.small_button("+").clicked()

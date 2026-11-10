@@ -930,7 +930,7 @@ fn valid_hostile_document_imports_sane() {
 /// empty, so the first minted id is deterministic).
 fn red_tile() -> Tile {
     let mut plane = [0u8; 128 * 128 * 4];
-    for px in plane.chunks_exact_mut(4) {
+    for px in plane.as_chunks_mut::<4>().0.iter_mut() {
         px.copy_from_slice(&[255, 0, 0, 255]);
     }
     Tile::from_rgba8(plane)

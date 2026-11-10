@@ -76,8 +76,10 @@ fn bmp_import_round_trips_alpha_exactly() {
     let flattened = raster::decode(&flat).expect("decode");
     for (got, want) in flattened
         .rgba
-        .chunks_exact(4)
-        .zip(plane.flatten_rgb(Matte::White).chunks_exact(3))
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .zip(plane.flatten_rgb(Matte::White).as_chunks::<3>().0.iter())
     {
         assert_eq!(&got[..3], want);
         assert_eq!(got[3], 255);
@@ -104,7 +106,12 @@ fn jpeg_import_tracks_the_flattened_expectation() {
     assert_eq!(decoded.source, SourceFormat::Jpeg);
     let expected = plane.flatten_rgb(options.matte);
     let mut sum = 0u64;
-    for (want, got) in expected.chunks_exact(3).zip(decoded.rgba.chunks_exact(4)) {
+    for (want, got) in expected
+        .as_chunks::<3>()
+        .0
+        .iter()
+        .zip(decoded.rgba.as_chunks::<4>().0.iter())
+    {
         for (w, g) in want.iter().zip(got.iter().take(3)) {
             sum += u64::from(w.abs_diff(*g));
         }
@@ -137,7 +144,9 @@ fn gif_import_decodes_the_first_frame() {
     // format + rough pixel agreement on the luma threshold).
     let flat = plane.flatten_rgb(Matte::White);
     let flat_rgba: Vec<u8> = flat
-        .chunks_exact(3)
+        .as_chunks::<3>()
+        .0
+        .iter()
         .flat_map(|px| [px[0], px[1], px[2], 255])
         .collect();
     let mut bytes = Vec::new();
@@ -160,7 +169,7 @@ fn wbmp_import_decodes_through_the_own_codec() {
     let decoded = raster::decode(&bytes).expect("decode");
     assert_eq!(decoded.source, SourceFormat::Wbmp);
     assert_eq!((decoded.width, decoded.height), (37, 23));
-    for (i, px) in decoded.rgba.chunks_exact(4).enumerate() {
+    for (i, px) in decoded.rgba.as_chunks::<4>().0.iter().enumerate() {
         let expected = if plane.luma_at(i as u32 % 37, i as u32 / 37, Matte::White) >= 128 {
             255
         } else {
