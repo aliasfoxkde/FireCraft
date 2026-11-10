@@ -120,7 +120,7 @@ authoritative source that supersedes this table.
 | **CI** | GitHub Actions: `fmt` (fast) + `gate` (`xtask ci-no-fmt`); GitForge 7-job pipeline | ✅ |
 | **aegis** | Baseline clean; scan ~12 s | `.aegisignore` excludes `target/`, `web/dist/`, `fuzz/`; the baseline is content-keyed, so no rule class is switched off (decision 0074) |
 | **Coverage** | floors 81.1 % lines / 78.7 % funcs (`xtask/src/coverage.rs`) | Local `llvm-cov` fails on stale artifacts; CI works |
-| **Code** | 143,527 Rust lines | No `unwrap()`/`panic!()` outside `#[cfg(test)]`; no `todo!`/`unimplemented!` |
+| **Code** | 144,122 Rust lines | No `unwrap()`/`panic!()` outside `#[cfg(test)]`; no `todo!`/`unimplemented!` |
 | **Registry** | 252 commands | Every command executable from the GUI via the Ctrl+P palette (19.4); menu reachability is the remaining gap |
 | **Menu reachability** | 2 inert of 294 items | *live* — derived + gated (`menus::tests::inert_count_never_rises`) |
 | **Parity** | 268 C / 3 P / 0 M / 85 N | 3 P rows are evidence-gated (Phase 12 oracle) |
