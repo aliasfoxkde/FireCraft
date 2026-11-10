@@ -93,6 +93,19 @@ const CLASS_NOTES: &[(&str, &str)] = &[
          .eval(u) calls.",
     ),
     (
+        "gdpr-personal-data",
+        "Matches the words \"personal data\" in release prose that names the \
+         category of material to exclude from a source archive, and the rule \
+         identifiers quoted by the Aegis adjudication tickets. This repository \
+         holds no personal data.",
+    ),
+    (
+        "gdpr-reference",
+        "Matches the rule identifier `gdpr-personal-data` quoted in the \
+         Aegis adjudication tickets and the release execution board. The text \
+         names the rule; it contains no GDPR reference or personal data.",
+    ),
+    (
         "international-phone",
         "Matches the build metadata of a Cargo.lock version string \
          (0.6.0+11769913).",
@@ -109,8 +122,9 @@ const CLASS_NOTES: &[(&str, &str)] = &[
     ),
     (
         "pci-cardholder-data",
-        "Matches the word \"pan\" in pan-zoom and hand-pan identifiers; the \
-         five credit-card-* rules stay armed.",
+        "Matches the word \"pan\" in pan-zoom, hand-pan and two-finger-pan \
+         identifiers and in prose quoting them; the five credit-card-* rules \
+         stay armed.",
     ),
     (
         "phone-number",
@@ -120,7 +134,8 @@ const CLASS_NOTES: &[(&str, &str)] = &[
     (
         "ssrf-localhost",
         "A loopback listener in the release smoke test, a localhost \
-         maintainer address, and prose naming the local GitForge API; the \
+         maintainer address, prose naming the local GitForge API, and the \
+         loopback bind quoted by the Aegis adjudication tickets; the \
          workspace has no HTTP client dependency.",
     ),
     (
@@ -146,7 +161,8 @@ const CLASS_NOTES: &[(&str, &str)] = &[
     (
         "zip-code",
         "Matches any 5-digit run: CS6 command ids, the JPEG dimension \
-         ceiling (65535), menu ids. This repository holds no postal data.",
+         ceiling (65535), menu ids, the Gregorian cycle constants (36524, \
+         60000). This repository holds no postal data.",
     ),
 ];
 
