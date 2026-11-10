@@ -107,11 +107,18 @@ jobs:
         # declared floor covers — the exact failure a too-low floor
         # produces (installs on an older system, then fails at exec).
         run: |
-          docker run --rm -v "$PWD/dist/native:/dist:ro" debian:12-slim bash -c '
+          docker run --rm \
+            -v "$PWD/dist/native:/dist:ro" \
+            -v "$PWD/packaging/deb:/pkg:ro" \
+            -v "$PWD/corpus/fixtures:/fixtures:ro" \
+            debian:12-slim bash -c '
             set -eu
             apt-get update -qq >/dev/null
-            apt-get install -y -qq --no-install-recommends /dist/firecraft_*.deb >/dev/null
-            firecraft-cli 2>&1 | head -1 | grep -q "usage: firecraft-cli"
+            apt-get install -y -qq --no-install-recommends \
+              xvfb xauth libgl1 libx11-6 libxcursor1 libxrandr2 libxi6 \
+              libxkbcommon0 desktop-file-utils >/dev/null
+            bash /pkg/verify-install.sh \
+              /dist/firecraft_*.deb "" /fixtures/composed.fw.png
           '
 
       - name: Build web bundle
