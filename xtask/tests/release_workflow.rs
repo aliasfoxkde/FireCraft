@@ -249,7 +249,11 @@ fn create_passes_the_assets_positionally_to_gh_release_create() {
         "create".to_string(),
         "v0.2.5".to_string(),
         "--title".to_string(),
-        "FireCraft 0.2.5".to_string(),
+        // The release title is the bare version, without the product
+        // name: the repository name and the asset filenames already
+        // carry it. This expectation was written before the naming
+        // cleanup and kept the old "FireCraft <version>" title.
+        "0.2.5".to_string(),
         "--draft".to_string(),
         "--notes-file".to_string(),
         "notes.md".to_string(),
