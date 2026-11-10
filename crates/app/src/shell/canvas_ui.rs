@@ -381,8 +381,8 @@ impl Shell {
         let response = response.on_hover_cursor(cursor);
 
         // First fit on a fresh raster keeps the document visible.
-        if self.raster.is_none() {
-            if let Some(page) = self.editor.document().pages.get(self.editor.page) {
+        if self.raster.is_none()
+            && let Some(page) = self.editor.document().pages.get(self.editor.page) {
                 let world = geom::Rect::new(
                     page.info.canvas.x,
                     page.info.canvas.y,
@@ -393,7 +393,6 @@ impl Shell {
                     self.view.fit(world, available);
                 }
             }
-        }
 
         // Raster cache: re-render when the session changed or when the
         // zoom moved off the cached render scale. The raster renders
@@ -800,17 +799,16 @@ impl Shell {
         // the view works in the same local space (top_left origin).
         // A press on a nine-slice guide handle drags that guide
         // instead of the tool.
-        if response.drag_started() {
-            if let Some(pos) = response.interact_pointer_pos() {
+        if response.drag_started()
+            && let Some(pos) = response.interact_pointer_pos() {
                 let local = pos - rect.left_top().to_vec2();
                 let world = self.view.to_world(local);
                 match self.nine_slice_edge_at(local) {
                     Some(edge) => {
-                        if let Some(symbol) = self.editor.symbol_scope {
-                            if let Err(error) = self.editor.begin_guide_drag(symbol, edge, world) {
+                        if let Some(symbol) = self.editor.symbol_scope
+                            && let Err(error) = self.editor.begin_guide_drag(symbol, edge, world) {
                                 self.status = format!("guide drag failed: {error}");
                             }
-                        }
                     }
                     None => {
                         // A press near the page's top/left edge drags
@@ -929,9 +927,8 @@ impl Shell {
                     }
                 }
             }
-        }
-        if response.dragged() {
-            if let Some(pos) = response.interact_pointer_pos() {
+        if response.dragged()
+            && let Some(pos) = response.interact_pointer_pos() {
                 let local = pos - rect.left_top().to_vec2();
                 let world = self.view.to_world(local);
                 if self.guide_draft.is_some() {
@@ -980,7 +977,6 @@ impl Shell {
                 // release.
                 ui.ctx().request_repaint();
             }
-        }
         if response.drag_stopped() {
             if self.guide_draft.is_some() {
                 self.commit_guide_draft();
@@ -1011,8 +1007,8 @@ impl Shell {
         }
         // Drop target for the Library panel's drag-to-place: the
         // payload clears itself at end of frame, release included.
-        if response.hovered() && ui.input(|input| input.pointer.any_released()) {
-            if let Some(symbol) = egui::DragAndDrop::take_payload::<i64>(ui.ctx()) {
+        if response.hovered() && ui.input(|input| input.pointer.any_released())
+            && let Some(symbol) = egui::DragAndDrop::take_payload::<i64>(ui.ctx()) {
                 let placed_at = ui
                     .input(|input| input.pointer.latest_pos())
                     .map_or(rect.center(), |pos| pos - rect.left_top().to_vec2());
@@ -1023,9 +1019,8 @@ impl Shell {
                     self.status = format!("place failed: {error}");
                 }
             }
-        }
-        if response.clicked() {
-            if let Some(pos) = response.interact_pointer_pos() {
+        if response.clicked()
+            && let Some(pos) = response.interact_pointer_pos() {
                 let local = pos - rect.left_top().to_vec2();
                 match self.editor.tool {
                     Tool::Pointer | Tool::Subselect => {
@@ -1087,7 +1082,6 @@ impl Shell {
                     _ => {}
                 }
             }
-        }
         // Double-click enters a symbol instance's definition (CS6's
         // pointer double-click), like the inspector's Edit Definition.
         if response.double_clicked()
@@ -1137,8 +1131,7 @@ impl Shell {
                         .segment_at(world, radius * 2.0)
                         .map(|c| (id, c.0, c.1))
                 })
-            {
-                if self.run_command(
+                && self.run_command(
                     "path.insertPoint",
                     serde_json::json!({
                         "id": id, "contour": contour, "segment": segment,
@@ -1147,20 +1140,18 @@ impl Shell {
                 ) {
                     self.status = format!("added node on segment {segment} (contour {contour})");
                 }
-            }
         }
         // The right-click context menu (CS6's canvas popup): a
         // secondary click picks the object under the pointer when it
         // missed the current selection, then opens a popup of
         // selection verbs — every row routed through `run_action`,
         // the same door the menu bar uses.
-        if response.secondary_clicked() {
-            if let Some(pos) = response.interact_pointer_pos() {
+        if response.secondary_clicked()
+            && let Some(pos) = response.interact_pointer_pos() {
                 let world = self.view.to_world(pos - rect.left_top().to_vec2());
                 self.context_menu_pick(world);
                 self.context_menu = Some(pos);
             }
-        }
         if let Some(open_at) = self.context_menu {
             let mut open = self.context_menu.is_some();
             let popup_id = egui::Id::new("canvas_context_menu");
@@ -1198,11 +1189,10 @@ impl Shell {
             }
             ui.separator();
             // Zoom readout + in/out, always at hand.
-            if ui.small_button("−").clicked() {
-                if let Some(rect) = self.canvas_rect {
+            if ui.small_button("−").clicked()
+                && let Some(rect) = self.canvas_rect {
                     self.view.zoom_about(rect.center(), 1.0 / 1.25);
                 }
-            }
             ui.label(format!("{}%", (self.view.zoom * 100.0).round() as i64));
             if ui.small_button("+").clicked()
                 && let Some(rect) = self.canvas_rect

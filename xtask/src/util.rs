@@ -16,10 +16,10 @@ use std::process::{Command, Output};
 /// fallback for an invocation from outside any workspace.
 #[must_use]
 pub fn workspace_root() -> PathBuf {
-    if let Ok(cwd) = std::env::current_dir() {
-        if let Some(root) = find_workspace_root(&cwd) {
-            return root;
-        }
+    if let Ok(cwd) = std::env::current_dir()
+        && let Some(root) = find_workspace_root(&cwd)
+    {
+        return root;
     }
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..")
 }
