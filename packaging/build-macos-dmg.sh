@@ -4,7 +4,7 @@
 # OFF-FLEET recipe: this host class has no macOS SDK and no Apple
 # toolchain, so the repo never builds or ships a dmg — the operator
 # runs this on macOS (Xcode command-line tools required) and owns the
-# artifact. See packaging/TOOLCHAINS.md for the no-untested-claims
+# artifact. See docs/TOOLCHAINS.md for the no-untested-claims
 # rule. Run from the repository root.
 set -euo pipefail
 
@@ -13,7 +13,19 @@ readonly STAGE="dist/macos-stage"
 readonly APP="FireCraft.app"
 
 version() {
-    sed -n '/^\[workspace\.package\]/,/^\[/{s/^version = "\(.*\)"/\1/p;q;}' Cargo.toml
+    # The workspace version is the single source of truth.
+    #
+    # The range form (`sed -n '/^\[workspace\.package\]/,/^\[/p'`) stops
+    # at the first line of the range — the `[workspace.package]` header
+    # itself — and quits before the `version =` line is ever printed, so
+    # it yields an empty string and the dmg name below collapses to
+    # `firecraft--macos-universal.dmg`. Awk keeps scanning until it
+    # sees the version key inside the section.
+    awk '
+      /^\[workspace\.package\]/ { in_pkg = 1; next }
+      /^\[/ { in_pkg = 0 }
+      in_pkg && /^version[ \t]*=/ { gsub(/[" ]/, "", $3); print $3; exit }
+    ' Cargo.toml
 }
 
 readonly VERSION="$(version)"

@@ -8,7 +8,7 @@
 # The repo carries the recipe — never an untested claim of a built
 # artifact.
 #
-# Toolchain (packaging/TOOLCHAINS.md): rustup stable, GNU tar,
+# Toolchain (docs/TOOLCHAINS.md): rustup stable, GNU tar,
 # linuxdeploy-x86_64.AppImage (pin your download; see TOOLCHAINS.md).
 # Run from the repository root.
 set -euo pipefail
@@ -18,7 +18,18 @@ readonly STAGE="dist/appimage-stage"
 
 version() {
     # The workspace version is the single source of truth.
-    sed -n '/^\[workspace\.package\]/,/^\[/{s/^version = "\(.*\)"/\1/p;q;}' Cargo.toml
+    #
+    # The range form (`sed -n '/^\[workspace\.package\]/,/^\[/p'`) stops
+    # at the first line of the range — the `[workspace.package]` header
+    # itself — and quits before the `version =` line is ever printed, so
+    # it yields an empty string and the artifact name below collapses to
+    # `firecraft--linux-x86_64.AppImage`. Awk keeps scanning until it
+    # sees the version key inside the section.
+    awk '
+      /^\[workspace\.package\]/ { in_pkg = 1; next }
+      /^\[/ { in_pkg = 0 }
+      in_pkg && /^version[ \t]*=/ { gsub(/[" ]/, "", $3); print $3; exit }
+    ' Cargo.toml
 }
 
 readonly VERSION="$(version)"
