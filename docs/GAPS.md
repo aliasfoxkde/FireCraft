@@ -117,13 +117,13 @@ Point-in-time snapshot **2026-11-02** (post-v0.2.4). Counts marked
 |---|---|---|
 | **Shipped** | v0.2.4 on GitHub (2026-11-02) | ✅ |
 | **CI** | GitHub Actions: `fmt` (fast) + `gate` (`xtask ci-no-fmt`); GitForge 7-job pipeline | ✅ |
-| **aegis** | Suppression clean; scan ~12 s | `.aegisignore` excludes `target/`, `web/dist/`, `fuzz/`; rule classes and per-finding digests suppressed (decision 0070) |
+| **aegis** | Baseline clean; scan 0.17 s | `.aegisignore` excludes `target/`, `web/dist/`, `fuzz/`; baseline is content-keyed (decision 0074) |
 | **Coverage** | floors 81.0 % lines / 78.5 % funcs (`xtask/src/coverage.rs`) | Local `llvm-cov` fails on stale artifacts; CI works |
 | **Code** | 128,967 Rust lines | No `unwrap()`/`panic!()` outside `#[cfg(test)]`; no `todo!`/`unimplemented!` |
 | **Registry** | 245 commands | Every command executable from the GUI via the Ctrl+P palette (19.4); menu reachability is the remaining gap |
 | **Menu reachability** | 8 inert of 290 items | *live* — derived + gated (`menus::tests::inert_count_never_rises`) |
 | **Parity** | 268 C / 3 P / 0 M / 85 N | 3 P rows are evidence-gated (Phase 12 oracle) |
-| **Decision docs** | 71 (0001–0071) | Next: 0072 |
+| **Decision docs** | 72 (0001–0069, 0071, 0074, 0076) | Next: 0077 |
 | **Web bundle** | 21,235,599 B (ceiling 21,500,000) | Re-pinned 2026-11-03 (19b.4, dated observation; 19.x shell growth) |
 
 ---
