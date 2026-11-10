@@ -55,10 +55,10 @@ open → apply → exportPng → exportDocument round trip through the M5
 postMessage bridge. A dist run that cannot prove the bridge does not
 claim the artifact.
 
-`FIRECRAFT_DIST_SKIP_SMOKE=1` skips the bridge smoke. It exists for the
-GitForge CI image, which has no chromium baked. **A bundle built with
-the smoke skipped is not a release byte-set** — it has no functional
-smoke receipt, and the GitForge release job builds that way today.
+The bridge smoke has no escape hatch. `FIRECRAFT_DIST_SKIP_SMOKE` was
+removed with the CI image's missing browser: the image now bakes
+chromium, and a dist run that cannot find a browser — or whose bridge
+round trip does not report `green` — fails instead of skipping.
 
 ## Linux native set
 
