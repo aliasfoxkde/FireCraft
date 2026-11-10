@@ -17,6 +17,13 @@ on:
   pull_request:
     branches: [main]
 
+# Least privilege: this workflow only reads the repository. Declaring
+# it explicitly keeps the default `GITHUB_TOKEN` from inheriting a
+# broader (write) grant from the org/repo settings — the rule
+# `actions/missing-workflow-permissions` fires without this block.
+permissions:
+  contents: read
+
 env:
   CARGO_TERM_COLOR: always
 

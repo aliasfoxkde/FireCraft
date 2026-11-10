@@ -195,7 +195,7 @@ fn state_pixels(document: &doc::Document, frame: usize) -> Vec<u8> {
 /// opaque (quantization may nudge primaries).
 fn assert_screen(got: &[u8], want: &[[u8; 4]], tolerance: u32, context: &str) {
     assert_eq!(got.len(), want.len() * 4, "{context}: pixel count");
-    for (index, (pixel, expected)) in got.chunks_exact(4).zip(want).enumerate() {
+    for (index, (pixel, expected)) in got.as_chunks::<4>().0.iter().zip(want).enumerate() {
         let opaque = expected[3] == 255;
         assert_eq!(
             pixel[3] == 255,

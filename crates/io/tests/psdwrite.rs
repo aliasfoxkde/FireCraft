@@ -581,8 +581,9 @@ fn matte_tiles_write_through_and_read_back_straight() {
     // re-premultiplies into the bank tile (import policy).
     assert!(
         tile.pixels()
-            .chunks_exact(4)
-            .any(|p| p == [0, 32, 128, 128]),
+            .as_chunks::<4>()
+            .0
+            .contains(&[0, 32, 128, 128]),
         "matte pixel appears premultiplied in the read-back tile"
     );
 }
@@ -593,7 +594,7 @@ fn straight_pixel_un_premultiplies_on_export() {
     // back straight (255,0,0,128) in the RLE channel bytes.
     let mut doc_mut = document(vec![("half", true, Vec::new())]);
     let mut tile = color_tile([255, 0, 0]);
-    for chunk in tile.pixels_mut().chunks_exact_mut(4) {
+    for chunk in tile.pixels_mut().as_chunks_mut::<4>().0.iter_mut() {
         chunk[0] = 128;
         chunk[3] = 128;
     }
@@ -605,7 +606,7 @@ fn straight_pixel_un_premultiplies_on_export() {
     let imported = psd::decode(&bytes).expect("decode");
     let tile = imported.document.tiles.get(0).expect("tile");
     assert!(
-        tile.pixels().chunks_exact(4).any(|p| p == [128, 0, 0, 128]),
+        tile.pixels().as_chunks::<4>().0.contains(&[128, 0, 0, 128]),
         "half-red survives the round trip, got {:?}",
         &tile.pixels()[..16]
     );

@@ -64,7 +64,8 @@ const CLASS_NOTES: &[(&str, &str)] = &[
     (
         "australian-tfn",
         "Matches the 9-digit observed value range in the PNG node dictionary \
-         (0..141663582); this repository holds no tax identifiers.",
+         (0..141663582), and the run of SVG path control coordinates in the \
+         brand mark's bezier paths; this repository holds no tax identifiers.",
     ),
     (
         "bank-routing-number",
@@ -129,8 +130,9 @@ const CLASS_NOTES: &[(&str, &str)] = &[
     (
         "ssrf-localhost",
         "A loopback listener in the release smoke test, a localhost \
-         maintainer address, and prose naming the local GitForge API or \
-         the rule itself; the workspace has no HTTP client dependency.",
+         maintainer address, prose naming the local GitForge API or the \
+         rule itself, and the local preview URL in the site deployment \
+         guide; the workspace has no HTTP client dependency.",
     ),
     (
         "ssn-no-dashes",
@@ -155,7 +157,8 @@ const CLASS_NOTES: &[(&str, &str)] = &[
     (
         "zip-code",
         "Matches any 5-digit run: CS6 command ids, the JPEG dimension \
-         ceiling (65535), menu ids. This repository holds no postal data.",
+         ceiling (65535), menu ids, CVE id suffixes. This repository holds \
+         no postal data.",
     ),
 ];
 

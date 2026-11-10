@@ -187,11 +187,12 @@ fn probe_intra(op: &Operand, params: &mut [Vec<f64>]) {
                 continue;
             }
             let (fa, fb) = (&op.flats[i], &op.flats[j]);
-            if let Some((t, u)) = segment_intersection(fa.a, fa.b, fb.a, fb.b) {
-                if chord_interior(t) && chord_interior(u) {
-                    params[fa.seg].push(fa.ta + t * (fa.tb - fa.ta));
-                    params[fb.seg].push(fb.ta + u * (fb.tb - fb.ta));
-                }
+            if let Some((t, u)) = segment_intersection(fa.a, fa.b, fb.a, fb.b)
+                && chord_interior(t)
+                && chord_interior(u)
+            {
+                params[fa.seg].push(fa.ta + t * (fa.tb - fa.ta));
+                params[fb.seg].push(fb.ta + u * (fb.tb - fb.ta));
             }
         }
     }

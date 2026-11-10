@@ -19,7 +19,31 @@
 # Regenerate with: cargo run -p xtask -- aegis --bless
 # Only after verifying each newly added key is a false positive.
 # Matches the 9-digit observed value range in the PNG node dictionary
-# (0..141663582); this repository holds no tax identifiers.
+# (0..141663582), and the run of SVG path control coordinates in the
+# brand mark's bezier paths; this repository holds no tax identifiers.
+australian-tfn	./docs/img/logo.svg	05ffbe779fdbeed8897ecb90c6610e6d5ae26ef3653a838140062fcccd7a8ce4	1
+australian-tfn	./docs/img/logo.svg	0eaed2a5b872f5f066ade727349a9ae6fe1e1092509219ff6001faa5509861d1	1
+australian-tfn	./docs/img/logo.svg	0ee2e84700b4ede0c27c03b443da672617a60834712152057e87aea906a18ff4	1
+australian-tfn	./docs/img/logo.svg	0f5ce515c8cecc9a0513d009e68bc30f056160eb6dbf9a8c6206b165d4255129	1
+australian-tfn	./docs/img/logo.svg	1fd489864fef470167dd93dbbbd177ea6a81b875b002cd059a4c62f511d66067	1
+australian-tfn	./docs/img/logo.svg	2f01afbeb0af784f25dafe629874bb46f430e42c45271dddeb1cfecf0cbca991	1
+australian-tfn	./docs/img/logo.svg	454b1f16d505ceddbd3d97484441083acc5d6ead24ea89b3fa08d4f02bc2502b	1
+australian-tfn	./docs/img/logo.svg	4b8302277ceaf82b0e8b9b662050cdc67fd05afb05d12b521456374f8a403b74	1
+australian-tfn	./docs/img/logo.svg	517610d345972b2a45cf08d5f3ad4d4d158d62003610b60ce9fb8f17b8da7f53	1
+australian-tfn	./docs/img/logo.svg	821183659e06f87a01c242d2121549748d5b396d36601fae864d56b4dc835ae7	1
+australian-tfn	./docs/img/logo.svg	8e18e8357553626ac0741b36414284be8c881ec2f9911287a82d2726389114e5	1
+australian-tfn	./docs/img/logo.svg	95adb35aebe7373d192d17611099931d4481ec07b22a55f8219d7328efee6752	1
+australian-tfn	./docs/img/logo.svg	95c66de87f548ef041527e5c94e476b403bd12456d29835b4959424fc2c6cfe4	1
+australian-tfn	./docs/img/logo.svg	9b89a7069b1a2f15bb1b40b7a2a325f160963448a9fb69e92c1ce74b968ece35	1
+australian-tfn	./docs/img/logo.svg	ae70800c55fbb4c060f043be1cadbc9933405871d159ef8e38416fa9333f0c30	1
+australian-tfn	./docs/img/logo.svg	c8185595e5a576ddfc9b75b26880147a2adf5bb1f3c6d38c58e423b8f6a3815b	1
+australian-tfn	./docs/img/logo.svg	cfe41484e53fafcc5bf059f0609c4d2cf2b879c48b06d8a1602eb7ed89f20434	1
+australian-tfn	./docs/img/logo.svg	d0ed234f513c7ee5446d5aeb9e3f77665f1b877d8c202dc20cc4e9476468de4f	1
+australian-tfn	./docs/img/logo.svg	daffb76e90ced7f90e97479515bd3285c19ba8cb824c1893148aee78900cfc4b	1
+australian-tfn	./docs/img/logo.svg	e01a8639dcaddc9333aa36bb52877e15e53dd86ea6ad8296a275a44a556339bf	1
+australian-tfn	./docs/img/logo.svg	e20b9a7de59b308846f20f58e758540cb30bf65a8f73b2982f30cdb4550c1648	1
+australian-tfn	./docs/img/logo.svg	ee547c09a9989b8cd109c29512b7e81b7033c6b9071a2c8aec8539f26e16e87f	1
+australian-tfn	./docs/img/logo.svg	ff09017689850911c6112f34bf47e2c4641d97d48ae7fd32306e4ceaf059afc9	1
 australian-tfn	./docs/research/fireworks-png-nodes.md	1004a585bc60d363038c5889d022bd6f58278338fe66f97483316133e316f41a	1
 australian-tfn	./xtask/src/aegis.rs	1004a585bc60d363038c5889d022bd6f58278338fe66f97483316133e316f41a	1
 # Matches the same 9-digit observed value range in the PNG node
@@ -128,12 +152,14 @@ sql-query	./docs/tasks/T22-screenshot-ui.md	6ba454ee08d4ce45364f6e849176079be5c6
 ssn-no-dashes	./docs/research/fireworks-png-nodes.md	1004a585bc60d363038c5889d022bd6f58278338fe66f97483316133e316f41a	1
 ssn-no-dashes	./xtask/src/aegis.rs	1004a585bc60d363038c5889d022bd6f58278338fe66f97483316133e316f41a	1
 # A loopback listener in the release smoke test, a localhost maintainer
-# address, and prose naming the local GitForge API or the rule itself;
-# the workspace has no HTTP client dependency.
+# address, prose naming the local GitForge API or the rule itself, and
+# the local preview URL in the site deployment guide; the workspace has
+# no HTTP client dependency.
 ssrf-localhost	./docs/NEXT.md	12ca17b49af2289436f303e0166030a21e525d266e209267433801a8fd4071a0	1
 ssrf-localhost	./docs/PLANNING.md	12ca17b49af2289436f303e0166030a21e525d266e209267433801a8fd4071a0	2
 ssrf-localhost	./docs/SESSIONS.md	12ca17b49af2289436f303e0166030a21e525d266e209267433801a8fd4071a0	1
 ssrf-localhost	./docs/SESSIONS.md	49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763	2
+ssrf-localhost	./docs/SITE-DEPLOYMENT.md	49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763	1
 ssrf-localhost	./docs/decisions/0074-aegis-content-keyed-baseline.md	49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763	1
 ssrf-localhost	./docs/tasks/T22-screenshot-ui.md	49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763	1
 ssrf-localhost	./packaging/deb/control	49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763	1
@@ -148,7 +174,8 @@ stack-trace-exposure	./infrastructure/docker/ci-rust.Dockerfile	17ee41935f062dff
 xml-external-entity	./crates/io/tests/svgimport.rs	f6cfc5faea5abe6ee5bd8667967edfc5cbe43d95f0f04d7a560afb01613823d5	2
 xml-external-entity	./packaging/build-macos-dmg.sh	7b16906a7de9206c7488979eb86e8393ba62a45c0e769c79cf070a16c1858d49	1
 # Matches any 5-digit run: CS6 command ids, the JPEG dimension ceiling
-# (65535), menu ids. This repository holds no postal data.
+# (65535), menu ids, CVE id suffixes. This repository holds no postal
+# data.
 zip-code	./crates/app-cli/src/mcp.rs	0e5c81ceee464db1c0cb9ed801d134fab0dd2a28c0dc62e35aa21a8e13ff0ebc	1
 zip-code	./crates/app-cli/src/mcp.rs	20d70708103e5223b6f2fb00f00947832fb93d12ebef11eb10bc5599efefe184	1
 zip-code	./crates/app-cli/src/mcp.rs	e27c72fe629f258a871404eed323c0cf57a7a26c19dc8d5a6ac90770241af8f5	1
@@ -480,6 +507,7 @@ zip-code	./docs/NEXT.md	e95e07198fbc2a3fac954c1e20f99ff404edbc4a9bcc08f0ef575f1b
 zip-code	./docs/NEXT.md	f2f89ede8e7d4b3d2243dea1ca96b8ece56f793811d9708b4a0181bf81a50011	1
 zip-code	./docs/NEXT.md	fec32d6024e177ac05e94de175bfccd84ec3d389034f6f57067fb167302534b6	1
 zip-code	./docs/PLANNING.md	0f255ec16482c343fd099ba9668863778be40dc166a6856b1d470e0bc97cc6fd	1
+zip-code	./docs/PLANNING.md	3e6d8748577115dd136761901582abce3093fbb973a08c35be9efe6781fb4f4d	1
 zip-code	./docs/PLANNING.md	9766638817ec53c323baa6aaa5f8d10a6105299553621601c5e71d0c47b10e5b	3
 zip-code	./docs/PLANNING.md	ca902d4a8acbdea132ada81a004081f51c5c9279d409cee414de5a39a139fab6	1
 zip-code	./docs/SESSIONS.md	265f10e1bf87701b7aa597c197b6a25b0984777f3443a289d7a92aedd31fddcf	1
@@ -520,6 +548,7 @@ zip-code	./docs/planning/generated/parity.md	b66a7baff55a93ebb558b351aabb3c7f8df
 zip-code	./docs/planning/generated/parity.md	db4859f7fe2245f0d7160995d4d60a96d0989d9d05cd8782dd7ebe07ffc45e00	1
 zip-code	./docs/planning/generated/parity.md	eea32706ceeea18ece420ede85bbc9dc629a96c899a0782cdd0543e260698320	1
 zip-code	./docs/planning/generated/scorecard.md	848e3fb85d62f31af8c03726f527aff81df44cca545728554b1bc26b40e4de0f	1
+zip-code	./docs/release/PHASE-0-AUDIT.md	3e6d8748577115dd136761901582abce3093fbb973a08c35be9efe6781fb4f4d	4
 zip-code	./docs/research/fireworks-png-nodes.md	492f431bae35265f2e5f4ed49bd8c58dda912431be561504846988d00d05d117	2
 zip-code	./docs/research/fireworks-png-nodes.md	9a37837cdde1d7b36fc789a2d4558af7652d6bb2f7ea5d1a7451ea416f34ef5a	1
 zip-code	./docs/research/fireworks-png-nodes.md	f2f89ede8e7d4b3d2243dea1ca96b8ece56f793811d9708b4a0181bf81a50011	1

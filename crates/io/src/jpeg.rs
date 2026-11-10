@@ -1,5 +1,6 @@
-//! JPEG export via `jpeg-encoder` 0.6 (0.7 needs Rust 1.87; the
-//! workspace MSRV is 1.85).
+//! JPEG export via `jpeg-encoder` 0.6. The workspace MSRV is 1.95,
+//! so 0.7 (which needs 1.87) is permitted — 0.6 is kept anyway so
+//! exported bytes do not drift with an encoder bump.
 //!
 //! JPEG carries no alpha, so the plane is flattened over a matte
 //! (default white — CS6's default) before encoding. Quality is the

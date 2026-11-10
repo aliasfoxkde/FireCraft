@@ -69,21 +69,21 @@ pub(crate) fn brush_of(
             });
         }
     };
-    if let Some(edge) = options.edge {
-        if edge > MAX_EDGE {
-            return Err(EngineError::BadPayload {
-                name: name.to_owned(),
-                detail: format!("brush edge {edge} is not in 0..={MAX_EDGE}"),
-            });
-        }
+    if let Some(edge) = options.edge
+        && edge > MAX_EDGE
+    {
+        return Err(EngineError::BadPayload {
+            name: name.to_owned(),
+            detail: format!("brush edge {edge} is not in 0..={MAX_EDGE}"),
+        });
     }
-    if let Some(aspect) = options.aspect {
-        if aspect == 0 || aspect > MAX_ASPECT {
-            return Err(EngineError::BadPayload {
-                name: name.to_owned(),
-                detail: format!("brush aspect {aspect} is not in 1..={MAX_ASPECT}"),
-            });
-        }
+    if let Some(aspect) = options.aspect
+        && (aspect == 0 || aspect > MAX_ASPECT)
+    {
+        return Err(EngineError::BadPayload {
+            name: name.to_owned(),
+            detail: format!("brush aspect {aspect} is not in 1..={MAX_ASPECT}"),
+        });
     }
     let pressure = options.pressure.unwrap_or(100);
     if pressure == 0 {
