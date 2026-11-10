@@ -24,6 +24,19 @@ version() {
 readonly VERSION="$(version)"
 readonly OUT="firecraft-${VERSION}-linux-x86_64.AppImage"
 
+echo "==> preflight"
+# The desktop entry and the icon are a pair: linuxdeploy resolves
+# `Icon=` against the icon theme in the AppDir, and an entry whose
+# icon is missing produces an image with no icon rather than an error.
+# Checking both here turns a silent packaging defect into a failed
+# recipe.
+readonly DESKTOP_SOURCE="packaging/desktop/firecraft.desktop"
+readonly ICON_SOURCE="assets/icons/hicolor/256x256/apps/firecraft.png"
+[ -f "${DESKTOP_SOURCE}" ] || { echo "missing ${DESKTOP_SOURCE}" >&2; exit 1; }
+[ -f "${ICON_SOURCE}" ] || { echo "missing ${ICON_SOURCE}" >&2; exit 1; }
+grep -q '^Icon=' "${DESKTOP_SOURCE}" ||
+    { echo "${DESKTOP_SOURCE} has no Icon= entry" >&2; exit 1; }
+
 echo "==> building release binaries"
 cargo build --release --locked -p app -p app-cli
 
@@ -34,7 +47,7 @@ mkdir -p "${STAGE}/usr/bin" \
          "${STAGE}/usr/share/doc/firecraft"
 install -m 755 target/release/firecraft     "${STAGE}/usr/bin/firecraft"
 install -m 755 target/release/firecraft-cli "${STAGE}/usr/bin/firecraft-cli"
-install -m 644 packaging/desktop/firecraft.desktop \
+install -m 644 "${DESKTOP_SOURCE}" \
     "${STAGE}/usr/share/applications/firecraft.desktop"
 {
     echo "FireCraft ${VERSION} is dual-licensed MIT OR Apache-2.0."
@@ -42,7 +55,7 @@ install -m 644 packaging/desktop/firecraft.desktop \
     cat LICENSE
 } > "${STAGE}/usr/share/doc/firecraft/copyright"
 mkdir -p "${STAGE}/usr/share/icons/hicolor/256x256/apps"
-install -m 644 assets/icons/hicolor/256x256/apps/firecraft.png \
+install -m 644 "${ICON_SOURCE}" \
     "${STAGE}/usr/share/icons/hicolor/256x256/apps/firecraft.png"
 
 # Icon ships in-tree at assets/icons/hicolor/256x256/apps/firecraft.png —

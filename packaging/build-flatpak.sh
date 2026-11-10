@@ -14,8 +14,10 @@ set -euo pipefail
 readonly MANIFEST="packaging/flatpak/dev.firecraft.FireCraft.yml"
 readonly REPO="dist/flatpak-repo"
 readonly STAGE="dist/flatpak-stage"
+readonly APP_ID="dev.firecraft.FireCraft"
 
 version() {
+    # The workspace version is the single source of truth.
     sed -n '/^\[workspace\.package\]/,/^\[/{s/^version = "\(.*\)"/\1/p;q;}' Cargo.toml
 }
 
@@ -24,12 +26,35 @@ readonly OUT="firecraft-${VERSION}-linux-x86_64.flatpak"
 
 echo "==> flatpak-builder -> local repo ${REPO}"
 rm -rf "${REPO}" "${STAGE}"
-flatpak-builder --repo="${REPO}" --force-clean "${STAGE}" "${MANIFEST}"
-
-echo "==> sandbox smoke: run --command=firecraft --version"
-flatpak run --command=firecraft --repo="${REPO}" dev.firecraft.FireCraft --version
+# --share=network: the cargo build inside the build sandbox fetches the
+# dependency graph, and the sandbox has no network by default — without
+# this the build dies at the first fetch. (A published flatpak should
+# vendor the registry instead; this recipe builds the candidate, and
+# the published artifact's provenance is the SBOM/attestation path.)
+flatpak-builder --share=network --repo="${REPO}" --force-clean "${STAGE}" "${MANIFEST}"
 
 echo "==> bundle -> ${OUT}"
-flatpak build-bundle "${REPO}" "${OUT}" dev.firecraft.FireCraft
+flatpak build-bundle "${REPO}" "${OUT}" "${APP_ID}"
+
+# The test installation. `flatpak run` has no --repo option: an
+# application has to be installed into an installation before it can
+# be run. The previous recipe passed --repo to `flatpak run`, which
+# flatpak rejects ("Unknown option --repo"), so the launch step never
+# ran — the recipe's only runtime evidence was a command that could
+# not execute.
+echo "==> install the bundle into the user installation"
+flatpak install --user --bundle "${OUT}" --noninteractive
+flatpak list --user --columns=application,version | grep -q "^${APP_ID}" ||
+    echo "WARNING: ${APP_ID} is not listed after the install"
+
+echo "==> launch: flatpak run --command=firecraft-cli ${APP_ID} --help"
+flatpak run --command=firecraft-cli "${APP_ID}" --help
+
+echo "==> removal"
+flatpak uninstall --user --noninteractive "${APP_ID}"
+if flatpak list --user --columns=application | grep -q "^${APP_ID}"; then
+    echo "ERROR: ${APP_ID} is still installed after the removal" >&2
+    exit 1
+fi
 
 echo "==> ${OUT}: $(sha256sum "${OUT}")"

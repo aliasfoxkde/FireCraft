@@ -95,8 +95,11 @@ echo "== stage 3: icon"
 pass "icon installed at $ICON_PATH"
 
 echo "== stage 4: CLI"
-CLI_OUT="$(firecraft-cli --help 2>&1 || true)"
-echo "$CLI_OUT" | grep -qi 'usage' || fail "firecraft-cli printed no usage line: $CLI_OUT"
+if ! CLI_OUT="$(firecraft-cli --help 2>&1)"; then
+    fail "firecraft-cli --help failed: $CLI_OUT"
+fi
+echo "$CLI_OUT" | grep -q 'usage: firecraft-cli' ||
+    fail "firecraft-cli printed no usage line: $CLI_OUT"
 pass "firecraft-cli runs"
 
 echo "== stage 5: GUI launch"
