@@ -76,10 +76,6 @@ impl Session {
     /// *joins* it (the surface opened the group deliberately); undo and
     /// redo commit a pending group first so stacks never straddle one.
     pub fn apply(&mut self, name: &str, payload: serde_json::Value) -> Result<(), EngineError> {
-        if name == REWIND_ID {
-            self.rewind_by_payload(payload)?;
-            return Ok(());
-        }
         self.apply_delta(name, payload).map(|_delta| ())
     }
 
@@ -87,11 +83,21 @@ impl Session {
     /// host reads created object ids out of it (addNew\* selects what
     /// it created). The journal and history records are identical to
     /// [`Session::apply`].
+    ///
+    /// The session-scoped [`REWIND_ID`] is the one command that
+    /// captures no document delta: it acts on the undo history and
+    /// returns [`Delta::Noop`].
     pub fn apply_delta(
         &mut self,
         name: &str,
         payload: serde_json::Value,
     ) -> Result<Delta, EngineError> {
+        if name == REWIND_ID {
+            // The session-scoped door: the rewind acts on the undo
+            // history, so it captures no document delta.
+            self.rewind_by_payload(payload)?;
+            return Ok(Delta::Noop);
+        }
         let delta = self
             .registry
             .execute(&mut self.document, name, payload.clone())?;
