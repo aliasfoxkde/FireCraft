@@ -170,7 +170,7 @@ The SDK must be independently usable by a third-party host. WebOS is an importan
 
 ### Shared engineering and release practices
 
-Use [craft-common-actions](https://github.com/storytold/craft-common-actions) as a source of proven CI/CD patterns and reusable workflows: shared quality gates, packaging lint, cross-platform build matrices, package signing, checksums, and release aggregation. Evaluate the existing workflow's Storyteld-specific Git dependency checks, font/i18n inputs, packaging conventions, and job matrix before enabling it in FireCraft. Keep FireCraft-specific browser bridge tests, document-format corpus tests, and deployment verification mandatory.
+Use [craft-common-actions](https://github.com/storytold/craft-common-actions) as a source of proven CI/CD patterns and reusable workflows: shared quality gates, packaging lint, cross-platform build matrices, package signing, checksums, and release aggregation. Evaluate the existing workflow's Storytold-specific Git dependency checks, font/i18n inputs, packaging conventions, and job matrix before enabling it in FireCraft. Keep FireCraft-specific browser bridge tests, document-format corpus tests, and deployment verification mandatory.
 
 The candidate fork at [artcraft-candidates/FireCraft](https://github.com/artcraft-candidates/FireCraft) is the appropriate first compatibility environment for shared workflows and cross-app crate testing. The canonical repository remains [aliasfoxkde/FireCraft](https://github.com/aliasfoxkde/FireCraft). Reusable improvements can be contributed upstream; once verified, workflow adoption and product changes return through reviewed PRs to the canonical repo.
 
