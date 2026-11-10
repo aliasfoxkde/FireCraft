@@ -900,8 +900,8 @@ fn build_deb(
         "Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/\n\
          Upstream-Name: FireCraft\n\
          Source: https://github.com/aliasfoxkde/FireCraft\n\n\
-         FireCraft is dual-licensed under the MIT License and the Apache\n\
-         License 2.0 (SPDX-License-Identifier: MIT OR Apache-2.0).\n",
+         FireCraft is licensed under the Apache License 2.0\n\
+         (SPDX-License-Identifier: Apache-2.0).\n",
     );
     copyright.push_str("\n----- full license text -----\n");
     copyright.push_str(

@@ -144,9 +144,11 @@ Following the photocraft/ArtCraft method (their AGENTS.md §3):
    trademarks of Adobe Inc.; FireCraft is an independent open-source project,
    not affiliated with, sponsored by or endorsed by Adobe Inc.; these names
    are used only to describe compatibility."
-7. **License:** the repo currently ships Apache-2.0; M0 adds **`MIT OR
-   Apache-2.0`** dual-licensing to match the wider Rust ecosystem (photocraft
-   convention), plus `NOTICE` and the trademark disclaimer.
+7. **License:** the repo ships **Apache-2.0** (SPDX `Apache-2.0`), plus
+   `NOTICE` and the trademark disclaimer. The original M0 plan added
+   `MIT OR Apache-2.0` dual-licensing to match the wider Rust ecosystem;
+   the maintainer narrowed it to Apache-2.0 alone on 2026-11-10, and the
+   MIT text was removed.
 
 The AMT/activation layer of the reference install is **out of scope
 entirely** — never analyzed as part of feature work, never reimplemented.

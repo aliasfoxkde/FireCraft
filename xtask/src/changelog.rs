@@ -1,10 +1,10 @@
 //! Release chore (M12 task 6): `xtask changelog` regenerates
 //! `docs/CHANGELOG.md` from the conventional-commit log — the same
 //! committed-generated-doc discipline as parity/scorecard — and
-//! verifies the release's stamps while it is at it: the dual license
-//! claim against the two license files, and one workspace version
-//! across every shipped crate. The gate fails the release chore when
-//! any stamp drifts.
+//! verifies the release's stamps while it is at it: the Apache-2.0
+//! license claim against the license file and the manifests, and one
+//! workspace version across every shipped crate. The gate fails the
+//! release chore when any stamp drifts.
 
 use crate::util::{cargo_metadata, workspace_root};
 use std::collections::BTreeMap;
@@ -25,8 +25,8 @@ const SECTIONS: &[(&str, &str)] = &[
     ("chore", "Chores"),
 ];
 
-/// Regenerates `docs/CHANGELOG.md`, then verifies the dual-license
-/// files and the workspace version stamps.
+/// Regenerates `docs/CHANGELOG.md`, then verifies the license
+/// stamps and the workspace version stamps.
 pub fn run() -> Result<(), String> {
     let (doc, commits) = generate()?;
     let path = workspace_root().join("docs/CHANGELOG.md");
@@ -117,18 +117,30 @@ fn generate() -> Result<(String, usize), String> {
     Ok((doc, total))
 }
 
-/// The dual claim against the combined license file: `LICENSE` states
-/// the OR and carries both full texts; the workspace manifest carries
-/// the SPDX identifier.
+/// The Apache-2.0 claim: `LICENSE` carries the license text and the
+/// SPDX identifier; the workspace manifest declares the same
+/// identifier. The MIT text must stay gone — FireCraft is licensed
+/// under Apache-2.0 alone.
 fn verify_licenses() -> Result<(), String> {
-    let lic = std::fs::read_to_string(workspace_root().join("LICENSE"))
-        .map_err(|e| format!("read LICENSE: {e}"))?;
-    for needle in ["MIT License", "Apache License", "MIT OR Apache-2.0"] {
+    let root = workspace_root();
+    let lic =
+        std::fs::read_to_string(root.join("LICENSE")).map_err(|e| format!("read LICENSE: {e}"))?;
+    for needle in ["Apache License", "Apache-2.0"] {
         if !lic.contains(needle) {
             return Err(format!(
-                "LICENSE no longer states the dual claim ({needle} missing)"
+                "LICENSE no longer states the Apache-2.0 claim ({needle} missing)"
             ));
         }
+    }
+    if lic.contains("MIT License") {
+        return Err("LICENSE still carries the MIT text; FireCraft is Apache-2.0 only".to_string());
+    }
+    let manifest = std::fs::read_to_string(root.join("Cargo.toml"))
+        .map_err(|e| format!("read Cargo.toml: {e}"))?;
+    if !manifest.contains("license = \"Apache-2.0\"") {
+        return Err(
+            "the workspace manifest no longer declares license = \"Apache-2.0\"".to_string(),
+        );
     }
     Ok(())
 }

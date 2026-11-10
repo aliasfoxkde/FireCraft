@@ -138,8 +138,8 @@ The GUI and automation interfaces are intended to drive the same engine commands
 
 The FireCraft mark is original project artwork: a fox/flame motif representing creative energy and precision. It is not an Adobe or Fireworks asset. The mark uses an ember-orange and gold gradient on a charcoal field; the SVG is the canonical scalable logo source.
 
-Third-party assets must retain their license notices and be recorded in [`docs/ATTRIBUTION.md`](docs/ATTRIBUTION.md). FireCraft's source is dual-licensed under MIT OR Apache-2.0.
+Third-party assets must retain their license notices and be recorded in [`docs/ATTRIBUTION.md`](docs/ATTRIBUTION.md). FireCraft's source is licensed under Apache-2.0.
 
 ## License
 
-Dual-licensed under either the [MIT License](LICENSE) or [Apache License 2.0](LICENSE), at your option.
+Licensed under the [Apache License 2.0](LICENSE).
