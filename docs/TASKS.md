@@ -13,6 +13,9 @@
 | P1 | Reconcile live web deployment | Artifact differs | The public manifest's JS/wasm/index hashes differ from local `dist/web`; identify intended deploy and verify it before publishing. See [T18](tasks/T18-release.md). |
 | P2 | Next-release asset breadth and platform verification | Open | [T23](tasks/T23-release-assets.md); recipes exist, but non-Linux artifacts need real platform build/launch receipts. |
 | P2 | Coverage and test quality ratchet | Open | Replace the old aspirational 99% label with measured per-crate targets and snapshots; [NEXT.md](NEXT.md). |
+| P2 | egui_kittest snapshot gates per panel/toolbar | Open | Theme and WCAG regression snapshots per panel; carried over from `main`'s board — [NEXT.md](NEXT.md#phase-21--modern-differentiators). |
+| P2 | Responsive/adaptive layout audit + fixes | Open | Layout behavior across viewport sizes; carried over from `main`'s board — [NEXT.md](NEXT.md). |
+| P1 | Aegis gate: content-keyed baseline, so a doc edit no longer fails the gate | **Done — landed with the `main` merge** | [decision 0074](decisions/0074-aegis-content-keyed-baseline.md): the committed baseline `.aegis-baseline.tsv` is keyed on content (pattern, file, digest) rather than on line, so a prose edit above a finding no longer invalidates it. No rule class is switched off — every occurrence is adjudicated individually. |
 
 ## Phase 22 detail
 
@@ -40,6 +43,18 @@
 - The 3 partial CS6 DOM rows remain evidence-gated; see [`planning/generated/dom-parity.md`](planning/generated/dom-parity.md) and the specific decisions.
 - The remaining 2 menu rows are tracked with explicit reasons by the live `inert_worklist`; do not wire behavior without a model/engine or reference basis.
 - Non-Linux release artifacts remain unverified until built and launched on their target platforms.
+
+## Closed (this board's lifetime)
+
+Carried over from `main`'s board so no row is lost in the restructure.
+
+| Task | Landed |
+|---|---|
+| Aegis baseline regeneration + `.aegisignore` self-exclusion | 2026-11-03 (`72aa1d7`) |
+| 19.6 batch 6 — View menu (10 inerts) | 2026-11-03 (`72aa1d7`) |
+| 19.6 batch 7 — Text menu (14 inerts) | 2026-11-03 (`72aa1d7`) |
+| 19.6 batch 8 — Attach In Path / Attach to Path (2 inerts); vertical-align rows evidence-gated | 2026-11-03 (`a8c86af`) |
+| 19.6 inert-menu burn-down (Modify/File families) | Complete — batches 1–17 landed; the census is 2 inert of 294 items |
 
 ## Ledger rules
 

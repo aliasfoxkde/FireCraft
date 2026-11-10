@@ -2,8 +2,10 @@
 #
 # Only machine-generated files belong here. A finding in a generated
 # file is a false positive that reappears whenever the generator's
-# output shifts, and the gate's per-finding suppression is keyed on
-# content — so a generated file's findings can never be pinned.
+# output shifts. The baseline keys on a finding's content, so a
+# regenerated file does not merely move the finding — it changes what
+# the finding is, and the gate would fail on noise instead of on a
+# real leak.
 #
 # Note: keep this file's own prose free of the patterns it names —
 # the scanner reads this file too, and a comment that quotes a rule
@@ -58,14 +60,10 @@ source/
 
 # Session log (git-ignored per AGENTS.md, appended to close every task).
 # Its prose quotes CS6 resource command ids, which trip the numeric PII
-# rules, and every session appends — line-keyed baseline entries can
-# never stick.
+# rules, and every session appends new prose — its findings churn.
 log/
 
-# The gate's own suppression files. Both are read by the scanner as
-# text: one names the rules it suppresses, the other records content
-# digests and the prose explaining each one. Their own contents land
-# back in the findings, so they are excluded like the generated files
-# above.
-.aegis-pattern-state.json
-.aegis-allowlist.json
+# The baseline file itself — machine-generated from a scan. It lists
+# every finding's path and content digest, so scanning it feeds those
+# paths and digests back into the very report they belong to.
+.aegis-baseline.tsv

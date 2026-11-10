@@ -118,13 +118,13 @@ authoritative source that supersedes this table.
 |---|---|---|
 | **Shipped** | v0.2.5 on GitHub (2026-11-03) | ✅ `v0.2.4` was released without a tag; see PROGRESS |
 | **CI** | GitHub Actions: `fmt` (fast) + `gate` (`xtask ci-no-fmt`); GitForge 7-job pipeline | ✅ |
-| **aegis** | Suppression clean; scan ~12 s | `.aegisignore` excludes `target/`, `web/dist/`, `fuzz/`; rule classes and per-finding digests suppressed (decision 0070) |
+| **aegis** | Baseline clean; scan ~12 s | `.aegisignore` excludes `target/`, `web/dist/`, `fuzz/`; the baseline is content-keyed, so no rule class is switched off (decision 0074) |
 | **Coverage** | floors 81.1 % lines / 78.7 % funcs (`xtask/src/coverage.rs`) | Local `llvm-cov` fails on stale artifacts; CI works |
-| **Code** | 141,945 Rust lines | No `unwrap()`/`panic!()` outside `#[cfg(test)]`; no `todo!`/`unimplemented!` |
+| **Code** | 143,527 Rust lines | No `unwrap()`/`panic!()` outside `#[cfg(test)]`; no `todo!`/`unimplemented!` |
 | **Registry** | 252 commands | Every command executable from the GUI via the Ctrl+P palette (19.4); menu reachability is the remaining gap |
 | **Menu reachability** | 2 inert of 294 items | *live* — derived + gated (`menus::tests::inert_count_never_rises`) |
 | **Parity** | 268 C / 3 P / 0 M / 85 N | 3 P rows are evidence-gated (Phase 12 oracle) |
-| **Decision docs** | 71 (0001–0071) | Next: 0072 |
+| **Decision docs** | 72 (0001–0076) | Next: 0077 |
 | **Web bundle** | 21,274,323 B (ceiling 21,500,000) | Re-pinned 2026-11-04; ceiling only moves down |
 
 ---

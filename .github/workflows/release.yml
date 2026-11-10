@@ -149,7 +149,7 @@ jobs:
             notes="artifacts/RELEASE_SHA256.txt"
           fi
           gh release create "$TAG" \
-            --title "FireCraft ${TAG#v}" \
+            --title "${TAG#v}" \
             --draft \
             --notes-file "$notes" \
             "${assets[@]}"

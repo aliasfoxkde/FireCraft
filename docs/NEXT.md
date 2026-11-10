@@ -618,20 +618,23 @@ scope, so no license path is attempted.
 - Do not run `cargo test --workspace` locally (hook-denied; use
   GitForge or per-crate commands).
 - Do not touch `source/`, do not commit `dist/`, do not force-push.
-- Do not add aegis allowlist entries without verifying each finding is
-  a false positive, and do not add a rule class to
-  `.aegis-pattern-state.json` without the same check. The classes that
-  are suppressed and the evidence for each are listed in decision
-  0070; a new entry needs the same kind of evidence, not a
-  convenience.
+- Do not add aegis baseline entries without verifying each finding is
+  a false positive ("pan" in pan/zoom prose trips PCI; 65535-style
+  literals trip zip-code — those two are the known classes). The
+  baseline is `.aegis-baseline.tsv`, keyed on content (pattern, file,
+  digest) rather than on line (decision 0074); regenerate it with
+  `cargo run -p xtask -- aegis --bless`, which prints every added key
+  for review before the rewrite is committed. A new entry needs the
+  same kind of evidence, not a convenience.
 
 ## Quick reference
 
 | Gate | Command | Timeout |
 |---|---|---|
 | Full CI | `cargo run -p xtask -- ci` | ~20 min |
-| Aegis | `cargo run -p xtask -- aegis` | ~15s |
-| Aegis report | `cargo run -p xtask -- aegis --report` | ~15s |
+| Aegis | `cargo run -p xtask -- aegis` | ~10s |
+| Aegis report | `cargo run -p xtask -- aegis --report` | ~10s |
+| Aegis baseline regen | `cargo run -p xtask -- aegis --bless` | ~10s |
 | Coverage measure | `cargo llvm-cov --summary-only` (hook: use GitForge) | ~6 min |
 | Coverage gate | `cargo run -p xtask -- coverage` | ~6 min |
 | Wasm only | `cargo run -p xtask -- wasm` | ~5 min |
