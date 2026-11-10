@@ -14,6 +14,7 @@ use crate::registry::CommandRegistry;
 pub(crate) fn install(registry: &mut CommandRegistry) -> Result<(), EngineError> {
     registry.register(SetCellVisible)?;
     registry.register(SetCellLocked)?;
+    registry.register(SetFrameDuration)?;
     registry.register(AddFrames)?;
     registry.register(DeleteFrames)?;
     registry.register(DuplicateFrame)?;
@@ -893,6 +894,92 @@ impl TypedCommand for SetCellLocked {
     }
 }
 
+/// `frame.setDuration` — CS6's frame delay: how long one state is
+/// shown before the animation advances.
+///
+/// The unit is hundredths of a second — the GIF delay field's unit is
+/// 10 ms and the `FNDi` node shares it (decision 0009), so a value
+/// passes through to the wire unchanged. The delay lives in the page's
+/// `frame_durations` record, which the writer persists through the
+/// page's `EXPv`/`FNLv` frame configurations.
+struct SetFrameDuration;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct SetFrameDurationPayload {
+    /// Page index.
+    page: usize,
+    /// Frame (state) index.
+    frame: usize,
+    /// The delay in hundredths of a second.
+    duration: i64,
+}
+
+/// The largest delay a frame may carry — the GIF delay field's own
+/// ceiling (decision 0009).
+const MAX_FRAME_DURATION: i64 = 65_535;
+
+/// The most frames a page may carry — the same bound `frame.add`'s
+/// `howMany` count uses and the GIF exporter's own state ceiling. The
+/// duration record is sized from the page's frame count, so a page that
+/// claims more frames than the format allows (a corrupt document) is
+/// refused rather than sized from.
+const MAX_FRAMES: usize = 4096;
+
+impl TypedCommand for SetFrameDuration {
+    type Payload = SetFrameDurationPayload;
+
+    fn name(&self) -> &'static str {
+        "frame.setDuration"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "frame.setDuration";
+        if !(0..=MAX_FRAME_DURATION).contains(&payload.duration) {
+            return Err(EngineError::BadPayload {
+                name: NAME.to_owned(),
+                detail: format!(
+                    "duration must be 0..={MAX_FRAME_DURATION} hundredths of a second, got {}",
+                    payload.duration
+                ),
+            });
+        }
+        access::page(document, NAME, payload.page)?;
+        let total = frame_count(document, payload.page);
+        if total > MAX_FRAMES {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: format!(
+                    "the page claims {total} frames, more than the format allows ({MAX_FRAMES})"
+                ),
+            });
+        }
+        if payload.frame >= total {
+            return Err(EngineError::MissingTarget {
+                name: NAME.to_owned(),
+                detail: format!("frame {} out of range ({total} frames)", payload.frame),
+            });
+        }
+        let target = access::page_mut(document, NAME, payload.page)?;
+        let before = target.info.clone();
+        // A record shorter than the page's frame count means "no
+        // explicit delay recorded" for the missing frames; they take
+        // the default so the record stays positional.
+        while target.info.frame_durations.len() < total {
+            target.info.frame_durations.push(DEFAULT_FRAME_DURATION);
+        }
+        target.info.frame_durations[payload.frame] = payload.duration;
+        Ok(Delta::PageInfo {
+            page: payload.page,
+            before: Box::new(before),
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
@@ -929,6 +1016,79 @@ mod tests {
             .apply_json(&mut document, payload)
             .unwrap_err();
         assert!(matches!(error, EngineError::MissingTarget { .. }));
+    }
+
+    #[test]
+    fn a_frame_delay_is_recorded_and_undone() {
+        let (mut document, _) = testdoc::sample_document();
+        let delta = SetFrameDuration
+            .apply_json(
+                &mut document,
+                json!({ "page": 0, "frame": 1, "duration": 25 }),
+            )
+            .unwrap();
+        assert_eq!(
+            document.pages[0].info.frame_durations,
+            vec![DEFAULT_FRAME_DURATION, 25],
+            "the record is positional and the untouched frame keeps the default"
+        );
+        delta.apply_inverse(&mut document).unwrap();
+        assert!(
+            document.pages[0].info.frame_durations.is_empty(),
+            "undo restores the page's own record"
+        );
+    }
+
+    #[test]
+    fn a_frame_delay_outside_the_page_is_missing_target() {
+        let (mut document, _) = testdoc::sample_document();
+        let error = SetFrameDuration
+            .apply_json(
+                &mut document,
+                json!({ "page": 0, "frame": 9, "duration": 10 }),
+            )
+            .unwrap_err();
+        assert!(matches!(error, EngineError::MissingTarget { .. }));
+        let error = SetFrameDuration
+            .apply_json(
+                &mut document,
+                json!({ "page": 9, "frame": 0, "duration": 10 }),
+            )
+            .unwrap_err();
+        assert!(matches!(error, EngineError::MissingTarget { .. }));
+    }
+
+    #[test]
+    fn a_negative_or_oversized_frame_delay_is_refused() {
+        let (mut document, _) = testdoc::sample_document();
+        for duration in [-1, MAX_FRAME_DURATION + 1] {
+            let error = SetFrameDuration
+                .apply_json(
+                    &mut document,
+                    json!({ "page": 0, "frame": 0, "duration": duration }),
+                )
+                .unwrap_err();
+            assert!(matches!(error, EngineError::BadPayload { .. }));
+        }
+    }
+
+    #[test]
+    fn a_page_with_an_impossible_frame_count_is_refused() {
+        let (mut document, _) = testdoc::sample_document();
+        // A corrupt document can claim more frames than the format
+        // allows; the duration record must not be sized from it.
+        document.pages[0].info.frame_count = 1_000_000;
+        let error = SetFrameDuration
+            .apply_json(
+                &mut document,
+                json!({ "page": 0, "frame": 0, "duration": 10 }),
+            )
+            .unwrap_err();
+        assert!(matches!(error, EngineError::InvalidState { .. }));
+        assert!(
+            document.pages[0].info.frame_durations.is_empty(),
+            "a refused call mutates nothing"
+        );
     }
 
     #[test]

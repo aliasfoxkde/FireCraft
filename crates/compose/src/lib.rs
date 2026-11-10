@@ -20,11 +20,13 @@ mod cache;
 mod convert;
 #[allow(clippy::module_name_repetitions)]
 mod effects;
+mod onion;
 mod render;
 
 pub use cache::EffectCache;
 pub use convert::{abgr, abgr_pack, blend_mode, blend_value};
 pub use effects::{FILTER_CATALOG, KernelOp, Plan, RECOGNIZED_GUIDS, apply_stack, plan};
+pub use onion::{ghost_frames, render_onion, render_onion_with};
 // The kernel surface type, re-exported so consumers of the effect
 // interpreter (the engine's bake commands) need no second edge.
 pub use filters::Surface;

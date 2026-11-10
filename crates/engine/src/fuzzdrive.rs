@@ -618,6 +618,7 @@ pub const CALLS: &[&str] = &[
     "page.setGridSize",
     "page.setOnionSkinning",
     "frame.add",
+    "frame.setDuration",
     "frame.delete",
     "frame.duplicate",
     "frame.reorder",
@@ -1790,6 +1791,22 @@ pub fn payload_template(name: &str, rng: &mut FuzzRng, document: &Document) -> s
                 "page": any_index(rng, pages),
                 "before": count(rng),
                 "after": count(rng),
+            })
+        }
+        "frame.setDuration" => {
+            // Mostly a legal delay in hundredths of a second; the
+            // negative case reaches the refusal.
+            let duration = |rng: &mut FuzzRng| -> i64 {
+                if rng.chance(85) {
+                    rng.below(100) as i64
+                } else {
+                    -(rng.below(3) as i64) - 1
+                }
+            };
+            serde_json::json!({
+                "page": any_index(rng, pages),
+                "frame": any_index(rng, frames),
+                "duration": duration(rng),
             })
         }
         "frame.add" => {

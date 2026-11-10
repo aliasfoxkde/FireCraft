@@ -247,6 +247,21 @@ pub fn render_scaled(
     frame: usize,
     scale: f64,
 ) -> Result<Render, ComposeError> {
+    render_scaled_inner(document, page, frame, scale, &mut EffectCache::new(), true)
+}
+
+/// [`render_scaled`] over a caller-owned cache, with the canvas matte
+/// optional. The onion-skin compositor needs the *content* of a
+/// neighbouring state without its matte, so the ghost can be laid over
+/// the background instead of replacing it.
+pub(crate) fn render_scaled_inner(
+    document: &Document,
+    page: usize,
+    frame: usize,
+    scale: f64,
+    cache: &mut EffectCache,
+    matte: bool,
+) -> Result<Render, ComposeError> {
     let (base_w, base_h) = canvas_extent(document, page)?;
     let scale = if scale.is_finite() && scale > 0.0 {
         scale
@@ -271,14 +286,16 @@ pub fn render_scaled(
     ctx.set_transform(affine);
     // Same matte pass as `render_inner`, but the rect spans the
     // scaled extent in world units (the transform maps it up).
-    let raw = document.pages[page].info.canvas.background_raw as u32;
-    ctx.set_paint(Brush::Solid(AlphaColor::from_rgba8(
-        (raw & 0xFF) as u8,
-        ((raw >> 8) & 0xFF) as u8,
-        ((raw >> 16) & 0xFF) as u8,
-        255,
-    )));
-    ctx.fill_rect(&Rect::new(0.0, 0.0, f64::from(base_w), f64::from(base_h)));
+    if matte {
+        let raw = document.pages[page].info.canvas.background_raw as u32;
+        ctx.set_paint(Brush::Solid(AlphaColor::from_rgba8(
+            (raw & 0xFF) as u8,
+            ((raw >> 8) & 0xFF) as u8,
+            ((raw >> 16) & 0xFF) as u8,
+            255,
+        )));
+        ctx.fill_rect(&Rect::new(0.0, 0.0, f64::from(base_w), f64::from(base_h)));
+    }
     let mut text_engine = None;
     let page_layers = &document.pages[page].layers.layers;
     walk_layers(
@@ -287,7 +304,7 @@ pub fn render_scaled(
             document,
             frame,
             canvas: (width, height),
-            cache: &mut EffectCache::new(),
+            cache,
             text_engine: &mut text_engine,
             ctx: &mut ctx,
             stack: &[],
