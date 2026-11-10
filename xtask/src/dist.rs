@@ -718,6 +718,109 @@ fn tar_gz(stage: &Path, top: &str, out: &Path) -> Result<(), String> {
     }
 }
 
+/// A GLIBC symbol-version requirement, e.g. `2.34` or the historic
+/// three-component `2.2.5`.
+///
+/// Compared component-wise, not as a float: `2.9` is older than
+/// `2.10`, and a float comparison of the two would order them
+/// backwards. A missing component is zero, so `2.2` is `2.2.0`.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+struct GlibcVersion(Vec<u64>);
+
+impl GlibcVersion {
+    /// Parses a dotted version. `None` for anything that is not a
+    /// purely numeric dotted version (`GLIBC_PRIVATE`, an empty
+    /// column, a truncated string).
+    fn parse(text: &str) -> Option<Self> {
+        let mut parts = Vec::new();
+        for part in text.split('.') {
+            if part.is_empty() {
+                return None;
+            }
+            parts.push(part.parse::<u64>().ok()?);
+        }
+        if parts.is_empty() {
+            return None;
+        }
+        Some(Self(parts))
+    }
+}
+
+impl std::fmt::Display for GlibcVersion {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let rendered: Vec<String> = self.0.iter().map(|n| n.to_string()).collect();
+        write!(f, "{}", rendered.join("."))
+    }
+}
+
+/// Reads the declared `libc6 (>= X)` floor out of a control file.
+fn declared_libc_floor(control: &str) -> Result<GlibcVersion, String> {
+    let depends = control
+        .lines()
+        .find(|l| l.starts_with("Depends:"))
+        .ok_or_else(|| "packaging/deb/control: no Depends field".to_owned())?;
+    let raw = depends
+        .split("libc6 (>= ")
+        .nth(1)
+        .and_then(|s| s.split(')').next())
+        .map(str::trim)
+        .ok_or_else(|| "packaging/deb/control: no parsable libc6 floor in Depends".to_owned())?;
+    GlibcVersion::parse(raw).ok_or_else(|| {
+        format!("packaging/deb/control: libc6 floor {raw:?} is not a dotted version")
+    })
+}
+
+/// The highest GLIBC symbol version referenced by `objdump -T` output.
+///
+/// Modern binutils prints the version in parentheses — `(GLIBC_2.34)`
+/// — while older binutils printed it bare (`GLIBC_2.2.5`). Both forms
+/// are accepted here; `GLIBC_PRIVATE` carries no release meaning and
+/// is ignored.
+///
+/// Returns `None` when the output holds no versioned GLIBC reference
+/// at all: a statically linked binary has no libc dependency, so
+/// there is nothing for the floor to cover.
+fn max_glibc_requirement(objdump_stdout: &str) -> Option<GlibcVersion> {
+    let mut best: Option<GlibcVersion> = None;
+    let mut rest = objdump_stdout;
+    while let Some(idx) = rest.find("GLIBC_") {
+        // Each iteration consumes the "GLIBC_" prefix, so this always
+        // makes progress even when no version follows it.
+        let after = &rest[idx + "GLIBC_".len()..];
+        let end = after
+            .find(|c: char| !(c.is_ascii_digit() || c == '.'))
+            .unwrap_or(after.len());
+        if let Some(found) = GlibcVersion::parse(&after[..end]) {
+            if best.as_ref().is_none_or(|b| found > *b) {
+                best = Some(found);
+            }
+        }
+        rest = &after[end..];
+    }
+    best
+}
+
+/// True when the `objdump -T` output describes a dynamic symbol
+/// table. Without one there is no libc dependency to floor.
+fn has_dynamic_symbols(objdump_stdout: &str) -> bool {
+    objdump_stdout.contains("DYNAMIC SYMBOL TABLE")
+}
+
+/// Compares the declared floor against the binary's requirement.
+fn check_glibc_floor(
+    floor: &GlibcVersion,
+    needed: &GlibcVersion,
+    binary: &Path,
+) -> Result<(), String> {
+    if needed > floor {
+        return Err(format!(
+            "{binary:?} needs GLIBC_{needed} but packaging/deb/control floors libc6 at \
+             {floor} — raise the Depends floor (or build on an older glibc host)"
+        ));
+    }
+    Ok(())
+}
+
 /// Checks that the control file's `libc6 (>= X)` floor is not below
 /// the binary's highest GLIBC symbol-version requirement. A floor
 /// below the real requirement produces a package that installs on
@@ -725,37 +828,40 @@ fn tar_gz(stage: &Path, top: &str, out: &Path) -> Result<(), String> {
 /// clean-container smoke exposed (floor said 2.31, binaries needed
 /// 2.35, found 2026-11-06). Parsed with `objdump -T` (binutils), not
 /// recalled from a table.
+///
+/// The requirement is set by the *build host's* glibc, not by Rust's
+/// std: the same program built on Debian 12 (glibc 2.36) references
+/// `pidfd_spawnp`/`pidfd_getpid` as weak undefined symbols with no
+/// version tag, while a build on Ubuntu 24.04 (glibc 2.39) tags them
+/// `(GLIBC_2.39)` and makes the package un-installable on Debian 12.
+/// So the floor is only meaningful if the build host is pinned — see
+/// `docs/decisions/0077-deb-glibc-floor.md`.
 fn verify_deb_glibc_floor(control: &str, binary: &Path) -> Result<(), String> {
-    let floor = control
-        .lines()
-        .find(|l| l.starts_with("Depends:"))
-        .and_then(|l| l.split("libc6 (>= ").nth(1))
-        .and_then(|s| s.split(')').next())
-        .and_then(|s| s.trim().parse::<f64>().ok())
-        .ok_or_else(|| "packaging/deb/control: no parsable libc6 floor in Depends".to_owned())?;
+    let floor = declared_libc_floor(control)?;
     let out = std::process::Command::new("objdump")
         .args(["-T"])
         .arg(binary)
         .output()
         .map_err(|e| format!("spawn objdump on {binary:?}: {e}"))?;
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
     if !out.status.success() {
-        return Err(format!(
-            "objdump -T {binary:?} failed: {}",
-            String::from_utf8_lossy(&out.stderr).trim()
-        ));
+        // A statically linked binary has no dynamic symbol table at
+        // all and therefore no libc dependency to floor.
+        if stderr.contains("not a dynamic object") {
+            return Ok(());
+        }
+        return Err(format!("objdump -T {binary:?} failed: {}", stderr.trim()));
     }
-    let needed = String::from_utf8_lossy(&out.stdout)
-        .split_whitespace()
-        .filter_map(|tok| tok.strip_prefix("GLIBC_"))
-        .filter_map(|v| v.parse::<f64>().ok())
-        .fold(f64::MIN, f64::max);
-    if needed > floor {
-        return Err(format!(
-            "{binary:?} needs GLIBC_{needed} but packaging/deb/control floors libc6 at \
-             {floor} — raise the Depends floor (or lower the binary's glibc use)"
-        ));
+    match max_glibc_requirement(&stdout) {
+        Some(needed) => check_glibc_floor(&floor, &needed, binary),
+        None if has_dynamic_symbols(&stdout) => Err(format!(
+            "{binary:?} has a dynamic symbol table but no GLIBC version could be parsed \
+             from `objdump -T` — refusing to assume the floor covers it"
+        )),
+        // No dynamic symbol table: nothing to floor.
+        None => Ok(()),
     }
-    Ok(())
 }
 
 /// Builds the `.deb` from the pinned control file
@@ -1222,5 +1328,132 @@ mod sbom_tests {
         assert_eq!(app["dependsOn"][0], "pkg:cargo/serde@1.0.0");
         let root = dependencies.last().unwrap();
         assert_eq!(root["dependsOn"][0], "urn:firecraft:app");
+    }
+}
+
+#[cfg(test)]
+mod glibc_floor_tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+    use super::*;
+
+    /// A slice of real `objdump -T` output, in the parenthesized form
+    /// modern binutils prints.
+    const MODERN_OBJDUMP: &str = "\
+/bin/ls:     file format elf64-x86-64
+
+DYNAMIC SYMBOL TABLE:
+0000000000000000      DF *UND*	0000000000000000 (GLIBC_2.3)  __ctype_toupper_loc
+0000000000000000      DF *UND*	0000000000000000 (GLIBC_2.34) __libc_start_main
+0000000000000000      w DF *UND*	0000000000000000 (GLIBC_2.34) _dl_find_dso_for_object
+";
+
+    /// The older bare form, including the historic three-component
+    /// version and a `GLIBC_PRIVATE` marker that names no release.
+    const LEGACY_OBJDUMP: &str = "\
+DYNAMIC SYMBOL TABLE:
+0000000000000000     DF *UND*	0000000000000000   GLIBC_2.2.5  getenv
+0000000000000000     DF *UND*	0000000000000000   GLIBC_PRIVATE __libc_dlopen_mode
+";
+
+    const CONTROL: &str = "\
+Package: firecraft
+Version: 0.2.5
+Depends: libc6 (>= 2.36)
+";
+
+    #[test]
+    fn parenthesized_versions_are_parsed() {
+        assert_eq!(
+            max_glibc_requirement(MODERN_OBJDUMP),
+            Some(GlibcVersion(vec![2, 34]))
+        );
+    }
+
+    #[test]
+    fn bare_versions_are_parsed() {
+        assert_eq!(
+            max_glibc_requirement(LEGACY_OBJDUMP),
+            Some(GlibcVersion(vec![2, 2, 5]))
+        );
+    }
+
+    #[test]
+    fn glibc_private_is_not_a_requirement() {
+        let only_private = "DYNAMIC SYMBOL TABLE:\n\
+                            0000     DF *UND*  0000   GLIBC_PRIVATE __libc_dlopen_mode\n";
+        assert_eq!(max_glibc_requirement(only_private), None);
+    }
+
+    #[test]
+    fn three_component_versions_sort_below_their_next_minor() {
+        // 2.2.5 is older than 2.10 — a float comparison would invert
+        // this pair.
+        let older = GlibcVersion(vec![2, 2, 5]);
+        let newer = GlibcVersion(vec![2, 10]);
+        assert!(older < newer);
+        assert!(GlibcVersion(vec![2, 36]) > newer);
+    }
+
+    #[test]
+    fn declared_floor_is_read_from_the_control_file() {
+        assert_eq!(
+            declared_libc_floor(CONTROL).unwrap(),
+            GlibcVersion(vec![2, 36])
+        );
+    }
+
+    #[test]
+    fn a_control_file_without_a_libc6_floor_is_rejected() {
+        let control = "Package: firecraft\nDepends: zlib1g\n";
+        assert!(declared_libc_floor(control).is_err());
+    }
+
+    #[test]
+    fn a_floor_below_the_requirement_is_rejected() {
+        let floor = GlibcVersion(vec![2, 31]);
+        let needed = GlibcVersion(vec![2, 39]);
+        let err = check_glibc_floor(&floor, &needed, Path::new("/usr/bin/firecraft")).unwrap_err();
+        assert!(err.contains("GLIBC_2.39"), "{err}");
+        assert!(err.contains("2.31"), "{err}");
+    }
+
+    #[test]
+    fn an_adequate_floor_is_accepted() {
+        let floor = GlibcVersion(vec![2, 36]);
+        let needed = GlibcVersion(vec![2, 35]);
+        assert!(check_glibc_floor(&floor, &needed, Path::new("/usr/bin/firecraft")).is_ok());
+    }
+
+    #[test]
+    fn the_check_fails_on_a_real_binary_with_a_too_low_floor() {
+        // End-to-end through objdump. Skipped when objdump is absent —
+        // the packaging path fails loudly in that case rather than
+        // silently passing.
+        if !std::path::Path::new("/usr/bin/objdump").exists() {
+            return;
+        }
+        let binary = Path::new("/bin/ls");
+        if !binary.exists() {
+            return;
+        }
+        let low = "Package: firecraft\nDepends: libc6 (>= 2.2)\n";
+        assert!(
+            verify_deb_glibc_floor(low, binary).is_err(),
+            "a floor of 2.2 cannot cover a modern glibc — the check must fail"
+        );
+        let high = "Package: firecraft\nDepends: libc6 (>= 99.0)\n";
+        assert!(
+            verify_deb_glibc_floor(high, binary).is_ok(),
+            "an absurdly high floor must cover the real requirement"
+        );
+    }
+
+    #[test]
+    fn a_dynamic_binary_with_no_parsable_version_fails_loudly() {
+        // No version column at all — the check must not assume the
+        // floor covers a requirement it could not read.
+        let opaque = "DYNAMIC SYMBOL TABLE:\n0000     DF *UND*  0000   ?   mystery_symbol\n";
+        assert_eq!(max_glibc_requirement(opaque), None);
+        assert!(has_dynamic_symbols(opaque));
     }
 }

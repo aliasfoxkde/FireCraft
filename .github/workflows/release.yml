@@ -24,13 +24,16 @@ on:
   push:
     tags: ["v*"]
 
-env:
-  CARGO_TERM_COLOR: always
-
-# Least privilege by default: no job gets a writable token unless it
-# asks for one. Only the `release` job escalates, to `contents: write`.
+# Least privilege by default (read-only checkout + artifact upload);
+# the `release` job widens to `contents: write` because `gh release
+# create` needs it. Declaring this keeps the default `GITHUB_TOKEN`
+# from inheriting a broader grant — the rule
+# `actions/missing-workflow-permissions` fires without it.
 permissions:
   contents: read
+
+env:
+  CARGO_TERM_COLOR: always
 
 jobs:
   build:
@@ -72,8 +75,44 @@ jobs:
             exit 1
           fi
 
-      - name: Build native artifacts
-        run: cargo run --quiet --package xtask -- dist --native
+      - name: Build native artifacts (Debian 12 glibc)
+        # The native artifacts must link against the glibc of the platform
+        # they ship to. `packaging/deb/control` declares `libc6 (>= 2.36)`
+        # and the package installs on Debian 12; linking on this
+        # ubuntu-24.04 runner (glibc 2.39) tags Rust std's weak
+        # `pidfd_spawnp`/`pidfd_getpid` references with (GLIBC_2.39) and
+        # produces a package that cannot install on Debian 12. Build inside
+        # the same Debian 12 base the CI image uses — see
+        # docs/decisions/0077-deb-glibc-floor.md.
+        #
+        # `--user` keeps the artifact tree owned by the runner (a
+        # root-owned `dist/` would break the later web build), and the
+        # cargo registry cache is mounted so the release build does not
+        # re-download the dependency graph.
+        run: |
+          docker run --rm \
+            --user "$(id -u):$(id -g)" \
+            -e CARGO_HOME=/cargo \
+            -e HOME=/tmp \
+            -v "$PWD:/w" \
+            -v "$HOME/.cargo:/cargo" \
+            -w /w \
+            rust:1.99-slim-bookworm \
+            cargo run --quiet --package xtask -- dist --native
+
+      - name: Verify the DEB installs and runs on Debian 12
+        # The floor claim is only real if the package installs on the
+        # platform it declares. `firecraft-cli` links against libc only,
+        # so running it proves the loader resolved every symbol the
+        # declared floor covers — the exact failure a too-low floor
+        # produces (installs on an older system, then fails at exec).
+        run: |
+          docker run --rm -v "$PWD/dist/native:/dist:ro" debian:12-slim bash -c '
+            set -eu
+            apt-get update -qq >/dev/null
+            apt-get install -y -qq --no-install-recommends /dist/firecraft_*.deb >/dev/null
+            firecraft-cli 2>&1 | head -1 | grep -q "usage: firecraft-cli"
+          '
 
       - name: Build web bundle
         run: cargo run --quiet --package xtask -- dist --web
@@ -141,6 +180,8 @@ jobs:
     name: create draft release
     runs-on: ubuntu-24.04
     needs: [build]
+    # `gh release create` writes a release (and its assets) — the one
+    # place this workflow needs more than read.
     permissions:
       contents: write
     steps:

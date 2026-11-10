@@ -163,9 +163,11 @@ cmd_create() {
   done
 
   # Assets are the positional filename arguments after the tag. `gh
-  # release create` has no -a/--asset flag.
+  # release create` has no -a/--asset flag. The title is the bare
+  # version ("0.2.6") — the repository name and the asset filenames
+  # already carry the product name.
   gh release create "$tag" \
-    --title "FireCraft ${tag#v}" \
+    --title "${tag#v}" \
     --draft \
     --notes-file "$notes" \
     "${assets[@]}"

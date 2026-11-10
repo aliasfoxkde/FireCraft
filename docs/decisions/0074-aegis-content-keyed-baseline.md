@@ -101,28 +101,6 @@ handful of classes, and that a new numeric literal in any file needs
 adjudicating before it can be baselined. That cost is visible and
 bounded; the coverage that class suppression gives up is not.
 
-### This branch's baseline
-
-The release-workflow branch carries the gate and re-blesses the baseline
-for its own tree. Three findings in the branch's own content are new
-relative to the upstream baseline, each adjudicated against its source
-line:
-
-| class | file:line | matched literal | why it is a false positive |
-|---|---|---|---|
-| `gdpr-personal-data` | `docs/RELEASE-ENGINEERING-PLAN.md:155` | `personal data` | a release checklist item saying the source archive must *exclude* personal data; it contains none |
-| `pci-cardholder-data` | `docs/research/android-feasibility.md:62` | `pan` | "two-finger pan" — the touch gesture in the Android feasibility table |
-| `zip-code` | `xtask/src/dist.rs:468` | `36524` | the civil-date epoch constant in Howard Hinnant's days-to-date algorithm, not a postal code |
-
-The remaining new keys are the gate's own source and this record
-quoting the literals they adjudicate — the `gdpr-reference` rule fires
-on the abbreviation inside a rule-class name, the `gdpr-personal-data`
-rule fires on the phrase a class note quotes, and the `pci-cardholder-
-data` and `zip-code` rules fire on the literals in the table above. A
-class note that names its literal makes the gate's own source a finding
-of that class, which is why the upstream baseline already carried
-eleven rows of the gate's own. They are adjudicated like any other.
-
 ### What the fix does not cover
 
 PR #10 and PR #11 were red for a **different** reason: genuinely new
