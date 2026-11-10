@@ -1516,7 +1516,7 @@ Depends: libc6 (>= 2.36)
 
 /// The Linux desktop-integration contract: the deb payload, the
 /// canonical desktop entry, and the icon they name must agree with
-/// each other. The desktop entry is shared with the AppImage recipe,
+/// each other. The desktop entry is shared with the `AppImage` recipe,
 /// so a drift here shows up in both formats.
 #[cfg(test)]
 mod deb_desktop_tests {
@@ -1524,7 +1524,7 @@ mod deb_desktop_tests {
     use super::*;
 
     /// The one canonical desktop entry, used by the deb payload and by
-    /// the AppImage recipe.
+    /// the `AppImage` recipe.
     const DESKTOP_ENTRY: &str = "packaging/desktop/firecraft.desktop";
 
     /// The application icon, installed at the hicolor path the desktop
