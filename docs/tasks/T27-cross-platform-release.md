@@ -6,7 +6,7 @@
 > **Priority:** P0 release infrastructure  
 > **Plan:** [RELEASE-ENGINEERING-PLAN.md](../RELEASE-ENGINEERING-PLAN.md)  
 > **Scope authority:** [decision 0075](../decisions/0075-release-scope-mvp.md)  
-> **Evidence baseline:** [PHASE-0-AUDIT.md](../release/PHASE-0-AUDIT.md) (PR #16, dated 2026-11-09 — the link resolves once that PR merges)
+> **Evidence baseline:** [PHASE-0-AUDIT.md](../release/PHASE-0-AUDIT.md) (PR #16 merged; dated 2026-11-09 historical baseline)
 
 ## Objective
 
@@ -47,7 +47,6 @@ without pretending a web wrapper is a native app.
   procedure.
 - [Toolchains](../TOOLCHAINS.md) — recipes and verification boundaries.
 - [HANDOFF.md](../HANDOFF.md) — project operating rules and deploy doors.
-- [PRODUCTION-READINESS-PLAN.md](../PRODUCTION-READINESS-PLAN.md) — application cleanup, WASM optimization, UI QA, agent roles, and integration sequence.
 - [PRODUCTION-READINESS-PLAN.md](../PRODUCTION-READINESS-PLAN.md) — application cleanup, WASM optimization, UI QA, agent roles, and integration sequence.
 - [TASKS.md](../TASKS.md) — live task status.
 - `docs/release/EXECUTION-BOARD.md` — the per-task execution board.

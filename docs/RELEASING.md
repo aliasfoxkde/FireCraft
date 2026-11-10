@@ -6,7 +6,7 @@
 > a draft GitHub release. For the Windows, macOS, AppImage, Flatpak,
 > Android, signing, and certification work order see
 > [`RELEASE-ENGINEERING-PLAN.md`](RELEASE-ENGINEERING-PLAN.md) and
-> ticket [T27](tasks/T27-cross-platform-release.md). **Do not infer that
+> ticket [T27](tasks/T27-cross-platform-release.md). Cross-cutting application cleanup, WASM optimization, QA, and agent integration are detailed in [PRODUCTION-READINESS-PLAN.md](PRODUCTION-READINESS-PLAN.md). **Do not infer that
 > a target is supported from a recipe alone.**
 >
 > **Scope authority:**
