@@ -32,10 +32,21 @@ The project must not trade correctness, document compatibility, security, or deb
 ## Long-horizon WebOS platform integration
 
 FireCraft is a first-class app in the ArtCraft WebOS portfolio, not merely
-an iframe demo. The near-term release remains standalone browser/desktop
-quality; the larger product contract must preserve a path to shared platform
-components/libraries, app-host services, WebOS CLI/MCP routing, AI-native
-command discovery, and later native installation.
+an iframe demo. It also remains an independent product with its own complete
+standalone distribution goals: native desktop packages, browser/PWA builds,
+CLI/MCP tools, developer-facing libraries/modules, source releases, and
+platform-specific packages where validation and maintenance ownership exist.
+Prebuilt, standardized artifacts make downstream embedding easier, but
+embedding is not the sole purpose of the release program. The near-term
+release remains standalone browser/desktop quality; the larger product
+contract must preserve a path to shared platform components/libraries,
+app-host services, WebOS CLI/MCP routing, AI-native command discovery, and
+later native installation.
+
+The expanded delivery matrix and shared-workflow adoption plan are tracked in
+[RELEASE-ENGINEERING-PLAN.md](RELEASE-ENGINEERING-PLAN.md), especially its
+complete product delivery matrix and RP-09 SDK/interoperability work package.
+The companion host-side roadmap is [ArtCraft-WebOS PR #36](https://github.com/aliasfoxkde/ArtCraft-WebOS/pull/36).
 
 The host-side architecture work is tracked in
 [ArtCraft-WebOS PR #36](https://github.com/aliasfoxkde/ArtCraft-WebOS/pull/36).
