@@ -92,8 +92,9 @@ exists.
   `dpkg-deb --info`/`--contents`), writes `MANIFEST.sha256`, and
   parse-checks the packaging recipes.
 - `xtask dist --web` — trunk wasm build, wasm size ceiling, manifest,
-  and the headless bridge smoke. `FIRECRAFT_DIST_SKIP_SMOKE=1` skips
-  the smoke — that is how the GitForge release job builds (B-5).
+  and the headless bridge smoke. The smoke has no skip switch: a
+  missing browser or a failed round trip fails the dist run (B-5 is
+  remediated).
 - `xtask dist --source` and `xtask dist --sbom` — **on this branch and
   the PR #9 / #12 trees; not on `main`** (F-9). Both are wired into
   `release.yml`.
@@ -106,8 +107,8 @@ exists.
   `Web bundle smoke` step is **tag-gated** (`if: startsWith(github.ref,
   'refs/tags/v')`) and is therefore **skipped on branch pushes**.
 - `.gitforge.yml` — the eight-job pipeline; its `release` job builds
-  the web bundle with `FIRECRAFT_DIST_SKIP_SMOKE=1`, so that path
-  publishes bytes that were never exercised through the bridge (B-5).
+  the web bundle **with** the bridge smoke, in the headless chromium
+  the CI image bakes (B-5 remediated).
 - Recipes (operator-owned, off-fleet): `build-windows.ps1`,
   `build-macos-dmg.sh`, `build-appimage.sh`, `build-flatpak.sh`.
 

@@ -40,10 +40,12 @@ const SMOKE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(300);
 
 /// Assembles the web bundle under `dist/web/`.
 ///
-/// `FIRECRAFT_DIST_SKIP_SMOKE=1` skips the bridge smoke for environments
-/// without a browser (the CI image has no chromium yet); every local
-/// release run keeps the smoke — this is an explicit debt of the CI
-/// image, not a release-option.
+/// The bridge smoke ALWAYS runs. There used to be a
+/// `FIRECRAFT_DIST_SKIP_SMOKE=1` escape hatch here, added while the
+/// CI image baked no browser; it was a procedure compensating for that
+/// tool defect, and it let the release gate ship a bundle it never
+/// smoked. The CI image now bakes chromium, so the door is gone: a
+/// missing browser or a failed round trip fails the dist run.
 pub fn web() -> Result<(), String> {
     let staged = stage_web()?;
     let dir = staged
@@ -52,18 +54,10 @@ pub fn web() -> Result<(), String> {
         .ok_or_else(|| "staging dir vanished".to_owned())?;
     let manifest = write_manifest(dir, &staged)?;
     let wasm_bytes = enforce_wasm_budget(&staged)?;
-    let smoke_skipped = std::env::var("FIRECRAFT_DIST_SKIP_SMOKE").is_ok_and(|v| v == "1");
-    if smoke_skipped {
-        eprintln!(
-            "[xtask] dist web: bridge smoke SKIPPED (FIRECRAFT_DIST_SKIP_SMOKE=1 — CI image debt: no chromium baked)"
-        );
-    } else {
-        smoke_bridge(&staged)?;
-    }
+    smoke_bridge(&staged)?;
     eprintln!(
-        "[xtask] dist web: {} file(s), wasm {wasm_bytes} B (ceiling {WASM_SIZE_CEILING}), manifest {manifest}, smoke {}",
+        "[xtask] dist web: {} file(s), wasm {wasm_bytes} B (ceiling {WASM_SIZE_CEILING}), manifest {manifest}, smoke green",
         staged.len(),
-        if smoke_skipped { "skipped" } else { "green" }
     );
     Ok(())
 }
