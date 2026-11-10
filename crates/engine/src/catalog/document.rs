@@ -254,17 +254,13 @@ fn preflight_page_images(
                 });
             }
             for tile_ref in &image.tiles {
-                if let TileRef::Tile(tile_id) = tile_ref {
-                    if document.tiles.get(*tile_id).is_none() {
-                        return Err(EngineError::InvalidState {
-                            name: name.to_owned(),
-                            detail: format!(
-                                "image {} references missing tile {}",
-                                id.index(),
-                                tile_id
-                            ),
-                        });
-                    }
+                if let TileRef::Tile(tile_id) = tile_ref
+                    && document.tiles.get(*tile_id).is_none()
+                {
+                    return Err(EngineError::InvalidState {
+                        name: name.to_owned(),
+                        detail: format!("image {} references missing tile {}", id.index(), tile_id),
+                    });
                 }
             }
         }
@@ -1280,7 +1276,7 @@ mod document_tests {
         let (mut document, _) = testdoc::sample_document();
         document.pages[0].info.canvas = canvas(16.0, 12.0);
         let mut tile = [0u8; raster::TILE_BYTES];
-        for pixel in tile.chunks_exact_mut(4) {
+        for pixel in tile.as_chunks_mut::<4>().0.iter_mut() {
             pixel.copy_from_slice(&[30, 90, 150, 255]);
         }
         let tile_id = next_tile_id(&document);

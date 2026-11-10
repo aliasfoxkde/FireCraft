@@ -197,16 +197,15 @@ fn definition_owner(
 /// captured the library beforehand). A no-op when the id is not placed
 /// in this definition.
 fn definition_unguarded_detach(document: &mut Document, symbol: i64, id: ObjectId) {
-    if let Some((layer, cell, position)) = definition_owner(document, symbol, id) {
-        if let Some(definition) = document
+    if let Some((layer, cell, position)) = definition_owner(document, symbol, id)
+        && let Some(definition) = document
             .symbols
             .iter_mut()
             .find(|definition| definition.symbol_number == symbol)
-        {
-            definition.layers.layers[layer].cells[cell]
-                .elements
-                .remove(position);
-        }
+    {
+        definition.layers.layers[layer].cells[cell]
+            .elements
+            .remove(position);
     }
 }
 
@@ -1248,10 +1247,10 @@ impl TypedCommand for DuplicateSymbolForAlias {
         // selection's instances point at, first-seen order.
         let mut numbers: Vec<i64> = Vec::new();
         for id in &document.object_selection {
-            if let Some(doc::ObjectData::SymbolInstance(instance)) = document.registry.get(*id) {
-                if !numbers.contains(&instance.symbol_number) {
-                    numbers.push(instance.symbol_number);
-                }
+            if let Some(doc::ObjectData::SymbolInstance(instance)) = document.registry.get(*id)
+                && !numbers.contains(&instance.symbol_number)
+            {
+                numbers.push(instance.symbol_number);
             }
         }
         // Content clones out before any mutation; a number with no

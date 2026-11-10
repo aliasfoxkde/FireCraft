@@ -1424,7 +1424,7 @@ fn record_from_pixels(
     width: usize,
 ) -> Result<Record, ExportError> {
     let pixels = rgba.len() / 4;
-    if rgba.len() != pixels * 4 || width == 0 || pixels % width != 0 {
+    if rgba.len() != pixels * 4 || width == 0 || !pixels.is_multiple_of(width) {
         return Err(ExportError::PlaneSize {
             width: width as u32,
             height: (pixels / width.max(1)) as u32,
@@ -1434,7 +1434,7 @@ fn record_from_pixels(
     let height = pixels / width;
     // Planes are channel-major: all red rows, then green, blue, alpha.
     let mut planes: [Vec<u8>; 4] = std::array::from_fn(|_| vec![0u8; pixels]);
-    for (index, pixel) in rgba.chunks_exact(4).enumerate() {
+    for (index, pixel) in rgba.as_chunks::<4>().0.iter().enumerate() {
         for (channel, value) in pixel.iter().enumerate() {
             planes[channel][index] = *value;
         }
@@ -1526,7 +1526,7 @@ fn composite_section(
     // validation-only for layered files and the flat-document fallback
     // reads it the same way.
     let mut planes: [Vec<u8>; 3] = std::array::from_fn(|_| vec![0u8; pixels]);
-    for (index, pixel) in premultiplied.chunks_exact(4).enumerate() {
+    for (index, pixel) in premultiplied.as_chunks::<4>().0.iter().enumerate() {
         let pixel = straight_pixel(pixel);
         planes[0][index] = pixel[0];
         planes[1][index] = pixel[1];
@@ -1638,7 +1638,7 @@ fn block(out: &mut Vec<u8>, key: &[u8; 4], body: &[u8]) {
     out.extend_from_slice(b"8BIM");
     out.extend_from_slice(key);
     out.extend_from_slice(&section_bytes(body));
-    while out.len() % 4 != 0 {
+    while !out.len().is_multiple_of(4) {
         out.push(0);
     }
 }

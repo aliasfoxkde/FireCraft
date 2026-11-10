@@ -108,7 +108,7 @@ pub fn encode_rgba8(width: u32, height: u32, rgba8: &[u8]) -> Result<Vec<u8>, Fw
 /// RGB (3 bytes/px) -> RGBA (4 bytes/px) with opaque alpha.
 fn expand_rgb(buf: &[u8]) -> Vec<u8> {
     let mut out = Vec::with_capacity(buf.len() / 3 * 4);
-    for px in buf.chunks_exact(3) {
+    for px in buf.as_chunks::<3>().0 {
         out.extend_from_slice(px);
         out.push(255);
     }
@@ -127,7 +127,7 @@ fn expand_gray(buf: &[u8]) -> Vec<u8> {
 /// Gray+alpha (2 bytes/px) -> RGBA.
 fn expand_gray_alpha(buf: &[u8]) -> Vec<u8> {
     let mut out = Vec::with_capacity(buf.len() / 2 * 4);
-    for px in buf.chunks_exact(2) {
+    for px in buf.as_chunks::<2>().0 {
         out.extend_from_slice(&[px[0], px[0], px[0], px[1]]);
     }
     out

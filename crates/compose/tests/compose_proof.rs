@@ -149,9 +149,9 @@ fn assert_solid(render: &compose::Render, expected: [u8; 4]) {
         render.pixels.len(),
         usize::from(render.width) * usize::from(render.height) * 4
     );
-    for (i, pixel) in render.pixels.chunks_exact(4).enumerate() {
+    for (i, pixel) in render.pixels.as_chunks::<4>().0.iter().enumerate() {
         assert_eq!(
-            pixel,
+            *pixel,
             expected,
             "pixel {i} ({}, {}) diverged",
             i % usize::from(render.width),

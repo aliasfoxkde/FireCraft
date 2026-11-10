@@ -1034,22 +1034,22 @@ fn malformed_effect_entries_bag_and_reemit() {
     assert_eq!(bag.len(), 2, "malformed DCEv + extra EPSv");
     let mut checked = 0;
     for (_, object) in doc2.registry.iter() {
-        if let ObjectData::Path(path) = object {
-            if path.name.as_deref() == Some("panel") {
-                let effect = &path.effects[0];
-                assert_eq!(
-                    effect.properties.len(),
-                    3,
-                    "only the well-formed entries map"
-                );
-                assert!(
-                    effect
-                        .properties
-                        .iter()
-                        .all(|prop| prop.key != "mystery_param")
-                );
-                checked += 1;
-            }
+        if let ObjectData::Path(path) = object
+            && path.name.as_deref() == Some("panel")
+        {
+            let effect = &path.effects[0];
+            assert_eq!(
+                effect.properties.len(),
+                3,
+                "only the well-formed entries map"
+            );
+            assert!(
+                effect
+                    .properties
+                    .iter()
+                    .all(|prop| prop.key != "mystery_param")
+            );
+            checked += 1;
         }
     }
     assert_eq!(checked, 1, "the panel path was inspected");
@@ -2354,13 +2354,12 @@ fn the_fplv_subtree_decodes_and_round_trips_byte_exactly() {
     );
     let mut decoded = 0;
     for (_, object) in doc2.registry.iter() {
-        if let ObjectData::Path(path) = object {
-            if let Some(paint) = &path.paint {
-                if paint.fill.is_some() {
-                    decoded += 1;
-                    assert_eq!(paint.fill.as_ref(), Some(&expected_fill()));
-                }
-            }
+        if let ObjectData::Path(path) = object
+            && let Some(paint) = &path.paint
+            && paint.fill.is_some()
+        {
+            decoded += 1;
+            assert_eq!(paint.fill.as_ref(), Some(&expected_fill()));
         }
     }
     assert_eq!(decoded, 1, "exactly the injected path decodes a fill");
@@ -2432,20 +2431,19 @@ fn a_modelable_fptv_maps_and_round_trips_byte_exactly() {
     assert_eq!(bag.iter().count(), 10, "UNMs + RAFs replace the tile");
     let mut seen = 0;
     for (_, object) in doc2.registry.iter() {
-        if let ObjectData::Path(path) = object {
-            if let Some(paint) = &path.paint {
-                if let Some(fill) = &paint.fill {
-                    let pattern = fill.pattern.as_ref().expect("pattern maps");
-                    assert_eq!(pattern.name.as_deref(), Some("tile"));
-                    assert_eq!(pattern.pixels, (256, 128));
-                    assert_eq!(pattern.tile_size, 128);
-                    assert_eq!(
-                        pattern.tiles,
-                        vec![TileRef::Tile(7), TileRef::Matte(0xFF_00_FF_00)]
-                    );
-                    seen += 1;
-                }
-            }
+        if let ObjectData::Path(path) = object
+            && let Some(paint) = &path.paint
+            && let Some(fill) = &paint.fill
+        {
+            let pattern = fill.pattern.as_ref().expect("pattern maps");
+            assert_eq!(pattern.name.as_deref(), Some("tile"));
+            assert_eq!(pattern.pixels, (256, 128));
+            assert_eq!(pattern.tile_size, 128);
+            assert_eq!(
+                pattern.tiles,
+                vec![TileRef::Tile(7), TileRef::Matte(0xFF_00_FF_00)]
+            );
+            seen += 1;
         }
     }
     assert_eq!(seen, 1);
@@ -2481,13 +2479,12 @@ fn an_fptv_without_a_usable_imgv_bags_whole() {
     let (doc2, bag) = read(&parse(&bytes).expect("parse")).expect("read");
     let mut decoded = false;
     for (_, object) in doc2.registry.iter() {
-        if let ObjectData::Path(path) = object {
-            if let Some(paint) = &path.paint {
-                if let Some(fill) = &paint.fill {
-                    assert!(fill.pattern.is_none(), "nothing decoded");
-                    decoded = true;
-                }
-            }
+        if let ObjectData::Path(path) = object
+            && let Some(paint) = &path.paint
+            && let Some(fill) = &paint.fill
+        {
+            assert!(fill.pattern.is_none(), "nothing decoded");
+            decoded = true;
         }
     }
     assert!(decoded, "the fill itself still decoded");
@@ -2521,12 +2518,12 @@ fn compatibility_fshi_decodes_when_fsxi_is_absent() {
     assert_eq!(bag.iter().count(), 9);
     let mut decoded = 0;
     for (_, object) in doc2.registry.iter() {
-        if let ObjectData::Path(path) = object {
-            if let Some(fill) = path.paint.as_ref().and_then(|p| p.fill.as_ref()) {
-                decoded += 1;
-                assert_eq!(fill.shape, FillShape::Radial);
-                assert!(!fill.shape_extended, "FSHi carried the kind");
-            }
+        if let ObjectData::Path(path) = object
+            && let Some(fill) = path.paint.as_ref().and_then(|p| p.fill.as_ref())
+        {
+            decoded += 1;
+            assert_eq!(fill.shape, FillShape::Radial);
+            assert!(!fill.shape_extended, "FSHi carried the kind");
         }
     }
     assert_eq!(decoded, 1, "exactly the injected path decodes a fill");
@@ -2566,11 +2563,11 @@ fn fsxi_wins_and_the_compatibility_slot_splices_back() {
     );
     let mut decoded = 0;
     for (_, object) in doc2.registry.iter() {
-        if let ObjectData::Path(path) = object {
-            if let Some(fill) = path.paint.as_ref().and_then(|p| p.fill.as_ref()) {
-                decoded += 1;
-                assert_eq!(fill.shape, FillShape::Linear, "FSXi carries the kind");
-            }
+        if let ObjectData::Path(path) = object
+            && let Some(fill) = path.paint.as_ref().and_then(|p| p.fill.as_ref())
+        {
+            decoded += 1;
+            assert_eq!(fill.shape, FillShape::Linear, "FSXi carries the kind");
         }
     }
     assert_eq!(decoded, 1, "exactly the injected path decodes a fill");

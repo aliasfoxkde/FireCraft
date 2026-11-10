@@ -1068,10 +1068,11 @@ impl PathRail {
             for pair in contour.points.windows(2) {
                 flatten_segment(&pair[0], &pair[1], &mut push);
             }
-            if contour.closed && contour.points.len() > 1 {
-                if let Some(last) = contour.points.last() {
-                    flatten_segment(last, first, &mut push);
-                }
+            if contour.closed
+                && contour.points.len() > 1
+                && let Some(last) = contour.points.last()
+            {
+                flatten_segment(last, first, &mut push);
             }
         }
         let mut starts = Vec::with_capacity(segments.len());

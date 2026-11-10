@@ -87,7 +87,7 @@ impl Thumbnail {
         let (w, h) = (self.width as usize, self.height as usize);
         let mut out = vec![0u8; w * h * 4];
         for (y, row) in out.chunks_exact_mut(w * 4).enumerate() {
-            for (x, px) in row.chunks_exact_mut(4).enumerate() {
+            for (x, px) in row.as_chunks_mut::<4>().0.iter_mut().enumerate() {
                 let idx = self.indices[y * THUMB_SIDE + x];
                 let [r, g, b] = self.palette.get(idx as usize).copied().unwrap_or([0, 0, 0]);
                 px[0] = r;

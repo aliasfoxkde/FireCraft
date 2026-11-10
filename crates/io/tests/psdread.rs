@@ -244,7 +244,7 @@ impl LayerFixture {
             extra.extend_from_slice(b"8BIM");
             extra.extend_from_slice(*key);
             extra.extend_from_slice(&section(body));
-            while extra.len() % 4 != 0 {
+            while !extra.len().is_multiple_of(4) {
                 extra.push(0);
             }
         }

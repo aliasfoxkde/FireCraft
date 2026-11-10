@@ -292,10 +292,8 @@ pub(crate) fn retile_rgba(
 }
 
 pub(crate) fn unpremultiply_all(pixels: &mut [u8]) {
-    for pixel in pixels.chunks_exact_mut(4) {
-        if let Ok(pixel) = <&mut [u8; 4]>::try_from(pixel) {
-            unpremultiply_pixel(pixel);
-        }
+    for pixel in pixels.as_chunks_mut::<4>().0.iter_mut() {
+        unpremultiply_pixel(pixel);
     }
 }
 
@@ -349,7 +347,7 @@ pub fn sample_pixel(image: &ImageObject, bank: &TileBank, x: i64, y: i64) -> Opt
 }
 
 pub(crate) fn premultiply_all(pixels: &mut [u8]) {
-    for pixel in pixels.chunks_exact_mut(4) {
+    for pixel in pixels.as_chunks_mut::<4>().0.iter_mut() {
         let alpha = pixel[3];
         if alpha == 255 {
             continue;
@@ -438,7 +436,7 @@ mod tests {
 
     fn solid_tile(rgba: [u8; 4]) -> raster::Tile {
         let mut buffer = [0u8; raster::TILE_BYTES];
-        for pixel in buffer.chunks_exact_mut(4) {
+        for pixel in buffer.as_chunks_mut::<4>().0.iter_mut() {
             pixel.copy_from_slice(&rgba);
         }
         raster::Tile::from_rgba8(buffer)
@@ -612,7 +610,7 @@ mod tests {
         for (width, height) in [(12usize, 6usize), (3, 1), (48, 24), (7, 5)] {
             let out = resample_rgba(&pixels, 6, 3, width as i64, height as i64);
             assert_eq!(out.len(), width * height * 4);
-            for pixel in out.chunks_exact(4) {
+            for pixel in out.as_chunks::<4>().0.iter() {
                 assert_eq!(pixel, &[12, 200, 30, 255]);
             }
         }
@@ -625,7 +623,12 @@ mod tests {
         // (edges clamp), so the middle columns mix at ¼ and ¾.
         let pixels = vec![0u8, 0, 0, 255, 200, 0, 0, 255];
         let out = resample_rgba(&pixels, 2, 1, 4, 1);
-        let reds: Vec<u8> = out.chunks_exact(4).map(|pixel| pixel[0]).collect();
+        let reds: Vec<u8> = out
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|pixel| pixel[0])
+            .collect();
         assert_eq!(reds, vec![0, 50, 150, 200]);
     }
 
@@ -634,7 +637,7 @@ mod tests {
         // One red pixel upscaled 1→3: every sample center clamps to
         // the border pixel, so nothing transparent or black bleeds in.
         let out = resample_rgba(&[255u8, 0, 0, 255], 1, 1, 3, 1);
-        for pixel in out.chunks_exact(4) {
+        for pixel in out.as_chunks::<4>().0.iter() {
             assert_eq!(pixel, &[255, 0, 0, 255]);
         }
     }
@@ -645,7 +648,7 @@ mod tests {
         // channels ≤ alpha (the domain never leaves premultiplied).
         let pixels = [128u8, 0, 0, 128].repeat(4 * 4);
         let out = resample_rgba(&pixels, 4, 4, 9, 3);
-        for pixel in out.chunks_exact(4) {
+        for pixel in out.as_chunks::<4>().0.iter() {
             assert!(
                 pixel[0] <= pixel[3],
                 "red {} over alpha {}",

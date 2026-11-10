@@ -401,7 +401,7 @@ fn curve_lut(knots: &[(f64, f64)]) -> Option<[u8; 256]> {
 #[must_use]
 pub fn auto_levels(surface: &Surface) -> Surface {
     let mut hist = [0u64; 768];
-    for px in surface.pixels().chunks_exact(4) {
+    for px in surface.pixels().as_chunks::<4>().0.iter() {
         if px[3] == 0 {
             continue;
         }

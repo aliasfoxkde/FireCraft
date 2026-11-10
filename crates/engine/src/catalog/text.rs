@@ -305,13 +305,13 @@ impl TypedCommand for SetAttrs {
                 });
             }
         }
-        if let Some(justification) = payload.justification {
-            if !(0..=3).contains(&justification) {
-                return Err(EngineError::InvalidState {
-                    name: NAME.to_owned(),
-                    detail: format!("justification {justification} outside 0..3"),
-                });
-            }
+        if let Some(justification) = payload.justification
+            && !(0..=3).contains(&justification)
+        {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: format!("justification {justification} outside 0..3"),
+            });
         }
         if payload.size.is_none()
             && payload.bold.is_none()
@@ -630,32 +630,32 @@ impl TextAttrsPayload {
             name: name.to_owned(),
             detail,
         };
-        if let Some(size) = self.size {
-            if !size.is_finite() || size <= 0.0 {
-                return Err(bad("size must be finite and positive".to_owned()));
-            }
+        if let Some(size) = self.size
+            && (!size.is_finite() || size <= 0.0)
+        {
+            return Err(bad("size must be finite and positive".to_owned()));
         }
-        if let Some(scale) = self.horizontal_scale {
-            if !scale.is_finite() || scale <= 0.0 {
-                return Err(bad(
-                    "horizontal_scale must be finite and positive".to_owned()
-                ));
-            }
+        if let Some(scale) = self.horizontal_scale
+            && (!scale.is_finite() || scale <= 0.0)
+        {
+            return Err(bad(
+                "horizontal_scale must be finite and positive".to_owned()
+            ));
         }
-        if let Some(leading) = self.leading {
-            if !leading.is_finite() || leading <= 0.0 {
-                return Err(bad("leading must be finite and positive".to_owned()));
-            }
+        if let Some(leading) = self.leading
+            && (!leading.is_finite() || leading <= 0.0)
+        {
+            return Err(bad("leading must be finite and positive".to_owned()));
         }
-        if let Some(kerning) = self.kerning {
-            if !kerning.is_finite() {
-                return Err(bad("kerning must be finite".to_owned()));
-            }
+        if let Some(kerning) = self.kerning
+            && !kerning.is_finite()
+        {
+            return Err(bad("kerning must be finite".to_owned()));
         }
-        if let Some(shift) = self.baseline_shift {
-            if !shift.is_finite() {
-                return Err(bad("baseline_shift must be finite".to_owned()));
-            }
+        if let Some(shift) = self.baseline_shift
+            && !shift.is_finite()
+        {
+            return Err(bad("baseline_shift must be finite".to_owned()));
         }
         match self.leading_unit {
             Some(0) | Some(1) | None => {}
@@ -663,20 +663,20 @@ impl TextAttrsPayload {
                 return Err(bad(format!("leadingUnit {other:?} outside 0..1")));
             }
         }
-        if let Some(justification) = self.justification {
-            if !(0..=3).contains(&justification) {
-                return Err(bad(format!("justification {justification} outside 0..3")));
-            }
+        if let Some(justification) = self.justification
+            && !(0..=3).contains(&justification)
+        {
+            return Err(bad(format!("justification {justification} outside 0..3")));
         }
         for (field, value) in [
             ("paragraph_indent", self.paragraph_indent),
             ("space_before", self.space_before),
             ("space_after", self.space_after),
         ] {
-            if let Some(value) = value {
-                if !value.is_finite() {
-                    return Err(bad(format!("{field} must be finite")));
-                }
+            if let Some(value) = value
+                && !value.is_finite()
+            {
+                return Err(bad(format!("{field} must be finite")));
             }
         }
         Ok(())
@@ -1224,21 +1224,21 @@ impl AttachPathPayload {
                 detail: "path must carry at least one contour".to_owned(),
             });
         }
-        if let Some(alignment) = self.alignment {
-            if !(0..=3).contains(&alignment) {
-                return Err(EngineError::InvalidState {
-                    name: name.to_owned(),
-                    detail: format!("alignment {alignment} outside 0..3"),
-                });
-            }
+        if let Some(alignment) = self.alignment
+            && !(0..=3).contains(&alignment)
+        {
+            return Err(EngineError::InvalidState {
+                name: name.to_owned(),
+                detail: format!("alignment {alignment} outside 0..3"),
+            });
         }
-        if let Some(offset) = self.offset {
-            if !offset.is_finite() {
-                return Err(EngineError::InvalidState {
-                    name: name.to_owned(),
-                    detail: "offset must be finite".to_owned(),
-                });
-            }
+        if let Some(offset) = self.offset
+            && !offset.is_finite()
+        {
+            return Err(EngineError::InvalidState {
+                name: name.to_owned(),
+                detail: "offset must be finite".to_owned(),
+            });
         }
         self.path
             .iter()
