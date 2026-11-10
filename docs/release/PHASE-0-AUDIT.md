@@ -723,6 +723,26 @@ package-manager check and still not be a desktop application.
 - `firecraft-cli --help` prints the usage on stdout and exits
   successfully, with an integration test that runs the built binary.
 
+**The parts of the new check that were proven against the published
+package before the fix.** The verification script was written against
+the *published* v0.2.3 package so that each stage's mechanism is
+established independently of the packaging fix; only the desktop-entry
+and icon stages could not pass, because the published package has
+neither. In the clean Debian 12 container:
+
+- **The document round trip.** `firecraft-cli info /t/composed.fw.png`
+  prints the document JSON (canvas, 1 page, 1 group, 2 paths);
+  `firecraft-cli export /t/composed.fw.png /tmp/out.png` writes a 97 B
+  file whose first eight bytes are `89 50 4e 47 0d 0a 1a 0a` — the
+  PNG signature. The earlier check matched a seven-byte pattern and
+  was wrong; the corrected eight-byte pattern passes.
+- **The GUI launch.** `timeout 25 xvfb-run -a /usr/bin/firecraft`
+  exits **124** — the timeout's status, i.e. the binary started and was
+  still running when the launch window closed. The first attempt failed
+  with `xvfb-run: error: xauth command not found`, which is an
+  environment gap in the check, not a defect in the application: the
+  container needs `xauth` alongside `xvfb` for `xvfb-run` to work.
+
 **What is still unverified.** The Flatpak and AppImage builds need
 `flatpak`/`flatpak-builder`/`linuxdeploy`, which this fleet does not
 carry (B-8, B-11) — those recipes are corrected but their runtime
