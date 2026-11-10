@@ -28,6 +28,28 @@ const LINE_THRESHOLD: f64 = 81.1;
 /// (2026-10-30, unchanged from 2026-10-26).
 const FUNCTION_THRESHOLD: f64 = 78.7;
 
+/// Render a failed `cargo llvm-cov` invocation for the operator.
+///
+/// cargo writes the per-test report — the panic message, the `left`
+/// / `right` values, the failing test's name — to **stdout**, and
+/// compile/harness diagnostics to stderr.  Reporting only stderr, as
+/// this gate used to, hides the one stream that says *why* the run
+/// failed, so a coverage failure looked like an empty error.
+fn failure_context(output: &std::process::Output) -> String {
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let mut text = format!("cargo-llvm-cov exited with {}\n", output.status);
+    if !stderr.trim().is_empty() {
+        text.push_str("\n--- stderr ---\n");
+        text.push_str(&stderr);
+    }
+    if !stdout.trim().is_empty() {
+        text.push_str("\n--- stdout ---\n");
+        text.push_str(&stdout);
+    }
+    text
+}
+
 /// Run the coverage gate.  Exits 0 if all thresholds are met or exceeded.
 pub fn run() -> Result<(), String> {
     let output = Command::new("cargo")
@@ -37,7 +59,7 @@ pub fn run() -> Result<(), String> {
         .map_err(|e| format!("failed to run cargo-llvm-cov: {e}"))?;
 
     if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).into_owned());
+        return Err(failure_context(&output));
     }
 
     let (lines, funcs, _regions) = parse_lcov(&workspace_root().join("lcov.info"))?;
@@ -79,7 +101,7 @@ pub fn measure() -> Result<(), String> {
         .map_err(|e| format!("failed to run cargo-llvm-cov: {e}"))?;
 
     if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).into_owned());
+        return Err(failure_context(&output));
     }
 
     let (lines, funcs, _regions) = parse_lcov(&workspace_root().join("lcov.info"))?;
