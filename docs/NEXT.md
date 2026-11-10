@@ -146,8 +146,9 @@ accesskit integration.
   until then.
 - **17.2 Release automation** — DONE 2026-10-26 (`5d83ed3`): a
   `release` job chains after generated-docs; on a tag push it builds
-  web + native dist (bridge smoke skipped — the CI image bakes no
-  chromium, recorded as image debt via `FIRECRAFT_DIST_SKIP_SMOKE`),
+  web + native dist, **smokes the web bundle in a headless chromium
+  baked into the CI image** (the bridge round trip must report
+  `green` — a missing browser or a failed round trip fails the job),
   verifies manifests, and stages into `<workspace>/artifacts/` for
   the runner's artifact collection. Note: GitForge stamps tag pushes
   as `TriggerType::Push` — the tag gate is in-step
