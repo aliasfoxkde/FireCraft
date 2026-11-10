@@ -241,12 +241,14 @@ pub fn bezpath_to_contour(path: &BezPath) -> Result<Contour, VectorError> {
     // explicit segment before the ClosePath, so reading back yields a
     // duplicated start anchor. Merge it: the duplicate's in-handle is
     // the start point's incoming wrap handle.
-    if closed && points.len() >= 2 && points[points.len() - 1].anchor == points[0].anchor {
-        if let Some(wrap) = points.pop() {
-            let first = &mut points[0];
-            first.primary = wrap.primary;
-            first.is_curve = first.secondary.is_some() || first.primary.is_some();
-        }
+    if closed
+        && points.len() >= 2
+        && points[points.len() - 1].anchor == points[0].anchor
+        && let Some(wrap) = points.pop()
+    {
+        let first = &mut points[0];
+        first.primary = wrap.primary;
+        first.is_curve = first.secondary.is_some() || first.primary.is_some();
     }
     Ok(Contour {
         closed,

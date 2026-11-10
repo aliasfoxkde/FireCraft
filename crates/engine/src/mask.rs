@@ -111,7 +111,7 @@ pub(crate) fn stamp_polygon(mask: &mut SelectionMask, points: &[(f64, f64)]) {
             }
         }
         crossings.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
-        for pair in crossings.chunks_exact(2) {
+        for pair in crossings.as_chunks::<2>().0.iter() {
             let (start, end) = (pair[0], pair[1]);
             // Centers strictly inside [start, end): px + 0.5 ∈ [start, end).
             let first = ((start - 0.5).ceil().max(0.0)) as u32;
@@ -183,11 +183,11 @@ pub(crate) fn stamp_wand(
                 (px, py.wrapping_sub(1)),
                 (px, py + 1),
             ] {
-                if let Some(neighbor) = mask_index(mask, nx as u32, ny as u32) {
-                    if !visited[neighbor] {
-                        visited[neighbor] = true;
-                        stack.push(neighbor);
-                    }
+                if let Some(neighbor) = mask_index(mask, nx as u32, ny as u32)
+                    && !visited[neighbor]
+                {
+                    visited[neighbor] = true;
+                    stack.push(neighbor);
                 }
             }
         }

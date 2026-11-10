@@ -153,7 +153,9 @@ fn bmp_24bit_round_trips_opaque_pixels() {
     let plane = gradient_plane(&rgba);
     let opaque: Vec<u8> = plane
         .rgba
-        .chunks_exact(4)
+        .as_chunks::<4>()
+        .0
+        .iter()
         .flat_map(|px| [px[0], px[1], px[2], 255])
         .collect();
     let opaque_plane = Plane::new(37, 23, &opaque).expect("same shape");
@@ -207,8 +209,8 @@ fn wbmp_round_trips_through_the_threshold_policy() {
     let bytes = wbmp::encode(&plane, Matte::White).expect("wbmp encode");
     let (width, height, rgba) = wbmp::decode(&bytes).expect("wbmp decode");
     assert_eq!((width, height), (37, 23));
-    for (y, row) in rgba.chunks_exact(37 * 4).enumerate() {
-        for (x, px) in row.chunks_exact(4).enumerate() {
+    for (y, row) in rgba.as_chunks::<{ 37 * 4 }>().0.iter().enumerate() {
+        for (x, px) in row.as_chunks::<4>().0.iter().enumerate() {
             let expected = if plane.luma_at(x as u32, y as u32, Matte::White) >= 128 {
                 255
             } else {
@@ -282,7 +284,12 @@ fn diff_stats(expected_rgb: &[u8], decoded: &image::RgbaImage) -> (u32, u64) {
     let raw = decoded.as_raw();
     let mut max = 0u32;
     let mut sum = 0u64;
-    for (px, out) in expected_rgb.chunks_exact(3).zip(raw.chunks_exact(4)) {
+    for (px, out) in expected_rgb
+        .as_chunks::<3>()
+        .0
+        .iter()
+        .zip(raw.as_chunks::<4>().0.iter())
+    {
         for (channel, decoded) in px.iter().zip(out[..3].iter()) {
             let diff = i32::from(*channel) - i32::from(*decoded);
             let diff = diff.unsigned_abs();

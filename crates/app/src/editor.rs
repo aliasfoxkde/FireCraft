@@ -976,10 +976,10 @@ impl Editor {
         })?;
         let mut numbers = Vec::new();
         for definition in &loaded.document.symbols {
-            if let Some(names) = names {
-                if !names.iter().any(|name| *name == definition.name) {
-                    continue;
-                }
+            if let Some(names) = names
+                && !names.iter().any(|name| *name == definition.name)
+            {
+                continue;
             }
             let members: Vec<serde_json::Value> = loaded
                 .document

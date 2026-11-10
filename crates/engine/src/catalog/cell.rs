@@ -183,11 +183,11 @@ pub(crate) fn splice_cells(
         for _ in 0..count {
             layer.cells.insert(at, cells());
         }
-        if let Some(visibility) = &mut layer.visibility_per_frame {
-            if visibility.len() + count == layer.cells.len() {
-                for _ in 0..count {
-                    visibility.insert(at, true);
-                }
+        if let Some(visibility) = &mut layer.visibility_per_frame
+            && visibility.len() + count == layer.cells.len()
+        {
+            for _ in 0..count {
+                visibility.insert(at, true);
             }
         }
     }
@@ -378,10 +378,10 @@ impl TypedCommand for DeleteFrames {
         let end = payload.index + count;
         for layer in &mut target.layers.layers {
             layer.cells.drain(payload.index..end);
-            if let Some(visibility) = &mut layer.visibility_per_frame {
-                if visibility.len() == total {
-                    visibility.drain(payload.index..end);
-                }
+            if let Some(visibility) = &mut layer.visibility_per_frame
+                && visibility.len() == total
+            {
+                visibility.drain(payload.index..end);
             }
         }
         if info_before.frame_durations.len() == total {
@@ -510,12 +510,12 @@ impl TypedCommand for DuplicateFrame {
             for (offset, cell) in minted[layer_index].iter().enumerate() {
                 layer.cells.insert(at + offset, cell.clone());
             }
-            if let Some(visibility) = &mut layer.visibility_per_frame {
-                if visibility.len() == total {
-                    let flag = visibility.get(payload.index).copied().unwrap_or(true);
-                    for _ in 0..count {
-                        visibility.insert(at, flag);
-                    }
+            if let Some(visibility) = &mut layer.visibility_per_frame
+                && visibility.len() == total
+            {
+                let flag = visibility.get(payload.index).copied().unwrap_or(true);
+                for _ in 0..count {
+                    visibility.insert(at, flag);
                 }
             }
         }
@@ -649,15 +649,15 @@ impl TypedCommand for ReorderFrame {
                 layer
                     .cells
                     .insert(payload.before, minted[layer_index].clone());
-                if let Some(visibility) = &mut layer.visibility_per_frame {
-                    if visibility.len() == total {
-                        let flag = layers_before[layer_index]
-                            .cells
-                            .get(payload.from)
-                            .map(|cell| cell.visible)
-                            .unwrap_or(true);
-                        visibility.insert(payload.before, flag);
-                    }
+                if let Some(visibility) = &mut layer.visibility_per_frame
+                    && visibility.len() == total
+                {
+                    let flag = layers_before[layer_index]
+                        .cells
+                        .get(payload.from)
+                        .map(|cell| cell.visible)
+                        .unwrap_or(true);
+                    visibility.insert(payload.before, flag);
                 }
             } else {
                 let cell = layer.cells.remove(payload.from);
@@ -667,11 +667,11 @@ impl TypedCommand for ReorderFrame {
                     payload.before
                 };
                 layer.cells.insert(at, cell);
-                if let Some(visibility) = &mut layer.visibility_per_frame {
-                    if visibility.len() == total {
-                        let flag = visibility.remove(payload.from);
-                        visibility.insert(at, flag);
-                    }
+                if let Some(visibility) = &mut layer.visibility_per_frame
+                    && visibility.len() == total
+                {
+                    let flag = visibility.remove(payload.from);
+                    visibility.insert(at, flag);
                 }
             }
         }

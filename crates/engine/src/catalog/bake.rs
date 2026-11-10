@@ -655,7 +655,7 @@ mod tests {
     fn image_at(document: &mut Document, seed: u8) -> ObjectId {
         let (w, h) = (8i64, 8i64);
         let mut pixels = vec![0u8; (w * h * 4) as usize];
-        for (index, px) in pixels.chunks_exact_mut(4).enumerate() {
+        for (index, px) in pixels.as_chunks_mut::<4>().0.iter_mut().enumerate() {
             // Quadratic, deliberately non-linear: a box mean preserves
             // affine gradients exactly, so a linear fixture would sit
             // still under Blur.

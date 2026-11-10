@@ -456,7 +456,7 @@ impl TypedCommand for StyleImportLibraryTiles {
                         ),
                     })?;
             let mut premultiplied = rgba;
-            for px in premultiplied.chunks_exact_mut(4) {
+            for px in premultiplied.as_chunks_mut::<4>().0.iter_mut() {
                 let a = u32::from(px[3]);
                 for channel in px.iter_mut().take(3) {
                     *channel = ((u32::from(*channel) * a + 127) / 255) as u8;

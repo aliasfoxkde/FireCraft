@@ -420,13 +420,13 @@ pub(crate) fn find_owner(document: &Document, id: ObjectId) -> Option<Owner> {
         }
     }
     for (group_id, object) in document.registry.iter() {
-        if let ObjectData::Group(group) = object {
-            if let Some(position) = group.children.iter().position(|&child| child == id) {
-                return Some(Owner::Group {
-                    id: group_id,
-                    position,
-                });
-            }
+        if let ObjectData::Group(group) = object
+            && let Some(position) = group.children.iter().position(|&child| child == id)
+        {
+            return Some(Owner::Group {
+                id: group_id,
+                position,
+            });
         }
     }
     None
@@ -1965,22 +1965,21 @@ impl TypedCommand for MoveObjectToCell {
             cell,
             position,
         } = owner
+            && (page, layer, cell) == (payload.page, payload.layer, payload.cell)
         {
-            if (page, layer, cell) == (payload.page, payload.layer, payload.cell) {
-                // Same cell: one remove + insert, one capture.
-                let target = access::cell_mut(document, NAME, page, layer, cell)?;
-                let len = target.elements.len();
-                let before = target.clone();
-                let moved = target.elements.remove(position);
-                let at = at.min(len - 1);
-                target.elements.insert(at, moved);
-                return Ok(Delta::Cell {
-                    page,
-                    layer,
-                    cell,
-                    before: Box::new(before),
-                });
-            }
+            // Same cell: one remove + insert, one capture.
+            let target = access::cell_mut(document, NAME, page, layer, cell)?;
+            let len = target.elements.len();
+            let before = target.clone();
+            let moved = target.elements.remove(position);
+            let at = at.min(len - 1);
+            target.elements.insert(at, moved);
+            return Ok(Delta::Cell {
+                page,
+                layer,
+                cell,
+                before: Box::new(before),
+            });
         }
         let source = detach(document, NAME, payload.id)?;
         let destination = attach_cell(

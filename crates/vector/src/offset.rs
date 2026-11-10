@@ -389,13 +389,14 @@ fn overlap_crossing(a: &Seg, b: &Seg) -> Result<Option<(f64, f64)>, VectorError>
     let (fa, fb) = (flatten_span(a)?, flatten_span(b)?);
     for wa in fa.windows(2) {
         for wb in fb.windows(2) {
-            if let Some((t, u)) = segment_intersection(wa[0].1, wa[1].1, wb[0].1, wb[1].1) {
-                if chord_interior(t) && chord_interior(u) {
-                    return Ok(Some((
-                        wa[0].0 + t * (wa[1].0 - wa[0].0),
-                        wb[0].0 + u * (wb[1].0 - wb[0].0),
-                    )));
-                }
+            if let Some((t, u)) = segment_intersection(wa[0].1, wa[1].1, wb[0].1, wb[1].1)
+                && chord_interior(t)
+                && chord_interior(u)
+            {
+                return Ok(Some((
+                    wa[0].0 + t * (wa[1].0 - wa[0].0),
+                    wb[0].0 + u * (wb[1].0 - wb[0].0),
+                )));
             }
         }
     }
@@ -653,10 +654,10 @@ fn chain_to_contour(chain: &[Seg]) -> Option<Contour> {
     let mut last_cubic_p2: Option<Point> = None;
     for seg in chain {
         let start = seg.start();
-        if let Some(prev) = points.last() {
-            if chord(prev.anchor, start) < SNAP {
-                continue; // zero-length connection: no geometry
-            }
+        if let Some(prev) = points.last()
+            && chord(prev.anchor, start) < SNAP
+        {
+            continue; // zero-length connection: no geometry
         }
         let secondary = match seg {
             Seg::Cubic(c) => Some(to_point(c.p1)),

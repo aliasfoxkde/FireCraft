@@ -409,7 +409,7 @@ fn images_embed_as_png_data_uris() {
     let mut document = document(Vec::new());
     // A 2×1 tile image: tile 0 red opaque, tile 1 (matte) blue.
     let mut red = raster::Tile::new();
-    for px in red.pixels_mut().chunks_exact_mut(4) {
+    for px in red.pixels_mut().as_chunks_mut::<4>().0.iter_mut() {
         px.copy_from_slice(&[255, 0, 0, 255]);
     }
     document.tiles.insert(0, red);

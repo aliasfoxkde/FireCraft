@@ -390,7 +390,9 @@ fn render_inner(
 #[must_use]
 pub fn straight_alpha(premultiplied: &[u8]) -> Vec<u8> {
     premultiplied
-        .chunks_exact(4)
+        .as_chunks::<4>()
+        .0
+        .iter()
         .flat_map(|pixel| {
             let [r, g, b, a] = [pixel[0], pixel[1], pixel[2], pixel[3]];
             if a == 0 || a == 255 {
@@ -439,29 +441,27 @@ fn walk_layers(layers: &[Layer], walk: &mut Walk, resolve_links: bool) -> Result
         if !layer.display {
             continue;
         }
-        if let Some(flags) = &layer.visibility_per_frame {
-            if !flags.get(walk.frame).copied().unwrap_or(true) {
-                continue;
-            }
+        if let Some(flags) = &layer.visibility_per_frame
+            && !flags.get(walk.frame).copied().unwrap_or(true)
+        {
+            continue;
         }
-        if resolve_links {
-            if let Some(link) = &layer.shared_link {
-                // The definition renders once, in this layer's
-                // z-position; its own display/visibility flags gate
-                // the recursion. Links never nest — a definition
-                // body's own shared_link stays inert, which also
-                // rules out uid cycles. A dangling uid draws nothing
-                // (the stale-reference walker rule).
-                if let Some(def) = walk
-                    .document
-                    .shared_layer_defs
-                    .iter()
-                    .find(|def| def.uid == link.uid)
-                {
-                    walk_layers(std::slice::from_ref(&def.layer), walk, false)?;
-                }
-                continue;
+        if resolve_links && let Some(link) = &layer.shared_link {
+            // The definition renders once, in this layer's
+            // z-position; its own display/visibility flags gate
+            // the recursion. Links never nest — a definition
+            // body's own shared_link stays inert, which also
+            // rules out uid cycles. A dangling uid draws nothing
+            // (the stale-reference walker rule).
+            if let Some(def) = walk
+                .document
+                .shared_layer_defs
+                .iter()
+                .find(|def| def.uid == link.uid)
+            {
+                walk_layers(std::slice::from_ref(&def.layer), walk, false)?;
             }
+            continue;
         }
         let placed: Vec<doc::ObjectId> = layer
             .cells

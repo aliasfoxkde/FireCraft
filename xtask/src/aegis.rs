@@ -148,7 +148,8 @@ const CLASS_NOTES: &[(&str, &str)] = &[
     (
         "zip-code",
         "Matches any 5-digit run: CS6 command ids, the JPEG dimension \
-         ceiling (65535), menu ids. This repository holds no postal data.",
+         ceiling (65535), menu ids, CVE id suffixes. This repository holds \
+         no postal data.",
     ),
 ];
 
