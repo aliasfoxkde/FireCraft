@@ -152,6 +152,16 @@ pub fn replay(
     let mut index = 0;
     while index < entries.len() {
         let entry = &entries[index];
+        if entry.name == crate::session::REWIND_ID {
+            // A rewind is a session-scoped step, not a document
+            // command: it undoes the steps above the recorded depth
+            // instead of applying anything. It is journaled so the
+            // replayed document matches the live one.
+            let depth = rewind_depth(&entry.payload)?;
+            history.rewind_to(document, depth)?;
+            index += 1;
+            continue;
+        }
         match &entry.txn {
             None => {
                 let delta = apply(document, registry, entry)?;
@@ -192,4 +202,19 @@ fn apply(
     entry: &JournalEntry,
 ) -> Result<crate::delta::Delta, EngineError> {
     registry.execute(document, &entry.name, entry.payload.clone())
+}
+
+/// The depth recorded in a rewind journal entry.
+fn rewind_depth(payload: &serde_json::Value) -> Result<usize, EngineError> {
+    #[derive(serde::Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct RewindPayload {
+        depth: usize,
+    }
+    serde_json::from_value(payload.clone())
+        .map(|parsed: RewindPayload| parsed.depth)
+        .map_err(|error| EngineError::Journal {
+            line: 0,
+            detail: format!("{} payload: {error}", crate::session::REWIND_ID),
+        })
 }
