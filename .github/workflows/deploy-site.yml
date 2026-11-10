@@ -1,0 +1,40 @@
+name: Deploy FireCraft marketing site
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "site/**"
+      - "wrangler.toml"
+      - ".github/workflows/deploy-site.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: firecraft-site-production
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Validate and deploy Cloudflare Pages
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Validate static site
+        run: |
+          test -s site/index.html
+          test -s site/styles.css
+          test -s site/app.js
+          test -s site/assets/firecraft-mark.svg
+          grep -q 'name="description"' site/index.html
+          grep -q 'prefers-reduced-motion' site/styles.css
+          grep -q 'loadRelease' site/app.js
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy site --project-name=firecraft-site --branch=main
