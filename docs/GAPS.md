@@ -122,7 +122,7 @@ Point-in-time snapshot **2026-11-02** (post-v0.2.4). Counts marked
 | **Registry** | 245 commands | Every command executable from the GUI via the Ctrl+P palette (19.4); menu reachability is the remaining gap |
 | **Menu reachability** | 8 inert of 289 items | *live* — derived + gated (`menus::tests::inert_count_never_rises`) |
 | **Parity** | 268 C / 3 P / 0 M / 85 N | 3 P rows are evidence-gated (Phase 12 oracle) |
-| **Decision docs** | 77 (0001–0079; 0071 unused, 0078 pending in PR #73) | Next: 0080 |
+| **Decision docs** | 77 (0001–0079; 0071 pending in PR #15, 0078 pending in PR #73) | Next: 0080 |
 | **Web bundle** | 21,608,249 B (ceiling 22,000,000) | Re-pinned 2026-11-10 (Phase 21/22 feature surface; decision 0079). The size budget moves in both directions from dated measurements; the twelve perf timing/memory budgets stay falling-only |
 
 ---

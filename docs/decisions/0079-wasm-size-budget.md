@@ -2,6 +2,19 @@
 
 Date: 2026-11-10 · Status: **accepted**
 
+Relates to: decision **0071** (the bundle stays on Cloudflare Pages; the
+size figure is FireCraft's own budget, not a platform limit), decision
+**0074** (the content-keyed Aegis gate), `xtask/src/dist.rs` (the
+ceiling), `xtask/src/status.rs` (the budget table), and the Phase 21/22
+feature surface.
+
+0071 already said the right thing — the ceiling is *"FireCraft's own
+regression tripwire… deliberately re-pinned each time the bundle grows"*,
+and that it is *"re-pinned deliberately, and the re-pin is recorded in
+the release notes"*. The **code and the generated table** did not say it:
+the failure message and the budget table's heading both said the opposite.
+This record makes the two statements agree, and pins the number.
+
 ## Decision
 
 The `xtask dist --web` wasm size ceiling is **a budget on the bytes the
@@ -96,11 +109,48 @@ incidental:
 
 Enabling `accesskit` therefore cannot add bytes to a wasm bundle; it
 enables the **desktop** screen-reader adapter, which is what PR #15's
-21.5 desktop arm wants. The isolating probe
-(`perf/wasm-accesskit-probe`, `c1a58a0` = `main` + the one-line
-feature) is queued on GitForge as the empirical confirmation of the
-same claim; the re-pin does not depend on it, because the re-pin
-follows the measured bundle size either way.
+21.5 desktop arm wants.
+
+### The graph evidence (measured locally, not argued)
+
+The structural argument above was checked against the resolved
+dependency graph, on both sides of the one-line change, with:
+
+```
+cargo metadata --format-version 1 \
+  --filter-platform wasm32-unknown-unknown --offline
+```
+
+| Graph | wasm32 packages |
+|---|---|
+| `main` (`2cfdeee`) | 336 |
+| probe (`c1a58a0` = `main` + `eframe/accesskit`) | 338 |
+
+The two crates the probe adds to the wasm32 graph are `futures-macro
+0.3.34` and `tracing-attributes 0.1.31` — and **both are
+`proc-macro = true`**. A proc-macro crate is compiled on the *host*
+and never linked into the wasm artifact, so it contributes **zero**
+bytes to the bundle. Nothing else is added or removed.
+
+`egui`'s resolved feature set is identical in both graphs —
+`bytemuck, default, default_fonts, persistence, ron, serde` — so the
+feature does not even change egui's own compile. In the wasm32 graph
+`accesskit 0.24.1` is present on **both** sides, and its only dependent
+is `egui`, which depends on it **unconditionally** (egui 0.36.2's
+`Cargo.toml` has a plain `[dependencies.accesskit]`, not an optional
+one). `egui-winit` is absent from the wasm32 graph entirely. The
+`accesskit` *runtime* was therefore already in the bundle before
+PR #15 and its feature flag changes nothing about it.
+
+This is the receipt that replaces the queued-probe wording an earlier
+draft of this record carried. The probe branch itself
+(`perf/wasm-accesskit-probe`) is still re-run as the end-to-end
+confirmation of the same claim — its first run failed at `fmt-layers`
+with `cannot update the lock file ... because --locked was passed`,
+because the feature line was committed without the lockfile it implies,
+not because the hypothesis was wrong; the lockfile is corrected in
+`7dba077`. The re-pin does not depend on the probe either way, because
+the re-pin follows the measured bundle size regardless of the cause.
 
 ## Consequences
 
