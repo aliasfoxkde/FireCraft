@@ -232,6 +232,15 @@ one. Summary:
   Repeat Filter), the Text Font placeholder (a verbatim CS6 resource
   artifact), and the Window panel rows pending their features
   (Optimize / Common Library / CSS Properties / Find and Replace).
+- **CS6 keymap parity (2026-11-10, decision 0080):** the menu bar
+  printed an accelerator for 106 rows, 100 of them live, and 69 of
+  the live ones fired nothing.
+  All 68 distinct missing rows are bound at the printed accelerator
+  now; `menus::parse_accel` is the single parser and
+  `menus::tests::cs6_keymap_is_fully_bound` holds every printed
+  accelerator to its binding (`Action::Inert` and `ReportGap` rows
+  stay display-only by design). The help panel now reads the
+  sections off the bindings instead of a hand-kept row count.
 - **19b**: path-node add/delete **DONE** (`bf1b547`); the
   wasm-budget re-pin **DONE** (2026-11-03: measured 21,235,599 B,
   ceiling moved to 21,500,000 with the dated cause — 19b.4). The

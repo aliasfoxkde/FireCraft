@@ -74,6 +74,15 @@
   `docs/NEXT.md` Phase 22. Icons come from an open-license survey
   (`docs/planning/generated/icon-resources-survey.md`), never from
   Adobe's assets.
+- **CS6 keymap parity (2026-11-10, decision 0080):** the menu bar
+  printed an accelerator for 106 rows, 100 of them live; 69 of the
+  live ones fired nothing. All
+  68 distinct missing rows are now bound at the printed accelerator
+  (`Ctrl+R` Import, `Ctrl+'` Show Grid, `Ctrl+Alt+1…6` align, the ten
+  `Ctrl+Alt+<panel>` toggles, …). `menus::parse_accel` is the single
+  parser, and `menus::tests::cs6_keymap_is_fully_bound` holds every
+  printed accelerator to its binding; `Action::Inert` and
+  `ReportGap` rows stay display-only by design.
 - **WebP:** import since M8; `.webp` export is VP8L lossless by default.
   Native builds can opt into lossy VP8 via `--quality N` (feature
   `lossy-webp`).

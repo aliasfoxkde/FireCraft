@@ -86,36 +86,31 @@ impl Shell {
                             .wrap(),
                         );
                         ui.separator();
-                        // (title, row count) — mirrors the SHORTCUTS table's
-                        // section comments; the sums are asserted in tests.
-                        let groups: &[(&str, usize)] = &[
-                            ("File", 7),
-                            ("Edit", 6),
-                            ("Clipboard", 3),
-                            ("Modify ▸ Group", 3),
-                            ("View", 3),
-                            ("Modify ▸ Arrange", 4),
-                            ("Modify ▸ Combine Paths", 1),
-                            ("Text styles", 3),
-                            ("Tools (one-key selects)", 14),
-                            ("Pixel-selection tools", 4),
-                            ("Help", 1),
-                        ];
+                        // Every binding carries the section it is filed
+                        // under; a new heading starts wherever that
+                        // section changes.
                         let mut row = 0usize;
-                        for (title, count) in groups {
-                            ui.heading(*title);
-                            egui::Grid::new((*title).to_string())
+                        while row < menus::SHORTCUTS.len() {
+                            let title = menus::SHORTCUTS[row].group;
+                            let start = row;
+                            while row < menus::SHORTCUTS.len()
+                                && menus::SHORTCUTS[row].group == title
+                            {
+                                row += 1;
+                            }
+                            let section = &menus::SHORTCUTS[start..row];
+                            ui.heading(title);
+                            egui::Grid::new(title.to_string())
                                 .num_columns(2)
                                 .spacing([12.0, 2.0])
                                 .show(ui, |ui| {
-                                    for s in &menus::SHORTCUTS[row..row + count] {
+                                    for s in section {
                                         ui.strong(s.label());
                                         ui.label(menus::action_name(s.action));
                                         ui.end_row();
                                     }
                                 });
                             ui.separator();
-                            row += count;
                         }
                     });
             });

@@ -541,7 +541,12 @@ pub static FILE: Menu = Menu {
         ),
         item(35036, "Revert", "", Action::Shell(ShellAction::Revert)),
         Entry::Sep,
-        item(35012, "Import...", "Ctrl+R", Action::Shell(ShellAction::Import)),
+        item(
+            35012,
+            "Import...",
+            "Ctrl+R",
+            Action::Shell(ShellAction::Import),
+        ),
         item(
             35007,
             "Export...",
@@ -1040,7 +1045,12 @@ pub static VIEW: Menu = Menu {
             Action::Shell(ShellAction::ToggleSliceOverlay),
         ),
         Entry::Sep,
-        item(35088, "Edges", "Ctrl+H", Action::Shell(ShellAction::ToggleEdges)),
+        item(
+            35088,
+            "Edges",
+            "Ctrl+H",
+            Action::Shell(ShellAction::ToggleEdges),
+        ),
     ],
 };
 
@@ -1546,11 +1556,21 @@ pub static MODIFY: Menu = Menu {
             "Align",
             &[
                 item(35073, "Left", "Ctrl+Alt+1", Action::Align("left")),
-                item(35075, "Center Vertical", "Ctrl+Alt+2", Action::Align("centerX")),
+                item(
+                    35075,
+                    "Center Vertical",
+                    "Ctrl+Alt+2",
+                    Action::Align("centerX"),
+                ),
                 item(35074, "Right", "Ctrl+Alt+3", Action::Align("right")),
                 Entry::Sep,
                 item(35077, "Top", "Ctrl+Alt+4", Action::Align("top")),
-                item(35076, "Center Horizontal", "Ctrl+Alt+5", Action::Align("centerY")),
+                item(
+                    35076,
+                    "Center Horizontal",
+                    "Ctrl+Alt+5",
+                    Action::Align("centerY"),
+                ),
                 item(35078, "Bottom", "Ctrl+Alt+6", Action::Align("bottom")),
                 Entry::Sep,
                 item(
@@ -1713,9 +1733,19 @@ pub static TEXT: Menu = Menu {
             "Align",
             &[
                 item(35044, "Left", "Ctrl+Alt+Shift+L", Action::TextJustify(0)),
-                item(35042, "Centered Horizontally", "Ctrl+Alt+Shift+C", Action::TextJustify(1)),
+                item(
+                    35042,
+                    "Centered Horizontally",
+                    "Ctrl+Alt+Shift+C",
+                    Action::TextJustify(1),
+                ),
                 item(35045, "Right", "Ctrl+Alt+Shift+R", Action::TextJustify(2)),
-                item(35043, "Justified", "Ctrl+Alt+Shift+J", Action::TextJustify(3)),
+                item(
+                    35043,
+                    "Justified",
+                    "Ctrl+Alt+Shift+J",
+                    Action::TextJustify(3),
+                ),
                 Entry::Sep,
                 item(
                     35114,
@@ -1951,7 +1981,12 @@ pub static WINDOW: Menu = Menu {
                 Action::Shell(ShellAction::ToggleMainToolbar),
             )],
         ),
-        item(35058, "Tools", "Ctrl+Alt+T", Action::Shell(ShellAction::ToggleTools)),
+        item(
+            35058,
+            "Tools",
+            "Ctrl+Alt+T",
+            Action::Shell(ShellAction::ToggleTools),
+        ),
         item(
             35586,
             "Properties",
@@ -2128,6 +2163,24 @@ pub const CTRL_ALT_SHIFT: Mods = Mods {
     alt: true,
     shift: true,
 };
+/// Alt.
+pub const ALT: Mods = Mods {
+    ctrl: false,
+    alt: true,
+    shift: false,
+};
+/// Shift.
+pub const SHIFT: Mods = Mods {
+    ctrl: false,
+    alt: false,
+    shift: true,
+};
+/// Alt+Shift.
+pub const ALT_SHIFT: Mods = Mods {
+    ctrl: false,
+    alt: true,
+    shift: true,
+};
 /// No modifiers.
 pub const NONE: Mods = Mods {
     ctrl: false,
@@ -2138,149 +2191,704 @@ pub const NONE: Mods = Mods {
 /// One bound key.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Shortcut {
+    /// The section heading this binding is filed under in the
+    /// help panel — the CS6 menu it belongs to.
+    pub group: &'static str,
     pub mods: Mods,
     pub key: egui::Key,
     pub action: Action,
 }
 
-const fn key(mods: Mods, k: egui::Key, action: Action) -> Shortcut {
+const fn key(group: &'static str, mods: Mods, k: egui::Key, action: Action) -> Shortcut {
     Shortcut {
+        group,
         mods,
         key: k,
         action,
     }
 }
 
+/// Parse a CS6 accelerator string (`"Ctrl+Alt+Shift+F"`, `"F12"`,
+/// `"Ctrl+]`) into the modifiers and key the binding table uses.
+/// Returns `None` for text that is not an accelerator.
+///
+/// The accelerator vocabulary is the one the CS6 menu bar prints:
+/// the modifiers `Ctrl`, `Alt` and `Shift` in any order, letters,
+/// digits, `F1`–`F12`, and the handful of named or symbolic keys
+/// CS6 uses (`Del`, `Tab`, `'` `]` `;` `\` `=` `-`, `↑` `↓`).
+#[must_use]
+pub fn parse_accel(text: &str) -> Option<(Mods, egui::Key)> {
+    let mut mods = Mods {
+        ctrl: false,
+        alt: false,
+        shift: false,
+    };
+    let mut key = None;
+    for part in text.split('+') {
+        match part {
+            "Ctrl" => mods.ctrl = true,
+            "Alt" => mods.alt = true,
+            "Shift" => mods.shift = true,
+            other => {
+                // Two key tokens is not an accelerator.
+                if key.is_some() {
+                    return None;
+                }
+                key = Some(accel_key(other)?);
+            }
+        }
+    }
+    key.map(|k| (mods, k))
+}
+
+/// The key half of an accelerator, once the modifiers are split off.
+fn accel_key(text: &str) -> Option<egui::Key> {
+    match text {
+        "Del" => return Some(egui::Key::Delete),
+        "↑" => return Some(egui::Key::ArrowUp),
+        "↓" => return Some(egui::Key::ArrowDown),
+        _ => {}
+    }
+    // The printed text carries the backslash raw; accept the escaped
+    // spelling too, so a hand-written accelerator still parses.
+    if !text.is_empty() && text.chars().all(|c| c == '\\') {
+        return Some(egui::Key::Backslash);
+    }
+    egui::Key::from_name(text)
+}
+
 /// The Fireworks.xml keymap bindings this shell implements. Tool
 /// letters are the CS6 one-key tool selects; plain keys only fire when
 /// no text field has keyboard focus.
+///
+/// The table is ordered by section: every entry carries the heading it
+/// is filed under, and the help panel prints a heading whenever that
+/// heading changes. Each binding matches the accelerator the CS6 menu
+/// bar prints for the same row — `cs6_keymap_is_fully_bound` holds the
+/// two in step.
 pub static SHORTCUTS: &[Shortcut] = &[
     // File
-    key(CTRL, egui::Key::N, Action::Shell(ShellAction::New)),
-    key(CTRL, egui::Key::O, Action::Shell(ShellAction::Open)),
-    key(CTRL, egui::Key::S, Action::Shell(ShellAction::Save)),
-    key(CTRL_SHIFT, egui::Key::S, Action::Shell(ShellAction::SaveAs)),
-    key(CTRL_SHIFT, egui::Key::R, Action::Shell(ShellAction::Export)),
-    // The command palette: every registered engine command, one door.
-    key(CTRL, egui::Key::P, Action::Shell(ShellAction::Palette)),
-    // Window ▸ Hide Panels — the CS6 Tab toggle.
+    key("File", CTRL, egui::Key::N, Action::Shell(ShellAction::New)),
+    key("File", CTRL, egui::Key::O, Action::Shell(ShellAction::Open)),
     key(
-        NONE,
-        egui::Key::Tab,
-        Action::Shell(ShellAction::ToggleHidePanels),
+        "File",
+        CTRL,
+        egui::Key::F4,
+        Action::Shell(ShellAction::CloseDocument),
+    ),
+    key("File", CTRL, egui::Key::S, Action::Shell(ShellAction::Save)),
+    key(
+        "File",
+        CTRL_SHIFT,
+        egui::Key::S,
+        Action::Shell(ShellAction::SaveAs),
     ),
     key(
+        "File",
+        CTRL,
+        egui::Key::R,
+        Action::Shell(ShellAction::Import),
+    ),
+    key(
+        "File",
+        CTRL_SHIFT,
+        egui::Key::R,
+        Action::Shell(ShellAction::Export),
+    ),
+    key(
+        "File",
         CTRL_SHIFT,
         egui::Key::X,
         Action::Shell(ShellAction::ExportPreview),
     ),
-    key(CTRL, egui::Key::Q, Action::Shell(ShellAction::Quit)),
     key(
-        Mods {
-            ctrl: false,
-            alt: true,
-            shift: false,
-        },
-        egui::Key::F4,
-        Action::Shell(ShellAction::Quit),
+        "File",
+        CTRL_ALT_SHIFT,
+        egui::Key::F,
+        Action::Shell(ShellAction::FileInfo),
+    ),
+    key(
+        "File",
+        NONE,
+        egui::Key::F12,
+        Action::Shell(ShellAction::PreviewInBrowser {
+            secondary: false,
+            all_pages: false,
+        }),
+    ),
+    key(
+        "File",
+        SHIFT,
+        egui::Key::F12,
+        Action::Shell(ShellAction::PreviewInBrowser {
+            secondary: true,
+            all_pages: false,
+        }),
+    ),
+    key(
+        "File",
+        CTRL,
+        egui::Key::F12,
+        Action::Shell(ShellAction::PreviewInBrowser {
+            secondary: false,
+            all_pages: true,
+        }),
+    ),
+    key("File", ALT, egui::Key::F4, Action::Shell(ShellAction::Quit)),
+    key("File", CTRL, egui::Key::Q, Action::Shell(ShellAction::Quit)),
+    // The command palette: every registered engine command, one door.
+    key(
+        "File",
+        CTRL,
+        egui::Key::P,
+        Action::Shell(ShellAction::Palette),
     ),
     // Edit
-    key(CTRL, egui::Key::Z, Action::Shell(ShellAction::Undo)),
-    key(CTRL_SHIFT, egui::Key::Z, Action::Shell(ShellAction::Redo)),
-    key(NONE, egui::Key::Delete, Action::Sel(SelAction::Delete)),
-    key(NONE, egui::Key::Backspace, Action::Sel(SelAction::Delete)),
-    key(CTRL, egui::Key::A, Action::Shell(ShellAction::SelectAll)),
-    key(CTRL, egui::Key::D, Action::Shell(ShellAction::Deselect)),
-    key(CTRL, egui::Key::M, Action::Sel(SelAction::Hide)),
-    // Edit ▸ clipboard
-    key(CTRL, egui::Key::C, Action::Shell(ShellAction::Copy)),
-    key(CTRL, egui::Key::X, Action::Shell(ShellAction::Cut)),
-    key(CTRL, egui::Key::V, Action::Shell(ShellAction::Paste)),
-    // Modify ▸ group
-    key(CTRL, egui::Key::G, Action::Sel(SelAction::Group)),
-    key(CTRL, egui::Key::U, Action::Sel(SelAction::Ungroup)),
-    key(CTRL_ALT, egui::Key::E, Action::Sel(SelAction::MergeDown)),
-    // View
-    key(CTRL, egui::Key::Equals, Action::Shell(ShellAction::ZoomIn)),
-    key(CTRL, egui::Key::Minus, Action::Shell(ShellAction::ZoomOut)),
+    key("Edit", CTRL, egui::Key::Z, Action::Shell(ShellAction::Undo)),
     key(
+        "Edit",
+        CTRL_SHIFT,
+        egui::Key::Z,
+        Action::Shell(ShellAction::Redo),
+    ),
+    key(
+        "Edit",
+        CTRL_ALT,
+        egui::Key::D,
+        Action::Sel(SelAction::Duplicate),
+    ),
+    key(
+        "Edit",
+        CTRL_SHIFT,
+        egui::Key::C,
+        Action::Sel(SelAction::Clone),
+    ),
+    key(
+        "Edit",
+        NONE,
+        egui::Key::Delete,
+        Action::Sel(SelAction::Delete),
+    ),
+    key(
+        "Edit",
+        NONE,
+        egui::Key::Backspace,
+        Action::Sel(SelAction::Delete),
+    ),
+    key(
+        "Edit",
+        CTRL,
+        egui::Key::A,
+        Action::Shell(ShellAction::SelectAll),
+    ),
+    key(
+        "Edit",
+        CTRL,
+        egui::Key::D,
+        Action::Shell(ShellAction::Deselect),
+    ),
+    key("Edit", CTRL, egui::Key::M, Action::Sel(SelAction::Hide)),
+    // Edit ▸ insert
+    key(
+        "Edit ▸ insert",
+        CTRL,
+        egui::Key::F8,
+        Action::Sel(SelAction::NewSymbol),
+    ),
+    key(
+        "Edit ▸ insert",
+        CTRL_SHIFT,
+        egui::Key::U,
+        Action::Shell(ShellAction::InsertWeb {
+            what: InsertWebKind::Hotspot,
+        }),
+    ),
+    key(
+        "Edit ▸ insert",
+        ALT_SHIFT,
+        egui::Key::P,
+        Action::Shell(ShellAction::InsertWeb {
+            what: InsertWebKind::PolygonSlice,
+        }),
+    ),
+    key(
+        "Edit ▸ insert",
+        CTRL_ALT,
+        egui::Key::Y,
+        Action::Sel(SelAction::EmptyBitmap),
+    ),
+    key(
+        "Edit ▸ insert",
+        SHIFT,
+        egui::Key::L,
+        Action::Sel(SelAction::NewLayer),
+    ),
+    key(
+        "Edit ▸ insert",
+        SHIFT,
+        egui::Key::F,
+        Action::Sel(SelAction::NewFrame),
+    ),
+    // Clipboard
+    key(
+        "Clipboard",
+        CTRL,
+        egui::Key::C,
+        Action::Shell(ShellAction::Copy),
+    ),
+    key(
+        "Clipboard",
+        CTRL,
+        egui::Key::X,
+        Action::Shell(ShellAction::Cut),
+    ),
+    key(
+        "Clipboard",
+        CTRL,
+        egui::Key::V,
+        Action::Shell(ShellAction::Paste),
+    ),
+    key(
+        "Clipboard",
+        CTRL_ALT,
+        egui::Key::V,
+        Action::Shell(ShellAction::PasteAsMask),
+    ),
+    key(
+        "Clipboard",
+        CTRL_SHIFT,
+        egui::Key::V,
+        Action::Shell(ShellAction::PasteInside),
+    ),
+    // Select
+    key(
+        "Select",
+        CTRL,
+        egui::Key::ArrowUp,
+        Action::Sel(SelAction::SelectParents),
+    ),
+    key(
+        "Select",
+        CTRL,
+        egui::Key::ArrowDown,
+        Action::Sel(SelAction::SelectChildren),
+    ),
+    key(
+        "Select",
+        CTRL_SHIFT,
+        egui::Key::I,
+        Action::Shell(ShellAction::SelectInverse),
+    ),
+    // Modify ▸ Group
+    key(
+        "Modify ▸ Group",
+        CTRL,
+        egui::Key::G,
+        Action::Sel(SelAction::Group),
+    ),
+    key(
+        "Modify ▸ Group",
+        CTRL,
+        egui::Key::U,
+        Action::Sel(SelAction::Ungroup),
+    ),
+    key(
+        "Modify ▸ Group",
+        CTRL_ALT,
+        egui::Key::E,
+        Action::Sel(SelAction::MergeDown),
+    ),
+    // Modify ▸ Symbol
+    key(
+        "Modify ▸ Symbol",
+        NONE,
+        egui::Key::F8,
+        Action::Sel(SelAction::ConvertToSymbol),
+    ),
+    key(
+        "Modify ▸ Symbol",
+        CTRL_ALT_SHIFT,
+        egui::Key::T,
+        Action::Sel(SelAction::TweenInstances),
+    ),
+    // Modify ▸ Mask
+    key(
+        "Modify ▸ Mask",
+        CTRL_SHIFT,
+        egui::Key::K,
+        Action::Sel(SelAction::EnableMask(false)),
+    ),
+    // Modify ▸ selective JPEG
+    key(
+        "Modify ▸ selective JPEG",
+        CTRL_ALT_SHIFT,
+        egui::Key::Z,
+        Action::Sel(SelAction::FlattenSelection),
+    ),
+    key(
+        "Modify ▸ selective JPEG",
+        CTRL_ALT_SHIFT,
+        egui::Key::E,
+        Action::Sel(SelAction::FlattenLayers),
+    ),
+    // Modify ▸ Transform
+    key(
+        "Modify ▸ Transform",
+        CTRL,
+        egui::Key::T,
+        Action::Shell(ShellAction::TransformMode(TransformMode::Scale)),
+    ),
+    key(
+        "Modify ▸ Transform",
+        CTRL_SHIFT,
+        egui::Key::T,
+        Action::Shell(ShellAction::NumericTransform),
+    ),
+    key(
+        "Modify ▸ Transform",
+        CTRL,
+        egui::Key::Num9,
+        Action::Sel(SelAction::Rotate(90.0)),
+    ),
+    key(
+        "Modify ▸ Transform",
+        CTRL,
+        egui::Key::Num7,
+        Action::Sel(SelAction::Rotate(-90.0)),
+    ),
+    // Modify ▸ Arrange (Fireworks.xml: 4 70 / 6 70 / 6 66 / 4 66)
+    key(
+        "Modify ▸ Arrange",
+        CTRL,
+        egui::Key::F,
+        Action::Arrange(Arrange::Front),
+    ),
+    key(
+        "Modify ▸ Arrange",
+        CTRL_SHIFT,
+        egui::Key::F,
+        Action::Arrange(Arrange::Forward),
+    ),
+    key(
+        "Modify ▸ Arrange",
+        CTRL_SHIFT,
+        egui::Key::B,
+        Action::Arrange(Arrange::Backward),
+    ),
+    key(
+        "Modify ▸ Arrange",
+        CTRL,
+        egui::Key::B,
+        Action::Arrange(Arrange::Back),
+    ),
+    // Modify ▸ align
+    key(
+        "Modify ▸ align",
+        CTRL_ALT,
+        egui::Key::Num1,
+        Action::Align("left"),
+    ),
+    key(
+        "Modify ▸ align",
+        CTRL_ALT,
+        egui::Key::Num2,
+        Action::Align("centerX"),
+    ),
+    key(
+        "Modify ▸ align",
+        CTRL_ALT,
+        egui::Key::Num3,
+        Action::Align("right"),
+    ),
+    key(
+        "Modify ▸ align",
+        CTRL_ALT,
+        egui::Key::Num4,
+        Action::Align("top"),
+    ),
+    key(
+        "Modify ▸ align",
+        CTRL_ALT,
+        egui::Key::Num5,
+        Action::Align("centerY"),
+    ),
+    key(
+        "Modify ▸ align",
+        CTRL_ALT,
+        egui::Key::Num6,
+        Action::Align("bottom"),
+    ),
+    // Modify ▸ distribute
+    key(
+        "Modify ▸ distribute",
+        CTRL_ALT,
+        egui::Key::Num7,
+        Action::Distribute("horizontal"),
+    ),
+    key(
+        "Modify ▸ distribute",
+        CTRL_ALT,
+        egui::Key::Num9,
+        Action::Distribute("vertical"),
+    ),
+    // Modify ▸ Combine Paths
+    key(
+        "Modify ▸ Combine Paths",
+        CTRL,
+        egui::Key::J,
+        Action::Boolean("union"),
+    ),
+    key(
+        "Modify ▸ Combine Paths",
+        CTRL_SHIFT,
+        egui::Key::J,
+        Action::Sel(SelAction::SplitPaths),
+    ),
+    // View
+    key(
+        "View",
+        CTRL,
+        egui::Key::Equals,
+        Action::Shell(ShellAction::ZoomIn),
+    ),
+    key(
+        "View",
+        CTRL,
+        egui::Key::Minus,
+        Action::Shell(ShellAction::ZoomOut),
+    ),
+    key(
+        "View",
         CTRL_ALT,
         egui::Key::Num0,
         Action::Shell(ShellAction::FitAll),
     ),
-    // Modify ▸ Arrange (Fireworks.xml: 4 70 / 6 70 / 6 66 / 4 66)
-    key(CTRL, egui::Key::F, Action::Arrange(Arrange::Front)),
-    key(CTRL_SHIFT, egui::Key::F, Action::Arrange(Arrange::Forward)),
-    key(CTRL_SHIFT, egui::Key::B, Action::Arrange(Arrange::Backward)),
-    key(CTRL, egui::Key::B, Action::Arrange(Arrange::Back)),
-    // Modify ▸ Combine Paths
-    key(CTRL, egui::Key::J, Action::Boolean("union")),
+    key(
+        "View",
+        CTRL,
+        egui::Key::Num0,
+        Action::Shell(ShellAction::FitSelection),
+    ),
+    key(
+        "View",
+        CTRL,
+        egui::Key::CloseBracket,
+        Action::Shell(ShellAction::ToggleTooltips),
+    ),
+    key(
+        "View",
+        CTRL_SHIFT,
+        egui::Key::M,
+        Action::Shell(ShellAction::ShowAllHidden),
+    ),
+    key(
+        "View",
+        CTRL_ALT,
+        egui::Key::R,
+        Action::Shell(ShellAction::ToggleRulers),
+    ),
+    // View ▸ grid
+    key(
+        "View ▸ grid",
+        CTRL,
+        egui::Key::Quote,
+        Action::Shell(ShellAction::ToggleGrid),
+    ),
+    key(
+        "View ▸ grid",
+        CTRL_SHIFT,
+        egui::Key::Quote,
+        Action::Shell(ShellAction::ToggleSnapToGrid),
+    ),
+    key(
+        "View ▸ grid",
+        CTRL_ALT,
+        egui::Key::G,
+        Action::Shell(ShellAction::EditGrid),
+    ),
+    // View ▸ guides
+    key(
+        "View ▸ guides",
+        CTRL,
+        egui::Key::Semicolon,
+        Action::Shell(ShellAction::ToggleGuides),
+    ),
+    key(
+        "View ▸ guides",
+        CTRL_ALT,
+        egui::Key::Semicolon,
+        Action::Shell(ShellAction::ToggleGuidesLocked),
+    ),
+    key(
+        "View ▸ guides",
+        CTRL_SHIFT,
+        egui::Key::Semicolon,
+        Action::Shell(ShellAction::ToggleSnapToGuides),
+    ),
+    // View ▸ smart guides
+    key(
+        "View ▸ smart guides",
+        CTRL,
+        egui::Key::Backslash,
+        Action::Shell(ShellAction::ToggleSmartGuides),
+    ),
+    key(
+        "View ▸ smart guides",
+        CTRL_SHIFT,
+        egui::Key::Backslash,
+        Action::Shell(ShellAction::ToggleSnapToSmartGuides),
+    ),
+    // View ▸ 9-slice guides
+    key(
+        "View ▸ 9-slice guides",
+        CTRL_ALT_SHIFT,
+        egui::Key::Semicolon,
+        Action::Shell(ShellAction::ToggleSliceGuides),
+    ),
+    key(
+        "View ▸ 9-slice guides",
+        CTRL,
+        egui::Key::H,
+        Action::Shell(ShellAction::ToggleEdges),
+    ),
     // Text styles
-    key(CTRL_ALT_SHIFT, egui::Key::B, Action::TextFlag("bold")),
-    key(CTRL_ALT_SHIFT, egui::Key::I, Action::TextFlag("italic")),
-    key(CTRL_ALT_SHIFT, egui::Key::U, Action::TextFlag("underline")),
+    key(
+        "Text styles",
+        CTRL_ALT_SHIFT,
+        egui::Key::P,
+        Action::TextPlain,
+    ),
+    key(
+        "Text styles",
+        CTRL_ALT_SHIFT,
+        egui::Key::B,
+        Action::TextFlag("bold"),
+    ),
+    key(
+        "Text styles",
+        CTRL_ALT_SHIFT,
+        egui::Key::I,
+        Action::TextFlag("italic"),
+    ),
+    key(
+        "Text styles",
+        CTRL_ALT_SHIFT,
+        egui::Key::U,
+        Action::TextFlag("underline"),
+    ),
+    // Text ▸ justify
+    key(
+        "Text ▸ justify",
+        CTRL_ALT_SHIFT,
+        egui::Key::L,
+        Action::TextJustify(0),
+    ),
+    key(
+        "Text ▸ justify",
+        CTRL_ALT_SHIFT,
+        egui::Key::C,
+        Action::TextJustify(1),
+    ),
+    key(
+        "Text ▸ justify",
+        CTRL_ALT_SHIFT,
+        egui::Key::R,
+        Action::TextJustify(2),
+    ),
+    key(
+        "Text ▸ justify",
+        CTRL_ALT_SHIFT,
+        egui::Key::J,
+        Action::TextJustify(3),
+    ),
+    // Text
+    key(
+        "Text",
+        CTRL_SHIFT,
+        egui::Key::Y,
+        Action::Sel(SelAction::AttachToPath),
+    ),
+    key(
+        "Text",
+        CTRL_SHIFT,
+        egui::Key::P,
+        Action::Sel(SelAction::ConvertToPaths),
+    ),
     // Tools (one-key selects)
     key(
+        "Tools (one-key selects)",
         NONE,
         egui::Key::V,
         Action::Shell(ShellAction::PickTool(Tool::Pointer)),
     ),
     key(
+        "Tools (one-key selects)",
         NONE,
         egui::Key::R,
         Action::Shell(ShellAction::PickTool(Tool::Rect)),
     ),
     key(
+        "Tools (one-key selects)",
         NONE,
         egui::Key::E,
         Action::Shell(ShellAction::PickTool(Tool::Ellipse)),
     ),
     key(
+        "Tools (one-key selects)",
         NONE,
         egui::Key::O,
         Action::Shell(ShellAction::PickTool(Tool::Line)),
     ),
     key(
+        "Tools (one-key selects)",
         NONE,
         egui::Key::T,
         Action::Shell(ShellAction::PickTool(Tool::Text)),
     ),
     key(
+        "Tools (one-key selects)",
         NONE,
         egui::Key::Z,
         Action::Shell(ShellAction::PickTool(Tool::Zoom)),
     ),
     key(
+        "Tools (one-key selects)",
         NONE,
         egui::Key::H,
         Action::Shell(ShellAction::PickTool(Tool::Hand)),
     ),
     key(
+        "Tools (one-key selects)",
         NONE,
         egui::Key::B,
         Action::Shell(ShellAction::PickTool(Tool::Paintbrush)),
     ),
     key(
+        "Tools (one-key selects)",
         NONE,
         egui::Key::N,
         Action::Shell(ShellAction::PickTool(Tool::Pencil)),
     ),
     key(
+        "Tools (one-key selects)",
         NONE,
         egui::Key::Y,
         Action::Shell(ShellAction::PickTool(Tool::Eraser)),
     ),
     key(
+        "Tools (one-key selects)",
         NONE,
         egui::Key::G,
         Action::Shell(ShellAction::PickTool(Tool::PaintBucket)),
     ),
     key(
+        "Tools (one-key selects)",
         NONE,
         egui::Key::D,
         Action::Shell(ShellAction::PickTool(Tool::Gradient)),
     ),
     key(
+        "Tools (one-key selects)",
         NONE,
         egui::Key::I,
         Action::Shell(ShellAction::PickTool(Tool::Eyedropper)),
@@ -2288,28 +2896,100 @@ pub static SHORTCUTS: &[Shortcut] = &[
     // Pixel-selection tools (CS6's keymap: L is the Lasso; the Line
     // tool has no letter and carries O here).
     key(
+        "Pixel-selection tools",
         NONE,
         egui::Key::M,
         Action::Shell(ShellAction::PickTool(Tool::Marquee)),
     ),
     key(
+        "Pixel-selection tools",
         NONE,
         egui::Key::L,
         Action::Shell(ShellAction::PickTool(Tool::Lasso)),
     ),
     key(
+        "Pixel-selection tools",
         NONE,
         egui::Key::P,
         Action::Shell(ShellAction::PickTool(Tool::PolygonalMarquee)),
     ),
     key(
+        "Pixel-selection tools",
         NONE,
         egui::Key::W,
         Action::Shell(ShellAction::PickTool(Tool::MagicWand)),
     ),
+    // Window ▸ panel toggles
+    key(
+        "Window ▸ panel toggles",
+        NONE,
+        egui::Key::Tab,
+        Action::Shell(ShellAction::ToggleHidePanels),
+    ),
+    key(
+        "Window ▸ panel toggles",
+        CTRL_ALT,
+        egui::Key::T,
+        Action::Shell(ShellAction::ToggleTools),
+    ),
+    key(
+        "Window ▸ panel toggles",
+        CTRL_ALT,
+        egui::Key::L,
+        Action::Shell(ShellAction::TogglePanel("Layers")),
+    ),
+    key(
+        "Window ▸ panel toggles",
+        CTRL_ALT,
+        egui::Key::O,
+        Action::Shell(ShellAction::TogglePanel("Pages")),
+    ),
+    key(
+        "Window ▸ panel toggles",
+        CTRL_ALT,
+        egui::Key::K,
+        Action::Shell(ShellAction::TogglePanel("States")),
+    ),
+    key(
+        "Window ▸ panel toggles",
+        CTRL_ALT,
+        egui::Key::J,
+        Action::Shell(ShellAction::TogglePanel("Styles")),
+    ),
+    key(
+        "Window ▸ panel toggles",
+        CTRL_ALT,
+        egui::Key::U,
+        Action::Shell(ShellAction::TogglePanel("URL")),
+    ),
+    key(
+        "Window ▸ panel toggles",
+        CTRL_ALT,
+        egui::Key::M,
+        Action::Shell(ShellAction::TogglePanel("Color Mixer")),
+    ),
+    key(
+        "Window ▸ panel toggles",
+        CTRL_ALT,
+        egui::Key::S,
+        Action::Shell(ShellAction::TogglePanel("Swatches")),
+    ),
+    key(
+        "Window ▸ panel toggles",
+        CTRL_ALT,
+        egui::Key::I,
+        Action::Shell(ShellAction::TogglePanel("Info")),
+    ),
+    key(
+        "Window ▸ panel toggles",
+        CTRL_ALT,
+        egui::Key::H,
+        Action::Shell(ShellAction::TogglePanel("Behaviors")),
+    ),
     // Help — the shortcut-map panel. Not part of the CS6 keymap
     // (Fireworks had no help binding); F1 is the desktop convention.
     key(
+        "Help",
         NONE,
         egui::Key::F1,
         Action::Shell(ShellAction::ShowShortcuts),
@@ -2342,6 +3022,10 @@ fn key_name(key: egui::Key) -> String {
     match key {
         K::Equals => "=".into(),
         K::Minus => "-".into(),
+        K::CloseBracket => "]".into(),
+        K::Semicolon => ";".into(),
+        K::Quote => "'".into(),
+        K::Backslash => "\\".into(),
         K::Num0 => "0".into(),
         K::ArrowDown => "↓".into(),
         K::ArrowLeft => "←".into(),
@@ -2752,9 +3436,97 @@ mod tests {
         );
         assert_eq!(
             find(true, false, false, egui::Key::Num0),
-            None,
-            "Ctrl+0 is Fit Selection in CS6 — not wired, must not bind Fit All"
+            Some(&Action::Shell(ShellAction::FitSelection)),
+            "Ctrl+0 is Fit Selection in CS6; Fit All keeps Ctrl+Alt+0"
         );
+    }
+
+    /// The binding table is read as sections: the help panel starts a
+    /// new heading wherever the group changes, so a group that
+    /// reappears later would be printed twice.
+    #[test]
+    fn shortcut_sections_are_contiguous() {
+        let mut seen: Vec<&'static str> = Vec::new();
+        for shortcut in SHORTCUTS {
+            assert!(
+                !shortcut.group.is_empty(),
+                "a binding carries no section: {:?}",
+                shortcut.action
+            );
+            if seen.last() != Some(&shortcut.group) {
+                assert!(
+                    !seen.contains(&shortcut.group),
+                    "section {:?} is not contiguous",
+                    shortcut.group
+                );
+                seen.push(shortcut.group);
+            }
+        }
+    }
+
+    /// The CS6 keymap parity gate.
+    ///
+    /// Every live menu row that prints an accelerator must have that
+    /// accelerator bound to that row's action: the printed text is
+    /// parsed by the same [`parse_accel`] the binding table is
+    /// written against, so a menu row and the key that fires it
+    /// cannot drift apart.
+    ///
+    /// Two kinds of row are display-only by design and are exempt:
+    /// [`Action::Inert`] rows, which CS6 itself shipped unwired, and
+    /// [`ShellAction::ReportGap`] rows, which name a capability this
+    /// build does not ship.
+    #[test]
+    fn cs6_keymap_is_fully_bound() {
+        for menu in MENUBAR {
+            for item in walk(menu.entries) {
+                if item.accel.is_empty() {
+                    continue;
+                }
+                if matches!(item.action, Action::Inert) {
+                    continue;
+                }
+                if matches!(item.action, Action::Shell(ShellAction::ReportGap(_))) {
+                    continue;
+                }
+                let (mods, key) = parse_accel(item.accel).unwrap_or_else(|| {
+                    panic!(
+                        "{} ▸ {} prints the accelerator {:?}, which the keymap parser does not understand",
+                        menu.label, item.label, item.accel
+                    )
+                });
+                let bound = SHORTCUTS
+                    .iter()
+                    .find(|s| s.mods == mods && s.key == key)
+                    .unwrap_or_else(|| {
+                        let elsewhere: Vec<String> = SHORTCUTS
+                            .iter()
+                            .filter(|s| s.action == item.action)
+                            .map(|s| s.label())
+                            .collect();
+                        panic!(
+                            "{} ▸ {} prints {:?}, but no binding carries those modifiers and that key{}",
+                            menu.label,
+                            item.label,
+                            item.accel,
+                            if elsewhere.is_empty() {
+                                String::new()
+                            } else {
+                                format!(" — the action is bound at {}", elsewhere.join(", "))
+                            }
+                        )
+                    });
+                assert_eq!(
+                    bound.action,
+                    item.action,
+                    "{} ▸ {} prints {:?}, which is bound to {}, not to this row",
+                    menu.label,
+                    item.label,
+                    item.accel,
+                    action_name(bound.action)
+                );
+            }
+        }
     }
 
     /// The roster pinned by the Window menu is the CS6 panel set.
