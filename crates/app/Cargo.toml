@@ -27,6 +27,7 @@ geom = { path = "../geom" }
 egui = "0.36"
 egui_extras = { version = "0.36", default-features = false, features = ["svg"] }
 eframe = { version = "0.36", default-features = false, features = [
+    "accesskit",
     "default_fonts",
     "glow",
     "persistence",
