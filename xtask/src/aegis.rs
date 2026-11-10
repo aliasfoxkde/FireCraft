@@ -146,9 +146,7 @@ const CLASS_NOTES: &[(&str, &str)] = &[
     (
         "zip-code",
         "Matches any 5-digit run: CS6 command ids, the JPEG dimension \
-         ceiling (65535), menu ids, and the CVE id 25727 in \
-         docs/PLANNING.md (a vulnerability identifier, not a postal code). \
-         This repository holds no postal data.",
+         ceiling (65535), menu ids. This repository holds no postal data.",
     ),
 ];
 

@@ -13,9 +13,6 @@
 # adjudicated as false positives, so a reviewer can read the reason
 # next to the rows it covers.
 #
-# The gate's own source quotes the literals it explains, so it carries
-# rows of its own; they are adjudicated like any other.
-#
 # Regenerate with: cargo run -p xtask -- aegis --bless
 # Only after verifying each newly added key is a false positive.
 # Matches the 9-digit observed value range in the PNG node dictionary
@@ -129,9 +126,7 @@ stack-trace-exposure	./infrastructure/docker/ci-rust.Dockerfile	17ee41935f062dff
 xml-external-entity	./crates/io/tests/svgimport.rs	f6cfc5faea5abe6ee5bd8667967edfc5cbe43d95f0f04d7a560afb01613823d5	2
 xml-external-entity	./packaging/build-macos-dmg.sh	7b16906a7de9206c7488979eb86e8393ba62a45c0e769c79cf070a16c1858d49	1
 # Matches any 5-digit run: CS6 command ids, the JPEG dimension ceiling
-# (65535), menu ids, and the CVE id 25727 in docs/PLANNING.md (a
-# vulnerability identifier, not a postal code). This repository holds no
-# postal data.
+# (65535), menu ids. This repository holds no postal data.
 zip-code	./crates/app-cli/src/mcp.rs	0e5c81ceee464db1c0cb9ed801d134fab0dd2a28c0dc62e35aa21a8e13ff0ebc	1
 zip-code	./crates/app-cli/src/mcp.rs	20d70708103e5223b6f2fb00f00947832fb93d12ebef11eb10bc5599efefe184	1
 zip-code	./crates/app-cli/src/mcp.rs	e27c72fe629f258a871404eed323c0cf57a7a26c19dc8d5a6ac90770241af8f5	1
@@ -429,7 +424,6 @@ zip-code	./docs/NEXT.md	d3d64843022420dc7dc2862b235e38ed08e77ab37be23ea65d851b8b
 zip-code	./docs/NEXT.md	d55d01d0341ed0ba2cd99b322e8c5b609254f47d10c7cd12b99b4922effeba44	1
 zip-code	./docs/NEXT.md	f2f89ede8e7d4b3d2243dea1ca96b8ece56f793811d9708b4a0181bf81a50011	1
 zip-code	./docs/PLANNING.md	0f255ec16482c343fd099ba9668863778be40dc166a6856b1d470e0bc97cc6fd	1
-zip-code	./docs/PLANNING.md	3e6d8748577115dd136761901582abce3093fbb973a08c35be9efe6781fb4f4d	1
 zip-code	./docs/PLANNING.md	9766638817ec53c323baa6aaa5f8d10a6105299553621601c5e71d0c47b10e5b	3
 zip-code	./docs/PLANNING.md	ca902d4a8acbdea132ada81a004081f51c5c9279d409cee414de5a39a139fab6	1
 zip-code	./docs/SESSIONS.md	265f10e1bf87701b7aa597c197b6a25b0984777f3443a289d7a92aedd31fddcf	1
@@ -474,7 +468,6 @@ zip-code	./docs/research/fw-ui-evidence.md	78f54f73431f4924a4c5ac3647c0dccca95e2
 zip-code	./docs/research/fw-ui-evidence.md	7f2c767b903ed755fb208e264d4ddf2bd2e5ff9f9985e3062a46cbd810c2b762	2
 zip-code	./docs/research/fw-ui-evidence.md	b255720517f7c131dbb0f14d63e793b120464a6c27762b858c2f7d34ba4ccabb	2
 zip-code	./docs/research/fw-ui-evidence.md	e846a3867ee2598139c1957e15fafe06f2357059c177aaa944cb5769bf1a5ae1	2
-zip-code	./xtask/src/aegis.rs	3e6d8748577115dd136761901582abce3093fbb973a08c35be9efe6781fb4f4d	1
 zip-code	./xtask/src/aegis.rs	f2f89ede8e7d4b3d2243dea1ca96b8ece56f793811d9708b4a0181bf81a50011	1
 zip-code	./xtask/src/dist.rs	d55d01d0341ed0ba2cd99b322e8c5b609254f47d10c7cd12b99b4922effeba44	1
 zip-code	./xtask/src/perf.rs	0eaa217986d49cd21dd15615c9531ffa6e1fe7e4f3a869748f4810aadb3d5ba9	1
