@@ -4,6 +4,7 @@ Name=FireCraft
 GenericName=Graphics Editor
 Comment=Clean-room reimplementation of Adobe Fireworks CS6
 Exec=firecraft
+Icon=firecraft
 Terminal=false
 Categories=Graphics;VectorGraphics;RasterGraphics;
 Keywords=graphics;vector;image;editor;fireworks;png;

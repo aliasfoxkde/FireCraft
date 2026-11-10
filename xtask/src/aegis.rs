@@ -91,8 +91,21 @@ const CLASS_NOTES: &[(&str, &str)] = &[
         "eval-usage",
         "The scripting crate's own boa context.eval() call — that crate \
          implements the CS6 scripting DOM's eval() — plus Rust curve-segment \
-         .eval(u) calls, and the session-receipt prose that quotes the rule \
-         name beside them.",
+         .eval(u) calls.",
+    ),
+    (
+        "gdpr-reference",
+        "Matches the lowercase abbreviation in this table's own rule-class \
+         name, in the personal-data rule's name, and in decision 0074's \
+         table of adjudicated classes; the abbreviation is a rule \
+         identifier, not a reference to anyone's data.",
+    ),
+    (
+        "gdpr-personal-data",
+        "Matches the two-word phrase naming an individual's data category \
+         in English prose. The occurrence outside this gate's own source \
+         is a release-plan checklist item that excludes personal data from \
+         the source archive; the repository holds no such data.",
     ),
     (
         "international-phone",
@@ -111,23 +124,22 @@ const CLASS_NOTES: &[(&str, &str)] = &[
     ),
     (
         "pci-cardholder-data",
-        "Matches the word \"pan\" in pan-zoom and hand-pan identifiers, in the \
-         CS6 Hand tool's \"Pan the artboard\" label, and in the receipt prose \
-         that names the rule; the five credit-card-* rules stay armed.",
+        "Matches the word \"pan\" in pan-zoom, hand-pan and two-finger pan \
+         identifiers, including the Android feasibility note's touch \
+         gesture, and in decision 0074's table of adjudicated classes; \
+         the five credit-card-* rules stay armed.",
     ),
     (
         "phone-number",
         "Matches any 10-digit run: u32::MAX, CRC and chunk values, observed \
-         PNG value ranges, and the receipt prose that quotes the rule name \
-         beside them.",
+         PNG value ranges.",
     ),
     (
         "ssrf-localhost",
         "A loopback listener in the release smoke test, a localhost \
          maintainer address, prose naming the local GitForge API, and the \
-         receipt prose that quotes the rule name, and the local preview \
-         URL in the site deployment guide; the workspace has no HTTP client \
-         dependency.",
+         local preview URL in the site deployment guide; the workspace has \
+         no HTTP client dependency.",
     ),
     (
         "ssn-no-dashes",
@@ -150,17 +162,12 @@ const CLASS_NOTES: &[(&str, &str)] = &[
         "The same two fixtures, seen by the hardening rule.",
     ),
     (
-        "sql-query",
-        "The rule is shaped like SELECT ... FROM and fires on the English \
-         prose \"select a tool from a tool group\" in the CS6 help quotes and \
-         on the receipt prose that quotes the rule. This repository has no \
-         database and no SQL.",
-    ),
-    (
         "zip-code",
-        "Matches any 5-digit run: CS6 command ids, CS6 panel ids, the \
-         Window-menu arrangement trio, the JPEG dimension ceiling (65535), \
-         menu ids, CVE id suffixes. This repository holds no postal data.",
+        "Matches any 5-digit run: CS6 command ids, the JPEG dimension \
+         ceiling (65535), menu ids, CVE id suffixes, and the civil-date \
+         epoch constant (36524) in the SBOM timestamp builder, and \
+         decision 0074's table of adjudicated classes. This repository \
+         holds no postal data.",
     ),
 ];
 
@@ -229,24 +236,6 @@ pub fn run() -> Result<(), String> {
         fresh.len(),
         render_findings(&fresh)
     ))
-}
-
-/// Prints the findings the baseline does not cover, with the content
-/// key each one carries.
-///
-/// Read-only: admitting a finding is a human decision, so this
-/// diagnostic never rewrites the baseline. It is the verb to reach for
-/// when the gate fails and the operator needs to know *which* literal
-/// to adjudicate before running `--bless`.
-pub fn report() -> Result<(), String> {
-    let baseline = read_baseline()?;
-    let findings = scan()?;
-    let fresh = uncovered(&findings, &baseline);
-    for finding in &fresh {
-        eprintln!("{}:{}:{}", finding.pattern, finding.file, finding.digest);
-        eprintln!("  {} {}:{}", finding.pattern, finding.file, finding.line);
-    }
-    Ok(())
 }
 
 /// Rewrites the baseline from the current tree, reporting what changed.
