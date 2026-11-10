@@ -282,8 +282,8 @@ Run the available local checks without changing code:
 - [x] P0.4.2 Run the canonical `xtask ci` gate. — IMPLEMENTED, rung 2 — routed through GitHub CI run 41938756908 on SHA 5fac7a2 (audit §1.4); the single-command form is CI-split and GitForge's copy is unavailable until PR #14 lands (B-20)
 - [x] P0.4.3 Run native distribution build. — BUILD VERIFIED, rung 5 — native dist built, manifest verified, DEB read back (audit §1.4)
 - [x] P0.4.4 Run web distribution build. — BUILD VERIFIED, rung 8 — web dist built, bridge smoke green (audit §1.4)
-- [x] P0.4.5 Run source archive build. — BLOCKED — `xtask dist --source` does not exist on `main` (F-9); verified on the PR #12 ancestor (audit §1.4)
-- [x] P0.4.6 Run SBOM generation. — BLOCKED — `xtask dist --sbom` does not exist on `main` (F-9); verified on the PR #12 ancestor (audit §1.4)
+- [x] P0.4.5 Run source archive build. — BLOCKED at audit time, blocker since resolved — the audit found `xtask dist --source` absent from `main` (F-9) and verified it on the PR #12 ancestor; PR #14 added `dist::source()` to `xtask/src/dist.rs` and merged as `2cfdeee`, so the command exists on `main` now. The build receipt is the GitForge `release` job, which runs the dist on the candidate SHA
+- [x] P0.4.6 Run SBOM generation. — BLOCKED at audit time, blocker since resolved — the audit found `xtask dist --sbom` absent from `main` (F-9) and verified it on the PR #12 ancestor; PR #14 added `dist::sbom()` to `xtask/src/dist.rs` and merged as `2cfdeee`, so the command exists on `main` now. The build receipt is the GitForge `release` job, which runs the dist on the candidate SHA
 - [x] P0.4.7 Inspect manifests and checksums. — IMPLEMENTED, rung 5 (audit §1.4)
 - [x] P0.4.8 Record exact failures and environmental limitations. — IMPLEMENTED — audit §4 (verified blockers) and §6 (unverified claims)
 
@@ -295,15 +295,15 @@ Run the available local checks without changing code:
 
 ### P1.1 — Create the execution board
 
-- [x] Create `docs/release/EXECUTION-BOARD.md`. — IMPLEMENTED — `docs/release/EXECUTION-BOARD.md` (61 tickets) carried by PR #12 (open, unmerged)
-- [x] Keep T27 as the parent campaign. — IMPLEMENTED — `docs/release/EXECUTION-BOARD.md` (61 tickets) carried by PR #12 (open, unmerged)
-- [x] Assign unique child task IDs. — IMPLEMENTED — `docs/release/EXECUTION-BOARD.md` (61 tickets) carried by PR #12 (open, unmerged)
-- [x] Link every child task to RP-00 through RP-08. — IMPLEMENTED — `docs/release/EXECUTION-BOARD.md` (61 tickets) carried by PR #12 (open, unmerged)
-- [x] Add priorities, dependencies, acceptance criteria, and verification. — IMPLEMENTED — `docs/release/EXECUTION-BOARD.md` (61 tickets) carried by PR #12 (open, unmerged)
-- [x] Add a status summary for each RP. — IMPLEMENTED — `docs/release/EXECUTION-BOARD.md` (61 tickets) carried by PR #12 (open, unmerged)
-- [x] Add artifact verification columns. — IMPLEMENTED — `docs/release/EXECUTION-BOARD.md` (61 tickets) carried by PR #12 (open, unmerged)
-- [x] Add blocker and decision registers. — IMPLEMENTED — `docs/release/EXECUTION-BOARD.md` (61 tickets) carried by PR #12 (open, unmerged)
-- [x] Add an explicit distinction between MVP and full cross-platform scope. — IMPLEMENTED — `docs/release/EXECUTION-BOARD.md` (61 tickets) carried by PR #12 (open, unmerged)
+- [x] Create `docs/release/EXECUTION-BOARD.md`. — IMPLEMENTED — `docs/release/EXECUTION-BOARD.md` (61 tickets) carried by PR #74 (open; PR #12 was closed unmerged, so its board never reached `main`)
+- [x] Keep T27 as the parent campaign. — IMPLEMENTED — `docs/release/EXECUTION-BOARD.md` (61 tickets) carried by PR #74 (open; PR #12 was closed unmerged, so its board never reached `main`)
+- [x] Assign unique child task IDs. — IMPLEMENTED — `docs/release/EXECUTION-BOARD.md` (61 tickets) carried by PR #74 (open; PR #12 was closed unmerged, so its board never reached `main`)
+- [x] Link every child task to RP-00 through RP-08. — IMPLEMENTED — `docs/release/EXECUTION-BOARD.md` (61 tickets) carried by PR #74 (open; PR #12 was closed unmerged, so its board never reached `main`)
+- [x] Add priorities, dependencies, acceptance criteria, and verification. — IMPLEMENTED — `docs/release/EXECUTION-BOARD.md` (61 tickets) carried by PR #74 (open; PR #12 was closed unmerged, so its board never reached `main`)
+- [x] Add a status summary for each RP. — IMPLEMENTED — `docs/release/EXECUTION-BOARD.md` (61 tickets) carried by PR #74 (open; PR #12 was closed unmerged, so its board never reached `main`)
+- [x] Add artifact verification columns. — IMPLEMENTED — `docs/release/EXECUTION-BOARD.md` (61 tickets) carried by PR #74 (open; PR #12 was closed unmerged, so its board never reached `main`)
+- [x] Add blocker and decision registers. — IMPLEMENTED — `docs/release/EXECUTION-BOARD.md` (61 tickets) carried by PR #74 (open; PR #12 was closed unmerged, so its board never reached `main`)
+- [x] Add an explicit distinction between MVP and full cross-platform scope. — IMPLEMENTED — `docs/release/EXECUTION-BOARD.md` (61 tickets) carried by PR #74 (open; PR #12 was closed unmerged, so its board never reached `main`)
 
 ### P1.2 — Create atomic task tickets
 
