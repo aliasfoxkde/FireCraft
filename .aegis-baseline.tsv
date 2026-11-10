@@ -73,6 +73,7 @@ eval-usage	./crates/vector/src/boolean.rs	a475ee49c7acce90b0c9124fcaaf388999e9ef
 eval-usage	./crates/vector/src/offset.rs	a475ee49c7acce90b0c9124fcaaf388999e9ef2c94d490d52a855d24c2d97deb	1
 eval-usage	./crates/vector/src/tests.rs	a475ee49c7acce90b0c9124fcaaf388999e9ef2c94d490d52a855d24c2d97deb	4
 eval-usage	./docs/SESSIONS.md	a475ee49c7acce90b0c9124fcaaf388999e9ef2c94d490d52a855d24c2d97deb	1
+eval-usage	./docs/decisions/0083-aegis-rebless-parity-matrix.md	a475ee49c7acce90b0c9124fcaaf388999e9ef2c94d490d52a855d24c2d97deb	1
 eval-usage	./xtask/src/aegis.rs	a475ee49c7acce90b0c9124fcaaf388999e9ef2c94d490d52a855d24c2d97deb	3
 # Matches the two-word phrase naming an individual's data category in
 # English prose. The occurrence outside this gate's own source is a
@@ -111,6 +112,7 @@ pci-cardholder-data	./docs/NEXT.md	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57
 pci-cardholder-data	./docs/SESSIONS.md	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	5
 pci-cardholder-data	./docs/SESSIONS.md	e6205bc8ab80302276cc2b94e571d9aeafa567c0517146ac4396a4f6a8cead1a	1
 pci-cardholder-data	./docs/decisions/0074-aegis-content-keyed-baseline.md	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	1
+pci-cardholder-data	./docs/decisions/0083-aegis-rebless-parity-matrix.md	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	1
 pci-cardholder-data	./docs/planning/firecraft/M12-parity-release.md	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	3
 pci-cardholder-data	./docs/planning/firecraft/M13-deep-re-shell-parity.md	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	1
 pci-cardholder-data	./docs/planning/firecraft/M15-tool-surface.md	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	1
@@ -136,6 +138,7 @@ phone-number	./crates/scripting/src/widget.rs	33c64e1da9ef98568745ca988c8867d9fb
 phone-number	./docs/SESSIONS.md	89461177fb9cf018f8f04ab3c920b60f882219e1b7cf53fbf66c8fa6a82e1add	1
 phone-number	./docs/SESSIONS.md	f807212b6748a8300fc3702322caa515edf0a6ed9bbc86e94c451e351b080c60	1
 phone-number	./docs/decisions/0010-expv-export-options.md	f807212b6748a8300fc3702322caa515edf0a6ed9bbc86e94c451e351b080c60	1
+phone-number	./docs/decisions/0083-aegis-rebless-parity-matrix.md	f807212b6748a8300fc3702322caa515edf0a6ed9bbc86e94c451e351b080c60	1
 phone-number	./docs/research/fireworks-png-nodes.md	a4b661bf8bd26f27cb657509d46c535ef9e189e3a530a6ee809aab2be1f27d04	1
 phone-number	./docs/research/fireworks-png-nodes.md	ae6e1f8a17537939035bff24309ec3650a13f809a6805f4abb04b46b98437ecc	1
 phone-number	./docs/research/fireworks-png-nodes.md	b4af0a9844c84c027667fc46ce52ee56614753f6d1169ac8e97a92341c614cdb	1
@@ -173,6 +176,7 @@ ssrf-localhost	./docs/SESSIONS.md	12ca17b49af2289436f303e0166030a21e525d266e2092
 ssrf-localhost	./docs/SESSIONS.md	49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763	2
 ssrf-localhost	./docs/SITE-DEPLOYMENT.md	49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763	1
 ssrf-localhost	./docs/decisions/0074-aegis-content-keyed-baseline.md	49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763	1
+ssrf-localhost	./docs/decisions/0083-aegis-rebless-parity-matrix.md	49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763	1
 ssrf-localhost	./docs/tasks/T22-screenshot-ui.md	49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763	1
 ssrf-localhost	./packaging/deb/control	49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763	1
 ssrf-localhost	./xtask/src/aegis.rs	49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763	2
@@ -543,6 +547,12 @@ zip-code	./docs/decisions/0066-smoke-budget.md	d55d01d0341ed0ba2cd99b322e8c5b609
 zip-code	./docs/decisions/0074-aegis-content-keyed-baseline.md	6f21ec723dd82aa7bd36bc81cc4008e4f6359fe8ce68f793af23b7123bdbf3a6	1
 zip-code	./docs/decisions/0074-aegis-content-keyed-baseline.md	7b1f167cba373e261a8bea96004bdf27f937a89c830fceb823eec636d4a3920e	1
 zip-code	./docs/decisions/0074-aegis-content-keyed-baseline.md	b83c588da0c6931625f42e0948054a3ade722bfd02c27816305742ed7390ac6c	2
+zip-code	./docs/decisions/0083-aegis-rebless-parity-matrix.md	0f9014ed17f9ca2536c7cf4a2e1325712d249a7ac34ac32d1c90ef9178b6d4ae	1
+zip-code	./docs/decisions/0083-aegis-rebless-parity-matrix.md	7868973fdf360a737747e8f6d750786d74f5513b4a769e8e35585049f0cc20eb	1
+zip-code	./docs/decisions/0083-aegis-rebless-parity-matrix.md	83b3224c2c14989480197312705ae919167e8e9a9af552b83b44834a3ba960ae	1
+zip-code	./docs/decisions/0083-aegis-rebless-parity-matrix.md	dabf5c8b9082180e7d7ae1ee52a9417fc76be7e3e80aed2a8f3cccf1cd1c162d	1
+zip-code	./docs/decisions/0083-aegis-rebless-parity-matrix.md	e95e07198fbc2a3fac954c1e20f99ff404edbc4a9bcc08f0ef575f1b58121ac5	2
+zip-code	./docs/decisions/0083-aegis-rebless-parity-matrix.md	fec32d6024e177ac05e94de175bfccd84ec3d389034f6f57067fb167302534b6	2
 zip-code	./docs/planning/firecraft/M8-import-export.md	f2f89ede8e7d4b3d2243dea1ca96b8ece56f793811d9708b4a0181bf81a50011	2
 zip-code	./docs/planning/firecraft/M9-scripting.md	0e5c81ceee464db1c0cb9ed801d134fab0dd2a28c0dc62e35aa21a8e13ff0ebc	1
 zip-code	./docs/planning/firecraft/M9-scripting.md	20d70708103e5223b6f2fb00f00947832fb93d12ebef11eb10bc5599efefe184	1
