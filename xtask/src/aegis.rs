@@ -64,11 +64,7 @@ const CLASS_NOTES: &[(&str, &str)] = &[
     (
         "australian-tfn",
         "Matches the 9-digit observed value range in the PNG node dictionary \
-         (0..141663582), and the redrawn docs/img/logo.svg, whose SVG path \
-         data carries space-separated triples of cubic-bezier control-point \
-         coordinates (three 3-digit canvas coordinates each), which the rule \
-         reads as digits separated by a TFN's dashes; this repository holds \
-         no tax identifiers.",
+         (0..141663582); this repository holds no tax identifiers.",
     ),
     (
         "bank-routing-number",
