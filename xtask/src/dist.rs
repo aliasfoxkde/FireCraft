@@ -154,7 +154,7 @@ pub fn source() -> Result<(), String> {
         std::fs::remove_dir_all(&out).map_err(|e| format!("clear {}: {e}", out.display()))?;
     }
     std::fs::create_dir_all(&out).map_err(|e| format!("mkdir {}: {e}", out.display()))?;
-    let archive = out.join(format!("FireCraft-{version}-source.tar.gz"));
+    let archive = out.join(format!("firecraft-{version}-source.tar.gz"));
 
     // git archive pins the commit identity inside the tar (pax header)
     // implicitly; the report below names HEAD so the receipt is
@@ -214,7 +214,7 @@ pub fn source() -> Result<(), String> {
     std::fs::remove_dir_all(&scratch).map_err(|e| format!("clean verify scratch: {e}"))?;
     let digest = sha256_hex_file(&archive)?;
     eprintln!(
-        "[xtask] dist source: FireCraft-{version}-source.tar.gz ({digest}), \
+        "[xtask] dist source: firecraft-{version}-source.tar.gz ({digest}), \
          clean-extract + cargo metadata --locked verified"
     );
     Ok(())
@@ -1447,8 +1447,8 @@ fn release_specs(version: &str) -> Vec<ArtifactSpec> {
             target: "wasm32-unknown-unknown",
         },
         ArtifactSpec {
-            name: format!("FireCraft-{version}-source.tar.gz"),
-            rel_path: format!("source/FireCraft-{version}-source.tar.gz"),
+            name: format!("firecraft-{version}-source.tar.gz"),
+            rel_path: format!("source/firecraft-{version}-source.tar.gz"),
             format: "tar.gz",
             target: TARGET_ANY,
         },

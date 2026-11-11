@@ -9,6 +9,7 @@
 //! firecraft-cli run-script <script.jsf> <doc.fw.png> [--out <out.fw.png>]
 //! firecraft-cli serve <doc.fw.png> [--out <out.fw.png>]
 //! firecraft-cli mcp <doc.fw.png> [--out <out.fw.png>]
+//! firecraft-cli --version
 //! ```
 //!
 //! Every operation runs through the same engine registry the GUI uses;
@@ -51,6 +52,15 @@ fn run(args: &[String]) -> Result<(), CliError> {
         // code — so a packaged CLI could not be asked what it does.
         Some("--help") | Some("-h") => {
             println!("{USAGE}");
+            Ok(())
+        }
+        // `--version` answers with the stamped version on stdout and
+        // succeeds. A packaged CLI that cannot say which build it is
+        // leaves the release receipt with nothing to attest to, so the
+        // version is the crate's own stamp (`app_cli::VERSION`), which
+        // the workspace gate keeps equal to the release version.
+        Some("--version") | Some("-V") => {
+            println!("firecraft-cli {}", app_cli::VERSION);
             Ok(())
         }
         Some("info") => {

@@ -59,7 +59,7 @@ would let a stale file into the manifest.
 | `firecraft_<v>_amd64.deb` | `native/firecraft_<v>_amd64.deb` | `deb` | `x86_64-unknown-linux-gnu` |
 | `MANIFEST.sha256` | `native/MANIFEST.sha256` | `sha256` | `x86_64-unknown-linux-gnu` |
 | `firecraft-web-<v>.zip` | `firecraft-web-<v>.zip` | `zip` | `wasm32-unknown-unknown` |
-| `FireCraft-<v>-source.tar.gz` | `source/FireCraft-<v>-source.tar.gz` | `tar.gz` | `any` |
+| `firecraft-<v>-source.tar.gz` | `source/firecraft-<v>-source.tar.gz` | `tar.gz` | `any` |
 | `firecraft-<v>-sbom.cdx.json` | `sbom/firecraft-<v>-sbom.cdx.json` | `json` | `any` |
 | `RELEASE_SHA256.txt` | `RELEASE_SHA256.txt` | `sha256` | `any` |
 

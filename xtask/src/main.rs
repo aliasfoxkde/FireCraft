@@ -14,6 +14,10 @@
 //! (milestone status), `changelog` (release chore: generated
 //! CHANGELOG + license/version stamps), `stamps` (the git-free
 //! license/version stamp checks, for a CI image that ships no git),
+//! `stamp <version>` (move every release version stamp together —
+//! the workspace, the member manifests, the path dependencies' version
+//! requirements, the DEB control file and `Cargo.lock` — its package
+//! entries and its dependency references),
 //! `reachability` (the shell's
 //! share of the command registry, against a rising floor),
 //! `panel-snapshot` (the CS6 panel inventory, against a committed
@@ -37,6 +41,7 @@ mod panelsnapshot;
 mod perf;
 mod reachability;
 mod scripts;
+mod stamp;
 mod status;
 mod styles;
 #[allow(clippy::module_inception)]
@@ -47,7 +52,7 @@ mod webgolden;
 
 use std::process::ExitCode;
 
-const USAGE: &str = "usage: cargo run -p xtask -- <ci [--full]|ci-no-fmt|aegis [--bless|--report]|coverage [--bless|--measure]|layers|wasm|corpus [--report]|corpus-gen|library-gen|hero-gen|styles-gen|scripts|floor|golden [--bless]|svg-golden [--bless]|svg-roundtrip [--measure]|web-golden [--bless|--measure]|perf [--bless|--measure]|dist --web|--native|--source|--sbom|--manifest|--verify-manifest|fuzz|fuzz-quick|panic-hunt|reachability [--bless]|panel-snapshot [--bless]|parity|scorecard|stamps>";
+const USAGE: &str = "usage: cargo run -p xtask -- <ci [--full]|ci-no-fmt|aegis [--bless|--report]|coverage [--bless|--measure]|layers|wasm|corpus [--report]|corpus-gen|library-gen|hero-gen|styles-gen|scripts|floor|golden [--bless]|svg-golden [--bless]|svg-roundtrip [--measure]|web-golden [--bless|--measure]|perf [--bless|--measure]|dist --web|--native|--source|--sbom|--manifest|--verify-manifest|fuzz|fuzz-quick|panic-hunt|reachability [--bless]|panel-snapshot [--bless]|parity|scorecard|stamps|stamp <version>>";
 
 fn main() -> ExitCode {
     match std::env::args().nth(1).as_deref() {
@@ -146,6 +151,22 @@ fn main() -> ExitCode {
         Some("scorecard") => finish("scorecard", status::scorecard()),
         Some("changelog") => finish("changelog", changelog::run()),
         Some("stamps") => finish("stamps", changelog::stamps()),
+        // `stamp <version>` moves every release version stamp together:
+        // the workspace version, the member manifests that carry their
+        // own copy, the path dependencies that pin a local crate to a
+        // version requirement, the DEB control file and `Cargo.lock`
+        // — its package entries and the dependency references that
+        // carry a local package's version. The stamp used to be a
+        // two-file manual edit, and the lock was never in it — which
+        // is how the published source archive ended up unbuildable
+        // with `--locked`.
+        Some("stamp") => match std::env::args().nth(2) {
+            Some(version) => finish("stamp", stamp::set(&version)),
+            None => {
+                eprintln!("{USAGE}");
+                ExitCode::FAILURE
+            }
+        },
         _ => {
             eprintln!("{USAGE}");
             ExitCode::FAILURE

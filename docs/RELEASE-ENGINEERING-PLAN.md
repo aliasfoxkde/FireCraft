@@ -286,8 +286,14 @@ The desired outcome is one repeatable release methodology that benefits FireCraf
   - `firecraft-0.2.5-x86_64.flatpak` (or repository bundle/Flatpak ref naming if publishing a repo)
   - `firecraft-0.2.5-1.x86_64.rpm`
   - `FireCraft-0.2.5-android-arm64.apk`
-  - `FireCraft-0.2.5-source.tar.gz`
+  - `firecraft-0.2.5-source.tar.gz`
 - Confirm naming against ecosystem conventions before implementation; examples are not a mandate to violate DEB/RPM conventions.
+- The fleet-built artifacts are lowercase and carry no `FireCraft` designation
+  (`firecraft-<v>-linux-x86_64.tar.gz`, `firecraft-cli-<v>-linux-x86_64.tar.gz`,
+  `firecraft_<v>_amd64.deb`, `firecraft-web-<v>.zip`,
+  `firecraft-<v>-source.tar.gz`, `firecraft-<v>-sbom.cdx.json`). The
+  `FireCraft-` names above are the off-fleet placeholders and are not the
+  canonical spelling for anything this repository builds.
 
 ## 7. Work packages and agent execution order
 

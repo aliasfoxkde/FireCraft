@@ -3,8 +3,10 @@
 //! committed-generated-doc discipline as parity/scorecard — and
 //! verifies the release's stamps while it is at it: the Apache-2.0
 //! license claim against the license file and the manifests, and one
-//! workspace version across every shipped crate. The gate fails the
-//! release chore when any stamp drifts.
+//! workspace version across every shipped crate — plus the lock's own
+//! copy of it (`stamp::verify`), which is the drift that makes a
+//! published source archive unbuildable with `--locked`. The gate
+//! fails the release chore when any stamp drifts.
 //!
 //! `xtask stamps` is the git-free half: the stamp checks alone. The
 //! CI image ships no git, so the generation half cannot run there;
@@ -57,9 +59,18 @@ const STAMP_SUMMARY: &str = "license + version stamps verified";
 /// the job step took its exit status from the last command (`cmp`),
 /// so the failure was invisible and the stamp checks never ran
 /// anywhere in CI. See decision 0086.
+///
+/// `verify_versions` reads the *resolved* versions, so it cannot see
+/// the drift that matters most: `Cargo.lock` records its own copy of
+/// every local package's version, and a release that stamps the
+/// manifests without the lock ships a source archive that
+/// `cargo build --locked` refuses to build. `stamp::verify` is the
+/// git-free, cargo-free check that closes that hole, so it runs with
+/// the other stamp checks.
 pub fn stamps() -> Result<(), String> {
     verify_licenses()?;
     verify_versions()?;
+    crate::stamp::verify()?;
     eprintln!("[xtask] stamps: {STAMP_SUMMARY}");
     Ok(())
 }

@@ -31,9 +31,19 @@ fleet cannot build ship as recipes under `packaging/`
   workspace-wide `clippy --all-targets` and `test --workspace` steps are
   not permitted, this gate is routed through CI; the receipt is the CI
   **run id**, not a local statement that it was green.
-- Version stamp: `[workspace.package] version` in the root `Cargo.toml`
-  **and** the literal `Version:` in `packaging/deb/control` move
-  together. `xtask stamps` and `xtask dist --native` fail on drift.
+- Version stamp: `cargo run -p xtask -- stamp <version>` moves **every**
+  stamp at once — the workspace's `[workspace.package] version`, the
+  member crates that carry their own copy, the version requirement of
+  every path dependency that pins a local crate, the literal
+  `Version:` in `packaging/deb/control`, and `Cargo.lock`: the local
+  packages' entries *and* the dependency references that carry a local
+  package's version. The lock is the one that used to be missed: a
+  release that stamped the manifests without it shipped a source
+  archive that `cargo build --locked` refused to build.
+- `xtask stamps` (and `xtask dist --native`) fail on drift, and
+  `xtask stamps` now also checks that the lock agrees with the
+  manifests — its package entries, its dependency references and the
+  path dependencies' requirements.
 - Every crate carries the workspace version; `xtask stamps`
   enforces one stamp across all workspace-local packages.
 
@@ -84,7 +94,7 @@ or `dpkg -i`.
     cargo run -p xtask -- dist --source
     cargo run -p xtask -- dist --sbom
 
-Both verbs are present on main and wired into the tag release workflow. Their presence is implementation evidence only; a successful post-repair tag run, clean source build, schema-valid SBOM, and independent download verification are still required. `dist --source` produces `dist/source/FireCraft-<v>-source.tar.gz`
+Both verbs are present on main and wired into the tag release workflow. Their presence is implementation evidence only; a successful post-repair tag run, clean source build, schema-valid SBOM, and independent download verification are still required. `dist --source` produces `dist/source/firecraft-<v>-source.tar.gz`
 and verifies a clean extraction plus `cargo metadata --locked` inside it;
 `dist --sbom` produces `dist/sbom/firecraft-<v>-sbom.cdx.json`
 (CycloneDX 1.5) over the locked dependency graph.
@@ -220,7 +230,10 @@ Every step below is one the repository can actually perform today.
    `Web bundle smoke` step is tag-gated and is **skipped on branch
    pushes**; on a branch, the bridge smoke has to come from a
    `dist --web` run, not from the CI job.
-2. Version stamped in `Cargo.toml` **and** `packaging/deb/control`.
+2. Version stamped by `xtask stamp <version>` — the workspace, the
+   member manifests, the path dependencies' requirements,
+   `packaging/deb/control` **and** `Cargo.lock` (package entries and
+   dependency references).
 3. `xtask dist --web` green — manifest verifies, size budget holds,
    bridge smoke green on the release bytes.
 4. `xtask dist --native` green — manifest verifies, `dpkg-deb`
