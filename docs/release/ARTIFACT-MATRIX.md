@@ -168,6 +168,8 @@ exists.
 
 ### Decision
 
+Recorded as [decision 0084](../decisions/0084-web-deployment-source-of-truth.md).
+
 **The release is the source of truth; the deployment is redeployed from
 the release bytes.** The reverse — cutting the release from the deployed
 bytes — is rejected, for two reasons that are both evidence-backed:
