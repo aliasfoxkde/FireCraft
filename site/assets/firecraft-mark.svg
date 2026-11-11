@@ -1,1 +1,37 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc"><title id="title">FireCraft</title><desc id="desc">A stylized fox formed from an ember-orange flame.</desc><defs><linearGradient id="ember" x1="28" y1="24" x2="218" y2="230" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#FFD36A"/><stop offset=".42" stop-color="#FF9A24"/><stop offset="1" stop-color="#E84B22"/></linearGradient><linearGradient id="light" x1="74" y1="88" x2="190" y2="190" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#FFF4D8"/><stop offset="1" stop-color="#FFC45B"/></linearGradient></defs><rect x="8" y="8" width="240" height="240" rx="54" fill="#171B24"/><path d="M128 24C115 47 91 57 67 61 70 82 61 98 43 112 26 126 25 154 39 177c18 30 52 52 89 57 37-5 71-27 89-57 14-23 13-51-4-65-18-14-27-30-24-51-24-4-48-14-61-37Z" fill="url(#ember)"/><path d="M75 91c13 12 26 18 42 20-10 8-19 20-24 34-5 14-2 31 10 43 11 11 27 17 43 14 18-3 33-15 42-31-11 8-25 11-37 7-14-4-22-15-21-28 1-14 13-24 28-25 13-1 25 5 33 14 2-20-8-39-25-50-15-9-34-11-50-5-15 5-29 8-41 7Z" fill="#171B24"/><path d="M89 99c14 9 27 12 41 10-13 11-22 26-22 41s10 29 26 34c13 4 29 0 40-10-10 19-29 30-49 25-22-5-37-23-39-44-2-20 5-38 19-52Z" fill="url(#light)"/><path d="M155 128c11-7 26-6 37 4-9 2-17 7-24 15-6-7-10-13-13-19Z" fill="#FFF4D8"/><path d="M177 148c7-3 14-3 21 1-6 8-15 11-24 8Z" fill="#171B24"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">FireCraft</title>
+  <desc id="desc">A flame drawn as vector artwork under edit: an ember-gold gradient shape with the selection nodes and a Bézier handle of a live path showing on its outline.</desc>
+  <defs>
+    <linearGradient id="ember" x1="52" y1="16" x2="204" y2="236" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFD36A"/>
+      <stop offset=".45" stop-color="#FF9A24"/>
+      <stop offset="1" stop-color="#E8451F"/>
+    </linearGradient>
+    <linearGradient id="light" x1="96" y1="128" x2="166" y2="224" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFF4D8"/>
+      <stop offset="1" stop-color="#FFC45B"/>
+    </linearGradient>
+    <path id="flame" d="M128 236
+      C80 230 44 188 44 146
+      C44 114 62 92 84 70
+      C104 50 122 38 126 16
+      C148 40 164 68 166 96
+      C186 84 200 66 206 48
+      C214 84 216 116 212 144
+      C205 196 174 232 128 236Z"/>
+  </defs>
+  <rect x="8" y="8" width="240" height="240" rx="54" fill="#171B24"/>
+  <use href="#flame" fill="url(#ember)"/>
+  <use href="#flame" fill="url(#light)" transform="translate(128 236) scale(.46) translate(-128 -236)"/>
+  <g fill="none" stroke="#EAF0FF" stroke-width="3.2" opacity=".95">
+    <rect x="120" y="10" width="12" height="12"/>
+    <rect x="38" y="140" width="12" height="12"/>
+    <rect x="206" y="138" width="12" height="12"/>
+    <rect x="122" y="230" width="12" height="12"/>
+  </g>
+  <g stroke="#EAF0FF" stroke-width="2" opacity=".65" fill="#EAF0FF">
+    <path d="M44 188V104" fill="none"/>
+    <circle cx="44" cy="188" r="3.2" stroke="none"/>
+    <circle cx="44" cy="104" r="3.2" stroke="none"/>
+  </g>
+</svg>

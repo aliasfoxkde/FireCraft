@@ -74,6 +74,10 @@
 # virtual-time budget (60000), and decision 0074's table of adjudicated
 # classes and the rule identifiers quoted by the Aegis adjudication
 # tickets. This repository holds no postal data.
+australian-tfn	./docs/img/app-preview-dark.svg	197e6b1c357f3d959ff48bf52e3e8aae179b55145f13eb64db7eea631a93cc69	1
+australian-tfn	./docs/img/app-preview-dark.svg	9e2095671e41853dd2c27a6a9f6c43b8d1cd2f8548e2293e95aec84f7a07adf5	1
+australian-tfn	./docs/img/app-preview-dark.svg	c271cd9d0bac232bb161ac8dd9b1a40816441598fd5c0c5e41d3e3bdfafa47ee	1
+australian-tfn	./docs/img/app-preview-dark.svg	c8c202ad4293b1893efd892e1f3420d2b79cbd72dc511fd5b980fbf51644d75c	1
 australian-tfn	./docs/img/logo.svg	05ffbe779fdbeed8897ecb90c6610e6d5ae26ef3653a838140062fcccd7a8ce4	1
 australian-tfn	./docs/img/logo.svg	0eaed2a5b872f5f066ade727349a9ae6fe1e1092509219ff6001faa5509861d1	1
 australian-tfn	./docs/img/logo.svg	0ee2e84700b4ede0c27c03b443da672617a60834712152057e87aea906a18ff4	1
@@ -87,6 +91,7 @@ australian-tfn	./docs/img/logo.svg	821183659e06f87a01c242d2121549748d5b396d36601
 australian-tfn	./docs/img/logo.svg	8e18e8357553626ac0741b36414284be8c881ec2f9911287a82d2726389114e5	1
 australian-tfn	./docs/img/logo.svg	95adb35aebe7373d192d17611099931d4481ec07b22a55f8219d7328efee6752	1
 australian-tfn	./docs/img/logo.svg	95c66de87f548ef041527e5c94e476b403bd12456d29835b4959424fc2c6cfe4	1
+australian-tfn	./docs/img/logo.svg	98a03f7796b555095e39bfbc17141a65f7f246b19242a8773d658ae11f94b909	1
 australian-tfn	./docs/img/logo.svg	9b89a7069b1a2f15bb1b40b7a2a325f160963448a9fb69e92c1ce74b968ece35	1
 australian-tfn	./docs/img/logo.svg	ae70800c55fbb4c060f043be1cadbc9933405871d159ef8e38416fa9333f0c30	1
 australian-tfn	./docs/img/logo.svg	c8185595e5a576ddfc9b75b26880147a2adf5bb1f3c6d38c58e423b8f6a3815b	1
@@ -95,9 +100,12 @@ australian-tfn	./docs/img/logo.svg	d0ed234f513c7ee5446d5aeb9e3f77665f1b877d8c202
 australian-tfn	./docs/img/logo.svg	daffb76e90ced7f90e97479515bd3285c19ba8cb824c1893148aee78900cfc4b	1
 australian-tfn	./docs/img/logo.svg	e01a8639dcaddc9333aa36bb52877e15e53dd86ea6ad8296a275a44a556339bf	1
 australian-tfn	./docs/img/logo.svg	e20b9a7de59b308846f20f58e758540cb30bf65a8f73b2982f30cdb4550c1648	1
+australian-tfn	./docs/img/logo.svg	e39efc16a4d37d36fb70bebedf27e218782f35257b98fc7aca373e7d49c27871	1
 australian-tfn	./docs/img/logo.svg	ee547c09a9989b8cd109c29512b7e81b7033c6b9071a2c8aec8539f26e16e87f	1
 australian-tfn	./docs/img/logo.svg	ff09017689850911c6112f34bf47e2c4641d97d48ae7fd32306e4ceaf059afc9	1
 australian-tfn	./docs/research/fireworks-png-nodes.md	1004a585bc60d363038c5889d022bd6f58278338fe66f97483316133e316f41a	1
+australian-tfn	./site/assets/firecraft-mark.svg	98a03f7796b555095e39bfbc17141a65f7f246b19242a8773d658ae11f94b909	1
+australian-tfn	./site/assets/firecraft-mark.svg	e39efc16a4d37d36fb70bebedf27e218782f35257b98fc7aca373e7d49c27871	1
 australian-tfn	./xtask/src/aegis.rs	1004a585bc60d363038c5889d022bd6f58278338fe66f97483316133e316f41a	1
 bank-routing-number	./docs/research/fireworks-png-nodes.md	1004a585bc60d363038c5889d022bd6f58278338fe66f97483316133e316f41a	1
 bank-routing-number	./xtask/src/aegis.rs	1004a585bc60d363038c5889d022bd6f58278338fe66f97483316133e316f41a	1
@@ -139,7 +147,7 @@ pci-cardholder-data	./crates/app/src/menus.rs	00e37ffae0562ab6818d8f4f97457ac5f9
 pci-cardholder-data	./crates/app/src/shell/canvas_ui.rs	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	3
 pci-cardholder-data	./crates/app/src/shell/mod.rs	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	1
 pci-cardholder-data	./docs/NEXT.md	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	1
-pci-cardholder-data	./docs/SESSIONS.md	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	5
+pci-cardholder-data	./docs/SESSIONS.md	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	3
 pci-cardholder-data	./docs/SESSIONS.md	e6205bc8ab80302276cc2b94e571d9aeafa567c0517146ac4396a4f6a8cead1a	1
 pci-cardholder-data	./docs/decisions/0074-aegis-content-keyed-baseline.md	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	1
 pci-cardholder-data	./docs/decisions/0083-aegis-rebless-parity-matrix.md	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	1
@@ -220,7 +228,7 @@ zip-code	./crates/app-cli/src/mcp.rs	e27c72fe629f258a871404eed323c0cf57a7a26c19d
 zip-code	./crates/app/src/menus.rs	003093a13c569a8fe1e221840c719e86d2186011336ee30a5619dc13f0b56a64	1
 zip-code	./crates/app/src/menus.rs	00ce795c950c9db7382e3602a94398d7459dc68375632c32c06b694b91bfd7af	2
 zip-code	./crates/app/src/menus.rs	011e7d470a1521bb04a72f8bbc8ff7f9b1cd607b4384f52bc741599aa1d274d7	1
-zip-code	./crates/app/src/menus.rs	01ad44d03f60bf93f74b92d3af07610e342cbde43b585f39217508b513d14343	2
+zip-code	./crates/app/src/menus.rs	01ad44d03f60bf93f74b92d3af07610e342cbde43b585f39217508b513d14343	1
 zip-code	./crates/app/src/menus.rs	02288a89ae983ed25364d4f918a8e2deb3ac471c99ff7ac76325f2a9755de8bf	1
 zip-code	./crates/app/src/menus.rs	025285462d5eafb1203031862330c70214c161500769cbe48f4fdf35542da075	1
 zip-code	./crates/app/src/menus.rs	02aafe7fc05eca9d75a03eb8cf85b099e6e2d2d9e9554ba1c8a8ec6b2df6528f	1
@@ -323,7 +331,7 @@ zip-code	./crates/app/src/menus.rs	6ae29c8266e042c990b22c648de06825fb83d9a2e854c
 zip-code	./crates/app/src/menus.rs	6d09116d2b83f1a67b7e7a904b5eaea53f79273f2d165229010df0ed9d4a36bb	1
 zip-code	./crates/app/src/menus.rs	6ead8351fe3a37874b4763382e304dfa13ad2b8b4582444efcfe5532e05fbbc3	1
 zip-code	./crates/app/src/menus.rs	71e411bae65754184bbb45baaa3a0e2cadad2ab00e029a58fe87f9510125c12e	1
-zip-code	./crates/app/src/menus.rs	75e8751a57e0fc4097f6d98b486fe1680635494bbfc7ce16564757f38192e190	2
+zip-code	./crates/app/src/menus.rs	75e8751a57e0fc4097f6d98b486fe1680635494bbfc7ce16564757f38192e190	1
 zip-code	./crates/app/src/menus.rs	78f54f73431f4924a4c5ac3647c0dccca95e2f95d4e25037a92d03f8fae9db10	1
 zip-code	./crates/app/src/menus.rs	793bf730f23cf4ae95523a12a1d9ec42427defa041026ec06f9fcda4a860e3d1	1
 zip-code	./crates/app/src/menus.rs	798653c0204944019e08e0f97e5029a23372752fcd8b34ec667f1d7993d089a2	1
@@ -402,7 +410,7 @@ zip-code	./crates/app/src/menus.rs	c1860f954563eeb5afaae3a6c26dcf5048b8dd0c1b1b0
 zip-code	./crates/app/src/menus.rs	c324f7de6ff2e9eb5122329bd1991ea4638cc8f045235b1ae8baf082c3dd7c35	1
 zip-code	./crates/app/src/menus.rs	c3e4095a0395ccd826644e6881fab1e10e10342278cd3495609d47401b158fdd	1
 zip-code	./crates/app/src/menus.rs	c417f8e7788d6ee7776f9086d7d118e4cd6e15a75b64858431c6bf834f0b4d87	2
-zip-code	./crates/app/src/menus.rs	c4811e67ef000af33f22f8f16a036d706fcf636f7ad79f6afe89411e6a5876a2	2
+zip-code	./crates/app/src/menus.rs	c4811e67ef000af33f22f8f16a036d706fcf636f7ad79f6afe89411e6a5876a2	1
 zip-code	./crates/app/src/menus.rs	c5ea45d255a440bc7d1e8ad9d3b21de8cd1c71fd2f52fe47550b0504bf9aa461	1
 zip-code	./crates/app/src/menus.rs	c5fb3c84f70f9a6d78f0685272022bd4f4e5310bbd3a8634ec6af38de7197441	1
 zip-code	./crates/app/src/menus.rs	c683cbb29be1f227c17c1bdf8ee9b46bf468ac03c7be7c8b77e3840a8d6425c6	1
@@ -439,14 +447,14 @@ zip-code	./crates/app/src/menus.rs	e54f884419f0da9030a8349e71dc4bdc1ed7bcea87100
 zip-code	./crates/app/src/menus.rs	e5586501c9641b47d3db40f3d6fabe56b1609d9886c2ad711a497c76ffd76fe4	1
 zip-code	./crates/app/src/menus.rs	e5e1c835eaff1f109bacc17aadd51983945d26068a922a9dee19acc3ce2d724a	1
 zip-code	./crates/app/src/menus.rs	e61b7ddff66a1220d3ca0098e3adfde441a174bb52942ca91057bb8c666100de	1
-zip-code	./crates/app/src/menus.rs	e62147508159e5fc695ede723066fbd9d42118e1c18ece6d18bfb70a96735a20	2
+zip-code	./crates/app/src/menus.rs	e62147508159e5fc695ede723066fbd9d42118e1c18ece6d18bfb70a96735a20	1
 zip-code	./crates/app/src/menus.rs	e670e8bb47655f895f07531ba65a8c39f3756b9b512eb13a33dd212f5630ed11	1
 zip-code	./crates/app/src/menus.rs	e6c1f8dc72e9d3a3c2837be0d843cc0b47b4e504c66dcf85d2f03f62d75d5f39	1
 zip-code	./crates/app/src/menus.rs	e6ed7f393091d090dc6bb6f5fa02dadc3eac44e2b7d12188965f4d1f0fd2035a	1
 zip-code	./crates/app/src/menus.rs	e7c20ffffd16b76ad7c2a84619642b95dc6d07fe1997ff1491d2bcd4f546bf17	1
 zip-code	./crates/app/src/menus.rs	e81a8588e04d8f58ba675fe485ac6fd8b904397505f7dee6322798452f1b5342	1
 zip-code	./crates/app/src/menus.rs	e93d60524b42e4cada18060fed25915d1cffa9d03c8fc41678bad660fbcd08f1	1
-zip-code	./crates/app/src/menus.rs	e95e07198fbc2a3fac954c1e20f99ff404edbc4a9bcc08f0ef575f1b58121ac5	4
+zip-code	./crates/app/src/menus.rs	e95e07198fbc2a3fac954c1e20f99ff404edbc4a9bcc08f0ef575f1b58121ac5	1
 zip-code	./crates/app/src/menus.rs	e97d7aa7e9a9dccc626f9be8d5f9d8bc101f0abe242405eb28b8d2d37a812b59	1
 zip-code	./crates/app/src/menus.rs	e99ae6b95a1b0a4b796029a2f6ad2033c6926c440cc338ac6ff7157b33cd7a0a	1
 zip-code	./crates/app/src/menus.rs	eb0bb749278d0f9652bd8df5e78688d4b2a5de2384be11a12ac92422723b32f9	1
@@ -477,7 +485,7 @@ zip-code	./crates/app/src/menus.rs	fcdd622916b6b611e2062d1585cbf4a1e189cd7cfc0c0
 zip-code	./crates/app/src/menus.rs	fd5cf06ef2a35b23fe58d2fa7d75e92510d7f79c62222387443468b7459767a0	1
 zip-code	./crates/app/src/menus.rs	fe4b5aaceb85434cb5ab2dd46e956d10971a5de67e5f81c344e312f83b55f19f	1
 zip-code	./crates/app/src/menus.rs	fe71955958a0844d86cd6217c0144e33825cd4c111f1fd815232c6b8fb4f6ec0	1
-zip-code	./crates/app/src/menus.rs	fec32d6024e177ac05e94de175bfccd84ec3d389034f6f57067fb167302534b6	4
+zip-code	./crates/app/src/menus.rs	fec32d6024e177ac05e94de175bfccd84ec3d389034f6f57067fb167302534b6	1
 zip-code	./crates/app/src/menus.rs	ffdfd59d08e67eeff2569e91641bb6adb12fc0bf42ef8f0f2c197ed14369f10d	1
 zip-code	./crates/app/src/shell/dialogs.rs	158cb7c22ce6943d7fe7d3e01d61b78ab5b2d080cbffdd81c5de41218a6d65ed	1
 zip-code	./crates/app/src/shell/dialogs.rs	f2f89ede8e7d4b3d2243dea1ca96b8ece56f793811d9708b4a0181bf81a50011	1
