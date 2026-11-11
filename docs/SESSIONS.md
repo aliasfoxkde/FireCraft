@@ -1420,22 +1420,32 @@ tests drive it with a deliberately broken binding set.
 
 ### The panel snapshot (`xtask panel-snapshot`)
 
-`egui_kittest` is **not usable here**: it is absent from `Cargo.lock`,
-and the CI image builds with `CARGO_NET_OFFLINE=true` against a
-registry cache holding only the locked crates — a dependency on it
-would be a build that cannot resolve, not a gate. The panel set is
-therefore pinned the way this repository pins everything else: a
-committed golden file, `crates/app/panels.snapshot`, compared against
-a snapshot rendered from the shell's own inventory (the xtask crate
-now depends on `app` and reads `app::shell::panel_inventory()`, so
-the Rust `PANELS` table stays the single authority).
+`egui_kittest` was checked before any code was written. It is
+**obtainable**: `egui_kittest` 0.36.2 is on crates.io and requires
+`egui ^0.36.2` — exactly the egui this lockfile pins — and the CI
+image is *not* offline (it runs with `CARGO_NET_OFFLINE=false`;
+decision 0073 removed that wall, so the baked registry cache is a
+fast floor, not a wall). The blocker is its **pixel** path: the
+snapshot machinery sits behind the crate's optional `wgpu` /
+`egui-wgpu` features, and the CI image installs no graphics stack
+(no mesa, no Vulkan drivers), so no wgpu adapter is available in the
+sandbox. A pixel suite would fail there for want of an adapter, not
+for want of a crate.
+
+So the panel set is pinned the way this repository pins everything
+else: a committed golden file, `crates/app/panels.snapshot`, compared
+against a snapshot rendered from the shell's own inventory (the xtask
+crate now depends on `app` and reads
+`app::shell::panel_inventory()`, so the Rust `PANELS` table stays the
+single authority).
 
 Pinned per panel: id, dock side, dock order, header text,
 fresh-document visibility, Window-menu togglability — 14 panels (13
 toggleable + the always-present Web Layer). A panel added, renamed,
 reordered or re-docked without a deliberate re-pin fails the build.
-Panel *content* is not pinned: it changes with every feature, and such
-a change is reviewed as code, not as a golden diff.
+Panel *pixels* are not pinned: they need `egui_kittest` plus a proven
+software adapter (lavapipe) in the CI image, and that half is
+recorded as still open.
 
 ### Docs reconciled
 
@@ -1445,9 +1455,9 @@ the same gate, the inert-drift test and the wasm budget were all
 open, and named `egui_kittest` as the snapshot mechanism. One truth
 now: 19b.2 records the xtask gate with its measured numbers, the
 quality-gate list points at 19b.2/19b.3/19b.4 as done, and the
-snapshot item explains why `egui_kittest` was replaced by the in-tree
-golden and what half of it (panel pixels) is still open. `GAPS.md`,
-`HANDOFF.md` and `PROGRESS.md` carry the same numbers.
+snapshot item records what was checked about `egui_kittest` and which
+half of it (panel pixels) is still open. `GAPS.md`, `HANDOFF.md` and
+`PROGRESS.md` carry the same numbers.
 
 ### Lesson
 

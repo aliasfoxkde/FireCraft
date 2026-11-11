@@ -505,23 +505,28 @@ scope, so no license path is attempted.
 ### Quality gates for UI work (new)
 
 1. **Panel snapshots** — theme and WCAG regressions become mechanical.
-   — **PARTIAL, DONE for structure (2026-11-10)**: `egui_kittest` is
-   **not usable in this repository**: it is absent from `Cargo.lock`,
-   and the CI image builds with `CARGO_NET_OFFLINE=true` against a
-   registry cache holding only the locked crates, so a dependency on it
-   is a build that cannot resolve rather than a gate. The panel set is
-   therefore pinned the way this repository pins everything else — a
-   committed golden file, **`crates/app/panels.snapshot`**, compared
-   against a snapshot rendered from the shell's own inventory by the
-   xtask step `cargo run -p xtask -- panel-snapshot` (in `ci`;
-   `--bless` re-pins). The golden pins the panel *structure* — id,
-   dock side, dock order, header text, fresh-document visibility,
-   Window-menu togglability — for all **14** panels (13 toggleable +
-   the always-present Web Layer). A panel added, renamed, reordered or
+   — **PARTIAL, DONE for structure (2026-11-10)**: `egui_kittest` was
+   checked before the gate was written. It is *obtainable* —
+   `egui_kittest` 0.36.2 is on crates.io and requires `egui ^0.36.2`,
+   exactly the egui this lockfile pins, and the CI image is not
+   offline (`CARGO_NET_OFFLINE=false`; decision 0073 — the baked
+   registry cache is a fast floor, not a wall). The blocker is its
+   *pixel* path: the snapshot machinery sits behind the crate's
+   optional `wgpu` / `egui-wgpu` features, and the CI image installs
+   no graphics stack (no mesa, no Vulkan drivers), so a wgpu adapter
+   is not available in the sandbox. The panel set is therefore pinned
+   the way this repository pins everything else — a committed golden
+   file, **`crates/app/panels.snapshot`**, compared against a snapshot
+   rendered from the shell's own inventory by the xtask step
+   `cargo run -p xtask -- panel-snapshot` (in `ci`; `--bless`
+   re-pins). The golden pins the panel *structure* — id, dock side,
+   dock order, header text, fresh-document visibility, Window-menu
+   togglability — for all **14** panels (13 toggleable + the
+   always-present Web Layer). A panel added, renamed, reordered or
    re-docked without a deliberate re-pin fails the build. The pixel
-   content of a panel is still unpinned; that half stays open and needs
-   `egui_kittest` (or an in-tree render harness) to close. Decision
-   [`0079`](decisions/0079-ui-work-gates.md).
+   content of a panel is still unpinned; that half stays open and
+   needs `egui_kittest` plus a proven software adapter (lavapipe) in
+   the CI image. Decision [`0079`](decisions/0079-ui-work-gates.md).
 2. **Reachability gate** in xtask: the set difference
    `catalog::ids()` − UI-bound commands only shrinks (mirror of the
    call-table test). Unreachable commands with no gate means drift.

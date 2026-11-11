@@ -2,13 +2,27 @@
 //! pinned against a committed golden file.
 //!
 //! `egui_kittest` — the snapshot library the quality-gates section of
-//! `docs/NEXT.md` names — cannot be used here. The CI image builds
-//! with `CARGO_NET_OFFLINE=true`, and its registry cache holds only
-//! the crates already in `Cargo.lock`; `egui_kittest` is not among
-//! them, so a dependency on it is a build that cannot resolve, not a
-//! gate. The panel set is therefore pinned the way this repository
-//! pins everything else — a committed golden file, compared against a
-//! freshly rendered snapshot, regenerated deliberately.
+//! `docs/NEXT.md` names — was checked before this gate was written
+//! (2026-11-10):
+//!
+//! - It is *obtainable*: `egui_kittest` 0.36.2 is on crates.io and
+//!   requires `egui ^0.36.2`, which is exactly the egui this
+//!   repository's lockfile pins. The CI image is not offline either —
+//!   it runs with `CARGO_NET_OFFLINE=false` (decision 0073: the baked
+//!   registry cache is a fast floor, not a wall), so a crate the cache
+//!   lacks is fetched, not refused.
+//! - Its *pixel* path is the blocker: the snapshot machinery sits
+//!   behind the crate's optional `wgpu` / `egui-wgpu` features, and
+//!   the CI image installs no graphics stack (no mesa, no Vulkan
+//!   drivers), so a wgpu adapter is not available in the sandbox. A
+//!   pixel suite would fail there for want of an adapter, not for
+//!   want of a crate.
+//!
+//! So the panel set is pinned the way this repository pins everything
+//! else — a committed golden file, compared against a freshly
+//! rendered snapshot, regenerated deliberately. Pixel snapshots stay
+//! open until the CI image can prove a software adapter; see
+//! decision 0079.
 //!
 //! What is pinned is the panel *structure*: the set, the dock order,
 //! the dock side, the header text, the fresh-document visibility, and

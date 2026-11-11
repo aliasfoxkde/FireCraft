@@ -22,12 +22,25 @@ Two design questions had to be answered before any code:
    a user can reach through the surface CS6 actually shows — the menu
    bar, the panels, the dialogs, the canvas tools.
 
-2. **Can the panel snapshot use `egui_kittest`?** It is not in
-   `Cargo.lock`, and the CI image builds with `CARGO_NET_OFFLINE=true`
-   against a registry cache holding only the locked crates (decision
-   0073). A dependency on it would be a build that cannot resolve,
-   not a gate — and the lockfile would have to move for a crate the
-   image cannot fetch.
+2. **Can the panel snapshot use `egui_kittest`?** It was checked
+   before any code was written (2026-11-10):
+
+   - It is *obtainable*. `egui_kittest` 0.36.2 is on crates.io and
+     requires `egui ^0.36.2` — exactly the egui this repository's
+     lockfile pins. The CI image is not offline either: it runs with
+     `CARGO_NET_OFFLINE=false` (decision 0073 removed the wall; the
+     baked registry cache is a fast floor, not a wall), so a crate the
+     cache lacks is fetched, not refused.
+   - Its *pixel* path is the blocker. The snapshot machinery sits
+     behind the crate's optional `wgpu` / `egui-wgpu` features, and
+     the CI image installs no graphics stack (no mesa, no Vulkan
+     drivers — the image carries the toolchain, node and a headless
+     chromium for the web smoke, nothing for wgpu). A wgpu adapter is
+     therefore not available in the sandbox, and a pixel suite would
+     fail there for want of an adapter rather than for want of a
+     crate. Adding it would also move the workspace lockfile and pull
+     `kittest`, `toml` and `wgpu` into every `cargo test --workspace`
+     build for a gate that cannot run there yet.
 
 ## Decision
 
@@ -47,8 +60,10 @@ may raise it and refuses to lower it. A removed binding fails the
 build; a regression is fixed, not forgiven.
 
 **The panel snapshot is pinned with the repository's own golden-file
-machinery**, not with `egui_kittest`. The xtask crate now reads the
-shell's own inventory (`app::shell::panel_inventory()`) and compares a
+machinery**, not with `egui_kittest` — whose pixel path needs a wgpu
+adapter the CI image cannot provide, and whose structural value the
+golden file already carries. The xtask crate now reads the shell's
+own inventory (`app::shell::panel_inventory()`) and compares a
 rendered snapshot against the committed golden
 `crates/app/panels.snapshot`. The Rust `PANELS` table stays the single
 authority for what the panel set *is*; the golden pins its
@@ -72,17 +87,18 @@ visibility, Window-menu togglability.
   pins — the failure mode is a floor that is slightly too generous,
   never a floor that hides a regression.
 - Panel *pixels* stay unpinned. A theme or WCAG regression inside a
-  panel is still reviewed as code, not as a golden diff; closing that
-  half needs a render harness the offline CI image can actually
-  build.
+  panel is still reviewed as code, not as a golden diff. Closing that
+  half means adding `egui_kittest` (0.36.2 matches the locked egui)
+  *and* proving a software wgpu adapter in the CI image — the
+  dependency is obtainable today, the renderer is not.
 - The panel snapshot depends on the `app` crate, so `xtask` links
   egui. The workspace already builds that crate, and the layer gate
   allows `xtask` (L7) to depend on `app` (L5), so no tier is
   violated.
 - `Cargo.lock` moves: `xtask` gains one path dependency. It is an
-  in-workspace crate, so no registry crate is added and the offline CI
-  image still resolves the build.
+  in-workspace crate, so no registry crate is added and the CI image
+  still resolves the build.
 - The docs now say one true thing. `NEXT.md` §19b.2 records the gate
   with its measured numbers, the quality-gate list points at
-  19b.2/19b.3/19b.4 as done, and the snapshot item records why
-  `egui_kittest` was replaced and which half of it is still open.
+  19b.2/19b.3/19b.4 as done, and the snapshot item records what was
+  checked about `egui_kittest` and which half of it is still open.

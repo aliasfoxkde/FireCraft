@@ -18,8 +18,10 @@
   holds it to a one-way floor in `.reachability-floor.tsv` — **245
   registry commands, 146 bound = 59.59%**, 99 unreachable. The panel
   snapshot (`crates/app/panels.snapshot`, 14 panels) pins the panel
-  set's structure; `egui_kittest` cannot resolve in the offline CI
-  image, so the in-tree golden machinery does that job.
+  set's structure; `egui_kittest` is obtainable (0.36.2 matches the
+  locked egui) but its pixel path needs a wgpu adapter the CI image
+  does not provide, so the in-tree golden machinery does that job and
+  panel pixels stay open.
 - **19.1–19.5 landed** (2026-10-31 → 11-01, `7329087`…`eb221ac`):
   transform handles + Numeric Transform dialog; Subselect path-node
   editing; gradient fill editor with on-canvas handles; command palette

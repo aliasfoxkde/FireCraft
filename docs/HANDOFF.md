@@ -242,8 +242,10 @@ one. Summary:
   commands, 146 bound by the shell = 59.59%**, floor pinned in
   `.reachability-floor.tsv` (one-way ratchet). The panel-structure
   snapshot landed with it (`crates/app/panels.snapshot`, 14 panels) —
-  `egui_kittest` is unusable offline, so the panel set is pinned with
-  the in-tree golden machinery instead.
+  `egui_kittest` is obtainable (0.36.2 matches the locked egui) but
+  its pixel path needs a wgpu adapter the CI image does not provide,
+  so the panel set is pinned with the in-tree golden machinery and
+  panel pixels stay open.
 - **20 / 21 queued**: daily-driver features (in-canvas text, Optimize
   panel, animation timeline, mask stack, tabs, history rewind, slice
   behaviors) and differentiators (autosave, HiDPI, palette v2,
