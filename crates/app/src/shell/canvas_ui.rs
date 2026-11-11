@@ -533,9 +533,7 @@ impl Shell {
                     .document()
                     .pages
                     .get(self.editor.page)
-                    .is_some_and(|page| {
-                        page.info.onion_before > 0 || page.info.onion_after > 0
-                    });
+                    .is_some_and(|page| page.info.onion_before > 0 || page.info.onion_after > 0);
                 let result = if onionning {
                     compose::render_onion(
                         self.editor.document(),
