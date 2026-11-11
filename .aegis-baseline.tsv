@@ -19,20 +19,31 @@
 # Regenerate with: cargo run -p xtask -- aegis --bless
 # Only after verifying each newly added key is a false positive.
 # Matches the 9-digit observed value range in the PNG node dictionary
-# (0..141663582), and the run of SVG path control coordinates in the
-# brand mark's bezier paths; this repository holds no tax identifiers.
+# (0..141663582), the run of SVG path control coordinates in the brand
+# mark's bezier paths, and the GitHub release and asset identifiers
+# quoted in the release receipts; this repository holds no tax
+# identifiers.
 australian-tfn	./docs/img/app-preview-dark.svg	197e6b1c357f3d959ff48bf52e3e8aae179b55145f13eb64db7eea631a93cc69	1
 australian-tfn	./docs/img/app-preview-dark.svg	9e2095671e41853dd2c27a6a9f6c43b8d1cd2f8548e2293e95aec84f7a07adf5	1
 australian-tfn	./docs/img/app-preview-dark.svg	c271cd9d0bac232bb161ac8dd9b1a40816441598fd5c0c5e41d3e3bdfafa47ee	1
 australian-tfn	./docs/img/app-preview-dark.svg	c8c202ad4293b1893efd892e1f3420d2b79cbd72dc511fd5b980fbf51644d75c	1
 australian-tfn	./docs/img/logo.svg	98a03f7796b555095e39bfbc17141a65f7f246b19242a8773d658ae11f94b909	1
 australian-tfn	./docs/img/logo.svg	e39efc16a4d37d36fb70bebedf27e218782f35257b98fc7aca373e7d49c27871	1
+australian-tfn	./docs/release/EXECUTION-BOARD.md	35b904df2c6f31c493260dde331b4104ae508d471dc06ce7595bf3ad5a681134	1
+australian-tfn	./docs/release/EXECUTION-BOARD.md	a3a2cc550be9d1627cd6ebe8554832486df9ae30304ab8ca9b141b1f88bb4e99	1
+australian-tfn	./docs/release/RECEIPT-0.2.5-DRYRUN-3.md	35b904df2c6f31c493260dde331b4104ae508d471dc06ce7595bf3ad5a681134	1
+australian-tfn	./docs/release/RECEIPT-0.2.5-DRYRUN-3.md	a3a2cc550be9d1627cd6ebe8554832486df9ae30304ab8ca9b141b1f88bb4e99	1
 australian-tfn	./docs/research/fireworks-png-nodes.md	1004a585bc60d363038c5889d022bd6f58278338fe66f97483316133e316f41a	1
 australian-tfn	./site/assets/firecraft-mark.svg	98a03f7796b555095e39bfbc17141a65f7f246b19242a8773d658ae11f94b909	1
 australian-tfn	./site/assets/firecraft-mark.svg	e39efc16a4d37d36fb70bebedf27e218782f35257b98fc7aca373e7d49c27871	1
 australian-tfn	./xtask/src/aegis.rs	1004a585bc60d363038c5889d022bd6f58278338fe66f97483316133e316f41a	1
 # Matches the same 9-digit observed value range in the PNG node
-# dictionary; this repository holds no banking data.
+# dictionary and the GitHub release and asset identifiers quoted in the
+# release receipts; this repository holds no banking data.
+bank-routing-number	./docs/release/EXECUTION-BOARD.md	35b904df2c6f31c493260dde331b4104ae508d471dc06ce7595bf3ad5a681134	1
+bank-routing-number	./docs/release/EXECUTION-BOARD.md	a3a2cc550be9d1627cd6ebe8554832486df9ae30304ab8ca9b141b1f88bb4e99	1
+bank-routing-number	./docs/release/RECEIPT-0.2.5-DRYRUN-3.md	35b904df2c6f31c493260dde331b4104ae508d471dc06ce7595bf3ad5a681134	1
+bank-routing-number	./docs/release/RECEIPT-0.2.5-DRYRUN-3.md	a3a2cc550be9d1627cd6ebe8554832486df9ae30304ab8ca9b141b1f88bb4e99	1
 bank-routing-number	./docs/research/fireworks-png-nodes.md	1004a585bc60d363038c5889d022bd6f58278338fe66f97483316133e316f41a	1
 bank-routing-number	./xtask/src/aegis.rs	1004a585bc60d363038c5889d022bd6f58278338fe66f97483316133e316f41a	1
 # The GitForge API row names the credential file that holds the bearer
@@ -167,7 +178,12 @@ sql-query	./docs/research/fw-ui-evidence.md	d7a39f416c7b9033673d6c465a646be64ce5
 sql-query	./docs/research/fw-ui-evidence.md	fbfaf459bf28ef75433705459453e22c20a8057f2a19f57a93e1660db5c3e0e7	1
 sql-query	./docs/tasks/T22-screenshot-ui.md	6ba454ee08d4ce45364f6e849176079be5c628c2e176eb31ae1671451b5c401a	1
 # Matches the same 9-digit observed value range in the PNG node
-# dictionary; this repository holds no social-security numbers.
+# dictionary and the GitHub release and asset identifiers quoted in the
+# release receipts; this repository holds no social-security numbers.
+ssn-no-dashes	./docs/release/EXECUTION-BOARD.md	35b904df2c6f31c493260dde331b4104ae508d471dc06ce7595bf3ad5a681134	1
+ssn-no-dashes	./docs/release/EXECUTION-BOARD.md	a3a2cc550be9d1627cd6ebe8554832486df9ae30304ab8ca9b141b1f88bb4e99	1
+ssn-no-dashes	./docs/release/RECEIPT-0.2.5-DRYRUN-3.md	35b904df2c6f31c493260dde331b4104ae508d471dc06ce7595bf3ad5a681134	1
+ssn-no-dashes	./docs/release/RECEIPT-0.2.5-DRYRUN-3.md	a3a2cc550be9d1627cd6ebe8554832486df9ae30304ab8ca9b141b1f88bb4e99	1
 ssn-no-dashes	./docs/research/fireworks-png-nodes.md	1004a585bc60d363038c5889d022bd6f58278338fe66f97483316133e316f41a	1
 ssn-no-dashes	./xtask/src/aegis.rs	1004a585bc60d363038c5889d022bd6f58278338fe66f97483316133e316f41a	1
 # A loopback listener in the release smoke test, a localhost maintainer
@@ -205,7 +221,9 @@ xml-external-entity	./packaging/build-macos-dmg.sh	7b16906a7de9206c7488979eb86e8
 # civil-date epoch constant (36524) in the SBOM timestamp builder, plus
 # the headless-browser virtual-time budget (60000), and decision 0074's
 # table of adjudicated classes and the rule identifiers quoted by the
-# Aegis adjudication tickets. This repository holds no postal data.
+# Aegis adjudication tickets. The v1 MVP roadmap's RPC-emulation row
+# names the legacy Fireworks RPC TCP port — a protocol number, not
+# postal data. This repository holds no postal data.
 zip-code	./crates/app-cli/src/mcp.rs	0e5c81ceee464db1c0cb9ed801d134fab0dd2a28c0dc62e35aa21a8e13ff0ebc	1
 zip-code	./crates/app-cli/src/mcp.rs	20d70708103e5223b6f2fb00f00947832fb93d12ebef11eb10bc5599efefe184	1
 zip-code	./crates/app-cli/src/mcp.rs	e27c72fe629f258a871404eed323c0cf57a7a26c19dc8d5a6ac90770241af8f5	1
@@ -606,6 +624,7 @@ zip-code	./docs/planning/generated/parity.md	b66a7baff55a93ebb558b351aabb3c7f8df
 zip-code	./docs/planning/generated/parity.md	db4859f7fe2245f0d7160995d4d60a96d0989d9d05cd8782dd7ebe07ffc45e00	1
 zip-code	./docs/planning/generated/parity.md	eea32706ceeea18ece420ede85bbc9dc629a96c899a0782cdd0543e260698320	1
 zip-code	./docs/planning/generated/scorecard.md	848e3fb85d62f31af8c03726f527aff81df44cca545728554b1bc26b40e4de0f	1
+zip-code	./docs/planning/v1-roadmap.md	9766638817ec53c323baa6aaa5f8d10a6105299553621601c5e71d0c47b10e5b	1
 zip-code	./docs/release/PHASE-0-AUDIT.md	3e6d8748577115dd136761901582abce3093fbb973a08c35be9efe6781fb4f4d	4
 zip-code	./docs/research/fireworks-png-nodes.md	492f431bae35265f2e5f4ed49bd8c58dda912431be561504846988d00d05d117	2
 zip-code	./docs/research/fireworks-png-nodes.md	9a37837cdde1d7b36fc789a2d4558af7652d6bb2f7ea5d1a7451ea416f34ef5a	1
