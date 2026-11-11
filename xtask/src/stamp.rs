@@ -805,6 +805,7 @@ fn rewrite_reference(
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used)]
     use super::{
         check_version, field, lock_reference_drifts, path_requirements, replace_field,
         replace_quoted, rewrite_lock, rewrite_path_requirements, section_value,
