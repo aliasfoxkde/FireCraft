@@ -102,7 +102,10 @@
 | 22 | Screenshot-driven frontend audit + systematic refinement | — | `IN PROGRESS` | frontend lane | audit against the CS6 shell-parity directive; record screenshots per panel |
 | 25 | Responsive/adaptive layout audit + fixes | — | `NOT STARTED` | frontend lane | follows the responsive audit in the current UI work |
 
-### T27 work-package detail
+### Production readiness and T27 work-package detail
+
+The cross-cutting cleanup, WASM optimization, QA, UI polish, agent ownership, and integration sequence are defined in [PRODUCTION-READINESS-PLAN.md](PRODUCTION-READINESS-PLAN.md).
+
 
 The full implementation-versus-verification table for T27 — per work
 package, the implementation state, the verification state, the owner and

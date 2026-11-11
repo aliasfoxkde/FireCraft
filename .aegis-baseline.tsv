@@ -219,6 +219,10 @@ ssrf-localhost	./docs/tasks/T27-12-adjudicate-aegis-findings.md	49960de5880e8c68
 ssrf-localhost	./packaging/deb/control	49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763	1
 ssrf-localhost	./xtask/src/aegis.rs	49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763	2
 ssrf-localhost	./xtask/src/dist.rs	12ca17b49af2289436f303e0166030a21e525d266e209267433801a8fd4071a0	1
+# A comment quoting a V8 crash dump observed in CI; it documents a
+# failure, and the build prints nothing.
+stack-trace-exposure	./docs/PRODUCTION-READINESS-PLAN.md	d26fba73fb8604b0c99010d648d66379756ada54983b96b6dbffcf0626cf0b1a	1
+stack-trace-exposure	./docs/decisions/0090-wasm-bundle-size-policy.md	d26fba73fb8604b0c99010d648d66379756ada54983b96b6dbffcf0626cf0b1a	1
 stack-trace-exposure	./infrastructure/docker/ci-rust.Dockerfile	17ee41935f062dffb434b86c2a8d432567df47fc5988eb4cf2bbae1b690e4747	1
 xml-external-entity	./crates/io/tests/svgimport.rs	f6cfc5faea5abe6ee5bd8667967edfc5cbe43d95f0f04d7a560afb01613823d5	2
 xml-external-entity	./packaging/build-macos-dmg.sh	7b16906a7de9206c7488979eb86e8393ba62a45c0e769c79cf070a16c1858d49	1
