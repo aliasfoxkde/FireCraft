@@ -459,7 +459,6 @@ impl Shell {
                         self.rewind_history(entry.depth);
                     }
                     response.on_hover_text(format!("Rewind to step {}", entry.depth));
-
                 }
             });
         ui.horizontal(|ui| {

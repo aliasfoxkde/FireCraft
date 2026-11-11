@@ -40,7 +40,6 @@ use std::process::ExitCode;
 
 const USAGE: &str = "usage: cargo run -p xtask -- <ci [--full]|ci-no-fmt|aegis [--bless|--report]|coverage [--bless|--measure]|layers|wasm|corpus [--report]|corpus-gen|library-gen|hero-gen|styles-gen|scripts|floor|golden [--bless]|svg-golden [--bless]|svg-roundtrip [--measure]|web-golden [--bless|--measure]|perf [--bless|--measure]|dist --web|--native|--source|--sbom|fuzz|fuzz-quick|panic-hunt|parity|scorecard>";
 
-
 fn main() -> ExitCode {
     match std::env::args().nth(1).as_deref() {
         Some("ci") => run_ci(std::env::args().nth(2).as_deref(), false),
