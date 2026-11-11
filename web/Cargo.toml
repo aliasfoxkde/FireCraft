@@ -16,6 +16,7 @@ path = "src/main.rs"
 [dependencies]
 app = { path = "../crates/app" }
 app-cli = { path = "../crates/app-cli" }
+base64 = "0.22"
 compose = { path = "../crates/compose" }
 eframe = { version = "0.36", default-features = false, features = [
     "default_fonts",
@@ -40,6 +41,7 @@ web-sys = { version = "0.3", features = [
     "HtmlAnchorElement",
     "HtmlCanvasElement",
     "HtmlInputElement",
+    "Storage",
     "MessageEvent",
     "Url",
     "Window",

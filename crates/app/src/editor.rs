@@ -1440,6 +1440,37 @@ impl Editor {
         self.session.redo()
     }
 
+    /// Rewinds the session to journal sequence `target_seq` — CS6's
+    /// History panel click-to-rewind. The journal is append-only (undo
+    /// does not truncate it), so the target is resolved against the
+    /// stacks: the redo entries sit above the current position, and the
+    /// steps to undo are the undo-stack depth minus the position the
+    /// target leaves (`target_seq - redo_len`). Returns the number of
+    /// steps undone; 0 for a target that is not a journal sequence at
+    /// or below the last applied entry, or already current — a stale
+    /// panel click is a no-op, not an error.
+    pub fn rewind_to(&mut self, target_seq: u64) -> usize {
+        let entries = self.session.journal_entries();
+        let Some(last) = entries.last() else {
+            return 0;
+        };
+        let redo_len = self.session.redo_len() as u64;
+        let in_undo_region =
+            target_seq <= last.seq && target_seq > redo_len && target_seq != last.seq - redo_len;
+        if !in_undo_region || !entries.iter().any(|entry| entry.seq == target_seq) {
+            return 0;
+        }
+        let target_depth = (target_seq - redo_len) as usize;
+        let mut undone = 0;
+        while self.session.undo_len() > target_depth {
+            if self.session.undo().is_err() {
+                break;
+            }
+            undone += 1;
+        }
+        undone
+    }
+
     /// Read-only document access for panels and painting.
     #[must_use]
     pub fn document(&self) -> &Document {
@@ -5316,6 +5347,61 @@ mod tests {
             }
         }
         assert!(editor.redo().is_err(), "drained redo stack refuses");
+    }
+
+    #[test]
+    fn rewind_to_reverts_to_the_clicked_step() {
+        let mut editor = Editor::untitled();
+        let seed_seq = editor.session.journal_entries().last().unwrap().seq;
+
+        editor.tool = Tool::Rect;
+        editor.begin_drag(geom::Point::new(10.0, 10.0));
+        editor.drag_to(geom::Point::new(60.0, 40.0));
+        editor.end_drag().unwrap();
+        let after_shape = editor.session.journal_entries().last().unwrap().seq;
+        assert_eq!(after_shape, seed_seq + 1, "one drag = one journal step");
+
+        editor.tool = Tool::Ellipse;
+        editor.begin_drag(geom::Point::new(100.0, 10.0));
+        editor.drag_to(geom::Point::new(140.0, 50.0));
+        editor.end_drag().unwrap();
+        let last_seq = editor.session.journal_entries().last().unwrap().seq;
+        assert_eq!(editor.current_cell().unwrap().elements.len(), 2);
+
+        // Rewind to just after the seed: only the rect remains. The
+        // journal is append-only, so the position shows in the stacks,
+        // not the entries.
+        let undone = editor.rewind_to(after_shape);
+        assert_eq!(undone, 1);
+        assert_eq!(editor.session.undo_len() + editor.session.redo_len(), 4);
+        assert_eq!(editor.current_cell().unwrap().elements.len(), 1);
+
+        // The undone steps sit on the redo stack — Redo restores them.
+        editor.redo().unwrap();
+        assert_eq!(editor.current_cell().unwrap().elements.len(), 2);
+
+        // Rewinding to the seed empties the canvas again.
+        let undone = editor.rewind_to(seed_seq);
+        assert_eq!(undone, 2);
+        assert!(editor.current_cell().unwrap().elements.is_empty());
+
+        // Out-of-range and current-position targets are no-ops.
+        assert_eq!(editor.rewind_to(u64::MAX), 0);
+        assert_eq!(editor.rewind_to(last_seq), 0);
+        assert!(editor.current_cell().unwrap().elements.is_empty());
+    }
+
+    #[test]
+    fn rewind_on_an_empty_journal_is_a_no_op() {
+        // A bare session (no seed steps, nothing applied) has no journal
+        // and rewinding is a no-op, not a panic.
+        let mut editor = Editor::wrap(
+            Document::default(),
+            doc::fwmap::UnknownBag::new(),
+            Vec::new(),
+        );
+        let undone = editor.rewind_to(1);
+        assert_eq!(undone, 0);
     }
 
     #[test]

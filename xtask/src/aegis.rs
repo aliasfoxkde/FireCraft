@@ -129,15 +129,17 @@ const CLASS_NOTES: &[(&str, &str)] = &[
     (
         "pci-cardholder-data",
         "Matches the word \"pan\" in pan-zoom, hand-pan and two-finger pan \
-         identifiers, including the Android feasibility note's touch \
-         gesture, and in decision 0074's table of adjudicated classes \
-         and the rule identifiers quoted by the Aegis adjudication \
-         tickets; the five credit-card-* rules stay armed.",
+         identifiers, in the Hand tool's \"Pan the artboard\" menu label, \
+         including the Android feasibility note's touch gesture, and in \
+         decision 0074's table of adjudicated classes and the rule \
+         identifiers quoted by the Aegis adjudication tickets; the five \
+         credit-card-* rules stay armed.",
     ),
     (
         "phone-number",
-        "Matches any 10-digit run: u32::MAX, CRC and chunk values, observed \
-         PNG value ranges.",
+        "Matches any 10-digit run: u32::MAX, the i32::MAX wrap constant \
+         the retouch filter documents (2147484160), CRC and chunk values, \
+         observed PNG value ranges.",
     ),
     (
         "ssrf-localhost",
@@ -146,6 +148,12 @@ const CLASS_NOTES: &[(&str, &str)] = &[
          local preview URL in the site deployment guide, and the loopback \
          bind quoted by the Aegis adjudication tickets; the workspace has \
          no HTTP client dependency.",
+    ),
+    (
+        "sql-query",
+        "The rule's regex is the English phrase \"select ... from\"; it fires \
+         on CS6 Help text quoted in the tool-strip evidence and the \
+         session log. This repository runs no SQL.",
     ),
     (
         "ssn-no-dashes",
@@ -170,12 +178,13 @@ const CLASS_NOTES: &[(&str, &str)] = &[
     (
         "zip-code",
         "Matches any 5-digit run: CS6 command ids, the JPEG dimension \
-         ceiling (65535), menu ids, CVE id suffixes, and the civil-date \
-         epoch constant (36524) in the SBOM timestamp builder, plus the \
-         headless-browser virtual-time budget (60000), and decision \
-         0074's table of adjudicated classes and the rule identifiers \
-         quoted by the Aegis adjudication tickets. This repository \
-         holds no postal data.",
+         ceiling (65535), menu ids, CS6 palette-instance ids (the 48xxx \
+         family), a canvas dimension in a render-scale test, CVE id \
+         suffixes, the civil-date epoch constant (36524) in the SBOM \
+         timestamp builder, plus the headless-browser virtual-time \
+         budget (60000), and decision 0074's table of adjudicated classes \
+         and the rule identifiers quoted by the Aegis adjudication \
+         tickets. This repository holds no postal data.",
     ),
 ];
 
@@ -280,6 +289,41 @@ pub fn bless() -> Result<(), String> {
     }
     for (pattern, file, digest) in removed {
         eprintln!("[xtask] aegis --bless: - {pattern} {file} {digest}");
+    }
+    Ok(())
+}
+
+/// Prints the findings the baseline does not cover, without failing.
+///
+/// Read-only: the gate never rewrites the baseline on its own, so
+/// this is the way to see what a rewrite would add before deciding
+/// whether each occurrence is a false positive. Exit code is 0 even
+/// when the findings are uncovered — the report is a diagnostic, not
+/// the gate.
+pub fn report() -> Result<(), String> {
+    let baseline = read_baseline()?;
+    let findings = scan()?;
+    let fresh = uncovered(&findings, &baseline);
+    let drift = stale(&findings, &baseline);
+    for (pattern, file, digest) in &drift {
+        eprintln!("[xtask] aegis --report: stale {pattern} {file} {digest}");
+    }
+    if fresh.is_empty() {
+        eprintln!("[xtask] aegis --report: the baseline covers every finding");
+        return Ok(());
+    }
+    eprintln!(
+        "[xtask] aegis --report: {} finding(s) the baseline does not cover:",
+        fresh.len()
+    );
+    for finding in &fresh {
+        eprintln!(
+            "[xtask] aegis --report: {} {}:{} {}",
+            finding.pattern,
+            finding.file,
+            finding.line,
+            &finding.digest[..finding.digest.len().min(12)]
+        );
     }
     Ok(())
 }

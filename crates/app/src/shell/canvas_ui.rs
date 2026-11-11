@@ -498,7 +498,7 @@ impl Shell {
         // zoom moved off the cached render scale. The raster renders
         // at a multiple of the document resolution so the view blits
         // it near 1:1 instead of linear-filtering a 1× raster (the
-        // always-1× blur). Scale clamps to a 16 MPix budget so deep
+        // always-1× blur). Scale clamps to a 16-MiPix budget so deep
         // zoom on a large page stays sane.
         let page = self
             .editor
@@ -506,22 +506,24 @@ impl Shell {
             .pages
             .get(self.editor.page)
             .map(|p| (p.info.canvas.width.round(), p.info.canvas.height.round()));
-        let desired_scale = {
-            let (pw, ph) = page.unwrap_or((1.0, 1.0));
-            let zoom = f64::from(self.view.zoom);
-            let budget = 16.0 * 1024.0 * 1024.0;
-            let max_scale = (budget / (pw * ph).max(1.0)).sqrt();
-            zoom.min(max_scale.max(1.0))
-        };
-        // Between buckets (within 2× of the cached scale) the existing
-        // texture stays crisp enough; a crossing re-renders.
+        // HiDPI (21.2): egui sizes in points, but the blit's pixels are
+        // device pixels — at `pixels_per_point` 2 a zoom-scale raster
+        // has half the resolution the screen can show. Render in device
+        // pixels: the scale rides ``zoom` × `pixels_per_point`` under the
+        // same 16-MiPix budget. The world-size math below divides the
+        // texture by this same scale, so the geometry is unchanged; only
+        // the texture's resolution rises.
+        let device_ppp = ui.ctx().pixels_per_point();
+        let (pw0, ph0) = page.unwrap_or((1.0, 1.0));
+        let desired_scale = render_scale(pw0, ph0, self.view.zoom, device_ppp);
+        let at_one = render_at_one(desired_scale, device_ppp);
         let stale_scale =
             (desired_scale / self.raster_scale) > 2.0 || (self.raster_scale / desired_scale) > 2.0;
         let stamp = self.stamp();
         let texture = match &self.raster {
             Some((texture, made)) if *made == stamp && !stale_scale => texture.clone(),
             _ => {
-                let result = if (desired_scale - 1.0).abs() < 0.05 {
+                let result = if at_one {
                     compose::render(self.editor.document(), self.editor.page, self.editor.frame)
                 } else {
                     compose::render_scaled(
@@ -539,11 +541,7 @@ impl Shell {
                         );
                         let texture = ui.ctx().load_texture("page", image, TextureOptions::LINEAR);
                         self.raster = Some((texture.clone(), stamp));
-                        self.raster_scale = if (desired_scale - 1.0).abs() < 0.05 {
-                            1.0
-                        } else {
-                            desired_scale
-                        };
+                        self.raster_scale = if at_one { 1.0 } else { desired_scale };
                         texture
                     }
                     Err(error) => {
@@ -1218,6 +1216,52 @@ impl Shell {
                         self.status = format!("polygon failed: {error}");
                     }
                 }
+                Tool::SelectSimilar => {
+                    // CS6's Select Similar: the click seeds the
+                    // selection and every similarly colored pixel
+                    // joins it.
+                    let world = self.view.to_world(local);
+                    let tolerance = self.editor.wand_tolerance;
+                    if let Err(error) = self.editor.select_similar_at(world, tolerance) {
+                        self.status = format!("select similar failed: {error}");
+                    }
+                }
+                Tool::Knife => {
+                    // CS6's Knife: the click cuts the path under
+                    // the pointer into pieces.
+                    let world = self.view.to_world(local);
+                    if let Err(error) = self.editor.knife_at(world) {
+                        self.status = format!("knife failed: {error}");
+                    }
+                }
+                Tool::Pen | Tool::PolygonSlice | Tool::PolygonHotspot => {
+                    // CS6 plots these with clicks: one click, one
+                    // vector point.
+                    let world = self.view.to_world(local);
+                    self.editor.add_draft_point(world);
+                    self.status = format!(
+                        "point {} plotted",
+                        self.editor
+                            .draft
+                            .as_ref()
+                            .map_or(0, |draft| draft.points.len())
+                    );
+                }
+                Tool::VectorPath => {
+                    // CS6's Vector Path: the click grabs the node
+                    // under the pointer and drags it.
+                    let world = self.view.to_world(local);
+                    let grabbed = self.editor.selected_live().and_then(|id| {
+                        self.editor
+                            .node_at(world, f64::from(6.0 / self.view.zoom))
+                            .map(|(contour, point)| (id, contour, point))
+                    });
+                    if let Some((id, contour, point)) = grabbed
+                        && let Err(error) = self.editor.begin_node_drag(id, contour, point, world)
+                    {
+                        self.status = format!("reshape failed: {error}");
+                    }
+                }
                 Tool::Zoom => {
                     let factor = if ui.input(|i| i.modifiers.alt) {
                         1.0 / 1.25
@@ -1272,6 +1316,7 @@ impl Shell {
                         self.status = format!("reshape failed: {error}");
                     }
                 }
+
                 Tool::Text => {
                     // CS6: a Text-tool click on an existing text
                     // object enters in-canvas editing instead of
@@ -1528,6 +1573,24 @@ impl Shell {
 }
 
 /// One row of the canvas popup.
+/// The raster render scale (21.2): ``zoom` × `pixels_per_point``, clamped
+/// to the 16-MiPix budget against the page size, so the blit has one
+/// texture pixel per device pixel at any zoom on any display. A pure
+/// function of (page, zoom, ppp) — the frame loop calls it, tests
+/// call it directly.
+pub(crate) fn render_scale(pw: f64, ph: f64, zoom: f32, pixels_per_point: f32) -> f64 {
+    let budget = 16.0 * 1024.0 * 1024.0;
+    let max_scale = (budget / (pw * ph).max(1.0)).sqrt();
+    (f64::from(zoom) * f64::from(pixels_per_point)).min(max_scale.max(1.0))
+}
+
+/// `true` when the unscaled 1× render path is correct: only at 100%
+/// zoom on a 1× display — a hidpi screen at 100% zoom wants the
+/// scaled render (2 device pixels per document pixel).
+pub(crate) fn render_at_one(scale: f64, pixels_per_point: f32) -> bool {
+    (scale - 1.0).abs() < 0.05 && pixels_per_point <= 1.05
+}
+
 pub(crate) struct ContextRow {
     /// The row's label, with the CS6 accelerator suffix.
     pub(crate) label: String,

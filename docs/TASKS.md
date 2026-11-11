@@ -7,6 +7,7 @@
 > not current status sources.
 
 >
+
 > Working document (not a historical record). Canonical planning:
 > [`PLANNING.md`](PLANNING.md) + [`planning/firecraft/ROADMAP.md`](planning/firecraft/ROADMAP.md).
 > Per-task tickets: [`tasks/`](tasks/) (one file per task, same
@@ -53,6 +54,7 @@
 
 ### Release & tooling lanes in flight
 
+
 | # | Task | Ticket | Status | Owner | Next action |
 |---|---|---|---|---|---|
 | 5 | 19.6 inert-menu burn-down — Modify/File families (83 of 289; batch 8 = Attach to Path landed 2026-11-03) | [tasks/T5-inert-burndown.md](tasks/T5-inert-burndown.md) | `IN PROGRESS` | UI/verb lane | continue the per-family burn-down; each batch carries its own evidence gate. This branch's newer census has batches 1–17 landed with 2 inert rows of 294, derived by `menus::tests::inert_count_never_rises` |
@@ -65,6 +67,7 @@
 
 ## Queued (Phase 20 — daily-driver features)
 
+
 | # | Task | Ticket |
 |---|---|---|
 | 20 | 20.1 In-canvas text editing (egui TextEdit overlay; kittest focus tests) | [tasks/T20-text-editing.md](tasks/T20-text-editing.md) |
@@ -76,6 +79,7 @@
 | 11 | 20.7 Slice/hotspot behavior editing + HTML preview | — (landed on `feat/slice-hotspot-edit`, PR #13 — not yet on `main`) |
 
 ## Queued (Phase 21 — modern differentiators)
+
 
 
 | # | Task | Ticket |
@@ -168,6 +172,9 @@ progress:
 
 ## Ledger rules
 
+
 - Update this file and the ticket when work starts, changes scope, or lands.
 - Keep detailed implementation history in [`SESSIONS.md`](SESSIONS.md); keep host/tooling diagnostics out of the FireCraft session history.
 - Do not copy a second active task list into the handoff or historical audit documents.
+
+d1699c053ec52ee9585cb2294242bdd779787503

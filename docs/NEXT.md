@@ -223,6 +223,7 @@ Phase 19 batches 19.1–19.5 landed 2026-10-31 → 11-01: transform
 handles + Numeric Transform, Subselect path-node editing, the gradient
 fill editor, the command palette, and the grid/guides/snap set. The
 inert count is 2 of 296 items (was 190); 19.6's menu-wiring
+
 campaign is complete and the Text ▸ Font submenu landed 2026-11-06. The remaining rows require separate feature or
 evidence work, tracked outside that campaign.
 
@@ -390,32 +391,68 @@ evidence work, tracked outside that campaign.
 - **20.3 Animation timeline** (M): frames strip, per-frame timing,
   onion skinning, `symbol.tween`.
 - **20.4 Mask stack UI** (M): add/remove/mode/link/move.
-- **20.5 Multi-document tabs** (M). Window-menu panel toggles landed in
-  Phase 19.6 batches 3 and 10.
+- **20.5 Multi-document tabs** (M): **LANDED 2026-11-07** — Open/New
+  park the active document as a `DocTab`; Close promotes the newest
+  parked tab (refuses dirty documents); the tab strip shows the
+  active doc plus parked tabs, click to switch, a dot marks unsaved
+  edits. Gate: `open_parks_the_previous_document`,
+  `activate_tab_swaps_state`, `close_promotes_the_last_parked_tab`,
+  `new_parks_the_current_document`,
+  `close_refuses_a_dirty_document`. (Window-menu panel toggles landed
+  in Phase 19.6 batches 3 and 10.)
 - **20.6 History panel click-to-rewind** (S): journal replay to seq N.
 - **20.7 Slice/hotspot behavior editing + HTML preview** (M).
 
 ### Phase 21 — Modern differentiators (P2)
 
 - **21.1 Autosave + crash recovery** (M): periodic journal snapshot to
-  a sidecar; restore prompt on open.
+  a sidecar; restore prompt on open. — **LANDED 2026-11-07**, per
+  surface: the web build persists the whole document (canonical save
+  bytes, base64) into localStorage on every change stamp and
+  restores it at boot, clearing on File ▸ New; the desktop build
+  snapshots the session journal to a temp-dir sidecar
+  (`FIRECRAFT_RECOVERY` overrides, resolved once at construction so
+  the tick never reads the environment), offers Recover/Discard at
+  startup, replays with undo intact across the crash boundary, and
+  clears on a clean save or File ▸ New. Gate:
+  `recovery_snapshot_round_trips_through_the_sidecar`.
 - **21.2 Zoom-aware/HiDPI rendering** (L): re-render vectors at
   `zoom × pixels_per_point`; extend `compose::cache::EffectCache` to
   view transforms. The single-texture blit is blurry above 100%. —
-  **PARTLY LANDED 2026-11-01** (`6e35c1e`): `compose::render_scaled`
+  **LANDED 2026-11-07** in two steps: `compose::render_scaled`
   renders the page under an affine scale and the shell caches it per
-  zoom bucket (re-render past 2× drift, 16 MPix budget), so the canvas
-  is crisp past 100%. **Still open**: `pixels_per_point` (HiDPI)
-  plumbing — the scale is zoom-only today.
+  zoom bucket (re-render past 2× drift, 16 MiPix budget), so the
+  canvas is crisp past 100% (`6e35c1e`); the render scale now rides
+  `zoom × pixels_per_point`, so the blit is crisp on hidpi displays
+  too (this session, `render_scale_rides_pixels_per_point_under_the_budget`).
+  The `EffectCache` view-transform extension remains open for
+  effect-heavy pages; the canvas path itself is done.
 - **21.3 Command palette v2** (S after 19.4): fuzzy, recents,
-  save-steps-as-command. — **PARTLY LANDED 2026-10-31** (`4458f3a`):
-  the palette filters by substring (case-insensitive). Still open:
-  fuzzy scoring, recents, save-steps-as-command.
-- **21.4 Preferences dialog + `pixels_per_point`** (S), persisting via
-  platform storage (decision 0067 follow-up).
+  save-steps-as-command. — **LANDED 2026-11-07**: substring
+  filtering (`4458f3a`), then fuzzy subsequence scoring with a
+  position bonus (tighter matches outrank spread-out ones), recents
+  (10 most recent successful runs, listed before the catalog on an
+  empty filter) persisted in `ShellLayout` with stale-name
+  dropping, and save-steps-as-command via the History panel's Save
+  Steps…/Replay… (the journal's own `.fwsteps` file). Gates:
+  `palette_fuzzy_scores_subsequences_with_position_bonus`,
+  `palette_recents_round_trip_through_the_layout`.
+- **21.4 Preferences dialog + `pixels_per_point`** (S): **LANDED
+  2026-11-07** — Edit ▸ Preferences… opens the dialog; a UI-scale
+  drag (0.5×–3×, Reset to platform default) applies to the context
+  each frame and rides `ShellLayout`, so it persists like the panel
+  set. Gate: `preferences_scale_round_trips_the_layout`. The
+  Preferences menu row also left the inert census, now 2 of 294.
 - **21.5 accesskit** desktop + web re-audit (0067 records the web
   blocker).
 - **21.6 In-app scripting** (S): Commands menu → run `.jsf`/`.fwsteps`.
+  — **LANDED 2026-11-07**: `.jsf` running through the scripting host
+  had landed with the automation milestone (Commands ▸ Run Script /
+  Help ▸ Manage Extensions); this session added the `.fwsteps` arm —
+  the Commands picker takes both formats, a steps file replays onto
+  the live document through the same door the History panel uses,
+  and a malformed journal is refused with the document untouched.
+  Gate: `run_script_runs_a_steps_file_through_the_replay_door`.
 
 ### Phase 22 — CS6 shell fidelity (P0, the "looks and acts like Fireworks" phase)
 
@@ -612,6 +649,7 @@ scope, so no license path is attempted.
   class-wide switch.
 
 
+
 ## Quick reference
 
 | Gate | Command | Timeout |
@@ -619,6 +657,7 @@ scope, so no license path is attempted.
 | Full CI | `cargo run -p xtask -- ci` | ~20 min |
 | Aegis | `cargo run -p xtask -- aegis` | ~10s |
 | Aegis report | `cargo run -p xtask -- aegis --report` | ~15s |
+
 
 | Aegis baseline regen | `cargo run -p xtask -- aegis --bless` | ~10s |
 | Coverage measure | `cargo llvm-cov --summary-only` (hook: use GitForge) | ~6 min |

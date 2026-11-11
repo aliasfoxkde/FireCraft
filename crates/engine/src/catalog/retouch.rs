@@ -107,8 +107,15 @@ pub(crate) fn brush_of(
 }
 
 /// Converts a radius payload to the diameter consumed by `Brush`.
-/// Refuse overflow explicitly rather than allowing a wrapped value to
-/// reach the brush validator.
+///
+/// Refuse overflow explicitly rather than letting `radius * 2` wrap:
+/// a wrapped diameter can land inside `Brush`'s accepted `1..=1024`
+/// window (e.g. `radius = 2147484160` wraps to exactly 1024) and so
+/// reach `box_average` with a `half` near 10^9 — a debug-mode `u32`
+/// overflow panic in the window sums, a release-mode hang in the
+/// `1..=half` loops. Rejecting here keeps every radius that survives
+/// at or below 512, which is what the `half` derivations assume.
+
 fn brush_diameter(name: &'static str, radius: u32) -> Result<u32, EngineError> {
     radius
         .checked_mul(2)
@@ -263,7 +270,7 @@ impl TypedCommand for RetouchBlur {
             NAME,
             payload.x,
             payload.y,
-            payload.radius * 2,
+            brush_diameter(NAME, payload.radius)?,
             &payload.brush,
         )?;
         let (brush, pressure) = (options.brush, options.pressure);
@@ -346,7 +353,7 @@ impl TypedCommand for RetouchSmudge {
             NAME,
             payload.x,
             payload.y,
-            payload.radius * 2,
+            brush_diameter(NAME, payload.radius)?,
             &payload.brush,
         )?;
         let (brush, pressure) = (options.brush, options.pressure);
@@ -431,7 +438,7 @@ impl TypedCommand for RetouchClone {
             NAME,
             payload.target_x,
             payload.target_y,
-            payload.radius * 2,
+            brush_diameter(NAME, payload.radius)?,
             &payload.brush,
         )?;
         let (brush, pressure) = (options.brush, options.pressure);
@@ -509,7 +516,7 @@ impl TypedCommand for RetouchEraser {
             NAME,
             payload.x,
             payload.y,
-            payload.radius * 2,
+            brush_diameter(NAME, payload.radius)?,
             &payload.brush,
         )?;
         let (brush, pressure) = (options.brush, options.pressure);
@@ -578,7 +585,7 @@ impl TypedCommand for RetouchRedEye {
             NAME,
             payload.x,
             payload.y,
-            payload.radius * 2,
+            brush_diameter(NAME, payload.radius)?,
             &payload.brush,
         )?;
         let (brush, pressure) = (options.brush, options.pressure);
@@ -1390,6 +1397,58 @@ mod tests {
                 matches!(error, crate::error::EngineError::InvalidState { .. }),
                 "{error}"
             );
+        }
+        assert_eq!(
+            serde_json::to_vec(&document).unwrap(),
+            before,
+            "refused strokes change nothing"
+        );
+    }
+
+    #[test]
+    fn overflowing_brush_radii_are_refused_before_the_kernel_runs() {
+        // `radius * 2` used to wrap: 2147484160 * 2 == 1024 (mod 2^32),
+        // which slips past `Brush`'s 1..=1024 window and then feeds
+        // `half = radius / 2` ≈ 10^9 into `box_average` — a debug-mode
+        // u32 overflow in the window sums, a release-mode hang in the
+        // `1..=half` loops. Every retouch command must refuse instead.
+        let (mut document, image) =
+            strip_document([[0, 0, 0, 255], [128, 128, 128, 255], [255, 255, 255, 255]]);
+        let registry = single_registry();
+        let before = serde_json::to_vec(&document).unwrap();
+        let wrap = 2_147_484_160u32; // * 2 wraps to exactly 1024
+        for radius in [wrap, u32::MAX] {
+            for name in [
+                "retouch.blur",
+                "retouch.smudge",
+                "retouch.clone",
+                "retouch.eraser",
+                "retouch.redEye",
+                "retouch.sharpen",
+                "retouch.dodge",
+                "retouch.burn",
+                "retouch.replaceColor",
+            ] {
+                let mut payload = json!({
+                    "id": image, "x": 1.5, "y": 0.5,
+                    "radius": radius, "strength": 100,
+                });
+                if name == "retouch.replaceColor" {
+                    payload["from_color_raw"] = json!(0xFFFF0000_i64);
+                    payload["to_color_raw"] = json!(0xFF00FFFF_i64);
+                }
+                if name == "retouch.smudge" {
+                    payload["dx"] = json!(1);
+                    payload["dy"] = json!(0);
+                }
+                let error = registry
+                    .execute(&mut document, name, payload)
+                    .expect_err("an overflowing radius must be refused");
+                assert!(
+                    matches!(error, crate::error::EngineError::BadPayload { .. }),
+                    "{name} radius {radius}: {error}"
+                );
+            }
         }
         assert_eq!(
             serde_json::to_vec(&document).unwrap(),

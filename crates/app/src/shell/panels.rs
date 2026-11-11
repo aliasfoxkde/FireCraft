@@ -68,6 +68,38 @@ impl Shell {
         });
     }
 
+    /// Edit ▸ Preferences (21.4): the persisted user settings. The
+    /// UI-scale drag writes `ui_scale` live (applied to the context
+    /// each frame); the value rides the shell layout, so it survives
+    /// restarts like the panel set does.
+    pub(super) fn preferences_ui(&mut self, ui: &mut egui::Ui) {
+        ui.add_space(4.0);
+        ui.heading("General");
+        ui.horizontal(|ui| {
+            ui.label("UI scale:");
+            let mut scale = self.ui_scale.unwrap_or(1.0);
+            let changed = ui
+                .add(
+                    egui::DragValue::new(&mut scale)
+                        .speed(0.01)
+                        .range(0.5..=3.0)
+                        .suffix("×"),
+                )
+                .changed();
+            if changed {
+                self.ui_scale = Some(scale);
+            }
+            if ui.button("Reset").clicked() {
+                self.ui_scale = None;
+            }
+        });
+        ui.weak("Scales the whole interface (HiDPI displays). Persists across sessions.");
+        ui.add_space(6.0);
+        if ui.button("Close").clicked() {
+            self.preferences_open = false;
+        }
+    }
+
     /// The keyboard-shortcuts help panel: every binding in the
     /// SHORTCUTS table, grouped by the table's section structure.
     pub(super) fn help_panel(&mut self, ctx: &egui::Context) {
@@ -403,24 +435,41 @@ impl Shell {
     }
 
     /// History section: journal rows plus the steps save/replay pair.
+    /// Clicking a row rewinds the session to that step (CS6's History
+    /// panel click-to-rewind); rows after the clicked one become the
+    /// redo stack and stay reachable with Redo.
     pub(super) fn history_section(&mut self, ui: &mut egui::Ui) {
         // Snapshot the rows so closures never borrow the session while
         // the editor is mutable (same rule as the layer list above).
-        let rows: Vec<String> = self
+        let rows: Vec<(u64, String)> = self
             .editor
             .session
             .journal_entries()
             .iter()
-            .map(|entry| match &entry.txn {
-                Some(txn) => format!("{}. {txn}: {}", entry.seq, entry.name),
-                None => format!("{}. {}", entry.seq, entry.name),
+            .map(|entry| {
+                let label = match &entry.txn {
+                    Some(txn) => format!("{}. {txn}: {}", entry.seq, entry.name),
+                    None => format!("{}. {}", entry.seq, entry.name),
+                };
+                (entry.seq, label)
             })
             .collect();
         egui::ScrollArea::vertical()
             .max_height(160.0)
             .show(ui, |ui| {
-                for row in &rows {
-                    ui.label(row);
+                for (seq, label) in &rows {
+                    if ui
+                        .selectable_label(false, label)
+                        .on_hover_text("rewind to this step")
+                        .clicked()
+                    {
+                        let undone = self.editor.rewind_to(*seq);
+                        self.status = if undone == 0 {
+                            "already at that step".to_owned()
+                        } else {
+                            format!("rewound {undone} step(s) — Redo restores them")
+                        };
+                    }
                 }
             });
         ui.horizontal(|ui| {

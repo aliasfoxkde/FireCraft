@@ -14,6 +14,15 @@ Current version: **0.2.5**.
 - **app**: in-canvas text editing and menu burn-down to 2 inert (ed82eae)
 - **app**: CS6 screen modes, Alt retouch swap, aegis gate (49a4e61)
 
+- **app**: 21.5 desktop accesskit feature enabled (88cf40c)
+- **app**: 21.6 Commands runs .fwsteps alongside .jsf (1e6fb7a)
+- **app**: 21.2 render in device pixels (HiDPI) (ac17e25)
+- **app**: 21.1 autosave and crash recovery on both surfaces (498af8a)
+- **app**: 21.3 palette fuzzy scoring and persisted recents (bc8b637)
+- **app**: 21.4 preferences dialog with persisted UI scale (bec3032)
+- **app**: 20.5 multi-document tabs, clean raster opens (02c4460)
+- **app**: 20.6 Ctrl+0 Fit Selection and rewind selection tests (c275951)
+
 - **app**: CS6 tool strip order and flyouts (1203ecc)
 - **app**: right dock column and per-kind inspector (1b10a5d)
 - **app**: CS6 shell fidelity + inert-menu burn-down batches 4-17 (#7) (5fac7a2)
@@ -188,6 +197,10 @@ Current version: **0.2.5**.
 - **engine**: reject overflowing retouch brush radii (a77ed51)
 - **app**: align symbol library click payload (f9bea9f)
 - **app**: repair distort, selection and redraw gestures (0c00b61)
+- **xtask**: point Aegis at the scratch config on CI runners (99ac326)
+- **app**: guard recover_steps for wasm, single persisted init (7449cbe)
+- resolve leftover conflict markers from the 21.1 cherry-pick (fe24e9a)
+
 - **app**: wire Ctrl+0 Fit Selection, keymap group counts, fmt (cefe01c)
 - **app**: crisp zoomed canvas, ellipse shape, picker colors (99f254c)
 - **app**: web theme, selection handles, image import placement (9c8f9d6)
@@ -237,6 +250,9 @@ Current version: **0.2.5**.
 - close screenshot audit and separate chrome follow-up (397feaa)
 - identify progress snapshot as PR branch (c588a99)
 - correct shell, build and parity details (88df723)
+
+- 21.5 ledger entries (f3e4c09)
+- close 21.2 HiDPI in the ledgers (970b1bc)
 
 - CS6 parity matrix, wiki set, and CS6 UI evidence (151e2fc)
 - 19b.1 quoting corrections, v0.2.4 receipts, license consolidation (2b849f5)
@@ -298,6 +314,7 @@ Current version: **0.2.5**.
 
 ### Tests
 
+- **engine**: stale-id refusal tests for filter commands (fb3a92f)
 - **app**: editor gesture-surface battery — 30 tests (cbfe7eb)
 - **io**: webp dimension-mismatch + corrected format gates (cb432c4)
 - **io**: gif still-frame + gate battery (1a1b9a4)
@@ -375,5 +392,7 @@ Current version: **0.2.5**.
 ### Other
 
 - Brand refresh and README overhaul (#10) (1c7d840)
+- wip(app,web): localStorage session persistence (21.1 partial) (7014638)
+
 - Web file doors complete, dist gate verified, session close (#4) (7c82997)
 - Initial commit (498f8c9)

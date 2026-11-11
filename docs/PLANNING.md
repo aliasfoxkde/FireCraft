@@ -316,7 +316,8 @@ mandatory `SAFETY:` comments); **no `unwrap`/`expect`/`panic!`/`todo!` in
 non-test code** — input-derived numbers are hostile (`get()`, `checked_*`,
 allocation caps); every crash fix ships a regression test; **never break
 wasm** — `cargo xtask wasm` runs in every finish checklist; MSRV raised
-to **1.95** on 2026-11-09 (it was 1.85 from M0: `egui 0.36` needs 1.95
+to **1.95** on 2026-11-07 here and on 2026-11-09 upstream (it was 1.85
+from M0: `egui 0.36` needs 1.95
 and the `time ≥0.3.47` security bump needs 1.88 — CVE-2026-25727).
 Cargo's MSRV-aware resolver floors version selection on the *lowest*
 `rust-version` in the workspace, so a floor below 1.88 would silently

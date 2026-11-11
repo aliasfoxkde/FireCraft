@@ -5,7 +5,7 @@
 //!
 //! - **Save** is fully synchronous: [`WebFs::write_file`] downloads
 //!   the bytes (Blob → object URL → anchor click) — works everywhere,
-//!   including inside the WebOS iframe.
+//!   including inside the `WebOS` iframe.
 //! - **Open** is async by nature (the user must pick a file), which
 //!   the synchronous [`Dialogs`] trait cannot await. So
 //!   [`WebDialogs::open_path`] triggers the hidden `<input

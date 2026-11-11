@@ -7,6 +7,7 @@
   distribution recipe), `docs/HANDOFF.md` (release runbook), decision
   0074 (the secret-scan gate that runs before a release)
 
+
 ## Context
 
 The release recipe pins a WASM bundle ceiling:

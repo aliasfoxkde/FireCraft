@@ -1671,6 +1671,13 @@ edit is a fifteen-minute regeneration is a gate that gets skipped.
 
 ### What changed
 
+> **Withdrawn.** When this branch merged `main`, this rule-class
+> suppression was dropped in favour of main's content-keyed baseline
+> (decision 0074): `.aegis-pattern-state.json`, `.aegis-allowlist.json`,
+> and decision 0070 are deleted, and every rule class stays armed with
+> each occurrence adjudicated individually. The paragraphs below record
+> the state of the branch at 2026-11-06.
+
 The baseline is gone; 644 line-keyed entries in 19.4 MB are replaced by
 12 rule names and 8 content digests.
 
@@ -1797,3 +1804,131 @@ placement itself is 22.1's item (recorded, not silently kept).
   Filter* (rows 52/54, rank 14), the F1 grouping mismatch (row 255),
   the 76 unbound keymap rows (row 257), the 3D tool (deliberately not
   carried), the Main toolbar's contents (row 164).
+
+## 2026-11-07 — 21.3 closed: command palette v2 (fuzzy + recents)
+
+The last two open items of 21.3. Save-steps-as-command had already
+landed as the History panel's Save Steps…/Replay… pair (the session
+journal as a `.fwsteps` file, exact inverse of replay by
+construction), so this session added:
+
+- **Fuzzy scoring** (`palette::fuzzy_score`): the query must be a
+  subsequence of the command id (case-insensitive); each hit scores
+  `100 - 10 × position`, so tighter, earlier matches outrank
+  spread-out ones, and ties keep catalog order (stable sort). The
+  old substring filter is a strict subset of this.
+- **Recents**: the 10 most recent *successful* palette runs,
+  deduplicated, re-runs promoting; listed before the catalog on an
+  empty filter under a "recent:" hint. Persisted in `ShellLayout`
+  as `palette_recents` (`#[serde(default)]` — older layouts load
+  fine); names not in the current catalog are dropped on restore,
+  same rule as the panel inventory.
+- CS6-PARITY gap row 13 closed; the parity workflow row unchanged.
+
+### Receipts
+
+- `cargo test -p app --lib palette` — 8 passed (including the two
+  new gates `palette_fuzzy_scores_subsequences_with_position_bonus`
+  and `palette_recents_round_trip_through_the_layout`)
+- `cargo clippy --workspace --all-targets -- -D warnings` — clean
+- Full workspace gate: `cargo run -p xtask -- ci` (background run
+  bagx52wr2)
+
+## 2026-11-07 — 21.1 closed: autosave + crash recovery, both surfaces
+
+The web half came in from the `web-autosave-wip` branch (a stale
+agent worktree's uncommitted work, kept as a branch in 2026-11-03's
+session): change-stamp-debounced whole-document persistence to
+localStorage through a wasm-only `PersistSink`, boot restore through
+the standard `Editor::open` door, clear on File ▸ New. Cherry-picked
+onto the current stack; the two conflicts were this session's own
+additions (the `DropSink` type alias landed upstream in the meantime,
+and the 20.5 tab strip reworked the same `with_platform`
+initializer).
+
+The desktop half is new: `recovery_tick` snapshots the session
+journal (`steps_text`, the replay-exact JSON lines) to a sidecar
+each frame, debounced by the same stamp; `Shell::new` checks the
+sidecar and arms a Recover/Discard window; Recover replays through
+`Editor::replay_steps` (undo works across the crash boundary), and a
+clean save or File ▸ New clears it. The sidecar path resolves once
+at construction (`FIRECRAFT_RECOVERY` override, else the platform
+temp dir) — the tick reads a field, never the environment, per the
+decision-cores-take-their-environment-as-data rule. `FileSystem`
+gained a defaulted `remove_file` (refusing default like `read_dir`;
+implemented by `StdFs` and `MemoryFs`, the web `WebFs` refuses).
+
+### Receipts
+
+- `cargo test -p app --lib` — 172 passed (including
+  `recovery_snapshot_round_trips_through_the_sidecar`)
+- `cargo run -p xtask -- wasm` — ok (the wasm-only persist path
+  compiles for `wasm32-unknown-unknown`)
+- Full workspace gate: `cargo run -p xtask -- ci` (background run
+  bm6zxgv3g)
+
+## 2026-11-07 — 21.2 closed: the canvas renders in device pixels
+
+The zoom-bucket raster (landed 2026-11-01) rendered at `zoom` scale
+only — on a 2× display the blit had half the device pixels it could.
+The render scale now rides `zoom × pixels_per_point` under the same
+16 MiPix budget, extracted as the pure functions `render_scale` and
+`render_at_one` (the 1× shortcut fires only at 100% zoom on a 1×
+display). The `EffectCache` view-transform extension stays open for
+effect-heavy pages; the canvas blit path itself is done.
+
+### Receipts
+
+- `cargo test -p app --lib` — 173 passed (including
+  `render_scale_rides_pixels_per_point_under_the_budget`)
+- Full workspace gate: `cargo run -p xtask -- ci` (background run
+  bjhefp81n, over commits 498af8a + ac17e25)
+
+## 2026-11-07 — 21.6 closed: Commands runs .fwsteps alongside .jsf
+
+The `.jsf` arm of Commands ▸ Run Script had landed with the
+automation milestone; the spec's other half — `.fwsteps` — now runs
+too: the same picker accepts both extensions, a steps file replays
+onto the live document through `Editor::replay_steps` (the History
+panel's door; journal, undo history and all), and a malformed
+journal is refused with the seed session untouched.
+
+A test-fixture correction worth keeping: `Editor::untitled()` seeds
+two journal rows (`page.add`, `page.setCanvasSize`), so "document
+untouched after refusal" asserts journal_len == 2, not 0.
+
+### Receipts
+
+- `cargo test -p app --lib` — 174 passed (including
+  `run_script_runs_a_steps_file_through_the_replay_door`)
+- Coverage-target sweep `cargo test --tests --all --target-dir
+  target/llvm-cov-target` — 60 suites ok
+- Full workspace gate: `cargo run -p xtask -- ci` (background run
+  bcm82bd0p, over the 21.6 commit)
+
+## 2026-11-07 — 21.5 desktop arm: accesskit compiled in
+
+eframe's `accesskit` feature is now on in `crates/app/Cargo.toml`,
+so the winit adapter ships with the desktop build and the egui tree
+reaches screen readers natively. The web arm stays the recorded
+upstream refusal — eframe 0.36.2 still has `accesskit_update: _`
+in `src/web/app_runner.rs` (decision 0067).
+
+Two wasm-target fixes along the way: the cherry-picked persist code
+had left a duplicate `persisted` initializer visible only to wasm,
+and `recover_steps` needed the same `#[cfg(not(wasm32))]` guard as
+its siblings.
+
+### Receipts
+
+- `cargo check --target wasm32-unknown-unknown -p firecraft-web` — ok
+- `cargo clippy -p app --all-targets -- -D warnings` — clean
+- `cargo test -p app --lib` — 174 passed
+- Full workspace gate: `cargo run -p xtask -- ci` (background run
+  bdunpbu0d; note the Cargo.lock moved with accesskit — the CI image
+  needs re-shipping before the next GitForge push per the runner rule)
+
+
+
+
+

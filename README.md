@@ -27,7 +27,7 @@ The goal is not to reproduce Adobe's code or redistribute its assets. The goal i
 
 The workspace version is 0.2.5. Development continues beyond that release: the active roadmap includes editor reachability, daily-driver canvas workflows, and a dedicated CS6-inspired shell-fidelity campaign. FireCraft is functional software under active development—not yet a feature-complete replacement for every Fireworks CS6 workflow.
 
-The current documented engine surface includes **245 registered commands** and a CS6 DOM parity matrix of **268 carried, 3 partial (evidence-gated), and 0 missing**. These figures describe the engine/DOM surface, not complete GUI parity: some commands are available through the command palette or automation surfaces before they have a corresponding menu or polished inspector workflow.
+The current documented engine surface includes **252 registered commands** and a CS6 DOM parity matrix of **268 carried, 3 partial (evidence-gated), and 0 missing**. These figures describe the engine/DOM surface, not complete GUI parity: some commands are available through the command palette or automation surfaces before they have a corresponding menu or polished inspector workflow.
 
 ### What is implemented
 
@@ -36,7 +36,7 @@ The current documented engine surface includes **245 registered commands** and a
 - **Vector editing:** paths, contours, Bézier handles, primitive shapes, boolean operations, gradients, fills, strokes, alignment, and arrangement.
 - **Bitmap editing:** paint and retouch tools, pixel-selection modes, bitmap objects, and raster composition.
 - **Canvas interaction:** transform handles, numeric transforms, path-node editing, gradient handles, guides, grid, snapping, zoom, and selection controls.
-- **Text and symbols:** text objects and rich text attributes, symbol definitions and instances, nested symbol workflows, and nine-slice guides. In-canvas text editing remains on the roadmap.
+- **Text and symbols:** text objects and rich text attributes, symbol definitions and instances, nested symbol workflows, and nine-slice guides. In-canvas text editing landed 2026-11-06.
 - **Effects:** live effects and a filter surface backed by the compositor.
 - **Automation:** a shared command registry, journal/replay, ExtendScript-compatible `.jsf` execution, headless CLI, browser `postMessage` bridge, and MCP server.
 - **Web application:** a WebAssembly build using the same editor shell and engine as the native application.
@@ -69,6 +69,8 @@ The image below is a repository screenshot of the application. It is a point-in-
 <p align="center">
   <img src="docs/img/app-main.png" alt="FireCraft application workspace" width="960" />
 </p>
+
+It is a 1280×800 capture of the current shell with a vector object selected, taken from the optimized web bundle built on 2026-11-04. It is evidence for that build and state, not a general parity claim — see the [screenshot audit](docs/tasks/T22-screenshot-ui.md) for the captures, measurements, and their limits.
 
 ## Get started
 
@@ -143,6 +145,9 @@ The GUI and automation interfaces are intended to drive the same engine commands
 | [Features](docs/FEATURES.md) | Implemented feature surface and evidence/gates |
 | [Usage](docs/USAGE.md) | Build instructions, CLI, shortcuts, browser bridge, MCP |
 | [Next / Roadmap](docs/NEXT.md) | Active phases, acceptance criteria, and open tasks |
+| [Gaps](docs/GAPS.md) | What is missing or evidence-gated, with the authority for each count |
+| [Doc index](docs/README.md) | The full documentation map |
+| [Releasing](docs/RELEASING.md) | Artifact build and deployment procedures |
 | [Progress](docs/PROGRESS.md) | Session-level status and historical progress |
 | [Planning](docs/PLANNING.md) | Product plan, file-format notes, and architecture |
 | [Handoff](docs/HANDOFF.md) | Engineering handoff and agent runbook |
