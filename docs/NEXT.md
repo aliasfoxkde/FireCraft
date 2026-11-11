@@ -1,5 +1,14 @@
 # FireCraft — Roadmap detail
 
+> **Current execution snapshot (2026-11-11; main `b61f198`):** Phase 21's
+> user-facing deliverables have landed. Phase 20.1 and 20.5–20.7 are on
+> main; Optimize/timeline are in open PR #118 and the mask stack is in
+> open PR #113. Phase 22 remains partial: the user-visible parity matrix
+> is published, but bitmap inspector capabilities and remaining CS6 chrome
+> are still open/evidence-gated. Use [TASKS.md](TASKS.md) for live status
+> and [PROGRESS.md](PROGRESS.md) for measured receipts. An open PR is not
+> a landed feature.
+
 > Current task state is tracked in [`TASKS.md`](TASKS.md), with a dated
 > snapshot in [`PROGRESS.md`](PROGRESS.md). This file is the detailed
 > phase plan, not a second live ledger.
@@ -373,11 +382,13 @@ evidence work, tracked outside that campaign.
   one-way ratchet: `--bless` may raise it (reachability improved) and
   refuses to lower it (a regression is fixed, not forgiven). Measured
   on `main` at 2026-11-10: **245 registry commands, 146 bound by the
-  shell = 59.59%**, 99 unreachable; the floor is pinned at 59.59%.
-  (The command palette makes the *palette* reach 100% — the gate
-  deliberately measures the CS6-visible surface instead, which is the
-  surface the 19.x batches widen. Decision
-  [`0087`](decisions/0087-ui-work-gates.md).)
+  shell = 59.59%**, 99 unreachable; the floor was pinned at 59.59%.
+  **Latest post-train measurement (2026-11-11): 253 registry commands,
+  164 shell-bound = 64.82%.** The floor remains 59.59%; the improvement
+  is recorded, not used to silently re-bless a higher floor. The command
+  palette reaches all registry commands, but this gate deliberately
+  measures the CS6-visible surface. Decision
+  [`0087`](decisions/0087-ui-work-gates.md).
 - **19b.3 Inert-drift test** (S): every non-Help/Command `Action::Inert`
   item carries a tracking reference, so an inert item cannot be added
   silently. — **LANDED 2026-11-02** in the stronger form: the census
@@ -385,7 +396,9 @@ evidence work, tracked outside that campaign.
   (`INERT_CEILING`), so a newly inert row fails the test until the
   ceiling is deliberately re-pinned. Per-item tracking references were
   dropped as unnecessary — the count is the honest metric and the gate
-  refuses any rise in it.
+  refuses any rise in it. **Latest census (2026-11-11): 2 inert rows of
+  296 total**, with eight separate feature/evidence-gated rows. The
+  19.6 wiring campaign is complete; do not keep it in progress.
 - **19b.4 Wasm budget re-pin** (S) — **DONE (2026-11-03)**: re-measured
   and re-pinned with evidence. `xtask dist --web` observed
   **21,235,599 B** (trunk --release, wasm-opt 2, rustc 1.99, wasm-opt
@@ -407,24 +420,35 @@ evidence work, tracked outside that campaign.
   double-click enters, Esc cancels, focus loss / tool switch commits
   ([T20](tasks/T20-text-editing.md)). Kittest focus tests deferred —
   see the ticket's residual note.
-- **20.2 Optimize panel** (M): palette/bitrate over `ExportOptions` +
-  live preview (export preview exists).
-- **20.3 Animation timeline** (M): frames strip, per-frame timing,
-  onion skinning, `symbol.tween`.
-- **20.4 Mask stack UI** (M): add/remove/mode/link/move.
-- **20.5 Multi-document tabs** (M): **LANDED 2026-11-07** — Open/New
-  park the active document as a `DocTab`; Close promotes the newest
-  parked tab (refuses dirty documents); the tab strip shows the
-  active doc plus parked tabs, click to switch, a dot marks unsaved
-  edits. Gate: `open_parks_the_previous_document`,
-  `activate_tab_swaps_state`, `close_promotes_the_last_parked_tab`,
-  `new_parks_the_current_document`,
-  `close_refuses_a_dirty_document`. (Window-menu panel toggles landed
-  in Phase 19.6 batches 3 and 10.)
-- **20.6 History panel click-to-rewind** (S): journal replay to seq N.
-- **20.7 Slice/hotspot behavior editing + HTML preview** (M).
+- **20.2 Optimize panel** (M): palette/bitrate over `ExportOptions`
+  plus live preview. **Implemented in open PR #118**; do not mark
+  shipped until merge and the release/e2e evidence is attached.
+- **20.3 Animation timeline** (M): frame strip, per-frame timing,
+  onion skinning, and frame operations. **Implemented in open PR #118**;
+  the compositor-side onion-skin renderer landed earlier in #100.
+- **20.4 Mask stack UI** (M): add/remove/mode/link/move. **In open PR
+  #113**; this is a FireCraft extension, not a CS6 parity claim.
+- **20.5 Multi-document tabs** (M): **LANDED 2026-11-11** in #107 —
+  Open/New park the active document as a `DocTab`; Close promotes the
+  newest parked tab and refuses dirty documents; the tab strip switches
+  documents and marks unsaved edits.
+- **20.6 History panel click-to-rewind** (S): **LANDED 2026-11-11**
+  in #107; the session-scoped rewind command is also discoverable from
+  the command palette and MCP list/run surface in open PR #122.
+- **20.7 Slice/hotspot behavior editing + HTML preview** (M):
+  **LANDED 2026-11-11** in #107.
 
 ### Phase 21 — Modern differentiators (P2)
+
+**Delivery status (2026-11-11):** all six planned user-facing
+deliverables landed on main with #107: autosave/recovery, HiDPI canvas,
+command palette v2, preferences, accessibility work, and in-app
+scripting. Decision 0067 continues to document the known screen-reader
+limitations of the web canvas; landing the desktop/accesskit work does
+not mean the web canvas has full screen-reader parity. The remaining
+effect-cache view-transform optimization noted under 21.2 is a separate
+performance follow-up, not a reason to reopen the delivered MVP features.
+
 
 - **21.1 Autosave + crash recovery** (M): periodic journal snapshot to
   a sidecar; restore prompt on open. — **LANDED 2026-11-07**, per
@@ -464,8 +488,10 @@ evidence work, tracked outside that campaign.
   each frame and rides `ShellLayout`, so it persists like the panel
   set. Gate: `preferences_scale_round_trips_the_layout`. The
   Preferences menu row also left the inert census, now 2 of 296.
-- **21.5 accesskit** desktop + web re-audit (0067 records the web
-  blocker).
+- **21.5 accesskit** desktop + web re-audit — **LANDED 2026-11-11**
+  in #107 for the supported desktop/accessibility surface. Decision
+  0067 remains the authority for the web-canvas screen-reader limitation;
+  do not describe that limitation as resolved.
 - **21.6 In-app scripting** (S): Commands menu → run `.jsf`/`.fwsteps`.
   — **LANDED 2026-11-07**: `.jsf` running through the scripting host
   had landed with the automation milestone (Commands ▸ Run Script /
