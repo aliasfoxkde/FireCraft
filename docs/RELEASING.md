@@ -33,8 +33,8 @@ fleet cannot build ship as recipes under `packaging/`
   **run id**, not a local statement that it was green.
 - Version stamp: `[workspace.package] version` in the root `Cargo.toml`
   **and** the literal `Version:` in `packaging/deb/control` move
-  together. `xtask changelog` and `xtask dist --native` fail on drift.
-- Every crate carries the workspace version; `xtask changelog`
+  together. `xtask stamps` and `xtask dist --native` fail on drift.
+- Every crate carries the workspace version; `xtask stamps`
   enforces one stamp across all workspace-local packages.
 
 ## Web bundle (WASM-first — the primary target)
@@ -126,6 +126,14 @@ Commit the regenerated copy deliberately rather than being surprised by
 it in a diff. A changelog generated from the log cannot contain its own
 tip commit, so the file is never byte-identical to a freshly generated
 one.
+
+The stamp half of that verb is also available on its own:
+
+    cargo run -p xtask -- stamps
+
+`xtask stamps` verifies the license claim and the workspace version
+stamps and needs no git. That is the verb CI runs: the CI image ships
+no git, so `xtask changelog` cannot run there (decision 0086).
 
 ## Tag-driven release (what the workflow actually does)
 

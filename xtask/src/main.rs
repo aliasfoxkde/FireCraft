@@ -12,7 +12,9 @@
 //! fuzz
 //! campaign), `parity` (rising-only parity floors), `scorecard`
 //! (milestone status), `changelog` (release chore: generated
-//! CHANGELOG + license/version stamps). Diagnostics go to stderr;
+//! CHANGELOG + license/version stamps), `stamps` (the git-free
+//! license/version stamp checks, for a CI image that ships no git).
+//! Diagnostics go to stderr;
 //! stdout stays clean so output can be piped.
 
 mod aegis;
@@ -38,7 +40,7 @@ mod webgolden;
 
 use std::process::ExitCode;
 
-const USAGE: &str = "usage: cargo run -p xtask -- <ci [--full]|ci-no-fmt|aegis [--bless|--report]|coverage [--bless|--measure]|layers|wasm|corpus [--report]|corpus-gen|library-gen|hero-gen|styles-gen|scripts|floor|golden [--bless]|svg-golden [--bless]|svg-roundtrip [--measure]|web-golden [--bless|--measure]|perf [--bless|--measure]|dist --web|--native|--source|--sbom|fuzz|fuzz-quick|panic-hunt|parity|scorecard>";
+const USAGE: &str = "usage: cargo run -p xtask -- <ci [--full]|ci-no-fmt|aegis [--bless|--report]|coverage [--bless|--measure]|layers|wasm|corpus [--report]|corpus-gen|library-gen|hero-gen|styles-gen|scripts|floor|golden [--bless]|svg-golden [--bless]|svg-roundtrip [--measure]|web-golden [--bless|--measure]|perf [--bless|--measure]|dist --web|--native|--source|--sbom|fuzz|fuzz-quick|panic-hunt|parity|scorecard|stamps>";
 
 fn main() -> ExitCode {
     match std::env::args().nth(1).as_deref() {
@@ -126,6 +128,7 @@ fn main() -> ExitCode {
         Some("parity") => finish("parity", status::parity()),
         Some("scorecard") => finish("scorecard", status::scorecard()),
         Some("changelog") => finish("changelog", changelog::run()),
+        Some("stamps") => finish("stamps", changelog::stamps()),
         _ => {
             eprintln!("{USAGE}");
             ExitCode::FAILURE

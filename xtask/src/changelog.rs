@@ -5,6 +5,11 @@
 //! claim against the two license files, and one workspace version
 //! across every shipped crate. The gate fails the release chore when
 //! any stamp drifts.
+//!
+//! `xtask stamps` is the git-free half: the stamp checks alone. The
+//! CI image ships no git, so the generation half cannot run there;
+//! the split keeps the stamp checks running in CI instead of letting
+//! them die with the generator. See decision 0086.
 
 use crate::util::{cargo_metadata, workspace_root};
 use std::collections::BTreeMap;
@@ -25,17 +30,37 @@ const SECTIONS: &[(&str, &str)] = &[
     ("chore", "Chores"),
 ];
 
-/// Regenerates `docs/CHANGELOG.md`, then verifies the dual-license
-/// files and the workspace version stamps.
+/// Regenerates `docs/CHANGELOG.md`, then verifies the release stamps.
 pub fn run() -> Result<(), String> {
     let (doc, commits) = generate()?;
     let path = workspace_root().join("docs/CHANGELOG.md");
     std::fs::write(&path, &doc).map_err(|e| format!("write {}: {e}", path.display()))?;
+    stamps()?;
+    eprintln!("[xtask] changelog: {commits} commits -> docs/CHANGELOG.md; {STAMP_SUMMARY}");
+    Ok(())
+}
+
+/// What the stamp gate proves, in one line.
+const STAMP_SUMMARY: &str = "license + version stamps verified";
+
+/// The release stamps, verified without git.
+///
+/// The license claim and the workspace version stamps are the two
+/// checks a release must pass, and neither needs the commit log:
+/// `verify_licenses` reads the license file, `verify_versions` reads
+/// `cargo metadata`. The changelog *generation* does need git, and the
+/// CI image ships no git — so the two are split, and CI runs this
+/// verb rather than the generator.
+///
+/// Before this split, CI ran `xtask changelog` and believed it
+/// verified the stamps. It did not: the verb died at `git log`, and
+/// the job step took its exit status from the last command (`cmp`),
+/// so the failure was invisible and the stamp checks never ran
+/// anywhere in CI. See decision 0086.
+pub fn stamps() -> Result<(), String> {
     verify_licenses()?;
     verify_versions()?;
-    eprintln!(
-        "[xtask] changelog: {commits} commits -> docs/CHANGELOG.md; license + version stamps verified"
-    );
+    eprintln!("[xtask] stamps: {STAMP_SUMMARY}");
     Ok(())
 }
 
