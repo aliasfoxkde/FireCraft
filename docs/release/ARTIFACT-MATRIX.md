@@ -50,8 +50,8 @@
 | 6 | Windows x86_64 | portable ZIP | recipe only — `packaging/build-windows.ps1` | operator-run on a Windows host with MSVC | `NOT STARTED` | 1 | recipe exists; the gate **existence-checks** it only — it cannot parse PowerShell on this fleet; **never executed** | B-12 (`pwsh` absent; no MSVC linker on this host). A GNU cross-build and a wine smoke are recorded on the PR #9 branch — preview evidence only, never native certification (campaign §8) The required Windows artifact does not yet exist: the MSVC build, the installer and the clean-Windows-VM install are all outstanding (board T27-36/37/38). |
 | 7 | Windows x86_64 | Inno Setup installer | recipe only — `packaging/windows/firecraft.iss` | compiled by the PowerShell recipe on a Windows host with Inno Setup 6 | `NOT STARTED` | 1 | recipe exists and is existence-checked by the gate; the `__APPVERSION__` placeholder is substituted by the PowerShell recipe, which has never run; **never built** | B-12 (`ISCC` absent). The PowerShell recipe *skips* the installer when `ISCC` is missing, so a Windows run without Inno Setup ships no installer and says nothing |
 | 8 | macOS universal | DMG | recipe only — `packaging/build-macos-dmg.sh` | operator-run on macOS: two `apple-darwin` slices → `lipo` → `hdiutil` | `NOT STARTED` | 1 | recipe exists and is `bash -n` parse-checked by the gate; **never executed** | needs macOS + Xcode CLT; `lipo`/`hdiutil` are absent on this Linux host, so the recipe is off-fleet by design |
-| 9 | Web (WASM) | ZIP bundle | `firecraft-web-0.2.5.zip` | `xtask dist --web` → `dist/web/`, then zipped | `PUBLISHED` | 11 | GitHub release v0.2.5 asset, 7,174,826 B. Downloaded 2026-11-09: 6 entries (bundle `firecraft-web-f9dbe2f14305b2d9{,_bg.wasm}`, `index.html`, `host.html`, `appinfo.json`, inner `MANIFEST.sha256`); `sha256sum -c` passes on all 5 manifest entries | **B-21 / F-16 — the published bundle was never built by the release workflow.** Its entries are stamped 2026-11-03 12:08, six hours before the workflow's own build finished at 18:15:59Z, and its wasm is a different size than the workflow's. No recorded bridge smoke ever ran against the published bytes. Separately, the **live deployment** serves a fourth bundle (`2274ac8c2925b61d`) that matches no release — B-6 |
-| 10 | WebOS | `appinfo.json` + `host.html` | staged into `dist/web/` by `dist --web` from `packaging/webos/` | `xtask dist --web` | `BUILD VERIFIED` | 5 | staged `appinfo.json` reads 0.2.5; the web manifest covers `appinfo.json` and `host.html`; the live site serves the same `appinfo.json` bytes | device/runtime smoke is `UNVERIFIED` (audit §6); the Pages deploy is manual and currently stale (B-6) |
+| 9 | Web (WASM) | ZIP bundle | `firecraft-web-0.2.5.zip` | `xtask dist --web` → `dist/web/`, then zipped | `PUBLISHED` | 11 | GitHub release v0.2.5 asset, 7,174,826 B. Downloaded 2026-11-09: 6 entries (bundle `firecraft-web-f9dbe2f14305b2d9{,_bg.wasm}`, `index.html`, `host.html`, `appinfo.json`, inner `MANIFEST.sha256`); `sha256sum -c` passes on all 5 manifest entries | **B-21 / F-16 — the published bundle was never built by the release workflow.** Its entries are stamped 2026-11-03 12:08, six hours before the workflow's own build finished at 18:15:59Z, and its wasm is a different size than the workflow's. No recorded bridge smoke ever ran against the published bytes. Separately, the **live deployment** serves a fourth bundle (`2274ac8c2925b61d`) that matches no release — B-6; the live comparison was **re-verified 2026-11-10** and is recorded in [Live web deployment](#live-web-deployment-b-6-reconciliation) below |
+| 10 | WebOS | `appinfo.json` + `host.html` | staged into `dist/web/` by `dist --web` from `packaging/webos/` | `xtask dist --web` | `BUILD VERIFIED` | 5 | staged `appinfo.json` reads 0.2.5; the web manifest covers `appinfo.json` and `host.html`; the live site serves the same `appinfo.json` bytes — re-verified 2026-11-10, byte-identical (`7d039c36…`) | device/runtime smoke is `UNVERIFIED` (audit §6); the Pages deploy is manual and currently stale (B-6) |
 | 11 | CLI binaries | `firecraft-cli` (inside #1 and #2) | `firecraft-cli` | `xtask dist --native` | `PUBLISHED` | 11 | the **published** `firecraft-cli` was downloaded and extracted 2026-11-09 and **launches**, printing its full usage string; the locally rebuilt one does the same | — |
 | 12 | Source | tar.gz | `FireCraft-0.2.5-source.tar.gz` — **not on `main`** | `xtask dist --source` (git archive of HEAD; the verb verifies a clean extraction and runs `cargo metadata --locked` inside it). The verb exists on this branch and on the PR #9 / #12 trees | `BUILD VERIFIED` | 3 | produced 2026-11-09 on `docs/release-execution-board` @ `08eae4a`: 3.35 MB, 661 entries, sha256 `a0fcaafe…`; clean-extract + `cargo metadata --locked` verified inside the verb | F-9 (the verb is absent from `main`), B-13 (never published) |
 | 13 | SBOM | CycloneDX 1.5 JSON | `firecraft-0.2.5-sbom.cdx.json` — **not on `main`** | `xtask dist --sbom` over the locked dependency graph; the serial is a deterministic UUIDv8 derived from the locked graph. The verb exists on this branch and on the PR #9 / #12 trees | `BUILD VERIFIED` | 3 | produced 2026-11-09 on `docs/release-execution-board` @ `08eae4a`: 249 KB, 493 components, 494 dependency edges, sha256 `837a731b…` | F-9 (the verb is absent from `main`), B-13 (never published) |
@@ -116,6 +116,96 @@ exists.
 - Recipes (operator-owned, off-fleet): `build-windows.ps1`,
   `build-macos-dmg.sh`, `build-appimage.sh`, `build-flatpak.sh`.
 
+## Live web deployment (B-6 reconciliation)
+
+**The deployed bundle is not the released bundle.** They are different
+bytes, and the difference is recorded here rather than left to be
+rediscovered at release time.
+
+### What the live site serves (re-verified 2026-11-10)
+
+Fetched from `https://firecraft-web.pages.dev/` on 2026-11-10 and checked
+against the site's **own** `MANIFEST.sha256`:
+
+| File | Live sha256 | Size | Manifest verdict |
+|---|---|---|---|
+| `appinfo.json` | `7d039c36…` | 250 B | **OK** |
+| `firecraft-web-2274ac8c2925b61d.js` | `3b0403fc…` | 86,028 B | **OK** |
+| `firecraft-web-2274ac8c2925b61d_bg.wasm` | `f4f0a3f0…` | 21,231,377 B | **OK** |
+| `host.html` | expected `379720cc…` | 2,209 B served | **FAILED** |
+| `index.html` | expected `2617be68…` | 2,409 B served | **FAILED** |
+
+The two HTML failures are **not** corruption: Cloudflare Pages injects its
+analytics beacon (`static.cloudflareinsights.com/beacon.min.js`) into the
+served HTML after the manifest was written, so the served bytes can never
+equal the built bytes. A live `sha256sum -c` therefore fails on those two
+entries **by construction** — the manifest is only verifiable against the
+pre-deploy bytes.
+
+### Deployed vs released (same table, two builds)
+
+| | Live deployment | Released v0.2.5 ZIP |
+|---|---|---|
+| bundle stem | `2274ac8c2925b61d` | `f9dbe2f14305b2d9` |
+| `.js` sha256 | `3b0403fc…` | `be288850…` |
+| `_bg.wasm` sha256 | `f4f0a3f0…` | `a8a4fa4f…` |
+| `_bg.wasm` size | 21,231,377 B | 21,238,451 B (7,074 B larger) |
+| `host.html` (pre-injection) | `379720cc…` | `379720cc…` — **identical** |
+| `index.html` (pre-injection) | `2617be68…` | `fb2a5140…` — different |
+| `appinfo.json` | `7d039c36…` | `7d039c36…` — **identical** |
+
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:80cec6c38b55085d90003b5fad6dff9ca2922022c500d27f2f1ec3dafe246ad5 -->
+
+**Relationship: different artifact bytes; source relationship unknown
+unless established by a build receipt.** The shared `host.html` and
+`appinfo.json` show the two bundles carry the same WebOS shell files; the
+differing wasm (7,074 B) and differing `index.html` establish that the
+artifacts differ, but do not establish different Rust sources. No
+receipt ties `2274ac8c2925b61d` to any commit SHA, so the deployed build
+cannot be attributed to a source revision at all — it is an orphan. It
+is also *not* the CI-built bundle recorded in the audit (21,231,517 B,
+`cf1bec8315c7bfe5`): the live wasm differs from that by 140 B, so a
+**fifth** distinct wasm build of nominally the same 0.2.5 release now
+exists.
+
+<!-- /coderabbit-ai-generated:v1 -->
+### Decision
+
+Recorded as [decision 0084](../decisions/0084-web-deployment-source-of-truth.md).
+
+**The release is the source of truth; the deployment is redeployed from
+the release bytes.** The reverse — cutting the release from the deployed
+bytes — is rejected, for two reasons that are both evidence-backed:
+
+1. The deployed bundle is **unattributable**: no build receipt, no
+   commit SHA, no CI run ties `2274ac8c2925b61d` to any revision.
+2. The deployed bytes are **not attestable**: two of the five files the
+   deployment's own manifest covers can never verify against it, so a
+   release cut from those bytes would publish an artifact whose
+   checksum list fails by construction.
+
+Consequences, recorded so the next release starts from a known state:
+
+- The next web release must be **redeployed** from the release ZIP's
+  bytes, and the redeploy must record the deployed bundle stem and the
+  source SHA in a receipt. Deploying is an operator action (the Pages
+  step in `release.yml` is commented out) and is **not** performed by
+  this repository's automation.
+- The live `MANIFEST.sha256` must **not** be used as the deployment's
+  verification list. Verification happens against the pre-deploy
+  `dist/web/MANIFEST.sha256`; the live HTML entries are expected to
+  differ.
+- Until a redeploy happens, the live site is **stale and unattributed**:
+  it is not evidence of any release, and no rung above 5 may be claimed
+  for it.
+
+**Status: `BLOCKED`** — the reconciliation is complete and the decision is
+recorded; the redeploy itself is gated behind explicit maintainer
+approval (campaign §20 forbids publishing or deploying production
+artifacts without it). Tracked by issue #81 / task #158, defect **B-6**.
+
 ## Known gaps against RP-00 acceptance
 
 1. **Windows/macOS/AppImage/Flatpak outputs are recipe-only.** No
@@ -137,7 +227,11 @@ exists.
    (B-6), and its own checksum list cannot verify it — Cloudflare
    Pages rewrites the two HTML files after the manifest is written, so
    `sha256sum -c` against the live site fails on those two entries by
-   construction.
+   construction. **Reconciled 2026-11-10** — see
+   [Live web deployment](#live-web-deployment-b-6-reconciliation): the
+   deployed bundle is a different, unattributable build, and the
+   decision is that the site is redeployed from the release bytes.
+   The redeploy itself is gated behind maintainer approval.
 5. **The release workflow has never produced a release** (B-4, B-21).
    All six published releases were operator-published by hand.
 6. **The source archive and the SBOM have never been published** (B-13),
