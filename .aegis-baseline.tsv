@@ -91,6 +91,13 @@ gdpr-reference	./docs/release/EXECUTION-BOARD.md	8b16477e3abe1de345a6e82f360db77
 gdpr-reference	./docs/tasks/T27-11-reproduce-aegis-gate-failure.md	8b16477e3abe1de345a6e82f360db77b5e238983ad685cec9fef0d0bc009aed3	1
 gdpr-reference	./docs/tasks/T27-12-adjudicate-aegis-findings.md	8b16477e3abe1de345a6e82f360db77b5e238983ad685cec9fef0d0bc009aed3	7
 gdpr-reference	./xtask/src/aegis.rs	8b16477e3abe1de345a6e82f360db77b5e238983ad685cec9fef0d0bc009aed3	2
+# Fires on English prose where a bulk-operation word and a bound word
+# share one line: the automation wiki's sentence about the CLI's bulk
+# work and the bounds it reports. FireCraft serves no GraphQL endpoint
+# and ships no GraphQL schema, so the missing depth guard this rule
+# reports does not exist here.
+graphql-batch-limit	./docs/wiki/Automation.md	ab6b3237ab28e713976df30ac7efe4871e983337248a8bef9fa68ffddcaca0e9	1
+graphql-batch-limit	./xtask/src/aegis.rs	623e18d37f4ff3f0c0acf509bcbc0b05490287b62a01eabef8d9b48776356521	1
 # Matches the build metadata of a Cargo.lock version string
 # (0.6.0+11769913).
 international-phone	./Cargo.lock	af21a1bff1718128c96522dc5f3a4136e66feeb8aee345e9676fda1199e5378e	1

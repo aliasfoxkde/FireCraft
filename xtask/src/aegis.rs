@@ -115,6 +115,14 @@ const CLASS_NOTES: &[(&str, &str)] = &[
          holds no such data.",
     ),
     (
+        "graphql-batch-limit",
+        "Fires on English prose where a bulk-operation word and a bound \
+         word share one line: the automation wiki's sentence about the \
+         CLI's bulk work and the bounds it reports. FireCraft serves no \
+         GraphQL endpoint and ships no GraphQL schema, so the missing \
+         depth guard this rule reports does not exist here.",
+    ),
+    (
         "international-phone",
         "Matches the build metadata of a Cargo.lock version string \
          (0.6.0+11769913).",
