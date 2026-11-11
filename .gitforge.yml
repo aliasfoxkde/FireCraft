@@ -40,6 +40,18 @@
 #     docker save firecraft-ci-rust:1 | ssh <host> docker load
 # - Step logs are head-capped: cargo's compile spam comes first, so a
 #   failure late in a long step can be truncated. Keep steps small.
+# - A job's `timeout:` is a WATCHDOG, not a gate: it kills the
+#   container and records `timed_out`, with no diagnostic about what
+#   was slow. The budgets below are therefore sized from the fleet's
+#   measured wall-clock, not from a round guess. The runner holds 4
+#   concurrent containers on a 16-core host and each compiles the
+#   workspace, so a co-tenant wave inflates a job roughly 4x:
+#   fmt-layers measured 0.3 min idle and 20.1 min loaded; perf-budgets
+#   3.2 min idle and 14.3 min loaded. Each budget below is ~2.5x the
+#   worst *successful* duration observed on 2026-11-11 with 9 runs in
+#   flight, so a loaded job still fits its budget and a genuinely hung
+#   job is still killed. A budget that a passing job can outrun is
+#   indistinguishable from a failure (issue #126).
 #
 # The image recipe is infrastructure/docker/ci-rust.Dockerfile; rebuild
 # and re-ship it when a pinned tool version or the Rust minor moves. A
@@ -60,7 +72,11 @@ jobs:
       - name: Layer-table gate
         # Compiles xtask alone; the gate itself is cargo metadata.
         run: CARGO_TARGET_DIR=/tmp/ci-target cargo run --locked -p xtask -- layers
-    timeout: 20m
+    # 45m: the gate compiles xtask, so it carries the workspace's
+    # build wave. Measured 20.1 min on 2026-11-11 with 9 runs in
+    # flight (0.3 min idle); the previous 20m budget killed a run that
+    # was 0.5 min from finishing.
+    timeout: 45m
 
   - name: clippy-test
     image: firecraft-ci-rust:1
@@ -76,7 +92,8 @@ jobs:
         run: CARGO_TARGET_DIR=/tmp/ci-target cargo test --workspace --locked --no-fail-fast -- --test-threads=2
     # The egui/eframe graph is the bulk of the workspace; the wall
     # absorbs co-tenant build waves on these shared hosts.
-    timeout: 90m
+    # 150m: measured 76.9 min on 2026-11-11 with 9 runs in flight.
+    timeout: 150m
 
   - name: wasm-web
     image: firecraft-ci-rust:1
@@ -89,7 +106,8 @@ jobs:
         # the image, the fwpng smoke suite executes for real (no
         # compile-only downgrade), and trunk builds the web bundle.
         run: CARGO_TARGET_DIR=/tmp/ci-target cargo run --locked -p xtask -- wasm
-    timeout: 60m
+    # 90m: measured 45.6 min on 2026-11-11 with 9 runs in flight.
+    timeout: 90m
 
   - name: corpus-golden
     image: firecraft-ci-rust:1
@@ -99,7 +117,8 @@ jobs:
         run: CARGO_TARGET_DIR=/tmp/ci-target cargo run --locked -p xtask -- corpus
       - name: Golden render pins + determinism
         run: CARGO_TARGET_DIR=/tmp/ci-target cargo run --locked -p xtask -- golden
-    timeout: 30m
+    # 45m: measured 19.6 min on 2026-11-11 with 9 runs in flight.
+    timeout: 45m
 
   - name: perf-budgets
     image: firecraft-ci-rust:1
@@ -110,7 +129,11 @@ jobs:
         # fleet. The report line names the host, so a trip is
         # diagnosable as regression vs environment shift.
         run: CARGO_TARGET_DIR=/tmp/ci-target cargo run --locked -p xtask -- perf
-    timeout: 20m
+    # 45m: measured 14.3 min on 2026-11-11 with 9 runs in flight, but
+    # two runs were killed at the previous 20m budget while still
+    # working (one on 2026-11-11 at 20.2 min, one at 20.3 min). The
+    # budget must exceed what a passing job can take.
+    timeout: 45m
 
   - name: fuzz
     image: firecraft-ci-rust:1
@@ -131,7 +154,9 @@ jobs:
     # 30m proved too tight: a cold sandbox target dir spends ~20m
     # compiling before fuzz-quick starts (dfd7f46 run was killed by
     # the watchdog 10m into the campaign itself).
-    timeout: 60m
+    # 120m: measured 52.9 min on 2026-11-11 with 9 runs in flight, so
+    # the 60m budget left less than a quarter of an hour of margin.
+    timeout: 120m
 
   - name: generated-docs
     image: firecraft-ci-rust:1
@@ -173,7 +198,8 @@ jobs:
           CARGO_TARGET_DIR=/tmp/ci-target cargo run --locked -p xtask -- panel-snapshot
           cmp /tmp/parity.committed docs/planning/generated/parity.md
           cmp /tmp/scorecard.committed docs/planning/generated/scorecard.md
-    timeout: 20m
+    # 45m: measured 16.1 min on 2026-11-11 with 9 runs in flight.
+    timeout: 45m
 
   - name: release
     image: firecraft-ci-rust:1
@@ -267,4 +293,8 @@ jobs:
           # directory, so verify from inside each one.
           (cd artifacts/web && sha256sum -c MANIFEST.sha256)
           (cd artifacts/native && sha256sum -c MANIFEST.sha256)
-    timeout: 90m
+    # 180m: measured 88.3 min on 2026-11-11 with 9 runs in flight —
+    # 1.7 minutes inside the previous 90m budget. The release job is
+    # the longest in the chain and runs last, when the fleet is most
+    # loaded, so it is the job most likely to be killed by its budget.
+    timeout: 180m
