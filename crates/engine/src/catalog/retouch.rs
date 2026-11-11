@@ -115,7 +115,6 @@ pub(crate) fn brush_of(
 /// overflow panic in the window sums, a release-mode hang in the
 /// `1..=half` loops. Rejecting here keeps every radius that survives
 /// at or below 512, which is what the `half` derivations assume.
-
 fn brush_diameter(name: &'static str, radius: u32) -> Result<u32, EngineError> {
     radius
         .checked_mul(2)
