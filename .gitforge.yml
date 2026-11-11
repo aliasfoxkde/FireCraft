@@ -137,7 +137,7 @@ jobs:
     image: firecraft-ci-rust:1
     needs: [fuzz]
     steps:
-      - name: Parity floors + scorecard + stamp check, then drift check
+      - name: Parity floors + scorecard + stamps + reachability + panel snapshot, then drift check
         # The committed generated docs must byte-equal what the gates
         # produce: copies are taken before regenerating, and cmp fails
         # the job on any hand-edit (git is not assumed in the checkout).
@@ -154,6 +154,14 @@ jobs:
         # `xtask stamps` is the git-free half of that verb: the license
         # and version stamp checks, which the changelog verb used to run
         # after a step that had already died.
+        #
+        # `reachability` and `panel-snapshot` are the two gates that used
+        # to exist only inside the local `xtask ci` list, so nothing in
+        # CI enforced them. They are measured against committed
+        # baselines (`.reachability-floor.tsv`, `crates/app/panels.snapshot`),
+        # and both are rising-only or byte-exact: the pipeline is the
+        # authoritative measurement oracle for the shell's coverage of
+        # the command registry and for the CS6 panel inventory.
         run: |
           set -e
           cp docs/planning/generated/parity.md /tmp/parity.committed
@@ -161,6 +169,8 @@ jobs:
           CARGO_TARGET_DIR=/tmp/ci-target cargo run --locked -p xtask -- parity
           CARGO_TARGET_DIR=/tmp/ci-target cargo run --locked -p xtask -- scorecard
           CARGO_TARGET_DIR=/tmp/ci-target cargo run --locked -p xtask -- stamps
+          CARGO_TARGET_DIR=/tmp/ci-target cargo run --locked -p xtask -- reachability
+          CARGO_TARGET_DIR=/tmp/ci-target cargo run --locked -p xtask -- panel-snapshot
           cmp /tmp/parity.committed docs/planning/generated/parity.md
           cmp /tmp/scorecard.committed docs/planning/generated/scorecard.md
     timeout: 20m
@@ -223,12 +233,26 @@ jobs:
         # that proof: install, desktop entry, icon, CLI, document round
         # trip, GUI launch, uninstall, reinstall. This image is Debian
         # 12, the platform the package declares (`libc6 >= 2.36`).
+        #
+        # `libxkbcommon-x11-0` is the X11 half of libxkbcommon: the
+        # winit X11 backend dlopens `libxkbcommon-x11.so.0` through
+        # `xkbcommon-dl`, and `libxkbcommon0` does not ship it. Without
+        # it the GUI launch aborts with a panic instead of starting, and
+        # the launch stage fails for a missing library rather than for
+        # a broken package.
+        #
+        # The list is exactly the `Depends` of `packaging/deb/control`
+        # (decision 0091) plus this stage's harness — `xvfb` and `xauth`
+        # to give the launch a display, `desktop-file-utils` to
+        # validate the desktop entry. Nothing else is installed, so a
+        # green launch is evidence that the package's own declared
+        # dependencies are sufficient.
         run: |
           set -e
           apt-get update -qq >/dev/null
           apt-get install -y -qq --no-install-recommends \
             xvfb xauth libgl1 libx11-6 libxcursor1 libxrandr2 libxi6 \
-            libxkbcommon0 desktop-file-utils >/dev/null
+            libxkbcommon0 libxkbcommon-x11-0 desktop-file-utils >/dev/null
           bash packaging/deb/verify-install.sh \
             dist/native/firecraft_*_amd64.deb "" corpus/fixtures/composed.fw.png
       - name: Stage artifacts for the runner's artifact collection

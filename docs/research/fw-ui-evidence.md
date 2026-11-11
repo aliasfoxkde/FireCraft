@@ -46,13 +46,22 @@ when the external tree is absent. The real surface:
 
 ## Keymap encoding
 
-`English/Keyboard Shortcuts/Fireworks.xml`: 128+ commands, each with
-`shortcut text="<mods> <vk>"` (multi-shortcut commands use several
-entries). Modifier codes observed: `0`/`2` = plain (2 marks
-extended/numeric-pad variants), `4` = Ctrl, `5` = Ctrl+Alt,
-`6` = Ctrl+Shift, `7` = Ctrl+Shift+Alt. Decode against the RT_MENU
-strings (which carry the same accelerators as display text) to confirm
-per-command assignments before implementing the M13 shortcut table.
+`English/Keyboard Shortcuts/Fireworks.xml`: 128 commands carrying
+133 `<shortcut text="<mods> <vk>"/>` entries (multi-shortcut commands
+use several entries). The modifier field is a **bitfield**, not a
+lookup table: `1` = Alt, `2` = Shift, `4` = Ctrl, so `0` = plain,
+`3` = Alt+Shift, `5` = Ctrl+Alt, `6` = Ctrl+Shift, `7` =
+Ctrl+Alt+Shift. Decode against the RT_MENU strings (which carry the
+same accelerators as display text) to confirm per-command assignments
+before implementing the M13 shortcut table.
+
+The `2` = Shift reading is settled by three independent pairs in the
+tree itself, not inferred: `cmd_Nudge*` is `0` on the arrow keys and
+`cmd_BigNudge*` is `2` on the same keys; `cmd_PreviewSecondary` is
+`2 123` = Shift+F12, and the tree prints "Shift+F12" on that row; and
+`cmd_SelectCopyToPolySlice` is `3 80` = Alt+Shift+P, the tree's
+`AS+P` binding. An earlier reading of this file took `2` for an
+extended/numeric-pad variant of plain; the tree disproves it.
 
 ## Derived verdicts now implemented (M13 shell)
 
@@ -228,9 +237,13 @@ here as an open evidence gap rather than guessed.
   Optimize, Layers, Common Library, CSS Properties, Pages, States,
   History, Auto Shapes, Styles, Document Library, URL, Color Mixer,
   Swatches, Info, Behaviors, Find and Replace.
-- Not wired by design: the file's `Page_Next=33` (PgUp) entry
-  contradicts the documented Ctrl+PgDn binding — left unbound until a
-  corpus page-turn proves the direction.
+- The file's `Page_Next=33` (Ctrl+PgUp) contradicts the documented
+  Ctrl+PgDn binding. FireCraft resolves it by the physical key, not by
+  the command's name: Ctrl+PgUp is bound to the tree's *Previous Page*
+  row's action and Ctrl+PgDn to *Next Page*, so the key and the row
+  agree. The divergence from CS6's command naming is recorded rather
+  than hidden; no corpus page-turn has settled which reading CS6's
+  own Page menu used.
 
 ## Where the bitmap-specific surface lives (Phase 22, ticket 22.4)
 

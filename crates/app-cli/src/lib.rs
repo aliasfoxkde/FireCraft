@@ -11,6 +11,11 @@ pub mod io;
 pub mod mcp;
 pub mod ops;
 
+/// The stamped version of this build — the crate's own `Cargo.toml`
+/// version, which the workspace gate keeps equal to the release
+/// version of every other crate. `--version` prints it.
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 /// Library error: one message, printed to stderr by the binary.
 #[derive(Debug)]
 pub struct CliError(pub String);

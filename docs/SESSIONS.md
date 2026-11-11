@@ -1932,3 +1932,79 @@ its siblings.
 
 
 
+## 2026-11-10 — Issue #94: the reachability gate and the panel snapshot
+
+### The reachability gate (`xtask reachability`)
+
+`engine::catalog::ids()` is the authority for what the engine can do;
+the shell's designed surface — the menu bar, the panels, the dialogs,
+the canvas tools — is what a user can actually reach. The gate
+measures the second against the first, derives both from the code
+rather than from a hand-written list, and holds the result to a floor
+in a committed file (`.reachability-floor.tsv`, the same shape as the
+Aegis baseline).
+
+Measured on `main` at 2026-11-10: **245 registry commands, 146 bound
+by the shell = 59.59%**; 99 unreachable. The floor is pinned at
+59.59%.
+
+The palette (Ctrl+P) executes *every* registry command, so a
+palette-inclusive metric is 100% and can never fail. The gate
+deliberately measures the CS6-visible surface instead — the same
+surface the 19.x batches have been widening, and the surface the
+historical "N commands unreachable" numbers were always about.
+
+The ratchet is one-way: `--bless` may raise the floor (reachability
+improved) and refuses to lower it (a regression is fixed, not
+forgiven). The decision core (`evaluate`, `next_floor`) takes the
+measurement and the floor as data and reads no process state, so the
+tests drive it with a deliberately broken binding set.
+
+### The panel snapshot (`xtask panel-snapshot`)
+
+`egui_kittest` was checked before any code was written. It is
+**obtainable**: `egui_kittest` 0.36.2 is on crates.io and requires
+`egui ^0.36.2` — exactly the egui this lockfile pins — and the CI
+image is *not* offline (it runs with `CARGO_NET_OFFLINE=false`;
+decision 0073 removed that wall, so the baked registry cache is a
+fast floor, not a wall). The blocker is its **pixel** path: the
+snapshot machinery sits behind the crate's optional `wgpu` /
+`egui-wgpu` features, and the CI image installs no graphics stack
+(no mesa, no Vulkan drivers), so no wgpu adapter is available in the
+sandbox. A pixel suite would fail there for want of an adapter, not
+for want of a crate.
+
+So the panel set is pinned the way this repository pins everything
+else: a committed golden file, `crates/app/panels.snapshot`, compared
+against a snapshot rendered from the shell's own inventory (the xtask
+crate now depends on `app` and reads
+`app::shell::panel_inventory()`, so the Rust `PANELS` table stays the
+single authority).
+
+Pinned per panel: id, dock side, dock order, header text,
+fresh-document visibility, Window-menu togglability — 14 panels (13
+toggleable + the always-present Web Layer). A panel added, renamed,
+reordered or re-docked without a deliberate re-pin fails the build.
+Panel *pixels* are not pinned: they need `egui_kittest` plus a proven
+software adapter (lavapipe) in the CI image, and that half is
+recorded as still open.
+
+### Docs reconciled
+
+`NEXT.md` §19b.2 said the reachability gate was "a test, not an xtask
+step" and marked it LANDED; the "Quality gates for UI work" list said
+the same gate, the inert-drift test and the wasm budget were all
+open, and named `egui_kittest` as the snapshot mechanism. One truth
+now: 19b.2 records the xtask gate with its measured numbers, the
+quality-gate list points at 19b.2/19b.3/19b.4 as done, and the
+snapshot item records what was checked about `egui_kittest` and which
+half of it (panel pixels) is still open. `GAPS.md`, `HANDOFF.md` and
+`PROGRESS.md` carry the same numbers.
+
+### Lesson
+
+A metric that can never fail is not a metric. The first instinct was
+to count everything the shell can execute — but the command palette
+executes the whole registry, so that number is 100% forever. The
+useful question was narrower and harder: *what can a user reach
+without knowing a command id?* That is the number worth a floor.

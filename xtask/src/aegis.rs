@@ -64,13 +64,16 @@ const CLASS_NOTES: &[(&str, &str)] = &[
     (
         "australian-tfn",
         "Matches the 9-digit observed value range in the PNG node dictionary \
-         (0..141663582), and the run of SVG path control coordinates in the \
-         brand mark's bezier paths; this repository holds no tax identifiers.",
+         (0..141663582), the run of SVG path control coordinates in the brand \
+         mark's bezier paths, and the GitHub release and asset identifiers \
+         quoted in the release receipts; this repository holds no tax \
+         identifiers.",
     ),
     (
         "bank-routing-number",
         "Matches the same 9-digit observed value range in the PNG node \
-         dictionary; this repository holds no banking data.",
+         dictionary and the GitHub release and asset identifiers quoted in \
+         the release receipts; this repository holds no banking data.",
     ),
     (
         "bearer-token-url",
@@ -130,9 +133,10 @@ const CLASS_NOTES: &[(&str, &str)] = &[
         "pci-cardholder-data",
         "Matches the word \"pan\" in pan-zoom, hand-pan and two-finger pan \
          identifiers, in the Hand tool's \"Pan the artboard\" menu label, \
-         including the Android feasibility note's touch gesture, and in \
-         decision 0074's table of adjudicated classes and the rule \
-         identifiers quoted by the Aegis adjudication tickets; the five \
+         including the Android feasibility note's touch gesture, in the \
+         session log's prose about that adjudication, and in decision \
+         0074's table of adjudicated classes and the rule identifiers \
+         quoted by the Aegis adjudication tickets; the five \
          credit-card-* rules stay armed.",
     ),
     (
@@ -158,7 +162,9 @@ const CLASS_NOTES: &[(&str, &str)] = &[
     (
         "ssn-no-dashes",
         "Matches the same 9-digit observed value range in the PNG node \
-         dictionary; this repository holds no social-security numbers.",
+         dictionary and the GitHub release and asset identifiers quoted in \
+         the release receipts; this repository holds no social-security \
+         numbers.",
     ),
     (
         "stack-trace-exposure",
@@ -184,7 +190,9 @@ const CLASS_NOTES: &[(&str, &str)] = &[
          timestamp builder, plus the headless-browser virtual-time \
          budget (60000), and decision 0074's table of adjudicated classes \
          and the rule identifiers quoted by the Aegis adjudication \
-         tickets. This repository holds no postal data.",
+         tickets. The v1 MVP roadmap's RPC-emulation row names the legacy \
+         Fireworks RPC TCP port — a protocol number, not postal data. \
+         This repository holds no postal data.",
     ),
 ];
 

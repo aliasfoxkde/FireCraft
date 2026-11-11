@@ -3,7 +3,7 @@ Version: 0.2.5
 Section: graphics
 Priority: optional
 Architecture: amd64
-Depends: libc6 (>= 2.36)
+Depends: libc6 (>= 2.36), libgcc-s1, libgl1, libx11-6, libxcursor1, libxrandr2, libxi6, libxkbcommon0, libxkbcommon-x11-0
 Maintainer: FireCraft contributors <firecraft@localhost>
 Homepage: https://github.com/aliasfoxkde/FireCraft
 Description: Clean-room reimplementation of Adobe Fireworks CS6

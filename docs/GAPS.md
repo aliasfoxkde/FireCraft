@@ -46,6 +46,18 @@ shell reaches 72; after Phase 11's paint family it reaches 77;
 > `menus::tests::inert_count_never_rises`). The family table below is
 > superseded by [`NEXT.md`](NEXT.md) Phases 19–21 as the work list;
 > this file's phases remain useful as per-family detail.
+>
+> **Note (2026-11-10):** the shell-side number above is now *gated*,
+> not just audited. The xtask step `cargo run -p xtask --
+> reachability` derives the bound set from `crates/app/src` and holds
+> it to a floor in `.reachability-floor.tsv` (one-way ratchet). The
+> measurement it took on `main`: **245 registry commands, 146 bound =
+> 59.59%**, 99 unreachable — the floor is pinned at 59.59%. The
+> `comm` line above counts *any* occurrence of a command name in the
+> shell crate; the gate counts the same bindings outside `#[cfg(test)]`
+> code and reports them as a share, so the two numbers are close but
+> not identical by construction. The audit snapshot above remains the
+> historical record.
 
 ```
 $ comm -23 <(engine::catalog::ids()) <(command names in crates/app/src)
@@ -124,8 +136,8 @@ authoritative source that supersedes this table.
 | **Registry** | 252 commands | Every command executable from the GUI via the Ctrl+P palette (19.4); menu reachability is the remaining gap |
 | **Menu reachability** | 2 inert of 294 items | *live* — derived + gated (`menus::tests::inert_count_never_rises`) |
 | **Parity** | 268 C / 3 P / 0 M / 85 N | 3 P rows are evidence-gated (Phase 12 oracle) |
-| **Decision docs** | 77 (0001–0079; 0071 pending in PR #15, 0078 pending in PR #73) | Next: 0080 |
-| **Web bundle** | 21,608,249 B (ceiling 22,000,000) | Re-pinned 2026-11-10 (Phase 21/22 feature surface; decision 0079). The size budget moves in both directions from dated measurements; the twelve perf timing/memory budgets stay falling-only |
+| **Decision docs** | 90 (0001–0090) | Next: 0091 |
+| **Web bundle** | 21,608,249 B observed; 25,000,000 B warning / 50,000,000 B hard cap | Policy decision 0090; web build uses Rust opt-level=z and Binaryen wasm-opt=z. Cap is a guardrail, not a target; A/B size evidence remains required |
 
 
 ---

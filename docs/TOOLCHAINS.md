@@ -1,7 +1,7 @@
 # Packaging recipes — toolchain requirements
 
 `xtask dist` builds what the release fleet can build and verify:
-`dist --web` (the static web bundle + bridge smoke), `dist --native`
+`dist --web` (the static web bundle + bridge smoke; Rust opt-level=z and Binaryen wasm-opt=z), `dist --native`
 (the Linux x86_64 tar.gz / deb / CLI set, manifest-verified),
 `dist --source` (the clean-extract-verified source archive) and
 `dist --sbom` (the CycloneDX 1.5 SBOM). Everything else under
@@ -23,14 +23,13 @@ target platform, with a receipt.
 **Parse-checked is not built.** Three of the recipes below are
 `bash -n`-checked by `xtask dist --native` on every run, so a broken
 recipe fails the gate. Two of them cannot even be parsed on this fleet.
-None of the recipes has produced an artifact that was installed,
-launched, or published.
+The off-fleet packaging recipes (AppImage, Flatpak, Windows, and macOS) have not yet produced target-native artifacts with install and launch receipts. This statement does not describe the separately built and published Linux tarballs, DEB, CLI, and web bundle.
 
 ## Recipe table
 
 | Recipe | Target artifact | Toolchain | Runs on | Parse status on this fleet | Artifact ever produced? |
 |---|---|---|---|---|---|
-| `web/` (trunk) | `dist/web/` bundle | rustup `wasm32-unknown-unknown`, trunk, wasm-opt | release fleet (`xtask dist --web`) | n/a — it is built, not parsed | **Yes.** Built and bridge-smoked; published as the v0.2.5 web ZIP (rung 11) |
+| `web/` (trunk) | `dist/web/` bundle | rustup `wasm32-unknown-unknown`, trunk, Cargo opt-level=z, Binaryen wasm-opt=z | release fleet (`xtask dist --web`) | n/a — it is built, not parsed | **Yes.** Built and bridge-smoked; published as the v0.2.5 web ZIP (rung 11) |
 | `packaging/webos/` (`appinfo.json`, `host.html`) | WebOS packaging stamped `@VERSION@` into `dist/web/` | none (text copy + stamp) | release fleet (`xtask dist --web`) | n/a — data, not a script | **Yes.** Staged into `dist/web/` (rung 5); device/runtime smoke unverified |
 | `packaging/deb/control` | `firecraft_<v>_amd64.deb` | dpkg-deb | release fleet (`xtask dist --native`) | n/a — data, not a script | **Yes.** Published (rung 11); the declared glibc floor is an open defect (B-7) |
 | `packaging/build-appimage.sh` | `firecraft-<v>-linux-x86_64.AppImage` | linuxdeploy-x86_64.AppImage (FUSE or `--appimage-extract-and-run`), GNU coreutils | any Linux x86_64 host with linuxdeploy | `bash -n` **parse-checked** by `dist --native` | **No.** `linuxdeploy` is absent from this fleet (B-8) |
@@ -94,7 +93,7 @@ build the artifact and has a receipt for it.
 
 ## Planned release targets — not yet verified by this inventory
 
-The comprehensive target matrix and execution criteria live in
+The cross-cutting code cleanup, WASM optimization, product QA, and agent execution sequence live in [PRODUCTION-READINESS-PLAN.md](PRODUCTION-READINESS-PLAN.md). The comprehensive target matrix and execution criteria live in
 [`docs/RELEASE-ENGINEERING-PLAN.md`](RELEASE-ENGINEERING-PLAN.md)
 (ticket [T27](tasks/T27-cross-platform-release.md)). Which of them
 constitute an acceptable release cut is decided by
@@ -108,9 +107,10 @@ constitute an acceptable release cut is decided by
 - Existing Windows and macOS scripts are recipes until their output is
   built and launch-tested on native runners.
 - AppImage is recipe-only until an actual image is built and runtime-tested.
-- Source archive and CycloneDX SBOM generation are implemented in
+- Source archive and CycloneDX SBOM generation are implemented on main in
   `xtask dist --source` and `xtask dist --sbom`, and are wired into the
-  tag workflow. They still need an end-to-end tag-release receipt.
+  tag workflow. They still need an end-to-end tag-release receipt, a clean
+  source build, and schema validation of the SBOM.
   Provenance/attestation and signed release metadata remain unimplemented
   until the required credentials and verification path are configured.
 

@@ -25,7 +25,9 @@ postMessage bridge: openDocument/apply/exportPng/exportDocument, M5);
 PLANNING §2 (delivery targets: WASM first, then Linux tar/AppImage/deb,
 macOS universal dmg, Windows installer + portable, CLI archives),
 §8 T4 row, §11.5 (releases: tagged, changelog from conventional
-commits); the dual LICENSE-MIT/LICENSE-APACHE files (already in tree);
+commits); the Apache-2.0 license file (the original plan's dual
+LICENSE-MIT/LICENSE-APACHE pair was narrowed to Apache-2.0 alone on
+2026-11-10);
 the fleet reality (Linux x86_64 + docker runners — no macOS SDK, no
 Windows toolchain guarantee).
 

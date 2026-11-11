@@ -2471,6 +2471,15 @@ pub static SHORTCUTS: &[Shortcut] = &[
         }),
     ),
     key("File", ALT, egui::Key::F4, Action::Shell(ShellAction::Quit)),
+    key("File", CTRL, egui::Key::Q, Action::Shell(ShellAction::Quit)),
+    key(
+        "File",
+        CTRL_SHIFT,
+        egui::Key::O,
+        Action::Shell(ShellAction::ReportGap(
+            "Adobe Bridge is not available in this build.",
+        )),
+    ),
     key(
         "File",
         CTRL,
@@ -2637,6 +2646,15 @@ pub static SHORTCUTS: &[Shortcut] = &[
         CTRL_ALT,
         egui::Key::E,
         Action::Sel(SelAction::MergeDown),
+    ),
+    // Modify ▸ snap
+    key(
+        "Modify ▸ snap",
+        CTRL,
+        egui::Key::K,
+        Action::Shell(ShellAction::ReportGap(
+            "Snap To Pixel needs a view snap mode, which this build does not ship",
+        )),
     ),
     // Modify ▸ Symbol
     key(
@@ -2865,6 +2883,16 @@ pub static SHORTCUTS: &[Shortcut] = &[
         egui::Key::Semicolon,
         Action::Shell(ShellAction::ToggleSnapToGuides),
     ),
+    // CS6's keymap file opens a guides editor here (`cmd_ViewEditGuides`);
+    // this build edits guides from the Properties panel instead.
+    key(
+        "View ▸ guides",
+        CTRL_ALT_SHIFT,
+        egui::Key::G,
+        Action::Shell(ShellAction::ReportGap(
+            "CS6's View Edit Guides dialog is not in this build",
+        )),
+    ),
     // View ▸ smart guides
     key(
         "View ▸ smart guides",
@@ -2915,6 +2943,16 @@ pub static SHORTCUTS: &[Shortcut] = &[
         CTRL_ALT_SHIFT,
         egui::Key::U,
         Action::TextFlag("underline"),
+    ),
+    // CS6's own keymap file gives each text style a function-key
+    // alternate alongside the Ctrl+Alt+Shift chord (`cmd_TextStyle_*`).
+    key("Text styles", NONE, egui::Key::F5, Action::TextPlain),
+    key("Text styles", NONE, egui::Key::F6, Action::TextFlag("bold")),
+    key(
+        "Text styles",
+        NONE,
+        egui::Key::F7,
+        Action::TextFlag("italic"),
     ),
     // Text ▸ justify
     key(
@@ -3112,6 +3150,26 @@ pub static SHORTCUTS: &[Shortcut] = &[
         egui::Key::Tab,
         Action::Shell(ShellAction::ToggleHidePanels),
     ),
+    // CS6's keymap file gives "Hide or show all panels" a second
+    // accelerator (`cmd_HideOrShowAllPanels`).
+    key(
+        "Window ▸ panel toggles",
+        CTRL_SHIFT,
+        egui::Key::H,
+        Action::Shell(ShellAction::ToggleHidePanels),
+    ),
+    key(
+        "Window ▸ panel toggles",
+        CTRL,
+        egui::Key::F7,
+        Action::Shell(ShellAction::TogglePanel("CSS Properties")),
+    ),
+    key(
+        "Window ▸ panel toggles",
+        CTRL_SHIFT,
+        egui::Key::L,
+        Action::Shell(ShellAction::TogglePanel("Common Library")),
+    ),
     key(
         "Window ▸ panel toggles",
         CTRL_ALT,
@@ -3250,6 +3308,32 @@ pub static SHORTCUTS: &[Shortcut] = &[
         egui::Key::OpenBracket,
         Action::Sel(SelAction::Nudge { dx: -10.0, dy: 0.0 }),
     ),
+    // CS6's big nudge is Shift with the arrow keys (`cmd_BigNudge*`);
+    // the plain bracket above is FireCraft's own extra.
+    key(
+        "Nudge",
+        SHIFT,
+        egui::Key::ArrowLeft,
+        Action::Sel(SelAction::Nudge { dx: -10.0, dy: 0.0 }),
+    ),
+    key(
+        "Nudge",
+        SHIFT,
+        egui::Key::ArrowRight,
+        Action::Sel(SelAction::Nudge { dx: 10.0, dy: 0.0 }),
+    ),
+    key(
+        "Nudge",
+        SHIFT,
+        egui::Key::ArrowUp,
+        Action::Sel(SelAction::Nudge { dx: 0.0, dy: -10.0 }),
+    ),
+    key(
+        "Nudge",
+        SHIFT,
+        egui::Key::ArrowDown,
+        Action::Sel(SelAction::Nudge { dx: 0.0, dy: 10.0 }),
+    ),
     // Guides and grid
     key(
         "Guides and grid",
@@ -3306,6 +3390,22 @@ pub static SHORTCUTS: &[Shortcut] = &[
         CTRL_ALT,
         egui::Key::C,
         Action::Sel(SelAction::CropDocument),
+    ),
+    // CS6's jQuery widget panel (`cmd_jquery`).
+    key(
+        "Insert",
+        CTRL,
+        egui::Key::F10,
+        Action::Shell(ShellAction::ReportGap(
+            "CS6's jQuery widget panel is not in this build",
+        )),
+    ),
+    // Filters
+    key(
+        "Filters",
+        CTRL_ALT_SHIFT,
+        egui::Key::X,
+        Action::RepeatFilter,
     ),
     // Layers and states
     key(
@@ -3999,5 +4099,266 @@ mod tests {
                 .any(|s| s.action == Action::Shell(ShellAction::ShowShortcuts)),
             "F1 shortcut map binding missing"
         );
+    }
+
+    /// CS6's own keyboard-shortcut file, transcribed.
+    ///
+    /// The reference application ships an editable
+    /// `Keyboard Shortcuts/Fireworks.xml`: one `<command>` per command
+    /// and one `<shortcut text="M K"/>` per binding, where `M` is a
+    /// modifier bitfield (1=Alt, 2=Shift, 4=Ctrl) and `K` is a Windows
+    /// virtual-key code. Each row below is one of those entries, with
+    /// the `FireCraft` action bound to that accelerator.
+    ///
+    /// The bitfield reading was validated against three independent
+    /// anchors in the reference tree: the plain and the big nudges
+    /// share the arrow keys and differ only in `Shift`, `cmd_
+    /// PreviewSecondary` is Shift+F12, and `cmd_SelectCopyToPolySlice`
+    /// is Alt+Shift+P.
+    ///
+    /// The command id is CS6's name for the command; the action is
+    /// what this build answers that accelerator with. The two differ
+    /// once, deliberately: CS6 calls Ctrl+PgUp `cmd_Page_Next` and
+    /// Ctrl+PgDn `cmd_Page_Previous`, while this build follows the
+    /// physical key and the tree's own Page menu rows — Ctrl+PgUp
+    /// turns to the previous page. See `docs/research/fw-ui-evidence.md`.
+    #[rustfmt::skip]
+    static CS6_KEYMAP: &[(&str, u8, u32, Action)] = &[
+    ("cmd_Frame_Previous", 2, 188, Action::Shell(ShellAction::SelectFrame(-1))),
+    ("cmd_Frame_Next", 2, 190, Action::Shell(ShellAction::SelectFrame(1))),
+    ("cmd_TextAlign_Justified", 7, 74, Action::TextJustify(3)),
+    ("cmd_SelectNone", 4, 68, Action::Shell(ShellAction::Deselect)),
+    ("cmd_TextEditor", 6, 69, Action::Shell(ShellAction::EditTextSelection)),
+    ("cmd_SelectCopyToURL", 6, 85, Action::Shell(ShellAction::InsertWeb { what: InsertWebKind::Hotspot, })),
+    ("cmd_AlignHorizontal", 5, 53, Action::Align("centerY")),
+    ("cmd_Page_Next", 4, 33, Action::Shell(ShellAction::SelectPage(-1))),
+    ("cmd_HideSelection", 4, 77, Action::Sel(SelAction::Hide)),
+    ("cmd_Panels_URLMgr", 5, 85, Action::Shell(ShellAction::TogglePanel("URL"))),
+    ("cmd_ViewRulers", 5, 82, Action::Shell(ShellAction::ToggleRulers)),
+    ("cmd_Open", 4, 79, Action::Shell(ShellAction::Open)),
+    ("cmd_EditImageObject", 4, 69, Action::Shell(ShellAction::EditTextSelection)),
+    ("cmd_TextAlign_Stretch", 7, 83, Action::TextFlag("stretch")),
+    ("cmd_ZoomIn", 4, 187, Action::Shell(ShellAction::ZoomIn)),
+    ("cmd_Mask_EnableDisable", 6, 75, Action::Sel(SelAction::ToggleMask)),
+    ("cmd_HideEdges", 4, 72, Action::Shell(ShellAction::ToggleEdges)),
+    ("cmd_AlignBottom", 5, 54, Action::Align("bottom")),
+    ("cmd_ArrangeFront", 4, 70, Action::Arrange(Arrange::Front)),
+    ("cmd_TextAlign_Left", 7, 76, Action::TextJustify(0)),
+    ("cmd_FlattenSelection", 7, 90, Action::Sel(SelAction::FlattenSelection)),
+    ("cmd_Group", 4, 71, Action::Sel(SelAction::Group)),
+    ("cmd_Split", 6, 74, Action::Sel(SelAction::SplitPaths)),
+    ("cmd_TextStyle_Bold", 7, 66, Action::TextFlag("bold")),
+    ("cmd_TextStyle_Bold", 0, 117, Action::TextFlag("bold")),
+    ("cmd_ArrangeBack", 4, 66, Action::Arrange(Arrange::Back)),
+    ("cmd_Toolbars_Art", 5, 84, Action::Shell(ShellAction::ToggleTools)),
+    ("cmd_Panels_Styles", 5, 74, Action::Shell(ShellAction::TogglePanel("Styles"))),
+    ("cmd_AlignTop", 5, 52, Action::Align("top")),
+    ("cmd_Doc_FileInfo", 7, 70, Action::Shell(ShellAction::FileInfo)),
+    ("cmd_New", 4, 78, Action::Shell(ShellAction::New)),
+    ("cmd_NudgeRight", 0, 39, Action::Sel(SelAction::Nudge { dx: 1.0, dy: 0.0 })),
+    ("cmd_Duplicate", 5, 68, Action::Sel(SelAction::Duplicate)),
+    ("cmd_TextAlign_Right", 7, 82, Action::TextJustify(2)),
+    ("cmd_Print", 4, 80, Action::Shell(ShellAction::Palette)),
+    ("cmd_TweenInstances", 7, 84, Action::Sel(SelAction::TweenInstances)),
+    ("cmd_ViewSliceGuides", 7, 186, Action::Shell(ShellAction::ToggleSliceGuides)),
+    ("cmd_ViewGrid", 4, 222, Action::Shell(ShellAction::ToggleGrid)),
+    ("cmd_NumericTransform", 6, 84, Action::Shell(ShellAction::NumericTransform)),
+    ("cmd_Rotate270", 4, 55, Action::Sel(SelAction::Rotate(-90.0))),
+    ("cmd_AlignVertical", 5, 50, Action::Align("centerX")),
+    ("cmd_ExportPreview", 6, 88, Action::Shell(ShellAction::ExportPreview)),
+    ("cmd_Undo", 4, 90, Action::Shell(ShellAction::Undo)),
+    ("cmd_Export", 6, 82, Action::Shell(ShellAction::Export)),
+    ("cmd_Clear", 0, 8, Action::Sel(SelAction::Delete)),
+    ("cmd_Clear", 0, 46, Action::Sel(SelAction::Delete)),
+    ("cmd_Save", 4, 83, Action::Shell(ShellAction::Save)),
+    ("cmd_PasteAttributes", 7, 86, Action::Shell(ShellAction::ReportGap( "Paste Attributes (no attribute clipboard in this build)", ))),
+    ("cmd_ZoomOut", 4, 189, Action::Shell(ShellAction::ZoomOut)),
+    ("cmd_SaveAs", 6, 83, Action::Shell(ShellAction::SaveAs)),
+    ("cmd_Redo", 6, 90, Action::Shell(ShellAction::Redo)),
+    ("cmd_Join", 4, 74, Action::Boolean("union")),
+    ("cmd_ViewSmartGuides", 4, 220, Action::Shell(ShellAction::ToggleSmartGuides)),
+    ("cmd_SnapSmartGuides", 6, 220, Action::Shell(ShellAction::ToggleSnapToSmartGuides)),
+    ("cmd_Tooltips", 4, 221, Action::Shell(ShellAction::ToggleTooltips)),
+    ("cmd_BigNudgeDown", 2, 40, Action::Sel(SelAction::Nudge { dx: 0.0, dy: 10.0 })),
+    ("cmd_ViewSnapGuides", 6, 186, Action::Shell(ShellAction::ToggleSnapToGuides)),
+    ("cmd_NudgeUp", 0, 38, Action::Sel(SelAction::Nudge { dx: 0.0, dy: -1.0 })),
+    ("cmd_PreviewSecondary", 2, 123, Action::Shell(ShellAction::PreviewInBrowser { secondary: true, all_pages: false, })),
+    ("cmd_PreviewAllPagesInBrowser", 4, 123, Action::Shell(ShellAction::PreviewInBrowser { secondary: false, all_pages: true, })),
+    ("cmd_FitSelection", 4, 48, Action::Shell(ShellAction::FitSelection)),
+    ("cmd_PasteInside", 6, 86, Action::Shell(ShellAction::PasteInside)),
+    ("cmd_ViewLockGuides", 5, 186, Action::Shell(ShellAction::ToggleGuidesLocked)),
+    ("cmd_ViewGuides", 4, 186, Action::Shell(ShellAction::ToggleGuides)),
+    ("cmd_ViewSnapGrid", 6, 222, Action::Shell(ShellAction::ToggleSnapToGrid)),
+    ("cmd_HideOrShowAllPanels", 0, 9, Action::Shell(ShellAction::ToggleHidePanels)),
+    ("cmd_HideOrShowAllPanels", 6, 72, Action::Shell(ShellAction::ToggleHidePanels)),
+    ("cmd_SelectInverse", 6, 73, Action::Shell(ShellAction::SelectInverse)),
+    ("cmd_ModifyCropObject", 5, 67, Action::Sel(SelAction::CropDocument)),
+    ("cmd_TextStyle_Italic", 7, 73, Action::TextFlag("italic")),
+    ("cmd_TextStyle_Italic", 0, 118, Action::TextFlag("italic")),
+    ("cmd_FitInWindow", 5, 48, Action::Shell(ShellAction::FitAll)),
+    ("cmd_Rotate90", 4, 57, Action::Sel(SelAction::Rotate(90.0))),
+    ("cmd_Cut", 4, 88, Action::Shell(ShellAction::Cut)),
+    ("cmd_ViewEditGuides", 7, 71, Action::Shell(ShellAction::ReportGap( "CS6's View Edit Guides dialog is not in this build", ))),
+    ("cmd_Panels_Frames", 5, 75, Action::Shell(ShellAction::TogglePanel("States"))),
+    ("cmd_TextAlign_Center", 7, 67, Action::TextJustify(1)),
+    ("cmd_Panels_Layers", 5, 76, Action::Shell(ShellAction::TogglePanel("Layers"))),
+    ("cmd_Panels_Swatches", 5, 83, Action::Shell(ShellAction::TogglePanel("Swatches"))),
+    ("cmd_Quit", 4, 81, Action::Shell(ShellAction::Quit)),
+    ("cmd_Copy", 4, 67, Action::Shell(ShellAction::Copy)),
+    ("cmd_Page_Previous", 4, 34, Action::Shell(ShellAction::SelectPage(1))),
+    ("cmd_ShowAll", 6, 77, Action::Shell(ShellAction::ShowAllHidden)),
+    ("cmd_Panels_Behaviors", 5, 72, Action::Shell(ShellAction::TogglePanel("Behaviors"))),
+    ("cmd_SelectChildren", 4, 40, Action::Sel(SelAction::SelectChildren)),
+    ("cmd_ConvertToMaster", 0, 119, Action::Sel(SelAction::ConvertToSymbol)),
+    ("cmd_ArrangeBackward", 6, 66, Action::Arrange(Arrange::Backward)),
+    ("cmd_Close", 4, 87, Action::Shell(ShellAction::CloseDocument)),
+    ("cmd_Clone", 6, 67, Action::Sel(SelAction::Clone)),
+    ("cmd_Ungroup", 4, 85, Action::Sel(SelAction::Ungroup)),
+    ("cmd_RepeatXtra", 7, 88, Action::RepeatFilter),
+    ("cmd_Panels_Pages", 5, 79, Action::Shell(ShellAction::TogglePanel("Pages"))),
+    ("cmd_cssproperties", 4, 118, Action::Shell(ShellAction::TogglePanel("CSS Properties"))),
+    ("cmd_jquery", 4, 121, Action::Shell(ShellAction::ReportGap( "CS6's jQuery widget panel is not in this build", ))),
+    ("cmd_SelectCopyToPolySlice", 3, 80, Action::Shell(ShellAction::InsertWeb { what: InsertWebKind::PolygonSlice, })),
+    ("cmd_PreviewInBrowser", 0, 123, Action::Shell(ShellAction::PreviewInBrowser { secondary: false, all_pages: false, })),
+    ("cmd_DistributeHorizontal", 5, 55, Action::Distribute("horizontal")),
+    ("cmd_browse", 6, 79, Action::Shell(ShellAction::ReportGap( "Adobe Bridge is not available in this build.", ))),
+    ("cmd_InsertLayer", 2, 76, Action::Sel(SelAction::NewLayer)),
+    ("cmd_MergeDown", 5, 69, Action::Sel(SelAction::MergeDown)),
+    ("cmd_TextStyle_Underline", 7, 85, Action::TextFlag("underline")),
+    ("cmd_ViewEditGrid", 5, 71, Action::Shell(ShellAction::EditGrid)),
+    ("cmd_commonlib_form_elements", 6, 76, Action::Shell(ShellAction::TogglePanel("Common Library"))),
+    ("cmd_Transform", 4, 84, Action::Shell(ShellAction::TransformMode(TransformMode::Scale))),
+    ("cmd_SelectAll", 4, 65, Action::Shell(ShellAction::SelectAll)),
+    ("cmd_NewSymbol", 4, 119, Action::Sel(SelAction::NewSymbol)),
+    ("cmd_TextStyle_Plain", 7, 80, Action::TextPlain),
+    ("cmd_TextStyle_Plain", 0, 116, Action::TextPlain),
+    ("cmd_ExitImageEdit", 6, 68, Action::Shell(ShellAction::Deselect)),
+    ("cmd_InsertFrame", 2, 70, Action::Sel(SelAction::NewFrame)),
+    ("cmd_FlattenDocument", 7, 69, Action::Sel(SelAction::FlattenLayers)),
+    ("cmd_PanelInfo", 5, 73, Action::Shell(ShellAction::TogglePanel("Info"))),
+    ("cmd_MaskGroup", 6, 71, Action::Sel(SelAction::AddMask { mode: "reveal selection", })),
+    ("cmd_CreateImage", 5, 89, Action::Sel(SelAction::EmptyBitmap)),
+    ("cmd_DistributeVertical", 5, 57, Action::Distribute("vertical")),
+    ("cmd_ArrangeForward", 6, 70, Action::Arrange(Arrange::Forward)),
+    ("cmd_BigNudgeUp", 2, 38, Action::Sel(SelAction::Nudge { dx: 0.0, dy: -10.0 })),
+    ("cmd_Panels_ColorMixer", 5, 77, Action::Shell(ShellAction::TogglePanel("Color Mixer"))),
+    ("cmd_AttachTextToPath", 6, 89, Action::Sel(SelAction::AttachToPath)),
+    ("cmd_Import", 4, 82, Action::Shell(ShellAction::Import)),
+    ("cmd_AlignRight", 5, 51, Action::Align("right")),
+    ("cmd_BigNudgeRight", 2, 39, Action::Sel(SelAction::Nudge { dx: 10.0, dy: 0.0 })),
+    ("cmd_SelectParent", 4, 38, Action::Sel(SelAction::SelectParents)),
+    ("cmd_NudgeLeft", 0, 37, Action::Sel(SelAction::Nudge { dx: -1.0, dy: 0.0 })),
+    ("cmd_NudgeDown", 0, 40, Action::Sel(SelAction::Nudge { dx: 0.0, dy: 1.0 })),
+    ("cmd_AlignLeft", 5, 49, Action::Align("left")),
+    ("cmd_ConvertToPaths", 6, 80, Action::Sel(SelAction::ConvertToPaths)),
+    ("cmd_BigNudgeLeft", 2, 37, Action::Sel(SelAction::Nudge { dx: -10.0, dy: 0.0 })),
+    ("cmd_Paste", 4, 86, Action::Shell(ShellAction::Paste)),
+    ("cmd_PasteAsMask", 5, 86, Action::Shell(ShellAction::PasteAsMask)),
+    ("cmd_Prev_Selection", 6, 37, Action::Shell(ShellAction::ReportGap( "Previous Selection (selection history not in this build)", ))),
+    ("cmd_Next_Selection", 6, 39, Action::Shell(ShellAction::ReportGap( "Next Selection (selection history not in this build)", ))),
+    ("cmd_SnapToPixel", 4, 75, Action::Shell(ShellAction::ReportGap( "Snap To Pixel needs a view snap mode, which this build does not ship", ))),
+    ];
+
+    /// The modifier combination a CS6 modifier bitfield names.
+    fn cs6_mods(bits: u8) -> Mods {
+        Mods {
+            ctrl: bits & 4 != 0,
+            alt: bits & 1 != 0,
+            shift: bits & 2 != 0,
+        }
+    }
+
+    /// The key a CS6 virtual-key code names.
+    fn cs6_key(code: u32) -> Option<egui::Key> {
+        let named = match code {
+            8 => "Backspace",
+            9 => "Tab",
+            33 => "PageUp",
+            34 => "PageDown",
+            37 => "ArrowLeft",
+            38 => "ArrowUp",
+            39 => "ArrowRight",
+            40 => "ArrowDown",
+            46 => "Delete",
+            186 => "Semicolon",
+            187 => "Equals",
+            188 => "Comma",
+            189 => "Minus",
+            190 => "Period",
+            220 => "Backslash",
+            221 => "CloseBracket",
+            222 => "Quote",
+            _ => {
+                // A letter, a digit, or a function key: the virtual-key
+                // code is the ASCII code.
+                if (65..=90).contains(&code) || (48..=57).contains(&code) {
+                    return egui::Key::from_name(&(code as u8 as char).to_string());
+                }
+                if (112..=123).contains(&code) {
+                    return egui::Key::from_name(&format!("F{}", code - 111));
+                }
+                return None;
+            }
+        };
+        egui::Key::from_name(named)
+    }
+
+    /// Every accelerator CS6's own keymap file declares is bound here,
+    /// and bound to the action this build answers it with.
+    #[test]
+    fn cs6_keymap_entries_are_bound() {
+        for &(command, mods, vk, action) in CS6_KEYMAP {
+            let key =
+                cs6_key(vk).unwrap_or_else(|| panic!("CS6 {command}: unknown virtual key {vk}"));
+            let mods = cs6_mods(mods);
+            let bound = SHORTCUTS
+                .iter()
+                .find(|s| s.mods == mods && s.key == key)
+                .map(|s| s.action);
+            assert_eq!(
+                bound,
+                Some(action),
+                "CS6 {command} is not bound the way this build answers it"
+            );
+        }
+    }
+
+    /// The transcription covers CS6's whole keymap file: 133 shortcut
+    /// entries across 128 command ids, with no two commands claiming
+    /// the same accelerator.
+    #[test]
+    fn cs6_keymap_transcription_is_complete() {
+        assert_eq!(CS6_KEYMAP.len(), 133, "CS6 shortcut entry count moved");
+        let mut commands: Vec<&str> = CS6_KEYMAP.iter().map(|(command, ..)| *command).collect();
+        commands.sort_unstable();
+        commands.dedup();
+        assert_eq!(commands.len(), 128, "CS6 command id count moved");
+        let mut accelerators: Vec<(Mods, egui::Key)> = CS6_KEYMAP
+            .iter()
+            .map(|&(_, mods, vk, _)| {
+                let key = cs6_key(vk).unwrap_or_else(|| panic!("unknown virtual key {vk}"));
+                (cs6_mods(mods), key)
+            })
+            .collect();
+        accelerators.sort_by_key(|(mods, key)| (mods.ctrl, mods.alt, mods.shift, *key as u32));
+        let before = accelerators.len();
+        accelerators.dedup();
+        assert_eq!(
+            accelerators.len(),
+            before,
+            "two CS6 commands claim the same accelerator"
+        );
+    }
+
+    /// CS6's Print command is not shipped; Ctrl+P opens the command
+    /// palette here. The divergence is named so the table is not read
+    /// as "`FireCraft` prints on Ctrl+P".
+    #[test]
+    fn cs6_print_diverges_to_the_palette() {
+        let entry = CS6_KEYMAP
+            .iter()
+            .find(|(command, ..)| *command == "cmd_Print")
+            .expect("cmd_Print is transcribed");
+        assert_eq!(entry.3, Action::Shell(ShellAction::Palette));
     }
 }

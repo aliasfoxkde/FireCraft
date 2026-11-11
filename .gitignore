@@ -32,3 +32,6 @@ lcov.info
 /temp/
 
 *.profraw
+
+# Session scratch: throwaway helper scripts and probe artifacts
+/.claude/scratch/

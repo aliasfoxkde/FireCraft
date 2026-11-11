@@ -90,8 +90,8 @@ is CS6's own keymap —
 — because it is the reference application's binding table, while the
 tree is a transcription of the resource dump. Every row below is a
 `<command count="1" id="…"><shortcut text="M K"/></command>` row in
-that file; the modifier codes are `0` plain, `2` plain, `4` Ctrl,
-`5` Ctrl+Alt, `6` Ctrl+Shift, `7` Ctrl+Shift+Alt.
+that file; the modifier codes are `0` plain, `4` Ctrl, `5`
+Ctrl+Alt, `6` Ctrl+Shift, `7` Ctrl+Shift+Alt.
 
 | CS6 command | keymap row | Binding |
 |---|---|---|
@@ -132,3 +132,33 @@ Consequences:
   (`cmd_PasteAttributes`, `7 86`) are `ReportGap` rows: the
   capabilities are not in this build. The parity gate exempts them by
   design, and the keymap rows confirm the accelerators CS6 prints.
+
+## Correction (2026-11-11)
+
+Two statements above were wrong, and both were caught when CS6's
+keymap file itself was transcribed into `menus::tests::CS6_KEYMAP`
+rather than read row by row.
+
+**The modifier field is a bitfield, not a lookup table.** The list
+above reads `0` plain and `2` plain. The real encoding is
+`1` = Alt, `2` = Shift, `4` = Ctrl, so `3` = Alt+Shift, `5` =
+Ctrl+Alt, `6` = Ctrl+Shift, `7` = Ctrl+Alt+Shift. The tree settles
+it three ways: the plain and the big nudges share the arrow keys and
+differ only in `Shift`, `cmd_PreviewSecondary` is Shift+F12, and
+`cmd_SelectCopyToPolySlice` is Alt+Shift+P. The reading is recorded
+in `docs/research/fw-ui-evidence.md` and used by every row of the
+transcription.
+
+**Two of the four display-only accelerators are now bound to real
+actions.** Ctrl+Shift+G (`cmd_MaskGroup`) runs the mask group's
+"reveal selection" verb and Ctrl+Alt+C (`cmd_ModifyCropObject`) runs
+the crop verb; Ctrl+P opens the command palette, and only
+Ctrl+Alt+Shift+V answers with a named gap. The tree's rows for the
+first two still read `ReportGap`, so the parity gate exempts them —
+the row says the capability is missing while the key does the nearest
+thing this build has.
+
+With those corrections, all 133 of the reference application's
+keymap-file entries across its 128 command ids resolve to a binding
+carrying the action this build answers them with; see
+`docs/CS6-PARITY.md` §H.

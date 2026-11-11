@@ -165,7 +165,7 @@ fn write_release_tree(sandbox: &Sandbox) {
     sandbox.write("src/native/firecraft_0.2.5_amd64.deb", "deb");
     sandbox.write("src/native/MANIFEST.sha256", "manifest");
     sandbox.write("src/firecraft-web-0.2.5.zip", "web");
-    sandbox.write("src/source/FireCraft-0.2.5-source.tar.gz", "source");
+    sandbox.write("src/source/firecraft-0.2.5-source.tar.gz", "source");
     sandbox.write("src/sbom/firecraft-0.2.5-sbom.cdx.json", "sbom");
     sandbox.write("src/RELEASE_SHA256.txt", "checksums");
 }
@@ -186,12 +186,17 @@ fn stage_flattens_the_artifact_tree_into_the_release_asset_set() {
     // directory is what both `sha256sum -c` and the release step read.
     assert_eq!(
         sandbox.dir_names("flat"),
+        // The basenames sort byte-wise, so the capitalised names come
+        // first and the lowercase names follow. The source archive used
+        // to be named `FireCraft-<v>-source.tar.gz`, whose capital `F`
+        // sorted ahead of `MANIFEST`; the lowercase rename moved it
+        // between the `-sbom` and `-cli` archives.
         vec![
-            "FireCraft-0.2.5-source.tar.gz".to_string(),
             "MANIFEST.sha256".to_string(),
             "RELEASE_SHA256.txt".to_string(),
             "firecraft-0.2.5-linux-x86_64.tar.gz".to_string(),
             "firecraft-0.2.5-sbom.cdx.json".to_string(),
+            "firecraft-0.2.5-source.tar.gz".to_string(),
             "firecraft-cli-0.2.5-linux-x86_64.tar.gz".to_string(),
             "firecraft-web-0.2.5.zip".to_string(),
             "firecraft_0.2.5_amd64.deb".to_string(),
@@ -213,7 +218,7 @@ fn stage_flattens_the_artifact_tree_into_the_release_asset_set() {
             "flat/firecraft-cli-0.2.5-linux-x86_64.tar.gz".to_string(),
             "flat/firecraft_0.2.5_amd64.deb".to_string(),
             "flat/firecraft-0.2.5-sbom.cdx.json".to_string(),
-            "flat/FireCraft-0.2.5-source.tar.gz".to_string(),
+            "flat/firecraft-0.2.5-source.tar.gz".to_string(),
         ]
     );
 }
@@ -264,7 +269,7 @@ fn create_passes_the_assets_positionally_to_gh_release_create() {
         "flat/firecraft-cli-0.2.5-linux-x86_64.tar.gz".to_string(),
         "flat/firecraft_0.2.5_amd64.deb".to_string(),
         "flat/firecraft-0.2.5-sbom.cdx.json".to_string(),
-        "flat/FireCraft-0.2.5-source.tar.gz".to_string(),
+        "flat/firecraft-0.2.5-source.tar.gz".to_string(),
     ];
     assert_eq!(argv, expected);
 

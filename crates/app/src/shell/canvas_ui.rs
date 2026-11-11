@@ -1270,53 +1270,6 @@ impl Shell {
                     };
                     self.view.zoom_about(local, factor);
                 }
-                Tool::SelectSimilar => {
-                    // CS6's Select Similar: the click seeds the
-                    // selection and every similarly colored pixel
-                    // joins it.
-                    let world = self.view.to_world(local);
-                    let tolerance = self.editor.wand_tolerance;
-                    if let Err(error) = self.editor.select_similar_at(world, tolerance) {
-                        self.status = format!("select similar failed: {error}");
-                    }
-                }
-                Tool::Knife => {
-                    // CS6's Knife: the click cuts the path under
-                    // the pointer into pieces.
-                    let world = self.view.to_world(local);
-                    if let Err(error) = self.editor.knife_at(world) {
-                        self.status = format!("knife failed: {error}");
-                    }
-                }
-                Tool::Pen | Tool::PolygonSlice | Tool::PolygonHotspot => {
-                    // CS6 plots these with clicks: one click, one
-                    // vector point.
-                    let world = self.view.to_world(local);
-                    self.editor.add_draft_point(world);
-                    self.status = format!(
-                        "point {} plotted",
-                        self.editor
-                            .draft
-                            .as_ref()
-                            .map_or(0, |draft| draft.points.len())
-                    );
-                }
-                Tool::VectorPath => {
-                    // CS6's Vector Path: the click grabs the node
-                    // under the pointer and drags it.
-                    let world = self.view.to_world(local);
-                    let grabbed = self.editor.selected_live().and_then(|id| {
-                        self.editor
-                            .node_at(world, f64::from(6.0 / self.view.zoom))
-                            .map(|(contour, point)| (id, contour, point))
-                    });
-                    if let Some((id, contour, point)) = grabbed
-                        && let Err(error) = self.editor.begin_node_drag(id, contour, point, world)
-                    {
-                        self.status = format!("reshape failed: {error}");
-                    }
-                }
-
                 Tool::Text => {
                     // CS6: a Text-tool click on an existing text
                     // object enters in-canvas editing instead of

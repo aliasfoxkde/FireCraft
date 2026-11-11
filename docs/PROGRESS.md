@@ -75,6 +75,87 @@
 
 <!-- /coderabbit-ai-generated:v1 -->
 
+- **Active work — the daily-driver expansion** (Phase 19 → 21,
+  `docs/NEXT.md`): the engine is complete but the shell exposes a
+  fraction of it, so the program is reachability + canvas, not
+  repair. 19.1–19.5 landed (transform handles, path-node editing,
+  gradient editor, command palette, guides/grid/snap); 19.6
+  (inert-menu burn-down) is in flight.
+- **UI-work gates landed (2026-11-10, issue #94):** the reachability
+  gate (`cargo run -p xtask -- reachability`, wired into `ci`) derives
+  the shell's bound command set from the shell crate's own source and
+  holds it to a one-way floor in `.reachability-floor.tsv` — **245
+  registry commands, 146 bound = 59.59%**, 99 unreachable. The panel
+  snapshot (`crates/app/panels.snapshot`, 14 panels) pins the panel
+  set's structure; `egui_kittest` is obtainable (0.36.2 matches the
+  locked egui) but its pixel path needs a wgpu adapter the CI image
+  does not provide, so the in-tree golden machinery does that job and
+  panel pixels stay open.
+- **19.1–19.5 landed** (2026-10-31 → 11-01, `7329087`…`eb221ac`):
+  transform handles + Numeric Transform dialog; Subselect path-node
+  editing; gradient fill editor with on-canvas handles; command palette
+  (Ctrl+P) over the whole registry; grid + guides overlays, drag-out
+  guides, snap-to, Edit Grid dialog. The shell was split from one
+  5.9k-line `shell.rs` into `shell/` modules (`32a110d`) as the
+  precondition.
+- **Three rendering defects fixed in one pass** (`6e35c1e`): the
+  canvas rendered at 1x and was linear-filtered at zoom (now
+  `compose::render_scaled`, cached per zoom bucket); ellipses bulged
+  inward (swapped bezier handles); picker colors were channel-swapped
+  (ARGB packed where ABGR is decoded — fixed by making
+  `compose::abgr_pack` the single encode side).
+- **Released:** v0.2.0 + **v0.2.1** + **v0.2.2** + **v0.2.3**
+  (2026-10-24) + **v0.2.4** (2026-11-02, `6c256bf`), repo public.
+  v0.2.4 shipped: 19.6 selection/mask reachability, Lucide icons,
+  canvas context menu, web session persistence. Web bundle live
+  at <https://firecraft-web.pages.dev>. Notes:
+  [`releases/v0.2.4.md`](releases/v0.2.4.md).
+- **Web file doors closed (2026-10-31):** picker `accept` covers
+  every sniffed format; drag-and-drop loads through the same
+  `load_document_bytes` door (`dfd7f46`); sink is `Rc` +
+  `thread_local` (wasm is single-threaded).
+- **Live deployment audit closed (2026-10-31):** headless input
+  probe verified the served app end-to-end — tool hotkeys, canvas
+  drags, engine commands, and the postMessage bridge all work;
+  console clean. Brush no-op on an empty document is by-design
+  (paint targets require an image under the pointer).
+- **Phase 2/11 complete (2026-10-21):** AVIF policy (dec. 0064),
+  HEIC refusal (dec. 0065), import surface parity, lossy WebP export
+  (`libwebp-sys`, `lossy-webp` feature, native only). All GAPS.md
+  Phase 2 tasks closed.
+- **Parked:** Phase 7 research (effect growth #156, TXFv texture #157)
+  — both need Wine oracle. Not actionable without CS6 corpus oracle.
+- **CI:** GitForge pipeline 7/7 green on the re-shipped
+  `firecraft-ci-rust:1` image (rebuilt 2026-10-24 after image-pull
+  404s); GitHub Actions green on all pushes. Local aegis scan fixed
+  (excludes `target/` / `web/dist/` / `fuzz/`).
+- **Roadmap:** M0–M15 **all closed**; the post-roadmap DOM parity
+  campaign is **complete** (no M families). Decision docs 0001–0089.
+- **Menu reachability:** 289 CS6 menu items; **8 render inert**
+  (281 wired). The count fell 190 → 178 (19.1) → 171 (19.5) → 144
+  (19.6 batch 1, selection/mask) → 129 (19b.1 + batch 2) → 120
+  (batch 3: Window-menu panel toggles) → 85 (batches 6–7, View+Text)
+  → 83 (batch 8, attach to path) → 79 (batch 9, transform) → 72
+  (batch 10, Window panels: Tools/Color Mixer/Swatches/Info +
+  single-document rows report honestly) → 68 (batch 11, Edit ▸ Insert
+  bitmap rows + Crop Document) → 67 (batch 12, Remove Animation) → 59
+  (batch 13, the File family) → 42 (batch 14, the File remainder) → 24
+  (batch 15, Edit + Text remainder) → 11 (batch 16, the Modify
+  remainder) → 8 (batch 17, the CS6 web panels: Auto Shapes / URL /
+  Behaviors). The census
+  is derived from the menu table (`menus::tests::inert_worklist` prints
+  the rows, `inert_count_never_rises` prints the count)
+  and gated (`menus::tests::inert_count_never_rises`); 19.6 burns it
+  down in family batches.
+- **CS6 shell fidelity (Phase 22, new 2026-11-03):** user directive —
+  the shell must present as CS6 (dockable panels, CS6 tool strip,
+  adaptive context menus, property inspector, CS6 chrome). Scoped in
+  `docs/NEXT.md` Phase 22. Icons come from an open-license survey
+  (`docs/planning/generated/icon-resources-survey.md`), never from
+  Adobe's assets.
+- **WebP:** import since M8; `.webp` export is VP8L lossless by default.
+  Native builds can opt into lossy VP8 via `--quality N` (feature
+  `lossy-webp`).
 
 ## Milestones
 

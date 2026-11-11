@@ -157,7 +157,7 @@ blanket; see [`decisions/0067-*`](decisions/) and
 
 ## Licensing
 
-Dual-licensed MIT OR Apache-2.0. FireCraft is independent and not
+Licensed under Apache-2.0. FireCraft is independent and not
 affiliated with Adobe Inc.; Adobe names appear only to describe
 compatible workflows and file formats. Vendored material is tracked
 in [`ATTRIBUTION.md`](ATTRIBUTION.md).

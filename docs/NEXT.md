@@ -355,13 +355,29 @@ evidence work, tracked outside that campaign.
 - **19b.1 Path-node add/delete** (S): the double-click half of 19.2 —
   add an anchor on a segment, delete a selected anchor.
 - **19b.2 Reachability gate** (S): the set difference
-  `catalog::ids()` − UI-bound commands may only shrink (a test, not an
-  xtask step). Without it the 63%-unreachable number drifts silently.
-  — **LANDED 2026-11-02**: the catalog side is pinned by
+  `catalog::ids()` − UI-bound commands may only shrink. Without it the
+  unreachable-command number drifts silently.
+  — **LANDED 2026-11-02** (partial): the catalog side is pinned by
   `palette_covers_every_catalog_command` (every registry command is
   executable from the palette); the shell side is pinned by
   `menus::tests::inert_count_never_rises`, which derives the census
-  from the menu table instead of quoting it.
+  from the menu table instead of quoting it. Neither pins the *engine*
+  commands the shell's designed surface binds.
+  — **LANDED 2026-11-10** (the gate itself): an xtask step,
+  `cargo run -p xtask -- reachability`, wired into
+  `cargo run -p xtask -- ci`. It derives the bound set from the shell
+  crate's own source (the command-id literals it hands the engine,
+  `#[cfg(test)]` code excluded), divides it by
+  `engine::catalog::ids()`, and fails when the share drops below the
+  floor recorded in **`.reachability-floor.tsv`**. The floor is a
+  one-way ratchet: `--bless` may raise it (reachability improved) and
+  refuses to lower it (a regression is fixed, not forgiven). Measured
+  on `main` at 2026-11-10: **245 registry commands, 146 bound by the
+  shell = 59.59%**, 99 unreachable; the floor is pinned at 59.59%.
+  (The command palette makes the *palette* reach 100% — the gate
+  deliberately measures the CS6-visible surface instead, which is the
+  surface the 19.x batches widen. Decision
+  [`0087`](decisions/0087-ui-work-gates.md).)
 - **19b.3 Inert-drift test** (S): every non-Help/Command `Action::Inert`
   item carries a tracking reference, so an inert item cannot be added
   silently. — **LANDED 2026-11-02** in the stronger form: the census
@@ -377,11 +393,12 @@ evidence work, tracked outside that campaign.
   with the dated cause recorded in the constant's doc comment (Phase 19
   shell surface: Lucide icons, command palette, gradient editor, image
   support — 10.87 MB at M12, 15.25 MB at 2026-11-02). Re-pinned
-  again 2026-11-10 (decision 0078): measured **21,608,249 B** on the
-  Phase 21/22 feature surface, ceiling moved 21,500,000 → 22,000,000.
-  The bundle-size budget tracks the shipped bytes and moves in **both**
-  directions from a dated measurement; the twelve perf
-  timing/memory budgets stay falling-only.
+  again 2026-11-10 (decision 0079): measured **21,608,249 B** on the
+  Phase 21/22 feature surface; the historical observed-size pin was
+  22,000,000 B. Decision 0080 now sets a 25,000,000 B warning and
+  50,000,000 B hard cap while the production-readiness plan drives
+  measured reduction. The cap is not a target; performance timing and
+  memory budgets remain separate and falling-only.
 
 ### Phase 20 — Daily-driver features (P1)
 
@@ -591,8 +608,20 @@ scope, so no license path is attempted.
   `the_text_font_submenu_dispatches_set_font`). **Repeat Filter landed 2026-11-06** (`Action::RepeatFilter` re-applies
   the session's last preset through `filter.add`, gated by
   `repeat_filter_reapplies_the_last_preset`; inert census 3→2).
-  Remaining on 22.5: the F1 grouping mismatch and the 76 unbound
-  keymap rows.
+  **CS6 keymap landed 2026-11-11** (decision 0080): the transcribed
+  tree prints CS6's own accelerators and every live printed
+  accelerator is bound to its row's action, held by
+  `menus::tests::cs6_keymap_is_fully_bound`; the binding table
+  carries its own section per row, gated by
+  `menus::tests::shortcut_sections_are_contiguous`. **The residual
+  keymap commands landed 2026-11-11**: the 16 bindings that close
+  them bring the table to 167 bindings in 40 sections, and every one
+  of CS6's 133 keymap-file entries across its 128 command ids now
+  resolves to a binding carrying the action this build answers it
+  with, held by `menus::tests::cs6_keymap_entries_are_bound` over
+  the transcribed `menus::tests::CS6_KEYMAP`. Remaining on 22.5:
+  the Main toolbar's contents (CS6-PARITY §A rows 54, 255, 257,
+  164).
 - **22.6 Icon pack integration** (M): ship the surveyed open-license
   icon set, subset it to the Fireworks verb set, and record the
   attribution rows. Accept: the wasm bundle grows by a documented,
@@ -602,19 +631,48 @@ scope, so no license path is attempted.
 
 ### Quality gates for UI work (new)
 
-1. **egui_kittest snapshots** per panel/toolbar — theme and WCAG
-   regressions become mechanical.
+1. **Panel snapshots** — theme and WCAG regressions become mechanical.
+   — **PARTIAL, DONE for structure (2026-11-10)**: `egui_kittest` was
+   checked before the gate was written. It is *obtainable* —
+   `egui_kittest` 0.36.2 is on crates.io and requires `egui ^0.36.2`,
+   exactly the egui this lockfile pins, and the CI image is not
+   offline (`CARGO_NET_OFFLINE=false`; decision 0073 — the baked
+   registry cache is a fast floor, not a wall). The blocker is its
+   *pixel* path: the snapshot machinery sits behind the crate's
+   optional `wgpu` / `egui-wgpu` features, and the CI image installs
+   no graphics stack (no mesa, no Vulkan drivers), so a wgpu adapter
+   is not available in the sandbox. The panel set is therefore pinned
+   the way this repository pins everything else — a committed golden
+   file, **`crates/app/panels.snapshot`**, compared against a snapshot
+   rendered from the shell's own inventory by the xtask step
+   `cargo run -p xtask -- panel-snapshot` (in `ci`; `--bless`
+   re-pins). The golden pins the panel *structure* — id, dock side,
+   dock order, header text, fresh-document visibility, Window-menu
+   togglability — for all **14** panels (13 toggleable + the
+   always-present Web Layer). A panel added, renamed, reordered or
+   re-docked without a deliberate re-pin fails the build. The pixel
+   content of a panel is still unpinned; that half stays open and
+   needs `egui_kittest` plus a proven software adapter (lavapipe) in
+   the CI image. Decision [`0087`](decisions/0087-ui-work-gates.md).
 2. **Reachability gate** in xtask: the set difference
    `catalog::ids()` − UI-bound commands only shrinks (mirror of the
-   call-table test). 63% unreachable with no gate means drift.
-   — **open, tracked as 19b.2.**
-3. **Inert-drift test**: every non-Help/Command `Action::Inert` item
-   carries a tracking ticket id in its doc comment.
-   — **open, tracked as 19b.3.**
-4. **Wasm budget**: keep `WASM_SIZE_CEILING` honest — the 12.78 MB
-   current size leaves ~1.2 MB headroom against the 14 MB ceiling;
-   panel work must fit or re-pin with evidence.
-   — **open, tracked as 19b.4** (the figure predates Phase 19).
+   call-table test). Unreachable commands with no gate means drift.
+   — **DONE (2026-11-10)**, tracked as 19b.2: `cargo run -p xtask --
+   reachability`, wired into `ci`. Measures **245 registry commands,
+   146 bound by the shell = 59.59%**, 99 unreachable; the floor lives
+   in **`.reachability-floor.tsv`** (pinned at 59.59%) and is a one-way
+   ratchet.
+3. **Inert-drift test**: an inert menu row may not be added silently.
+   — **DONE (2026-11-02)**, tracked as 19b.3: the census is derived
+   from `MENUBAR` and gated against `INERT_CEILING` (8 of 289 items),
+   so a newly inert row fails the test until the ceiling is re-pinned.
+   Per-item tracking ticket ids were dropped as unnecessary — the
+   count is the honest metric and the gate refuses any rise in it.
+4. **Wasm budget**: keep `WASM_SIZE_CEILING` honest — panel work must
+   fit or re-pin with evidence.
+   — **DONE (2026-11-03)**, tracked as 19b.4: measured 21,235,599 B;
+   the ceiling moved 14,000,000 → 21,500,000 with the dated cause in
+   the constant's doc comment. Ceiling only moves down from here.
 5. **Render-stamp migration** when 21.2 lands: the undo/redo/journal
    tuple-stamp misses view-dependent re-renders — move to a dirty
    counter in `Editor`.

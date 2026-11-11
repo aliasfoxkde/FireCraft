@@ -12,7 +12,7 @@
 > everything lives, how to work here, and exactly what to do next.
 > Day-to-day rules: [`../AGENTS.md`](../AGENTS.md). Master plan:
 > [`PLANNING.md`](PLANNING.md). Live status: [`PROGRESS.md`](PROGRESS.md).
-> Session log: [`SESSIONS.md`](SESSIONS.md). Project arc: [`HISTORY.md`](HISTORY.md). Cross-platform release work order: [`RELEASE-ENGINEERING-PLAN.md`](RELEASE-ENGINEERING-PLAN.md) (ticket [T27](tasks/T27-cross-platform-release.md)).
+> Session log: [`SESSIONS.md`](SESSIONS.md). Project arc: [`HISTORY.md`](HISTORY.md). Cross-platform release work order: [`RELEASE-ENGINEERING-PLAN.md`](RELEASE-ENGINEERING-PLAN.md) (ticket [T27](tasks/T27-cross-platform-release.md)). Production cleanup and agent execution: [`PRODUCTION-READINESS-PLAN.md`](PRODUCTION-READINESS-PLAN.md).
 
 
 ---
@@ -147,9 +147,10 @@ verifiable.
 ### Current program: Phases 20–22
 
 Phase 19's canvas work and menu wiring campaign (batches 1–17) are
-complete. The live menu census is 2 inert rows of 296; eight other rows have explicit feature/evidence gates and are not considered inert. Path-node add/delete,
-
-the reachability gate, and the wasm budget re-pin are also complete.
+complete. The live menu census is 2 inert rows of 296; eight other rows
+have explicit feature/evidence gates and are not considered inert.
+Path-node add/delete, the reachability gate, and the wasm budget
+re-pin are also complete.
 
 - **CS6 keymap parity (2026-11-10, decisions 0080 + 0085):** every
   accelerator the menu bar prints is bound at the printed key.
@@ -165,6 +166,16 @@ the reachability gate, and the wasm budget re-pin are also complete.
   (`engine::catalog::element_mask_state`), the shell sends the
   opposite, and the row's visible label flips between "Enable Mask" and
   "Disable Mask" with the mask.
+- **Web bundle policy (2026-11-10, decision 0090):** the raw Wasm
+  module is guarded by two numbers — a 25,000,000 B investigation
+  warning and a 50,000,000 B hard ceiling in `xtask dist --web`. The
+  measured baseline is 21,608,249 B. The web build now optimizes for
+  size (Rust `opt-level=z` for the Trunk child, Binaryen
+  `wasm-opt=z`); the native desktop profile is untouched. The cap is
+  a guardrail, not a target: crossing the warning needs a measured
+  optimization review, and no reduction is claimed without a same-SHA
+  before/after measurement. Decision 0079 keeps the historical
+  measurement-based analysis.
 
 <!-- coderabbit-ai-generated:v1 -->
 
