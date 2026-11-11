@@ -45,6 +45,18 @@ shell reaches 72; after Phase 11's paint family it reaches 77;
 > `menus::tests::inert_count_never_rises`). The family table below is
 > superseded by [`NEXT.md`](NEXT.md) Phases 19–21 as the work list;
 > this file's phases remain useful as per-family detail.
+>
+> **Note (2026-11-10):** the shell-side number above is now *gated*,
+> not just audited. The xtask step `cargo run -p xtask --
+> reachability` derives the bound set from `crates/app/src` and holds
+> it to a floor in `.reachability-floor.tsv` (one-way ratchet). The
+> measurement it took on `main`: **245 registry commands, 146 bound =
+> 59.59%**, 99 unreachable — the floor is pinned at 59.59%. The
+> `comm` line above counts *any* occurrence of a command name in the
+> shell crate; the gate counts the same bindings outside `#[cfg(test)]`
+> code and reports them as a share, so the two numbers are close but
+> not identical by construction. The audit snapshot above remains the
+> historical record.
 
 ```
 $ comm -23 <(engine::catalog::ids()) <(command names in crates/app/src)

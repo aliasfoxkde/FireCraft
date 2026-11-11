@@ -119,6 +119,91 @@ pub(crate) enum PanelKind {
 /// height each dock window is opened at.
 const DOCK_STEP: f32 = 260.0;
 
+/// Which edge the panel column docks to.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DockSide {
+    /// The column hugs the left edge of the window.
+    Left,
+    /// The column hugs the right edge of the window.
+    Right,
+}
+
+impl DockSide {
+    /// The side's name, as the panel snapshot records it.
+    #[must_use]
+    pub fn as_str(&self) -> &'static str {
+        match *self {
+            DockSide::Left => "left",
+            DockSide::Right => "right",
+        }
+    }
+}
+
+/// The edge the panel column docks to. CS6 keeps the group on the
+/// right; the panel-snapshot gate pins the choice, so moving the
+/// column is a deliberate re-pin, never a silent drift.
+const DOCK_SIDE: DockSide = DockSide::Right;
+
+/// One panel of the CS6 inventory, as plain data.
+///
+/// The panel *structure* — the set, the dock order, the dock side,
+/// the header text, the fresh-document visibility — is what the
+/// panel-snapshot gate pins. The content a panel draws is not: it
+/// changes with every feature, and a content change is reviewed as
+/// code, not as a golden diff.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PanelSummary {
+    /// The panel's stable id: its CS6 name, lowercased with the
+    /// spaces turned into dashes.
+    pub id: String,
+    /// The header text the panel's window carries.
+    pub header: String,
+    /// The edge the panel column docks to.
+    pub side: DockSide,
+    /// The panel's place in the dock, counted from the top.
+    pub order: usize,
+    /// Whether a fresh document opens the panel.
+    pub visible_by_default: bool,
+    /// Whether the Window menu carries a row that toggles the panel.
+    pub toggleable: bool,
+}
+
+/// The CS6 panel inventory, in dock order, as plain data.
+///
+/// The Web Layer panel has no Window-menu row in CS6 — it is always
+/// present — so it is listed after the toggleable panels, at the
+/// bottom of the dock.
+#[must_use]
+pub fn panel_inventory() -> Vec<PanelSummary> {
+    let mut panels: Vec<PanelSummary> = PANELS
+        .iter()
+        .enumerate()
+        .map(|(order, spec)| PanelSummary {
+            id: panel_id(spec.name),
+            header: spec.name.to_owned(),
+            side: DOCK_SIDE,
+            order,
+            visible_by_default: spec.open_by_default,
+            toggleable: true,
+        })
+        .collect();
+    panels.push(PanelSummary {
+        id: panel_id(WEB_PANEL),
+        header: WEB_PANEL.to_owned(),
+        side: DOCK_SIDE,
+        order: PANELS.len(),
+        visible_by_default: true,
+        toggleable: false,
+    });
+    panels
+}
+
+/// The machine-facing id of a panel: its CS6 name, lowercased with
+/// the spaces turned into dashes.
+fn panel_id(name: &str) -> String {
+    name.to_lowercase().replace(' ', "-")
+}
+
 impl Shell {
     /// Draws the panel windows.
     ///
@@ -192,15 +277,19 @@ impl Shell {
         self.panel_hidden.push(name);
     }
 
-    /// The default dock position for the panel at `index`: a
-    /// right-edge column. Needs the screen size, so it is computed at
-    /// draw time from the context the windows are shown into.
+    /// The default dock position for the panel at `index`: the
+    /// [`DOCK_SIDE`] column. Needs the screen size, so it is computed
+    /// at draw time from the context the windows are shown into.
     fn dock_pos(&self, index: usize) -> egui::Pos2 {
         let screen = self
             .ctx
             .as_ref()
             .map_or(egui::Rect::NOTHING, |ctx| ctx.viewport_rect());
-        egui::Pos2::new(screen.right() - 258.0, 8.0 + DOCK_STEP * index as f32)
+        let x = match DOCK_SIDE {
+            DockSide::Left => screen.left() + 8.0,
+            DockSide::Right => screen.right() - 258.0,
+        };
+        egui::Pos2::new(x, 8.0 + DOCK_STEP * index as f32)
     }
 
     /// The panels CS6 opens on a fresh document — the initial value of

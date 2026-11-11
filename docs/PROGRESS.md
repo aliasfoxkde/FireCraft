@@ -12,6 +12,14 @@
   repair. 19.1–19.5 landed (transform handles, path-node editing,
   gradient editor, command palette, guides/grid/snap); 19.6
   (inert-menu burn-down) is in flight.
+- **UI-work gates landed (2026-11-10, issue #94):** the reachability
+  gate (`cargo run -p xtask -- reachability`, wired into `ci`) derives
+  the shell's bound command set from the shell crate's own source and
+  holds it to a one-way floor in `.reachability-floor.tsv` — **245
+  registry commands, 146 bound = 59.59%**, 99 unreachable. The panel
+  snapshot (`crates/app/panels.snapshot`, 14 panels) pins the panel
+  set's structure; `egui_kittest` cannot resolve in the offline CI
+  image, so the in-tree golden machinery does that job.
 - **19.1–19.5 landed** (2026-10-31 → 11-01, `7329087`…`eb221ac`):
   transform handles + Numeric Transform dialog; Subselect path-node
   editing; gradient fill editor with on-canvas handles; command palette
@@ -51,7 +59,7 @@
   404s); GitHub Actions green on all pushes. Local aegis scan fixed
   (excludes `target/` / `web/dist/` / `fuzz/`).
 - **Roadmap:** M0–M15 **all closed**; the post-roadmap DOM parity
-  campaign is **complete** (no M families). Decision docs 0001–0069.
+  campaign is **complete** (no M families). Decision docs 0001–0079.
 - **Menu reachability:** 289 CS6 menu items; **8 render inert**
   (281 wired). The count fell 190 → 178 (19.1) → 171 (19.5) → 144
   (19.6 batch 1, selection/mask) → 129 (19b.1 + batch 2) → 120

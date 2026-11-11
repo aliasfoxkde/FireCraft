@@ -235,8 +235,15 @@ one. Summary:
 - **19b**: path-node add/delete **DONE** (`bf1b547`); the
   wasm-budget re-pin **DONE** (2026-11-03: measured 21,235,599 B,
   ceiling moved to 21,500,000 with the dated cause — 19b.4). The
-  reachability gate and inert-drift test landed 2026-11-02
-  (`menus::tests::inert_count_never_rises` + the derived census).
+  inert-drift test landed 2026-11-02
+  (`menus::tests::inert_count_never_rises` + the derived census). The
+  reachability gate landed 2026-11-10 as an xtask step
+  (`cargo run -p xtask -- reachability`, in `ci`): **245 registry
+  commands, 146 bound by the shell = 59.59%**, floor pinned in
+  `.reachability-floor.tsv` (one-way ratchet). The panel-structure
+  snapshot landed with it (`crates/app/panels.snapshot`, 14 panels) —
+  `egui_kittest` is unusable offline, so the panel set is pinned with
+  the in-tree golden machinery instead.
 - **20 / 21 queued**: daily-driver features (in-canvas text, Optimize
   panel, animation timeline, mask stack, tabs, history rewind, slice
   behaviors) and differentiators (autosave, HiDPI, palette v2,

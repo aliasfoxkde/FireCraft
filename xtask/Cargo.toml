@@ -26,6 +26,10 @@ engine = { path = "../crates/engine" }
 # .jsf corpus headless through the scripting host; serde on doc for
 # the report's document digests.
 scripting = { path = "../crates/scripting" }
+# The panel-snapshot gate pins the CS6 panel inventory the shell
+# draws, so it reads the inventory from the shell crate itself rather
+# than from a second copy of it.
+app = { path = "../crates/app" }
 doc = { path = "../crates/doc", features = ["serde"] }
 fwpng = { path = "../crates/fwpng" }
 image-compare = "0.5.0"
