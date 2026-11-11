@@ -863,19 +863,46 @@ struct SetPageExportPayload {
     /// `FMTi` — 0 gif, 1 jpeg, 2 png, 3 other, 4 animated gif.
     format: Option<i64>,
     /// `JPQi` — JPEG quality 0..=100.
+    #[serde(default, deserialize_with = "double_option")]
     jpeg_quality: Option<Option<i64>>,
     /// `JPPb` — progressive JPEG scans.
-    jpeg_progressive: Option<bool>,
+    #[serde(default, deserialize_with = "double_option")]
+    jpeg_progressive: Option<Option<bool>>,
     /// `FCLi` — matte color, ABGR raw.
+    #[serde(default, deserialize_with = "double_option")]
     matte_raw: Option<Option<i64>>,
     /// `GFIb` — interlaced output.
     interlaced: Option<bool>,
     /// `PLDi` — palette dither level 0..=100.
+    #[serde(default, deserialize_with = "double_option")]
     dither: Option<Option<i64>>,
     /// `FLPi` — GIF frame loop: 0 infinite, -1 never, n repeat n times.
+    #[serde(default, deserialize_with = "double_option")]
     frame_loop: Option<Option<i64>>,
+    /// `AACb` — crop animated frames to their ink bounding box.
+    #[serde(default, deserialize_with = "double_option")]
+    anim_crop: Option<Option<bool>>,
+    /// `AADb` — animated inter-frame difference.
+    #[serde(default, deserialize_with = "double_option")]
+    anim_diff: Option<Option<bool>>,
     /// Remove the page's export settings.
     clear: Option<bool>,
+}
+
+/// A field that can be absent (keep the current value), null (clear
+/// it), or a value (set it).
+///
+/// `Option<Option<T>>` alone cannot express the difference: serde
+/// reads a JSON `null` as the outer `None` — the same as an absent
+/// key. The double-option deserializer tells the two apart, which is
+/// what the Optimize panel needs: a knob that does not apply to the
+/// chosen format is cleared, not silently left behind.
+fn double_option<'de, D, T>(deserializer: D) -> Result<Option<Option<T>>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: serde::Deserialize<'de>,
+{
+    serde::Deserialize::deserialize(deserializer).map(Some)
 }
 
 impl TypedCommand for SetPageExport {
@@ -930,7 +957,7 @@ impl TypedCommand for SetPageExport {
                 export.jpeg_quality = quality;
             }
             if let Some(progressive) = payload.jpeg_progressive {
-                export.jpeg_progressive = Some(progressive);
+                export.jpeg_progressive = progressive;
             }
             if let Some(matte) = payload.matte_raw {
                 export.matte_raw = matte;
@@ -943,6 +970,12 @@ impl TypedCommand for SetPageExport {
             }
             if let Some(loop_) = payload.frame_loop {
                 export.frame_loop = loop_;
+            }
+            if let Some(crop) = payload.anim_crop {
+                export.anim_crop = crop;
+            }
+            if let Some(diff) = payload.anim_diff {
+                export.anim_diff = diff;
             }
         }
         Ok(Delta::PageBody {
@@ -1411,5 +1444,98 @@ mod structure_tests {
             assert!(matches!(error, EngineError::InvalidState { .. }));
         }
         assert!(document.pages[0].export.is_none(), "refusals never mint");
+    }
+
+    #[test]
+    fn set_export_writes_the_animated_gif_knobs() {
+        let (mut document, _) = testdoc::sample_document();
+        SetPageExport
+            .apply_json(
+                &mut document,
+                json!({ "page": 0, "format": 0, "anim_crop": true, "anim_diff": true }),
+            )
+            .unwrap();
+        let export = document.pages[0].export.as_ref().expect("settings minted");
+        assert_eq!(export.anim_crop, Some(true));
+        assert_eq!(export.anim_diff, Some(true));
+    }
+
+    #[test]
+    fn set_export_clears_a_knob_the_format_cannot_use() {
+        let (mut document, _) = testdoc::sample_document();
+        SetPageExport
+            .apply_json(
+                &mut document,
+                json!({ "page": 0, "format": 0, "dither": 30 }),
+            )
+            .unwrap();
+        assert_eq!(
+            document.pages[0]
+                .export
+                .as_ref()
+                .and_then(|export| export.dither),
+            Some(30)
+        );
+
+        // A JSON null clears the knob; an absent key leaves it alone.
+        SetPageExport
+            .apply_json(
+                &mut document,
+                json!({ "page": 0, "format": 1, "dither": null }),
+            )
+            .unwrap();
+        assert_eq!(
+            document.pages[0]
+                .export
+                .as_ref()
+                .and_then(|export| export.dither),
+            None,
+            "the null cleared the dither"
+        );
+        SetPageExport
+            .apply_json(
+                &mut document,
+                json!({ "page": 0, "format": 1, "frame_loop": 3 }),
+            )
+            .unwrap();
+        assert_eq!(
+            document.pages[0]
+                .export
+                .as_ref()
+                .and_then(|export| export.dither),
+            None,
+            "an absent key did not revive the cleared dither"
+        );
+        assert_eq!(
+            document.pages[0]
+                .export
+                .as_ref()
+                .and_then(|export| export.frame_loop),
+            Some(3)
+        );
+    }
+
+    #[test]
+    fn set_export_clears_the_matte_and_the_progressive_flag() {
+        let (mut document, _) = testdoc::sample_document();
+        SetPageExport
+            .apply_json(
+                &mut document,
+                json!({ "page": 0, "format": 1, "matte_raw": -1, "jpeg_progressive": true }),
+            )
+            .unwrap();
+        let export = document.pages[0].export.as_ref().expect("settings minted");
+        assert_eq!(export.matte_raw, Some(-1));
+        assert_eq!(export.jpeg_progressive, Some(true));
+
+        SetPageExport
+            .apply_json(
+                &mut document,
+                json!({ "page": 0, "matte_raw": null, "jpeg_progressive": null }),
+            )
+            .unwrap();
+        let export = document.pages[0].export.as_ref().expect("settings kept");
+        assert_eq!(export.matte_raw, None);
+        assert_eq!(export.jpeg_progressive, None);
     }
 }

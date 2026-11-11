@@ -10,10 +10,6 @@ use compose::abgr_pack;
 use doc::{GroupObject, ImageObject, SliceObject};
 
 impl Shell {
-    /// The Optimize panel's format names in `FMTi` order (0 gif,
-    /// 1 jpeg, 2 png — the dictionary's documented domain).
-    pub(crate) const FMT_NAMES: [&str; 3] = ["GIF", "JPEG", "PNG"];
-
     /// Edit ▸ Paste as Mask / Paste Inside: the clipboard becomes the
     /// selection's mask. Both commands read the document's selection,
     /// so it is synced first.
@@ -775,91 +771,6 @@ impl Shell {
                     }
                 }
             });
-    }
-
-    /// Window ▸ Optimize: the page's export settings (`EXPv`) as
-    /// CS6's panel edits them — format, JPEG quality/progressive,
-    /// GIF loop/dither, interlace. Written through `page.setExport`,
-    /// so each change is one undoable step and Export stamps the same
-    /// settings onto its output.
-    pub(super) fn optimize_panel(&mut self, ui: &mut egui::Ui) {
-        let page = self.editor.page;
-        let export = self
-            .editor
-            .document()
-            .pages
-            .get(page)
-            .and_then(|p| p.export.clone())
-            .unwrap_or_default();
-        let mut format = export.format.unwrap_or(2).clamp(0, 2);
-        let mut jpeg_quality = export.jpeg_quality.unwrap_or(90).clamp(0, 100);
-        let mut jpeg_progressive = export.jpeg_progressive.unwrap_or(false);
-        let mut dither = export.dither.unwrap_or(0).clamp(0, 100);
-        let mut frame_loop = export.frame_loop.unwrap_or(0);
-        let mut interlaced = export.interlaced.unwrap_or(false);
-        let mut changed = false;
-        egui::Grid::new("optimize").num_columns(2).show(ui, |ui| {
-            ui.label("format");
-            let before = format;
-            egui::ComboBox::new("optimize_format", "")
-                .selected_text(Self::FMT_NAMES[format.clamp(0, 2) as usize])
-                .show_ui(ui, |ui| {
-                    for (id, name) in Self::FMT_NAMES.iter().enumerate() {
-                        ui.selectable_value(&mut format, id as i64, *name);
-                    }
-                });
-            changed |= format != before;
-            let jpeg = format == 1;
-            let gif = format == 0;
-            if jpeg {
-                ui.label("quality");
-                let before = jpeg_quality;
-                ui.add(egui::Slider::new(&mut jpeg_quality, 0..=100i64).text("%"));
-                changed |= jpeg_quality != before;
-                ui.label("progressive");
-                changed |= ui.checkbox(&mut jpeg_progressive, "").changed();
-            }
-            if gif {
-                ui.label("loop");
-                let before = frame_loop;
-                egui::ComboBox::new("optimize_loop", "")
-                    .selected_text(match frame_loop {
-                        0 => "infinite".to_owned(),
-                        -1 => "never".to_owned(),
-                        n => format!("×{n}"),
-                    })
-                    .show_ui(ui, |ui| {
-                        ui.selectable_value(&mut frame_loop, 0, "infinite");
-                        ui.selectable_value(&mut frame_loop, -1, "never");
-                        ui.selectable_value(&mut frame_loop, 3, "×3");
-                    });
-                changed |= frame_loop != before;
-                ui.label("dither");
-                let before = dither;
-                ui.add(egui::Slider::new(&mut dither, 0..=100i64).text("%"));
-                changed |= dither != before;
-            }
-            ui.label("interlaced");
-            changed |= ui.checkbox(&mut interlaced, "").changed();
-        });
-        if changed {
-            let jpeg = format == 1;
-            let gif = format == 0;
-            if self.run_command(
-                "page.setExport",
-                serde_json::json!({
-                    "page": page,
-                    "format": format,
-                    "jpeg_quality": jpeg.then_some(jpeg_quality),
-                    "jpeg_progressive": jpeg.then_some(jpeg_progressive),
-                    "dither": gif.then_some(dither),
-                    "frame_loop": gif.then_some(frame_loop),
-                    "interlaced": interlaced,
-                }),
-            ) {
-                self.status = "Optimize settings applied to the page.".to_owned();
-            }
-        }
     }
 
     /// Window ▸ Info: document and selection facts (canvas size,

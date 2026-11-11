@@ -408,8 +408,16 @@ evidence work, tracked outside that campaign.
   double-click enters, Esc cancels, focus loss / tool switch commits
   ([T20](tasks/T20-text-editing.md)). Kittest focus tests deferred —
   see the ticket's residual note.
-- **20.2 Optimize panel** (M): palette/bitrate over `ExportOptions` +
-  live preview (export preview exists).
+- **20.2 Optimize panel** (M): **LANDED 2026-11-11** — the panel's
+  controls are the fields the export honors (`FMTi`, `JPQi`/`JPPb`/
+  `FCLi`, `PLDi`/`FLPi`/`AACb`/`AADb`), the live preview encodes the
+  page through the same `io::expv` resolution the export uses, and
+  PNG's Adam7 interlace is disclosed and clearable rather than offered
+  as a knob that breaks the export ([T7](tasks/T7-optimize-panel.md),
+  decision
+  [0095](decisions/0095-optimize-panel-honors-only-what-export-honors.md)).
+  Still open: Adam7 interlacing, CS6's selective-JPEG quality table,
+  screenshot acceptance.
 - **20.3 Animation timeline** (M): **SHELL LANDED 2026-11-11** — the
   `States` panel is the strip (the page's own `FRCi` count), the delay
   field writes `frame.setDuration` into the record the GIF exporter

@@ -81,6 +81,14 @@
   repair. 19.1–19.5 landed (transform handles, path-node editing,
   gradient editor, command palette, guides/grid/snap); 19.6
   (inert-menu burn-down) is in flight.
+- **Phase 20 daily-driver features — three landed 2026-11-11:** the
+  Optimize panel (20.2, decision 0094's sibling [0095](decisions/0095-optimize-panel-honors-only-what-export-honors.md))
+  edits the `EXPv` fields the export honors and previews the page
+  through the export's own resolution; the animation timeline (20.3,
+  decision [0094](decisions/0094-animation-timeline-shell.md)) makes
+  the `States` panel the strip, writes per-state delays through
+  `frame.setDuration`, and makes onion skinning a canvas toggle.
+  Mask stack, history rewind and slice behavior remain open.
 - **UI-work gates landed (2026-11-10, issue #94):** the reachability
   gate (`cargo run -p xtask -- reachability`, wired into `ci`) derives
   the shell's bound command set from the shell crate's own source and
