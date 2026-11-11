@@ -24,6 +24,7 @@ pub(crate) fn install(registry: &mut CommandRegistry) -> Result<(), EngineError>
     registry.register(SetDocumentImageSize)?;
     registry.register(SetDocumentCanvasSizeToDocumentExtents)?;
     registry.register(SetDocumentCanvasSizeToSelection)?;
+    registry.register(SetDocumentCanvasRect)?;
     registry.register(DeleteAllInDocument)
 }
 
@@ -913,6 +914,63 @@ struct SetDocumentCanvasSizeToSelectionPayload {
     page: usize,
 }
 
+/// `document.setDocumentCanvasRect` — moves one page's canvas rect.
+///
+/// CS6's Crop tool drags a rectangle and the document is cropped to
+/// it; the content keeps its world coordinates and the canvas window
+/// moves over it, so what falls outside the new rect is cropped away.
+/// The two `setDocumentCanvasSizeTo*` commands derive their rect from
+/// the selection or the page extents; this one takes the rect
+/// explicitly, which is the case the Crop tool has.
+struct SetDocumentCanvasRect;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct SetDocumentCanvasRectPayload {
+    /// Page whose canvas is trimmed.
+    page: usize,
+    /// New canvas origin, world coordinates.
+    x: f64,
+    /// New canvas origin, world coordinates.
+    y: f64,
+    /// New canvas width, pixels.
+    width: f64,
+    /// New canvas height, pixels.
+    height: f64,
+}
+
+impl TypedCommand for SetDocumentCanvasRect {
+    type Payload = SetDocumentCanvasRectPayload;
+
+    fn name(&self) -> &'static str {
+        "document.setDocumentCanvasRect"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "document.setDocumentCanvasRect";
+        access::page(document, NAME, payload.page)?;
+        if !payload.x.is_finite() || !payload.y.is_finite() {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: "canvas origin must be finite".to_owned(),
+            });
+        }
+        let rect = geom::Rect::new(
+            payload.x,
+            payload.y,
+            payload.x + payload.width,
+            payload.y + payload.height,
+        );
+        // `grow = true`: the crop tool may enlarge the canvas as well
+        // as shrink it — the dragged rect decides, not the old size.
+        trim_canvas(document, NAME, payload.page, rect, true)
+    }
+}
+
 /// The union bounds of every element on one page (top-level walk;
 /// `content_bounds` recurses into groups and instances).
 fn page_extents(document: &Document, page: usize) -> Option<geom::Rect> {
@@ -1122,6 +1180,71 @@ mod document_tests {
         assert_eq!(document.info.canvas.background_raw, 0x00_FF_FF);
         assert_eq!(document.pages[0].info.canvas.background_raw, 0x11_22_33);
         assert_eq!(document.pages[1].info.canvas.background_raw, 0x44_55_66);
+    }
+
+    /// The Crop tool's canvas trim: the page's canvas window moves to
+    /// the dragged rectangle, and undo puts it back.
+    #[test]
+    fn canvas_rect_moves_the_page_window_and_undoes() {
+        let (mut document, _) = testdoc::sample_document();
+        let before = document.pages[0].info.canvas.clone();
+
+        let delta = SetDocumentCanvasRect
+            .apply_json(
+                &mut document,
+                serde_json::json!({
+                    "page": 0, "x": 10.0, "y": 20.0,
+                    "width": 30.0, "height": 40.0,
+                }),
+            )
+            .expect("setDocumentCanvasRect applies");
+        let canvas = &document.pages[0].info.canvas;
+        assert_eq!(canvas.x, 10.0);
+        assert_eq!(canvas.y, 20.0);
+        assert_eq!(canvas.width, 30.0);
+        assert_eq!(canvas.height, 40.0);
+
+        delta.apply_inverse(&mut document).expect("inverse applies");
+        let after = &document.pages[0].info.canvas;
+        assert_eq!(after.x, before.x);
+        assert_eq!(after.y, before.y);
+        assert_eq!(after.width, before.width);
+        assert_eq!(after.height, before.height);
+    }
+
+    /// A non-finite origin, a zero-size rect and a missing page are
+    /// refused without touching the document.
+    #[test]
+    fn canvas_rect_refuses_a_bad_rect_or_page() {
+        let (mut document, _) = testdoc::sample_document();
+        let before = document_bytes(&document);
+
+        let err = SetDocumentCanvasRect
+            .apply_json(
+                &mut document,
+                serde_json::json!({
+                    "page": 0, "x": "bad", "y": 0.0,
+                    "width": 10.0, "height": 10.0,
+                }),
+            )
+            .expect_err("a non-finite origin is refused");
+        assert!(matches!(err, crate::error::EngineError::BadPayload { .. }));
+
+        let err = SetDocumentCanvasRect
+            .apply_json(
+                &mut document,
+                serde_json::json!({
+                    "page": 9, "x": 0.0, "y": 0.0,
+                    "width": 10.0, "height": 10.0,
+                }),
+            )
+            .expect_err("a missing page is refused");
+        assert!(matches!(
+            err,
+            crate::error::EngineError::MissingTarget { .. }
+        ));
+
+        assert_eq!(document_bytes(&document), before);
     }
 
     #[test]

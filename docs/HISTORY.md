@@ -53,12 +53,12 @@ A real-browser session against the deployed bundle found it in an
 hour; v0.2.1 replaced the bundle the same day (downcast override,
 repaint after bridge mutations, honest smoke, web fmt gate).
 
-**Where it goes.** The parity campaign reached its evidence limits;
-current work is the daily-driver expansion —
-[`NEXT.md`](NEXT.md) Phases 19–21 (shell reachability: inert-menu
-burn-down, canvas competence, daily-driver features, differentiators).
-Evidence-gated holds stay parked in HANDOFF §4 Phase 12; the quality
-ratchet (Phases 14–18) is the parallel backlog.
+**Where it goes.** The parity campaign reached its evidence limits.
+The current front is Phase 22 shell fidelity and the screenshot-driven
+responsive audit; Phases 20–21 hold the queued daily-driver features and
+modern differentiators. See [`TASKS.md`](TASKS.md) for current status
+and [`NEXT.md`](NEXT.md) for the detailed plan. Evidence-gated holds
+stay parked until their required references become available.
 
 **v0.2.2 and the hygiene turn (2026-10-19 → 10-20).** The GitHub
 Actions CI had been failing silently on every push for 18 commits —

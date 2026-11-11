@@ -17,6 +17,10 @@ use crate::editor::Tool;
 /// The embedded Lucide set, one entry per vendored file.
 static ICONS: &[(&str, &[u8])] = &[
     (
+        "aperture",
+        include_bytes!("../../../../assets/icons/aperture.svg"),
+    ),
+    (
         "arrow-left-right",
         include_bytes!("../../../../assets/icons/arrow-left-right.svg"),
     ),
@@ -29,6 +33,10 @@ static ICONS: &[(&str, &[u8])] = &[
         include_bytes!("../../../../assets/icons/brush.svg"),
     ),
     (
+        "circle",
+        include_bytes!("../../../../assets/icons/circle.svg"),
+    ),
+    (
         "circle-dashed",
         include_bytes!("../../../../assets/icons/circle-dashed.svg"),
     ),
@@ -37,48 +45,81 @@ static ICONS: &[(&str, &[u8])] = &[
         include_bytes!("../../../../assets/icons/circle-dot.svg"),
     ),
     (
-        "circle",
-        include_bytes!("../../../../assets/icons/circle.svg"),
+        "contrast",
+        include_bytes!("../../../../assets/icons/contrast.svg"),
     ),
     ("copy", include_bytes!("../../../../assets/icons/copy.svg")),
+    ("crop", include_bytes!("../../../../assets/icons/crop.svg")),
+    (
+        "crosshair",
+        include_bytes!("../../../../assets/icons/crosshair.svg"),
+    ),
+    (
+        "droplet",
+        include_bytes!("../../../../assets/icons/droplet.svg"),
+    ),
     (
         "eraser",
         include_bytes!("../../../../assets/icons/eraser.svg"),
     ),
+    ("eye", include_bytes!("../../../../assets/icons/eye.svg")),
     (
         "eye-off",
         include_bytes!("../../../../assets/icons/eye-off.svg"),
     ),
-    ("eye", include_bytes!("../../../../assets/icons/eye.svg")),
+    (
+        "feather",
+        include_bytes!("../../../../assets/icons/feather.svg"),
+    ),
+    (
+        "flame",
+        include_bytes!("../../../../assets/icons/flame.svg"),
+    ),
+    (
+        "git-commit-horizontal",
+        include_bytes!("../../../../assets/icons/git-commit-horizontal.svg"),
+    ),
     (
         "grid-3x3",
         include_bytes!("../../../../assets/icons/grid-3x3.svg"),
     ),
     ("hand", include_bytes!("../../../../assets/icons/hand.svg")),
     (
-        "image",
-        include_bytes!("../../../../assets/icons/image.svg"),
+        "hexagon",
+        include_bytes!("../../../../assets/icons/hexagon.svg"),
     ),
     (
-        "lasso-select",
-        include_bytes!("../../../../assets/icons/lasso-select.svg"),
+        "image",
+        include_bytes!("../../../../assets/icons/image.svg"),
     ),
     (
         "lasso",
         include_bytes!("../../../../assets/icons/lasso.svg"),
     ),
     (
+        "lasso-select",
+        include_bytes!("../../../../assets/icons/lasso-select.svg"),
+    ),
+    (
         "layers",
         include_bytes!("../../../../assets/icons/layers.svg"),
     ),
+    ("lock", include_bytes!("../../../../assets/icons/lock.svg")),
     (
         "lock-open",
         include_bytes!("../../../../assets/icons/lock-open.svg"),
     ),
-    ("lock", include_bytes!("../../../../assets/icons/lock.svg")),
+    (
+        "magnet",
+        include_bytes!("../../../../assets/icons/magnet.svg"),
+    ),
     (
         "minus",
         include_bytes!("../../../../assets/icons/minus.svg"),
+    ),
+    (
+        "monitor",
+        include_bytes!("../../../../assets/icons/monitor.svg"),
     ),
     (
         "mouse-pointer-2",
@@ -86,8 +127,24 @@ static ICONS: &[(&str, &[u8])] = &[
     ),
     ("move", include_bytes!("../../../../assets/icons/move.svg")),
     (
+        "orbit",
+        include_bytes!("../../../../assets/icons/orbit.svg"),
+    ),
+    (
         "paint-bucket",
         include_bytes!("../../../../assets/icons/paint-bucket.svg"),
+    ),
+    (
+        "paintbrush",
+        include_bytes!("../../../../assets/icons/paintbrush.svg"),
+    ),
+    (
+        "palette",
+        include_bytes!("../../../../assets/icons/palette.svg"),
+    ),
+    (
+        "pen-tool",
+        include_bytes!("../../../../assets/icons/pen-tool.svg"),
     ),
     (
         "pencil",
@@ -100,6 +157,10 @@ static ICONS: &[(&str, &[u8])] = &[
     (
         "pipette",
         include_bytes!("../../../../assets/icons/pipette.svg"),
+    ),
+    (
+        "pizza",
+        include_bytes!("../../../../assets/icons/pizza.svg"),
     ),
     ("plus", include_bytes!("../../../../assets/icons/plus.svg")),
     (
@@ -119,8 +180,29 @@ static ICONS: &[(&str, &[u8])] = &[
         include_bytes!("../../../../assets/icons/redo-2.svg"),
     ),
     (
+        "refresh-cw",
+        include_bytes!("../../../../assets/icons/refresh-cw.svg"),
+    ),
+    (
+        "replace",
+        include_bytes!("../../../../assets/icons/replace.svg"),
+    ),
+    (
+        "route",
+        include_bytes!("../../../../assets/icons/route.svg"),
+    ),
+    (
         "ruler",
         include_bytes!("../../../../assets/icons/ruler.svg"),
+    ),
+    (
+        "scale",
+        include_bytes!("../../../../assets/icons/scale.svg"),
+    ),
+    ("scan", include_bytes!("../../../../assets/icons/scan.svg")),
+    (
+        "scan-search",
+        include_bytes!("../../../../assets/icons/scan-search.svg"),
     ),
     (
         "scissors",
@@ -129,6 +211,10 @@ static ICONS: &[(&str, &[u8])] = &[
     (
         "search",
         include_bytes!("../../../../assets/icons/search.svg"),
+    ),
+    (
+        "shield",
+        include_bytes!("../../../../assets/icons/shield.svg"),
     ),
     (
         "slice-knife",
@@ -143,20 +229,33 @@ static ICONS: &[(&str, &[u8])] = &[
         include_bytes!("../../../../assets/icons/spline.svg"),
     ),
     (
-        "square-dashed-mouse-pointer",
-        include_bytes!("../../../../assets/icons/square-dashed-mouse-pointer.svg"),
+        "square",
+        include_bytes!("../../../../assets/icons/square.svg"),
     ),
     (
         "square-dashed",
         include_bytes!("../../../../assets/icons/square-dashed.svg"),
     ),
     (
-        "square",
-        include_bytes!("../../../../assets/icons/square.svg"),
+        "square-dashed-mouse-pointer",
+        include_bytes!("../../../../assets/icons/square-dashed-mouse-pointer.svg"),
+    ),
+    (
+        "stamp",
+        include_bytes!("../../../../assets/icons/stamp.svg"),
+    ),
+    ("sun", include_bytes!("../../../../assets/icons/sun.svg")),
+    (
+        "sun-dim",
+        include_bytes!("../../../../assets/icons/sun-dim.svg"),
     ),
     (
         "trash",
         include_bytes!("../../../../assets/icons/trash.svg"),
+    ),
+    (
+        "triangle",
+        include_bytes!("../../../../assets/icons/triangle.svg"),
     ),
     ("type", include_bytes!("../../../../assets/icons/type.svg")),
     (
@@ -166,6 +265,14 @@ static ICONS: &[(&str, &[u8])] = &[
     (
         "wand-sparkles",
         include_bytes!("../../../../assets/icons/wand-sparkles.svg"),
+    ),
+    (
+        "waypoints",
+        include_bytes!("../../../../assets/icons/waypoints.svg"),
+    ),
+    (
+        "wrench",
+        include_bytes!("../../../../assets/icons/wrench.svg"),
     ),
     (
         "zoom-in",
@@ -223,53 +330,116 @@ pub(crate) fn paint(ui: &egui::Ui, rect: Rect, name: &str, size: f32, tint: Colo
 const TOOLS: &[Tool] = &[
     Tool::Pointer,
     Tool::Subselect,
-    Tool::Rect,
-    Tool::Ellipse,
-    Tool::Line,
-    Tool::Text,
-    Tool::Zoom,
-    Tool::Hand,
-    Tool::Slice,
-    Tool::Hotspot,
-    Tool::AutoShape(crate::editor::AutoShape::Star),
-    Tool::Paintbrush,
-    Tool::Pencil,
-    Tool::Eraser,
-    Tool::PaintBucket,
-    Tool::Gradient,
-    Tool::Eyedropper,
+    Tool::Scale,
+    Tool::Skew,
+    Tool::Distort,
+    Tool::Crop,
     Tool::Marquee,
     Tool::EllipticalMarquee,
     Tool::Lasso,
     Tool::PolygonalMarquee,
     Tool::MagicWand,
+    Tool::SelectSimilar,
+    Tool::Paintbrush,
+    Tool::Pencil,
+    Tool::Eraser,
+    Tool::Blur,
+    Tool::Sharpen,
+    Tool::Smudge,
+    Tool::Dodge,
+    Tool::Burn,
+    Tool::RubberStamp,
+    Tool::RedEyeRemoval,
+    Tool::ReplaceColor,
+    Tool::Line,
+    Tool::Pen,
+    Tool::VectorPath,
+    Tool::RedrawPath,
+    Tool::Rect,
+    Tool::Ellipse,
+    Tool::Text,
+    Tool::Freeform,
+    Tool::ReshapeArea,
+    Tool::Knife,
+    Tool::Slice,
+    Tool::PolygonSlice,
+    Tool::Hotspot,
+    Tool::CircleHotspot,
+    Tool::PolygonHotspot,
+    Tool::HideShowSlices,
+    Tool::Eyedropper,
+    Tool::PaintBucket,
+    Tool::Gradient,
+    Tool::DefaultStrokeFill,
+    Tool::SwapStrokeFill,
+    Tool::NoStrokeFill,
+    Tool::ToggleScreenMode,
+    Tool::Hand,
+    Tool::Zoom,
+    Tool::AutoShape(crate::editor::AutoShape::Star),
 ];
 
-/// The Lucide icon for a tool.
+/// The Lucide icon for a tool. The mapping is `FireCraft`'s own — the
+/// set is Lucide's, but no icon is Adobe's.
 pub(crate) fn tool_icon(tool: Tool) -> &'static str {
     match tool {
+        // Select
         Tool::Pointer => "pointer",
         Tool::Subselect => "mouse-pointer-2",
-        Tool::Rect => "square",
-        Tool::Ellipse => "circle",
-        Tool::Line => "minus",
-        Tool::Text => "type",
-        Tool::Zoom => "zoom-in",
-        Tool::Hand => "hand",
-        Tool::Slice => "slice-knife",
-        Tool::Hotspot => "circle-dot",
-        Tool::AutoShape(_) => "sparkles",
-        Tool::Paintbrush => "brush",
-        Tool::Pencil => "pencil",
-        Tool::Eraser => "eraser",
-        Tool::PaintBucket => "paint-bucket",
-        Tool::Gradient => "blend",
-        Tool::Eyedropper => "pipette",
+        Tool::Scale => "scale",
+        Tool::Skew => "triangle",
+        Tool::Distort => "waypoints",
+        Tool::Crop => "crop",
+        // Bitmap: selection
         Tool::Marquee => "square-dashed",
         Tool::EllipticalMarquee => "circle-dashed",
         Tool::Lasso => "lasso",
-        Tool::PolygonalMarquee => "pentagon",
+        Tool::PolygonalMarquee => "lasso-select",
         Tool::MagicWand => "wand-sparkles",
+        Tool::SelectSimilar => "scan-search",
+        // Bitmap: paint
+        Tool::Paintbrush => "paintbrush",
+        Tool::Pencil => "pencil",
+        Tool::Eraser => "eraser",
+        // Bitmap: retouch
+        Tool::Blur => "droplet",
+        Tool::Sharpen => "aperture",
+        Tool::Smudge => "feather",
+        Tool::Dodge => "sun",
+        Tool::Burn => "flame",
+        Tool::RubberStamp => "stamp",
+        Tool::RedEyeRemoval => "crosshair",
+        Tool::ReplaceColor => "replace",
+        // Vector
+        Tool::Line => "minus",
+        Tool::Pen => "pen-tool",
+        Tool::VectorPath => "route",
+        Tool::RedrawPath => "spline",
+        Tool::Rect => "square",
+        Tool::Ellipse => "circle",
+        Tool::Text => "type",
+        Tool::Freeform => "orbit",
+        Tool::ReshapeArea => "refresh-cw",
+        Tool::Knife => "slice-knife",
+        Tool::AutoShape(_) => "sparkles",
+        // Web
+        Tool::Slice => "scissors",
+        Tool::PolygonSlice => "pizza",
+        Tool::Hotspot => "square-dashed-mouse-pointer",
+        Tool::CircleHotspot => "circle-dot",
+        Tool::PolygonHotspot => "hexagon",
+        Tool::HideShowSlices => "eye",
+        // Colors
+        Tool::Eyedropper => "pipette",
+        Tool::PaintBucket => "paint-bucket",
+        Tool::Gradient => "blend",
+        Tool::DefaultStrokeFill => "palette",
+        Tool::SwapStrokeFill => "arrow-left-right",
+        Tool::NoStrokeFill => "eye-off",
+        // View
+        Tool::ToggleScreenMode => "monitor",
+        Tool::Hand => "hand",
+        Tool::Zoom => "zoom-in",
     }
 }
 
@@ -291,10 +461,25 @@ mod tests {
     #[test]
     fn the_icons_are_recoloured_to_white() {
         let map = white_icons();
-        assert!(map.len() >= 40);
+        assert_eq!(map.len(), ICONS.len());
+        assert!(map.len() >= 73);
         for (name, bytes) in map {
             let svg = String::from_utf8_lossy(bytes);
             assert!(!svg.contains("currentColor"), "{name} kept currentColor");
+        }
+    }
+
+    /// Every tool the CS6 strip shows has an embedded icon — the
+    /// strip is the surface the icons are for.
+    #[test]
+    fn every_strip_tool_has_an_embedded_icon() {
+        for category in crate::toolstrip::CATEGORIES {
+            for group in category.groups {
+                for entry in group.tools {
+                    let name = tool_icon(entry.tool);
+                    assert!(exists(name), "{:?} → {name}", entry.tool);
+                }
+            }
         }
     }
 }

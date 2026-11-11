@@ -177,6 +177,54 @@ fn the_eraser_stroke_runs_through_the_same_door() {
     editor.undo().expect("erase painted one undo step");
 }
 
+/// The journal's last applied command name.
+fn last_command(editor: &Editor) -> String {
+    editor
+        .session
+        .journal_entries()
+        .last()
+        .map(|entry| entry.name.clone())
+        .expect("a command was applied")
+}
+
+/// CS6's Alt-hold swap (help 3555, 3580): with Alt down, the Blur
+/// stroke paints `retouch.sharpen` and the Dodge stroke paints
+/// `retouch.burn` — through the same dab path, the active tool never
+/// changing, and Smudge (no variant) staying itself.
+#[test]
+fn alt_hold_swaps_the_retouch_pair_at_the_dab() {
+    let (mut editor, _id) = editor_with_raster();
+
+    editor.tool = Tool::Blur;
+    editor.begin_stroke(Point::new(0.5, 0.5)).unwrap();
+    editor.end_stroke().unwrap();
+    assert_eq!(last_command(&editor), "retouch.blur");
+
+    editor.alt_held = true;
+    editor.begin_stroke(Point::new(0.5, 0.5)).unwrap();
+    editor.end_stroke().unwrap();
+    assert_eq!(last_command(&editor), "retouch.sharpen");
+
+    editor.tool = Tool::Dodge;
+    editor.begin_stroke(Point::new(0.5, 0.5)).unwrap();
+    editor.end_stroke().unwrap();
+    assert_eq!(last_command(&editor), "retouch.burn");
+
+    // Smudge has no Alt variant — it stays itself.
+    editor.tool = Tool::Smudge;
+    editor.begin_stroke(Point::new(0.5, 0.5)).unwrap();
+    editor.end_stroke().unwrap();
+    assert_eq!(last_command(&editor), "retouch.smudge");
+
+    // The swap is temporary: Alt up restores the active tool.
+    editor.alt_held = false;
+    editor.tool = Tool::Blur;
+    editor.begin_stroke(Point::new(0.5, 0.5)).unwrap();
+    editor.end_stroke().unwrap();
+    assert_eq!(last_command(&editor), "retouch.blur");
+    assert_eq!(editor.tool, Tool::Blur, "the active tool never changed");
+}
+
 #[test]
 fn the_paint_bucket_fills_or_reports_no_target() {
     let (mut editor, _id) = editor_with_raster();

@@ -33,6 +33,7 @@ pub(crate) fn install(registry: &mut CommandRegistry) -> Result<(), EngineError>
     registry.register(GroupObjects)?;
     registry.register(UngroupObject)?;
     registry.register(CreatePath)?;
+    registry.register(CreatePolyline)?;
     registry.register(TransformObject)?;
     registry.register(ScaleObject)?;
     registry.register(RotateObject)?;
@@ -2444,6 +2445,121 @@ impl TypedCommand for CreatePath {
     }
 }
 
+/// `object.createPolyline` — creates a path from an explicit point
+/// list.
+///
+/// CS6's Pen tool plots points and Fireworks draws the path through
+/// them ("plotting points is like drawing a connect-the-dots
+/// picture", CS6 help). `object.createPath` cannot express that: its
+/// `CreateKind` is a rectangle, an ellipse, or a two-point line.
+/// The contour this builds is open (CS6's pen leaves a path open
+/// until it is closed) unless `closed` says otherwise.
+struct CreatePolyline;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct CreatePolylinePayload {
+    /// The plotted points, world coordinates. At least two.
+    points: Vec<[f64; 2]>,
+    /// Whether the contour closes back on its first point.
+    #[serde(default)]
+    closed: bool,
+    /// Target page index.
+    page: usize,
+    /// Target layer index.
+    layer: usize,
+    /// Target cell index (state number).
+    cell: usize,
+    /// Optional object name.
+    name: Option<String>,
+}
+
+impl TypedCommand for CreatePolyline {
+    type Payload = CreatePolylinePayload;
+
+    fn name(&self) -> &'static str {
+        "object.createPolyline"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "object.createPolyline";
+        // Two points is the shortest drawable path; one point is a
+        // degenerate contour the editors cannot show.
+        if payload.points.len() < 2 {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: format!("{} points is not a path", payload.points.len()),
+            });
+        }
+        if payload
+            .points
+            .iter()
+            .any(|point| !point[0].is_finite() || !point[1].is_finite())
+        {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: "points must be finite".to_owned(),
+            });
+        }
+        // Validate the destination before anything mutates.
+        access::cell_mut(document, NAME, payload.page, payload.layer, payload.cell)?;
+
+        let points: Vec<doc::PathPoint> = payload
+            .points
+            .iter()
+            .map(|point| corner(point[0], point[1]))
+            .collect();
+        let contour = doc::Contour {
+            closed: payload.closed,
+            point_count: points.len() as i64,
+            points,
+        };
+        let object = ObjectData::Path(PathObject {
+            contours: vec![contour],
+            primitive: None,
+            even_odd: false,
+            paint: Some(PaintStyle {
+                stroke_raw: 0,         // transparent black — no stroke yet
+                fill_raw: 0xFF00_0000, // ABGR opaque black — the CS6 new-path fill
+                fill: None,
+            }),
+            fill_start: None,
+            fill_end: None,
+            fill_third: None,
+            brush_placement: None,
+            fill_on_top: None,
+            locked: false,
+            visible: true,
+            opacity: 1000,
+            blend: 0,
+            name: payload.name.clone(),
+            effects: Vec::new(),
+        });
+
+        let id = document.registry.insert(object);
+        let placed = attach_cell(
+            document,
+            NAME,
+            payload.page,
+            payload.layer,
+            payload.cell,
+            id,
+            None,
+        )?;
+        Ok(Delta::Group(vec![
+            placed,
+            Delta::Object {
+                id,
+                inverse: ObjectInverse::Created,
+            },
+        ]))
+    }
+}
+
 /// One closed 4-anchor contour from a rect's corners.
 fn rect_contour(rect: geom::Rect) -> Vec<doc::Contour> {
     let points = vec![
@@ -3239,6 +3355,99 @@ mod tests {
             .unwrap_err();
         assert!(matches!(error, EngineError::BadPayload { .. }));
         assert_eq!(document.registry.len(), 1, "still just the fixture path");
+    }
+
+    /// The Pen tool's path: the plotted points become one open
+    /// contour, in order, with no primitive source.
+    #[test]
+    fn create_polyline_appends_an_open_contour_and_undo_removes_it() {
+        let (mut document, _) = document_with(vec![]);
+        let original = serde_json::to_vec(&document).unwrap();
+        let delta = CreatePolyline
+            .apply_json(
+                &mut document,
+                json!({
+                    "points": [[0.0, 0.0], [10.0, 20.0], [30.0, 0.0]],
+                    "closed": false,
+                    "page": 0, "layer": 0, "cell": 0,
+                    "name": "plotted",
+                }),
+            )
+            .unwrap();
+        let cell = &document.pages[0].layers.layers[0].cells[0];
+        assert_eq!(cell.elements.len(), 1);
+        let id = cell.elements[0];
+        match document.registry.get(id).unwrap() {
+            ObjectData::Path(path) => {
+                assert_eq!(path.contours.len(), 1);
+                let contour = &path.contours[0];
+                assert!(!contour.closed, "CS6's pen leaves the path open");
+                assert_eq!(contour.points.len(), 3);
+                assert_eq!(contour.point_count, 3);
+                assert_eq!(contour.points[1].anchor, geom::Point::new(10.0, 20.0));
+                assert!(
+                    path.primitive.is_none(),
+                    "a plotted path is not a primitive"
+                );
+                assert_eq!(path.name.as_deref(), Some("plotted"));
+            }
+            other => panic!("wrong object kind: {other:?}"),
+        }
+        delta.apply_inverse(&mut document).unwrap();
+        assert!(document.registry.get(id).is_none());
+        assert_eq!(
+            serde_json::to_vec(&document).unwrap(),
+            original,
+            "undo restores the exact pre-create bytes"
+        );
+    }
+
+    /// A closed contour keeps the flag; a degenerate point list and a
+    /// bad target are refused without touching the document.
+    #[test]
+    fn create_polyline_refuses_a_degenerate_list() {
+        let (mut document, _) = document_with(vec![path_object()]);
+        let before = serde_json::to_vec(&document).unwrap();
+        let error = CreatePolyline
+            .apply_json(
+                &mut document,
+                json!({
+                    "points": [[0.0, 0.0]],
+                    "closed": false,
+                    "page": 0, "layer": 0, "cell": 0, "name": null,
+                }),
+            )
+            .unwrap_err();
+        assert!(matches!(error, EngineError::InvalidState { .. }));
+        // A non-finite coordinate is refused too.
+        let error = CreatePolyline
+            .apply_json(
+                &mut document,
+                json!({
+                    "points": [[0.0, 0.0], ["bad", 1.0]],
+                    "closed": false,
+                    "page": 0, "layer": 0, "cell": 0, "name": null,
+                }),
+            )
+            .unwrap_err();
+        assert!(matches!(error, EngineError::BadPayload { .. }));
+        // An out-of-range cell is refused before anything registers.
+        let error = CreatePolyline
+            .apply_json(
+                &mut document,
+                json!({
+                    "points": [[0.0, 0.0], [1.0, 1.0]],
+                    "closed": false,
+                    "page": 0, "layer": 0, "cell": 9, "name": null,
+                }),
+            )
+            .unwrap_err();
+        assert!(matches!(error, EngineError::MissingTarget { .. }));
+        assert_eq!(
+            serde_json::to_vec(&document).unwrap(),
+            before,
+            "a refused create must not leave an orphan registration"
+        );
     }
 
     fn group_of(document: &Document, id: ObjectId) -> doc::GroupObject {

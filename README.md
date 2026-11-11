@@ -54,9 +54,17 @@ The editor is being brought closer to the Fireworks CS6 workspace rather than tr
 
 Some of these items are partially implemented or still planned. The authoritative, task-level status is maintained in [`docs/NEXT.md`](docs/NEXT.md); see its Phase 22 for the shell-fidelity campaign.
 
+## Start here
+
+- **Try the app:** [usage guide](docs/USAGE.md)
+- **See what works and what is incomplete:** [feature map](docs/FEATURES.md) · [current gaps](docs/GAPS.md)
+- **Browse all project docs:** [documentation index](docs/README.md)
+- **Current work and next tasks:** [task board](docs/TASKS.md)
+- **Contributing or handing off work:** [agent handoff](docs/HANDOFF.md) · [repository rules](AGENTS.md)
+
 ## Screenshots
 
-The image below is a repository screenshot of the application. It is a point-in-time view; consult the roadmap for current implementation status.
+The image below is a repository screenshot of the application. It is a point-in-time view; consult the roadmap for current implementation status. The capture is a 1280×800 frame of the shell with a vector object selected, taken from the optimized web bundle built on 2026-11-04. It is evidence for that build and state, not a general parity claim — see the [screenshot audit](docs/tasks/T22-screenshot-ui.md) for the captures, measurements, and their limits.
 
 <p align="center">
   <img src="docs/img/app-main.png" alt="FireCraft application workspace" width="960" />
@@ -85,6 +93,14 @@ cargo build --release -p app-cli
 
 # Build the browser distribution
 cargo run -p xtask -- dist --web
+```
+
+### Quick commands
+
+```sh
+cargo run -p xtask -- ci
+cargo run -p app-cli -- info document.fw.png
+cargo run -p app-cli -- convert input.fw.png output.fw.png
 ```
 
 ### CLI examples
@@ -130,9 +146,12 @@ The GUI and automation interfaces are intended to drive the same engine commands
 | [Progress](docs/PROGRESS.md) | Session-level status and historical progress |
 | [Planning](docs/PLANNING.md) | Product plan, file-format notes, and architecture |
 | [Handoff](docs/HANDOFF.md) | Engineering handoff and agent runbook |
+| [Gaps](docs/GAPS.md) | Current gaps and evidence-gated items |
+| [Task board](docs/TASKS.md) | Active tasks, priority, and status |
 | [Toolchains](docs/TOOLCHAINS.md) | Platform toolchains and packaging recipes |
 | [WebOS](docs/WEBOS.md) | Browser embedding contract |
 | [Attribution](docs/ATTRIBUTION.md) | Third-party asset and license ledger |
+| [Repository rules](AGENTS.md) | Clean-room policy, repository rules, and workflow |
 
 ## Brand and assets
 

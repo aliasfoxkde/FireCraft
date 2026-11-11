@@ -39,6 +39,7 @@ use crate::editor::{
     Tool, TransformHandle,
 };
 use crate::menus;
+use crate::toolstrip;
 
 // The web drop sink ([`Shell::set_drop_sink`]): the web crate's async
 // file reader, installed at startup. Wasm only — the desktop shell
@@ -156,6 +157,16 @@ pub struct Shell {
     /// position it opened at (the popup re-anchors there each frame,
     /// so a later pointer move does not drag it).
     pub(crate) context_menu: Option<Pos2>,
+    /// In-canvas text editing (20.1): the object being edited and the
+    /// live buffer. `Some` while the egui `TextEdit` overlay sits on the
+    /// text frame; commit writes `text.setText`, cancel (Esc or
+    /// switching tools) discards the buffer.
+    text_edit: Option<TextEditState>,
+    /// Filters ▸ Repeat Filter: the internal name of the last filter
+    /// applied from the Filters menu or the live-filters panel.
+    /// CS6 applies it to the current selection; with none applied
+    /// yet the row reports the CS6 "no filters to repeat" state.
+    last_filter: Option<&'static str>,
     /// Window-menu panel visibility: names of right-dock panels the
     /// user closed. Absent = shown (CS6 default is everything open).
     panel_hidden: Vec<&'static str>,
@@ -165,6 +176,10 @@ pub struct Shell {
     /// The Behaviors panel's chosen swap-image target (the slice's
     /// name; `None` = not chosen yet).
     swap_target: Option<String>,
+    /// The Find and Replace panel's query; `None` = not typed yet.
+    find_query: Option<String>,
+    /// The Find and Replace panel's replacement text.
+    find_replacement: Option<String>,
     /// Window ▸ Hide Panels (Tab): all right-dock panels folded at
     /// once, independent of per-panel visibility.
     panels_hidden: bool,
@@ -172,11 +187,29 @@ pub struct Shell {
     tools_hidden: bool,
     /// Window ▸ Toolbars ▸ Main: the context options bar is hidden.
     options_bar_hidden: bool,
+    /// The screen-mode control's cycle position (CS6's three view
+    /// modes: Standard, Full Screen with Menus, Full Screen). Display
+    /// state, not document state.
+    screen_mode: ScreenMode,
     /// The live egui context, stashed each frame so code outside the
     /// frame loop (the web bridge) can request a repaint after it
     /// mutates the shell — without one, a bridge-loaded document sat
     /// behind a stale untitled canvas until the next input event.
     ctx: Option<egui::Context>,
+}
+
+/// In-canvas text editing (20.1): the live editor state for one text
+/// object. `buffer` is what the overlay `TextEdit` shows; commit sends
+/// it through `text.setText` when it differs from `original`; cancel
+/// (Esc, or switching tools) drops it without touching the document.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct TextEditState {
+    /// The text object being edited.
+    pub(crate) id: doc::ObjectId,
+    /// The characters before editing started.
+    pub(crate) original: String,
+    /// The live edit buffer.
+    pub(crate) buffer: String,
 }
 
 /// A press-and-hold in progress on a tool-group leader: when it
@@ -197,6 +230,58 @@ pub(crate) const TOOL_HOLD_SECONDS: f64 = 0.45;
 /// clock and the pointer state are read at the edge and passed in.
 pub(crate) fn hold_opens_flyout(elapsed: f64) -> bool {
     elapsed >= TOOL_HOLD_SECONDS
+}
+
+/// CS6's three view modes — the help set: "In the Tools panel,
+/// select from one of three view modes to control the layout of your
+/// workspace. Standard Screen mode: The default document window view.
+/// Full Screen with Menus mode: A maximized document window view set
+/// against a gray background. Menus, toolbars, scroll bars, and
+/// panels are visible. Full Screen mode: A maximized document window
+/// view set against a black background. No menus, toolbars, or title
+/// bars are visible." (fwref 1178–1185.) The screen-mode control
+/// cycles through them.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) enum ScreenMode {
+    /// The default document window view — every chrome element shown.
+    #[default]
+    Standard,
+    /// Maximized against a gray backdrop; menus stay.
+    FullScreenWithMenus,
+    /// Maximized against a black backdrop; no menus, toolbars, or
+    /// title bars.
+    FullScreen,
+}
+
+impl ScreenMode {
+    /// The next mode in CS6's cycle order.
+    fn next(self) -> Self {
+        match self {
+            ScreenMode::Standard => ScreenMode::FullScreenWithMenus,
+            ScreenMode::FullScreenWithMenus => ScreenMode::FullScreen,
+            ScreenMode::FullScreen => ScreenMode::Standard,
+        }
+    }
+
+    /// The status line the cycle reports.
+    fn label(self) -> &'static str {
+        match self {
+            ScreenMode::Standard => "Standard Screen mode",
+            ScreenMode::FullScreenWithMenus => "Full Screen with Menus mode",
+            ScreenMode::FullScreen => "Full Screen mode",
+        }
+    }
+
+    /// The backdrop CS6 paints behind the maximized document: gray in
+    /// Full Screen with Menus, black in Full Screen, and the shell's
+    /// usual dark canvas matte in Standard.
+    fn backdrop(self) -> egui::Color32 {
+        match self {
+            ScreenMode::Standard => egui::Color32::from_rgb(32, 32, 32),
+            ScreenMode::FullScreenWithMenus => egui::Color32::from_rgb(0x99, 0x99, 0x99),
+            ScreenMode::FullScreen => egui::Color32::BLACK,
+        }
+    }
 }
 
 /// The persisted shell layout: the panel-visibility set and the dock
@@ -310,14 +395,19 @@ impl Shell {
             gamma_18: false,
             guide_draft: None,
             context_menu: None,
+            text_edit: None,
+            last_filter: None,
             // CS6's fresh-document roster: Properties/Pages/States/
             // Layers open, the rest of the panel inventory closed.
             panel_hidden: Self::default_open_panels(),
             url_draft: None,
             swap_target: None,
+            find_query: None,
+            find_replacement: None,
             panels_hidden: false,
             tools_hidden: false,
             options_bar_hidden: false,
+            screen_mode: ScreenMode::Standard,
             layout: ShellLayout::default(),
             ctx: None,
         }
@@ -721,6 +811,51 @@ impl Shell {
         }
     }
 
+    /// Begin in-canvas editing of the text object under `id` (20.1):
+    /// snapshot its characters and open the overlay. Re-opening on the
+    /// same object keeps the live buffer (a click back into the edit
+    /// must not wipe what was typed).
+    pub(crate) fn begin_text_edit(&mut self, id: doc::ObjectId) {
+        if self.text_edit.as_ref().is_some_and(|edit| edit.id == id) {
+            return;
+        }
+        let original = match self.editor.document().registry.get(id) {
+            Some(doc::ObjectData::Text(text)) => text
+                .runs
+                .iter()
+                .map(|run| run.text.as_str())
+                .collect::<String>(),
+            _ => return,
+        };
+        self.text_edit = Some(TextEditState {
+            id,
+            buffer: original.clone(),
+            original,
+        });
+    }
+
+    /// Commit the text-edit overlay: `text.setText` with the buffer
+    /// when it changed; then the session closes the editor either way.
+    pub(crate) fn commit_text_edit(&mut self) {
+        let Some(edit) = self.text_edit.take() else {
+            return;
+        };
+        if edit.buffer == edit.original {
+            return;
+        }
+        if !self.run_command(
+            "text.setText",
+            serde_json::json!({ "id": edit.id, "text": edit.buffer }),
+        ) {
+            self.status = "text edit failed".to_owned();
+        }
+    }
+
+    /// Cancel the text-edit overlay without touching the document.
+    pub(crate) fn cancel_text_edit(&mut self) {
+        self.text_edit = None;
+    }
+
     /// History → Save Steps…: the session journal written as a
     /// `.fwsteps` command file (JSON lines) through the injected
     /// traits. The file replays through [`Session::reopen`] — the same
@@ -951,6 +1086,16 @@ impl Shell {
                     serde_json::json!({ "id": id, "size": next }),
                 );
             }
+            menus::Action::TextFont(family) => {
+                // Text ▸ Font (22.5): the same family list the
+                // inspector's combo offers, through `text.setFont`.
+                if let Some(id) = self.editor.selection {
+                    self.run_command(
+                        "text.setFont",
+                        serde_json::json!({ "id": id, "font": family }),
+                    );
+                }
+            }
             menus::Action::TextOnPathMode(mode) => {
                 // The on-path setters walk the document's selection, so
                 // the view's selection must land there first.
@@ -967,10 +1112,21 @@ impl Shell {
             }
             menus::Action::Filter(name) => match self.editor.selection {
                 Some(id) => match filter_preset(name) {
-                    Some(preset) => self.apply_filter_preset(id, *preset),
+                    Some(preset) => {
+                        self.last_filter = Some(preset.name);
+                        self.apply_filter_preset(id, *preset);
+                    }
                     None => self.status = format!("no such filter: {name}"),
                 },
                 None => self.status = "pick an object to filter".to_owned(),
+            },
+            menus::Action::RepeatFilter => match (self.last_filter, self.editor.selection) {
+                (Some(name), Some(id)) => match filter_preset(name) {
+                    Some(preset) => self.apply_filter_preset(id, *preset),
+                    None => self.status = format!("no such filter: {name}"),
+                },
+                (Some(_), None) => self.status = "pick an object to filter".to_owned(),
+                (None, _) => self.status = "no filters to repeat".to_owned(),
             },
             menus::Action::Document(action) => self.run_document(action),
         }
@@ -1152,8 +1308,12 @@ impl Shell {
             }
             menus::ShellAction::ToggleHidePanels => self.toggle_all_panels(),
             menus::ShellAction::ToggleMainToolbar => self.toggle_options_bar(),
+            menus::ShellAction::CycleScreenMode => self.cycle_screen_mode(),
             menus::ShellAction::ReportGap(message) => self.status = message.to_owned(),
             menus::ShellAction::InsertWeb { what } => self.insert_web(what),
+            menus::ShellAction::SelectFrame(step) => self.select_frame_relative(step),
+            menus::ShellAction::SelectPage(step) => self.select_page_relative(step),
+            menus::ShellAction::EditTextSelection => self.edit_text_selection(),
             menus::ShellAction::PreviewInBrowser {
                 secondary,
                 all_pages,
@@ -1329,6 +1489,41 @@ impl Shell {
             menus::ShellAction::About => self.about_open = true,
             menus::ShellAction::ShowShortcuts => self.help_open = !self.help_open,
             menus::ShellAction::PickTool(tool) => {
+                self.editor.tool = tool;
+                self.status = format!("tool: {}", tool_label(tool));
+            }
+            menus::ShellAction::PickToolGroup(leader) => {
+                // CS6: "To quickly select a hidden tool, repeatedly
+                // press the group keyboard shortcut until the tool you
+                // want appears." The shortcut picks the group's leader
+                // and steps through the group from there.
+                //
+                // The Hide/Show Slices control is the exception: the
+                // book's Table 1-1 gives it the "2" key, but it is a
+                // panel button, so the key *acts* on it instead of
+                // making it the active tool.
+                if toolstrip::is_panel_button(leader) {
+                    self.run_panel_button(leader);
+                    return;
+                }
+                let group = toolstrip::group_of(leader);
+                let index = match group {
+                    Some(group) => {
+                        let current = group
+                            .tools
+                            .iter()
+                            .position(|entry| entry.tool == self.editor.tool);
+                        match current {
+                            Some(index) => (index + 1) % group.tools.len(),
+                            None => 0,
+                        }
+                    }
+                    None => 0,
+                };
+                let tool = match group {
+                    Some(group) => group.tools[index].tool,
+                    None => leader,
+                };
                 self.editor.tool = tool;
                 self.status = format!("tool: {}", tool_label(tool));
             }
@@ -1898,6 +2093,18 @@ impl Shell {
                 self.run_command("selection.selectChildren", serde_json::json!({}));
                 self.editor.adopt_document_selection();
             }
+            menus::SelAction::Nudge { dx, dy } => {
+                let ids = self.editor.live_selection();
+                if ids.is_empty() {
+                    self.status = "nothing selected to nudge".to_owned();
+                    return;
+                }
+                self.run_command(
+                    "object.translate",
+                    serde_json::json!({ "ids": ids, "dx": dx, "dy": dy }),
+                );
+                self.status = format!("nudged {} object(s)", ids.len());
+            }
             menus::SelAction::SelectSimilar => {
                 let tolerance = self.editor.wand_tolerance;
                 if let Err(error) = self.editor.select_similar(tolerance) {
@@ -2022,6 +2229,79 @@ impl Shell {
             return;
         }
         self.run_command("flatten.selection", serde_json::json!({}));
+    }
+
+    /// The `,`/`.` state-step rows: move the frame pointer within the
+    /// page's state count, clamped (fwref `cmd_Frame_Previous`/`Next`).
+    fn select_frame_relative(&mut self, step: i64) {
+        let page = self.editor.page;
+        let count = self
+            .editor
+            .document()
+            .pages
+            .get(page)
+            .map(|p| p.info.frame_count)
+            .unwrap_or(0);
+        if count == 0 {
+            self.status = "the document has no states".to_owned();
+            return;
+        }
+        let current = i64::try_from(self.editor.frame).unwrap_or(0);
+        let next = (current + step).clamp(0, count - 1);
+        if usize::try_from(next) == Ok(self.editor.frame) {
+            self.status = if step < 0 {
+                "already at the first state".to_owned()
+            } else {
+                "already at the last state".to_owned()
+            };
+            return;
+        }
+        self.editor.frame = usize::try_from(next).unwrap_or(0);
+        self.status = format!("state {}", self.editor.frame + 1);
+    }
+
+    /// PageUp/PageDown: move the page pointer within the document's
+    /// page count, clamped (fwref `cmd_Page_Previous`/`Next`).
+    fn select_page_relative(&mut self, step: i64) {
+        let count = self.editor.document().pages.len();
+        if count == 0 {
+            self.status = "the document has no pages".to_owned();
+            return;
+        }
+        let current = i64::try_from(self.editor.page).unwrap_or(0);
+        let next = (current + step).clamp(0, i64::try_from(count - 1).unwrap_or(0));
+        if usize::try_from(next) == Ok(self.editor.page) {
+            self.status = if step < 0 {
+                "already at the first page".to_owned()
+            } else {
+                "already at the last page".to_owned()
+            };
+            return;
+        }
+        self.editor.page = usize::try_from(next).unwrap_or(0);
+        self.editor.frame = 0;
+        self.status = format!("page {}", self.editor.page + 1);
+    }
+
+    /// The Text Editor / Edit Image Object row (fwref `cmd_TextEditor`,
+    /// `cmd_EditImageObject`): a selected text object opens the
+    /// in-canvas text overlay; anything else reports that the kind has
+    /// no editor in this build.
+    fn edit_text_selection(&mut self) {
+        let Some(id) = self.editor.selection else {
+            self.status = "select a text object to edit it".to_owned();
+            return;
+        };
+        let is_text = matches!(
+            self.editor.session.document().registry.get(id),
+            Some(doc::ObjectData::Text(_))
+        );
+        if is_text {
+            self.begin_text_edit(id);
+            self.status = "editing text".to_owned();
+        } else {
+            self.status = "the selected kind has no editor in this build".to_owned();
+        }
     }
 
     /// Edit ▸ Insert ▸ Hotspot / slice rows / New Button…: the target
@@ -2157,6 +2437,7 @@ impl Shell {
     fn shortcuts(&mut self, ctx: &egui::Context) {
         let text_focus = ctx.egui_wants_keyboard_input();
         let mut fired: Vec<menus::Action> = Vec::new();
+        let mut draft_key = None;
         ctx.input(|input| {
             for event in &input.events {
                 let egui::Event::Key {
@@ -2169,6 +2450,24 @@ impl Shell {
                 else {
                     continue;
                 };
+                // CS6 closes a plotted path with Enter and abandons it
+                // with Escape. The Pen, the Polygon Slice, the Polygon
+                // Hotspot and the Polygonal Marquee all build their
+                // shape with clicks, so these two keys are how the
+                // shape becomes real.
+                if !modifiers.ctrl && !modifiers.alt && !modifiers.shift && !text_focus {
+                    match key {
+                        egui::Key::Enter => {
+                            draft_key = Some(true);
+                            continue;
+                        }
+                        egui::Key::Escape => {
+                            draft_key = Some(false);
+                            continue;
+                        }
+                        _ => {}
+                    }
+                }
                 for shortcut in menus::SHORTCUTS {
                     if shortcut.key != *key
                         || shortcut.mods.ctrl != modifiers.ctrl
@@ -2186,6 +2485,39 @@ impl Shell {
         });
         for action in fired {
             self.run_action(&action);
+        }
+        match draft_key {
+            Some(true) => self.finish_draft(),
+            Some(false) => self.cancel_draft(),
+            None => {}
+        }
+    }
+
+    /// Enter: commits the shape being plotted — the pen's polyline, a
+    /// polygon slice or hotspot, or the polygonal marquee.
+    fn finish_draft(&mut self) {
+        if self.editor.polygon.is_some() {
+            match self.editor.commit_polygon() {
+                Ok(true) => self.status = "polygon selected".to_owned(),
+                Ok(false) => self.status = "polygon needs three points".to_owned(),
+                Err(error) => self.status = format!("polygon failed: {error}"),
+            }
+            return;
+        }
+        if self.editor.draft.is_some() {
+            match self.editor.commit_draft() {
+                Ok(true) => self.status = "shape created".to_owned(),
+                Ok(false) => self.status = "shape needs more points".to_owned(),
+                Err(error) => self.status = format!("shape failed: {error}"),
+            }
+        }
+    }
+
+    /// Escape: abandons the shape being plotted, leaving the document
+    /// as it was.
+    fn cancel_draft(&mut self) {
+        if self.editor.draft.take().is_some() || self.editor.polygon.take().is_some() {
+            self.status = "shape discarded".to_owned();
         }
     }
 
@@ -2266,50 +2598,64 @@ impl eframe::App for Shell {
         // Panels first, CentralPanel last (egui's required order), in
         // the CS6 arrangement: menu, context options bar, tool strip,
         // panel stack (Properties included), status strip, canvas.
-        // The Properties block lived in a bottom dock, which read as a
-        // detached options strip floating at the lower left — the CS6
-        // and Photopea arrangement puts it in the right dock.
-        egui::Panel::top(egui::Id::new("menu")).show(ui, |ui| self.menu_bar(ui));
-        if !self.options_bar_hidden {
+        // The screen mode folds chrome on top of the dock folds: Full
+        // Screen hides menus, toolbars, tools, panels, status and the
+        // document tab strip against a black backdrop; Full Screen
+        // with Menus keeps the menu bar and paints the gray backdrop
+        // (fwref 1178–1185).
+        let full_screen = self.screen_mode == ScreenMode::FullScreen;
+        let menus_visible = !full_screen;
+        if menus_visible {
+            egui::Panel::top(egui::Id::new("menu")).show(ui, |ui| self.menu_bar(ui));
+        }
+        if !self.options_bar_hidden && !full_screen {
             egui::Panel::top(egui::Id::new("options")).show(ui, |ui| self.options_bar(ui));
         }
-        if !self.tools_hidden {
+        if !self.tools_hidden && !full_screen {
             egui::Panel::left(egui::Id::new("tools"))
                 .exact_size(34.0)
                 .show(ui, |ui| self.tools_panel(ui));
         }
-        // The CS6 panel group: one window per panel, docked along the
-        // right edge (drawn after the CentralPanel reservation below —
-        // egui windows float above panels regardless of call order, but
-        // the fold flag is honored here).
-        egui::Panel::bottom(egui::Id::new("status")).show(ui, |ui| {
-            ui.horizontal(|ui| {
-                ui.label(&self.status);
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    ui.label(format!(
-                        "{} · page {} · state {} · undo {} · redo {} · journal {}",
-                        self.doc_name,
-                        self.editor.page + 1,
-                        self.editor.frame + 1,
-                        self.editor.session.undo_len(),
-                        self.editor.session.redo_len(),
-                        self.editor.session.journal_len(),
-                    ));
+        // The CS6 panel group: the right dock, one column of stacked
+        // panels. A side panel *reserves* its width, so the canvas
+        // shrinks instead of being covered, and the column scrolls so
+        // every panel stays reachable at any viewport height.
+        if !self.panels_hidden && !full_screen {
+            self.dock(ui);
+        }
+        if !full_screen {
+            egui::Panel::bottom(egui::Id::new("status")).show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    ui.label(&self.status);
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        ui.label(format!(
+                            "{} · page {} · state {} · undo {} · redo {} · journal {}",
+                            self.doc_name,
+                            self.editor.page + 1,
+                            self.editor.frame + 1,
+                            self.editor.session.undo_len(),
+                            self.editor.session.redo_len(),
+                            self.editor.session.journal_len(),
+                        ));
+                    });
                 });
             });
-        });
+        }
         egui::CentralPanel::default()
             .frame(egui::Frame::NONE)
             .show(ui, |ui| {
                 // The document tab strip: a single-document window, so
                 // the CS6 MDI tab strip reduced to its one member.
-                ui.horizontal(|ui| {
-                    ui.add(
-                        egui::Button::new(egui::RichText::new(&self.doc_name).size(11.0))
-                            .selected(true),
-                    );
-                    ui.weak("FireCraft");
-                });
+                // Full Screen drops the title bar, tab strip included.
+                if !full_screen {
+                    ui.horizontal(|ui| {
+                        ui.add(
+                            egui::Button::new(egui::RichText::new(&self.doc_name).size(11.0))
+                                .selected(true),
+                        );
+                        ui.weak("FireCraft");
+                    });
+                }
                 self.canvas(ui);
             });
         if self.export_dialog.is_some() {
@@ -2364,9 +2710,6 @@ impl eframe::App for Shell {
         if self.help_open {
             self.help_panel(ui.ctx());
         }
-        // The CS6 panel group — drawn last so the windows float over
-        // the canvas like CS6's docked panels do.
-        self.panel_windows(ui.ctx());
         if self.close_requested {
             self.close_requested = false;
             ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
@@ -2420,7 +2763,7 @@ mod tests {
     }
 
     /// A GUI-shaped session: seeds + drag-created rect + a rename.
-    fn gui_editor() -> Editor {
+    pub(super) fn gui_editor() -> Editor {
         let mut editor = Editor::untitled();
         editor.tool = Tool::Rect;
         editor.begin_drag(geom::Point::new(10.0, 10.0));
@@ -2437,7 +2780,7 @@ mod tests {
     }
 
     /// A shell with scripted dialogs over a memory filesystem.
-    fn gui_shell(editor: Editor) -> Shell {
+    pub(super) fn gui_shell(editor: Editor) -> Shell {
         let dialogs = FixedDialogs {
             steps: "/mem/steps.fwsteps".to_owned(),
             doc: "/mem/doc.fw.png".to_owned(),
@@ -2839,6 +3182,39 @@ mod tests {
             shell.editor.session.journal_len(),
             journal,
             "panel toggles are view state, not document history"
+        );
+    }
+
+    /// The screen-mode control cycles CS6's three view modes in the
+    /// documented order (fwref 1178–1185) and back to Standard; the
+    /// cycle is view state — the journal never moves.
+    #[test]
+    fn the_screen_mode_cycles_through_the_three_view_modes() {
+        let mut shell = gui_shell(Editor::untitled());
+        let journal = shell.editor.session.journal_len();
+
+        assert_eq!(shell.screen_mode, ScreenMode::Standard);
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::CycleScreenMode));
+        assert_eq!(shell.screen_mode, ScreenMode::FullScreenWithMenus);
+        assert!(shell.status.contains("Full Screen with Menus"));
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::CycleScreenMode));
+        assert_eq!(shell.screen_mode, ScreenMode::FullScreen);
+        assert!(shell.status.contains("Full Screen mode"));
+        // The third press returns to Standard — a cycle, not a toggle.
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::CycleScreenMode));
+        assert_eq!(shell.screen_mode, ScreenMode::Standard);
+        assert_eq!(
+            shell.editor.session.journal_len(),
+            journal,
+            "the screen mode is view state, not document history"
+        );
+
+        // The Full Screen backdrop is black; Full Screen with Menus is
+        // CS6's gray; Standard keeps the usual dark matte.
+        assert_eq!(ScreenMode::FullScreen.backdrop(), egui::Color32::BLACK);
+        assert_eq!(
+            ScreenMode::FullScreenWithMenus.backdrop(),
+            egui::Color32::from_rgb(0x99, 0x99, 0x99)
         );
     }
 
@@ -4822,5 +5198,179 @@ mod tests {
         shell.editor.selection = Some(id);
         shell.run_action(&menus::Action::Sel(menus::SelAction::EditSymbol));
         assert_eq!(shell.editor.symbol_scope, Some(symbol));
+    }
+
+    /// 20.1: beginning an edit snapshots the runs, the buffer tracks
+    /// keystrokes, commit writes `text.setText` once, and re-opening
+    /// the same object keeps the live buffer.
+    #[test]
+    fn text_edit_session_buffers_and_commits() {
+        let (mut shell, id) = text_shell("hello");
+        shell.begin_text_edit(id);
+        assert_eq!(shell.text_edit.as_ref().unwrap().original, "hello");
+        shell.text_edit.as_mut().unwrap().buffer.push_str(" world");
+        // Re-open on the same object mid-edit keeps the buffer.
+        shell.begin_text_edit(id);
+        assert_eq!(shell.text_edit.as_ref().unwrap().buffer, "hello world");
+        shell.commit_text_edit();
+        assert!(shell.text_edit.is_none());
+        assert_eq!(text_of(&shell.editor, id), "hello world");
+        // An unchanged buffer commits nothing — no journal row.
+        let journal = shell.editor.session.journal_len();
+        shell.begin_text_edit(id);
+        shell.commit_text_edit();
+        assert_eq!(shell.editor.session.journal_len(), journal);
+    }
+
+    /// 20.1: cancel restores nothing and writes nothing; a vanished
+    /// object (deleted under the editor) closes the session silently.
+    #[test]
+    fn text_edit_cancel_and_lost_object() {
+        let (mut shell, id) = text_shell("keep");
+        shell.begin_text_edit(id);
+        shell.text_edit.as_mut().unwrap().buffer = "changed".to_owned();
+        shell.cancel_text_edit();
+        assert!(shell.text_edit.is_none());
+        assert_eq!(text_of(&shell.editor, id), "keep");
+        // Commit on a no-op session stays clean.
+        shell.commit_text_edit();
+        assert_eq!(text_of(&shell.editor, id), "keep");
+        // A vanished object refuses to open an edit session.
+        shell.begin_text_edit(doc::ObjectId::from_parts(9_999, 0));
+        assert!(shell.text_edit.is_none());
+    }
+
+    /// 20.1 focus paths: a tool switch commits (CS6 commits the edit
+    /// when you leave the Text tool); Esc closes without writing.
+    #[test]
+    fn text_edit_focus_paths() {
+        let (mut shell, id) = text_shell("keep");
+        // Tool switch commits a changed buffer exactly once.
+        shell.begin_text_edit(id);
+        shell.text_edit.as_mut().unwrap().buffer = "typed".to_owned();
+        shell.pick_tool(Tool::Pointer);
+        assert!(shell.text_edit.is_none());
+        assert_eq!(text_of(&shell.editor, id), "typed");
+        let journal = shell.editor.session.journal_len();
+        // Esc cancels — the buffer change is discarded.
+        shell.begin_text_edit(id);
+        shell.text_edit.as_mut().unwrap().buffer = "scratch".to_owned();
+        shell.cancel_text_edit();
+        assert!(shell.text_edit.is_none());
+        assert_eq!(text_of(&shell.editor, id), "typed");
+        assert_eq!(shell.editor.session.journal_len(), journal);
+        // A no-op tool switch writes nothing.
+        shell.begin_text_edit(id);
+        shell.pick_tool(Tool::Pointer);
+        assert_eq!(shell.editor.session.journal_len(), journal);
+    }
+
+    /// 22.4: the document field set writes through `document.*` —
+    /// canvas geometry, resolution with unit, canvas color — and the
+    /// multi-selection set fans a display edit out to every member.
+    #[test]
+    fn inspector_document_and_multi_selection_sets() {
+        // Document set: canvas color and resolution round-trip.
+        let (mut shell, _) = text_shell("doc");
+        assert!(shell.run_command(
+            "document.setCanvasColor",
+            serde_json::json!({ "color_raw": 0xFF20_4A87i64 })
+        ));
+        assert_eq!(
+            shell.editor.session.document().info.canvas.background_raw,
+            0xFF20_4A87
+        );
+        assert!(shell.run_command(
+            "document.setResolution",
+            serde_json::json!({ "resolution": 96.0, "unit": "inch" }),
+        ));
+        assert!((shell.editor.session.document().info.canvas.resolution - 96.0).abs() < 1e-9);
+
+        // Multi-selection set: two paths, one shared opacity edit.
+        let (mut shell, first) = two_path_shell();
+        let second = *shell
+            .editor
+            .current_cell()
+            .unwrap()
+            .elements
+            .last()
+            .unwrap();
+        assert_ne!(first, second);
+        shell.editor.set_selection(vec![first, second]);
+        assert_eq!(shell.editor.live_selection().len(), 2);
+        for id in [first, second] {
+            assert!(shell.run_command(
+                "object.setOpacity",
+                serde_json::json!({ "id": id, "opacity": 500 }),
+            ));
+        }
+        for id in [first, second] {
+            match shell.editor.document().registry.get(id) {
+                Some(doc::ObjectData::Path(path)) => assert_eq!(path.opacity, 500),
+                other => panic!("expected path, got {other:?}"),
+            }
+        }
+    }
+
+    /// A shell holding two rectangles — the multi-selection fixture.
+    fn two_path_shell() -> (Shell, doc::ObjectId) {
+        let mut editor = Editor::untitled();
+        for (name, x) in [("a", 0.0), ("b", 40.0)] {
+            editor
+                .apply(
+                    "object.createPath",
+                    serde_json::json!({
+                        "kind": "rect",
+                        "x": x, "y": 0.0, "width": 20.0, "height": 10.0,
+                        "page": 0, "layer": editor.active_layer(), "cell": 0,
+                        "name": name,
+                    }),
+                )
+                .unwrap();
+        }
+        let cell = editor.current_cell().unwrap().clone();
+        let ids: Vec<doc::ObjectId> = cell.elements.clone();
+        editor.set_selection(ids.clone());
+        (gui_shell(editor), ids[0])
+    }
+
+    /// 22.5: Repeat Filter re-applies the last filter preset to the
+    /// selection; with nothing applied yet it reports, never acts.
+    #[test]
+    fn repeat_filter_reapplies_the_last_preset() {
+        let (mut shell, _id) = two_path_shell();
+        // Nothing applied yet — the CS6 "no filters to repeat" report.
+        shell.run_action(&menus::Action::RepeatFilter);
+        assert_eq!(shell.status, "no filters to repeat");
+        let journal = shell.editor.session.journal_len();
+        // Apply invert from the Filters menu; the session remembers it.
+        shell.run_action(&menus::Action::Filter("invert"));
+        assert_eq!(shell.last_filter, Some("invert"));
+        let after_one = shell.editor.session.journal_len();
+        assert!(after_one > journal);
+        // Repeat lands a second, identical filter row. The filter
+        // targets the session's primary selection (the last id).
+        let selected = shell.editor.selection.unwrap();
+        shell.run_action(&menus::Action::RepeatFilter);
+        assert_eq!(shell.editor.session.journal_len(), after_one + 1);
+        match shell.editor.document().registry.get(selected) {
+            Some(doc::ObjectData::Path(path)) => assert_eq!(path.effects.len(), 2),
+            other => panic!("expected path, got {other:?}"),
+        }
+        // No selection — the repeat reports instead of acting.
+        shell.editor.selection = None;
+        shell.run_action(&menus::Action::RepeatFilter);
+        assert_eq!(shell.status, "pick an object to filter");
+    }
+
+    fn text_of(editor: &Editor, id: doc::ObjectId) -> String {
+        match editor.document().registry.get(id) {
+            Some(doc::ObjectData::Text(text)) => text
+                .runs
+                .iter()
+                .map(|run| run.text.as_str())
+                .collect::<String>(),
+            _ => panic!("not a text object"),
+        }
     }
 }

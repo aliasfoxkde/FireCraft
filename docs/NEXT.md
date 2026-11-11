@@ -1,7 +1,8 @@
-# FireCraft — Next-agent plan (2026-11-01)
+# FireCraft — Roadmap detail
 
-> Start at `docs/HANDOFF.md` first. This file is the live backlog
-> and the expanded plan. HANDOFF §4 has the phase descriptions.
+> Current task state is tracked in [`TASKS.md`](TASKS.md), with a dated
+> snapshot in [`PROGRESS.md`](PROGRESS.md). This file is the detailed
+> phase plan, not a second live ledger.
 > Rewritten 2026-10-25 from a full audit: coverage measured at
 > 80.47% lines / 77.85% functions, production code panic-free,
 > clippy zero-warning, v0.2.3 shipped. Phase 19–21 (the daily-driver
@@ -189,16 +190,15 @@ accesskit integration.
 
 ## Suggested order
 
-**Current front:** 19.6 (inert burn-down) → 19b.2/19b.3 (reachability
-+ inert-drift gates) → 19b.1 (path-node add/delete) → 19b.4 (wasm
-budget re-pin) → 20.1 (in-canvas text) → 20.4 (mask stack) → 20.3
-(animation timeline) → 21.x.
+**Current front:** Phase 22 shell fidelity and the screenshot-driven
+responsive audit. Phases 19 and 19b are complete; Phase 20 and 21
+features are queued in [`TASKS.md`](TASKS.md).
 
 **Quality-ratchet backlog (14.2–14.5):** 14.2 → 14.5 (ratchet) →
 15.1/15.3 → 16.1/16.3 (cheap wins) → 16.2/16.4 → 18.x → 14.3/14.4 →
 17.2 → 17.1/17.3.
 
-## The daily-driver expansion (2026-10-31)
+## Audit context: the daily-driver expansion (2026-10-31)
 
 A judge-panel audit against Fireworks CS6 and Photopea (screenshots in
 `/var/tmp/fc-audit`, method: headless Playwright interaction + vision
@@ -222,8 +222,9 @@ of replacing it, fill/stroke swatch panel bound to
 Phase 19 batches 19.1–19.5 landed 2026-10-31 → 11-01: transform
 handles + Numeric Transform, Subselect path-node editing, the gradient
 fill editor, the command palette, and the grid/guides/snap set. The
-inert count is 8 of 289 items (was 190); 19.6 is the remaining
-burn-down.
+inert count is 2 of 294 items (was 190); 19.6's menu-wiring
+campaign is complete and the Text ▸ Font submenu landed 2026-11-06. The remaining rows require separate feature or
+evidence work, tracked outside that campaign.
 
 ### Phase 19 — Canvas competence (P0, feeds usability directly)
 
@@ -235,7 +236,7 @@ burn-down.
   drag via `path.movePoints`; double-click adds/deletes. Accept: node
   drag round-trips save/open. — **LANDED 2026-10-31** (`5e4f0ce`):
   anchors + handles drawn, drag folded into one "Reshape" undo step;
-  the double-click add/delete half is **still open**.
+  add/delete completed in 19b.1.
 - **19.3 Gradient fill editor** (M): stops + on-canvas handles over
   `path.setFill`/`path.setFillVector`. Accept: linear gradient drawn,
   edited, survives save. — **LANDED 2026-10-31** (`1c84ee8`).
@@ -248,10 +249,10 @@ burn-down.
 - **19.5 Guides + grid + snapping** (M): `page.addGuide`, drag-out
   guides, snap-to on object drag. — **LANDED 2026-11-01** (`eb221ac`):
   grid overlay, guide drag-out, per-axis snap, Edit Grid dialog.
-- **19.6 Inert-menu burn-down** (L, multi-session): family batches in
+- **19.6 Inert-menu burn-down — COMPLETE** (L, multi-session): family batches in
   GAPS order (selection/mask → page/frame → symbol/animation → text);
-  every wired item proven by a shell test through the journal. — **IN
-  FLIGHT**: 190 → 178 (19.1) → 171 (19.5) → 144 (19.6 batch 1,
+  every wired item proven by a shell test through the journal. — **DONE**:
+  190 → 178 (19.1) → 171 (19.5) → 144 (19.6 batch 1,
   selection/mask) → 129 (19b.1 + batch 2 — canvas dialogs,
   Duplicate/Clone; 2026-11-03) → 120 (batch 3 — Window menu: Hide
   Panels/Tab, Main toolbar, and 7 docked-panel toggles; 2026-11-03) →
@@ -283,7 +284,8 @@ burn-down.
   `object.setQuadrangle`, the other three corners frozen at drag
   start), Split via `path.splitPaths`, Remove Transformations via
   `object.transform` with each stored `MTXv`'s inverse; Group as
-  Mask/Repeat Filter/fill-edge rows stay inert — no engine verbs yet;
+  Mask/fill-edge rows stay inert — no engine verbs yet (Repeat Filter
+  landed 2026-11-06: the session's last preset re-applied);
   2026-11-03) → **72 inert of 289 items** (batch 10 — Window family:
   Tools folds the left dock, Color Mixer/Swatches/Info dock as
   toggled right-dock panels (Swatches = the ABGR palette as a grid
@@ -337,12 +339,14 @@ burn-down.
   (`shell::panels_web`) whose every action is one engine command —
   `object.createPath` / `autoshape.*` for the gallery, `slice.setLink`
   for the URL, `slice.addBehavior` / `slice.removeBehavior` /
-  `slice.setData` for the behaviors; decision 0069). The 8 remaining
-  inert rows: the Text Font placeholder (a verbatim CS6 resource
-  artifact), Commands ▸ Manage Saved Commands and Filters ▸ Repeat
-  Filter (the scripting family), and the Window panels (Optimize /
-  Common Library / CSS Properties / Find and Replace) that land with
-  their features (Phases 20–22). 19.6's programmable surface is done;
+  `slice.setData` for the behaviors; decision 0069). The remaining
+  inert rows: Commands ▸ Manage Saved Commands (the scripting
+  family) and Window ▸ Extensions, plus the Window panels that land
+  with their features (Phases 20–22). The Text Font placeholder and
+  Filters ▸ Repeat Filter were wired 2026-11-06 — RT_MENU 128 ships
+  Font as a runtime-populated popup, so the static transcription
+  carries five renderer-known families through `text.setFont`, and
+  Repeat Filter re-applies the session's last preset. 19.6's programmable surface is done;
   the rest is feature-gated, not reachability debt.
 
 ### Phase 19b — Follow-ups from the landed batches
@@ -376,14 +380,18 @@ burn-down.
 
 ### Phase 20 — Daily-driver features (P1)
 
-- **20.1 In-canvas text editing** (L): egui TextEdit overlay at the
-  text frame; budget kittest focus-regression tests.
+- **20.1 In-canvas text editing** (L): **LANDED 2026-11-06** — egui
+  `TextEdit` overlay at the text frame; Text-tool click or Pointer
+  double-click enters, Esc cancels, focus loss / tool switch commits
+  ([T20](tasks/T20-text-editing.md)). Kittest focus tests deferred —
+  see the ticket's residual note.
 - **20.2 Optimize panel** (M): palette/bitrate over `ExportOptions` +
   live preview (export preview exists).
 - **20.3 Animation timeline** (M): frames strip, per-frame timing,
   onion skinning, `symbol.tween`.
 - **20.4 Mask stack UI** (M): add/remove/mode/link/move.
-- **20.5 Multi-document tabs + Window-menu panel toggles** (M).
+- **20.5 Multi-document tabs** (M). Window-menu panel toggles landed in
+  Phase 19.6 batches 3 and 10.
 - **20.6 History panel click-to-rewind** (S): journal replay to seq N.
 - **20.7 Slice/hotspot behavior editing + HTML preview** (M).
 
@@ -429,19 +437,23 @@ be launched as an oracle: under Wine it fails its own configuration
 check ("Error: 1"), and the activation machinery is explicitly out of
 scope, so no license path is attempted.
 
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:42ecf8717bacd73d9fd56477bf4610ea61f6985566267456938b76e4d56354c9 -->
+
 - **22.1 CS6 panel inventory + docking** (L): the left tool dock and
   the right panel stack with the CS6 panel set (Properties, Layers,
   Pages, Swatches, Color Mixer, Info, History, Optimize, Symbols,
   Styles, Common Library, CSS Properties, Auto Shapes, URL,
   Behaviors, Find and Replace, Slices). Panels are dockable left or
   right, collapsible, resizable, and re-openable from the Window
-  menu; the dock geometry persists. Accept: a panel can be moved
-  left↔right, collapsed, and reopened, and the layout survives a
-  restart. — **PARTLY LANDED 2026-11-03**: the panel stack is now
-  one window per panel (`shell::panel_windows`) — draggable,
-  collapsible, resizable, closable, docked by default in the
-  right-hand column (`default_pos`, so a drag moves a panel free and
-  egui's persisted area memory keeps the new spot), with CS6's
+  menu; the dock geometry persists. Accept: a panel can be collapsed
+  and reopened, the right dock can be resized, and the layout survives
+  a restart. Left↔right movement remains open work toward the CS6 target.
+  — **PARTLY LANDED 2026-11-04**: `shell::panel_windows` uses a
+  width-reserving `egui::Panel::right` dock (258 pt default width),
+  with a scrolling column of collapsible, closable panel sections
+  and CS6's
   fresh-document roster (Properties/Pages/States/Layers open, the
   rest closed until asked for) and the Window menu toggling each.
   The layout now persists across restarts (`eframe`'s `persistence`
@@ -450,14 +462,36 @@ scope, so no license path is attempted.
   to localStorage — and restored at startup, filtered against the
   current panel inventory. The web panels landed 2026-11-04
   (`shell::panels_web`, decision 0069): Auto Shapes, URL, and
-  Behaviors are real panels whose actions are engine commands. Still
-  open: the panels this build does not implement yet (Optimize,
-  Common Library, CSS Properties, Find and Replace, Slices).
+  Behaviors are real panels whose actions are engine commands. The
+  remaining panel surfaces (Optimize, Common Library, CSS Properties,
+  Find and Replace, Slices) landed 2026-11-06; the panel inventory is
+  complete (see `TASKS.md`). Left↔right docking movement remains open.
+  The normal-viewport reachability pass is recorded in
+  [`tasks/T22-screenshot-ui.md`](tasks/T22-screenshot-ui.md).
+  — **REACHABILITY MEASURED 2026-11-04**: the stack is now a dock that
+  reserves its width rather than a set of floating windows, and the
+  capture round measured it — at 1280×800 every open panel is inside
+  the viewport, and at a deliberately short 1280×400 a wheel over the
+  dock moves the stack. The receipts, and the limits of the check, are
+  in the ticket.
+
 - **22.2 CS6 tool strip** (M): the CS6 tool set in CS6 order with
   tool flyouts (shape tools, the modify sub-tools, the fill/stroke
   pair, zoom/hand, and the eyedropper), each with an open-license
   icon. Accept: every tool in the strip selects a working tool; the
-  flyout opens on press-and-hold.
+  flyout opens on press-and-hold. — **LANDED 2026-11-05**
+  (`app/src/toolstrip.rs`): the strip is CS6's, as data — the six
+  categories in CS6's order (Select, Bitmap, Vector, Web, Colors,
+  View), the twenty-four groups with their one-key shortcuts, and the
+  flyout memberships, all read from the CS6 help set and the book's
+  Table 1-1 (evidence in
+  [`research/fw-ui-evidence.md`](research/fw-ui-evidence.md)). CS6's
+  group-cycling rule is implemented: a group's key advances within
+  the group. The Modify trio (Scale/Skew/Distort), the retouch trio
+  (Blur/Sharpen/Smudge), Dodge/Burn, Knife, Freeform/Reshape Area and
+  the Colors section's four panel buttons are all in the strip. Open:
+  the Alt-hold tool variants and the three-mode screen switch
+  (ticket 22.5).
 - **22.3 Adaptive canvas context menu** (M): the right-click menu
   changes with the selection — nothing selected, a bitmap, a vector
   path, a text object, an instance, a multi-selection, and inside a
@@ -474,17 +508,56 @@ scope, so no license path is attempted.
   read-only summary. — **PARTLY LANDED 2026-11-03**: the Properties
   panel edits opacity, blend, visibility, lock, name, text runs and
   font attributes, and the live effect list; the CS6 X/Y/W/H
-  geometry strip now applies through `object.setBounds`. Still open:
-  the fill/stroke editors for bitmaps, and the CS6 inspector's
-  per-kind field sets.
+  geometry strip now applies through `object.setBounds`. — **PER-KIND
+  FIELD SETS LANDED 2026-11-04**: the inspector dispatches every
+  selection kind. A group shows its display controls, geometry and
+  member list; a bitmap shows name, opacity, blend, visibility, lock,
+  a pixel-size readout and the effect list; a slice shows its name,
+  type (foreground / background / hotspot), frame geometry, and the
+  anchor link and alt text — the same editor the Window ▸ URL panel
+  renders, so the two surfaces cannot disagree. Still open: the
+  bitmap's X/Y/W/H strip (`object.setBounds` refuses bitmaps —
+  decision 0019) and any bitmap fill/stroke editor (`IMGv` carries
+  no fill/stroke node; CS6's bitmap tools are the separate Image
+  Editing command panel), the
+  document-level field set, the multi-selection field set, and
+  enter-group. — **DOC/MULTI/ENTER LANDED 2026-11-06**: nothing
+  selected shows the document field set (canvas W/H through
+  `document.setCanvasRect`, resolution + per-cm unit through
+  `document.setResolution`, canvas color through
+  `document.setCanvasColor` over the shared ABGR palette); a
+  2+-object selection shows the multi-selection set (count, union
+  bounds, opacity-min/blend-min/visible-AND/locked-OR with every
+  edit fanned out per id); a group's member rows select the child
+  (enter-group by selection). Test
+  `inspector_document_and_multi_selection_sets`. Remaining 22.4:
+  the bitmap X/Y/W/H strip and bitmap fill/stroke, both blocked by
+  decision 0019 and the absent `IMGv` fill/stroke nodes — recorded,
+  not faked.
 - **22.5 CS6 chrome** (M): menu bar order, tool strip placement,
   document tab strip, status bar, panel headers with the CS6
   collapse/close affordances, and the CS6 color scheme (a dark
-  neutral chrome, not egui's default light look).
+  neutral chrome, not egui's default light look). **Landed
+  2026-11-06:** the three-mode screen cycle (Standard / Full Screen
+  with Menus / Full Screen, fwref 1178–1185 — the control no longer
+  aliases Tab), the Alt-hold retouch swap (Blur↔Sharpen,
+  Dodge↔Burn, fwref 3555/3580; Smudge has no variant), and the
+  Window-menu arrangement trio (57650/57651/57652 with CS6's
+  labels; census 289→290). **Also landed 2026-11-06:** the Text ▸ Font
+  submenu (RT_MENU 128 ships a runtime-populated placeholder; the
+  transcription carries five renderer-known families through
+  `text.setFont`, census 290→294, gated by
+  `the_text_font_submenu_dispatches_set_font`). **Repeat Filter landed 2026-11-06** (`Action::RepeatFilter` re-applies
+  the session's last preset through `filter.add`, gated by
+  `repeat_filter_reapplies_the_last_preset`; inert census 3→2).
+  Remaining on 22.5: the F1 grouping mismatch and the 76 unbound
+  keymap rows.
 - **22.6 Icon pack integration** (M): ship the surveyed open-license
   icon set, subset it to the Fireworks verb set, and record the
   attribution rows. Accept: the wasm bundle grows by a documented,
   measured amount and stays under the pinned ceiling.
+
+<!-- /coderabbit-ai-generated:v1 -->
 
 ### Quality gates for UI work (new)
 
@@ -524,7 +597,11 @@ scope, so no license path is attempted.
   baseline is `.aegis-baseline.tsv`, keyed on content (pattern, file,
   digest) rather than on line (decision 0074); regenerate it with
   `cargo run -p xtask -- aegis --bless`, which prints every added key
-  for review before the rewrite is committed.
+  for review before the rewrite is committed. The rule class of every
+  baselined literal is recorded in `xtask/src/aegis.rs` (`CLASS_NOTES`)
+  next to the rows it covers, and the evidence for each is in decision
+  0074, which supersedes the rule-class suppression of decision 0070;
+  a new class needs the same kind of evidence, not a convenience.
 
 ## Quick reference
 
@@ -532,6 +609,7 @@ scope, so no license path is attempted.
 |---|---|---|
 | Full CI | `cargo run -p xtask -- ci` | ~20 min |
 | Aegis | `cargo run -p xtask -- aegis` | ~10s |
+| Aegis report | `cargo run -p xtask -- aegis --report` | ~15s |
 | Aegis baseline regen | `cargo run -p xtask -- aegis --bless` | ~10s |
 | Coverage measure | `cargo llvm-cov --summary-only` (hook: use GitForge) | ~6 min |
 | Coverage gate | `cargo run -p xtask -- coverage` | ~6 min |
@@ -541,7 +619,7 @@ scope, so no license path is attempted.
 
 | Fact | Value |
 |---|---|
-| Live site | <https://firecraft-web.pages.dev> (v0.2.5 pending deploy) |
+| Live site | <https://firecraft-web.pages.dev> (manifest differs from local dist; deployed revision unknown) |
 | Latest release | v0.2.5 (2026-11-03) |
 | Coverage floors | 81.1% lines / 78.7% functions (rising-only; `xtask/src/coverage.rs`) |
 | CI image | `firecraft-ci-rust:1` — rebuild + re-ship when ANY lockfile moves |
