@@ -283,10 +283,11 @@ touching `web/` or the smoke.**
 
 ### Suggested order
 
-**Current front:** Phase 22 shell fidelity and the screenshot-driven
-responsive audit. After that, take queued Phase 20/21 work from
-[`TASKS.md`](TASKS.md). Phase 19 and 19b are complete. Re-verify the
-browser path after any `web/` change (§6.2).
+**Current front:** complete the open Phase 20 PRs (#118 Optimize/timeline;
+#113 mask-stack extension), then close the remaining Phase 22 inspector and
+chrome gaps with evidence. Phase 21's user-facing deliverables and Phase 19/19b
+are landed. Check [`TASKS.md`](TASKS.md) before selecting work; do not restart
+completed phases. Re-verify the browser path after any `web/` or shell change (§6.2).
 
 ## 5. Parity-matrix regeneration recipe
 
@@ -382,9 +383,14 @@ Phase 10 defects passed every desktop gate. The working pattern
    `corpus/fixtures/` proves the menu open; `expect_download` proves
    save. Check `pageerror` after every step (`unreachable` = a wasm
    panic).
-3. Redeploy Pages and repeat step 2 against the live URL — check the
-   served `MANIFEST.sha256` hash matches `dist/web` before
-   diagnosing anything (edge propagation lags a few minutes).
+3. For the live site, compare the served JavaScript, Wasm and `appinfo.json`
+   with the tagged release manifest first. Cloudflare Pages injects an
+   analytics beacon into served `index.html`/`host.html`; those HTML digests
+   therefore differ from the pre-deploy bundle even when the executable
+   assets match. This exact discrepancy was reconciled by #104 on
+   2026-11-11. Do not call the deployment an unknown revision based only
+   on the injected HTML. Record the release source SHA, JS/Wasm hashes,
+   appinfo hash and cache state; then repeat the bridge and file handoff smoke.
 
 ### 6.3 Release + deploy doors
 
@@ -397,15 +403,20 @@ Phase 10 defects passed every desktop gate. The working pattern
   cli tar.gz, deb, MANIFEST.sha256 → `dist/native/`) and
   `dist --web`. Web zip is manual, files at root:
   `cd dist/web && zip -qr ../firecraft-web-<v>.zip .`
-- **Publish:** tag, `git push gitforge main --tags`, `git push origin
-  main --tags`, `gh release create vX.Y.Z --notes-file
-  docs/releases/vX.Y.Z.md <5 assets>`. GitForge has no release-asset
-  surface (tags only); GitHub carries the assets. The release notes are
-  tracked in `docs/releases/` (13.3, closed) — `dist/release-notes.txt`
-  is gitignored staging and can be stale; do not ship it.
-- **Pages:** `wrangler pages deploy dist/web --project-name
-  firecraft-web` (authenticated via `CLOUDFLARE_API_TOKEN`;
-  <https://firecraft-web.pages.dev>, direct-upload project).
+- **Tag/release:** follow [RELEASING.md](RELEASING.md). The tag-triggered
+  GitHub Actions workflow builds native Linux, WebAssembly, source, SBOM,
+  checksums and the release manifest, validates the aggregate, and creates
+  a **draft** GitHub Release. Inspect the draft and all receipts; publication
+  remains an explicit operator action. Do not create a second manual release
+  with `gh release create` for the same tag. GitForge carries Git refs/tags,
+  not release assets. Release notes are tracked in `docs/releases/`;
+  `dist/release-notes.txt` is gitignored staging and can be stale.
+- **Pages:** deployment remains manual and is not part of the current tag
+  workflow: `wrangler pages deploy dist/web --project-name firecraft-web`
+  (authenticated via `CLOUDFLARE_API_TOKEN`; direct-upload project). Deploy
+  the exact `dist/web` from the release build and reconcile served JS/Wasm/
+  appinfo against the release manifest. Account for Cloudflare's injected
+  analytics beacon in served HTML (T18/#104).
 
 ## 7. Session-close checklist
 
