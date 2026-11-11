@@ -148,7 +148,6 @@ verifiable.
 
 Phase 19's canvas work and menu wiring campaign (batches 1–17) are
 complete. The live menu census is 2 inert rows of 296; eight other rows have explicit feature/evidence gates and are not considered inert. Path-node add/delete,
-
 the reachability gate, and the wasm budget re-pin are also complete.
 
 - **CS6 keymap parity (2026-11-10, decisions 0080 + 0085):** every

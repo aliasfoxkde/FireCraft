@@ -1,0 +1,20 @@
+# FireCraft reachability floor — the share of the engine's command
+# registry the shell's designed surface can execute.
+#
+# The gate fails when the measured reachable share drops below
+# `floor_reachable_percent`. The floor is a one-way ratchet: the
+# unreachable share may fall and never rise, so a removed binding
+# fails the build and only a deliberate re-pin forgives it.
+#
+# `reachable_percent` records the measurement the floor was last set
+# from; `registry_commands` and `shell_bound_commands` record the two
+# counts behind it.
+#
+# Regenerate with: cargo run -p xtask -- reachability --bless
+# The bless verb refuses to lower the floor.
+#
+# metric<TAB>value
+registry_commands	245
+shell_bound_commands	146
+reachable_percent	59.59
+floor_reachable_percent	59.59

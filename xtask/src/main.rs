@@ -13,9 +13,12 @@
 //! campaign), `parity` (rising-only parity floors), `scorecard`
 //! (milestone status), `changelog` (release chore: generated
 //! CHANGELOG + license/version stamps), `stamps` (the git-free
-//! license/version stamp checks, for a CI image that ships no git).
-//! Diagnostics go to stderr;
-//! stdout stays clean so output can be piped.
+//! license/version stamp checks, for a CI image that ships no git),
+//! `reachability` (the shell's
+//! share of the command registry, against a rising floor),
+//! `panel-snapshot` (the CS6 panel inventory, against a committed
+//! golden). Diagnostics go to stderr; stdout stays clean so output can
+//! be piped.
 
 mod aegis;
 mod changelog;
@@ -28,7 +31,9 @@ mod golden;
 mod hero;
 mod layers;
 mod library;
+mod panelsnapshot;
 mod perf;
+mod reachability;
 mod scripts;
 mod status;
 mod styles;
@@ -40,7 +45,7 @@ mod webgolden;
 
 use std::process::ExitCode;
 
-const USAGE: &str = "usage: cargo run -p xtask -- <ci [--full]|ci-no-fmt|aegis [--bless|--report]|coverage [--bless|--measure]|layers|wasm|corpus [--report]|corpus-gen|library-gen|hero-gen|styles-gen|scripts|floor|golden [--bless]|svg-golden [--bless]|svg-roundtrip [--measure]|web-golden [--bless|--measure]|perf [--bless|--measure]|dist --web|--native|--source|--sbom|fuzz|fuzz-quick|panic-hunt|parity|scorecard|stamps>";
+const USAGE: &str = "usage: cargo run -p xtask -- <ci [--full]|ci-no-fmt|aegis [--bless|--report]|coverage [--bless|--measure]|layers|wasm|corpus [--report]|corpus-gen|library-gen|hero-gen|styles-gen|scripts|floor|golden [--bless]|svg-golden [--bless]|svg-roundtrip [--measure]|web-golden [--bless|--measure]|perf [--bless|--measure]|dist --web|--native|--source|--sbom|fuzz|fuzz-quick|panic-hunt|reachability [--bless]|panel-snapshot [--bless]|parity|scorecard|stamps>";
 
 fn main() -> ExitCode {
     match std::env::args().nth(1).as_deref() {
@@ -64,6 +69,14 @@ fn main() -> ExitCode {
         },
         Some("corpus-gen") => finish("corpus-gen", corpus::gen_fixtures()),
         Some("floor") => finish("floor", floor::run()),
+        Some("reachability") => match std::env::args().nth(2).as_deref() {
+            Some("--bless") => finish("reachability --bless", reachability::bless()),
+            _ => finish("reachability", reachability::run()),
+        },
+        Some("panel-snapshot") => match std::env::args().nth(2).as_deref() {
+            Some("--bless") => finish("panel-snapshot --bless", panelsnapshot::bless()),
+            _ => finish("panel-snapshot", panelsnapshot::run()),
+        },
         Some("library-gen") => finish("library-gen", library::run()),
         Some("hero-gen") => finish("hero-gen", hero::run()),
         Some("styles-gen") => finish("styles-gen", styles::run()),
@@ -188,6 +201,8 @@ fn run_ci(full: Option<&str>, skip_fmt: bool) -> ExitCode {
         ("web-golden", webgolden::run),
         ("perf", perf::run),
         ("fuzz", fuzz::quick),
+        ("reachability", reachability::run),
+        ("panel-snapshot", panelsnapshot::run),
         ("parity", status::parity),
         ("scorecard", status::scorecard),
         ("changelog", changelog::run),
