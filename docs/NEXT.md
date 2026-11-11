@@ -463,7 +463,7 @@ evidence work, tracked outside that campaign.
   drag (0.5×–3×, Reset to platform default) applies to the context
   each frame and rides `ShellLayout`, so it persists like the panel
   set. Gate: `preferences_scale_round_trips_the_layout`. The
-  Preferences menu row also left the inert census, now 2 of 294.
+  Preferences menu row also left the inert census, now 2 of 296.
 - **21.5 accesskit** desktop + web re-audit (0067 records the web
   blocker).
 - **21.6 In-app scripting** (S): Commands menu → run `.jsf`/`.fwsteps`.

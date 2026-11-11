@@ -23,11 +23,11 @@
   the latest tag is `v0.2.5`). The tag and current `main` are different
   snapshots. See [`PROGRESS.md`](PROGRESS.md) for build and release
   evidence and [`TASKS.md`](TASKS.md) for current work.
-- **Engine and parity:** 252 registry commands (`engine::catalog::ids()`
+- **Engine and parity:** 253 registry commands (`engine::catalog::ids()`
   is the live authority); 268 carried / 3 partial / 0 missing of the 356
   DOM verbs. Live generated files and source calls are authoritative
   for counts.
-- **Menu census:** 2 of 294 menu rows remain non-dispatching. The 19.6
+- **Menu census:** 2 of 296 menu rows remain non-dispatching. The 19.6
   wiring campaign is complete; remaining rows belong to future feature
   work or evidence gates. The live census is derived and gated by
   `menus::tests::inert_count_never_rises`.

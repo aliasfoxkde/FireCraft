@@ -33,7 +33,7 @@
   cannot execute the Rust suite; the current PR head has no GitHub Actions
   run/status receipt visible. Do not treat the new tests as passing until
   the repository CI or a local `cargo run -p xtask -- ci` completes.
-- **Engine and parity:** 245 command IDs (source is authoritative);
+- **Engine and parity:** 253 command IDs (source is authoritative);
   268 carried / 3 partial / 0 missing of the 356 DOM verbs.
 - **CS6 keymap parity (2026-11-10, decisions 0080 + 0085):** every
   accelerator the menu bar prints is bound at the printed key —

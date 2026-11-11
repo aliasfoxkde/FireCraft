@@ -308,7 +308,7 @@ the matrix does not read them as missing CS6 features.
 
 | Addition | Why it exists | Evidence |
 |---|---|---|
-| Command palette (Ctrl+P) over the whole registry | CS6 had no palette; FireCraft's registry is 252 commands and a palette makes every one reachable | `S/palette.rs` |
+| Command palette (Ctrl+P) over the whole registry | CS6 had no palette; FireCraft's registry is 253 commands and a palette makes every one reachable | `S/palette.rs` |
 | Rust-native `.fw.png` engine, CLI, journal, MCP server | headless automation and scripting parity beyond CS6's surface | `crates/app-cli` |
 | ExtendScript host running the CS6 `.jsf` corpus | scripting parity, headless | `crates/scripting` |
 | The **Web Layer** panel | FireCraft's own always-present web panel; CS6's web state lives in the Properties/Slices panels | `S/dialogs.rs::web_panel` |
