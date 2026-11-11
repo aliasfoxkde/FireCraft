@@ -115,8 +115,11 @@ fn the_history_panel_rows_carry_their_depth() {
 fn the_rewind_command_is_session_scoped() {
     let (mut session, ids) = session();
     set_opacity(&mut session, ids[0], 400);
-    set_opacity(&mut session, ids[1], 500);
+    // Captured after the FIRST edit: rewinding to depth 1 restores the
+    // document to the state one recorded step back, not to the state
+    // both steps produced.
     let after_first = DocumentBytes::of(session.document());
+    set_opacity(&mut session, ids[1], 500);
 
     // The registry catalog does not own it: a catalog command must
     // undo and redo against the document alone.
