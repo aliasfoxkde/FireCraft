@@ -185,6 +185,7 @@ Current version: **0.2.5**.
 
 ### Fixes
 
+- **xtask**: keep the changelog's squashed entries on regeneration (47f7b32)
 - **deps**: clear the remaining rustsec advisories in the lockfile (#117) (b61f198)
 - **xtask**: report the coverage gate's stdout on failure (#82) (7f6cb3f)
 - **release**: repair gh release create asset arguments (#14) (2cfdeee)
