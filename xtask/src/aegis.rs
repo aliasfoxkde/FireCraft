@@ -96,16 +96,20 @@ const CLASS_NOTES: &[(&str, &str)] = &[
     (
         "gdpr-reference",
         "Matches the lowercase abbreviation in this table's own rule-class \
-         name, in the personal-data rule's name, and in decision 0074's \
-         table of adjudicated classes; the abbreviation is a rule \
-         identifier, not a reference to anyone's data.",
+         name, in the personal-data rule's name, in decision 0074's \
+         table of adjudicated classes, and in the rule identifiers \
+         quoted by the Aegis adjudication tickets and the release \
+         execution board; the abbreviation is a rule identifier, not a \
+         reference to anyone's data.",
     ),
     (
         "gdpr-personal-data",
         "Matches the two-word phrase naming an individual's data category \
-         in English prose. The occurrence outside this gate's own source \
-         is a release-plan checklist item that excludes personal data from \
-         the source archive; the repository holds no such data.",
+         in English prose. The occurrences outside this gate's own source \
+         are a release-plan checklist item that excludes personal data from \
+         the source archive, and the adjudication tables that name the \
+         category in order to record that it is absent; the repository \
+         holds no such data.",
     ),
     (
         "international-phone",
@@ -126,8 +130,9 @@ const CLASS_NOTES: &[(&str, &str)] = &[
         "pci-cardholder-data",
         "Matches the word \"pan\" in pan-zoom, hand-pan and two-finger pan \
          identifiers, including the Android feasibility note's touch \
-         gesture, and in decision 0074's table of adjudicated classes; \
-         the five credit-card-* rules stay armed.",
+         gesture, and in decision 0074's table of adjudicated classes \
+         and the rule identifiers quoted by the Aegis adjudication \
+         tickets; the five credit-card-* rules stay armed.",
     ),
     (
         "phone-number",
@@ -137,8 +142,9 @@ const CLASS_NOTES: &[(&str, &str)] = &[
     (
         "ssrf-localhost",
         "A loopback listener in the release smoke test, a localhost \
-         maintainer address, prose naming the local GitForge API, and the \
-         local preview URL in the site deployment guide; the workspace has \
+         maintainer address, prose naming the local GitForge API, the \
+         local preview URL in the site deployment guide, and the loopback \
+         bind quoted by the Aegis adjudication tickets; the workspace has \
          no HTTP client dependency.",
     ),
     (
@@ -165,8 +171,10 @@ const CLASS_NOTES: &[(&str, &str)] = &[
         "zip-code",
         "Matches any 5-digit run: CS6 command ids, the JPEG dimension \
          ceiling (65535), menu ids, CVE id suffixes, and the civil-date \
-         epoch constant (36524) in the SBOM timestamp builder, and \
-         decision 0074's table of adjudicated classes. This repository \
+         epoch constant (36524) in the SBOM timestamp builder, plus the \
+         headless-browser virtual-time budget (60000), and decision \
+         0074's table of adjudicated classes and the rule identifiers \
+         quoted by the Aegis adjudication tickets. This repository \
          holds no postal data.",
     ),
 ];
