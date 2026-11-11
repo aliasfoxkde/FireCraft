@@ -11,10 +11,11 @@ use super::unknown::UnknownBag;
 use super::writer::{mapped_indices, splice, write, write_style_library};
 use crate::model::{
     Canvas, Cell, Contour, Document, DocumentInfo, Effect, EffectProperty, EffectValue,
-    ExportOptions, Grid, GroupObject, Guides, ImageObject, Layer, LayerList, NineSliceGuides, Page,
-    PageInfo, PaintStyle, PathObject, PathPoint, PrimitiveSource, SharedLayerDef, SharedLayerLink,
-    SliceBackground, SliceBehavior, SliceObject, StyleEntry, StyleText, SymbolAnimation,
-    SymbolDefinition, SymbolInstanceObject, SymbolType, TextObject, TextRun, TextStyle, TileRef,
+    ExportOptions, Grid, GroupObject, Guides, ImageObject, Layer, LayerList, MASK_STACK_MODE_KEY,
+    MaskCombineMode, NineSliceGuides, Page, PageInfo, PaintStyle, PathObject, PathPoint,
+    PrimitiveSource, SharedLayerDef, SharedLayerLink, SliceBackground, SliceBehavior, SliceObject,
+    StyleEntry, StyleText, SymbolAnimation, SymbolDefinition, SymbolInstanceObject, SymbolType,
+    TextObject, TextRun, TextStyle, TileRef,
 };
 use crate::registry::{ObjectData, ObjectId, Registry};
 use fwpng::nodetree::{Node, NodeValue, parse, serialize};
@@ -334,6 +335,7 @@ fn sample_document() -> Document {
         }),
     }));
     let group_id = doc.registry.insert(ObjectData::Group(GroupObject {
+        stack_mode: None,
         group_type: 1,
         name: Some("grp".into()),
         children: vec![text_id, slice_id],
@@ -600,6 +602,158 @@ fn lnkb_writes_only_when_unlinked_and_round_trips() {
     find_nodes(&tree, b"LNKb", &mut hits);
     assert!(hits.is_empty(), "linked groups write no LNKb");
     assert!(!bytes.is_empty());
+}
+
+// --- decision 0091: the mask stack's combine mode ----------------------
+
+/// The sample document's group — the mask level the mode rides on.
+fn sample_group_id(doc: &Document) -> ObjectId {
+    doc.registry
+        .iter()
+        .find(|(_, o)| matches!(o, ObjectData::Group(_)))
+        .map(|(id, _)| id)
+        .expect("sample carries a group")
+}
+
+/// The group's mode, read back through the model.
+fn group_mode(doc: &Document, id: ObjectId) -> Option<MaskCombineMode> {
+    match doc.registry.get(id) {
+        Some(ObjectData::Group(g)) => g.stack_mode,
+        other => panic!("group vanished: {other:?}"),
+    }
+}
+
+/// The group's data node in a written tree, when it carries one.
+fn group_data_node(tree: &[Node]) -> Option<&Node> {
+    let mut groups = Vec::new();
+    find_nodes(tree, b"GRPv", &mut groups);
+    let group = groups.first()?;
+    kids_of(group).iter().find(|node| &node.fourcc == b"DTAv")
+}
+
+#[test]
+fn the_mask_stack_mode_is_written_and_read_back() {
+    // A fresh file: the mode rides in the group's data node.
+    let mut doc = sample_document();
+    let group_id = sample_group_id(&doc);
+    if let Some(ObjectData::Group(slot)) = doc.registry.get_mut(group_id) {
+        slot.stack_mode = Some(MaskCombineMode::Subtract);
+    }
+    let (_bytes, doc2, _bag2) = round_trip_bytes(&doc, &UnknownBag::new());
+    assert_eq!(
+        group_mode(&doc2, group_id),
+        Some(MaskCombineMode::Subtract),
+        "the mode survives bytes"
+    );
+
+    // No mode: no data node is minted for it.
+    if let Some(ObjectData::Group(slot)) = doc.registry.get_mut(group_id) {
+        slot.stack_mode = None;
+    }
+    let (tree, _stats) = write(&doc, &UnknownBag::new()).expect("write");
+    assert!(
+        group_data_node(&tree).is_none(),
+        "a group without a mode writes no data node"
+    );
+}
+
+#[test]
+fn the_model_owns_the_mode_key_and_foreign_data_survives() {
+    // A file whose group carries a data node: a CS6 author's entry and
+    // the mask stack's mode.
+    let doc = sample_document();
+    let group_id = sample_group_id(&doc);
+    let (mut tree, _stats) = write(&doc, &UnknownBag::new()).expect("write");
+    let mut groups = Vec::new();
+    find_nodes(&tree, b"GRPv", &mut groups);
+    assert_eq!(groups.len(), 1, "the sample carries one group");
+    children_mut(groups[0]).push(n_k(
+        b"DTAv",
+        vec![
+            n_k(
+                b"DCEv",
+                vec![n_s(b"DCKs", "tooltips"), n_s(b"DCVs", "a CS6 tip")],
+            ),
+            n_k(
+                b"DCEv",
+                vec![n_s(b"DCKs", MASK_STACK_MODE_KEY), n_s(b"DCVs", "intersect")],
+            ),
+        ],
+    ));
+    let bytes = serialize(&tree);
+    let parsed = parse(&bytes).expect("reparse");
+    let (doc2, bag2) = read(&parsed).expect("read");
+    assert_eq!(
+        group_mode(&doc2, group_id),
+        Some(MaskCombineMode::Intersect),
+        "the mode is read out of the data node"
+    );
+
+    // The model wins over the file: a changed mode is what is written.
+    let mut doc3 = doc2.clone();
+    if let Some(ObjectData::Group(slot)) = doc3.registry.get_mut(group_id) {
+        slot.stack_mode = Some(MaskCombineMode::Invert);
+    }
+    let (tree2, _stats) = write(&doc3, &bag2).expect("write");
+    let data_node = group_data_node(&tree2).expect("the group carries its data node");
+    let entries: Vec<(&str, &str)> = kids_of(data_node)
+        .iter()
+        .filter_map(|entry| {
+            let kids = kids_of(entry);
+            let key = kids.first().and_then(|k| k.as_str())?;
+            let value = kids.get(1).and_then(|v| v.as_str())?;
+            Some((key, value))
+        })
+        .collect();
+    assert_eq!(
+        entries,
+        vec![("tooltips", "a CS6 tip"), (MASK_STACK_MODE_KEY, "invert"),],
+        "the foreign entry survives and the mode is rewritten"
+    );
+}
+
+#[test]
+fn an_unrecognized_mode_spelling_survives_the_round_trip() {
+    // A file from a future FireCraft carries a mode this build does
+    // not know. The model canonicalizes it to the default — but the
+    // file's own spelling must not be lost, because the model cannot
+    // express it.
+    let doc = sample_document();
+    let group_id = sample_group_id(&doc);
+    let (mut tree, _stats) = write(&doc, &UnknownBag::new()).expect("write");
+    let mut groups = Vec::new();
+    find_nodes(&tree, b"GRPv", &mut groups);
+    children_mut(groups[0]).push(n_k(
+        b"DTAv",
+        vec![n_k(
+            b"DCEv",
+            vec![n_s(b"DCKs", MASK_STACK_MODE_KEY), n_s(b"DCVs", "gigantic")],
+        )],
+    ));
+    let bytes = serialize(&tree);
+    let parsed = parse(&bytes).expect("reparse");
+    let (doc2, bag2) = read(&parsed).expect("read");
+    assert_eq!(
+        group_mode(&doc2, group_id),
+        None,
+        "an unknown spelling canonicalizes to the default"
+    );
+
+    let (tree2, _stats) = write(&doc2, &bag2).expect("write");
+    let data_node = group_data_node(&tree2).expect("the group carries its data node");
+    let values: Vec<&str> = kids_of(data_node)
+        .iter()
+        .filter_map(|entry| {
+            let kids = kids_of(entry);
+            kids.first().and_then(|k| k.as_str())?;
+            kids.get(1).and_then(|v| v.as_str())
+        })
+        .collect();
+    assert_eq!(
+        values,
+        vec!["gigantic"],
+        "the spelling the model cannot express survives verbatim"
+    );
 }
 
 // --- M10: symbol wire contract (MSYi / NGSv / ANNi family) --------------
@@ -1459,6 +1613,7 @@ fn model_structs_are_fully_constructed() {
         effects: Vec::new(),
     };
     let _group = GroupObject {
+        stack_mode: None,
         group_type: 0,
         name: None,
         children: Vec::new(),

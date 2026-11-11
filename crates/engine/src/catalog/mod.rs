@@ -69,6 +69,20 @@ pub fn element_mask_state(document: &Document, id: ObjectId) -> Option<bool> {
     mask::element_mask_state(document, id)
 }
 
+/// The mask group behind `id` and the combine mode of its level.
+///
+/// The mask stack's read side: `id` is the mask group itself, the
+/// mask it holds, or the object it masks. `None` when `id` carries no
+/// element mask. The combine mode is the level's mask-stack mode —
+/// `None` is the default union.
+#[must_use]
+pub fn element_mask_stack_mode(
+    document: &Document,
+    id: ObjectId,
+) -> Option<(ObjectId, Option<doc::MaskCombineMode>)> {
+    mask::element_mask_stack_mode(document, id)
+}
+
 /// Every registered built-in, sorted (surfaces enumerate this).
 #[must_use]
 pub fn ids() -> Vec<&'static str> {

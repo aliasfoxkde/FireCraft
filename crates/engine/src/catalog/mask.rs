@@ -15,8 +15,8 @@
 //! retraction rule the frame family documented.
 
 use doc::{
-    Contour, Document, GroupObject, ImageObject, ObjectData, ObjectId, PathObject, PathPoint,
-    SelectionMask, TileRef,
+    Contour, Document, GroupObject, ImageObject, MaskCombineMode, ObjectData, ObjectId, PathObject,
+    PathPoint, SelectionMask, TileRef,
 };
 use geom::{Point, Vec2};
 
@@ -48,6 +48,7 @@ pub(crate) fn install(registry: &mut CommandRegistry) -> Result<(), EngineError>
     registry.register(RemoveMask)?;
     registry.register(SetMaskMode)?;
     registry.register(SetMaskShowAttrs)?;
+    registry.register(SetMaskStackMode)?;
     registry.register(PathToMarquee)?;
     registry.register(MarqueeToPath)?;
     registry.register(SaveJpegMask)?;
@@ -138,7 +139,6 @@ fn owning_mask_group_deep(
 /// The element-mask state of `id`: `Some(true)` when `id` carries an
 /// enabled element mask, `Some(false)` when the mask is present but
 /// disabled, `None` when `id` carries no element mask.
-///
 /// The two arms resolve exactly the two structures `mask.enable`
 /// acts on — the enabled resolution (`GRTi` 1/2) and the disabled one
 /// (`GRTi` 0 with a mask-kind first child) — so a caller can read the
@@ -160,6 +160,34 @@ pub(crate) fn element_mask_state(document: &Document, id: ObjectId) -> Option<bo
         .and_then(|&mask_id| document.registry.get(mask_id))
         .and_then(group_type_of_mask);
     mask_kind.map(|_| false)
+}
+
+/// The mask group behind `id` and the combine mode of its level.
+///
+/// The mask stack's read side (decision 0091): `id` is the mask group
+/// itself, the mask it holds, or the object it masks. `None` when `id`
+/// carries no element mask.
+pub(crate) fn element_mask_stack_mode(
+    document: &Document,
+    id: ObjectId,
+) -> Option<(ObjectId, Option<MaskCombineMode>)> {
+    let is_mask_group = |group_type: i64| group_type == GRAYSCALE_MASK || group_type == SHAPE_MASK;
+    if let Some(ObjectData::Group(group)) = document.registry.get(id)
+        && is_mask_group(group.group_type)
+    {
+        return Some((id, group.stack_mode));
+    }
+    if let Some(Owner::Group {
+        id: parent,
+        position,
+    }) = find_owner(document, id)
+        && (position == 0 || position == 1)
+        && let Some(ObjectData::Group(group)) = document.registry.get(parent)
+        && is_mask_group(group.group_type)
+    {
+        return Some((parent, group.stack_mode));
+    }
+    None
 }
 
 /// Union content bounds of one object (identity transform).
@@ -738,6 +766,7 @@ impl TypedCommand for AddMask {
         };
         let mask_id = document.registry.insert(ObjectData::Image(mask_image));
         let group_id = document.registry.insert(ObjectData::Group(GroupObject {
+            stack_mode: None,
             group_type: GRAYSCALE_MASK,
             name: None,
             children: vec![mask_id, target_id],
@@ -1384,6 +1413,62 @@ impl TypedCommand for SetMaskShowAttrs {
     }
 }
 
+// --- mask.setStackMode --------------------------------------------------
+
+/// `mask.setStackMode` — sets the combine mode of a mask level inside
+/// a mask stack (decision 0091). A FireCraft extension: CS6 has one
+/// element mask per object and no stack, so the mode rides in the mask
+/// group's data node and the default is the union ("add").
+///
+/// The mode is stored and persisted, not yet rendered — the panel that
+/// shows and changes it is the Phase 20 mask stack UI.
+struct SetMaskStackMode;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct SetMaskStackModePayload {
+    /// The mask group, or the object it masks.
+    id: ObjectId,
+    /// "add" / "subtract" / "intersect" / "invert".
+    mode: String,
+}
+
+impl TypedCommand for SetMaskStackMode {
+    type Payload = SetMaskStackModePayload;
+
+    fn name(&self) -> &'static str {
+        "mask.setStackMode"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "mask.setStackMode";
+        let mode =
+            MaskCombineMode::parse(&payload.mode).ok_or_else(|| EngineError::BadPayload {
+                name: NAME.to_owned(),
+                detail: format!(
+                    "mode {:?} is not one of \"add\"/\"subtract\"/\"intersect\"/\"invert\"",
+                    payload.mode
+                ),
+            })?;
+        let resolved = owning_mask_group(document, NAME, payload.id)?;
+        let mut group = resolved.group.clone();
+        group.stack_mode = Some(mode);
+        if let Some(ObjectData::Group(slot)) = document.registry.get_mut(resolved.id) {
+            *slot = group.clone();
+        }
+        Ok(Delta::Object {
+            id: resolved.id,
+            inverse: ObjectInverse::Mutated {
+                object: Box::new(ObjectData::Group(resolved.group)),
+            },
+        })
+    }
+}
+
 // --- mask.pathToMarquee -------------------------------------------------
 
 /// `mask.pathToMarquee` — rasterizes a path into the pixel selection
@@ -1999,6 +2084,7 @@ mod tests {
         );
         let mask_id = document.registry.insert(ObjectData::Image(mask_image));
         let group_id = document.registry.insert(ObjectData::Group(GroupObject {
+            stack_mode: None,
             group_type: GRAYSCALE_MASK,
             name: None,
             children: vec![mask_id, image_id],
@@ -2226,6 +2312,59 @@ mod tests {
     }
 
     #[test]
+    fn set_stack_mode_records_the_level_mode_and_refuses_a_bad_spelling() {
+        let (mut document, image_id) = image_document();
+        AddMask
+            .apply_json(
+                &mut document,
+                serde_json::json!({ "id": image_id, "mode": "reveal all" }),
+            )
+            .unwrap();
+        let group_id = cell_element(&document, 0).unwrap();
+
+        // The masked object addresses its level.
+        SetMaskStackMode
+            .apply_json(
+                &mut document,
+                serde_json::json!({ "id": image_id, "mode": "subtract" }),
+            )
+            .unwrap();
+        let ObjectData::Group(group) = document.registry.get(group_id).unwrap() else {
+            panic!("group vanished");
+        };
+        assert_eq!(group.stack_mode, Some(MaskCombineMode::Subtract));
+
+        // So does the group itself.
+        SetMaskStackMode
+            .apply_json(
+                &mut document,
+                serde_json::json!({ "id": group_id, "mode": "intersect" }),
+            )
+            .unwrap();
+        let ObjectData::Group(group) = document.registry.get(group_id).unwrap() else {
+            panic!("group vanished");
+        };
+        assert_eq!(group.stack_mode, Some(MaskCombineMode::Intersect));
+
+        // A spelling the model does not know is a typed refusal, and
+        // the level keeps its mode.
+        let error = SetMaskStackMode
+            .apply_json(
+                &mut document,
+                serde_json::json!({ "id": group_id, "mode": "additive" }),
+            )
+            .unwrap_err();
+        assert!(
+            matches!(error, EngineError::BadPayload { .. }),
+            "an unknown mode is a bad payload: {error:?}"
+        );
+        let ObjectData::Group(group) = document.registry.get(group_id).unwrap() else {
+            panic!("group vanished");
+        };
+        assert_eq!(group.stack_mode, Some(MaskCombineMode::Intersect));
+    }
+
+    #[test]
     fn move_by_moves_mask_contents_move_content() {
         let (mut document, image_id) = image_document();
         AddMask
@@ -2293,6 +2432,7 @@ mod tests {
         // Shape-mask group over the image: path covering the left half.
         let path_id = document.registry.insert(square_path(0.0, 0.0, 4.0));
         let group_id = document.registry.insert(ObjectData::Group(GroupObject {
+            stack_mode: None,
             group_type: SHAPE_MASK,
             name: None,
             children: vec![path_id, image_id],

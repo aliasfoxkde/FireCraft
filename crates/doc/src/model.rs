@@ -1142,6 +1142,61 @@ impl TextObject {
     }
 }
 
+/// The `DCEv` key the mask stack's combine mode rides under inside a
+/// mask group's `DTAv` data node. Namespaced: CS6 authors may put
+/// their own `DCEv` entries in a group's data node (the dictionary
+/// lists `tooltips`, `radius1`, `radius0`, `alrtmsg`, `round0`), and a
+/// bare `mode` would be read out of one of those.
+pub const MASK_STACK_MODE_KEY: &str = "firecraft.mask.mode";
+
+/// How a mask level in a mask stack combines with the levels below it.
+/// FireCraft extension (decision 0091): CS6 has one element mask per
+/// object and no stack, so the mode rides in the mask group's data
+/// node under the [`MASK_STACK_MODE_KEY`] key.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum MaskCombineMode {
+    /// Union with the coverage below.
+    Add,
+    /// Cut this level's coverage out of the coverage below.
+    Subtract,
+    /// Keep only the overlap with the coverage below.
+    Intersect,
+    /// Show what this level's mask hides — the level's inverted
+    /// coverage stands in for the coverage below.
+    Invert,
+}
+
+impl MaskCombineMode {
+    /// Every mode, in panel order.
+    pub const ALL: [Self; 4] = [Self::Add, Self::Subtract, Self::Intersect, Self::Invert];
+
+    /// The wire spelling (the `DCVs` value under
+    /// [`MASK_STACK_MODE_KEY`]).
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Add => "add",
+            Self::Subtract => "subtract",
+            Self::Intersect => "intersect",
+            Self::Invert => "invert",
+        }
+    }
+
+    /// Parses a wire spelling; `None` for anything else, so a hostile
+    /// value canonicalizes to the default (the absent mode).
+    #[must_use]
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "add" => Some(Self::Add),
+            "subtract" => Some(Self::Subtract),
+            "intersect" => Some(Self::Intersect),
+            "invert" => Some(Self::Invert),
+            _ => None,
+        }
+    }
+}
+
 /// `GRPv` — a group, including mask-structured groups.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -1166,6 +1221,11 @@ pub struct GroupObject {
     /// dictionary defines as linked (`true` is never written);
     /// `Some(false)` = the content moves independently of the mask.
     pub mask_linked: Option<bool>,
+    /// The combine mode of this mask level inside its mask stack
+    /// (a `DCEv` entry under `DTAv`, keyed
+    /// [`MASK_STACK_MODE_KEY`]; FireCraft extension, decision 0091).
+    /// `None` = the default union ([`MaskCombineMode::Add`]).
+    pub stack_mode: Option<MaskCombineMode>,
     /// `EFLv`* — live effects, file order.
     pub effects: Vec<Effect>,
 }
