@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-FireCraft: a clean-room reimplementation of Adobe Fireworks CS6 in pure Rust (Apache-2.0 OR MIT), modeled on the StoryTold/ArtCraft projects (github.com/storytold — photocraft et al.). Primary release target is a **WASM build for the user's WebOS** (live at https://firecraft-web.pages.dev), plus a wide desktop/CLI release matrix. The reference application is Adobe Fireworks CS6 (v12.0).
+FireCraft: a clean-room reimplementation of Adobe Fireworks CS6 in pure Rust (Apache-2.0), modeled on the StoryTold/ArtCraft projects (github.com/storytold — photocraft et al.). Primary release target is a **WASM build for the user's WebOS** (live at https://firecraft-web.pages.dev), plus a wide desktop/CLI release matrix. The reference application is Adobe Fireworks CS6 (v12.0).
 
 **Status (2026-11-07 PR branch):** M0–M15 and the DOM verb-surface campaign are complete. The latest tag is v0.2.5; `main` remains at the documented 5fac7a2 baseline while PR #8 carries the current shell/editor work. The registry has 245 commands. The live menu census is **2 inert rows of 296**; 8 additional rows remain feature- or evidence-gated and must not be wired without a model/reference basis. The 19.6 wiring campaign is complete. Phase 22.1 (panel inventory) and 22.2 (tool strip) are complete; 22.5 (CS6 chrome) remains partial. Phase 20 is in progress (20.1 landed); Phase 21 is queued. Use `docs/TASKS.md` for the live task ledger, `docs/NEXT.md` for phase criteria, and `docs/PROGRESS.md` for the dated snapshot. Start with `AGENTS.md`, then the live task ledger:
 

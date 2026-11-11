@@ -166,7 +166,7 @@ Every release must include:
 - SBOM in SPDX JSON and/or CycloneDX JSON, generated from locked dependency graphs and packaged native dependencies where tooling permits. Clearly state coverage boundaries.
 - Build provenance/attestation linking artifact digest to repository, tag, workflow, runner, and source commit (GitHub artifact attestations/SLSA provenance if available).
 - Detached signatures for checksums/manifest and signed native executables/installers where supported.
-- License/notice bundle for MIT OR Apache-2.0 and all third-party dependencies/assets. Re-run license gate.
+- License/notice bundle for Apache-2.0 and all third-party dependencies/assets. Re-run license gate.
 - No credentials, signing keys, tokens, keystores, provisioning profiles, or private configuration in artifacts or logs.
 - Pin third-party GitHub Actions by full commit SHA for release workflows. Use least-privilege workflow permissions, protected environments for signing/publishing, and artifact retention/immutability where available.
 - Treat unsigned builds as prerelease/test artifacts. Never imply that checksums alone establish publisher authenticity.

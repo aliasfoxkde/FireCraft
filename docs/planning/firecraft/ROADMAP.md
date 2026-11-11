@@ -18,7 +18,7 @@ installed, before any Fireworks code exists.
 
 - Workspace scaffold: `crates/` `apps/` `xtask/` `web/` `docs/` `assets/`
   `packaging/`; edition 2024; workspace lints (`unsafe_code = "forbid"`,
-  no-unwrap/panic policy); MIT OR Apache-2.0 dual license + `NOTICE` +
+  no-unwrap/panic policy); Apache-2.0 license + `NOTICE` +
   trademark disclaimer in README.
 - `xtask` with gates: `layers` (dependency-direction enforcement),
   `wasm` (workspace builds for `wasm32-unknown-unknown`; headless test

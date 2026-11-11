@@ -60,7 +60,7 @@ impl Shell {
                 };
             }
             ui.add_space(6.0);
-            ui.weak("Dual-licensed under Apache-2.0 OR MIT.");
+            ui.weak("Licensed under Apache-2.0.");
             ui.add_space(4.0);
             if ui.button("Close").clicked() {
                 self.about_open = false;

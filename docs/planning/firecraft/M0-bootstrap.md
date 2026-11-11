@@ -22,10 +22,12 @@ decision note in `docs/decisions/`.
    path deps). Members: `crates/*`, `xtask`. Dir skeleton: `crates/`,
    `xtask/`, `web/`, `assets/`, `packaging/`, `docs/decisions/`,
    `docs/research/` (exists). **Stopping condition:** `cargo metadata` clean.
-2. **License switch** — add `LICENSE-MIT`, keep Apache-2.0 as
-   `LICENSE-APACHE`, root `LICENSE` → pointer/dual-license text, `NOTICE`
-   with Adobe trademark disclaimer, README disclaimer paragraph.
-   **Verification:** `cargo` manifests declare `license = "MIT OR Apache-2.0"`.
+2. **License** — ship Apache-2.0 as the sole license: the root
+   `LICENSE` holds the Apache-2.0 text, `NOTICE` carries the Adobe
+   trademark disclaimer, and the README disclaimer paragraph.
+   (The original plan added `LICENSE-MIT` and dual-licensing; the
+   maintainer narrowed it to Apache-2.0 alone on 2026-11-10.)
+   **Verification:** `cargo` manifests declare `license = "Apache-2.0"`.
 3. **`fwpng` crate skeleton** — standalone, zero workspace deps; manifest
    only + module layout (`chunk`, `nodetree`, `thumbnail`, `tile`) each with
    a real smoke test (e.g. chunk CRC round-trip, tiny node-tree encode/decode
