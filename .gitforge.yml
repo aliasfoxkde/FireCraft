@@ -137,7 +137,7 @@ jobs:
     image: firecraft-ci-rust:1
     needs: [fuzz]
     steps:
-      - name: Parity floors + scorecard + stamp check, then drift check
+      - name: Parity floors + scorecard + stamps + reachability + panel snapshot, then drift check
         # The committed generated docs must byte-equal what the gates
         # produce: copies are taken before regenerating, and cmp fails
         # the job on any hand-edit (git is not assumed in the checkout).
@@ -154,6 +154,14 @@ jobs:
         # `xtask stamps` is the git-free half of that verb: the license
         # and version stamp checks, which the changelog verb used to run
         # after a step that had already died.
+        #
+        # `reachability` and `panel-snapshot` are the two gates that used
+        # to exist only inside the local `xtask ci` list, so nothing in
+        # CI enforced them. They are measured against committed
+        # baselines (`.reachability-floor.tsv`, `crates/app/panels.snapshot`),
+        # and both are rising-only or byte-exact: the pipeline is the
+        # authoritative measurement oracle for the shell's coverage of
+        # the command registry and for the CS6 panel inventory.
         run: |
           set -e
           cp docs/planning/generated/parity.md /tmp/parity.committed
@@ -161,6 +169,8 @@ jobs:
           CARGO_TARGET_DIR=/tmp/ci-target cargo run --locked -p xtask -- parity
           CARGO_TARGET_DIR=/tmp/ci-target cargo run --locked -p xtask -- scorecard
           CARGO_TARGET_DIR=/tmp/ci-target cargo run --locked -p xtask -- stamps
+          CARGO_TARGET_DIR=/tmp/ci-target cargo run --locked -p xtask -- reachability
+          CARGO_TARGET_DIR=/tmp/ci-target cargo run --locked -p xtask -- panel-snapshot
           cmp /tmp/parity.committed docs/planning/generated/parity.md
           cmp /tmp/scorecard.committed docs/planning/generated/scorecard.md
     timeout: 20m
