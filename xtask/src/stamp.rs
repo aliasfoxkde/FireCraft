@@ -82,12 +82,8 @@ fn member_version(manifest: &Path) -> Result<Option<String>, String> {
 fn workspace_version(root: &Path) -> Result<String, String> {
     let manifest = root.join("Cargo.toml");
     let text = read(&manifest)?;
-    section_value(&text, "workspace.package", "version")?.ok_or_else(|| {
-        format!(
-            "{} has no [workspace.package] version",
-            manifest.display()
-        )
-    })
+    section_value(&text, "workspace.package", "version")?
+        .ok_or_else(|| format!("{} has no [workspace.package] version", manifest.display()))
 }
 
 /// The workspace members, from the root manifest's `members` list.
@@ -97,16 +93,15 @@ fn workspace_version(root: &Path) -> Result<String, String> {
 fn members(root: &Path) -> Result<Vec<Member>, String> {
     let manifest = root.join("Cargo.toml");
     let text = read(&manifest)?;
-    let patterns = workspace_members(&text).ok_or_else(|| {
-        format!("{} has no [workspace] members list", manifest.display())
-    })?;
+    let patterns = workspace_members(&text)
+        .ok_or_else(|| format!("{} has no [workspace] members list", manifest.display()))?;
     let mut found = Vec::new();
     for pattern in patterns {
         let mut paths: Vec<PathBuf> = Vec::new();
         if let Some(prefix) = pattern.strip_suffix("/*") {
             let dir = root.join(prefix);
-            let entries = std::fs::read_dir(&dir)
-                .map_err(|e| format!("read {}: {e}", dir.display()))?;
+            let entries =
+                std::fs::read_dir(&dir).map_err(|e| format!("read {}: {e}", dir.display()))?;
             for entry in entries {
                 let entry = entry.map_err(|e| format!("read {}: {e}", dir.display()))?;
                 let candidate = entry.path().join("Cargo.toml");
@@ -122,11 +117,12 @@ fn members(root: &Path) -> Result<Vec<Member>, String> {
                 return Err(format!("{} is missing", path.display()));
             }
             let body = read(&path)?;
-            let name = section_value(&body, "package", "name")?.ok_or_else(|| {
-                format!("{} has no [package] name", path.display())
-            })?;
+            let name = section_value(&body, "package", "name")?
+                .ok_or_else(|| format!("{} has no [package] name", path.display()))?;
             found.push(Member {
-                dir: path.parent().map_or_else(|| root.to_path_buf(), Path::to_path_buf),
+                dir: path
+                    .parent()
+                    .map_or_else(|| root.to_path_buf(), Path::to_path_buf),
                 name,
                 manifest: path,
             });
@@ -156,12 +152,12 @@ fn lock_versions(root: &Path, local: &[String]) -> Result<BTreeMap<String, Strin
 fn locked_versions(text: &str, local: &[String]) -> BTreeMap<String, String> {
     let mut versions = BTreeMap::new();
     for block in text.split("[[package]]").skip(1) {
-        let name = field(block, "name");
-        let version = field(block, "version");
-        let source = field(block, "source");
+        let name = toml_field(block, "name");
+        let version = toml_field(block, "version");
+        let source = toml_field(block, "source");
         if let (Some(name), Some(version)) = (name, version)
             && source.is_none()
-            && local.iter().any(|local_name| local_name == name)
+            && local.contains(&name)
         {
             versions.insert(name, version);
         }
@@ -503,7 +499,9 @@ pub fn verify() -> Result<(), String> {
 fn lock_reference_drifts(text: &str) -> Vec<String> {
     let mut packages: BTreeSet<(String, String)> = BTreeSet::new();
     for block in text.split("[[package]]").skip(1) {
-        if let (Some(name), Some(version)) = (field(block, "name"), field(block, "version")) {
+        if let (Some(name), Some(version)) =
+            (toml_field(block, "name"), toml_field(block, "version"))
+        {
             packages.insert((name, version));
         }
     }
@@ -511,7 +509,9 @@ fn lock_reference_drifts(text: &str) -> Vec<String> {
     let mut drifts = Vec::new();
     for line in text.lines() {
         let trimmed = line.trim();
-        let Some(inner) = trimmed.strip_prefix('"').and_then(|rest| rest.strip_suffix('",'))
+        let Some(inner) = trimmed
+            .strip_prefix('"')
+            .and_then(|rest| rest.strip_suffix("\","))
         else {
             continue;
         };
@@ -519,7 +519,9 @@ fn lock_reference_drifts(text: &str) -> Vec<String> {
             continue;
         };
         if !packages.contains(&(name.to_owned(), version.to_owned())) {
-            drifts.push(format!("Cargo.lock: reference \"{name} {version}\" names no package"));
+            drifts.push(format!(
+                "Cargo.lock: reference \"{name} {version}\" names no package"
+            ));
         }
     }
     drifts
@@ -529,15 +531,15 @@ fn lock_reference_drifts(text: &str) -> Vec<String> {
 /// pre-release and build suffix). A stamp that is not a version makes
 /// every artifact name it produces meaningless.
 fn check_version(version: &str) -> Result<(), String> {
-    let core = version
-        .split_once('-')
-        .map_or(version, |(core, _)| core);
+    let core = version.split_once('-').map_or(version, |(core, _)| core);
     let core = core.split_once('+').map_or(core, |(core, _)| core);
     let parts: Vec<&str> = core.split('.').collect();
-    if parts.len() != 3 || parts.iter().any(|part| part.is_empty() || !part.chars().all(|c| c.is_ascii_digit())) {
-        return Err(format!(
-            "version {version:?} is not MAJOR.MINOR.PATCH"
-        ));
+    if parts.len() != 3
+        || parts
+            .iter()
+            .any(|part| part.is_empty() || !part.chars().all(|c| c.is_ascii_digit()))
+    {
+        return Err(format!("version {version:?} is not MAJOR.MINOR.PATCH"));
     }
     Ok(())
 }
@@ -566,9 +568,7 @@ fn section_value(text: &str, section: &str, key: &str) -> Result<Option<String>,
             inside = trimmed == format!("[{section}]");
             continue;
         }
-        if inside
-            && let Some(value) = trimmed.strip_prefix(&format!("{key} = "))
-        {
+        if inside && let Some(value) = trimmed.strip_prefix(&format!("{key} = ")) {
             return Ok(Some(unquote(value)));
         }
     }
@@ -584,9 +584,7 @@ fn workspace_members(text: &str) -> Option<Vec<String>> {
             inside = trimmed == "[workspace]";
             continue;
         }
-        if inside
-            && let Some(rest) = trimmed.strip_prefix("members = ")
-        {
+        if inside && let Some(rest) = trimmed.strip_prefix("members = ") {
             let rest = rest.trim();
             let rest = rest.strip_prefix('[')?.strip_suffix(']')?;
             return Some(
@@ -616,13 +614,29 @@ fn field(text: &str, key: &str) -> Option<String> {
     })
 }
 
+/// A `key = "value"` entry's value in a TOML document.
+///
+/// The lock is TOML, and the DEB control file is not, so the two
+/// spellings are read separately: this one insists on the `=`
+/// separator, so a key that merely shares a prefix with another
+/// (`name` against `names`) is not mistaken for the field.
+fn toml_field(text: &str, key: &str) -> Option<String> {
+    for line in text.lines() {
+        let trimmed = line.trim();
+        let Some(rest) = trimmed.strip_prefix(key) else {
+            continue;
+        };
+        let Some(rest) = rest.trim_start().strip_prefix('=') else {
+            continue;
+        };
+        return Some(unquote(rest.trim().trim_end_matches(',')));
+    }
+    None
+}
+
 /// Strips the quotes from a TOML string value.
 fn unquote(value: &str) -> String {
-    value
-        .trim()
-        .trim_matches('"')
-        .trim()
-        .to_owned()
+    value.trim().trim_matches('"').trim().to_owned()
 }
 
 /// Rewrites `key = "…"` inside `[section]`, leaving the rest of the
@@ -642,10 +656,7 @@ fn replace_section_value(
         if trimmed.starts_with('[') {
             inside = trimmed == header;
         }
-        if inside
-            && !replaced
-            && let Some(rest) = trimmed.strip_prefix(&format!("{key} = "))
-        {
+        if inside && !replaced && trimmed.strip_prefix(&format!("{key} = ")).is_some() {
             let indent = &line[..line.len() - line.trim_start().len()];
             out.push_str(&format!("{indent}{key} = \"{value}\"\n"));
             replaced = true;
@@ -734,10 +745,13 @@ fn rewrite_lock_block(
     version: &str,
     replaced: &mut usize,
 ) -> String {
-    let name = field(block, "name");
-    let is_local = name
-        .as_ref()
-        .is_some_and(|name| local.iter().any(|local_name| local_name == name));
+    let name = toml_field(block, "name");
+    // A workspace package is the entry with no `source` line. The
+    // local `color` and the registry `color` share a name, so the
+    // name alone does not tell them apart — and rewriting the
+    // registry one's version would corrupt the lock.
+    let is_local = toml_field(block, "source").is_none()
+        && name.as_ref().is_some_and(|name| local.contains(name));
     let mut out = String::with_capacity(block.len());
     let mut done = false;
     let mut in_dependencies = false;
@@ -755,9 +769,7 @@ fn rewrite_lock_block(
             *replaced += 1;
             continue;
         }
-        if in_dependencies
-            && let Some(reference) = rewrite_reference(line, locked, version)
-        {
+        if in_dependencies && let Some(reference) = rewrite_reference(line, locked, version) {
             out.push_str(&reference);
             out.push('\n');
             continue;
@@ -783,7 +795,7 @@ fn rewrite_reference(
     let trimmed = line.trim();
     let inner = trimmed
         .strip_prefix('"')
-        .and_then(|rest| rest.strip_suffix('",'))?;
+        .and_then(|rest| rest.strip_suffix("\","))?;
     let (name, referenced) = inner.split_once(' ')?;
     let recorded = locked.get(name)?;
     if referenced != recorded {
@@ -811,16 +823,15 @@ edition = \"2024\"
 
     #[test]
     fn reads_the_workspace_version() {
-        let version = section_value(MANIFEST, "workspace.package", "version")
-            .expect("section value");
+        let version =
+            section_value(MANIFEST, "workspace.package", "version").expect("section value");
         assert_eq!(version.as_deref(), Some("0.2.5"));
     }
 
     #[test]
     fn a_key_in_another_section_is_not_picked_up() {
         let manifest = "[package]\nversion = \"1.2.3\"\n\n[dependencies]\nversion = \"4.5.6\"\n";
-        let version = section_value(manifest, "package", "version")
-            .expect("section value");
+        let version = section_value(manifest, "package", "version").expect("section value");
         assert_eq!(version.as_deref(), Some("1.2.3"));
     }
 
@@ -851,8 +862,8 @@ name = \"serde\"
 version = \"1.0.0\"
 source = \"registry+https://github.com/rust-lang/crates.io-index\"
 ";
-        let updated = rewrite_lock(lock, &["engine".to_owned()], "0.2.6")
-            .expect("rewrite the lock");
+        let updated =
+            rewrite_lock(lock, &["engine".to_owned()], "0.2.6").expect("rewrite the lock");
         assert!(updated.contains("name = \"engine\"\nversion = \"0.2.6\""));
         assert!(updated.contains("name = \"serde\"\nversion = \"1.0.0\""));
     }
@@ -923,12 +934,11 @@ compose = { version = \"0.2.5\", path = \"../crates/compose\" }
 flate2 = { version = \"1\", default-features = false }
 other = { version = \"0.2.5\", path = \"../elsewhere/other\" }
 ";
-        let resolve = |path: &str| {
-            (path == "../crates/compose").then(|| "compose".to_owned())
-        };
-        let updated =
-            rewrite_path_requirements(manifest, &resolve, "0.2.6").expect("rewrite");
-        assert!(updated.contains("compose = { version = \"0.2.6\", path = \"../crates/compose\" }"));
+        let resolve = |path: &str| (path == "../crates/compose").then(|| "compose".to_owned());
+        let updated = rewrite_path_requirements(manifest, &resolve, "0.2.6").expect("rewrite");
+        assert!(
+            updated.contains("compose = { version = \"0.2.6\", path = \"../crates/compose\" }")
+        );
         // The registry dependency keeps its own requirement, and so
         // does the path that leaves the workspace.
         assert!(updated.contains("flate2 = { version = \"1\", default-features = false }"));
@@ -975,6 +985,46 @@ source = \"registry+https://github.com/rust-lang/crates.io-index\"
         assert!(updated.contains(" \"color 0.2.6\","));
         assert!(updated.contains(" \"compose\","));
         assert!(updated.contains("name = \"color\"\nversion = \"0.3.3\""));
+    }
+
+    #[test]
+    fn a_pre_release_stamp_reaches_the_requirement_and_the_reference() {
+        // The rehearsal stamp is a pre-release, and it is the case
+        // that broke the published archive: a caret requirement on
+        // `0.2.5` does not match `0.2.5-dryrun.3`, and the lock's
+        // references carry the version only because two versions of
+        // the same name live in it. Both have to move.
+        let manifest = "\
+[dependencies]
+compose = { version = \"0.2.5\", path = \"../crates/compose\" }
+";
+        let resolve = |path: &str| (path == "../crates/compose").then(|| "compose".to_owned());
+        let updated =
+            rewrite_path_requirements(manifest, &resolve, "0.2.5-dryrun.3").expect("rewrite");
+        assert!(updated.contains("version = \"0.2.5-dryrun.3\""));
+
+        let lock = "\
+[[package]]
+name = \"app\"
+version = \"0.2.5\"
+dependencies = [
+ \"color 0.2.5\",
+]
+
+[[package]]
+name = \"color\"
+version = \"0.2.5\"
+";
+        let updated = rewrite_lock(
+            lock,
+            &["app".to_owned(), "color".to_owned()],
+            "0.2.5-dryrun.3",
+        )
+        .expect("rewrite the lock");
+        assert!(updated.contains(" \"color 0.2.5-dryrun.3\","));
+        assert!(updated.contains("name = \"color\"\nversion = \"0.2.5-dryrun.3\""));
+        // The lock still describes itself.
+        assert!(lock_reference_drifts(&updated).is_empty());
     }
 
     #[test]
