@@ -46,7 +46,8 @@ document rather than guess at its shape.
 ## The asset set
 
 The manifest describes the published release asset set — the eight files the
-release attaches. The set is a fixed table in the generator, not a scan of the
+release attaches beside the manifest itself. The set is a fixed table in the
+generator, not a scan of the
 output directory: the release names every asset explicitly (a glob such as
 `firecraft-web-*.zip` picks up older versions left in `dist/`), and a scan
 would let a stale file into the manifest.
