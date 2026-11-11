@@ -1261,6 +1261,465 @@ fn which(name: &str) -> bool {
         .is_some_and(|paths| std::env::split_paths(&paths).any(|dir| dir.join(name).is_file()))
 }
 
+// ---------------------------------------------------------------------------
+// Release manifest (T27-54)
+// ---------------------------------------------------------------------------
+
+/// Schema identifier of the release manifest. A consumer that does not
+/// recognise this string must refuse the document rather than guess at
+/// its shape.
+pub const MANIFEST_SCHEMA: &str = "firecraft.release-manifest/1";
+
+/// The manifest's file name inside the release output directory.
+pub const MANIFEST_FILE_NAME: &str = "release-manifest.json";
+
+/// Verification status of an artifact whose digest was corroborated by
+/// an independently recorded checksum list.
+const VERIFICATION_VERIFIED: &str = "verified";
+
+/// Verification status of an artifact whose digest the generator
+/// computed itself, with no recorded list covering it.
+const VERIFICATION_COMPUTED: &str = "computed";
+
+/// Target triple recorded for artifacts that are not platform-specific
+/// (the source archive, the SBOM, the checksum lists).
+const TARGET_ANY: &str = "any";
+
+/// The recorded checksum lists the generator corroborates digests
+/// against, as paths relative to the release output directory.
+const CHECKSUM_LISTS: &[&str] = &[
+    "RELEASE_SHA256.txt",
+    "native/MANIFEST.sha256",
+    "web/MANIFEST.sha256",
+];
+
+/// One published release asset.
+struct ArtifactSpec {
+    /// Canonical published name — the asset's basename, which is how a
+    /// release names it.
+    name: String,
+    /// Path relative to the release output directory.
+    rel_path: String,
+    /// Package format.
+    format: &'static str,
+    /// Target triple the artifact was built for.
+    target: &'static str,
+}
+
+/// The build-time facts a manifest records about the run that produced
+/// it.
+///
+/// The environment, the git checkout and the clock are read once at the
+/// edge — in [`manifest_context`] — and handed to the generator as
+/// data. The generator is therefore a pure function of its inputs, and
+/// the same inputs produce the same manifest bytes.
+struct ManifestContext {
+    /// Workspace version the artifacts carry.
+    version: String,
+    /// Release tag the artifacts were cut from — absent when the build
+    /// was not made from a tagged commit.
+    tag: Option<String>,
+    /// Git revision the artifacts were built from.
+    source_sha: String,
+    /// Workflow run URL — absent outside CI.
+    run_url: Option<String>,
+    /// Workflow run id — absent outside CI.
+    run_id: Option<String>,
+    /// UTC build timestamp — the one field that is build-time data by
+    /// definition.
+    built_at: String,
+}
+
+/// The published release asset set for `version`.
+///
+/// This is a fixed table, not a scan of the output directory. The
+/// release names every asset explicitly — the workflow names each file
+/// rather than globbing, because a glob such as `firecraft-web-*.zip`
+/// picks up older versions left in `dist/` — and a scan would let a
+/// stale file into the manifest.
+fn release_specs(version: &str) -> Vec<ArtifactSpec> {
+    vec![
+        ArtifactSpec {
+            name: format!("firecraft-{version}-linux-x86_64.tar.gz"),
+            rel_path: format!("native/firecraft-{version}-linux-x86_64.tar.gz"),
+            format: "tar.gz",
+            target: "x86_64-unknown-linux-gnu",
+        },
+        ArtifactSpec {
+            name: format!("firecraft-cli-{version}-linux-x86_64.tar.gz"),
+            rel_path: format!("native/firecraft-cli-{version}-linux-x86_64.tar.gz"),
+            format: "tar.gz",
+            target: "x86_64-unknown-linux-gnu",
+        },
+        ArtifactSpec {
+            name: format!("firecraft_{version}_amd64.deb"),
+            rel_path: format!("native/firecraft_{version}_amd64.deb"),
+            format: "deb",
+            target: "x86_64-unknown-linux-gnu",
+        },
+        ArtifactSpec {
+            name: "MANIFEST.sha256".to_owned(),
+            rel_path: "native/MANIFEST.sha256".to_owned(),
+            format: "sha256",
+            target: "x86_64-unknown-linux-gnu",
+        },
+        ArtifactSpec {
+            name: format!("firecraft-web-{version}.zip"),
+            rel_path: format!("firecraft-web-{version}.zip"),
+            format: "zip",
+            target: "wasm32-unknown-unknown",
+        },
+        ArtifactSpec {
+            name: format!("FireCraft-{version}-source.tar.gz"),
+            rel_path: format!("source/FireCraft-{version}-source.tar.gz"),
+            format: "tar.gz",
+            target: TARGET_ANY,
+        },
+        ArtifactSpec {
+            name: format!("firecraft-{version}-sbom.cdx.json"),
+            rel_path: format!("sbom/firecraft-{version}-sbom.cdx.json"),
+            format: "json",
+            target: TARGET_ANY,
+        },
+        ArtifactSpec {
+            name: "RELEASE_SHA256.txt".to_owned(),
+            rel_path: "RELEASE_SHA256.txt".to_owned(),
+            format: "sha256",
+            target: TARGET_ANY,
+        },
+    ]
+}
+
+/// Parses a `sha256sum`-format list into `file name -> digest`.
+///
+/// The format is one `<digest>  <name>` line per file; `#` starts a
+/// comment. A line that does not parse is an error, never a silently
+/// skipped entry: a release whose checksum list is broken must not
+/// produce a manifest that claims its assets are verified.
+fn parse_checksum_list(text: &str, list_name: &str) -> Result<BTreeMap<String, String>, String> {
+    let mut entries = BTreeMap::new();
+    for (index, line) in text.lines().enumerate() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let mut fields = line.split_whitespace();
+        let digest = fields
+            .next()
+            .ok_or_else(|| format!("{list_name}:{}: empty entry", index + 1))?;
+        let name = fields
+            .next()
+            .ok_or_else(|| format!("{list_name}:{}: no file name after the digest", index + 1))?;
+        if digest.len() != 64 || !digest.chars().all(|c| c.is_ascii_hexdigit()) {
+            return Err(format!(
+                "{list_name}:{}: not a SHA-256 digest: {digest}",
+                index + 1
+            ));
+        }
+        if fields.next().is_some() {
+            return Err(format!(
+                "{list_name}:{}: unexpected text after the file name",
+                index + 1
+            ));
+        }
+        // `sha256sum` marks binary-mode entries with a leading `*`.
+        let name = name.strip_prefix('*').unwrap_or(name);
+        entries.insert(name.to_owned(), digest.to_ascii_lowercase());
+    }
+    Ok(entries)
+}
+
+/// Loads the recorded checksum lists that exist in the release output
+/// directory.
+///
+/// A list that exists but does not parse fails the run: the manifest
+/// must not describe a release whose own checksum list is broken.
+fn load_checksum_lists(root: &Path) -> Result<Vec<(String, BTreeMap<String, String>)>, String> {
+    let mut lists = Vec::new();
+    for rel in CHECKSUM_LISTS {
+        let path = root.join(rel);
+        if !path.is_file() {
+            continue;
+        }
+        let text = std::fs::read_to_string(&path).map_err(|e| format!("read {rel}: {e}"))?;
+        lists.push(((*rel).to_owned(), parse_checksum_list(&text, rel)?));
+    }
+    Ok(lists)
+}
+
+/// The SHA-256 digest and byte size of a file.
+///
+/// The digest comes from [`sha256_hex_file`], the same helper the
+/// release manifests themselves use, so the manifest records the same
+/// digest form as the rest of the release path.
+fn digest_and_size(path: &Path) -> Result<(String, u64), String> {
+    let digest = sha256_hex_file(path)?;
+    let size = std::fs::metadata(path)
+        .map_err(|e| format!("stat {}: {e}", path.display()))?
+        .len();
+    Ok((digest, size))
+}
+
+/// Builds the manifest document for a release tree.
+///
+/// Fail-closed by design: a missing artifact, an empty artifact, a
+/// checksum list that does not parse, or a file whose digest disagrees
+/// with a recorded list all fail the run. A manifest that claims a
+/// release the build cannot prove is worse than no manifest at all.
+fn build_manifest(
+    root: &Path,
+    specs: &[ArtifactSpec],
+    ctx: &ManifestContext,
+) -> Result<serde_json::Value, String> {
+    let lists = load_checksum_lists(root)?;
+    let mut entries: Vec<(String, serde_json::Value)> = Vec::with_capacity(specs.len());
+    for spec in specs {
+        let path = root.join(&spec.rel_path);
+        if !path.is_file() {
+            return Err(format!("release artifact missing: {}", spec.name));
+        }
+        let (digest, size) = digest_and_size(&path)?;
+        if size == 0 {
+            return Err(format!("release artifact is empty: {}", spec.name));
+        }
+        let mut verification = VERIFICATION_COMPUTED;
+        for (list_name, recorded) in &lists {
+            if let Some(expected) = recorded.get(&spec.name) {
+                if expected != &digest {
+                    return Err(format!(
+                        "digest mismatch for {}: {list_name} records {expected}, \
+                         the file hashes to {digest}",
+                        spec.name
+                    ));
+                }
+                verification = VERIFICATION_VERIFIED;
+            }
+        }
+        let value = serde_json::json!({
+            "format": spec.format,
+            "name": spec.name,
+            "path": spec.rel_path,
+            "sha256": digest,
+            "size": size,
+            "source_sha": ctx.source_sha,
+            "target": spec.target,
+            "verification": verification,
+        });
+        entries.push((spec.name.clone(), value));
+    }
+    // The artifact array is sorted by name, so the document does not
+    // depend on the order the table happens to be written in.
+    entries.sort_by(|left, right| left.0.cmp(&right.0));
+    let artifacts: Vec<serde_json::Value> = entries.into_iter().map(|(_, value)| value).collect();
+    Ok(serde_json::json!({
+        "artifacts": artifacts,
+        "built_at": ctx.built_at,
+        "run_id": ctx.run_id,
+        "run_url": ctx.run_url,
+        "schema": MANIFEST_SCHEMA,
+        "source_sha": ctx.source_sha,
+        "tag": ctx.tag,
+        "version": ctx.version,
+    }))
+}
+
+/// Renders the manifest document: pretty-printed JSON with a trailing
+/// newline.
+///
+/// Object keys are sorted and the artifact array is sorted by name, so
+/// the same inputs always produce the same bytes.
+fn render_manifest(value: &serde_json::Value) -> Result<String, String> {
+    let mut text =
+        serde_json::to_string_pretty(value).map_err(|e| format!("render the manifest: {e}"))?;
+    text.push('\n');
+    Ok(text)
+}
+
+/// Reads the build-time facts from the environment, git and the clock.
+///
+/// This is the edge — the only place that touches process-global state.
+/// Everything downstream takes the values as data, so the generator can
+/// be exercised in a test without touching the environment.
+fn manifest_context(version: &str) -> Result<ManifestContext, String> {
+    let root = workspace_root();
+    let source_sha = git_value(&root, &["rev-parse", "HEAD"])?.ok_or_else(|| {
+        "could not read the source revision: `git rev-parse HEAD` failed".to_owned()
+    })?;
+    // A git tag on the commit is the authoritative tag. The CI ref
+    // name is the fallback for a checkout that did not fetch tags; it
+    // only counts when it names this version, because on a branch
+    // build the ref name is a branch, not a release.
+    let git_tag = git_value(&root, &["describe", "--tags", "--exact-match", "HEAD"])?;
+    if let Some(tag) = &git_tag {
+        let tagged = tag.strip_prefix('v').unwrap_or(tag.as_str());
+        if tagged != version {
+            return Err(format!(
+                "release tag {tag} does not carry the workspace version {version} — \
+                 the tree and the tag disagree about what is being released"
+            ));
+        }
+    }
+    let tag = git_tag.or_else(|| {
+        env_value("GITHUB_REF_NAME")
+            .filter(|name| name.strip_prefix('v').unwrap_or(name.as_str()) == version)
+    });
+    Ok(ManifestContext {
+        version: version.to_owned(),
+        tag,
+        source_sha,
+        run_url: env_value("GITHUB_RUN_URL"),
+        run_id: env_value("GITHUB_RUN_ID"),
+        built_at: build_timestamp(),
+    })
+}
+
+/// Runs a git command in `root` and returns its trimmed stdout.
+///
+/// `None` means the command produced no output — a commit that carries
+/// no tag, for instance. A git that cannot be spawned at all is an
+/// error: the manifest's source revision cannot be invented.
+fn git_value(root: &Path, args: &[&str]) -> Result<Option<String>, String> {
+    let (stdout, _stderr) = crate::util::capture_in(Some(root), "git", args)?;
+    let trimmed = stdout.trim();
+    Ok(if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed.to_owned())
+    })
+}
+
+/// A non-empty environment value, or `None`.
+fn env_value(name: &str) -> Option<String> {
+    std::env::var(name)
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+}
+
+/// Writes the machine-readable release manifest next to the artifacts
+/// (T27-54).
+///
+/// The manifest describes the complete published asset set: every
+/// artifact's canonical name, path relative to the output directory,
+/// byte size, SHA-256 digest, package format, target triple and
+/// verification status — plus the version, tag, source revision, run
+/// URL and build timestamp of the run that produced it.
+///
+/// It is written into the release output directory, `dist/`, next to
+/// the artifacts it describes. The build-time facts are read once, at
+/// the edge, and passed in as data; the manifest bytes are therefore a
+/// pure function of the artifact set and those facts.
+pub fn manifest() -> Result<(), String> {
+    let version = workspace_version()?;
+    let out = workspace_root().join("dist");
+    let ctx = manifest_context(&version)?;
+    let specs = release_specs(&version);
+    let value = build_manifest(&out, &specs, &ctx)?;
+    let text = render_manifest(&value)?;
+    let path = out.join(MANIFEST_FILE_NAME);
+    std::fs::write(&path, &text).map_err(|e| format!("write {}: {e}", path.display()))?;
+    eprintln!(
+        "[xtask] dist manifest: {} artifact(s) -> {}",
+        specs.len(),
+        path.display()
+    );
+    Ok(())
+}
+
+/// Verifies `dist/release-manifest.json` against the files on disk.
+///
+/// Every artifact the manifest lists must exist with the recorded size
+/// and digest, and every published artifact must be listed: a manifest
+/// that omits an asset is as wrong as one that misdescribes it.
+pub fn verify_manifest() -> Result<(), String> {
+    let version = workspace_version()?;
+    let out = workspace_root().join("dist");
+    verify_manifest_at(&out, &release_specs(&version), &version)
+}
+
+/// The manifest verification, against a given release tree.
+fn verify_manifest_at(root: &Path, specs: &[ArtifactSpec], version: &str) -> Result<(), String> {
+    let path = root.join(MANIFEST_FILE_NAME);
+    let text =
+        std::fs::read_to_string(&path).map_err(|e| format!("read {}: {e}", path.display()))?;
+    let value: serde_json::Value =
+        serde_json::from_str(&text).map_err(|e| format!("parse {}: {e}", path.display()))?;
+    // The document is read with `get`, never by indexing: a manifest
+    // whose root is not an object must be rejected with an error, not
+    // panic on the index.
+    let schema = value
+        .get("schema")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or_default();
+    if schema != MANIFEST_SCHEMA {
+        return Err(format!(
+            "{MANIFEST_FILE_NAME} carries an unknown schema: {schema}"
+        ));
+    }
+    let described = value
+        .get("version")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or_default();
+    if described != version {
+        return Err(format!(
+            "{MANIFEST_FILE_NAME} describes version {described}, the workspace is {version}"
+        ));
+    }
+    let artifacts = value
+        .get("artifacts")
+        .and_then(serde_json::Value::as_array)
+        .ok_or_else(|| format!("{MANIFEST_FILE_NAME} has no artifact array"))?;
+    let mut listed: Vec<&str> = Vec::with_capacity(artifacts.len());
+    for entry in artifacts {
+        let name = entry
+            .get("name")
+            .and_then(serde_json::Value::as_str)
+            .ok_or_else(|| format!("{MANIFEST_FILE_NAME}: an artifact has no name"))?;
+        let rel = entry
+            .get("path")
+            .and_then(serde_json::Value::as_str)
+            .ok_or_else(|| format!("{MANIFEST_FILE_NAME}: {name} has no path"))?;
+        let expected_sha = entry
+            .get("sha256")
+            .and_then(serde_json::Value::as_str)
+            .ok_or_else(|| format!("{MANIFEST_FILE_NAME}: {name} has no sha256"))?;
+        let expected_size = entry
+            .get("size")
+            .and_then(serde_json::Value::as_u64)
+            .ok_or_else(|| format!("{MANIFEST_FILE_NAME}: {name} has no size"))?;
+        let file = root.join(rel);
+        if !file.is_file() {
+            return Err(format!("release artifact missing: {name}"));
+        }
+        let (digest, size) = digest_and_size(&file)?;
+        if digest != expected_sha {
+            return Err(format!(
+                "digest mismatch for {name}: the manifest records {expected_sha}, \
+                 the file hashes to {digest}"
+            ));
+        }
+        if size != expected_size {
+            return Err(format!(
+                "size mismatch for {name}: the manifest records {expected_size} B, \
+                 the file is {size} B"
+            ));
+        }
+        listed.push(name);
+    }
+    for spec in specs {
+        if !listed.contains(&spec.name.as_str()) {
+            return Err(format!("the release manifest does not list {}", spec.name));
+        }
+    }
+    for name in listed {
+        if !specs.iter().any(|spec| spec.name == name) {
+            return Err(format!(
+                "the release manifest lists {name}, which is not a published artifact"
+            ));
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod sbom_tests {
     #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
@@ -1449,5 +1908,354 @@ Depends: libc6 (>= 2.36)
         let opaque = "DYNAMIC SYMBOL TABLE:\n0000     DF *UND*  0000   ?   mystery_symbol\n";
         assert_eq!(max_glibc_requirement(opaque), None);
         assert!(has_dynamic_symbols(opaque));
+    }
+}
+
+#[cfg(test)]
+mod manifest_tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+    use super::{
+        ArtifactSpec, MANIFEST_FILE_NAME, MANIFEST_SCHEMA, ManifestContext, VERIFICATION_COMPUTED,
+        VERIFICATION_VERIFIED, build_manifest, digest_and_size, parse_checksum_list, release_specs,
+        render_manifest, verify_manifest_at,
+    };
+    use std::path::{Path, PathBuf};
+
+    /// A fixture version that cannot collide with the workspace's own.
+    const VERSION: &str = "9.9.9";
+
+    /// A scratch release tree that cleans itself up.
+    struct Scratch(PathBuf);
+
+    impl Scratch {
+        fn new(tag: &str) -> Self {
+            let path = std::env::temp_dir().join(format!(
+                "firecraft-release-manifest-{}-{tag}",
+                std::process::id()
+            ));
+            let _ = std::fs::remove_dir_all(&path);
+            std::fs::create_dir_all(&path).unwrap();
+            Scratch(path)
+        }
+
+        fn root(&self) -> &Path {
+            &self.0
+        }
+
+        fn write(&self, rel: &str, contents: &str) {
+            let path = self.0.join(rel);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(&path, contents).unwrap();
+        }
+
+        fn digest(&self, rel: &str) -> String {
+            digest_and_size(&self.0.join(rel)).unwrap().0
+        }
+
+        fn remove(&self, rel: &str) {
+            std::fs::remove_file(self.0.join(rel)).unwrap();
+        }
+    }
+
+    impl Drop for Scratch {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    /// The build-time facts a fixture manifest carries.
+    fn context() -> ManifestContext {
+        ManifestContext {
+            version: VERSION.to_owned(),
+            tag: Some(format!("v{VERSION}")),
+            source_sha: "0123456789abcdef0123456789abcdef01234567".to_owned(),
+            run_url: Some("https://example.invalid/runs/1".to_owned()),
+            run_id: Some("1".to_owned()),
+            built_at: "2026-01-01T00:00:00Z".to_owned(),
+        }
+    }
+
+    /// Builds a release tree with the published asset set and the two
+    /// recorded checksum lists the release actually writes: the
+    /// release-wide list covers every asset except itself, the native
+    /// list covers the three native artifacts.
+    fn release_tree(scratch: &Scratch) -> Vec<ArtifactSpec> {
+        let specs = release_specs(VERSION);
+        for spec in &specs {
+            scratch.write(&spec.rel_path, &format!("contents of {}\n", spec.name));
+        }
+        // The native list covers the three native archives. It is
+        // written before the release-wide list, because that list
+        // records the native list's own digest.
+        let native: Vec<String> = specs
+            .iter()
+            .filter(|spec| spec.rel_path.starts_with("native/") && spec.name != "MANIFEST.sha256")
+            .map(|spec| format!("{}  {}", scratch.digest(&spec.rel_path), spec.name))
+            .collect();
+        scratch.write(
+            "native/MANIFEST.sha256",
+            &format!("{}\n", native.join("\n")),
+        );
+        // The release-wide list covers every asset except itself.
+        let wide: Vec<String> = specs
+            .iter()
+            .filter(|spec| spec.name != "RELEASE_SHA256.txt")
+            .map(|spec| format!("{}  {}", scratch.digest(&spec.rel_path), spec.name))
+            .collect();
+        scratch.write("RELEASE_SHA256.txt", &format!("{}\n", wide.join("\n")));
+        specs
+    }
+
+    /// The manifest document for a fixture release.
+    fn manifest_of(scratch: &Scratch, specs: &[ArtifactSpec]) -> serde_json::Value {
+        build_manifest(scratch.root(), specs, &context()).unwrap()
+    }
+
+    #[test]
+    fn the_manifest_describes_every_published_artifact() {
+        let scratch = Scratch::new("shape");
+        let specs = release_tree(&scratch);
+        let value = manifest_of(&scratch, &specs);
+        let artifacts = value["artifacts"].as_array().unwrap();
+        assert_eq!(artifacts.len(), specs.len());
+        for entry in artifacts {
+            assert!(entry["name"].is_string(), "an artifact has no name");
+            assert!(entry["path"].is_string(), "an artifact has no path");
+            assert!(entry["sha256"].is_string(), "an artifact has no digest");
+            assert!(entry["size"].is_u64(), "an artifact has no size");
+            assert!(entry["format"].is_string(), "an artifact has no format");
+            assert!(entry["target"].is_string(), "an artifact has no target");
+            assert!(
+                entry["verification"].is_string(),
+                "an artifact has no verification status"
+            );
+            assert_eq!(
+                entry["source_sha"].as_str().unwrap(),
+                context().source_sha,
+                "an artifact must record the revision it was built from"
+            );
+        }
+        assert_eq!(value["schema"].as_str().unwrap(), MANIFEST_SCHEMA);
+        assert_eq!(value["version"].as_str().unwrap(), VERSION);
+        assert_eq!(value["tag"].as_str().unwrap(), format!("v{VERSION}"));
+        assert_eq!(value["source_sha"].as_str().unwrap(), context().source_sha);
+    }
+
+    #[test]
+    fn every_listed_artifact_matches_the_file_on_disk() {
+        let scratch = Scratch::new("matches");
+        let specs = release_tree(&scratch);
+        let value = manifest_of(&scratch, &specs);
+        for entry in value["artifacts"].as_array().unwrap() {
+            let rel = entry["path"].as_str().unwrap();
+            let (digest, size) = digest_and_size(&scratch.root().join(rel)).unwrap();
+            assert_eq!(
+                entry["sha256"].as_str().unwrap(),
+                digest,
+                "{rel} carries a digest that is not the file's"
+            );
+            assert_eq!(
+                entry["size"].as_u64().unwrap(),
+                size,
+                "{rel} carries a size that is not the file's"
+            );
+        }
+    }
+
+    #[test]
+    fn the_manifest_is_byte_identical_across_runs() {
+        let scratch = Scratch::new("determinism");
+        let specs = release_tree(&scratch);
+        let first = render_manifest(&manifest_of(&scratch, &specs)).unwrap();
+        let second = render_manifest(&manifest_of(&scratch, &specs)).unwrap();
+        assert_eq!(
+            first, second,
+            "the same inputs must produce the same manifest bytes"
+        );
+        assert!(
+            first.ends_with('\n'),
+            "the manifest must end with a newline"
+        );
+    }
+
+    #[test]
+    fn the_manifest_keys_and_entries_are_sorted() {
+        let scratch = Scratch::new("sorted");
+        let specs = release_tree(&scratch);
+        let value = manifest_of(&scratch, &specs);
+        let text = render_manifest(&value).unwrap();
+        let top: Vec<String> = value
+            .as_object()
+            .unwrap()
+            .keys()
+            .map(String::to_owned)
+            .collect();
+        let mut sorted = top.clone();
+        sorted.sort();
+        assert_eq!(top, sorted, "the top-level keys must be sorted");
+        // The rendered document must carry the top-level keys in that
+        // order too. The keys are read back from the rendered lines at
+        // the top level's indentation — a plain substring search would
+        // find a nested key of the same name first.
+        let rendered: Vec<String> = text
+            .lines()
+            .filter_map(|line| line.strip_prefix("  \""))
+            .filter_map(|line| line.split_once('"'))
+            .map(|(key, _)| key.to_owned())
+            .collect();
+        assert_eq!(
+            rendered, sorted,
+            "the rendered keys must be in sorted order"
+        );
+        let names: Vec<&str> = value["artifacts"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|entry| entry["name"].as_str().unwrap())
+            .collect();
+        let mut sorted_names = names.clone();
+        sorted_names.sort();
+        assert_eq!(names, sorted_names, "the artifacts must be sorted by name");
+    }
+
+    #[test]
+    fn an_artifact_corroborated_by_a_checksum_list_is_verified() {
+        let scratch = Scratch::new("verified");
+        let specs = release_tree(&scratch);
+        let value = manifest_of(&scratch, &specs);
+        for entry in value["artifacts"].as_array().unwrap() {
+            let name = entry["name"].as_str().unwrap();
+            let expected = if name == "RELEASE_SHA256.txt" {
+                VERIFICATION_COMPUTED
+            } else {
+                VERIFICATION_VERIFIED
+            };
+            assert_eq!(
+                entry["verification"].as_str().unwrap(),
+                expected,
+                "{name} carries the wrong verification status"
+            );
+        }
+    }
+
+    #[test]
+    fn a_missing_artifact_is_rejected() {
+        let scratch = Scratch::new("missing");
+        let specs = release_tree(&scratch);
+        scratch.remove(&specs[0].rel_path);
+        let err = build_manifest(scratch.root(), &specs, &context()).unwrap_err();
+        assert!(
+            err.contains("missing"),
+            "a missing artifact must be rejected: {err}"
+        );
+    }
+
+    #[test]
+    fn an_empty_artifact_is_rejected() {
+        let scratch = Scratch::new("empty");
+        let specs = release_tree(&scratch);
+        scratch.write(&specs[0].rel_path, "");
+        let err = build_manifest(scratch.root(), &specs, &context()).unwrap_err();
+        assert!(
+            err.contains("empty"),
+            "an empty artifact must be rejected: {err}"
+        );
+    }
+
+    #[test]
+    fn a_digest_contradicting_the_checksum_list_is_rejected() {
+        let scratch = Scratch::new("mismatch");
+        let specs = release_tree(&scratch);
+        // The file changed after the release-wide list was written.
+        scratch.write(&specs[0].rel_path, "tampered\n");
+        let err = build_manifest(scratch.root(), &specs, &context()).unwrap_err();
+        assert!(
+            err.contains("digest mismatch"),
+            "a checksum-mismatched artifact must be rejected: {err}"
+        );
+    }
+
+    #[test]
+    fn a_checksum_list_that_cannot_be_parsed_is_rejected() {
+        let scratch = Scratch::new("unparseable");
+        let specs = release_tree(&scratch);
+        scratch.write("RELEASE_SHA256.txt", "not a digest  firecraft.tar.gz\n");
+        let err = build_manifest(scratch.root(), &specs, &context()).unwrap_err();
+        assert!(
+            err.contains("not a SHA-256 digest"),
+            "a broken checksum list must be rejected: {err}"
+        );
+    }
+
+    #[test]
+    fn a_checksum_list_parses_comments_and_binary_marks() {
+        let entries = parse_checksum_list(
+            "# a comment\n\n0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef  a.tar.gz\n\
+             FEDCBA9876543210FEDCBA9876543210FEDCBA9876543210FEDCBA9876543210 *b.tar.gz\n",
+            "test.sha256",
+        )
+        .unwrap();
+        assert_eq!(entries.len(), 2);
+        assert_eq!(
+            entries.get("a.tar.gz").unwrap(),
+            "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        );
+        assert_eq!(
+            entries.get("b.tar.gz").unwrap(),
+            "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"
+        );
+    }
+
+    #[test]
+    fn the_verifier_accepts_an_untouched_release() {
+        let scratch = Scratch::new("verify-ok");
+        let specs = release_tree(&scratch);
+        let text = render_manifest(&manifest_of(&scratch, &specs)).unwrap();
+        scratch.write(MANIFEST_FILE_NAME, &text);
+        verify_manifest_at(scratch.root(), &specs, VERSION).unwrap();
+    }
+
+    #[test]
+    fn the_verifier_rejects_a_corrupted_artifact() {
+        let scratch = Scratch::new("verify-corrupt");
+        let specs = release_tree(&scratch);
+        let text = render_manifest(&manifest_of(&scratch, &specs)).unwrap();
+        scratch.write(MANIFEST_FILE_NAME, &text);
+        scratch.write(&specs[0].rel_path, "tampered\n");
+        let err = verify_manifest_at(scratch.root(), &specs, VERSION).unwrap_err();
+        assert!(
+            err.contains("digest mismatch"),
+            "a corrupted artifact must fail the verification: {err}"
+        );
+    }
+
+    #[test]
+    fn the_verifier_rejects_a_manifest_that_omits_an_artifact() {
+        let scratch = Scratch::new("verify-omit");
+        let specs = release_tree(&scratch);
+        let mut value = manifest_of(&scratch, &specs);
+        value
+            .get_mut("artifacts")
+            .and_then(serde_json::Value::as_array_mut)
+            .unwrap()
+            .pop();
+        scratch.write(MANIFEST_FILE_NAME, &render_manifest(&value).unwrap());
+        let err = verify_manifest_at(scratch.root(), &specs, VERSION).unwrap_err();
+        assert!(
+            err.contains("does not list"),
+            "a manifest that omits an asset must fail the verification: {err}"
+        );
+    }
+
+    #[test]
+    fn the_verifier_rejects_a_manifest_that_is_not_an_object() {
+        let scratch = Scratch::new("verify-shape");
+        let specs = release_tree(&scratch);
+        scratch.write(MANIFEST_FILE_NAME, "[]\n");
+        let err = verify_manifest_at(scratch.root(), &specs, VERSION).unwrap_err();
+        assert!(
+            err.contains("unknown schema"),
+            "a manifest that is not an object must fail the verification: {err}"
+        );
     }
 }

@@ -5,8 +5,9 @@
 #   2. Builds the optimized web bundle and ZIP
 #   3. Builds a clean-extract-verified source archive
 #   4. Generates a CycloneDX 1.5 SBOM
-#   5. Generates release-wide SHA-256 checksums and validates all 8 assets
-#   6. Creates a draft GitHub Release with the validated assets
+#   5. Generates release-wide SHA-256 checksums
+#   6. Generates the machine-readable release manifest (release-manifest.json)
+#   7. Validates all 9 assets and creates a draft GitHub Release
 #
 # What it does NOT do (operator handles):
 #   - Bumping versions (8 stamps in Cargo.toml files)
@@ -156,6 +157,19 @@ jobs:
         env:
           TAG: ${{ github.ref_name }}
 
+      - name: Generate release manifest
+        # The machine-readable release manifest (T27-54): one JSON
+        # document describing every published asset — canonical name,
+        # path relative to the output directory, byte size, SHA-256,
+        # package format, target triple and verification status — plus
+        # the version, tag, source revision, workflow run URL and build
+        # timestamp of the run that produced it. It is generated after
+        # every asset exists, and the verifier then re-reads it against
+        # the files on disk.
+        run: |
+          cargo run --quiet --package xtask -- dist --manifest
+          cargo run --quiet --package xtask -- dist --verify-manifest
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -169,6 +183,7 @@ jobs:
             dist/source/FireCraft-*-source.tar.gz
             dist/sbom/firecraft-*-sbom.cdx.json
             dist/RELEASE_SHA256.txt
+            dist/release-manifest.json
           retention-days: 5
           # A clean runner has no stale artifacts, but a self-hosted or
           # re-run job might. Fail loudly on a name collision rather
@@ -213,7 +228,11 @@ jobs:
       - name: Fail-closed aggregate validation
         # RP-07: the aggregate must reject a release that is missing any
         # required artifact, misnamed, empty, or whose digests disagree
-        # with RELEASE_SHA256.txt — before gh release create runs.
+        # with RELEASE_SHA256.txt — before gh release create runs. The
+        # release manifest is checked against the same assets: it must
+        # carry the tag's version, list every published asset, and
+        # describe each one with the digest and size the asset actually
+        # has.
         env:
           TAG: ${{ github.ref_name }}
         run: |
@@ -230,6 +249,7 @@ jobs:
             "firecraft-${TAG#v}-sbom.cdx.json"
             "MANIFEST.sha256"
             "RELEASE_SHA256.txt"
+            "release-manifest.json"
           )
           fail=0
           for name in "${expected[@]}"; do
@@ -247,12 +267,70 @@ jobs:
           # The aggregate includes the native manifest's own digest;
           # it is not recursive, so verify it along with every other file.
           (cd artifacts && sha256sum -c RELEASE_SHA256.txt) || fail=1
+          # The release manifest must agree with the assets it describes:
+          # the same version, the same digests, the same sizes, and every
+          # published asset listed. jq ships in the runner image.
+          manifest="artifacts/release-manifest.json"
+          if [ -f "$manifest" ]; then
+            if ! command -v jq >/dev/null 2>&1; then
+              echo "::error::jq is required to validate the release manifest"
+              fail=1
+            else
+              if ! schema=$(jq -r '.schema // ""' "$manifest"); then
+                echo "::error::the release manifest is not valid JSON"
+                fail=1
+              elif [ "$schema" != "firecraft.release-manifest/1" ]; then
+                echo "::error::the release manifest carries an unknown schema: $schema"
+                fail=1
+              fi
+              if ! version=$(jq -r '.version // ""' "$manifest"); then
+                echo "::error::the release manifest is not valid JSON"
+                fail=1
+              elif [ "$version" != "${TAG#v}" ]; then
+                echo "::error::the release manifest describes version $version, the tag is ${TAG#v}"
+                fail=1
+              fi
+              # Every artifact the manifest lists must be present with the
+              # recorded digest and the recorded size.
+              if jq -r '.artifacts[] | "\(.sha256)  \(.name)"' "$manifest" > "$RUNNER_TEMP/manifest.sha256"; then
+                (cd artifacts && sha256sum -c "$RUNNER_TEMP/manifest.sha256") || fail=1
+              else
+                echo "::error::the release manifest lists no artifacts"
+                fail=1
+              fi
+              while read -r name size; do
+                if [ -z "$name" ]; then
+                  continue
+                fi
+                actual=$(stat -c%s "artifacts/$name" 2>/dev/null || echo "")
+                if [ "$actual" != "$size" ]; then
+                  echo "::error::the release manifest records $size B for $name, the asset is ${actual:-missing} B"
+                  fail=1
+                fi
+              done < <(jq -r '.artifacts[] | "\(.name) \(.size)"' "$manifest")
+              # Every published asset must be listed in the manifest: a
+              # manifest that omits an asset is as wrong as one that
+              # misdescribes it.
+              for name in "${expected[@]}"; do
+                if [ "$name" != "release-manifest.json" ]; then
+                  if ! jq -e --arg n "$name" '.artifacts | any(.name == $n)' "$manifest" >/dev/null; then
+                    echo "::error::$name is not listed in the release manifest"
+                    fail=1
+                  fi
+                fi
+              done
+            fi
+          fi
           # Version consistency: no artifact of one version may carry a
           # different version string in its name than the tag.
           for f in artifacts/*; do
             case "$(basename "$f")" in
               *"${TAG#v}"*) ;;
               *.sha256|*.txt) ;;
+              # The manifest's name is fixed — the release names it
+              # release-manifest.json — so its version is checked inside
+              # the document above, not in the file name.
+              release-manifest.json) ;;
               *) echo "::error::artifact name does not carry the tag version: $(basename "$f")"; fail=1 ;;
             esac
           done

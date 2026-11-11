@@ -92,6 +92,36 @@ and verifies a clean extraction plus `cargo metadata --locked` inside it;
 `dist --sbom` produces `dist/sbom/firecraft-<v>-sbom.cdx.json`
 (CycloneDX 1.5) over the locked dependency graph.
 
+## Release manifest
+
+    cargo run -p xtask -- dist --manifest
+    cargo run -p xtask -- dist --verify-manifest
+
+`dist --manifest` writes `dist/release-manifest.json` — the
+machine-readable description of the release. It lands in the release
+output directory next to the artifacts it describes, and it is
+published with them as a ninth release asset.
+
+The manifest carries the version, the tag, the source revision, the
+workflow run URL and id, and the build timestamp; and for every
+published asset its canonical name, its path relative to `dist/`, its
+byte size, its SHA-256 digest, its package format, its target triple,
+and whether a recorded checksum list corroborates the digest.
+
+The generator is fail-closed: a missing artifact, an empty artifact, a
+checksum list that does not parse, or a file whose digest contradicts a
+recorded list all fail the run. It runs **after** every asset exists —
+including the web zip and `dist/RELEASE_SHA256.txt`, which the workflow
+produces — so it describes the whole release.
+
+The bytes are deterministic: the keys are sorted, the artifact array is
+sorted by name, and the only build-time fields (`built_at`, the run URL
+and id) are documented as build-time data.
+
+The full schema: [release/RELEASE-MANIFEST.md](release/RELEASE-MANIFEST.md).
+
+    jq -r '.version,.artifacts[0].sha256' dist/release-manifest.json
+
 ## Off-fleet platforms (recipes — the operator builds these)
 
 - AppImage: `packaging/build-appimage.sh` (needs
@@ -135,13 +165,16 @@ jobs:
 1. **`build artifacts`** — `dist --native`, `dist --web`,
    `dist --source`, `dist --sbom`; zips the web bundle; writes
    `dist/RELEASE_SHA256.txt` over the seven digested files plus
-   `MANIFEST.sha256`; uploads eight paths as one artifact.
+   `MANIFEST.sha256`; writes `dist/release-manifest.json` with
+   `dist --manifest` and re-verifies it with `dist --verify-manifest`;
+   uploads nine paths as one artifact.
 2. **`create draft release`** — downloads that artifact, flattens it
    with `packaging/release-assets.sh stage`, runs a **fail-closed
-   aggregate validation** (all eight required artifacts present and
-   non-empty, `sha256sum -c RELEASE_SHA256.txt` passing, and every
-   artifact name carrying the tag version), then creates a **draft**
-   GitHub release with the assets passed as positional arguments.
+   aggregate validation** (all nine required artifacts present and
+   non-empty, `sha256sum -c RELEASE_SHA256.txt` passing, the release
+   manifest agreeing with the assets it describes, and every artifact
+   name carrying the tag version), then creates a **draft** GitHub
+   release with the assets passed as positional arguments.
 
 The workflow does **not** publish the release, does not bump versions,
 does not run `xtask changelog`, and does not deploy to Cloudflare Pages

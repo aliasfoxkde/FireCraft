@@ -57,7 +57,7 @@
 | 13 | SBOM | CycloneDX 1.5 JSON | `firecraft-0.2.5-sbom.cdx.json` — **not on `main`** | `xtask dist --sbom` over the locked dependency graph; the serial is a deterministic UUIDv8 derived from the locked graph. The verb exists on this branch and on the PR #9 / #12 trees | `BUILD VERIFIED` | 3 | produced 2026-11-09 on `docs/release-execution-board` @ `08eae4a`: 249 KB, 493 components, 494 dependency edges, sha256 `837a731b…` | F-9 (the verb is absent from `main`), B-13 (never published) |
 | 14 | Metadata | checksums / manifest | `dist/native/MANIFEST.sha256` (3 native artifacts) and `dist/web/MANIFEST.sha256` (5 bundle files) | `xtask dist --native` / `dist --web`; `release.yml` additionally writes a release-wide `RELEASE_SHA256.txt` over 8 assets | `PUBLISHED` | 11 | `MANIFEST.sha256` attached to release v0.2.5 (398 B, 3 native files) and embedded in the web ZIP (532 B). Both checked against the published downloads on 2026-11-09 — 3/3 and 5/5 pass | B-17 (neither list covers the ZIP files themselves and no release-wide `RELEASE_SHA256.txt` was ever published, although `release.yml` writes one), B-21 (the manifest and the assets it covers were published out of band, so the list is self-consistent but not independently attested) |
 | 15 | Metadata | provenance / attestation | **nothing on any branch** | no generator, no `gh attestation` step, no in-toto/SLSA material anywhere in the repository | `NOT STARTED` | 0 | nothing exists | B-14 |
-| 16 | Metadata | release manifest (JSON) | **nothing on any branch** | the campaign and the plan require a machine-readable artifact manifest; none exists | `NOT STARTED` | 0 | nothing exists | B-14 |
+| 16 | Metadata | release manifest (JSON) | `dist/release-manifest.json` on `feat/release-manifest` — not on `main`, never published | `xtask dist --manifest` (schema `firecraft.release-manifest/1`); `xtask dist --verify-manifest` re-checks it against the files; `release.yml` generates it after the other assets and publishes it as a ninth release asset | `IMPLEMENTED` | 0 | generator, verifier and unit tests (shape, determinism, rejection paths) exist in `xtask/src/dist.rs`; the aggregate validation checks the manifest against the downloaded assets. **No CI receipt, no published manifest** — [decision 0079](../decisions/0079-release-manifest-shape.md) | B-14 (nothing published), T27-53 (the canonical naming the asset table inherits is still open) |
 | 17 | Metadata | signature (Authenticode / Developer ID / GPG) | **nothing**; no signing identity is configured anywhere | no signing step in any workflow; signing remains an operator ceremony | `NOT STARTED` | 0 | nothing exists | B-14 — no artifact can reach rung 9 until this is resolved, so **no artifact can be `CERTIFIED`** |
 | 18 | Android arm64 | APK/AAB | feasibility report only — [android-feasibility.md](../research/android-feasibility.md) | not started: no native entrypoint, no NDK/SDK CI image | `DEFERRED` | 0 | the report concludes "feasible with bounded work", disposition experimental | the feasibility-gate decision is unrecorded; no NDK/SDK image, no device |
 | 19 | Linux | RPM | no spec, no recipe | — | `DEFERRED` | 0 | [decision 0070](../decisions/0070-rpm-deferred.md), accepted 2026-11-06 | decision 0070 is not on `main`; RPM is **not** reopened by [decision 0075](../decisions/0075-release-scope-mvp.md) |
@@ -68,11 +68,11 @@
 
 | Status | Count | Artifacts |
 |---|---|---|
-| `NOT STARTED` | 8 | AppImage, Flatpak, Windows ZIP, Windows installer, macOS DMG, provenance/attestation, release manifest JSON, signature |
+| `NOT STARTED` | 7 | AppImage, Flatpak, Windows ZIP, Windows installer, macOS DMG, provenance/attestation, signature |
 | `READY` | 0 | — |
 | `IN PROGRESS` | 0 | — |
 | `BLOCKED` | 0 | — |
-| `IMPLEMENTED` | 0 | — |
+| `IMPLEMENTED` | 1 | release manifest JSON |
 | `BUILD VERIFIED` | 3 | WebOS package, source archive, SBOM |
 | `INSTALLED` | 0 | — |
 | `LAUNCHED` | 0 | — |

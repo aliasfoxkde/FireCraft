@@ -1,8 +1,9 @@
 # T27-54 — Generate and verify a machine-readable release manifest
 
-> **RP:** RP-06 · **Priority:** P0 · **Status:** NOT STARTED
+> **RP:** RP-06 · **Priority:** P0 · **Status:** IMPLEMENTED (validation pending)
 > **Board row:** [EXECUTION-BOARD.md §6](../release/EXECUTION-BOARD.md)
 > **Depends on:** T27-53
+> **Decision:** [0079](../decisions/0079-release-manifest-shape.md) · **Schema:** [RELEASE-MANIFEST.md](../release/RELEASE-MANIFEST.md)
 
 **Objective:** publish one machine-readable manifest describing every artifact, so the
 release is machine-verifiable rather than only human-checkable.
@@ -20,9 +21,24 @@ against the actual files.
 
 **Verification:** `jq -r '.version,.artifacts[0].sha256' dist/release-manifest.json`
 
-**Evidence:** not implemented — no manifest exists today.
+**Evidence:** implemented on `feat/release-manifest` — `xtask dist --manifest` writes
+`dist/release-manifest.json` (schema `firecraft.release-manifest/1`) describing the eight
+published assets with their canonical name, path relative to `dist/`, size, SHA-256,
+format, target triple, source revision and verification status, plus the version, tag,
+source revision, run URL, run id and build timestamp of the run. `xtask dist
+--verify-manifest` re-reads it against the files on disk. The generator is fail-closed:
+a missing artifact, an empty artifact, an unparseable checksum list, or a digest that
+contradicts a recorded list fails the run. Unit tests cover the document's shape, its
+determinism (the same inputs produce the same bytes, keys and entries sorted), the
+verification status, and every rejection path. `release.yml` generates the manifest
+after the other assets exist, uploads it as a ninth release asset, and its aggregate
+validation checks the manifest against the downloaded assets. **Not yet validated against
+a real release run** — the CI receipt is outstanding, and no published release carries
+a manifest.
 
-**Blockers:** T27-53.
+**Blockers:** none for the implementation. T27-53's canonical naming is still
+`NOT STARTED`; the manifest adopts the names the release already enforces, and its
+asset table moves with T27-53 when that lands ([decision 0079](../decisions/0079-release-manifest-shape.md)).
 
 **Stopping condition:** the manifest exists, verifies, and is published alongside the
 assets.
