@@ -151,6 +151,21 @@ complete. The live menu census is 2 inert rows of 296; eight other rows have exp
 
 the reachability gate, and the wasm budget re-pin are also complete.
 
+- **CS6 keymap parity (2026-11-10, decisions 0080 + 0085):** every
+  accelerator the menu bar prints is bound at the printed key.
+  `menus::parse_accel` is the single parser and
+  `menus::tests::cs6_keymap_is_fully_bound` holds the printed label and
+  the binding in step (`Action::Inert` and `ReportGap` rows stay
+  display-only by design). Where CS6's own keymap and the transcribed
+  menu tree disagreed, the keymap won: Ctrl+9 is Rotate 90, Ctrl+7 is
+  Rotate 270 (not 180), Ctrl+Alt+2/5 are the vertical/horizontal
+  centers, F8 converts to a symbol and Ctrl+F8 makes a new one, and
+  Ctrl+Shift+K is the mask toggle. Modify ▸ Mask enable/disable is
+  CS6's single toggle row: the engine reads the mask's state
+  (`engine::catalog::element_mask_state`), the shell sends the
+  opposite, and the row's visible label flips between "Enable Mask" and
+  "Disable Mask" with the mask.
+
 <!-- coderabbit-ai-generated:v1 -->
 
 

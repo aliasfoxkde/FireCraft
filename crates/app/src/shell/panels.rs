@@ -123,25 +123,31 @@ impl Shell {
                             .wrap(),
                         );
                         ui.separator();
-                        // (title, row count) — `SHORTCUT_GROUPS` tiles the
-                        // SHORTCUTS table exactly; the sum is asserted by
-                        // `the_shortcut_groups_cover_the_table`.
-                        let groups: &[(&str, usize)] = menus::SHORTCUT_GROUPS;
+                        // Every binding carries the section it is filed
+                        // under; a new heading starts wherever that
+                        // section changes.
                         let mut row = 0usize;
-                        for (title, count) in groups {
-                            ui.heading(*title);
-                            egui::Grid::new((*title).to_string())
+                        while row < menus::SHORTCUTS.len() {
+                            let title = menus::SHORTCUTS[row].group;
+                            let start = row;
+                            while row < menus::SHORTCUTS.len()
+                                && menus::SHORTCUTS[row].group == title
+                            {
+                                row += 1;
+                            }
+                            let section = &menus::SHORTCUTS[start..row];
+                            ui.heading(title);
+                            egui::Grid::new(title.to_string())
                                 .num_columns(2)
                                 .spacing([12.0, 2.0])
                                 .show(ui, |ui| {
-                                    for s in &menus::SHORTCUTS[row..row + count] {
+                                    for s in section {
                                         ui.strong(s.label());
                                         ui.label(menus::action_name(s.action));
                                         ui.end_row();
                                     }
                                 });
                             ui.separator();
-                            row += count;
                         }
                     });
             });

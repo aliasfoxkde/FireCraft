@@ -135,6 +135,33 @@ fn owning_mask_group_deep(
     })
 }
 
+/// The element-mask state of `id`: `Some(true)` when `id` carries an
+/// enabled element mask, `Some(false)` when the mask is present but
+/// disabled, `None` when `id` carries no element mask.
+///
+/// The two arms resolve exactly the two structures `mask.enable`
+/// acts on — the enabled resolution (`GRTi` 1/2) and the disabled one
+/// (`GRTi` 0 with a mask-kind first child) — so a caller can read the
+/// current state and send the opposite `enable` flag without
+/// re-deriving the ownership rule.
+pub(crate) fn element_mask_state(document: &Document, id: ObjectId) -> Option<bool> {
+    const NAME: &str = "mask.enable";
+    if owning_mask_group_deep(document, NAME, id, false).is_ok() {
+        return Some(true);
+    }
+    let resolved = owning_mask_group_deep(document, NAME, id, true).ok()?;
+    if resolved.group.group_type != REGULAR_GROUP {
+        return None;
+    }
+    let mask_kind = resolved
+        .group
+        .children
+        .first()
+        .and_then(|&mask_id| document.registry.get(mask_id))
+        .and_then(group_type_of_mask);
+    mask_kind.map(|_| false)
+}
+
 /// Union content bounds of one object (identity transform).
 pub(crate) fn bounds_of(
     document: &Document,
@@ -2115,6 +2142,42 @@ mod tests {
             panic!("group vanished");
         };
         assert_eq!(group.group_type, GRAYSCALE_MASK);
+    }
+
+    #[test]
+    fn element_mask_state_reads_the_two_structures_enable_acts_on() {
+        let (mut document, image_id) = image_document();
+        // A bare image carries no element mask.
+        assert_eq!(element_mask_state(&document, image_id), None);
+
+        AddMask
+            .apply_json(
+                &mut document,
+                serde_json::json!({ "id": image_id, "mode": "reveal all" }),
+            )
+            .unwrap();
+        let group_id = cell_element(&document, 0).unwrap();
+        // The group and its content child both read as masked.
+        assert_eq!(element_mask_state(&document, image_id), Some(true));
+        assert_eq!(element_mask_state(&document, group_id), Some(true));
+
+        EnableMask
+            .apply_json(
+                &mut document,
+                serde_json::json!({ "id": image_id, "enable": false }),
+            )
+            .unwrap();
+        // Disabled: the mask is still there, off.
+        assert_eq!(element_mask_state(&document, image_id), Some(false));
+        assert_eq!(element_mask_state(&document, group_id), Some(false));
+
+        EnableMask
+            .apply_json(
+                &mut document,
+                serde_json::json!({ "id": group_id, "enable": true }),
+            )
+            .unwrap();
+        assert_eq!(element_mask_state(&document, image_id), Some(true));
     }
 
     #[test]

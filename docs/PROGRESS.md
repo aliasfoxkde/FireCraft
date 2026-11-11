@@ -35,6 +35,14 @@
   the repository CI or a local `cargo run -p xtask -- ci` completes.
 - **Engine and parity:** 245 command IDs (source is authoritative);
   268 carried / 3 partial / 0 missing of the 356 DOM verbs.
+- **CS6 keymap parity (2026-11-10, decisions 0080 + 0085):** every
+  accelerator the menu bar prints is bound at the printed key —
+  `menus::parse_accel` is the single parser and
+  `menus::tests::cs6_keymap_is_fully_bound` holds the two in step
+  (`Action::Inert` and `ReportGap` rows stay display-only by design).
+  Modify ▸ Mask enable/disable is CS6's single toggle row: the
+  engine reads the mask's state, the shell sends the opposite, and the
+  row's label flips between "Enable Mask" and "Disable Mask".
 - **Menu reachability:** 2 of 296 rows currently use `Action::Inert`; eight additional rows have explicit feature/evidence gates. The
 
   19.6 campaign (batches 1–17) is complete, and the Window menu's

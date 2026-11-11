@@ -29,6 +29,7 @@ pub(crate) mod web;
 
 use crate::error::EngineError;
 use crate::registry::CommandRegistry;
+use doc::{Document, ObjectId};
 
 /// Registers the built-in catalog into `registry`.
 pub fn install(registry: &mut CommandRegistry) -> Result<(), EngineError> {
@@ -53,6 +54,19 @@ pub fn install(registry: &mut CommandRegistry) -> Result<(), EngineError> {
     web::install(registry)?;
     mask::install(registry)?;
     style::install(registry)
+}
+
+/// The element-mask state of `id`: `Some(true)` when `id` carries an
+/// enabled element mask, `Some(false)` when the mask is present but
+/// disabled, `None` when `id` carries no element mask.
+///
+/// The mask family's read side. CS6's Modify ▸ Mask enable/disable is
+/// one row whose visible label flips with the mask's state, so a
+/// shell needs to read the state to render that row and to pick the
+/// direction of the toggle.
+#[must_use]
+pub fn element_mask_state(document: &Document, id: ObjectId) -> Option<bool> {
+    mask::element_mask_state(document, id)
 }
 
 /// Every registered built-in, sorted (surfaces enumerate this).

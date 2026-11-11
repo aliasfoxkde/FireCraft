@@ -1145,17 +1145,57 @@ impl Shell {
                     ui.menu_button(*label, |ui| self.entries_ui(ui, sub));
                 }
                 menus::Entry::Item(item) => {
-                    let label = if item.accel.is_empty() {
-                        item.label.to_owned()
-                    } else {
-                        format!("{}\t{}", item.label, item.accel)
-                    };
-                    let wired = !matches!(item.action, menus::Action::Inert);
+                    let label = self.item_label(item);
+                    let wired = self.item_applies(item);
                     if ui.add_enabled(wired, egui::Button::new(label)).clicked() {
                         self.run_action(&item.action);
                     }
                 }
             }
+        }
+    }
+
+    /// The visible label of one menu row. Rows whose label depends on
+    /// live document state resolve it here; the rest show the label
+    /// the CS6 resource table carries.
+    fn item_label(&self, item: &menus::Item) -> String {
+        let label = match item.dynamic {
+            Some(menus::DynamicLabel::MaskToggle) => self.mask_toggle_label(),
+            None => item.label,
+        };
+        if item.accel.is_empty() {
+            label.to_owned()
+        } else {
+            format!("{}\t{}", label, item.accel)
+        }
+    }
+
+    /// Whether a row applies to the current selection. An inert row
+    /// never applies; a row that needs an element mask applies only
+    /// while the selection carries one.
+    fn item_applies(&self, item: &menus::Item) -> bool {
+        if matches!(item.action, menus::Action::Inert) {
+            return false;
+        }
+        match item.dynamic {
+            Some(menus::DynamicLabel::MaskToggle) => self.mask_state().is_some(),
+            None => true,
+        }
+    }
+
+    /// The element-mask state of the selection: enabled, disabled, or
+    /// no element mask at all.
+    fn mask_state(&self) -> Option<bool> {
+        let id = self.editor.selected_live()?;
+        engine::catalog::element_mask_state(self.editor.document(), id)
+    }
+
+    /// The mask toggle's live label. CS6 swaps this row between
+    /// "Enable Mask" and "Disable Mask" with the mask's state.
+    fn mask_toggle_label(&self) -> &'static str {
+        match self.mask_state() {
+            Some(false) => "Enable Mask",
+            _ => "Disable Mask",
         }
     }
 
@@ -2384,14 +2424,19 @@ impl Shell {
                     serde_json::json!({ "id": id, "mode": mode, "enter_edit_mode": false }),
                 );
             }
-            menus::SelAction::EnableMask(enable) => {
+            menus::SelAction::ToggleMask => {
                 let Some(id) = self.editor.selected_live() else {
                     self.status = "nothing selected".to_owned();
                     return;
                 };
+                let Some(enabled) = engine::catalog::element_mask_state(self.editor.document(), id)
+                else {
+                    self.status = "the selection carries no element mask".to_owned();
+                    return;
+                };
                 self.run_command(
                     "mask.enable",
-                    serde_json::json!({ "id": id, "enable": enable }),
+                    serde_json::json!({ "id": id, "enable": !enabled }),
                 );
             }
             menus::SelAction::LinkMask(linked) => {
@@ -5607,7 +5652,7 @@ mod tests {
         shell.run_sel(menus::SelAction::AddMask { mode: "hide all" });
         assert_eq!(shell.status, "nothing selected");
 
-        shell.run_sel(menus::SelAction::EnableMask(false));
+        shell.run_sel(menus::SelAction::ToggleMask);
         assert_eq!(shell.status, "nothing selected");
 
         let id = shell.editor.current_cell().unwrap().elements[0];
@@ -5618,6 +5663,43 @@ mod tests {
             "mask.add on a live object should route, got {:?}",
             shell.status
         );
+    }
+
+    /// CS6's Modify ▸ Mask enable/disable is one row whose label
+    /// flips with the mask's state: the toggle disables an enabled
+    /// mask, re-enables a disabled one, and the row follows.
+    #[test]
+    fn mask_toggle_flips_the_mask_and_its_label() {
+        let mut shell = gui_shell(gui_editor());
+        let id = shell.editor.current_cell().unwrap().elements[0];
+        shell.editor.set_selection(vec![id]);
+        shell.run_sel(menus::SelAction::AddMask { mode: "hide all" });
+        assert!(
+            !shell.status.contains("failed"),
+            "mask.add on a live object should route, got {:?}",
+            shell.status
+        );
+        assert_eq!(
+            engine::catalog::element_mask_state(shell.editor.document(), id),
+            Some(true),
+            "a fresh mask starts enabled"
+        );
+
+        shell.run_sel(menus::SelAction::ToggleMask);
+        assert_eq!(
+            engine::catalog::element_mask_state(shell.editor.document(), id),
+            Some(false),
+            "the toggle disables an enabled mask"
+        );
+        assert_eq!(shell.mask_toggle_label(), "Enable Mask");
+
+        shell.run_sel(menus::SelAction::ToggleMask);
+        assert_eq!(
+            engine::catalog::element_mask_state(shell.editor.document(), id),
+            Some(true),
+            "the toggle re-enables a disabled mask"
+        );
+        assert_eq!(shell.mask_toggle_label(), "Disable Mask");
     }
 
     /// `adopt_document_selection` pulls the document's object
