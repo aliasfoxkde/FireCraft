@@ -7,7 +7,7 @@
 
 use super::*;
 use compose::abgr_pack;
-use doc::{GroupObject, ImageObject, SliceObject};
+use doc::{GroupObject, ImageObject, MaskCombineMode, SliceObject};
 
 impl Shell {
     /// The Optimize panel's format names in `FMTi` order (0 gif,
@@ -1004,6 +1004,7 @@ impl Shell {
             self.document_properties(ui);
             return;
         };
+        self.mask_stack_panel(ui, id);
         let object = self.editor.document().registry.get(id).cloned();
         let effects = match object {
             Some(ObjectData::Path(path)) => {
@@ -1755,6 +1756,38 @@ impl Shell {
                 self.editor.set_selection(vec![child]);
             }
         }
+    }
+
+    /// The mask stack section of the Properties panel: the element
+    /// mask's level and the way it combines with the coverage below.
+    ///
+    /// A FireCraft extension (decision 0091): CS6 has one element mask
+    /// per object and no stack, so the level's mode defaults to the
+    /// union. The panel draws the section only when the selection
+    /// carries an element mask.
+    pub(super) fn mask_stack_panel(&mut self, ui: &mut egui::Ui, id: doc::ObjectId) {
+        let Some((group_id, mode)) =
+            engine::catalog::element_mask_stack_mode(self.editor.document(), id)
+        else {
+            return;
+        };
+        ui.heading("Mask stack");
+        let current = mode.unwrap_or(MaskCombineMode::Add);
+        egui::ComboBox::from_label("combine")
+            .selected_text(current.as_str())
+            .show_ui(ui, |ui| {
+                for candidate in MaskCombineMode::ALL {
+                    if ui
+                        .selectable_label(candidate == current, candidate.as_str())
+                        .clicked()
+                    {
+                        self.run_command(
+                            "mask.setStackMode",
+                            serde_json::json!({ "id": group_id, "mode": candidate.as_str() }),
+                        );
+                    }
+                }
+            });
     }
 
     /// Bitmap properties: the pixel geometry as a readout, then the
