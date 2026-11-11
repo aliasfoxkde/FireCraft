@@ -18,4 +18,10 @@ info	right	9	Info	false	true
 auto-shapes	right	10	Auto Shapes	false	true
 url	right	11	URL	false	true
 behaviors	right	12	Behaviors	false	true
-web-layer	right	13	Web Layer	true	false
+optimize	right	13	Optimize	false	true
+slices	right	14	Slices	false	true
+html-preview	right	15	HTML Preview	false	true
+css-properties	right	16	CSS Properties	false	true
+find-and-replace	right	17	Find and Replace	false	true
+common-library	right	18	Common Library	false	true
+web-layer	right	19	Web Layer	true	false
