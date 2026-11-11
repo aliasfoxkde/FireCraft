@@ -103,6 +103,30 @@ ADD --checksum=sha256:2faf6a387e9b62b888e21c54f01249fb27537ffecf1842f29f4c919d0a
 RUN tar -xzf /tmp/node.tar.gz --strip-components=1 -C /usr/local \
     && rm /tmp/node.tar.gz
 
+# A headless chromium, so the release gate can smoke the web bundle on
+# its own release bytes instead of skipping the check.
+#
+# The `release` job's web step runs `xtask dist --web`, which serves the
+# staged bundle over loopback and drives one open -> apply -> exportPng
+# -> exportDocument round trip through the M5 postMessage bridge in a
+# headless browser, requiring a `green` verdict in the dumped DOM. The
+# image used to bake no browser, so that step ran with the smoke
+# disabled (`FIRECRAFT_DIST_SKIP_SMOKE=1`) — the bundle was BUILT but
+# never SMOKED, and a broken bridge would still have shipped.
+#
+# Debian 12 bookworm's `chromium` package installs the browser at
+# /usr/bin/chromium, which is the first name `xtask`'s `chromium_path()`
+# looks for. Chromium needs its runtime libraries, so this is a
+# `chromium` install with dependencies (not --no-install-recommends:
+# the shared libraries are hard dependencies of the package itself).
+#
+# Kept in its own layer, after the toolchain layers, so a chromium bump
+# never rebuilds cargo/rustup/node, and the browser never invalidates
+# the registry cache copy below.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends chromium \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY --from=fetch /usr/local/cargo/registry /usr/local/cargo/registry
 
 # The baked registry is a FAST FLOOR, not a wall.
