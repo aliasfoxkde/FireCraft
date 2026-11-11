@@ -116,19 +116,19 @@ cargo run -p app-cli -- convert input.fw.png output.fw.png
 
 ```sh
 # Inspect a document
-cargo run -p firecraft-cli -- info artwork.fw.png
+cargo run -p app-cli -- info artwork.fw.png
 
 # Canonically re-emit a Fireworks PNG document
-cargo run -p firecraft-cli -- convert input.fw.png output.fw.png
+cargo run -p app-cli -- convert input.fw.png output.fw.png
 
 # Export a document
-cargo run -p firecraft-cli -- export artwork.fw.png output.webp
+cargo run -p app-cli -- export artwork.fw.png output.webp
 
 # Import a raster image into a new Fireworks PNG document
-cargo run -p firecraft-cli -- import photograph.jpg new-document.fw.png
+cargo run -p app-cli -- import photograph.jpg new-document.fw.png
 
 # Start the MCP server for an existing document
-cargo run -p firecraft-cli -- mcp artwork.fw.png
+cargo run -p app-cli -- mcp artwork.fw.png
 ```
 
 See [`docs/USAGE.md`](docs/USAGE.md) for the complete CLI, GUI shortcut, browser-embedding, and MCP reference.

@@ -130,9 +130,10 @@ const CLASS_NOTES: &[(&str, &str)] = &[
         "pci-cardholder-data",
         "Matches the word \"pan\" in pan-zoom, hand-pan and two-finger pan \
          identifiers, in the Hand tool's \"Pan the artboard\" menu label, \
-         including the Android feasibility note's touch gesture, and in \
-         decision 0074's table of adjudicated classes and the rule \
-         identifiers quoted by the Aegis adjudication tickets; the five \
+         including the Android feasibility note's touch gesture, in the \
+         session log's prose about that adjudication, and in decision \
+         0074's table of adjudicated classes and the rule identifiers \
+         quoted by the Aegis adjudication tickets; the five \
          credit-card-* rules stay armed.",
     ),
     (
