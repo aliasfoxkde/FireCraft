@@ -170,7 +170,7 @@ pub(crate) enum PanelKind {
 }
 
 /// Which edge the panel column docks to.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum DockSide {
     /// The column hugs the left edge of the window.
     Left,
@@ -187,12 +187,28 @@ impl DockSide {
             DockSide::Right => "right",
         }
     }
+
+    /// The other dock: where a panel goes when it is moved.
+    #[must_use]
+    pub fn other(self) -> Self {
+        match self {
+            DockSide::Left => DockSide::Right,
+            DockSide::Right => DockSide::Left,
+        }
+    }
 }
 
 /// The edge the panel column docks to. CS6 keeps the group on the
 /// right; the panel-snapshot gate pins the choice, so moving the
 /// column is a deliberate re-pin, never a silent drift.
 const DOCK_SIDE: DockSide = DockSide::Right;
+
+/// The payload a panel drag carries: which panel is being moved.
+#[derive(Clone, Copy)]
+struct PanelDrag {
+    /// The dragged panel's CS6 name.
+    name: &'static str,
+}
 
 /// One panel of the CS6 inventory, as plain data.
 ///
@@ -254,6 +270,16 @@ fn panel_id(name: &str) -> String {
     name.to_lowercase().replace(' ', "-")
 }
 
+/// The spec of a panel this shell knows, including the Web Layer
+/// panel — which has no Window-menu row but is a panel all the same.
+pub(crate) fn panel_spec(name: &str) -> Option<PanelSpec> {
+    PANELS
+        .iter()
+        .copied()
+        .find(|spec| spec.name == name)
+        .or_else(|| (WEB_PANEL == name).then_some(WEB_PANEL_SPEC))
+}
+
 /// The width of the right dock, in points — CS6's dock is a narrow
 /// column; the canvas keeps the rest.
 pub(crate) const DOCK_WIDTH: f32 = 258.0;
@@ -268,32 +294,111 @@ impl Shell {
     /// `Hide Panels` (the CS6 Tab key) folds the whole dock; the
     /// Window menu toggles one panel at a time, and a panel closed
     /// with its own close button leaves the rest of the dock alone.
-    pub(crate) fn dock(&mut self, ui: &mut egui::Ui) {
+    ///
+    /// Returns the column's inner rect — the drop target a dragged
+    /// panel is released over.
+    pub(crate) fn dock(&mut self, ui: &mut egui::Ui) -> Option<egui::Rect> {
         if self.panels_hidden {
-            return;
+            return None;
         }
-        egui::Panel::right(egui::Id::new("cs6_dock"))
+        self.dock_column(ui, DockSide::Right)
+    }
+
+    /// The left panel column — the second dock a panel can live in.
+    ///
+    /// It exists only when a panel is docked left or a panel is being
+    /// dragged: a drop target has to be there before the drag
+    /// reaches it, or there would be nowhere to drop the panel.
+    pub(crate) fn left_dock(&mut self, ui: &mut egui::Ui) -> Option<egui::Rect> {
+        if self.panels_hidden {
+            return None;
+        }
+        let dragging = egui::DragAndDrop::has_payload_of_type::<PanelDrag>(ui.ctx());
+        if !dragging && self.panels_in_dock(DockSide::Left).is_empty() {
+            return None;
+        }
+        self.dock_column(ui, DockSide::Left)
+    }
+
+    /// One dock column: the panels that live in it, stacked.
+    fn dock_column(&mut self, ui: &mut egui::Ui, side: DockSide) -> Option<egui::Rect> {
+        let (column_id, scroll_id) = match side {
+            DockSide::Left => ("cs6_left_dock", "cs6_left_dock_scroll"),
+            DockSide::Right => ("cs6_dock", "cs6_dock_scroll"),
+        };
+        let column = match side {
+            DockSide::Left => egui::Panel::left(egui::Id::new(column_id)),
+            DockSide::Right => egui::Panel::right(egui::Id::new(column_id)),
+        };
+        let mut rect = None;
+        column
             .resizable(true)
             .default_size(DOCK_WIDTH)
             .show_separator_line(true)
             .show(ui, |ui| {
+                rect = Some(ui.max_rect());
                 // The column scrolls: CS6's dock does too when the
                 // stack is taller than the window, and it is what keeps
                 // every panel reachable at a short viewport.
                 egui::ScrollArea::vertical()
-                    .id_salt("cs6_dock_scroll")
+                    .id_salt(scroll_id)
                     .auto_shrink([false, false])
                     .show(ui, |ui| {
                         for spec in PANELS {
-                            if self.panel_shown(spec.name) {
-                                self.dock_section(ui, spec, true);
+                            if self.panel_shown(spec.name) && self.panel_home(spec.name) == side {
+                                self.dock_section(ui, spec, true, side);
                             }
                         }
                         // The Web Layer panel is always present and
                         // carries no close button.
-                        self.dock_section(ui, &WEB_PANEL_SPEC, false);
+                        if self.panel_home(WEB_PANEL) == side {
+                            self.dock_section(ui, &WEB_PANEL_SPEC, false, side);
+                        }
                     });
             });
+        rect
+    }
+
+    /// Resolves a finished panel drag: a panel released over a dock
+    /// column moves into that column, and a release anywhere else
+    /// cancels the move. Either way the payload is consumed — a
+    /// payload left behind would keep the left column on screen
+    /// forever.
+    pub(crate) fn finish_panel_drag(
+        &mut self,
+        ui: &egui::Ui,
+        right: Option<egui::Rect>,
+        left: Option<egui::Rect>,
+    ) {
+        if !ui.input(|input| input.pointer.any_released()) {
+            return;
+        }
+        let Some(drag) = egui::DragAndDrop::take_payload::<PanelDrag>(ui.ctx()) else {
+            return;
+        };
+        let pointer = ui.ctx().pointer_interact_pos();
+        let over = |column: Option<egui::Rect>| {
+            pointer.is_some_and(|pos| column.is_some_and(|rect| rect.contains(pos)))
+        };
+        let target = if over(left) {
+            Some(DockSide::Left)
+        } else if over(right) {
+            Some(DockSide::Right)
+        } else {
+            None
+        };
+        if let Some(side) = target {
+            self.move_panel_to_dock(drag.name, side);
+        }
+    }
+
+    /// Drops a panel drag in flight. Called when the docks are not
+    /// drawn: a payload left behind would move a panel on a later
+    /// release, long after the drag the user made.
+    pub(crate) fn cancel_panel_drag(ctx: &egui::Context) {
+        if egui::DragAndDrop::has_payload_of_type::<PanelDrag>(ctx) {
+            egui::DragAndDrop::clear_payload(ctx);
+        }
     }
 
     /// One panel in the dock: a CS6 header (collapse arrow, name,
@@ -302,20 +407,47 @@ impl Shell {
     /// The header's expanded state is egui's own, keyed on the
     /// panel's name, so it survives a restart the way CS6's collapsed
     /// panels do.
-    fn dock_section(&mut self, ui: &mut egui::Ui, spec: &PanelSpec, closable: bool) {
+    ///
+    /// The panel's title is its drag handle — CS6 moves a panel by
+    /// its header — and the small arrow beside the close button
+    /// moves it to the other dock for anyone who cannot drag.
+    fn dock_section(
+        &mut self,
+        ui: &mut egui::Ui,
+        spec: &PanelSpec,
+        closable: bool,
+        side: DockSide,
+    ) {
         let mut close = false;
+        let mut move_to_other = false;
         let state = egui::collapsing_header::CollapsingState::load_with_default_open(
             ui.ctx(),
             egui::Id::new(("cs6_dock_panel", spec.name)),
             true,
         );
         let header = state.show_header(ui, |ui| {
-            ui.strong(spec.name);
-            if closable {
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            let _drag = ui.dnd_drag_source(
+                egui::Id::new(("cs6_panel_drag", spec.name)),
+                PanelDrag { name: spec.name },
+                |ui| {
+                    ui.strong(spec.name);
+                },
+            );
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if closable {
                     close = ui.small_button("×").clicked();
-                });
-            }
+                }
+                move_to_other = ui
+                    .small_button(match side {
+                        DockSide::Left => "»",
+                        DockSide::Right => "«",
+                    })
+                    .on_hover_text(match side {
+                        DockSide::Left => "Move the panel to the right dock",
+                        DockSide::Right => "Move the panel to the left dock",
+                    })
+                    .clicked();
+            });
         });
         header.body_unindented(|ui| {
             ui.set_min_width(DOCK_CONTENT_WIDTH);
@@ -346,6 +478,37 @@ impl Shell {
         if close {
             self.hide_panel(spec.name);
         }
+        if move_to_other {
+            self.move_panel_to_dock(spec.name, side.other());
+        }
+    }
+
+    /// The dock a panel lives in. A panel the user has not moved
+    /// lives in the right stack, where CS6 keeps its panel group.
+    pub(crate) fn panel_home(&self, name: &str) -> DockSide {
+        self.panel_homes
+            .iter()
+            .find(|(panel, _)| *panel == name)
+            .map_or(DOCK_SIDE, |(_, side)| *side)
+    }
+
+    /// Moves a panel into a dock. A panel moved back to the default
+    /// dock drops out of the moved set, so the saved layout stays
+    /// small and "not mentioned" keeps meaning "the default".
+    pub(crate) fn move_panel_to_dock(&mut self, name: &'static str, side: DockSide) {
+        self.panel_homes.retain(|(panel, _)| *panel != name);
+        if side != DOCK_SIDE {
+            self.panel_homes.push((name, side));
+        }
+    }
+
+    /// The panels that live in a dock, in CS6's roster order.
+    pub(crate) fn panels_in_dock(&self, side: DockSide) -> Vec<&'static str> {
+        PANELS
+            .iter()
+            .filter(|spec| self.panel_home(spec.name) == side)
+            .map(|spec| spec.name)
+            .collect()
     }
 
     /// Records a panel as hidden (the Window menu's toggle uses the
