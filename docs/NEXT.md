@@ -613,10 +613,15 @@ scope, so no license path is attempted.
   accelerator is bound to its row's action, held by
   `menus::tests::cs6_keymap_is_fully_bound`; the binding table
   carries its own section per row, gated by
-  `menus::tests::shortcut_sections_are_contiguous`. Remaining on
-  22.5: the Main toolbar's contents (CS6-PARITY §A rows 54, 255, 257,
-  164) and the 12 residual CS6 keymap command ids no FireCraft row
-  carries (CS6-PARITY §H).
+  `menus::tests::shortcut_sections_are_contiguous`. **The residual
+  keymap commands landed 2026-11-11**: the 16 bindings that close
+  them bring the table to 167 bindings in 40 sections, and every one
+  of CS6's 133 keymap-file entries across its 128 command ids now
+  resolves to a binding carrying the action this build answers it
+  with, held by `menus::tests::cs6_keymap_entries_are_bound` over
+  the transcribed `menus::tests::CS6_KEYMAP`. Remaining on 22.5:
+  the Main toolbar's contents (CS6-PARITY §A rows 54, 255, 257,
+  164).
 - **22.6 Icon pack integration** (M): ship the surveyed open-license
   icon set, subset it to the Fireworks verb set, and record the
   attribution rows. Accept: the wasm bundle grows by a documented,

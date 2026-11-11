@@ -237,9 +237,13 @@ here as an open evidence gap rather than guessed.
   Optimize, Layers, Common Library, CSS Properties, Pages, States,
   History, Auto Shapes, Styles, Document Library, URL, Color Mixer,
   Swatches, Info, Behaviors, Find and Replace.
-- Not wired by design: the file's `Page_Next=33` (PgUp) entry
-  contradicts the documented Ctrl+PgDn binding — left unbound until a
-  corpus page-turn proves the direction.
+- The file's `Page_Next=33` (Ctrl+PgUp) contradicts the documented
+  Ctrl+PgDn binding. FireCraft resolves it by the physical key, not by
+  the command's name: Ctrl+PgUp is bound to the tree's *Previous Page*
+  row's action and Ctrl+PgDn to *Next Page*, so the key and the row
+  agree. The divergence from CS6's command naming is recorded rather
+  than hidden; no corpus page-turn has settled which reading CS6's
+  own Page menu used.
 
 ## Where the bitmap-specific surface lives (Phase 22, ticket 22.4)
 
