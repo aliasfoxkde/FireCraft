@@ -22,7 +22,7 @@
 //! else — a committed golden file, compared against a freshly
 //! rendered snapshot, regenerated deliberately. Pixel snapshots stay
 //! open until the CI image can prove a software adapter; see
-//! decision 0079.
+//! decision 0087.
 //!
 //! What is pinned is the panel *structure*: the set, the dock order,
 //! the dock side, the header text, the fresh-document visibility, and

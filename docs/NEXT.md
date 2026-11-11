@@ -377,7 +377,7 @@ evidence work, tracked outside that campaign.
   (The command palette makes the *palette* reach 100% — the gate
   deliberately measures the CS6-visible surface instead, which is the
   surface the 19.x batches widen. Decision
-  [`0079`](decisions/0079-ui-work-gates.md).)
+  [`0087`](decisions/0087-ui-work-gates.md).)
 - **19b.3 Inert-drift test** (S): every non-Help/Command `Action::Inert`
   item carries a tracking reference, so an inert item cannot be added
   silently. — **LANDED 2026-11-02** in the stronger form: the census
@@ -640,7 +640,7 @@ scope, so no license path is attempted.
    re-docked without a deliberate re-pin fails the build. The pixel
    content of a panel is still unpinned; that half stays open and
    needs `egui_kittest` plus a proven software adapter (lavapipe) in
-   the CI image. Decision [`0079`](decisions/0079-ui-work-gates.md).
+   the CI image. Decision [`0087`](decisions/0087-ui-work-gates.md).
 2. **Reachability gate** in xtask: the set difference
    `catalog::ids()` − UI-bound commands only shrinks (mirror of the
    call-table test). Unreachable commands with no gate means drift.

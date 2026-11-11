@@ -17,7 +17,9 @@
 //! `reachability` (the shell's
 //! share of the command registry, against a rising floor),
 //! `panel-snapshot` (the CS6 panel inventory, against a committed
-//! golden). Diagnostics go to stderr; stdout stays clean so output can
+//! golden), `dist --manifest` / `dist --verify-manifest` (the
+//! machine-readable release manifest and its verification).
+//! Diagnostics go to stderr; stdout stays clean so output can
 //! be piped.
 
 mod aegis;
@@ -45,7 +47,7 @@ mod webgolden;
 
 use std::process::ExitCode;
 
-const USAGE: &str = "usage: cargo run -p xtask -- <ci [--full]|ci-no-fmt|aegis [--bless|--report]|coverage [--bless|--measure]|layers|wasm|corpus [--report]|corpus-gen|library-gen|hero-gen|styles-gen|scripts|floor|golden [--bless]|svg-golden [--bless]|svg-roundtrip [--measure]|web-golden [--bless|--measure]|perf [--bless|--measure]|dist --web|--native|--source|--sbom|fuzz|fuzz-quick|panic-hunt|reachability [--bless]|panel-snapshot [--bless]|parity|scorecard|stamps>";
+const USAGE: &str = "usage: cargo run -p xtask -- <ci [--full]|ci-no-fmt|aegis [--bless|--report]|coverage [--bless|--measure]|layers|wasm|corpus [--report]|corpus-gen|library-gen|hero-gen|styles-gen|scripts|floor|golden [--bless]|svg-golden [--bless]|svg-roundtrip [--measure]|web-golden [--bless|--measure]|perf [--bless|--measure]|dist --web|--native|--source|--sbom|--manifest|--verify-manifest|fuzz|fuzz-quick|panic-hunt|reachability [--bless]|panel-snapshot [--bless]|parity|scorecard|stamps>";
 
 fn main() -> ExitCode {
     match std::env::args().nth(1).as_deref() {
@@ -130,6 +132,8 @@ fn main() -> ExitCode {
             Some("--native") => finish("dist --native", dist::native()),
             Some("--source") => finish("dist --source", dist::source()),
             Some("--sbom") => finish("dist --sbom", dist::sbom()),
+            Some("--manifest") => finish("dist --manifest", dist::manifest()),
+            Some("--verify-manifest") => finish("dist --verify-manifest", dist::verify_manifest()),
             _ => {
                 eprintln!("{USAGE}");
                 ExitCode::FAILURE

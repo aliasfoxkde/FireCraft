@@ -1,4 +1,4 @@
-# 0079 — The UI-work gates measure the CS6-visible surface and pin structure, not pixels
+# 0087 — The UI-work gates measure the CS6-visible surface and pin structure, not pixels
 
 Date: 2026-11-10 · Ticket: [#94](https://github.com/aliasfoxkde/FireCraft/issues/94) · Status: accepted
 

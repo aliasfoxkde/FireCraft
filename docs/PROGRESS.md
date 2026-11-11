@@ -130,7 +130,7 @@
   404s); GitHub Actions green on all pushes. Local aegis scan fixed
   (excludes `target/` / `web/dist/` / `fuzz/`).
 - **Roadmap:** M0–M15 **all closed**; the post-roadmap DOM parity
-  campaign is **complete** (no M families). Decision docs 0001–0079.
+  campaign is **complete** (no M families). Decision docs 0001–0089.
 - **Menu reachability:** 289 CS6 menu items; **8 render inert**
   (281 wired). The count fell 190 → 178 (19.1) → 171 (19.5) → 144
   (19.6 batch 1, selection/mask) → 129 (19b.1 + batch 2) → 120

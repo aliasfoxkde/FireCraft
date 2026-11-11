@@ -1,4 +1,4 @@
-# 0084 — The release bytes are the source of truth for the web deployment
+# 0088 — The release bytes are the source of truth for the web deployment
 
 Date: 2026-11-10 · Ticket: [T18](../tasks/T18-release.md) · Status: accepted
 
