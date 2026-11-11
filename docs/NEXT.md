@@ -411,7 +411,13 @@ evidence work, tracked outside that campaign.
   live preview (export preview exists).
 - **20.3 Animation timeline** (M): frames strip, per-frame timing,
   onion skinning, `symbol.tween`.
-- **20.4 Mask stack UI** (M): add/remove/mode/link/move.
+- **20.4 Mask stack UI** (M): add/remove/mode/link/move. — **PARTIAL
+  2026-11-11**: the level's combine mode is modelled, persisted, and
+  editable (`mask.setStackMode`, the Properties panel's "Mask stack"
+  section; decision [0091](decisions/0091-mask-stack-combine-mode.md),
+  ticket [T9](tasks/T9-mask-stack.md)). The operator changes no
+  pixels yet — the compositor still folds mask-structured groups
+  unmasked — and add/remove/link/move are still open.
 - **20.5 Multi-document tabs** (M): **LANDED 2026-11-07** — Open/New
   park the active document as a `DocTab`; Close promotes the newest
   parked tab (refuses dirty documents); the tab strip shows the
