@@ -31,6 +31,7 @@ lcov.info
 # Session scratch: CS6 reference screenshots + session notes (Adobe-derived, never commit)
 /temp/
 
+# llvm-cov raw profile files written by `xtask coverage` on every gate run
 *.profraw
 
 # Session scratch: throwaway helper scripts and probe artifacts
