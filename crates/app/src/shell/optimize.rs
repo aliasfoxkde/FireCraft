@@ -436,4 +436,72 @@ mod tests {
         assert_eq!(matte_name(Some(MATTE_BLACK)), "black");
         assert_eq!(matte_name(Some(0x0012_3456)), "custom");
     }
+
+    /// A shell over a fresh document with one rectangle on page 0.
+    fn shell() -> Shell {
+        super::super::tests::gui_shell(super::super::tests::gui_editor())
+    }
+
+    #[test]
+    fn the_preview_stamp_follows_the_settings() {
+        let shell = shell();
+        let settings = OptimizeSettings::read(&shell.editor.document().pages[0]);
+        let base = shell.optimize_preview_stamp(&settings);
+        // The same settings stamp the same.
+        assert_eq!(base, shell.optimize_preview_stamp(&settings));
+        // Different settings do not.
+        let jpeg = OptimizeSettings {
+            format: 1,
+            ..settings
+        };
+        assert_ne!(base, shell.optimize_preview_stamp(&jpeg));
+    }
+
+    #[test]
+    fn the_preview_stamp_follows_the_view() {
+        let mut shell = shell();
+        let settings = OptimizeSettings::read(&shell.editor.document().pages[0]);
+        let base = shell.optimize_preview_stamp(&settings);
+        shell.editor.frame = 1;
+        assert_ne!(base, shell.optimize_preview_stamp(&settings));
+    }
+
+    #[test]
+    fn the_preview_encodes_the_page_as_a_png() {
+        let shell = shell();
+        let settings = OptimizeSettings {
+            format: 2,
+            ..OptimizeSettings::read(&shell.editor.document().pages[0])
+        };
+        let bytes = shell
+            .encode_for_preview(&settings)
+            .expect("the page must encode");
+        assert_eq!(&bytes[..4], b"\x89PNG");
+    }
+
+    #[test]
+    fn the_preview_encodes_the_page_as_a_jpeg() {
+        let shell = shell();
+        let settings = OptimizeSettings {
+            format: 1,
+            ..OptimizeSettings::read(&shell.editor.document().pages[0])
+        };
+        let bytes = shell
+            .encode_for_preview(&settings)
+            .expect("the page must encode");
+        assert_eq!(&bytes[..3], &[0xFF, 0xD8, 0xFF]);
+    }
+
+    #[test]
+    fn the_preview_encodes_the_page_as_an_animated_gif() {
+        let shell = shell();
+        let settings = OptimizeSettings {
+            format: 0,
+            ..OptimizeSettings::read(&shell.editor.document().pages[0])
+        };
+        let bytes = shell
+            .encode_for_preview(&settings)
+            .expect("the page must encode");
+        assert_eq!(&bytes[..4], b"GIF8");
+    }
 }

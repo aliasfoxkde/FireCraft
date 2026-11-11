@@ -380,4 +380,121 @@ mod tests {
         let document = document_with(1);
         assert!(TimelineStrip::read(&document, 9).is_none());
     }
+
+    /// A shell over a fresh document whose page 0 carries `states`
+    /// states.
+    fn shell_with_states(states: i64) -> Shell {
+        let mut shell = super::super::tests::gui_shell(crate::editor::Editor::untitled());
+        for _ in 1..states {
+            assert!(
+                shell.run_command(
+                    "frame.add",
+                    serde_json::json!({ "page": 0, "how_many": 1, "location": "end" }),
+                ),
+                "adding a state must succeed",
+            );
+        }
+        shell
+    }
+
+    /// The page's state count, as the model holds it.
+    fn state_count(shell: &Shell) -> i64 {
+        shell.editor.document().pages[0].info.frame_count
+    }
+
+    /// The elements of one layer's one state.
+    fn elements(shell: &Shell, layer: usize, state: usize) -> Vec<doc::ObjectId> {
+        shell.editor.document().pages[0].layers.layers[layer].cells[state]
+            .elements
+            .clone()
+    }
+
+    /// Puts one rectangle into the given layer's given state.
+    fn put_rect(shell: &mut Shell, layer: usize, state: usize, x: f64) {
+        shell
+            .editor
+            .apply(
+                "object.createPath",
+                serde_json::json!({
+                    "kind": "rect", "x": x, "y": 0.0,
+                    "width": 20.0, "height": 20.0,
+                    "page": 0, "layer": layer, "cell": state, "name": null,
+                }),
+            )
+            .expect("the rectangle must land");
+    }
+
+    #[test]
+    fn add_state_puts_an_empty_state_after_the_current_one() {
+        let mut shell = shell_with_states(2);
+        let layer = shell.editor.active_layer();
+        shell.editor.frame = 0;
+        shell.add_state(0, 0);
+        assert_eq!(state_count(&shell), 3);
+        // The new state becomes the active one.
+        assert_eq!(shell.editor.frame, 1);
+        // And it is empty: Add State is not Duplicate State.
+        assert!(elements(&shell, layer, 1).is_empty());
+    }
+
+    #[test]
+    fn duplicate_state_copies_the_current_state_after_it() {
+        let mut shell = shell_with_states(1);
+        let layer = shell.editor.active_layer();
+        put_rect(&mut shell, layer, 0, 10.0);
+        shell.duplicate_state(0, 0);
+        assert_eq!(state_count(&shell), 2);
+        assert_eq!(shell.editor.frame, 1);
+        // The copy carries the original's content, in its own slot.
+        let source = elements(&shell, layer, 0);
+        let copy = elements(&shell, layer, 1);
+        assert_eq!(source.len(), 1);
+        assert_eq!(copy.len(), 1);
+        assert_ne!(source[0], copy[0]);
+    }
+
+    #[test]
+    fn delete_state_drops_the_current_state_and_the_next_one_takes_its_place() {
+        let mut shell = shell_with_states(3);
+        shell.editor.frame = 1;
+        shell.delete_state(0, 1);
+        assert_eq!(state_count(&shell), 2);
+        assert_eq!(shell.editor.frame, 1);
+    }
+
+    #[test]
+    fn the_last_state_stays() {
+        // The engine refuses to empty a page, so the refusal is
+        // reported on the status line and the view does not move.
+        let mut shell = shell_with_states(1);
+        shell.editor.frame = 0;
+        shell.delete_state(0, 0);
+        assert_eq!(state_count(&shell), 1);
+        assert!(shell.status.contains("frame.delete failed"));
+        assert_eq!(shell.editor.frame, 0);
+    }
+
+    #[test]
+    fn distribute_to_states_moves_the_items_one_per_state() {
+        let mut shell = shell_with_states(1);
+        let layer = shell.editor.active_layer();
+        put_rect(&mut shell, layer, 0, 10.0);
+        put_rect(&mut shell, layer, 0, 40.0);
+        shell.distribute_to_states(0, 0);
+        // Two items, one per state — the page grew to hold them.
+        assert_eq!(state_count(&shell), 2);
+        assert_eq!(elements(&shell, layer, 0).len(), 1);
+        assert_eq!(elements(&shell, layer, 1).len(), 1);
+    }
+
+    #[test]
+    fn a_single_item_distributes_to_nothing() {
+        // CS6's documented no-op: one item cannot be spread.
+        let mut shell = shell_with_states(1);
+        let layer = shell.editor.active_layer();
+        put_rect(&mut shell, layer, 0, 10.0);
+        shell.distribute_to_states(0, 0);
+        assert_eq!(state_count(&shell), 1);
+        assert_eq!(elements(&shell, layer, 0).len(), 1);
+    }
 }
