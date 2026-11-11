@@ -63,6 +63,27 @@ pub fn ids() -> Vec<&'static str> {
     registry.names()
 }
 
+/// The session-scoped command ids, sorted.
+///
+/// These are *not* in [`ids`]: they act on the session's undo
+/// history rather than on the document, so the registry cannot own
+/// them. A surface that enumerates commands (the command palette, the
+/// CLI, the MCP bridge) offers both lists.
+#[must_use]
+pub fn session_ids() -> Vec<&'static str> {
+    vec![crate::session::REWIND_ID]
+}
+
+/// Every command a surface can run: the registry catalog plus the
+/// session-scoped ids, sorted.
+#[must_use]
+pub fn all_ids() -> Vec<&'static str> {
+    let mut ids = ids();
+    ids.extend(session_ids());
+    ids.sort_unstable();
+    ids
+}
+
 /// Unit-test fixture shared by the catalog modules: two pages, two
 /// layers each, two visible cells (states) per layer, two path objects
 /// per first cell. Integration tests keep their own copy in

@@ -434,42 +434,26 @@ impl Shell {
         }
     }
 
-    /// History section: journal rows plus the steps save/replay pair.
-    /// Clicking a row rewinds the session to that step (CS6's History
-    /// panel click-to-rewind); rows after the clicked one become the
-    /// redo stack and stay reachable with Redo.
+    /// History section: the undo steps, newest first (CS6's History
+    /// panel), each row clickable — clicking a row rewinds the
+    /// document to the state that step recorded. Plus the steps
+    /// save/replay pair.
     pub(super) fn history_section(&mut self, ui: &mut egui::Ui) {
         // Snapshot the rows so closures never borrow the session while
         // the editor is mutable (same rule as the layer list above).
-        let rows: Vec<(u64, String)> = self
-            .editor
-            .session
-            .journal_entries()
-            .iter()
-            .map(|entry| {
-                let label = match &entry.txn {
-                    Some(txn) => format!("{}. {txn}: {}", entry.seq, entry.name),
-                    None => format!("{}. {}", entry.seq, entry.name),
-                };
-                (entry.seq, label)
-            })
-            .collect();
+        let mut entries = self.editor.session.history_entries();
+        entries.reverse();
         egui::ScrollArea::vertical()
             .max_height(160.0)
             .show(ui, |ui| {
-                for (seq, label) in &rows {
-                    if ui
-                        .selectable_label(false, label)
-                        .on_hover_text("rewind to this step")
-                        .clicked()
-                    {
-                        let undone = self.editor.rewind_to(*seq);
-                        self.status = if undone == 0 {
-                            "already at that step".to_owned()
-                        } else {
-                            format!("rewound {undone} step(s) — Redo restores them")
-                        };
+                for entry in &entries {
+                    let label = format!("{}. {}", entry.depth, entry.label);
+                    let response = ui.selectable_label(false, label);
+                    if response.clicked() {
+                        self.rewind_history(entry.depth);
                     }
+                    response.on_hover_text(format!("Rewind to step {}", entry.depth));
+
                 }
             });
         ui.horizontal(|ui| {
@@ -488,6 +472,17 @@ impl Shell {
                 self.replay_steps();
             }
         });
+    }
+
+    /// Rewinds the session's history to `depth`: the document returns
+    /// to the state that step recorded and the steps above it are
+    /// dropped.
+    pub(super) fn rewind_history(&mut self, depth: usize) {
+        match self.editor.session.rewind_to(depth) {
+            Ok(0) => self.status = "already at that step".to_owned(),
+            Ok(undone) => self.status = format!("rewound {undone} step(s)"),
+            Err(error) => self.status = format!("history.rewind failed: {error}"),
+        }
     }
 
     /// The document library: one row per definition — click enters
