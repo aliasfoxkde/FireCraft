@@ -1,10 +1,12 @@
 # CS6 user-visible parity matrix
 
-> Audited 2026-11-04 against the `main` tree; **revised 2026-11-07**
-> after the Phase 20/21/22 landings (tabs, autosave, Preferences,
-> Run Script, in-canvas text editing, and the five Window panels).
-> This is the
-> **user-visible** inventory demanded by
+> Initial inventory audited 2026-11-04; refreshed against
+> `main` at `b61f198` on 2026-11-11 after the shell-lineage train:
+> multi-document tabs, history rewind, slice/hotspot editing, the
+> Phase 21 deliverables, and the completed menu wiring campaign.
+> Remaining Phase 20/22 work is called out with its current PR or
+> evidence gate in this matrix and [TASKS.md](TASKS.md).
+> This is the **user-visible** inventory demanded by
 > [`tasks/T26-parity-matrix.md`](tasks/T26-parity-matrix.md): every
 > Fireworks CS6 workflow and UI area a person can reach, classified
 > with a citation. It is *not* the DOM verb matrix
