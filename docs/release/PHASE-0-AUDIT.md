@@ -369,6 +369,7 @@ it, and what it blocks. Nothing here is inferred from "not done".
 | B-20 | **GitForge CI can no longer build `main` at all.** The single shared runner image is keyed to one lockfile — the one on PR #15 — so every branch still on `main`'s `Cargo.lock` fails the sandbox at its first cargo step, and `main` itself cannot be validated on the authoritative CI system. | The image `firecraft-ci-rust:1` on the runner host (fedora) was built **2026-11-09 08:54** and its cargo registry cache holds `time-0.3.41`, `time-0.3.47` and `time-0.3.55` — **not** `time-0.3.45`, which is what `main` pins. `.gitforge.yml` sets `CARGO_NET_OFFLINE=true`, and its own header warns "Rebuild + re-ship the image before pushing any commit that moves either lockfile". Two runs prove the consequence: a retrigger of this audit's own branch (`tmp/p0-ci-retrigger`, run `ddb0c9df`) and a probe of `main` itself (`tmp/p0-main-probe`, run on `5fac7a2`) both fail in the first job with `fmt-layers` exit 101 — "error: failed to download `time v0.3.45` / Caused by: attempting to make an HTTP request, but --offline was specified" — and every downstream job is `cancelled` | The GitForge copy of the 20-step gate cannot be run for `main` or for any branch that has not taken the PR #15 lockfile, so P0.4.2 has no GitForge receipt for the audited baseline (and could not get one). The image is shared, so re-shipping it for one branch breaks the others — the image must hold **both** lockfile states, or the sandbox must be allowed to fetch `time 0.3.45` |
 | B-21 | **The published v0.2.5 web bundle is not the bundle the release workflow built, and the release itself was published out of band.** The release workflow's `create draft release` job failed, and the release plus its assets were created 91 seconds later by a path the workflow does not contain. | Release run `41689885746`: job `126105364883` ("build artifacts") succeeded and logged "[xtask] dist web: 6 file(s), wasm 21231517 B (ceiling 21500000), manifest MANIFEST.sha256, smoke green" at **18:15:59Z**; job `126113210174` ("create draft release") then failed at **18:16:19Z** with `unknown shorthand flag: 'a' in -a` (B-4 defect (a)). The GitHub release `v0.2.5` reports `published_at 2026-11-03T18:17:51Z` with all five assets created at **18:17:49Z** — 91 seconds after the workflow died, with no job account for it. The published ZIP's own entries are stamped **2026-11-03 12:08** and its wasm is **21,238,451 B**, against the workflow's **21,231,517 B**; the ZIP holds 5 content files + manifest where the workflow staged 6 content files (a CI-built `dist/web` would zip to 7 entries) | The bytes that shipped have **no build receipt**: no log, no commit SHA, no toolchain, and no bridge smoke of *those* bytes — the smoke was green on a different bundle (F-16). Nothing in the repository can attest what the published v0.2.5 artifacts are, and the next release will inherit the same hand-publish path until B-4 is fixed |
 | B-22 | **The GitForge runner's failure path arms its container reap and backend-health checks with no timeout**, so a wedged Docker daemon wedges the runner instead of failing the job. This defect lives in the **GitForge** repository, not in FireCraft. | `/nas/Temp/repos/GitForge/crates/gitforge-runner/src/executor.rs`: the failure path calls `self.reap_attempt_containers(job_id).await` (lines 693 and 716) and `self.pool.sandbox.backend_health().await` (lines 709, 730, 769, 848, 871) with no timeout, while the preflight-teardown path wraps the same class of call in `timeout(Duration::from_secs(15), …)`. The unbounded `backend_health` reaches an unbounded bollard `list_containers` in `crates/gitforge-sandbox/src/docker.rs`. | FireCraft's authoritative CI receipt depends on the GitForge runner completing: a runner that hangs instead of failing produces **no terminal job state**, which blocks the campaign's evidence ladder for every GitForge-verified row (P2.1 "Verify authoritative GitForge CI"). Tracked as FireCraft issue **#37** and as task #202; the fix belongs in the GitForge repository. |
+| B-23 | **The GitForge `release` job's tag gate does not gate.** Its first step ends with `exit 0` when the ref is not a tag, but `exit 0` ends a *step*, not a *job* — the runner executes the remaining steps regardless, so the release-path build (web bundle + native set + deb read-back) runs on **every** push, and the step's own message ("not a tag push — skipping release build") is false. | Read from the authoritative store on 2026-11-10: run `9acd8b5a` was an ordinary branch push (commit `aefe5ac`), and its `release` job ran **52 minutes** — `started_at 2026-11-09T19:37:29Z`, `finished_at 2026-11-09T20:29:56Z` — with all four step commands recorded on the job row: the tag gate, `dist --web`, `dist --native`, and the artifact staging. A job that had skipped the build would have finished in seconds. | The pipeline misstates its own cost and the meaning of a "release" run: a reader would conclude that branch pushes are cheap and that only tags produce release artifacts, and the opposite is true. It also weakens the receipt — a green `release` job on a branch push is evidence about the release *path*, not about a tagged release. Fixed in PR #40 by renaming the step to "Tag report", making it report the ref instead of pretending to gate, and stating the actual policy: the release path is built on every push, because the web bundle's bridge smoke and the native set's deb read-back are the strongest evidence this pipeline produces and a tag-only gate would withhold them from every pull request. |
 
 ---
 
@@ -488,7 +489,7 @@ fix (B-20), and the Aegis gate itself was defective (PR #18).
 | F-10 | the release procedure assumes a reproducible toolchain | no `rust-toolchain.toml`; CI installs `stable` at run time, so the compiler that produced the published artifacts is not pinned in the repository | medium |
 | F-11 | `docs/RELEASING.md`: "`xtask changelog` … Refresh and commit the copy at release time; CI runs the verb (it re-verifies licenses/versions on the runner) but does not byte-check the file" | the verb **writes** the file, and it is a step of the canonical gate, so every gate run rewrites a tracked document (B-16) | medium |
 | F-12 | the campaign's live task ledger is `docs/TASKS.md` | `docs/TASKS.md` on `main` carries no T27 row; the campaign board exists only on PR #12 | medium |
-| F-13 | the campaign mandate is a repository document | `docs/planning/release-compaign/Cross-Platform Releas.txt` is **untracked** in the operator's checkout — the mandate for this campaign is not in version control | medium |
+| F-13 | the campaign mandate is a repository document | `docs/planning/release-compaign/Cross-Platform Releas.txt` was **untracked** in the operator's checkout — the mandate for this campaign was not in version control. **Closed** by tracking the mandate under `docs/planning/release-compaign/` (decision 0078): the file names are kept verbatim because open branches cite them by path and by section number, and `docs/release/EXECUTION-BOARD.md` links to them relatively | medium — **closed** |
 | F-14 | the release plan treats the source archive and SBOM as MVP-lane deliverables | neither has ever been published, and the publishing workflow (B-4) cannot carry them | high |
 | F-15 | the audited baseline `main` is what gets built and shipped, and nothing in the release procedure checks the dependency set for security advisories | `origin/main:Cargo.lock` pins **`time 0.3.45`**. The repository contains commits `c74b179` and `e9747b8` — "build: raise MSRV to 1.95 and bump time past CVE-2026-25727" — recording that `time` 0.3.45 is affected by a Dependabot **stack-exhaustion denial of service** requiring `time >= 0.3.47`, and that the fix additionally forces the workspace `rust-version` from `1.85` to `1.95` (`time` 0.3.47 needs 1.88, and cargo's MSRV-aware resolver floors on the *lowest* `rust-version` anywhere in the workspace, so the lockfile silently slid back to 0.3.45 until the floor moved). Those commits live on `feat/dock-inspector-parity-matrix` and `feat/phase-21-daily-driver` (pushed to origin **and** gitforge, 23–29 commits ahead of `main`) — **not on `main`**. Every published v0.2.5 artifact and the audited baseline therefore carry the flagged version. The advisory is confirmed independently of the commit message: GitHub's Dependabot API reports alert **#1, state `open`, severity `medium`**, package `time` in `Cargo.lock`, `GHSA-r6v5-fh4h-64xc` / `CVE-2026-25727`, summary "time vulnerable to stack exhaustion Denial of Service attack", vulnerable range `>= 0.3.6, < 0.3.47`, first patched version `0.3.47`; `main`'s `0.3.45` is inside that range and the alert is open against the default branch | high |
 | F-16 | the release workflow is the thing that publishes the web bundle, and `docs/RELEASING.md` treats the release job's output as the released artifact | the workflow's own web build (21,231,517 B wasm, 6 staged content files) is **not** the bundle in the published ZIP (21,238,451 B wasm, 5 content files + manifest, entries stamped 12:08 — six hours before the workflow's build finished at 18:15:59Z). The `create draft release` job died at 18:16:19Z and the release appeared at 18:17:49Z with no job account for it. The documented release path and the actual publication path are different code paths | high |
@@ -652,7 +653,44 @@ This changes the PR dispositions above in one respect: the red gates
 on #10, #11, #14 and #17 were not evidence against their content. They
 are re-run against the corrected gate.
 
-### 11.5 Merge order
+### 11.5 B-5 — the GitForge release path smokes the bundle again
+
+B-5 recorded that the GitForge `release` job set
+`FIRECRAFT_DIST_SKIP_SMOKE=1`, so the authoritative CI path built the
+web bundle **without** the bridge smoke while `docs/RELEASING.md`
+claimed the opposite. That was a procedure compensating for a tool
+defect: the CI image baked no browser, so the escape hatch was the
+only way to let `dist --web` run at all.
+
+The tool defect is fixed and the procedure is gone:
+
+- `infrastructure/docker/ci-rust.Dockerfile` bakes Debian 12
+  bookworm's `chromium` package (at `/usr/bin/chromium`, the first
+  name `xtask`'s `chromium_path()` looks for) in its own layer, after
+  the toolchain layers and before the registry copy. The browser is a
+  hard dependency install (`--no-install-recommends` keeps only the
+  recommended packages out; chromium's shared libraries are hard
+  dependencies of the package itself).
+- `xtask/src/dist.rs` no longer reads `FIRECRAFT_DIST_SKIP_SMOKE`.
+  `dist --web` always runs the bridge smoke; a missing browser or a
+  round trip that does not report `green` fails the run.
+- `.gitforge.yml`'s `release` job runs the web step without the skip
+  switch, so the authoritative path smokes the bytes it publishes.
+- `docs/RELEASING.md` and `docs/release/ARTIFACT-MATRIX.md` no longer
+  describe the door.
+
+The image carrying the browser was built on Fedora and shipped to the
+runner host on 2026-11-10 (`firecraft-ci-rust:1`, chromium 156.0.8078.79
+at `/usr/bin/chromium`); a local `xtask dist --web` against it reports
+"smoke green" on the staged bytes.
+
+The same change uncovered **B-23**: the `release` job's tag gate did
+not gate. Its `exit 0` ended a step, not a job, so the release-path
+build ran on every push while the step announced a skip. The step is
+now "Tag report" and states the real policy — the release path is built
+on every push, and the tag only adds its name to the log. See §4, B-23.
+
+### 11.6 Merge order
 
 1. **#18** — the corrected gate. Every other PR's aegis result depends
    on it, and it changes no behaviour other than finding identity.
