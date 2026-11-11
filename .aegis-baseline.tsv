@@ -165,6 +165,8 @@ ssrf-localhost	./xtask/src/aegis.rs	49960de5880e8c687434170f6476605b8fe4aeb9a286
 ssrf-localhost	./xtask/src/dist.rs	12ca17b49af2289436f303e0166030a21e525d266e209267433801a8fd4071a0	1
 # A comment quoting a V8 crash dump observed in CI; it documents a
 # failure, and the build prints nothing.
+stack-trace-exposure	./docs/PRODUCTION-READINESS-PLAN.md	d26fba73fb8604b0c99010d648d66379756ada54983b96b6dbffcf0626cf0b1a	1
+stack-trace-exposure	./docs/decisions/0080-wasm-bundle-size-policy.md	d26fba73fb8604b0c99010d648d66379756ada54983b96b6dbffcf0626cf0b1a	1
 stack-trace-exposure	./infrastructure/docker/ci-rust.Dockerfile	17ee41935f062dffb434b86c2a8d432567df47fc5988eb4cf2bbae1b690e4747	1
 # The SVG importer's entity-expansion fixture, which must declare an
 # external entity so the test can observe the importer refusing it, and
