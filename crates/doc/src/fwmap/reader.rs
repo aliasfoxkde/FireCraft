@@ -2162,7 +2162,7 @@ impl Reader {
     }
 
     /// `DTAv` children → the mask level's combine mode (decision
-    /// 0091). The node itself stays bagged either way — foreign data
+    /// 0092). The node itself stays bagged either way — foreign data
     /// round-trips verbatim — but the `DCEv` entry keyed
     /// [`MASK_STACK_MODE_KEY`] is read into the model. An unknown
     /// spelling canonicalizes to the default (the absent mode); the
@@ -2212,7 +2212,7 @@ impl Reader {
                 }
                 // The mask level's combine mode rides in the group's
                 // custom data as a `DCEv` entry keyed
-                // `MASK_STACK_MODE_KEY` (decision 0091). The node is
+                // `MASK_STACK_MODE_KEY` (decision 0092). The node is
                 // bagged as well, so foreign entries round-trip
                 // verbatim; the writer owns the mode key itself.
                 b"DTAv" => {

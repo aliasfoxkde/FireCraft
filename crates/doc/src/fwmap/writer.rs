@@ -246,7 +246,7 @@ pub(crate) fn mapped_indices(bagged: &[(usize, Node)], mapped_len: usize) -> Vec
 }
 
 /// The `DCEv` entry a mask stack's combine mode rides in: a key/value
-/// pair inside the mask group's `DTAv` data node (decision 0091).
+/// pair inside the mask group's `DTAv` data node (decision 0092).
 fn stack_mode_entry(mode: MaskCombineMode) -> Node {
     n_kids(
         *b"DCEv",
@@ -1248,7 +1248,7 @@ impl Writer<'_> {
         //
         // The group's preserved children are taken up front: the mask
         // stack's combine mode rides in the group's `DTAv` data node
-        // (decision 0091), and the writer owns that key — so it has to
+        // (decision 0092), and the writer owns that key — so it has to
         // know whether a `DTAv` was preserved before it decides to
         // emit one.
         let bagged = self.bag.take_under(path);

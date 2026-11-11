@@ -604,7 +604,7 @@ fn lnkb_writes_only_when_unlinked_and_round_trips() {
     assert!(!bytes.is_empty());
 }
 
-// --- decision 0091: the mask stack's combine mode ----------------------
+// --- decision 0092: the mask stack's combine mode ----------------------
 
 /// The sample document's group — the mask level the mode rides on.
 fn sample_group_id(doc: &Document) -> ObjectId {

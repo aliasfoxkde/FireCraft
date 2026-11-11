@@ -414,7 +414,7 @@ evidence work, tracked outside that campaign.
 - **20.4 Mask stack UI** (M): add/remove/mode/link/move. — **PARTIAL
   2026-11-11**: the level's combine mode is modelled, persisted, and
   editable (`mask.setStackMode`, the Properties panel's "Mask stack"
-  section; decision [0091](decisions/0091-mask-stack-combine-mode.md),
+  section; decision [0092](decisions/0092-mask-stack-combine-mode.md),
   ticket [T9](tasks/T9-mask-stack.md)). The operator changes no
   pixels yet — the compositor still folds mask-structured groups
   unmasked — and add/remove/link/move are still open.

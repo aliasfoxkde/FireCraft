@@ -164,7 +164,7 @@ pub(crate) fn element_mask_state(document: &Document, id: ObjectId) -> Option<bo
 
 /// The mask group behind `id` and the combine mode of its level.
 ///
-/// The mask stack's read side (decision 0091): `id` is the mask group
+/// The mask stack's read side (decision 0092): `id` is the mask group
 /// itself, the mask it holds, or the object it masks. `None` when `id`
 /// carries no element mask.
 pub(crate) fn element_mask_stack_mode(
@@ -1416,7 +1416,7 @@ impl TypedCommand for SetMaskShowAttrs {
 // --- mask.setStackMode --------------------------------------------------
 
 /// `mask.setStackMode` — sets the combine mode of a mask level inside
-/// a mask stack (decision 0091). A `FireCraft` extension: CS6 has one
+/// a mask stack (decision 0092). A `FireCraft` extension: CS6 has one
 /// element mask per object and no stack, so the mode rides in the mask
 /// group's data node and the default is the union ("add").
 ///

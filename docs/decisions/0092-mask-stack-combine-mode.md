@@ -1,4 +1,4 @@
-# 0091 — The mask stack's combine mode is a namespaced data entry the model owns
+# 0092 — The mask stack's combine mode is a namespaced data entry the model owns
 
 Date: 2026-11-11 · Status: accepted
 

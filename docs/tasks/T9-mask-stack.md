@@ -29,7 +29,7 @@ plus the repo gate `cargo run -p xtask -- ci`.
 
 ## Status — PARTIAL (2026-11-11)
 
-**Landed** (decision [0091](../decisions/0091-mask-stack-combine-mode.md)):
+**Landed** (decision [0092](../decisions/0092-mask-stack-combine-mode.md)):
 
 - The model owns the operator. `doc::MaskCombineMode` is `Add`,
   `Subtract`, `Intersect`, `Invert`; `GroupObject::stack_mode` holds
