@@ -706,17 +706,15 @@ fn rewrite_lock(text: &str, local: &[String], version: &str) -> Result<String, S
     let mut replaced = 0usize;
     let mut block = String::new();
     for line in text.lines() {
-        if line.trim() == "[[package]]" {
-            if !block.is_empty() {
-                out.push_str(&rewrite_lock_block(
-                    &block,
-                    local,
-                    &locked,
-                    version,
-                    &mut replaced,
-                ));
-                block.clear();
-            }
+        if line.trim() == "[[package]]" && !block.is_empty() {
+            out.push_str(&rewrite_lock_block(
+                &block,
+                local,
+                &locked,
+                version,
+                &mut replaced,
+            ));
+            block.clear();
         }
         block.push_str(line);
         block.push('\n');

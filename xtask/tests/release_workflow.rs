@@ -186,12 +186,17 @@ fn stage_flattens_the_artifact_tree_into_the_release_asset_set() {
     // directory is what both `sha256sum -c` and the release step read.
     assert_eq!(
         sandbox.dir_names("flat"),
+        // The basenames sort byte-wise, so the capitalised names come
+        // first and the lowercase names follow. The source archive used
+        // to be named `FireCraft-<v>-source.tar.gz`, whose capital `F`
+        // sorted ahead of `MANIFEST`; the lowercase rename moved it
+        // between the `-sbom` and `-cli` archives.
         vec![
-            "firecraft-0.2.5-source.tar.gz".to_string(),
             "MANIFEST.sha256".to_string(),
             "RELEASE_SHA256.txt".to_string(),
             "firecraft-0.2.5-linux-x86_64.tar.gz".to_string(),
             "firecraft-0.2.5-sbom.cdx.json".to_string(),
+            "firecraft-0.2.5-source.tar.gz".to_string(),
             "firecraft-cli-0.2.5-linux-x86_64.tar.gz".to_string(),
             "firecraft-web-0.2.5.zip".to_string(),
             "firecraft_0.2.5_amd64.deb".to_string(),
