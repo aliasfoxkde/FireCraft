@@ -24,7 +24,7 @@ caught and fixed the 2.31 vs 2.35 libc6 floor.
 
 The pipeline now performs this check on every run
 (`packaging/deb/verify-install.sh`, stage by stage). On 2026-11-11 the run for
-`4273471` (pipeline run `85502100-799b-42fe-b1b4-352488538449`) passed the install,
+`4273471` (pipeline run `85502100`) passed the install,
 desktop-entry, icon, CLI and document round-trip stages and failed the GUI launch:
 the desktop binary aborted with "Library libxkbcommon-x11.so could not be loaded",
 because the package declared only `libc6` and the verification image installed only

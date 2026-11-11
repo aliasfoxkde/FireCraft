@@ -5,8 +5,8 @@ Date: 2026-11-11 · Ticket: [T27](../tasks/T27-cross-platform-release.md) · Sta
 ## Context
 
 The release pipeline's DEB install verification reached its GUI
-launch stage on 2026-11-11 (run
-`85502100-799b-42fe-b1b4-352488538449`, commit `4273471`) and the
+launch stage on 2026-11-11 (pipeline run
+`85502100`, commit `4273471`) and the
 desktop binary died instead of starting:
 
 ```
@@ -90,6 +90,11 @@ provide it would get a window that never draws.
   parenthesis.
 - The published v0.2.5 package is historical and is not replaced; its
   `Depends` stays `libc6 (>= 2.31)`, recording what was published.
+- The pipeline run is cited by its short id (`85502100`), the way
+  `docs/release/EXECUTION-BOARD.md` cites it. The full id's last
+  segment is a 12-digit number, which the Aegis scan reports as an
+  Indian Aadhaar number — a false positive, but one the short form
+  does not have.
 
 See also decision 0077 (the libc6 floor) and 0086 (the pipeline fails
 closed).
