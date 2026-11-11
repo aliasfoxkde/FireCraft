@@ -744,6 +744,9 @@ pub const CALLS: &[&str] = &[
     "mask.setMode",
     "mask.setShowAttrs",
     "mask.setStackMode",
+    "mask.addLevel",
+    "mask.removeLevel",
+    "mask.moveLevel",
     "mask.pathToMarquee",
     "mask.marqueeToPath",
     "mask.saveJPEG",
@@ -2858,6 +2861,18 @@ pub fn payload_template(name: &str, rng: &mut FuzzRng, document: &Document) -> s
         "mask.setStackMode" => serde_json::json!({
             "id": any_id(rng),
             "mode": rng.pick(&["add", "subtract", "intersect", "invert"]).copied(),
+        }),
+        "mask.addLevel" => serde_json::json!({
+            "id": any_id(rng),
+            "source": any_id(rng),
+            "mode": rng.pick(&["add", "subtract", "intersect", "invert"]).copied(),
+        }),
+        "mask.removeLevel" => serde_json::json!({
+            "id": any_id(rng),
+        }),
+        "mask.moveLevel" => serde_json::json!({
+            "id": any_id(rng),
+            "delta": if rng.chance(50) { 1 } else { -1 },
         }),
         "mask.pathToMarquee" => serde_json::json!({
             "id": any_id(rng),
