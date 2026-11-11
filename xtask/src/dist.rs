@@ -27,7 +27,7 @@ use std::sync::mpsc;
 /// - 50,000,000 B: hard ceiling; the build fails above this value.
 ///
 /// The measured Phase 21/22 baseline is 21,608,249 B (2026-11-10;
-/// 8c68b0f; GitForge run 2bf47590-3f50-445c-9948-f0bc3587b483).
+/// 8c68b0f; `GitForge` run 2bf47590-3f50-445c-9948-f0bc3587b483).
 /// The 50 MB cap is an explicit policy safety limit, not a measured
 /// target and not permission to let the bundle grow to 49 MB.
 /// Decision 0079 retains the historical 22 MB measurement-based pin;
