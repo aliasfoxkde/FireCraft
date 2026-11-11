@@ -115,11 +115,13 @@ fn compare(rendered: &str, committed: &str) -> Result<(), String> {
         let rendered_line = rendered_lines.get(index);
         let committed_line = committed_lines.get(index);
         match (rendered_line, committed_line) {
-            (Some(rendered_line), Some(committed_line)) if rendered_line != committed_line => {
-                differences.push(format!(
-                    "line {}: golden `{committed_line}` != panel set `{rendered_line}`",
-                    index + 1
-                ));
+            (Some(rendered_line), Some(committed_line)) => {
+                if rendered_line != committed_line {
+                    differences.push(format!(
+                        "line {}: golden `{committed_line}` != panel set `{rendered_line}`",
+                        index + 1
+                    ));
+                }
             }
             (Some(rendered_line), None) => differences.push(format!(
                 "line {}: panel set `{rendered_line}` is not in the golden",
