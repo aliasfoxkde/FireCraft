@@ -11,6 +11,7 @@
 * [Documents and Formats](Documents-and-Formats)
 * [Automation](Automation)
 * [Browser and WebOS](Browser-and-WebOS)
+* [Distribution and SDK](Distribution-and-SDK)
 * [Troubleshooting](Troubleshooting)
 
 **DEVELOPING FIRECRAFT**
