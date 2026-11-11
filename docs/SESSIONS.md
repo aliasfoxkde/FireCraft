@@ -1601,6 +1601,15 @@ gate at all.
 
 ## 2026-11-06 — The Aegis gate, rebuilt on rule classes and content digests
 
+> **Superseded 2026-11-09.** The mechanism this entry describes —
+> `.aegis-pattern-state.json` plus `.aegis-allowlist.json`, with the
+> gate filtering the scanner's output itself — was **not** merged. It
+> was superseded by decision 0074, the content-keyed baseline
+> (`.aegis-baseline.tsv`), which keeps every rule class armed and
+> adjudicates each occurrence individually. The entry is kept as the
+> record of what was measured and why; the mechanism it describes is
+> gone from the tree.
+
 ### The question that started it
 
 Two questions were asked about the release machinery rather than about
@@ -1678,6 +1687,7 @@ The baseline is gone; 644 line-keyed entries in 19.4 MB are replaced by
   `CLASS_NOTES` table in `xtask/src/aegis.rs`. The five `credit-card-*`
   rules stay
   **armed**, so a real card number is still caught.
+
 - **`.aegis-allowlist.json`** suppresses the ten remaining
   per-finding false positives, keyed `pattern:file:content-digest` —
   the line is deliberately omitted, so an entry survives every edit
@@ -1702,6 +1712,15 @@ The baseline is gone; 644 line-keyed entries in 19.4 MB are replaced by
   produced `aws-access-key aegis-gate-selftest.txt:1 [critical]` and
   exit 1; the file was removed immediately afterwards.
 - The `.aegis-baseline.json` file is deleted from the repository.
+
+### Superseded
+
+The class-level suppression above was replaced before merge by
+decision 0074's content-keyed baseline. The measurements in this
+entry stand; the mechanism does not. What survives is the reason the
+gate was rebuilt at all: a line-keyed baseline turns an unrelated doc
+edit into a gate failure, and the remedy for that must not be a
+procedure that encodes the defect.
 
 The lesson is the one the previous session recorded, now with the tool
 fixed rather than the procedure: the rebaseline was a procedure

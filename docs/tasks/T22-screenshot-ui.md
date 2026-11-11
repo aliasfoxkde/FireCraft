@@ -181,17 +181,19 @@ headroom 1.4× on `open_scripted_hwm_kib`).
 
 **A pre-existing defect the gate surfaced.** The gate failed at its
 *first* step, Aegis, before this change was even in play: the
-committed `.aegis-baseline.json` had gone stale, because the baseline
-keys each finding on `file:line:content-digest` and this change
+committed baseline had gone stale, because the baseline then in use
+keyed each finding on `file:line:content-digest` and this change
 rewrote `menus.rs`, `document.rs` and four docs, shifting every
 finding below it. The 307 new findings were all the known
 false-positive classes — 292 `zip-code` on numeric literals, 8
 `pci-cardholder-data` on the word "pan", 5 `sql-query` on the words
 "select from a tool group", 1 each of `ssrf-localhost` and
 `bearer-token-url` — and the baseline was regenerated over the whole
-tree with the documented recipe
-(`aegis --format json -c production scan . --output-file
-.aegis-baseline.json -q`), after which the scan is clean (exit 0, zero
-new findings). The stale baseline had been failing the local gate
-since the last regeneration; it is recorded here because a gate that
-fails on noise is a gate nobody trusts.
+tree with the documented recipe, after which the scan was clean (exit
+0, zero new findings). The stale baseline had been failing the local
+gate since the last regeneration; it is recorded here because a gate
+that fails on noise is a gate nobody trusts.
+
+That defect is now fixed at the tool level rather than by procedure:
+the baseline is content-keyed (decision 0074), so a line shift is not
+a new finding and no whole-tree regeneration is needed.

@@ -18,11 +18,13 @@ mod dialogs;
 mod filters_ui;
 mod glyphs;
 mod guides_ui;
+mod html_preview;
 mod icons;
 mod palette;
 mod panel_windows;
 mod panels;
 mod panels_web;
+mod slice_editor;
 
 pub use glyphs::apply_cs6_theme;
 pub(crate) use glyphs::{draw_autoshape_glyph, symbol_type_label, tool_key, tool_label};

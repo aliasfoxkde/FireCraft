@@ -5,7 +5,7 @@
 - **Supersedes:** nothing
 - **Relates to:** `xtask/src/dist.rs` (the size ceiling and the web
   distribution recipe), `docs/HANDOFF.md` (release runbook), decision
-  0070 (the gate that runs before a release)
+  0074 (the secret-scan gate that runs before a release)
 
 ## Context
 

@@ -55,7 +55,7 @@ all ten in the same order (`M:2095`).
 | Window | 34 | 34 rows; the four unimplemented panels are inert rows | **partial** | `M:1927` | 22.5, 22.1 |
 | Help | 6 | 6 rows; Online Help opens the hosted wiki, Keyboard Shortcuts opens the binding table | **implemented** | `M:2061`, `S/panels.rs:70` | — |
 
-**Inert-row census.** Two of 294 rows render inert, pinned by
+**Inert-row census.** Two of 296 rows render inert, pinned by
 `menus::tests::inert_count_never_rises`. They are **Window ▸
 Extensions** (the unimplemented CS6 panels row, 22.1) and
 **Commands ▸ Manage Saved Commands…** (the scripting family, 21.6).

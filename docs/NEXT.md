@@ -222,7 +222,7 @@ of replacing it, fill/stroke swatch panel bound to
 Phase 19 batches 19.1–19.5 landed 2026-10-31 → 11-01: transform
 handles + Numeric Transform, Subselect path-node editing, the gradient
 fill editor, the command palette, and the grid/guides/snap set. The
-inert count is 2 of 294 items (was 190); 19.6's menu-wiring
+inert count is 2 of 296 items (was 190); 19.6's menu-wiring
 campaign is complete and the Text ▸ Font submenu landed 2026-11-06. The remaining rows require separate feature or
 evidence work, tracked outside that campaign.
 
@@ -602,6 +602,15 @@ scope, so no license path is attempted.
   next to the rows it covers, and the evidence for each is in decision
   0074, which supersedes the rule-class suppression of decision 0070;
   a new class needs the same kind of evidence, not a convenience.
+- Do not switch off a whole aegis rule class to silence a finding.
+  The class-level suppression this tree once carried
+  (`.aegis-pattern-state.json` plus a per-finding allowlist) was
+  superseded by the content-keyed baseline in decision 0074, which
+  keeps every rule armed and
+  adjudicates each occurrence individually. A rule class that fires
+  here gets a class note beside its rows in the baseline, never a
+  class-wide switch.
+
 
 ## Quick reference
 
@@ -610,6 +619,7 @@ scope, so no license path is attempted.
 | Full CI | `cargo run -p xtask -- ci` | ~20 min |
 | Aegis | `cargo run -p xtask -- aegis` | ~10s |
 | Aegis report | `cargo run -p xtask -- aegis --report` | ~15s |
+
 | Aegis baseline regen | `cargo run -p xtask -- aegis --bless` | ~10s |
 | Coverage measure | `cargo llvm-cov --summary-only` (hook: use GitForge) | ~6 min |
 | Coverage gate | `cargo run -p xtask -- coverage` | ~6 min |

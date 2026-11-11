@@ -13,6 +13,7 @@ Current version: **0.2.5**.
 - **site**: launch FireCraft marketing website (#11) (0ca5e3d)
 - **app**: in-canvas text editing and menu burn-down to 2 inert (ed82eae)
 - **app**: CS6 screen modes, Alt retouch swap, aegis gate (49a4e61)
+
 - **app**: CS6 tool strip order and flyouts (1203ecc)
 - **app**: right dock column and per-kind inspector (1b10a5d)
 - **app**: CS6 shell fidelity + inert-menu burn-down batches 4-17 (#7) (5fac7a2)
@@ -236,6 +237,7 @@ Current version: **0.2.5**.
 - close screenshot audit and separate chrome follow-up (397feaa)
 - identify progress snapshot as PR branch (c588a99)
 - correct shell, build and parity details (88df723)
+
 - CS6 parity matrix, wiki set, and CS6 UI evidence (151e2fc)
 - 19b.1 quoting corrections, v0.2.4 receipts, license consolidation (2b849f5)
 - refresh stack for the daily-driver turn (19.1-19.5 landed) (dc62449)

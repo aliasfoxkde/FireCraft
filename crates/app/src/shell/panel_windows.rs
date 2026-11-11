@@ -99,6 +99,11 @@ pub(crate) const PANELS: &[PanelSpec] = &[
         open_by_default: false,
     },
     PanelSpec {
+        name: "HTML Preview",
+        kind: PanelKind::HtmlPreview,
+        open_by_default: false,
+    },
+    PanelSpec {
         name: "CSS Properties",
         kind: PanelKind::CssProperties,
         open_by_default: false,
@@ -158,6 +163,7 @@ pub(crate) enum PanelKind {
     WebLayer,
     Optimize,
     Slices,
+    HtmlPreview,
     CssProperties,
     FindReplace,
     CommonLibrary,
@@ -245,6 +251,7 @@ impl Shell {
                 PanelKind::WebLayer => self.web_panel(ui),
                 PanelKind::Optimize => self.optimize_panel(ui),
                 PanelKind::Slices => self.slices_panel(ui),
+                PanelKind::HtmlPreview => self.html_preview_panel(ui),
                 PanelKind::CssProperties => self.css_properties_panel(ui),
                 PanelKind::FindReplace => self.find_replace_panel(ui),
                 PanelKind::CommonLibrary => self.common_library_panel(ui),
@@ -303,6 +310,7 @@ mod tests {
             "Behaviors",
             "Optimize",
             "Slices",
+            "HTML Preview",
             "CSS Properties",
             "Find and Replace",
             "Common Library",
@@ -327,6 +335,10 @@ mod tests {
     /// The default-open set matches CS6's fresh-document roster:
     /// Properties/Pages/States/Layers visible, the rest closed until
     /// asked for.
+    ///
+    /// The two web panels — Slices and HTML Preview — are closed by
+    /// default too, and the Window menu carries a row for each, so
+    /// both are reachable.
     #[test]
     fn the_default_open_set_is_the_cs6_roster() {
         let hidden = Shell::default_open_panels();
@@ -344,6 +356,7 @@ mod tests {
                 "Behaviors",
                 "Optimize",
                 "Slices",
+                "HTML Preview",
                 "CSS Properties",
                 "Find and Replace",
                 "Common Library"

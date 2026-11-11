@@ -5,6 +5,7 @@
 > unmerged until PR approval. Use [`NEXT.md`](NEXT.md) for phase detail and
 > [`tasks/`](tasks/) for task tickets. Historical plans and session notes are
 > not current status sources.
+
 >
 > Working document (not a historical record). Canonical planning:
 > [`PLANNING.md`](PLANNING.md) + [`planning/firecraft/ROADMAP.md`](planning/firecraft/ROADMAP.md).
@@ -39,6 +40,19 @@
 
 ## In flight
 
+| Priority | Task | Status | Detail |
+|---|---|---|---|
+| P0 | Refresh user-visible CS6 parity matrix | **Done — matrix published** | [T26](tasks/T26-parity-matrix.md) → [`CS6-PARITY.md`](CS6-PARITY.md): every CS6 menu, tool, panel, inspector field set, workflow, import/export surface, canvas interaction, keymap area, and selection state classified with an evidence citation and an owning ticket. The browser-sampling check the ticket named was performed on 2026-11-04 against a fresh optimized bundle and is recorded in T22. |
+| P0 | Phase 22: CS6 shell fidelity and screenshot audit | In progress | [T22](tasks/T22-screenshot-ui.md) — screenshot acceptance is complete; 22.1 panel inventory and 22.2 tool strip are complete in PR #8; 22.5 chrome remains partial, and 22.4 still has evidence-gated bitmap transform/fill-stroke work. [Phase 22](NEXT.md#phase-22--cs6-shell-fidelity-p0-the-looks-and-acts-like-fireworks-phase) |
+| P1 | Phase 20: daily-driver editing features | **In progress — 20.1 landed** | In-canvas text editing landed 2026-11-06 ([T20](tasks/T20-text-editing.md)); remaining: Optimize, animation timeline, mask stack, tabs, history rewind, slice behavior; [details](NEXT.md#phase-20--daily-driver-features-p1) |
+| P1 | Phase 21: modern differentiators | Queued | Autosave, HiDPI, palette, preferences, accessibility, scripting; [details](NEXT.md#phase-21--modern-differentiators) |
+| P1 | Reconcile live web deployment | Artifact differs | The public manifest's JS/wasm/index hashes differ from local `dist/web`; identify intended deploy and verify it before publishing. See [T18](tasks/T18-release.md). |
+| P2 | Next-release asset breadth and platform verification | Open | [T23](tasks/T23-release-assets.md); recipes exist, but non-Linux artifacts need real platform build/launch receipts. |
+| P2 | Coverage and test quality ratchet | Open | Replace the old aspirational 99% label with measured per-crate targets and snapshots; [NEXT.md](NEXT.md). |
+| P2 | Aegis gate: content-keyed baseline, so a doc edit no longer fails the gate | **Done — landed on `main`** | [decisions/0074-aegis-content-keyed-baseline.md](decisions/0074-aegis-content-keyed-baseline.md). The baseline keys on content (pattern, file, digest) rather than on line, and every rule class stays armed. |
+
+### Release & tooling lanes in flight
+
 | # | Task | Ticket | Status | Owner | Next action |
 |---|---|---|---|---|---|
 | 5 | 19.6 inert-menu burn-down — Modify/File families (83 of 289; batch 8 = Attach to Path landed 2026-11-03) | [tasks/T5-inert-burndown.md](tasks/T5-inert-burndown.md) | `IN PROGRESS` | UI/verb lane | continue the per-family burn-down; each batch carries its own evidence gate. This branch's newer census has batches 1–17 landed with 2 inert rows of 294, derived by `menus::tests::inert_count_never_rises` |
@@ -48,18 +62,21 @@
 | 22 | Phase 22: CS6 shell fidelity and screenshot audit | [tasks/T22-screenshot-ui.md](tasks/T22-screenshot-ui.md) | `IN PROGRESS` | UI lane | screenshot acceptance is complete; 22.1 panel inventory and 22.2 tool strip are complete in PR #8; 22.5 chrome remains partial, and 22.4 still has evidence-gated bitmap transform/fill-stroke work. [Phase 22](NEXT.md#phase-22--cs6-shell-fidelity-p0-the-looks-and-acts-like-fireworks-phase) |
 | 20 | 20.1 In-canvas text editing (egui TextEdit overlay; kittest focus tests) | [tasks/T20-text-editing.md](tasks/T20-text-editing.md) | `IMPLEMENTED` — landed 2026-11-06 (`shell::begin_text_edit` / `text_edit_overlay`) | editing lane | the remaining Phase 20 items (Optimize, animation timeline, mask stack, tabs, history rewind, slice behavior) stay queued below |
 
+
 ## Queued (Phase 20 — daily-driver features)
 
 | # | Task | Ticket |
 |---|---|---|
+| 20 | 20.1 In-canvas text editing (egui TextEdit overlay; kittest focus tests) | [tasks/T20-text-editing.md](tasks/T20-text-editing.md) |
 | 7 | 20.2 Optimize panel (palette/bitrate over `ExportOptions` + live preview) | [tasks/T7-optimize-panel.md](tasks/T7-optimize-panel.md) |
 | 8 | 20.3 Animation timeline (frames strip, timing, onion skinning, `symbol.tween`) | [tasks/T8-animation-timeline.md](tasks/T8-animation-timeline.md) |
 | — | 20.4 Mask stack UI (add/remove/mode/link/move) | — |
 | 9 | 20.5 Multi-document tabs + Window-menu panel toggles | — |
 | 10 | 20.6 History panel click-to-rewind (journal replay to seq N) | — |
-| 11 | 20.7 Slice/hotspot behavior editing + HTML preview | — |
+| 11 | 20.7 Slice/hotspot behavior editing + HTML preview | — (landed on `feat/slice-hotspot-edit`, PR #13 — not yet on `main`) |
 
 ## Queued (Phase 21 — modern differentiators)
+
 
 | # | Task | Ticket |
 |---|---|---|
@@ -126,6 +143,7 @@ progress:
 | 19b path nodes and wasm budget | Path node add/delete and dated wasm ceiling re-pin recorded in [Progress](PROGRESS.md). |
 | v0.2.5 release tag | `v0.2.5` exists; see [release notes](releases/v0.2.5.md). The live deployment uses a different manifest from the current local distribution. |
 
+
 ## Closed (this board's lifetime)
 
 | Task | Landed |
@@ -146,6 +164,7 @@ progress:
 - The 3 partial CS6 DOM rows remain evidence-gated; see [`planning/generated/dom-parity.md`](planning/generated/dom-parity.md) and the specific decisions.
 - The remaining 8 menu rows are tracked with explicit reasons by the live `inert_worklist`; do not wire behavior without a model/engine or reference basis.
 - Non-Linux release artifacts remain unverified until built and launched on their target platforms.
+
 
 ## Ledger rules
 

@@ -21,6 +21,59 @@
 # Matches the 9-digit observed value range in the PNG node dictionary
 # (0..141663582), and the run of SVG path control coordinates in the
 # brand mark's bezier paths; this repository holds no tax identifiers.
+# Matches the same 9-digit observed value range in the PNG node
+# dictionary; this repository holds no banking data.
+# The GitForge API row names the credential file that holds the bearer
+# token; the row contains no token.
+# A glyph-position golden value (27.345314025878906); its digit run
+# matches the Amex shape, and it is a float literal, not a card number.
+# The same glyph-position golden value, seen by the generic card-number
+# rule.
+# The scripting crate's own boa context.eval() call — that crate
+# implements the CS6 scripting DOM's eval() — plus Rust curve-segment
+# .eval(u) calls.
+# Matches the two-word phrase naming an individual's data category in
+# English prose. The occurrences outside this gate's own source are a
+# release-plan checklist item that excludes personal data from the
+# source archive, and the adjudication tables that name the category in
+# order to record that it is absent; the repository holds no such data.
+# Matches the lowercase abbreviation in this table's own rule-class
+# name, in the personal-data rule's name, in decision 0074's table of
+# adjudicated classes, and in the rule identifiers quoted by the Aegis
+# adjudication tickets and the release execution board; the abbreviation
+# is a rule identifier, not a reference to anyone's data.
+# Matches the build metadata of a Cargo.lock version string
+# (0.6.0+11769913).
+# The rule's regex is JavaScript-shaped (open / fs. / readFile, then
+# user / input / query) and fires on English prose; this repository has
+# no server-side file read.
+# Matches the word "pan" in pan-zoom, hand-pan and two-finger pan
+# identifiers, including the Android feasibility note's touch gesture,
+# and in decision 0074's table of adjudicated classes and the rule
+# identifiers quoted by the Aegis adjudication tickets; the five
+# credit-card-* rules stay armed.
+# Matches any 10-digit run: u32::MAX, CRC and chunk values, observed PNG
+# value ranges.
+# The same JavaScript-shaped regex, seen by the hardening rule.
+# The same two fixtures, seen by the hardening rule.
+# Individually adjudicated as a false positive; see decision 0074.
+# Matches the same 9-digit observed value range in the PNG node
+# dictionary; this repository holds no social-security numbers.
+# A loopback listener in the release smoke test, a localhost maintainer
+# address, prose naming the local GitForge API, the local preview URL in
+# the site deployment guide, and the loopback bind quoted by the Aegis
+# adjudication tickets; the workspace has no HTTP client dependency.
+# A comment quoting a V8 crash dump observed in CI; it documents a
+# failure, and the build prints nothing.
+# The SVG importer's entity-expansion fixture, which must declare an
+# external entity so the test can observe the importer refusing it, and
+# the Apple plist doctype's quoted public identifier.
+# Matches any 5-digit run: CS6 command ids, the JPEG dimension ceiling
+# (65535), menu ids, CVE id suffixes, and the civil-date epoch constant
+# (36524) in the SBOM timestamp builder, plus the headless-browser
+# virtual-time budget (60000), and decision 0074's table of adjudicated
+# classes and the rule identifiers quoted by the Aegis adjudication
+# tickets. This repository holds no postal data.
 australian-tfn	./docs/img/logo.svg	05ffbe779fdbeed8897ecb90c6610e6d5ae26ef3653a838140062fcccd7a8ce4	1
 australian-tfn	./docs/img/logo.svg	0eaed2a5b872f5f066ade727349a9ae6fe1e1092509219ff6001faa5509861d1	1
 australian-tfn	./docs/img/logo.svg	0ee2e84700b4ede0c27c03b443da672617a60834712152057e87aea906a18ff4	1
@@ -46,25 +99,14 @@ australian-tfn	./docs/img/logo.svg	ee547c09a9989b8cd109c29512b7e81b7033c6b9071a2
 australian-tfn	./docs/img/logo.svg	ff09017689850911c6112f34bf47e2c4641d97d48ae7fd32306e4ceaf059afc9	1
 australian-tfn	./docs/research/fireworks-png-nodes.md	1004a585bc60d363038c5889d022bd6f58278338fe66f97483316133e316f41a	1
 australian-tfn	./xtask/src/aegis.rs	1004a585bc60d363038c5889d022bd6f58278338fe66f97483316133e316f41a	1
-# Matches the same 9-digit observed value range in the PNG node
-# dictionary; this repository holds no banking data.
 bank-routing-number	./docs/research/fireworks-png-nodes.md	1004a585bc60d363038c5889d022bd6f58278338fe66f97483316133e316f41a	1
 bank-routing-number	./xtask/src/aegis.rs	1004a585bc60d363038c5889d022bd6f58278338fe66f97483316133e316f41a	1
-# The GitForge API row names the credential file that holds the bearer
-# token; the row contains no token.
 bearer-token-url	./docs/NEXT.md	e2c69d19c5b81831c31fa61fe8fd0b18ce2c7ae21cf1062aadcb8e67b49daf34	1
 bearer-token-url	./xtask/src/aegis.rs	0063f0d1147604f6ef4939d76884d546fb4d0d94c48f9e92f6b2b38296f1432c	1
-# A glyph-position golden value (27.345314025878906); its digit run
-# matches the Amex shape, and it is a float literal, not a card number.
 credit-card-amex	./crates/text/tests/layout.rs	ae9b46ed1c3eff9a64786a2171b0f694350bb589478b4327f5f82836c23e8da9	1
 credit-card-amex	./xtask/src/aegis.rs	ae9b46ed1c3eff9a64786a2171b0f694350bb589478b4327f5f82836c23e8da9	1
-# The same glyph-position golden value, seen by the generic card-number
-# rule.
 credit-card-number-generic	./crates/text/tests/layout.rs	ae9b46ed1c3eff9a64786a2171b0f694350bb589478b4327f5f82836c23e8da9	1
 credit-card-number-generic	./xtask/src/aegis.rs	ae9b46ed1c3eff9a64786a2171b0f694350bb589478b4327f5f82836c23e8da9	1
-# The scripting crate's own boa context.eval() call — that crate
-# implements the CS6 scripting DOM's eval() — plus Rust curve-segment
-# .eval(u) calls.
 eval-usage	./crates/scripting/src/dom.rs	a475ee49c7acce90b0c9124fcaaf388999e9ef2c94d490d52a855d24c2d97deb	3
 eval-usage	./crates/scripting/src/lib.rs	a475ee49c7acce90b0c9124fcaaf388999e9ef2c94d490d52a855d24c2d97deb	3
 eval-usage	./crates/scripting/src/marshal.rs	a475ee49c7acce90b0c9124fcaaf388999e9ef2c94d490d52a855d24c2d97deb	1
@@ -74,41 +116,22 @@ eval-usage	./crates/vector/src/offset.rs	a475ee49c7acce90b0c9124fcaaf388999e9ef2
 eval-usage	./crates/vector/src/tests.rs	a475ee49c7acce90b0c9124fcaaf388999e9ef2c94d490d52a855d24c2d97deb	4
 eval-usage	./docs/SESSIONS.md	a475ee49c7acce90b0c9124fcaaf388999e9ef2c94d490d52a855d24c2d97deb	1
 eval-usage	./docs/decisions/0083-aegis-rebless-parity-matrix.md	a475ee49c7acce90b0c9124fcaaf388999e9ef2c94d490d52a855d24c2d97deb	1
+eval-usage	./docs/decisions/0084-aegis-rebless-slice-hotspot.md	a475ee49c7acce90b0c9124fcaaf388999e9ef2c94d490d52a855d24c2d97deb	1
 eval-usage	./xtask/src/aegis.rs	a475ee49c7acce90b0c9124fcaaf388999e9ef2c94d490d52a855d24c2d97deb	3
-# Matches the two-word phrase naming an individual's data category in
-# English prose. The occurrences outside this gate's own source are a
-# release-plan checklist item that excludes personal data from the
-# source archive, and the adjudication tables that name the category in
-# order to record that it is absent; the repository holds no such data.
 gdpr-personal-data	./docs/RELEASE-ENGINEERING-PLAN.md	d85533ba786e27667c68f55c37f3d5a70d6cd7a1e1157262ac3353dd6b11b193	1
 gdpr-personal-data	./docs/decisions/0074-aegis-content-keyed-baseline.md	d85533ba786e27667c68f55c37f3d5a70d6cd7a1e1157262ac3353dd6b11b193	1
 gdpr-personal-data	./docs/tasks/T27-12-adjudicate-aegis-findings.md	d85533ba786e27667c68f55c37f3d5a70d6cd7a1e1157262ac3353dd6b11b193	3
 gdpr-personal-data	./xtask/src/aegis.rs	d85533ba786e27667c68f55c37f3d5a70d6cd7a1e1157262ac3353dd6b11b193	1
-# Matches the lowercase abbreviation in this table's own rule-class
-# name, in the personal-data rule's name, in decision 0074's table of
-# adjudicated classes, and in the rule identifiers quoted by the Aegis
-# adjudication tickets and the release execution board; the abbreviation
-# is a rule identifier, not a reference to anyone's data.
 gdpr-reference	./docs/decisions/0074-aegis-content-keyed-baseline.md	8b16477e3abe1de345a6e82f360db77b5e238983ad685cec9fef0d0bc009aed3	3
 gdpr-reference	./docs/release/EXECUTION-BOARD.md	8b16477e3abe1de345a6e82f360db77b5e238983ad685cec9fef0d0bc009aed3	2
 gdpr-reference	./docs/tasks/T27-11-reproduce-aegis-gate-failure.md	8b16477e3abe1de345a6e82f360db77b5e238983ad685cec9fef0d0bc009aed3	1
 gdpr-reference	./docs/tasks/T27-12-adjudicate-aegis-findings.md	8b16477e3abe1de345a6e82f360db77b5e238983ad685cec9fef0d0bc009aed3	7
 gdpr-reference	./xtask/src/aegis.rs	8b16477e3abe1de345a6e82f360db77b5e238983ad685cec9fef0d0bc009aed3	2
-# Matches the build metadata of a Cargo.lock version string
-# (0.6.0+11769913).
 international-phone	./Cargo.lock	af21a1bff1718128c96522dc5f3a4136e66feeb8aee345e9676fda1199e5378e	1
 international-phone	./xtask/src/aegis.rs	af21a1bff1718128c96522dc5f3a4136e66feeb8aee345e9676fda1199e5378e	1
-# The rule's regex is JavaScript-shaped (open / fs. / readFile, then
-# user / input / query) and fires on English prose; this repository has
-# no server-side file read.
 path-traversal	./docs/HANDOFF.md	8a69ab888f99a99e70366c051f330d9512cabc8d710f849e6eeb0de25711be66	1
 path-traversal	./docs/planning/generated/scorecard.md	d24059df4850652d14de7bcd5b2d806833567be8055cdc8f60cdc0005bd96de4	1
 path-traversal	./xtask/src/status.rs	d24059df4850652d14de7bcd5b2d806833567be8055cdc8f60cdc0005bd96de4	1
-# Matches the word "pan" in pan-zoom, hand-pan and two-finger pan
-# identifiers, including the Android feasibility note's touch gesture,
-# and in decision 0074's table of adjudicated classes and the rule
-# identifiers quoted by the Aegis adjudication tickets; the five
-# credit-card-* rules stay armed.
 pci-cardholder-data	./crates/app/src/canvas.rs	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	15
 pci-cardholder-data	./crates/app/src/canvas.rs	fd92d952db92eff57586865ef7b6ae62897642d1abedbe203d56e2d4ced964ed	1
 pci-cardholder-data	./crates/app/src/editor.rs	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	1
@@ -120,6 +143,7 @@ pci-cardholder-data	./docs/SESSIONS.md	00e37ffae0562ab6818d8f4f97457ac5f9679723c
 pci-cardholder-data	./docs/SESSIONS.md	e6205bc8ab80302276cc2b94e571d9aeafa567c0517146ac4396a4f6a8cead1a	1
 pci-cardholder-data	./docs/decisions/0074-aegis-content-keyed-baseline.md	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	1
 pci-cardholder-data	./docs/decisions/0083-aegis-rebless-parity-matrix.md	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	1
+pci-cardholder-data	./docs/decisions/0084-aegis-rebless-slice-hotspot.md	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	3
 pci-cardholder-data	./docs/planning/firecraft/M12-parity-release.md	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	3
 pci-cardholder-data	./docs/planning/firecraft/M13-deep-re-shell-parity.md	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	1
 pci-cardholder-data	./docs/planning/firecraft/M15-tool-surface.md	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	1
@@ -138,8 +162,6 @@ pci-cardholder-data	./xtask/src/aegis.rs	00e37ffae0562ab6818d8f4f97457ac5f967972
 pci-cardholder-data	./xtask/src/perf.rs	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	2
 pci-cardholder-data	./xtask/src/perf.rs	fd92d952db92eff57586865ef7b6ae62897642d1abedbe203d56e2d4ced964ed	1
 pci-cardholder-data	./xtask/src/status.rs	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	5
-# Matches any 10-digit run: u32::MAX, CRC and chunk values, observed PNG
-# value ranges.
 phone-number	./crates/doc/src/model.rs	f807212b6748a8300fc3702322caa515edf0a6ed9bbc86e94c451e351b080c60	1
 phone-number	./crates/io/src/bmp.rs	972dcafa6fb4c2c88bce752fca4ab18c6bd88599330a4ad9813915b05bfbe76d	1
 phone-number	./crates/io/src/expv.rs	f807212b6748a8300fc3702322caa515edf0a6ed9bbc86e94c451e351b080c60	1
@@ -159,12 +181,9 @@ phone-number	./docs/research/fireworks-png-nodes.md	ebebc7bc31b4fd88112f19c0e000
 phone-number	./docs/research/fireworks-png-nodes.md	f3e0457469e6aea7d9ba1b0d8851a4bee518b0163cb0e141a778bcda96f3742f	1
 phone-number	./docs/research/fireworks-png-nodes.md	f807212b6748a8300fc3702322caa515edf0a6ed9bbc86e94c451e351b080c60	3
 phone-number	./docs/research/fireworks-png-nodes.md	f83e39c0ea6003e6777a7c158434b5489b13ce5c0926b72f7743d0572779db85	2
-# The same JavaScript-shaped regex, seen by the hardening rule.
 security-hardening-path-traversal	./docs/PLANNING.md	8970fe80e5b5b5afefbcb8f72dbd3ec6561a516a7b9364ec2518217dd2fc7298	1
-# The same two fixtures, seen by the hardening rule.
 security-hardening-xml-external-entity	./crates/io/tests/svgimport.rs	f6cfc5faea5abe6ee5bd8667967edfc5cbe43d95f0f04d7a560afb01613823d5	2
 security-hardening-xml-external-entity	./packaging/build-macos-dmg.sh	7b16906a7de9206c7488979eb86e8393ba62a45c0e769c79cf070a16c1858d49	1
-# Individually adjudicated as a false positive; see decision 0074.
 sql-query	./crates/app/src/toolstrip.rs	16c94413c298ee4768003b9702628830fe05264871353e66519d3b9da09287fb	1
 sql-query	./crates/app/src/toolstrip.rs	4d14086f6fc14ba218ff162d47249f7a7dc132e9220f1abf87862c704f54142d	1
 sql-query	./docs/SESSIONS.md	6ba454ee08d4ce45364f6e849176079be5c628c2e176eb31ae1671451b5c401a	1
@@ -172,14 +191,8 @@ sql-query	./docs/research/fw-ui-evidence.md	4d14086f6fc14ba218ff162d47249f7a7dc1
 sql-query	./docs/research/fw-ui-evidence.md	d7a39f416c7b9033673d6c465a646be64ce568f0dba2e02ce3906aa37f351e11	1
 sql-query	./docs/research/fw-ui-evidence.md	fbfaf459bf28ef75433705459453e22c20a8057f2a19f57a93e1660db5c3e0e7	1
 sql-query	./docs/tasks/T22-screenshot-ui.md	6ba454ee08d4ce45364f6e849176079be5c628c2e176eb31ae1671451b5c401a	1
-# Matches the same 9-digit observed value range in the PNG node
-# dictionary; this repository holds no social-security numbers.
 ssn-no-dashes	./docs/research/fireworks-png-nodes.md	1004a585bc60d363038c5889d022bd6f58278338fe66f97483316133e316f41a	1
 ssn-no-dashes	./xtask/src/aegis.rs	1004a585bc60d363038c5889d022bd6f58278338fe66f97483316133e316f41a	1
-# A loopback listener in the release smoke test, a localhost maintainer
-# address, prose naming the local GitForge API, the local preview URL in
-# the site deployment guide, and the loopback bind quoted by the Aegis
-# adjudication tickets; the workspace has no HTTP client dependency.
 ssrf-localhost	./docs/NEXT.md	12ca17b49af2289436f303e0166030a21e525d266e209267433801a8fd4071a0	1
 ssrf-localhost	./docs/PLANNING.md	12ca17b49af2289436f303e0166030a21e525d266e209267433801a8fd4071a0	2
 ssrf-localhost	./docs/SESSIONS.md	12ca17b49af2289436f303e0166030a21e525d266e209267433801a8fd4071a0	1
@@ -195,20 +208,9 @@ ssrf-localhost	./docs/tasks/T27-12-adjudicate-aegis-findings.md	49960de5880e8c68
 ssrf-localhost	./packaging/deb/control	49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763	1
 ssrf-localhost	./xtask/src/aegis.rs	49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763	2
 ssrf-localhost	./xtask/src/dist.rs	12ca17b49af2289436f303e0166030a21e525d266e209267433801a8fd4071a0	1
-# A comment quoting a V8 crash dump observed in CI; it documents a
-# failure, and the build prints nothing.
 stack-trace-exposure	./infrastructure/docker/ci-rust.Dockerfile	17ee41935f062dffb434b86c2a8d432567df47fc5988eb4cf2bbae1b690e4747	1
-# The SVG importer's entity-expansion fixture, which must declare an
-# external entity so the test can observe the importer refusing it, and
-# the Apple plist doctype's quoted public identifier.
 xml-external-entity	./crates/io/tests/svgimport.rs	f6cfc5faea5abe6ee5bd8667967edfc5cbe43d95f0f04d7a560afb01613823d5	2
 xml-external-entity	./packaging/build-macos-dmg.sh	7b16906a7de9206c7488979eb86e8393ba62a45c0e769c79cf070a16c1858d49	1
-# Matches any 5-digit run: CS6 command ids, the JPEG dimension ceiling
-# (65535), menu ids, CVE id suffixes, and the civil-date epoch constant
-# (36524) in the SBOM timestamp builder, plus the headless-browser
-# virtual-time budget (60000), and decision 0074's table of adjudicated
-# classes and the rule identifiers quoted by the Aegis adjudication
-# tickets. This repository holds no postal data.
 zip-code	./crates/app-cli/src/mcp.rs	0e5c81ceee464db1c0cb9ed801d134fab0dd2a28c0dc62e35aa21a8e13ff0ebc	1
 zip-code	./crates/app-cli/src/mcp.rs	20d70708103e5223b6f2fb00f00947832fb93d12ebef11eb10bc5599efefe184	1
 zip-code	./crates/app-cli/src/mcp.rs	e27c72fe629f258a871404eed323c0cf57a7a26c19dc8d5a6ac90770241af8f5	1
@@ -314,6 +316,7 @@ zip-code	./crates/app/src/menus.rs	6685ba2342898d3a378bfbd6b390ec3d6ba0a8748c4c0
 zip-code	./crates/app/src/menus.rs	67afbb0f1ae2d608a33c74b87fee7c5ab71874df676f53bf8edb9125c34a34ea	1
 zip-code	./crates/app/src/menus.rs	67b4acc3a35001ce2358ee155323bc411457601e60abcc70082524a59cd7a4d5	1
 zip-code	./crates/app/src/menus.rs	69bb4acfca30fe3bd14052631067b7d7fac3b0b43c10c4f8ce93475f90fdc83b	1
+zip-code	./crates/app/src/menus.rs	6ae29c8266e042c990b22c648de06825fb83d9a2e854ca65b4fd30f692f5aedd	1
 zip-code	./crates/app/src/menus.rs	6d09116d2b83f1a67b7e7a904b5eaea53f79273f2d165229010df0ed9d4a36bb	1
 zip-code	./crates/app/src/menus.rs	6ead8351fe3a37874b4763382e304dfa13ad2b8b4582444efcfe5532e05fbbc3	1
 zip-code	./crates/app/src/menus.rs	71e411bae65754184bbb45baaa3a0e2cadad2ab00e029a58fe87f9510125c12e	1
@@ -329,6 +332,7 @@ zip-code	./crates/app/src/menus.rs	7c9c0c36979256d1990bb10e2f0dd4fbfeb381a4fff6a
 zip-code	./crates/app/src/menus.rs	7d4617e6d4f6575fbeeea64680d26e1075ca2f7130e06763cd5d00196844e8e8	1
 zip-code	./crates/app/src/menus.rs	7e051ba37ad4842aa0e8cffe413c767d754d35a3ef6e80379f9c4e533c0a0dff	1
 zip-code	./crates/app/src/menus.rs	7f01ef148038d807b241561658da3de6d53908927b8a96dc236699bb65e5115f	1
+zip-code	./crates/app/src/menus.rs	7f86696157efee849855811dbdd3b8babcbde71c5c3e17277bf4f2bf6a75106e	1
 zip-code	./crates/app/src/menus.rs	83706ed0a7fe5af737522c77e2f080255c67f37d78b6aa199683a94917302a09	1
 zip-code	./crates/app/src/menus.rs	83b3224c2c14989480197312705ae919167e8e9a9af552b83b44834a3ba960ae	1
 zip-code	./crates/app/src/menus.rs	83f04cf7d18a22e55af2efd0a2bc43b850611b9eaeede85b24fa4b462c5f33c7	1
@@ -569,6 +573,10 @@ zip-code	./docs/decisions/0083-aegis-rebless-parity-matrix.md	83b3224c2c14989480
 zip-code	./docs/decisions/0083-aegis-rebless-parity-matrix.md	dabf5c8b9082180e7d7ae1ee52a9417fc76be7e3e80aed2a8f3cccf1cd1c162d	1
 zip-code	./docs/decisions/0083-aegis-rebless-parity-matrix.md	e95e07198fbc2a3fac954c1e20f99ff404edbc4a9bcc08f0ef575f1b58121ac5	2
 zip-code	./docs/decisions/0083-aegis-rebless-parity-matrix.md	fec32d6024e177ac05e94de175bfccd84ec3d389034f6f57067fb167302534b6	2
+zip-code	./docs/decisions/0084-aegis-rebless-slice-hotspot.md	6ae29c8266e042c990b22c648de06825fb83d9a2e854ca65b4fd30f692f5aedd	1
+zip-code	./docs/decisions/0084-aegis-rebless-slice-hotspot.md	7f86696157efee849855811dbdd3b8babcbde71c5c3e17277bf4f2bf6a75106e	1
+zip-code	./docs/decisions/0084-aegis-rebless-slice-hotspot.md	e95e07198fbc2a3fac954c1e20f99ff404edbc4a9bcc08f0ef575f1b58121ac5	1
+zip-code	./docs/decisions/0084-aegis-rebless-slice-hotspot.md	fec32d6024e177ac05e94de175bfccd84ec3d389034f6f57067fb167302534b6	1
 zip-code	./docs/planning/firecraft/M8-import-export.md	f2f89ede8e7d4b3d2243dea1ca96b8ece56f793811d9708b4a0181bf81a50011	2
 zip-code	./docs/planning/firecraft/M9-scripting.md	0e5c81ceee464db1c0cb9ed801d134fab0dd2a28c0dc62e35aa21a8e13ff0ebc	1
 zip-code	./docs/planning/firecraft/M9-scripting.md	20d70708103e5223b6f2fb00f00947832fb93d12ebef11eb10bc5599efefe184	1
