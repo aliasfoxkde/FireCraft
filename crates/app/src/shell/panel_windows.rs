@@ -227,6 +227,15 @@ struct PanelDrag {
     name: &'static str,
 }
 
+/// Drops a panel drag in flight. Called when the docks are not
+/// drawn: a payload left behind would move a panel on a later
+/// release, long after the drag the user made.
+pub(crate) fn cancel_panel_drag(ctx: &egui::Context) {
+    if egui::DragAndDrop::has_payload_of_type::<PanelDrag>(ctx) {
+        egui::DragAndDrop::clear_payload(ctx);
+    }
+}
+
 /// One panel of the CS6 inventory, as plain data.
 ///
 /// The panel *structure* — the set, the dock order, the dock side,
@@ -446,15 +455,6 @@ impl Shell {
         };
         if let Some(side) = target {
             self.move_panel_to_dock(drag.name, side);
-        }
-    }
-
-    /// Drops a panel drag in flight. Called when the docks are not
-    /// drawn: a payload left behind would move a panel on a later
-    /// release, long after the drag the user made.
-    pub(crate) fn cancel_panel_drag(ctx: &egui::Context) {
-        if egui::DragAndDrop::has_payload_of_type::<PanelDrag>(ctx) {
-            egui::DragAndDrop::clear_payload(ctx);
         }
     }
 
