@@ -64,20 +64,19 @@ Some of these items are partially implemented or still planned. The authoritativ
 
 ## Screenshots
 
-The image below is a repository screenshot of the application. It is a point-in-time view; consult the roadmap for current implementation status. The capture is a 1280×800 frame of the shell with a vector object selected, taken from the optimized web bundle built on 2026-11-04. It is evidence for that build and state, not a general parity claim — see the [screenshot audit](docs/tasks/T22-screenshot-ui.md) for the captures, measurements, and their limits.
+The images below are repository screenshots of the application. They are point-in-time views; consult the roadmap for current implementation status.
 
 <p align="center">
   <img src="docs/img/app-main.png" alt="FireCraft application workspace" width="960" />
 </p>
 
-It is a 1280×800 capture of the current shell with a vector object selected, taken from the optimized web bundle built on 2026-11-04. It is evidence for that build and state, not a general parity claim — see the [screenshot audit](docs/tasks/T22-screenshot-ui.md) for the captures, measurements, and their limits.
+The first capture is a 1280×800 frame of the current shell with a vector object selected, taken from the optimized web bundle built on 2026-11-04. It is evidence for that build and state, not a general parity claim — see the [screenshot audit](docs/tasks/T22-screenshot-ui.md) for the captures, measurements, and their limits.
 
-The dark-mode preview below is a graphic mock-up of the shell — a geometric fox under edit — not a screen capture.
+The same workspace in the dark theme — Tools panel down the left edge, a vector object selected on a transparent canvas, and the Optimize panel previewing a PNG-24 export:
 
 <p align="center">
-  <img src="docs/img/app-preview-dark.png" alt="Preview graphic of the FireCraft workspace in dark mode with a vector fox illustration selected" width="960" />
+  <img src="docs/img/app-dark.png" alt="FireCraft in dark mode: the Tools panel down the left edge, a vector fox logo selected on a transparent 800×600 canvas, and the Optimize panel showing a PNG-24 preview at 100% quality." width="960" />
 </p>
-
 
 ## Get started
 
