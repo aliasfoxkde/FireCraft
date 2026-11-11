@@ -608,8 +608,15 @@ scope, so no license path is attempted.
   `the_text_font_submenu_dispatches_set_font`). **Repeat Filter landed 2026-11-06** (`Action::RepeatFilter` re-applies
   the session's last preset through `filter.add`, gated by
   `repeat_filter_reapplies_the_last_preset`; inert census 3→2).
-  Remaining on 22.5: the F1 grouping mismatch and the 76 unbound
-  keymap rows.
+  **CS6 keymap landed 2026-11-11** (decision 0080): the transcribed
+  tree prints CS6's own accelerators and every live printed
+  accelerator is bound to its row's action, held by
+  `menus::tests::cs6_keymap_is_fully_bound`; the binding table
+  carries its own section per row, gated by
+  `menus::tests::shortcut_sections_are_contiguous`. Remaining on
+  22.5: the Main toolbar's contents (CS6-PARITY §A rows 54, 255, 257,
+  164) and the 12 residual CS6 keymap command ids no FireCraft row
+  carries (CS6-PARITY §H).
 - **22.6 Icon pack integration** (M): ship the surveyed open-license
   icon set, subset it to the Fireworks verb set, and record the
   attribution rows. Accept: the wasm bundle grows by a documented,

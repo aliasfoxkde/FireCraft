@@ -46,13 +46,22 @@ when the external tree is absent. The real surface:
 
 ## Keymap encoding
 
-`English/Keyboard Shortcuts/Fireworks.xml`: 128+ commands, each with
-`shortcut text="<mods> <vk>"` (multi-shortcut commands use several
-entries). Modifier codes observed: `0`/`2` = plain (2 marks
-extended/numeric-pad variants), `4` = Ctrl, `5` = Ctrl+Alt,
-`6` = Ctrl+Shift, `7` = Ctrl+Shift+Alt. Decode against the RT_MENU
-strings (which carry the same accelerators as display text) to confirm
-per-command assignments before implementing the M13 shortcut table.
+`English/Keyboard Shortcuts/Fireworks.xml`: 128 commands carrying
+133 `<shortcut text="<mods> <vk>"/>` entries (multi-shortcut commands
+use several entries). The modifier field is a **bitfield**, not a
+lookup table: `1` = Alt, `2` = Shift, `4` = Ctrl, so `0` = plain,
+`3` = Alt+Shift, `5` = Ctrl+Alt, `6` = Ctrl+Shift, `7` =
+Ctrl+Alt+Shift. Decode against the RT_MENU strings (which carry the
+same accelerators as display text) to confirm per-command assignments
+before implementing the M13 shortcut table.
+
+The `2` = Shift reading is settled by three independent pairs in the
+tree itself, not inferred: `cmd_Nudge*` is `0` on the arrow keys and
+`cmd_BigNudge*` is `2` on the same keys; `cmd_PreviewSecondary` is
+`2 123` = Shift+F12, and the tree prints "Shift+F12" on that row; and
+`cmd_SelectCopyToPolySlice` is `3 80` = Alt+Shift+P, the tree's
+`AS+P` binding. An earlier reading of this file took `2` for an
+extended/numeric-pad variant of plain; the tree disproves it.
 
 ## Derived verdicts now implemented (M13 shell)
 
