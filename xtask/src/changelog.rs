@@ -119,7 +119,7 @@ fn generate() -> Result<(String, usize), String> {
 
 /// The Apache-2.0 claim: `LICENSE` carries the license text and the
 /// SPDX identifier; the workspace manifest declares the same
-/// identifier. The MIT text must stay gone — FireCraft is licensed
+/// identifier. The MIT text must stay gone — `FireCraft` is licensed
 /// under Apache-2.0 alone.
 fn verify_licenses() -> Result<(), String> {
     let root = workspace_root();
