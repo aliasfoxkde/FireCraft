@@ -3,7 +3,7 @@
 > **RP:** RP-06 · **Priority:** P0 · **Status:** IMPLEMENTED (validation pending)
 > **Board row:** [EXECUTION-BOARD.md §6](../release/EXECUTION-BOARD.md)
 > **Depends on:** T27-53
-> **Decision:** [0079](../decisions/0079-release-manifest-shape.md) · **Schema:** [RELEASE-MANIFEST.md](../release/RELEASE-MANIFEST.md)
+> **Decision:** [0085](../decisions/0085-release-manifest-shape.md) · **Schema:** [RELEASE-MANIFEST.md](../release/RELEASE-MANIFEST.md)
 
 **Objective:** publish one machine-readable manifest describing every artifact, so the
 release is machine-verifiable rather than only human-checkable.
@@ -38,7 +38,7 @@ a manifest.
 
 **Blockers:** none for the implementation. T27-53's canonical naming is still
 `NOT STARTED`; the manifest adopts the names the release already enforces, and its
-asset table moves with T27-53 when that lands ([decision 0079](../decisions/0079-release-manifest-shape.md)).
+asset table moves with T27-53 when that lands ([decision 0085](../decisions/0085-release-manifest-shape.md)).
 
 **Stopping condition:** the manifest exists, verifies, and is published alongside the
 assets.

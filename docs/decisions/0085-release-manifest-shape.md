@@ -1,4 +1,4 @@
-# 0079 — The release manifest is a fixed asset table, generated last
+# 0085 — The release manifest is a fixed asset table, generated last
 
 Date: 2026-11-10 · Ticket: [T27](../tasks/T27-cross-platform-release.md) · Status: accepted
 
