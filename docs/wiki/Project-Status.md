@@ -1,7 +1,7 @@
 # Project Status
 
-**Snapshot reviewed:** 2026-11-11  
-**Source:** `main` at `b61f198`  
+**Snapshot reviewed:** 2026-11-11\
+**Source:** `main` at `b61f198`\
 **Latest published release:** [v0.2.5](https://github.com/aliasfoxkde/FireCraft/releases/tag/v0.2.5) (2026-11-03)
 
 FireCraft is a functional Rust graphics editor with a shared document engine and command registry across the desktop GUI, WebAssembly app, CLI, scripting host, and MCP server. The current source is newer than the latest published release; do not assume the hosted app contains every change on `main`.
