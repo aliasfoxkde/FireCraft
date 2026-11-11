@@ -55,7 +55,7 @@ through the same registry every other surface drives:
 
 | Tool | Arguments | What it does |
 |---|---|---|
-| `firecraft.apply` | `command`, `args` | One registry command through `Session::apply` (the 245-command door). |
+| `firecraft.apply` | `command`, `args` | One registry command through `Session::apply` (the 246-command door). |
 | `firecraft.runScript` | `path` | Run a `.jsf` script; queued mutations drain on completion (scripting builds). |
 | `firecraft.info` | — | Document summary (frames, canvas, pages, object counts) as JSON. |
 | `firecraft.export` | `path`, `quality?` | Render page 0 and write it; the extension picks the codec (same set as `export`). |

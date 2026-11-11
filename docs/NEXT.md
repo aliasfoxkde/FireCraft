@@ -372,8 +372,8 @@ evidence work, tracked outside that campaign.
   floor recorded in **`.reachability-floor.tsv`**. The floor is a
   one-way ratchet: `--bless` may raise it (reachability improved) and
   refuses to lower it (a regression is fixed, not forgiven). Measured
-  on `main` at 2026-11-10: **245 registry commands, 146 bound by the
-  shell = 59.59%**, 99 unreachable; the floor is pinned at 59.59%.
+  on `main` at 2026-11-11: **246 registry commands, 147 bound by the
+  shell = 59.76%**, 99 unreachable; the floor is pinned at 59.76%.
   (The command palette makes the *palette* reach 100% — the gate
   deliberately measures the CS6-visible surface instead, which is the
   surface the 19.x batches widen. Decision
@@ -664,9 +664,9 @@ scope, so no license path is attempted.
    `catalog::ids()` − UI-bound commands only shrinks (mirror of the
    call-table test). Unreachable commands with no gate means drift.
    — **DONE (2026-11-10)**, tracked as 19b.2: `cargo run -p xtask --
-   reachability`, wired into `ci`. Measures **245 registry commands,
-   146 bound by the shell = 59.59%**, 99 unreachable; the floor lives
-   in **`.reachability-floor.tsv`** (pinned at 59.59%) and is a one-way
+   reachability`, wired into `ci`. Measures **246 registry commands,
+   147 bound by the shell = 59.76%**, 99 unreachable; the floor lives
+   in **`.reachability-floor.tsv`** (pinned at 59.76%) and is a one-way
    ratchet.
 3. **Inert-drift test**: an inert menu row may not be added silently.
    — **DONE (2026-11-02)**, tracked as 19b.3: the census is derived
