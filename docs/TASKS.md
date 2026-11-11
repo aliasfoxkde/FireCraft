@@ -1,8 +1,9 @@
 # FireCraft — Live task board
 
-> **Live ledger.** Reconciled against `main` at `658f015` on 2026-11-11,
+> **Live ledger.** Reconciled against `main` at `b61f198` on 2026-11-11,
 > after the shell-lineage train (#107) and the release-engineering train
-> (#108, merged into the train as `1884c04`) landed. Use [`NEXT.md`](NEXT.md)
+> (#108, merged into the train as `1884c04`) landed, plus the post-train
+> dependency work (#117, #120). Use [`NEXT.md`](NEXT.md)
 > for phase detail and [`tasks/`](tasks/) for task tickets. Historical plans
 > and session notes are not current status sources.
 >
@@ -157,6 +158,9 @@ progress:
 | Host fork-bomb from a throwaway `/proc/self/exe` probe — ~5800 processes at load 2057 starved the GitForge runner's sandbox; terminated by per-PID cmdline+exe verification and the probe directory moved aside | 2026-11-09 |
 | Task-board tracking scaffold — `docs/TASKS.md` plus the `docs/tasks/` per-task ticket set (one file per task, same objective/inputs/authority/stopping-condition/verification shape as the milestone tickets). The scaffold is this board and the `docs/tasks/` directory; the row it carried in the queued table is closed by this reconciliation | 2026-11-09 |
 | Shell-lineage and release-engineering trains merged — #107 squash `658f015` carrying #8, #13, #15, #41, #83, #84, #100, #102, #103 and (via #108 → `1884c04`) #85, #101, #104, #105, #106; the 14 constituent PRs were closed as merged-by-train, and Phase 20.5–20.7 plus all of Phase 21 shipped in the same landing | 2026-11-11 |
+| Post-train RustSec lockfile clear — #117 (`b61f198`): `zbus_xml` 5.1.0→5.2.1 (drops `quick-xml` 0.38.4, clearing RUSTSEC-2026-0194/0195) and `tokio` 1.53.2→1.54.1 (clears RUSTSEC-2026-0386); `cargo audit` exit 0. The `serde_yaml`/`unsafe-libyaml` removal (RUSTSEC-2024-0449) rides PR #120 (saphyr swap in xtask's Flatpak parse) | 2026-11-11 |
+| Post-train issue triage — closed with evidence: #79, #81, #86, #94, #98, #109, #111, #112 (all fixed by #107/#108's content or #14; squash broke the auto-close links); progress-commented and left open: #75, #76, #78, #93, #97, #110; filed #121 (`xtask changelog` cannot regenerate main's committed CHANGELOG after a squash merge) | 2026-11-11 |
+| Command-count and menu-census doc repair — README, GAPS, FEATURES, HANDOFF, CS6-PARITY, PROGRESS and NEXT quoted stale pre-train numbers (252 commands / 294 items); corrected to the gated truth: **253 registered commands** (measured by `xtask reachability`, 164 bound = 64.82%) and **2 inert of 296** (the pinned census) | 2026-11-11 |
 
 ## Blocked or evidence-gated
 
