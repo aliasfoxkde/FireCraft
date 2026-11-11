@@ -7,7 +7,7 @@
 
 use super::*;
 use compose::abgr_pack;
-use doc::{GroupObject, ImageObject, SliceObject};
+use doc::{GroupObject, ImageObject, MaskCombineMode, SliceObject};
 
 impl Shell {
     /// The Optimize panel's format names in `FMTi` order (0 gif,
@@ -1004,6 +1004,7 @@ impl Shell {
             self.document_properties(ui);
             return;
         };
+        self.mask_stack_panel(ui, id);
         let object = self.editor.document().registry.get(id).cloned();
         let effects = match object {
             Some(ObjectData::Path(path)) => {
@@ -1754,6 +1755,87 @@ impl Shell {
             if ui.selectable_label(false, &label).clicked() {
                 self.editor.set_selection(vec![child]);
             }
+        }
+    }
+
+    /// The mask stack section of the Properties panel: the element
+    /// mask's levels, their state, and the way each level combines with
+    /// the coverage below it.
+    ///
+    /// A `FireCraft` extension (decision 0092): CS6 has one element mask
+    /// per object and no stack, so the level's mode defaults to the
+    /// union. The panel draws the section only when the selection
+    /// carries an element mask.
+    pub(super) fn mask_stack_panel(&mut self, ui: &mut egui::Ui, id: doc::ObjectId) {
+        let levels = engine::catalog::element_mask_stack(self.editor.document(), id);
+        if levels.is_empty() {
+            return;
+        }
+        ui.heading("Mask stack");
+        let count = levels.len();
+        for (index, level) in levels.iter().enumerate() {
+            // The levels are listed top first; the mask numbers count
+            // from the bottom, as CS6 numbers its masks.
+            let number = count - index;
+            ui.horizontal(|ui| {
+                let mut enabled = level.enabled;
+                if ui
+                    .checkbox(&mut enabled, format!("Mask {number}"))
+                    .changed()
+                {
+                    self.run_command(
+                        "mask.enable",
+                        serde_json::json!({ "id": level.group, "enable": enabled }),
+                    );
+                }
+                egui::ComboBox::from_id_salt(("mask_mode", level.group))
+                    .selected_text(level.mode.as_str())
+                    .width(80.0)
+                    .show_ui(ui, |ui| {
+                        for candidate in MaskCombineMode::ALL {
+                            if ui
+                                .selectable_label(candidate == level.mode, candidate.as_str())
+                                .clicked()
+                            {
+                                self.run_command(
+                                    "mask.setStackMode",
+                                    serde_json::json!({
+                                        "id": level.group,
+                                        "mode": candidate.as_str(),
+                                    }),
+                                );
+                            }
+                        }
+                    });
+                if ui.small_button("↑").clicked() {
+                    self.run_command(
+                        "mask.moveLevel",
+                        serde_json::json!({ "id": level.group, "delta": 1 }),
+                    );
+                }
+                if ui.small_button("↓").clicked() {
+                    self.run_command(
+                        "mask.moveLevel",
+                        serde_json::json!({ "id": level.group, "delta": -1 }),
+                    );
+                }
+                if ui.small_button("remove").clicked() {
+                    self.run_command("mask.removeLevel", serde_json::json!({ "id": level.group }));
+                }
+                // The link flag rides the level's own mask group, so
+                // it is per level: an unlinked level's mask moves on
+                // its own, without its content.
+                let mut linked = level.linked;
+                if ui.checkbox(&mut linked, "link").changed() {
+                    self.run_command(
+                        "mask.link",
+                        serde_json::json!({ "id": level.group, "linked": linked }),
+                    );
+                }
+            });
+        }
+        if ui.button("Add level").clicked() {
+            self.run_command("mask.addLevel", serde_json::json!({ "id": id }));
         }
     }
 

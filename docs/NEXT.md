@@ -372,8 +372,9 @@ evidence work, tracked outside that campaign.
   floor recorded in **`.reachability-floor.tsv`**. The floor is a
   one-way ratchet: `--bless` may raise it (reachability improved) and
   refuses to lower it (a regression is fixed, not forgiven). Measured
-  on `main` at 2026-11-10: **245 registry commands, 146 bound by the
-  shell = 59.59%**, 99 unreachable; the floor is pinned at 59.59%.
+  on the mask-stack branch at 2026-11-11: **257 registry commands, 168
+  bound by the shell = 65.37%**, 89 unreachable; the floor is pinned at
+  65.37%.
   (The command palette makes the *palette* reach 100% — the gate
   deliberately measures the CS6-visible surface instead, which is the
   surface the 19.x batches widen. Decision
@@ -412,6 +413,17 @@ evidence work, tracked outside that campaign.
 - **20.3 Animation timeline** (M): frames strip, per-frame timing,
   onion skinning, `symbol.tween`.
 - **20.4 Mask stack UI** (M): add/remove/mode/link/move.
+- **20.4 Mask stack UI** (M): add/remove/mode/link/move. — **PARTIAL
+  2026-11-11**: the stack, its operators, and its fold landed. The
+  model holds a level's combine mode and persists it
+  (`mask.setStackMode`, decisions [0092](decisions/0092-mask-stack-combine-mode.md)
+  and [0093](decisions/0093-mask-stack-levels-and-folding.md)); the
+  compositor folds the levels bottom-up into one coverage and applies
+  it to the content's pixels; the panel lists one row per level with
+  its enable flag, operator, link flag, reorder arrows and remove
+  button, and can add a level. The structural commands undo
+  byte-exactly. Still open: the screenshot acceptance; ticket
+  [T9](tasks/T9-mask-stack.md).
 - **20.5 Multi-document tabs** (M): **LANDED 2026-11-07** — Open/New
   park the active document as a `DocTab`; Close promotes the newest
   parked tab (refuses dirty documents); the tab strip shows the
@@ -658,9 +670,9 @@ scope, so no license path is attempted.
    `catalog::ids()` − UI-bound commands only shrinks (mirror of the
    call-table test). Unreachable commands with no gate means drift.
    — **DONE (2026-11-10)**, tracked as 19b.2: `cargo run -p xtask --
-   reachability`, wired into `ci`. Measures **245 registry commands,
-   146 bound by the shell = 59.59%**, 99 unreachable; the floor lives
-   in **`.reachability-floor.tsv`** (pinned at 59.59%) and is a one-way
+   reachability`, wired into `ci`. Measures **257 registry commands,
+   168 bound by the shell = 65.37%**, 89 unreachable; the floor lives
+   in **`.reachability-floor.tsv`** (pinned at 65.37%) and is a one-way
    ratchet.
 3. **Inert-drift test**: an inert menu row may not be added silently.
    — **DONE (2026-11-02)**, tracked as 19b.3: the census is derived

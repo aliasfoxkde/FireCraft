@@ -51,8 +51,9 @@ shell reaches 72; after Phase 11's paint family it reaches 77;
 > not just audited. The xtask step `cargo run -p xtask --
 > reachability` derives the bound set from `crates/app/src` and holds
 > it to a floor in `.reachability-floor.tsv` (one-way ratchet). The
-> measurement it took on `main`: **245 registry commands, 146 bound =
-> 59.59%**, 99 unreachable — the floor is pinned at 59.59%. The
+> measurement it took on the mask-stack branch: **257 registry
+> commands, 168 bound = 65.37%**, 89 unreachable — the floor is pinned
+> at 65.37%. The
 > `comm` line above counts *any* occurrence of a command name in the
 > shell crate; the gate counts the same bindings outside `#[cfg(test)]`
 > code and reports them as a share, so the two numbers are close but
@@ -136,7 +137,7 @@ authoritative source that supersedes this table.
 | **Registry** | 252 commands | Every command executable from the GUI via the Ctrl+P palette (19.4); menu reachability is the remaining gap |
 | **Menu reachability** | 2 inert of 294 items | *live* — derived + gated (`menus::tests::inert_count_never_rises`) |
 | **Parity** | 268 C / 3 P / 0 M / 85 N | 3 P rows are evidence-gated (Phase 12 oracle) |
-| **Decision docs** | 90 (0001–0090) | Next: 0091 |
+| **Decision docs** | 92 (0001–0092) | Next: 0093 |
 | **Web bundle** | 21,608,249 B observed; 25,000,000 B warning / 50,000,000 B hard cap | Policy decision 0090; web build uses Rust opt-level=z and Binaryen wasm-opt=z. Cap is a guardrail, not a target; A/B size evidence remains required |
 
 
