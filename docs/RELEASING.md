@@ -235,9 +235,10 @@ Every step below is one the repository can actually perform today.
    GitForge only when the lineage question is resolved; the GitForge
    remote carries tags only and has no release-asset surface.
 9. The tag push fires `release.yml`, which creates a **draft** release
-   with the eight validated assets. Inspect the draft: confirm the
-   asset list, confirm the digests against `RELEASE_SHA256.txt`, and
-   confirm the release notes are `docs/releases/<tag>.md`.
+   with the nine validated assets. Inspect the draft: confirm the
+   asset list, confirm the digests against `RELEASE_SHA256.txt` and the
+   release manifest, and confirm the release notes are
+   `docs/releases/<tag>.md`.
 10. Deploy the web bundle to Cloudflare Pages manually, then reconcile
     the deployed assets against the tagged bundle and record the result.
 11. **Publishing the draft is a separate, authorized action.** Publishing
