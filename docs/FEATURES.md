@@ -1,12 +1,12 @@
 # FireCraft — Feature surface
 
-> Audited 2026-11-01 against the main tree. Every claim here is
-> backed by a gate in the repository: the command registry
-> (`engine::catalog::ids()`), the parity matrix
-> (`docs/planning/generated/dom-parity.md`), the menus
-> (`crates/app/src/menus.rs`), and the CLI (`crates/app-cli`).
+> Feature inventory originally audited 2026-11-01; status and
+> command/reachability counts refreshed 2026-11-11 against `main`
+> (`b61f198`). Claims are grounded in the command registry,
+> generated DOM parity, menu census, CLI and current task ledger.
 > Where a feature is a *recipe* rather than a built artifact, it says
-> so.
+> so. A DOM verb or CLI command is not by itself proof of a complete,
+> polished GUI workflow.
 
 FireCraft is a clean-room reimplementation of Adobe Fireworks CS6 —
 the hybrid vector + bitmap web-design tool Adobe discontinued in 2013
