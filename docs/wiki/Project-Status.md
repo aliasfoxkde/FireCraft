@@ -1,26 +1,39 @@
 # Project Status
 
+**Snapshot reviewed:** 2026-11-11  
+**Source:** `main` at `b61f198`  
+**Latest published release:** [v0.2.5](https://github.com/aliasfoxkde/FireCraft/releases/tag/v0.2.5) (2026-11-03)
+
+FireCraft is a functional Rust graphics editor with a shared document engine and command registry across the desktop GUI, WebAssembly app, CLI, scripting host, and MCP server. The current source is newer than the latest published release; do not assume the hosted app contains every change on `main`.
+
 ## Current snapshot
 
-The last audited source snapshot is `main` at `5fac7a2` (2026-11-04); the latest release tag is `v0.2.5`. The detailed [Progress page](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/PROGRESS.md) is the authority for current counts and validation receipts.
+| Surface | Current state |
+|---|---|
+| Engine commands | 253 registered command IDs |
+| Shell reachability | 164/253 = 64.82% in the 2026-11-11 measurement; the command palette exposes the full registry, but this gate measures the CS6-visible shell |
+| CS6 DOM matrix | 268 carried / 3 partial / 0 missing of 356 verbs; this is scripting/API parity, not GUI parity |
+| Menu census | 2 inert rows of 296; eight other rows are explicitly feature/evidence-gated |
+| User-visible parity | Full inventory published in [CS6-PARITY.md](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/CS6-PARITY.md) |
+| Phase 20 | 20.1 and 20.5–20.7 are on main; Optimize/timeline are in [PR #118](https://github.com/aliasfoxkde/FireCraft/pull/118), mask stack in [PR #113](https://github.com/aliasfoxkde/FireCraft/pull/113) |
+| Phase 21 | User-facing modern deliverables landed in the 2026-11-11 train |
+| Phase 22 | Partial: core panel/tool/context surfaces landed; remaining inspector and chrome details are tracked |
+| Published artifacts | Linux x86_64 GUI/CLI archives, DEB, and web bundle in v0.2.5 |
+| Other native formats | Recipes exist, but Windows, macOS, AppImage and Flatpak need target-native build/install/launch receipts before being called supported |
 
-The source snapshot has a recent optimized web distribution whose manifest verifies. The public Pages manifest has different JavaScript, wasm, and index hashes from that local distribution; its deployed source revision is unknown. Do not infer the live build from the source version alone.
+## Deployment and release
 
-## Where work stands
+The 2026-11-11 deployment reconciliation (#104) found that the live site's JavaScript, Wasm and WebOS app metadata match the v0.2.5 release bytes. Cloudflare injects an analytics beacon into the served HTML, which accounts for the remaining HTML-manifest difference. Republish from the canonical release artifact is pending.
 
-<!-- coderabbit-ai-generated:v1 -->
+The current release program keeps standalone FireCraft and embeddable developer artifacts as complementary targets. A packaging recipe or cross-compile is not a verified release.
 
-<!-- coderabbit-ai-generated-section:v1:53e1babaf030bba0ca85e43bacab55a245bc04312570811385e3712883f14109 -->
+## Where to go next
 
-- M0–M15 and the DOM verb-surface campaign are complete.
-- The 19.6 menu-wiring campaign is complete; 2 of 296 rows are inert and eight additional rows remain feature- or evidence-gated.
-- Phase 22 shell fidelity is the active UI front. Phase 20 daily-driver features and Phase 21 modern additions are queued.
-- T22 recorded a replacement 1280×800 vector screenshot and empty, vector, and bitmap captures at both 1280×800 and 1920×1080. See the [build and capture receipts](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/tasks/T22-screenshot-ui.md#receipts--2026-11-04) for the tested artifact and limits.
-
-<!-- /coderabbit-ai-generated:v1 -->
-
-## Live sources
-
+- [Current task board](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/TASKS.md)
 - [Detailed roadmap](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/NEXT.md)
-- [Build and deployment evidence](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/PROGRESS.md)
-- [Release notes](https://github.com/aliasfoxkde/FireCraft/tree/main/docs/releases)
+- [Progress and receipts](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/PROGRESS.md)
+- [User-visible CS6 parity matrix](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/CS6-PARITY.md)
+- [Release artifact matrix](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/release/ARTIFACT-MATRIX.md)
+- [Known gaps](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/GAPS.md) (historical audit; use TASKS/PROGRESS for current status)
+
+The full measured state, including limitations and dates, is in the repository documentation. This page is a navigation summary, not a certification claim.
