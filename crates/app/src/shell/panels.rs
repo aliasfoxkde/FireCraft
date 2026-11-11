@@ -242,32 +242,6 @@ impl Shell {
         }
     }
 
-    /// States section: one row per state of the tallest layer.
-    pub(super) fn states_section(&mut self, ui: &mut egui::Ui) {
-        let states = self
-            .editor
-            .document()
-            .pages
-            .get(self.editor.page)
-            .map_or(1, |page| {
-                page.layers
-                    .layers
-                    .iter()
-                    .map(|layer| layer.cells.len())
-                    .max()
-                    .unwrap_or(1)
-            });
-        for frame in 0..states {
-            if ui
-                .selectable_label(self.editor.frame == frame, format!("State {}", frame + 1))
-                .clicked()
-            {
-                self.editor.frame = frame;
-                self.raster = None;
-            }
-        }
-    }
-
     /// Layers section: name + display toggle per layer, bottom-first.
     /// The active layer's row is highlighted and can be changed by
     /// clicking it — that row is where every placement command lands

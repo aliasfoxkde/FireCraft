@@ -63,6 +63,7 @@
 | 26 | Refresh user-visible CS6 parity matrix | [tasks/T26-parity-matrix.md](tasks/T26-parity-matrix.md) | `IMPLEMENTED` — matrix published | parity lane | every CS6 menu, tool, panel, inspector field set, workflow, import/export surface, canvas interaction, keymap area, and selection state is classified with an evidence citation and an owning ticket in [`CS6-PARITY.md`](CS6-PARITY.md); the browser-sampling check the ticket named was performed on 2026-11-04 against a fresh optimized bundle and is recorded in T22 |
 | 22 | Phase 22: CS6 shell fidelity and screenshot audit | [tasks/T22-screenshot-ui.md](tasks/T22-screenshot-ui.md) | `IN PROGRESS` | UI lane | screenshot acceptance is complete; 22.1 panel inventory and 22.2 tool strip are complete in PR #8; 22.5 chrome remains partial, and 22.4 still has evidence-gated bitmap transform/fill-stroke work. [Phase 22](NEXT.md#phase-22--cs6-shell-fidelity-p0-the-looks-and-acts-like-fireworks-phase) |
 | 20 | 20.1 In-canvas text editing (egui TextEdit overlay; kittest focus tests) | [tasks/T20-text-editing.md](tasks/T20-text-editing.md) | `IMPLEMENTED` — landed 2026-11-06 (`shell::begin_text_edit` / `text_edit_overlay`) | editing lane | the remaining Phase 20 items (Optimize, animation timeline, mask stack, tabs, history rewind, slice behavior) stay queued below |
+| 8 | 20.3 Animation timeline (frames strip, per-state timing, onion skinning, `symbol.tween`) | [tasks/T8-animation-timeline.md](tasks/T8-animation-timeline.md) | `IMPLEMENTED` — the shell half landed 2026-11-11 (decision [0094](decisions/0094-animation-timeline-shell.md)): the States panel is the strip, the delay field writes `frame.setDuration`, the onion toggle writes `page.setOnionSkinning` and the canvas calls `compose::render_onion` | editing lane | playback (CS6's `Play Animation`), state thumbnails, and the screenshot acceptance are still open — see the ticket |
 
 
 ## Queued (Phase 20 — daily-driver features)
@@ -72,7 +73,7 @@
 |---|---|---|
 | 20 | 20.1 In-canvas text editing (egui TextEdit overlay; kittest focus tests) | [tasks/T20-text-editing.md](tasks/T20-text-editing.md) |
 | 7 | 20.2 Optimize panel (palette/bitrate over `ExportOptions` + live preview) | [tasks/T7-optimize-panel.md](tasks/T7-optimize-panel.md) |
-| 8 | 20.3 Animation timeline (frames strip, timing, onion skinning, `symbol.tween`) | [tasks/T8-animation-timeline.md](tasks/T8-animation-timeline.md) |
+| 8 | 20.3 Animation timeline (frames strip, timing, onion skinning, `symbol.tween`) — shell half landed 2026-11-11; playback open | [tasks/T8-animation-timeline.md](tasks/T8-animation-timeline.md) |
 | — | 20.4 Mask stack UI (add/remove/mode/link/move) | — |
 | 9 | 20.5 Multi-document tabs + Window-menu panel toggles | — |
 | 10 | 20.6 History panel click-to-rewind (journal replay to seq N) | — |

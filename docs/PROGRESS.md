@@ -84,9 +84,9 @@
 - **UI-work gates landed (2026-11-10, issue #94):** the reachability
   gate (`cargo run -p xtask -- reachability`, wired into `ci`) derives
   the shell's bound command set from the shell crate's own source and
-  holds it to a one-way floor in `.reachability-floor.tsv` — **245
-  registry commands, 146 bound = 59.59%**, 99 unreachable. The panel
-  snapshot (`crates/app/panels.snapshot`, 14 panels) pins the panel
+  holds it to a one-way floor in `.reachability-floor.tsv` — **253
+  registry commands, 168 bound = 66.40%**, 85 unreachable. The panel
+  snapshot (`crates/app/panels.snapshot`, 19 panels) pins the panel
   set's structure; `egui_kittest` is obtainable (0.36.2 matches the
   locked egui) but its pixel path needs a wgpu adapter the CI image
   does not provide, so the in-tree golden machinery does that job and

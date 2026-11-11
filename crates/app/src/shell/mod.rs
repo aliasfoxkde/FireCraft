@@ -25,6 +25,7 @@ mod panel_windows;
 mod panels;
 mod panels_web;
 mod slice_editor;
+mod timeline;
 
 pub use glyphs::apply_cs6_theme;
 pub(crate) use glyphs::{draw_autoshape_glyph, symbol_type_label, tool_key, tool_label};
@@ -2161,22 +2162,18 @@ impl Shell {
                 // the current one, which becomes active on insert.
                 let page = self.editor.page;
                 let current = self.editor.frame;
-                self.run_command(
+                let at = current + 1;
+                if self.run_command(
                     "frame.add",
                     serde_json::json!({
                         "page": page, "how_many": 1,
                         "location": "after current", "current": current,
                     }),
-                );
-                let count = self
-                    .editor
-                    .document()
-                    .pages
-                    .get(page)
-                    .map(|p| p.info.frame_count)
-                    .unwrap_or(0);
-                if count > 0 {
-                    self.editor.frame = (count - 1) as usize;
+                ) {
+                    // The new state sits right behind the current one —
+                    // not at the end of the page.
+                    self.editor.frame = at;
+                    self.raster = None;
                 }
             }
             menus::SelAction::BreakApart => {

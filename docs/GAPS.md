@@ -51,8 +51,9 @@ shell reaches 72; after Phase 11's paint family it reaches 77;
 > not just audited. The xtask step `cargo run -p xtask --
 > reachability` derives the bound set from `crates/app/src` and holds
 > it to a floor in `.reachability-floor.tsv` (one-way ratchet). The
-> measurement it took on `main`: **245 registry commands, 146 bound =
-> 59.59%**, 99 unreachable — the floor is pinned at 59.59%. The
+> measurement it took on the release train at 2026-11-11: **253
+> registry commands, 168 bound = 66.40%**, 85 unreachable — the floor is
+> pinned at 66.40%. The
 > `comm` line above counts *any* occurrence of a command name in the
 > shell crate; the gate counts the same bindings outside `#[cfg(test)]`
 > code and reports them as a share, so the two numbers are close but
