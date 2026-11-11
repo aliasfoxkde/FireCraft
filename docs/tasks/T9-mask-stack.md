@@ -29,7 +29,8 @@ plus the repo gate `cargo run -p xtask -- ci`.
 
 ## Status — PARTIAL (2026-11-11)
 
-**Landed** (decision [0092](../decisions/0092-mask-stack-combine-mode.md)):
+**Landed** (decisions [0092](../decisions/0092-mask-stack-combine-mode.md)
+and [0093](../decisions/0093-mask-stack-levels-and-folding.md)):
 
 - The model owns the operator. `doc::MaskCombineMode` is `Add`,
   `Subtract`, `Intersect`, `Invert`; `GroupObject::stack_mode` holds
@@ -45,23 +46,31 @@ plus the repo gate `cargo run -p xtask -- ci`.
 - `mask.setStackMode` sets the level's operator, resolving the mask
   group from either the group or the object it masks, and refuses an
   unknown spelling with `EngineError::BadPayload`.
-- The Properties panel draws a "Mask stack" section with a combine
-  combo box, only when the selection carries an element mask.
+- **A stack is nested mask groups** (0093): a level's content child
+  is the level below it, the outermost group is the top level. The
+  bottom level replaces the coverage and each level above combines
+  with the coverage below it by its operator. A disabled level stays
+  in the stack in place and contributes no coverage.
+- **The compositor applies the stack.** `compose` folds the levels
+  bottom-up into one coverage and scales the content's pixels by it;
+  the mask artwork is never composited as content.
+- **The panel lists the levels** — one row per level, top first,
+  numbered from the bottom the way CS6 numbers its masks. Each row
+  has the enable checkbox, the operator combo, the reorder arrows and
+  the remove button; the section's foot adds a level.
+- The structural level commands (`mask.addLevel`,
+  `mask.removeLevel`, `mask.moveLevel`) undo byte-exactly — the
+  engine's fuzz property covers them.
 
 **Open:**
 
-- **The compositor does not apply masks at all yet.** `compose`'s
-  group fold composites mask-structured groups unmasked this milestone
-  ("masks as pixel content are M6/M7; `MNAb` is carried by the model
-  only"). So the operator is stored and persisted but changes no
-  pixels, and a single level has no coverage below it to combine
-  with. The rendering half is the open scope of this ticket: the
-  compositor must apply each level against the coverage below it
-  using the level's operator, and the stack must hold more than one
+- Linking and unlinking a *level* (`mask.link` operates on a mask
+  group, not on a level in a stack) has no panel affordance yet.
+- The compositor samples a level's mask at the canvas resolution
+  rather than at the mask image's own resolution, and the fold is a
+  per-pixel operation with no feathering beyond the mask's own gray
   level.
-- Add / remove / link / move for stack levels (the rest of 20.4) are
-  not implemented: the model has one level per mask group today, and
-  the panel exposes only the operator.
 - No screenshot acceptance yet — the section is unstyled relative to
   the rest of the Properties panel, and the Phase 22 screenshot audit
   has not covered it.
+

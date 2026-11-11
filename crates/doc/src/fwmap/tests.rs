@@ -759,6 +759,221 @@ fn an_unrecognized_mode_spelling_survives_the_round_trip() {
     );
 }
 
+// --- decision 0093: the mask stack's shape -----------------------------
+
+/// A mask stack: two nested mask groups, each holding a mask and the
+/// level below it, plus the content the bottom level restricts.
+///
+/// The shape is the stack itself (decision 0093): the outer group is
+/// the top level, its content child is the level below, and the
+/// bottom level's content child is the masked object.
+fn mask_stack_document() -> (Document, Vec<ObjectId>) {
+    let mut doc = Document::default();
+    let content = doc.registry.insert(ObjectData::Path(PathObject {
+        contours: Vec::new(),
+        primitive: None,
+        even_odd: false,
+        paint: None,
+        fill_start: None,
+        fill_end: None,
+        fill_third: None,
+        brush_placement: None,
+        fill_on_top: Some(false),
+        locked: false,
+        visible: true,
+        opacity: 1000,
+        blend: 0,
+        name: Some("content".to_owned()),
+        effects: Vec::new(),
+    }));
+    let bottom_mask = doc.registry.insert(ObjectData::Path(PathObject {
+        contours: Vec::new(),
+        primitive: None,
+        even_odd: false,
+        paint: None,
+        fill_start: None,
+        fill_end: None,
+        fill_third: None,
+        brush_placement: None,
+        fill_on_top: Some(false),
+        locked: false,
+        visible: true,
+        opacity: 1000,
+        blend: 0,
+        name: Some("bottom-mask".to_owned()),
+        effects: Vec::new(),
+    }));
+    let top_mask = doc.registry.insert(ObjectData::Path(PathObject {
+        contours: Vec::new(),
+        primitive: None,
+        even_odd: false,
+        paint: None,
+        fill_start: None,
+        fill_end: None,
+        fill_third: None,
+        brush_placement: None,
+        fill_on_top: Some(false),
+        locked: false,
+        visible: true,
+        opacity: 1000,
+        blend: 0,
+        name: Some("top-mask".to_owned()),
+        effects: Vec::new(),
+    }));
+    // The bottom level: `GRTi` 2 (shape mask), its content child is
+    // the masked object.
+    let bottom = doc.registry.insert(ObjectData::Group(GroupObject {
+        stack_mode: Some(MaskCombineMode::Add),
+        group_type: 2,
+        name: None,
+        children: vec![bottom_mask, content],
+        opacity: 1000,
+        blend: 0,
+        visible: true,
+        locked: false,
+        mask_hidden: false,
+        mask_linked: None,
+        effects: Vec::new(),
+    }));
+    // The top level: its content child is the level below.
+    let top = doc.registry.insert(ObjectData::Group(GroupObject {
+        stack_mode: Some(MaskCombineMode::Subtract),
+        group_type: 2,
+        name: None,
+        children: vec![top_mask, bottom],
+        opacity: 1000,
+        blend: 0,
+        visible: true,
+        locked: false,
+        mask_hidden: false,
+        mask_linked: None,
+        effects: Vec::new(),
+    }));
+    doc.pages.push(Page {
+        info: PageInfo {
+            version: None,
+            revision: None,
+            frame_count: 1,
+            frame_count_duplicate: 1,
+            request_id: 0,
+            canvas: Canvas::default(),
+            onion_before: 0,
+            onion_after: 0,
+            frame_durations: Vec::new(),
+        },
+        name: None,
+        is_master: false,
+        is_linked: false,
+        page_id: None,
+        last_export_dir: None,
+        last_export_file: None,
+        layers: LayerList {
+            layers: vec![Layer {
+                cells: vec![Cell {
+                    elements: vec![top],
+                    ..Cell::default()
+                }],
+                ..Layer::default()
+            }],
+        },
+        grid: None,
+        guides: Guides::default(),
+        export: None,
+    });
+    (doc, vec![content, bottom_mask, top_mask, bottom, top])
+}
+
+/// The document's single root group — the top level of the stack.
+fn root_group(doc: &Document) -> GroupObject {
+    let id = doc.pages[0].layers.layers[0].cells[0].elements[0];
+    match doc.registry.get(id) {
+        Some(ObjectData::Group(group)) => group.clone(),
+        other => panic!("the root is not a group: {other:?}"),
+    }
+}
+
+/// The group among `children`, if any.
+fn child_group(doc: &Document, children: &[ObjectId]) -> GroupObject {
+    for id in children {
+        if let Some(ObjectData::Group(group)) = doc.registry.get(*id) {
+            return group.clone();
+        }
+    }
+    panic!("no group among {children:?}");
+}
+
+/// The names of the objects in `ids`, in order.
+fn names_of(doc: &Document, ids: &[ObjectId]) -> Vec<String> {
+    ids.iter()
+        .map(|id| {
+            let name = match doc.registry.get(*id) {
+                Some(ObjectData::Path(path)) => path.name.clone(),
+                Some(ObjectData::Text(text)) => text.name.clone(),
+                Some(ObjectData::Group(group)) => group.name.clone(),
+                Some(ObjectData::Image(image)) => image.name.clone(),
+                Some(ObjectData::Slice(slice)) => slice.name.clone(),
+                Some(ObjectData::SymbolInstance(symbol)) => symbol.name.clone(),
+                None => None,
+            };
+            name.unwrap_or_default()
+        })
+        .collect()
+}
+
+#[test]
+fn a_mask_stack_survives_the_round_trip() {
+    let (doc, _ids) = mask_stack_document();
+    let (bytes, doc2, _bag2) = round_trip_bytes(&doc, &UnknownBag::new());
+    assert!(!bytes.is_empty());
+
+    // The stack's shape survives: the top level holds its mask and the
+    // level below, and the bottom level holds its mask and the content.
+    // The reader mints its own object ids, so the assertions name the
+    // objects rather than index into the registry.
+    let top = root_group(&doc2);
+    assert_eq!(top.group_type, 2, "the top level is a shape mask");
+    assert_eq!(
+        top.stack_mode,
+        Some(MaskCombineMode::Subtract),
+        "the top mode"
+    );
+    assert_eq!(
+        names_of(&doc2, &top.children[..1]),
+        vec!["top-mask"],
+        "the top level holds its mask"
+    );
+
+    let bottom = child_group(&doc2, &top.children);
+    assert_eq!(bottom.group_type, 2, "the bottom level is a shape mask");
+    assert_eq!(
+        bottom.stack_mode,
+        Some(MaskCombineMode::Add),
+        "the bottom mode"
+    );
+    assert_eq!(
+        names_of(&doc2, &bottom.children),
+        vec!["bottom-mask", "content"],
+        "the bottom level holds its mask and the content"
+    );
+}
+
+#[test]
+fn a_disabled_level_survives_the_round_trip() {
+    // A disabled level is a `GRTi` 0 group whose mask artwork is
+    // hidden (`MNAb`) — the shape `mask.enable` leaves behind. It must
+    // still read as disabled after the file round trip, or the level
+    // would silently come back enabled.
+    let (mut doc, ids) = mask_stack_document();
+    if let Some(ObjectData::Group(group)) = doc.registry.get_mut(ids[4]) {
+        group.group_type = 0;
+        group.mask_hidden = true;
+    }
+    let (_bytes, doc2, _bag2) = round_trip_bytes(&doc, &UnknownBag::new());
+    let top = root_group(&doc2);
+    assert_eq!(top.group_type, 0, "the level stays a plain group");
+    assert!(top.mask_hidden, "the level stays disabled");
+}
+
 // --- M10: symbol wire contract (MSYi / NGSv / ANNi family) --------------
 
 /// Collect references to every node carrying `fourcc`, at any depth.

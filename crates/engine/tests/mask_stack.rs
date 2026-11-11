@@ -204,6 +204,60 @@ fn every_level_command_undoes_byte_exactly() {
 }
 
 #[test]
+fn a_disabled_level_keeps_its_place_and_its_mode_stays_editable() {
+    let registry = builtins();
+    let (mut document, ids) = masked_document();
+    registry
+        .execute(
+            &mut document,
+            "mask.addLevel",
+            json!({ "id": ids[0], "source": ids[2] }),
+        )
+        .expect("mask.addLevel");
+    let levels = element_mask_stack(&document, ids[0]);
+    let top = levels[0];
+
+    // The top level is disabled: it stays in the stack, in place, but
+    // contributes no coverage.
+    registry
+        .execute(&mut document, "mask.enable", json!({ "id": top.group, "enable": false }))
+        .expect("mask.enable");
+    let disabled = element_mask_stack(&document, ids[0]);
+    assert_eq!(disabled.len(), 2, "the stack keeps both levels");
+    assert_eq!(disabled[0].group, top.group, "the level keeps its place");
+    assert!(!disabled[0].enabled, "the level is disabled");
+
+    // A disabled level's combine mode is still editable — the level
+    // keeps its mode across the enable/disable round trip.
+    registry
+        .execute(
+            &mut document,
+            "mask.setStackMode",
+            json!({ "id": top.group, "mode": "intersect" }),
+        )
+        .expect("mask.setStackMode");
+    let edited = element_mask_stack(&document, ids[0]);
+    assert_eq!(
+        edited[0].mode,
+        doc::MaskCombineMode::Intersect,
+        "the disabled level's mode"
+    );
+    assert!(!edited[0].enabled, "the level is still disabled");
+
+    // And re-enabling keeps the mode.
+    registry
+        .execute(&mut document, "mask.enable", json!({ "id": top.group, "enable": true }))
+        .expect("mask.enable");
+    let enabled = element_mask_stack(&document, ids[0]);
+    assert!(enabled[0].enabled, "the level is enabled again");
+    assert_eq!(
+        enabled[0].mode,
+        doc::MaskCombineMode::Intersect,
+        "the mode survives the round trip"
+    );
+}
+
+#[test]
 fn a_refused_level_command_leaves_the_document_alone() {
     let registry = builtins();
     let (mut document, ids) = masked_document();

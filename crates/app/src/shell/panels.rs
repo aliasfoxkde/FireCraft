@@ -1759,35 +1759,74 @@ impl Shell {
     }
 
     /// The mask stack section of the Properties panel: the element
-    /// mask's level and the way it combines with the coverage below.
+    /// mask's levels, their state, and the way each level combines with
+    /// the coverage below it.
     ///
     /// A `FireCraft` extension (decision 0092): CS6 has one element mask
     /// per object and no stack, so the level's mode defaults to the
     /// union. The panel draws the section only when the selection
     /// carries an element mask.
     pub(super) fn mask_stack_panel(&mut self, ui: &mut egui::Ui, id: doc::ObjectId) {
-        let Some((group_id, mode)) =
-            engine::catalog::element_mask_stack_mode(self.editor.document(), id)
-        else {
+        let levels = engine::catalog::element_mask_stack(self.editor.document(), id);
+        if levels.is_empty() {
             return;
-        };
+        }
         ui.heading("Mask stack");
-        let current = mode.unwrap_or(MaskCombineMode::Add);
-        egui::ComboBox::from_label("combine")
-            .selected_text(current.as_str())
-            .show_ui(ui, |ui| {
-                for candidate in MaskCombineMode::ALL {
-                    if ui
-                        .selectable_label(candidate == current, candidate.as_str())
-                        .clicked()
-                    {
-                        self.run_command(
-                            "mask.setStackMode",
-                            serde_json::json!({ "id": group_id, "mode": candidate.as_str() }),
-                        );
-                    }
+        let count = levels.len();
+        for (index, level) in levels.iter().enumerate() {
+            // The levels are listed top first; the mask numbers count
+            // from the bottom, as CS6 numbers its masks.
+            let number = count - index;
+            ui.horizontal(|ui| {
+                let mut enabled = level.enabled;
+                if ui
+                    .checkbox(&mut enabled, format!("Mask {number}"))
+                    .changed()
+                {
+                    self.run_command(
+                        "mask.enable",
+                        serde_json::json!({ "id": level.group, "enable": enabled }),
+                    );
+                }
+                egui::ComboBox::from_id_salt(("mask_mode", level.group))
+                    .selected_text(level.mode.as_str())
+                    .width(80.0)
+                    .show_ui(ui, |ui| {
+                        for candidate in MaskCombineMode::ALL {
+                            if ui
+                                .selectable_label(candidate == level.mode, candidate.as_str())
+                                .clicked()
+                            {
+                                self.run_command(
+                                    "mask.setStackMode",
+                                    serde_json::json!({
+                                        "id": level.group,
+                                        "mode": candidate.as_str(),
+                                    }),
+                                );
+                            }
+                        }
+                    });
+                if ui.small_button("↑").clicked() {
+                    self.run_command(
+                        "mask.moveLevel",
+                        serde_json::json!({ "id": level.group, "delta": 1 }),
+                    );
+                }
+                if ui.small_button("↓").clicked() {
+                    self.run_command(
+                        "mask.moveLevel",
+                        serde_json::json!({ "id": level.group, "delta": -1 }),
+                    );
+                }
+                if ui.small_button("remove").clicked() {
+                    self.run_command("mask.removeLevel", serde_json::json!({ "id": level.group }));
                 }
             });
+        }
+        if ui.button("Add level").clicked() {
+            self.run_command("mask.addLevel", serde_json::json!({ "id": id }));
+        }
     }
 
     /// Bitmap properties: the pixel geometry as a readout, then the

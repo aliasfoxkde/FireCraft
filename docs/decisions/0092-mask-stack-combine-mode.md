@@ -63,9 +63,10 @@ real, read by CS6, and crowded with names FireCraft does not own.
   and rejects any other with `EngineError::BadPayload` naming the
   offending value. `mask.setStackMode` acts on the **mask group**
   (the group that owns the element mask), and the engine publishes a
-  read side — `engine::catalog::element_mask_stack_mode(document, id)`
-  — that resolves an id to its mask group and the group's mode, so a
-  shell can render the control without reaching into the model.
+  read side — `engine::catalog::element_mask_stack(document, id)`,
+  which lists every level of the stack, top level first, with the
+  level's group, mask, combine mode, and enabled flag — so a shell
+  can render the control without reaching into the model.
 - **The Properties panel draws the control.** The panel's "Mask
   stack" section appears only when the selection carries an element
   mask, and its combo box shows the level's mode. It is a real

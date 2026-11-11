@@ -165,34 +165,6 @@ pub(crate) fn element_mask_state(document: &Document, id: ObjectId) -> Option<bo
     mask_kind.map(|_| false)
 }
 
-/// The mask group behind `id` and the combine mode of its level.
-///
-/// The mask stack's read side (decision 0092): `id` is the mask group
-/// itself, the mask it holds, or the object it masks. `None` when `id`
-/// carries no element mask.
-pub(crate) fn element_mask_stack_mode(
-    document: &Document,
-    id: ObjectId,
-) -> Option<(ObjectId, Option<MaskCombineMode>)> {
-    let is_mask_group = |group_type: i64| group_type == GRAYSCALE_MASK || group_type == SHAPE_MASK;
-    if let Some(ObjectData::Group(group)) = document.registry.get(id)
-        && is_mask_group(group.group_type)
-    {
-        return Some((id, group.stack_mode));
-    }
-    if let Some(Owner::Group {
-        id: parent,
-        position,
-    }) = find_owner(document, id)
-        && (position == 0 || position == 1)
-        && let Some(ObjectData::Group(group)) = document.registry.get(parent)
-        && is_mask_group(group.group_type)
-    {
-        return Some((parent, group.stack_mode));
-    }
-    None
-}
-
 /// Union content bounds of one object (identity transform).
 pub(crate) fn bounds_of(
     document: &Document,
@@ -1463,16 +1435,34 @@ impl TypedCommand for SetMaskStackMode {
                     payload.mode
                 ),
             })?;
-        let resolved = owning_mask_group(document, NAME, payload.id)?;
-        let mut group = resolved.group.clone();
+        // A level of a stack carries the mode, and a disabled level
+        // keeps its place in the stack — so the resolution accepts the
+        // disabled shape too, but never a plain group.
+        let resolved =
+            mask_group_of(document, payload.id).ok_or_else(|| EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: format!(
+                    "object {} (generation {}) carries no element mask",
+                    payload.id.index(),
+                    payload.id.generation()
+                ),
+            })?;
+        let Some(ObjectData::Group(previous)) = document.registry.get(resolved) else {
+            return Err(EngineError::MissingTarget {
+                name: NAME.to_owned(),
+                detail: "the mask group is not live".to_owned(),
+            });
+        };
+        let previous = previous.clone();
+        let mut group = previous.clone();
         group.stack_mode = Some(mode);
-        if let Some(ObjectData::Group(slot)) = document.registry.get_mut(resolved.id) {
+        if let Some(ObjectData::Group(slot)) = document.registry.get_mut(resolved) {
             *slot = group.clone();
         }
         Ok(Delta::Object {
-            id: resolved.id,
+            id: resolved,
             inverse: ObjectInverse::Mutated {
-                object: Box::new(ObjectData::Group(resolved.group)),
+                object: Box::new(ObjectData::Group(previous)),
             },
         })
     }
