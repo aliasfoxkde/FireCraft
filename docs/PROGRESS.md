@@ -62,6 +62,14 @@
   evidence.
 - **Clean-room boundary:** local CS6 files and Adobe-derived extracts
   remain uncommitted; visual assets require attribution.
+- **History rewind as a command (2026-11-11, decision 0096):** the
+  session-scoped `history.rewind` is enumerated by
+  `catalog::all_ids()`, so every surface that lists commands lists it
+  too: the command palette offers it (its payload grounded one step
+  below the document's live depth, not a fuzz depth) and the MCP
+  bridge's `firecraft.listCommands` advertises it. The registry
+  catalog and the reachability measurement are unchanged — the id is
+  not a registry id, so 168/253 (66.40%) stands.
 
 ## Build and deployment evidence
 
