@@ -69,9 +69,9 @@
 
 | # | Task | Ticket |
 |---|---|---|
-| 7 | 20.2 Optimize panel | [tasks/T7-optimize-panel.md](tasks/T7-optimize-panel.md) | PR #118 (open; not on main) |
+| 7 | 20.2 Optimize panel export-settings/preview completion | [tasks/T7-optimize-panel.md](tasks/T7-optimize-panel.md) | PR #118 (open; base panel already exists) |
 | 8 | 20.3 Animation timeline | [tasks/T8-animation-timeline.md](tasks/T8-animation-timeline.md) | PR #118 (open; not on main) |
-| — | 20.4 Mask stack UI | [decision 0093](decisions/0093-mask-stack-levels-and-folding.md) | PR #113 (open; not on main) |
+| — | 20.4 Mask stack UI | [PR #113](https://github.com/aliasfoxkde/FireCraft/pull/113) | Open; not on main; requires diff reduction/review and merge-conflict resolution |
 
 20.1 and 20.5–20.7 are already on `main`; do not reopen them.
 
