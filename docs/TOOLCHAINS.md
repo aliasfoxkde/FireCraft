@@ -34,15 +34,14 @@ launched, or published.
 | `packaging/webos/` (`appinfo.json`, `host.html`) | WebOS packaging stamped `@VERSION@` into `dist/web/` | none (text copy + stamp) | release fleet (`xtask dist --web`) | n/a — data, not a script | **Yes.** Staged into `dist/web/` (rung 5); device/runtime smoke unverified |
 | `packaging/deb/control` | `firecraft_<v>_amd64.deb` | dpkg-deb | release fleet (`xtask dist --native`) | n/a — data, not a script | **Yes.** Published (rung 11); the declared glibc floor is an open defect (B-7) |
 | `packaging/build-appimage.sh` | `firecraft-<v>-linux-x86_64.AppImage` | linuxdeploy-x86_64.AppImage (FUSE or `--appimage-extract-and-run`), GNU coreutils | any Linux x86_64 host with linuxdeploy | `bash -n` **parse-checked** by `dist --native` | **No.** `linuxdeploy` is absent from this fleet (B-8) |
-| `packaging/build-flatpak.sh` + `packaging/flatpak/dev.firecraft.FireCraft.yml` | `firecraft-<v>-linux-x86_64.flatpak` | flatpak + flatpak-builder, `org.freedesktop.Sdk//24.08` | any Linux x86_64 host with the Flatpak SDK | script `bash -n` **parse-checked**; manifest **YAML-parse-checked** by `dist --native` | **No.** `flatpak`/`flatpak-builder` absent (B-11) |
+| `packaging/build-flatpak.sh` + `packaging/flatpak/dev.firecraft.FireCraft.yml` | `firecraft-<v>-linux-x86_64.flatpak` | flatpak + flatpak-builder, `org.freedesktop.Sdk//26.08` + `org.freedesktop.Sdk.Extension.rust-stable` | any Linux x86_64 host with the Flatpak SDK | script `bash -n` **parse-checked**; manifest **YAML-parse-checked** by `dist --native` | **No.** `flatpak`/`flatpak-builder` absent (B-11) |
 | `packaging/build-macos-dmg.sh` | `firecraft-<v>-macos-universal.dmg` | macOS + Xcode CLT, rustup targets `aarch64`/`x86_64-apple-darwin`, lipo, codesign, hdiutil | macOS only | `bash -n` **parse-checked** by `dist --native` | **No.** `lipo`/`hdiutil`/Xcode CLT absent on this Linux host |
 | `packaging/build-windows.ps1` + `packaging/windows/firecraft.iss` | portable zip + optional Inno Setup installer | Windows, PowerShell 5.1+/7, MSVC (rustup target `x86_64-pc-windows-msvc` + VS Build Tools), optional Inno Setup 6 | Windows only | **cannot be parsed here** — no `pwsh`, no `ISCC`. The gate only checks that the files exist | **No.** `pwsh` absent and no MSVC linker on this fleet (B-12) |
 
-Two of the three `bash -n`-checked recipes (`build-macos-dmg.sh`,
-`build-appimage.sh`) plus the Windows recipe point at
-`packaging/TOOLCHAINS.md`, which does not exist — the document is
-`docs/TOOLCHAINS.md`. That is a defect in the recipes' comments, not a
-missing document.
+The three `bash -n`-checked recipes that cannot be exercised on this
+fleet (`build-macos-dmg.sh`, `build-appimage.sh`) plus the Windows
+recipe point at `docs/TOOLCHAINS.md` — this document. (They previously
+cited `packaging/TOOLCHAINS.md`, which does not exist; B-15, fixed.)
 
 ## Verification burden per artifact
 

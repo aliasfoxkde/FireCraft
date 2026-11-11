@@ -114,14 +114,19 @@ cmd_stage() {
   done
 
   local -a staged=()
-  local base prev=""
+  local base
+  # The staged file is named by the source basename, so two sources with
+  # the same basename collide. Comparing against the *previous* basename
+  # only caught adjacent duplicates: a third file sorting between them
+  # reset the comparison and the later duplicate silently overwrote the
+  # earlier one, shipping the wrong bytes under that name. Test the
+  # destination itself — that is the actual collision, adjacent or not.
   for f in "${paths[@]}"; do
     base=${f##*/}
-    if [ "$base" = "$prev" ]; then
+    if [ -e "$flat/$base" ]; then
       warn "duplicate release asset name '$base' — skipping $f (a release asset is named by its basename)"
       continue
     fi
-    prev=$base
     cp -- "$f" "$flat/$base"
     staged+=("$flat/$base")
   done

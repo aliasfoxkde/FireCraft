@@ -387,6 +387,50 @@ fn stage_skips_a_duplicate_asset_name_and_says_so() {
 }
 
 #[test]
+fn stage_skips_a_duplicate_asset_name_that_is_not_adjacent() {
+    // The sorted source order is a/same.tar.gz, b/other.txt, c/same.tar.gz:
+    // the two colliding basenames are NOT adjacent. A duplicate check that
+    // only compares against the previous basename resets on the file in
+    // between, so the later duplicate silently overwrites the earlier one
+    // and the release ships the wrong bytes under that name.
+    let sandbox = Sandbox::new("duplicate-nonadjacent");
+    sandbox.write("src/a/same.tar.gz", "first");
+    sandbox.write("src/b/other.txt", "between");
+    sandbox.write("src/c/same.tar.gz", "second");
+
+    let output = run_script(&sandbox, &["stage", "src", "flat", "assets.zlist"]);
+    assert!(
+        output.status.success(),
+        "staging failed: {}",
+        stderr_of(&output)
+    );
+
+    assert_eq!(
+        sandbox.dir_names("flat"),
+        vec!["other.txt".to_string(), "same.tar.gz".to_string()],
+        "the colliding basename must be staged once"
+    );
+    assert!(
+        stderr_of(&output).contains("duplicate release asset name"),
+        "the skip must be reported: {}",
+        stderr_of(&output)
+    );
+    let assets = staged_assets(&sandbox, "assets.zlist");
+    assert_eq!(
+        assets.len(),
+        2,
+        "the duplicate must appear once: {assets:?}"
+    );
+    // The first source wins; the second is skipped, not silently
+    // substituted over the top of it.
+    assert_eq!(
+        std::fs::read_to_string(sandbox.path("flat/same.tar.gz")).expect("read the staged asset"),
+        "first",
+        "the later duplicate must not overwrite the staged bytes"
+    );
+}
+
+#[test]
 fn stage_refuses_a_destination_that_already_holds_files() {
     let sandbox = Sandbox::new("stale");
     sandbox.write("src/RELEASE_SHA256.txt", "checksums");

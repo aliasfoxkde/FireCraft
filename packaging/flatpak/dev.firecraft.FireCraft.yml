@@ -1,7 +1,16 @@
 id: dev.firecraft.FireCraft
 runtime: org.freedesktop.Platform
-runtime-version: '24.08'
+# 26.08 is the live freedesktop branch. The Rust SDK extension ships
+# 1.98.0 on branch/26.08; the workspace declares `rust-version = "1.95"`,
+# and branch/24.08's extension tops out at 1.89.0 — below the floor, so
+# 24.08 cannot build this workspace at all.
+runtime-version: '26.08'
 sdk: org.freedesktop.Sdk
+# The Rust toolchain is not in the base SDK; it is an extension. This
+# key is manifest-level only — a module-level `sdk-extensions` is not
+# consumed by flatpak-builder, so it is declared once, here.
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.rust-stable
 command: firecraft
 finish-args:
   # GPU-accelerated eframe/wgpu rendering.
@@ -10,18 +19,65 @@ finish-args:
   - --socket=x11
   - --socket=wayland
   - --socket=fallback-x11
-  # File open/save/export goes through the portal file chooser.
+  # The desktop shell's open/save path is not a document-portal
+  # chooser: `EnvDialogs` reads the document path from the environment
+  # and the host's document directory, so the sandbox is granted that
+  # one directory rather than the whole home. The portal stays
+  # allowed for the host's own file chooser.
   - --filesystem=xdg-documents
   - --talk-name=org.freedesktop.portal.Desktop
+# The rust-stable extension installs its toolchain outside the default
+# PATH, so it is appended explicitly.
+build-options:
+  append-path: /usr/lib/sdk/rust-stable/bin
 modules:
   - name: firecraft
     buildsystem: simple
+    build-options:
+      # A writable CARGO_HOME inside the build sandbox; the default
+      # points at a path the sandbox does not own.
+      env:
+        CARGO_HOME: /run/build/firecraft/cargo
+      # `--share=network` is a `flatpak build` option, not a
+      # flatpak-builder one: flatpak-builder's own option table rejects
+      # `--share` with "Unknown option --share". Declared as a
+      # build-arg it reaches the `flatpak build` argv, where it lifts
+      # the sandbox's default `--unshare-net` — without it the cargo
+      # build dies at the first dependency fetch. (A published flatpak
+      # should vendor the registry instead; this manifest builds the
+      # candidate, and the published artifact's provenance is the
+      # SBOM/attestation path.)
+      build-args:
+        - --share=network
     build-commands:
       - cargo build --release --locked -p app -p app-cli
       - install -Dm755 target/release/firecraft /app/bin/firecraft
       - install -Dm755 target/release/firecraft-cli /app/bin/firecraft-cli
-      - install -Dm644 packaging/appimage/firecraft.desktop /app/share/applications/dev.firecraft.FireCraft.desktop
+      - install -Dm644 packaging/desktop/firecraft.desktop /app/share/applications/dev.firecraft.FireCraft.desktop
+      # The desktop entry names `Icon=firecraft`; without the icon the
+      # launcher shows a broken image. The icon ships in-tree
+      # (docs/ATTRIBUTION.md) and is an original work.
+      - install -Dm644 assets/icons/hicolor/256x256/apps/firecraft.png /app/share/icons/hicolor/256x256/apps/firecraft.png
       - install -Dm644 LICENSE /app/share/licenses/firecraft/LICENSE
     sources:
       - type: dir
-        path: ..
+        # `path` is resolved against the manifest's parent directory
+        # (packaging/flatpak/), so the repository root is two levels up.
+        path: ../..
+        # Skip entries are matched as top-level names against the
+        # source root — nested paths are not matched, so each entry
+        # names a top-level directory. `source/` holds the Adobe
+        # reference install (~350 MB of copyrighted binaries) and must
+        # never enter a build; `corpus/` and `target/` are large and
+        # regenerated.
+        skip:
+          - source
+          - corpus
+          - target
+          - dist
+          - fuzz
+          - log
+          - temp
+          - plan
+          - .git
+          - .flatpak-builder
