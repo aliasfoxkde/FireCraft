@@ -58,14 +58,16 @@ and [0093](../decisions/0093-mask-stack-levels-and-folding.md)):
   numbered from the bottom the way CS6 numbers its masks. Each row
   has the enable checkbox, the operator combo, the reorder arrows and
   the remove button; the section's foot adds a level.
+- **A level links and unlinks its own mask.** The link flag rides the
+  level's mask group (`LNKb` is written only when the mask is
+  *un*linked), so the flag is per level: unlinking one level leaves
+  the levels around it linked. The panel row carries the checkbox.
 - The structural level commands (`mask.addLevel`,
   `mask.removeLevel`, `mask.moveLevel`) undo byte-exactly — the
   engine's fuzz property covers them.
 
 **Open:**
 
-- Linking and unlinking a *level* (`mask.link` operates on a mask
-  group, not on a level in a stack) has no panel affordance yet.
 - The compositor samples a level's mask at the canvas resolution
   rather than at the mask image's own resolution, and the fold is a
   per-pixel operation with no feathering beyond the mask's own gray

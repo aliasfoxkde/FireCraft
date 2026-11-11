@@ -419,9 +419,9 @@ evidence work, tracked outside that campaign.
   and [0093](decisions/0093-mask-stack-levels-and-folding.md)); the
   compositor folds the levels bottom-up into one coverage and applies
   it to the content's pixels; the panel lists one row per level with
-  its enable flag, operator, reorder arrows and remove button, and can
-  add a level. The structural commands undo byte-exactly. Still open:
-  link/unlink per level, and the screenshot acceptance; ticket
+  its enable flag, operator, link flag, reorder arrows and remove
+  button, and can add a level. The structural commands undo
+  byte-exactly. Still open: the screenshot acceptance; ticket
   [T9](tasks/T9-mask-stack.md).
 - **20.5 Multi-document tabs** (M): **LANDED 2026-11-07** — Open/New
   park the active document as a `DocTab`; Close promotes the newest

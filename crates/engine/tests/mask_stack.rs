@@ -47,7 +47,37 @@ fn a_mask_carries_one_level() {
     let levels = element_mask_stack(&document, ids[0]);
     assert_eq!(levels.len(), 1, "the mask is one level");
     assert!(levels[0].enabled, "the level is enabled");
+    assert!(levels[0].linked, "the level's mask is linked by default");
     assert_ne!(levels[0].mask, levels[0].group, "the mask is not the group");
+}
+
+#[test]
+fn a_level_unlinks_its_own_mask() {
+    let registry = builtins();
+    let (mut document, ids) = masked_document();
+    registry
+        .execute(
+            &mut document,
+            "mask.addLevel",
+            json!({ "id": ids[0], "source": ids[2] }),
+        )
+        .expect("mask.addLevel");
+    let levels = element_mask_stack(&document, ids[0]);
+    assert!(levels[0].linked, "the new level is linked");
+    assert!(levels[1].linked, "the old level is linked");
+
+    // The link flag rides the level's own mask group, so unlinking
+    // one level leaves the other alone.
+    registry
+        .execute(
+            &mut document,
+            "mask.link",
+            json!({ "id": levels[0].group, "linked": false }),
+        )
+        .expect("mask.link");
+    let unlinked = element_mask_stack(&document, ids[0]);
+    assert!(!unlinked[0].linked, "the top level is unlinked");
+    assert!(unlinked[1].linked, "the level below is still linked");
 }
 
 #[test]
@@ -220,7 +250,11 @@ fn a_disabled_level_keeps_its_place_and_its_mode_stays_editable() {
     // The top level is disabled: it stays in the stack, in place, but
     // contributes no coverage.
     registry
-        .execute(&mut document, "mask.enable", json!({ "id": top.group, "enable": false }))
+        .execute(
+            &mut document,
+            "mask.enable",
+            json!({ "id": top.group, "enable": false }),
+        )
         .expect("mask.enable");
     let disabled = element_mask_stack(&document, ids[0]);
     assert_eq!(disabled.len(), 2, "the stack keeps both levels");
@@ -246,7 +280,11 @@ fn a_disabled_level_keeps_its_place_and_its_mode_stays_editable() {
 
     // And re-enabling keeps the mode.
     registry
-        .execute(&mut document, "mask.enable", json!({ "id": top.group, "enable": true }))
+        .execute(
+            &mut document,
+            "mask.enable",
+            json!({ "id": top.group, "enable": true }),
+        )
         .expect("mask.enable");
     let enabled = element_mask_stack(&document, ids[0]);
     assert!(enabled[0].enabled, "the level is enabled again");

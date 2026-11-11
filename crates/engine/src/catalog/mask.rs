@@ -1488,6 +1488,9 @@ pub struct MaskLevel {
     /// Whether the level's mask is enabled. A disabled level
     /// contributes no coverage at all.
     pub enabled: bool,
+    /// Whether the level's mask is linked to its content — the
+    /// default. An unlinked level's mask moves on its own.
+    pub linked: bool,
 }
 
 /// True when the group type marks a live (enabled) mask group.
@@ -1566,6 +1569,9 @@ pub(crate) fn element_mask_stack(document: &Document, id: ObjectId) -> Vec<MaskL
             mask,
             mode: group.stack_mode.unwrap_or(MaskCombineMode::Add),
             enabled: is_enabled_mask_group(group.group_type),
+            // `LNKb` is written only when the mask is *un*linked; its
+            // absence means the mask is linked to its content.
+            linked: group.mask_linked != Some(false),
         });
         let Some(content) = group.children.get(1).copied() else {
             break;

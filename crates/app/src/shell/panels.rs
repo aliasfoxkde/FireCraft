@@ -1822,6 +1822,16 @@ impl Shell {
                 if ui.small_button("remove").clicked() {
                     self.run_command("mask.removeLevel", serde_json::json!({ "id": level.group }));
                 }
+                // The link flag rides the level's own mask group, so
+                // it is per level: an unlinked level's mask moves on
+                // its own, without its content.
+                let mut linked = level.linked;
+                if ui.checkbox(&mut linked, "link").changed() {
+                    self.run_command(
+                        "mask.link",
+                        serde_json::json!({ "id": level.group, "linked": linked }),
+                    );
+                }
             });
         }
         if ui.button("Add level").clicked() {
