@@ -4,7 +4,7 @@
 
 The last audited source snapshot is `main` at `5fac7a2` (2026-11-04); the latest release tag is `v0.2.5`. The detailed [Progress page](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/PROGRESS.md) is the authority for current counts and validation receipts.
 
-The source snapshot has a recent optimized web distribution whose manifest verifies. The public Pages manifest has different JavaScript, wasm, and index hashes from that local distribution; its deployed source revision is unknown. Do not infer the live build from the source version alone.
+The source snapshot has a recent optimized web distribution whose manifest verifies. The public Pages deployment is a **third** bundle: on 2026-11-11 its trunk asset name (`2274ac8c2925b61d`) and wasm digest (`f4f0a3f0…`) matched neither the published v0.2.5 release asset (`f9dbe2f14305b2d9` / `a8a4fa4f…`) nor a rebuild of the v0.2.5 tag (`103c62d3366aef17` / `5934702f…`), so the live build corresponds to no identifiable release and its source revision is unknown. The served `index.html` differs from the build's own only by the substituted asset names and the Cloudflare analytics beacon — that difference is explained. Do not infer the live build from the source version alone: every commit since the v0.2.5 stamp reports version `0.2.5`. The measurement is in [T18](../tasks/T18-release.md#deployment-receipt--2026-11-11).
 
 ## Where work stands
 
