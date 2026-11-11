@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="docs/img/logo.svg" alt="FireCraft fox-and-flame logo" width="112" height="112" />
+  <img src="docs/img/logo.svg" alt="FireCraft flame mark" width="112" height="112" />
   <h1>FireCraft</h1>
   <p><strong>Create. Edit. Design.</strong></p>
   <p>A modern, open-source graphics editor inspired by the workflows of Adobe Fireworks CS6.</p>
@@ -60,6 +60,12 @@ The image below is a repository screenshot of the application. It is a point-in-
 
 <p align="center">
   <img src="docs/img/app-main.png" alt="FireCraft application workspace" width="960" />
+</p>
+
+The dark-mode preview below is a graphic mock-up of the shell — a geometric fox under edit — not a screen capture.
+
+<p align="center">
+  <img src="docs/img/app-preview-dark.png" alt="Preview graphic of the FireCraft workspace in dark mode with a vector fox illustration selected" width="960" />
 </p>
 
 ## Get started
@@ -136,7 +142,7 @@ The GUI and automation interfaces are intended to drive the same engine commands
 
 ## Brand and assets
 
-The FireCraft mark is original project artwork: a fox/flame motif representing creative energy and precision. It is not an Adobe or Fireworks asset. The mark uses an ember-orange and gold gradient on a charcoal field; the SVG is the canonical scalable logo source.
+The FireCraft mark is original project artwork: a flame drawn as vector artwork under edit — an ember-orange and gold gradient shape with the selection nodes and a Bézier handle of a live path showing on its outline, on a charcoal field. It is not an Adobe or Fireworks asset; the SVG is the canonical scalable logo source.
 
 Third-party assets must retain their license notices and be recorded in [`docs/ATTRIBUTION.md`](docs/ATTRIBUTION.md). FireCraft's source is dual-licensed under MIT OR Apache-2.0.
 
