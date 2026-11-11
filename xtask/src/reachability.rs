@@ -231,11 +231,10 @@ fn rust_files(dir: &Path) -> Result<Vec<PathBuf>, String> {
     let mut out = Vec::new();
     let mut stack = vec![dir.to_path_buf()];
     while let Some(current) = stack.pop() {
-        let entries = std::fs::read_dir(&current)
-            .map_err(|e| format!("read {}: {e}", current.display()))?;
+        let entries =
+            std::fs::read_dir(&current).map_err(|e| format!("read {}: {e}", current.display()))?;
         for entry in entries {
-            let entry =
-                entry.map_err(|e| format!("read {}: {e}", current.display()))?;
+            let entry = entry.map_err(|e| format!("read {}: {e}", current.display()))?;
             let path = entry.path();
             if path.is_dir() {
                 stack.push(path);
@@ -318,7 +317,9 @@ fn parse_floor(label: &str, text: &str) -> Result<Floor, String> {
             ));
         };
         match key {
-            "registry_commands" => registry_commands = Some(parse_count(label, key, value, number)?),
+            "registry_commands" => {
+                registry_commands = Some(parse_count(label, key, value, number)?)
+            }
             "shell_bound_commands" => {
                 shell_bound_commands = Some(parse_count(label, key, value, number)?);
             }

@@ -51,16 +51,19 @@ fn run_inner(bless: bool) -> Result<(), String> {
     let rendered = render(&inventory);
     let path = workspace_root().join(GOLDEN);
     if bless {
-        std::fs::write(&path, &rendered)
-            .map_err(|e| format!("write {}: {e}", path.display()))?;
+        std::fs::write(&path, &rendered).map_err(|e| format!("write {}: {e}", path.display()))?;
         eprintln!(
             "[xtask] panel-snapshot --bless: wrote {GOLDEN} ({} panel(s))",
             inventory.len()
         );
         return Ok(());
     }
-    let committed = std::fs::read_to_string(&path)
-        .map_err(|e| format!("read {}: {e} — run `cargo run -p xtask -- panel-snapshot --bless`", path.display()))?;
+    let committed = std::fs::read_to_string(&path).map_err(|e| {
+        format!(
+            "read {}: {e} — run `cargo run -p xtask -- panel-snapshot --bless`",
+            path.display()
+        )
+    })?;
     compare(&rendered, &committed)
 }
 
@@ -142,7 +145,10 @@ mod tests {
 
     /// A two-panel sample inventory.
     fn sample() -> Vec<PanelSummary> {
-        vec![panel("properties", "Properties", 0), panel("pages", "Pages", 1)]
+        vec![
+            panel("properties", "Properties", 0),
+            panel("pages", "Pages", 1),
+        ]
     }
 
     #[test]
@@ -187,7 +193,6 @@ mod tests {
         let path = workspace_root().join(GOLDEN);
         let committed = std::fs::read_to_string(&path)
             .unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
-        compare(&render(&panel_inventory()), &committed)
-            .unwrap_or_else(|e| panic!("{e}"));
+        compare(&render(&panel_inventory()), &committed).unwrap_or_else(|e| panic!("{e}"));
     }
 }
