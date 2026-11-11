@@ -117,7 +117,7 @@ jobs:
             apt-get update -qq >/dev/null
             apt-get install -y -qq --no-install-recommends \
               xvfb xauth libgl1 libx11-6 libxcursor1 libxrandr2 libxi6 \
-              libxkbcommon0 desktop-file-utils >/dev/null
+              libxkbcommon0 libxkbcommon-x11-0 desktop-file-utils >/dev/null
             bash /pkg/verify-install.sh \
               /dist/firecraft_*.deb "" /fixtures/composed.fw.png
           '

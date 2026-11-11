@@ -869,6 +869,57 @@ fn verify_deb_glibc_floor(control: &str, binary: &Path) -> Result<(), String> {
     }
 }
 
+/// The libraries the desktop binary needs at run time, beyond libc.
+///
+/// The GUI links none of them at build time: `x11-dl` and
+/// `xkbcommon-dl` load them with `dlopen`, so neither
+/// `dpkg-shlibdeps` nor the ELF dynamic section can see them, and a
+/// package that does not declare them installs cleanly and then
+/// refuses to start. Measured on a clean Debian 12 (2026-11-11):
+/// without `libxkbcommon-x11-0` the launch aborts with "Library
+/// libxkbcommon-x11.so could not be loaded", and without
+/// `libxcursor1` it aborts with "opening library failed
+/// (libXcursor.so.1 ...)". `libgcc-s1` is a `DT_NEEDED` entry of the
+/// binary itself.
+const GUI_RUNTIME_LIBRARIES: &[&str] = &[
+    "libgcc-s1",
+    "libgl1",
+    "libx11-6",
+    "libxcursor1",
+    "libxrandr2",
+    "libxi6",
+    "libxkbcommon0",
+    "libxkbcommon-x11-0",
+];
+
+/// The package names a control file's `Depends` field declares.
+fn declared_depends(control: &str) -> Vec<String> {
+    control
+        .lines()
+        .filter_map(|line| line.strip_prefix("Depends:"))
+        .flat_map(|rest| rest.split(','))
+        .map(|entry| {
+            entry
+                .split_whitespace()
+                .next()
+                .unwrap_or_default()
+                .to_owned()
+        })
+        .filter(|name| !name.is_empty())
+        .collect()
+}
+
+/// The runtime libraries the desktop binary needs and the control
+/// file does not declare.
+fn missing_gui_runtime_libraries(control: &str) -> Vec<&'static str> {
+    let declared = declared_depends(control);
+    GUI_RUNTIME_LIBRARIES
+        .iter()
+        .copied()
+        .filter(|library| !declared.iter().any(|name| name == library))
+        .collect()
+}
+
 /// Builds the `.deb` from the pinned control file
 /// (`packaging/deb/control`, whose Version must equal the workspace
 /// version) over the standard payload: both binaries in `usr/bin`,
@@ -891,6 +942,13 @@ fn build_deb(
         return Err(format!(
             "packaging/deb/control pins Version {pinned} but the workspace is \
              {version} — bump the control file with the workspace version"
+        ));
+    }
+    let missing = missing_gui_runtime_libraries(&control);
+    if !missing.is_empty() {
+        return Err(format!(
+            "packaging/deb/control does not declare {missing:?} — the desktop \
+             binary loads them with dlopen, so the package must name them"
         ));
     }
     verify_deb_glibc_floor(&control, shell)?;
@@ -1948,6 +2006,34 @@ Depends: libc6 (>= 2.36)
     fn a_control_file_without_a_libc6_floor_is_rejected() {
         let control = "Package: firecraft\nDepends: zlib1g\n";
         assert!(declared_libc_floor(control).is_err());
+    }
+
+    #[test]
+    fn the_shipped_control_declares_the_gui_runtime_libraries() {
+        let control = std::fs::read_to_string(workspace_root().join("packaging/deb/control"))
+            .expect("packaging/deb/control is readable");
+        assert_eq!(
+            missing_gui_runtime_libraries(&control),
+            Vec::<&str>::new(),
+            "the desktop binary dlopens these libraries; the package must declare them"
+        );
+    }
+
+    #[test]
+    fn a_control_that_omits_the_x11_libraries_is_rejected() {
+        let control = "Package: firecraft\nDepends: libc6 (>= 2.36)\n";
+        let missing = missing_gui_runtime_libraries(control);
+        assert!(missing.contains(&"libxkbcommon-x11-0"), "{missing:?}");
+        assert!(missing.contains(&"libxcursor1"), "{missing:?}");
+    }
+
+    #[test]
+    fn a_versioned_dependency_still_names_its_package() {
+        let control = "Package: firecraft\nDepends: libc6 (>= 2.36), libx11-6\n";
+        assert_eq!(
+            declared_depends(control),
+            vec!["libc6".to_owned(), "libx11-6".to_owned()]
+        );
     }
 
     #[test]
