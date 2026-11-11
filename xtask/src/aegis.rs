@@ -91,6 +91,15 @@ const CLASS_NOTES: &[(&str, &str)] = &[
          card-number rule.",
     ),
     (
+        "email-address",
+        "Matches the throwaway Git identity the change-detection \
+         self-test configures for its temporary repositories. The \
+         address uses the .invalid top-level domain reserved by \
+         RFC 2606 for exactly this purpose, so it can never resolve \
+         to a real mailbox; the repository holds no personal \
+         addresses.",
+    ),
+    (
         "eval-usage",
         "The scripting crate's own boa context.eval() call — that crate \
          implements the CS6 scripting DOM's eval() — plus Rust curve-segment \

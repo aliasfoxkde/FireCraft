@@ -58,6 +58,12 @@ credit-card-amex	./xtask/src/aegis.rs	ae9b46ed1c3eff9a64786a2171b0f694350bb58947
 # rule.
 credit-card-number-generic	./crates/text/tests/layout.rs	ae9b46ed1c3eff9a64786a2171b0f694350bb589478b4327f5f82836c23e8da9	1
 credit-card-number-generic	./xtask/src/aegis.rs	ae9b46ed1c3eff9a64786a2171b0f694350bb589478b4327f5f82836c23e8da9	1
+# Matches the throwaway Git identity the change-detection self-test
+# configures for its temporary repositories. The address uses the
+# .invalid top-level domain reserved by RFC 2606 for exactly this
+# purpose, so it can never resolve to a real mailbox; the repository
+# holds no personal addresses.
+email-address	./tests/detect-changes-selftest.sh	852e7b941ea2052143c1b0a0f7b007a06c49c056312aac64e2649dc35d13f994	1
 # The scripting crate's own boa context.eval() call — that crate
 # implements the CS6 scripting DOM's eval() — plus Rust curve-segment
 # .eval(u) calls.
