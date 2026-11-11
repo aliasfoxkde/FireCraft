@@ -1429,12 +1429,16 @@ fn parse_checksum_list(text: &str, list_name: &str) -> Result<BTreeMap<String, S
     Ok(entries)
 }
 
+/// A recorded checksum list: its path relative to the release output
+/// directory, and the digests it records (file name -> digest).
+type ChecksumList = (String, BTreeMap<String, String>);
+
 /// Loads the recorded checksum lists that exist in the release output
 /// directory.
 ///
 /// A list that exists but does not parse fails the run: the manifest
 /// must not describe a release whose own checksum list is broken.
-fn load_checksum_lists(root: &Path) -> Result<Vec<(String, BTreeMap<String, String>)>, String> {
+fn load_checksum_lists(root: &Path) -> Result<Vec<ChecksumList>, String> {
     let mut lists = Vec::new();
     for rel in CHECKSUM_LISTS {
         let path = root.join(rel);
