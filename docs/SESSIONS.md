@@ -1389,3 +1389,622 @@ feature-sized items into a panel-sized change.
 The same lesson applies to the proof: "the panel is in the inventory"
 and "the panel is on screen" are different claims. Only the pixel
 diff distinguishes them.
+
+## 2026-11-04 — Batch 17 shipped: CI repaired and PR merged
+
+### The CI image was the CI failure
+
+The first GitForge sweep on `56ee1bf` failed at `fmt-layers` with
+`no matching package named 'egui_extras' found ... offline mode`. The
+image cache was stale after the lockfile change. The image was rebuilt
+from the current lockfile and re-shipped; retry `ce94c14f` passed all
+eight jobs. Rebuild and re-ship `firecraft-ci-rust:1` whenever
+`Cargo.lock` moves.
+
+### PR #7 merged
+
+The direct push to `main` was refused by the Safeguards ruleset, so the
+branch went through PR #7. After `gate` passed, the PR merged by squash
+as `5fac7a2` to preserve linear history.
+
+### UI evidence and follow-up
+
+The batch 17 browser proof recorded in the local devlog used a 3200 px
+viewport to show every panel in the right-side stack. That proves the
+panel content renders, but also exposed a usability gap at ordinary
+window sizes: lower panels need a better navigation/docking treatment.
+The tracked `docs/img/app-main.png` predates this merge and must not be
+used as a current screenshot. Follow-up is tracked in
+[`tasks/T22-screenshot-ui.md`](tasks/T22-screenshot-ui.md).
+
+The previously empty GitHub Wiki landing page was replaced with user
+and contributor navigation (`Home.md`, `_Sidebar.md`), pushed to the
+wiki repository at `4fd9c7a`. The source copy is under `docs/wiki/`.
+
+The public Pages manifest was fetched read-only at 20:01 local time.
+Its `appinfo.json` and `host.html` hashes match local `dist/web`, but
+the JavaScript, wasm, and index hashes differ. The deployed source
+revision is unknown; T18 now tracks reconciliation rather than assuming
+the live site matches the local build.
+
+## 2026-11-04 — CS6 shell dock, per-kind inspector, and the T22 screenshot audit
+
+### The right dock replaces the floating panel windows
+
+The panel group was a stack of independently positioned egui windows
+along the right edge. As floating windows they covered the canvas, and
+their fixed vertical step put the lower panels below the fold at
+ordinary sizes. The group is now one right-side `egui::Panel` — a
+column of stacked, collapsible panels under CS6-style headers — so the
+dock *reserves* its width, the canvas shrinks instead of being covered,
+and the column scrolls when the stack outgrows the window.
+
+### The inspector grew per-kind field sets
+
+`properties_panel` used to answer "selection has no editable properties
+yet" for anything that was not a path or a text object. It now dispatches
+every object kind the document model has — path, text, symbol instance,
+group, bitmap, slice — and the group and bitmap kinds reach the live
+effect list as well. A bitmap selection shows its pixel size, tile
+count, location and offset; a slice shows its type, shape, geometry and
+its link and alt text.
+
+The slice link editor is now one shared component used by both the URL
+panel and the inspector, so the two cannot disagree: a single draft is
+reseeded whenever the selected object or the stored value changes
+underneath it.
+
+The bitmap's fill and stroke editors are **not** UI work — the `IMGv`
+node carries no fill/stroke node, `object.setFill`/`object.setStroke`
+are path-only, and `object.setBounds` refuses bitmaps (decision 0019).
+CS6's bitmap tools live in a separate *Image Editing* command panel,
+evidenced in the CS6 install. That gap is recorded as evidence-gated
+rather than faked.
+
+### The screenshot audit, and an invalid first round
+
+T22's first capture round was invalid: the bundle in `dist/web` predated
+the inspector work, so the captures showed the pre-change fallback text.
+Rebuilding the bundle and recapturing produced the real field sets —
+the path's X/Y/W/H/opacity/blend/visible/locked, and the bitmap's
+`bitmap 32x32 px, 1 tile(s) of 128 px`, `at (100.0, 100.0), offset (0.0,
+0.0)`, name, display controls and effect list.
+
+Six captures (empty, vector, bitmap at 1280×800 and 1920×1080) were
+taken against the fresh optimized bundle, with the objects created
+through the page's own command surface and the WebGL context alive in
+every one. Measured at 1280×800: the tool strip ends at x=70, the canvas
+runs 71–961, the dock occupies 962–1279, and the dock's drawn content
+ends at row 682 of 800 — every open panel inside the viewport. At a
+deliberately short 1280×400 viewport a wheel event over the dock moves
+the content, so panels stay reachable when the stack is taller than the
+window.
+
+The tracked `docs/img/app-main.png` was replaced with the 1280×800
+vector capture and labelled for its build and state.
+
+### Outcome
+
+`cargo run -p xtask -- ci` green (exit 0). The tracked screenshot, the
+T22 ticket's receipts, the parity matrix's sampling note, and the task
+board are reconciled with what the captures actually showed.
+
+## 2026-11-05 — 22.2: the CS6 tool strip, as data
+
+### The evidence, and where it stops
+
+The strip's shape is CS6's, and the evidence for it is three sources
+that agree where they overlap:
+
+- **The CS6 help set** (a text extract of the help PDFs) gives the six
+  categories in order, the group triangle and the cycling rule, the
+  Modify trio, the pixel-selection family, the retouch trio and its
+  Alt toggle, the Colors section's four buttons, and the three view
+  modes.
+- **The book's Table 1-1 "Fireworks Tools"** gives the tool names and
+  the one-key shortcuts, and it is the only source for `O` (Freeform)
+  and `2` (Hide/Show Slices).
+- **The install's own `Fireworks.xml`** gives the *shape* of CS6's
+  tool-shortcut table: 37 `<one_tool>` blocks, 40 entries, decimal
+  `MODS VK`, every one plain. The blocks carry **bare GUIDs and no tool
+  names**, so the GUID→tool mapping is not recoverable. That is
+  recorded as an open evidence gap, not guessed; the strip's names and
+  keys come from the help and the book.
+
+The multiplicity in the keymap's VK histogram (S×3, Q×4, B×2, L×2, M×2,
+U×2, R×2) corroborates the group sizes the help describes in prose.
+
+### What changed
+
+`crates/app/src/toolstrip.rs` is new: the strip as data — six
+categories in CS6's order, twenty-four groups with their key and their
+members, CS6's labels, and the flyout memberships. The shell renders
+from it, so nothing about the order is FireCraft's own.
+
+CS6's group-cycling rule is implemented: a group has **one** key, and
+repeated presses advance within the group. The Hide/Show Slices
+control is the one exception — it keeps the book's `2` but *acts* on
+the control rather than becoming the active tool, because it is one of
+CS6's panel buttons.
+
+New tools in the strip: Skew and Distort (behind the Scale button on
+`Q`), Blur, Sharpen, Smudge, Dodge, Burn, Rubber Stamp, Red-eye
+Removal and Replace Color, Knife, Freeform and Reshape Area, and the
+Web section's hotspot and slice variants. The Colors section's four
+controls and the two color boxes are panel buttons — they act on click
+and never become the tool.
+
+### Four bugs found on the way
+
+1. **The path paint was written as ARGB, but the engine reads it as
+   ABGR** — red and blue swapped in "Set Default Stroke/Fill Colors".
+   The shell had one color helper; the engine has two conventions by
+   design (bitmap/retouch ARGB, path paint ABGR). The shell now has
+   `argb_raw` and `abgr_raw` and each call site names the one it means.
+2. The hotspot payload sent the shape name `"oval"`; the engine's
+   `WebShape` is `"rect"` / `"ellipse"` / `"polygon"`.
+3. **`Editor::commit_polygon` was never called from anywhere** — the
+   polygonal marquee could be started and never finished. The
+   properties panel now carries the in-progress shape's panel (point
+   count, finish, cancel), and Enter/Escape finish or abandon a plotted
+   path on the canvas.
+4. The icon table had been regenerated by appending rather than
+   replacing: 117 entries for 73 icons, every lookup silently keeping
+   the first copy. It is now one entry per icon.
+
+### The icons
+
+29 new Lucide SVGs were vendored for the new tools. Every new file was
+diffed against upstream `lucide-static@1.69.0` and matches byte for
+byte after the license comment and the `class` attribute are
+stripped; the 43 pre-existing files were checked the same way. The one
+file that is **not** Lucide — `slice-knife.svg`, an original drawing,
+since Lucide has no such icon — now has its own row in
+`docs/ATTRIBUTION.md` (it also had a stale comment naming a different
+project), and the Lucide row's count is 72.
+
+### Outcome
+
+`cargo clippy -p app -p engine --all-targets -- -D warnings` clean;
+the app crate's suite green at 151 unit tests plus the integration
+suites, including nine new tests over the strip's own invariants and a
+test that every tool the strip shows has an embedded icon.
+
+**The full workspace gate is green** — `cargo run -p xtask -- ci`
+finished `[xtask] ci: all gates green` (`XTASK_EXIT=0`) with all
+twenty steps `ok`: aegis, coverage, fmt, clippy (workspace and
+`web/`), test, layers, wasm, corpus, floor, scripts, golden,
+svg-golden, svg-roundtrip, web-golden, perf, fuzz, parity, scorecard,
+changelog. The perf step enforced its 12 budgets (worst headroom
+1.4×, on `open_scripted_hwm_kib`).
+
+### The gate that was already broken
+
+The gate failed at its **first** step, Aegis — and it had been failing
+there since the last baseline regeneration, before this change was in
+play. The committed `.aegis-baseline.json` keys each finding on
+`file:line:content-digest`; this change rewrote `menus.rs`,
+`document.rs` and four docs, which shifted every finding below the
+edit and invalidated 307 baseline entries. All 307 were the known
+false-positive classes (292 `zip-code` on numeric literals, 8
+`pci-cardholder-data` on the word "pan", 5 `sql-query` on the words
+"select from a tool group", 1 each of `ssrf-localhost` and
+`bearer-token-url`). The baseline was regenerated over the whole tree
+with the documented recipe — `aegis --format json -c production scan .
+--output-file .aegis-baseline.json -q` — and the scan is now clean
+(exit 0, zero new findings).
+
+The lesson worth keeping: the rebaseline is not paperwork, it is the
+step that makes the gate mean anything. A gate that fails on noise is
+a gate nobody runs, and a gate that is quietly red is worse than no
+gate at all.
+
+## 2026-11-06 — The Aegis gate, rebuilt on rule classes and content digests
+
+> **Superseded 2026-11-09.** The mechanism this entry describes —
+> `.aegis-pattern-state.json` plus `.aegis-allowlist.json`, with the
+> gate filtering the scanner's output itself — was **not** merged. It
+> was superseded by decision 0074, the content-keyed baseline
+> (`.aegis-baseline.tsv`), which keeps every rule class armed and
+> adjudicates each occurrence individually. The entry is kept as the
+> record of what was measured and why; the mechanism it describes is
+> gone from the tree.
+
+### The question that started it
+
+Two questions were asked about the release machinery rather than about
+Fireworks: *what exactly is the 21.5 MB ceiling, and could the WASM
+just be loaded from GitHub instead?* and *is Aegis (Rust) or the older
+Atheon-Enhanced scanner (Go) the faster and more reliable of the two?*
+
+Both were answered from measurement, and both produced changes.
+
+### The 21.5 MB number is ours, not the platform's
+
+`xtask/src/dist.rs` pins `WASM_SIZE_CEILING: u64 = 21_500_000` and
+fails the build past it. That is FireCraft's own regression tripwire —
+not a WASM 3.0 limit, not GitHub's, not Cloudflare's — and it is
+re-pinned deliberately whenever the bundle grows. The binding external
+limit is Cloudflare Pages' **25 MiB per-asset cap**; the shipped
+bundle is 21,271,259 B raw and 7,376,731 B gzipped, so it sits ~4.94 MB
+under the cap.
+
+Loading the WASM from GitHub is possible but worse: GitHub's raw host
+serves `.wasm` as `application/octet-stream`, which makes
+`WebAssembly.instantiateStreaming` throw, and its URLs are ref-mutable
+rather than immutable. Decision 0071 records the measurements and the
+answer — Pages stays; if the bundle ever outgrows 25 MiB the move is
+object storage behind a Worker that serves `application/wasm`.
+
+### Aegis versus Atheon-Enhanced
+
+Same corpus, same box, three interleaved runs each:
+
+| scanner | median wall clock | findings |
+|---|---|---|
+| Aegis 0.6.3 (Rust) | **12.12 s** | **373** |
+| Atheon-Enhanced (Go) | **216.3 s** | **18,021** |
+
+Atheon-Enhanced is 17.8× slower and 48× noisier, and its rules
+mis-attribute (terraform, azure and dockerfile rules firing on Rust
+lines). On a planted corpus both missed `ghp_` and `xoxb_` tokens;
+Atheon-Enhanced caught a Stripe key Aegis missed, which does not
+outweigh 48× the noise. Aegis stays the scanner.
+
+### What the comparison exposed, and the gate it broke
+
+Aegis has two suppression channels and only one of them works. Its
+`--baseline` keys a finding as `pattern:file:line:content-digest`, so
+a suppression dies with the line it names; a JSON profile's
+`disabled_patterns` field is silently ignored (measured: 7
+`eval-usage` findings with and without it); the only working per-rule
+switch is the state file at `$HOME/.config/aegis/pattern-state.json`,
+which is keyed on the *rule name* and survives every edit.
+
+That distinction is why the gate failed on 2026-11-06: the 22.2
+receipt prose quotes the rule names it describes, so the receipt trips
+the rules it is about — and because the baseline is line-keyed, an
+unrelated edit above a finding invalidates its entry. The recorded
+repair was to regenerate a 19.4 MB baseline over the whole tree, which
+takes a full-tree scan. A gate whose routine response to an unrelated
+edit is a fifteen-minute regeneration is a gate that gets skipped.
+
+### What changed
+
+> **Withdrawn.** When this branch merged `main`, this rule-class
+> suppression was dropped in favour of main's content-keyed baseline
+> (decision 0074): `.aegis-pattern-state.json`, `.aegis-allowlist.json`,
+> and decision 0070 are deleted, and every rule class stays armed with
+> each occurrence adjudicated individually. The paragraphs below record
+> the state of the branch at 2026-11-06.
+
+The baseline is gone; 644 line-keyed entries in 19.4 MB are replaced by
+12 rule names and 8 content digests.
+
+- **`.aegis-pattern-state.json`** suppresses whole rule classes that
+  cannot fire in this tree — `zip-code` (523 hits: every 5-digit
+  constant), `pci-cardholder-data` (52: the word "pan" in "pan-zoom"),
+  `phone-number` (21: `4294967295` and CRC values), `eval-usage` (15:
+  Rust `.eval(t)`), `ssrf-localhost` (8: the workspace has no HTTP
+  client), `sql-query` (7: English prose), the JavaScript-shaped
+  `path-traversal` rules, and three digit-run PII rules. The evidence
+  for each was in decision 0070, whose rule-class suppression
+  `main` superseded with decision 0074; the same evidence now rides
+  with each baselined row in `.aegis-baseline.tsv` and in the
+  `CLASS_NOTES` table in `xtask/src/aegis.rs`. The five `credit-card-*`
+  rules stay
+  **armed**, so a real card number is still caught.
+
+- **`.aegis-allowlist.json`** suppresses the ten remaining
+  per-finding false positives, keyed `pattern:file:content-digest` —
+  the line is deliberately omitted, so an entry survives every edit
+  that does not touch the matched content, and dies when the content
+  itself changes, which is exactly when a human should look again.
+  Each entry carries its own note saying why it is a false positive.
+  This file, and `.aegis-pattern-state.json` above, were both
+  superseded and deleted when `main` adopted the content-keyed
+  baseline (decision 0074); the branch no longer carries either.
+- **`xtask`** installs the pattern state into a private `HOME` (so the
+  developer's own Aegis configuration is never touched) and filters the
+  scanner's findings itself; `cargo run -p xtask -- aegis --report`
+  prints the uncovered findings with the key an allowlist entry would
+  need. The gate never writes the allowlist: suppressing a finding is a
+  human decision that requires seeing the finding first.
+
+### Receipts
+
+- The gate is green in the new form: `[xtask] aegis ok`, exit 0.
+- The gate still fails when it should. A planted AWS example access-key
+  id (the key AWS publishes in its own documentation) in the tree
+  produced `aws-access-key aegis-gate-selftest.txt:1 [critical]` and
+  exit 1; the file was removed immediately afterwards.
+- The `.aegis-baseline.json` file is deleted from the repository.
+
+### Superseded
+
+The class-level suppression above was replaced before merge by
+decision 0074's content-keyed baseline. The measurements in this
+entry stand; the mechanism does not. What survives is the reason the
+gate was rebuilt at all: a line-keyed baseline turns an unrelated doc
+edit into a gate failure, and the remedy for that must not be a
+procedure that encodes the defect.
+
+The lesson is the one the previous session recorded, now with the tool
+fixed rather than the procedure: the rebaseline was a procedure
+compensating for a line-keyed baseline, and a procedure that encodes a
+defect survives the defect's fix.
+
+## 2026-11-06 — 22.5: the screen-mode cycle, the Alt-hold retouch swap, and the Window arrangement trio
+
+Ticket 22.5's evidence-backed items landed as one batch. Three of
+them came straight out of the reference extracts; the fourth was a
+comment that asserted the opposite of the layout XML.
+
+### The three-mode screen cycle (fwref 1178–1185)
+
+The screen-mode control in the View section of the tool strip used to
+alias `ToggleHidePanels` — a Tab press wearing a monitor icon. CS6's
+help names three view modes: *Standard Screen mode* (the default),
+*Full Screen with Menus mode* ("A maximized document window view set
+against a gray background. Menus, toolbars, scroll bars, and panels
+are visible"), and *Full Screen mode* ("A maximized document window
+view set against a black background. No menus, toolbars, or title
+bars are visible"). `ScreenMode` now cycles those three in order; the
+layout in `Shell::ui` folds chrome by mode, the canvas backdrop
+switches to CS6's gray (0x999999) / black in the two full-screen
+modes, and the document tab strip drops in Full Screen (no title
+bars). The cycle is view state: the journal never moves.
+
+### The Alt-hold retouch swap (fwref 3555, 3580)
+
+CS6's help twice: "Hold down Alt (Windows) or Option (Mac OS) to
+change from one tool behavior to the other" (the Blur/Sharpen/Smudge
+section), and "To temporarily switch between the Dodge tool and the
+Burn tool, hold down Alt (Windows)". `toolstrip::alt_variant` is the
+pure pair-swap (Blur↔Sharpen, Dodge↔Burn; Smudge has no variant),
+and `Editor::paint_dab` resolves the effective tool at the dab edge
+through a shell-supplied `alt_held` flag — the editor never reads
+the window system, and the active tool never changes. The swap is
+an involution gated by
+`toolstrip::tests::the_alt_swap_is_an_involution_on_two_pairs` and
+proven end-to-end by `editor_surface::alt_hold_swaps_the_retouch_pair_at_the_dab`
+(journal command names differ under Alt).
+
+### The Window arrangement trio (57650/57651/57652)
+
+The transcription carried 57650 *Cascade* and 57652 *Tile* and no
+57651 — `ID_WINDOW_TILE_HORZ` from `MENU_DESCRIPTION_MAP`. The
+"Tile Horizontally" row is now transcribed between them and 57652 is
+relabeled *Tile Vertically* (the resource's `ID_WINDOW_TILE_VERT`);
+`menus::tests::the_window_arrangement_trio_matches_the_resource`
+pins all three. The pinned item census rose 289 → 290: the row was
+always part of the CS6 surface; the transcription was short one. The
+live doc quotes (CLAUDE.md, GAPS, HANDOFF, NEXT) moved with it; the
+dated batch history in NEXT keeps its period counts. The §A open
+evidence item in CS6-PARITY closed on this evidence — no bar-resource
+decode was needed.
+
+### The wrong comment
+
+`Shell::ui` claimed "the CS6 and Photopea arrangement puts it [the
+Properties block] in the right dock". CS6's own `Expanded Mode.xml`
+puts Properties (palette app-data 35586) in the **bottom** dock at
+923×105. The comment is replaced by the screen-mode layout note; the
+placement itself is 22.1's item (recorded, not silently kept).
+
+### Receipts
+
+- `cargo test -p app --lib toolstrip::tests::the_alt_swap_is_an_involution_on_two_pairs` — pass
+- `cargo test -p app --lib menus::tests::the_window_arrangement_trio_matches_the_resource` — pass
+- `cargo test -p app --lib shell::tests::the_screen_mode_cycles_through_the_three_view_modes` — pass
+- `cargo test -p app --test editor_surface alt_hold_swaps_the_retouch_pair_at_the_dab` — pass
+- Full workspace gate: `/var/tmp/fc-ci-225.log` (`cargo run -p xtask -- ci`)
+- Deferred from 22.5 with reasons: dock tab-groups and the Properties
+  bottom dock (22.1's structure), Text ▸ Font submenu and *Repeat
+  Filter* (rows 52/54, rank 14), the F1 grouping mismatch (row 255),
+  the 76 unbound keymap rows (row 257), the 3D tool (deliberately not
+  carried), the Main toolbar's contents (row 164).
+
+## 2026-11-07 — 21.3 closed: command palette v2 (fuzzy + recents)
+
+The last two open items of 21.3. Save-steps-as-command had already
+landed as the History panel's Save Steps…/Replay… pair (the session
+journal as a `.fwsteps` file, exact inverse of replay by
+construction), so this session added:
+
+- **Fuzzy scoring** (`palette::fuzzy_score`): the query must be a
+  subsequence of the command id (case-insensitive); each hit scores
+  `100 - 10 × position`, so tighter, earlier matches outrank
+  spread-out ones, and ties keep catalog order (stable sort). The
+  old substring filter is a strict subset of this.
+- **Recents**: the 10 most recent *successful* palette runs,
+  deduplicated, re-runs promoting; listed before the catalog on an
+  empty filter under a "recent:" hint. Persisted in `ShellLayout`
+  as `palette_recents` (`#[serde(default)]` — older layouts load
+  fine); names not in the current catalog are dropped on restore,
+  same rule as the panel inventory.
+- CS6-PARITY gap row 13 closed; the parity workflow row unchanged.
+
+### Receipts
+
+- `cargo test -p app --lib palette` — 8 passed (including the two
+  new gates `palette_fuzzy_scores_subsequences_with_position_bonus`
+  and `palette_recents_round_trip_through_the_layout`)
+- `cargo clippy --workspace --all-targets -- -D warnings` — clean
+- Full workspace gate: `cargo run -p xtask -- ci` (background run
+  bagx52wr2)
+
+## 2026-11-07 — 21.1 closed: autosave + crash recovery, both surfaces
+
+The web half came in from the `web-autosave-wip` branch (a stale
+agent worktree's uncommitted work, kept as a branch in 2026-11-03's
+session): change-stamp-debounced whole-document persistence to
+localStorage through a wasm-only `PersistSink`, boot restore through
+the standard `Editor::open` door, clear on File ▸ New. Cherry-picked
+onto the current stack; the two conflicts were this session's own
+additions (the `DropSink` type alias landed upstream in the meantime,
+and the 20.5 tab strip reworked the same `with_platform`
+initializer).
+
+The desktop half is new: `recovery_tick` snapshots the session
+journal (`steps_text`, the replay-exact JSON lines) to a sidecar
+each frame, debounced by the same stamp; `Shell::new` checks the
+sidecar and arms a Recover/Discard window; Recover replays through
+`Editor::replay_steps` (undo works across the crash boundary), and a
+clean save or File ▸ New clears it. The sidecar path resolves once
+at construction (`FIRECRAFT_RECOVERY` override, else the platform
+temp dir) — the tick reads a field, never the environment, per the
+decision-cores-take-their-environment-as-data rule. `FileSystem`
+gained a defaulted `remove_file` (refusing default like `read_dir`;
+implemented by `StdFs` and `MemoryFs`, the web `WebFs` refuses).
+
+### Receipts
+
+- `cargo test -p app --lib` — 172 passed (including
+  `recovery_snapshot_round_trips_through_the_sidecar`)
+- `cargo run -p xtask -- wasm` — ok (the wasm-only persist path
+  compiles for `wasm32-unknown-unknown`)
+- Full workspace gate: `cargo run -p xtask -- ci` (background run
+  bm6zxgv3g)
+
+## 2026-11-07 — 21.2 closed: the canvas renders in device pixels
+
+The zoom-bucket raster (landed 2026-11-01) rendered at `zoom` scale
+only — on a 2× display the blit had half the device pixels it could.
+The render scale now rides `zoom × pixels_per_point` under the same
+16 MiPix budget, extracted as the pure functions `render_scale` and
+`render_at_one` (the 1× shortcut fires only at 100% zoom on a 1×
+display). The `EffectCache` view-transform extension stays open for
+effect-heavy pages; the canvas blit path itself is done.
+
+### Receipts
+
+- `cargo test -p app --lib` — 173 passed (including
+  `render_scale_rides_pixels_per_point_under_the_budget`)
+- Full workspace gate: `cargo run -p xtask -- ci` (background run
+  bjhefp81n, over commits 498af8a + ac17e25)
+
+## 2026-11-07 — 21.6 closed: Commands runs .fwsteps alongside .jsf
+
+The `.jsf` arm of Commands ▸ Run Script had landed with the
+automation milestone; the spec's other half — `.fwsteps` — now runs
+too: the same picker accepts both extensions, a steps file replays
+onto the live document through `Editor::replay_steps` (the History
+panel's door; journal, undo history and all), and a malformed
+journal is refused with the seed session untouched.
+
+A test-fixture correction worth keeping: `Editor::untitled()` seeds
+two journal rows (`page.add`, `page.setCanvasSize`), so "document
+untouched after refusal" asserts journal_len == 2, not 0.
+
+### Receipts
+
+- `cargo test -p app --lib` — 174 passed (including
+  `run_script_runs_a_steps_file_through_the_replay_door`)
+- Coverage-target sweep `cargo test --tests --all --target-dir
+  target/llvm-cov-target` — 60 suites ok
+- Full workspace gate: `cargo run -p xtask -- ci` (background run
+  bcm82bd0p, over the 21.6 commit)
+
+## 2026-11-07 — 21.5 desktop arm: accesskit compiled in
+
+eframe's `accesskit` feature is now on in `crates/app/Cargo.toml`,
+so the winit adapter ships with the desktop build and the egui tree
+reaches screen readers natively. The web arm stays the recorded
+upstream refusal — eframe 0.36.2 still has `accesskit_update: _`
+in `src/web/app_runner.rs` (decision 0067).
+
+Two wasm-target fixes along the way: the cherry-picked persist code
+had left a duplicate `persisted` initializer visible only to wasm,
+and `recover_steps` needed the same `#[cfg(not(wasm32))]` guard as
+its siblings.
+
+### Receipts
+
+- `cargo check --target wasm32-unknown-unknown -p firecraft-web` — ok
+- `cargo clippy -p app --all-targets -- -D warnings` — clean
+- `cargo test -p app --lib` — 174 passed
+- Full workspace gate: `cargo run -p xtask -- ci` (background run
+  bdunpbu0d; note the Cargo.lock moved with accesskit — the CI image
+  needs re-shipping before the next GitForge push per the runner rule)
+
+
+
+
+
+## 2026-11-10 — Issue #94: the reachability gate and the panel snapshot
+
+### The reachability gate (`xtask reachability`)
+
+`engine::catalog::ids()` is the authority for what the engine can do;
+the shell's designed surface — the menu bar, the panels, the dialogs,
+the canvas tools — is what a user can actually reach. The gate
+measures the second against the first, derives both from the code
+rather than from a hand-written list, and holds the result to a floor
+in a committed file (`.reachability-floor.tsv`, the same shape as the
+Aegis baseline).
+
+Measured on `main` at 2026-11-10: **245 registry commands, 146 bound
+by the shell = 59.59%**; 99 unreachable. The floor is pinned at
+59.59%.
+
+The palette (Ctrl+P) executes *every* registry command, so a
+palette-inclusive metric is 100% and can never fail. The gate
+deliberately measures the CS6-visible surface instead — the same
+surface the 19.x batches have been widening, and the surface the
+historical "N commands unreachable" numbers were always about.
+
+The ratchet is one-way: `--bless` may raise the floor (reachability
+improved) and refuses to lower it (a regression is fixed, not
+forgiven). The decision core (`evaluate`, `next_floor`) takes the
+measurement and the floor as data and reads no process state, so the
+tests drive it with a deliberately broken binding set.
+
+### The panel snapshot (`xtask panel-snapshot`)
+
+`egui_kittest` was checked before any code was written. It is
+**obtainable**: `egui_kittest` 0.36.2 is on crates.io and requires
+`egui ^0.36.2` — exactly the egui this lockfile pins — and the CI
+image is *not* offline (it runs with `CARGO_NET_OFFLINE=false`;
+decision 0073 removed that wall, so the baked registry cache is a
+fast floor, not a wall). The blocker is its **pixel** path: the
+snapshot machinery sits behind the crate's optional `wgpu` /
+`egui-wgpu` features, and the CI image installs no graphics stack
+(no mesa, no Vulkan drivers), so no wgpu adapter is available in the
+sandbox. A pixel suite would fail there for want of an adapter, not
+for want of a crate.
+
+So the panel set is pinned the way this repository pins everything
+else: a committed golden file, `crates/app/panels.snapshot`, compared
+against a snapshot rendered from the shell's own inventory (the xtask
+crate now depends on `app` and reads
+`app::shell::panel_inventory()`, so the Rust `PANELS` table stays the
+single authority).
+
+Pinned per panel: id, dock side, dock order, header text,
+fresh-document visibility, Window-menu togglability — 14 panels (13
+toggleable + the always-present Web Layer). A panel added, renamed,
+reordered or re-docked without a deliberate re-pin fails the build.
+Panel *pixels* are not pinned: they need `egui_kittest` plus a proven
+software adapter (lavapipe) in the CI image, and that half is
+recorded as still open.
+
+### Docs reconciled
+
+`NEXT.md` §19b.2 said the reachability gate was "a test, not an xtask
+step" and marked it LANDED; the "Quality gates for UI work" list said
+the same gate, the inert-drift test and the wasm budget were all
+open, and named `egui_kittest` as the snapshot mechanism. One truth
+now: 19b.2 records the xtask gate with its measured numbers, the
+quality-gate list points at 19b.2/19b.3/19b.4 as done, and the
+snapshot item records what was checked about `egui_kittest` and which
+half of it (panel pixels) is still open. `GAPS.md`, `HANDOFF.md` and
+`PROGRESS.md` carry the same numbers.
+
+### Lesson
+
+A metric that can never fail is not a metric. The first instinct was
+to count everything the shell can execute — but the command palette
+executes the whole registry, so that number is 100% forever. The
+useful question was narrower and harder: *what can a user reach
+without knowing a command id?* That is the number worth a floor.

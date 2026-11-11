@@ -27,7 +27,7 @@ host, and the browser bridge all drive.
 ## The command registry
 
 One registry serves every surface. The live count is
-`engine::catalog::ids()` — 245 as of 2026-11-03 (a point-in-time
+`engine::catalog::ids()` — 252 as of 2026-11-07 (a point-in-time
 number; the call is the authority). The CS6 DOM parity matrix stands
 at **268 carried / 3 partial (evidence-gated) / 0 missing** across 356
 verbs.
@@ -35,8 +35,8 @@ verbs.
 Surfaces that drive it:
 
 - **GUI** — the shell (`crates/app/src/shell/`); menus map CS6 menu
-  ids to actions (`crates/app/src/menus.rs`; 8 of 289 items still
-  render inert — the 19.6 burn-down is closing them, and the census
+  ids to actions (`crates/app/src/menus.rs`; 2 of 294 items still
+  render inert — the 19.6 burn-down closed the rest, and the census
   is derived (`menus::tests::inert_worklist`) and test-gated), and the Ctrl+P
   command palette makes **every** registry command executable from
   the GUI regardless of menu state.
@@ -157,7 +157,7 @@ blanket; see [`decisions/0067-*`](decisions/) and
 
 ## Licensing
 
-Dual-licensed MIT OR Apache-2.0. FireCraft is independent and not
+Licensed under Apache-2.0. FireCraft is independent and not
 affiliated with Adobe Inc.; Adobe names appear only to describe
 compatible workflows and file formats. Vendored material is tracked
 in [`ATTRIBUTION.md`](ATTRIBUTION.md).

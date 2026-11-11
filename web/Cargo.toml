@@ -3,7 +3,7 @@ name = "firecraft-web"
 version = "0.2.5"
 edition = "2024"
 rust-version = "1.95"
-license = "MIT OR Apache-2.0"
+license = "Apache-2.0"
 authors = ["FireCraft contributors"]
 repository = "https://github.com/aliasfoxkde/FireCraft"
 homepage = "https://github.com/aliasfoxkde/FireCraft"
@@ -16,6 +16,7 @@ path = "src/main.rs"
 [dependencies]
 app = { path = "../crates/app" }
 app-cli = { path = "../crates/app-cli" }
+base64 = "0.22"
 compose = { path = "../crates/compose" }
 eframe = { version = "0.36", default-features = false, features = [
     "default_fonts",
@@ -40,6 +41,7 @@ web-sys = { version = "0.3", features = [
     "HtmlAnchorElement",
     "HtmlCanvasElement",
     "HtmlInputElement",
+    "Storage",
     "MessageEvent",
     "Url",
     "Window",

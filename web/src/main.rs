@@ -59,7 +59,7 @@ fn reply_status(kind: &str, ok: bool, error: Option<&str>) {
 
 /// Best-effort string for a rejected `JsValue` error.
 #[cfg(target_arch = "wasm32")]
-fn js_error_text(value: wasm_bindgen::JsValue) -> String {
+fn js_error_text(value: &wasm_bindgen::JsValue) -> String {
     value
         .as_string()
         .unwrap_or_else(|| "unknown error".to_owned())
@@ -153,7 +153,7 @@ pub async fn start() -> Result<(), wasm_bindgen::JsValue> {
                         reply_status("opened", false, Some("picked file is not an ArrayBuffer"))
                     }
                 },
-                Err(error) => reply_status("opened", false, Some(&js_error_text(error))),
+                Err(error) => reply_status("opened", false, Some(&js_error_text(&error))),
             }
         });
     });
@@ -165,7 +165,7 @@ pub async fn start() -> Result<(), wasm_bindgen::JsValue> {
     // postMessage bridge.
     let message_runner = runner.clone();
     let message_callback = wasm_bindgen::closure::Closure::<dyn Fn(web_sys::MessageEvent)>::new(
-        move |event: web_sys::MessageEvent| handle_message(&message_runner, event),
+        move |event: web_sys::MessageEvent| handle_message(&message_runner, &event),
     );
     window
         .add_event_listener_with_callback("message", message_callback.as_ref().unchecked_ref())?;
@@ -180,18 +180,47 @@ pub async fn start() -> Result<(), wasm_bindgen::JsValue> {
                 // has to be applied here — without it the deployed app
                 // rendered egui's default light chrome.
                 app::shell::apply_cs6_theme(&cc.egui_ctx);
+                let (editor, restored) = match restore_document() {
+                    Some(editor) => (editor, true),
+                    None => (app::editor::Editor::untitled(), false),
+                };
                 let mut shell = app::shell::Shell::with_platform(
-                    app::editor::Editor::untitled(),
+                    editor,
                     std::rc::Rc::new(platform::WebFs),
                     Box::new(platform::WebDialogs),
                 );
                 // The persisted panel set and dock folds come back from
                 // localStorage, the same way they do on the desktop.
                 shell.restore_layout(cc.storage);
+                if restored {
+                    shell.status = "restored session (File ▸ New clears it)".to_owned();
+                    shell.set_doc_name("untitled (restored)");
+                }
                 Ok(Box::new(shell))
             }),
         )
         .await?;
+
+    // Session persistence: the shell hands us canonical save bytes at
+    // each change; we mirror them into localStorage so a refresh
+    // restores the artwork instead of an empty canvas. The sink is a
+    // fire-and-forget write — a storage failure (quota, private mode)
+    // logs but never interrupts editing.
+    if let Some(storage) = local_storage() {
+        app::shell::Shell::set_persist_sink(std::rc::Rc::new(move |bytes| {
+            // Empty bytes are the clear signal (File ▸ New): the
+            // stored session must go, or a refresh would resurrect
+            // the discarded document.
+            let outcome = if bytes.is_empty() {
+                storage.remove_item("firecraft.session")
+            } else {
+                storage.set_item("firecraft.session", &base64_encode(bytes))
+            };
+            if let Err(error) = outcome {
+                web_sys::console::warn_1(&format!("persist failed: {error:?}").into());
+            }
+        }));
+    }
 
     // Drop sink: the shell's drag-and-drop handler hands us the
     // dropped-file handle (the read is async on the web); the bytes
@@ -224,6 +253,48 @@ pub async fn start() -> Result<(), wasm_bindgen::JsValue> {
     Ok(())
 }
 
+/// The window's localStorage, when reachable (private modes and some
+/// embedding contexts refuse it).
+#[cfg(target_arch = "wasm32")]
+fn local_storage() -> Option<web_sys::Storage> {
+    web_sys::window()?.local_storage().ok().flatten()
+}
+
+/// Base64 (standard alphabet, with padding) for localStorage —
+/// storage values are DOM strings, so raw PNG bytes cannot be stored.
+#[cfg(target_arch = "wasm32")]
+fn base64_encode(bytes: &[u8]) -> String {
+    use base64::Engine as _;
+    base64::engine::general_purpose::STANDARD.encode(bytes)
+}
+
+/// Restores the persisted session: reads the base64 document from
+/// localStorage and opens it through the standard read door (`Editor::open`,
+/// the same path File ▸ Open uses). `None` on any failure (absent
+/// key, storage refusal, corrupt bytes) — persistence is a
+/// convenience, never a load-bearing read.
+#[cfg(target_arch = "wasm32")]
+fn restore_document() -> Option<app::editor::Editor> {
+    let stored =
+        local_storage().and_then(|storage| storage.get_item("firecraft.session").ok().flatten())?;
+    let bytes = base64_decode(&stored)
+        .map_err(|_| web_sys::console::warn_1(&"stored session was not valid base64".into()))
+        .ok()?;
+    match app::editor::Editor::open(&bytes) {
+        Ok(editor) => Some(editor),
+        Err(error) => {
+            web_sys::console::warn_1(&format!("session restore failed: {error}").into());
+            None
+        }
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn base64_decode(text: &str) -> Result<Vec<u8>, base64::DecodeError> {
+    use base64::Engine as _;
+    base64::engine::general_purpose::STANDARD.decode(text)
+}
+
 /// Loads document bytes into the shell through the standard read path.
 #[cfg(target_arch = "wasm32")]
 fn open_bytes(runner: &std::rc::Rc<eframe::WebRunner>, bytes: &[u8]) {
@@ -238,7 +309,7 @@ fn open_bytes(runner: &std::rc::Rc<eframe::WebRunner>, bytes: &[u8]) {
 /// `source: "firecraft"`) are ignored; a bare `ArrayBuffer` is
 /// shorthand for `openDocument`.
 #[cfg(target_arch = "wasm32")]
-fn handle_message(runner: &std::rc::Rc<eframe::WebRunner>, event: web_sys::MessageEvent) {
+fn handle_message(runner: &std::rc::Rc<eframe::WebRunner>, event: &web_sys::MessageEvent) {
     use wasm_bindgen::JsCast as _;
     use wasm_bindgen::JsValue;
 

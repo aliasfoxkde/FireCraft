@@ -1,53 +1,37 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
   <title id="title">FireCraft</title>
-  <desc id="desc">A stylized fox formed from an ember-orange flame, representing creative tools and precision editing.</desc>
+  <desc id="desc">A flame drawn as vector artwork under edit: an ember-gold gradient shape with the selection nodes and a Bézier handle of a live path showing on its outline.</desc>
   <defs>
-    <linearGradient id="ember" x1="28" y1="24" x2="218" y2="230" gradientUnits="userSpaceOnUse">
+    <linearGradient id="ember" x1="52" y1="16" x2="204" y2="236" gradientUnits="userSpaceOnUse">
       <stop offset="0" stop-color="#FFD36A"/>
-      <stop offset=".42" stop-color="#FF9A24"/>
-      <stop offset="1" stop-color="#E84B22"/>
+      <stop offset=".45" stop-color="#FF9A24"/>
+      <stop offset="1" stop-color="#E8451F"/>
     </linearGradient>
-    <linearGradient id="light" x1="74" y1="88" x2="190" y2="190" gradientUnits="userSpaceOnUse">
+    <linearGradient id="light" x1="96" y1="128" x2="166" y2="224" gradientUnits="userSpaceOnUse">
       <stop offset="0" stop-color="#FFF4D8"/>
       <stop offset="1" stop-color="#FFC45B"/>
     </linearGradient>
+    <path id="flame" d="M128 236
+      C80 230 44 188 44 146
+      C44 114 62 92 84 70
+      C104 50 122 38 126 16
+      C148 40 164 68 166 96
+      C186 84 200 66 206 48
+      C214 84 216 116 212 144
+      C205 196 174 232 128 236Z"/>
   </defs>
   <rect x="8" y="8" width="240" height="240" rx="54" fill="#171B24"/>
-  <path d="M128 24
-    C115 47 91 57 67 61
-    C70 82 61 98 43 112
-    C26 126 25 154 39 177
-    C57 207 91 229 128 234
-    C165 229 199 207 217 177
-    C231 154 230 126 213 112
-    C195 98 186 82 189 61
-    C165 57 141 47 128 24Z" fill="url(#ember)"/>
-  <path d="M75 91
-    C88 103 101 109 117 111
-    C107 119 98 131 93 145
-    C88 159 91 176 103 188
-    C114 199 130 205 146 202
-    C164 199 179 187 188 171
-    C177 179 163 182 151 178
-    C137 174 129 163 130 150
-    C131 136 143 126 158 125
-    C171 124 183 130 191 139
-    C193 119 183 100 166 89
-    C151 80 132 78 116 84
-    C101 89 87 92 75 91Z" fill="#171B24"/>
-  <path d="M89 99
-    C103 108 116 111 130 109
-    C117 120 108 135 108 150
-    C108 166 118 179 134 184
-    C147 188 163 184 174 174
-    C164 193 145 204 125 199
-    C103 194 88 176 86 155
-    C84 135 91 117 105 104Z" fill="url(#light)"/>
-  <path d="M155 128 C166 121 181 122 192 132
-    C183 134 175 139 168 147
-    C162 140 158 134 155 128Z" fill="#FFF4D8"/>
-  <path d="M177 148 C184 145 191 145 198 149
-    C192 157 183 160 174 157Z" fill="#171B24"/>
-  <path d="M96 117 C105 109 117 105 130 105" fill="none" stroke="#FFE4A6" stroke-width="5" stroke-linecap="round" opacity=".85"/>
-  <path d="M55 154 C57 180 75 202 99 214" fill="none" stroke="#FFD36A" stroke-width="5" stroke-linecap="round" opacity=".7"/>
+  <use href="#flame" fill="url(#ember)"/>
+  <use href="#flame" fill="url(#light)" transform="translate(128 236) scale(.46) translate(-128 -236)"/>
+  <g fill="none" stroke="#EAF0FF" stroke-width="3.2" opacity=".95">
+    <rect x="120" y="10" width="12" height="12"/>
+    <rect x="38" y="140" width="12" height="12"/>
+    <rect x="206" y="138" width="12" height="12"/>
+    <rect x="122" y="230" width="12" height="12"/>
+  </g>
+  <g stroke="#EAF0FF" stroke-width="2" opacity=".65" fill="#EAF0FF">
+    <path d="M44 188V104" fill="none"/>
+    <circle cx="44" cy="188" r="3.2" stroke="none"/>
+    <circle cx="44" cy="104" r="3.2" stroke="none"/>
+  </g>
 </svg>

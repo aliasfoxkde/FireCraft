@@ -1,8 +1,9 @@
 # FireCraft — Gaps, Improvements & Next Steps
 
-> Audited 2026-10-21. Replaces the "Now" snapshot in PROGRESS.md until
-> the next session close. A living document — update in-place, do not
-> maintain a separate stale copy.
+> **Historical audit, dated 2026-10-21.** This file preserves the
+> findings and family-level evidence from that audit. It is not a live
+> status page or task list. Use [`PROGRESS.md`](PROGRESS.md) for the
+> current snapshot and [`TASKS.md`](TASKS.md) for current work.
 >
 > **This revision answers the standing question**: *is FireCraft fully
 > reverse engineered, fully functional, working end to end, and
@@ -19,12 +20,12 @@
 | Surface | State | Evidence |
 |---|---|---|
 | Fireworks PNG format | Complete | `crates/fwpng`, `crates/doc/src/fwmap.rs`; node tree round-trips |
-| Engine command registry | **245 commands** | `engine::catalog::ids()` — 245 as of 2026-11-03 |
+| Engine command registry | **252 commands** | `engine::catalog::ids()` — 252 as of 2026-11-07 |
 | CS6 DOM verb parity | **268 C / 3 P / 0 M / 85 N** | `docs/planning/generated/dom-parity.md` (356 verbs) |
 | ExtendScript host | Complete | `crates/scripting` — runs the CS6 `.jsf` corpus headless |
 | Web bridge | Exposes **all** commands | `web/src/main.rs` — `apply(name, payload)` |
 | CLI | Complete | `crates/app-cli` — every verb drivable headless |
-| Browser build + smoke | **Green** | `xtask dist --web` — wasm 12,778,687 B, "bridge smoke green" |
+| Browser build + smoke | **Green** | `xtask dist --web` — bridge smoke green; wasm measured 12,778,687 B at the 2026-10-21 audit, 21,274,323 B at 2026-11-04 (ceiling 21,500,000) |
 | Smoke is not vacuous | Fixed | `xtask/src/dist.rs:strip_script_bodies` — verdict read outside `<script>` |
 | Live effects rendered | 6 (shadow×2, glow×2, bevel, fill) | `crates/compose/src/effects.rs:924` |
 | Filters exposed | 30 | `crates/app/src/menus.rs` — `Action::Filter` |
@@ -40,11 +41,23 @@ shell reaches 72; after Phase 11's paint family it reaches 77;
 > **Note (2026-11-02):** the reachability picture above is a
 > point-in-time audit snapshot. The command palette (19.4,
 > `4458f3a`) makes **every** registry command executable from the
-> GUI, and the inert count has fallen 190 → **8 of 289** menu
+> GUI, and the inert count has fallen 190 → **2 of 294** menu
 > items (19.1–19.6 batches 1–17 + 19b.1/batch 2; derived + gated by
 > `menus::tests::inert_count_never_rises`). The family table below is
 > superseded by [`NEXT.md`](NEXT.md) Phases 19–21 as the work list;
 > this file's phases remain useful as per-family detail.
+>
+> **Note (2026-11-10):** the shell-side number above is now *gated*,
+> not just audited. The xtask step `cargo run -p xtask --
+> reachability` derives the bound set from `crates/app/src` and holds
+> it to a floor in `.reachability-floor.tsv` (one-way ratchet). The
+> measurement it took on `main`: **245 registry commands, 146 bound =
+> 59.59%**, 99 unreachable — the floor is pinned at 59.59%. The
+> `comm` line above counts *any* occurrence of a command name in the
+> shell crate; the gate counts the same bindings outside `#[cfg(test)]`
+> code and reports them as a share, so the two numbers are close but
+> not identical by construction. The audit snapshot above remains the
+> historical record.
 
 ```
 $ comm -23 <(engine::catalog::ids()) <(command names in crates/app/src)
@@ -70,7 +83,7 @@ $ comm -23 <(engine::catalog::ids()) <(command names in crates/app/src)
 Supporting evidence:
 
 - **190 of 265 CS6 menu items rendered disabled** (`Action::Inert`,
-  `crates/app/src/menus.rs`) **at audit time** — now 8 of 289, and
+  `crates/app/src/menus.rs`) **at audit time** — now 2 of 294, and
   the census is test-gated. The shell refuses to pretend.
 - **The app could not open a raster image.** *(fixed 2026-10-21)*
   `File > Open` called `Editor::open` → `app_cli::io::open`, which
@@ -109,21 +122,23 @@ Supporting evidence:
 
 ## 2. State snapshot
 
-Point-in-time snapshot **2026-11-02** (post-v0.2.4). Counts marked
-*live* have an authoritative source that supersedes this table.
+Point-in-time snapshot **2026-11-07** (post-v0.2.5; the 2026-11-02
+revision is preserved in git history). Counts marked *live* have an
+authoritative source that supersedes this table.
 
 | Dimension | Status | Notes |
 |---|---|---|
-| **Shipped** | v0.2.4 on GitHub (2026-11-02) | ✅ |
+| **Shipped** | v0.2.5 on GitHub (2026-11-03) | ✅ `v0.2.4` was released without a tag; see PROGRESS |
 | **CI** | GitHub Actions: `fmt` (fast) + `gate` (`xtask ci-no-fmt`); GitForge 7-job pipeline | ✅ |
-| **aegis** | Baseline clean; scan 0.17 s | `.aegisignore` excludes `target/`, `web/dist/`, `fuzz/`; baseline is content-keyed (decision 0074) |
-| **Coverage** | floors 81.0 % lines / 78.5 % funcs (`xtask/src/coverage.rs`) | Local `llvm-cov` fails on stale artifacts; CI works |
-| **Code** | 128,967 Rust lines | No `unwrap()`/`panic!()` outside `#[cfg(test)]`; no `todo!`/`unimplemented!` |
-| **Registry** | 245 commands | Every command executable from the GUI via the Ctrl+P palette (19.4); menu reachability is the remaining gap |
-| **Menu reachability** | 8 inert of 289 items | *live* — derived + gated (`menus::tests::inert_count_never_rises`) |
+| **aegis** | Baseline clean; scan 0.17 s | `.aegisignore` excludes `target/`, `web/dist/`, `fuzz/`; baseline is content-keyed (decision 0074), which supersedes the rule-class and per-finding suppression of decision 0070 |
+| **Coverage** | floors 81.1 % lines / 78.7 % funcs (`xtask/src/coverage.rs`) | Local `llvm-cov` fails on stale artifacts; CI works |
+| **Code** | 144,122 Rust lines | No `unwrap()`/`panic!()` outside `#[cfg(test)]`; no `todo!`/`unimplemented!` |
+| **Registry** | 252 commands | Every command executable from the GUI via the Ctrl+P palette (19.4); menu reachability is the remaining gap |
+| **Menu reachability** | 2 inert of 294 items | *live* — derived + gated (`menus::tests::inert_count_never_rises`) |
 | **Parity** | 268 C / 3 P / 0 M / 85 N | 3 P rows are evidence-gated (Phase 12 oracle) |
-| **Decision docs** | 69 (0001–0069) | Next: 0070 |
-| **Web bundle** | 21,235,599 B (ceiling 21,500,000) | Re-pinned 2026-11-03 (19b.4, dated observation; 19.x shell growth) |
+| **Decision docs** | 90 (0001–0090) | Next: 0091 |
+| **Web bundle** | 21,608,249 B observed; 25,000,000 B warning / 50,000,000 B hard cap | Policy decision 0090; web build uses Rust opt-level=z and Binaryen wasm-opt=z. Cap is a guardrail, not a target; A/B size evidence remains required |
+
 
 ---
 
@@ -396,14 +411,13 @@ model.
 
 ## 15. Next action
 
-**Superseded (2026-11-02).** This file's phase sections (§3–§15) were
-the work plan through the parity campaign; Phases 8–13 landed (see
-[`PROGRESS.md`](PROGRESS.md)), and the active work list is
-[`NEXT.md`](NEXT.md) — Phase 19.6 inert-menu burn-down (8 of 289
-items remaining, batches 1–17 landed), then the daily-driver
-features (Phase 20) and differentiators (Phase 21). The per-family
-detail above remains useful as historical evidence; do not take a
-task from this file without checking NEXT.md first.
+**Superseded (2026-11-04).** This file's phase sections (§3–§15) were
+the work plan through the parity campaign. Phases 8–13 and the 19.6
+menu wiring campaign are complete. The current UI front is Phase 22;
+the canonical task list is [`TASKS.md`](TASKS.md), with detailed
+acceptance criteria in [`NEXT.md`](NEXT.md). Keep the per-family
+details above as historical evidence; do not take current status from
+this dated audit.
 
 ---
 

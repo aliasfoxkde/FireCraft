@@ -106,13 +106,35 @@ pub(crate) fn brush_of(
     })
 }
 
+/// Converts a radius payload to the diameter consumed by `Brush`.
+///
+/// Refuse overflow explicitly rather than letting `radius * 2` wrap:
+/// a wrapped diameter can land inside `Brush`'s accepted `1..=1024`
+/// window (e.g. `radius = 2147484160` wraps to exactly 1024) and so
+/// reach `box_average` with a `half` near 10^9 — a debug-mode `u32`
+/// overflow panic in the window sums, a release-mode hang in the
+/// `1..=half` loops. Rejecting here keeps every radius that survives
+/// at or below 512, which is what the `half` derivations assume.
+fn brush_diameter(name: &'static str, radius: u32) -> Result<u32, EngineError> {
+    radius
+        .checked_mul(2)
+        .ok_or_else(|| EngineError::BadPayload {
+            name: name.to_owned(),
+            detail: format!("brush radius {radius} overflows its diameter"),
+        })
+}
+
 /// Registers the retouch commands.
 pub(crate) fn install(registry: &mut CommandRegistry) -> Result<(), EngineError> {
     registry.register(RetouchBlur)?;
     registry.register(RetouchSmudge)?;
     registry.register(RetouchClone)?;
     registry.register(RetouchEraser)?;
-    registry.register(RetouchRedEye)
+    registry.register(RetouchRedEye)?;
+    registry.register(RetouchSharpen)?;
+    registry.register(RetouchDodge)?;
+    registry.register(RetouchBurn)?;
+    registry.register(RetouchReplaceColor)
 }
 
 use crate::registry::CommandRegistry;
@@ -247,7 +269,7 @@ impl TypedCommand for RetouchBlur {
             NAME,
             payload.x,
             payload.y,
-            payload.radius * 2,
+            brush_diameter(NAME, payload.radius)?,
             &payload.brush,
         )?;
         let (brush, pressure) = (options.brush, options.pressure);
@@ -330,7 +352,7 @@ impl TypedCommand for RetouchSmudge {
             NAME,
             payload.x,
             payload.y,
-            payload.radius * 2,
+            brush_diameter(NAME, payload.radius)?,
             &payload.brush,
         )?;
         let (brush, pressure) = (options.brush, options.pressure);
@@ -415,7 +437,7 @@ impl TypedCommand for RetouchClone {
             NAME,
             payload.target_x,
             payload.target_y,
-            payload.radius * 2,
+            brush_diameter(NAME, payload.radius)?,
             &payload.brush,
         )?;
         let (brush, pressure) = (options.brush, options.pressure);
@@ -493,7 +515,7 @@ impl TypedCommand for RetouchEraser {
             NAME,
             payload.x,
             payload.y,
-            payload.radius * 2,
+            brush_diameter(NAME, payload.radius)?,
             &payload.brush,
         )?;
         let (brush, pressure) = (options.brush, options.pressure);
@@ -562,7 +584,7 @@ impl TypedCommand for RetouchRedEye {
             NAME,
             payload.x,
             payload.y,
-            payload.radius * 2,
+            brush_diameter(NAME, payload.radius)?,
             &payload.brush,
         )?;
         let (brush, pressure) = (options.brush, options.pressure);
@@ -587,6 +609,342 @@ impl TypedCommand for RetouchRedEye {
                         let excess = u32::from(red - ceiling) * u32::from(255 - eff);
                         pixel[0] = (ceiling + ((excess + 127) / 255) as u16) as u8;
                     }
+                    write(pixels, index, pixel);
+                }
+            }
+            Ok(())
+        })
+    }
+}
+
+/// `retouch.sharpen` — unsharp mask: push each pixel away from its
+/// neighborhood average, so edges gain contrast while flat areas stay
+/// flat. The amount scales with strength and brush coverage.
+struct RetouchSharpen;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct RetouchSharpenPayload {
+    /// Target image.
+    id: ObjectId,
+    /// Brush center in image pixel coordinates.
+    x: f64,
+    y: f64,
+    /// Brush radius in pixels (1..=512).
+    radius: u32,
+    /// Effect strength percent (1..=100).
+    strength: u8,
+    /// The Edit Brush dialog slots (edge/shape/aspect/angle/
+    /// pressure), all defaulted to the M7 behavior.
+    #[serde(default)]
+    brush: BrushOptionsPayload,
+}
+
+impl TypedCommand for RetouchSharpen {
+    type Payload = RetouchSharpenPayload;
+
+    fn name(&self) -> &'static str {
+        "retouch.sharpen"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "retouch.sharpen";
+        let options = brush_of(
+            NAME,
+            payload.x,
+            payload.y,
+            brush_diameter(NAME, payload.radius)?,
+            &payload.brush,
+        )?;
+        let (brush, pressure) = (options.brush, options.pressure);
+        let strength = strength_of(NAME, payload.strength)?;
+        let half = (payload.radius as usize / 2).max(1);
+        masked_pixel_edit(document, NAME, payload.id, |pixels, size, mask| {
+            let snapshot = pixels.to_vec();
+            let averaged = box_average(&snapshot, size.0 as usize, size.1 as usize, half);
+            for py in 0..size.1 {
+                for px in 0..size.0 {
+                    let index = py as usize * size.0 as usize + px as usize;
+                    let eff = brush.effect(px, py, strength, pressure, mask.alpha[index]);
+                    if eff == 0 {
+                        continue;
+                    }
+                    let mut pixel: [u8; 4] =
+                        pixels[index * 4..index * 4 + 4].try_into().map_err(|_| {
+                            EngineError::InvalidState {
+                                name: NAME.to_owned(),
+                                detail: "pixel buffer misaligned".to_owned(),
+                            }
+                        })?;
+                    let average: [u8; 4] =
+                        averaged[index * 4..index * 4 + 4].try_into().map_err(|_| {
+                            EngineError::InvalidState {
+                                name: NAME.to_owned(),
+                                detail: "pixel buffer misaligned".to_owned(),
+                            }
+                        })?;
+                    // The unsharp term is (pixel − average); the alpha
+                    // channel is left alone so the footprint cannot
+                    // punch holes in a transparent image.
+                    for channel in 0..3 {
+                        let center = i32::from(pixel[channel]);
+                        let mean = i32::from(average[channel]);
+                        let boosted = center + (center - mean) * i32::from(eff) / 255;
+                        pixel[channel] = boosted.clamp(0, 255) as u8;
+                    }
+                    write(pixels, index, pixel);
+                }
+            }
+            Ok(())
+        })
+    }
+}
+
+/// `retouch.dodge` — lighten: pull each pixel toward white by a
+/// fraction of its remaining headroom, scaled by strength and
+/// coverage. CS6's dodge/burn share a tool (alt toggles); the two
+/// commands split them so a stroke records one intent.
+struct RetouchDodge;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct RetouchDodgePayload {
+    /// Target image.
+    id: ObjectId,
+    /// Brush center in image pixel coordinates.
+    x: f64,
+    y: f64,
+    /// Brush radius in pixels (1..=512).
+    radius: u32,
+    /// Effect strength percent (1..=100).
+    strength: u8,
+    /// The Edit Brush dialog slots (edge/shape/aspect/angle/
+    /// pressure), all defaulted to the M7 behavior.
+    #[serde(default)]
+    brush: BrushOptionsPayload,
+}
+
+impl TypedCommand for RetouchDodge {
+    type Payload = RetouchDodgePayload;
+
+    fn name(&self) -> &'static str {
+        "retouch.dodge"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "retouch.dodge";
+        let options = brush_of(
+            NAME,
+            payload.x,
+            payload.y,
+            brush_diameter(NAME, payload.radius)?,
+            &payload.brush,
+        )?;
+        let (brush, pressure) = (options.brush, options.pressure);
+        let strength = strength_of(NAME, payload.strength)?;
+        masked_pixel_edit(document, NAME, payload.id, |pixels, size, mask| {
+            for py in 0..size.1 {
+                for px in 0..size.0 {
+                    let index = py as usize * size.0 as usize + px as usize;
+                    let eff = brush.effect(px, py, strength, pressure, mask.alpha[index]);
+                    if eff == 0 {
+                        continue;
+                    }
+                    let mut pixel: [u8; 4] =
+                        pixels[index * 4..index * 4 + 4].try_into().map_err(|_| {
+                            EngineError::InvalidState {
+                                name: NAME.to_owned(),
+                                detail: "pixel buffer misaligned".to_owned(),
+                            }
+                        })?;
+                    for channel in pixel.iter_mut().take(3) {
+                        let headroom = 255 - i32::from(*channel);
+                        let lifted = i32::from(*channel) + headroom * i32::from(eff) / 255;
+                        *channel = lifted.clamp(0, 255) as u8;
+                    }
+                    write(pixels, index, pixel);
+                }
+            }
+            Ok(())
+        })
+    }
+}
+
+/// `retouch.burn` — darken: pull each pixel toward black by a fraction
+/// of its own value, scaled by strength and coverage.
+struct RetouchBurn;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct RetouchBurnPayload {
+    /// Target image.
+    id: ObjectId,
+    /// Brush center in image pixel coordinates.
+    x: f64,
+    y: f64,
+    /// Brush radius in pixels (1..=512).
+    radius: u32,
+    /// Effect strength percent (1..=100).
+    strength: u8,
+    /// The Edit Brush dialog slots (edge/shape/aspect/angle/
+    /// pressure), all defaulted to the M7 behavior.
+    #[serde(default)]
+    brush: BrushOptionsPayload,
+}
+
+impl TypedCommand for RetouchBurn {
+    type Payload = RetouchBurnPayload;
+
+    fn name(&self) -> &'static str {
+        "retouch.burn"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "retouch.burn";
+        let options = brush_of(
+            NAME,
+            payload.x,
+            payload.y,
+            brush_diameter(NAME, payload.radius)?,
+            &payload.brush,
+        )?;
+        let (brush, pressure) = (options.brush, options.pressure);
+        let strength = strength_of(NAME, payload.strength)?;
+        masked_pixel_edit(document, NAME, payload.id, |pixels, size, mask| {
+            for py in 0..size.1 {
+                for px in 0..size.0 {
+                    let index = py as usize * size.0 as usize + px as usize;
+                    let eff = brush.effect(px, py, strength, pressure, mask.alpha[index]);
+                    if eff == 0 {
+                        continue;
+                    }
+                    let mut pixel: [u8; 4] =
+                        pixels[index * 4..index * 4 + 4].try_into().map_err(|_| {
+                            EngineError::InvalidState {
+                                name: NAME.to_owned(),
+                                detail: "pixel buffer misaligned".to_owned(),
+                            }
+                        })?;
+                    for channel in pixel.iter_mut().take(3) {
+                        let darkened =
+                            i32::from(*channel) - i32::from(*channel) * i32::from(eff) / 255;
+                        *channel = darkened.clamp(0, 255) as u8;
+                    }
+                    write(pixels, index, pixel);
+                }
+            }
+            Ok(())
+        })
+    }
+}
+
+/// `retouch.replaceColor` — swap one color for another inside the
+/// brush footprint: pixels close enough to `from_color_raw` are
+/// blended toward `to_color_raw`. The tolerance is per channel, in
+/// the same 0..=255 space as the colors themselves.
+struct RetouchReplaceColor;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct RetouchReplaceColorPayload {
+    /// Target image.
+    id: ObjectId,
+    /// Brush center in image pixel coordinates.
+    x: f64,
+    y: f64,
+    /// Brush radius in pixels (1..=512).
+    radius: u32,
+    /// Effect strength percent (1..=100).
+    strength: u8,
+    /// The color to replace, as ARGB raw int (the `object.setFill`
+    /// convention).
+    from_color_raw: i64,
+    /// The replacement color, as ARGB raw int.
+    to_color_raw: i64,
+    /// Per-channel match tolerance, 0..=255 (default 0 — an exact
+    /// match).
+    #[serde(default)]
+    tolerance: Option<u8>,
+    /// The Edit Brush dialog slots (edge/shape/aspect/angle/
+    /// pressure), all defaulted to the M7 behavior.
+    #[serde(default)]
+    brush: BrushOptionsPayload,
+}
+
+/// Splits an ARGB raw int into straight RGBA bytes.
+fn argb_to_rgba(raw: i64) -> [u8; 4] {
+    let argb = raw as u32;
+    [
+        ((argb >> 16) & 0xFF) as u8,
+        ((argb >> 8) & 0xFF) as u8,
+        (argb & 0xFF) as u8,
+        ((argb >> 24) & 0xFF) as u8,
+    ]
+}
+
+impl TypedCommand for RetouchReplaceColor {
+    type Payload = RetouchReplaceColorPayload;
+
+    fn name(&self) -> &'static str {
+        "retouch.replaceColor"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "retouch.replaceColor";
+        let options = brush_of(
+            NAME,
+            payload.x,
+            payload.y,
+            brush_diameter(NAME, payload.radius)?,
+            &payload.brush,
+        )?;
+        let (brush, pressure) = (options.brush, options.pressure);
+        let strength = strength_of(NAME, payload.strength)?;
+        let from = argb_to_rgba(payload.from_color_raw);
+        let to = argb_to_rgba(payload.to_color_raw);
+        let tolerance = i32::from(payload.tolerance.unwrap_or(0));
+        masked_pixel_edit(document, NAME, payload.id, |pixels, size, mask| {
+            for py in 0..size.1 {
+                for px in 0..size.0 {
+                    let index = py as usize * size.0 as usize + px as usize;
+                    let eff = brush.effect(px, py, strength, pressure, mask.alpha[index]);
+                    if eff == 0 {
+                        continue;
+                    }
+                    let mut pixel: [u8; 4] =
+                        pixels[index * 4..index * 4 + 4].try_into().map_err(|_| {
+                            EngineError::InvalidState {
+                                name: NAME.to_owned(),
+                                detail: "pixel buffer misaligned".to_owned(),
+                            }
+                        })?;
+                    let matches = (0..3).all(|channel| {
+                        let distance = i32::from(pixel[channel]) - i32::from(from[channel]);
+                        distance.abs() <= tolerance
+                    });
+                    if !matches {
+                        continue;
+                    }
+                    // The replacement keeps the source alpha: replacing
+                    // a color must not change how opaque the pixel is.
+                    let target = [to[0], to[1], to[2], pixel[3]];
+                    blend_pixel(&mut pixel, target, eff);
                     write(pixels, index, pixel);
                 }
             }
@@ -780,6 +1138,153 @@ mod tests {
     }
 
     #[test]
+    fn retouch_commands_reject_overflowing_brush_diameters() {
+        let (mut document, image) = strip_document([
+            [100, 100, 100, 255],
+            [120, 120, 120, 255],
+            [140, 140, 140, 255],
+        ]);
+        let payload = json!({
+            "id": image, "x": 1.5, "y": 0.5,
+            "radius": u32::MAX, "strength": 50,
+        });
+        assert!(matches!(
+            RetouchSharpen.apply_json(&mut document, payload.clone()),
+            Err(EngineError::BadPayload { .. })
+        ));
+        assert!(matches!(
+            RetouchDodge.apply_json(&mut document, payload.clone()),
+            Err(EngineError::BadPayload { .. })
+        ));
+        assert!(matches!(
+            RetouchBurn.apply_json(&mut document, payload.clone()),
+            Err(EngineError::BadPayload { .. })
+        ));
+        assert!(matches!(
+            RetouchReplaceColor.apply_json(
+                &mut document,
+                json!({
+                    "id": image, "x": 1.5, "y": 0.5,
+                    "radius": u32::MAX, "strength": 50,
+                    "from_color_raw": 0xFFFF0000_i64, "to_color_raw": 0xFF00FFFF_i64,
+                })
+            ),
+            Err(EngineError::BadPayload { .. })
+        ));
+    }
+
+    #[test]
+    fn sharpen_pushes_edges_away_from_their_average() {
+        // A ramp [100, 120, 140]: the one-pass box average is
+        // [107, 120, 133], so the ends sit away from their mean and
+        // the center sits on it. Unsharp pushes the ends further out
+        // and leaves the center alone.
+        let (mut document, image) = strip_document([
+            [100, 100, 100, 255],
+            [120, 120, 120, 255],
+            [140, 140, 140, 255],
+        ]);
+        RetouchSharpen
+            .apply_json(
+                &mut document,
+                json!({ "id": image, "x": 1.5, "y": 0.5, "radius": 2, "strength": 100 }),
+            )
+            .unwrap();
+        assert_eq!(
+            strip(&document, image),
+            [
+                [93, 93, 93, 255],
+                [120, 120, 120, 255],
+                [147, 147, 147, 255]
+            ]
+        );
+    }
+
+    #[test]
+    fn dodge_lifts_and_burn_sinks() {
+        let (mut document, image) = strip_document([
+            [100, 100, 100, 255],
+            [100, 100, 100, 255],
+            [100, 100, 100, 255],
+        ]);
+        RetouchDodge
+            .apply_json(
+                &mut document,
+                json!({ "id": image, "x": 1.5, "y": 0.5, "radius": 2, "strength": 50 }),
+            )
+            .unwrap();
+        let lifted = strip(&document, image);
+        assert!(lifted[1][0] > 100, "dodge lightens: {lifted:?}");
+
+        let (mut document, image) = strip_document([
+            [100, 100, 100, 255],
+            [100, 100, 100, 255],
+            [100, 100, 100, 255],
+        ]);
+        RetouchBurn
+            .apply_json(
+                &mut document,
+                json!({ "id": image, "x": 1.5, "y": 0.5, "radius": 2, "strength": 50 }),
+            )
+            .unwrap();
+        let sunk = strip(&document, image);
+        assert!(sunk[1][0] < 100, "burn darkens: {sunk:?}");
+    }
+
+    #[test]
+    fn replace_color_swaps_only_the_matching_pixels() {
+        let (mut document, image) =
+            strip_document([[255, 0, 0, 255], [0, 255, 0, 255], [0, 0, 255, 255]]);
+        RetouchReplaceColor
+            .apply_json(
+                &mut document,
+                json!({ "id": image, "x": 1.5, "y": 0.5, "radius": 2, "strength": 100,
+                        "from_color_raw": 0xFFFF0000_i64, "to_color_raw": 0xFF00FFFF_i64 }),
+            )
+            .unwrap();
+        assert_eq!(
+            strip(&document, image),
+            [[0, 255, 255, 255], [0, 255, 0, 255], [0, 0, 255, 255]]
+        );
+    }
+
+    #[test]
+    fn replace_color_respects_the_tolerance() {
+        // [240, 30, 30] is 30 away from [255, 0, 0] in green and
+        // blue, so a tolerance of 16 does not reach it but a
+        // tolerance of 32 does.
+        let (mut document, image) =
+            strip_document([[240, 30, 30, 255], [0, 255, 0, 255], [0, 0, 255, 255]]);
+        RetouchReplaceColor
+            .apply_json(
+                &mut document,
+                json!({ "id": image, "x": 1.5, "y": 0.5, "radius": 2, "strength": 100,
+                        "from_color_raw": 0xFFFF0000_i64, "to_color_raw": 0xFF00FFFF_i64,
+                        "tolerance": 16 }),
+            )
+            .unwrap();
+        assert_eq!(
+            strip(&document, image),
+            [[240, 30, 30, 255], [0, 255, 0, 255], [0, 0, 255, 255]]
+        );
+
+        let (mut document, image) =
+            strip_document([[240, 30, 30, 255], [0, 255, 0, 255], [0, 0, 255, 255]]);
+        RetouchReplaceColor
+            .apply_json(
+                &mut document,
+                json!({ "id": image, "x": 1.5, "y": 0.5, "radius": 2, "strength": 100,
+                        "from_color_raw": 0xFFFF0000_i64, "to_color_raw": 0xFF00FFFF_i64,
+                        "tolerance": 32 }),
+            )
+            .unwrap();
+        assert_eq!(
+            strip(&document, image),
+            [[0, 255, 255, 255], [0, 255, 0, 255], [0, 0, 255, 255]]
+        );
+    }
+
+    #[test]
     fn the_dialog_slots_flow_through_the_retouch_dab() {
         // Edge changes the footprint: a hard blur replaces the probe
         // pixel outright, a fully soft one only pulls it partway.
@@ -891,6 +1396,58 @@ mod tests {
                 matches!(error, crate::error::EngineError::InvalidState { .. }),
                 "{error}"
             );
+        }
+        assert_eq!(
+            serde_json::to_vec(&document).unwrap(),
+            before,
+            "refused strokes change nothing"
+        );
+    }
+
+    #[test]
+    fn overflowing_brush_radii_are_refused_before_the_kernel_runs() {
+        // `radius * 2` used to wrap: 2147484160 * 2 == 1024 (mod 2^32),
+        // which slips past `Brush`'s 1..=1024 window and then feeds
+        // `half = radius / 2` ≈ 10^9 into `box_average` — a debug-mode
+        // u32 overflow in the window sums, a release-mode hang in the
+        // `1..=half` loops. Every retouch command must refuse instead.
+        let (mut document, image) =
+            strip_document([[0, 0, 0, 255], [128, 128, 128, 255], [255, 255, 255, 255]]);
+        let registry = single_registry();
+        let before = serde_json::to_vec(&document).unwrap();
+        let wrap = 2_147_484_160u32; // * 2 wraps to exactly 1024
+        for radius in [wrap, u32::MAX] {
+            for name in [
+                "retouch.blur",
+                "retouch.smudge",
+                "retouch.clone",
+                "retouch.eraser",
+                "retouch.redEye",
+                "retouch.sharpen",
+                "retouch.dodge",
+                "retouch.burn",
+                "retouch.replaceColor",
+            ] {
+                let mut payload = json!({
+                    "id": image, "x": 1.5, "y": 0.5,
+                    "radius": radius, "strength": 100,
+                });
+                if name == "retouch.replaceColor" {
+                    payload["from_color_raw"] = json!(0xFFFF0000_i64);
+                    payload["to_color_raw"] = json!(0xFF00FFFF_i64);
+                }
+                if name == "retouch.smudge" {
+                    payload["dx"] = json!(1);
+                    payload["dy"] = json!(0);
+                }
+                let error = registry
+                    .execute(&mut document, name, payload)
+                    .expect_err("an overflowing radius must be refused");
+                assert!(
+                    matches!(error, crate::error::EngineError::BadPayload { .. }),
+                    "{name} radius {radius}: {error}"
+                );
+            }
         }
         assert_eq!(
             serde_json::to_vec(&document).unwrap(),

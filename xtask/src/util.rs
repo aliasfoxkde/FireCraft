@@ -77,7 +77,17 @@ pub fn run(program: &str, args: &[&str]) -> Result<(), String> {
 
 /// Runs a program from `dir` (or the workspace root when `None`).
 pub fn run_in(dir: Option<&std::path::Path>, program: &str, args: &[&str]) -> Result<(), String> {
-    let output = spawn(dir, program, args)?;
+    run_in_with_env(dir, program, args, &[])
+}
+
+/// Runs a program with explicit environment overrides.
+pub fn run_in_with_env(
+    dir: Option<&std::path::Path>,
+    program: &str,
+    args: &[&str],
+    env: &[(&str, &str)],
+) -> Result<(), String> {
+    let output = spawn_with_env(dir, program, args, env)?;
     if output.status.success() {
         Ok(())
     } else {
@@ -122,8 +132,17 @@ pub fn cargo_metadata() -> Result<serde_json::Value, String> {
 }
 
 fn spawn(dir: Option<&std::path::Path>, program: &str, args: &[&str]) -> Result<Output, String> {
+    spawn_with_env(dir, program, args, &[])
+}
+
+fn spawn_with_env(
+    dir: Option<&std::path::Path>,
+    program: &str,
+    args: &[&str],
+    env: &[(&str, &str)],
+) -> Result<Output, String> {
     let mut cmd = Command::new(program);
-    cmd.args(args);
+    cmd.args(args).envs(env.iter().copied());
     match dir {
         Some(d) => cmd.current_dir(d),
         None => cmd.current_dir(workspace_root()),

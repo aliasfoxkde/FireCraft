@@ -170,6 +170,56 @@ impl History {
         self.undo.len()
     }
 
+    /// The undo stack's step labels, oldest first — the History
+    /// panel's edit list, one entry per undoable step.
+    #[must_use]
+    pub fn undo_labels(&self) -> Vec<&str> {
+        self.undo.iter().map(|step| step.label.as_str()).collect()
+    }
+
+    /// Rewinds the undo stack to `depth` steps: every step above it
+    /// is undone (its captured inverse applied to the document) and
+    /// dropped. Returns how many steps were undone.
+    ///
+    /// The dropped steps are *not* filed on the redo stack: a rewind
+    /// discards them, so the redo stack is cleared — redoing after a
+    /// rewind would replay a step against a document that no longer
+    /// has the state it was captured in. A rewind to the current
+    /// depth drops nothing and leaves the redo stack alone.
+    ///
+    /// A `depth` past the recorded steps is refused
+    /// ([`EngineError::InvalidState`]) rather than clamped: a
+    /// surface asking to rewind beyond the document's history is
+    /// asking for something that does not exist.
+    pub fn rewind_to(
+        &mut self,
+        document: &mut doc::Document,
+        depth: usize,
+    ) -> Result<usize, EngineError> {
+        if depth > self.undo.len() {
+            return Err(EngineError::InvalidState {
+                name: "history.rewind".to_owned(),
+                detail: format!(
+                    "depth {depth} is past the {} recorded step(s)",
+                    self.undo.len()
+                ),
+            });
+        }
+        let mut undone = 0usize;
+        while self.undo.len() > depth {
+            let Some(step) = self.undo.last() else {
+                break;
+            };
+            step.delta.apply_inverse(document)?;
+            self.undo.pop();
+            undone += 1;
+        }
+        if undone > 0 {
+            self.redo.clear();
+        }
+        Ok(undone)
+    }
+
     /// Depth of the redo stack.
     #[must_use]
     pub fn redo_len(&self) -> usize {

@@ -6,7 +6,7 @@
 > a draft GitHub release. For the Windows, macOS, AppImage, Flatpak,
 > Android, signing, and certification work order see
 > [`RELEASE-ENGINEERING-PLAN.md`](RELEASE-ENGINEERING-PLAN.md) and
-> ticket [T27](tasks/T27-cross-platform-release.md). **Do not infer that
+> ticket [T27](tasks/T27-cross-platform-release.md). Cross-cutting application cleanup, WASM optimization, QA, and agent integration are detailed in [PRODUCTION-READINESS-PLAN.md](PRODUCTION-READINESS-PLAN.md). **Do not infer that
 > a target is supported from a recipe alone.**
 >
 > **Scope authority:**
@@ -15,7 +15,7 @@
 > *recommended — awaiting maintainer approval*.
 >
 > **Evidence baseline:** [PHASE-0-AUDIT.md](release/PHASE-0-AUDIT.md)
-> (PR #16, dated 2026-11-09 — the link resolves once that PR merges).
+> (PR #16, merged; dated 2026-11-09 historical baseline).
 > Per-artifact evidence state:
 > [ARTIFACT-MATRIX.md](release/ARTIFACT-MATRIX.md).
 
@@ -31,10 +31,20 @@ fleet cannot build ship as recipes under `packaging/`
   workspace-wide `clippy --all-targets` and `test --workspace` steps are
   not permitted, this gate is routed through CI; the receipt is the CI
   **run id**, not a local statement that it was green.
-- Version stamp: `[workspace.package] version` in the root `Cargo.toml`
-  **and** the literal `Version:` in `packaging/deb/control` move
-  together. `xtask changelog` and `xtask dist --native` fail on drift.
-- Every crate carries the workspace version; `xtask changelog`
+- Version stamp: `cargo run -p xtask -- stamp <version>` moves **every**
+  stamp at once — the workspace's `[workspace.package] version`, the
+  member crates that carry their own copy, the version requirement of
+  every path dependency that pins a local crate, the literal
+  `Version:` in `packaging/deb/control`, and `Cargo.lock`: the local
+  packages' entries *and* the dependency references that carry a local
+  package's version. The lock is the one that used to be missed: a
+  release that stamped the manifests without it shipped a source
+  archive that `cargo build --locked` refused to build.
+- `xtask stamps` (and `xtask dist --native`) fail on drift, and
+  `xtask stamps` now also checks that the lock agrees with the
+  manifests — its package entries, its dependency references and the
+  path dependencies' requirements.
+- Every crate carries the workspace version; `xtask stamps`
   enforces one stamp across all workspace-local packages.
 
 ## Web bundle (WASM-first — the primary target)
@@ -48,7 +58,7 @@ Produces `dist/web/`:
 | `index.html`, `host.html`, `appinfo.json`, one `.js`, one `.wasm` | trunk `--release` bundle |
 | `MANIFEST.sha256` | over the bundle; `sha256sum -c` verifies |
 
-The gate enforces the wasm size ceiling (parity table) and runs the
+The web build uses a Rust opt-level=z release profile for the Trunk subprocess and Binaryen wasm-opt=z. It warns above 25,000,000 B and fails above the 50,000,000 B hard ceiling (decimal bytes; decision 0090). This ceiling is a safety cap, not a target. The gate runs the
 bridge smoke **on these release bytes**: the WEBOS.md host page loads
 the bundle in headless chromium and completes one
 open → apply → exportPng → exportDocument round trip through the M5
@@ -84,13 +94,40 @@ or `dpkg -i`.
     cargo run -p xtask -- dist --source
     cargo run -p xtask -- dist --sbom
 
-Both verbs exist on this branch and are wired into the release workflow.
-They do **not** exist on `main` — the two release branches carry
-duplicate implementations that have to be consolidated before either
-lands. `dist --source` produces `dist/source/FireCraft-<v>-source.tar.gz`
+Both verbs are present on main and wired into the tag release workflow. Their presence is implementation evidence only; a successful post-repair tag run, clean source build, schema-valid SBOM, and independent download verification are still required. `dist --source` produces `dist/source/firecraft-<v>-source.tar.gz`
 and verifies a clean extraction plus `cargo metadata --locked` inside it;
 `dist --sbom` produces `dist/sbom/firecraft-<v>-sbom.cdx.json`
 (CycloneDX 1.5) over the locked dependency graph.
+
+## Release manifest
+
+    cargo run -p xtask -- dist --manifest
+    cargo run -p xtask -- dist --verify-manifest
+
+`dist --manifest` writes `dist/release-manifest.json` — the
+machine-readable description of the release. It lands in the release
+output directory next to the artifacts it describes, and it is
+published with them as a ninth release asset.
+
+The manifest carries the version, the tag, the source revision, the
+workflow run URL and id, and the build timestamp; and for every
+published asset its canonical name, its path relative to `dist/`, its
+byte size, its SHA-256 digest, its package format, its target triple,
+and whether a recorded checksum list corroborates the digest.
+
+The generator is fail-closed: a missing artifact, an empty artifact, a
+checksum list that does not parse, or a file whose digest contradicts a
+recorded list all fail the run. It runs **after** every asset exists —
+including the web zip and `dist/RELEASE_SHA256.txt`, which the workflow
+produces — so it describes the whole release.
+
+The bytes are deterministic: the keys are sorted, the artifact array is
+sorted by name, and the only build-time fields (`built_at`, the run URL
+and id) are documented as build-time data.
+
+The full schema: [release/RELEASE-MANIFEST.md](release/RELEASE-MANIFEST.md).
+
+    jq -r '.version,.artifacts[0].sha256' dist/release-manifest.json
 
 ## Off-fleet platforms (recipes — the operator builds these)
 
@@ -127,6 +164,14 @@ it in a diff. A changelog generated from the log cannot contain its own
 tip commit, so the file is never byte-identical to a freshly generated
 one.
 
+The stamp half of that verb is also available on its own:
+
+    cargo run -p xtask -- stamps
+
+`xtask stamps` verifies the license claim and the workspace version
+stamps and needs no git. That is the verb CI runs: the CI image ships
+no git, so `xtask changelog` cannot run there (decision 0086).
+
 ## Tag-driven release (what the workflow actually does)
 
 `.github/workflows/release.yml` fires on a `v*` tag push and runs two
@@ -135,13 +180,16 @@ jobs:
 1. **`build artifacts`** — `dist --native`, `dist --web`,
    `dist --source`, `dist --sbom`; zips the web bundle; writes
    `dist/RELEASE_SHA256.txt` over the seven digested files plus
-   `MANIFEST.sha256`; uploads eight paths as one artifact.
+   `MANIFEST.sha256`; writes `dist/release-manifest.json` with
+   `dist --manifest` and re-verifies it with `dist --verify-manifest`;
+   uploads nine paths as one artifact.
 2. **`create draft release`** — downloads that artifact, flattens it
    with `packaging/release-assets.sh stage`, runs a **fail-closed
-   aggregate validation** (all eight required artifacts present and
-   non-empty, `sha256sum -c RELEASE_SHA256.txt` passing, and every
-   artifact name carrying the tag version), then creates a **draft**
-   GitHub release with the assets passed as positional arguments.
+   aggregate validation** (all nine required artifacts present and
+   non-empty, `sha256sum -c RELEASE_SHA256.txt` passing, the release
+   manifest agreeing with the assets it describes, and every artifact
+   name carrying the tag version), then creates a **draft** GitHub
+   release with the assets passed as positional arguments.
 
 The workflow does **not** publish the release, does not bump versions,
 does not run `xtask changelog`, and does not deploy to Cloudflare Pages
@@ -182,7 +230,10 @@ Every step below is one the repository can actually perform today.
    `Web bundle smoke` step is tag-gated and is **skipped on branch
    pushes**; on a branch, the bridge smoke has to come from a
    `dist --web` run, not from the CI job.
-2. Version stamped in `Cargo.toml` **and** `packaging/deb/control`.
+2. Version stamped by `xtask stamp <version>` — the workspace, the
+   member manifests, the path dependencies' requirements,
+   `packaging/deb/control` **and** `Cargo.lock` (package entries and
+   dependency references).
 3. `xtask dist --web` green — manifest verifies, size budget holds,
    bridge smoke green on the release bytes.
 4. `xtask dist --native` green — manifest verifies, `dpkg-deb`
@@ -202,9 +253,10 @@ Every step below is one the repository can actually perform today.
    GitForge only when the lineage question is resolved; the GitForge
    remote carries tags only and has no release-asset surface.
 9. The tag push fires `release.yml`, which creates a **draft** release
-   with the eight validated assets. Inspect the draft: confirm the
-   asset list, confirm the digests against `RELEASE_SHA256.txt`, and
-   confirm the release notes are `docs/releases/<tag>.md`.
+   with the nine validated assets. Inspect the draft: confirm the
+   asset list, confirm the digests against `RELEASE_SHA256.txt` and the
+   release manifest, and confirm the release notes are
+   `docs/releases/<tag>.md`.
 10. Deploy the web bundle to Cloudflare Pages manually, then reconcile
     the deployed assets against the tagged bundle and record the result.
 11. **Publishing the draft is a separate, authorized action.** Publishing

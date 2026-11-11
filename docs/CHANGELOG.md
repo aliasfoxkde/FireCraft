@@ -10,6 +10,21 @@ Current version: **0.2.5**.
 
 ### Features
 
+- **site**: launch FireCraft marketing website (#11) (0ca5e3d)
+- **app**: in-canvas text editing and menu burn-down to 2 inert (ed82eae)
+- **app**: CS6 screen modes, Alt retouch swap, aegis gate (49a4e61)
+
+- **app**: 21.5 desktop accesskit feature enabled (88cf40c)
+- **app**: 21.6 Commands runs .fwsteps alongside .jsf (1e6fb7a)
+- **app**: 21.2 render in device pixels (HiDPI) (ac17e25)
+- **app**: 21.1 autosave and crash recovery on both surfaces (498af8a)
+- **app**: 21.3 palette fuzzy scoring and persisted recents (bc8b637)
+- **app**: 21.4 preferences dialog with persisted UI scale (bec3032)
+- **app**: 20.5 multi-document tabs, clean raster opens (02c4460)
+- **app**: 20.6 Ctrl+0 Fit Selection and rewind selection tests (c275951)
+
+- **app**: CS6 tool strip order and flyouts (1203ecc)
+- **app**: right dock column and per-kind inspector (1b10a5d)
 - **app**: CS6 shell fidelity + inert-menu burn-down batches 4-17 (#7) (5fac7a2)
 - **app**: path-node add/delete, canvas dialogs, Duplicate/Clone (19b.1 + 19.6) (8ce5762)
 - **app**: Lucide tool icons, context menu, selection/mask verbs (19.6) (2923392)
@@ -170,6 +185,23 @@ Current version: **0.2.5**.
 
 ### Fixes
 
+- **deps**: bump time to 0.3.47 for CVE-2026-25727 (#17) (a1bb30b)
+- **xtask**: resolve the workspace root at run time (#20) (b439d91)
+- **xtask**: content-key the aegis baseline (#18) (ad598a4)
+- **xtask**: move the test module to the end of the file (092a91c)
+- **app**: let one-axis creation gestures commit (88123c3)
+- **xtask**: point Aegis at the scratch config on CI runners (9457199)
+- **app**: center inserted symbol content (941e5b6)
+- **engine**: reject retouch radius overflow explicitly (427f0f8)
+- **xtask**: isolate Aegis pattern state per invocation (a658edd)
+- **engine**: reject overflowing retouch brush radii (a77ed51)
+- **app**: align symbol library click payload (f9bea9f)
+- **app**: repair distort, selection and redraw gestures (0c00b61)
+- **xtask**: point Aegis at the scratch config on CI runners (99ac326)
+- **app**: guard recover_steps for wasm, single persisted init (7449cbe)
+- resolve leftover conflict markers from the 21.1 cherry-pick (fe24e9a)
+
+- **app**: wire Ctrl+0 Fit Selection, keymap group counts, fmt (cefe01c)
 - **app**: crisp zoomed canvas, ellipse shape, picker colors (99f254c)
 - **app**: web theme, selection handles, image import placement (9c8f9d6)
 - **ci**: verify dist manifests from their own directory (c61883f)
@@ -201,6 +233,28 @@ Current version: **0.2.5**.
 
 ### Documentation
 
+- **release**: Phase 0 release baseline audit (#16) (af2fb3f)
+- **gaps**: correct the decision-doc count after the merge (d41bcaa)
+- **sessions**: mark the deleted aegis suppression files as superseded (270182b)
+- update current shell work and menu census (025199e)
+- update current menu inert count (9d01a8d)
+- reconcile parity roadmap menu census (5063ce3)
+- reconcile project menu status (5c64409)
+- correct live menu census (728159c)
+- correct menu census and current shell status (6af496c)
+- update live task ledger for PR branch (efddd1f)
+- reconcile handoff snapshot and menu census (14120df)
+- **agent**: align instructions, layers and task isolation (f330fd9)
+- **agent**: correct Claude Code project status and gate (f586ebc)
+- record PR remediation and verification state (5d3fa26)
+- close screenshot audit and separate chrome follow-up (397feaa)
+- identify progress snapshot as PR branch (c588a99)
+- correct shell, build and parity details (88df723)
+
+- 21.5 ledger entries (f3e4c09)
+- close 21.2 HiDPI in the ledgers (970b1bc)
+
+- CS6 parity matrix, wiki set, and CS6 UI evidence (151e2fc)
 - 19b.1 quoting corrections, v0.2.4 receipts, license consolidation (2b849f5)
 - refresh stack for the daily-driver turn (19.1-19.5 landed) (dc62449)
 - session log for 19.1-19.5 + rendering fixes; ignore scratch (da108e7)
@@ -260,6 +314,7 @@ Current version: **0.2.5**.
 
 ### Tests
 
+- **engine**: stale-id refusal tests for filter commands (fb3a92f)
 - **app**: editor gesture-surface battery — 30 tests (cbfe7eb)
 - **io**: webp dimension-mismatch + corrected format gates (cb432c4)
 - **io**: gif still-frame + gate battery (1a1b9a4)
@@ -284,11 +339,16 @@ Current version: **0.2.5**.
 
 ### Style
 
+- **xtask**: apply rustfmt to the new aegis report verb (8ada85c)
+- **xtask**: apply rustfmt to scratch-home guard (a2c9972)
+- **engine**: apply rustfmt to retouch guard tests (0c24ffe)
+- **app**: apply rustfmt to editor gesture tests (e46ca3f)
 - **lints**: adopt clippy::needless_pass_by_value (196277c)
 - **lints**: adopt clippy::doc_markdown + must_use_candidate (173f05b)
 
 ### Continuous Integration
 
+- declare least-privilege GITHUB_TOKEN permissions (#21) (57a3847)
 - **gitforge**: release job on tag push (5d83ed3)
 - retrigger after runner loss on 91c2a27 fuzz job (400773c)
 - retrigger pipeline after runner sandbox race on 8ac178d (9abc37e)
@@ -306,6 +366,7 @@ Current version: **0.2.5**.
 
 ### Chores
 
+- **release**: name releases by version alone (#22) (625eb80)
 - **release**: v0.2.5 stamps, notes, operator checklist, aegis hygiene (3a4832b)
 - **release**: v0.2.4 version stamps + changelog + notes (291d658)
 - **xtask**: ratchet coverage floors to 81.0/78.5 (6b0c46f)
@@ -329,6 +390,9 @@ Current version: **0.2.5**.
 - **gates**: close M5 — panic-hunt flag fix, floors, scorecard (a074703)
 
 ### Other
+
+- Brand refresh and README overhaul (#10) (1c7d840)
+- wip(app,web): localStorage session persistence (21.1 partial) (7014638)
 
 - Web file doors complete, dist gate verified, session close (#4) (7c82997)
 - Initial commit (498f8c9)

@@ -144,9 +144,11 @@ Following the photocraft/ArtCraft method (their AGENTS.md §3):
    trademarks of Adobe Inc.; FireCraft is an independent open-source project,
    not affiliated with, sponsored by or endorsed by Adobe Inc.; these names
    are used only to describe compatibility."
-7. **License:** the repo currently ships Apache-2.0; M0 adds **`MIT OR
-   Apache-2.0`** dual-licensing to match the wider Rust ecosystem (photocraft
-   convention), plus `NOTICE` and the trademark disclaimer.
+7. **License:** the repo ships **Apache-2.0** (SPDX `Apache-2.0`), plus
+   `NOTICE` and the trademark disclaimer. The original M0 plan added
+   `MIT OR Apache-2.0` dual-licensing to match the wider Rust ecosystem;
+   the maintainer narrowed it to Apache-2.0 alone on 2026-11-10, and the
+   MIT text was removed.
 
 The AMT/activation layer of the reference install is **out of scope
 entirely** — never analyzed as part of feature work, never reimplemented.
@@ -316,7 +318,8 @@ mandatory `SAFETY:` comments); **no `unwrap`/`expect`/`panic!`/`todo!` in
 non-test code** — input-derived numbers are hostile (`get()`, `checked_*`,
 allocation caps); every crash fix ships a regression test; **never break
 wasm** — `cargo xtask wasm` runs in every finish checklist; MSRV raised
-to **1.95** on 2026-11-09 (it was 1.85 from M0: `egui 0.36` needs 1.95
+to **1.95** on 2026-11-07 here and on 2026-11-09 upstream (it was 1.85
+from M0: `egui 0.36` needs 1.95
 and the `time ≥0.3.47` security bump needs 1.88 — CVE-2026-25727).
 Cargo's MSRV-aware resolver floors version selection on the *lowest*
 `rust-version` in the workspace, so a floor below 1.88 would silently

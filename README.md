@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="docs/img/logo.svg" alt="FireCraft fox-and-flame logo" width="112" height="112" />
+  <img src="docs/img/logo.svg" alt="FireCraft flame mark" width="112" height="112" />
   <h1>FireCraft</h1>
   <p><strong>Create. Edit. Design.</strong></p>
   <p>A modern, open-source graphics editor inspired by the workflows of Adobe Fireworks CS6.</p>
@@ -27,7 +27,7 @@ The goal is not to reproduce Adobe's code or redistribute its assets. The goal i
 
 The workspace version is 0.2.5. Development continues beyond that release: the active roadmap includes editor reachability, daily-driver canvas workflows, and a dedicated CS6-inspired shell-fidelity campaign. FireCraft is functional software under active development—not yet a feature-complete replacement for every Fireworks CS6 workflow.
 
-The current documented engine surface includes **245 registered commands** and a CS6 DOM parity matrix of **268 carried, 3 partial (evidence-gated), and 0 missing**. These figures describe the engine/DOM surface, not complete GUI parity: some commands are available through the command palette or automation surfaces before they have a corresponding menu or polished inspector workflow.
+The current documented engine surface includes **252 registered commands** and a CS6 DOM parity matrix of **268 carried, 3 partial (evidence-gated), and 0 missing**. These figures describe the engine/DOM surface, not complete GUI parity: some commands are available through the command palette or automation surfaces before they have a corresponding menu or polished inspector workflow.
 
 ### What is implemented
 
@@ -36,7 +36,7 @@ The current documented engine surface includes **245 registered commands** and a
 - **Vector editing:** paths, contours, Bézier handles, primitive shapes, boolean operations, gradients, fills, strokes, alignment, and arrangement.
 - **Bitmap editing:** paint and retouch tools, pixel-selection modes, bitmap objects, and raster composition.
 - **Canvas interaction:** transform handles, numeric transforms, path-node editing, gradient handles, guides, grid, snapping, zoom, and selection controls.
-- **Text and symbols:** text objects and rich text attributes, symbol definitions and instances, nested symbol workflows, and nine-slice guides. In-canvas text editing remains on the roadmap.
+- **Text and symbols:** text objects and rich text attributes, symbol definitions and instances, nested symbol workflows, and nine-slice guides. In-canvas text editing landed 2026-11-06.
 - **Effects:** live effects and a filter surface backed by the compositor.
 - **Automation:** a shared command registry, journal/replay, ExtendScript-compatible `.jsf` execution, headless CLI, browser `postMessage` bridge, and MCP server.
 - **Web application:** a WebAssembly build using the same editor shell and engine as the native application.
@@ -54,13 +54,30 @@ The editor is being brought closer to the Fireworks CS6 workspace rather than tr
 
 Some of these items are partially implemented or still planned. The authoritative, task-level status is maintained in [`docs/NEXT.md`](docs/NEXT.md); see its Phase 22 for the shell-fidelity campaign.
 
+## Start here
+
+- **Try the app:** [usage guide](docs/USAGE.md)
+- **See what works and what is incomplete:** [feature map](docs/FEATURES.md) · [current gaps](docs/GAPS.md)
+- **Browse all project docs:** [documentation index](docs/README.md)
+- **Current work and next tasks:** [task board](docs/TASKS.md)
+- **Contributing or handing off work:** [agent handoff](docs/HANDOFF.md) · [repository rules](AGENTS.md)
+
 ## Screenshots
 
-The image below is a repository screenshot of the application. It is a point-in-time view; consult the roadmap for current implementation status.
+The image below is a repository screenshot of the application. It is a point-in-time view; consult the roadmap for current implementation status. The capture is a 1280×800 frame of the shell with a vector object selected, taken from the optimized web bundle built on 2026-11-04. It is evidence for that build and state, not a general parity claim — see the [screenshot audit](docs/tasks/T22-screenshot-ui.md) for the captures, measurements, and their limits.
 
 <p align="center">
   <img src="docs/img/app-main.png" alt="FireCraft application workspace" width="960" />
 </p>
+
+It is a 1280×800 capture of the current shell with a vector object selected, taken from the optimized web bundle built on 2026-11-04. It is evidence for that build and state, not a general parity claim — see the [screenshot audit](docs/tasks/T22-screenshot-ui.md) for the captures, measurements, and their limits.
+
+The dark-mode preview below is a graphic mock-up of the shell — a geometric fox under edit — not a screen capture.
+
+<p align="center">
+  <img src="docs/img/app-preview-dark.png" alt="Preview graphic of the FireCraft workspace in dark mode with a vector fox illustration selected" width="960" />
+</p>
+
 
 ## Get started
 
@@ -87,23 +104,31 @@ cargo build --release -p app-cli
 cargo run -p xtask -- dist --web
 ```
 
+### Quick commands
+
+```sh
+cargo run -p xtask -- ci
+cargo run -p app-cli -- info document.fw.png
+cargo run -p app-cli -- convert input.fw.png output.fw.png
+```
+
 ### CLI examples
 
 ```sh
 # Inspect a document
-cargo run -p firecraft-cli -- info artwork.fw.png
+cargo run -p app-cli -- info artwork.fw.png
 
 # Canonically re-emit a Fireworks PNG document
-cargo run -p firecraft-cli -- convert input.fw.png output.fw.png
+cargo run -p app-cli -- convert input.fw.png output.fw.png
 
 # Export a document
-cargo run -p firecraft-cli -- export artwork.fw.png output.webp
+cargo run -p app-cli -- export artwork.fw.png output.webp
 
 # Import a raster image into a new Fireworks PNG document
-cargo run -p firecraft-cli -- import photograph.jpg new-document.fw.png
+cargo run -p app-cli -- import photograph.jpg new-document.fw.png
 
 # Start the MCP server for an existing document
-cargo run -p firecraft-cli -- mcp artwork.fw.png
+cargo run -p app-cli -- mcp artwork.fw.png
 ```
 
 See [`docs/USAGE.md`](docs/USAGE.md) for the complete CLI, GUI shortcut, browser-embedding, and MCP reference.
@@ -127,19 +152,25 @@ The GUI and automation interfaces are intended to drive the same engine commands
 | [Features](docs/FEATURES.md) | Implemented feature surface and evidence/gates |
 | [Usage](docs/USAGE.md) | Build instructions, CLI, shortcuts, browser bridge, MCP |
 | [Next / Roadmap](docs/NEXT.md) | Active phases, acceptance criteria, and open tasks |
+| [Gaps](docs/GAPS.md) | What is missing or evidence-gated, with the authority for each count |
+| [Doc index](docs/README.md) | The full documentation map |
+| [Releasing](docs/RELEASING.md) | Artifact build and deployment procedures |
 | [Progress](docs/PROGRESS.md) | Session-level status and historical progress |
 | [Planning](docs/PLANNING.md) | Product plan, file-format notes, and architecture |
 | [Handoff](docs/HANDOFF.md) | Engineering handoff and agent runbook |
+| [Gaps](docs/GAPS.md) | Current gaps and evidence-gated items |
+| [Task board](docs/TASKS.md) | Active tasks, priority, and status |
 | [Toolchains](docs/TOOLCHAINS.md) | Platform toolchains and packaging recipes |
 | [WebOS](docs/WEBOS.md) | Browser embedding contract |
 | [Attribution](docs/ATTRIBUTION.md) | Third-party asset and license ledger |
+| [Repository rules](AGENTS.md) | Clean-room policy, repository rules, and workflow |
 
 ## Brand and assets
 
-The FireCraft mark is original project artwork: a fox/flame motif representing creative energy and precision. It is not an Adobe or Fireworks asset. The mark uses an ember-orange and gold gradient on a charcoal field; the SVG is the canonical scalable logo source.
+The FireCraft mark is original project artwork: a flame drawn as vector artwork under edit — an ember-orange and gold gradient shape with the selection nodes and a Bézier handle of a live path showing on its outline, on a charcoal field. It is not an Adobe or Fireworks asset; the SVG is the canonical scalable logo source.
 
-Third-party assets must retain their license notices and be recorded in [`docs/ATTRIBUTION.md`](docs/ATTRIBUTION.md). FireCraft's source is dual-licensed under MIT OR Apache-2.0.
+Third-party assets must retain their license notices and be recorded in [`docs/ATTRIBUTION.md`](docs/ATTRIBUTION.md). FireCraft's source is licensed under Apache-2.0.
 
 ## License
 
-Dual-licensed under either the [MIT License](LICENSE) or [Apache License 2.0](LICENSE), at your option.
+Licensed under the [Apache License 2.0](LICENSE).

@@ -4,27 +4,28 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-FireCraft: a clean-room reimplementation of Adobe Fireworks CS6 in pure Rust (Apache-2.0 OR MIT), modeled on the StoryTold/ArtCraft projects (github.com/storytold — photocraft et al.). Primary release target is a **WASM build for the user's WebOS** (live at https://firecraft-web.pages.dev), plus a wide desktop/CLI release matrix. The reference application is Adobe Fireworks CS6 (v12.0).
+FireCraft: a clean-room reimplementation of Adobe Fireworks CS6 in pure Rust (Apache-2.0), modeled on the StoryTold/ArtCraft projects (github.com/storytold — photocraft et al.). Primary release target is a **WASM build for the user's WebOS** (live at https://firecraft-web.pages.dev), plus a wide desktop/CLI release matrix. The reference application is Adobe Fireworks CS6 (v12.0).
 
-**Status: M0–M15 complete; v0.2.5 in flight (stamped, gate green, release pending). The CS6 DOM verb-surface parity campaign is complete (268 C / 3 P / 0 M; registry count is point-in-time — `engine::catalog::ids()` is the live authority, 245 as of 2026-11-03). Phase 11 (image support) is complete. Active work = the daily-driver expansion (docs/NEXT.md Phases 19–21) and the CS6 shell-fidelity phase (Phase 22): the engine binds 245 commands but the shell reaches only part of them — 8 of 289 CS6 menu items still render inert (derived — `cargo test -p app inert_worklist -- --nocapture` — and gated by `menus::tests::inert_count_never_rises`; 19.6 burn-down in flight, batches 6–17 landed) — so the program is reachability and canvas competence (transform handles, path-node editing, gradient editor, command palette, guides/grid/snap, context menu — all landed 19.1–19.6 batch 1), then daily-driver features (text editing, Optimize panel, animation timeline, mask stack), the CS6 shell itself (dockable panel set, CS6 tool strip, adaptive context menus, property inspector — Phase 22), and differentiators (autosave, HiDPI). The quality ratchet (Phases 14–18: coverage to 99%, lint hardening incl. `deny(missing_docs)` on geom/color, WCAG 2.1 AAA audit, release automation) is the parallel backlog.** Start at `docs/HANDOFF.md` — it holds the state snapshot, the phased/atomic plan, and the runbooks. Read before doing anything:
+**Status (2026-11-07 PR branch):** M0–M15 and the DOM verb-surface campaign are complete. The latest tag is v0.2.5; `main` remains at the documented 5fac7a2 baseline while PR #8 carries the current shell/editor work. The registry has 245 commands. The live menu census is **2 inert rows of 296**; 8 additional rows remain feature- or evidence-gated and must not be wired without a model/reference basis. The 19.6 wiring campaign is complete. Phase 22.1 (panel inventory) and 22.2 (tool strip) are complete; 22.5 (CS6 chrome) remains partial. Phase 20 is in progress (20.1 landed); Phase 21 is queued. Use `docs/TASKS.md` for the live task ledger, `docs/NEXT.md` for phase criteria, and `docs/PROGRESS.md` for the dated snapshot. Start with `AGENTS.md`, then the live task ledger:
 
-1. `docs/HANDOFF.md` — agent handoff: state, phased plan, CI runbook, lessons (START HERE)
-2. `docs/PLANNING.md` — master plan: clean-room policy, Fireworks PNG format spec (§6), crate architecture (§7), stack decisions (§7.6), tiers, risks, method, RE tooling (§5.5), sourced research appendix
-3. `docs/PROGRESS.md` — live status board; `docs/SESSIONS.md` — session log; `docs/HISTORY.md` — arc, decisions, lessons
-4. `AGENTS.md` — day-to-day operating manual (commands, gates, commit rules)
+1. `AGENTS.md` — repository rules, clean-room policy, and workflow
+2. `docs/TASKS.md` and `docs/NEXT.md` — current work and detailed roadmap
+3. `docs/HANDOFF.md` — agent orientation and operational runbooks
+4. `docs/PLANNING.md` — format spec, architecture, and decisions
 
-Session task lists should mirror the active phase in HANDOFF.md §4. RE evidence work (Ghidra/REA over `source/` binaries) records derived specs only — raw Adobe-derived dumps stay uncommitted in scratch.
+Update `docs/TASKS.md` and its ticket as work changes. Session history belongs in `docs/SESSIONS.md`; append local details to `log/devlog.md`.
 
-The global harness commands (backend-fixed's cargo/just/local-ci) do not exist here. Once M0 creates the workspace, the project's own gate is `cargo run -p xtask -- ci` (fmt, clippy `-D warnings`, tests, layer enforcement, wasm build).
+Do not assume global Harness profiles or commands from another repository apply here. This workspace already exists; this repository's gate is `cargo run -p xtask -- ci` (formatting, clippy with `-D warnings`, tests, layer enforcement, and wasm build).
 
 ## Repository layout
 
-- `docs/HANDOFF.md` — agent handoff: state snapshot, phased/atomic plan, CI runbook
-- `docs/PROGRESS.md` — live status board · `docs/SESSIONS.md` — session log · `docs/HISTORY.md` — arc, decisions, lessons
+- `docs/README.md` — documentation map; `docs/TASKS.md` — live task ledger
+- `docs/HANDOFF.md` — agent orientation and CI runbook
+- `docs/PROGRESS.md` — dated status · `docs/SESSIONS.md` — session log · `docs/HISTORY.md` — project arc
 - `docs/PLANNING.md` — master planning document (see above)
 - `docs/planning/firecraft/` — ROADMAP.md + per-milestone tickets (objective / inputs / authority / stopping condition / verification)
 - `docs/planning/generated/` — `parity.md` / `scorecard.md` (xtask-owned) + `dom-parity.md` (CS6 verb-surface matrix; regen recipe in HANDOFF §5)
-- `docs/decisions/` — decision records 0001–0022; write one per family/batch
+- `docs/decisions/` — decision records; write one per family/batch
 - `docs/research/fireworks-png-nodes.md` — vendored MIT reverse-engineering dictionary of the Fireworks PNG node system (from davidje13/png-analyser) — the format Rosetta stone
 - `docs/ATTRIBUTION.md` — asset-attribution ledger; **add a row in the same change as any non-code asset**
 - `source/` — proprietary Adobe reference material. **Analysis input only — never commit.**

@@ -29,6 +29,7 @@ pub(crate) mod web;
 
 use crate::error::EngineError;
 use crate::registry::CommandRegistry;
+use doc::{Document, ObjectId};
 
 /// Registers the built-in catalog into `registry`.
 pub fn install(registry: &mut CommandRegistry) -> Result<(), EngineError> {
@@ -55,12 +56,46 @@ pub fn install(registry: &mut CommandRegistry) -> Result<(), EngineError> {
     style::install(registry)
 }
 
+/// The element-mask state of `id`: `Some(true)` when `id` carries an
+/// enabled element mask, `Some(false)` when the mask is present but
+/// disabled, `None` when `id` carries no element mask.
+///
+/// The mask family's read side. CS6's Modify ▸ Mask enable/disable is
+/// one row whose visible label flips with the mask's state, so a
+/// shell needs to read the state to render that row and to pick the
+/// direction of the toggle.
+#[must_use]
+pub fn element_mask_state(document: &Document, id: ObjectId) -> Option<bool> {
+    mask::element_mask_state(document, id)
+}
+
 /// Every registered built-in, sorted (surfaces enumerate this).
 #[must_use]
 pub fn ids() -> Vec<&'static str> {
     let mut registry = CommandRegistry::new();
     let _ = install(&mut registry);
     registry.names()
+}
+
+/// The session-scoped command ids, sorted.
+///
+/// These are *not* in [`ids`]: they act on the session's undo
+/// history rather than on the document, so the registry cannot own
+/// them. A surface that enumerates commands (the command palette, the
+/// CLI, the MCP bridge) offers both lists.
+#[must_use]
+pub fn session_ids() -> Vec<&'static str> {
+    vec![crate::session::REWIND_ID]
+}
+
+/// Every command a surface can run: the registry catalog plus the
+/// session-scoped ids, sorted.
+#[must_use]
+pub fn all_ids() -> Vec<&'static str> {
+    let mut ids = ids();
+    ids.extend(session_ids());
+    ids.sort_unstable();
+    ids
 }
 
 /// Unit-test fixture shared by the catalog modules: two pages, two

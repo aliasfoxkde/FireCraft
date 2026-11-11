@@ -28,6 +28,17 @@ pub trait FileSystem {
             detail: "directory listing is not supported by this file system".to_owned(),
         })
     }
+
+    /// Removes a file. The default refuses, mirroring [`FileSystem::read_dir`]:
+    /// surfaces without deletion (wasm browser storage) report it as
+    /// an I/O error.
+    fn remove_file(&self, path: &str) -> Result<(), crate::EngineError> {
+        let _ = path;
+        Err(crate::EngineError::Io {
+            path: path.to_owned(),
+            detail: "file removal is not supported by this file system".to_owned(),
+        })
+    }
 }
 
 /// Open/save dialogs and user messages.
@@ -108,5 +119,16 @@ impl FileSystem for MemoryFs {
 
     fn exists(&self, path: &str) -> bool {
         self.files.borrow().contains_key(path)
+    }
+
+    fn remove_file(&self, path: &str) -> Result<(), crate::EngineError> {
+        self.files
+            .borrow_mut()
+            .remove(path)
+            .map(|_| ())
+            .ok_or_else(|| crate::EngineError::Io {
+                path: path.to_owned(),
+                detail: "no such file".to_owned(),
+            })
     }
 }

@@ -23,59 +23,38 @@ impl Shell {
             })
     }
 
-    /// The CS6 tool strip: vertical, grouped, glyph buttons painted
-    /// with `Painter` primitives (original art, never the Adobe icons).
+    /// The CS6 tool strip: a single column of the six CS6 categories
+    /// — Select, Bitmap, Vector, Web, Colors, View — in CS6's order.
     ///
-    /// CS6 groups the tools into flyouts — a group leader button
-    /// carries a small arrow, and press-and-hold (or a secondary
-    /// click) opens the group's tools. The groups here follow CS6's
-    /// own grouping.
+    /// The order and the groups live in [`crate::toolstrip`]. A group
+    /// leader carries CS6's corner triangle, and press-and-hold (or a
+    /// secondary click) opens the group's pop-up, exactly as the help
+    /// set describes: "Click the tool icon and hold down the mouse
+    /// button. Drag the pointer to highlight the tool you want, and
+    /// release the mouse button."
     pub(super) fn tools_panel(&mut self, ui: &mut egui::Ui) {
-        let groups: &[(&str, &[Tool])] = &[
-            ("Select", &[Tool::Pointer, Tool::Subselect]),
-            (
-                "Shape",
-                &[Tool::Rect, Tool::Ellipse, Tool::Line, Tool::Text],
-            ),
-            (
-                "Draw",
-                &[
-                    Tool::Paintbrush,
-                    Tool::Pencil,
-                    Tool::Eraser,
-                    Tool::PaintBucket,
-                    Tool::Gradient,
-                    Tool::Eyedropper,
-                ],
-            ),
-            (
-                "Marquee",
-                &[
-                    Tool::Marquee,
-                    Tool::EllipticalMarquee,
-                    Tool::Lasso,
-                    Tool::PolygonalMarquee,
-                    Tool::MagicWand,
-                ],
-            ),
-            ("Web", &[Tool::Slice, Tool::Hotspot]),
-            ("View", &[Tool::Zoom, Tool::Hand]),
-        ];
         ui.add_space(4.0);
-        for (index, (name, group)) in groups.iter().enumerate() {
+        for (index, category) in toolstrip::CATEGORIES.iter().enumerate() {
             if index > 0 {
                 ui.separator();
             }
-            for (position, tool) in group.iter().enumerate() {
-                // The group leader carries the flyout arrow.
-                let leader = position == 0 && group.len() > 1;
-                let response = self.tool_button(ui, *tool, leader);
-                if !leader {
+            for group in category.groups {
+                let leader = group.leader();
+                if toolstrip::is_panel_button(leader.tool) {
+                    // CS6's Colors section buttons, the Hide/Show
+                    // Slices control and the screen-mode control act
+                    // when clicked; they never become the tool.
+                    self.panel_button(ui, leader.tool);
                     continue;
                 }
+                let response = self.tool_button(ui, leader.tool, group.is_flyout());
+                if !group.is_flyout() {
+                    continue;
+                }
+                let tools: Vec<Tool> = group.tools.iter().map(|entry| entry.tool).collect();
                 if response.secondary_clicked() {
                     if let Some(pos) = response.interact_pointer_pos() {
-                        self.tool_flyout = Some((*name, group.to_vec(), pos));
+                        self.tool_flyout = Some((category.name, tools, pos));
                         self.tool_press = None;
                     }
                     continue;
@@ -87,7 +66,7 @@ impl Shell {
                 match self.tool_press {
                     Some(_) if !holding => self.tool_press = None,
                     Some(press) if hold_opens_flyout(now - press.at) => {
-                        self.tool_flyout = Some((*name, group.to_vec(), press.pos));
+                        self.tool_flyout = Some((category.name, tools, press.pos));
                         self.tool_press = None;
                     }
                     Some(_) => {}
@@ -99,10 +78,98 @@ impl Shell {
                     None => {}
                 }
             }
+            if category.auto_shapes {
+                // The Vector section's pop-up: CS6's Auto Shapes.
+                self.autoshape_button(ui);
+            }
+            if category.name == "Colors" {
+                // CS6's Colors section carries the stroke and fill
+                // color boxes under the tools.
+                self.colors_boxes(ui);
+            }
         }
-        ui.separator();
-        self.autoshape_button(ui);
         self.tool_flyout_ui(ui);
+    }
+
+    /// CS6's panel buttons — the Colors section's three controls, the
+    /// Hide/Show Slices control and the screen-mode control. They act
+    /// when clicked; they never become the active tool.
+    fn panel_button(&mut self, ui: &mut egui::Ui, tool: Tool) {
+        let (rect, response) = ui.allocate_exact_size(egui::Vec2::splat(26.0), Sense::click());
+        if response.clicked() {
+            self.run_panel_button(tool);
+        }
+        let painter = ui.painter();
+        if response.hovered() {
+            painter.rect_filled(rect, 2.0, Color32::from_rgb(0x4a, 0x4a, 0x4a));
+        }
+        icons::paint(
+            ui,
+            rect,
+            icons::tool_icon(tool),
+            17.0,
+            Color32::from_rgb(0xc4, 0xc4, 0xc4),
+        );
+        response.on_hover_text(tool_label(tool));
+    }
+
+    /// What CS6's panel buttons do.
+    /// User picked a tool (leader button or flyout row): an open
+    /// text-edit session commits first — CS6 commits the type edit
+    /// when you leave the Text tool.
+    pub(super) fn pick_tool(&mut self, tool: Tool) {
+        self.commit_text_edit();
+        self.editor.tool = tool;
+        self.status = format!("tool: {}", tool_label(tool));
+    }
+
+    pub(super) fn run_panel_button(&mut self, tool: Tool) {
+        let outcome = match tool {
+            Tool::DefaultStrokeFill => {
+                let (fill, stroke) = (self.editor.fill_color, self.editor.stroke_color);
+                self.editor.apply_default_stroke_fill(fill, stroke)
+            }
+            Tool::SwapStrokeFill => self.editor.swap_stroke_fill(),
+            Tool::NoStrokeFill => self.editor.clear_stroke_fill(),
+            Tool::HideShowSlices => self.editor.toggle_web_objects(),
+            Tool::ToggleScreenMode => {
+                // CS6's screen-mode control cycles the three view
+                // modes (fwref 1178–1185); the layout reads the mode
+                // each frame.
+                self.run_shell(menus::ShellAction::CycleScreenMode);
+                return;
+            }
+            _ => return,
+        };
+        match outcome {
+            Ok(true) => self.status = format!("{}: done", tool_label(tool)),
+            Ok(false) => self.status = format!("{}: nothing to do", tool_label(tool)),
+            Err(error) => self.status = format!("{} failed: {error}", tool_label(tool)),
+        }
+    }
+
+    /// CS6's Colors section color boxes: "In the Colors section of
+    /// the Tools panel, click the icon to the left of the Stroke
+    /// Color or Fill Color box."
+    fn colors_boxes(&mut self, ui: &mut egui::Ui) {
+        for channel in ["stroke", "fill"] {
+            let color = if channel == "stroke" {
+                self.editor.stroke_color
+            } else {
+                self.editor.fill_color
+            };
+            let mut rgba = Color32::from_rgba_unmultiplied(color[0], color[1], color[2], color[3]);
+            let response = ui.color_edit_button_srgba(&mut rgba);
+            if response.changed() {
+                let updated = [rgba.r(), rgba.g(), rgba.b(), rgba.a()];
+                if channel == "stroke" {
+                    self.editor.stroke_color = updated;
+                } else {
+                    self.editor.fill_color = updated;
+                }
+            }
+            response.on_hover_text(format!("{channel} color"));
+        }
     }
 
     /// The open tool flyout: CS6's press-and-hold tool list.
@@ -131,9 +198,7 @@ impl Shell {
                 }
             });
         if let Some(tool) = picked {
-            self.editor.tool = tool;
-            self.status = format!("tool: {}", tool_label(tool));
-            open = false;
+            self.pick_tool(tool);
         }
         // `open_bool` writes `false` back when the popup's close
         // behavior fires; either way the flyout is done once closed.
@@ -154,8 +219,7 @@ impl Shell {
         let (rect, response) = ui.allocate_exact_size(egui::Vec2::splat(26.0), Sense::click());
         let active = self.editor.tool == tool;
         if response.clicked() {
-            self.editor.tool = tool;
-            self.status = format!("tool: {}", tool_label(tool));
+            self.pick_tool(tool);
         }
         // CS6's tool-button double-clicks: Zoom resets to 100%, Hand
         // fits the page in the window.
@@ -350,6 +414,10 @@ impl Shell {
         // switches to the temporary Hand (the CS6 space-drag pan). While
         // a pan drag is actively moving, the cursor closes (Grabbing).
         let space_held = ui.input(|input| input.key_down(egui::Key::Space));
+        // Alt held this frame — the CS6 Alt-hold retouch swap reads it
+        // at the dab edge (editor.paint_dab); the active tool itself
+        // never changes.
+        self.editor.alt_held = ui.input(|input| input.modifiers.alt);
         let pan_dragging = space_held && response.dragged();
         let cursor = if pan_dragging {
             egui::CursorIcon::Grabbing
@@ -358,24 +426,55 @@ impl Shell {
         } else {
             match self.editor.tool {
                 Tool::Pointer | Tool::Subselect => egui::CursorIcon::Default,
-                Tool::Rect | Tool::Ellipse | Tool::Line | Tool::Slice | Tool::Hotspot => {
-                    egui::CursorIcon::Crosshair
-                }
                 Tool::Text => egui::CursorIcon::Text,
                 Tool::Zoom => egui::CursorIcon::ZoomIn,
                 Tool::Hand => egui::CursorIcon::Grab,
-                Tool::AutoShape(_) => egui::CursorIcon::Crosshair,
-                Tool::Paintbrush
+                // CS6's panel buttons, not canvas tools: the pointer
+                // keeps the arrow over the artwork.
+                Tool::HideShowSlices
+                | Tool::DefaultStrokeFill
+                | Tool::SwapStrokeFill
+                | Tool::NoStrokeFill
+                | Tool::ToggleScreenMode => egui::CursorIcon::Default,
+                Tool::Rect
+                | Tool::Ellipse
+                | Tool::Line
+                | Tool::Scale
+                | Tool::Skew
+                | Tool::Distort
+                | Tool::Crop
+                | Tool::Slice
+                | Tool::Hotspot
+                | Tool::AutoShape(_)
+                | Tool::Paintbrush
                 | Tool::Pencil
                 | Tool::Eraser
                 | Tool::PaintBucket
                 | Tool::Gradient
-                | Tool::Eyedropper => egui::CursorIcon::Crosshair,
-                Tool::Marquee
+                | Tool::Eyedropper
+                | Tool::Marquee
                 | Tool::EllipticalMarquee
                 | Tool::Lasso
                 | Tool::PolygonalMarquee
-                | Tool::MagicWand => egui::CursorIcon::Crosshair,
+                | Tool::MagicWand
+                | Tool::SelectSimilar
+                | Tool::Blur
+                | Tool::Sharpen
+                | Tool::Smudge
+                | Tool::Dodge
+                | Tool::Burn
+                | Tool::RubberStamp
+                | Tool::RedEyeRemoval
+                | Tool::ReplaceColor
+                | Tool::Pen
+                | Tool::VectorPath
+                | Tool::RedrawPath
+                | Tool::Freeform
+                | Tool::ReshapeArea
+                | Tool::Knife
+                | Tool::PolygonSlice
+                | Tool::PolygonHotspot
+                | Tool::CircleHotspot => egui::CursorIcon::Crosshair,
             }
         };
         let response = response.on_hover_cursor(cursor);
@@ -399,7 +498,7 @@ impl Shell {
         // zoom moved off the cached render scale. The raster renders
         // at a multiple of the document resolution so the view blits
         // it near 1:1 instead of linear-filtering a 1× raster (the
-        // always-1× blur). Scale clamps to a 16 MPix budget so deep
+        // always-1× blur). Scale clamps to a 16-MiPix budget so deep
         // zoom on a large page stays sane.
         let page = self
             .editor
@@ -407,22 +506,24 @@ impl Shell {
             .pages
             .get(self.editor.page)
             .map(|p| (p.info.canvas.width.round(), p.info.canvas.height.round()));
-        let desired_scale = {
-            let (pw, ph) = page.unwrap_or((1.0, 1.0));
-            let zoom = f64::from(self.view.zoom);
-            let budget = 16.0 * 1024.0 * 1024.0;
-            let max_scale = (budget / (pw * ph).max(1.0)).sqrt();
-            zoom.min(max_scale.max(1.0))
-        };
-        // Between buckets (within 2× of the cached scale) the existing
-        // texture stays crisp enough; a crossing re-renders.
+        // HiDPI (21.2): egui sizes in points, but the blit's pixels are
+        // device pixels — at `pixels_per_point` 2 a zoom-scale raster
+        // has half the resolution the screen can show. Render in device
+        // pixels: the scale rides ``zoom` × `pixels_per_point`` under the
+        // same 16-MiPix budget. The world-size math below divides the
+        // texture by this same scale, so the geometry is unchanged; only
+        // the texture's resolution rises.
+        let device_ppp = ui.ctx().pixels_per_point();
+        let (pw0, ph0) = page.unwrap_or((1.0, 1.0));
+        let desired_scale = render_scale(pw0, ph0, self.view.zoom, device_ppp);
+        let at_one = render_at_one(desired_scale, device_ppp);
         let stale_scale =
             (desired_scale / self.raster_scale) > 2.0 || (self.raster_scale / desired_scale) > 2.0;
         let stamp = self.stamp();
         let texture = match &self.raster {
             Some((texture, made)) if *made == stamp && !stale_scale => texture.clone(),
             _ => {
-                let result = if (desired_scale - 1.0).abs() < 0.05 {
+                let result = if at_one {
                     compose::render(self.editor.document(), self.editor.page, self.editor.frame)
                 } else {
                     compose::render_scaled(
@@ -440,11 +541,7 @@ impl Shell {
                         );
                         let texture = ui.ctx().load_texture("page", image, TextureOptions::LINEAR);
                         self.raster = Some((texture.clone(), stamp));
-                        self.raster_scale = if (desired_scale - 1.0).abs() < 0.05 {
-                            1.0
-                        } else {
-                            desired_scale
-                        };
+                        self.raster_scale = if at_one { 1.0 } else { desired_scale };
                         texture
                     }
                     Err(error) => {
@@ -464,8 +561,11 @@ impl Shell {
         };
 
         // Checker-dark backdrop, then the page texture through the view.
+        // The backdrop behind the page: the shell's usual dark matte,
+        // or CS6's gray/black in the two Full Screen modes (fwref
+        // 1181–1184).
         ui.painter()
-            .rect_filled(rect, 0.0, Color32::from_rgb(32, 32, 32));
+            .rect_filled(rect, 0.0, self.screen_mode.backdrop());
         // The raster may have been rendered at `raster_scale`, so its
         // world size is texture_size / scale, not texture_size.
         let world_w = texture.size()[0] as f64 / self.raster_scale;
@@ -853,9 +953,25 @@ impl Shell {
                         }
                     } else if !space_held {
                         match self.editor.tool {
-                            Tool::Paintbrush | Tool::Pencil | Tool::Eraser | Tool::Gradient => {
+                            Tool::Paintbrush
+                            | Tool::Pencil
+                            | Tool::Eraser
+                            | Tool::Gradient
+                            | Tool::Blur
+                            | Tool::Sharpen
+                            | Tool::Smudge
+                            | Tool::Dodge
+                            | Tool::Burn
+                            | Tool::RubberStamp
+                            | Tool::RedEyeRemoval
+                            | Tool::ReplaceColor => {
                                 // A paint stroke: the dabs land on
-                                // the image under the pointer.
+                                // the image under the pointer. The
+                                // retouch tools are brush dabs too
+                                // — CS6's Blur, Sharpen, Smudge,
+                                // Dodge, Burn, Rubber Stamp, Red-eye
+                                // Removal and Replace Color all
+                                // paint through the brush.
                                 if let Err(error) = self.editor.begin_stroke(world) {
                                     self.status = format!("paint failed: {error}");
                                 }
@@ -918,6 +1034,33 @@ impl Shell {
                             Tool::PolygonalMarquee => {
                                 // The polygon's vertices are
                                 // clicks, not a drag.
+                            }
+                            Tool::Pen
+                            | Tool::VectorPath
+                            | Tool::PolygonSlice
+                            | Tool::PolygonHotspot => {
+                                // CS6 plots these with clicks:
+                                // the Pen's vertices, the vector
+                                // path's nodes, the polygon's
+                                // points.
+                            }
+                            Tool::SelectSimilar | Tool::Knife => {
+                                // Click-only tools: the press
+                                // itself is the whole gesture.
+                            }
+                            Tool::Text
+                                if self.editor.hit_at(world).is_some_and(|id| {
+                                    matches!(
+                                        self.editor.document().registry.get(id),
+                                        Some(doc::ObjectData::Text(_))
+                                    )
+                                }) =>
+                            {
+                                // A press on a text object edits it
+                                // in place (20.1) — the release
+                                // click opens the editor; a drag
+                                // here must not also stamp a new
+                                // frame.
                             }
                             _ => self.editor.begin_drag(world),
                         }
@@ -1073,6 +1216,52 @@ impl Shell {
                         self.status = format!("polygon failed: {error}");
                     }
                 }
+                Tool::SelectSimilar => {
+                    // CS6's Select Similar: the click seeds the
+                    // selection and every similarly colored pixel
+                    // joins it.
+                    let world = self.view.to_world(local);
+                    let tolerance = self.editor.wand_tolerance;
+                    if let Err(error) = self.editor.select_similar_at(world, tolerance) {
+                        self.status = format!("select similar failed: {error}");
+                    }
+                }
+                Tool::Knife => {
+                    // CS6's Knife: the click cuts the path under
+                    // the pointer into pieces.
+                    let world = self.view.to_world(local);
+                    if let Err(error) = self.editor.knife_at(world) {
+                        self.status = format!("knife failed: {error}");
+                    }
+                }
+                Tool::Pen | Tool::PolygonSlice | Tool::PolygonHotspot => {
+                    // CS6 plots these with clicks: one click, one
+                    // vector point.
+                    let world = self.view.to_world(local);
+                    self.editor.add_draft_point(world);
+                    self.status = format!(
+                        "point {} plotted",
+                        self.editor
+                            .draft
+                            .as_ref()
+                            .map_or(0, |draft| draft.points.len())
+                    );
+                }
+                Tool::VectorPath => {
+                    // CS6's Vector Path: the click grabs the node
+                    // under the pointer and drags it.
+                    let world = self.view.to_world(local);
+                    let grabbed = self.editor.selected_live().and_then(|id| {
+                        self.editor
+                            .node_at(world, f64::from(6.0 / self.view.zoom))
+                            .map(|(contour, point)| (id, contour, point))
+                    });
+                    if let Some((id, contour, point)) = grabbed
+                        && let Err(error) = self.editor.begin_node_drag(id, contour, point, world)
+                    {
+                        self.status = format!("reshape failed: {error}");
+                    }
+                }
                 Tool::Zoom => {
                     let factor = if ui.input(|i| i.modifiers.alt) {
                         1.0 / 1.25
@@ -1080,6 +1269,20 @@ impl Shell {
                         1.25
                     };
                     self.view.zoom_about(local, factor);
+                }
+                Tool::Text => {
+                    // CS6: a Text-tool click on an existing text
+                    // object enters in-canvas editing instead of
+                    // stamping a new empty frame (20.1).
+                    let world = self.view.to_world(local);
+                    if let Some(id) = self.editor.hit_at(world)
+                        && matches!(
+                            self.editor.document().registry.get(id),
+                            Some(doc::ObjectData::Text(_))
+                        )
+                    {
+                        self.begin_text_edit(id);
+                    }
                 }
                 _ => {}
             }
@@ -1098,7 +1301,9 @@ impl Shell {
                     .get(id)
                     .map(|data| (id, data))
             });
-            if let Some((_id, ObjectData::SymbolInstance(instance))) = entered {
+            if let Some((id, ObjectData::Text(_))) = entered {
+                self.begin_text_edit(id);
+            } else if let Some((_id, ObjectData::SymbolInstance(instance))) = entered {
                 let number = instance.symbol_number;
                 match self.editor.enter_symbol(number) {
                     Ok(()) => self.status = format!("editing symbol {number}"),
@@ -1180,6 +1385,66 @@ impl Shell {
                     .zoom_about(anchor, if scroll > 0.0 { 1.1 } else { 1.0 / 1.1 });
             }
         }
+
+        // In-canvas text editing (20.1): the overlay TextEdit sits on
+        // the object's frame. Esc cancels; any other commit path
+        // (click-away, tool switch) goes through `commit_text_edit`.
+        if self.text_edit.is_some() {
+            let esc = ui.input(|i| i.key_pressed(egui::Key::Escape));
+            if esc {
+                self.cancel_text_edit();
+            } else {
+                self.text_edit_overlay(ui, rect);
+            }
+        }
+    }
+
+    /// The in-canvas text-edit overlay (20.1): a frameless, opaque
+    /// `TextEdit` pinned to the text object's frame in canvas space,
+    /// sized to fit the live buffer. Request focus so typing lands in
+    /// it immediately; losing focus (a click elsewhere) commits.
+    fn text_edit_overlay(&mut self, ui: &mut egui::Ui, canvas_rect: Rect) {
+        let Some(edit) = self.text_edit.clone() else {
+            return;
+        };
+        let Some(doc::ObjectData::Text(text)) = self.editor.document().registry.get(edit.id) else {
+            // The object vanished (undo, delete) — close the editor.
+            self.text_edit = None;
+            return;
+        };
+        let frame = text.frame;
+        let min = self.screen_of(geom::Point::new(frame.x0, frame.y0));
+        let size = egui::vec2(
+            ((frame.x1 - frame.x0) * f64::from(self.view.zoom)).max(60.0) as f32,
+            ((frame.y1 - frame.y0) * f64::from(self.view.zoom)).max(24.0) as f32,
+        );
+        let screen = Rect::from_min_size(min, size);
+        if !screen.intersects(canvas_rect) {
+            return;
+        }
+        let editor_id = egui::Id::new(("text_edit", edit.id));
+        let mut buffer = edit.buffer;
+        ui.allocate_rect(screen, egui::Sense::hover());
+        egui::Area::new(editor_id)
+            .fixed_pos(screen.min)
+            .order(egui::Order::Foreground)
+            .show(ui.ctx(), |ui| {
+                let response = egui::TextEdit::multiline(&mut buffer)
+                    .id(editor_id)
+                    .desired_width(size.x)
+                    .desired_rows(1)
+                    .frame(egui::Frame::NONE)
+                    .show(ui);
+                if response.response.changed()
+                    && let Some(edit) = self.text_edit.as_mut()
+                {
+                    edit.buffer = buffer.clone();
+                }
+                if response.response.lost_focus() {
+                    self.commit_text_edit();
+                }
+            });
+        ui.memory_mut(|memory| memory.request_focus(editor_id));
     }
 
     /// The CS6 context options bar under the menu: the active tool's
@@ -1261,6 +1526,24 @@ impl Shell {
 }
 
 /// One row of the canvas popup.
+/// The raster render scale (21.2): ``zoom` × `pixels_per_point``, clamped
+/// to the 16-MiPix budget against the page size, so the blit has one
+/// texture pixel per device pixel at any zoom on any display. A pure
+/// function of (page, zoom, ppp) — the frame loop calls it, tests
+/// call it directly.
+pub(crate) fn render_scale(pw: f64, ph: f64, zoom: f32, pixels_per_point: f32) -> f64 {
+    let budget = 16.0 * 1024.0 * 1024.0;
+    let max_scale = (budget / (pw * ph).max(1.0)).sqrt();
+    (f64::from(zoom) * f64::from(pixels_per_point)).min(max_scale.max(1.0))
+}
+
+/// `true` when the unscaled 1× render path is correct: only at 100%
+/// zoom on a 1× display — a hidpi screen at 100% zoom wants the
+/// scaled render (2 device pixels per document pixel).
+pub(crate) fn render_at_one(scale: f64, pixels_per_point: f32) -> bool {
+    (scale - 1.0).abs() < 0.05 && pixels_per_point <= 1.05
+}
+
 pub(crate) struct ContextRow {
     /// The row's label, with the CS6 accelerator suffix.
     pub(crate) label: String,

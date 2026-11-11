@@ -464,7 +464,7 @@ mod tests {
     use super::super::testdoc;
     use super::*;
     use crate::command::Command;
-    use doc::SliceObject;
+    use doc::{GroupObject, ImageObject, SliceObject, TextObject};
     use serde_json::json;
 
     #[test]
@@ -897,6 +897,206 @@ mod tests {
             before,
             "undo is byte-exact"
         );
+    }
+
+    #[test]
+    fn remove_and_setparam_reject_out_of_range_slots() {
+        let (mut document, ids) = testdoc::sample_document();
+        let id = ids[0];
+        // An empty stack: slot 0 is already out of range.
+        let error = RemoveFilter
+            .apply_json(&mut document, json!({ "id": id, "index": 0 }))
+            .unwrap_err();
+        assert!(matches!(error, EngineError::InvalidState { .. }));
+        // One effect: its own slot is valid, len is not.
+        AddFilter
+            .apply_json(&mut document, json!({ "id": id, "name": "invert" }))
+            .unwrap();
+        let error = RemoveFilter
+            .apply_json(&mut document, json!({ "id": id, "index": 1 }))
+            .unwrap_err();
+        assert!(error.to_string().contains("out of range"));
+        let error = SetFilterParam
+            .apply_json(
+                &mut document,
+                json!({ "id": id, "index": 1, "key": "k", "value": "v" }),
+            )
+            .unwrap_err();
+        assert!(matches!(error, EngineError::InvalidState { .. }));
+        // Countercases: the in-range slot removes and sets.
+        RemoveFilter
+            .apply_json(&mut document, json!({ "id": id, "index": 0 }))
+            .unwrap();
+        AddFilter
+            .apply_json(&mut document, json!({ "id": id, "name": "invert" }))
+            .unwrap();
+        SetFilterParam
+            .apply_json(
+                &mut document,
+                json!({ "id": id, "index": 0, "key": "brightness", "value": "10" }),
+            )
+            .unwrap();
+        let ObjectData::Path(path) = document.registry.get(id).unwrap() else {
+            panic!("wrong kind");
+        };
+        assert_eq!(path.effects.len(), 1);
+        assert_eq!(path.effects[0].properties[0].key, "brightness");
+    }
+
+    #[test]
+    fn setparam_rejects_an_empty_key() {
+        let (mut document, ids) = testdoc::sample_document();
+        let id = ids[0];
+        AddFilter
+            .apply_json(&mut document, json!({ "id": id, "name": "invert" }))
+            .unwrap();
+        let before = serde_json::to_vec(&document).unwrap();
+        let error = SetFilterParam
+            .apply_json(
+                &mut document,
+                json!({ "id": id, "index": 0, "key": "", "value": "v" }),
+            )
+            .unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("parameter keys must be non-empty")
+        );
+        assert_eq!(
+            serde_json::to_vec(&document).unwrap(),
+            before,
+            "the refused write leaves the document untouched"
+        );
+        // Countercase: the same slot with a real key lands.
+        SetFilterParam
+            .apply_json(
+                &mut document,
+                json!({ "id": id, "index": 0, "key": "brightness", "value": "10" }),
+            )
+            .unwrap();
+    }
+
+    #[test]
+    fn stale_ids_are_missing_target() {
+        let (mut document, ids) = testdoc::sample_document();
+        let id = ids[0];
+        AddFilter
+            .apply_json(&mut document, json!({ "id": id, "name": "invert" }))
+            .unwrap();
+        // Forged generation: the slot exists but the handle is stale.
+        let stale = ObjectId::from_parts(id.index() as u32, id.generation() + 1);
+        let payloads = [
+            json!({ "id": stale, "name": "x" }),
+            json!({ "id": stale, "index": 0 }),
+            json!({ "id": stale, "index": 0, "key": "k", "value": "v" }),
+        ];
+        for payload in payloads {
+            let error = match payload["name"].is_null() {
+                false => AddFilter
+                    .apply_json(&mut document, payload.clone())
+                    .unwrap_err(),
+                true => match payload["key"].is_null() {
+                    false => SetFilterParam
+                        .apply_json(&mut document, payload.clone())
+                        .unwrap_err(),
+                    true => RemoveFilter
+                        .apply_json(&mut document, payload.clone())
+                        .unwrap_err(),
+                },
+            };
+            // All three collapse into `InvalidState`, but the wording
+            // differs: add reports the missing spine; remove/setParam
+            // swallow the access error and report the slot as out of
+            // range.
+            assert!(matches!(error, EngineError::InvalidState { .. }), "{error}");
+            if payload["name"].is_null() {
+                assert!(error.to_string().contains("out of range"), "{error}");
+            } else {
+                assert!(
+                    error.to_string().contains("does not carry an effect list"),
+                    "{error}"
+                );
+            }
+        }
+        // Countercase: the live id still dispatches.
+        SetFilterParam
+            .apply_json(
+                &mut document,
+                json!({ "id": id, "index": 0, "key": "brightness", "value": "10" }),
+            )
+            .unwrap();
+    }
+
+    #[test]
+    fn every_spine_kind_accepts_effects() {
+        // The countercase to `kinds_without_a_spine_are_invalid_state`:
+        // text, group, and image each carry an `EFLv` spine and take
+        // the same commands.
+        let (mut document, ids) = testdoc::sample_document();
+        let path = ids[0];
+        let text = document.registry.insert(ObjectData::Text(TextObject {
+            frame: geom::Rect::new(0.0, 0.0, 10.0, 4.0),
+            style: None,
+            runs: Vec::new(),
+            flow: None,
+            on_path: None,
+            anti_alias: None,
+            anti_alias_sharpness: None,
+            anti_alias_strength: None,
+            anti_alias_oversample: None,
+            auto_enlarge: None,
+            auto_kern: None,
+            name: None,
+            opacity: 1000,
+            blend: 0,
+            visible: true,
+            locked: false,
+            transform: None,
+            effects: Vec::new(),
+        }));
+        let group = document.registry.insert(ObjectData::Group(GroupObject {
+            group_type: 0,
+            name: None,
+            children: Vec::new(),
+            opacity: 1000,
+            blend: 0,
+            visible: true,
+            locked: false,
+            mask_hidden: false,
+            mask_linked: None,
+            effects: Vec::new(),
+        }));
+        let image = document.registry.insert(ObjectData::Image(ImageObject {
+            location: geom::Point::ZERO,
+            offset: geom::Point::ZERO,
+            pixels: (4, 4),
+            tile_size: 128,
+            tiles: Vec::new(),
+            name: None,
+            opacity: 1000,
+            blend: 0,
+            visible: true,
+            locked: false,
+            effects: Vec::new(),
+        }));
+        for id in [path, text, group, image] {
+            AddFilter
+                .apply_json(&mut document, json!({ "id": id, "name": "invert" }))
+                .unwrap();
+            SetFilterParam
+                .apply_json(
+                    &mut document,
+                    json!({ "id": id, "index": 0, "key": "brightness", "value": "5" }),
+                )
+                .unwrap();
+            let effects =
+                with_effects(&mut document, id, |effects| effects.clone()).expect("spine kind");
+            assert_eq!(effects.len(), 1, "kind at {}", id.index());
+            assert_eq!(effects[0].properties[0].key, "brightness");
+            RemoveFilter
+                .apply_json(&mut document, json!({ "id": id, "index": 0 }))
+                .unwrap();
+        }
     }
 
     #[test]

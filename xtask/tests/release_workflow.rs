@@ -165,7 +165,7 @@ fn write_release_tree(sandbox: &Sandbox) {
     sandbox.write("src/native/firecraft_0.2.5_amd64.deb", "deb");
     sandbox.write("src/native/MANIFEST.sha256", "manifest");
     sandbox.write("src/firecraft-web-0.2.5.zip", "web");
-    sandbox.write("src/source/FireCraft-0.2.5-source.tar.gz", "source");
+    sandbox.write("src/source/firecraft-0.2.5-source.tar.gz", "source");
     sandbox.write("src/sbom/firecraft-0.2.5-sbom.cdx.json", "sbom");
     sandbox.write("src/RELEASE_SHA256.txt", "checksums");
 }
@@ -186,12 +186,17 @@ fn stage_flattens_the_artifact_tree_into_the_release_asset_set() {
     // directory is what both `sha256sum -c` and the release step read.
     assert_eq!(
         sandbox.dir_names("flat"),
+        // The basenames sort byte-wise, so the capitalised names come
+        // first and the lowercase names follow. The source archive used
+        // to be named `FireCraft-<v>-source.tar.gz`, whose capital `F`
+        // sorted ahead of `MANIFEST`; the lowercase rename moved it
+        // between the `-sbom` and `-cli` archives.
         vec![
-            "FireCraft-0.2.5-source.tar.gz".to_string(),
             "MANIFEST.sha256".to_string(),
             "RELEASE_SHA256.txt".to_string(),
             "firecraft-0.2.5-linux-x86_64.tar.gz".to_string(),
             "firecraft-0.2.5-sbom.cdx.json".to_string(),
+            "firecraft-0.2.5-source.tar.gz".to_string(),
             "firecraft-cli-0.2.5-linux-x86_64.tar.gz".to_string(),
             "firecraft-web-0.2.5.zip".to_string(),
             "firecraft_0.2.5_amd64.deb".to_string(),
@@ -213,7 +218,7 @@ fn stage_flattens_the_artifact_tree_into_the_release_asset_set() {
             "flat/firecraft-cli-0.2.5-linux-x86_64.tar.gz".to_string(),
             "flat/firecraft_0.2.5_amd64.deb".to_string(),
             "flat/firecraft-0.2.5-sbom.cdx.json".to_string(),
-            "flat/FireCraft-0.2.5-source.tar.gz".to_string(),
+            "flat/firecraft-0.2.5-source.tar.gz".to_string(),
         ]
     );
 }
@@ -264,7 +269,7 @@ fn create_passes_the_assets_positionally_to_gh_release_create() {
         "flat/firecraft-cli-0.2.5-linux-x86_64.tar.gz".to_string(),
         "flat/firecraft_0.2.5_amd64.deb".to_string(),
         "flat/firecraft-0.2.5-sbom.cdx.json".to_string(),
-        "flat/FireCraft-0.2.5-source.tar.gz".to_string(),
+        "flat/firecraft-0.2.5-source.tar.gz".to_string(),
     ];
     assert_eq!(argv, expected);
 
@@ -383,6 +388,50 @@ fn stage_skips_a_duplicate_asset_name_and_says_so() {
         assets.len(),
         2,
         "the duplicate must appear once: {assets:?}"
+    );
+}
+
+#[test]
+fn stage_skips_a_duplicate_asset_name_that_is_not_adjacent() {
+    // The sorted source order is a/same.tar.gz, b/other.txt, c/same.tar.gz:
+    // the two colliding basenames are NOT adjacent. A duplicate check that
+    // only compares against the previous basename resets on the file in
+    // between, so the later duplicate silently overwrites the earlier one
+    // and the release ships the wrong bytes under that name.
+    let sandbox = Sandbox::new("duplicate-nonadjacent");
+    sandbox.write("src/a/same.tar.gz", "first");
+    sandbox.write("src/b/other.txt", "between");
+    sandbox.write("src/c/same.tar.gz", "second");
+
+    let output = run_script(&sandbox, &["stage", "src", "flat", "assets.zlist"]);
+    assert!(
+        output.status.success(),
+        "staging failed: {}",
+        stderr_of(&output)
+    );
+
+    assert_eq!(
+        sandbox.dir_names("flat"),
+        vec!["other.txt".to_string(), "same.tar.gz".to_string()],
+        "the colliding basename must be staged once"
+    );
+    assert!(
+        stderr_of(&output).contains("duplicate release asset name"),
+        "the skip must be reported: {}",
+        stderr_of(&output)
+    );
+    let assets = staged_assets(&sandbox, "assets.zlist");
+    assert_eq!(
+        assets.len(),
+        2,
+        "the duplicate must appear once: {assets:?}"
+    );
+    // The first source wins; the second is skipped, not silently
+    // substituted over the top of it.
+    assert_eq!(
+        std::fs::read_to_string(sandbox.path("flat/same.tar.gz")).expect("read the staged asset"),
+        "first",
+        "the later duplicate must not overwrite the staged bytes"
     );
 }
 

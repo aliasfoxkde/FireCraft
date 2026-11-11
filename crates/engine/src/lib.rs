@@ -32,4 +32,4 @@ pub use error::EngineError;
 pub use history::{Call, History, Step};
 pub use journal::{Journal, JournalEntry};
 pub use registry::CommandRegistry;
-pub use session::{Session, TransactionGuard};
+pub use session::{HistoryEntry, REWIND_ID, Session, TransactionGuard};

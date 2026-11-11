@@ -19,35 +19,31 @@
 # Regenerate with: cargo run -p xtask -- aegis --bless
 # Only after verifying each newly added key is a false positive.
 # Matches the 9-digit observed value range in the PNG node dictionary
-# (0..141663582), and the run of SVG path control coordinates in the
-# brand mark's bezier paths; this repository holds no tax identifiers.
-australian-tfn	./docs/img/logo.svg	05ffbe779fdbeed8897ecb90c6610e6d5ae26ef3653a838140062fcccd7a8ce4	1
-australian-tfn	./docs/img/logo.svg	0eaed2a5b872f5f066ade727349a9ae6fe1e1092509219ff6001faa5509861d1	1
-australian-tfn	./docs/img/logo.svg	0ee2e84700b4ede0c27c03b443da672617a60834712152057e87aea906a18ff4	1
-australian-tfn	./docs/img/logo.svg	0f5ce515c8cecc9a0513d009e68bc30f056160eb6dbf9a8c6206b165d4255129	1
-australian-tfn	./docs/img/logo.svg	1fd489864fef470167dd93dbbbd177ea6a81b875b002cd059a4c62f511d66067	1
-australian-tfn	./docs/img/logo.svg	2f01afbeb0af784f25dafe629874bb46f430e42c45271dddeb1cfecf0cbca991	1
-australian-tfn	./docs/img/logo.svg	454b1f16d505ceddbd3d97484441083acc5d6ead24ea89b3fa08d4f02bc2502b	1
-australian-tfn	./docs/img/logo.svg	4b8302277ceaf82b0e8b9b662050cdc67fd05afb05d12b521456374f8a403b74	1
-australian-tfn	./docs/img/logo.svg	517610d345972b2a45cf08d5f3ad4d4d158d62003610b60ce9fb8f17b8da7f53	1
-australian-tfn	./docs/img/logo.svg	821183659e06f87a01c242d2121549748d5b396d36601fae864d56b4dc835ae7	1
-australian-tfn	./docs/img/logo.svg	8e18e8357553626ac0741b36414284be8c881ec2f9911287a82d2726389114e5	1
-australian-tfn	./docs/img/logo.svg	95adb35aebe7373d192d17611099931d4481ec07b22a55f8219d7328efee6752	1
-australian-tfn	./docs/img/logo.svg	95c66de87f548ef041527e5c94e476b403bd12456d29835b4959424fc2c6cfe4	1
-australian-tfn	./docs/img/logo.svg	9b89a7069b1a2f15bb1b40b7a2a325f160963448a9fb69e92c1ce74b968ece35	1
-australian-tfn	./docs/img/logo.svg	ae70800c55fbb4c060f043be1cadbc9933405871d159ef8e38416fa9333f0c30	1
-australian-tfn	./docs/img/logo.svg	c8185595e5a576ddfc9b75b26880147a2adf5bb1f3c6d38c58e423b8f6a3815b	1
-australian-tfn	./docs/img/logo.svg	cfe41484e53fafcc5bf059f0609c4d2cf2b879c48b06d8a1602eb7ed89f20434	1
-australian-tfn	./docs/img/logo.svg	d0ed234f513c7ee5446d5aeb9e3f77665f1b877d8c202dc20cc4e9476468de4f	1
-australian-tfn	./docs/img/logo.svg	daffb76e90ced7f90e97479515bd3285c19ba8cb824c1893148aee78900cfc4b	1
-australian-tfn	./docs/img/logo.svg	e01a8639dcaddc9333aa36bb52877e15e53dd86ea6ad8296a275a44a556339bf	1
-australian-tfn	./docs/img/logo.svg	e20b9a7de59b308846f20f58e758540cb30bf65a8f73b2982f30cdb4550c1648	1
-australian-tfn	./docs/img/logo.svg	ee547c09a9989b8cd109c29512b7e81b7033c6b9071a2c8aec8539f26e16e87f	1
-australian-tfn	./docs/img/logo.svg	ff09017689850911c6112f34bf47e2c4641d97d48ae7fd32306e4ceaf059afc9	1
+# (0..141663582), the run of SVG path control coordinates in the brand
+# mark's bezier paths, and the GitHub release and asset identifiers
+# quoted in the release receipts; this repository holds no tax
+# identifiers.
+australian-tfn	./docs/img/app-preview-dark.svg	197e6b1c357f3d959ff48bf52e3e8aae179b55145f13eb64db7eea631a93cc69	1
+australian-tfn	./docs/img/app-preview-dark.svg	9e2095671e41853dd2c27a6a9f6c43b8d1cd2f8548e2293e95aec84f7a07adf5	1
+australian-tfn	./docs/img/app-preview-dark.svg	c271cd9d0bac232bb161ac8dd9b1a40816441598fd5c0c5e41d3e3bdfafa47ee	1
+australian-tfn	./docs/img/app-preview-dark.svg	c8c202ad4293b1893efd892e1f3420d2b79cbd72dc511fd5b980fbf51644d75c	1
+australian-tfn	./docs/img/logo.svg	98a03f7796b555095e39bfbc17141a65f7f246b19242a8773d658ae11f94b909	1
+australian-tfn	./docs/img/logo.svg	e39efc16a4d37d36fb70bebedf27e218782f35257b98fc7aca373e7d49c27871	1
+australian-tfn	./docs/release/EXECUTION-BOARD.md	35b904df2c6f31c493260dde331b4104ae508d471dc06ce7595bf3ad5a681134	1
+australian-tfn	./docs/release/EXECUTION-BOARD.md	a3a2cc550be9d1627cd6ebe8554832486df9ae30304ab8ca9b141b1f88bb4e99	1
+australian-tfn	./docs/release/RECEIPT-0.2.5-DRYRUN-3.md	35b904df2c6f31c493260dde331b4104ae508d471dc06ce7595bf3ad5a681134	1
+australian-tfn	./docs/release/RECEIPT-0.2.5-DRYRUN-3.md	a3a2cc550be9d1627cd6ebe8554832486df9ae30304ab8ca9b141b1f88bb4e99	1
 australian-tfn	./docs/research/fireworks-png-nodes.md	1004a585bc60d363038c5889d022bd6f58278338fe66f97483316133e316f41a	1
+australian-tfn	./site/assets/firecraft-mark.svg	98a03f7796b555095e39bfbc17141a65f7f246b19242a8773d658ae11f94b909	1
+australian-tfn	./site/assets/firecraft-mark.svg	e39efc16a4d37d36fb70bebedf27e218782f35257b98fc7aca373e7d49c27871	1
 australian-tfn	./xtask/src/aegis.rs	1004a585bc60d363038c5889d022bd6f58278338fe66f97483316133e316f41a	1
 # Matches the same 9-digit observed value range in the PNG node
-# dictionary; this repository holds no banking data.
+# dictionary and the GitHub release and asset identifiers quoted in the
+# release receipts; this repository holds no banking data.
+bank-routing-number	./docs/release/EXECUTION-BOARD.md	35b904df2c6f31c493260dde331b4104ae508d471dc06ce7595bf3ad5a681134	1
+bank-routing-number	./docs/release/EXECUTION-BOARD.md	a3a2cc550be9d1627cd6ebe8554832486df9ae30304ab8ca9b141b1f88bb4e99	1
+bank-routing-number	./docs/release/RECEIPT-0.2.5-DRYRUN-3.md	35b904df2c6f31c493260dde331b4104ae508d471dc06ce7595bf3ad5a681134	1
+bank-routing-number	./docs/release/RECEIPT-0.2.5-DRYRUN-3.md	a3a2cc550be9d1627cd6ebe8554832486df9ae30304ab8ca9b141b1f88bb4e99	1
 bank-routing-number	./docs/research/fireworks-png-nodes.md	1004a585bc60d363038c5889d022bd6f58278338fe66f97483316133e316f41a	1
 bank-routing-number	./xtask/src/aegis.rs	1004a585bc60d363038c5889d022bd6f58278338fe66f97483316133e316f41a	1
 # The GitForge API row names the credential file that holds the bearer
@@ -72,6 +68,9 @@ eval-usage	./crates/scripting/src/widget.rs	a475ee49c7acce90b0c9124fcaaf388999e9
 eval-usage	./crates/vector/src/boolean.rs	a475ee49c7acce90b0c9124fcaaf388999e9ef2c94d490d52a855d24c2d97deb	2
 eval-usage	./crates/vector/src/offset.rs	a475ee49c7acce90b0c9124fcaaf388999e9ef2c94d490d52a855d24c2d97deb	1
 eval-usage	./crates/vector/src/tests.rs	a475ee49c7acce90b0c9124fcaaf388999e9ef2c94d490d52a855d24c2d97deb	4
+eval-usage	./docs/SESSIONS.md	a475ee49c7acce90b0c9124fcaaf388999e9ef2c94d490d52a855d24c2d97deb	1
+eval-usage	./docs/decisions/0083-aegis-rebless-parity-matrix.md	a475ee49c7acce90b0c9124fcaaf388999e9ef2c94d490d52a855d24c2d97deb	1
+eval-usage	./docs/decisions/0084-aegis-rebless-slice-hotspot.md	a475ee49c7acce90b0c9124fcaaf388999e9ef2c94d490d52a855d24c2d97deb	1
 eval-usage	./xtask/src/aegis.rs	a475ee49c7acce90b0c9124fcaaf388999e9ef2c94d490d52a855d24c2d97deb	3
 # Matches the two-word phrase naming an individual's data category in
 # English prose. The occurrences outside this gate's own source are a
@@ -103,10 +102,11 @@ path-traversal	./docs/HANDOFF.md	8a69ab888f99a99e70366c051f330d9512cabc8d710f849
 path-traversal	./docs/planning/generated/scorecard.md	d24059df4850652d14de7bcd5b2d806833567be8055cdc8f60cdc0005bd96de4	1
 path-traversal	./xtask/src/status.rs	d24059df4850652d14de7bcd5b2d806833567be8055cdc8f60cdc0005bd96de4	1
 # Matches the word "pan" in pan-zoom, hand-pan and two-finger pan
-# identifiers, including the Android feasibility note's touch gesture,
-# and in decision 0074's table of adjudicated classes and the rule
-# identifiers quoted by the Aegis adjudication tickets; the five
-# credit-card-* rules stay armed.
+# identifiers, in the Hand tool's "Pan the artboard" menu label,
+# including the Android feasibility note's touch gesture, in the session
+# log's prose about that adjudication, and in decision 0074's table of
+# adjudicated classes and the rule identifiers quoted by the Aegis
+# adjudication tickets; the five credit-card-* rules stay armed.
 pci-cardholder-data	./crates/app/src/canvas.rs	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	15
 pci-cardholder-data	./crates/app/src/canvas.rs	fd92d952db92eff57586865ef7b6ae62897642d1abedbe203d56e2d4ced964ed	1
 pci-cardholder-data	./crates/app/src/editor.rs	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	1
@@ -114,9 +114,11 @@ pci-cardholder-data	./crates/app/src/menus.rs	00e37ffae0562ab6818d8f4f97457ac5f9
 pci-cardholder-data	./crates/app/src/shell/canvas_ui.rs	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	3
 pci-cardholder-data	./crates/app/src/shell/mod.rs	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	1
 pci-cardholder-data	./docs/NEXT.md	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	1
-pci-cardholder-data	./docs/SESSIONS.md	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	3
+pci-cardholder-data	./docs/SESSIONS.md	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	5
 pci-cardholder-data	./docs/SESSIONS.md	e6205bc8ab80302276cc2b94e571d9aeafa567c0517146ac4396a4f6a8cead1a	1
 pci-cardholder-data	./docs/decisions/0074-aegis-content-keyed-baseline.md	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	1
+pci-cardholder-data	./docs/decisions/0083-aegis-rebless-parity-matrix.md	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	1
+pci-cardholder-data	./docs/decisions/0084-aegis-rebless-slice-hotspot.md	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	3
 pci-cardholder-data	./docs/planning/firecraft/M12-parity-release.md	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	3
 pci-cardholder-data	./docs/planning/firecraft/M13-deep-re-shell-parity.md	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	1
 pci-cardholder-data	./docs/planning/firecraft/M15-tool-surface.md	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	1
@@ -127,21 +129,28 @@ pci-cardholder-data	./docs/planning/generated/scorecard.md	00e37ffae0562ab6818d8
 pci-cardholder-data	./docs/release/EXECUTION-BOARD.md	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	1
 pci-cardholder-data	./docs/research/android-feasibility.md	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	1
 pci-cardholder-data	./docs/research/fw-code-notes.md	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	1
+pci-cardholder-data	./docs/research/fw-ui-evidence.md	fd92d952db92eff57586865ef7b6ae62897642d1abedbe203d56e2d4ced964ed	1
+pci-cardholder-data	./docs/tasks/T22-screenshot-ui.md	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	1
 pci-cardholder-data	./docs/tasks/T27-12-adjudicate-aegis-findings.md	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	3
 pci-cardholder-data	./docs/tasks/T27-12-adjudicate-aegis-findings.md	7c84e9e401dade7b4eb1539d1c1d3072ece79aa89418712b802340f871614197	2
 pci-cardholder-data	./xtask/src/aegis.rs	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	1
+pci-cardholder-data	./xtask/src/aegis.rs	fd92d952db92eff57586865ef7b6ae62897642d1abedbe203d56e2d4ced964ed	1
 pci-cardholder-data	./xtask/src/perf.rs	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	2
 pci-cardholder-data	./xtask/src/perf.rs	fd92d952db92eff57586865ef7b6ae62897642d1abedbe203d56e2d4ced964ed	1
 pci-cardholder-data	./xtask/src/status.rs	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	5
-# Matches any 10-digit run: u32::MAX, CRC and chunk values, observed PNG
-# value ranges.
+# Matches any 10-digit run: u32::MAX, the i32::MAX wrap constant the
+# retouch filter documents (2147484160), CRC and chunk values, observed
+# PNG value ranges.
 phone-number	./crates/doc/src/model.rs	f807212b6748a8300fc3702322caa515edf0a6ed9bbc86e94c451e351b080c60	1
+phone-number	./crates/engine/src/catalog/retouch.rs	748fed306ccd4b6085713b6163c116c0efe758606b9d6cca947d0b782975fd6f	2
 phone-number	./crates/io/src/bmp.rs	972dcafa6fb4c2c88bce752fca4ab18c6bd88599330a4ad9813915b05bfbe76d	1
 phone-number	./crates/io/src/expv.rs	f807212b6748a8300fc3702322caa515edf0a6ed9bbc86e94c451e351b080c60	1
 phone-number	./crates/io/src/gif.rs	f807212b6748a8300fc3702322caa515edf0a6ed9bbc86e94c451e351b080c60	1
 phone-number	./crates/scripting/src/widget.rs	33c64e1da9ef98568745ca988c8867d9fb7d6b548fb6668e4482ed565027a05f	1
 phone-number	./docs/SESSIONS.md	89461177fb9cf018f8f04ab3c920b60f882219e1b7cf53fbf66c8fa6a82e1add	1
+phone-number	./docs/SESSIONS.md	f807212b6748a8300fc3702322caa515edf0a6ed9bbc86e94c451e351b080c60	1
 phone-number	./docs/decisions/0010-expv-export-options.md	f807212b6748a8300fc3702322caa515edf0a6ed9bbc86e94c451e351b080c60	1
+phone-number	./docs/decisions/0083-aegis-rebless-parity-matrix.md	f807212b6748a8300fc3702322caa515edf0a6ed9bbc86e94c451e351b080c60	1
 phone-number	./docs/research/fireworks-png-nodes.md	a4b661bf8bd26f27cb657509d46c535ef9e189e3a530a6ee809aab2be1f27d04	1
 phone-number	./docs/research/fireworks-png-nodes.md	ae6e1f8a17537939035bff24309ec3650a13f809a6805f4abb04b46b98437ecc	1
 phone-number	./docs/research/fireworks-png-nodes.md	b4af0a9844c84c027667fc46ce52ee56614753f6d1169ac8e97a92341c614cdb	1
@@ -152,13 +161,29 @@ phone-number	./docs/research/fireworks-png-nodes.md	ebebc7bc31b4fd88112f19c0e000
 phone-number	./docs/research/fireworks-png-nodes.md	f3e0457469e6aea7d9ba1b0d8851a4bee518b0163cb0e141a778bcda96f3742f	1
 phone-number	./docs/research/fireworks-png-nodes.md	f807212b6748a8300fc3702322caa515edf0a6ed9bbc86e94c451e351b080c60	3
 phone-number	./docs/research/fireworks-png-nodes.md	f83e39c0ea6003e6777a7c158434b5489b13ce5c0926b72f7743d0572779db85	2
+phone-number	./xtask/src/aegis.rs	748fed306ccd4b6085713b6163c116c0efe758606b9d6cca947d0b782975fd6f	1
 # The same JavaScript-shaped regex, seen by the hardening rule.
 security-hardening-path-traversal	./docs/PLANNING.md	8970fe80e5b5b5afefbcb8f72dbd3ec6561a516a7b9364ec2518217dd2fc7298	1
 # The same two fixtures, seen by the hardening rule.
 security-hardening-xml-external-entity	./crates/io/tests/svgimport.rs	f6cfc5faea5abe6ee5bd8667967edfc5cbe43d95f0f04d7a560afb01613823d5	2
 security-hardening-xml-external-entity	./packaging/build-macos-dmg.sh	7b16906a7de9206c7488979eb86e8393ba62a45c0e769c79cf070a16c1858d49	1
+# The rule's regex is the English phrase "select ... from"; it fires on
+# CS6 Help text quoted in the tool-strip evidence and the session log.
+# This repository runs no SQL.
+sql-query	./crates/app/src/toolstrip.rs	16c94413c298ee4768003b9702628830fe05264871353e66519d3b9da09287fb	1
+sql-query	./crates/app/src/toolstrip.rs	4d14086f6fc14ba218ff162d47249f7a7dc132e9220f1abf87862c704f54142d	1
+sql-query	./docs/SESSIONS.md	6ba454ee08d4ce45364f6e849176079be5c628c2e176eb31ae1671451b5c401a	1
+sql-query	./docs/research/fw-ui-evidence.md	4d14086f6fc14ba218ff162d47249f7a7dc132e9220f1abf87862c704f54142d	1
+sql-query	./docs/research/fw-ui-evidence.md	d7a39f416c7b9033673d6c465a646be64ce568f0dba2e02ce3906aa37f351e11	1
+sql-query	./docs/research/fw-ui-evidence.md	fbfaf459bf28ef75433705459453e22c20a8057f2a19f57a93e1660db5c3e0e7	1
+sql-query	./docs/tasks/T22-screenshot-ui.md	6ba454ee08d4ce45364f6e849176079be5c628c2e176eb31ae1671451b5c401a	1
 # Matches the same 9-digit observed value range in the PNG node
-# dictionary; this repository holds no social-security numbers.
+# dictionary and the GitHub release and asset identifiers quoted in the
+# release receipts; this repository holds no social-security numbers.
+ssn-no-dashes	./docs/release/EXECUTION-BOARD.md	35b904df2c6f31c493260dde331b4104ae508d471dc06ce7595bf3ad5a681134	1
+ssn-no-dashes	./docs/release/EXECUTION-BOARD.md	a3a2cc550be9d1627cd6ebe8554832486df9ae30304ab8ca9b141b1f88bb4e99	1
+ssn-no-dashes	./docs/release/RECEIPT-0.2.5-DRYRUN-3.md	35b904df2c6f31c493260dde331b4104ae508d471dc06ce7595bf3ad5a681134	1
+ssn-no-dashes	./docs/release/RECEIPT-0.2.5-DRYRUN-3.md	a3a2cc550be9d1627cd6ebe8554832486df9ae30304ab8ca9b141b1f88bb4e99	1
 ssn-no-dashes	./docs/research/fireworks-png-nodes.md	1004a585bc60d363038c5889d022bd6f58278338fe66f97483316133e316f41a	1
 ssn-no-dashes	./xtask/src/aegis.rs	1004a585bc60d363038c5889d022bd6f58278338fe66f97483316133e316f41a	1
 # A loopback listener in the release smoke test, a localhost maintainer
@@ -168,9 +193,12 @@ ssn-no-dashes	./xtask/src/aegis.rs	1004a585bc60d363038c5889d022bd6f58278338fe66f
 ssrf-localhost	./docs/NEXT.md	12ca17b49af2289436f303e0166030a21e525d266e209267433801a8fd4071a0	1
 ssrf-localhost	./docs/PLANNING.md	12ca17b49af2289436f303e0166030a21e525d266e209267433801a8fd4071a0	2
 ssrf-localhost	./docs/SESSIONS.md	12ca17b49af2289436f303e0166030a21e525d266e209267433801a8fd4071a0	1
+ssrf-localhost	./docs/SESSIONS.md	49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763	2
 ssrf-localhost	./docs/SITE-DEPLOYMENT.md	49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763	1
 ssrf-localhost	./docs/decisions/0074-aegis-content-keyed-baseline.md	49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763	1
+ssrf-localhost	./docs/decisions/0083-aegis-rebless-parity-matrix.md	49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763	1
 ssrf-localhost	./docs/release/EXECUTION-BOARD.md	49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763	2
+ssrf-localhost	./docs/tasks/T22-screenshot-ui.md	49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763	1
 ssrf-localhost	./docs/tasks/T27-11-reproduce-aegis-gate-failure.md	49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763	1
 ssrf-localhost	./docs/tasks/T27-12-adjudicate-aegis-findings.md	12ca17b49af2289436f303e0166030a21e525d266e209267433801a8fd4071a0	1
 ssrf-localhost	./docs/tasks/T27-12-adjudicate-aegis-findings.md	49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763	6
@@ -179,6 +207,8 @@ ssrf-localhost	./xtask/src/aegis.rs	49960de5880e8c687434170f6476605b8fe4aeb9a286
 ssrf-localhost	./xtask/src/dist.rs	12ca17b49af2289436f303e0166030a21e525d266e209267433801a8fd4071a0	1
 # A comment quoting a V8 crash dump observed in CI; it documents a
 # failure, and the build prints nothing.
+stack-trace-exposure	./docs/PRODUCTION-READINESS-PLAN.md	d26fba73fb8604b0c99010d648d66379756ada54983b96b6dbffcf0626cf0b1a	1
+stack-trace-exposure	./docs/decisions/0090-wasm-bundle-size-policy.md	d26fba73fb8604b0c99010d648d66379756ada54983b96b6dbffcf0626cf0b1a	1
 stack-trace-exposure	./infrastructure/docker/ci-rust.Dockerfile	17ee41935f062dffb434b86c2a8d432567df47fc5988eb4cf2bbae1b690e4747	1
 # The SVG importer's entity-expansion fixture, which must declare an
 # external entity so the test can observe the importer refusing it, and
@@ -186,18 +216,21 @@ stack-trace-exposure	./infrastructure/docker/ci-rust.Dockerfile	17ee41935f062dff
 xml-external-entity	./crates/io/tests/svgimport.rs	f6cfc5faea5abe6ee5bd8667967edfc5cbe43d95f0f04d7a560afb01613823d5	2
 xml-external-entity	./packaging/build-macos-dmg.sh	7b16906a7de9206c7488979eb86e8393ba62a45c0e769c79cf070a16c1858d49	1
 # Matches any 5-digit run: CS6 command ids, the JPEG dimension ceiling
-# (65535), menu ids, CVE id suffixes, and the civil-date epoch constant
-# (36524) in the SBOM timestamp builder, plus the headless-browser
-# virtual-time budget (60000), and decision 0074's table of adjudicated
-# classes and the rule identifiers quoted by the Aegis adjudication
-# tickets. This repository holds no postal data.
+# (65535), menu ids, CS6 palette-instance ids (the 48xxx family), a
+# canvas dimension in a render-scale test, CVE id suffixes, the
+# civil-date epoch constant (36524) in the SBOM timestamp builder, plus
+# the headless-browser virtual-time budget (60000), and decision 0074's
+# table of adjudicated classes and the rule identifiers quoted by the
+# Aegis adjudication tickets. The v1 MVP roadmap's RPC-emulation row
+# names the legacy Fireworks RPC TCP port — a protocol number, not
+# postal data. This repository holds no postal data.
 zip-code	./crates/app-cli/src/mcp.rs	0e5c81ceee464db1c0cb9ed801d134fab0dd2a28c0dc62e35aa21a8e13ff0ebc	1
 zip-code	./crates/app-cli/src/mcp.rs	20d70708103e5223b6f2fb00f00947832fb93d12ebef11eb10bc5599efefe184	1
 zip-code	./crates/app-cli/src/mcp.rs	e27c72fe629f258a871404eed323c0cf57a7a26c19dc8d5a6ac90770241af8f5	1
 zip-code	./crates/app/src/menus.rs	003093a13c569a8fe1e221840c719e86d2186011336ee30a5619dc13f0b56a64	1
 zip-code	./crates/app/src/menus.rs	00ce795c950c9db7382e3602a94398d7459dc68375632c32c06b694b91bfd7af	2
 zip-code	./crates/app/src/menus.rs	011e7d470a1521bb04a72f8bbc8ff7f9b1cd607b4384f52bc741599aa1d274d7	1
-zip-code	./crates/app/src/menus.rs	01ad44d03f60bf93f74b92d3af07610e342cbde43b585f39217508b513d14343	1
+zip-code	./crates/app/src/menus.rs	01ad44d03f60bf93f74b92d3af07610e342cbde43b585f39217508b513d14343	2
 zip-code	./crates/app/src/menus.rs	02288a89ae983ed25364d4f918a8e2deb3ac471c99ff7ac76325f2a9755de8bf	1
 zip-code	./crates/app/src/menus.rs	025285462d5eafb1203031862330c70214c161500769cbe48f4fdf35542da075	1
 zip-code	./crates/app/src/menus.rs	02aafe7fc05eca9d75a03eb8cf85b099e6e2d2d9e9554ba1c8a8ec6b2df6528f	1
@@ -296,10 +329,11 @@ zip-code	./crates/app/src/menus.rs	6685ba2342898d3a378bfbd6b390ec3d6ba0a8748c4c0
 zip-code	./crates/app/src/menus.rs	67afbb0f1ae2d608a33c74b87fee7c5ab71874df676f53bf8edb9125c34a34ea	1
 zip-code	./crates/app/src/menus.rs	67b4acc3a35001ce2358ee155323bc411457601e60abcc70082524a59cd7a4d5	1
 zip-code	./crates/app/src/menus.rs	69bb4acfca30fe3bd14052631067b7d7fac3b0b43c10c4f8ce93475f90fdc83b	1
+zip-code	./crates/app/src/menus.rs	6ae29c8266e042c990b22c648de06825fb83d9a2e854ca65b4fd30f692f5aedd	1
 zip-code	./crates/app/src/menus.rs	6d09116d2b83f1a67b7e7a904b5eaea53f79273f2d165229010df0ed9d4a36bb	1
 zip-code	./crates/app/src/menus.rs	6ead8351fe3a37874b4763382e304dfa13ad2b8b4582444efcfe5532e05fbbc3	1
 zip-code	./crates/app/src/menus.rs	71e411bae65754184bbb45baaa3a0e2cadad2ab00e029a58fe87f9510125c12e	1
-zip-code	./crates/app/src/menus.rs	75e8751a57e0fc4097f6d98b486fe1680635494bbfc7ce16564757f38192e190	1
+zip-code	./crates/app/src/menus.rs	75e8751a57e0fc4097f6d98b486fe1680635494bbfc7ce16564757f38192e190	2
 zip-code	./crates/app/src/menus.rs	78f54f73431f4924a4c5ac3647c0dccca95e2f95d4e25037a92d03f8fae9db10	1
 zip-code	./crates/app/src/menus.rs	793bf730f23cf4ae95523a12a1d9ec42427defa041026ec06f9fcda4a860e3d1	1
 zip-code	./crates/app/src/menus.rs	798653c0204944019e08e0f97e5029a23372752fcd8b34ec667f1d7993d089a2	1
@@ -311,9 +345,11 @@ zip-code	./crates/app/src/menus.rs	7c9c0c36979256d1990bb10e2f0dd4fbfeb381a4fff6a
 zip-code	./crates/app/src/menus.rs	7d4617e6d4f6575fbeeea64680d26e1075ca2f7130e06763cd5d00196844e8e8	1
 zip-code	./crates/app/src/menus.rs	7e051ba37ad4842aa0e8cffe413c767d754d35a3ef6e80379f9c4e533c0a0dff	1
 zip-code	./crates/app/src/menus.rs	7f01ef148038d807b241561658da3de6d53908927b8a96dc236699bb65e5115f	1
+zip-code	./crates/app/src/menus.rs	7f86696157efee849855811dbdd3b8babcbde71c5c3e17277bf4f2bf6a75106e	1
 zip-code	./crates/app/src/menus.rs	83706ed0a7fe5af737522c77e2f080255c67f37d78b6aa199683a94917302a09	1
 zip-code	./crates/app/src/menus.rs	83b3224c2c14989480197312705ae919167e8e9a9af552b83b44834a3ba960ae	1
 zip-code	./crates/app/src/menus.rs	83f04cf7d18a22e55af2efd0a2bc43b850611b9eaeede85b24fa4b462c5f33c7	1
+zip-code	./crates/app/src/menus.rs	84412e4c3f4477a8fda21cc497daa5b1e5c4dfde11c76e9d5f7b9b27c637f5c3	1
 zip-code	./crates/app/src/menus.rs	8518fa5bc058621e14473657305bb75e087c8c424f043067bff061e04e4ac28d	1
 zip-code	./crates/app/src/menus.rs	860ca8e8aba81240e9271e4376d835693f61161fa5ab492ebbafadb0207148a2	1
 zip-code	./crates/app/src/menus.rs	87e6f5b6e5ffee72ff8d12de6dacbe2650a7161ac805803801ad4e0f543350b6	1
@@ -348,10 +384,12 @@ zip-code	./crates/app/src/menus.rs	9be5d67d9b67715b5dc118d81f5aa0eacc2bf4c0433ed
 zip-code	./crates/app/src/menus.rs	9d04ab5a67f0f1c6ada2f8f42a51830a92a31c3e4ddcb2f5411b81fb980c3e3a	1
 zip-code	./crates/app/src/menus.rs	a08ac6e72355344bd254d375420e33484b4d7cd2d63e0b43c9819f5d4b2d7875	1
 zip-code	./crates/app/src/menus.rs	a305e3b3bd433193ded6deeeb2bd44072e8902330f594c94e4522930ea76174e	1
+zip-code	./crates/app/src/menus.rs	a712f6960729845b5053802f9f02515af0812d84e6c36a64a87b036b5b803b67	1
 zip-code	./crates/app/src/menus.rs	a9b551de1cdc58510abac48463e5bff8a9671cd20749662d5bda808472b72bc1	1
 zip-code	./crates/app/src/menus.rs	ab83666a58d91d656197f872534927019ff049417ea87440d5294b6d33724ba4	1
 zip-code	./crates/app/src/menus.rs	ac280071057c43a28522a011a227eb4e8ce38c3c5be9e30e249e7fe2b0f2405d	1
 zip-code	./crates/app/src/menus.rs	ae18c4eebcf4d297c1c74338657db213d3349ade84494a4ffddc2622d9a637cc	1
+zip-code	./crates/app/src/menus.rs	ae2b96166835eb462bf6718365421a4cf1d2b4b21fc2f33c734d6f642668abfa	1
 zip-code	./crates/app/src/menus.rs	ae87abf59f31db2add14a23c4853f49571b8a664ede065bdd19192a18886af38	1
 zip-code	./crates/app/src/menus.rs	af6b54051799ac2513245a530b62a39f743f0657176e292f608bd361b512cb8c	1
 zip-code	./crates/app/src/menus.rs	b085d058de40104a6c6b2b4fc5fa17ce421de8404f7fafde74d734a2649f378f	1
@@ -374,7 +412,7 @@ zip-code	./crates/app/src/menus.rs	c1860f954563eeb5afaae3a6c26dcf5048b8dd0c1b1b0
 zip-code	./crates/app/src/menus.rs	c324f7de6ff2e9eb5122329bd1991ea4638cc8f045235b1ae8baf082c3dd7c35	1
 zip-code	./crates/app/src/menus.rs	c3e4095a0395ccd826644e6881fab1e10e10342278cd3495609d47401b158fdd	1
 zip-code	./crates/app/src/menus.rs	c417f8e7788d6ee7776f9086d7d118e4cd6e15a75b64858431c6bf834f0b4d87	2
-zip-code	./crates/app/src/menus.rs	c4811e67ef000af33f22f8f16a036d706fcf636f7ad79f6afe89411e6a5876a2	1
+zip-code	./crates/app/src/menus.rs	c4811e67ef000af33f22f8f16a036d706fcf636f7ad79f6afe89411e6a5876a2	2
 zip-code	./crates/app/src/menus.rs	c5ea45d255a440bc7d1e8ad9d3b21de8cd1c71fd2f52fe47550b0504bf9aa461	1
 zip-code	./crates/app/src/menus.rs	c5fb3c84f70f9a6d78f0685272022bd4f4e5310bbd3a8634ec6af38de7197441	1
 zip-code	./crates/app/src/menus.rs	c683cbb29be1f227c17c1bdf8ee9b46bf468ac03c7be7c8b77e3840a8d6425c6	1
@@ -398,6 +436,7 @@ zip-code	./crates/app/src/menus.rs	d6a72e6744d5589ac13e42e711d2fda853f2637d55477
 zip-code	./crates/app/src/menus.rs	d730192dfca3e8de55ab1559bf3034038d6a9b1cc01e9c9b283385f7a1ea70ca	1
 zip-code	./crates/app/src/menus.rs	d79efc3bee372bac14dd5a2037b4edd92e8a234a9cc8b1a7fbe438e13e7c2049	1
 zip-code	./crates/app/src/menus.rs	d8abc8c5d91d78bab4f6adb811aa188e56c68d1436d8e80e05d8106985938a95	1
+zip-code	./crates/app/src/menus.rs	dabf5c8b9082180e7d7ae1ee52a9417fc76be7e3e80aed2a8f3cccf1cd1c162d	4
 zip-code	./crates/app/src/menus.rs	daccd66fc15cb728dd9aa33c48221e41663e4ad754eceab18426c6fd8927a080	1
 zip-code	./crates/app/src/menus.rs	dcdbff215eec2616ed583f291281c69e16e3c618662665562127224ed360f0fc	1
 zip-code	./crates/app/src/menus.rs	df0bf6c9fbd101f46b2b9986f2afedad41b031225e7429023ec1af739c9746cf	1
@@ -410,14 +449,14 @@ zip-code	./crates/app/src/menus.rs	e54f884419f0da9030a8349e71dc4bdc1ed7bcea87100
 zip-code	./crates/app/src/menus.rs	e5586501c9641b47d3db40f3d6fabe56b1609d9886c2ad711a497c76ffd76fe4	1
 zip-code	./crates/app/src/menus.rs	e5e1c835eaff1f109bacc17aadd51983945d26068a922a9dee19acc3ce2d724a	1
 zip-code	./crates/app/src/menus.rs	e61b7ddff66a1220d3ca0098e3adfde441a174bb52942ca91057bb8c666100de	1
-zip-code	./crates/app/src/menus.rs	e62147508159e5fc695ede723066fbd9d42118e1c18ece6d18bfb70a96735a20	1
+zip-code	./crates/app/src/menus.rs	e62147508159e5fc695ede723066fbd9d42118e1c18ece6d18bfb70a96735a20	2
 zip-code	./crates/app/src/menus.rs	e670e8bb47655f895f07531ba65a8c39f3756b9b512eb13a33dd212f5630ed11	1
 zip-code	./crates/app/src/menus.rs	e6c1f8dc72e9d3a3c2837be0d843cc0b47b4e504c66dcf85d2f03f62d75d5f39	1
 zip-code	./crates/app/src/menus.rs	e6ed7f393091d090dc6bb6f5fa02dadc3eac44e2b7d12188965f4d1f0fd2035a	1
 zip-code	./crates/app/src/menus.rs	e7c20ffffd16b76ad7c2a84619642b95dc6d07fe1997ff1491d2bcd4f546bf17	1
 zip-code	./crates/app/src/menus.rs	e81a8588e04d8f58ba675fe485ac6fd8b904397505f7dee6322798452f1b5342	1
 zip-code	./crates/app/src/menus.rs	e93d60524b42e4cada18060fed25915d1cffa9d03c8fc41678bad660fbcd08f1	1
-zip-code	./crates/app/src/menus.rs	e95e07198fbc2a3fac954c1e20f99ff404edbc4a9bcc08f0ef575f1b58121ac5	1
+zip-code	./crates/app/src/menus.rs	e95e07198fbc2a3fac954c1e20f99ff404edbc4a9bcc08f0ef575f1b58121ac5	4
 zip-code	./crates/app/src/menus.rs	e97d7aa7e9a9dccc626f9be8d5f9d8bc101f0abe242405eb28b8d2d37a812b59	1
 zip-code	./crates/app/src/menus.rs	e99ae6b95a1b0a4b796029a2f6ad2033c6926c440cc338ac6ff7157b33cd7a0a	1
 zip-code	./crates/app/src/menus.rs	eb0bb749278d0f9652bd8df5e78688d4b2a5de2384be11a12ac92422723b32f9	1
@@ -448,10 +487,11 @@ zip-code	./crates/app/src/menus.rs	fcdd622916b6b611e2062d1585cbf4a1e189cd7cfc0c0
 zip-code	./crates/app/src/menus.rs	fd5cf06ef2a35b23fe58d2fa7d75e92510d7f79c62222387443468b7459767a0	1
 zip-code	./crates/app/src/menus.rs	fe4b5aaceb85434cb5ab2dd46e956d10971a5de67e5f81c344e312f83b55f19f	1
 zip-code	./crates/app/src/menus.rs	fe71955958a0844d86cd6217c0144e33825cd4c111f1fd815232c6b8fb4f6ec0	1
-zip-code	./crates/app/src/menus.rs	fec32d6024e177ac05e94de175bfccd84ec3d389034f6f57067fb167302534b6	1
+zip-code	./crates/app/src/menus.rs	fec32d6024e177ac05e94de175bfccd84ec3d389034f6f57067fb167302534b6	4
 zip-code	./crates/app/src/menus.rs	ffdfd59d08e67eeff2569e91641bb6adb12fc0bf42ef8f0f2c197ed14369f10d	1
 zip-code	./crates/app/src/shell/dialogs.rs	158cb7c22ce6943d7fe7d3e01d61b78ab5b2d080cbffdd81c5de41218a6d65ed	1
 zip-code	./crates/app/src/shell/dialogs.rs	f2f89ede8e7d4b3d2243dea1ca96b8ece56f793811d9708b4a0181bf81a50011	1
+zip-code	./crates/app/src/shell/mod.rs	876c9b16254e157d1eb645390dcfae6f29b9d3cd394e73a91de8ee5d0e67ee43	1
 zip-code	./crates/app/tests/automation.rs	e27c72fe629f258a871404eed323c0cf57a7a26c19dc8d5a6ac90770241af8f5	1
 zip-code	./crates/color/src/convert.rs	73f0ef1da00cab5b267e1b642d46ae6b6bb6152c1d3c307049752271c5fe9683	1
 zip-code	./crates/compose/src/effects.rs	fd5f56b40a79a385708428e7b32ab996a681080a166a2206e750eb4819186145	2
@@ -483,16 +523,67 @@ zip-code	./crates/io/tests/roundtrip.rs	f2f89ede8e7d4b3d2243dea1ca96b8ece56f7938
 zip-code	./crates/raster/src/lib.rs	0f255ec16482c343fd099ba9668863778be40dc166a6856b1d470e0bc97cc6fd	1
 zip-code	./crates/raster/src/tile.rs	0f255ec16482c343fd099ba9668863778be40dc166a6856b1d470e0bc97cc6fd	1
 zip-code	./crates/text/tests/layout.rs	1f971bb001a144fb2a7bc958114acf3aa0968dde56915ad64b3dcf474b1fcc36	1
+zip-code	./docs/CS6-PARITY.md	01ad44d03f60bf93f74b92d3af07610e342cbde43b585f39217508b513d14343	1
+zip-code	./docs/CS6-PARITY.md	025285462d5eafb1203031862330c70214c161500769cbe48f4fdf35542da075	1
+zip-code	./docs/CS6-PARITY.md	0f9014ed17f9ca2536c7cf4a2e1325712d249a7ac34ac32d1c90ef9178b6d4ae	1
+zip-code	./docs/CS6-PARITY.md	1749c0069badd97d7f20bc9123374e90114cfdc1314f8011f4f31690a5dc3e68	1
+zip-code	./docs/CS6-PARITY.md	2516b29128ecd6a3cb043801b07450dc9bbcf63ee852a8430bb0cd157b803be9	1
+zip-code	./docs/CS6-PARITY.md	34c1b2df52bd43662e4574afe368a09769be40b2921f0377699564a176080a6c	1
+zip-code	./docs/CS6-PARITY.md	37f5c3f4893f5aa0010e914af9e0bd1bf82313473befc0377f163b0bc5092ecf	1
+zip-code	./docs/CS6-PARITY.md	41255266c15b84fff96ceeafde91c025e15283d446d57eb60f72fdb3a7870c6c	1
+zip-code	./docs/CS6-PARITY.md	4239ff7a657455710a5b6a323e44c237237633801051aa0d325ff12893831238	1
+zip-code	./docs/CS6-PARITY.md	43462937931f4de544388a15ec15cf8d834e4762938aca10829ec794cba529e4	1
+zip-code	./docs/CS6-PARITY.md	6017af6c686609dd487e75a27e6465c8c2e2689148ad7eb1c24eb2cabb0338a2	1
+zip-code	./docs/CS6-PARITY.md	64815f2085911987c30d3dce151584f607761454b922d95a47373f3f2011ec14	1
+zip-code	./docs/CS6-PARITY.md	67b4acc3a35001ce2358ee155323bc411457601e60abcc70082524a59cd7a4d5	1
+zip-code	./docs/CS6-PARITY.md	6ae29c8266e042c990b22c648de06825fb83d9a2e854ca65b4fd30f692f5aedd	1
+zip-code	./docs/CS6-PARITY.md	83706ed0a7fe5af737522c77e2f080255c67f37d78b6aa199683a94917302a09	1
+zip-code	./docs/CS6-PARITY.md	83b3224c2c14989480197312705ae919167e8e9a9af552b83b44834a3ba960ae	1
+zip-code	./docs/CS6-PARITY.md	83f04cf7d18a22e55af2efd0a2bc43b850611b9eaeede85b24fa4b462c5f33c7	1
+zip-code	./docs/CS6-PARITY.md	872981009609e6327106ff5e1691bb3522debbabb4b995053a3b0eea6117164f	1
+zip-code	./docs/CS6-PARITY.md	8967b2ccf2cc94a9f364c634e2a1d4414df7094055f45c6cc91e65f23c168d0b	1
+zip-code	./docs/CS6-PARITY.md	8ad1bda180a71e69610c9d8ffefb58a1a383fb151d637fda354fa158f211443b	1
+zip-code	./docs/CS6-PARITY.md	8e40a9425e96b2b2f46810b76c3cfb120a7ef301c1d0faa21131dcbff1ef890c	1
+zip-code	./docs/CS6-PARITY.md	92c357ab8c050bfa4257b4359a14f7a2366609fed5281dde3d35182691768c0a	1
+zip-code	./docs/CS6-PARITY.md	ab83666a58d91d656197f872534927019ff049417ea87440d5294b6d33724ba4	1
+zip-code	./docs/CS6-PARITY.md	ae18c4eebcf4d297c1c74338657db213d3349ade84494a4ffddc2622d9a637cc	1
+zip-code	./docs/CS6-PARITY.md	c324f7de6ff2e9eb5122329bd1991ea4638cc8f045235b1ae8baf082c3dd7c35	1
+zip-code	./docs/CS6-PARITY.md	dabf5c8b9082180e7d7ae1ee52a9417fc76be7e3e80aed2a8f3cccf1cd1c162d	4
+zip-code	./docs/CS6-PARITY.md	e1f7f20633f3e890ca7e4597145e4e014db028aaeb49984052a6f1b5f80ee1c0	1
+zip-code	./docs/CS6-PARITY.md	e5586501c9641b47d3db40f3d6fabe56b1609d9886c2ad711a497c76ffd76fe4	1
+zip-code	./docs/CS6-PARITY.md	e5e1c835eaff1f109bacc17aadd51983945d26068a922a9dee19acc3ce2d724a	1
+zip-code	./docs/CS6-PARITY.md	e61b7ddff66a1220d3ca0098e3adfde441a174bb52942ca91057bb8c666100de	1
+zip-code	./docs/CS6-PARITY.md	e6c1f8dc72e9d3a3c2837be0d843cc0b47b4e504c66dcf85d2f03f62d75d5f39	1
+zip-code	./docs/CS6-PARITY.md	e7c20ffffd16b76ad7c2a84619642b95dc6d07fe1997ff1491d2bcd4f546bf17	1
+zip-code	./docs/CS6-PARITY.md	e95e07198fbc2a3fac954c1e20f99ff404edbc4a9bcc08f0ef575f1b58121ac5	5
+zip-code	./docs/CS6-PARITY.md	f0b147fb33b5d017af34d58f6675d6cbd00409b8b553dd313050c20e4370d1f7	1
+zip-code	./docs/CS6-PARITY.md	f1a8066b40fca80840553e871ce9fe636efab3f5b686d0ea458fc90ca4b09c17	1
+zip-code	./docs/CS6-PARITY.md	f3ef78e4b39967eb78be9856c0ffc22f7b2233c37532f354dab142134461c0a3	1
+zip-code	./docs/CS6-PARITY.md	f3fbead98fdedbf3a510d6d643783ef79b1cb6a171bb0da80472abebf63aa6e2	1
+zip-code	./docs/CS6-PARITY.md	f9471241f2374b2a5289fcf4e0a9002aabd11525f4ac87deaa48c62fa2c27800	1
+zip-code	./docs/CS6-PARITY.md	fc86a70159f9843695bc28d0ebb606aac2f6200627e945ac06a517c3946b923f	1
+zip-code	./docs/CS6-PARITY.md	fec32d6024e177ac05e94de175bfccd84ec3d389034f6f57067fb167302534b6	6
+zip-code	./docs/CS6-PARITY.md	ffdfd59d08e67eeff2569e91641bb6adb12fc0bf42ef8f0f2c197ed14369f10d	1
 zip-code	./docs/HANDOFF.md	d55d01d0341ed0ba2cd99b322e8c5b609254f47d10c7cd12b99b4922effeba44	1
 zip-code	./docs/NEXT.md	d3d64843022420dc7dc2862b235e38ed08e77ab37be23ea65d851b8b2b037901	1
 zip-code	./docs/NEXT.md	d55d01d0341ed0ba2cd99b322e8c5b609254f47d10c7cd12b99b4922effeba44	1
+zip-code	./docs/NEXT.md	dabf5c8b9082180e7d7ae1ee52a9417fc76be7e3e80aed2a8f3cccf1cd1c162d	1
+zip-code	./docs/NEXT.md	e95e07198fbc2a3fac954c1e20f99ff404edbc4a9bcc08f0ef575f1b58121ac5	1
 zip-code	./docs/NEXT.md	f2f89ede8e7d4b3d2243dea1ca96b8ece56f793811d9708b4a0181bf81a50011	1
+zip-code	./docs/NEXT.md	fec32d6024e177ac05e94de175bfccd84ec3d389034f6f57067fb167302534b6	1
 zip-code	./docs/PLANNING.md	0f255ec16482c343fd099ba9668863778be40dc166a6856b1d470e0bc97cc6fd	1
 zip-code	./docs/PLANNING.md	3e6d8748577115dd136761901582abce3093fbb973a08c35be9efe6781fb4f4d	1
 zip-code	./docs/PLANNING.md	9766638817ec53c323baa6aaa5f8d10a6105299553621601c5e71d0c47b10e5b	3
 zip-code	./docs/PLANNING.md	ca902d4a8acbdea132ada81a004081f51c5c9279d409cee414de5a39a139fab6	1
 zip-code	./docs/SESSIONS.md	265f10e1bf87701b7aa597c197b6a25b0984777f3443a289d7a92aedd31fddcf	1
+zip-code	./docs/SESSIONS.md	83b3224c2c14989480197312705ae919167e8e9a9af552b83b44834a3ba960ae	1
+zip-code	./docs/SESSIONS.md	dabf5c8b9082180e7d7ae1ee52a9417fc76be7e3e80aed2a8f3cccf1cd1c162d	2
+zip-code	./docs/SESSIONS.md	e95e07198fbc2a3fac954c1e20f99ff404edbc4a9bcc08f0ef575f1b58121ac5	2
 zip-code	./docs/SESSIONS.md	f2f89ede8e7d4b3d2243dea1ca96b8ece56f793811d9708b4a0181bf81a50011	4
+zip-code	./docs/SESSIONS.md	fec32d6024e177ac05e94de175bfccd84ec3d389034f6f57067fb167302534b6	3
+zip-code	./docs/TASKS.md	dabf5c8b9082180e7d7ae1ee52a9417fc76be7e3e80aed2a8f3cccf1cd1c162d	1
+zip-code	./docs/TASKS.md	e95e07198fbc2a3fac954c1e20f99ff404edbc4a9bcc08f0ef575f1b58121ac5	1
+zip-code	./docs/TASKS.md	fec32d6024e177ac05e94de175bfccd84ec3d389034f6f57067fb167302534b6	1
 zip-code	./docs/decisions/0006-psd-fidelity.md	842917bbca0f5e25ebdc9ff1ea19153c112db38d0e3b4183ad829f8794c2fd2d	1
 zip-code	./docs/decisions/0006-psd-fidelity.md	f2f89ede8e7d4b3d2243dea1ca96b8ece56f793811d9708b4a0181bf81a50011	1
 zip-code	./docs/decisions/0009-animated-gif.md	f2f89ede8e7d4b3d2243dea1ca96b8ece56f793811d9708b4a0181bf81a50011	1
@@ -506,6 +597,16 @@ zip-code	./docs/decisions/0066-smoke-budget.md	d55d01d0341ed0ba2cd99b322e8c5b609
 zip-code	./docs/decisions/0074-aegis-content-keyed-baseline.md	6f21ec723dd82aa7bd36bc81cc4008e4f6359fe8ce68f793af23b7123bdbf3a6	1
 zip-code	./docs/decisions/0074-aegis-content-keyed-baseline.md	7b1f167cba373e261a8bea96004bdf27f937a89c830fceb823eec636d4a3920e	1
 zip-code	./docs/decisions/0074-aegis-content-keyed-baseline.md	b83c588da0c6931625f42e0948054a3ade722bfd02c27816305742ed7390ac6c	2
+zip-code	./docs/decisions/0083-aegis-rebless-parity-matrix.md	0f9014ed17f9ca2536c7cf4a2e1325712d249a7ac34ac32d1c90ef9178b6d4ae	1
+zip-code	./docs/decisions/0083-aegis-rebless-parity-matrix.md	7868973fdf360a737747e8f6d750786d74f5513b4a769e8e35585049f0cc20eb	1
+zip-code	./docs/decisions/0083-aegis-rebless-parity-matrix.md	83b3224c2c14989480197312705ae919167e8e9a9af552b83b44834a3ba960ae	1
+zip-code	./docs/decisions/0083-aegis-rebless-parity-matrix.md	dabf5c8b9082180e7d7ae1ee52a9417fc76be7e3e80aed2a8f3cccf1cd1c162d	1
+zip-code	./docs/decisions/0083-aegis-rebless-parity-matrix.md	e95e07198fbc2a3fac954c1e20f99ff404edbc4a9bcc08f0ef575f1b58121ac5	2
+zip-code	./docs/decisions/0083-aegis-rebless-parity-matrix.md	fec32d6024e177ac05e94de175bfccd84ec3d389034f6f57067fb167302534b6	2
+zip-code	./docs/decisions/0084-aegis-rebless-slice-hotspot.md	6ae29c8266e042c990b22c648de06825fb83d9a2e854ca65b4fd30f692f5aedd	1
+zip-code	./docs/decisions/0084-aegis-rebless-slice-hotspot.md	7f86696157efee849855811dbdd3b8babcbde71c5c3e17277bf4f2bf6a75106e	1
+zip-code	./docs/decisions/0084-aegis-rebless-slice-hotspot.md	e95e07198fbc2a3fac954c1e20f99ff404edbc4a9bcc08f0ef575f1b58121ac5	1
+zip-code	./docs/decisions/0084-aegis-rebless-slice-hotspot.md	fec32d6024e177ac05e94de175bfccd84ec3d389034f6f57067fb167302534b6	1
 zip-code	./docs/planning/firecraft/M8-import-export.md	f2f89ede8e7d4b3d2243dea1ca96b8ece56f793811d9708b4a0181bf81a50011	2
 zip-code	./docs/planning/firecraft/M9-scripting.md	0e5c81ceee464db1c0cb9ed801d134fab0dd2a28c0dc62e35aa21a8e13ff0ebc	1
 zip-code	./docs/planning/firecraft/M9-scripting.md	20d70708103e5223b6f2fb00f00947832fb93d12ebef11eb10bc5599efefe184	1
@@ -523,18 +624,53 @@ zip-code	./docs/planning/generated/parity.md	b66a7baff55a93ebb558b351aabb3c7f8df
 zip-code	./docs/planning/generated/parity.md	db4859f7fe2245f0d7160995d4d60a96d0989d9d05cd8782dd7ebe07ffc45e00	1
 zip-code	./docs/planning/generated/parity.md	eea32706ceeea18ece420ede85bbc9dc629a96c899a0782cdd0543e260698320	1
 zip-code	./docs/planning/generated/scorecard.md	848e3fb85d62f31af8c03726f527aff81df44cca545728554b1bc26b40e4de0f	1
+zip-code	./docs/planning/v1-roadmap.md	9766638817ec53c323baa6aaa5f8d10a6105299553621601c5e71d0c47b10e5b	1
 zip-code	./docs/release/PHASE-0-AUDIT.md	3e6d8748577115dd136761901582abce3093fbb973a08c35be9efe6781fb4f4d	4
 zip-code	./docs/research/fireworks-png-nodes.md	492f431bae35265f2e5f4ed49bd8c58dda912431be561504846988d00d05d117	2
 zip-code	./docs/research/fireworks-png-nodes.md	9a37837cdde1d7b36fc789a2d4558af7652d6bb2f7ea5d1a7451ea416f34ef5a	1
 zip-code	./docs/research/fireworks-png-nodes.md	f2f89ede8e7d4b3d2243dea1ca96b8ece56f793811d9708b4a0181bf81a50011	1
 zip-code	./docs/research/fw-code-notes.md	641db3bce85876ca99c655873a991e5b545ca927b6ff197586d65a258c10bcd0	2
 zip-code	./docs/research/fw-code-notes.md	d9d0a2dc2f9a5b30eecb54019199fcf45467cfd71921dd32c48ad471711538d9	1
+zip-code	./docs/research/fw-ui-evidence.md	0f9014ed17f9ca2536c7cf4a2e1325712d249a7ac34ac32d1c90ef9178b6d4ae	3
+zip-code	./docs/research/fw-ui-evidence.md	12e75000dddb2adf979997ceb136ba0cac1b36eea5b3f3cd76d097289867fa47	2
+zip-code	./docs/research/fw-ui-evidence.md	1749c0069badd97d7f20bc9123374e90114cfdc1314f8011f4f31690a5dc3e68	3
+zip-code	./docs/research/fw-ui-evidence.md	194441995983d5a55cf2e5c2bf854123a12c87cd863b8d0586096af33813373d	2
+zip-code	./docs/research/fw-ui-evidence.md	2516b29128ecd6a3cb043801b07450dc9bbcf63ee852a8430bb0cd157b803be9	3
+zip-code	./docs/research/fw-ui-evidence.md	34c1b2df52bd43662e4574afe368a09769be40b2921f0377699564a176080a6c	3
+zip-code	./docs/research/fw-ui-evidence.md	37f5c3f4893f5aa0010e914af9e0bd1bf82313473befc0377f163b0bc5092ecf	2
+zip-code	./docs/research/fw-ui-evidence.md	43462937931f4de544388a15ec15cf8d834e4762938aca10829ec794cba529e4	3
+zip-code	./docs/research/fw-ui-evidence.md	6017af6c686609dd487e75a27e6465c8c2e2689148ad7eb1c24eb2cabb0338a2	3
 zip-code	./docs/research/fw-ui-evidence.md	62da24cc616bf24f9945b38dda504b3b52a5b477cc56dd1413728a75847d2a94	3
+zip-code	./docs/research/fw-ui-evidence.md	64815f2085911987c30d3dce151584f607761454b922d95a47373f3f2011ec14	3
+zip-code	./docs/research/fw-ui-evidence.md	67b4acc3a35001ce2358ee155323bc411457601e60abcc70082524a59cd7a4d5	3
+zip-code	./docs/research/fw-ui-evidence.md	6ae29c8266e042c990b22c648de06825fb83d9a2e854ca65b4fd30f692f5aedd	1
+zip-code	./docs/research/fw-ui-evidence.md	6c9e0ea1852f6ed92c32bfb11b6871120e5e0ff0661ec3486bd46159d4cab1b0	2
 zip-code	./docs/research/fw-ui-evidence.md	6d09116d2b83f1a67b7e7a904b5eaea53f79273f2d165229010df0ed9d4a36bb	1
+zip-code	./docs/research/fw-ui-evidence.md	7868973fdf360a737747e8f6d750786d74f5513b4a769e8e35585049f0cc20eb	2
 zip-code	./docs/research/fw-ui-evidence.md	78f54f73431f4924a4c5ac3647c0dccca95e2f95d4e25037a92d03f8fae9db10	1
 zip-code	./docs/research/fw-ui-evidence.md	7f2c767b903ed755fb208e264d4ddf2bd2e5ff9f9985e3062a46cbd810c2b762	2
+zip-code	./docs/research/fw-ui-evidence.md	83706ed0a7fe5af737522c77e2f080255c67f37d78b6aa199683a94917302a09	2
+zip-code	./docs/research/fw-ui-evidence.md	83b3224c2c14989480197312705ae919167e8e9a9af552b83b44834a3ba960ae	3
+zip-code	./docs/research/fw-ui-evidence.md	83f04cf7d18a22e55af2efd0a2bc43b850611b9eaeede85b24fa4b462c5f33c7	3
+zip-code	./docs/research/fw-ui-evidence.md	872981009609e6327106ff5e1691bb3522debbabb4b995053a3b0eea6117164f	3
+zip-code	./docs/research/fw-ui-evidence.md	8967b2ccf2cc94a9f364c634e2a1d4414df7094055f45c6cc91e65f23c168d0b	3
+zip-code	./docs/research/fw-ui-evidence.md	8e40a9425e96b2b2f46810b76c3cfb120a7ef301c1d0faa21131dcbff1ef890c	3
+zip-code	./docs/research/fw-ui-evidence.md	ae18c4eebcf4d297c1c74338657db213d3349ade84494a4ffddc2622d9a637cc	3
 zip-code	./docs/research/fw-ui-evidence.md	b255720517f7c131dbb0f14d63e793b120464a6c27762b858c2f7d34ba4ccabb	2
+zip-code	./docs/research/fw-ui-evidence.md	b696d7a591ca3f8d859a089d536a7865e258602c18d5e7b88b025d55ef6124c2	2
+zip-code	./docs/research/fw-ui-evidence.md	baa3165a26a2187383be86b3a66a93f918e39cb742c0cfcd316fa2a4a81f02ea	2
+zip-code	./docs/research/fw-ui-evidence.md	be726fe23418e37fa2e8f63932f28c8f19d744e0ae77c75e4aa3b7eba645ab1f	2
+zip-code	./docs/research/fw-ui-evidence.md	c9a3c0745f17edfb0983b9f1ae1b0b3ede222a8d4da358be219df2f07a50ce9f	2
+zip-code	./docs/research/fw-ui-evidence.md	dabf5c8b9082180e7d7ae1ee52a9417fc76be7e3e80aed2a8f3cccf1cd1c162d	3
+zip-code	./docs/research/fw-ui-evidence.md	e1f7f20633f3e890ca7e4597145e4e014db028aaeb49984052a6f1b5f80ee1c0	1
+zip-code	./docs/research/fw-ui-evidence.md	e7c20ffffd16b76ad7c2a84619642b95dc6d07fe1997ff1491d2bcd4f546bf17	3
 zip-code	./docs/research/fw-ui-evidence.md	e846a3867ee2598139c1957e15fafe06f2357059c177aaa944cb5769bf1a5ae1	2
+zip-code	./docs/research/fw-ui-evidence.md	e95e07198fbc2a3fac954c1e20f99ff404edbc4a9bcc08f0ef575f1b58121ac5	2
+zip-code	./docs/research/fw-ui-evidence.md	f1a8066b40fca80840553e871ce9fe636efab3f5b686d0ea458fc90ca4b09c17	1
+zip-code	./docs/research/fw-ui-evidence.md	fbb41b11b6476a0b3e188d9915f489b0e300ecaab16e7f499f1316689e1363f0	1
+zip-code	./docs/research/fw-ui-evidence.md	fc86a70159f9843695bc28d0ebb606aac2f6200627e945ac06a517c3946b923f	3
+zip-code	./docs/research/fw-ui-evidence.md	fec32d6024e177ac05e94de175bfccd84ec3d389034f6f57067fb167302534b6	2
+zip-code	./docs/research/fw-ui-evidence.md	ffdfd59d08e67eeff2569e91641bb6adb12fc0bf42ef8f0f2c197ed14369f10d	3
 zip-code	./docs/tasks/T27-12-adjudicate-aegis-findings.md	6f21ec723dd82aa7bd36bc81cc4008e4f6359fe8ce68f793af23b7123bdbf3a6	1
 zip-code	./docs/tasks/T27-12-adjudicate-aegis-findings.md	d55d01d0341ed0ba2cd99b322e8c5b609254f47d10c7cd12b99b4922effeba44	1
 zip-code	./xtask/src/aegis.rs	6f21ec723dd82aa7bd36bc81cc4008e4f6359fe8ce68f793af23b7123bdbf3a6	1

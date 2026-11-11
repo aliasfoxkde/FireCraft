@@ -322,4 +322,11 @@ impl engine::platform::FileSystem for StdFs {
         names.sort();
         Ok(names)
     }
+
+    fn remove_file(&self, path: &str) -> Result<(), engine::EngineError> {
+        std::fs::remove_file(path).map_err(|error| engine::EngineError::Io {
+            path: path.to_owned(),
+            detail: error.to_string(),
+        })
+    }
 }

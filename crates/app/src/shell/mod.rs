@@ -18,14 +18,17 @@ mod dialogs;
 mod filters_ui;
 mod glyphs;
 mod guides_ui;
+mod html_preview;
 mod icons;
 mod palette;
 mod panel_windows;
 mod panels;
 mod panels_web;
+mod slice_editor;
 
 pub use glyphs::apply_cs6_theme;
 pub(crate) use glyphs::{draw_autoshape_glyph, symbol_type_label, tool_key, tool_label};
+pub use panel_windows::{DockSide, PanelSummary, panel_inventory};
 
 use doc::{ObjectData, PathObject, SymbolInstanceObject, SymbolType, TextObject};
 use egui::{Color32, ColorImage, Pos2, Rect, Sense, TextureHandle, TextureOptions, Vec2};
@@ -39,6 +42,7 @@ use crate::editor::{
     Tool, TransformHandle,
 };
 use crate::menus;
+use crate::toolstrip;
 
 // The web drop sink ([`Shell::set_drop_sink`]): the web crate's async
 // file reader, installed at startup. Wasm only — the desktop shell
@@ -46,8 +50,25 @@ use crate::menus;
 // single-threaded and the sink captures `Rc<WebRunner>`, so the
 // holder is a `thread_local` (a `static Mutex` would demand `Send`).
 #[cfg(target_arch = "wasm32")]
+type DropSink = dyn Fn(&egui::DroppedFileHandle, egui::Context);
+
+#[cfg(target_arch = "wasm32")]
 thread_local! {
-    static DROP_SINK: std::cell::RefCell<Option<std::rc::Rc<dyn Fn(&egui::DroppedFileHandle, egui::Context)>>> =
+    static DROP_SINK: std::cell::RefCell<Option<std::rc::Rc<DropSink>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+// The web persist sink ([`Shell::set_persist_sink`]): the web crate's
+// localStorage writer, installed at startup. The shell calls it with
+// the document's save bytes whenever the session changes — the
+// browser owns *where* the bytes live. Same wasm-only `Rc` contract
+// as the drop sink; empty bytes are the clear signal.
+#[cfg(target_arch = "wasm32")]
+type PersistSink = dyn Fn(&[u8]);
+
+#[cfg(target_arch = "wasm32")]
+thread_local! {
+    static PERSIST_SINK: std::cell::RefCell<Option<std::rc::Rc<PersistSink>>> =
         const { std::cell::RefCell::new(None) };
 }
 
@@ -113,6 +134,27 @@ pub struct Shell {
     pub(crate) about_open: bool,
     /// The keyboard-shortcuts help panel is open (F1 / Help menu).
     help_open: bool,
+    /// The Preferences dialog (21.4) is open.
+    preferences_open: bool,
+    /// The crash-recovery offer (21.1, desktop) is open: a journal
+    /// snapshot from a previous session exists and the user has not
+    /// chosen recover/discard yet.
+    ///
+    /// `cfg(gated)`: the offer exists only in the desktop shell —
+    /// `recovery_ui()` (its only reader) is `cfg(not(wasm32))`.
+    #[cfg(not(target_arch = "wasm32"))]
+    recover_open: bool,
+    /// The desktop crash-recovery sidecar path (21.1). Resolved once
+    /// at shell construction — `FIRECRAFT_RECOVERY` overrides, else
+    /// the platform temp dir — so the recovery tick reads a field,
+    /// never the process environment. Desktop-only: the web build
+    /// persists through the browser instead, so the field (and its
+    /// helpers) are compiled out of wasm rather than left dead.
+    #[cfg(not(target_arch = "wasm32"))]
+    recovery_path: std::path::PathBuf,
+    /// The user's UI scale factor (`pixels_per_point`): `None` follows
+    /// the platform default. Persisted with the layout.
+    ui_scale: Option<f32>,
     /// The Styles panel's new-style name field.
     style_name: String,
     /// The layer whose name is being edited in the Layers panel
@@ -156,6 +198,16 @@ pub struct Shell {
     /// position it opened at (the popup re-anchors there each frame,
     /// so a later pointer move does not drag it).
     pub(crate) context_menu: Option<Pos2>,
+    /// In-canvas text editing (20.1): the object being edited and the
+    /// live buffer. `Some` while the egui `TextEdit` overlay sits on the
+    /// text frame; commit writes `text.setText`, cancel (Esc or
+    /// switching tools) discards the buffer.
+    text_edit: Option<TextEditState>,
+    /// Filters ▸ Repeat Filter: the internal name of the last filter
+    /// applied from the Filters menu or the live-filters panel.
+    /// CS6 applies it to the current selection; with none applied
+    /// yet the row reports the CS6 "no filters to repeat" state.
+    last_filter: Option<&'static str>,
     /// Window-menu panel visibility: names of right-dock panels the
     /// user closed. Absent = shown (CS6 default is everything open).
     panel_hidden: Vec<&'static str>,
@@ -165,6 +217,10 @@ pub struct Shell {
     /// The Behaviors panel's chosen swap-image target (the slice's
     /// name; `None` = not chosen yet).
     swap_target: Option<String>,
+    /// The Find and Replace panel's query; `None` = not typed yet.
+    find_query: Option<String>,
+    /// The Find and Replace panel's replacement text.
+    find_replacement: Option<String>,
     /// Window ▸ Hide Panels (Tab): all right-dock panels folded at
     /// once, independent of per-panel visibility.
     panels_hidden: bool,
@@ -172,11 +228,52 @@ pub struct Shell {
     tools_hidden: bool,
     /// Window ▸ Toolbars ▸ Main: the context options bar is hidden.
     options_bar_hidden: bool,
+    /// The screen-mode control's cycle position (CS6's three view
+    /// modes: Standard, Full Screen with Menus, Full Screen). Display
+    /// state, not document state.
+    screen_mode: ScreenMode,
+    /// The last change stamp written by the persistence path: the web
+    /// persist sink and the desktop recovery sidecar share it, so the
+    /// debounce is one field. `None` until the first write, so an
+    /// untouched untitled document never seeds storage.
+    persisted: Option<(usize, usize, usize)>,
     /// The live egui context, stashed each frame so code outside the
     /// frame loop (the web bridge) can request a repaint after it
     /// mutates the shell — without one, a bridge-loaded document sat
     /// behind a stale untitled canvas until the next input event.
     ctx: Option<egui::Context>,
+    /// Background document tabs (20.5). The active document lives in
+    /// the shell's own `editor`/`view`/`raster`/`doc_name`/`doc_path`
+    /// fields; switching swaps those with the parked tab's, so every
+    /// existing code path keeps operating on "the current document"
+    /// unchanged.
+    tabs: Vec<DocTab>,
+}
+
+/// One parked (background) document tab: the state that must survive
+/// switching away — the editing core, its view, the cached raster, and
+/// the file identity the tab strip and save path read.
+struct DocTab {
+    editor: Editor,
+    view: View,
+    raster: Option<(TextureHandle, (usize, usize, usize))>,
+    raster_scale: f64,
+    doc_name: String,
+    doc_path: Option<String>,
+}
+
+/// In-canvas text editing (20.1): the live editor state for one text
+/// object. `buffer` is what the overlay `TextEdit` shows; commit sends
+/// it through `text.setText` when it differs from `original`; cancel
+/// (Esc, or switching tools) drops it without touching the document.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct TextEditState {
+    /// The text object being edited.
+    pub(crate) id: doc::ObjectId,
+    /// The characters before editing started.
+    pub(crate) original: String,
+    /// The live edit buffer.
+    pub(crate) buffer: String,
 }
 
 /// A press-and-hold in progress on a tool-group leader: when it
@@ -199,6 +296,58 @@ pub(crate) fn hold_opens_flyout(elapsed: f64) -> bool {
     elapsed >= TOOL_HOLD_SECONDS
 }
 
+/// CS6's three view modes — the help set: "In the Tools panel,
+/// select from one of three view modes to control the layout of your
+/// workspace. Standard Screen mode: The default document window view.
+/// Full Screen with Menus mode: A maximized document window view set
+/// against a gray background. Menus, toolbars, scroll bars, and
+/// panels are visible. Full Screen mode: A maximized document window
+/// view set against a black background. No menus, toolbars, or title
+/// bars are visible." (fwref 1178–1185.) The screen-mode control
+/// cycles through them.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) enum ScreenMode {
+    /// The default document window view — every chrome element shown.
+    #[default]
+    Standard,
+    /// Maximized against a gray backdrop; menus stay.
+    FullScreenWithMenus,
+    /// Maximized against a black backdrop; no menus, toolbars, or
+    /// title bars.
+    FullScreen,
+}
+
+impl ScreenMode {
+    /// The next mode in CS6's cycle order.
+    fn next(self) -> Self {
+        match self {
+            ScreenMode::Standard => ScreenMode::FullScreenWithMenus,
+            ScreenMode::FullScreenWithMenus => ScreenMode::FullScreen,
+            ScreenMode::FullScreen => ScreenMode::Standard,
+        }
+    }
+
+    /// The status line the cycle reports.
+    fn label(self) -> &'static str {
+        match self {
+            ScreenMode::Standard => "Standard Screen mode",
+            ScreenMode::FullScreenWithMenus => "Full Screen with Menus mode",
+            ScreenMode::FullScreen => "Full Screen mode",
+        }
+    }
+
+    /// The backdrop CS6 paints behind the maximized document: gray in
+    /// Full Screen with Menus, black in Full Screen, and the shell's
+    /// usual dark canvas matte in Standard.
+    fn backdrop(self) -> egui::Color32 {
+        match self {
+            ScreenMode::Standard => egui::Color32::from_rgb(32, 32, 32),
+            ScreenMode::FullScreenWithMenus => egui::Color32::from_rgb(0x99, 0x99, 0x99),
+            ScreenMode::FullScreen => egui::Color32::BLACK,
+        }
+    }
+}
+
 /// The persisted shell layout: the panel-visibility set and the dock
 /// folds. Serialized (RON, via eframe's storage) on shutdown and
 /// every ~30 s; restored at startup so the CS6 arrangement survives a
@@ -219,6 +368,12 @@ struct ShellLayout {
     show_guides: bool,
     show_rulers: bool,
     smart_guides: bool,
+    /// The user's UI scale (`pixels_per_point`); `None` follows the
+    /// platform default.
+    ui_scale: Option<f32>,
+    /// The palette's recently-run commands, most recent first.
+    #[serde(default)]
+    palette_recents: Vec<String>,
 }
 
 impl Default for ShellLayout {
@@ -235,6 +390,8 @@ impl Default for ShellLayout {
             show_guides: true,
             show_rulers: false,
             smart_guides: true,
+            ui_scale: None,
+            palette_recents: Vec::new(),
         }
     }
 }
@@ -257,6 +414,8 @@ impl Shell {
         );
         shell.layout = layout;
         shell.apply_layout();
+        #[cfg(not(target_arch = "wasm32"))]
+        shell.check_recovery();
         shell
     }
 
@@ -291,6 +450,12 @@ impl Shell {
             tool_press: None,
             about_open: false,
             help_open: false,
+            preferences_open: false,
+            #[cfg(not(target_arch = "wasm32"))]
+            recover_open: false,
+            #[cfg(not(target_arch = "wasm32"))]
+            recovery_path: Self::default_recovery_path(),
+            ui_scale: None,
             style_name: String::new(),
             rename_layer: None,
             show_grid: false,
@@ -310,16 +475,23 @@ impl Shell {
             gamma_18: false,
             guide_draft: None,
             context_menu: None,
+            persisted: None,
+            text_edit: None,
+            last_filter: None,
             // CS6's fresh-document roster: Properties/Pages/States/
             // Layers open, the rest of the panel inventory closed.
             panel_hidden: Self::default_open_panels(),
             url_draft: None,
             swap_target: None,
+            find_query: None,
+            find_replacement: None,
             panels_hidden: false,
             tools_hidden: false,
             options_bar_hidden: false,
+            screen_mode: ScreenMode::Standard,
             layout: ShellLayout::default(),
             ctx: None,
+            tabs: Vec::new(),
         }
     }
 
@@ -359,6 +531,16 @@ impl Shell {
         self.show_guides = self.layout.show_guides;
         self.show_rulers = self.layout.show_rulers;
         self.smart_guides = self.layout.smart_guides;
+        self.ui_scale = self.layout.ui_scale;
+        // Recents naming a command this build lacks are dropped —
+        // same rule as the panel inventory above.
+        self.palette.recents = self
+            .layout
+            .palette_recents
+            .iter()
+            .filter(|recent| engine::catalog::ids().contains(&recent.as_str()))
+            .cloned()
+            .collect();
     }
 
     /// Snapshots the live layout fields for `App::save`.
@@ -376,7 +558,14 @@ impl Shell {
             show_guides: self.show_guides,
             show_rulers: self.show_rulers,
             smart_guides: self.smart_guides,
+            ui_scale: self.ui_scale,
+            palette_recents: self.palette.recents.clone(),
         }
+    }
+
+    /// The name shown in the document tab strip.
+    pub fn set_doc_name(&mut self, name: &str) {
+        self.doc_name = name.to_owned();
     }
 
     /// Wakes the frame loop — a no-op until the first `ui` frame has
@@ -440,6 +629,44 @@ impl Shell {
         )
     }
 
+    /// Parks the active document as a new tab and swaps in `tab`'s
+    /// state. This is the whole switch mechanic: the active fields
+    /// (`editor`, `view`, `raster`, …) are canonical, so a switch is
+    /// a mutual exchange with the parked slot. The transient
+    /// `Editor::untitled()` placeholders exist only between the two
+    /// `replace`s and are both overwritten before the call returns.
+    fn activate_tab(&mut self, index: usize) {
+        if index >= self.tabs.len() {
+            return;
+        }
+        let active = DocTab {
+            editor: std::mem::replace(&mut self.editor, Editor::untitled()),
+            view: self.view,
+            raster: self.raster.take(),
+            raster_scale: self.raster_scale,
+            doc_name: std::mem::take(&mut self.doc_name),
+            doc_path: self.doc_path.take(),
+        };
+        let parked = std::mem::replace(
+            &mut self.tabs[index],
+            DocTab {
+                editor: active.editor,
+                view: active.view,
+                raster: active.raster,
+                raster_scale: active.raster_scale,
+                doc_name: active.doc_name,
+                doc_path: active.doc_path,
+            },
+        );
+        self.editor = parked.editor;
+        self.view = parked.view;
+        self.raster = parked.raster;
+        self.raster_scale = parked.raster_scale;
+        self.doc_name = parked.doc_name;
+        self.doc_path = parked.doc_path;
+        self.status = format!("switched to {}", self.doc_name);
+    }
+
     /// File → Open through the injected traits. A Fireworks PNG
     /// opens as a document; any other supported raster opens as a
     /// document sized to the image — one door, no guessing.
@@ -475,9 +702,19 @@ impl Shell {
         match Editor::open(&bytes) {
             Ok(editor) => {
                 self.status = format!("opened {path}");
+                // Park the previous document rather than dropping it
+                // (20.5 multi-document tabs).
+                let previous = DocTab {
+                    editor: std::mem::replace(&mut self.editor, editor),
+                    view: self.view,
+                    raster: self.raster.take(),
+                    raster_scale: self.raster_scale,
+                    doc_name: std::mem::take(&mut self.doc_name),
+                    doc_path: self.doc_path.take(),
+                };
+                self.tabs.push(previous);
                 self.raster = None;
                 self.raster_scale = 1.0;
-                self.editor = editor;
                 self.view = View::default();
                 self.doc_path = Some(path.clone());
                 self.doc_name = std::path::Path::new(&path)
@@ -491,15 +728,34 @@ impl Shell {
                 let name = std::path::Path::new(&path)
                     .file_name()
                     .map_or_else(|| path.clone(), |name| name.to_string_lossy().into_owned());
+                // `open_raster_document` overwrites the active
+                // editor, so park the previous document first and
+                // restore it if the decode fails.
+                let previous = DocTab {
+                    editor: std::mem::replace(&mut self.editor, Editor::untitled()),
+                    view: self.view,
+                    raster: self.raster.take(),
+                    raster_scale: self.raster_scale,
+                    doc_name: std::mem::take(&mut self.doc_name),
+                    doc_path: self.doc_path.take(),
+                };
                 match self.open_raster_document(&bytes, &name) {
                     Ok(()) => {
+                        self.tabs.push(previous);
                         self.status = format!("opened {path} as an image");
                         self.raster = None;
                         self.raster_scale = 1.0;
                         self.view = View::default();
                         self.doc_name = name;
+                        self.doc_path = Some(path.clone());
                     }
                     Err(_) => {
+                        self.editor = previous.editor;
+                        self.view = previous.view;
+                        self.raster = previous.raster;
+                        self.raster_scale = previous.raster_scale;
+                        self.doc_name = previous.doc_name;
+                        self.doc_path = previous.doc_path;
                         self.status = format!("open failed: {document_error}");
                     }
                 }
@@ -509,14 +765,20 @@ impl Shell {
 
     /// File → Save through the injected traits.
     /// Help ▸ Manage Extensions / Commands ▸ Run Script: pick a
-    /// `.jsf` script and run it against the live document through the
-    /// same engine the CLI's `run-script` verb drives. A script that
-    /// throws or hits a limit leaves the document untouched and
+    /// `.jsf` script or a `.fwsteps` journal and run it against the
+    /// live document — the script through the same engine the CLI's
+    /// `run-script` verb drives, the steps through the same replay
+    /// path the History panel's Replay uses (21.6: one door, both
+    /// automation formats). A script that throws or hits a limit, or
+    /// a journal that refuses, leaves the document untouched and
     /// reports the failure on the status line.
     fn run_script_file(&mut self) {
         let Some(path) = self.dialogs.open_path(
             "Run script",
-            &[("FireCraft script".to_owned(), vec!["jsf".to_owned()])],
+            &[
+                ("FireCraft script".to_owned(), vec!["jsf".to_owned()]),
+                ("FireCraft steps".to_owned(), vec!["fwsteps".to_owned()]),
+            ],
         ) else {
             return;
         };
@@ -530,6 +792,18 @@ impl Shell {
         let name = std::path::Path::new(&path)
             .file_name()
             .map_or_else(|| path.clone(), |n| n.to_string_lossy().into_owned());
+        if path.ends_with(".fwsteps") {
+            match self.editor.replay_steps(&source) {
+                Ok(()) => {
+                    let rows = self.editor.session.journal_len();
+                    self.status = format!("ran steps {name} ({rows} journal row(s))");
+                    self.raster = None;
+                    self.raster_scale = 1.0;
+                }
+                Err(error) => self.status = format!("steps {name} failed: {error}"),
+            }
+            return;
+        }
         let mut engine = match scripting::ScriptEngine::new(scripting::Limits::default()) {
             Ok(engine) => engine,
             Err(error) => {
@@ -696,6 +970,8 @@ impl Shell {
             Ok(bytes) => match self.fs.write_file(&path, &bytes) {
                 Ok(()) => {
                     self.editor.session.mark_clean();
+                    #[cfg(not(target_arch = "wasm32"))]
+                    self.clear_recovery();
                     self.doc_path = Some(path.clone());
                     self.doc_name = std::path::Path::new(&path)
                         .file_name()
@@ -719,6 +995,51 @@ impl Shell {
                 false
             }
         }
+    }
+
+    /// Begin in-canvas editing of the text object under `id` (20.1):
+    /// snapshot its characters and open the overlay. Re-opening on the
+    /// same object keeps the live buffer (a click back into the edit
+    /// must not wipe what was typed).
+    pub(crate) fn begin_text_edit(&mut self, id: doc::ObjectId) {
+        if self.text_edit.as_ref().is_some_and(|edit| edit.id == id) {
+            return;
+        }
+        let original = match self.editor.document().registry.get(id) {
+            Some(doc::ObjectData::Text(text)) => text
+                .runs
+                .iter()
+                .map(|run| run.text.as_str())
+                .collect::<String>(),
+            _ => return,
+        };
+        self.text_edit = Some(TextEditState {
+            id,
+            buffer: original.clone(),
+            original,
+        });
+    }
+
+    /// Commit the text-edit overlay: `text.setText` with the buffer
+    /// when it changed; then the session closes the editor either way.
+    pub(crate) fn commit_text_edit(&mut self) {
+        let Some(edit) = self.text_edit.take() else {
+            return;
+        };
+        if edit.buffer == edit.original {
+            return;
+        }
+        if !self.run_command(
+            "text.setText",
+            serde_json::json!({ "id": edit.id, "text": edit.buffer }),
+        ) {
+            self.status = "text edit failed".to_owned();
+        }
+    }
+
+    /// Cancel the text-edit overlay without touching the document.
+    pub(crate) fn cancel_text_edit(&mut self) {
+        self.text_edit = None;
     }
 
     /// History → Save Steps…: the session journal written as a
@@ -825,17 +1146,57 @@ impl Shell {
                     ui.menu_button(*label, |ui| self.entries_ui(ui, sub));
                 }
                 menus::Entry::Item(item) => {
-                    let label = if item.accel.is_empty() {
-                        item.label.to_owned()
-                    } else {
-                        format!("{}\t{}", item.label, item.accel)
-                    };
-                    let wired = !matches!(item.action, menus::Action::Inert);
+                    let label = self.item_label(item);
+                    let wired = self.item_applies(item);
                     if ui.add_enabled(wired, egui::Button::new(label)).clicked() {
                         self.run_action(&item.action);
                     }
                 }
             }
+        }
+    }
+
+    /// The visible label of one menu row. Rows whose label depends on
+    /// live document state resolve it here; the rest show the label
+    /// the CS6 resource table carries.
+    fn item_label(&self, item: &menus::Item) -> String {
+        let label = match item.dynamic {
+            Some(menus::DynamicLabel::MaskToggle) => self.mask_toggle_label(),
+            None => item.label,
+        };
+        if item.accel.is_empty() {
+            label.to_owned()
+        } else {
+            format!("{}\t{}", label, item.accel)
+        }
+    }
+
+    /// Whether a row applies to the current selection. An inert row
+    /// never applies; a row that needs an element mask applies only
+    /// while the selection carries one.
+    fn item_applies(&self, item: &menus::Item) -> bool {
+        if matches!(item.action, menus::Action::Inert) {
+            return false;
+        }
+        match item.dynamic {
+            Some(menus::DynamicLabel::MaskToggle) => self.mask_state().is_some(),
+            None => true,
+        }
+    }
+
+    /// The element-mask state of the selection: enabled, disabled, or
+    /// no element mask at all.
+    fn mask_state(&self) -> Option<bool> {
+        let id = self.editor.selected_live()?;
+        engine::catalog::element_mask_state(self.editor.document(), id)
+    }
+
+    /// The mask toggle's live label. CS6 swaps this row between
+    /// "Enable Mask" and "Disable Mask" with the mask's state.
+    fn mask_toggle_label(&self) -> &'static str {
+        match self.mask_state() {
+            Some(false) => "Enable Mask",
+            _ => "Disable Mask",
         }
     }
 
@@ -951,6 +1312,16 @@ impl Shell {
                     serde_json::json!({ "id": id, "size": next }),
                 );
             }
+            menus::Action::TextFont(family) => {
+                // Text ▸ Font (22.5): the same family list the
+                // inspector's combo offers, through `text.setFont`.
+                if let Some(id) = self.editor.selection {
+                    self.run_command(
+                        "text.setFont",
+                        serde_json::json!({ "id": id, "font": family }),
+                    );
+                }
+            }
             menus::Action::TextOnPathMode(mode) => {
                 // The on-path setters walk the document's selection, so
                 // the view's selection must land there first.
@@ -967,10 +1338,21 @@ impl Shell {
             }
             menus::Action::Filter(name) => match self.editor.selection {
                 Some(id) => match filter_preset(name) {
-                    Some(preset) => self.apply_filter_preset(id, *preset),
+                    Some(preset) => {
+                        self.last_filter = Some(preset.name);
+                        self.apply_filter_preset(id, *preset);
+                    }
                     None => self.status = format!("no such filter: {name}"),
                 },
                 None => self.status = "pick an object to filter".to_owned(),
+            },
+            menus::Action::RepeatFilter => match (self.last_filter, self.editor.selection) {
+                (Some(name), Some(id)) => match filter_preset(name) {
+                    Some(preset) => self.apply_filter_preset(id, *preset),
+                    None => self.status = format!("no such filter: {name}"),
+                },
+                (Some(_), None) => self.status = "pick an object to filter".to_owned(),
+                (None, _) => self.status = "no filters to repeat".to_owned(),
             },
             menus::Action::Document(action) => self.run_document(action),
         }
@@ -1008,12 +1390,27 @@ impl Shell {
     fn run_shell(&mut self, action: menus::ShellAction) {
         match action {
             menus::ShellAction::New => {
-                self.editor = Editor::untitled();
+                // Park the current document (20.5 tabs); a new
+                // untitled document becomes active.
+                let previous = DocTab {
+                    editor: std::mem::replace(&mut self.editor, Editor::untitled()),
+                    view: self.view,
+                    raster: self.raster.take(),
+                    raster_scale: self.raster_scale,
+                    doc_name: std::mem::take(&mut self.doc_name),
+                    doc_path: self.doc_path.take(),
+                };
+                self.tabs.push(previous);
                 self.view = View::default();
                 self.raster = None;
                 self.raster_scale = 1.0;
                 self.doc_name = "untitled".to_owned();
+                self.doc_path = None;
                 self.status = "new document".to_owned();
+                #[cfg(target_arch = "wasm32")]
+                self.clear_persisted();
+                #[cfg(not(target_arch = "wasm32"))]
+                self.clear_recovery();
             }
             menus::ShellAction::Open => self.open_document(),
             menus::ShellAction::Import => self.import_raster_dialog(),
@@ -1053,6 +1450,15 @@ impl Shell {
                 // silently dropping work.
                 if self.editor.session.is_dirty() {
                     self.status = "document has unsaved changes — save before closing".to_owned();
+                } else if let Some(tab) = self.tabs.pop() {
+                    // Promote the most recently parked document.
+                    self.editor = tab.editor;
+                    self.view = tab.view;
+                    self.raster = tab.raster;
+                    self.raster_scale = tab.raster_scale;
+                    self.doc_name = tab.doc_name;
+                    self.doc_path = tab.doc_path;
+                    self.status = format!("closed; switched to {}", self.doc_name);
                 } else {
                     self.editor = Editor::untitled();
                     self.view = View::default();
@@ -1152,8 +1558,12 @@ impl Shell {
             }
             menus::ShellAction::ToggleHidePanels => self.toggle_all_panels(),
             menus::ShellAction::ToggleMainToolbar => self.toggle_options_bar(),
+            menus::ShellAction::CycleScreenMode => self.cycle_screen_mode(),
             menus::ShellAction::ReportGap(message) => self.status = message.to_owned(),
             menus::ShellAction::InsertWeb { what } => self.insert_web(what),
+            menus::ShellAction::SelectFrame(step) => self.select_frame_relative(step),
+            menus::ShellAction::SelectPage(step) => self.select_page_relative(step),
+            menus::ShellAction::EditTextSelection => self.edit_text_selection(),
             menus::ShellAction::PreviewInBrowser {
                 secondary,
                 all_pages,
@@ -1327,8 +1737,44 @@ impl Shell {
                 };
             }
             menus::ShellAction::About => self.about_open = true,
+            menus::ShellAction::ShowPreferences => self.preferences_open = true,
             menus::ShellAction::ShowShortcuts => self.help_open = !self.help_open,
             menus::ShellAction::PickTool(tool) => {
+                self.editor.tool = tool;
+                self.status = format!("tool: {}", tool_label(tool));
+            }
+            menus::ShellAction::PickToolGroup(leader) => {
+                // CS6: "To quickly select a hidden tool, repeatedly
+                // press the group keyboard shortcut until the tool you
+                // want appears." The shortcut picks the group's leader
+                // and steps through the group from there.
+                //
+                // The Hide/Show Slices control is the exception: the
+                // book's Table 1-1 gives it the "2" key, but it is a
+                // panel button, so the key *acts* on it instead of
+                // making it the active tool.
+                if toolstrip::is_panel_button(leader) {
+                    self.run_panel_button(leader);
+                    return;
+                }
+                let group = toolstrip::group_of(leader);
+                let index = match group {
+                    Some(group) => {
+                        let current = group
+                            .tools
+                            .iter()
+                            .position(|entry| entry.tool == self.editor.tool);
+                        match current {
+                            Some(index) => (index + 1) % group.tools.len(),
+                            None => 0,
+                        }
+                    }
+                    None => 0,
+                };
+                let tool = match group {
+                    Some(group) => group.tools[index].tool,
+                    None => leader,
+                };
                 self.editor.tool = tool;
                 self.status = format!("tool: {}", tool_label(tool));
             }
@@ -1898,6 +2344,18 @@ impl Shell {
                 self.run_command("selection.selectChildren", serde_json::json!({}));
                 self.editor.adopt_document_selection();
             }
+            menus::SelAction::Nudge { dx, dy } => {
+                let ids = self.editor.live_selection();
+                if ids.is_empty() {
+                    self.status = "nothing selected to nudge".to_owned();
+                    return;
+                }
+                self.run_command(
+                    "object.translate",
+                    serde_json::json!({ "ids": ids, "dx": dx, "dy": dy }),
+                );
+                self.status = format!("nudged {} object(s)", ids.len());
+            }
             menus::SelAction::SelectSimilar => {
                 let tolerance = self.editor.wand_tolerance;
                 if let Err(error) = self.editor.select_similar(tolerance) {
@@ -1967,14 +2425,19 @@ impl Shell {
                     serde_json::json!({ "id": id, "mode": mode, "enter_edit_mode": false }),
                 );
             }
-            menus::SelAction::EnableMask(enable) => {
+            menus::SelAction::ToggleMask => {
                 let Some(id) = self.editor.selected_live() else {
                     self.status = "nothing selected".to_owned();
                     return;
                 };
+                let Some(enabled) = engine::catalog::element_mask_state(self.editor.document(), id)
+                else {
+                    self.status = "the selection carries no element mask".to_owned();
+                    return;
+                };
                 self.run_command(
                     "mask.enable",
-                    serde_json::json!({ "id": id, "enable": enable }),
+                    serde_json::json!({ "id": id, "enable": !enabled }),
                 );
             }
             menus::SelAction::LinkMask(linked) => {
@@ -2022,6 +2485,79 @@ impl Shell {
             return;
         }
         self.run_command("flatten.selection", serde_json::json!({}));
+    }
+
+    /// The `,`/`.` state-step rows: move the frame pointer within the
+    /// page's state count, clamped (fwref `cmd_Frame_Previous`/`Next`).
+    fn select_frame_relative(&mut self, step: i64) {
+        let page = self.editor.page;
+        let count = self
+            .editor
+            .document()
+            .pages
+            .get(page)
+            .map(|p| p.info.frame_count)
+            .unwrap_or(0);
+        if count == 0 {
+            self.status = "the document has no states".to_owned();
+            return;
+        }
+        let current = i64::try_from(self.editor.frame).unwrap_or(0);
+        let next = (current + step).clamp(0, count - 1);
+        if usize::try_from(next) == Ok(self.editor.frame) {
+            self.status = if step < 0 {
+                "already at the first state".to_owned()
+            } else {
+                "already at the last state".to_owned()
+            };
+            return;
+        }
+        self.editor.frame = usize::try_from(next).unwrap_or(0);
+        self.status = format!("state {}", self.editor.frame + 1);
+    }
+
+    /// PageUp/PageDown: move the page pointer within the document's
+    /// page count, clamped (fwref `cmd_Page_Previous`/`Next`).
+    fn select_page_relative(&mut self, step: i64) {
+        let count = self.editor.document().pages.len();
+        if count == 0 {
+            self.status = "the document has no pages".to_owned();
+            return;
+        }
+        let current = i64::try_from(self.editor.page).unwrap_or(0);
+        let next = (current + step).clamp(0, i64::try_from(count - 1).unwrap_or(0));
+        if usize::try_from(next) == Ok(self.editor.page) {
+            self.status = if step < 0 {
+                "already at the first page".to_owned()
+            } else {
+                "already at the last page".to_owned()
+            };
+            return;
+        }
+        self.editor.page = usize::try_from(next).unwrap_or(0);
+        self.editor.frame = 0;
+        self.status = format!("page {}", self.editor.page + 1);
+    }
+
+    /// The Text Editor / Edit Image Object row (fwref `cmd_TextEditor`,
+    /// `cmd_EditImageObject`): a selected text object opens the
+    /// in-canvas text overlay; anything else reports that the kind has
+    /// no editor in this build.
+    fn edit_text_selection(&mut self) {
+        let Some(id) = self.editor.selection else {
+            self.status = "select a text object to edit it".to_owned();
+            return;
+        };
+        let is_text = matches!(
+            self.editor.session.document().registry.get(id),
+            Some(doc::ObjectData::Text(_))
+        );
+        if is_text {
+            self.begin_text_edit(id);
+            self.status = "editing text".to_owned();
+        } else {
+            self.status = "the selected kind has no editor in this build".to_owned();
+        }
     }
 
     /// Edit ▸ Insert ▸ Hotspot / slice rows / New Button…: the target
@@ -2157,6 +2693,7 @@ impl Shell {
     fn shortcuts(&mut self, ctx: &egui::Context) {
         let text_focus = ctx.egui_wants_keyboard_input();
         let mut fired: Vec<menus::Action> = Vec::new();
+        let mut draft_key = None;
         ctx.input(|input| {
             for event in &input.events {
                 let egui::Event::Key {
@@ -2169,6 +2706,24 @@ impl Shell {
                 else {
                     continue;
                 };
+                // CS6 closes a plotted path with Enter and abandons it
+                // with Escape. The Pen, the Polygon Slice, the Polygon
+                // Hotspot and the Polygonal Marquee all build their
+                // shape with clicks, so these two keys are how the
+                // shape becomes real.
+                if !modifiers.ctrl && !modifiers.alt && !modifiers.shift && !text_focus {
+                    match key {
+                        egui::Key::Enter => {
+                            draft_key = Some(true);
+                            continue;
+                        }
+                        egui::Key::Escape => {
+                            draft_key = Some(false);
+                            continue;
+                        }
+                        _ => {}
+                    }
+                }
                 for shortcut in menus::SHORTCUTS {
                     if shortcut.key != *key
                         || shortcut.mods.ctrl != modifiers.ctrl
@@ -2187,6 +2742,39 @@ impl Shell {
         for action in fired {
             self.run_action(&action);
         }
+        match draft_key {
+            Some(true) => self.finish_draft(),
+            Some(false) => self.cancel_draft(),
+            None => {}
+        }
+    }
+
+    /// Enter: commits the shape being plotted — the pen's polyline, a
+    /// polygon slice or hotspot, or the polygonal marquee.
+    fn finish_draft(&mut self) {
+        if self.editor.polygon.is_some() {
+            match self.editor.commit_polygon() {
+                Ok(true) => self.status = "polygon selected".to_owned(),
+                Ok(false) => self.status = "polygon needs three points".to_owned(),
+                Err(error) => self.status = format!("polygon failed: {error}"),
+            }
+            return;
+        }
+        if self.editor.draft.is_some() {
+            match self.editor.commit_draft() {
+                Ok(true) => self.status = "shape created".to_owned(),
+                Ok(false) => self.status = "shape needs more points".to_owned(),
+                Err(error) => self.status = format!("shape failed: {error}"),
+            }
+        }
+    }
+
+    /// Escape: abandons the shape being plotted, leaving the document
+    /// as it was.
+    fn cancel_draft(&mut self) {
+        if self.editor.draft.take().is_some() || self.editor.polygon.take().is_some() {
+            self.status = "shape discarded".to_owned();
+        }
     }
 
     /// The installed web drop sink: the web crate registers a reader
@@ -2195,13 +2783,181 @@ impl Shell {
     /// runner. `None` until then — a drop before startup is a no-op
     /// (the status line already said the app was still coming up).
     #[cfg(target_arch = "wasm32")]
-    pub fn set_drop_sink(sink: std::rc::Rc<dyn Fn(&egui::DroppedFileHandle, egui::Context)>) {
+    pub fn set_drop_sink(sink: std::rc::Rc<DropSink>) {
         DROP_SINK.with(|cell| *cell.borrow_mut() = Some(sink));
     }
 
     #[cfg(target_arch = "wasm32")]
-    fn drop_sink() -> Option<std::rc::Rc<dyn Fn(&egui::DroppedFileHandle, egui::Context)>> {
+    fn drop_sink() -> Option<std::rc::Rc<DropSink>> {
         DROP_SINK.with(|cell| cell.borrow().clone())
+    }
+
+    /// Installs the browser-side persist writer (called once at web
+    /// startup). Wasm only; see [`PERSIST_SINK`]. Empty bytes clear
+    /// the stored session (File ▸ New).
+    #[cfg(target_arch = "wasm32")]
+    pub fn set_persist_sink(sink: std::rc::Rc<PersistSink>) {
+        PERSIST_SINK.with(|cell| *cell.borrow_mut() = Some(sink));
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    fn persist_tick(&mut self) {
+        // Debounce by change stamp: serialize only when the session
+        // moved since the last write. Saving is the canonical
+        // `.fw.png` bytes, so a refresh restores the exact document.
+        let stamp = self.stamp();
+        if self.persisted == Some(stamp) {
+            return;
+        }
+        if let Ok(bytes) = self.editor.save() {
+            PERSIST_SINK.with(|cell| {
+                if let Some(sink) = cell.borrow().as_ref() {
+                    sink(&bytes);
+                }
+            });
+            self.persisted = Some(stamp);
+        }
+    }
+
+    /// Drops the stored session (File ▸ New): the persisted bytes
+    /// belong to the discarded document, so a refresh must not
+    /// resurrect it.
+    #[cfg(target_arch = "wasm32")]
+    fn clear_persisted(&mut self) {
+        PERSIST_SINK.with(|cell| {
+            if let Some(sink) = cell.borrow().as_ref() {
+                sink(&[]);
+            }
+        });
+        self.persisted = None;
+    }
+
+    /// The default recovery sidecar path: `FIRECRAFT_RECOVERY` when
+    /// set, else the platform temp dir. Called once, at construction.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn default_recovery_path() -> std::path::PathBuf {
+        if let Ok(path) = std::env::var("FIRECRAFT_RECOVERY") {
+            return std::path::PathBuf::from(path);
+        }
+        std::env::temp_dir().join("firecraft-autorecover.fwsteps")
+    }
+
+    /// The recovery sidecar path as a `&str` for the injected
+    /// [`engine::platform::FileSystem`].
+    #[cfg(not(target_arch = "wasm32"))]
+    fn recovery_path_str(&self) -> String {
+        self.recovery_path.to_string_lossy().into_owned()
+    }
+
+    /// Periodic journal snapshot to the recovery sidecar (desktop;
+    /// the web build persists the whole document through the browser
+    /// instead). Debounced by the same change stamp the web persist
+    /// uses: a write happens only when the session actually moved.
+    /// An empty journal clears the sidecar — an untitled document's
+    /// first steps must not resurrect a discarded recovery file, and
+    /// a cleared journal must not outlive its session.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn recovery_tick(&mut self) {
+        let stamp = self.stamp();
+        if self.persisted == Some(stamp) {
+            return;
+        }
+        let path = self.recovery_path_str();
+        let outcome = if self.editor.session.journal_len() == 0 {
+            if self.fs.exists(&path) {
+                self.fs.remove_file(&path)
+            } else {
+                Ok(())
+            }
+        } else {
+            self.fs
+                .write_file(&path, self.editor.steps_text().as_bytes())
+        };
+        if outcome.is_ok() {
+            self.persisted = Some(stamp);
+        }
+    }
+
+    /// Removes the recovery sidecar after a clean save or File ▸ New:
+    /// the document now has a durable home, so a crash-recovery
+    /// replay would only resurrect stale steps.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn clear_recovery(&mut self) {
+        let path = self.recovery_path_str();
+        if self.fs.exists(&path) {
+            let _ = self.fs.remove_file(&path);
+        }
+        self.persisted = None;
+    }
+
+    /// Checks for a leftover recovery journal and, when found, arms
+    /// the restore-offer window. Called from `Shell::new` only — a
+    /// mid-session appearance would mean this very session crashed,
+    /// which it cannot have.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn check_recovery(&mut self) {
+        let path = self.recovery_path_str();
+        if self.fs.exists(&path) {
+            self.recover_open = true;
+        }
+    }
+
+    /// Replays the recovery journal onto the fresh untitled session
+    /// (the crash-recovery path of `Editor::replay_steps`: history is
+    /// reconstructed, so undo works across the crash boundary).
+    #[cfg(not(target_arch = "wasm32"))]
+    fn recover_steps(&mut self) -> Result<usize, String> {
+        let path = self.recovery_path_str();
+        let text = self
+            .fs
+            .read_file(&path)
+            .map_err(|error| error.to_string())
+            .and_then(|bytes| String::from_utf8(bytes).map_err(|error| error.to_string()))?;
+        self.editor
+            .replay_steps(&text)
+            .map_err(|error| error.to_string())?;
+        let rows = self.editor.session.journal_len();
+        self.clear_recovery();
+        Ok(rows)
+    }
+
+    /// The recovery-offer window: what was found, Recover (replay
+    /// onto this session) or Discard (delete the sidecar).
+    #[cfg(not(target_arch = "wasm32"))]
+    fn recovery_ui(&mut self, ui: &mut egui::Ui) {
+        if !self.recover_open {
+            return;
+        }
+        egui::Window::new("Recover unsaved work?")
+            .anchor(egui::Align2::CENTER_TOP, [0.0, 80.0])
+            .resizable(false)
+            .collapsible(false)
+            .show(ui.ctx(), |ui| {
+                ui.label(format!(
+                    "A journal snapshot from a previous session exists:\n{}",
+                    self.recovery_path.display()
+                ));
+                ui.label("Recover replays its steps onto this session; undo history comes back with them.");
+                ui.horizontal(|ui| {
+                    if ui.button("Recover").clicked() {
+                        match self.recover_steps() {
+                            Ok(rows) => {
+                                self.status = format!("recovered {rows} step(s) from the snapshot");
+                                self.view = View::default();
+                                self.raster = None;
+                                self.raster_scale = 1.0;
+                            }
+                            Err(error) => self.status = format!("recovery failed: {error}"),
+                        }
+                        self.recover_open = false;
+                    }
+                    if ui.button("Discard").clicked() {
+                        self.clear_recovery();
+                        self.recover_open = false;
+                        self.status = "recovery snapshot discarded".to_owned();
+                    }
+                });
+            });
     }
 
     /// Files dropped onto the window open through the same one-door
@@ -2259,57 +3015,113 @@ impl eframe::App for Shell {
         // Keep the context reachable for out-of-frame mutators (the
         // web bridge's request_repaint).
         self.ctx = Some(ui.ctx().clone());
+        // Preferences UI scale (21.4): apply the user factor when it
+        // differs from what the context currently runs at. `None`
+        // means "follow the platform default" — restore it when the
+        // user resets.
+        let native_ppp = ui.ctx().native_pixels_per_point();
+        let wanted = self.ui_scale.map_or(native_ppp.unwrap_or(1.0), |scale| {
+            scale * native_ppp.unwrap_or(1.0)
+        });
+        if (ui.ctx().pixels_per_point() - wanted).abs() > 0.001 {
+            ui.ctx().set_pixels_per_point(wanted);
+        }
         // Menu/shortcut actions run before layout so their effects are
         // visible the same frame.
         self.shortcuts(ui.ctx());
         self.dropped_files(ui.ctx());
+        #[cfg(target_arch = "wasm32")]
+        self.persist_tick();
+        #[cfg(not(target_arch = "wasm32"))]
+        self.recovery_tick();
         // Panels first, CentralPanel last (egui's required order), in
         // the CS6 arrangement: menu, context options bar, tool strip,
         // panel stack (Properties included), status strip, canvas.
-        // The Properties block lived in a bottom dock, which read as a
-        // detached options strip floating at the lower left — the CS6
-        // and Photopea arrangement puts it in the right dock.
-        egui::Panel::top(egui::Id::new("menu")).show(ui, |ui| self.menu_bar(ui));
-        if !self.options_bar_hidden {
+        // The screen mode folds chrome on top of the dock folds: Full
+        // Screen hides menus, toolbars, tools, panels, status and the
+        // document tab strip against a black backdrop; Full Screen
+        // with Menus keeps the menu bar and paints the gray backdrop
+        // (fwref 1178–1185).
+        let full_screen = self.screen_mode == ScreenMode::FullScreen;
+        let menus_visible = !full_screen;
+        if menus_visible {
+            egui::Panel::top(egui::Id::new("menu")).show(ui, |ui| self.menu_bar(ui));
+        }
+        if !self.options_bar_hidden && !full_screen {
             egui::Panel::top(egui::Id::new("options")).show(ui, |ui| self.options_bar(ui));
         }
-        if !self.tools_hidden {
+        if !self.tools_hidden && !full_screen {
             egui::Panel::left(egui::Id::new("tools"))
                 .exact_size(34.0)
                 .show(ui, |ui| self.tools_panel(ui));
         }
-        // The CS6 panel group: one window per panel, docked along the
-        // right edge (drawn after the CentralPanel reservation below —
-        // egui windows float above panels regardless of call order, but
-        // the fold flag is honored here).
-        egui::Panel::bottom(egui::Id::new("status")).show(ui, |ui| {
-            ui.horizontal(|ui| {
-                ui.label(&self.status);
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    ui.label(format!(
-                        "{} · page {} · state {} · undo {} · redo {} · journal {}",
-                        self.doc_name,
-                        self.editor.page + 1,
-                        self.editor.frame + 1,
-                        self.editor.session.undo_len(),
-                        self.editor.session.redo_len(),
-                        self.editor.session.journal_len(),
-                    ));
+        // The CS6 panel group: the right dock, one column of stacked
+        // panels. A side panel *reserves* its width, so the canvas
+        // shrinks instead of being covered, and the column scrolls so
+        // every panel stays reachable at any viewport height.
+        if !self.panels_hidden && !full_screen {
+            self.dock(ui);
+        }
+        if !full_screen {
+            egui::Panel::bottom(egui::Id::new("status")).show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    ui.label(&self.status);
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        ui.label(format!(
+                            "{} · page {} · state {} · undo {} · redo {} · journal {}",
+                            self.doc_name,
+                            self.editor.page + 1,
+                            self.editor.frame + 1,
+                            self.editor.session.undo_len(),
+                            self.editor.session.redo_len(),
+                            self.editor.session.journal_len(),
+                        ));
+                    });
                 });
             });
-        });
+        }
         egui::CentralPanel::default()
             .frame(egui::Frame::NONE)
             .show(ui, |ui| {
-                // The document tab strip: a single-document window, so
-                // the CS6 MDI tab strip reduced to its one member.
-                ui.horizontal(|ui| {
-                    ui.add(
-                        egui::Button::new(egui::RichText::new(&self.doc_name).size(11.0))
-                            .selected(true),
-                    );
-                    ui.weak("FireCraft");
-                });
+                // The document tab strip (20.5): the active document
+                // plus every parked tab, click to switch. A dot marks
+                // a tab with unsaved edits. Full Screen drops the
+                // title bar, tab strip included.
+                if !full_screen {
+                    ui.horizontal(|ui| {
+                        let tab_button =
+                            |ui: &mut egui::Ui, name: &str, is_dirty: bool, selected: bool| {
+                                let label = if is_dirty {
+                                    format!("{name} •")
+                                } else {
+                                    name.to_owned()
+                                };
+                                ui.add(
+                                    egui::Button::new(egui::RichText::new(label).size(11.0))
+                                        .selected(selected),
+                                )
+                            };
+                        tab_button(ui, &self.doc_name, self.editor.session.is_dirty(), true);
+                        // Snapshot labels/dirty flags so the switch
+                        // (a `&mut self` call) can't fight the
+                        // iterator.
+                        let parked: Vec<(String, bool)> = self
+                            .tabs
+                            .iter()
+                            .map(|tab| (tab.doc_name.clone(), tab.editor.session.is_dirty()))
+                            .collect();
+                        // Most recently parked first (CS6 stacks
+                        // newest-rightmost; `tabs` holds oldest
+                        // first).
+                        for index in (0..parked.len()).rev() {
+                            let (name, is_dirty) = &parked[index];
+                            if tab_button(ui, name, *is_dirty, false).clicked() {
+                                self.activate_tab(index);
+                            }
+                        }
+                        ui.weak("FireCraft");
+                    });
+                }
                 self.canvas(ui);
             });
         if self.export_dialog.is_some() {
@@ -2360,13 +3172,18 @@ impl eframe::App for Shell {
                 .collapsible(false)
                 .show(ui.ctx(), |ui| self.about_ui(ui));
         }
+        if self.preferences_open {
+            egui::Window::new("Preferences")
+                .resizable(false)
+                .collapsible(false)
+                .show(ui.ctx(), |ui| self.preferences_ui(ui));
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        self.recovery_ui(ui);
         self.palette_ui(ui);
         if self.help_open {
             self.help_panel(ui.ctx());
         }
-        // The CS6 panel group — drawn last so the windows float over
-        // the canvas like CS6's docked panels do.
-        self.panel_windows(ui.ctx());
         if self.close_requested {
             self.close_requested = false;
             ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
@@ -2420,7 +3237,7 @@ mod tests {
     }
 
     /// A GUI-shaped session: seeds + drag-created rect + a rename.
-    fn gui_editor() -> Editor {
+    pub(super) fn gui_editor() -> Editor {
         let mut editor = Editor::untitled();
         editor.tool = Tool::Rect;
         editor.begin_drag(geom::Point::new(10.0, 10.0));
@@ -2437,7 +3254,7 @@ mod tests {
     }
 
     /// A shell with scripted dialogs over a memory filesystem.
-    fn gui_shell(editor: Editor) -> Shell {
+    pub(super) fn gui_shell(editor: Editor) -> Shell {
         let dialogs = FixedDialogs {
             steps: "/mem/steps.fwsteps".to_owned(),
             doc: "/mem/doc.fw.png".to_owned(),
@@ -2842,6 +3659,39 @@ mod tests {
         );
     }
 
+    /// The screen-mode control cycles CS6's three view modes in the
+    /// documented order (fwref 1178–1185) and back to Standard; the
+    /// cycle is view state — the journal never moves.
+    #[test]
+    fn the_screen_mode_cycles_through_the_three_view_modes() {
+        let mut shell = gui_shell(Editor::untitled());
+        let journal = shell.editor.session.journal_len();
+
+        assert_eq!(shell.screen_mode, ScreenMode::Standard);
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::CycleScreenMode));
+        assert_eq!(shell.screen_mode, ScreenMode::FullScreenWithMenus);
+        assert!(shell.status.contains("Full Screen with Menus"));
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::CycleScreenMode));
+        assert_eq!(shell.screen_mode, ScreenMode::FullScreen);
+        assert!(shell.status.contains("Full Screen mode"));
+        // The third press returns to Standard — a cycle, not a toggle.
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::CycleScreenMode));
+        assert_eq!(shell.screen_mode, ScreenMode::Standard);
+        assert_eq!(
+            shell.editor.session.journal_len(),
+            journal,
+            "the screen mode is view state, not document history"
+        );
+
+        // The Full Screen backdrop is black; Full Screen with Menus is
+        // CS6's gray; Standard keeps the usual dark matte.
+        assert_eq!(ScreenMode::FullScreen.backdrop(), egui::Color32::BLACK);
+        assert_eq!(
+            ScreenMode::FullScreenWithMenus.backdrop(),
+            egui::Color32::from_rgb(0x99, 0x99, 0x99)
+        );
+    }
+
     /// A shell holding one named slice on the Web Layer, selected.
     /// The slice is created through the engine's own command, so the
     /// panels read exactly what the document holds.
@@ -2995,6 +3845,130 @@ mod tests {
         }
     }
 
+    /// The desktop crash-recovery cycle (21.1): a dirty session's
+    /// recovery tick writes the journal to the sidecar; a fresh shell
+    /// over the same sidecar arms the offer; Recover replays the
+    /// steps onto an untitled session with undo intact; Discard
+    /// removes the sidecar. An empty journal never resurrects a
+    /// discarded file, and a clean save clears the sidecar.
+    ///
+    /// Desktop-only: the whole recovery offer (`recovery_path`,
+    /// `recover_open`, `check_recovery`, `recovery_tick`,
+    /// `recover_steps`, `clear_recovery`) is `cfg(not(wasm32))` — the
+    /// web shell persists through the browser instead — so this test
+    /// must be gated with them or `wasm32 --all-targets` stops
+    /// compiling.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn recovery_snapshot_round_trips_through_the_sidecar() {
+        let mut shell = gui_shell(gui_editor());
+        shell.recovery_path = std::path::PathBuf::from("/mem/autorecover.fwsteps");
+        // No sidecar at start: no offer.
+        shell.check_recovery();
+        assert!(!shell.recover_open);
+
+        // Draw something (dirty session) and tick: the sidecar
+        // appears, with journal content.
+        shell
+            .editor
+            .apply(
+                "autoshape.rect",
+                serde_json::json!({
+                    "x": 10.0, "y": 10.0, "width": 40.0, "height": 30.0,
+                    "corner": 0.0, "kind": "bevel",
+                    "page": 0, "layer": 0, "cell": 0, "name": null,
+                }),
+            )
+            .expect("rect draws");
+        shell.recovery_tick();
+        let path = shell.recovery_path_str();
+        let fs = shell.fs.clone();
+        let stored = String::from_utf8(fs.read_file(&path).expect("sidecar exists")).expect("utf8");
+        assert!(stored.contains("autoshape.rect"), "journal rows recorded");
+
+        // A fresh shell over that sidecar arms the offer…
+        let mut fresh = gui_shell(Editor::untitled());
+        fresh.recovery_path = shell.recovery_path.clone();
+        fresh.fs = fs.clone();
+        fresh.check_recovery();
+        assert!(fresh.recover_open, "a leftover snapshot arms the offer");
+
+        // …and Recover replays onto the fresh session with undo.
+        let rows = fresh.recover_steps().expect("replay succeeds");
+        assert!(rows > 0, "journal rows replayed");
+        assert_eq!(
+            fresh.editor.session.journal_len(),
+            rows,
+            "the replayed journal is the session's journal"
+        );
+        fresh.editor.undo().expect("undo works across the crash");
+        assert!(!fresh.fs.exists(&path), "the sidecar is consumed");
+
+        // Discard on a fresh snapshot removes it without touching
+        // the session. (The tick re-writes only after the session
+        // moved again — clear the debounce to stand in for another
+        // edit between ticks.)
+        shell.persisted = None;
+        shell.recovery_tick();
+        assert!(fs.exists(&path));
+        shell.clear_recovery();
+        assert!(!fs.exists(&path));
+
+        // A tick with an empty journal does not resurrect it.
+        let mut empty = gui_shell(Editor::untitled());
+        empty.recovery_path = shell.recovery_path.clone();
+        empty.recovery_tick();
+        assert!(!fs.exists(&path), "an empty journal clears, not seeds");
+        assert!(empty.persisted.is_some(), "the clear is debounced too");
+
+        // Saving clean clears a fresh sidecar.
+        shell
+            .editor
+            .apply(
+                "autoshape.rect",
+                serde_json::json!({
+                    "x": 60.0, "y": 10.0, "width": 20.0, "height": 20.0,
+                    "corner": 0.0, "kind": "bevel",
+                    "page": 0, "layer": 0, "cell": 0, "name": null,
+                }),
+            )
+            .expect("second rect draws");
+        shell.recovery_tick();
+        assert!(fs.exists(&path));
+        shell.editor.session.mark_clean();
+        shell.clear_recovery();
+        assert!(!fs.exists(&path), "a clean save clears the sidecar");
+    }
+
+    /// The raster render scale (21.2 HiDPI): the scale is
+    /// `zoom` × `pixels_per_point` under the 16-MiPix budget, so a 2×
+    /// display at 100% zoom renders 2× (crisp), and deep zoom on a
+    /// large page clamps to the budget. The unscaled 1× shortcut only
+    /// fires at 100% zoom on a 1× display.
+    #[test]
+    fn render_scale_rides_pixels_per_point_under_the_budget() {
+        use crate::shell::canvas_ui::{render_at_one, render_scale};
+
+        let (pw, ph) = (800.0, 600.0); // 0.48 MPix
+        assert_eq!(render_scale(pw, ph, 1.0, 1.0), 1.0);
+        assert_eq!(render_scale(pw, ph, 1.0, 2.0), 2.0, "hidpi at 100%");
+        assert_eq!(render_scale(pw, ph, 3.0, 1.0), 3.0);
+        assert_eq!(render_scale(pw, ph, 2.0, 2.0), 4.0);
+        // Budget: 16 MiPix / 0.48 MPix → max scale ~5.91; 800% on 2×
+        // asks 16.0 and clamps.
+        let clamped = render_scale(pw, ph, 8.0, 2.0);
+        assert!(clamped < 16.0, "budget clamps: {clamped}");
+        let budget = 16.0 * 1024.0 * 1024.0;
+        assert!((clamped - (budget / (pw * ph)).sqrt()).abs() < 1e-9);
+        // A huge page clamps to 1× (never below).
+        let tiny = render_scale(20000.0, 20000.0, 1.0, 2.0);
+        assert!((tiny - 1.0).abs() < 1e-9, "budget floor is 1×: {tiny}");
+
+        assert!(render_at_one(1.0, 1.0), "1× display at 100% zoom");
+        assert!(!render_at_one(2.0, 2.0), "hidpi at 100% renders scaled");
+        assert!(!render_at_one(2.0, 1.0), "200% zoom renders scaled");
+    }
+
     /// The persisted layout round-trips: capture → (RON via serde,
     /// the shape eframe stores) → apply reproduces the panel set and
     /// dock folds, and a layout naming a panel this build does not
@@ -3059,7 +4033,84 @@ mod tests {
         ron::ser::to_string(layout).expect("layout encodes")
     }
 
-    /// The palette covers the whole registry: every catalog id is
+    /// The palette's fuzzy scoring is subsequence-based with a
+    /// position bonus: a query need not be a contiguous substring,
+    /// tighter (earlier) matches outrank spread-out ones, and
+    /// non-matches are filtered rather than ranked last. Equal scores
+    /// keep catalog order (stable sort).
+    #[test]
+    fn palette_fuzzy_scores_subsequences_with_position_bonus() {
+        use crate::shell::palette::fuzzy_score as palette_fuzzy_score;
+
+        // Non-contiguous subsequence matches where substring fails.
+        assert!(palette_fuzzy_score("object.setOpacity", "ooc").is_some());
+        assert!(palette_fuzzy_score("object.setOpacity", "xyz").is_none());
+        // Earlier/tighter matches outrank spread-out ones: the query
+        // "sel" sits at positions 7-9 in bitmap.selectRect but 0-2
+        // in selection.save.
+        let spread = palette_fuzzy_score("bitmap.selectRect", "sel").expect("scores");
+        let tight = palette_fuzzy_score("selection.save", "sel").expect("scores");
+        assert!(tight > spread, "tighter match outranks the spread one");
+        // Ranking: the tight match sorts before the spread one.
+        let mut shell = gui_shell(gui_editor());
+        shell.palette.filter = "strect".to_owned();
+        let hits = shell.palette_matches();
+        assert!(
+            hits.contains(&"bitmap.selectRect"),
+            "subsequence hits the intended command: {hits:?}"
+        );
+    }
+
+    /// Recents survive a layout round trip: a successful palette run
+    /// records the command at the front (deduplicated), capture →
+    /// RON → restore carries it, and a stale name a newer build
+    /// dropped from the catalog is discarded rather than resurrected.
+    #[test]
+    fn palette_recents_round_trip_through_the_layout() {
+        let mut shell = gui_shell(gui_editor());
+        assert!(
+            shell.run_palette_command("object.setOpacity"),
+            "the run succeeds on a fresh editor"
+        );
+        shell.palette.record_recent("object.setOpacity");
+        shell.palette.record_recent("autoshape.rect");
+        // Re-running the older recent promotes it and deduplicates.
+        shell.palette.record_recent("object.setOpacity");
+        assert_eq!(shell.palette.recents[0], "object.setOpacity");
+        assert_eq!(shell.palette.recents.len(), 2);
+
+        let saved = shell.capture_layout();
+        let encoded = ron_mid_encoded(&saved);
+        let decoded: ShellLayout = ron::from_str(&encoded).expect("layout decodes");
+        let mut restored = gui_shell(gui_editor());
+        restored.layout = decoded;
+        restored.apply_layout();
+        assert_eq!(restored.palette.recents, shell.palette.recents);
+
+        // A foreign layout naming commands this build lacks: dropped.
+        let mut foreign = shell.capture_layout();
+        foreign
+            .palette_recents
+            .push("command.goneForever".to_owned());
+        let mut restored = gui_shell(gui_editor());
+        restored.layout = foreign;
+        restored.apply_layout();
+        assert!(
+            !restored
+                .palette
+                .recents
+                .iter()
+                .any(|recent| recent == "command.goneForever"),
+            "no stale command names survive apply_layout"
+        );
+
+        // The empty filter lists recents before the catalog.
+        restored.palette.filter.clear();
+        let hits = restored.palette_matches();
+        assert_eq!(&hits[..2], ["object.setOpacity", "autoshape.rect"]);
+        assert_eq!(hits.len(), engine::catalog::ids().len());
+    }
+
     /// reachable by an empty filter, carries a non-null payload
     /// template, and runs without taking the shell down — a command
     /// may refuse (the palette then names the refusal), but it never
@@ -3101,7 +4152,10 @@ mod tests {
 
         shell.palette.filter = "rect".to_owned();
         for name in shell.palette_matches() {
-            assert!(name.to_lowercase().contains("rect"));
+            assert!(
+                crate::shell::palette::fuzzy_score(name, "rect").is_some(),
+                "{name} matches the fuzzy query"
+            );
         }
         assert!(shell.palette_matches().len() < total, "filter narrows");
 
@@ -3756,6 +4810,73 @@ mod tests {
         );
     }
 
+    /// Commands ▸ Run Script accepts a `.fwsteps` journal as well as
+    /// a `.jsf` (21.6): the steps run through the same replay door
+    /// the History panel uses, onto the live document — journal,
+    /// history and all. A malformed steps file reports the refusal
+    /// and leaves the document untouched.
+    #[test]
+    fn run_script_runs_a_steps_file_through_the_replay_door() {
+        // Record a real journal, then run it as a script.
+        let mut author = gui_shell(gui_editor());
+        author
+            .editor
+            .apply(
+                "autoshape.rect",
+                serde_json::json!({
+                    "x": 10.0, "y": 10.0, "width": 40.0, "height": 30.0,
+                    "corner": 0.0, "kind": "bevel",
+                    "page": 0, "layer": 0, "cell": 0, "name": null,
+                }),
+            )
+            .unwrap();
+        let steps = author.editor.steps_text();
+
+        let fs = MemoryFs::new();
+        fs.write_file("batch.fwsteps", steps.as_bytes()).unwrap();
+        let dialogs = FixedDialogs {
+            steps: String::new(),
+            doc: "batch.fwsteps".to_owned(),
+        };
+        // Run Script's dialog title is not "Replay…", so FixedDialogs
+        // hands back the `doc` slot.
+        let mut runner =
+            Shell::with_platform(Editor::untitled(), std::rc::Rc::new(fs), Box::new(dialogs));
+        runner.run_script_file();
+        assert!(
+            runner.status.contains("ran steps"),
+            "the steps file ran as a script: {}",
+            runner.status
+        );
+        assert_eq!(
+            runner.editor.session.journal_len(),
+            author.editor.session.journal_len(),
+            "the replayed journal equals the recorded one"
+        );
+
+        // A malformed journal is refused, document untouched.
+        let fs = MemoryFs::new();
+        fs.write_file("broken.fwsteps", b"not json\n".as_slice())
+            .unwrap();
+        let dialogs = FixedDialogs {
+            steps: String::new(),
+            doc: "broken.fwsteps".to_owned(),
+        };
+        let mut runner =
+            Shell::with_platform(Editor::untitled(), std::rc::Rc::new(fs), Box::new(dialogs));
+        runner.run_script_file();
+        assert!(
+            runner.status.contains("failed"),
+            "the refusal is reported: {}",
+            runner.status
+        );
+        assert_eq!(
+            runner.editor.session.journal_len(),
+            2,
+            "the refused journal left the seed steps untouched"
+        );
+    }
+
     #[test]
     fn web_export_dialog_writes_html_and_files() {
         // A slice dragged on the canvas, then the dialog pointed at
@@ -4307,6 +5428,26 @@ mod tests {
         assert!(shell.help_open);
     }
 
+    /// Edit ▸ Preferences opens the dialog (21.4); the chosen UI
+    /// scale lands in `ui_scale`, rides the persisted layout, and
+    /// restores with it — so the setting survives a restart.
+    #[test]
+    fn preferences_scale_round_trips_the_layout() {
+        let mut shell = gui_shell(gui_editor());
+        assert!(!shell.preferences_open);
+        assert_eq!(shell.ui_scale, None);
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::ShowPreferences));
+        assert!(shell.preferences_open, "Preferences opens the dialog");
+        shell.ui_scale = Some(1.5);
+        let saved = shell.capture_layout();
+        assert_eq!(saved.ui_scale, Some(1.5));
+        // A fresh shell restores the factor with the layout.
+        let mut other = gui_shell(gui_editor());
+        other.layout = saved;
+        other.apply_layout();
+        assert_eq!(other.ui_scale, Some(1.5));
+    }
+
     /// The Canvas Size dialog opens seeded with the live canvas,
     /// resizes page 0 through the engine command, and shifts content
     /// opposite the anchor so the anchored corner stays fixed.
@@ -4512,7 +5653,7 @@ mod tests {
         shell.run_sel(menus::SelAction::AddMask { mode: "hide all" });
         assert_eq!(shell.status, "nothing selected");
 
-        shell.run_sel(menus::SelAction::EnableMask(false));
+        shell.run_sel(menus::SelAction::ToggleMask);
         assert_eq!(shell.status, "nothing selected");
 
         let id = shell.editor.current_cell().unwrap().elements[0];
@@ -4523,6 +5664,43 @@ mod tests {
             "mask.add on a live object should route, got {:?}",
             shell.status
         );
+    }
+
+    /// CS6's Modify ▸ Mask enable/disable is one row whose label
+    /// flips with the mask's state: the toggle disables an enabled
+    /// mask, re-enables a disabled one, and the row follows.
+    #[test]
+    fn mask_toggle_flips_the_mask_and_its_label() {
+        let mut shell = gui_shell(gui_editor());
+        let id = shell.editor.current_cell().unwrap().elements[0];
+        shell.editor.set_selection(vec![id]);
+        shell.run_sel(menus::SelAction::AddMask { mode: "hide all" });
+        assert!(
+            !shell.status.contains("failed"),
+            "mask.add on a live object should route, got {:?}",
+            shell.status
+        );
+        assert_eq!(
+            engine::catalog::element_mask_state(shell.editor.document(), id),
+            Some(true),
+            "a fresh mask starts enabled"
+        );
+
+        shell.run_sel(menus::SelAction::ToggleMask);
+        assert_eq!(
+            engine::catalog::element_mask_state(shell.editor.document(), id),
+            Some(false),
+            "the toggle disables an enabled mask"
+        );
+        assert_eq!(shell.mask_toggle_label(), "Enable Mask");
+
+        shell.run_sel(menus::SelAction::ToggleMask);
+        assert_eq!(
+            engine::catalog::element_mask_state(shell.editor.document(), id),
+            Some(true),
+            "the toggle re-enables a disabled mask"
+        );
+        assert_eq!(shell.mask_toggle_label(), "Disable Mask");
     }
 
     /// `adopt_document_selection` pulls the document's object
@@ -4822,5 +6000,290 @@ mod tests {
         shell.editor.selection = Some(id);
         shell.run_action(&menus::Action::Sel(menus::SelAction::EditSymbol));
         assert_eq!(shell.editor.symbol_scope, Some(symbol));
+    }
+
+    /// 20.1: beginning an edit snapshots the runs, the buffer tracks
+    /// keystrokes, commit writes `text.setText` once, and re-opening
+    /// the same object keeps the live buffer.
+    #[test]
+    fn text_edit_session_buffers_and_commits() {
+        let (mut shell, id) = text_shell("hello");
+        shell.begin_text_edit(id);
+        assert_eq!(shell.text_edit.as_ref().unwrap().original, "hello");
+        shell.text_edit.as_mut().unwrap().buffer.push_str(" world");
+        // Re-open on the same object mid-edit keeps the buffer.
+        shell.begin_text_edit(id);
+        assert_eq!(shell.text_edit.as_ref().unwrap().buffer, "hello world");
+        shell.commit_text_edit();
+        assert!(shell.text_edit.is_none());
+        assert_eq!(text_of(&shell.editor, id), "hello world");
+        // An unchanged buffer commits nothing — no journal row.
+        let journal = shell.editor.session.journal_len();
+        shell.begin_text_edit(id);
+        shell.commit_text_edit();
+        assert_eq!(shell.editor.session.journal_len(), journal);
+    }
+
+    /// 20.1: cancel restores nothing and writes nothing; a vanished
+    /// object (deleted under the editor) closes the session silently.
+    #[test]
+    fn text_edit_cancel_and_lost_object() {
+        let (mut shell, id) = text_shell("keep");
+        shell.begin_text_edit(id);
+        shell.text_edit.as_mut().unwrap().buffer = "changed".to_owned();
+        shell.cancel_text_edit();
+        assert!(shell.text_edit.is_none());
+        assert_eq!(text_of(&shell.editor, id), "keep");
+        // Commit on a no-op session stays clean.
+        shell.commit_text_edit();
+        assert_eq!(text_of(&shell.editor, id), "keep");
+        // A vanished object refuses to open an edit session.
+        shell.begin_text_edit(doc::ObjectId::from_parts(9_999, 0));
+        assert!(shell.text_edit.is_none());
+    }
+
+    /// 20.1 focus paths: a tool switch commits (CS6 commits the edit
+    /// when you leave the Text tool); Esc closes without writing.
+    #[test]
+    fn text_edit_focus_paths() {
+        let (mut shell, id) = text_shell("keep");
+        // Tool switch commits a changed buffer exactly once.
+        shell.begin_text_edit(id);
+        shell.text_edit.as_mut().unwrap().buffer = "typed".to_owned();
+        shell.pick_tool(Tool::Pointer);
+        assert!(shell.text_edit.is_none());
+        assert_eq!(text_of(&shell.editor, id), "typed");
+        let journal = shell.editor.session.journal_len();
+        // Esc cancels — the buffer change is discarded.
+        shell.begin_text_edit(id);
+        shell.text_edit.as_mut().unwrap().buffer = "scratch".to_owned();
+        shell.cancel_text_edit();
+        assert!(shell.text_edit.is_none());
+        assert_eq!(text_of(&shell.editor, id), "typed");
+        assert_eq!(shell.editor.session.journal_len(), journal);
+        // A no-op tool switch writes nothing.
+        shell.begin_text_edit(id);
+        shell.pick_tool(Tool::Pointer);
+        assert_eq!(shell.editor.session.journal_len(), journal);
+    }
+
+    /// 22.4: the document field set writes through `document.*` —
+    /// canvas geometry, resolution with unit, canvas color — and the
+    /// multi-selection set fans a display edit out to every member.
+    #[test]
+    fn inspector_document_and_multi_selection_sets() {
+        // Document set: canvas color and resolution round-trip.
+        let (mut shell, _) = text_shell("doc");
+        assert!(shell.run_command(
+            "document.setCanvasColor",
+            serde_json::json!({ "color_raw": 0xFF20_4A87i64 })
+        ));
+        assert_eq!(
+            shell.editor.session.document().info.canvas.background_raw,
+            0xFF20_4A87
+        );
+        assert!(shell.run_command(
+            "document.setResolution",
+            serde_json::json!({ "resolution": 96.0, "unit": "inch" }),
+        ));
+        assert!((shell.editor.session.document().info.canvas.resolution - 96.0).abs() < 1e-9);
+
+        // Multi-selection set: two paths, one shared opacity edit.
+        let (mut shell, first) = two_path_shell();
+        let second = *shell
+            .editor
+            .current_cell()
+            .unwrap()
+            .elements
+            .last()
+            .unwrap();
+        assert_ne!(first, second);
+        shell.editor.set_selection(vec![first, second]);
+        assert_eq!(shell.editor.live_selection().len(), 2);
+        for id in [first, second] {
+            assert!(shell.run_command(
+                "object.setOpacity",
+                serde_json::json!({ "id": id, "opacity": 500 }),
+            ));
+        }
+        for id in [first, second] {
+            match shell.editor.document().registry.get(id) {
+                Some(doc::ObjectData::Path(path)) => assert_eq!(path.opacity, 500),
+                other => panic!("expected path, got {other:?}"),
+            }
+        }
+    }
+
+    /// A shell holding two rectangles — the multi-selection fixture.
+    fn two_path_shell() -> (Shell, doc::ObjectId) {
+        let mut editor = Editor::untitled();
+        for (name, x) in [("a", 0.0), ("b", 40.0)] {
+            editor
+                .apply(
+                    "object.createPath",
+                    serde_json::json!({
+                        "kind": "rect",
+                        "x": x, "y": 0.0, "width": 20.0, "height": 10.0,
+                        "page": 0, "layer": editor.active_layer(), "cell": 0,
+                        "name": name,
+                    }),
+                )
+                .unwrap();
+        }
+        let cell = editor.current_cell().unwrap().clone();
+        let ids: Vec<doc::ObjectId> = cell.elements.clone();
+        editor.set_selection(ids.clone());
+        (gui_shell(editor), ids[0])
+    }
+
+    /// 22.5: Repeat Filter re-applies the last filter preset to the
+    /// selection; with nothing applied yet it reports, never acts.
+    #[test]
+    fn repeat_filter_reapplies_the_last_preset() {
+        let (mut shell, _id) = two_path_shell();
+        // Nothing applied yet — the CS6 "no filters to repeat" report.
+        shell.run_action(&menus::Action::RepeatFilter);
+        assert_eq!(shell.status, "no filters to repeat");
+        let journal = shell.editor.session.journal_len();
+        // Apply invert from the Filters menu; the session remembers it.
+        shell.run_action(&menus::Action::Filter("invert"));
+        assert_eq!(shell.last_filter, Some("invert"));
+        let after_one = shell.editor.session.journal_len();
+        assert!(after_one > journal);
+        // Repeat lands a second, identical filter row. The filter
+        // targets the session's primary selection (the last id).
+        let selected = shell.editor.selection.unwrap();
+        shell.run_action(&menus::Action::RepeatFilter);
+        assert_eq!(shell.editor.session.journal_len(), after_one + 1);
+        match shell.editor.document().registry.get(selected) {
+            Some(doc::ObjectData::Path(path)) => assert_eq!(path.effects.len(), 2),
+            other => panic!("expected path, got {other:?}"),
+        }
+        // No selection — the repeat reports instead of acting.
+        shell.editor.selection = None;
+        shell.run_action(&menus::Action::RepeatFilter);
+        assert_eq!(shell.status, "pick an object to filter");
+    }
+
+    fn text_of(editor: &Editor, id: doc::ObjectId) -> String {
+        match editor.document().registry.get(id) {
+            Some(doc::ObjectData::Text(text)) => text
+                .runs
+                .iter()
+                .map(|run| run.text.as_str())
+                .collect::<String>(),
+            _ => panic!("not a text object"),
+        }
+    }
+
+    /// A shell whose open dialog hands back a red PNG at `path` and
+    /// whose filesystem already holds it — File ▸ Open round-trips.
+    fn open_shell(path: &str) -> Shell {
+        let mut shell = gui_shell(Editor::untitled());
+        shell.fs.write_file(path, &red_png()).unwrap();
+        let dialogs = FixedDialogs {
+            steps: "/mem/steps.fwsteps".to_owned(),
+            doc: path.to_owned(),
+        };
+        shell.dialogs = Box::new(dialogs);
+        shell
+    }
+
+    /// 20.5 tabs: opening a second document parks the first and the
+    /// tab strip state follows the active document.
+    #[test]
+    fn open_parks_the_previous_document() {
+        let mut shell = open_shell("/mem/first.png");
+        shell.open_document();
+        assert!(shell.status.contains("opened"), "{}", shell.status);
+        assert_eq!(shell.doc_name, "first.png");
+        assert_eq!(shell.tabs.len(), 1, "the untitled start parked");
+        assert_eq!(shell.tabs[0].doc_name, "untitled");
+    }
+
+    /// Switching to a parked tab restores its editor, name, and path.
+    #[test]
+    fn activate_tab_swaps_state() {
+        let mut shell = open_shell("/mem/first.png");
+        shell.open_document();
+        shell.open_document();
+        // The untitled start and the first open are both parked; the
+        // active document is the second open of first.png.
+        assert_eq!(shell.tabs.len(), 2);
+        assert_eq!(shell.tabs[1].doc_name, "first.png");
+        let parked_clean = !shell.tabs[1].editor.session.is_dirty();
+        shell.activate_tab(1);
+        assert_eq!(shell.doc_name, "first.png");
+        assert_eq!(shell.doc_path.as_deref(), Some("/mem/first.png"));
+        assert_eq!(
+            !shell.editor.session.is_dirty(),
+            parked_clean,
+            "cleanliness rides with the editor"
+        );
+        // And back: the once-active document is now parked again.
+        assert_eq!(shell.tabs.len(), 2);
+        assert_eq!(shell.tabs[1].doc_name, "first.png");
+        assert_eq!(shell.doc_name, "first.png");
+    }
+
+    /// Close promotes the most recently parked document; with no
+    /// tabs left it falls back to a fresh untitled.
+    fn open_promote_dialogs() -> FixedDialogs {
+        FixedDialogs {
+            steps: "/mem/steps.fwsteps".to_owned(),
+            doc: "/mem/second.png".to_owned(),
+        }
+    }
+
+    #[test]
+    fn close_promotes_the_last_parked_tab() {
+        let mut shell = open_shell("/mem/first.png");
+        shell.open_document();
+        // A second, distinct open so each close promotes a different tab.
+        shell.fs.write_file("/mem/second.png", &red_png()).unwrap();
+        shell.dialogs = Box::new(open_promote_dialogs());
+        shell.open_document();
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::CloseDocument));
+        assert!(
+            shell.status.contains("closed; switched"),
+            "{}",
+            shell.status
+        );
+        assert_eq!(shell.doc_name, "first.png", "the last parked tab promoted");
+        assert_eq!(shell.tabs.len(), 1);
+        assert_eq!(shell.tabs[0].doc_name, "untitled");
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::CloseDocument));
+        assert_eq!(shell.doc_name, "untitled", "the start document back");
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::CloseDocument));
+        assert_eq!(shell.doc_name, "untitled");
+        assert_eq!(shell.tabs.len(), 0);
+    }
+
+    /// New parks the current document rather than discarding it.
+    #[test]
+    fn new_parks_the_current_document() {
+        let mut shell = open_shell("/mem/first.png");
+        shell.open_document();
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::New));
+        assert_eq!(shell.doc_name, "untitled");
+        assert_eq!(shell.doc_path, None);
+        assert_eq!(shell.tabs.len(), 2);
+        assert_eq!(shell.tabs[1].doc_name, "first.png");
+    }
+
+    /// A dirty active document still refuses to close (the 20.5
+    /// countercase to `close_promotes_the_last_parked_tab`).
+    #[test]
+    fn dirty_active_document_refuses_close_even_with_tabs() {
+        let mut shell = open_shell("/mem/first.png");
+        shell.open_document();
+        shell.open_document();
+        let tabs_before = shell.tabs.len();
+        shell.editor
+            .apply("autoshape.rect", serde_json::json!({"x":0.0,"y":0.0,"width":40.0,"height":20.0,"corner":0.0,"kind":"bevel","page":0,"layer":0,"cell":0,"name":null}))
+            .expect("mark dirty");
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::CloseDocument));
+        assert_eq!(shell.tabs.len(), tabs_before, "close refused");
+        assert!(shell.status.contains("unsaved"), "{}", shell.status);
     }
 }

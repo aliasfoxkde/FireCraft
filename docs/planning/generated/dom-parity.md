@@ -7,8 +7,9 @@ regeneration recipe in docs/PLANNING.md §5.4). The DOM is stable
 CS4→CS6; CS6 additions the text lacks (e.g. 9-slice guides) are
 covered by the CS6 `.jsf` scripts and appear here via their verbs.
 
-FireCraft side: the 230-command registry (`engine::catalog::ids()`,
-enforced == the fuzz call table).
+FireCraft side: the registry (`engine::catalog::ids()`, enforced ==
+the fuzz call table) — 245 commands as of 2026-11-04; the live
+registry count is the authority, not this line.
 
 ## Coverage classes
 

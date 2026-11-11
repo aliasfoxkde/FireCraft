@@ -1,6 +1,6 @@
 # T27-20 — Prove the DEB glibc-floor check fails on a too-low floor and passes on an adequate one
 
-> **RP:** RP-01 · **Priority:** P0 · **Status:** READY
+> **RP:** RP-01 · **Priority:** P0 · **Status:** IN PROGRESS
 > **Board row:** [EXECUTION-BOARD.md §6](../release/EXECUTION-BOARD.md)
 > **Depends on:** T27-06
 
@@ -25,6 +25,12 @@ the actual requirement, the build succeeds.
 **Evidence:** `b63a040` added `verify_deb_glibc_floor`; the control file now declares
 `Depends: libc6 (>= 2.35)`, which was raised from 2.31 after the clean-container
 smoke caught the mismatch.
+
+The floor is only half of "the declared dependency must match the binaries". The
+desktop binary `dlopen`s the X11 and GL stack, so neither the ELF dynamic section
+nor `dpkg-shlibdeps` can see those dependencies, and the package has to name them by
+hand. Decision 0091 declares that set and adds a build gate that refuses a control
+file that drops one.
 
 **Blockers:** none.
 

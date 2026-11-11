@@ -9,6 +9,7 @@
 //! firecraft-cli run-script <script.jsf> <doc.fw.png> [--out <out.fw.png>]
 //! firecraft-cli serve <doc.fw.png> [--out <out.fw.png>]
 //! firecraft-cli mcp <doc.fw.png> [--out <out.fw.png>]
+//! firecraft-cli --version
 //! ```
 //!
 //! Every operation runs through the same engine registry the GUI uses;
@@ -45,6 +46,23 @@ fn main() -> ExitCode {
 fn run(args: &[String]) -> Result<(), CliError> {
     let fs = io::StdFs;
     match args.first().map(String::as_str) {
+        // `--help` prints the usage on stdout and succeeds. Without it
+        // the flag fell through to the positional parser, which made
+        // the usage an error message on stderr with a failing exit
+        // code — so a packaged CLI could not be asked what it does.
+        Some("--help") | Some("-h") => {
+            println!("{USAGE}");
+            Ok(())
+        }
+        // `--version` answers with the stamped version on stdout and
+        // succeeds. A packaged CLI that cannot say which build it is
+        // leaves the release receipt with nothing to attest to, so the
+        // version is the crate's own stamp (`app_cli::VERSION`), which
+        // the workspace gate keeps equal to the release version.
+        Some("--version") | Some("-V") => {
+            println!("firecraft-cli {}", app_cli::VERSION);
+            Ok(())
+        }
         Some("info") => {
             let path = args.get(1).ok_or_else(missing("info <file>"))?;
             let bytes = fs

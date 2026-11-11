@@ -3,7 +3,7 @@ name = "app"
 version = "0.2.5"
 edition = "2024"
 rust-version = "1.95"
-license = "MIT OR Apache-2.0"
+license = "Apache-2.0"
 authors = ["FireCraft contributors"]
 repository = "https://github.com/aliasfoxkde/FireCraft"
 homepage = "https://github.com/aliasfoxkde/FireCraft"
@@ -32,6 +32,7 @@ eframe = { version = "0.36", default-features = false, features = [
     "persistence",
     "wayland",
     "x11",
+    "accesskit",
 ] }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["float_roundtrip"] }

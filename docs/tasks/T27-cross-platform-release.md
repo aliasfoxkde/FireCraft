@@ -6,7 +6,7 @@
 > **Priority:** P0 release infrastructure  
 > **Plan:** [RELEASE-ENGINEERING-PLAN.md](../RELEASE-ENGINEERING-PLAN.md)  
 > **Scope authority:** [decision 0075](../decisions/0075-release-scope-mvp.md)  
-> **Evidence baseline:** [PHASE-0-AUDIT.md](../release/PHASE-0-AUDIT.md) (PR #16, dated 2026-11-09 — the link resolves once that PR merges)
+> **Evidence baseline:** [PHASE-0-AUDIT.md](../release/PHASE-0-AUDIT.md) (PR #16 merged; dated 2026-11-09 historical baseline)
 
 ## Objective
 
@@ -47,6 +47,7 @@ without pretending a web wrapper is a native app.
   procedure.
 - [Toolchains](../TOOLCHAINS.md) — recipes and verification boundaries.
 - [HANDOFF.md](../HANDOFF.md) — project operating rules and deploy doors.
+- [PRODUCTION-READINESS-PLAN.md](../PRODUCTION-READINESS-PLAN.md) — application cleanup, WASM optimization, UI QA, agent roles, and integration sequence.
 - [TASKS.md](../TASKS.md) — live task status.
 - `docs/release/EXECUTION-BOARD.md` — the per-task execution board.
   **It is not present on this branch**; it arrives with PR #12
@@ -85,8 +86,8 @@ separates the two for every work package.
 | RP-02 | Windows packaging and verification | `IMPLEMENTED` — `packaging/build-windows.ps1` + `packaging/windows/firecraft.iss` exist; the PowerShell and Inno recipes are **existence-checked only** (the gate cannot parse them on this fleet) | `NOT STARTED` (rung 1) — `pwsh` absent and no MSVC linker here (B-12). The GNU cross-build and wine smoke recorded on the PR #9 branch are preview evidence, not native Windows certification (campaign §8) | release-workflow lane | needs a Windows host with MSVC and Inno Setup; until then Windows is recipe-only |
 | RP-03 | macOS packaging and notarization | `IMPLEMENTED` — `packaging/build-macos-dmg.sh` exists and is `bash -n` parse-checked by the gate | `NOT STARTED` (rung 1) — needs macOS + Xcode CLT; the recipe is off-fleet by design | release-workflow lane | needs a macOS host with `lipo`/`hdiutil` and a Developer ID identity |
 | RP-04 | Android feasibility spike and native port | `IMPLEMENTED` — [android-feasibility.md](../research/android-feasibility.md) concludes "feasible with bounded work" | `DEFERRED` — the gate decision is unrecorded; no NDK/SDK CI image, no native entrypoint, no ARM64 device | research lane | record an explicit feasibility-gate decision before any Android work is scheduled |
-| RP-05 | Source, CLI, and web release assets | `IMPLEMENTED` — `xtask dist --source` and `xtask dist --sbom` exist on this branch; both are wired into `release.yml` | `BUILD VERIFIED` (rung 3) for source archive and SBOM — audit P0.4.5/P0.4.6, verified on the PR #12 tree because the verbs do not exist on `main` (F-9, B-13). The web bundle is `PUBLISHED` (rung 11 for the ZIP) but the deployment reconciliation is `BLOCKED` (B-6) | release-workflow lane | merge the two `dist` verbs (B-3), then land an end-to-end tag run that publishes source archive, SBOM and `RELEASE_SHA256.txt` |
-| RP-06 | Supply-chain metadata and signing | `IMPLEMENTED` — `RELEASE_SHA256.txt` generation, the fail-closed eight-asset aggregate, and `packaging/release-assets.sh` exist on this branch | `BLOCKED` — no provenance/attestation generator, no machine-readable release manifest, and no signing identity exist on any branch (B-14), so no artifact can reach rung 9 | release-workflow lane | the signing and attestation work is credential-bound; it is not a documentation task |
+| RP-05 | Source, CLI, and web release assets | `IMPLEMENTED` — `xtask dist --source` and `xtask dist --sbom` are present on main and wired into `release.yml` | `BLOCKED` — generators exist, but no successful post-repair tag run has published and independently verified their outputs. The v0.2.5 web ZIP is historical and production deployment reconciliation remains open (B-6/B-21) | release-workflow lane | run a disposable tag end to end; clean-build the downloaded source archive, schema-validate the SBOM, and reconcile production Pages hashes |
+| RP-06 | Supply-chain metadata and signing | `IMPLEMENTED` — checksum generation, fail-closed aggregation, and `packaging/release-assets.sh` are on main | `BLOCKED` — canonical machine-readable release manifest, schema-valid published SBOM, provenance/attestation, and signing verification are still absent | release-workflow lane | validate SBOM; fix release staging edge cases; add manifest and provenance/signing; independently verify downloads |
 | RP-07 | Release orchestration and publication | `IMPLEMENTED` — `release.yml` builds native + web + source + SBOM, validates the aggregate fail-closed, and creates the draft release with positional assets (`packaging/release-assets.sh create`) | `NOT STARTED` — **the workflow has never produced a release.** All five recorded runs failed (B-4); all six published releases were operator-published by hand, and the shipped v0.2.5 web bundle is not the bundle the workflow built (B-21, F-16) | release-workflow lane | run the repaired workflow end to end on a disposable tag and attach the receipt to this ticket |
 | RP-08 | Final release certification | `NOT STARTED` | `NOT STARTED` — no artifact is `CERTIFIED`; no certification report exists | maintainer | blocked on RP-05…RP-07 evidence and on the scope approval in decision 0075 |
 
@@ -151,13 +152,13 @@ gate this ticket:
 
 | ID | Blocker | Effect on this ticket |
 |---|---|---|
-| B-3 | PR #9 and PR #14 both add `docs/RELEASE-ENGINEERING-PLAN.md` and both implement `dist --source` / `dist --sbom` | the two `dist` verbs must be consolidated into one release branch before RP-05 can land |
+| B-3 | PR #9 and PR #14 duplicated the release plan and `dist --source` / `dist --sbom` implementation | **Resolved on main:** the plan and both commands are present; RP-05 remains blocked on end-to-end tag evidence, not command consolidation |
 | B-4 | the release workflow could not create a release (three defects; all five recorded runs failed) | repaired on PR #14, but unproven end to end — RP-07 stays `NOT STARTED` |
 | B-6 | the live deployment serves a bundle that corresponds to no identifiable release, and its own checksum list cannot verify it | RP-05's "verified production web deployment" is `BLOCKED` |
 | B-7 | the DEB's declared glibc floor is below the binaries' real requirement, confirmed on the **published** artifact | the DEB row stays an open defect, not a settled fact; the floor numbers are owned by the stacked glibc-floor PR |
 | B-13 | the source archive and the SBOM have never been published | RP-05 cannot be `PUBLISHED` |
 | B-14 | no provenance, no release manifest, no signing identity | nothing can be `CERTIFIED` |
-| B-19 | the `time` 0.3.47 / MSRV 1.95 bump is not on `main` | the next artifact must be rebuilt and re-measured, not re-tagged |
+| B-19 | the `time` 0.3.47 / MSRV 1.95 update was pending in the 2026-11-09 audit baseline | **Resolved on main**; new artifacts must still be rebuilt from the current tag SHA rather than re-tagged from v0.2.5 |
 | B-21 | the published v0.2.5 web bundle has no build receipt and the release was published out of band | the published set is not attested by anything in this repository |
 | B-22 | the GitForge runner's failure path arms its container reap and backend-health calls with no timeout, so a wedged Docker daemon wedges the runner instead of failing the job — a defect in the **GitForge** repository (`crates/gitforge-runner/src/executor.rs`), tracked as FireCraft issue #37 | every GitForge-verified row needs a terminal job state from the runner; a hang yields no terminal state, so no GitForge receipt can be attached until the calls are bounded. The fix is owned by the GitForge repository; FireCraft tracks it as issue #37 and task #202 |
 

@@ -1,10 +1,79 @@
 # FireCraft — Progress
 
-> Live status board. Updated at every session close (see
-> [`HANDOFF.md`](HANDOFF.md) §7). History and narrative:
-> [`HISTORY.md`](HISTORY.md). Per-session log: [`SESSIONS.md`](SESSIONS.md).
+> Current snapshot. For the authoritative next-work list see
+> [`TASKS.md`](TASKS.md); phase detail is in [`NEXT.md`](NEXT.md).
+> Historical narrative: [`HISTORY.md`](HISTORY.md) and
+> [`SESSIONS.md`](SESSIONS.md).
 
-## Now (2026-11-01)
+## Snapshot (2026-11-07, PR #8 branch; based on `main` at `5fac7a2`)
+
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:96efdab11c7df4b57fb72854f016b25100c7ae63868aab068c0acecdf0dbaf8c -->
+
+- **Release:** `v0.2.5` is the latest tag. `main` has additional work
+  since that tag. The public Pages manifest was checked on 2026-11-04
+  20:01 local time; its JavaScript, wasm, and index hashes differ from
+  the verified local optimized distribution. The deployed source
+  revision is unknown.
+- **Build evidence:** the earlier optimized `dist/web/` distribution,
+  built 2026-11-04 16:45 local time, had a 21,274,323-byte wasm
+  (below the 21,500,000-byte ceiling). It was built from `56ee1bf`,
+  whose Git tree matches `5fac7a2`; all five entries in its
+  `MANIFEST.sha256` verified. The deployment comparison and earlier
+  bridge smoke covered that artifact. The later [T22 rebuild](tasks/T22-screenshot-ui.md#receipts--2026-11-04)
+  used `5fac7a2` plus uncommitted dock and inspector changes, producing
+  a 21,271,259-byte optimized wasm in `dist/web/`; T22's six browser
+  captures and interaction checks covered this rebuilt artifact.
+  The 18:21 `web/dist/` output was a raw 95,583,065-byte wasm bundle,
+  not a release distribution. Neither directory is tracked by Git.
+- **CI evidence:** PR #7's GitForge 8-job receipt and GitHub Actions
+  gate are recorded in the session notes. PR #8 review remediation now
+  has targeted regression tests in the branch, but this audit environment
+  cannot execute the Rust suite; the current PR head has no GitHub Actions
+  run/status receipt visible. Do not treat the new tests as passing until
+  the repository CI or a local `cargo run -p xtask -- ci` completes.
+- **Engine and parity:** 245 command IDs (source is authoritative);
+  268 carried / 3 partial / 0 missing of the 356 DOM verbs.
+- **CS6 keymap parity (2026-11-10, decisions 0080 + 0085):** every
+  accelerator the menu bar prints is bound at the printed key —
+  `menus::parse_accel` is the single parser and
+  `menus::tests::cs6_keymap_is_fully_bound` holds the two in step
+  (`Action::Inert` and `ReportGap` rows stay display-only by design).
+  Modify ▸ Mask enable/disable is CS6's single toggle row: the
+  engine reads the mask's state, the shell sends the opposite, and the
+  row's label flips between "Enable Mask" and "Disable Mask".
+- **Menu reachability:** 2 of 296 rows currently use `Action::Inert`; eight additional rows have explicit feature/evidence gates. The
+
+  19.6 campaign (batches 1–17) is complete, and the Window menu's
+  panel rows (including Optimize, CSS Properties, Find and Replace,
+  and Common Library) all dispatch; the remaining rows are
+  feature work or explicit evidence gates. Census source:
+  `menus::tests::inert_worklist`; ceiling:
+  `menus::tests::inert_count_never_rises`.
+- **Current UI priority:** Phase 22.1 (panel inventory) and 22.2
+  (tool strip) are complete in this PR branch; 22.5 (CS6 chrome audit)
+  remains partial. The screenshot acceptance work is complete, with
+  1280×800 and 1920×1080 captures and empty/vector/bitmap states
+  recorded in [T22](tasks/T22-screenshot-ui.md).
+- **Completed foundations:** M0–M15, DOM verb-surface campaign,
+  Phases 19.1–19.5, 19.6 menu wiring, and 19b. Three partial DOM
+  rows and the other evidence-gated items remain parked pending new
+  evidence.
+- **Clean-room boundary:** local CS6 files and Adobe-derived extracts
+  remain uncommitted; visual assets require attribution.
+
+## Build and deployment evidence
+
+| Artifact or check | Observed | Meaning |
+|---|---|---|
+| Earlier optimized `dist/web/` | 2026-11-04 16:45 local; 21,274,323-byte wasm; manifest verified | Build from `56ee1bf`, whose Git tree matches `5fac7a2`; deployment comparison and earlier bridge smoke |
+| T22 optimized rebuild in `dist/web/` | 2026-11-04; 21,271,259-byte wasm | `5fac7a2` plus dock and inspector changes; six browser captures and interaction checks in [T22](tasks/T22-screenshot-ui.md#receipts--2026-11-04) |
+| Raw `web/dist/` | 2026-11-04 18:21 local; 95,583,065-byte wasm | Development output; not the optimized distribution |
+| Browser smoke | Earlier optimized artifact: bridge smoke in session history; T22 rebuild: six captures and interaction checks in T22 | Local end-to-end proof for each recorded artifact; live deployed revision still unverified |
+| Live Pages | Manifest fetched 2026-11-04 20:01 local | JS/wasm/index hashes differ from the earlier 21,274,323-byte optimized distribution; deployed revision unknown |
+
+<!-- /coderabbit-ai-generated:v1 -->
 
 - **Active work — the daily-driver expansion** (Phase 19 → 21,
   `docs/NEXT.md`): the engine is complete but the shell exposes a
@@ -12,6 +81,16 @@
   repair. 19.1–19.5 landed (transform handles, path-node editing,
   gradient editor, command palette, guides/grid/snap); 19.6
   (inert-menu burn-down) is in flight.
+- **UI-work gates landed (2026-11-10, issue #94):** the reachability
+  gate (`cargo run -p xtask -- reachability`, wired into `ci`) derives
+  the shell's bound command set from the shell crate's own source and
+  holds it to a one-way floor in `.reachability-floor.tsv` — **245
+  registry commands, 146 bound = 59.59%**, 99 unreachable. The panel
+  snapshot (`crates/app/panels.snapshot`, 14 panels) pins the panel
+  set's structure; `egui_kittest` is obtainable (0.36.2 matches the
+  locked egui) but its pixel path needs a wgpu adapter the CI image
+  does not provide, so the in-tree golden machinery does that job and
+  panel pixels stay open.
 - **19.1–19.5 landed** (2026-10-31 → 11-01, `7329087`…`eb221ac`):
   transform handles + Numeric Transform dialog; Subselect path-node
   editing; gradient fill editor with on-canvas handles; command palette
@@ -51,7 +130,7 @@
   404s); GitHub Actions green on all pushes. Local aegis scan fixed
   (excludes `target/` / `web/dist/` / `fuzz/`).
 - **Roadmap:** M0–M15 **all closed**; the post-roadmap DOM parity
-  campaign is **complete** (no M families). Decision docs 0001–0069.
+  campaign is **complete** (no M families). Decision docs 0001–0089.
 - **Menu reachability:** 289 CS6 menu items; **8 render inert**
   (281 wired). The count fell 190 → 178 (19.1) → 171 (19.5) → 144
   (19.6 batch 1, selection/mask) → 129 (19b.1 + batch 2) → 120
@@ -104,8 +183,9 @@
 | — | **v0.2.2 released** | 2026-10-19 | AVIF/HEIC decisions, WebOS dry-run, smoke budget, 54 tests |
 | — | **v0.2.3 released** | 2026-10-24 | Phase 11.4 pixel selection + marching ants, paint/IO batch, CI image re-ship |
 | — | **v0.2.4 released** | 2026-11-02 | 19.6 selection/mask reachability, Lucide icons, context menu, web session persistence |
+| — | **v0.2.5 tagged** | 2026-11-03 | Latest tag; `main` has post-tag shell fidelity work |
 
-## Post-roadmap parity campaign (the current work)
+## Post-roadmap parity campaign (completed)
 
 | Task | Family | Commit | Parity after |
 |---|---|---|---|
@@ -169,9 +249,9 @@
 
 **Campaign complete** (2026-10-14): no remaining M families; the
 Phase 9 debt list closed the same day (#126–#132). The 3 P rows are
-terminal/evidence-gated (HANDOFF §4 Phase 12). Current work is the
-daily-driver expansion (`docs/NEXT.md` Phases 19–21); rows #135+ are
-the shell-reachability program, not parity rows.
+terminal/evidence-gated (HANDOFF §4 Phase 12). Current UI work is
+Phase 22; rows #135+ are the shell-reachability/fidelity program, not
+parity rows.
 
 ## Recorded debts (open)
 
@@ -186,7 +266,7 @@ the shell-reachability program, not parity rows.
 | ~~Path→image rasterizer (filterSelection on non-image selection)~~ **DONE** — landed in #130 (decision 0059) | 8.8 bake family | #110 (decision 0040) |
 | Out-of-bounds effect growth (bake clips to the image surface) — **evidence-gated**: the live render already grows (compose applies kernels canvas-spanning, M14); the destructive bake clips by settled posture (0031/0040/0059). Reopening needs a CS6 filter/flatten bounds oracle (Wine corpus) — any growth rule without one is invented | tile-bank growth parity | #110 (decision 0040) |
 | ~~Shared-layer link-resolution render~~ **DONE** — landed in #131 (decision 0060) | shared layers render empty | #93 (decision 0022) |
-| 8 inert CS6 menu items (289 items total) — **open**, burn-down in family batches (selection/mask + Window panel toggles + page/frame + symbol/animation + View + Text + Attach to Path + Free Transform/Distort/Split/Remove Transformations + File + Edit + Modify + the CS6 web panels done; vertical-align rows evidence-gated → the scripting family and the Optimize/Common Library/CSS Properties/Find and Replace panels, which need their features); 19.6 | daily-driver reachability | NEXT.md 19.6 |
+| Phase 22 shell fidelity; screenshot and responsive UI audit | UI/UX | TASKS.md / tasks/T22-screenshot-ui.md |
 
 ## Parity timeline
 

@@ -12,9 +12,9 @@ WASM build.
   `docs/PLANNING.md` for the full method). Do not paste output from
   disassemblers into code, comments, tests, or docs. Do not submit
   fonts, icons, or imagery extracted from the reference application.
-- **Licensing.** The project is dual-licensed under Apache-2.0 OR MIT.
-  By contributing you agree your work is released under both, unless
-  you state otherwise in the contribution.
+- **Licensing.** The project is licensed under Apache-2.0. By
+  contributing you agree your work is released under it, unless you
+  state otherwise in the contribution.
 - **Assets.** Any non-code asset (font, image, icon set) must be an
   original work or permissively licensed, and must add a row to
   `docs/ATTRIBUTION.md` in the same change.

@@ -5,7 +5,7 @@
 # repo never builds or ships a Windows artifact — the operator runs
 # this on Windows (PowerShell 5.1+ or PowerShell 7, MSVC toolchain via
 # rustup, Visual Studio Build Tools for link.exe) and owns the
-# artifact. See packaging/TOOLCHAINS.md for the no-untested-claims
+# artifact. See docs/TOOLCHAINS.md for the no-untested-claims
 # rule. Run from the repository root.
 #Requires -Version 5.1
 $ErrorActionPreference = "Stop"

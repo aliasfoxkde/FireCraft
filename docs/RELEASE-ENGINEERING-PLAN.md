@@ -2,7 +2,7 @@
 
 > **Status:** Approved execution plan; implementation in progress and not release-certified  
 > **Created:** 2026-11-06  
-> **Repository baseline:** `main` at `5fac7a2267ebc6b61432d5302ab6b02a1ff15c0f` (`v0.2.5`)  
+> **Repository baseline:** `main` at `2cfdeeee9c45bc3d399e1b6ddb781506e5eb7fd2` (`v0.2.5`, observed 2026-11-10)  
 > **Owner:** FireCraft maintainers  
 > **Purpose:** Give parallel agents an authoritative, evidence-driven plan for producing, validating, signing, and publishing a complete multi-platform FireCraft release.
 
@@ -61,9 +61,9 @@ blocker and plan the corresponding native-runner work explicitly.
 
 The repository currently has a useful release foundation:
 
-- Workspace version is `0.2.5`; workspace package metadata uses Rust edition 2024 and `rust-version = 1.85`.
+- Workspace version is `0.2.5`; workspace package metadata uses Rust edition 2024 and `rust-version = 1.95`.
 - `cargo run -p xtask -- ci` is the canonical quality gate.
-- `cargo run -p xtask -- dist --web` stages the web bundle, checks the WASM size ceiling, writes a SHA-256 manifest, and normally runs a bridge smoke test. CI currently has a documented Chromium-image debt and can explicitly skip that smoke.
+- `cargo run -p xtask -- dist --web` stages the web bundle, checks the WASM size ceiling, writes a SHA-256 manifest, and normally runs a bridge smoke test. The web release build uses Rust opt-level=z and Binaryen wasm-opt=z. GitHub tag CI runs the browser smoke; GitForge still has a temporary smoke-skip path until PR #40's Chromium image work is integrated. A skipped smoke is not release acceptance.
 - `cargo run -p xtask -- dist --native` currently targets Linux x86_64 and produces desktop+CLI tar.gz, CLI-only tar.gz, and .deb packages.
 - Existing packaging recipes: `packaging/build-appimage.sh`, `packaging/build-macos-dmg.sh`, `packaging/build-windows.ps1`, and `packaging/windows/firecraft.iss`.
 - `docs/TOOLCHAINS.md` documents those recipes as off-fleet/operator-built outputs rather than verified release artifacts.
@@ -71,6 +71,8 @@ The repository currently has a useful release foundation:
 - A Flatpak manifest and build recipe exist, but no verified Flatpak artifact is established. No native Android build is established; Android remains feasibility-gated.
 - The public Pages deployment previously differed from local `dist/web` hashes. Deployment reconciliation remains a release blocker.
 - The release process currently treats signing as an operator ceremony. Secrets and credentials must remain outside the repository.
+
+For application cleanup, code refactoring, WASM profiling, UI polish, agent ownership, and cross-workstream sequencing, follow [PRODUCTION-READINESS-PLAN.md](PRODUCTION-READINESS-PLAN.md).
 
 Before changing packaging architecture, inspect the current scripts, workflows, `xtask` distribution code, workspace features, app entrypoints, and all existing documentation. Extend working mechanisms where practical; do not create parallel packaging implementations without a reason.
 
@@ -157,6 +159,50 @@ Android is a **gated workstream**, not an assumed packaging task.
 - Publish a source-only checksum and include commit SHA/tag, Rust toolchain, target triples, and build instructions.
 - Do not claim byte-for-byte reproducible native binaries unless independent rebuilds produce matching hashes. Start with reproducible build inputs and provenance, then measure reproducibility.
 
+## 3.7 Complete product delivery and embedding matrix
+
+The full release scope is intentionally broader than WebOS integration. FireCraft is a standalone creative application in its own right; prebuilt, consistently packaged outputs also make it straightforward for other products, operating environments, launchers, and application suites to consume it. These are complementary distribution goals, not competing product identities.
+
+The artifact matrix therefore covers four independent delivery modes:
+
+1. **End-user application:** a complete, independently installable GUI application with its own update, data, and support lifecycle.
+2. **Developer/integration distribution:** versioned engine/library interfaces, host adapters, schemas, and prebuilt modules that another product can embed or orchestrate.
+3. **Automation distribution:** native CLI and MCP entry points that expose the same command semantics as the GUI, subject to host-platform security and permission policy.
+4. **Browser distribution:** a standalone PWA/WASM app and a separately documented embeddable WASM/host-bridge package. Embedding must not become a requirement for using FireCraft.
+
+### Long-term target inventory
+
+| Surface | Artifacts to produce or evaluate | Intended use | Release posture |
+|---|---|---|---|
+| Windows desktop | Native GUI, portable ZIP, signed installer (MSI and/or Setup EXE); x64 and ARM64, with x86 assessed only if dependencies and demand justify it | Normal desktop installation, portable use, managed deployment | Mainstream target; each architecture requires native install/launch and functional receipts |
+| macOS desktop | Universal arm64+x86_64 app bundle and DMG; optional signed PKG for managed deployment; standalone CLI archive | Normal desktop use, enterprise deployment, automation | Mainstream target; Developer ID signing, notarization, Gatekeeper and upgrade tests |
+| Linux desktop | Native GUI/CLI in AppImage, DEB, RPM, Flatpak, portable tar.gz, and Arch `.pkg.tar.zst`; glibc x86_64 and aarch64 where validated | Distribution-native installation, portable use, sandboxed use, suite/launcher installation | Mainstream formats should be automated; package/repository channels require explicit maintainers |
+| Linux variants | Explicitly named GNU/glibc and musl artifacts; RISC-V 64 builds | Minimal/container/embedded Linux and additional hardware | Separate compatibility tiers; never label one libc ABI as generic Linux |
+| BSD | FreeBSD x86_64 and aarch64 binaries/packages where the target toolchain and dependencies permit | Community and specialist desktop use | Community-supported until native smoke, packaging, and maintenance ownership are established |
+| Browser/PWA | Static HTML/JS/WASM distribution, installable PWA, offline cache/update metadata, checksums | Independent browser use without WebOS | Mainstream target; release-byte browser tests and deployment hash reconciliation are mandatory |
+| Embeddable browser module | Versioned WASM module plus host/page bridge, command schema, capability manifest, TypeScript/JavaScript client or generated bindings, and conformance fixtures | WebOS, third-party browser products, other web shells | First-class developer distribution; versioned separately from presentation details and tested without the WebOS host |
+| Native integration | Rust engine/API crates; optional static/dynamic library and C ABI only after an explicit stable ABI contract; headers and examples if published | Native applications, plugins, launchers, SDK consumers | Prefer Rust API first; add foreign-language ABI only when a real consumer and ABI test matrix exist |
+| CLI and MCP | Native `firecraft` CLI and standalone MCP server/transport binaries on supported native targets; machine-readable command catalog and schemas | Scripts, IDEs, agents, pipelines, headless workflows | Same engine command semantics as GUI; browser builds use the host broker/bridge rather than pretending to listen on TCP |
+| Android | Native arm64 APK for sideload/testing; AAB only after store signing, policy, and release readiness | Mobile/tablet workflow | Feasibility-gated native port; a web wrapper is not a native Android release |
+| Other mobile targets | iOS/iPadOS feasibility assessment and target-specific packaging only if the native app architecture supports it | Mobile/tablet workflow | Discovery-only until native entrypoint, storage, GPU/input, lifecycle, signing, and device tests pass |
+| Source and SDK | Exact-tag source archive, Cargo crate/API docs, versioned schemas, sample embedder, licenses/attribution, SBOM and build metadata | Independent builds, downstream development, long-term integration | Publish from the same release commit with explicit compatibility declarations |
+
+This inventory is a target catalogue, not a claim that every row is currently implemented or immediately GA. Keep three explicit support states in release metadata and documentation:
+
+- **Stable:** built from the canonical tag, packaged, signed where required, installed/launched on a target-native runner or device, and functionally smoke-tested.
+- **Preview/community:** build and test evidence exists, but a stated limitation, incomplete installer/signing path, or lack of continuing maintenance prevents a stable support claim.
+- **Planned/unsupported:** no artifact is published as a supported build; the release page must say so rather than silently implying coverage.
+
+A platform does not become Stable because a workflow can cross-compile it. The support owner, toolchain, package format, signing requirements, runtime tests, data-path behavior, and upgrade/uninstall path must all be explicit.
+
+### Build once, package deliberately, consume through stable contracts
+
+A release should produce canonical build outputs and then package them for each delivery surface. Do not create independent implementations of the editor for each package format. Keep target-specific adapters and packaging scripts thin, feature-gated, and testable.
+
+Each published asset must be discoverable in a machine-readable manifest containing at least: product/component ID, version, source commit, target triple, operating-system and libc baseline, architecture, artifact format, GUI/CLI/MCP/library/module role, enabled feature set, SDK/API compatibility range, dependency/runtime requirements, signing identity/status, SHA-256 digest, SBOM/provenance references, and support tier. Filenames must encode platform, architecture, ABI/libc where relevant, and component role; they must never imply a broader compatibility range than was tested.
+
+For downstream consumers, supply a documented integration bundle rather than requiring them to reverse-engineer a desktop installer: stable package layout, versioned API/schema, public headers only where an ABI exists, examples, licensing/attribution, runtime dependency notes, and explicit data/config paths. Keep the standalone desktop distribution fully usable without any SDK or host product installed.
+
 ## 4. Release metadata, trust, and supply-chain security
 
 Every release must include:
@@ -166,7 +212,7 @@ Every release must include:
 - SBOM in SPDX JSON and/or CycloneDX JSON, generated from locked dependency graphs and packaged native dependencies where tooling permits. Clearly state coverage boundaries.
 - Build provenance/attestation linking artifact digest to repository, tag, workflow, runner, and source commit (GitHub artifact attestations/SLSA provenance if available).
 - Detached signatures for checksums/manifest and signed native executables/installers where supported.
-- License/notice bundle for MIT OR Apache-2.0 and all third-party dependencies/assets. Re-run license gate.
+- License/notice bundle for Apache-2.0 and all third-party dependencies/assets. Re-run license gate.
 - No credentials, signing keys, tokens, keystores, provisioning profiles, or private configuration in artifacts or logs.
 - Pin third-party GitHub Actions by full commit SHA for release workflows. Use least-privilege workflow permissions, protected environments for signing/publishing, and artifact retention/immutability where available.
 - Treat unsigned builds as prerelease/test artifacts. Never imply that checksums alone establish publisher authenticity.
@@ -204,6 +250,28 @@ Create or extend a tag-driven release workflow with separate build jobs and a fi
 - Separate build, sign, and publish permissions. Fork PRs must not access signing secrets.
 - Produce logs/receipts even when a target fails. Keep failures actionable and target-specific.
 
+### 5.3 Reuse and adapt the ArtCraft shared DevOps foundation
+
+The Storytold/ArtCraft ecosystem has working reusable infrastructure worth evaluating before FireCraft creates parallel pipelines:
+
+- [`storytold/craft-common-actions`](https://github.com/storytold/craft-common-actions) provides reusable quality-gate, release, and packaging-lint workflows plus composite actions. Its current release workflow covers macOS universal, Windows x64/x86/ARM64 MSI, Linux x86_64/aarch64 GNU packages, Flatpak, Arch, a FreeBSD x86_64/aarch64 cross-build path, WebAssembly, Linux RISC-V 64, and an optional headless Linux server. FreeBSD aarch64 still requires app-specific packaging scripts to honor `CARGO_BUILD_TARGET` and a per-app release receipt; see the open rollout/compatibility tracker [#39](https://github.com/storytold/craft-common-actions/issues/39). It also centralizes signing, package construction, artifact collection, checksums, and release publication.
+- [`storytold/craft-libs`](https://github.com/storytold/craft-libs) is the shared Rust workspace; it is the candidate source for reusable mechanisms, not a reason to replace FireCraft's application-specific engine or document policy.
+- [`artcraft-candidates/FireCraft`](https://github.com/artcraft-candidates/FireCraft), provisioned following [FireCraft issue #1](https://github.com/aliasfoxkde/FireCraft/issues/1), is the community proving ground for compatibility testing while `aliasfoxkde/FireCraft` remains the canonical author-owned repository.
+
+Adoption must be selective and evidence-led. Evaluate the shared `gate.yml`, `packaging-lint.yml`, `release.yml`, and individual actions against FireCraft's current Cargo graph, package scripts, feature flags, web build, signing model, and artifact naming. The shared release workflow has Storytold-specific assumptions (including its Git-source policy and optional shared font/i18n inputs); do not wire it into FireCraft unchanged until those assumptions are checked. Keep FireCraft-specific corpus, Wasm bridge, browser E2E, installer probes, deployment-hash checks, and release acceptance as caller-side checks or upstreamed reusable jobs. Do not remove an existing required check merely because a shared workflow does not yet run it.
+
+The shared workflow's roadmap is not the same as its implemented matrix. At the time of this plan, [Android APK support](https://github.com/storytold/craft-common-actions/issues/183), [musl builds](https://github.com/storytold/craft-common-actions/issues/168), and [release provenance attestations](https://github.com/storytold/craft-common-actions/issues/29) are open proposals. Treat those as integration opportunities to validate, not existing capabilities. In particular, SHA-256 checksums and code signing are not a substitute for provenance that binds a binary to the tagged source commit.
+
+The preferred collaboration sequence is:
+
+1. Validate the current candidate fork against the shared gate, package linter, and release workflow in isolation.
+2. Record incompatibilities and missing acceptance jobs; distinguish app-specific checks from genuinely reusable workflow gaps.
+3. Contribute generic improvements to `craft-common-actions` through focused PRs where appropriate, and keep FireCraft-only checks in the FireCraft repository.
+4. Once the shared path is proven, bring the equivalent workflow adoption and package changes to the canonical FireCraft repository through reviewed PRs.
+5. Pin toolchains, action versions, shared-library revisions, and external build inputs according to the upstream security/update policy; retain the resolved commit and build receipt for every release.
+
+The desired outcome is one repeatable release methodology that benefits FireCraft and can be reused by other products—not an irreversible dependency on a workflow that does not yet meet FireCraft's product contract.
+
 ## 6. Versioning and artifact naming
 
 - The root `[workspace.package] version` is the source of truth; keep existing `xtask changelog` and `dist` consistency checks.
@@ -218,8 +286,14 @@ Create or extend a tag-driven release workflow with separate build jobs and a fi
   - `firecraft-0.2.5-x86_64.flatpak` (or repository bundle/Flatpak ref naming if publishing a repo)
   - `firecraft-0.2.5-1.x86_64.rpm`
   - `FireCraft-0.2.5-android-arm64.apk`
-  - `FireCraft-0.2.5-source.tar.gz`
+  - `firecraft-0.2.5-source.tar.gz`
 - Confirm naming against ecosystem conventions before implementation; examples are not a mandate to violate DEB/RPM conventions.
+- The fleet-built artifacts are lowercase and carry no `FireCraft` designation
+  (`firecraft-<v>-linux-x86_64.tar.gz`, `firecraft-cli-<v>-linux-x86_64.tar.gz`,
+  `firecraft_<v>_amd64.deb`, `firecraft-web-<v>.zip`,
+  `firecraft-<v>-source.tar.gz`, `firecraft-<v>-sbom.cdx.json`). The
+  `FireCraft-` names above are the off-fleet placeholders and are not the
+  canonical spelling for anything this repository builds.
 
 ## 7. Work packages and agent execution order
 
@@ -382,6 +456,23 @@ Required final checklist:
 - [ ] Production web deployment matches release bundle hashes.
 - [ ] Release notes contain installation, upgrade, uninstall, OS/architecture support, and known limitations.
 - [ ] No package is labeled supported based solely on cross-compilation or recipe presence.
+
+### RP-09 — shared foundations, SDK, and cross-project interoperability (P1)
+
+**Objective:** make FireCraft straightforward to embed, automate, and extend while preserving it as a complete standalone product.
+
+Tasks:
+
+- Audit `storytold/craft-libs` crate-by-crate against FireCraft's real dependency graph and the WebOS host contract. Prioritize candidates such as `craft-cms`, `craft-atomic`, `craft-settings`, `craft-platform`, `craft-dialogs`, `craft-keymap`, `craft-ui`, `craft-web-api`, and `craft-web-host`; confirm API fit, egui/version compatibility, feature costs, license/attribution, wasm safety, and target support before adopting any crate.
+- Treat `craft-web-api` and `craft-web-host` as especially relevant prior art for a common page-control API and host bridge. Compare their protocol and security guarantees with FireCraft's existing bridge; migrate only through compatibility fixtures and a staged adapter, not by replacing a working surface blindly.
+- Keep FireCraft's document model, file-format behavior, command meanings, editor policy, and product UX owned by FireCraft. Shared crates should contain reusable mechanisms/contracts and remain useful to at least two independent consumers. Preserve intentional product differences through typed policies and adapters.
+- Build a small, stable FireCraft-facing SDK facade over the existing engine/command registry. Its first public surface should cover app/component identity, version and capability discovery, command metadata and typed schemas, document open/inspect/mutate/export operations, progress/cancellation/error handling, storage handoff, and host capability negotiation. Do not create a monolithic `craft-common` crate or expose unstable internal types as a semver promise.
+- Keep the SDK layered: Rust crates for native consumers; a target-gated WASM API/host bridge for browser consumers; JSON Schema (or another reviewed language-neutral contract) plus generated TypeScript/JavaScript bindings for WebOS and other hosts; native CLI/MCP adapters that invoke the same command service. Add a C ABI only when a real non-Rust embedder justifies its maintenance and ABI obligations.
+- Define semver/API compatibility, feature flags, error codes, version negotiation, deprecation windows, migration tests, and a machine-readable SDK manifest. Test at least two independent consumers before promoting a candidate shared mechanism into a stable common crate.
+- Preserve FireCraft's standalone product deliverables: independent installers/packages, desktop GUI, PWA, CLI/MCP, source distribution, and release/update documentation must remain usable without WebOS or another ArtCraft host.
+- Add conformance tests that execute equivalent document and command operations through GUI, native CLI, MCP, browser bridge, and a test host. Verify capability denial, malformed/replayed/oversized requests, API-version mismatch, and cancellation/error semantics.
+
+**Acceptance:** a crate compatibility inventory with build-size/runtime measurements; at least one shared-crate adoption tested in two consumers (or a documented no-adoption decision); a versioned SDK/bridge contract with generated-client and conformance fixtures; candidate-fork CI receipts; and an upstream/downstream contribution plan with no unexplained long-lived fork delta.
 
 ## 8. Suggested parallel-agent assignment
 

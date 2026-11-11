@@ -14,6 +14,28 @@ use crate::history::{Call, History};
 use crate::journal::{self, Journal, JournalEntry};
 use crate::registry::CommandRegistry;
 
+/// The session-scoped command id: rewind the undo history.
+///
+/// This command is *not* in the registry catalog. Its state is the
+/// session's undo stack, not the document, and a catalog command must
+/// undo and redo exactly against the document alone. It is listed by
+/// [`crate::catalog::session_ids`] so surfaces that enumerate
+/// commands can still offer it.
+pub const REWIND_ID: &str = "history.rewind";
+
+/// One row of the History panel: a label and the undo depth it
+/// corresponds to.
+///
+/// Depth `0` is the document as opened — the panel's first row. Depth
+/// `n` is the state after the `n`-th recorded edit.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct HistoryEntry {
+    /// The row's label — the command name, or the transaction label.
+    pub label: String,
+    /// The undo depth this row restores.
+    pub depth: usize,
+}
+
 /// One open editing session over one document.
 pub struct Session {
     registry: CommandRegistry,
@@ -61,11 +83,21 @@ impl Session {
     /// host reads created object ids out of it (addNew\* selects what
     /// it created). The journal and history records are identical to
     /// [`Session::apply`].
+    ///
+    /// The session-scoped [`REWIND_ID`] is the one command that
+    /// captures no document delta: it acts on the undo history and
+    /// returns [`Delta::Noop`].
     pub fn apply_delta(
         &mut self,
         name: &str,
         payload: serde_json::Value,
     ) -> Result<Delta, EngineError> {
+        if name == REWIND_ID {
+            // The session-scoped door: the rewind acts on the undo
+            // history, so it captures no document delta.
+            self.rewind_by_payload(payload)?;
+            return Ok(Delta::Noop);
+        }
         let delta = self
             .registry
             .execute(&mut self.document, name, payload.clone())?;
@@ -149,16 +181,71 @@ impl Session {
         &self.document
     }
 
+    /// The History panel's rows, oldest first: the document as opened
+    /// (depth `0`), then one row per recorded edit.
+    #[must_use]
+    pub fn history_entries(&self) -> Vec<HistoryEntry> {
+        let mut entries = Vec::with_capacity(self.history.undo_len() + 1);
+        entries.push(HistoryEntry {
+            label: "Document opened".to_owned(),
+            depth: 0,
+        });
+        for (index, label) in self.history.undo_labels().into_iter().enumerate() {
+            entries.push(HistoryEntry {
+                label: label.to_owned(),
+                depth: index + 1,
+            });
+        }
+        entries
+    }
+
+    /// Rewinds the undo history to `depth` steps: every step above it
+    /// is undone and dropped, and the redo stack is cleared. Returns
+    /// how many steps were undone.
+    ///
+    /// The rewind is journaled under [`REWIND_ID`], so a restarted
+    /// session replays to the same document state.
+    pub fn rewind_to(&mut self, depth: usize) -> Result<usize, EngineError> {
+        let undone = self.history.rewind_to(&mut self.document, depth)?;
+        if undone == 0 {
+            // Nothing was dropped: the request named the current
+            // depth. No journal line, no dirty flag — the document
+            // did not move.
+            return Ok(0);
+        }
+        let payload = serde_json::json!({ "depth": depth });
+        self.journal.record(REWIND_ID, &payload, None);
+        self.dirty = true;
+        Ok(undone)
+    }
+
+    /// The [`REWIND_ID`] command's payload.
+    fn rewind_by_payload(&mut self, payload: serde_json::Value) -> Result<(), EngineError> {
+        #[derive(serde::Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct RewindPayload {
+            depth: usize,
+        }
+        let parsed: RewindPayload =
+            serde_json::from_value(payload).map_err(|error| EngineError::BadPayload {
+                name: REWIND_ID.to_owned(),
+                detail: error.to_string(),
+            })?;
+        self.rewind_to(parsed.depth)?;
+        Ok(())
+    }
+
     /// Registered catalog ids, sorted (menus, CLI help).
     #[must_use]
     pub fn command_names(&self) -> Vec<&'static str> {
         self.registry.names()
     }
 
-    /// `true` when the catalog knows this id.
+    /// `true` when the catalog knows this id — or when it is one of
+    /// the session-scoped ids ([`REWIND_ID`]).
     #[must_use]
     pub fn has_command(&self, name: &str) -> bool {
-        self.registry.contains(name)
+        name == REWIND_ID || self.registry.contains(name)
     }
 
     /// The journal so far (JSON lines).
