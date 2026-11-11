@@ -154,11 +154,15 @@ pre-deploy bytes.
 | `index.html` (pre-injection) | `2617be68…` | `fb2a5140…` — different |
 | `appinfo.json` | `7d039c36…` | `7d039c36…` — **identical** |
 
-**Relationship: different, because the wasm and the loader were built
-from different Rust sources.** The shared `host.html` and
-`appinfo.json` show the two bundles carry the same WebOS shell; the
-differing wasm (7,074 B) and differing `index.html` show the deployed
-wasm was built from a **different tree** than the published one. No
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:80cec6c38b55085d90003b5fad6dff9ca2922022c500d27f2f1ec3dafe246ad5 -->
+
+**Relationship: different artifact bytes; source relationship unknown
+unless established by a build receipt.** The shared `host.html` and
+`appinfo.json` show the two bundles carry the same WebOS shell files; the
+differing wasm (7,074 B) and differing `index.html` establish that the
+artifacts differ, but do not establish different Rust sources. No
 receipt ties `2274ac8c2925b61d` to any commit SHA, so the deployed build
 cannot be attributed to a source revision at all — it is an orphan. It
 is also *not* the CI-built bundle recorded in the audit (21,231,517 B,
@@ -166,6 +170,7 @@ is also *not* the CI-built bundle recorded in the audit (21,231,517 B,
 **fifth** distinct wasm build of nominally the same 0.2.5 release now
 exists.
 
+<!-- /coderabbit-ai-generated:v1 -->
 ### Decision
 
 Recorded as [decision 0084](../decisions/0084-web-deployment-source-of-truth.md).

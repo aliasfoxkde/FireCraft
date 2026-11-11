@@ -17,9 +17,16 @@ Re-verified 2026-11-10 against the live site:
 - the deployed `.js` (`3b0403fc…`) and `_bg.wasm` (`f4f0a3f0…`,
   21,231,377 B) differ from the published v0.2.5 bundle
   (`be288850…`, `a8a4fa4f…`, 21,238,451 B) — **different bytes**;
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:76f45b6fbea47af691cab441a492d6a283099340bb4def54e30f4c31376732c3 -->
+
 - the deployed `host.html` and `appinfo.json` are byte-identical to the
-  released ones, so the two bundles share the WebOS shell but not the
-  Rust build;
+  released ones, so the two bundles share those WebOS shell files;
+  their source relationship is unknown without a build receipt;
+
+<!-- /coderabbit-ai-generated:v1 -->
+
 - `sha256sum -c` against the live manifest passes for the three
   non-HTML entries and **fails for `host.html` and `index.html`**, by
   construction.
@@ -47,14 +54,24 @@ of corruption.
 
 ## Consequences
 
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:6278fcea3e528def9d2b8f99a230703ebf06e9a84436244e533965d2dd0cd961 -->
+
 - The next web release must be redeployed from the release ZIP's bytes.
-  The redeploy records the deployed bundle stem and the source SHA in a
-  receipt, so a future reconciliation can attribute the deployment
-  instead of discovering an orphan.
-- Deployment stays a manual operator action: the Cloudflare Pages step
-  in `release.yml` is commented out. This repository's automation does
-  not publish or deploy, and the redeploy is gated behind explicit
-  maintainer approval (campaign §20).
+  The redeploy receipt records the deployed bundle stem and the source
+  SHA when established by provenance. If the published ZIP lacks
+  provenance, it records the source SHA as **unknown**; the release tag
+  alone does not establish source attribution.
+- Deployment of `firecraft-web` stays a manual operator action: the
+  Cloudflare Pages step in `release.yml` is commented out, so the release
+  workflow does not deploy `firecraft-web`. Separately, `deploy-site.yml`
+  deploys `firecraft-site` on matching pushes to `main` and by manual
+  dispatch. The web app redeploy is gated behind explicit maintainer
+  approval (campaign §20).
+
+<!-- /coderabbit-ai-generated:v1 -->
+
 - Until the redeploy happens, the live site is stale and unattributed.
   No evidence rung above 5 may be claimed for it, and it is not evidence
   of any release.
