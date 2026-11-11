@@ -1150,7 +1150,7 @@ impl TextObject {
 pub const MASK_STACK_MODE_KEY: &str = "firecraft.mask.mode";
 
 /// How a mask level in a mask stack combines with the levels below it.
-/// FireCraft extension (decision 0091): CS6 has one element mask per
+/// `FireCraft` extension (decision 0091): CS6 has one element mask per
 /// object and no stack, so the mode rides in the mask group's data
 /// node under the [`MASK_STACK_MODE_KEY`] key.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1223,7 +1223,7 @@ pub struct GroupObject {
     pub mask_linked: Option<bool>,
     /// The combine mode of this mask level inside its mask stack
     /// (a `DCEv` entry under `DTAv`, keyed
-    /// [`MASK_STACK_MODE_KEY`]; FireCraft extension, decision 0091).
+    /// [`MASK_STACK_MODE_KEY`]; `FireCraft` extension, decision 0091).
     /// `None` = the default union ([`MaskCombineMode::Add`]).
     pub stack_mode: Option<MaskCombineMode>,
     /// `EFLv`* — live effects, file order.

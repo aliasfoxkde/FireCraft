@@ -1761,7 +1761,7 @@ impl Shell {
     /// The mask stack section of the Properties panel: the element
     /// mask's level and the way it combines with the coverage below.
     ///
-    /// A FireCraft extension (decision 0091): CS6 has one element mask
+    /// A `FireCraft` extension (decision 0091): CS6 has one element mask
     /// per object and no stack, so the level's mode defaults to the
     /// union. The panel draws the section only when the selection
     /// carries an element mask.

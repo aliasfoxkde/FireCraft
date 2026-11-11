@@ -1416,7 +1416,7 @@ impl TypedCommand for SetMaskShowAttrs {
 // --- mask.setStackMode --------------------------------------------------
 
 /// `mask.setStackMode` — sets the combine mode of a mask level inside
-/// a mask stack (decision 0091). A FireCraft extension: CS6 has one
+/// a mask stack (decision 0091). A `FireCraft` extension: CS6 has one
 /// element mask per object and no stack, so the mode rides in the mask
 /// group's data node and the default is the union ("add").
 ///

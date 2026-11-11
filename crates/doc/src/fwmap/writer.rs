@@ -266,7 +266,7 @@ fn stack_mode_entry(mode: MaskCombineMode) -> Node {
 /// that was canonical on read re-serializes byte-identically.
 ///
 /// One exception: an entry whose value the model cannot parse (a
-/// spelling from a future FireCraft) is *not* the model's to drop —
+/// spelling from a future `FireCraft`) is *not* the model's to drop —
 /// the model cannot express it, so the bag keeps it verbatim. Every
 /// other entry — a CS6 author's `tooltips`, a nested value the model
 /// cannot express — is preserved verbatim too.
@@ -315,10 +315,8 @@ fn merge_stack_modes(
                 }
             }
         }
-        if !rewritten {
-            if let Some(mode) = mode {
-                children.push(stack_mode_entry(mode));
-            }
+        if !rewritten && let Some(mode) = mode {
+            children.push(stack_mode_entry(mode));
         }
         out.push((*index, n_kids(*b"DTAv", children)));
     }
@@ -1265,10 +1263,8 @@ impl Writer<'_> {
         if let Some(name) = &object.name {
             mapped.push(n_s(*b"OBNs", name));
         }
-        if !preserves_dtav {
-            if let Some(mode) = object.stack_mode {
-                mapped.push(n_kids(*b"DTAv", vec![stack_mode_entry(mode)]));
-            }
+        if !preserves_dtav && let Some(mode) = object.stack_mode {
+            mapped.push(n_kids(*b"DTAv", vec![stack_mode_entry(mode)]));
         }
         mapped.extend(self.write_effects(&object.effects, path)?);
         if object.mask_hidden {
@@ -1280,7 +1276,7 @@ impl Writer<'_> {
         mapped.push(n_b(*b"VISb", object.visible));
         mapped.push(n_i(*b"OPAi", object.opacity));
         mapped.push(n_i(*b"BLDi", object.blend));
-        let children = splice(mapped, &merge_stack_modes(bagged, object.stack_mode));
+        let children = splice(mapped, &merge_stack_modes(&bagged, object.stack_mode));
         Ok(n_kids(*b"GRPv", children))
     }
 

@@ -667,7 +667,8 @@ fn the_model_owns_the_mode_key_and_foreign_data_survives() {
     let mut groups = Vec::new();
     find_nodes(&tree, b"GRPv", &mut groups);
     assert_eq!(groups.len(), 1, "the sample carries one group");
-    children_mut(groups[0]).push(n_k(
+    let group = find_node_mut(&mut tree, b"GRPv").expect("the sample carries one group");
+    children_mut(group).push(n_k(
         b"DTAv",
         vec![
             n_k(
@@ -723,7 +724,9 @@ fn an_unrecognized_mode_spelling_survives_the_round_trip() {
     let (mut tree, _stats) = write(&doc, &UnknownBag::new()).expect("write");
     let mut groups = Vec::new();
     find_nodes(&tree, b"GRPv", &mut groups);
-    children_mut(groups[0]).push(n_k(
+    assert_eq!(groups.len(), 1, "the sample carries one group");
+    let group = find_node_mut(&mut tree, b"GRPv").expect("the sample carries one group");
+    children_mut(group).push(n_k(
         b"DTAv",
         vec![n_k(
             b"DCEv",
@@ -775,6 +778,21 @@ fn kids_of(node: &Node) -> &[Node] {
         NodeValue::Children(kids) => kids,
         _ => panic!("expected a container node"),
     }
+}
+
+/// The first node carrying `fourcc`, at any depth, mutably.
+fn find_node_mut<'a>(nodes: &'a mut [Node], fourcc: &[u8; 4]) -> Option<&'a mut Node> {
+    for node in nodes.iter_mut() {
+        if &node.fourcc == fourcc {
+            return Some(node);
+        }
+        if let NodeValue::Children(kids) = &mut node.value
+            && let Some(found) = find_node_mut(kids, fourcc)
+        {
+            return Some(found);
+        }
+    }
+    None
 }
 
 #[test]
