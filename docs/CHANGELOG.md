@@ -185,6 +185,8 @@ Current version: **0.2.5**.
 
 ### Fixes
 
+- **aegis**: adjudicate the self-test's reserved-domain Git identity (cd6184b)
+- **aegis**: adjudicate the wiki's GraphQL-batch prose finding (a3fe33b)
 - **xtask**: keep the changelog's squashed entries on regeneration (47f7b32)
 - **deps**: clear the remaining rustsec advisories in the lockfile (#117) (b61f198)
 - **xtask**: report the coverage gate's stdout on failure (#82) (7f6cb3f)
@@ -236,6 +238,35 @@ Current version: **0.2.5**.
 
 ### Documentation
 
+- drop trailing whitespace from the project status header (c49b208)
+- **wiki**: clarify open Optimize panel work (4d98aaa)
+- **ledger**: qualify mask-stack PR mergeability status (dbdd34f)
+- **ledger**: clarify Phase 20 panel completion and PR scope (95801f5)
+- **parity**: refresh landed Phase 20 evidence and open work (e2243bb)
+- **handoff**: align web verification and release runbooks (7ac6e79)
+- **wiki**: document standalone distribution and SDK strategy (2b3a2a7)
+- **wiki**: add SDK and distribution navigation (3079cde)
+- **wiki**: add distribution SDK and current navigation (fdf1997)
+- **wiki**: add current release and SDK references (bd5f262)
+- **wiki**: update contribution path and integration rules (2637649)
+- **wiki**: add platform adapter and SDK architecture (de6af82)
+- **wiki**: refresh release and build guidance (e46a5b6)
+- **wiki**: distinguish standalone web and host integration (429e6fd)
+- **wiki**: clarify current automation and command coverage (5e7cc50)
+- **wiki**: update editor and panel layout guidance (83e93bd)
+- **wiki**: reconcile parity roadmap and delivered phases (6d68987)
+- **wiki**: refresh FireCraft project status (8a8b195)
+- **index**: add distribution and platform integration references (ef2b9e3)
+- **parity**: refresh matrix review metadata (8671874)
+- **features**: refresh audit date and parity caveat (ae723cd)
+- **plan**: refresh current baseline and remove duplicated references (079f614)
+- **handoff**: refresh current main and open work snapshot (93fa7b0)
+- **roadmap**: refresh phase status and measured parity gates (f86fd75)
+- **ledger**: reconcile current Phase 20 and release states (4a55f6b)
+- **progress**: refresh the live snapshot for the post-train tree (6f19a0f)
+- **ledger**: record the post-train triage, #117, and the doc repair (653a2a1)
+- repair the stale command-count and menu-census numbers (5900f42)
+- **ledger**: reconcile TASKS.md against the landed trains (09cd6f6)
 - **readme**: add the dark-mode preview and fix the CLI package names (#115) (e268a4a)
 - **release**: re-sync the T27 execution board onto the repaired release workflow (#74) (18c5a52)
 - track the campaign mandate in version control (#73) (6e229de)
@@ -318,6 +349,7 @@ Current version: **0.2.5**.
 
 ### Tests
 
+- cover FireCraft docs-only and source change detection (1ef97d5)
 - **engine**: stale-id refusal tests for filter commands (fb3a92f)
 - **app**: editor gesture-surface battery — 30 tests (cbfe7eb)
 - **io**: webp dimension-mismatch + corrected format gates (cb432c4)
@@ -352,6 +384,11 @@ Current version: **0.2.5**.
 
 ### Continuous Integration
 
+- size the pipeline watchdogs from the fleet's measured wall-clock (c13eb81)
+- add conservative FireCraft path classifier (294c75e)
+- keep FireCraft backup CI lightweight for docs-only changes (f7010bf)
+- add git to FireCraft CI image for change detection (45cce2f)
+- skip FireCraft heavy GitForge jobs for docs-only commits (4816835)
 - **release**: smoke the web bundle in CI instead of skipping (#40) (2f57b63)
 - declare least-privilege GITHUB_TOKEN permissions (#21) (57a3847)
 - **gitforge**: release job on tag push (5d83ed3)

@@ -48,8 +48,6 @@ The expanded delivery matrix and shared-workflow adoption plan are tracked in
 complete product delivery matrix and RP-09 SDK/interoperability work package.
 The companion host-side roadmap is [ArtCraft-WebOS PR #36](https://github.com/aliasfoxkde/ArtCraft-WebOS/pull/36).
 
-The host-side architecture work is tracked in
-[ArtCraft-WebOS PR #36](https://github.com/aliasfoxkde/ArtCraft-WebOS/pull/36).
 The FireCraft-side requirements, security boundary, library strategy, and
 cross-repository test matrix are in
 [WEBOS-PLATFORM-INTEGRATION.md](WEBOS-PLATFORM-INTEGRATION.md).
@@ -67,19 +65,51 @@ independently compiled Craft WASM apps.
 
 ## 2. Current baseline and known work in flight
 
-The initial audit and current GitHub tree establish these starting points. Refresh them at the start of each work session:
+This is a dated execution baseline, not a substitute for refreshing GitHub
+before each session. The current live task ledger and release artifact matrix
+are authoritative for task and platform status.
 
-- The workspace uses Rust edition 2024 and declares Rust 1.95.
-- The production web entry is the Trunk-built Rust/WASM app in the web crate.
-- The previous build selected Trunk/Binaryen optimization level 4, which prioritizes speed rather than minimum output size.
-- The root release profile already uses ThinLTO. The web build now adds a scoped Cargo opt-level=z override and Trunk wasm-opt=z without changing native desktop release settings.
-- The measured Phase 21/22 baseline is 21,608,249 raw Wasm bytes, recorded 2026-11-10. Decision 0090 sets a 25,000,000-byte warning and 50,000,000-byte hard ceiling. The hard ceiling is a safety limit, not a target.
-- The browser bridge smoke is implemented in xtask. GitHub tag CI can run it; the GitForge workflow still contains a temporary smoke-skip path tracked by PR #40. A skipped smoke is not a release receipt.
-- The current application and release work is distributed across feature and infrastructure PRs. The 2026-11-10 snapshot included PR #15, #40, #41, #73, #74, #82, and #83 among other open work. This is a snapshot, not a substitute for querying GitHub.
-- Known release issues include live web deployment reconciliation (#30/#81), DEB runtime dependencies (#39), release orchestration (#33), provenance/signing (#32), native Windows/macOS receipts (#31), and final certification (#34).
-- Phase 21/22 feature work, desktop integration, web smoke, campaign mandate, execution board, coverage diagnostics, and size-policy work are separate branches/PRs. Preserve the existing stack rather than recreating or overwriting it.
+- **Canonical source:** `main` at `b61f198` on 2026-11-11. The latest
+  published version remains `v0.2.5` (2026-11-03); the source tree has
+  advanced beyond that tag.
+- **Editor surface:** 253 registered engine commands; 164 are bound in the
+  CS6-visible shell surface (64.82%, latest measurement 2026-11-11). The
+  generated DOM matrix is 268 carried / 3 partial / 0 missing of 356 verbs.
+  These are separate measurements and neither establishes complete
+  end-user GUI parity.
+- **Menus and panels:** 2 inert menu rows of 296; eight additional rows
+  remain explicitly feature/evidence-gated. The 19.6 inert-menu wiring
+  campaign is complete. The CS6 user-visible matrix is published in
+  `docs/CS6-PARITY.md`.
+- **Recent delivered work:** Phase 21's user-facing deliverables and Phase
+  20.1/20.5–20.7 landed in the 2026-11-11 shell-lineage train (#107).
+  Optimize/timeline work is in open PR #118; the mask stack is in open
+  PR #113. These are not shipped until merged.
+- **WASM/release policy:** the web-only Cargo `opt-level=z` and Binaryen
+  `wasm-opt=z` path is scoped to Trunk; decision 0090 sets a
+  25,000,000-byte investigation warning and 50,000,000-byte hard ceiling.
+  The ceiling is a safety boundary, not a target. The 21,608,249-byte
+  observation from 2026-11-10 is a dated feature-branch measurement, not
+  a new main-branch release receipt.
+- **Deployment:** #104 reconciled the deployed JavaScript, Wasm and
+  `appinfo` with v0.2.5 release bytes; Cloudflare injects an analytics
+  beacon into the served HTML, which explains the remaining HTML hash
+  difference. Republish from the canonical release artifact is pending
+  (T18).
+- **Release certification:** Linux x86_64 desktop/CLI archives, DEB and
+  the web bundle have published receipts for v0.2.5. Off-fleet Windows,
+  macOS, AppImage and Flatpak recipes are not target-native release
+  receipts. No target may be called certified without build, install,
+  launch, functional smoke and publication evidence. See
+  `docs/release/ARTIFACT-MATRIX.md` and T27.
+- **Open integration changes:** #120 replaces deprecated `serde_yaml`
+  in the packaging-manifest parser; #122 extends command discovery for
+  session-scoped history rewind; #123 reconciles the live docs. Refresh
+  their current review and CI state before depending on them.
 
-The live GitHub source and CI receipts outrank this snapshot. Historical audits should remain dated and clearly identified as historical; do not silently rewrite historical evidence to make it look current.
+The live GitHub source, current PR heads, and target receipts outrank this
+snapshot. Historical audits should remain dated and clearly identified as
+historical; do not silently rewrite their measurements to look current.
 
 ## 3. Agent roles and file ownership
 
