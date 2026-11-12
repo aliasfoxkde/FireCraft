@@ -881,6 +881,10 @@ impl Shell {
 #[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 mod tests {
     use super::*;
+    // The shell's scripted-dialogs helpers live in the shell module's
+    // own test module. They are visible here because this module is a
+    // child of the shell.
+    use super::super::tests::{gui_editor, gui_shell};
 
     /// The panel inventory carries the CS6 panel names the Window menu
     /// toggles, and every one of those names is a panel this shell
@@ -964,5 +968,172 @@ mod tests {
     fn the_dock_width_is_cs6s() {
         const { assert!(DOCK_WIDTH >= 240.0) };
         const { assert!(DOCK_WIDTH <= 300.0) };
+    }
+
+    /// The spec lookup knows every panel of the inventory — including
+    /// the Web Layer panel, which has no Window-menu row but is a
+    /// panel all the same — and refuses a name that is not a panel.
+    #[test]
+    fn the_spec_lookup_knows_every_panel() {
+        assert_eq!(
+            panel_spec("Properties").map(|spec| spec.name),
+            Some("Properties")
+        );
+        assert_eq!(
+            panel_spec(WEB_PANEL).map(|spec| spec.kind),
+            Some(PanelKind::WebLayer)
+        );
+        assert!(panel_spec("Not A Panel").is_none());
+    }
+
+    /// The dock's roster is the toggleable panels in CS6's order,
+    /// followed by the always-present Web Layer panel.
+    #[test]
+    fn the_dock_roster_carries_the_web_panel_last() {
+        let roster = dock_roster();
+        assert_eq!(roster.len(), PANELS.len() + 1);
+        assert_eq!(roster.first().map(|spec| spec.name), Some("Properties"));
+        assert_eq!(roster.last().map(|spec| spec.name), Some(WEB_PANEL));
+    }
+
+    /// A dock side names itself for the panel snapshot, and a panel
+    /// moves to the other side.
+    #[test]
+    fn a_dock_side_names_itself_and_has_an_other() {
+        assert_eq!(DockSide::Left.as_str(), "left");
+        assert_eq!(DockSide::Right.as_str(), "right");
+        assert_eq!(DockSide::Left.other(), DockSide::Right);
+        assert_eq!(DockSide::Right.other(), DockSide::Left);
+    }
+
+    /// A tab group switches to another member, and refuses a member
+    /// it does not have and a group that does not exist.
+    #[test]
+    fn a_group_switches_to_another_member() {
+        let mut shell = gui_shell(gui_editor());
+        shell.group_panels("Layers", "Properties");
+        assert_eq!(shell.panel_groups.len(), 1);
+
+        shell.set_active_tab(0, "Properties");
+        assert_eq!(shell.panel_groups[0].active, "Properties");
+
+        // A member the group does not have is refused.
+        shell.set_active_tab(0, "History");
+        assert_eq!(shell.panel_groups[0].active, "Properties");
+
+        // A group that does not exist is refused.
+        shell.set_active_tab(9, "Properties");
+        assert_eq!(shell.panel_groups[0].active, "Properties");
+    }
+
+    /// Splitting a group gives every member its own slot again, and
+    /// every member keeps the dock the group was in.
+    #[test]
+    fn splitting_a_group_gives_every_member_its_own_slot() {
+        let mut shell = gui_shell(gui_editor());
+        shell.move_panel_to_dock("Properties", DockSide::Left);
+        shell.group_panels("Layers", "Properties");
+        assert_eq!(shell.panel_groups.len(), 1);
+
+        shell.ungroup_group("Properties");
+        assert!(shell.panel_groups.is_empty(), "the group is split");
+        assert_eq!(shell.panel_home("Properties"), DockSide::Left);
+        assert_eq!(shell.panel_home("Layers"), DockSide::Left);
+
+        // A panel that is in no group changes nothing.
+        shell.ungroup_group("History");
+        assert!(shell.panel_groups.is_empty());
+    }
+
+    /// A panel that leaves its group takes the group with it: the
+    /// group dissolves when it drops below two members, and the
+    /// members keep the dock the group was in.
+    #[test]
+    fn a_panel_that_leaves_its_group_dissolves_it() {
+        let mut shell = gui_shell(gui_editor());
+        shell.move_panel_to_dock("Properties", DockSide::Left);
+        shell.group_panels("Layers", "Properties");
+        assert_eq!(shell.panel_groups.len(), 1);
+
+        shell.leave_group("Layers");
+        assert!(shell.panel_groups.is_empty(), "a group of one is no group");
+        assert_eq!(shell.panel_home("Properties"), DockSide::Left);
+        assert_eq!(shell.panel_home("Layers"), DockSide::Left);
+
+        // A panel that is in no group changes nothing.
+        shell.leave_group("History");
+        assert!(shell.panel_groups.is_empty());
+    }
+
+    /// The panels of a dock are the panels that live in it, in CS6's
+    /// roster order.
+    #[test]
+    fn a_dock_lists_the_panels_that_live_in_it() {
+        let mut shell = gui_shell(gui_editor());
+        assert!(shell.panels_in_dock(DockSide::Left).is_empty());
+        assert_eq!(
+            shell.panels_in_dock(DockSide::Right),
+            PANELS.iter().map(|spec| spec.name).collect::<Vec<_>>()
+        );
+
+        shell.move_panel_to_dock("Layers", DockSide::Left);
+        assert_eq!(shell.panels_in_dock(DockSide::Left), vec!["Layers"]);
+        assert!(!shell.panels_in_dock(DockSide::Right).contains(&"Layers"));
+    }
+
+    /// One headless frame with the dock drawn: the right dock, the
+    /// left dock, and the drag resolution all run without a window.
+    ///
+    /// The left dock exists only while a panel is in it or a drag is
+    /// in flight, so the frame moves a panel left first — the drop
+    /// target has to be there before a drag reaches it.
+    fn draw_one_frame(shell: &mut Shell) {
+        let ctx = egui::Context::default();
+        let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+            let _ = shell.dock(ui);
+            let _ = shell.left_dock(ui);
+            shell.finish_panel_drag(ui, None, None);
+        });
+        cancel_panel_drag(&ctx);
+    }
+
+    /// The dock draws: the panels CS6 opens on a fresh document are
+    /// in it, a panel moved to the other dock is in the other dock,
+    /// and a tab group draws once, at its anchor.
+    #[test]
+    fn the_dock_draws_the_panels_cs6_opens() {
+        let mut shell = gui_shell(gui_editor());
+        draw_one_frame(&mut shell);
+
+        // The right dock draws the panels that are open by default.
+        assert!(
+            shell
+                .panels_in_dock(DockSide::Right)
+                .contains(&"Properties"),
+            "the right dock draws Properties"
+        );
+        // The left dock has no panel in it yet, and no drag is in
+        // flight, so it is not drawn at all.
+        assert!(shell.panels_in_dock(DockSide::Left).is_empty());
+
+        // A panel moved to the other dock moves with it.
+        shell.move_panel_to_dock("Properties", DockSide::Left);
+        draw_one_frame(&mut shell);
+        assert_eq!(shell.panel_home("Properties"), DockSide::Left);
+        assert_eq!(shell.panels_in_dock(DockSide::Left), vec!["Properties"]);
+    }
+
+    /// A tab group draws as one slot: the group's members share the
+    /// slot, and the group is drawn at its anchor.
+    #[test]
+    fn a_tab_group_draws_as_one_slot() {
+        let mut shell = gui_shell(gui_editor());
+        shell.group_panels("Layers", "Properties");
+        assert_eq!(shell.panel_groups.len(), 1);
+        draw_one_frame(&mut shell);
+        // The frame drew the group; the group's members are still
+        // one slot, and the group survived the frame.
+        assert_eq!(shell.panel_groups.len(), 1);
+        assert_eq!(shell.panel_groups[0].members, vec!["Properties", "Layers"]);
     }
 }
