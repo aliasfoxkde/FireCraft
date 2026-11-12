@@ -6972,4 +6972,116 @@ mod tests {
             shell.status
         );
     }
+
+    /// A shell whose selection carries an element mask.
+    fn masked_shell(mode: &str) -> (Shell, doc::ObjectId) {
+        let mut editor = gui_editor();
+        let id = editor.current_cell().expect("a cell").elements[0];
+        editor
+            .apply(
+                "mask.add",
+                serde_json::json!({ "id": id, "mode": mode, "enter_edit_mode": false }),
+            )
+            .expect("the mask was added");
+        editor.set_selection(vec![id]);
+        (gui_shell(editor), id)
+    }
+
+    /// The mask group that owns the masked object.
+    fn mask_group_of(shell: &Shell, id: doc::ObjectId) -> (doc::ObjectId, doc::GroupObject) {
+        for (group_id, data) in shell.editor.document().registry.iter() {
+            let doc::ObjectData::Group(group) = data else {
+                continue;
+            };
+            if group.children.get(1) == Some(&id) {
+                return (group_id, group.clone());
+            }
+        }
+        panic!("object {id:?} carries no mask group");
+    }
+
+    /// The mask image's location.
+    fn mask_location(shell: &Shell, group: &doc::GroupObject) -> geom::Point {
+        let mask_id = group.children.first().copied().expect("a mask child");
+        match shell.editor.document().registry.get(mask_id) {
+            Some(doc::ObjectData::Image(image)) => image.location,
+            _ => panic!("the mask child is not an image"),
+        }
+    }
+
+    /// The masked content's first anchor.
+    fn content_anchor(shell: &Shell, id: doc::ObjectId) -> geom::Point {
+        match shell.editor.document().registry.get(id) {
+            Some(doc::ObjectData::Path(path)) => path
+                .contours
+                .first()
+                .and_then(|contour| contour.points.first())
+                .map(|point| point.anchor)
+                .expect("a contour"),
+            _ => panic!("the content is not a path"),
+        }
+    }
+
+    /// The mask panel's two nudges move different things: the mask
+    /// image follows `mask.moveBy`, and the content it hides follows
+    /// `mask.moveContentsBy`.
+    #[test]
+    fn the_mask_nudges_move_the_mask_and_the_content() {
+        let (mut shell, id) = masked_shell("reveal all");
+        let facts = shell.mask_facts(id).expect("the selection carries a mask");
+        assert!(facts.raster, "a minted mask is a grayscale mask");
+        assert!(facts.enabled, "a fresh mask is enabled");
+        assert!(!facts.hidden, "the mask's attributes start visible");
+
+        let (_group, group) = mask_group_of(&shell, id);
+        let mask_before = mask_location(&shell, &group);
+        let content_before = content_anchor(&shell, id);
+        shell.mask_nudge(id, 3.0, 0.0, false);
+        let (_group, group) = mask_group_of(&shell, id);
+        let mask_moved = mask_location(&shell, &group);
+        assert_eq!(mask_moved.x, mask_before.x + 3.0, "the mask moved");
+        assert_eq!(
+            content_anchor(&shell, id),
+            content_before,
+            "the content stayed where it was"
+        );
+
+        shell.mask_nudge(id, 0.0, 4.0, true);
+        assert_eq!(
+            content_anchor(&shell, id).y,
+            content_before.y + 4.0,
+            "the content moved"
+        );
+        let (_group, group) = mask_group_of(&shell, id);
+        assert_eq!(
+            mask_location(&shell, &group),
+            mask_moved,
+            "the mask stayed where it was"
+        );
+    }
+
+    /// The mask converts between CS6's raster and vector forms, and
+    /// the conversion rewrites the mask child and the group's kind.
+    #[test]
+    fn the_mask_converts_between_raster_and_vector() {
+        let (mut shell, id) = masked_shell("reveal all");
+        shell.mask_set_mode(id, "mask to path");
+        let facts = shell.mask_facts(id).expect("the selection carries a mask");
+        assert!(!facts.raster, "the mask is a vector mask now");
+        shell.mask_set_mode(id, "mask to image");
+        let facts = shell.mask_facts(id).expect("the selection carries a mask");
+        assert!(facts.raster, "the mask is a raster mask again");
+    }
+
+    /// The mask's own fill and stroke can be hidden and shown again.
+    #[test]
+    fn the_mask_attributes_can_be_hidden_and_shown() {
+        let (mut shell, id) = masked_shell("reveal all");
+        shell.mask_set_show_attrs(id, false);
+        let facts = shell.mask_facts(id).expect("the selection carries a mask");
+        assert!(facts.hidden, "the mask's attributes are hidden");
+        shell.mask_set_show_attrs(id, true);
+        let facts = shell.mask_facts(id).expect("the selection carries a mask");
+        assert!(!facts.hidden, "the mask's attributes are shown again");
+    }
 }

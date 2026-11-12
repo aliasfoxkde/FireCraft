@@ -1102,37 +1102,200 @@ impl Shell {
         let effects = match object {
             Some(ObjectData::Path(path)) => {
                 self.path_properties(ui, id, &path);
-                path.effects
+                Some(path.effects)
             }
             Some(ObjectData::Text(text)) => {
                 self.text_properties(ui, id, &text);
-                text.effects
+                Some(text.effects)
             }
             Some(ObjectData::SymbolInstance(instance)) => {
                 self.symbol_instance_properties(ui, id, &instance);
-                return;
+                None
             }
             Some(ObjectData::Group(group)) => {
                 self.group_properties(ui, id, &group);
-                group.effects
+                Some(group.effects)
             }
             Some(ObjectData::Image(image)) => {
                 self.image_properties(ui, id, &image);
-                image.effects
+                Some(image.effects)
             }
             Some(ObjectData::Slice(slice)) => {
                 // A slice carries no `EFLv` spine, so the effect list
                 // below has nothing to read.
                 self.slice_properties(ui, id, &slice);
-                return;
+                None
             }
             None => {
                 ui.label("stale selection");
                 return;
             }
         };
+        // The element mask the selection carries, if any.
+        self.mask_panel(ui, id);
         // The live effect list: every kind that carries an `EFLv` spine.
-        self.filter_panel(ui, id, &effects);
+        if let Some(effects) = effects {
+            self.filter_panel(ui, id, &effects);
+        }
+    }
+
+    /// The element mask the selection carries: CS6's own mask
+    /// section — the conversion between a raster and a vector mask,
+    /// the two nudges (the mask itself, and the content it hides),
+    /// and the mask's own fill and stroke visibility.
+    ///
+    /// The panel draws nothing when the selection carries no mask:
+    /// the mask verbs all refuse on an unmasked object, so an
+    /// always-present section would only offer dead buttons.
+    pub(super) fn mask_panel(&mut self, ui: &mut egui::Ui, id: doc::ObjectId) {
+        let Some(facts) = self.mask_facts(id) else {
+            return;
+        };
+        ui.separator();
+        ui.heading("Mask");
+        ui.label(format!(
+            "{} mask in group {} (gen {})",
+            if facts.raster { "raster" } else { "vector" },
+            facts.group_id.index(),
+            facts.group_id.generation()
+        ));
+        ui.horizontal(|ui| {
+            // Only an enabled mask converts: the conversion rewrites
+            // the mask child, and a disabled mask has no `GRTi` kind
+            // to follow.
+            if facts.enabled {
+                let mode = if facts.raster {
+                    "mask to path"
+                } else {
+                    "mask to image"
+                };
+                if ui.button(mode).clicked() {
+                    self.mask_set_mode(id, mode);
+                }
+            }
+            let label = if facts.hidden {
+                "show mask attributes"
+            } else {
+                "hide mask attributes"
+            };
+            if ui.button(label).clicked() {
+                self.mask_set_show_attrs(id, !facts.hidden);
+            }
+        });
+        if facts.enabled {
+            for (contents, what) in [(false, "mask"), (true, "content")] {
+                self.mask_nudge_row(ui, id, contents, what);
+            }
+        }
+    }
+
+    /// The element mask the selection carries: the owning mask
+    /// group, whether the mask is raster (an image) or vector (a
+    /// path), whether the mask is enabled, and whether the mask's
+    /// own fill and stroke are hidden.
+    ///
+    /// The engine resolves the owner, so the panel asks it rather
+    /// than re-deriving the ownership rule.
+    pub(super) fn mask_facts(&self, id: doc::ObjectId) -> Option<MaskFacts> {
+        let document = self.editor.document();
+        let Some(enabled) = engine::catalog::element_mask_state(document, id) else {
+            return None;
+        };
+        let mask_kind = |group: &GroupObject| {
+            group
+                .children
+                .first()
+                .and_then(|child| document.registry.get(child))
+                .is_some_and(|data| matches!(data, ObjectData::Image(_) | ObjectData::Path(_)))
+        };
+        let is_mask_group = |group: &GroupObject| {
+            group.group_type == MASK_GROUP_GRAYSCALE
+                || group.group_type == MASK_GROUP_SHAPE
+                || (group.group_type == MASK_GROUP_REGULAR && mask_kind(group))
+        };
+        let mut owner: Option<(doc::ObjectId, GroupObject)> = None;
+        if let Some(ObjectData::Group(group)) = document.registry.get(id)
+            && is_mask_group(group)
+        {
+            owner = Some((id, group.clone()));
+        }
+        if owner.is_none() {
+            for (group_id, data) in document.registry.iter() {
+                let ObjectData::Group(group) = data else {
+                    continue;
+                };
+                if is_mask_group(group) && group.children.get(1) == Some(&id) {
+                    owner = Some((group_id, group.clone()));
+                    break;
+                }
+            }
+        }
+        let (group_id, group) = owner?;
+        let raster = match group
+            .children
+            .first()
+            .and_then(|child| document.registry.get(child))
+        {
+            Some(ObjectData::Image(_)) => true,
+            Some(ObjectData::Path(_)) => false,
+            _ => return None,
+        };
+        Some(MaskFacts {
+            group_id,
+            raster,
+            enabled,
+            hidden: group.mask_hidden,
+        })
+    }
+
+    /// `mask.setMode` — convert the mask between CS6's raster and
+    /// vector forms.
+    pub(super) fn mask_set_mode(&mut self, id: doc::ObjectId, mode: &str) {
+        self.run_command(
+            "mask.setMode",
+            serde_json::json!({ "id": id, "mode": mode }),
+        );
+    }
+
+    /// `mask.setShowAttrs` — show or hide the mask's own fill and
+    /// stroke.
+    pub(super) fn mask_set_show_attrs(&mut self, id: doc::ObjectId, show: bool) {
+        self.run_command(
+            "mask.setShowAttrs",
+            serde_json::json!({ "id": id, "show": show }),
+        );
+    }
+
+    /// `mask.moveBy` / `mask.moveContentsBy` — nudge the mask itself,
+    /// or the content it hides, by a pixel delta.
+    pub(super) fn mask_nudge(&mut self, id: doc::ObjectId, dx: f64, dy: f64, contents: bool) {
+        let command = if contents {
+            "mask.moveContentsBy"
+        } else {
+            "mask.moveBy"
+        };
+        self.run_command(
+            command,
+            serde_json::json!({ "ids": [id], "dx": dx, "dy": dy }),
+        );
+    }
+
+    /// One nudge row: the arrows that move the mask, or the content
+    /// it hides, one pixel at a time.
+    fn mask_nudge_row(&mut self, ui: &mut egui::Ui, id: doc::ObjectId, contents: bool, what: &str) {
+        ui.horizontal(|ui| {
+            ui.label(format!("move {what}"));
+            for (dx, dy, label) in [
+                (-1.0, 0.0, "◀"),
+                (0.0, -1.0, "▲"),
+                (0.0, 1.0, "▼"),
+                (1.0, 0.0, "▶"),
+            ] {
+                if ui.small_button(label).clicked() {
+                    self.mask_nudge(id, dx, dy, contents);
+                }
+            }
+        });
     }
 
     /// The in-progress shape's panel. CS6's Pen, Polygon Slice,
@@ -3652,6 +3815,26 @@ fn object_label(object: &ObjectData) -> String {
         Some(name) if !name.is_empty() => format!("{name} ({kind})"),
         _ => format!("(unnamed {kind})"),
     }
+}
+
+/// The mask group's `GRTi` values: an ordinary group, a grayscale
+/// (raster) mask, and a shape (vector) mask.
+const MASK_GROUP_REGULAR: i64 = 0;
+const MASK_GROUP_GRAYSCALE: i64 = 1;
+const MASK_GROUP_SHAPE: i64 = 2;
+
+/// The element mask the selection carries.
+#[derive(Clone, Copy)]
+pub(super) struct MaskFacts {
+    /// The group that owns the mask and the content.
+    pub(super) group_id: doc::ObjectId,
+    /// The mask is an image (raster), not a path (vector).
+    pub(super) raster: bool,
+    /// The mask is enabled — a `GRTi` 1/2 group, not the disabled
+    /// `GRTi` 0 structure.
+    pub(super) enabled: bool,
+    /// The mask's own fill and stroke are hidden (`MNAb`).
+    pub(super) hidden: bool,
 }
 
 /// The button's export options, read from the first slice linked to
