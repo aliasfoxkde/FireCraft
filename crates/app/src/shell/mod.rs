@@ -6837,4 +6837,98 @@ mod tests {
             _ => panic!("not a symbol instance"),
         }
     }
+
+    /// A text object's first run's stated changes.
+    fn run_changes(shell: &Shell, id: doc::ObjectId) -> doc::TextStyle {
+        match shell.editor.document().registry.get(id) {
+            Some(doc::ObjectData::Text(text)) => text.runs.first().expect("a run").changes.clone(),
+            _ => panic!("not a text object"),
+        }
+    }
+
+    /// The markup verbs restyle the *runs*, not the base style.
+    #[test]
+    fn the_markup_verbs_restyle_the_runs() {
+        let (mut shell, id) = text_shell("hello");
+        shell.apply_character_markup(id, "b");
+        assert_eq!(run_changes(&shell, id).bold, Some(true));
+        shell.remove_character_markup(id, "b");
+        assert_eq!(run_changes(&shell, id).bold, Some(false));
+        shell.apply_character_markup(id, "fwplain");
+        assert_eq!(run_changes(&shell, id).bold, Some(false));
+        shell.apply_font_markup(id, "size", "24pt");
+        assert_eq!(run_changes(&shell, id).size, Some(24.0));
+        shell.remove_font_markup(id, "size");
+        assert_eq!(run_changes(&shell, id).size, None);
+    }
+
+    /// A shell with one button definition carrying a text item, and
+    /// one instance of it.
+    fn button_with_text_shell() -> (Shell, doc::ObjectId) {
+        let mut editor = gui_editor();
+        editor
+            .apply(
+                "text.createText",
+                serde_json::json!({
+                    "page": 0, "layer": editor.active_layer(), "cell": 0,
+                    "x": 10.0, "y": 10.0, "width": 200.0, "height": 40.0,
+                    "text": "Old", "name": null,
+                }),
+            )
+            .expect("the text was created");
+        let text_id = editor.current_cell().expect("a cell").elements[1];
+        editor.set_selection(vec![text_id]);
+        editor
+            .apply(
+                "symbol.create",
+                serde_json::json!({
+                    "ids": vec![text_id], "name": "button", "symbol_type": "button",
+                }),
+            )
+            .expect("the button was created");
+        let symbol = editor.document().symbols[0].symbol_number;
+        editor
+            .apply(
+                "symbol.createInstance",
+                serde_json::json!({
+                    "page": 0, "layer": 0, "cell": 0, "symbol": symbol,
+                    "x": 40.0, "y": 40.0,
+                }),
+            )
+            .expect("the instance was created");
+        let elements = &editor.current_cell().expect("a cell").elements;
+        let id = elements[elements.len() - 1];
+        editor.selection_set = vec![id];
+        editor.selection = Some(id);
+        (gui_shell(editor), id)
+    }
+
+    /// The button definition's text item's characters.
+    fn button_text_of(shell: &Shell) -> String {
+        let definition = &shell.editor.document().symbols[0];
+        let cell = &definition.layers.layers[0].cells[0];
+        let id = cell.elements[0];
+        match shell.editor.document().registry.get(id) {
+            Some(doc::ObjectData::Text(text)) => text
+                .runs
+                .first()
+                .map(|run| run.text.clone())
+                .unwrap_or_default(),
+            _ => panic!("not a text object"),
+        }
+    }
+
+    /// The button's text: one verb across the library's button
+    /// definitions, one across the definitions the selected instances
+    /// reference.
+    #[test]
+    fn the_button_text_reaches_the_library_and_the_instances() {
+        let (mut shell, id) = button_with_text_shell();
+        shell.replace_button_text("Library");
+        assert_eq!(button_text_of(&shell), "Library");
+        shell.editor.selection_set = vec![id];
+        shell.editor.selection = Some(id);
+        shell.replace_button_text_in_instances("Instance");
+        assert_eq!(button_text_of(&shell), "Instance");
+    }
 }

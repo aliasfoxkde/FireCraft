@@ -1618,6 +1618,46 @@ impl Shell {
         if !linked.found {
             ui.label("no slice is linked to this symbol yet");
         }
+        // The button's text: CS6's replacement verbs — one across the
+        // library's button definitions, one across the definitions the
+        // selected instances reference.
+        let mut button_text = String::new();
+        ui.horizontal(|ui| {
+            ui.add(egui::TextEdit::singleline(&mut button_text).hint_text("button text"));
+            if ui.button("in library").clicked() {
+                self.replace_button_text(&button_text);
+            }
+            if ui.button("in instances").clicked() {
+                self.replace_button_text_in_instances(&button_text);
+            }
+        });
+    }
+
+    /// Replace the button text of every button definition in the
+    /// library.
+    pub(super) fn replace_button_text(&mut self, text: &str) {
+        self.run_command(
+            "text.replaceButtonTextStrings",
+            serde_json::json!({ "text": text, "uniform_attrs": false }),
+        );
+    }
+
+    /// Replace the button text of the definitions the selected
+    /// instances reference. The engine reads the document's selection,
+    /// so the view's selection is synced first.
+    pub(super) fn replace_button_text_in_instances(&mut self, text: &str) {
+        if self.editor.live_selection().is_empty() {
+            self.status = "nothing selected".to_owned();
+            return;
+        }
+        if let Err(error) = self.editor.sync_selection() {
+            self.status = format!("selection failed: {error}");
+            return;
+        }
+        self.run_command(
+            "text.replaceButtonTextStringsInInstances",
+            serde_json::json!({ "text": text, "uniform_attrs": false }),
+        );
     }
 
     /// The first slice linked to `number`, read for the button's
@@ -2188,7 +2228,108 @@ impl Shell {
         );
         self.text_layout_fields(ui, id, text);
         self.text_render_fields(ui, id, text);
+        self.text_markup_fields(ui, id, size, &font);
         self.geometry_fields(ui, id);
+    }
+
+    /// The markup verbs: CS6's character and font markup, which
+    /// restyle the *runs* rather than the base style.
+    ///
+    /// The panel's bold/italic/underline checkboxes write the base
+    /// style (`text.setAttrs`); these are the sibling verbs that
+    /// reach the runs, which is what CS6's Format ▸ Text menu does
+    /// to a mixed-format text item.
+    pub(super) fn text_markup_fields(
+        &mut self,
+        ui: &mut egui::Ui,
+        id: doc::ObjectId,
+        size: f64,
+        face: &str,
+    ) {
+        ui.heading("Markup");
+        ui.horizontal(|ui| {
+            if ui.button("bold").clicked() {
+                self.apply_character_markup(id, "b");
+            }
+            if ui.button("italic").clicked() {
+                self.apply_character_markup(id, "i");
+            }
+            if ui.button("underline").clicked() {
+                self.apply_character_markup(id, "u");
+            }
+            if ui
+                .button("plain")
+                .on_hover_text("CS6's fwplain: no character markup, base included")
+                .clicked()
+            {
+                self.apply_character_markup(id, "fwplain");
+            }
+        });
+        ui.horizontal(|ui| {
+            if ui.button("clear bold").clicked() {
+                self.remove_character_markup(id, "b");
+            }
+            if ui.button("clear italic").clicked() {
+                self.remove_character_markup(id, "i");
+            }
+            if ui.button("clear underline").clicked() {
+                self.remove_character_markup(id, "u");
+            }
+        });
+        ui.horizontal(|ui| {
+            if ui.button("apply size").clicked() {
+                self.apply_font_markup(id, "size", &format!("{size}pt"));
+            }
+            if ui.button("apply face").clicked() {
+                self.apply_font_markup(id, "face", face);
+            }
+        });
+        ui.horizontal(|ui| {
+            if ui.button("clear size").clicked() {
+                self.remove_font_markup(id, "size");
+            }
+            if ui.button("clear color").clicked() {
+                self.remove_font_markup(id, "color");
+            }
+            if ui.button("clear face").clicked() {
+                self.remove_font_markup(id, "face");
+            }
+        });
+    }
+
+    /// Apply one character markup tag to the text's runs.
+    pub(super) fn apply_character_markup(&mut self, id: doc::ObjectId, tag: &str) {
+        self.run_command(
+            "text.applyCharacterMarkup",
+            serde_json::json!({ "id": id, "tag": tag }),
+        );
+    }
+
+    /// Reapply the default for one character markup tag.
+    pub(super) fn remove_character_markup(&mut self, id: doc::ObjectId, tag: &str) {
+        self.run_command(
+            "text.removeCharacterMarkup",
+            serde_json::json!({ "id": id, "tag": tag }),
+        );
+    }
+
+    /// Apply one font markup attribute to the text's runs. The size
+    /// takes the dom's `"NNNpt"` form; the face takes a family name.
+    pub(super) fn apply_font_markup(&mut self, id: doc::ObjectId, attribute: &str, value: &str) {
+        self.run_command(
+            "text.applyFontMarkup",
+            serde_json::json!({
+                "id": id, "font_attribute": attribute, "value": value,
+            }),
+        );
+    }
+
+    /// Reapply the default for one font markup attribute.
+    pub(super) fn remove_font_markup(&mut self, id: doc::ObjectId, attribute: &str) {
+        self.run_command(
+            "text.removeFontMarkup",
+            serde_json::json!({ "id": id, "font_attribute": attribute }),
+        );
     }
 
     /// The text object's layout: the paragraph's indent and spacing,
