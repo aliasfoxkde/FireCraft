@@ -436,8 +436,12 @@ evidence work, tracked outside that campaign.
   canvas calls `compose::render_onion`; Add / Duplicate / Delete
   State and Distribute to States are in the panel
   ([T8](tasks/T8-animation-timeline.md), decision
-  [0094](decisions/0094-animation-timeline-shell.md)). Still open:
-  playback (CS6's `Play Animation`), state thumbnails, per-side onion
+  [0094](decisions/0094-animation-timeline-shell.md)). **PLAYBACK
+  LANDED 2026-11-12** — the panel has CS6's `Play Animation` as a
+  clock over elapsed-time data, with a `Loop` checkbox, and the view
+  follows the playhead (decision
+  [0096](decisions/0096-animation-playback-clock.md)). Still open:
+  state thumbnails, a document-level loop count, per-side onion
   opacity, screenshot acceptance.
 - **20.4 Mask stack UI** (M): add/remove/mode/link/move. **In open
   PR #113**; this is a FireCraft extension, not a CS6 parity claim.
