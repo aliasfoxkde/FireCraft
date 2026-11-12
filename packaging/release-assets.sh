@@ -25,10 +25,21 @@
 #       asset paths to <list-file>. The list file is what `create`
 #       consumes; it is the single source of truth for the asset set.
 #
-#   create <tag> <list-file> <notes-file>
+#   create <tag> <list-file> <notes-file> [mode]
 #       Call `gh release create <tag> --title ... --draft --notes-file
 #       <notes-file> <assets...>` with the staged assets as positional
-#       arguments.
+#       arguments. `mode` is `production` (the default) or `test`:
+#
+#         production — the title is the bare version, the release is an
+#         ordinary draft, and the notes must be the tracked release
+#         notes under `docs/releases/`; a release whose description is a
+#         checksum dump is not a release.
+#
+#         test — a rehearsal of the release path. The title is prefixed
+#         `TEST `, the release is a prerelease, and the notes carry a
+#         banner that says it must not be published. A test release may
+#         fall back to the checksum list as its description, because its
+#         description is never the published one.
 #
 # Fail-closed by design:
 #   * an empty source tree aborts before anything is staged;
@@ -36,6 +47,9 @@
 #     files can never be attached to a release;
 #   * an empty asset list aborts before `gh` is called, so a release is
 #     never created with zero assets;
+#   * a missing notes file aborts, and in production mode the notes file
+#     must be a tracked `docs/releases/` note;
+#   * an unknown mode aborts;
 #   * a duplicate basename is skipped with a warning, because a release
 #     asset is named by its basename and two files with one name cannot
 #     both be attached. RELEASE_SHA256.txt and MANIFEST.sha256 are not
@@ -142,15 +156,32 @@ cmd_stage() {
 
 # Create the draft release with the staged assets as positional arguments.
 cmd_create() {
-  if [ "$#" -ne 3 ]; then
-    die "usage: release-assets.sh create <tag> <list-file> <notes-file>"
+  if [ "$#" -lt 3 ] || [ "$#" -gt 4 ]; then
+    die "usage: release-assets.sh create <tag> <list-file> <notes-file> [production|test]"
   fi
   local tag=$1
   local list=$2
   local notes=$3
+  local mode=${4:-production}
+
+  case "$mode" in
+    production|test) ;;
+    *) die "unknown release mode '$mode' — expected 'production' or 'test'" ;;
+  esac
 
   [ -f "$list" ] || die "asset list not found: $list"
   [ -f "$notes" ] || die "release notes file not found: $notes"
+
+  # A production release carries its tracked release notes. The checksum
+  # list is a manifest of the artifacts, not a description of the
+  # release: a draft whose description is a SHA dump is a release nobody
+  # can read, so the fallback is allowed only for a rehearsal.
+  if [ "$mode" = production ]; then
+    case "$notes" in
+      docs/releases/*) ;;
+      *) die "a production release must carry its tracked release notes (docs/releases/<tag>.md); got: $notes" ;;
+    esac
+  fi
 
   local -a assets=()
   local entry
@@ -170,11 +201,34 @@ cmd_create() {
   # Assets are the positional filename arguments after the tag. `gh
   # release create` has no -a/--asset flag. The title is the bare
   # version ("0.2.6") — the repository name and the asset filenames
-  # already carry the product name.
+  # already carry the product name. A rehearsal is titled `TEST <version>`
+  # and is a prerelease, so it cannot be mistaken for the release.
+  local title="${tag#v}"
+  local -a flags=()
+  local notes_arg=$notes
+  local banner=""
+  if [ "$mode" = test ]; then
+    title="TEST $title"
+    flags=(--prerelease)
+    banner=$(mktemp)
+    {
+      echo "**TEST RELEASE — not for publication.**"
+      echo
+      echo "This is a rehearsal of the release path. It is a prerelease, its"
+      echo "title carries the TEST prefix, and it must not be published."
+      echo
+      cat "$notes"
+    } > "$banner"
+    notes_arg=$banner
+    # shellcheck disable=SC2064
+    trap "rm -f -- '$banner'" EXIT
+  fi
+
   gh release create "$tag" \
-    --title "${tag#v}" \
+    --title "$title" \
     --draft \
-    --notes-file "$notes" \
+    ${flags[@]+"${flags[@]}"} \
+    --notes-file "$notes_arg" \
     "${assets[@]}"
 }
 
@@ -190,7 +244,7 @@ main() {
       cmd_create "$@"
       ;;
     *)
-      die "usage: release-assets.sh {stage <src-dir> <flat-dir> <list-file> | create <tag> <list-file> <notes-file>}"
+      die "usage: release-assets.sh {stage <src-dir> <flat-dir> <list-file> | create <tag> <list-file> <notes-file> [production|test]}"
       ;;
   esac
 }

@@ -204,19 +204,21 @@ no git, so `xtask changelog` cannot run there (decision 0086).
 `.github/workflows/release.yml` fires on a `v*` tag push and runs two
 jobs:
 
-1. **`build artifacts`** — `dist --native`, `dist --web`,
-   `dist --source`, `dist --sbom`; zips the web bundle; writes
-   `dist/RELEASE_SHA256.txt` over the seven digested files plus
-   `MANIFEST.sha256`; writes `dist/release-manifest.json` with
-   `dist --manifest` and re-verifies it with `dist --verify-manifest`;
-   uploads nine paths as one artifact.
+1. **`build artifacts`** — derives the version once from `cargo
+   metadata`; `dist --native`, `dist --web`, `dist --source`,
+   `dist --sbom`; zips the web bundle; writes `dist/RELEASE_SHA256.txt`
+   over the seven digested files plus `MANIFEST.sha256`; writes
+   `dist/release-manifest.json` with `dist --manifest` and re-verifies
+   it with `dist --verify-manifest`; uploads nine paths as one artifact.
 2. **`create draft release`** — downloads that artifact, flattens it
    with `packaging/release-assets.sh stage`, runs a **fail-closed
-   aggregate validation** (all nine required artifacts present and
-   non-empty, `sha256sum -c RELEASE_SHA256.txt` passing, the release
-   manifest agreeing with the assets it describes, and every artifact
-   name carrying the tag version), then creates a **draft** GitHub
-   release with the assets passed as positional arguments.
+   aggregate validation** (`scripts/validate_release_aggregate.sh`:
+   all nine required artifacts present and non-empty, nothing else in
+   the release set, `sha256sum -c RELEASE_SHA256.txt` passing, the
+   release manifest agreeing with the assets it describes, and every
+   required platform represented), classifies the tag's release mode,
+   then creates a **draft** GitHub release with the assets passed as
+   positional arguments.
 
 The workflow does **not** publish the release, does not bump versions,
 does not run `xtask changelog`, and does not deploy to Cloudflare Pages
@@ -226,6 +228,44 @@ does not run `xtask changelog`, and does not deploy to Cloudflare Pages
 > the old workflow failed, and all six published releases were created
 > by hand. The repaired workflow on this branch is unproven end to end:
 > its first real run is itself the receipt this repository lacks.
+
+### Release modes
+
+The tag decides what a run is, and the rule is one script —
+`scripts/classify_release_mode.sh` — that refuses every tag it does not
+recognise:
+
+| Tag | Mode | What it produces |
+|---|---|---|
+| `vX.Y.Z` | production | a draft release titled `X.Y.Z`, described by `docs/releases/vX.Y.Z.md` |
+| `vX.Y.Z-dryrun.N` | test | a **prerelease** titled `TEST X.Y.Z-dryrun.N`, described by a banner that says it must not be published |
+
+A production release must carry its tracked release notes; a checksum
+dump is not a release description. A rehearsal may fall back to the
+checksum list, because its description is never the published one.
+
+### Rehearsing the release path
+
+A manual run (`workflow_dispatch`) **may only rehearse**: it requires a
+disposable rehearsal tag, and the classifier refuses a production-shaped
+tag there. The rehearsal tag is created at the exact commit the build
+ran on, so the artifacts and the tag bind to one SHA, and an existing
+tag is never overwritten.
+
+    # in the Actions tab: "Release" → "Run workflow" → rehearsal_tag: v0.2.6-dryrun.1
+
+A rehearsal leaves a draft prerelease and a disposable tag on the
+remote. Both are safe to leave; deleting tags and releases is a
+maintainer action.
+
+### Checking the release path without cutting a release
+
+    bash scripts/validate_release_aggregate-selftest.sh
+    bash scripts/classify_release_mode-selftest.sh
+    bash tests/release-assets-selftest.sh
+
+These are the failure modes of the release path, one deliberately broken
+input each. They run in the backup CI's `changes` job.
 
 ## Cloudflare Pages deploy (manual)
 
