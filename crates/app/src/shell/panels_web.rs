@@ -129,6 +129,17 @@ impl Shell {
                     ui.end_row();
                 }
             });
+        ui.separator();
+        // The rectangle tools' corner cut — CS6's tool options strip
+        // carries the same knob for the rounded and chamfered shapes.
+        ui.horizontal(|ui| {
+            ui.label("Corner");
+            ui.add(
+                egui::DragValue::new(&mut self.editor.rect_corner)
+                    .range(0.0..=200.0)
+                    .speed(0.5),
+            );
+        });
     }
 
     /// Inserts the panel's shape at the canvas center.
@@ -149,7 +160,8 @@ impl Shell {
                 }),
             ),
             ShapeKind::Auto(shape) => {
-                let payload = shape.payload_in_rect(page, layer, cell, x, y, size);
+                let payload =
+                    shape.payload_in_rect(page, layer, cell, x, y, size, self.editor.rect_corner);
                 self.run_command(shape.command(), payload)
             }
         };
@@ -1426,7 +1438,7 @@ mod tests {
     /// line-bound ones.
     #[test]
     fn the_panel_payload_places_every_shape_family() {
-        let star = AutoShape::Star.payload_in_rect(0, 1, 2, 10.0, 20.0, 100.0);
+        let star = AutoShape::Star.payload_in_rect(0, 1, 2, 10.0, 20.0, 100.0, 12.0);
         assert_eq!(star["centerX"], 60.0);
         assert_eq!(star["centerY"], 70.0);
         assert_eq!(star["outer"], 50.0);
@@ -1434,17 +1446,37 @@ mod tests {
         assert_eq!(star["layer"], 1);
         assert_eq!(star["cell"], 2);
 
-        let lshape = AutoShape::LShape.payload_in_rect(0, 0, 0, 10.0, 20.0, 100.0);
+        let lshape = AutoShape::LShape.payload_in_rect(0, 0, 0, 10.0, 20.0, 100.0, 12.0);
         assert_eq!(lshape["x"], 10.0);
         assert_eq!(lshape["y"], 20.0);
         assert_eq!(lshape["width"], 100.0);
         assert_eq!(lshape["height"], 100.0);
 
-        let measure = AutoShape::Measure.payload_in_rect(0, 0, 0, 10.0, 20.0, 100.0);
+        let measure = AutoShape::Measure.payload_in_rect(0, 0, 0, 10.0, 20.0, 100.0, 12.0);
         assert_eq!(measure["startX"], 10.0);
         assert_eq!(measure["startY"], 70.0);
         assert_eq!(measure["endX"], 110.0);
         assert_eq!(measure["endY"], 70.0);
+    }
+
+    /// The two corner-cut rectangles carry their own corner radius
+    /// and their own corner treatment, and the cut never exceeds
+    /// half the shorter side.
+    #[test]
+    fn the_rectangle_tools_carry_their_corner() {
+        let rounded = AutoShape::RoundedRect.payload_in_rect(0, 0, 0, 10.0, 20.0, 100.0, 8.0);
+        assert_eq!(rounded["kind"], "round");
+        assert_eq!(rounded["corner"], 8.0);
+        assert_eq!(rounded["x"], 10.0);
+        assert_eq!(rounded["width"], 100.0);
+
+        let chamfer = AutoShape::ChamferRect.payload_in_rect(0, 0, 0, 10.0, 20.0, 100.0, 8.0);
+        assert_eq!(chamfer["kind"], "chamfer");
+        assert_eq!(chamfer["corner"], 8.0);
+
+        // A cut wider than half the box is clamped.
+        let clamped = AutoShape::RoundedRect.payload_in_rect(0, 0, 0, 0.0, 0.0, 40.0, 500.0);
+        assert_eq!(clamped["corner"], 20.0);
     }
 
     /// An empty field clears the stored value; a filled one is sent
