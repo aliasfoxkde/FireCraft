@@ -546,16 +546,26 @@ impl Shell {
             .collect();
         let targets: Vec<doc::ObjectId> = self.editor.selection_set.clone();
         for (index, label) in &rows {
-            if ui
-                .selectable_label(false, label)
-                .on_hover_text("apply onto the selection")
-                .clicked()
-            {
-                self.run_command(
-                    "style.apply",
-                    serde_json::json!({ "index": index, "ids": targets }),
-                );
-            }
+            ui.horizontal(|ui| {
+                if ui
+                    .selectable_label(false, label)
+                    .on_hover_text("apply onto the selection")
+                    .clicked()
+                {
+                    self.run_command(
+                        "style.apply",
+                        serde_json::json!({ "index": index, "ids": targets.clone() }),
+                    );
+                }
+                if ui
+                    .small_button("redefine")
+                    .on_hover_text("redefine this style from the selection's appearance")
+                    .clicked()
+                    && let Some(source) = targets.last().copied()
+                {
+                    self.redefine_style(*index, source);
+                }
+            });
         }
         if rows.is_empty() {
             ui.label("(empty — define one from a selection or import a library)");
@@ -580,6 +590,39 @@ impl Shell {
         if ui.button("Import Style Library...").clicked() {
             self.import_styles_dialog();
         }
+        ui.separator();
+        ui.horizontal(|ui| {
+            ui.label("text scale");
+            ui.add(
+                egui::DragValue::new(&mut self.style_scale)
+                    .speed(0.05)
+                    .range(0.1..=10.0),
+            );
+            if ui
+                .button("Scale Styles")
+                .on_hover_text("multiplies every style's text size by the factor")
+                .clicked()
+            {
+                let scale = self.style_scale;
+                self.scale_styles(scale);
+            }
+        });
+    }
+
+    /// The Styles panel's per-row redefine: the named object's
+    /// appearance becomes the style at `index` — CS6's
+    /// `redefineStyleByIndex`.
+    pub(super) fn redefine_style(&mut self, index: usize, source: doc::ObjectId) {
+        self.run_command(
+            "style.redefineByIndex",
+            serde_json::json!({ "index": index, "source": source }),
+        );
+    }
+
+    /// The Styles panel's scale: every style's text size by the
+    /// factor — CS6's `scaleStyles`.
+    pub(super) fn scale_styles(&mut self, scale: f64) {
+        self.run_command("style.scaleStyles", serde_json::json!({ "scale": scale }));
     }
 
     /// Styles panel ▸ Import: reads a CS6 style library (`.stl`)

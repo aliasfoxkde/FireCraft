@@ -164,6 +164,8 @@ pub struct Shell {
     ui_scale: Option<f32>,
     /// The Styles panel's new-style name field.
     style_name: String,
+    /// The Styles panel's text-scale factor.
+    style_scale: f64,
     /// The layer whose name is being edited in the Layers panel
     /// (`None` = no inline rename open).
     rename_layer: Option<usize>,
@@ -468,6 +470,7 @@ impl Shell {
             recovery_path: Self::default_recovery_path(),
             ui_scale: None,
             style_name: String::new(),
+            style_scale: 1.0,
             rename_layer: None,
             rename_page: None,
             show_grid: false,
@@ -4799,6 +4802,33 @@ mod tests {
             shell.status.contains("failed"),
             "the refusal is reported: {}",
             shell.status
+        );
+    }
+
+    /// The Styles panel's redefine and scale: the selection's
+    /// appearance becomes the named style, and the scale multiplies
+    /// every style's text size.
+    #[test]
+    fn the_styles_panel_redefines_and_scales_styles() {
+        let mut shell = gui_shell(gui_editor());
+        let id = shell.editor.current_cell().unwrap().elements[0];
+        shell.editor.set_selection(vec![id]);
+        shell.run_command(
+            "style.redefineFromSelection",
+            serde_json::json!({ "name": "mine", "source": id }),
+        );
+        assert_eq!(
+            shell.editor.document().styles.len(),
+            1,
+            "the style is defined"
+        );
+        shell.redefine_style(0, id);
+        let before = shell.editor.document().styles[0].text.size;
+        shell.scale_styles(2.0);
+        assert_eq!(
+            shell.editor.document().styles[0].text.size,
+            before * 2.0,
+            "the scale multiplied the text size"
         );
     }
 
