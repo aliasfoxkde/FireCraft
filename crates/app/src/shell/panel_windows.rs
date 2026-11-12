@@ -570,7 +570,7 @@ impl Shell {
                     let dragging = ui.ctx().is_being_dragged(drag_id);
                     let drag = ui.dnd_drag_source(
                         drag_id,
-                        PanelDrag { name: *member },
+                        PanelDrag { name: member },
                         // The tab is drawn, not clicked: the drag source
                         // below owns the click, so that a single widget
                         // can both switch the tab and drag the group.
@@ -667,22 +667,22 @@ impl Shell {
     }
 
     /// The group a panel belongs to, if it is in one.
-    fn group_of(&self, name: &str) -> Option<&PanelGroup> {
+    fn group_of(&self, name: &'static str) -> Option<&PanelGroup> {
         self.panel_groups
             .iter()
-            .find(|group| group.members.iter().any(|member| *member == name))
+            .find(|group| group.members.contains(&name))
     }
 
     /// The index of the group a panel belongs to, if it is in one.
-    fn group_index(&self, name: &str) -> Option<usize> {
+    fn group_index(&self, name: &'static str) -> Option<usize> {
         self.panel_groups
             .iter()
-            .position(|group| group.members.iter().any(|member| *member == name))
+            .position(|group| group.members.contains(&name))
     }
 
     /// The anchor of the group a panel belongs to: the panel the
     /// group is drawn at, and the member a move carries with it.
-    fn group_anchor_of(&self, name: &str) -> Option<&'static str> {
+    fn group_anchor_of(&self, name: &'static str) -> Option<&'static str> {
         self.group_of(name)
             .and_then(|group| group.members.first().copied())
     }
@@ -690,7 +690,7 @@ impl Shell {
     /// The dock a panel lives in. A panel the user has not moved
     /// lives in the right stack, where CS6 keeps its panel group. A
     /// panel in a tab group lives where its group does.
-    pub(crate) fn panel_home(&self, name: &str) -> DockSide {
+    pub(crate) fn panel_home(&self, name: &'static str) -> DockSide {
         let anchor = self.group_anchor_of(name);
         self.panel_homes
             .iter()
@@ -773,10 +773,10 @@ impl Shell {
 
     /// Switches a tab group to another member.
     pub(crate) fn set_active_tab(&mut self, group_index: usize, member: &'static str) {
-        if let Some(group) = self.panel_groups.get_mut(group_index) {
-            if group.members.contains(&member) {
-                group.active = member;
-            }
+        if let Some(group) = self.panel_groups.get_mut(group_index)
+            && group.members.contains(&member)
+        {
+            group.active = member;
         }
     }
 
@@ -788,7 +788,7 @@ impl Shell {
         };
         let home = self.panel_home(name);
         self.panel_groups
-            .retain(|group| !group.members.iter().any(|member| *member == name));
+            .retain(|group| !group.members.contains(&name));
         for member in &members {
             self.panel_homes.retain(|(moved, _)| moved != member);
         }
@@ -836,10 +836,10 @@ impl Shell {
             if let Some(previous) = anchor_before {
                 self.panel_homes.retain(|(moved, _)| *moved != previous);
             }
-            if home != DOCK_SIDE {
-                if let Some(anchor) = anchor_after {
-                    self.panel_homes.push((anchor, home));
-                }
+            if home != DOCK_SIDE
+                && let Some(anchor) = anchor_after
+            {
+                self.panel_homes.push((anchor, home));
             }
         }
     }
