@@ -91,6 +91,15 @@ const CLASS_NOTES: &[(&str, &str)] = &[
          card-number rule.",
     ),
     (
+        "email-address",
+        "Matches the throwaway Git identity the change-detection \
+         self-test configures for its temporary repositories. The \
+         address uses the .invalid top-level domain reserved by \
+         RFC 2606 for exactly this purpose, so it can never resolve \
+         to a real mailbox; the repository holds no personal \
+         addresses.",
+    ),
+    (
         "eval-usage",
         "The scripting crate's own boa context.eval() call — that crate \
          implements the CS6 scripting DOM's eval() — plus Rust curve-segment \
@@ -113,6 +122,14 @@ const CLASS_NOTES: &[(&str, &str)] = &[
          the source archive, and the adjudication tables that name the \
          category in order to record that it is absent; the repository \
          holds no such data.",
+    ),
+    (
+        "graphql-batch-limit",
+        "Fires on English prose where a bulk-operation word and a bound \
+         word share one line: the automation wiki's sentence about the \
+         CLI's bulk work and the bounds it reports. FireCraft serves no \
+         GraphQL endpoint and ships no GraphQL schema, so the missing \
+         depth guard this rule reports does not exist here.",
     ),
     (
         "international-phone",

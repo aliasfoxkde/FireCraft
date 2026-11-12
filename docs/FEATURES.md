@@ -1,12 +1,12 @@
 # FireCraft — Feature surface
 
-> Audited 2026-11-01 against the main tree. Every claim here is
-> backed by a gate in the repository: the command registry
-> (`engine::catalog::ids()`), the parity matrix
-> (`docs/planning/generated/dom-parity.md`), the menus
-> (`crates/app/src/menus.rs`), and the CLI (`crates/app-cli`).
+> Feature inventory originally audited 2026-11-01; status and
+> command/reachability counts refreshed 2026-11-11 against `main`
+> (`b61f198`). Claims are grounded in the command registry,
+> generated DOM parity, menu census, CLI and current task ledger.
 > Where a feature is a *recipe* rather than a built artifact, it says
-> so.
+> so. A DOM verb or CLI command is not by itself proof of a complete,
+> polished GUI workflow.
 
 FireCraft is a clean-room reimplementation of Adobe Fireworks CS6 —
 the hybrid vector + bitmap web-design tool Adobe discontinued in 2013
@@ -27,7 +27,7 @@ host, and the browser bridge all drive.
 ## The command registry
 
 One registry serves every surface. The live count is
-`engine::catalog::ids()` — 252 as of 2026-11-07 (a point-in-time
+`engine::catalog::ids()` — 253 as of 2026-11-11 (a point-in-time
 number; the call is the authority). The CS6 DOM parity matrix stands
 at **268 carried / 3 partial (evidence-gated) / 0 missing** across 356
 verbs.
@@ -35,7 +35,7 @@ verbs.
 Surfaces that drive it:
 
 - **GUI** — the shell (`crates/app/src/shell/`); menus map CS6 menu
-  ids to actions (`crates/app/src/menus.rs`; 2 of 294 items still
+  ids to actions (`crates/app/src/menus.rs`; 2 of 296 items still
   render inert — the 19.6 burn-down closed the rest, and the census
   is derived (`menus::tests::inert_worklist`) and test-gated), and the Ctrl+P
   command palette makes **every** registry command executable from
