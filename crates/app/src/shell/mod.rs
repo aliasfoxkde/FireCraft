@@ -167,6 +167,9 @@ pub struct Shell {
     /// The layer whose name is being edited in the Layers panel
     /// (`None` = no inline rename open).
     rename_layer: Option<usize>,
+    /// The page whose name is being edited in the Pages panel
+    /// (`None` = no inline rename open).
+    rename_page: Option<usize>,
     /// View-menu toggles + the open grid dialog. Display state only —
     /// the guides and grid themselves live in the document, so a move
     /// drag's snapping reads them through the editor like every other
@@ -466,6 +469,7 @@ impl Shell {
             ui_scale: None,
             style_name: String::new(),
             rename_layer: None,
+            rename_page: None,
             show_grid: false,
             snap_to_grid: false,
             show_guides: true,
@@ -4763,6 +4767,38 @@ mod tests {
             shell.editor.selection_set,
             vec![upper],
             "the other layer's object replaces it"
+        );
+    }
+
+    /// The Pages panel's rename and delete: `page.setName` renames the
+    /// page and `page.delete` removes it — and the last page cannot
+    /// go.
+    #[test]
+    fn the_pages_panel_renames_and_deletes_pages() {
+        let mut shell = gui_shell(gui_editor());
+        shell.run_command("page.add", serde_json::json!({ "index": null }));
+        assert_eq!(shell.editor.document().pages.len(), 2);
+        shell.run_command(
+            "page.setName",
+            serde_json::json!({ "page": 1, "name": "second" }),
+        );
+        assert_eq!(
+            shell.editor.document().pages[1].name.as_deref(),
+            Some("second"),
+            "the page carries its new name"
+        );
+        shell.delete_page(1);
+        assert_eq!(shell.editor.document().pages.len(), 1, "the page is gone");
+        shell.delete_page(0);
+        assert_eq!(
+            shell.editor.document().pages.len(),
+            1,
+            "the last page stays"
+        );
+        assert!(
+            shell.status.contains("failed"),
+            "the refusal is reported: {}",
+            shell.status
         );
     }
 

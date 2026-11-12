@@ -220,7 +220,8 @@ impl Shell {
         self.status = self.screen_mode.label().to_owned();
     }
 
-    /// Pages section: one selectable row per page.
+    /// Pages section: one selectable row per page, with a rename and
+    /// a delete button beside it.
     pub(super) fn pages_section(&mut self, ui: &mut egui::Ui) {
         let pages = self.editor.document().pages.len();
         for index in 0..pages {
@@ -228,14 +229,60 @@ impl Shell {
                 .name
                 .clone()
                 .unwrap_or_else(|| format!("Page {}", index + 1));
-            if ui
-                .selectable_label(self.editor.page == index, &name)
-                .clicked()
-            {
-                self.editor.page = index;
-                self.raster = None;
-            }
+            let mut rename = name.clone();
+            ui.horizontal(|ui| {
+                if self.rename_page == Some(index) {
+                    let field = ui
+                        .add(egui::TextEdit::singleline(&mut rename).desired_width(96.0))
+                        .on_hover_text("rename (Enter applies)");
+                    let enter = ui.input(|input| input.key_pressed(egui::Key::Enter));
+                    if (field.lost_focus() || enter) && rename != name {
+                        self.run_command(
+                            "page.setName",
+                            serde_json::json!({ "page": index, "name": rename }),
+                        );
+                    }
+                    if field.lost_focus() || enter {
+                        self.rename_page = None;
+                    }
+                } else if ui
+                    .selectable_label(self.editor.page == index, &name)
+                    .on_hover_text("Make this the current page")
+                    .clicked()
+                {
+                    self.editor.page = index;
+                    self.raster = None;
+                }
+                if ui
+                    .small_button("✎")
+                    .on_hover_text("Rename this page")
+                    .clicked()
+                {
+                    self.rename_page = Some(index);
+                }
+                if ui
+                    .small_button("×")
+                    .on_hover_text("Delete this page")
+                    .clicked()
+                {
+                    self.delete_page(index);
+                }
+            });
         }
+    }
+
+    /// Delete a page through the engine's `page.delete` — the last
+    /// page cannot go (the engine refuses it), and the current page
+    /// index follows the shorter list.
+    pub(super) fn delete_page(&mut self, index: usize) {
+        if !self.run_command("page.delete", serde_json::json!({ "page": index })) {
+            return;
+        }
+        let count = self.editor.document().pages.len();
+        if self.editor.page >= count {
+            self.editor.page = count.saturating_sub(1);
+        }
+        self.raster = None;
     }
 
     /// Layers section: name + display toggle per layer, bottom-first.
@@ -328,7 +375,7 @@ impl Shell {
                     self.editor.set_active_layer(layer_index);
                 }
                 if ui
-                    .small_button("◉")
+                    .small_button("all")
                     .on_hover_text("Select this layer's objects")
                     .clicked()
                 {
