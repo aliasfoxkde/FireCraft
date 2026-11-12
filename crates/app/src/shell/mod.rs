@@ -6931,4 +6931,45 @@ mod tests {
         shell.replace_button_text_in_instances("Instance");
         assert_eq!(button_text_of(&shell), "Instance");
     }
+
+    /// One effect of an object.
+    fn effect_of(shell: &Shell, id: doc::ObjectId, index: usize) -> doc::Effect {
+        match shell.editor.document().registry.get(id) {
+            Some(doc::ObjectData::Path(path)) => path.effects[index].clone(),
+            _ => panic!("not a path"),
+        }
+    }
+
+    /// CS6's `setEffectName`: the effect keeps its category and takes
+    /// the new internal name.
+    #[test]
+    fn the_effect_can_be_renamed() {
+        let (mut shell, id) = two_path_shell();
+        shell.apply_filter_preset(id, FILTER_FAMILIES[0].1[0]);
+        let effect = effect_of(&shell, id, 0);
+        let category = effect.category.clone();
+        let old_name = effect.internal_name.clone();
+        shell.rename_filter_effect(&category, &old_name, "renamed");
+        assert_eq!(effect_of(&shell, id, 0).internal_name, "renamed");
+    }
+
+    /// The bake verbs carry the dom's own payload shapes: the
+    /// convolution kernel's count must match its sides, and the
+    /// motion blur's kind must be one the dom knows.
+    #[test]
+    fn the_bake_verbs_carry_the_dom_payloads() {
+        let (mut shell, _id) = two_path_shell();
+        shell.convolve_selection(3, 3, vec![0, 0, 0, 0], false);
+        assert!(
+            shell.status.contains("filter.convolveSelection failed"),
+            "{}",
+            shell.status
+        );
+        shell.motion_blur_selection("sideways", 0.0, 10, 8);
+        assert!(
+            shell.status.contains("filter.motionBlurSelection failed"),
+            "{}",
+            shell.status
+        );
+    }
 }

@@ -1840,9 +1840,10 @@ impl Shell {
         });
     }
 
-    /// The animation verbs address the document's selection, so the
-    /// view's selection is synced into the document first.
-    fn sync_for_animation(&mut self) -> bool {
+    /// The animation and effect verbs address the document's
+    /// selection, so the view's selection is synced into the
+    /// document first.
+    fn sync_document_selection(&mut self) -> bool {
         if let Err(error) = self.editor.sync_selection() {
             self.status = format!("selection failed: {error}");
             return false;
@@ -1852,7 +1853,7 @@ impl Shell {
 
     /// Write the animation's frame count (`ANNi`).
     pub(super) fn set_anim_num_frames(&mut self, frames: i64) {
-        if !self.sync_for_animation() {
+        if !self.sync_document_selection() {
             return;
         }
         self.run_command(
@@ -1864,7 +1865,7 @@ impl Shell {
     /// Write the animation's loop count (CS6's deprecated spelling of
     /// the frame count).
     pub(super) fn set_anim_loop_count(&mut self, loop_count: i64) {
-        if !self.sync_for_animation() {
+        if !self.sync_document_selection() {
             return;
         }
         self.run_command(
@@ -1875,7 +1876,7 @@ impl Shell {
 
     /// Write the animation's travel across the span (`ANXf`/`ANYf`).
     pub(super) fn set_anim_offset(&mut self, x: f64, y: f64) {
-        if !self.sync_for_animation() {
+        if !self.sync_document_selection() {
             return;
         }
         self.run_command(
@@ -1886,7 +1887,7 @@ impl Shell {
 
     /// Write the animation's rotation across the span (`ANRi`).
     pub(super) fn set_anim_rotation(&mut self, rotation: f64) {
-        if !self.sync_for_animation() {
+        if !self.sync_document_selection() {
             return;
         }
         self.run_command(
@@ -1897,7 +1898,7 @@ impl Shell {
 
     /// Write the animation's scaling across the span (`ASCf`).
     pub(super) fn set_anim_scale(&mut self, scale: f64) {
-        if !self.sync_for_animation() {
+        if !self.sync_document_selection() {
             return;
         }
         self.run_command(
@@ -1908,7 +1909,7 @@ impl Shell {
 
     /// Write the animation's opacity ramp (`ASOi`/`AEOi`).
     pub(super) fn set_anim_opacity(&mut self, start: f64, end: f64) {
-        if !self.sync_for_animation() {
+        if !self.sync_document_selection() {
             return;
         }
         self.run_command(
@@ -3132,10 +3133,225 @@ impl Shell {
                             );
                         }
                     });
+                    // The effect's own name: CS6's `setEffectName`
+                    // renames it under its category.
+                    let mut new_name = effect.internal_name.clone();
+                    ui.horizontal(|ui| {
+                        ui.add(egui::TextEdit::singleline(&mut new_name).desired_width(96.0));
+                        if ui.small_button("rename").clicked() {
+                            self.rename_filter_effect(
+                                &effect.category,
+                                &effect.internal_name,
+                                &new_name,
+                            );
+                        }
+                    });
                     self.filter_param_rows(ui, id, index, effect);
                 });
         }
         self.filter_add_menu(ui, id);
+        self.filter_bake_fields(ui);
+    }
+
+    /// Rename the effect under its category — CS6's
+    /// `dom.setEffectName(category, oldName, newName)`. The verb
+    /// walks the *selection*, so the view's selection is synced into
+    /// the document first.
+    pub(super) fn rename_filter_effect(&mut self, category: &str, old_name: &str, new_name: &str) {
+        if new_name.is_empty() {
+            self.status = "the new name is empty".to_owned();
+            return;
+        }
+        if !self.sync_document_selection() {
+            return;
+        }
+        self.run_command(
+            "filter.setEffectName",
+            serde_json::json!({
+                "category": category, "old_name": old_name, "new_name": new_name,
+            }),
+        );
+    }
+
+    /// The bake section: CS6's `dom.filterSelection*` verbs, which
+    /// apply a filter to the selection and bake it into the pixels.
+    ///
+    /// The bake verbs read the document's selection, so the panel
+    /// syncs the view's selection into the document first.
+    pub(super) fn filter_bake_fields(&mut self, ui: &mut egui::Ui) {
+        ui.heading("Bake");
+        let mut category = String::new();
+        let mut name = String::new();
+        ui.horizontal(|ui| {
+            ui.add(egui::TextEdit::singleline(&mut category).hint_text("category"));
+            ui.add(egui::TextEdit::singleline(&mut name).hint_text("filter name"));
+        });
+        ui.horizontal(|ui| {
+            if ui.button("bake").clicked() {
+                self.bake_filter(&category, &name);
+            }
+            if ui
+                .button("bake by catalog name")
+                .on_hover_text(
+                    "CS6's filterSelectionByName: the filter's GUID comes from the catalog",
+                )
+                .clicked()
+            {
+                self.bake_filter_by_name(&category, &name);
+            }
+        });
+        let mut guid = String::new();
+        ui.horizontal(|ui| {
+            ui.add(egui::TextEdit::singleline(&mut guid).hint_text("EffectMoaID"));
+            if ui.button("bake by id").clicked() {
+                self.bake_filter_by_id(&guid);
+            }
+        });
+        // The convolution kernel: raw integer coefficients, row
+        // major, exactly as the dom takes them.
+        let mut width = 3i64;
+        let mut height = 3i64;
+        let mut values = "0,0,0,0,1,0,0,0,0".to_owned();
+        let mut affects_alpha = false;
+        ui.horizontal(|ui| {
+            ui.add(
+                egui::DragValue::new(&mut width)
+                    .speed(1.0)
+                    .range(1..=7)
+                    .prefix("w "),
+            );
+            ui.add(
+                egui::DragValue::new(&mut height)
+                    .speed(1.0)
+                    .range(1..=7)
+                    .prefix("h "),
+            );
+            ui.add(
+                egui::TextEdit::singleline(&mut values)
+                    .desired_width(160.0)
+                    .hint_text("kernel values"),
+            );
+        });
+        ui.horizontal(|ui| {
+            ui.checkbox(&mut affects_alpha, "affects alpha");
+            if ui.button("convolve").clicked() {
+                match parse_kernel(&values, width, height) {
+                    Ok(kernel) => self.convolve_selection(width, height, kernel, affects_alpha),
+                    Err(detail) => self.status = format!("kernel refused: {detail}"),
+                }
+            }
+        });
+        // The motion blur: the dom's three kinds.
+        let mut blur_type = "linear".to_owned();
+        let mut angle = 0.0f64;
+        let mut distance = 10u32;
+        let mut samples = 8u32;
+        ui.horizontal(|ui| {
+            egui::ComboBox::from_label("blur")
+                .selected_text(blur_type.clone())
+                .show_ui(ui, |ui| {
+                    for choice in ["linear", "radial", "zoom"] {
+                        if ui.selectable_label(blur_type == choice, choice).clicked() {
+                            blur_type = choice.to_owned();
+                        }
+                    }
+                });
+            ui.add(egui::DragValue::new(&mut angle).speed(1.0).prefix("angle "));
+            ui.add(
+                egui::DragValue::new(&mut distance)
+                    .speed(1.0)
+                    .range(0..=400)
+                    .prefix("distance "),
+            );
+            ui.add(
+                egui::DragValue::new(&mut samples)
+                    .speed(1.0)
+                    .range(0..=100)
+                    .prefix("samples "),
+            );
+        });
+        if ui.button("motion blur").clicked() {
+            self.motion_blur_selection(&blur_type, angle, distance, samples);
+        }
+    }
+
+    /// Bake the named filter into the selection.
+    pub(super) fn bake_filter(&mut self, category: &str, name: &str) {
+        if !self.sync_document_selection() {
+            return;
+        }
+        self.run_command(
+            "filter.selection",
+            serde_json::json!({ "category": category, "name": name, "params": [] }),
+        );
+    }
+
+    /// Bake the named filter into the selection, taking the filter's
+    /// GUID from the catalog.
+    pub(super) fn bake_filter_by_name(&mut self, category: &str, name: &str) {
+        if !self.sync_document_selection() {
+            return;
+        }
+        self.run_command(
+            "filter.selectionByName",
+            serde_json::json!({ "category": category, "name": name, "params": [] }),
+        );
+    }
+
+    /// Bake the filter with the given `EffectMoaID` into the
+    /// selection.
+    pub(super) fn bake_filter_by_id(&mut self, guid: &str) {
+        if !self.sync_document_selection() {
+            return;
+        }
+        self.run_command(
+            "filter.selectionByID",
+            serde_json::json!({ "id": guid, "params": [] }),
+        );
+    }
+
+    /// Bake an arbitrary integer kernel into the selection.
+    pub(super) fn convolve_selection(
+        &mut self,
+        width: i64,
+        height: i64,
+        values: Vec<i64>,
+        affects_alpha: bool,
+    ) {
+        if !self.sync_document_selection() {
+            return;
+        }
+        self.run_command(
+            "filter.convolveSelection",
+            serde_json::json!({
+                "kernel_width": width,
+                "kernel_height": height,
+                "kernel_values": values,
+                "affects_alpha": affects_alpha,
+            }),
+        );
+    }
+
+    /// Bake a motion blur into the selection.
+    pub(super) fn motion_blur_selection(
+        &mut self,
+        blur_type: &str,
+        angle: f64,
+        distance: u32,
+        samples: u32,
+    ) {
+        if !self.sync_document_selection() {
+            return;
+        }
+        self.run_command(
+            "filter.motionBlurSelection",
+            serde_json::json!({
+                "blur_type": blur_type,
+                "angle": angle,
+                "distance": distance,
+                "samples": samples,
+            }),
+        );
     }
 
     /// The family-grouped quick-add menu — the same table the Filters
@@ -3447,4 +3663,31 @@ struct LinkedSliceFacts {
     link: String,
     alt: String,
     slice_name: String,
+}
+
+/// The convolution kernel's coefficients: the dom takes them raw,
+/// row major, and their count must match the kernel's sides.
+fn parse_kernel(text: &str, width: i64, height: i64) -> Result<Vec<i64>, String> {
+    let cells = width * height;
+    if cells <= 0 {
+        return Err("the kernel has no cells".to_owned());
+    }
+    let mut values = Vec::new();
+    for part in text.split(',') {
+        let trimmed = part.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        match trimmed.parse::<i64>() {
+            Ok(value) => values.push(value),
+            Err(_) => return Err(format!("{trimmed:?} is not an integer")),
+        }
+    }
+    if values.len() as i64 != cells {
+        return Err(format!(
+            "{} values for a {width}x{height} kernel",
+            values.len()
+        ));
+    }
+    Ok(values)
 }
