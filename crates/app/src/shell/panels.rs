@@ -269,6 +269,7 @@ impl Shell {
                 }
             });
         }
+        self.guides_section(ui);
     }
 
     /// Delete a page through the engine's `page.delete` — the last
@@ -283,6 +284,110 @@ impl Shell {
             self.editor.page = count.saturating_sub(1);
         }
         self.raster = None;
+    }
+
+    /// The page's guides: each one can be moved or removed.
+    ///
+    /// The guide list lives in the document (`page.guides`), so the
+    /// rows read it there and write through the engine's
+    /// `page.changeGuide` and `page.removeGuide`.
+    pub(super) fn guides_section(&mut self, ui: &mut egui::Ui) {
+        let page = self.editor.page;
+        let Some(guides) = self
+            .editor
+            .document()
+            .pages
+            .get(page)
+            .map(|page| page.guides.clone())
+        else {
+            return;
+        };
+        ui.label("Guides");
+        for (kind, positions) in [
+            ("horizontal", guides.horizontal.clone()),
+            ("vertical", guides.vertical.clone()),
+        ] {
+            for position in positions {
+                let mut value = position;
+                ui.horizontal(|ui| {
+                    let field = ui.add(
+                        egui::DragValue::new(&mut value)
+                            .speed(1.0)
+                            .prefix(format!("{kind} ")),
+                    );
+                    if field.changed() {
+                        self.change_guide(page, kind, position, value);
+                    }
+                    if ui
+                        .small_button("×")
+                        .on_hover_text("Remove this guide")
+                        .clicked()
+                    {
+                        self.remove_guide(page, kind, position);
+                    }
+                });
+            }
+        }
+    }
+
+    /// Move one guide to a new position.
+    pub(super) fn change_guide(&mut self, page: usize, kind: &str, current: f64, new: f64) {
+        self.run_command(
+            "page.changeGuide",
+            serde_json::json!({
+                "page": page, "current": current, "new": new, "kind": kind,
+            }),
+        );
+    }
+
+    /// Remove one guide.
+    pub(super) fn remove_guide(&mut self, page: usize, kind: &str, position: f64) {
+        self.run_command(
+            "page.removeGuide",
+            serde_json::json!({
+                "page": page, "position": position, "kind": kind,
+            }),
+        );
+    }
+
+    /// The selection moves onto another layer of the current page, in
+    /// the current state.
+    ///
+    /// The engine's `object.moveToCell` moves one object at a time,
+    /// so the panel moves the selection one by one and skips the
+    /// objects that already live there.
+    pub(super) fn move_selection_to_layer(&mut self, layer: usize) {
+        let ids = self.editor.live_selection();
+        if ids.is_empty() {
+            self.status = "nothing selected".to_owned();
+            return;
+        }
+        let page = self.editor.page;
+        let cell = self.editor.frame;
+        let already: Vec<doc::ObjectId> = self
+            .editor
+            .document()
+            .pages
+            .get(page)
+            .and_then(|page| page.layers.layers.get(layer))
+            .and_then(|layer| layer.cells.get(cell))
+            .map(|cell| cell.elements.clone())
+            .unwrap_or_default();
+        let mut moved = 0usize;
+        for id in ids {
+            if already.contains(&id) {
+                continue;
+            }
+            if self.run_command(
+                "object.moveToCell",
+                serde_json::json!({
+                    "id": id, "page": page, "layer": layer, "cell": cell, "index": null,
+                }),
+            ) {
+                moved += 1;
+            }
+        }
+        self.status = format!("moved {moved} object(s) to layer {layer}");
     }
 
     /// Layers section: name + display toggle per layer, bottom-first.
@@ -401,6 +506,13 @@ impl Shell {
                     .clicked()
                 {
                     self.reorder_layer(layer_index, false);
+                }
+                if ui
+                    .small_button("⇔")
+                    .on_hover_text("Move the selection onto this layer")
+                    .clicked()
+                {
+                    self.move_selection_to_layer(layer_index);
                 }
             });
         }
@@ -1503,6 +1615,7 @@ impl Shell {
             },
         );
         self.text_layout_fields(ui, id, text);
+        self.text_render_fields(ui, id, text);
         self.geometry_fields(ui, id);
     }
 
@@ -1645,6 +1758,188 @@ impl Shell {
             return false;
         }
         true
+    }
+
+    /// The text object's rendering: the custom anti-alias dials, the
+    /// run list, and the frame the text is laid out in.
+    ///
+    /// The three dials are MX 2004's custom anti-alias mode (`TA1i`
+    /// sharpness, `TA2i` strength, `TOSi` oversampling); the runs
+    /// are the structured string's segments, one line per run; the
+    /// frame is the box the text flows inside — a different box from
+    /// the object's own bounds.
+    pub(super) fn text_render_fields(
+        &mut self,
+        ui: &mut egui::Ui,
+        id: doc::ObjectId,
+        text: &TextObject,
+    ) {
+        // The custom anti-alias dials.
+        let mut sharpness = text.anti_alias_sharpness.unwrap_or(0);
+        let mut strength = text.anti_alias_strength.unwrap_or(0);
+        ui.horizontal(|ui| {
+            let sharp = ui.add(
+                egui::DragValue::new(&mut sharpness)
+                    .speed(1.0)
+                    .range(0..=255)
+                    .prefix("sharpness "),
+            );
+            let strong = ui.add(
+                egui::DragValue::new(&mut strength)
+                    .speed(1.0)
+                    .range(0..=255)
+                    .prefix("strength "),
+            );
+            if sharp.changed() {
+                self.set_custom_anti_alias_sharpness(id, sharpness);
+            }
+            if strong.changed() {
+                self.set_custom_anti_alias_strength(id, strength);
+            }
+        });
+        let mut over_sample = text.anti_alias_oversample.unwrap_or(4);
+        egui::ComboBox::from_label("oversample")
+            .selected_text(over_sample.to_string())
+            .show_ui(ui, |ui| {
+                for value in [4i64, 8, 16] {
+                    if ui
+                        .selectable_label(over_sample == value, value.to_string())
+                        .clicked()
+                    {
+                        self.set_custom_anti_alias_over_sample(id, value);
+                    }
+                }
+            });
+        // The runs: one line per run. The base style rides along
+        // unchanged — the command writes the run list alone.
+        let mut runs = text
+            .runs
+            .iter()
+            .map(|run| run.text.clone())
+            .collect::<Vec<String>>()
+            .join("\n");
+        let field = ui.add(
+            egui::TextEdit::multiline(&mut runs)
+                .hint_text("runs, one per line (click away to apply)"),
+        );
+        if field.changed() && field.lost_focus() {
+            self.set_text_runs(id, &runs);
+        }
+        // The frame the text flows inside.
+        let mut width = text.frame.width() as f32;
+        let mut height = text.frame.height() as f32;
+        ui.horizontal(|ui| {
+            let wide = ui.add(
+                egui::DragValue::new(&mut width)
+                    .speed(1.0)
+                    .prefix("text W "),
+            );
+            let tall = ui.add(
+                egui::DragValue::new(&mut height)
+                    .speed(1.0)
+                    .prefix("text H "),
+            );
+            if wide.changed() || tall.changed() {
+                self.set_text_rectangle(id, width as f64, height as f64);
+            }
+        });
+        if ui
+            .button("Fit box at the corner")
+            .on_hover_text(
+                "CS6's setTextRectangleAutoFromPoint: the fitted box anchors at the frame's top-left corner",
+            )
+            .clicked()
+        {
+            self.fit_text_box_at(id);
+        }
+    }
+
+    /// The custom anti-alias sharpness (`TA1i`), 0..=255.
+    pub(super) fn set_custom_anti_alias_sharpness(&mut self, id: doc::ObjectId, sharpness: i64) {
+        self.run_command(
+            "text.setTextCustomAntiAliasSharpness",
+            serde_json::json!({ "id": id, "sharpness": sharpness }),
+        );
+    }
+
+    /// The custom anti-alias strength (`TA2i`), 0..=255.
+    pub(super) fn set_custom_anti_alias_strength(&mut self, id: doc::ObjectId, strength: i64) {
+        self.run_command(
+            "text.setTextCustomAntiAliasStrength",
+            serde_json::json!({ "id": id, "strength": strength }),
+        );
+    }
+
+    /// The custom anti-alias oversampling (`TOSi`): 4, 8 or 16.
+    pub(super) fn set_custom_anti_alias_over_sample(
+        &mut self,
+        id: doc::ObjectId,
+        over_sample: i64,
+    ) {
+        self.run_command(
+            "text.setTextCustomAntiAliasOverSample",
+            serde_json::json!({ "id": id, "over_sample": over_sample }),
+        );
+    }
+
+    /// The structured string's runs: one line per run, written in
+    /// order. The base style stays as it is.
+    pub(super) fn set_text_runs(&mut self, id: doc::ObjectId, text: &str) {
+        let runs: Vec<serde_json::Value> = if text.is_empty() {
+            Vec::new()
+        } else {
+            text.split('\n')
+                .map(|characters| serde_json::json!({ "characters": characters }))
+                .collect()
+        };
+        self.run_command(
+            "text.setTextRuns",
+            serde_json::json!({ "id": id, "runs": runs }),
+        );
+    }
+
+    /// The frame the text flows inside. The command reads the
+    /// document's selection, so the view's selection lands there
+    /// first.
+    pub(super) fn set_text_rectangle(&mut self, id: doc::ObjectId, width: f64, height: f64) {
+        if !self.sync_document_selection() {
+            return;
+        }
+        let Some(frame) = self.text_frame(id) else {
+            return;
+        };
+        self.run_command(
+            "text.setTextRectangle",
+            serde_json::json!({
+                "rect": {
+                    "left": frame.x0, "top": frame.y0,
+                    "right": frame.x0 + width, "bottom": frame.y0 + height,
+                }
+            }),
+        );
+    }
+
+    /// CS6's setTextRectangleAutoFromPoint: the fitted box anchors at
+    /// the frame's top-left corner.
+    pub(super) fn fit_text_box_at(&mut self, id: doc::ObjectId) {
+        if !self.sync_document_selection() {
+            return;
+        }
+        let Some(frame) = self.text_frame(id) else {
+            return;
+        };
+        self.run_command(
+            "text.setTextRectangleAutoFromPoint",
+            serde_json::json!({ "anchor": { "x": frame.x0, "y": frame.y0 } }),
+        );
+    }
+
+    /// The frame of one text object.
+    fn text_frame(&self, id: doc::ObjectId) -> Option<geom::Rect> {
+        match self.editor.document().registry.get(id) {
+            Some(ObjectData::Text(text)) => Some(text.frame),
+            _ => None,
+        }
     }
 
     /// Document properties (22.4): the field set the inspector shows

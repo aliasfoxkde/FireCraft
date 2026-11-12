@@ -4875,6 +4875,104 @@ mod tests {
         assert!(after.width() > 0.0, "the frame still holds the text");
     }
 
+    /// The text properties' anti-alias dials: the custom sharpness,
+    /// strength and oversampling reach the text object.
+    #[test]
+    fn the_text_properties_write_the_anti_alias_dials() {
+        let (mut shell, id) = text_shell("hello");
+        shell.set_custom_anti_alias_sharpness(id, 200);
+        shell.set_custom_anti_alias_strength(id, 64);
+        shell.set_custom_anti_alias_over_sample(id, 16);
+        let text = match shell.editor.document().registry.get(id) {
+            Some(ObjectData::Text(text)) => text.clone(),
+            _ => panic!("the text is there"),
+        };
+        assert_eq!(text.anti_alias_sharpness, Some(200));
+        assert_eq!(text.anti_alias_strength, Some(64));
+        assert_eq!(text.anti_alias_oversample, Some(16));
+    }
+
+    /// The text properties' run field: one line per run, in order.
+    #[test]
+    fn the_text_properties_write_the_runs() {
+        let (mut shell, id) = text_shell("hello");
+        shell.set_text_runs(id, "one\ntwo");
+        let text = match shell.editor.document().registry.get(id) {
+            Some(ObjectData::Text(text)) => text.clone(),
+            _ => panic!("the text is there"),
+        };
+        let runs: Vec<&str> = text.runs.iter().map(|run| run.text.as_str()).collect();
+        assert_eq!(runs, vec!["one", "two"], "the runs are in order");
+    }
+
+    /// The text properties' frame: the box the text flows inside is
+    /// written, and the object's own placement stays put.
+    #[test]
+    fn the_text_properties_write_the_text_frame() {
+        let (mut shell, id) = text_shell("hello");
+        shell.set_text_rectangle(id, 120.0, 30.0);
+        let text = match shell.editor.document().registry.get(id) {
+            Some(ObjectData::Text(text)) => text.clone(),
+            _ => panic!("the text is there"),
+        };
+        assert_eq!(text.frame.width(), 120.0, "the frame carries the width");
+        assert_eq!(text.frame.height(), 30.0, "the frame carries the height");
+        assert_eq!(text.frame.x0, 10.0, "the frame kept its corner");
+    }
+
+    /// The Pages panel's guide rows: a guide moves and goes away.
+    #[test]
+    fn the_guides_move_and_go_away() {
+        let mut shell = gui_shell(gui_editor());
+        shell.run_command(
+            "page.addGuide",
+            serde_json::json!({ "page": 0, "position": 100.0, "kind": "horizontal" }),
+        );
+        assert_eq!(
+            shell.editor.document().pages[0].guides.horizontal,
+            vec![100.0],
+            "the guide is on the page"
+        );
+        shell.change_guide(0, "horizontal", 100.0, 150.0);
+        assert_eq!(
+            shell.editor.document().pages[0].guides.horizontal,
+            vec![150.0],
+            "the guide moved"
+        );
+        shell.remove_guide(0, "horizontal", 150.0);
+        assert!(
+            shell.editor.document().pages[0]
+                .guides
+                .horizontal
+                .is_empty(),
+            "the guide is gone"
+        );
+    }
+
+    /// The Layers panel's "move the selection here": the object
+    /// leaves its layer for the named one.
+    #[test]
+    fn the_selection_moves_to_another_layer() {
+        let mut editor = gui_editor();
+        let id = editor.current_cell().unwrap().elements[0];
+        editor.set_selection(vec![id]);
+        editor
+            .apply("layer.add", serde_json::json!({ "page": 0 }))
+            .unwrap();
+        let mut shell = gui_shell(editor);
+        shell.move_selection_to_layer(1);
+        let page = &shell.editor.document().pages[0];
+        assert!(
+            page.layers.layers[0].cells[0].elements.is_empty(),
+            "the object left the lower layer"
+        );
+        assert_eq!(
+            page.layers.layers[1].cells[0].elements,
+            vec![id],
+            "the object landed on the upper layer"
+        );
+    }
+
     /// Modify ▸ Group / Ungroup: the group lands in the cell where the
     /// members were, and ungroup puts the members back.
     #[test]

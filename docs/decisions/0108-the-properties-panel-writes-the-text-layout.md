@@ -60,9 +60,11 @@ every word processor offers in the same place.
   `text.setTextOnPathOffset` and `text.setTextRectangleAuto`.
 - The text box behaves like a word processor's: paragraphs are laid
   out, and the frame can follow the text.
-- The panel's custom anti-alias fields stay unbound: the engine has
-  no command for the anti-alias *preset*, so a sharpness or strength
-  field would have nothing to switch it on with.
+- The panel's custom anti-alias fields stay unbound *in this
+  decision*: they are bound by decision
+  [0109](0109-the-text-properties-write-the-rendering-dials.md), which
+  found that the three custom dials have setters of their own and
+  need no anti-alias preset to switch on first.
 
 See also decisions [0104](0104-the-shells-selection-verbs-go-through-the-engine.md)
 and [0107](0107-the-states-panel-reorders-and-fans-the-selection.md) —
