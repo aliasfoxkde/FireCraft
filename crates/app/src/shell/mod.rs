@@ -6653,4 +6653,188 @@ mod tests {
         assert_eq!(shell.tabs.len(), tabs_before, "close refused");
         assert!(shell.status.contains("unsaved"), "{}", shell.status);
     }
+
+    /// A shell whose selection is one instance of a fresh definition
+    /// of the given kind. The instance is the view's selection too,
+    /// so the selection-scoped verbs reach it.
+    fn symbol_instance_shell(kind: &str) -> (Shell, doc::ObjectId) {
+        let mut shell = gui_shell(gui_editor());
+        shell
+            .editor
+            .apply(
+                "library.add",
+                serde_json::json!({ "name": "def", "symbol_type": kind }),
+            )
+            .expect("the definition was added");
+        let symbol = shell.editor.document().symbols[0].symbol_number;
+        shell
+            .editor
+            .apply(
+                "symbol.createInstance",
+                serde_json::json!({
+                    "page": 0, "layer": 0, "cell": 0, "symbol": symbol,
+                    "x": 10.0, "y": 10.0,
+                }),
+            )
+            .expect("the instance was created");
+        let elements = &shell.editor.current_cell().expect("a cell").elements;
+        let id = elements[elements.len() - 1];
+        shell.editor.selection_set = vec![id];
+        shell.editor.selection = Some(id);
+        (shell, id)
+    }
+
+    /// The animation carrier of an instance.
+    fn animation_of(shell: &Shell, id: doc::ObjectId) -> doc::SymbolAnimation {
+        match shell.editor.document().registry.get(id) {
+            Some(doc::ObjectData::SymbolInstance(instance)) => instance
+                .animation
+                .clone()
+                .expect("the instance carries an animation"),
+            _ => panic!("not a symbol instance"),
+        }
+    }
+
+    /// The instance's custom-data store.
+    fn custom_data_of(
+        shell: &Shell,
+        id: doc::ObjectId,
+    ) -> std::collections::BTreeMap<String, String> {
+        match shell.editor.document().registry.get(id) {
+            Some(doc::ObjectData::SymbolInstance(instance)) => instance.custom_data.clone(),
+            _ => panic!("not a symbol instance"),
+        }
+    }
+
+    /// The animation panel's six writes reach the instance's `ANNi`
+    /// family: the frame count, the travel, the rotation, the
+    /// scaling and the opacity ramp.
+    #[test]
+    fn the_animation_fields_write_the_span() {
+        let (mut shell, id) = symbol_instance_shell("animation");
+        shell.set_anim_num_frames(5);
+        assert_eq!(animation_of(&shell, id).frames, 5);
+        // CS6's deprecated spelling writes the same field.
+        shell.set_anim_loop_count(3);
+        assert_eq!(animation_of(&shell, id).frames, 3);
+        shell.set_anim_offset(2.0, -3.0);
+        let animation = animation_of(&shell, id);
+        assert_eq!(animation.x_shift, 2.0);
+        assert_eq!(animation.y_shift, -3.0);
+        shell.set_anim_rotation(45.0);
+        assert_eq!(animation_of(&shell, id).rotation, Some(45));
+        shell.set_anim_scale(200.0);
+        assert_eq!(animation_of(&shell, id).scaling, 200.0);
+        // The wire speaks 0–100; the model stores per mille.
+        shell.set_anim_opacity(20.0, 80.0);
+        let animation = animation_of(&shell, id);
+        assert_eq!(animation.start_opacity, Some(200));
+        assert_eq!(animation.end_opacity, Some(800));
+    }
+
+    /// The button's four state flags live on the definition; the
+    /// panel writes them through the engine.
+    #[test]
+    fn the_button_flags_write_the_definition() {
+        let (mut shell, _id) = symbol_instance_shell("button");
+        let number = shell.editor.document().symbols[0].symbol_number;
+        shell.set_button_auto_slice(number, true);
+        shell.set_button_include_down_state(number, true);
+        shell.set_button_show_down_on_load(number, true);
+        shell.set_button_include_over_while_down(number, true);
+        let definition = &shell.editor.document().symbols[0];
+        assert_eq!(definition.auto_slice, Some(true));
+        assert_eq!(definition.include_down_state, Some(true));
+        assert_eq!(definition.show_down_on_load, Some(true));
+        assert_eq!(definition.include_over_while_down, Some(true));
+    }
+
+    /// The instance's parameters and custom data reach the engine's
+    /// `currentValues` and `DTAv` stores.
+    #[test]
+    fn the_instance_carries_parameters_and_custom_data() {
+        let (mut shell, id) = symbol_instance_shell("graphic");
+        shell.set_symbol_param(id, "size", "text", "42");
+        let values: Vec<serde_json::Value> = serde_json::from_str(
+            custom_data_of(&shell, id)
+                .get("currentValues")
+                .expect("currentValues"),
+        )
+        .expect("the parameter array parses");
+        assert_eq!(values[0]["name"], serde_json::json!("size"));
+        assert_eq!(values[0]["value"], serde_json::json!("42"));
+        shell.set_symbol_custom_data(id, "colour", "red");
+        assert_eq!(
+            custom_data_of(&shell, id).get("colour").map(String::as_str),
+            Some("red")
+        );
+        shell.remove_symbol_custom_data(id, "colour");
+        assert!(custom_data_of(&shell, id).get("colour").is_none());
+    }
+
+    /// The definition's content: the panel lifts an object out of the
+    /// symbol and moves one within the symbol's z-order.
+    #[test]
+    fn the_definition_content_detaches_and_reorders() {
+        let mut editor = gui_editor();
+        let first = editor.current_cell().unwrap().elements[0];
+        let second = rect_on_active_layer(&mut editor, 100.0, 100.0);
+        editor.set_selection(vec![first, second]);
+        editor
+            .apply(
+                "symbol.create",
+                serde_json::json!({
+                    "ids": vec![first, second],
+                    "name": "def",
+                    "symbol_type": "graphic",
+                }),
+            )
+            .expect("the definition was created");
+        let mut shell = gui_shell(editor);
+        let symbol = shell.editor.document().symbols[0].symbol_number;
+        assert_eq!(
+            shell.editor.document().symbols[0].layers.layers[0].cells[0].elements,
+            vec![first, second],
+            "the definition holds both objects"
+        );
+        // Move the lower object up: the engine's target index is the
+        // position after the object leaves the list.
+        shell.reorder_symbol_object(symbol, first, 1);
+        assert_eq!(
+            shell.editor.document().symbols[0].layers.layers[0].cells[0].elements,
+            vec![second, first],
+            "the object moved up"
+        );
+        // Lift the top object out of the symbol.
+        shell.detach_symbol_object(symbol, first);
+        assert_eq!(
+            shell.editor.document().symbols[0].layers.layers[0].cells[0].elements,
+            vec![second],
+            "the object left the symbol"
+        );
+    }
+
+    /// "Duplicate for alias": the selected instance points at a copy
+    /// of the definition it named.
+    #[test]
+    fn the_instance_can_be_duplicated_for_an_alias() {
+        let (mut shell, id) = symbol_instance_shell("graphic");
+        let number = shell.editor.document().symbols[0].symbol_number;
+        let before = shell.editor.document().symbols.len();
+        shell.duplicate_symbol_for_alias();
+        assert_eq!(
+            shell.editor.document().symbols.len(),
+            before + 1,
+            "the library gained the copy"
+        );
+        match shell.editor.document().registry.get(id) {
+            Some(doc::ObjectData::SymbolInstance(instance)) => {
+                assert_ne!(
+                    instance.symbol_number, number,
+                    "the instance points at the copy"
+                );
+            }
+            _ => panic!("not a symbol instance"),
+        }
+    }
 }

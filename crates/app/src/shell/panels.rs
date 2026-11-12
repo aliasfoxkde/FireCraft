@@ -7,7 +7,7 @@
 
 use super::*;
 use compose::abgr_pack;
-use doc::{GroupObject, ImageObject, SliceObject};
+use doc::{GroupObject, ImageObject, SliceObject, SymbolAnimation};
 
 impl Shell {
     /// Edit ▸ Paste as Mask / Paste Inside: the clipboard becomes the
@@ -1408,9 +1408,37 @@ impl Shell {
                         layer.cells.iter().map(|cell| cell.elements.len()).collect()
                     }),
                 definition.nine_slice.is_some(),
+                definition.auto_slice,
+                definition.include_down_state,
+                definition.show_down_on_load,
+                definition.include_over_while_down,
+                definition
+                    .layers
+                    .layers
+                    .iter()
+                    .map(|layer| {
+                        layer
+                            .cells
+                            .iter()
+                            .map(|cell| cell.elements.clone())
+                            .collect::<Vec<Vec<doc::ObjectId>>>()
+                    })
+                    .collect::<Vec<Vec<Vec<doc::ObjectId>>>>(),
             )
         });
-        let Some((name, kind, kind_raw, state_parts, sliced)) = facts else {
+        let Some((
+            name,
+            kind,
+            kind_raw,
+            state_parts,
+            sliced,
+            auto_slice,
+            include_down_state,
+            show_down_on_load,
+            include_over_while_down,
+            cells,
+        )) = facts
+        else {
             ui.label(format!("instance of missing symbol {number}"));
             return;
         };
@@ -1481,6 +1509,550 @@ impl Shell {
                 self.status = format!("nine-slice failed: {error}");
             }
         }
+
+        // The button's behavior: the four state flags and the export
+        // options that ride the button's auto-slice.
+        self.symbol_button_fields(
+            ui,
+            number,
+            kind_raw,
+            auto_slice,
+            include_down_state,
+            show_down_on_load,
+            include_over_while_down,
+        );
+
+        // The animation span — CS6's Animation panel, for an
+        // instance that already carries one or names an animated
+        // definition.
+        if matches!(kind_raw, SymbolType::Animation) || instance.animation.is_some() {
+            self.symbol_animation_fields(ui, instance);
+        }
+
+        // The instance's own parameters and custom data.
+        self.symbol_data_fields(ui, id, instance);
+
+        // The definition's content: detach an object from the
+        // symbol, or move it within the symbol's z-order.
+        self.symbol_content_fields(ui, number, &cells);
+
+        // "Duplicate for alias": the selected instances point at
+        // fresh copies of the definitions they name.
+        if ui
+            .button("Duplicate for alias")
+            .on_hover_text(
+                "CS6's duplicateSymbolForAlias: the selected instances point at copies of \
+                 the definitions they name",
+            )
+            .clicked()
+        {
+            self.duplicate_symbol_for_alias();
+        }
+    }
+
+    /// The button's behavior: the four state flags (`ATSb`, `IDSb`,
+    /// `DVLb`, `IODb`) and the export options that ride the button's
+    /// linked slices (`A2Ts`, `ALTs`, `OBNs`).
+    ///
+    /// The flags live on the *definition*, so the write names the
+    /// symbol number; the options live on the definition's linked
+    /// slices, so the write names the symbol number too and the
+    /// engine applies the payload to every linked slice.
+    pub(super) fn symbol_button_fields(
+        &mut self,
+        ui: &mut egui::Ui,
+        number: i64,
+        kind: SymbolType,
+        auto_slice: Option<bool>,
+        include_down_state: Option<bool>,
+        show_down_on_load: Option<bool>,
+        include_over_while_down: Option<bool>,
+    ) {
+        let is_button = matches!(kind, SymbolType::Button);
+        if !is_button
+            && auto_slice.is_none()
+            && include_down_state.is_none()
+            && show_down_on_load.is_none()
+            && include_over_while_down.is_none()
+        {
+            return;
+        }
+        ui.heading("Button");
+        let mut flag = auto_slice.unwrap_or(false);
+        if ui.checkbox(&mut flag, "auto-slice").changed() {
+            self.set_button_auto_slice(number, flag);
+        }
+        let mut flag = include_down_state.unwrap_or(false);
+        if ui.checkbox(&mut flag, "include down state").changed() {
+            self.set_button_include_down_state(number, flag);
+        }
+        let mut flag = show_down_on_load.unwrap_or(false);
+        if ui.checkbox(&mut flag, "show down on load").changed() {
+            self.set_button_show_down_on_load(number, flag);
+        }
+        let mut flag = include_over_while_down.unwrap_or(false);
+        if ui.checkbox(&mut flag, "include over while down").changed() {
+            self.set_button_include_over_while_down(number, flag);
+        }
+        // The export options: the first linked slice is the read
+        // side; the write reaches every slice linked to the symbol.
+        let linked = self.linked_slice_facts(number);
+        let mut link = linked.link;
+        let mut alt = linked.alt;
+        let mut slice_name = linked.slice_name;
+        ui.horizontal(|ui| {
+            let link_field = ui.add(egui::TextEdit::singleline(&mut link).hint_text("link URL"));
+            let alt_field = ui.add(egui::TextEdit::singleline(&mut alt).hint_text("alt text"));
+            let name_field =
+                ui.add(egui::TextEdit::singleline(&mut slice_name).hint_text("slice name"));
+            if link_field.lost_focus() && link_field.changed() {
+                self.set_button_options(number, Some(link.clone()), None, None);
+            }
+            if alt_field.lost_focus() && alt_field.changed() {
+                self.set_button_options(number, None, Some(alt.clone()), None);
+            }
+            if name_field.lost_focus() && name_field.changed() {
+                self.set_button_options(number, None, None, Some(slice_name.clone()));
+            }
+        });
+        if !linked.found {
+            ui.label("no slice is linked to this symbol yet");
+        }
+    }
+
+    /// The first slice linked to `number`, read for the button's
+    /// export options.
+    fn linked_slice_facts(&self, number: i64) -> LinkedSliceFacts {
+        let mut facts = LinkedSliceFacts::default();
+        for (_, data) in self.editor.document().registry.iter() {
+            let ObjectData::Slice(slice) = data else {
+                continue;
+            };
+            if slice.symbol_number != Some(number) {
+                continue;
+            }
+            facts.found = true;
+            if facts.link.is_empty() {
+                facts.link = slice.link.clone().unwrap_or_default();
+            }
+            if facts.alt.is_empty() {
+                facts.alt = slice.alt.clone().unwrap_or_default();
+            }
+            if facts.slice_name.is_empty() {
+                facts.slice_name = slice.name.clone().unwrap_or_default();
+            }
+        }
+        facts
+    }
+
+    /// Write the button's auto-slice flag (`ATSb`).
+    pub(super) fn set_button_auto_slice(&mut self, number: i64, value: bool) {
+        self.run_command(
+            "symbol.setButtonAutoSlice",
+            serde_json::json!({ "symbol": number, "value": value }),
+        );
+    }
+
+    /// Write the button's include-down-state flag (`IDSb`).
+    pub(super) fn set_button_include_down_state(&mut self, number: i64, value: bool) {
+        self.run_command(
+            "symbol.setButtonIncludeDownState",
+            serde_json::json!({ "symbol": number, "value": value }),
+        );
+    }
+
+    /// Write the button's show-down-on-load flag (`DVLb`).
+    pub(super) fn set_button_show_down_on_load(&mut self, number: i64, value: bool) {
+        self.run_command(
+            "symbol.setButtonShowDownOnLoad",
+            serde_json::json!({ "symbol": number, "value": value }),
+        );
+    }
+
+    /// Write the button's include-over-while-down flag (`IODb`).
+    pub(super) fn set_button_include_over_while_down(&mut self, number: i64, value: bool) {
+        self.run_command(
+            "symbol.setButtonIncludeOverWhileDownState",
+            serde_json::json!({ "symbol": number, "value": value }),
+        );
+    }
+
+    /// Write one of the button's export options. The engine applies
+    /// every present field to every slice linked to the symbol and
+    /// leaves the absent ones untouched, so the panel sends one field
+    /// at a time.
+    pub(super) fn set_button_options(
+        &mut self,
+        number: i64,
+        link: Option<String>,
+        alt: Option<String>,
+        slice_name: Option<String>,
+    ) {
+        self.run_command(
+            "symbol.setButtonOptions",
+            serde_json::json!({
+                "symbol": number,
+                "link": link,
+                "alt": alt,
+                "slice_name": slice_name,
+            }),
+        );
+    }
+
+    /// The animation span: the `ANNi` family's six writes. CS6's
+    /// `setAnimInstance*` verbs address the *selected instances*, so
+    /// the panel syncs the view's selection into the document first
+    /// (decision 0104's bridge).
+    pub(super) fn symbol_animation_fields(
+        &mut self,
+        ui: &mut egui::Ui,
+        instance: &SymbolInstanceObject,
+    ) {
+        let animation = instance.animation.clone().unwrap_or(SymbolAnimation {
+            frames: 1,
+            x_shift: 0.0,
+            y_shift: 0.0,
+            scaling: 100.0,
+            rotation: None,
+            start_opacity: None,
+            end_opacity: None,
+        });
+        let mut frames = animation.frames;
+        let mut loop_count = animation.frames;
+        let mut shift_x = animation.x_shift;
+        let mut shift_y = animation.y_shift;
+        let mut rotation = animation.rotation.unwrap_or(0) as f64;
+        let mut scale = animation.scaling;
+        // The model stores opacity per mille; the wire speaks 0–100.
+        let mut start = animation.start_opacity.unwrap_or(1000) as f64 / 10.0;
+        let mut end = animation.end_opacity.unwrap_or(1000) as f64 / 10.0;
+        ui.heading("Animation");
+        ui.horizontal(|ui| {
+            let frame_field = ui.add(
+                egui::DragValue::new(&mut frames)
+                    .speed(1.0)
+                    .range(1..=1000)
+                    .prefix("frames "),
+            );
+            let loop_field = ui.add(
+                egui::DragValue::new(&mut loop_count)
+                    .speed(1.0)
+                    .range(1..=1000)
+                    .prefix("loop count "),
+            );
+            if frame_field.changed() {
+                self.set_anim_num_frames(frames);
+            }
+            if loop_field.changed() {
+                self.set_anim_loop_count(loop_count);
+            }
+        });
+        ui.horizontal(|ui| {
+            let x_field = ui.add(
+                egui::DragValue::new(&mut shift_x)
+                    .speed(1.0)
+                    .prefix("offset x "),
+            );
+            let y_field = ui.add(
+                egui::DragValue::new(&mut shift_y)
+                    .speed(1.0)
+                    .prefix("offset y "),
+            );
+            if x_field.changed() || y_field.changed() {
+                self.set_anim_offset(shift_x, shift_y);
+            }
+        });
+        ui.horizontal(|ui| {
+            let rotation_field = ui.add(
+                egui::DragValue::new(&mut rotation)
+                    .speed(1.0)
+                    .prefix("rotation "),
+            );
+            let scale_field = ui.add(
+                egui::DragValue::new(&mut scale)
+                    .speed(1.0)
+                    .range(0.01..=1000.0)
+                    .prefix("scale % "),
+            );
+            if rotation_field.changed() {
+                self.set_anim_rotation(rotation);
+            }
+            if scale_field.changed() {
+                self.set_anim_scale(scale);
+            }
+        });
+        ui.horizontal(|ui| {
+            let start_field = ui.add(
+                egui::DragValue::new(&mut start)
+                    .speed(1.0)
+                    .range(0.0..=100.0)
+                    .prefix("start opacity "),
+            );
+            let end_field = ui.add(
+                egui::DragValue::new(&mut end)
+                    .speed(1.0)
+                    .range(0.0..=100.0)
+                    .prefix("end opacity "),
+            );
+            if start_field.changed() || end_field.changed() {
+                self.set_anim_opacity(start, end);
+            }
+        });
+    }
+
+    /// The animation verbs address the document's selection, so the
+    /// view's selection is synced into the document first.
+    fn sync_for_animation(&mut self) -> bool {
+        if let Err(error) = self.editor.sync_selection() {
+            self.status = format!("selection failed: {error}");
+            return false;
+        }
+        true
+    }
+
+    /// Write the animation's frame count (`ANNi`).
+    pub(super) fn set_anim_num_frames(&mut self, frames: i64) {
+        if !self.sync_for_animation() {
+            return;
+        }
+        self.run_command(
+            "symbol.setAnimInstanceNumFrames",
+            serde_json::json!({ "frames": frames }),
+        );
+    }
+
+    /// Write the animation's loop count (CS6's deprecated spelling of
+    /// the frame count).
+    pub(super) fn set_anim_loop_count(&mut self, loop_count: i64) {
+        if !self.sync_for_animation() {
+            return;
+        }
+        self.run_command(
+            "symbol.setAnimInstanceLoopCount",
+            serde_json::json!({ "loop_count": loop_count }),
+        );
+    }
+
+    /// Write the animation's travel across the span (`ANXf`/`ANYf`).
+    pub(super) fn set_anim_offset(&mut self, x: f64, y: f64) {
+        if !self.sync_for_animation() {
+            return;
+        }
+        self.run_command(
+            "symbol.setAnimInstanceOffsetDist",
+            serde_json::json!({ "offset": { "x": x, "y": y } }),
+        );
+    }
+
+    /// Write the animation's rotation across the span (`ANRi`).
+    pub(super) fn set_anim_rotation(&mut self, rotation: f64) {
+        if !self.sync_for_animation() {
+            return;
+        }
+        self.run_command(
+            "symbol.setAnimInstanceRotationAmount",
+            serde_json::json!({ "rotation": rotation }),
+        );
+    }
+
+    /// Write the animation's scaling across the span (`ASCf`).
+    pub(super) fn set_anim_scale(&mut self, scale: f64) {
+        if !self.sync_for_animation() {
+            return;
+        }
+        self.run_command(
+            "symbol.setAnimInstanceScaleAmount",
+            serde_json::json!({ "scale": scale }),
+        );
+    }
+
+    /// Write the animation's opacity ramp (`ASOi`/`AEOi`).
+    pub(super) fn set_anim_opacity(&mut self, start: f64, end: f64) {
+        if !self.sync_for_animation() {
+            return;
+        }
+        self.run_command(
+            "symbol.setAnimInstanceStartEndOpacity",
+            serde_json::json!({ "start": start, "end": end }),
+        );
+    }
+
+    /// The instance's parameters (`currentValues`) and its custom data
+    /// (`DTAv`).
+    pub(super) fn symbol_data_fields(
+        &mut self,
+        ui: &mut egui::Ui,
+        id: doc::ObjectId,
+        instance: &SymbolInstanceObject,
+    ) {
+        ui.heading("Parameters");
+        let mut name = String::new();
+        let mut kind = "text".to_owned();
+        let mut value = String::new();
+        ui.horizontal(|ui| {
+            ui.add(
+                egui::TextEdit::singleline(&mut name)
+                    .desired_width(96.0)
+                    .hint_text("name"),
+            );
+            ui.add(
+                egui::TextEdit::singleline(&mut kind)
+                    .desired_width(64.0)
+                    .hint_text("type"),
+            );
+            ui.add(
+                egui::TextEdit::singleline(&mut value)
+                    .desired_width(96.0)
+                    .hint_text("value"),
+            );
+        });
+        if ui.button("Set parameter").clicked() {
+            self.set_symbol_param(id, &name, &kind, &value);
+        }
+        ui.heading("Custom data");
+        let mut key = String::new();
+        let mut text = String::new();
+        ui.horizontal(|ui| {
+            ui.add(
+                egui::TextEdit::singleline(&mut key)
+                    .desired_width(96.0)
+                    .hint_text("key"),
+            );
+            ui.add(
+                egui::TextEdit::singleline(&mut text)
+                    .desired_width(96.0)
+                    .hint_text("value"),
+            );
+        });
+        if ui.button("Set custom data").clicked() {
+            self.set_symbol_custom_data(id, &key, &text);
+        }
+        for (existing, stored) in &instance.custom_data {
+            ui.horizontal(|ui| {
+                ui.label(format!("{existing}: {stored}"));
+                if ui.small_button("×").clicked() {
+                    self.remove_symbol_custom_data(id, existing);
+                }
+            });
+        }
+    }
+
+    /// Write one parameter of the instance (`currentValues`).
+    pub(super) fn set_symbol_param(
+        &mut self,
+        id: doc::ObjectId,
+        name: &str,
+        kind: &str,
+        value: &str,
+    ) {
+        self.run_command(
+            "symbol.setParam",
+            serde_json::json!({
+                "id": id, "name": name, "kind": kind, "value": value,
+            }),
+        );
+    }
+
+    /// Write one custom-data entry of the instance (`DTAv`).
+    pub(super) fn set_symbol_custom_data(&mut self, id: doc::ObjectId, key: &str, value: &str) {
+        self.run_command(
+            "symbol.setCustomData",
+            serde_json::json!({ "id": id, "key": key, "value": value }),
+        );
+    }
+
+    /// Remove one custom-data entry of the instance.
+    pub(super) fn remove_symbol_custom_data(&mut self, id: doc::ObjectId, key: &str) {
+        self.run_command(
+            "symbol.setCustomData",
+            serde_json::json!({ "id": id, "key": key, "value": null }),
+        );
+    }
+
+    /// The definition's own content: every object in the symbol's
+    /// cells, with the two edits CS6 offers on them — lift the object
+    /// out of the symbol, or move it within the symbol's z-order.
+    pub(super) fn symbol_content_fields(
+        &mut self,
+        ui: &mut egui::Ui,
+        number: i64,
+        cells: &[Vec<Vec<doc::ObjectId>>],
+    ) {
+        if cells.is_empty() {
+            return;
+        }
+        ui.heading("Definition content");
+        for (layer_index, layer) in cells.iter().enumerate() {
+            for (cell_index, cell) in layer.iter().enumerate() {
+                if cell.is_empty() {
+                    continue;
+                }
+                ui.label(format!("layer {layer_index}, state {cell_index}"));
+                for (position, element) in cell.iter().enumerate() {
+                    let top = cell.len().saturating_sub(1);
+                    ui.horizontal(|ui| {
+                        ui.label(format!("object {}", element.index()));
+                        if position < top
+                            && ui
+                                .small_button("▲")
+                                .on_hover_text("Move the object up in the symbol")
+                                .clicked()
+                        {
+                            self.reorder_symbol_object(number, *element, position + 1);
+                        }
+                        if position > 0
+                            && ui
+                                .small_button("▼")
+                                .on_hover_text("Move the object down in the symbol")
+                                .clicked()
+                        {
+                            self.reorder_symbol_object(number, *element, position - 1);
+                        }
+                        if ui
+                            .small_button("×")
+                            .on_hover_text("Lift the object out of the symbol")
+                            .clicked()
+                        {
+                            self.detach_symbol_object(number, *element);
+                        }
+                    });
+                }
+            }
+        }
+    }
+
+    /// Move an object within its definition's cell. The engine's
+    /// target index is the position *after* the object leaves the
+    /// list, so a move up is `position + 1` and a move down is
+    /// `position - 1`.
+    pub(super) fn reorder_symbol_object(&mut self, number: i64, id: doc::ObjectId, to: usize) {
+        self.run_command(
+            "symbol.editReorder",
+            serde_json::json!({ "symbol": number, "id": id, "to": to }),
+        );
+    }
+
+    /// Lift an object out of its definition's cell.
+    pub(super) fn detach_symbol_object(&mut self, number: i64, id: doc::ObjectId) {
+        self.run_command(
+            "symbol.editDetach",
+            serde_json::json!({ "symbol": number, "id": id }),
+        );
+    }
+
+    /// The selected instances point at fresh copies of the definitions
+    /// they name. The engine reads the document's selection, so the
+    /// view's selection is synced first.
+    pub(super) fn duplicate_symbol_for_alias(&mut self) {
+        if self.editor.live_selection().is_empty() {
+            self.status = "nothing selected".to_owned();
+            return;
+        }
+        if let Err(error) = self.editor.sync_selection() {
+            self.status = format!("selection failed: {error}");
+            return;
+        }
+        self.run_command("symbol.duplicateSymbolForAlias", serde_json::json!({}));
     }
 
     /// Path-object properties, then the shared display controls.
@@ -2723,4 +3295,15 @@ fn object_label(object: &ObjectData) -> String {
         Some(name) if !name.is_empty() => format!("{name} ({kind})"),
         _ => format!("(unnamed {kind})"),
     }
+}
+
+/// The button's export options, read from the first slice linked to
+/// the symbol. `found` records whether any slice is linked at all —
+/// the engine refuses `symbol.setButtonOptions` when none is.
+#[derive(Default)]
+struct LinkedSliceFacts {
+    found: bool,
+    link: String,
+    alt: String,
+    slice_name: String,
 }
