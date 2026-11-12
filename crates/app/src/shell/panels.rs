@@ -1582,7 +1582,7 @@ impl Shell {
             group
                 .children
                 .first()
-                .and_then(|child| document.registry.get(child))
+                .and_then(|child| document.registry.get(*child))
                 .is_some_and(|data| matches!(data, ObjectData::Image(_) | ObjectData::Path(_)))
         };
         let is_mask_group = |group: &GroupObject| {
@@ -1611,7 +1611,7 @@ impl Shell {
         let raster = match group
             .children
             .first()
-            .and_then(|child| document.registry.get(child))
+            .and_then(|child| document.registry.get(*child))
         {
             Some(ObjectData::Image(_)) => true,
             Some(ObjectData::Path(_)) => false,
@@ -2380,17 +2380,6 @@ impl Shell {
         });
     }
 
-    /// The animation and effect verbs address the document's
-    /// selection, so the view's selection is synced into the
-    /// document first.
-    fn sync_document_selection(&mut self) -> bool {
-        if let Err(error) = self.editor.sync_selection() {
-            self.status = format!("selection failed: {error}");
-            return false;
-        }
-        true
-    }
-
     /// Write the animation's frame count (`ANNi`).
     pub(super) fn set_anim_num_frames(&mut self, frames: i64) {
         if !self.sync_document_selection() {
@@ -3151,7 +3140,7 @@ impl Shell {
                 self.set_custom_anti_alias_strength(id, strength);
             }
         });
-        let mut over_sample = text.anti_alias_oversample.unwrap_or(4);
+        let over_sample = text.anti_alias_oversample.unwrap_or(4);
         egui::ComboBox::from_label("oversample")
             .selected_text(over_sample.to_string())
             .show_ui(ui, |ui| {
@@ -3649,7 +3638,7 @@ impl Shell {
         match &selection {
             Some(mask) => ui.label(format!("selection {}x{} px", mask.width, mask.height)),
             None => ui.label("(no pixel selection)"),
-        }
+        };
         let (Ok(width), Ok(height)) =
             (u32::try_from(image.pixels.0), u32::try_from(image.pixels.1))
         else {

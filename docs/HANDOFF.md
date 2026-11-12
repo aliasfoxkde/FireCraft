@@ -322,14 +322,32 @@ the absolute repo path.
   this fleet's problem. Read the truth from the store:
   `sudo sqlite3 /var/lib/gitforge/gitforge.db "SELECT id,name,status,
   capacity,last_heartbeat FROM runners;"`.
+- **Measured throughput (2026-11-12, read from the store):** one
+  online runner (`swarmone-docker`, capacity 4 — so four jobs
+  concurrently, no more), `fedora-docker` offline since 15:13 and
+  `t5500-docker` offline since 2026-10-11. Job *starts* measured with
+  `julianday(started_at) > julianday('now') - N/1440.0` (compare
+  timestamps with `julianday`, never with `datetime()` string
+  comparison — the `T` separator breaks lexical ordering and
+  over-counts): 10 starts in the last hour, 37 in three hours, 53 in
+  six. That is **≈12 job starts per hour, one start every ~5
+  minutes** — the runner is saturated, and the queue is the
+  bottleneck, not the code.
+  A pipeline is **ten** jobs (`detect-changes`, `fmt-layers`, `layers`,
+  `clippy-test`, `wasm-web`, `corpus-golden`, `perf-budgets`, `fuzz`,
+  `generated-docs`, `release`), so one pipeline costs ~50 minutes of
+  queue time and a merge campaign of nine PR branches costs ~7 hours.
+  Budget for that when sequencing a campaign; do not read a long
+  queue as a hung runner.
 - **Find the run:** `GET /api/pipeline-runs?limit=15` — match
   `commit_hash` (field name is `commit_hash`, *not* `sha`; both are
-  `None` in the list view — fetch jobs to identify a run by its 7-job
-  shape).
+  `None` in the list view — fetch jobs to identify a run by its
+  ten-job shape).
 - **Wait + jobs:** `GET /api/pipeline-runs/{id}` until status is
-  terminal; `GET /api/pipeline-runs/{id}/jobs` for the 7 jobs
-  (fmt-layers, clippy-test, wasm-web, corpus-golden, perf-budgets,
-  fuzz, generated-docs). All must be `succeeded`. ~15–18 min.
+  terminal; `GET /api/pipeline-runs/{id}/jobs` for the ten jobs
+  (detect-changes, fmt-layers, layers, clippy-test, wasm-web,
+  corpus-golden, perf-budgets, fuzz, generated-docs, release). All
+  must be `succeeded`. ~15–18 min once the pipeline has the runner.
 - **Job logs:** `GET /api/jobs/{job_id}/logs` — walk
   `data.logs[].chunk` or `data.receipt.step_results[].stdout/stderr`
   (helper: `/var/tmp/getjoblog.py`).
