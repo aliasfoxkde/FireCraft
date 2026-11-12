@@ -166,6 +166,10 @@ pub struct Shell {
     style_name: String,
     /// The Styles panel's text-scale factor.
     style_scale: f64,
+    /// The States panel's range fan: the first and last state the
+    /// selection's range fan covers (`-1` = the current state).
+    fan_first: i64,
+    fan_last: i64,
     /// The layer whose name is being edited in the Layers panel
     /// (`None` = no inline rename open).
     rename_layer: Option<usize>,
@@ -471,6 +475,8 @@ impl Shell {
             ui_scale: None,
             style_name: String::new(),
             style_scale: 1.0,
+            fan_first: 0,
+            fan_last: 0,
             rename_layer: None,
             rename_page: None,
             show_grid: false,

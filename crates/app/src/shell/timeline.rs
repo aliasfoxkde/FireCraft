@@ -174,6 +174,118 @@ impl Shell {
             }
         });
 
+        // The state's place in the strip: CS6's reorderFrame, as a
+        // move one place left and a move one place right.
+        ui.horizontal(|ui| {
+            if ui
+                .button("Move left")
+                .on_hover_text("move this state one place left in the strip")
+                .clicked()
+            {
+                self.move_state(page, current, -1);
+            }
+            if ui
+                .button("Move right")
+                .on_hover_text("move this state one place right in the strip")
+                .clicked()
+            {
+                self.move_state(page, current, 1);
+            }
+        });
+
+        // CS6's selection fans: the selection goes onto the page's
+        // other states.
+        ui.horizontal(|ui| {
+            if ui
+                .button("Duplicate to next")
+                .on_hover_text(
+                    "CS6's duplicateSelectionToFrames: the selection is copied onto the next state",
+                )
+                .clicked()
+            {
+                self.duplicate_selection_to_frames(page, current, "next");
+            }
+            if ui
+                .button("Duplicate to all")
+                .on_hover_text("the selection is copied onto every state of the page")
+                .clicked()
+            {
+                self.duplicate_selection_to_frames(page, current, "all");
+            }
+            if ui
+                .button("Distribute selection")
+                .on_hover_text(
+                    "CS6's distributeSelectionToFrames: the selected items move one per state",
+                )
+                .clicked()
+            {
+                self.distribute_selection_to_frames(page, current);
+            }
+        });
+        ui.horizontal(|ui| {
+            let mut first = self.fan_first;
+            let mut last = self.fan_last;
+            let first_field = ui.add(
+                egui::DragValue::new(&mut first)
+                    .speed(1.0)
+                    .range(-1..=64)
+                    .prefix("from "),
+            );
+            let last_field = ui.add(
+                egui::DragValue::new(&mut last)
+                    .speed(1.0)
+                    .range(-1..=64)
+                    .prefix("to "),
+            );
+            if first_field.changed() {
+                self.fan_first = first;
+            }
+            if last_field.changed() {
+                self.fan_last = last;
+            }
+            if ui
+                .button("Duplicate to range")
+                .on_hover_text("CS6's duplicateSelectionToFrameRange: the selection is copied across the range")
+                .clicked()
+            {
+                let (first, last) = (self.fan_first, self.fan_last);
+                self.duplicate_selection_to_frame_range(page, current, first, last);
+            }
+        });
+
+        // The active layer's cell in the current state: visible and
+        // locked. The flags live on the cell, so they belong to the
+        // layer, not to the page.
+        let layer = self.editor.active_layer();
+        let flags = self
+            .editor
+            .document()
+            .pages
+            .get(page)
+            .and_then(|page| page.layers.layers.get(layer))
+            .and_then(|layer| layer.cells.get(current))
+            .map(|cell| (cell.visible, cell.locked));
+        if let Some((visible, locked)) = flags {
+            ui.horizontal(|ui| {
+                let mut visible = visible;
+                if ui
+                    .checkbox(&mut visible, "visible")
+                    .on_hover_text("show the active layer's cell in this state")
+                    .changed()
+                {
+                    self.set_cell_visible(page, layer, current, visible);
+                }
+                let mut locked = locked;
+                if ui
+                    .checkbox(&mut locked, "locked")
+                    .on_hover_text("lock the active layer's cell in this state")
+                    .changed()
+                {
+                    self.set_cell_locked(page, layer, current, locked);
+                }
+            });
+        }
+
         // The onion-skinning counts: how many states ghost behind the
         // current one on each side. Zero on both sides is off.
         ui.horizontal(|ui| {
@@ -282,6 +394,107 @@ impl Shell {
         self.run_command(
             "frame.distributeLayer",
             serde_json::json!({ "page": page, "layer": layer, "cell": current }),
+        );
+    }
+
+    /// CS6's reorderFrame: the state at `current` moves one place
+    /// left (`step` -1) or right (`step` 1) in the strip.
+    ///
+    /// The engine's `before` is an index in the strip's own
+    /// numbering, and it shifts the list by one when the moved state
+    /// came first — so a move to the right names the state *after*
+    /// the target, and a move to the left names the target itself.
+    fn move_state(&mut self, page: usize, current: usize, step: i32) {
+        let total = self
+            .editor
+            .document()
+            .pages
+            .get(page)
+            .map_or(1, |page| page.info.frame_count.max(1) as usize);
+        let before = if step < 0 {
+            if current == 0 {
+                return;
+            }
+            current - 1
+        } else {
+            if current + 1 >= total {
+                return;
+            }
+            current + 2
+        };
+        self.run_command(
+            "frame.reorder",
+            serde_json::json!({
+                "page": page, "from": current, "before": before, "make_copy": false,
+            }),
+        );
+    }
+
+    /// CS6's duplicateSelectionToFrames: the selection is copied onto
+    /// the states the fan names — "next", "previous", "end" or
+    /// "all".
+    fn duplicate_selection_to_frames(&mut self, page: usize, current: usize, which: &str) {
+        if let Err(error) = self.editor.sync_selection() {
+            self.status = format!("selection failed: {error}");
+            return;
+        }
+        self.run_command(
+            "selection.duplicateToFrames",
+            serde_json::json!({ "page": page, "frame": current, "which": which }),
+        );
+    }
+
+    /// CS6's duplicateSelectionToFrameRange: the selection is copied
+    /// across an inclusive range of states.
+    fn duplicate_selection_to_frame_range(
+        &mut self,
+        page: usize,
+        current: usize,
+        first: i64,
+        last: i64,
+    ) {
+        if let Err(error) = self.editor.sync_selection() {
+            self.status = format!("selection failed: {error}");
+            return;
+        }
+        self.run_command(
+            "selection.duplicateToFrameRange",
+            serde_json::json!({
+                "page": page, "frame": current, "first": first, "last": last,
+            }),
+        );
+    }
+
+    /// CS6's distributeSelectionToFrames: the selected items move
+    /// one per state, starting at the current one.
+    fn distribute_selection_to_frames(&mut self, page: usize, current: usize) {
+        if let Err(error) = self.editor.sync_selection() {
+            self.status = format!("selection failed: {error}");
+            return;
+        }
+        self.run_command(
+            "selection.distributeToFrames",
+            serde_json::json!({ "page": page, "frame": current }),
+        );
+    }
+
+    /// The active layer's cell in one state: shown or hidden.
+    fn set_cell_visible(&mut self, page: usize, layer: usize, cell: usize, visible: bool) {
+        self.run_command(
+            "cell.setVisible",
+            serde_json::json!({
+                "page": page, "layer": layer, "cell": cell, "visible": visible,
+            }),
+        );
+    }
+
+    /// The active layer's cell in one state: locked or unlocked.
+    fn set_cell_locked(&mut self, page: usize, layer: usize, cell: usize, locked: bool) {
+        self.run_command(
+            "cell.setLocked",
+            serde_json::json!({
+                "page": page, "layer": layer, "cell": cell, "locked": locked,
+            }),
         );
     }
 }
@@ -496,5 +709,103 @@ mod tests {
         shell.distribute_to_states(0, 0);
         assert_eq!(state_count(&shell), 1);
         assert_eq!(elements(&shell, layer, 0).len(), 1);
+    }
+
+    /// The cell flags of one layer's one state.
+    fn flags(shell: &Shell, layer: usize, state: usize) -> (bool, bool) {
+        let cell = &shell.editor.document().pages[0].layers.layers[layer].cells[state];
+        (cell.visible, cell.locked)
+    }
+
+    #[test]
+    fn moving_a_state_left_swaps_it_with_the_one_before() {
+        let mut shell = shell_with_states(3);
+        let layer = shell.editor.active_layer();
+        put_rect(&mut shell, layer, 0, 10.0);
+        put_rect(&mut shell, layer, 2, 40.0);
+        let moved = elements(&shell, layer, 2)[0];
+        shell.move_state(0, 2, -1);
+        // The state that sat third now sits second, and the empty
+        // state takes its place.
+        assert_eq!(elements(&shell, layer, 1), vec![moved]);
+        assert!(elements(&shell, layer, 2).is_empty());
+    }
+
+    #[test]
+    fn moving_a_state_right_swaps_it_with_the_one_after() {
+        let mut shell = shell_with_states(3);
+        let layer = shell.editor.active_layer();
+        put_rect(&mut shell, layer, 0, 10.0);
+        put_rect(&mut shell, layer, 1, 40.0);
+        let moved = elements(&shell, layer, 1)[0];
+        shell.move_state(0, 1, 1);
+        assert_eq!(elements(&shell, layer, 2), vec![moved]);
+        assert!(elements(&shell, layer, 1).is_empty());
+    }
+
+    #[test]
+    fn the_first_and_last_states_do_not_move_off_the_strip() {
+        let mut shell = shell_with_states(2);
+        let layer = shell.editor.active_layer();
+        put_rect(&mut shell, layer, 0, 10.0);
+        let first = elements(&shell, layer, 0)[0];
+        shell.move_state(0, 0, -1);
+        shell.move_state(0, 1, 1);
+        assert_eq!(elements(&shell, layer, 0), vec![first]);
+    }
+
+    #[test]
+    fn a_cell_hides_and_locks_through_the_commands() {
+        let mut shell = shell_with_states(2);
+        let layer = shell.editor.active_layer();
+        assert_eq!(flags(&shell, layer, 0), (true, false));
+        shell.set_cell_visible(0, layer, 0, false);
+        shell.set_cell_locked(0, layer, 0, true);
+        assert_eq!(flags(&shell, layer, 0), (false, true));
+        // The other state keeps its own flags.
+        assert_eq!(flags(&shell, layer, 1), (true, false));
+    }
+
+    #[test]
+    fn the_selection_is_copied_onto_the_next_state() {
+        let mut shell = shell_with_states(2);
+        let layer = shell.editor.active_layer();
+        put_rect(&mut shell, layer, 0, 10.0);
+        let id = elements(&shell, layer, 0)[0];
+        shell.editor.set_selection(vec![id]);
+        shell.duplicate_selection_to_frames(0, 0, "next");
+        // The copy is a new object on the next state.
+        assert_eq!(elements(&shell, layer, 0).len(), 1);
+        assert_eq!(elements(&shell, layer, 1).len(), 1);
+        assert_ne!(elements(&shell, layer, 1)[0], id);
+    }
+
+    #[test]
+    fn the_selection_distributes_one_item_per_state() {
+        let mut shell = shell_with_states(1);
+        let layer = shell.editor.active_layer();
+        put_rect(&mut shell, layer, 0, 10.0);
+        put_rect(&mut shell, layer, 0, 40.0);
+        let ids = elements(&shell, layer, 0);
+        shell.editor.set_selection(ids.clone());
+        shell.distribute_selection_to_frames(0, 0);
+        // Two items, one per state — the page grew to hold them.
+        assert_eq!(state_count(&shell), 2);
+        assert_eq!(elements(&shell, layer, 0), vec![ids[0]]);
+        assert_eq!(elements(&shell, layer, 1), vec![ids[1]]);
+    }
+
+    #[test]
+    fn the_selection_is_copied_across_a_range_of_states() {
+        let mut shell = shell_with_states(3);
+        let layer = shell.editor.active_layer();
+        put_rect(&mut shell, layer, 0, 10.0);
+        let id = elements(&shell, layer, 0)[0];
+        shell.editor.set_selection(vec![id]);
+        shell.duplicate_selection_to_frame_range(0, 0, 1, 2);
+        // The range skipped the source state and covered the other two.
+        assert_eq!(elements(&shell, layer, 0).len(), 1);
+        assert_eq!(elements(&shell, layer, 1).len(), 1);
+        assert_eq!(elements(&shell, layer, 2).len(), 1);
     }
 }
