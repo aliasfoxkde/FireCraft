@@ -166,6 +166,10 @@ pub struct Shell {
     style_name: String,
     /// The Styles panel's text-scale factor.
     style_scale: f64,
+    /// The Properties panel's channel pair: the clipboard channel
+    /// pasted in, and the image channel it lands in.
+    channel_from: &'static str,
+    channel_to: &'static str,
     /// The States panel's range fan: the first and last state the
     /// selection's range fan covers (`-1` = the current state).
     fan_first: i64,
@@ -475,6 +479,8 @@ impl Shell {
             ui_scale: None,
             style_name: String::new(),
             style_scale: 1.0,
+            channel_from: "red",
+            channel_to: "alpha",
             fan_first: 0,
             fan_last: 0,
             rename_layer: None,
@@ -4617,6 +4623,39 @@ mod tests {
         }
     }
 
+    /// The image behind a name, for the channel assertions.
+    fn shell_image(shell: &Shell, name: &str) -> doc::ObjectId {
+        shell
+            .editor
+            .document()
+            .registry
+            .iter()
+            .find_map(|(id, object)| match object {
+                ObjectData::Image(image) if image.name.as_deref() == Some(name) => Some(id),
+                _ => None,
+            })
+            .unwrap_or_else(|| panic!("no image named {name:?}"))
+    }
+
+    /// The alpha byte of an image's first tile — the coverage a
+    /// channel paste writes.
+    fn image_alpha(shell: &Shell, id: doc::ObjectId) -> Option<u8> {
+        let image = match shell.editor.document().registry.get(id) {
+            Some(ObjectData::Image(image)) => image,
+            _ => return None,
+        };
+        match image.tiles.first() {
+            Some(doc::TileRef::Tile(tile_id)) => shell
+                .editor
+                .document()
+                .tiles
+                .get(*tile_id)
+                .map(|tile| tile.pixels()[3]),
+            Some(doc::TileRef::Matte(argb)) => Some(((*argb >> 24) & 0xff) as u8),
+            None => None,
+        }
+    }
+
     /// Edit ▸ Copy / Paste: the clipboard crosses the engine's command
     /// door — the view's selection lands in the document first, the
     /// paste re-mints onto the active layer, and the pasted object
@@ -7309,5 +7348,198 @@ mod tests {
             .unwrap();
         assert_eq!(fill.shape, doc::FillShape::Pattern, "the fill is a pattern");
         assert!(fill.pattern.is_some(), "the pattern carries its tile");
+    }
+
+    /// The Slices panel's editors: the web object's rectangle moves,
+    /// and its background knobs carry their own fields.
+    #[test]
+    fn the_slices_panel_edits_the_web_object() {
+        let mut shell = gui_shell(gui_editor());
+        shell
+            .editor
+            .apply(
+                "slice.create",
+                serde_json::json!({
+                    "shape": "rect", "x": 10.0, "y": 20.0,
+                    "width": 100.0, "height": 50.0, "page": 0, "name": "band",
+                }),
+            )
+            .unwrap();
+        let id = shell
+            .editor
+            .document()
+            .registry
+            .iter()
+            .find_map(|(id, object)| match object {
+                ObjectData::Slice(slice) if slice.name.as_deref() == Some("band") => Some(id),
+                _ => None,
+            })
+            .unwrap();
+
+        // The rectangle moves the web object.
+        shell.set_hotspot_rectangle(id, 0.0, 0.0, 40.0, 30.0, false);
+        assert!(!shell.status.contains("failed"), "{}", shell.status);
+        let frame = match shell.editor.document().registry.get(id) {
+            Some(ObjectData::Slice(slice)) => slice.frame,
+            _ => panic!("the slice is gone"),
+        };
+        assert_eq!(
+            (frame.x0, frame.y0, frame.x1, frame.y1),
+            (0.0, 0.0, 40.0, 30.0),
+            "the web object moved"
+        );
+
+        // The background knobs carry their own fields.
+        shell.set_slice_background(id, "is_background", serde_json::json!(true));
+        shell.set_slice_background(id, "repeat", serde_json::json!(2));
+        shell.set_slice_background(id, "h_position", serde_json::json!(3));
+        shell.set_slice_background(id, "h_value", serde_json::json!(12));
+        let background = match shell.editor.document().registry.get(id) {
+            Some(ObjectData::Slice(slice)) => slice.background.clone().unwrap(),
+            _ => panic!("the slice is gone"),
+        };
+        assert_eq!(background.is_background, Some(true));
+        assert_eq!(background.repeat, Some(2));
+        assert_eq!(background.h_position, Some(3));
+        assert_eq!(background.h_value, Some(12));
+        assert_eq!(
+            background.v_position, None,
+            "the field the user did not touch stays unset"
+        );
+    }
+
+    /// The Slices panel's "Selection → hotspot": the selection becomes
+    /// a web object of its own.
+    #[test]
+    fn the_slices_panel_makes_a_web_object_from_the_selection() {
+        let mut shell = gui_shell(gui_editor());
+        let id = shell.editor.current_cell().unwrap().elements[0];
+        shell.editor.set_selection(vec![id]);
+        let before = shell
+            .editor
+            .document()
+            .registry
+            .iter()
+            .filter(|(_, object)| matches!(object, ObjectData::Slice(_)))
+            .count();
+
+        shell.copy_selection_to_web_object("hotspot");
+        assert!(!shell.status.contains("failed"), "{}", shell.status);
+        let after = shell
+            .editor
+            .document()
+            .registry
+            .iter()
+            .filter(|(_, object)| matches!(object, ObjectData::Slice(_)))
+            .count();
+        assert_eq!(after, before + 1, "the selection became a web object");
+    }
+
+    /// The Styles panel's "Update Named": the existing style of the
+    /// typed name takes the selection's appearance, and a name with no
+    /// style is refused rather than creating one.
+    #[test]
+    fn the_styles_panel_updates_a_named_style() {
+        let mut shell = gui_shell(gui_editor());
+        let id = shell.editor.current_cell().unwrap().elements[0];
+        shell
+            .editor
+            .apply(
+                "style.redefineFromSelection",
+                serde_json::json!({ "name": "band", "source": id }),
+            )
+            .unwrap();
+        assert_eq!(shell.editor.document().styles.len(), 1, "one style");
+
+        // The selection takes a fill; the style follows it.
+        shell
+            .editor
+            .apply(
+                "object.setFill",
+                serde_json::json!({ "id": id, "color_raw": 0x00ff_0000 }),
+            )
+            .unwrap();
+        shell.style_name = "band".to_owned();
+        shell.update_named_style(id);
+        assert!(!shell.status.contains("failed"), "{}", shell.status);
+        assert_eq!(
+            shell.editor.document().styles.len(),
+            1,
+            "the update replaced the style instead of adding one"
+        );
+        assert_eq!(shell.editor.document().styles[0].name, "band");
+        assert_eq!(
+            shell.editor.document().styles[0].paint.fill_raw,
+            0x00ff_0000,
+            "the style carries the new fill"
+        );
+
+        // A name with no style is refused — an update never creates.
+        shell.style_name = "absent".to_owned();
+        shell.update_named_style(id);
+        assert!(shell.status.contains("failed"), "{}", shell.status);
+        assert_eq!(shell.editor.document().styles.len(), 1, "no style appeared");
+    }
+
+    /// The Properties panel's channel section: the clipboard's channel
+    /// lands in the image's own.
+    #[test]
+    fn the_properties_panel_pastes_a_channel() {
+        let mut shell = gui_shell(gui_editor());
+        // A source bitmap, opaque.
+        shell
+            .editor
+            .apply(
+                "bitmap.addImage",
+                serde_json::json!({
+                    "x": 0.0, "y": 0.0, "width": 16.0, "height": 16.0,
+                    "page": 0, "layer": 0, "cell": 0, "name": "source",
+                }),
+            )
+            .unwrap();
+        let source = shell_image(&shell, "source");
+        shell
+            .editor
+            .apply(
+                "bitmap.fill",
+                serde_json::json!({ "id": source, "color_raw": -1 }),
+            )
+            .unwrap();
+        assert_eq!(
+            image_alpha(&shell, source),
+            Some(255),
+            "the source bitmap is opaque"
+        );
+
+        // A target bitmap, empty.
+        shell
+            .editor
+            .apply(
+                "bitmap.addImage",
+                serde_json::json!({
+                    "x": 100.0, "y": 100.0, "width": 16.0, "height": 16.0,
+                    "page": 0, "layer": 0, "cell": 0, "name": "target",
+                }),
+            )
+            .unwrap();
+        let target = shell_image(&shell, "target");
+        assert_eq!(
+            image_alpha(&shell, target),
+            Some(0),
+            "the target bitmap starts empty"
+        );
+
+        // The source goes to the clipboard.
+        shell.editor.set_selection(vec![source]);
+        shell.editor.sync_selection().unwrap();
+        shell
+            .editor
+            .apply("clipboard.copy", serde_json::json!({}))
+            .unwrap();
+
+        // The clipboard's alpha lands in the target's alpha.
+        shell.paste_channel(target, "alpha", "alpha");
+        assert!(!shell.status.contains("failed"), "{}", shell.status);
+        assert_eq!(image_alpha(&shell, target), Some(255), "the channel landed");
     }
 }

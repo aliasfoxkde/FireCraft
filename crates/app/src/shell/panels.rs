@@ -980,6 +980,17 @@ impl Shell {
                     serde_json::json!({ "name": self.style_name, "source": source }),
                 );
             }
+            if ui
+                .button("Update Named")
+                .on_hover_text(
+                    "redefines the existing style of this name, and refuses when there is none",
+                )
+                .clicked()
+                && let Some(source) = targets.last().copied()
+                && !self.style_name.is_empty()
+            {
+                self.update_named_style(source);
+            }
         });
         if ui.button("Import Style Library...").clicked() {
             self.import_styles_dialog();
@@ -1010,6 +1021,19 @@ impl Shell {
         self.run_command(
             "style.redefineByIndex",
             serde_json::json!({ "index": index, "source": source }),
+        );
+    }
+
+    /// The Styles panel's "Update Named": the existing style of the
+    /// typed name takes the selection's appearance — CS6's
+    /// `redefineStyleByName`.
+    ///
+    /// Unlike "New From Selection" this never creates: a name with no
+    /// style is refused, so an update cannot quietly add an entry.
+    pub(super) fn update_named_style(&mut self, source: doc::ObjectId) {
+        self.run_command(
+            "style.redefineByName",
+            serde_json::json!({ "name": self.style_name, "source": source }),
         );
     }
 
@@ -3534,6 +3558,7 @@ impl Shell {
             image.location.x, image.location.y, image.offset.x, image.offset.y
         ));
         self.pixel_mask_section(ui, id, image);
+        self.channel_section(ui, id);
         self.display_controls(
             ui,
             id,
@@ -3544,6 +3569,67 @@ impl Shell {
                 locked: image.locked,
                 name: image.name.clone(),
             },
+        );
+    }
+
+    /// The bitmap's channels: the clipboard's channel pasted into the
+    /// image's own. Moving an alpha channel from one bitmap to
+    /// another is a CS6 habit, and the engine's
+    /// `clipboard.pasteFromChannelToChannel` does exactly that.
+    ///
+    /// The verb reads the document's clipboard and writes onto the
+    /// single selected image, so the image is selected first.
+    pub(super) fn channel_section(&mut self, ui: &mut egui::Ui, id: doc::ObjectId) {
+        ui.heading("Channels");
+        const CHANNELS: [&str; 4] = ["red", "green", "blue", "alpha"];
+        let mut from = self.channel_from;
+        let mut to = self.channel_to;
+        ui.horizontal(|ui| {
+            egui::ComboBox::from_id_salt(("channel_from", id))
+                .selected_text(from)
+                .show_ui(ui, |ui| {
+                    for channel in CHANNELS {
+                        if ui.selectable_label(channel == from, channel).clicked() {
+                            from = channel;
+                        }
+                    }
+                });
+            ui.label("→");
+            egui::ComboBox::from_id_salt(("channel_to", id))
+                .selected_text(to)
+                .show_ui(ui, |ui| {
+                    for channel in CHANNELS {
+                        if ui.selectable_label(channel == to, channel).clicked() {
+                            to = channel;
+                        }
+                    }
+                });
+        });
+        self.channel_from = from;
+        self.channel_to = to;
+        if ui
+            .button("paste the channel")
+            .on_hover_text("copy the clipboard's channel into this image")
+            .clicked()
+        {
+            self.paste_channel(id, from, to);
+        }
+    }
+
+    /// Pastes the clipboard's channel into the image's own
+    /// (`clipboard.pasteFromChannelToChannel`).
+    ///
+    /// The verb writes onto the single selected image, so the image
+    /// is selected before it runs.
+    pub(super) fn paste_channel(&mut self, id: doc::ObjectId, from: &str, to: &str) {
+        self.editor.set_selection(vec![id]);
+        if let Err(error) = self.editor.sync_selection() {
+            self.status = format!("selection failed: {error}");
+            return;
+        }
+        self.run_command(
+            "clipboard.pasteFromChannelToChannel",
+            serde_json::json!({ "from_channel": from, "to_channel": to }),
         );
     }
 
