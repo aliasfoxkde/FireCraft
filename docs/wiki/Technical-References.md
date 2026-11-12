@@ -7,9 +7,11 @@ Use these references when the overview pages are not specific enough:
 - [UI evidence notes](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/research/fw-ui-evidence.md)
 - [Code research notes](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/research/fw-code-notes.md)
 - [Decision records](https://github.com/aliasfoxkde/FireCraft/tree/main/docs/decisions)
-- [DOM parity matrix](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/planning/generated/dom-parity.md)
-- [Generated parity floors](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/planning/generated/parity.md)
-- [Scorecard](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/planning/generated/scorecard.md)
-- [Release and platform matrix](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/TOOLCHAINS.md)
+- [User-visible CS6 parity matrix](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/CS6-PARITY.md)
+- [Generated DOM parity matrix](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/planning/generated/dom-parity.md)
+- [Generated parity floors and scorecard](https://github.com/aliasfoxkde/FireCraft/tree/main/docs/planning/generated)
+- [Cross-platform release engineering and artifact matrix](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/RELEASE-ENGINEERING-PLAN.md)
+- [WebOS integration and SDK contract](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/WEBOS-PLATFORM-INTEGRATION.md)
+- [Progress and build/deployment receipts](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/PROGRESS.md)
 
-Generated reports may lag source until their generator runs. Check the generation note at the top of each report before using a count as current.
+Generated reports may lag source until their generator runs. Check each report's generation note before using a count as current.

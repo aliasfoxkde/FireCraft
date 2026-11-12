@@ -1,73 +1,42 @@
 # Fireworks CS6 Parity Roadmap
 
-This page collects the currently documented work toward Fireworks CS6 feature and UI/UX/layout parity. It separates parity work from FireCraft's modern additions. The sequence is a practical work order; individual phases may move when evidence or dependencies require it.
+This page summarizes FireCraft's current user-visible parity work. It does not claim that every undocumented Fireworks behavior has been reproduced. The detailed, evidence-bearing inventory is [CS6-PARITY.md](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/CS6-PARITY.md).
 
-## Ordered work at a glance
+**Status reviewed:** 2026-11-11 against `main` at `b61f198`.
 
-Status below is the audited source snapshot at `5fac7a2` (2026-11-04). Check [Project Status](Project-Status) for the current deployment and validation evidence.
+## How to read parity
 
-| Order | Work | State |
-|---|---|---|
-| 1 | Finish CS6 shell presentation and responsive layout (Phase 22) | Active; panel reachability and screenshot review lead |
-| Alongside | Refresh the complete user-visible parity inventory | Needed before any full-parity claim; DOM parity alone does not cover UI/workflows |
-| 2 | Complete daily-driver workflows (Phase 20) | Queued |
-| 3 | Add modern FireCraft capabilities (Phase 21) | Queued; separate from CS6 parity |
+Keep three independent measures separate:
 
-## Cross-cutting gate: complete the parity inventory
+- **DOM/API parity:** 268 carried, 3 partial, 0 missing of 356 verbs. This describes scripting/API compatibility.
+- **Shell command reachability:** 164 of 253 registered engine commands are bound in the CS6-visible shell surface (64.82%, measured 2026-11-11). The command palette exposes the full command registry, but that does not mean every operation has a polished contextual GUI.
+- **User-visible feature parity:** each menu, tool, panel, inspector field, workflow, import/export path, canvas interaction, keymap and selection state is classified in the [parity matrix](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/CS6-PARITY.md).
 
-1. **Refresh the user-visible parity matrix.** Map the CS6 menus, tools, panels, inspectors, document workflows, and important selection states to `implemented`, `partial`, `missing`, or `evidence-gated` behavior. Start this audit alongside the active shell work; finish it before claiming full parity.
-2. **Keep source evidence attached.** For each gap, link the code path, research note, decision, screenshot, or behavior observation that supports the status. The existing DOM parity matrix covers scripting verbs; it is not a complete UI or workflow parity inventory.
-3. **Protect the clean-room boundary.** Use documentation and behavioral observation. Do not copy Adobe code, icons, or artwork.
+A DOM command being carried does not prove that its GUI surface exists. A row appearing in a menu does not prove that the behavior is complete. Each claim needs a working UI path and evidence.
 
-Until the inventory refresh is complete, this roadmap is the known backlog, not a proof that no other gaps exist. Track detailed phase criteria in [NEXT.md](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/NEXT.md).
+## Current order of work
 
-## Then: finish the visible shell (Phase 22)
+| Workstream | State at 2026-11-11 |
+|---|---|
+| User-visible parity inventory | Complete and published (T26); update it as real behavior lands |
+| Phase 22 — CS6 shell fidelity | In progress; panel inventory, tool strip, adaptive context menus and icon pack landed; inspector/chrome follow-ups remain |
+| Phase 20 — daily-driver editor workflows | Partially delivered: text editing and multi-document/history/slice workflows on main; Optimize/timeline in PR #118; mask stack in PR #113 |
+| Phase 21 — modern additions | User-facing deliverables landed: autosave/recovery, HiDPI, command palette, preferences, accessibility work and scripting |
+| Phase 19.6 — menu wiring | Complete: 2 inert of 296 rows; eight explicit feature/evidence gates remain |
 
-This is the current UI priority. The context menu and open-license icon pack are complete; the remaining work is:
+## Remaining parity and quality work
 
-<!-- coderabbit-ai-generated:v1 -->
+1. **Inspector completeness:** bitmap transform and fill/stroke behavior remain constrained by the document model and recorded decision 0019; do not fake unsupported fields.
+2. **CS6 chrome and toolbar:** the main-toolbar contents and remaining presentation details are tracked in Phase 22 and the parity matrix.
+3. **Open Phase 20 PRs:** #118 contains the Optimize panel and timeline; #113 contains the mask-stack extension. They are not shipped until merged and verified.
+4. **Evidence and regressions:** maintain screenshot/interaction receipts, round-trip and malformed-file tests, undo/redo checks, and the generated DOM and shell-reachability gates.
 
-<!-- coderabbit-ai-generated-section:v1:f4fd3ecf7aeee82ab02450c0773aca0a8b3c825c71dd41fdae98bc0cad0612a6 -->
+## Authoritative references
 
-1. **Panel reachability and layout (22.1):** make active panels usable at normal viewport sizes, finish the documented Optimize, Common Library, CSS Properties, Find and Replace, and Slices surfaces, and verify persistence and movement.
-2. **Tool strip and flyouts (22.2):** align tool order, grouping, flyout behavior, and keyboard access with the reference notes.
-3. **Property inspector (22.4):** finish per-object fields and close the documented bitmap transform/resample gap (decision 0019); X/Y/W/H remains read-only. Bitmap fill/stroke editing requires a separate format decision because `IMGv` carries no fill or stroke nodes. See the [bitmap evidence](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/research/fw-ui-evidence.md#where-the-bitmap-specific-surface-lives-phase-22-ticket-224).
-4. **CS6 chrome (22.5):** review menu, tabs, status area, panel headers, and the overall shell layout.
-5. **Screenshot and responsive proof:** capture representative empty, vector, and bitmap states at 1280×800 and 1920×1080; record the build and replace the stale sample only after review.
+- [CS6 user-visible parity matrix](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/CS6-PARITY.md)
+- [Live task board](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/TASKS.md)
+- [Detailed phased roadmap](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/NEXT.md)
+- [Progress and dated receipts](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/PROGRESS.md)
+- [Generated DOM parity report](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/planning/generated/dom-parity.md)
 
-<!-- /coderabbit-ai-generated:v1 -->
-
-Detailed acceptance criteria are in [Phase 22](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/NEXT.md#phase-22--cs6-shell-fidelity-p0-the-looks-and-acts-like-fireworks-phase); release and gate receipts are in [PROGRESS.md](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/PROGRESS.md).
-
-## Next: close daily-driver feature gaps (Phase 20)
-
-1. **In-canvas text editing (20.1)**
-2. **Optimize panel and live export preview (20.2)**
-3. **Animation timeline, frame timing, and onion skinning (20.3)**
-4. **Mask stack editing (20.4)**
-5. **Multi-document tabs (20.5)**
-6. **History panel rewind (20.6)**
-7. **Slice/hotspot behavior editing and HTML preview (20.7)**
-
-## Then: add modern capabilities (Phase 21)
-
-These items extend the discontinued product rather than reproduce a CS6 feature. They should remain clearly labeled as FireCraft additions:
-
-1. Autosave and crash recovery (21.1)
-2. HiDPI rendering and display-scale handling (21.2)
-3. Command palette improvements (21.3)
-4. Preferences and platform storage (21.4)
-5. Accessibility re-audit and supported accesskit surfaces (21.5)
-6. In-app scripting access (21.6)
-
-## Known menu and model gaps
-
-<!-- coderabbit-ai-generated:v1 -->
-
-<!-- coderabbit-ai-generated-section:v1:b03ee491f097e349a36553c458dc7f5872ace2f771a8f25075ae1299da49fb24 -->
-
-- 2 of 296 menu rows are currently inert. Eight additional rows remain feature- or evidence-gated. Clickable `ReportGap` rows, such as printing and document templates, report missing features without implementing them. The inert-row count is not a census of all menu gaps; see the [parity matrix](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/CS6-PARITY.md) for the distinction. The menu wiring campaign is complete; remaining features need implementation or supporting evidence.
-
-<!-- /coderabbit-ai-generated:v1 -->
-- The DOM verb matrix has 3 partial, evidence-gated verbs and 85 entries classified as not applicable to the current API surface. See the [generated parity matrix](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/planning/generated/dom-parity.md).
-- For detailed phase criteria and dated validation receipts, use [NEXT.md](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/NEXT.md) and [PROGRESS.md](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/PROGRESS.md).
+The 2026-11-04 screenshot audit remains a dated capture receipt; it is not evidence that every UI surface or workflow has since been certified.

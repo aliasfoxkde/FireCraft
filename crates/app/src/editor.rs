@@ -3930,6 +3930,25 @@ pub fn union_selection_bounds(document: &Document, ids: &[ObjectId]) -> Option<g
     out
 }
 
+/// The union of a set of boxes; the empty box when there are none.
+///
+/// The union is taken over the boxes themselves, never over a box
+/// seeded with the origin: seeding with [`geom::Rect::ZERO`] pulls
+/// every union toward (0, 0), so a group whose children sit away from
+/// the canvas origin reported a box that swallowed the origin — the
+/// selection handles landed in the wrong place and a click near the
+/// origin hit the group.
+fn union_bounds(bounds: impl Iterator<Item = geom::Rect>) -> geom::Rect {
+    let mut out: Option<geom::Rect> = None;
+    for bounds in bounds {
+        out = Some(match out {
+            Some(acc) => acc.union(bounds),
+            None => bounds,
+        });
+    }
+    out.unwrap_or(geom::Rect::ZERO)
+}
+
 #[must_use]
 pub fn object_bounds(document: &Document, data: &ObjectData, depth: u8) -> geom::Rect {
     const MAX_DEPTH: u8 = 32;
@@ -3939,16 +3958,12 @@ pub fn object_bounds(document: &Document, data: &ObjectData, depth: u8) -> geom:
     match data {
         ObjectData::Path(path) => bounds_of(path),
         ObjectData::Text(text) => text.frame,
-        ObjectData::Group(group) => group
-            .children
-            .iter()
-            .filter_map(|id| {
-                document
-                    .registry
-                    .get(*id)
-                    .map(|child| object_bounds(document, child, depth + 1))
-            })
-            .fold(geom::Rect::ZERO, |acc, bounds| acc.union(bounds)),
+        ObjectData::Group(group) => union_bounds(group.children.iter().filter_map(|id| {
+            document
+                .registry
+                .get(*id)
+                .map(|child| object_bounds(document, child, depth + 1))
+        })),
         ObjectData::Image(image) => geom::Rect::from_points(
             image.location,
             image.location
@@ -3978,19 +3993,20 @@ pub fn object_bounds(document: &Document, data: &ObjectData, depth: u8) -> geom:
             else {
                 return geom::Rect::ZERO;
             };
-            let content = definition
-                .layers
-                .layers
-                .iter()
-                .flat_map(|layer| &layer.cells)
-                .flat_map(|cell| &cell.elements)
-                .filter_map(|id| {
-                    document
-                        .registry
-                        .get(*id)
-                        .map(|child| object_bounds(document, child, depth + 1))
-                })
-                .fold(geom::Rect::ZERO, |acc, bounds| acc.union(bounds));
+            let content = union_bounds(
+                definition
+                    .layers
+                    .layers
+                    .iter()
+                    .flat_map(|layer| &layer.cells)
+                    .flat_map(|cell| &cell.elements)
+                    .filter_map(|id| {
+                        document
+                            .registry
+                            .get(*id)
+                            .map(|child| object_bounds(document, child, depth + 1))
+                    }),
+            );
             geom::transform::map_rect(instance.transform, content)
         }
     }
@@ -4096,6 +4112,52 @@ mod tests {
             .elements
             .last()
             .expect("the creation drag made an object")
+    }
+
+    #[test]
+    fn the_bounds_of_a_group_are_the_union_of_its_children() {
+        let mut editor = Editor::untitled();
+        let first = rect_at(&mut editor, 10.0, 10.0);
+        let second = rect_at(&mut editor, 100.0, 40.0);
+        editor
+            .apply(
+                "object.group",
+                serde_json::json!({ "ids": [first, second], "name": null }),
+            )
+            .expect("the group must form");
+        let cell = editor.current_cell().unwrap();
+        assert_eq!(cell.elements.len(), 1, "the two objects became one group");
+        let group = cell.elements[0];
+        let document = editor.document();
+        let data = document.registry.get(group).expect("the group is there");
+        assert!(matches!(data, ObjectData::Group(_)));
+        let bounds = object_bounds(document, data, 0);
+        // The union of the two rectangles — and nothing else: the box
+        // must not reach back to the canvas origin.
+        assert!((bounds.x0 - 10.0).abs() < 0.001, "{bounds:?}");
+        assert!((bounds.y0 - 10.0).abs() < 0.001, "{bounds:?}");
+        assert!((bounds.x1 - 140.0).abs() < 0.001, "{bounds:?}");
+        assert!((bounds.y1 - 60.0).abs() < 0.001, "{bounds:?}");
+    }
+
+    #[test]
+    fn the_union_of_no_boxes_is_the_empty_box() {
+        let empty = union_bounds(std::iter::empty::<geom::Rect>());
+        assert_eq!(
+            (empty.x0, empty.y0, empty.x1, empty.y1),
+            (0.0, 0.0, 0.0, 0.0)
+        );
+        // And the union of two boxes keeps both corners.
+        let one = union_bounds([geom::Rect::new(10.0, 10.0, 50.0, 30.0)].into_iter());
+        let two = union_bounds(
+            [
+                geom::Rect::new(10.0, 10.0, 50.0, 30.0),
+                geom::Rect::new(100.0, 40.0, 140.0, 60.0),
+            ]
+            .into_iter(),
+        );
+        assert_eq!((one.x0, one.y0, one.x1, one.y1), (10.0, 10.0, 50.0, 30.0));
+        assert_eq!((two.x0, two.y0, two.x1, two.y1), (10.0, 10.0, 140.0, 60.0));
     }
 
     #[test]

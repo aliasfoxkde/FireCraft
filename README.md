@@ -27,7 +27,7 @@ The goal is not to reproduce Adobe's code or redistribute its assets. The goal i
 
 The workspace version is 0.2.5. Development continues beyond that release: the active roadmap includes editor reachability, daily-driver canvas workflows, and a dedicated CS6-inspired shell-fidelity campaign. FireCraft is functional software under active development—not yet a feature-complete replacement for every Fireworks CS6 workflow.
 
-The current documented engine surface includes **252 registered commands** and a CS6 DOM parity matrix of **268 carried, 3 partial (evidence-gated), and 0 missing**. These figures describe the engine/DOM surface, not complete GUI parity: some commands are available through the command palette or automation surfaces before they have a corresponding menu or polished inspector workflow.
+The current documented engine surface includes **253 registered commands** and a CS6 DOM parity matrix of **268 carried, 3 partial (evidence-gated), and 0 missing**. These figures describe the engine/DOM surface, not complete GUI parity: some commands are available through the command palette or automation surfaces before they have a corresponding menu or polished inspector workflow.
 
 ### What is implemented
 
@@ -166,7 +166,11 @@ The GUI and automation interfaces are intended to drive the same engine commands
 
 ## Brand and assets
 
-The FireCraft mark is original project artwork: a flame drawn as vector artwork under edit — an ember-orange and gold gradient shape with the selection nodes and a Bézier handle of a live path showing on its outline, on a charcoal field. It is not an Adobe or Fireworks asset; the SVG is the canonical scalable logo source.
+The FireCraft identity is built around a clean, custom-traced flame silhouette and a vertical ember-red-to-orange gradient. The canonical logo is SVG; matching raster exports supply the Linux application icon and repository artwork. The vector-editing illustration below shows the same flame in an active design state, with Bézier anchors, tangent handles, path outlines, and the gradient control line. It is brand artwork—not an application screenshot and not an Adobe or Fireworks asset.
+
+<p align="center">
+  <img src="docs/img/firecraft-vector-brand-study.svg" alt="FireCraft flame mark in a vector editor, with Bézier nodes, curve handles, and gradient direction controls visible" width="420" />
+</p>
 
 Third-party assets must retain their license notices and be recorded in [`docs/ATTRIBUTION.md`](docs/ATTRIBUTION.md). FireCraft's source is licensed under Apache-2.0.
 

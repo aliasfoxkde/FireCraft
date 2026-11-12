@@ -1,13 +1,12 @@
 # FireCraft — Live task board
 
-> **Live ledger.** Reconciled on the PR #8 working branch (2026-11-07; merged
-> with `main` on 2026-11-10) against `main` at `5fac7a2`. Changes remain
-> unmerged until PR approval. Use [`NEXT.md`](NEXT.md) for phase detail and
-> [`tasks/`](tasks/) for task tickets. Historical plans and session notes are
-> not current status sources.
-
+> **Live ledger.** Reconciled against `main` at `b61f198` on 2026-11-11,
+> after the shell-lineage train (#107) and the release-engineering train
+> (#108, merged into the train as `1884c04`) landed, plus the post-train
+> dependency work (#117, #120). Use [`NEXT.md`](NEXT.md)
+> for phase detail and [`tasks/`](tasks/) for task tickets. Historical plans
+> and session notes are not current status sources.
 >
-
 > Working document (not a historical record). Canonical planning:
 > [`PLANNING.md`](PLANNING.md) + [`planning/firecraft/ROADMAP.md`](planning/firecraft/ROADMAP.md).
 > Per-task tickets: [`tasks/`](tasks/) (one file per task, same
@@ -44,10 +43,10 @@
 | Priority | Task | Status | Detail |
 |---|---|---|---|
 | P0 | Refresh user-visible CS6 parity matrix | **Done — matrix published** | [T26](tasks/T26-parity-matrix.md) → [`CS6-PARITY.md`](CS6-PARITY.md): every CS6 menu, tool, panel, inspector field set, workflow, import/export surface, canvas interaction, keymap area, and selection state classified with an evidence citation and an owning ticket. The browser-sampling check the ticket named was performed on 2026-11-04 against a fresh optimized bundle and is recorded in T22. |
-| P0 | Phase 22: CS6 shell fidelity and screenshot audit | In progress | [T22](tasks/T22-screenshot-ui.md) — screenshot acceptance is complete; 22.1 panel inventory and 22.2 tool strip are complete in PR #8; 22.5 chrome remains partial, and 22.4 still has evidence-gated bitmap transform/fill-stroke work. [Phase 22](NEXT.md#phase-22--cs6-shell-fidelity-p0-the-looks-and-acts-like-fireworks-phase) |
-| P1 | Phase 20: daily-driver editing features | **In progress — 20.1 landed** | In-canvas text editing landed 2026-11-06 ([T20](tasks/T20-text-editing.md)); remaining: Optimize, animation timeline, mask stack, tabs, history rewind, slice behavior; [details](NEXT.md#phase-20--daily-driver-features-p1) |
-| P1 | Phase 21: modern differentiators | Queued | Autosave, HiDPI, palette, preferences, accessibility, scripting; [details](NEXT.md#phase-21--modern-differentiators) |
-| P1 | Reconcile live web deployment | Artifact differs | The public manifest's JS/wasm/index hashes differ from local `dist/web`; identify intended deploy and verify it before publishing. See [T18](tasks/T18-release.md). |
+| P0 | Phase 22: CS6 shell fidelity and screenshot audit | In progress | [T22](tasks/T22-screenshot-ui.md) — screenshot acceptance is complete; 22.1 panel inventory and 22.2 tool strip landed on `main` with the shell-lineage train (#107); 22.5 chrome remains partial, and 22.4 still has evidence-gated bitmap transform/fill-stroke work. [Phase 22](NEXT.md#phase-22--cs6-shell-fidelity-p0-the-looks-and-acts-like-fireworks-phase) |
+| P1 | Phase 20: daily-driver editing features | **In progress — 20.1–20.3, 20.5–20.7 on main; 20.4 in PR** | In-canvas text editing landed 2026-11-06 ([T20](tasks/T20-text-editing.md)); multi-document tabs (20.5), history rewind (20.6), and slice/hotspot behavior editing with HTML preview (20.7) landed 2026-11-11 in #107; the Optimize panel (20.2, [T7](tasks/T7-optimize-panel.md)) and the animation timeline (20.3, [T8](tasks/T8-animation-timeline.md)) landed 2026-11-11 in #118. Mask stack (20.4) is in open PR #113. Do not count open PR work as shipped until merged and validated. [details](NEXT.md#phase-20--daily-driver-features-p1) |
+| P1 | Phase 21: modern differentiators | **Done — all items landed 2026-11-11** | Autosave/crash recovery, HiDPI, command palette v2 (fuzzy scoring, recents, Save Steps As Command), preferences, accesskit accessibility and in-app scripting (`.jsf`/`.fwsteps`) all landed with the shell-lineage train (#107, PR #15); [details](NEXT.md#phase-21--modern-differentiators) |
+| P1 | Reconcile live web deployment | **Reconciled — republish pending** | #104 (`docs/web-deployment-reconciliation`) reconciled the live site against v0.2.5: the JS, wasm and `appinfo` match; `host.html`/`index.html` fail the site's own manifest because Cloudflare injects an analytics beacon after it is written. Decision recorded there: the release bytes are the source of truth. Next: republish from the release artifact. See [T18](tasks/T18-release.md). |
 | P2 | Next-release asset breadth and platform verification | Open | [T23](tasks/T23-release-assets.md); recipes exist, but non-Linux artifacts need real platform build/launch receipts. |
 | P2 | Coverage and test quality ratchet | Open | Replace the old aspirational 99% label with measured per-crate targets and snapshots; [NEXT.md](NEXT.md). |
 | P2 | Aegis gate: content-keyed baseline, so a doc edit no longer fails the gate | **Done — landed on `main`** | [decisions/0074-aegis-content-keyed-baseline.md](decisions/0074-aegis-content-keyed-baseline.md). The baseline keys on content (pattern, file, digest) rather than on line, and every rule class stays armed. |
@@ -57,45 +56,39 @@
 
 | # | Task | Ticket | Status | Owner | Next action |
 |---|---|---|---|---|---|
-| 5 | 19.6 inert-menu burn-down — Modify/File families (83 of 289; batch 8 = Attach to Path landed 2026-11-03) | [tasks/T5-inert-burndown.md](tasks/T5-inert-burndown.md) | `IN PROGRESS` | UI/verb lane | continue the per-family burn-down; each batch carries its own evidence gate. This branch's newer census has batches 1–17 landed with 2 inert rows of 294, derived by `menus::tests::inert_count_never_rises` |
+| 5 | 19.6 inert-menu wiring campaign | [tasks/T5-inert-burndown.md](tasks/T5-inert-burndown.md) | `DONE — 2026-11-11` | UI/verb lane | Batches 1–17 are complete. The current pinned census is 2 inert rows of 296; eight other rows remain explicitly feature/evidence-gated and are not part of an active wiring campaign (`menus::tests::inert_count_never_rises`, `menus::tests::menu_item_total_is_pinned`). |
 | 194 | Aegis gate: content-keyed baseline, so a doc edit no longer fails the gate (decision 0074) | [decisions/0074-aegis-content-keyed-baseline.md](decisions/0074-aegis-content-keyed-baseline.md) | `IMPLEMENTED` — the content-keyed gate and its decision record are in the tree; the gate has been exercised on this branch's tree | CI/tooling lane | **landed in `main` (#18)** and merged here; attach a run id before claiming the fleet-wide state |
 | 27 | Cross-platform release engineering: Windows, macOS, Linux package matrix, Android feasibility, source, SBOM/provenance, signing, CI aggregation and certification | [tasks/T27-cross-platform-release.md](tasks/T27-cross-platform-release.md) | `IN PROGRESS` — implementation is ahead of verification; **no target is `CERTIFIED`** and nothing is signed | release-workflow lane | land an end-to-end tag run of the repaired workflow and attach the run id as the RP-07 receipt; consolidate the duplicated `dist --source`/`--sbom` verbs (B-3) |
 | 26 | Refresh user-visible CS6 parity matrix | [tasks/T26-parity-matrix.md](tasks/T26-parity-matrix.md) | `IMPLEMENTED` — matrix published | parity lane | every CS6 menu, tool, panel, inspector field set, workflow, import/export surface, canvas interaction, keymap area, and selection state is classified with an evidence citation and an owning ticket in [`CS6-PARITY.md`](CS6-PARITY.md); the browser-sampling check the ticket named was performed on 2026-11-04 against a fresh optimized bundle and is recorded in T22 |
-| 22 | Phase 22: CS6 shell fidelity and screenshot audit | [tasks/T22-screenshot-ui.md](tasks/T22-screenshot-ui.md) | `IN PROGRESS` | UI lane | screenshot acceptance is complete; 22.1 panel inventory and 22.2 tool strip are complete in PR #8; 22.5 chrome remains partial, and 22.4 still has evidence-gated bitmap transform/fill-stroke work. [Phase 22](NEXT.md#phase-22--cs6-shell-fidelity-p0-the-looks-and-acts-like-fireworks-phase) |
+| 22 | Phase 22: CS6 shell fidelity and screenshot audit | [tasks/T22-screenshot-ui.md](tasks/T22-screenshot-ui.md) | `IN PROGRESS` | UI lane | screenshot acceptance is complete; 22.1 panel inventory and 22.2 tool strip landed on `main` with the shell-lineage train (#107); 22.5 chrome remains partial, and 22.4 still has evidence-gated bitmap transform/fill-stroke work. [Phase 22](NEXT.md#phase-22--cs6-shell-fidelity-p0-the-looks-and-acts-like-fireworks-phase) |
 | 20 | 20.1 In-canvas text editing (egui TextEdit overlay; kittest focus tests) | [tasks/T20-text-editing.md](tasks/T20-text-editing.md) | `IMPLEMENTED` — landed 2026-11-06 (`shell::begin_text_edit` / `text_edit_overlay`) | editing lane | the remaining Phase 20 items (Optimize, animation timeline, mask stack, tabs, history rewind, slice behavior) stay queued below |
+| 8 | 20.3 Animation timeline (frames strip, per-state timing, onion skinning, `symbol.tween`) | [tasks/T8-animation-timeline.md](tasks/T8-animation-timeline.md) | `IMPLEMENTED` — the shell half landed 2026-11-11 (decision [0094](decisions/0094-animation-timeline-shell.md)): the States panel is the strip, the delay field writes `frame.setDuration`, the onion toggle writes `page.setOnionSkinning` and the canvas calls `compose::render_onion` | editing lane | playback (CS6's `Play Animation`), state thumbnails, and the screenshot acceptance are still open — see the ticket |
+| 7 | 20.2 Optimize panel (palette/bitrate over `ExportOptions` + live preview) | [tasks/T7-optimize-panel.md](tasks/T7-optimize-panel.md) | `IMPLEMENTED` — landed 2026-11-11 (decision [0095](decisions/0095-optimize-panel-honors-only-what-export-honors.md)): the controls are the fields the export honors, the preview encodes the page through the export's own `io::expv` resolution, and PNG's Adam7 interlace is disclosed and clearable | editing lane | Adam7 interlacing, CS6's selective-JPEG quality table, and the screenshot acceptance are still open — see the ticket |
 
 
-## Queued (Phase 20 — daily-driver features)
-
-
-| # | Task | Ticket |
-|---|---|---|
-| 20 | 20.1 In-canvas text editing (egui TextEdit overlay; kittest focus tests) | [tasks/T20-text-editing.md](tasks/T20-text-editing.md) |
-| 7 | 20.2 Optimize panel (palette/bitrate over `ExportOptions` + live preview) | [tasks/T7-optimize-panel.md](tasks/T7-optimize-panel.md) |
-| 8 | 20.3 Animation timeline (frames strip, timing, onion skinning, `symbol.tween`) | [tasks/T8-animation-timeline.md](tasks/T8-animation-timeline.md) |
-| — | 20.4 Mask stack UI (add/remove/mode/link/move) | — |
-| 9 | 20.5 Multi-document tabs + Window-menu panel toggles | — |
-| 10 | 20.6 History panel click-to-rewind (journal replay to seq N) | — |
-| 11 | 20.7 Slice/hotspot behavior editing + HTML preview | — (landed on `feat/slice-hotspot-edit`, PR #13 — not yet on `main`) |
-
-## Queued (Phase 21 — modern differentiators)
-
+## Phase 20 — remaining work (open PRs)
 
 
 | # | Task | Ticket |
 |---|---|---|
-| 12 | 21.1 Autosave + crash recovery (journal snapshot sidecar; restore prompt) | — |
-| 13 | 21.2 HiDPI `pixels_per_point` + render-stamp→dirty-counter migration | — |
-| 14 | 21.3 Command palette v2 (fuzzy scoring, recents, save-steps-as-command) | — |
-| 15 | 21.4 Preferences dialog + platform-storage persistence (0067 follow-up) | — |
-| 16 | 21.5 accesskit desktop + web re-audit (0067 records the web blocker) | — |
-| 17 | 21.6 In-app scripting (`.jsf`/`.fwsteps` from the Commands menu) | — |
+| — | 20.4 Mask stack UI (add/remove/mode/link/move) — a FireCraft extension, not a CS6 parity claim | [PR #113](https://github.com/aliasfoxkde/FireCraft/pull/113); open, not on `main` |
+
+20.1 and 20.5–20.7 are already on `main`; do not reopen them.
+
+## Phase 21 — delivered modern differentiators
+
+**All Phase 21 items landed 2026-11-11** with the shell-lineage train
+(#107, PR #15): autosave/crash recovery, HiDPI, command palette v2
+(fuzzy scoring, recents, Save Steps As Command), preferences, accesskit
+accessibility, and in-app scripting (`.jsf` and `.fwsteps` from the
+Commands menu). Scope detail stays in
+[NEXT.md](NEXT.md#phase-21--modern-differentiators).
 
 ## Queued (release + quality)
 
 | # | Task | Ticket | Status | Owner | Next action |
 |---|---|---|---|---|---|
-| 18 | Ship v0.2.5: release assets + web deploy | [tasks/T18-release.md](tasks/T18-release.md) | `BLOCKED` — blocked on T23's asset breadth. The v0.2.5 release exists as published artifacts, but the **live web deployment serves a bundle that corresponds to no identifiable release** (B-6), and the published set was published out of band rather than by the release workflow (B-21) | release-workflow lane | reconcile the deployed bundle against a tagged release by hashing the deployed assets individually and recording the producing commit; do not re-cut v0.2.5 — B-19 means the next artifact must be rebuilt and re-measured, not re-tagged |
+| 18 | Republish the reconciled v0.2.5 web artifact | [tasks/T18-release.md](tasks/T18-release.md) | `RECONCILED — REPUBLISH PENDING` | release-workflow lane | #104 established that the live JavaScript, Wasm and `appinfo` match the v0.2.5 release bytes; the remaining `host.html`/`index.html` differences are Cloudflare's injected analytics beacon. Republish from the canonical release artifact and verify the deployed hashes/cache stamp; do not describe the deployment as an unidentified bundle. |
 | 23 | Broaden release assets to photocraft breadth (dmg, AppImage, Flatpak, win installer) | [tasks/T23-release-assets.md](tasks/T23-release-assets.md) | `IMPLEMENTED` for the recipe set, `NOT STARTED` for every off-fleet artifact — the AppImage, Flatpak, Windows and macOS recipes exist and are parse-checked (or existence-checked) by the gate, but **none has ever been produced**: `linuxdeploy`, `flatpak`/`flatpak-builder`, `pwsh`/`ISCC`, and `lipo`/`hdiutil`/Xcode CLT are all absent from the fleet (B-8, B-11, B-12) | release-workflow lane | either provision a host with each SDK and produce the artifact, or keep the recipes recipe-only and let the scope decision in 0075 exclude those targets — do not advertise them as supported |
 | 19 | Quality ratchet: coverage → 99%, `deny(missing_docs)` on geom/color, WCAG AAA | — | `NOT STARTED` | quality lane | schedule after the release lane; the coverage floor is a workspace-wide change |
 | 21 | egui_kittest snapshot gates per panel/toolbar | — | `NOT STARTED` | quality lane | needs a stable per-panel harness |
@@ -131,7 +124,7 @@ progress:
 
 ## Phase 22 detail
 
-| Item | State at `5fac7a2` | Remaining evidence/work |
+| Item | State at `658f015` (reconciled 2026-11-11) | Remaining evidence/work |
 |---|---|---|
 | 22.1 Panel inventory and docking | Complete | The right dock is a resizable, scrolling column of stacked panels in CS6's order (`crates/app/src/shell/panel_windows.rs`: 18-panel inventory, collapse/close headers, scroll keeps every panel reachable at any viewport height). All surfaces dispatch, including the previously-missing Optimize, Slices, CSS Properties, Find and Replace, and Common Library panels (landed 2026-11-06). Common Library lists the document's own symbols — CS6's shipped libraries are proprietary resources and are not copied. |
 | 22.2 Tool strip and flyouts | Complete | The strip is CS6's, as data in `crates/app/src/toolstrip.rs`: six categories in CS6's order, twenty-four groups with their one-key shortcuts, the flyout memberships, and CS6's group-cycling rule. Evidence in [`research/fw-ui-evidence.md`](research/fw-ui-evidence.md); landed 2026-11-05. |
@@ -146,7 +139,7 @@ progress:
 | Task | Evidence |
 |---|---|
 | 19.1–19.5 canvas competence | Transform handles, path nodes, gradient editor, command palette, guides/grid/snap; [NEXT.md](NEXT.md). |
-| 19.6 menu wiring campaign | Batches 1–17 landed; current census is 2 inert rows of 294, derived and gated by `menus::tests::inert_count_never_rises`. Remaining rows are feature work or evidence-gated, not an active burn-down. |
+| 19.6 menu wiring campaign | Batches 1–17 landed; current census is 2 inert rows of 296 (pinned total `menus::tests::menu_item_total_is_pinned`, ceiling `menus::tests::inert_count_never_rises`). Remaining rows are feature work or evidence-gated, not an active burn-down. |
 | 19b path nodes and wasm budget | Path node add/delete and dated wasm ceiling re-pin recorded in [Progress](PROGRESS.md). |
 | v0.2.5 release tag | `v0.2.5` exists; see [release notes](releases/v0.2.5.md). The live deployment uses a different manifest from the current local distribution. |
 
@@ -165,6 +158,10 @@ progress:
 | Aegis gate is content-keyed on this branch — a finding's identity is `(pattern, file, content digest)` rather than Aegis's line-keyed fingerprint, so a prose edit that moves a documented false positive no longer fails the gate. No rule class is switched off; each class's rows carry the reason they were adjudicated ([decision 0074](decisions/0074-aegis-content-keyed-baseline.md)) | 2026-11-09 |
 | Host fork-bomb from a throwaway `/proc/self/exe` probe — ~5800 processes at load 2057 starved the GitForge runner's sandbox; terminated by per-PID cmdline+exe verification and the probe directory moved aside | 2026-11-09 |
 | Task-board tracking scaffold — `docs/TASKS.md` plus the `docs/tasks/` per-task ticket set (one file per task, same objective/inputs/authority/stopping-condition/verification shape as the milestone tickets). The scaffold is this board and the `docs/tasks/` directory; the row it carried in the queued table is closed by this reconciliation | 2026-11-09 |
+| Shell-lineage and release-engineering trains merged — #107 squash `658f015` carrying #8, #13, #15, #41, #83, #84, #100, #102, #103 and (via #108 → `1884c04`) #85, #101, #104, #105, #106; the 14 constituent PRs were closed as merged-by-train, and Phase 20.5–20.7 plus all of Phase 21 shipped in the same landing | 2026-11-11 |
+| Post-train RustSec lockfile clear — #117 (`b61f198`): `zbus_xml` 5.1.0→5.2.1 (drops `quick-xml` 0.38.4, clearing RUSTSEC-2026-0194/0195) and `tokio` 1.53.2→1.54.1 (clears RUSTSEC-2026-0386); `cargo audit` exit 0. The `serde_yaml`/`unsafe-libyaml` removal (RUSTSEC-2024-0449) rides PR #120 (saphyr swap in xtask's Flatpak parse) | 2026-11-11 |
+| Post-train issue triage — closed with evidence: #79, #81, #86, #94, #98, #109, #111, #112 (all fixed by #107/#108's content or #14; squash broke the auto-close links); progress-commented and left open: #75, #76, #78, #93, #97, #110; filed #121 (`xtask changelog` cannot regenerate main's committed CHANGELOG after a squash merge) | 2026-11-11 |
+| Command-count and menu-census doc repair — README, GAPS, FEATURES, HANDOFF, CS6-PARITY, PROGRESS and NEXT quoted stale pre-train numbers (252 commands / 294 items); corrected to the gated truth: **253 registered commands** (measured by `xtask reachability`, 164 bound = 64.82%) and **2 inert of 296** (the pinned census) | 2026-11-11 |
 
 ## Blocked or evidence-gated
 
@@ -179,5 +176,3 @@ progress:
 - Update this file and the ticket when work starts, changes scope, or lands.
 - Keep detailed implementation history in [`SESSIONS.md`](SESSIONS.md); keep host/tooling diagnostics out of the FireCraft session history.
 - Do not copy a second active task list into the handoff or historical audit documents.
-
-d1699c053ec52ee9585cb2294242bdd779787503

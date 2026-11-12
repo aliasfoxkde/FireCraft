@@ -65,9 +65,9 @@ const CLASS_NOTES: &[(&str, &str)] = &[
         "australian-tfn",
         "Matches the 9-digit observed value range in the PNG node dictionary \
          (0..141663582), the run of SVG path control coordinates in the brand \
-         mark's bezier paths, and the GitHub release and asset identifiers \
-         quoted in the release receipts; this repository holds no tax \
-         identifiers.",
+         mark's bezier paths and in the brand study illustration's control \
+         points, and the GitHub release and asset identifiers quoted in the \
+         release receipts; this repository holds no tax identifiers.",
     ),
     (
         "bank-routing-number",
@@ -89,6 +89,15 @@ const CLASS_NOTES: &[(&str, &str)] = &[
         "credit-card-number-generic",
         "The same glyph-position golden value, seen by the generic \
          card-number rule.",
+    ),
+    (
+        "email-address",
+        "Matches the throwaway Git identity the change-detection \
+         self-test configures for its temporary repositories. The \
+         address uses the .invalid top-level domain reserved by \
+         RFC 2606 for exactly this purpose, so it can never resolve \
+         to a real mailbox; the repository holds no personal \
+         addresses.",
     ),
     (
         "eval-usage",
@@ -113,6 +122,14 @@ const CLASS_NOTES: &[(&str, &str)] = &[
          the source archive, and the adjudication tables that name the \
          category in order to record that it is absent; the repository \
          holds no such data.",
+    ),
+    (
+        "graphql-batch-limit",
+        "Fires on English prose where a bulk-operation word and a bound \
+         word share one line: the automation wiki's sentence about the \
+         CLI's bulk work and the bounds it reports. FireCraft serves no \
+         GraphQL endpoint and ships no GraphQL schema, so the missing \
+         depth guard this rule reports does not exist here.",
     ),
     (
         "international-phone",
