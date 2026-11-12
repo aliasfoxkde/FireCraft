@@ -20,6 +20,7 @@
 //! inventory, the dock, and the open/closed bookkeeping.
 
 use super::*;
+use egui::Widget;
 
 /// The panels this shell implements, in the CS6 right-dock order.
 pub(crate) const PANELS: &[PanelSpec] = &[
