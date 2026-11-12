@@ -82,7 +82,13 @@ if ($Isscc) {
     $Iss | Set-Content -Encoding UTF8 $StagedIss
     & ISCC "/O$Stage" $StagedIss
     if ($LASTEXITCODE -ne 0) { throw "ISCC failed" }
-    Move-Item "$Stage\firecraft-$Version-setup.exe" $Installer -Force
+    # The installer's file name comes from the .iss's
+    # OutputBaseFilename, which carries the version and the platform.
+    # The recipe moves that exact name: a move of any other name finds
+    # no file and fails after a successful compile.
+    $SetupExe = "$Stage\firecraft-$Version-windows-x86_64-setup.exe"
+    if (-not (Test-Path $SetupExe)) { throw "ISCC did not produce $SetupExe" }
+    Move-Item $SetupExe $Installer -Force
     (Get-FileHash $Installer -Algorithm SHA256).Hash
 } else {
     Write-Host "==> ISCC.exe (Inno Setup) not on PATH: skipping installer."

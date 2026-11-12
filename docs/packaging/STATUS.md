@@ -64,8 +64,11 @@ installer recipe could not have compiled as written — the staged script
 resolved its license path against the stage instead of the repository — and
 the distribution omitted `NOTICE`. Both are fixed, the installer now names a
 publisher, and the `.iss` compiles only through the recipe, which substitutes
-the version and the license path. One assumption stays open for the operator:
-an MSVC build needs the Microsoft C runtime on the machine that runs it.
+the version and the license path. A third defect — the recipe moved an
+installer name the compiler never produces, so a successful compile was
+reported as a failure — is fixed too. One assumption stays open for the
+operator: an MSVC build needs the Microsoft C runtime on the machine that runs
+it.
 
 ## Adding a new platform
 

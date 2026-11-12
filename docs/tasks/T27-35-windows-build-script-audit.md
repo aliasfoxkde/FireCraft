@@ -29,7 +29,7 @@ records the audit and its consequences; the two recipe files carry the fixes inl
 **Blockers:** no Windows host. The build rows (T27-36/37/38) remain open.
 
 **Stopping condition:** the audit is committed with a per-assumption risk list. **Met
-2026-11-12** — the audit is below, and the three defects it found are fixed in the
+2026-11-12** — the audit is below, and the four defects it found are fixed in the
 recipes.
 
 ---
@@ -119,6 +119,15 @@ version is numeric today, so the substitution was safe; the license path, which 
 numeric and can contain `$` in a user profile name, would not have been. **Fixed:** both
 stand-ins are substituted through a `MatchEvaluator`, which treats the replacement as
 literal text.
+
+**D4 — the recipe moved a file the compiler never produced.** After `ISCC` runs, the recipe
+moved `dist\windows-stage\firecraft-$Version-setup.exe` to the repository root. The
+installer's name comes from the `.iss`'s `OutputBaseFilename`, which is
+`firecraft-__APPVERSION__-windows-x86_64-setup` — the platform is part of the name. The
+move therefore looked for a file that does not exist and failed *after* a successful
+compile, so the recipe reported failure on a build that had in fact worked. **Fixed:** the
+recipe moves the name the `.iss` produces and fails closed with a clear message if the
+compiler did not produce it.
 
 ## What this audit does not close
 

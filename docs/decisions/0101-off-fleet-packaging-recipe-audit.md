@@ -16,9 +16,9 @@ audit of the two recipes — their environment assumptions, their product identi
 shortcuts, their version metadata — with a per-assumption risk list. The audit is the
 deliverable; a build is not.
 
-Reading the recipes closely showed that they were not merely unbuilt. Three of their
-defects would have stopped the artifacts they exist to produce, and a fourth would have
-shipped an incomplete legal notice.
+Reading the recipes closely showed that they were not merely unbuilt. All four of the
+defects the audit found would have stopped the artifacts they exist to produce, or
+shipped one that was legally incomplete.
 
 ## Decision
 
@@ -55,7 +55,7 @@ shipped an incomplete legal notice.
 
 ## Evidence
 
-Three defects, all found by reading rather than by running:
+Four defects, all found by reading rather than by running:
 
 1. **The installer could not have compiled.** `LicenseFile=..\..\LICENSE` next to a
    staged script in `dist\windows-stage\` resolves to `dist\LICENSE`, which nothing
@@ -63,6 +63,10 @@ Three defects, all found by reading rather than by running:
 2. **The distribution carried `LICENSE` but not `NOTICE`.**
 3. **The macOS version read failed silently** because `readonly` masks the exit status
    of a command substitution.
+4. **The Windows recipe moved a file the compiler never produced.** The installer's
+   name comes from the `.iss`'s `OutputBaseFilename`, which carries the platform as well as
+   the version; the recipe moved a name without it, so it failed after a successful
+   compile.
 
 The fleet can prove none of these by execution — there is no `pwsh` and no `ISCC` here,
 and no macOS host — which is why the audit is the deliverable and why the fixes are
@@ -71,7 +75,7 @@ recorded in the recipes rather than in a procedure around them.
 ## Consequences
 
 - The Windows and macOS recipes are closer to buildable than they were, and none of the
-  three defects can reach an artifact.
+  four defects can reach an artifact.
 - The `.iss` is no longer compilable by itself. That is deliberate: the recipe is the
   supported path, because the recipe is what substitutes the version and stages the
   license. T27-37's verification command now says so.
