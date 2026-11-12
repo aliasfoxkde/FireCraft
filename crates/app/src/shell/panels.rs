@@ -9,6 +9,16 @@ use super::*;
 use compose::abgr_pack;
 use doc::{GroupObject, ImageObject, SliceObject, SymbolAnimation};
 
+/// A shared-layer definition and the page slots that carry its link.
+/// A link slot holds no content of its own — it resolves through the
+/// definition (decision 0022).
+struct SharedLayer {
+    /// The definition's layer name.
+    name: String,
+    /// `(page, layer)` slots carrying the link, in page order.
+    slots: Vec<(usize, usize)>,
+}
+
 impl Shell {
     /// Edit ▸ Paste as Mask / Paste Inside: the clipboard becomes the
     /// selection's mask. Both commands read the document's selection,
@@ -229,6 +239,7 @@ impl Shell {
                 .name
                 .clone()
                 .unwrap_or_else(|| format!("Page {}", index + 1));
+            let is_master = self.editor.document().pages[index].is_master;
             let mut rename = name.clone();
             ui.horizontal(|ui| {
                 if self.rename_page == Some(index) {
@@ -260,6 +271,23 @@ impl Shell {
                 {
                     self.rename_page = Some(index);
                 }
+                // The master page is the document's shared base: its
+                // layers stand behind every other page's.
+                if is_master {
+                    if ui
+                        .small_button("★")
+                        .on_hover_text("Unset the master page")
+                        .clicked()
+                    {
+                        self.unset_master_page();
+                    }
+                } else if ui
+                    .small_button("☆")
+                    .on_hover_text("Make this the master page")
+                    .clicked()
+                {
+                    self.set_master_page(index);
+                }
                 if ui
                     .small_button("×")
                     .on_hover_text("Delete this page")
@@ -269,7 +297,67 @@ impl Shell {
                 }
             });
         }
+        self.master_layers_section(ui);
         self.guides_section(ui);
+    }
+
+    /// Pages panel: the master page's own layer list — the shared
+    /// base every other page stands on. The engine keeps those
+    /// layers on the master page itself, so the section reads that
+    /// page's list.
+    pub(super) fn master_layers_section(&mut self, ui: &mut egui::Ui) {
+        let Some(master) = self
+            .editor
+            .document()
+            .pages
+            .iter()
+            .position(|page| page.is_master)
+        else {
+            return;
+        };
+        let names: Vec<String> = self.editor.document().pages[master]
+            .layers
+            .layers
+            .iter()
+            .enumerate()
+            .map(|(index, layer)| {
+                if layer.name.is_empty() {
+                    format!("Layer {}", index + 1)
+                } else {
+                    layer.name.clone()
+                }
+            })
+            .collect();
+        ui.separator();
+        ui.label("Master page layers");
+        for name in &names {
+            ui.label(name);
+        }
+        if ui
+            .button("+")
+            .on_hover_text("Add a layer to the master page")
+            .clicked()
+        {
+            self.add_master_layer();
+        }
+    }
+
+    /// Pages panel: designate the page as the document's master. The
+    /// engine allows one master at a time — a previous master is
+    /// demoted.
+    pub(super) fn set_master_page(&mut self, index: usize) {
+        self.run_command("page.setMaster", serde_json::json!({ "page": index }));
+    }
+
+    /// Pages panel: clear the document's master page.
+    pub(super) fn unset_master_page(&mut self) {
+        self.run_command("page.unsetMaster", serde_json::json!({}));
+    }
+
+    /// Pages panel: add an empty layer to the master page's layer
+    /// list — the shared base every other page stands on.
+    pub(super) fn add_master_layer(&mut self) {
+        self.run_command("page.addMasterLayer", serde_json::json!({ "index": null }));
     }
 
     /// Delete a page through the engine's `page.delete` — the last
@@ -401,13 +489,22 @@ impl Shell {
             return;
         };
         let frame = self.editor.frame;
+        let defs = &self.editor.document().shared_layer_defs;
         let layers: Vec<(String, bool, bool)> = page
             .layers
             .layers
             .iter()
             .enumerate()
             .map(|(index, layer)| {
-                let label = if layer.name.is_empty() {
+                let label = if let Some(link) = &layer.shared_link {
+                    // A link slot carries no name of its own — the
+                    // definition names the shared layer.
+                    defs.iter()
+                        .find(|def| def.uid == link.uid)
+                        .map(|def| def.layer.name.clone())
+                        .filter(|name| !name.is_empty())
+                        .unwrap_or_else(|| format!("Shared layer {}", index + 1))
+                } else if layer.name.is_empty() {
                     format!("Layer {}", index + 1)
                 } else {
                     layer.name.clone()
@@ -542,6 +639,191 @@ impl Shell {
                 self.editor.set_active_layer(active.saturating_sub(1));
             }
         });
+        self.sharing_section(ui);
+    }
+
+    /// Layers panel: the shared layers — one definition, a link per
+    /// page. The page toggles add or remove a page's link; *unshare*
+    /// gives every page its own copy; *detach here* gives this page
+    /// one and leaves the definition and the other pages alone.
+    pub(super) fn sharing_section(&mut self, ui: &mut egui::Ui) {
+        let shared = self.shared_layers();
+        let page_count = self.editor.document().pages.len();
+        let current_page = self.editor.page;
+        let active = self.editor.active_layer();
+        let shareable = self
+            .editor
+            .document()
+            .pages
+            .get(current_page)
+            .and_then(|page| page.layers.layers.get(active))
+            .is_some_and(|layer| layer.shared_link.is_none() && !layer.is_special);
+        ui.separator();
+        ui.label("Sharing");
+        if shareable
+            && ui
+                .button("share the active layer")
+                .on_hover_text("Share this layer with every page")
+                .clicked()
+        {
+            self.share_layer(active);
+        }
+        for entry in &shared {
+            ui.label(format!("{} (shared)", entry.name));
+            ui.horizontal(|ui| {
+                for target in 0..page_count {
+                    let carried = entry.slots.iter().any(|(page, _)| *page == target);
+                    let label = format!("P{}", target + 1);
+                    if carried && entry.slots.len() == 1 {
+                        // The last link: removing it would orphan
+                        // the definition — nothing left to address it
+                        // by.
+                        ui.add_enabled(false, egui::Button::selectable(true, label))
+                            .on_hover_text("The last link — unshare the layer instead");
+                        continue;
+                    }
+                    let tip = if carried {
+                        "Remove this page's link to the shared layer"
+                    } else {
+                        "Add this page's link to the shared layer"
+                    };
+                    if ui
+                        .selectable_label(carried, label)
+                        .on_hover_text(tip)
+                        .clicked()
+                    {
+                        // The command addresses the definition through
+                        // a link slot, so the source must survive the
+                        // change: a removal names another page's link.
+                        let source = entry
+                            .slots
+                            .iter()
+                            .find(|(page, _)| !carried || *page != target)
+                            .copied();
+                        if let Some((page, layer)) = source {
+                            self.share_layer_with_page(page, layer, target, !carried);
+                        }
+                    }
+                }
+            });
+            ui.horizontal(|ui| {
+                if let Some((page, layer)) = entry.slots.first().copied()
+                    && ui
+                        .button("unshare")
+                        .on_hover_text("Give every page its own copy of this layer")
+                        .clicked()
+                {
+                    self.unshare_layer(page, layer);
+                }
+                let here = entry
+                    .slots
+                    .iter()
+                    .find(|(page, _)| *page == current_page)
+                    .copied();
+                if let Some((page, layer)) = here
+                    && ui
+                        .button("detach here")
+                        .on_hover_text("Give this page its own copy of this layer")
+                        .clicked()
+                {
+                    self.detach_shared_layer(page, layer);
+                }
+            });
+        }
+    }
+
+    /// The document's shared-layer definitions, each with the page
+    /// slots that carry its link.
+    fn shared_layers(&self) -> Vec<SharedLayer> {
+        let document = self.editor.document();
+        document
+            .shared_layer_defs
+            .iter()
+            .map(|def| {
+                let name = if def.layer.name.is_empty() {
+                    "Shared layer".to_owned()
+                } else {
+                    def.layer.name.clone()
+                };
+                let mut slots = Vec::new();
+                for (page_index, page) in document.pages.iter().enumerate() {
+                    for (layer_index, layer) in page.layers.layers.iter().enumerate() {
+                        if layer
+                            .shared_link
+                            .as_ref()
+                            .is_some_and(|link| link.uid == def.uid)
+                        {
+                            slots.push((page_index, layer_index));
+                        }
+                    }
+                }
+                SharedLayer { name, slots }
+            })
+            .collect()
+    }
+
+    /// Layers panel: share the layer across every page — one
+    /// definition, one link per page.
+    pub(super) fn share_layer(&mut self, layer: usize) {
+        self.run_command(
+            "layer.setSharing",
+            serde_json::json!({
+                "page": self.editor.page,
+                "layer": layer,
+                "shared": true,
+                "unshare_copies_to_all_frames": null,
+            }),
+        );
+    }
+
+    /// Layers panel: unshare the shared layer — every page's link
+    /// becomes that page's own copy. CS6 asks whether the copies go
+    /// to every state; the copies fill the page's frame span.
+    pub(super) fn unshare_layer(&mut self, page: usize, layer: usize) {
+        self.run_command(
+            "layer.setSharing",
+            serde_json::json!({
+                "page": page,
+                "layer": layer,
+                "shared": false,
+                "unshare_copies_to_all_frames": true,
+            }),
+        );
+    }
+
+    /// Layers panel: add or remove the shared layer's link on a page.
+    pub(super) fn share_layer_with_page(
+        &mut self,
+        page: usize,
+        layer: usize,
+        target: usize,
+        add: bool,
+    ) {
+        let payload = if add {
+            serde_json::json!({
+                "page": page,
+                "layer": layer,
+                "add_to_pages": [target],
+                "delete_from_pages": null,
+            })
+        } else {
+            serde_json::json!({
+                "page": page,
+                "layer": layer,
+                "add_to_pages": null,
+                "delete_from_pages": [target],
+            })
+        };
+        self.run_command("layer.shareToPages", payload);
+    }
+
+    /// Layers panel: give this page its own copy of the shared layer;
+    /// the definition and the other pages keep theirs.
+    pub(super) fn detach_shared_layer(&mut self, page: usize, layer: usize) {
+        self.run_command(
+            "layer.detachShared",
+            serde_json::json!({ "page": page, "layer": layer }),
+        );
     }
 
     /// Layers-panel reorder: one slot up (toward the top of the

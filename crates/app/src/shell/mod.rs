@@ -7084,4 +7084,114 @@ mod tests {
         let facts = shell.mask_facts(id).expect("the selection carries a mask");
         assert!(!facts.hidden, "the mask's attributes are shown again");
     }
+
+    /// The Pages panel's master star: one master per document, the
+    /// master's own layer list grows through the engine, and clearing
+    /// the master hands the page back.
+    #[test]
+    fn the_pages_panel_marks_the_master_page() {
+        let mut shell = gui_shell(gui_editor());
+        shell.set_master_page(0);
+        assert!(shell.editor.document().pages[0].is_master);
+
+        // A second master demotes the first.
+        shell
+            .editor
+            .apply("page.add", serde_json::json!({ "index": null }))
+            .unwrap();
+        shell.set_master_page(1);
+        assert!(!shell.editor.document().pages[0].is_master);
+        assert!(shell.editor.document().pages[1].is_master);
+
+        // The master's own layer list grows through the engine.
+        let before = shell.editor.document().pages[1].layers.layers.len();
+        shell.add_master_layer();
+        assert_eq!(
+            shell.editor.document().pages[1].layers.layers.len(),
+            before + 1
+        );
+
+        shell.unset_master_page();
+        assert!(!shell.editor.document().pages[1].is_master);
+    }
+
+    /// The Layers panel's sharing section: the active layer shares
+    /// with every page, a page's link can leave and come back, a page
+    /// can detach its own copy, and unsharing gives the pages their
+    /// own layers again.
+    #[test]
+    fn the_layers_panel_shares_layers() {
+        let mut shell = gui_shell(gui_editor());
+        shell
+            .editor
+            .apply("page.add", serde_json::json!({ "index": null }))
+            .unwrap();
+        shell.share_layer(0);
+
+        let uid = shell.editor.document().shared_layer_defs[0].uid.clone();
+        assert_eq!(
+            shell.editor.document().shared_layer_defs.len(),
+            1,
+            "one definition"
+        );
+        assert_eq!(
+            shell.editor.document().pages[0].layers.layers[0]
+                .shared_link
+                .as_ref()
+                .map(|link| link.uid.clone()),
+            Some(uid.clone()),
+            "the owner slot became the link"
+        );
+        assert!(
+            shell.editor.document().pages[1].layers.layers[0]
+                .shared_link
+                .as_ref()
+                .is_some_and(|link| link.uid == uid),
+            "the other page carries the link"
+        );
+
+        // The link can leave a page and come back.
+        shell.share_layer_with_page(0, 0, 1, false);
+        assert!(
+            shell.editor.document().pages[1]
+                .layers
+                .layers
+                .iter()
+                .all(|layer| layer.shared_link.is_none()),
+            "the link left the page"
+        );
+        shell.share_layer_with_page(0, 0, 1, true);
+        assert!(
+            shell.editor.document().pages[1]
+                .layers
+                .layers
+                .iter()
+                .any(|layer| layer.shared_link.is_some()),
+            "the link came back"
+        );
+
+        // A page can detach its own copy.
+        shell.detach_shared_layer(1, 0);
+        assert!(
+            shell.editor.document().pages[1].layers.layers[0]
+                .shared_link
+                .is_none(),
+            "the page holds its own copy"
+        );
+        assert_eq!(
+            shell.editor.document().shared_layer_defs.len(),
+            1,
+            "the definition stays"
+        );
+
+        // Unsharing gives the pages their own layers back.
+        shell.unshare_layer(0, 0);
+        assert!(shell.editor.document().shared_layer_defs.is_empty());
+        assert!(
+            shell.editor.document().pages[0].layers.layers[0]
+                .shared_link
+                .is_none(),
+            "the owner holds a real layer"
+        );
+    }
 }
