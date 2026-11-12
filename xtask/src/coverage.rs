@@ -63,6 +63,9 @@ pub fn run() -> Result<(), String> {
     }
 
     let (lines, funcs, _regions) = parse_lcov(&workspace_root().join("lcov.info"))?;
+    if let Ok(report) = parse_lcov_report(&workspace_root().join("lcov.info")) {
+        report.print_breakdown();
+    }
 
     let pass_lines = lines >= LINE_THRESHOLD;
     let pass_funcs = funcs >= FUNCTION_THRESHOLD;
@@ -135,7 +138,81 @@ pub fn bless() -> Result<(), String> {
     Ok(())
 }
 
+/// One file's coverage counters.
+#[derive(Clone, Copy, Debug, Default)]
+struct FileCoverage {
+    lines_hit: u64,
+    lines_found: u64,
+    funcs_hit: u64,
+    funcs_found: u64,
+}
+
+/// The per-file breakdown of a coverage run.
+#[derive(Debug, Default)]
+struct CoverageReport {
+    files: Vec<(String, FileCoverage)>,
+    excluded_files: usize,
+    excluded_lines: u64,
+}
+
+impl CoverageReport {
+    /// Prints the totals and the least-covered files.
+    ///
+    /// The gate's verdict is a single pair of percentages; this is the
+    /// breakdown behind them — which files were measured, which were
+    /// excluded, and where the uncovered lines are. It is diagnostic
+    /// output, not a second gate.
+    fn print_breakdown(&self) {
+        let lines_hit: u64 = self.files.iter().map(|(_, c)| c.lines_hit).sum();
+        let lines_found: u64 = self.files.iter().map(|(_, c)| c.lines_found).sum();
+        let funcs_hit: u64 = self.files.iter().map(|(_, c)| c.funcs_hit).sum();
+        let funcs_found: u64 = self.files.iter().map(|(_, c)| c.funcs_found).sum();
+        let excluded_lines = self.excluded_lines;
+        eprintln!(
+            "[coverage] breakdown: {} measured file(s), lines {lines_hit}/{lines_found}, \
+             funcs {funcs_hit}/{funcs_found}, {} excluded file(s) ({excluded_lines} line(s))",
+            self.files.len(),
+            self.excluded_files
+        );
+        let mut worst: Vec<&(String, FileCoverage)> = self.files.iter().collect();
+        worst.sort_by_key(|entry| {
+            let c = entry.1;
+            std::cmp::Reverse(c.lines_found.saturating_sub(c.lines_hit))
+        });
+        for entry in worst.iter().take(30) {
+            let (file, c) = *entry;
+            eprintln!(
+                "[coverage]   {file}: lines {}/{}, funcs {}/{}",
+                c.lines_hit, c.lines_found, c.funcs_hit, c.funcs_found
+            );
+        }
+    }
+}
+
 fn parse_lcov(path: &std::path::Path) -> Result<(f64, f64, f64), String> {
+    let report = parse_lcov_report(path)?;
+    let lines_hit: f64 = report.files.iter().map(|(_, c)| c.lines_hit as f64).sum();
+    let lines_found: f64 = report.files.iter().map(|(_, c)| c.lines_found as f64).sum();
+    let funcs_hit: f64 = report.files.iter().map(|(_, c)| c.funcs_hit as f64).sum();
+    let funcs_found: f64 = report.files.iter().map(|(_, c)| c.funcs_found as f64).sum();
+
+    let lines_pct = if lines_found > 0.0 {
+        (lines_hit / lines_found) * 100.0
+    } else {
+        0.0
+    };
+    let funcs_pct = if funcs_found > 0.0 {
+        (funcs_hit / funcs_found) * 100.0
+    } else {
+        0.0
+    };
+    let regions_pct = 0.0;
+
+    Ok((lines_pct, funcs_pct, regions_pct))
+}
+
+/// Parses `lcov.info` into a per-file breakdown.
+fn parse_lcov_report(path: &std::path::Path) -> Result<CoverageReport, String> {
     let mut text = String::new();
     // lcov.info is written relative to workspace_root(), which is also
     // where this process runs when invoked via `cargo run -p xtask`.
@@ -155,53 +232,53 @@ fn parse_lcov(path: &std::path::Path) -> Result<(f64, f64, f64), String> {
         "crates/app/src/shell/panels.rs",
     ];
 
-    let mut lines_hit: f64 = 0.0;
-    let mut lines_found: f64 = 0.0;
-    let mut funcs_hit: f64 = 0.0;
-    let mut funcs_found: f64 = 0.0;
-    let mut regions_hit: f64 = 0.0;
-    let mut regions_found: f64 = 0.0;
-    let mut current_excluded = false;
+    let mut report = CoverageReport::default();
+    let mut current: Option<(String, FileCoverage)> = None;
+    let mut excluded: Option<FileCoverage> = None;
 
     for line in text.lines() {
         let line = line.trim();
         if let Some(file) = line.strip_prefix("SF:") {
-            current_excluded = EXCLUDED.iter().any(|ex| file.ends_with(ex));
+            if let Some((name, cov)) = current.take() {
+                report.files.push((name, cov));
+            }
+            if let Some(cov) = excluded.take() {
+                report.excluded_files += 1;
+                report.excluded_lines += cov.lines_found;
+            }
+            if EXCLUDED.iter().any(|ex| file.ends_with(ex)) {
+                excluded = Some(FileCoverage::default());
+            } else {
+                current = Some((file.to_string(), FileCoverage::default()));
+            }
             continue;
         }
-        if current_excluded {
+        if let Some(cov) = excluded.as_mut() {
+            if let Some(n) = line.strip_prefix("LF:") {
+                cov.lines_found = n.parse::<u64>().unwrap_or(0);
+            }
             continue;
         }
+        let Some((_, cov)) = current.as_mut() else {
+            continue;
+        };
         if let Some(n) = line.strip_prefix("LH:") {
-            lines_hit += n.parse::<f64>().unwrap_or(0.0);
+            cov.lines_hit = n.parse::<u64>().unwrap_or(0);
         } else if let Some(n) = line.strip_prefix("LF:") {
-            lines_found += n.parse::<f64>().unwrap_or(0.0);
+            cov.lines_found = n.parse::<u64>().unwrap_or(0);
         } else if let Some(n) = line.strip_prefix("FNH:") {
-            funcs_hit += n.parse::<f64>().unwrap_or(0.0);
+            cov.funcs_hit = n.parse::<u64>().unwrap_or(0);
         } else if let Some(n) = line.strip_prefix("FNF:") {
-            funcs_found += n.parse::<f64>().unwrap_or(0.0);
-        } else if let Some(n) = line.strip_prefix("RH:") {
-            regions_hit += n.parse::<f64>().unwrap_or(0.0);
-        } else if let Some(n) = line.strip_prefix("RF:") {
-            regions_found += n.parse::<f64>().unwrap_or(0.0);
+            cov.funcs_found = n.parse::<u64>().unwrap_or(0);
         }
     }
+    if let Some((name, cov)) = current.take() {
+        report.files.push((name, cov));
+    }
+    if let Some(cov) = excluded.take() {
+        report.excluded_files += 1;
+        report.excluded_lines += cov.lines_found;
+    }
 
-    let lines_pct = if lines_found > 0.0 {
-        (lines_hit / lines_found) * 100.0
-    } else {
-        0.0
-    };
-    let funcs_pct = if funcs_found > 0.0 {
-        (funcs_hit / funcs_found) * 100.0
-    } else {
-        0.0
-    };
-    let regions_pct = if regions_found > 0.0 {
-        (regions_hit / regions_found) * 100.0
-    } else {
-        0.0
-    };
-
-    Ok((lines_pct, funcs_pct, regions_pct))
+    Ok(report)
 }
