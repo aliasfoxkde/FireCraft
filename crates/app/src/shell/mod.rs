@@ -7194,4 +7194,120 @@ mod tests {
             "the owner holds a real layer"
         );
     }
+
+    /// The Properties panel's rectangle section: the corner radius
+    /// and the source rectangle travel through the engine's primitive
+    /// commands.
+    #[test]
+    fn the_properties_panel_rounds_a_rectangle() {
+        let mut shell = gui_shell(gui_editor());
+        let id = shell.editor.current_cell().unwrap().elements[0];
+        let primitive = shell_path(&shell, id).primitive.clone().unwrap();
+        assert_eq!(primitive.radius, 0.0, "the tool draws a sharp rectangle");
+
+        // The radius, in pixels.
+        shell.set_rect_radius(id, 8.0);
+        let primitive = shell_path(&shell, id).primitive.clone().unwrap();
+        assert_eq!(primitive.radius, 8.0, "the radius reached the source");
+
+        // The radius, as a fraction of the short side: the plate is
+        // 80x40, so half roundness is half the stadium radius.
+        shell.set_rect_roundness(id, 0.5);
+        let primitive = shell_path(&shell, id).primitive.clone().unwrap();
+        let side = primitive.rect.width().min(primitive.rect.height());
+        assert_eq!(primitive.radius, side / 4.0);
+
+        // The source rectangle moves.
+        shell.set_rect_sides(id, [0.0, 0.0, 20.0, 10.0]);
+        let primitive = shell_path(&shell, id).primitive.clone().unwrap();
+        assert_eq!(primitive.rect.x0, 0.0);
+        assert_eq!(primitive.rect.width(), 20.0);
+        assert_eq!(primitive.rect.height(), 10.0);
+    }
+
+    /// The Properties panel's pixel-mask section: the mask is set,
+    /// moved, and cleared over the bitmap.
+    #[test]
+    fn the_bitmap_panel_moves_the_pixel_mask() {
+        let mut shell = gui_shell(gui_editor());
+        shell
+            .editor
+            .apply(
+                "bitmap.addImage",
+                serde_json::json!({
+                    "x": 0.0, "y": 0.0, "width": 16.0, "height": 16.0,
+                    "page": 0, "layer": 0, "cell": 0, "name": "tile",
+                }),
+            )
+            .unwrap();
+        let image_id = shell
+            .editor
+            .document()
+            .registry
+            .iter()
+            .find_map(|(id, object)| match object {
+                ObjectData::Image(_) => Some(id),
+                _ => None,
+            })
+            .unwrap();
+
+        shell.select_all_pixels(image_id, 16, 16);
+        let selection = shell.editor.document().selection.clone().unwrap();
+        assert_eq!((selection.width, selection.height), (16, 16));
+        assert!(
+            selection.alpha.iter().all(|&byte| byte == 255),
+            "every pixel is covered"
+        );
+
+        // The selection slides without its pixels: the left column
+        // leaves the frame.
+        shell.move_pixel_mask(image_id, 1, 0);
+        let moved = shell.editor.document().selection.clone().unwrap();
+        assert_eq!(moved.alpha[0], 0, "the left column slid away");
+        assert_eq!(moved.alpha[1], 255, "the rest stayed");
+
+        shell.clear_pixel_mask(image_id);
+        assert!(
+            shell.editor.document().selection.is_none(),
+            "the mask is gone"
+        );
+    }
+
+    /// The Fill & Stroke panel's pattern section: an image in the
+    /// document becomes the selection's repeating fill.
+    #[test]
+    fn the_fill_panel_applies_a_pattern() {
+        let mut shell = gui_shell(gui_editor());
+        shell
+            .editor
+            .apply(
+                "bitmap.addImage",
+                serde_json::json!({
+                    "x": 0.0, "y": 0.0, "width": 16.0, "height": 16.0,
+                    "page": 0, "layer": 0, "cell": 0, "name": "tile",
+                }),
+            )
+            .unwrap();
+        let image_id = shell
+            .editor
+            .document()
+            .registry
+            .iter()
+            .find_map(|(id, object)| match object {
+                ObjectData::Image(_) => Some(id),
+                _ => None,
+            })
+            .unwrap();
+        let plate = shell.editor.current_cell().unwrap().elements[0];
+
+        shell.fill_with_pattern(plate, image_id);
+        let path = shell_path(&shell, plate);
+        let fill = path
+            .paint
+            .as_ref()
+            .and_then(|paint| paint.fill.clone())
+            .unwrap();
+        assert_eq!(fill.shape, doc::FillShape::Pattern, "the fill is a pattern");
+        assert!(fill.pattern.is_some(), "the pattern carries its tile");
+    }
 }

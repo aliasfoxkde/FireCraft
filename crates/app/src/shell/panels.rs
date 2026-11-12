@@ -1217,6 +1217,77 @@ impl Shell {
                 }
             });
         }
+        // The pattern fill: only paths carry one.
+        let paths: Vec<doc::ObjectId> = ids
+            .iter()
+            .copied()
+            .filter(|id| {
+                matches!(
+                    self.editor.document().registry.get(*id),
+                    Some(ObjectData::Path(_))
+                )
+            })
+            .collect();
+        if !paths.is_empty() {
+            self.pattern_fill_section(ui, &paths);
+        }
+    }
+
+    /// The pattern fill: an image in the document becomes the tile
+    /// the selection's fill repeats (CS6's Fill panel's pattern
+    /// swatch).
+    pub(super) fn pattern_fill_section(&mut self, ui: &mut egui::Ui, ids: &[doc::ObjectId]) {
+        ui.heading("Pattern");
+        let images: Vec<(doc::ObjectId, String)> = self
+            .editor
+            .document()
+            .registry
+            .iter()
+            .filter_map(|(id, object)| match object {
+                ObjectData::Image(image) => Some((
+                    id,
+                    image
+                        .name
+                        .clone()
+                        .unwrap_or_else(|| format!("image {}", id.index())),
+                )),
+                _ => None,
+            })
+            .collect();
+        if images.is_empty() {
+            ui.label("(no image in the document to fill with)");
+            return;
+        }
+        let mut source = images[0].0;
+        egui::ComboBox::from_label("tile")
+            .selected_text(
+                images
+                    .iter()
+                    .find(|(id, _)| *id == source)
+                    .map(|(_, name)| name.clone())
+                    .unwrap_or_default(),
+            )
+            .show_ui(ui, |ui| {
+                for (id, name) in &images {
+                    if ui.selectable_label(*id == source, name.as_str()).clicked() {
+                        source = *id;
+                    }
+                }
+            });
+        if ui.button("fill the selection with it").clicked() {
+            for id in ids {
+                self.fill_with_pattern(*id, source);
+            }
+        }
+    }
+
+    /// A path's fill becomes the image's raster, repeating as a
+    /// pattern.
+    pub(super) fn fill_with_pattern(&mut self, id: doc::ObjectId, source: doc::ObjectId) {
+        self.run_command(
+            "path.setPatternFill",
+            serde_json::json!({ "id": id, "source": source }),
+        );
     }
 
     /// Window ▸ Swatches: the same ABGR palette the Properties
@@ -2550,6 +2621,9 @@ impl Shell {
     ) {
         ui.label(format!("object {} (gen {})", id.index(), id.generation()));
         self.geometry_fields(ui, id);
+        if path.primitive.is_some() {
+            self.rectangle_primitive_section(ui, id);
+        }
         self.display_controls(
             ui,
             id,
@@ -2560,6 +2634,103 @@ impl Shell {
                 locked: path.locked,
                 name: path.name.clone(),
             },
+        );
+    }
+
+    /// The rectangle primitive's own parameters: the corner radius
+    /// (in pixels and as a fraction of the short side) and the
+    /// untransformed source rectangle the contours derive from.
+    ///
+    /// CS6's Rectangle tool keeps the drawn rectangle editable through
+    /// its source, so the panel edits the source rather than the
+    /// contours.
+    pub(super) fn rectangle_primitive_section(&mut self, ui: &mut egui::Ui, id: doc::ObjectId) {
+        let Some(primitive) =
+            self.editor
+                .document()
+                .registry
+                .get(id)
+                .and_then(|object| match object {
+                    ObjectData::Path(path) => path.primitive.clone(),
+                    _ => None,
+                })
+        else {
+            return;
+        };
+        ui.heading("Rectangle");
+        let side = primitive
+            .rect
+            .width()
+            .abs()
+            .min(primitive.rect.height().abs());
+        // The corner radius in pixels.
+        let mut radius = primitive.radius;
+        if ui
+            .add(
+                egui::DragValue::new(&mut radius)
+                    .speed(0.5)
+                    .prefix("radius "),
+            )
+            .changed()
+        {
+            self.set_rect_radius(id, radius);
+        }
+        // The same radius as a fraction of the short side — CS6 shows
+        // both units, and the fraction is the one that survives a
+        // resize.
+        let mut percent = if side > 0.0 {
+            (primitive.radius / (side / 2.0)).clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
+        if ui
+            .add(egui::Slider::new(&mut percent, 0.0..=1.0).text("roundness"))
+            .changed()
+        {
+            self.set_rect_roundness(id, percent);
+        }
+        // The source rectangle: the untransformed rect the primitive
+        // derives its contours from.
+        let mut x = primitive.rect.x0;
+        let mut y = primitive.rect.y0;
+        let mut w = primitive.rect.width();
+        let mut h = primitive.rect.height();
+        ui.horizontal(|ui| {
+            let x_field = ui.add(egui::DragValue::new(&mut x).speed(1.0).prefix("X "));
+            let y_field = ui.add(egui::DragValue::new(&mut y).speed(1.0).prefix("Y "));
+            let w_field = ui.add(egui::DragValue::new(&mut w).speed(1.0).prefix("W "));
+            let h_field = ui.add(egui::DragValue::new(&mut h).speed(1.0).prefix("H "));
+            let edited = [x_field, y_field, w_field, h_field]
+                .into_iter()
+                .any(|field| field.changed());
+            if edited && w > 0.0 && h > 0.0 {
+                self.set_rect_sides(id, [x, y, x + w, y + h]);
+            }
+        });
+    }
+
+    /// The corner radius of a rectangle primitive, in pixels.
+    pub(super) fn set_rect_radius(&mut self, id: doc::ObjectId, radius: f64) {
+        self.run_command(
+            "primitive.setRectRoundness",
+            serde_json::json!({ "id": id, "roundness": radius.max(0.0), "mode": "pixels" }),
+        );
+    }
+
+    /// The corner radius of a rectangle primitive, as a fraction of
+    /// its short side (1.0 is the stadium limit).
+    pub(super) fn set_rect_roundness(&mut self, id: doc::ObjectId, percent: f64) {
+        self.run_command(
+            "primitive.setRectRoundness",
+            serde_json::json!({ "id": id, "roundness": percent.clamp(0.0, 1.0), "mode": "percent" }),
+        );
+    }
+
+    /// The untransformed source rectangle of a rectangle primitive.
+    pub(super) fn set_rect_sides(&mut self, id: doc::ObjectId, rect: [f64; 4]) {
+        self.run_command(
+            "primitive.setRectSides",
+            serde_json::json!({ "id": id, "rect": rect }),
         );
     }
 
@@ -3362,6 +3533,7 @@ impl Shell {
             "at ({:.1}, {:.1}), offset ({:.1}, {:.1})",
             image.location.x, image.location.y, image.offset.x, image.offset.y
         ));
+        self.pixel_mask_section(ui, id, image);
         self.display_controls(
             ui,
             id,
@@ -3372,6 +3544,90 @@ impl Shell {
                 locked: image.locked,
                 name: image.name.clone(),
             },
+        );
+    }
+
+    /// The bitmap's pixel mask: the pixel selection riding on the
+    /// image, and the moves CS6's marquee makes.
+    ///
+    /// The mask is a coverage plane over the whole image, so the
+    /// section reports its extent rather than drawing it.
+    pub(super) fn pixel_mask_section(
+        &mut self,
+        ui: &mut egui::Ui,
+        id: doc::ObjectId,
+        image: &ImageObject,
+    ) {
+        ui.heading("Pixel mask");
+        let selection = self.editor.document().selection.clone();
+        match &selection {
+            Some(mask) => ui.label(format!("selection {}x{} px", mask.width, mask.height)),
+            None => ui.label("(no pixel selection)"),
+        }
+        let (Ok(width), Ok(height)) =
+            (u32::try_from(image.pixels.0), u32::try_from(image.pixels.1))
+        else {
+            return;
+        };
+        // A full mask travels as one coverage byte per pixel, so the
+        // button refuses past a megabyte of plane.
+        let plane = u64::from(width) * u64::from(height);
+        if plane <= 1_048_576 {
+            if ui.button("select all").clicked() {
+                self.select_all_pixels(id, width, height);
+            }
+        } else {
+            ui.label("the image is too large for a full mask");
+        }
+        ui.horizontal(|ui| {
+            if ui.button("clear").clicked() {
+                self.clear_pixel_mask(id);
+            }
+            for (label, dx, dy) in [
+                ("←", -1_i64, 0_i64),
+                ("→", 1_i64, 0_i64),
+                ("↑", 0_i64, -1_i64),
+                ("↓", 0_i64, 1_i64),
+            ] {
+                if ui
+                    .add_enabled(selection.is_some(), egui::Button::new(label).small())
+                    .clicked()
+                {
+                    self.move_pixel_mask(id, dx, dy);
+                }
+            }
+        });
+    }
+
+    /// The bitmap's pixel selection, replaced by a full-coverage
+    /// plane.
+    pub(super) fn select_all_pixels(&mut self, id: doc::ObjectId, width: u32, height: u32) {
+        let Some(count) = usize::try_from(u64::from(width) * u64::from(height)).ok() else {
+            return;
+        };
+        self.run_command(
+            "bitmap.setPixelMask",
+            serde_json::json!({
+                "id": id,
+                "mask": { "width": width, "height": height, "alpha": vec![255_u8; count] },
+                "mode": "replace",
+            }),
+        );
+    }
+
+    /// The bitmap's pixel selection, cleared.
+    pub(super) fn clear_pixel_mask(&mut self, id: doc::ObjectId) {
+        self.run_command(
+            "bitmap.setPixelMask",
+            serde_json::json!({ "id": id, "mask": serde_json::Value::Null }),
+        );
+    }
+
+    /// The bitmap's pixel selection, moved without its pixels.
+    pub(super) fn move_pixel_mask(&mut self, id: doc::ObjectId, dx: i64, dy: i64) {
+        self.run_command(
+            "bitmap.movePixelMaskBy",
+            serde_json::json!({ "id": id, "dx": dx, "dy": dy }),
         );
     }
 
