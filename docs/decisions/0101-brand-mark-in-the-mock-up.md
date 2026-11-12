@@ -49,9 +49,10 @@ settled before the artwork was right.
 - **The placement transform is adjudicated, not dodged.** The mock-up places
   the mark with `transform="translate(403.79 193.46) scale(0.31214)"`. The
   scale factor's digits read as a five-digit run, and Aegis's `zip-code`
-  rule matches any five-digit run, so the gate reports it as new. Two
-  occurrences — one per copy of the graphic — are false positives of a
-  class the baseline already carries, and the rule class's reason in
+  rule matches any five-digit run, so the gate reports it as new. Three
+  occurrences — one per copy of the graphic, and this record, which
+  quotes the transform it adjudicates — are false positives of a class
+  the baseline already carries, and the rule class's reason in
   `xtask/src/aegis.rs` now names this source so a reviewer can read what
   the rows cover. No rule class was switched off and no rule was excluded.
 
@@ -71,9 +72,10 @@ rewrite was iterated to a fixed point: the second pass found no change.
 - The flame's placement is derived from the mark's own outline rather than
   drawn by eye, so the selection chrome, the layer list and the properties
   panel describe the object on the artboard.
-- The Aegis baseline carries two new `zip-code` rows (the placement
-  transform's scale factor, in each copy of the graphic) and drops the four
-  `australian-tfn` rows the retired fox's bezier paths had contributed. The
+- The Aegis baseline carries three new `zip-code` rows (the placement
+  transform's scale factor, in each copy of the graphic and in this record)
+  and drops the four `australian-tfn` rows the retired fox's bezier paths
+  had contributed. The
   `australian-tfn` reason also returns to the wording the gate's source
   holds: the committed baseline had drifted from it when the brand study
   illustration was added, and regenerating from the source restores it.

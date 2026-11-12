@@ -204,7 +204,8 @@ const CLASS_NOTES: &[(&str, &str)] = &[
          ceiling (65535), menu ids, CS6 palette-instance ids (the 48xxx \
          family), a canvas dimension in a render-scale test, the scale \
          factor of the brand mark's placement transform in the dark-mode \
-         mock-up, CVE id suffixes, the civil-date epoch constant (36524) \
+         mock-up and in the decision record that adjudicates it, CVE id \
+         suffixes, the civil-date epoch constant (36524) \
          in the SBOM \
          timestamp builder, plus the headless-browser virtual-time \
          budget (60000), and decision 0074's table of adjudicated classes \
