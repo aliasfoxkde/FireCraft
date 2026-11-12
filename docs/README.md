@@ -8,7 +8,9 @@ This page is the documentation map. Start with the overview that matches your go
 
 1. [Usage](USAGE.md): install/build, CLI examples, keyboard shortcuts, and browser embedding.
 2. [Features](FEATURES.md): implemented surfaces and their verification gates.
-3. [WebOS embedding](WEBOS.md): host page contract and browser bridge.
+3. [Release engineering](RELEASE-ENGINEERING-PLAN.md): standalone platform matrix, artifact evidence, SDK distribution and shared CI adoption.
+4. [WebOS embedding](WEBOS.md): current host page contract and browser bridge.
+5. [Platform integration](WEBOS-PLATFORM-INTEGRATION.md): future versioned SDK, command/capability contract and WebOS interoperability.
 
 ### I want to understand project status
 

@@ -1,10 +1,12 @@
 # CS6 user-visible parity matrix
 
-> Audited 2026-11-04 against the `main` tree; **revised 2026-11-07**
-> after the Phase 20/21/22 landings (tabs, autosave, Preferences,
-> Run Script, in-canvas text editing, and the five Window panels).
-> This is the
-> **user-visible** inventory demanded by
+> Initial inventory audited 2026-11-04; refreshed against
+> `main` at `b61f198` on 2026-11-11 after the shell-lineage train:
+> multi-document tabs, history rewind, slice/hotspot editing, the
+> Phase 21 deliverables, and the completed menu wiring campaign.
+> Remaining Phase 20/22 work is called out with its current PR or
+> evidence gate in this matrix and [TASKS.md](TASKS.md).
+> This is the **user-visible** inventory demanded by
 > [`tasks/T26-parity-matrix.md`](tasks/T26-parity-matrix.md): every
 > Fireworks CS6 workflow and UI area a person can reach, classified
 > with a citation. It is *not* the DOM verb matrix
@@ -148,7 +150,7 @@ Eighteen have a Window-menu row; five do not.
 | Pages (35798) | panel; page list, click selects | **implemented** | `S/panels.rs::pages_section` | — |
 | States (43410, `cmd_Panels_Frames`) | panel; state list | **implemented** | `S/panels.rs::states_section` | — |
 | Layers (43412) | panel; name, eye, lock, reorder | **implemented** | `S/panels.rs::layers_section` | — |
-| History (43418) | panel; journal rows, Save Steps / Replay | **implemented** | `S/panels.rs::history_section` | 20.6 |
+| History (43418) | panel; journal rows, click-to-rewind, Save Steps / Replay | **implemented** — click-to-rewind landed on main 2026-11-11 in #107 | `S/panels.rs::history_section` | 20.6 |
 | Styles (43415) | panel; style rows, New From Selection, Import | **implemented** | `S/panels.rs::styles_panel` | — |
 | Document Library (43416, `cmd_Panels_SymLibrary`) | panel; symbol rows, enter/exit symbol | **implemented** | `S/panels.rs::library_panel` | — |
 | Color Mixer (43405) | panel; fill/stroke pickers + gradient editor | **implemented** | `S/panels.rs::fill_stroke_panel`, `S/panels.rs::gradient_editor_section` | — |
@@ -158,11 +160,11 @@ Eighteen have a Window-menu row; five do not.
 | URL (43414, `cmd_Panels_URLMgr`) | panel; link + alt text, Apply | **implemented** | `S/panels_web.rs::url_panel` | — |
 | Behaviors (43413) | panel; list, Add menu, Add swap image | **implemented** | `S/panels_web.rs::behaviors_panel` | — |
 | Tools (35058, `cmd_Toolbars_Art`) | the left tool strip | **implemented** | `S/canvas_ui.rs::tools_panel` | 22.2 |
-| **Optimize** (43409, `cmd_Panels_ExportPanel`) | panel; the page's export settings (`EXPv`: format, JPEG quality/progressive, dither, GIF loop, interlace) with an Apply | **implemented** — landed 2026-11-06 | `S/panels.rs::optimize_panel`, `M` id 43409 | — |
+| **Optimize** (43409, `cmd_Panels_ExportPanel`) | panel; page export settings (`EXPv`) and preview | **implemented** — base panel landed 2026-11-06; full encoder-backed settings, format-aware clearing and preview are in open PR #118, not on main | `S/panels.rs::optimize_panel`, `M` id 43409 | 20.2 / PR #118 |
 | **Common Library** (45816) | panel; lists the document's own symbols (drag-to-place like Document Library) | **partial** — CS6's *shipped* libraries are proprietary resources and are deliberately not copied; the panel says so | `S/panels_web.rs::common_library_panel`, `M` id 45816 | 22.1 |
 | **CSS Properties** (49125) | panel; the selected slice's generated CSS, read-only | **partial** — CS6 edits properties here; FireCraft's edit surfaces are the slice verbs | `S/panels_web.rs::css_properties_panel`, `M` id 49125 | 22.1 |
 | **Find and Replace** (43402, `cmd_PanelFind`) | panel; find over text objects with per-match replace / replace-all (`text.setText`) | **implemented** — landed 2026-11-06 | `S/panels_web.rs::find_replace_panel`, `M` id 43402 | — |
-| **Slices** | panel; the slice list with kind, link and export override, click-to-select | **implemented** — landed 2026-11-06 (CS6's tree also lists hotspots as first-class rows; FireCraft's hotspots ride the URL/Behaviors panels) | `S/panels_web.rs::slices_panel` | 20.7 |
+| **Slices** | panel; slice list with kind, link, export override and click-to-select; hotspot behavior editing and HTML preview | **implemented** — panel landed 2026-11-06; behavior editor and HTML preview landed on main 2026-11-11 in #107 | `S/panels_web.rs::slices_panel` | 20.7 |
 | **Project** (43403, `cmd_PanelProject`) | none | **missing** | **R** | 22.1 |
 | **Site** (43420, `cmd_Panels_Site`) | none | **missing** | **R** | 22.1 |
 | **Answers** (43421, `cmd_Panels_Answers`) | none | **not applicable** — CS6 opens it from the Help menu as a web panel | **R** | — |
@@ -220,7 +222,7 @@ dispatches at `S/panels.rs::properties_panel`.
 | Open Recent | one inert-ish row that reports the gap | **missing** (documented refusal) | `M` (File ▸ Open Recent) | — |
 | Export Wizard | present | **implemented** | `M` id 35181 | — |
 | Batch Process | reports the gap | **missing** (documented refusal) | `M` id 35302 | — |
-| **Multi-document tabs** | open a second document parks the first in a tab strip; Close promotes the last parked tab, dirty documents refuse to close silently, the strip folds away in Full Screen (**20.5, landed 2026-11-07**) | **implemented** | `M` id 57648, `S/mod.rs::activate_tab` | — |
+| **Multi-document tabs** | open a second document parks the first in a tab strip; Close promotes the last parked tab, dirty documents refuse to close silently, the strip folds away in Full Screen (**20.5, landed on main 2026-11-11 in #107**) | **implemented** | `M` id 57648, `S/mod.rs::activate_tab` | — |
 | Print / Page Setup | report the gap (no printing) | **not applicable** — FireCraft has no printing story | `M` id 57605, id 57607 | — |
 | **Autosave / crash recovery** | web: whole-document localStorage persistence with boot restore; desktop: journal sidecar snapshot with a Recover/Discard offer, undo intact across the boundary (**21.1, landed 2026-11-07**) | **implemented** | `S/mod.rs::check_recovery`, `S/mod.rs::recovery_ui` | — |
 | **Preferences dialog** | Edit ▸ Preferences… opens a real dialog (UI scale, persisted in `ShellLayout`) (**21.4, landed 2026-11-07**) | **implemented** | `M` id 35034, `S/panels.rs::preferences_ui` | — |
@@ -308,7 +310,7 @@ the matrix does not read them as missing CS6 features.
 
 | Addition | Why it exists | Evidence |
 |---|---|---|
-| Command palette (Ctrl+P) over the whole registry | CS6 had no palette; FireCraft's registry is 252 commands and a palette makes every one reachable | `S/palette.rs` |
+| Command palette (Ctrl+P) over the whole registry | CS6 had no palette; FireCraft's registry is 253 commands and a palette makes every one reachable | `S/palette.rs` |
 | Rust-native `.fw.png` engine, CLI, journal, MCP server | headless automation and scripting parity beyond CS6's surface | `crates/app-cli` |
 | ExtendScript host running the CS6 `.jsf` corpus | scripting parity, headless | `crates/scripting` |
 | The **Web Layer** panel | FireCraft's own always-present web panel; CS6's web state lives in the Properties/Slices panels | `S/dialogs.rs::web_panel` |
@@ -329,10 +331,10 @@ acceptance hook. Ordered by how much of the product it unlocks.
 | 3 | The right dock's five-tab-group structure and the bottom Properties dock — the **panel inventory landed 2026-11-06** (18 panels in CS6's order, collapse/close headers, scrolling column); what is left is the *structure*: CS6 stacks them as five tab-groups with Properties in the bottom dock, FireCraft runs one flat column | C | 22.1 | P0 |
 | 4 | ~~In-canvas text editing~~ **CLOSED 2026-11-06** — double-click edits in place: `TextEdit` overlay on the text frame, commit/cancel/focus routing (§G) | E, H, I | 20.1 | — |
 | 5 | The CS6 tool strip's remaining items: the 3D tool (the screen-mode cycle and the Alt-hold variants **landed 2026-11-06**) | B | 22.5 | P2 |
-| 6 | ~~Multi-document tabs~~ **CLOSED 2026-11-07** — park on Open/New, Close promotes the last tab, dirty dots, the strip folds in Full Screen (§E) | E | 20.5 | — |
-| 7 | The animation timeline (States panel) | C | 20.3 | P1 |
-| 8 | History click-to-rewind | C, E | 20.6 | P1 |
-| 9 | Slice/hotspot behaviour editing and the HTML preview surface | C, F, I | 20.7 | P1 |
+| 6 | ~~Multi-document tabs~~ **CLOSED — landed on main 2026-11-11 in #107** — park on Open/New, Close promotes the last tab, dirty dots, the strip folds in Full Screen (§E) | E | 20.5 | — |
+| 7 | The animation timeline (States panel) — **open PR #118; not yet on main** | C | 20.3 | P1 |
+| 8 | ~~History click-to-rewind~~ **CLOSED — landed on main 2026-11-11 in #107**; command-palette/MCP discoverability refinement remains in PR #122 | C, E | 20.6 | — |
+| 9 | ~~Slice/hotspot behaviour editing and HTML preview~~ **CLOSED — landed on main 2026-11-11 in #107** | C, F, I | 20.7 | — |
 | 10 | Autosave and crash recovery — **LANDED 2026-11-07** — web: whole-document localStorage persistence with boot restore; desktop: journal sidecar snapshot with Recover/Discard prompt, undo intact across the crash boundary | E | 21.1 | P1 |
 | 11 | The Keyboard Shortcuts editor and the four alternative keymaps — the **Preferences dialog CLOSED 2026-11-07** (§E) | E, H | 21.4 | P1 |
 | 12 | The in-app script console and saved commands — **LANDED 2026-11-07**: Commands ▸ Run Script runs `.jsf` (scripting host, landed with automation) and `.fwsteps` (journal replay onto the live document); CS6's broader extension installer remains a recorded gap | A, E | 21.6 | P1 |
@@ -340,7 +342,7 @@ acceptance hook. Ordered by how much of the product it unlocks.
 | 14 | ~~The Text ▸ Font submenu, *Repeat Filter*, the F1 grouping mismatch~~ **CLOSED 2026-11-06** — Font dispatches `text.setFont` over the renderer's five families (`RT_MENU` 128 ships a runtime-populated placeholder; the static list is the substitute, recorded as the evidence gap); Repeat Filter re-applies the session's last preset; the F1 groups now tile the table exactly, each binding carrying its own section (`menus::Shortcut.group`, gate `menus::tests::shortcut_sections_are_contiguous`). | A, H | — | — |
 | 15 | ~~The Window menu's window-arrangement rows~~ **CLOSED 2026-11-06** — the trio (57650/57651/57652) is transcribed with CS6's labels (see §A) | A | — | — |
 | 16 | ~~HiDPI `pixels_per_point` rendering~~ **CLOSED 2026-11-07** — the canvas raster renders at zoom × pixels_per_point under the 16 MiPix budget; the canvas is crisp on hidpi displays at any zoom | — | 21.2 | P2 |
-| 17 | accesskit desktop + web re-audit | H | 21.5 | P2 |
+| 17 | ~~accesskit desktop + web re-audit~~ **CLOSED — re-audit landed 2026-11-11 in #107; web-canvas screen-reader limitation remains explicitly documented in decision 0067** | H | 21.5 | — |
 
 ## L. Verification performed for this matrix
 

@@ -5,17 +5,21 @@
 > Historical narrative: [`HISTORY.md`](HISTORY.md) and
 > [`SESSIONS.md`](SESSIONS.md).
 
-## Snapshot (2026-11-07, PR #8 branch; based on `main` at `5fac7a2`)
+## Snapshot (2026-11-11, post-train; based on `main` at `b61f198`)
 
 <!-- coderabbit-ai-generated:v1 -->
 
 <!-- coderabbit-ai-generated-section:v1:96efdab11c7df4b57fb72854f016b25100c7ae63868aab068c0acecdf0dbaf8c -->
 
-- **Release:** `v0.2.5` is the latest tag. `main` has additional work
-  since that tag. The public Pages manifest was checked on 2026-11-04
-  20:01 local time; its JavaScript, wasm, and index hashes differ from
-  the verified local optimized distribution. The deployed source
-  revision is unknown.
+- **Release:** `v0.2.5` is the latest tag; `main` carries the
+  shell-lineage train (#107) and the post-train dependency work
+  (#117) beyond it. The live Pages deployment was reconciled on
+  2026-11-11 (#104): its JavaScript, wasm and `appinfo` match the
+  released v0.2.5 web bytes; `host.html`/`index.html` differ only by
+  Cloudflare's injected analytics beacon. Decision recorded in #104:
+  the release bytes are the source of truth; republishing from the
+  release artifact is the pending next step (T18 row in
+  [`TASKS.md`](TASKS.md)).
 - **Build evidence:** the earlier optimized `dist/web/` distribution,
   built 2026-11-04 16:45 local time, had a 21,274,323-byte wasm
   (below the 21,500,000-byte ceiling). It was built from `56ee1bf`,
@@ -27,13 +31,13 @@
   captures and interaction checks covered this rebuilt artifact.
   The 18:21 `web/dist/` output was a raw 95,583,065-byte wasm bundle,
   not a release distribution. Neither directory is tracked by Git.
-- **CI evidence:** PR #7's GitForge 8-job receipt and GitHub Actions
-  gate are recorded in the session notes. PR #8 review remediation now
-  has targeted regression tests in the branch, but this audit environment
-  cannot execute the Rust suite; the current PR head has no GitHub Actions
-  run/status receipt visible. Do not treat the new tests as passing until
-  the repository CI or a local `cargo run -p xtask -- ci` completes.
-- **Engine and parity:** 245 command IDs (source is authoritative);
+- **CI evidence:** PRs since #107 each carry a double GitHub `gate`
+  receipt — a full `cargo run -p xtask -- ci` at roughly 30 minutes —
+  plus fmt, CodeQL and the language analysis jobs. The train itself
+  (#107: 32m52s + 32m48s), #115 (32m36s + 28m7s) and #117 (32m50s +
+  29m6s) are all double-green. Local full-gate receipts exist for the
+  post-train branches as well (`EXIT=0`, "all gates green").
+- **Engine and parity:** 253 command IDs (source is authoritative);
   268 carried / 3 partial / 0 missing of the 356 DOM verbs.
 - **CS6 keymap parity (2026-11-10, decisions 0080 + 0085):** every
   accelerator the menu bar prints is bound at the printed key —
@@ -52,10 +56,13 @@
   `menus::tests::inert_worklist`; ceiling:
   `menus::tests::inert_count_never_rises`.
 - **Current UI priority:** Phase 22.1 (panel inventory) and 22.2
-  (tool strip) are complete in this PR branch; 22.5 (CS6 chrome audit)
-  remains partial. The screenshot acceptance work is complete, with
-  1280×800 and 1920×1080 captures and empty/vector/bitmap states
-  recorded in [T22](tasks/T22-screenshot-ui.md).
+  (tool strip) landed on `main` with the shell-lineage train (#107);
+  22.5 (CS6 chrome audit) remains partial. Phase 21 is complete
+  (2026-11-11); Phase 20 continues with Optimize (T7), animation
+  timeline (T8) and the mask stack (PR #113). The screenshot
+  acceptance work is complete, with 1280×800 and 1920×1080 captures
+  and empty/vector/bitmap states recorded in
+  [T22](tasks/T22-screenshot-ui.md).
 - **Completed foundations:** M0–M15, DOM verb-surface campaign,
   Phases 19.1–19.5, 19.6 menu wiring, and 19b. Three partial DOM
   rows and the other evidence-gated items remain parked pending new
@@ -70,25 +77,29 @@
 | Earlier optimized `dist/web/` | 2026-11-04 16:45 local; 21,274,323-byte wasm; manifest verified | Build from `56ee1bf`, whose Git tree matches `5fac7a2`; deployment comparison and earlier bridge smoke |
 | T22 optimized rebuild in `dist/web/` | 2026-11-04; 21,271,259-byte wasm | `5fac7a2` plus dock and inspector changes; six browser captures and interaction checks in [T22](tasks/T22-screenshot-ui.md#receipts--2026-11-04) |
 | Raw `web/dist/` | 2026-11-04 18:21 local; 95,583,065-byte wasm | Development output; not the optimized distribution |
-| Browser smoke | Earlier optimized artifact: bridge smoke in session history; T22 rebuild: six captures and interaction checks in T22 | Local end-to-end proof for each recorded artifact; live deployed revision still unverified |
-| Live Pages | Manifest fetched 2026-11-04 20:01 local | JS/wasm/index hashes differ from the earlier 21,274,323-byte optimized distribution; deployed revision unknown |
+| Browser smoke | Earlier optimized artifact: bridge smoke in session history; T22 rebuild: six captures and interaction checks in T22 | Local end-to-end proof for each recorded artifact; the live deployment was reconciled against the release bytes on 2026-11-11 (#104) |
+| Live Pages | Reconciled 2026-11-11 (#104) | JS/wasm/appinfo match the released v0.2.5 web bytes; `host.html`/`index.html` differ only by Cloudflare's injected beacon; release bytes are the source of truth |
 
 <!-- /coderabbit-ai-generated:v1 -->
 
-- **Active work — the daily-driver expansion** (Phase 19 → 21,
+- **Active work — the daily-driver expansion** (Phases 20–22,
   `docs/NEXT.md`): the engine is complete but the shell exposes a
   fraction of it, so the program is reachability + canvas, not
-  repair. 19.1–19.5 landed (transform handles, path-node editing,
-  gradient editor, command palette, guides/grid/snap); 19.6
-  (inert-menu burn-down) is in flight.
-- **Phase 20 daily-driver features — three landed 2026-11-11:** the
+  repair. 19.1–19.6 all landed (transform handles, path-node editing,
+  gradient editor, command palette, guides/grid/snap, and the
+  inert-menu burn-down to 2 of 296), and all of Phase 21 shipped with
+  #107. Phase 20 continues — 20.1, 20.5–20.7 shipped with #107 and
+  20.2 Optimize + 20.3 animation timeline with #118, leaving the
+  mask stack (#113); Phase 22 chrome work remains open.
+- **Phase 20 daily-driver features — two landed 2026-11-11:** the
   Optimize panel (20.2, decision 0094's sibling [0095](decisions/0095-optimize-panel-honors-only-what-export-honors.md))
   edits the `EXPv` fields the export honors and previews the page
   through the export's own resolution; the animation timeline (20.3,
   decision [0094](decisions/0094-animation-timeline-shell.md)) makes
   the `States` panel the strip, writes per-state delays through
   `frame.setDuration`, and makes onion skinning a canvas toggle.
-  Mask stack, history rewind and slice behavior remain open.
+  Mask stack (#113) remains open; history rewind (20.6) and slice
+  behavior editing (20.7) landed with #107.
 - **UI-work gates landed (2026-11-10, issue #94):** the reachability
   gate (`cargo run -p xtask -- reachability`, wired into `ci`) derives
   the shell's bound command set from the shell crate's own source and

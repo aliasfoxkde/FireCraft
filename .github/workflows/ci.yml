@@ -1,49 +1,107 @@
-# GitHub Actions backup CI — mirrors the GitForge 7-job pipeline.
-# GitForge is primary; this is the fallback if GitForge is unavailable.
-#
-# Two-job design:
-#   fmt  — fast (~30s), fails fast, no expensive tool installs needed
-#   gate — the full `xtask ci-no-fmt` suite; only runs if fmt passes
-#
-# Both run on all pushes and PRs. The fmt job prevents wasted runner
-# time on formatting errors that would fail clippy anyway.
-
+# GitHub Actions backup CI. GitForge is primary; this is the fallback.
+# Docs-only changes get a fast whitespace/conflict-marker check and do not
+# install Rust/Aegis/coverage tooling or run the full xtask gate. The workflow
+# remains active for every PR/push so required checks are not path-filtered
+# into a permanently pending state.
 name: CI (backup)
-
 on:
   push:
     branches: ["**"]
     tags: ["v*"]
   pull_request:
     branches: [main]
-
-# Least privilege: this workflow only reads the repository. Declaring
-# it explicitly keeps the default `GITHUB_TOKEN` from inheriting a
-# broader (write) grant from the org/repo settings — the rule
-# `actions/missing-workflow-permissions` fires without this block.
 permissions:
   contents: read
-
 env:
   CARGO_TERM_COLOR: always
-
 jobs:
-  fmt:
-    name: fmt
+  changes:
+    name: classify-change
     runs-on: ubuntu-latest
+    outputs:
+      docs_only: ${{ steps.classify.outputs.docs_only }}
+      code_changed: ${{ steps.classify.outputs.code_changed }}
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Classify changed paths (fail closed on unknown/empty diff)
+        id: classify
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          BEFORE_SHA: ${{ github.event.before }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" == "workflow_dispatch" || "$REF" == refs/tags/* ]]; then
+            echo "docs_only=false" >> "$GITHUB_OUTPUT"
+            echo "code_changed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          base="$BEFORE_SHA"
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then base="$PR_BASE_SHA"; fi
+          if [[ -z "$base" || "$base" =~ ^0+$ ]] || ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+            echo "docs_only=false" >> "$GITHUB_OUTPUT"
+            echo "code_changed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            files=$(git diff --name-only "$base...$GITHUB_SHA")
+          else
+            files=$(git diff --name-only "$base" "$GITHUB_SHA")
+          fi
+          if [[ -z "$files" ]]; then
+            echo "docs_only=false" >> "$GITHUB_OUTPUT"
+            echo "code_changed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          docs_only=true
+          while IFS= read -r file; do
+            [[ -z "$file" ]] && continue
+            case "$file" in
+              docs/*|README.md|CHANGELOG.md|CONTRIBUTING.md|LICENSE|CODE_OF_CONDUCT.md) ;;
+              *) docs_only=false; break ;;
+            esac
+          done <<< "$files"
+          echo "docs_only=$docs_only" >> "$GITHUB_OUTPUT"
+          if [[ "$docs_only" == "true" ]]; then
+            echo "code_changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "code_changed=true" >> "$GITHUB_OUTPUT"
+          fi
+          printf 'Changed files:\n%s\n' "$files"
+  docs:
+    name: docs-only-check
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: needs.changes.outputs.docs_only == 'true'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
+      - name: Validate whitespace and merge markers
+        run: |
+          set -euo pipefail
+          if grep -RInE '^(<<<<<<<|=======|>>>>>>>)' docs README.md CONTRIBUTING.md 2>/dev/null; then
+            echo "Unresolved merge-conflict marker found in documentation."
+            exit 1
+          fi
+  fmt:
+    name: fmt
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: needs.changes.outputs.code_changed == 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
-
       - name: Check formatting
         run: cargo fmt --all -- --check
-
-      # Also check the workspace-excluded web crate explicitly.
       - name: Check web formatting
         run: cargo fmt --manifest-path web/Cargo.toml -- --check
 
@@ -60,88 +118,65 @@ jobs:
           python3 -m venv /tmp/pipeline-venv
           /tmp/pipeline-venv/bin/pip install --quiet pyyaml
           /tmp/pipeline-venv/bin/python scripts/validate_gitforge_pipeline.py .gitforge.yml
-
   gate:
     name: gate
     runs-on: ubuntu-latest
-    needs: [fmt]
+    needs: [changes, fmt]
+    if: needs.changes.outputs.code_changed == 'true'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
-
-      - name: Install aegis
+      - name: Install Aegis
         run: |
-          # aegis 0.6.3 — must match the version pinned in the GitForge CI
-          # image, or the baseline findings shift and the gate fails on
-          # tool drift rather than on a real finding.
           set -euo pipefail
           url=https://github.com/aliasfoxkde/aegis/releases/download/v0.6.3/aegis-linux-x86_64.tar.gz
           curl -sSL -o aegis.tar.gz "$url"
-          echo "835fad56172f8977a91424a580d0a3ec0c5b59fea99f4c2eb4c0a88fce30ff9e  aegis.tar.gz" \
-            | sha256sum -c -
+          echo "835fad56172f8977a91424a580d0a3ec0c5b59fea99f4c2eb4c0a88fce30ff9e  aegis.tar.gz" | sha256sum -c -
           tar xzf aegis.tar.gz aegis
           sudo mv aegis /usr/local/bin/aegis
           aegis --version
-
       - name: Install wasm32 target
         run: rustup target add wasm32-unknown-unknown
-
       - name: Cache cargo registry
         uses: actions/cache@v4
         with:
           path: ~/.cargo/registry
           key: cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-
       - name: Cache cargo index
         uses: actions/cache@v4
         with:
           path: ~/.cargo/git
           key: cargo-index-${{ hashFiles('**/Cargo.lock') }}
-
       - name: Cache build artifacts
         uses: actions/cache@v4
         with:
           path: target
           key: cargo-build-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: cargo-build-${{ runner.os }}-
-
-      # Cache cargo-llvm-cov and trunk binaries between runs (~2 min saved per run).
-      # --locked pins the version so the cache key matches the locked version.
       - name: Cache cargo-llvm-cov
         id: cache-llvc
         uses: actions/cache@v4
         with:
           path: ~/.cargo/bin/cargo-llvm-cov
           key: cargo-llvm-cov-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
-
       - name: Install cargo-llvm-cov (if uncached)
         if: steps.cache-llvc.outputs.cache-hit != 'true'
         run: cargo install cargo-llvm-cov --locked
-
       - name: Cache trunk
         id: cache-trunk
         uses: actions/cache@v4
         with:
           path: ~/.cargo/bin/trunk
           key: trunk-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
-
       - name: Install trunk (if uncached)
         if: steps.cache-trunk.outputs.cache-hit != 'true'
         run: cargo install trunk --locked
-
-      # `ci-no-fmt` skips the fmt step so the two jobs stay independent —
-      # fmt is owned by the `fmt` job above.
       - name: Full gate (xtask ci-no-fmt)
         run: cargo run --package xtask -- ci-no-fmt
-        continue-on-error: false
-
-      # Smoke for the web bundle — only runs on tag pushes (release candidates)
       - name: Web bundle smoke
         if: startsWith(github.ref, 'refs/tags/v')
         run: cargo run --package xtask -- dist --web
-        continue-on-error: false

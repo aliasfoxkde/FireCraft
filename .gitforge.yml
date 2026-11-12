@@ -21,17 +21,22 @@
 #   invisible whenever a later command happens to succeed. That masking
 #   once hid a failing gate for dozens of runs (decision 0086).
 # - `cache:` mounts a host-local Cargo target directory at `/cargo-target`
-#   and exports `CARGO_TARGET_DIR`. This keeps rustc writes off the sshfs
-#   workspace bridge while reusing compiled artifacts across runs.
+#   and exports `CARGO_TARGET_DIR` (GitForge's JobCache defaults). No
+#   rustc write pattern survives the sshfs workspace bridge under load
+#   (clippy metadata bursts and codegen both EPERM'd on fedora), so all
+#   compilation lands on the mounted host directory instead of the
+#   container-local overlay2 disk — and the compiled artifacts survive
+#   the run, so the next run of the same job starts warm.
 #   The runner holds an EXCLUSIVE advisory lock on every writable host
-#   directory a job mounts, for the job's whole lifetime (GitForge GF-11):
-#   two jobs writing one target tree would clobber each other's binaries.
-#   So the cache directory is PER JOB — `.../cargo/{image}-<job-name>` —
-#   and not one directory per image. A single shared directory would
-#   serialize every Cargo job in the fleet into one lane, which is the
-#   throughput problem this cache is meant to fix. Each job keeps its own
-#   warm tree; no two jobs contend for it. Two runs of the SAME job still
-#   contend, by design: that is the case the lock exists for.
+#   directory a job mounts, for the job's whole lifetime (GitForge
+#   GF-11): two jobs writing one target tree would clobber each other's
+#   binaries. So the cache directory is PER JOB —
+#   `.../cargo/{image}-<job-name>` — and not one directory per image. A
+#   single shared directory would serialize every Cargo job in the fleet
+#   into one lane, which is the throughput problem this cache is meant
+#   to fix. Each job keeps its own warm tree; no two jobs contend for
+#   it. Two runs of the SAME job still contend, by design: that is the
+#   case the lock exists for.
 # - Job sandboxes run with CARGO_NET_OFFLINE=false: the image's
 #   registry cache is a FAST FLOOR, not a wall. A crate already in the
 #   cache touches the network not at all; a crate that is not costs one
@@ -44,7 +49,7 @@
 # - Images must be pre-warmed on every runner host before a commit that
 #   needs them lands (60-second sandbox acquisition cap; the runner
 #   never pulls). Ship with:
-#     docker save firecraft-ci-rust:1 | ssh <host> docker load
+#     docker save firecraft-ci-rust:2 | ssh <host> docker load
 # - Step logs are head-capped: cargo's compile spam comes first, so a
 #   failure late in a long step can be truncated. Keep steps small.
 # - A job's `timeout:` is a WATCHDOG, not a gate: it kills the
@@ -71,15 +76,35 @@ trigger_on:
   - tag
 environment: {}
 jobs:
+  - name: detect-changes
+    image: firecraft-ci-rust:2
+    steps:
+      - name: Classify the diff; unknown/empty diffs fail closed
+        run: bash scripts/detect-changes.sh
+    timeout: 5m
+
   - name: fmt-layers
-    image: firecraft-ci-rust:1
+    image: firecraft-ci-rust:2
     cache:
       source: "{cache_root}/cargo/{image}-fmt-layers"
+    needs: [detect-changes]
     steps:
       - name: Rust formatting check
         run: cargo fmt --all -- --check
-      - name: Layer-table gate
-        # Compiles xtask alone; the gate itself is cargo metadata.
+      - name: Web crate formatting check
+        run: cargo fmt --manifest-path web/Cargo.toml -- --check
+      - name: Whitespace/conflict-marker check
+        run: git diff --check origin/main...HEAD
+    timeout: 20m
+
+  - name: layers
+    image: firecraft-ci-rust:2
+    cache:
+      source: "{cache_root}/cargo/{image}-layers"
+    needs: [fmt-layers]
+    skip_if: '[[ "$CI_CHANGE_INCLUDE_CODE" == "1" || "$CI_CHANGE_INCLUDE_CRATES" == "1" || "$CI_CHANGE_INCLUDE_TESTS" == "1" || "$CI_CHANGE_IS_TAG" == "1" ]]'
+    steps:
+      - name: Workspace layer-table gate
         run: cargo run --locked -p xtask -- layers
     # 45m: the gate compiles xtask, so it carries the workspace's
     # build wave. Measured 20.1 min on 2026-11-11 with 9 runs in
@@ -88,17 +113,18 @@ jobs:
     timeout: 45m
 
   - name: clippy-test
-    image: firecraft-ci-rust:1
+    image: firecraft-ci-rust:2
     cache:
       source: "{cache_root}/cargo/{image}-clippy-test"
-    needs: [fmt-layers]
+    needs: [layers]
+    skip_if: '[[ "$CI_CHANGE_INCLUDE_CODE" == "1" || "$CI_CHANGE_INCLUDE_CRATES" == "1" || "$CI_CHANGE_INCLUDE_TESTS" == "1" || "$CI_CHANGE_IS_TAG" == "1" ]]'
     steps:
       - name: Cargo clippy (deny warnings, all targets)
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: Web crate clippy (workspace-excluded, trunk)
-        # The web crate is a separate workspace with its own lockfile, so it
-        # keeps its own target tree — inside the job's cache mount, so the
-        # artifacts survive the job.
+        # The web crate is a separate workspace with its own lockfile,
+        # so it keeps its own target tree — inside the job's cache
+        # mount, so the artifacts survive the job.
         run: cd web && CARGO_TARGET_DIR=/cargo-target/web cargo clippy --all-targets --locked -- -D warnings
       - name: Workspace tests
         # Same container as the clippy step: the warm target dir carries
@@ -110,26 +136,28 @@ jobs:
     timeout: 150m
 
   - name: wasm-web
-    image: firecraft-ci-rust:1
+    image: firecraft-ci-rust:2
     cache:
       source: "{cache_root}/cargo/{image}-wasm-web"
     needs: [clippy-test]
+    skip_if: '[[ "$CI_CHANGE_INCLUDE_CODE" == "1" || "$CI_CHANGE_INCLUDE_CRATES" == "1" || "$CI_CHANGE_INCLUDE_TESTS" == "1" || "$CI_CHANGE_IS_TAG" == "1" ]]'
     steps:
       - name: Wasm compile gate + smoke suite + trunk bundle
-        # The cache exports CARGO_TARGET_DIR to xtask's child cargo calls
-        # and trunk's cargo build, keeping every rustc write off the
-        # sshfs bridge. With wasm-bindgen-test-runner + node baked into
-        # the image, the fwpng smoke suite executes for real (no
-        # compile-only downgrade), and trunk builds the web bundle.
+        # The cache exports CARGO_TARGET_DIR to xtask's child cargo
+        # calls and by trunk's cargo build, keeping every rustc write
+        # off the sshfs bridge. With wasm-bindgen-test-runner + node
+        # baked into the image, the fwpng smoke suite executes for real
+        # (no compile-only downgrade), and trunk builds the web bundle.
         run: cargo run --locked -p xtask -- wasm
     # 90m: measured 45.6 min on 2026-11-11 with 9 runs in flight.
     timeout: 90m
 
   - name: corpus-golden
-    image: firecraft-ci-rust:1
+    image: firecraft-ci-rust:2
     cache:
       source: "{cache_root}/cargo/{image}-corpus-golden"
     needs: [wasm-web]
+    skip_if: '[[ "$CI_CHANGE_INCLUDE_CODE" == "1" || "$CI_CHANGE_INCLUDE_CRATES" == "1" || "$CI_CHANGE_INCLUDE_TESTS" == "1" || "$CI_CHANGE_IS_TAG" == "1" ]]'
     steps:
       - name: Corpus digests + doc-model round-trips
         run: cargo run --locked -p xtask -- corpus
@@ -139,10 +167,11 @@ jobs:
     timeout: 45m
 
   - name: perf-budgets
-    image: firecraft-ci-rust:1
+    image: firecraft-ci-rust:2
     cache:
       source: "{cache_root}/cargo/{image}-perf-budgets"
     needs: [corpus-golden]
+    skip_if: '[[ "$CI_CHANGE_INCLUDE_CODE" == "1" || "$CI_CHANGE_INCLUDE_CRATES" == "1" || "$CI_CHANGE_IS_TAG" == "1" ]]'
     steps:
       - name: Performance budgets (open / frame / save / peak memory)
         # M12: the parity table's ceilings, enforced on the runner
@@ -156,10 +185,11 @@ jobs:
     timeout: 45m
 
   - name: fuzz
-    image: firecraft-ci-rust:1
+    image: firecraft-ci-rust:2
     cache:
       source: "{cache_root}/cargo/{image}-fuzz"
-    needs: [perf-budgets]
+    needs: [corpus-golden]
+    skip_if: '[[ "$CI_CHANGE_INCLUDE_CODE" == "1" || "$CI_CHANGE_INCLUDE_CRATES" == "1" || "$CI_CHANGE_IS_TAG" == "1" ]]'
     steps:
       - name: Stable fuzz drivers (anchors + panic_hunt + scripting arms)
         # The stable-toolchain driver set from `xtask ci`; the
@@ -181,10 +211,11 @@ jobs:
     timeout: 120m
 
   - name: generated-docs
-    image: firecraft-ci-rust:1
+    image: firecraft-ci-rust:2
     cache:
       source: "{cache_root}/cargo/{image}-generated-docs"
     needs: [fuzz]
+    skip_if: '[[ "$CI_CHANGE_INCLUDE_CODE" == "1" || "$CI_CHANGE_INCLUDE_CRATES" == "1" || "$CI_CHANGE_INCLUDE_GENERATED" == "1" || "$CI_CHANGE_IS_TAG" == "1" ]]'
     steps:
       - name: Parity floors + scorecard + stamps + reachability + panel snapshot, then drift check
         # The committed generated docs must byte-equal what the gates
@@ -226,10 +257,11 @@ jobs:
     timeout: 45m
 
   - name: release
-    image: firecraft-ci-rust:1
+    image: firecraft-ci-rust:2
     cache:
       source: "{cache_root}/cargo/{image}-release"
     needs: [generated-docs]
+    skip_if: '[[ "$CI_CHANGE_INCLUDE_CODE" == "1" || "$CI_CHANGE_INCLUDE_CRATES" == "1" || "$CI_CHANGE_IS_TAG" == "1" ]]'
     steps:
       - name: Ref report
         # GitForge stamps every push AND every tag push as TriggerType::
@@ -264,9 +296,12 @@ jobs:
           set -e
           echo "release-path build — the CI image ships no git, so this step cannot detect the ref; the ref is on the pipeline run (pipeline_runs.ref_name) and in the release workflow's arguments"
       - name: "Web bundle (bridge smoke)"
-        # Same container as the tag report; the release profile remains
-        # distinct under the shared target cache's release subdirectory.
-        # the bundle must come from tag bytes, not a warm debug cache.
+        # Same container as the tag report; the job's cache directory
+        # holds the release profile, so the bundle is built from the
+        # run's own sources rather than from a warm debug cache. The
+        # cache is warm across RUNS, not across trees: cargo's
+        # fingerprints mean an artifact is reused only when the inputs
+        # that produced it are unchanged.
         #
         # The bridge smoke RUNS here: `dist --web` serves the staged
         # bundle over loopback and drives one open -> apply -> exportPng
