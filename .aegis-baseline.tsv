@@ -20,13 +20,9 @@
 # Only after verifying each newly added key is a false positive.
 # Matches the 9-digit observed value range in the PNG node dictionary
 # (0..141663582), the run of SVG path control coordinates in the brand
-# mark's bezier paths, and the GitHub release and asset identifiers
-# quoted in the release receipts; this repository holds no tax
-# identifiers.
-australian-tfn	./docs/img/app-preview-dark.svg	197e6b1c357f3d959ff48bf52e3e8aae179b55145f13eb64db7eea631a93cc69	1
-australian-tfn	./docs/img/app-preview-dark.svg	9e2095671e41853dd2c27a6a9f6c43b8d1cd2f8548e2293e95aec84f7a07adf5	1
-australian-tfn	./docs/img/app-preview-dark.svg	c271cd9d0bac232bb161ac8dd9b1a40816441598fd5c0c5e41d3e3bdfafa47ee	1
-australian-tfn	./docs/img/app-preview-dark.svg	c8c202ad4293b1893efd892e1f3420d2b79cbd72dc511fd5b980fbf51644d75c	1
+# mark's bezier paths and in the brand study illustration's control
+# points, and the GitHub release and asset identifiers quoted in the
+# release receipts; this repository holds no tax identifiers.
 australian-tfn	./docs/img/firecraft-vector-brand-study.svg	0c0abeaf013ea7ee28c7a1845ec462ed9d0dab7f9626410681d6a15aa9fb1571	1
 australian-tfn	./docs/img/firecraft-vector-brand-study.svg	1c302c0eb6b2ce0b6aef4f72d11808bda6520a11205cf024c4c3daac3a12af82	1
 australian-tfn	./docs/img/firecraft-vector-brand-study.svg	353c47b7c0c49557e6633299b2b3a0fcde5225767f34c7b9adb4aeca93828a12	1
@@ -248,11 +244,12 @@ xml-external-entity	./crates/io/tests/svgimport.rs	f6cfc5faea5abe6ee5bd8667967ed
 xml-external-entity	./packaging/build-macos-dmg.sh	7b16906a7de9206c7488979eb86e8393ba62a45c0e769c79cf070a16c1858d49	1
 # Matches any 5-digit run: CS6 command ids, the JPEG dimension ceiling
 # (65535), menu ids, CS6 palette-instance ids (the 48xxx family), a
-# canvas dimension in a render-scale test, CVE id suffixes, the
-# civil-date epoch constant (36524) in the SBOM timestamp builder, plus
-# the headless-browser virtual-time budget (60000), and decision 0074's
-# table of adjudicated classes and the rule identifiers quoted by the
-# Aegis adjudication tickets. The v1 MVP roadmap's RPC-emulation row
+# canvas dimension in a render-scale test, the scale factor of the brand
+# mark's placement transform in the dark-mode mock-up, CVE id suffixes,
+# the civil-date epoch constant (36524) in the SBOM timestamp builder,
+# plus the headless-browser virtual-time budget (60000), and decision
+# 0074's table of adjudicated classes and the rule identifiers quoted by
+# the Aegis adjudication tickets. The v1 MVP roadmap's RPC-emulation row
 # names the legacy Fireworks RPC TCP port — a protocol number, not
 # postal data. This repository holds no postal data.
 zip-code	./crates/app-cli/src/mcp.rs	0e5c81ceee464db1c0cb9ed801d134fab0dd2a28c0dc62e35aa21a8e13ff0ebc	1
@@ -638,6 +635,7 @@ zip-code	./docs/decisions/0084-aegis-rebless-slice-hotspot.md	6ae29c8266e042c990
 zip-code	./docs/decisions/0084-aegis-rebless-slice-hotspot.md	7f86696157efee849855811dbdd3b8babcbde71c5c3e17277bf4f2bf6a75106e	1
 zip-code	./docs/decisions/0084-aegis-rebless-slice-hotspot.md	e95e07198fbc2a3fac954c1e20f99ff404edbc4a9bcc08f0ef575f1b58121ac5	1
 zip-code	./docs/decisions/0084-aegis-rebless-slice-hotspot.md	fec32d6024e177ac05e94de175bfccd84ec3d389034f6f57067fb167302534b6	1
+zip-code	./docs/img/app-preview-dark.svg	16b024b09ebcb9d66f6a9968858d7e01081e51a14a4922edf3c8e3c2009c0000	1
 zip-code	./docs/planning/firecraft/M8-import-export.md	f2f89ede8e7d4b3d2243dea1ca96b8ece56f793811d9708b4a0181bf81a50011	2
 zip-code	./docs/planning/firecraft/M9-scripting.md	0e5c81ceee464db1c0cb9ed801d134fab0dd2a28c0dc62e35aa21a8e13ff0ebc	1
 zip-code	./docs/planning/firecraft/M9-scripting.md	20d70708103e5223b6f2fb00f00947832fb93d12ebef11eb10bc5599efefe184	1
@@ -704,6 +702,7 @@ zip-code	./docs/research/fw-ui-evidence.md	fec32d6024e177ac05e94de175bfccd84ec3d
 zip-code	./docs/research/fw-ui-evidence.md	ffdfd59d08e67eeff2569e91641bb6adb12fc0bf42ef8f0f2c197ed14369f10d	3
 zip-code	./docs/tasks/T27-12-adjudicate-aegis-findings.md	6f21ec723dd82aa7bd36bc81cc4008e4f6359fe8ce68f793af23b7123bdbf3a6	1
 zip-code	./docs/tasks/T27-12-adjudicate-aegis-findings.md	d55d01d0341ed0ba2cd99b322e8c5b609254f47d10c7cd12b99b4922effeba44	1
+zip-code	./site/assets/app-preview-dark.svg	16b024b09ebcb9d66f6a9968858d7e01081e51a14a4922edf3c8e3c2009c0000	1
 zip-code	./xtask/src/aegis.rs	6f21ec723dd82aa7bd36bc81cc4008e4f6359fe8ce68f793af23b7123bdbf3a6	1
 zip-code	./xtask/src/aegis.rs	d55d01d0341ed0ba2cd99b322e8c5b609254f47d10c7cd12b99b4922effeba44	1
 zip-code	./xtask/src/aegis.rs	f2f89ede8e7d4b3d2243dea1ca96b8ece56f793811d9708b4a0181bf81a50011	1
