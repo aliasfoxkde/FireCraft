@@ -328,6 +328,13 @@ impl Shell {
                     self.editor.set_active_layer(layer_index);
                 }
                 if ui
+                    .small_button("◉")
+                    .on_hover_text("Select this layer's objects")
+                    .clicked()
+                {
+                    self.select_layer_objects(layer_index);
+                }
+                if ui
                     .small_button("✎")
                     .on_hover_text("Rename this layer")
                     .clicked()

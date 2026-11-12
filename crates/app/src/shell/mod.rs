@@ -1585,19 +1585,8 @@ impl Shell {
                 Ok(name) => self.status = format!("redid {name}"),
                 Err(error) => self.status = format!("redo failed: {error}"),
             },
-            menus::ShellAction::Deselect => {
-                self.editor.set_selection(Vec::new());
-                self.status = "deselected".to_owned();
-            }
-            menus::ShellAction::SelectAll => {
-                let ids = self
-                    .editor
-                    .current_cell()
-                    .map_or_else(Vec::new, |cell| cell.elements.clone());
-                let picked = ids.len();
-                self.editor.set_selection(ids);
-                self.status = format!("selected {picked} object(s)");
-            }
+            menus::ShellAction::Deselect => self.deselect(),
+            menus::ShellAction::SelectAll => self.select_all(),
             menus::ShellAction::SelectInverse => self.select_inverse(),
             menus::ShellAction::Copy => self.clipboard_copy(false),
             menus::ShellAction::Cut => self.clipboard_copy(true),
@@ -1836,21 +1825,82 @@ impl Shell {
         }
     }
 
-    /// Select ▸ Select Inverse: everything in the current cell the
-    /// selection does not cover. The cell is the editor's scope (one
-    /// layer, one state) — the same scope Select All covers.
-    fn select_inverse(&mut self) {
-        let selected = self.editor.live_selection();
-        let ids: Vec<doc::ObjectId> = self
-            .editor
-            .current_cell()
-            .map_or_else(Vec::new, |cell| cell.elements.clone())
-            .into_iter()
-            .filter(|id| !selected.contains(id))
-            .collect();
-        let picked = ids.len();
-        self.editor.set_selection(ids);
+    /// Select ▸ Select All: CS6's `dom.selectAll()` — every object of
+    /// the page in the current state, across layers.
+    ///
+    /// The scope belongs to the engine, so the selection goes through
+    /// `selection.selectAll`: the command door journals it, undo can
+    /// take it back, and the scripting host sees the same scope the
+    /// menu does. The view follows the document's selection.
+    fn select_all(&mut self) {
+        let payload = serde_json::json!({
+            "page": self.editor.page,
+            "frame": self.editor.frame,
+        });
+        if !self.run_command("selection.selectAll", payload) {
+            return;
+        }
+        self.editor.adopt_document_selection();
+        let picked = self.editor.live_selection().len();
         self.status = format!("selected {picked} object(s)");
+    }
+
+    /// Select ▸ Deselect: CS6's `dom.selectNone()` — the object
+    /// selection goes empty. The engine clears it, so the document and
+    /// the view agree afterwards.
+    fn deselect(&mut self) {
+        if self.editor.live_selection().is_empty()
+            && self.editor.document().object_selection.is_empty()
+        {
+            // Nothing to clear — the command would be a no-op that
+            // only adds an undo step.
+            self.status = "deselected".to_owned();
+            return;
+        }
+        if !self.run_command("selection.selectNone", serde_json::json!({})) {
+            return;
+        }
+        self.editor.adopt_document_selection();
+        self.status = "deselected".to_owned();
+    }
+
+    /// Select ▸ Select Inverse: everything in the page-and-state scope
+    /// the selection does not cover. The complement is the engine's,
+    /// so the view's selection lands in the document first and the
+    /// document's answer comes back as the view's selection.
+    fn select_inverse(&mut self) {
+        if let Err(error) = self.editor.sync_selection() {
+            self.status = format!("selection failed: {error}");
+            return;
+        }
+        let payload = serde_json::json!({
+            "page": self.editor.page,
+            "frame": self.editor.frame,
+        });
+        if !self.run_command("selection.selectInverse", payload) {
+            return;
+        }
+        self.editor.adopt_document_selection();
+        let picked = self.editor.live_selection().len();
+        self.status = format!("selected {picked} object(s)");
+    }
+
+    /// The Layers panel's "select this layer's objects": CS6's
+    /// `dom.selectAllOnLayer(layerIndex, bRememberSelection,
+    /// bToggleSelection)` with the plain replace semantics. The
+    /// engine scopes it to one layer and state; the view follows.
+    pub(super) fn select_layer_objects(&mut self, layer: usize) {
+        let payload = serde_json::json!({
+            "page": self.editor.page,
+            "layer": layer,
+            "frame": self.editor.frame,
+        });
+        if !self.run_command("selection.selectAllOnLayer", payload) {
+            return;
+        }
+        self.editor.adopt_document_selection();
+        let picked = self.editor.live_selection().len();
+        self.status = format!("selected {picked} object(s) on layer {layer}");
     }
 
     /// Edit ▸ Copy / Cut: the engine's clipboard commands read the
@@ -4600,14 +4650,120 @@ mod tests {
     }
 
     /// Select ▸ Select Inverse: the complement of the selection within
-    /// the cell the editor edits.
+    /// the page the editor edits — every object of the page and state
+    /// the selection does not cover.
     #[test]
-    fn select_inverse_complements_the_cell() {
+    fn select_inverse_complements_the_page() {
         let mut shell = gui_shell(gui_editor_two());
         let ids = shell.editor.current_cell().unwrap().elements.clone();
         shell.editor.set_selection(vec![ids[0]]);
         shell.run_action(&menus::Action::Shell(menus::ShellAction::SelectInverse));
         assert_eq!(shell.editor.selection_set, vec![ids[1]]);
+    }
+
+    /// A rect on the editor's active layer, for the cross-layer
+    /// selection tests.
+    fn rect_on_active_layer(editor: &mut Editor, x: f64, y: f64) -> doc::ObjectId {
+        editor.tool = Tool::Rect;
+        editor.begin_drag(geom::Point::new(x, y));
+        editor.drag_to(geom::Point::new(x + 60.0, y + 40.0));
+        editor.end_drag().unwrap();
+        editor
+            .current_cell()
+            .unwrap()
+            .elements
+            .last()
+            .copied()
+            .unwrap()
+    }
+
+    /// Select ▸ Select All: CS6's `dom.selectAll()` covers every object
+    /// of the page in the current state — across layers, not only the
+    /// active one — and the selection goes through the engine's
+    /// command door, so the journal carries it.
+    #[test]
+    fn select_all_covers_every_layer_of_the_page() {
+        let mut editor = gui_editor();
+        let lower = editor.current_cell().unwrap().elements[0];
+        editor
+            .apply("layer.add", serde_json::json!({ "page": 0 }))
+            .unwrap();
+        editor.set_active_layer(1);
+        let upper = rect_on_active_layer(&mut editor, 60.0, 60.0);
+        assert_ne!(lower, upper);
+
+        let mut shell = gui_shell(editor);
+        let journal_before = shell.editor.session.journal_len();
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::SelectAll));
+        assert_eq!(
+            shell.editor.selection_set.len(),
+            2,
+            "select all covers both layers"
+        );
+        assert!(
+            shell.editor.selection_set.contains(&lower)
+                && shell.editor.selection_set.contains(&upper),
+            "select all picks the objects of every layer"
+        );
+        assert!(
+            shell.editor.session.journal_len() > journal_before,
+            "the selection went through the command door"
+        );
+        assert!(
+            shell
+                .editor
+                .session
+                .journal_lines()
+                .contains("selection.selectAll"),
+            "the journal names the command"
+        );
+    }
+
+    /// Select ▸ Deselect: the object selection goes empty in the
+    /// document as well as in the view — CS6's `dom.selectNone()`.
+    #[test]
+    fn deselect_clears_the_document_selection() {
+        let mut shell = gui_shell(gui_editor());
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::SelectAll));
+        assert!(!shell.editor.document().object_selection.is_empty());
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::Deselect));
+        assert!(
+            shell.editor.document().object_selection.is_empty(),
+            "the document's selection is empty"
+        );
+        assert!(
+            shell.editor.selection_set.is_empty(),
+            "the view's selection is empty"
+        );
+    }
+
+    /// The Layers panel's "select this layer's objects": the engine's
+    /// `selection.selectAllOnLayer` scopes the selection to one layer
+    /// and state, whatever else the page carries.
+    #[test]
+    fn select_layer_objects_scopes_to_one_layer() {
+        let mut editor = gui_editor();
+        let lower = editor.current_cell().unwrap().elements[0];
+        editor
+            .apply("layer.add", serde_json::json!({ "page": 0 }))
+            .unwrap();
+        editor.set_active_layer(1);
+        rect_on_active_layer(&mut editor, 60.0, 60.0);
+        let upper = editor.document().pages[0].layers.layers[1].cells[0].elements[0];
+
+        let mut shell = gui_shell(editor);
+        shell.select_layer_objects(0);
+        assert_eq!(
+            shell.editor.selection_set,
+            vec![lower],
+            "only the named layer's object is selected"
+        );
+        shell.select_layer_objects(1);
+        assert_eq!(
+            shell.editor.selection_set,
+            vec![upper],
+            "the other layer's object replaces it"
+        );
     }
 
     /// Modify ▸ Group / Ungroup: the group lands in the cell where the
