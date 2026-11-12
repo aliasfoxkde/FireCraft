@@ -1502,7 +1502,149 @@ impl Shell {
                 name: text.name.clone(),
             },
         );
+        self.text_layout_fields(ui, id, text);
         self.geometry_fields(ui, id);
+    }
+
+    /// The text object's layout: the paragraph's indent and spacing,
+    /// the on-path offset, and the frame that fits the text.
+    ///
+    /// The paragraph values live on the text style (`PINf`, `PSBf`,
+    /// `PSAf`), so the panel reads them from the style and writes
+    /// them through the three paragraph setters.
+    pub(super) fn text_layout_fields(
+        &mut self,
+        ui: &mut egui::Ui,
+        id: doc::ObjectId,
+        text: &TextObject,
+    ) {
+        let mut indent = text
+            .style
+            .as_ref()
+            .and_then(|style| style.paragraph_indent)
+            .unwrap_or(0.0);
+        let mut before = text
+            .style
+            .as_ref()
+            .and_then(|style| style.space_before)
+            .unwrap_or(0.0);
+        let mut after = text
+            .style
+            .as_ref()
+            .and_then(|style| style.space_after)
+            .unwrap_or(0.0);
+        ui.horizontal(|ui| {
+            let indent_field = ui.add(
+                egui::DragValue::new(&mut indent)
+                    .speed(1.0)
+                    .range(-1000.0..=1000.0)
+                    .prefix("indent "),
+            );
+            let before_field = ui.add(
+                egui::DragValue::new(&mut before)
+                    .speed(1.0)
+                    .range(-1000.0..=1000.0)
+                    .prefix("before "),
+            );
+            let after_field = ui.add(
+                egui::DragValue::new(&mut after)
+                    .speed(1.0)
+                    .range(-1000.0..=1000.0)
+                    .prefix("after "),
+            );
+            if indent_field.changed() {
+                self.set_paragraph_indent(id, indent);
+            }
+            if before_field.changed() {
+                self.set_paragraph_spacing_before(id, before);
+            }
+            if after_field.changed() {
+                self.set_paragraph_spacing_after(id, after);
+            }
+        });
+        // The on-path offset: where the text starts along its guide
+        // path (`CHOf`).
+        if let Some(on_path) = text.on_path.as_ref() {
+            let mut offset = on_path.offset;
+            if ui
+                .add(
+                    egui::DragValue::new(&mut offset)
+                        .speed(1.0)
+                        .range(-10_000.0..=10_000.0)
+                        .prefix("offset "),
+                )
+                .on_hover_text("where the text starts along its path")
+                .changed()
+            {
+                self.set_on_path_offset(offset);
+            }
+        }
+        if ui
+            .button("Fit box to text")
+            .on_hover_text("CS6's setTextRectangleAuto: the frame shrinks to the text it holds")
+            .clicked()
+        {
+            self.fit_text_box();
+        }
+    }
+
+    /// The paragraph's indent, in pixels (`PINf`).
+    pub(super) fn set_paragraph_indent(&mut self, id: doc::ObjectId, indent: f64) {
+        let _ = self.editor.apply(
+            "text.setTextParaIndent",
+            serde_json::json!({ "id": id, "para_indent": indent }),
+        );
+    }
+
+    /// The space above the paragraph, in pixels (`PSBf`).
+    pub(super) fn set_paragraph_spacing_before(&mut self, id: doc::ObjectId, before: f64) {
+        let _ = self.editor.apply(
+            "text.setTextParaSpacingBefore",
+            serde_json::json!({ "id": id, "para_space_before": before }),
+        );
+    }
+
+    /// The space below the paragraph, in pixels (`PSAf`).
+    pub(super) fn set_paragraph_spacing_after(&mut self, id: doc::ObjectId, after: f64) {
+        let _ = self.editor.apply(
+            "text.setTextParaSpacingAfter",
+            serde_json::json!({ "id": id, "para_space_after": after }),
+        );
+    }
+
+    /// Where the text starts along its guide path (`CHOf`).
+    pub(super) fn set_on_path_offset(&mut self, offset: f64) {
+        // The setter walks the document's selection, so the view's
+        // selection lands there first.
+        if self.sync_document_selection() {
+            let _ = self.editor.apply(
+                "text.setTextOnPathOffset",
+                serde_json::json!({ "offset": offset }),
+            );
+        }
+    }
+
+    /// CS6's setTextRectangleAuto: the frame shrinks to the text it
+    /// holds.
+    pub(super) fn fit_text_box(&mut self) {
+        // The setter reads the document's selection, so the view's
+        // selection lands there first.
+        if self.sync_document_selection() {
+            let _ = self
+                .editor
+                .apply("text.setTextRectangleAuto", serde_json::json!({}));
+        }
+    }
+
+    /// The text commands that read the document's selection need the
+    /// view's selection to land there first — the same bridge the
+    /// Select menu's verbs use (decision 0104).
+    pub(super) fn sync_document_selection(&mut self) -> bool {
+        if let Err(error) = self.editor.sync_selection() {
+            self.status = format!("selection failed: {error}");
+            return false;
+        }
+        true
     }
 
     /// Document properties (22.4): the field set the inspector shows

@@ -4838,6 +4838,43 @@ mod tests {
         );
     }
 
+    /// The Properties panel's text layout: the paragraph's indent
+    /// and spacing reach the text's style.
+    #[test]
+    fn the_text_properties_write_the_paragraph_layout() {
+        let (mut shell, id) = text_shell("hello");
+        shell.set_paragraph_indent(id, 12.0);
+        shell.set_paragraph_spacing_before(id, 4.0);
+        shell.set_paragraph_spacing_after(id, 6.0);
+        let style = match shell.editor.document().registry.get(id) {
+            Some(ObjectData::Text(text)) => text.style.clone(),
+            _ => None,
+        };
+        let style = style.expect("the text carries a style");
+        assert_eq!(style.paragraph_indent, Some(12.0));
+        assert_eq!(style.space_before, Some(4.0));
+        assert_eq!(style.space_after, Some(6.0));
+    }
+
+    /// "Fit box to text": the frame shrinks to the text it holds.
+    #[test]
+    fn the_text_box_fits_its_text() {
+        let (mut shell, id) = text_shell("hello");
+        let frame =
+            |shell: &Shell, id: doc::ObjectId| match shell.editor.document().registry.get(id) {
+                Some(ObjectData::Text(text)) => text.frame,
+                _ => panic!("the text is there"),
+            };
+        let before = frame(&shell, id);
+        shell.fit_text_box();
+        let after = frame(&shell, id);
+        assert!(
+            after.width() < before.width(),
+            "the frame shrank to the text: {before:?} -> {after:?}"
+        );
+        assert!(after.width() > 0.0, "the frame still holds the text");
+    }
+
     /// Modify ▸ Group / Ungroup: the group lands in the cell where the
     /// members were, and ungroup puts the members back.
     #[test]
