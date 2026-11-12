@@ -20,11 +20,15 @@ mod glyphs;
 mod guides_ui;
 mod html_preview;
 mod icons;
+mod optimize;
 mod palette;
 mod panel_windows;
 mod panels;
 mod panels_web;
 mod slice_editor;
+mod timeline;
+
+pub use optimize::OptimizeSettings;
 
 pub use glyphs::apply_cs6_theme;
 pub(crate) use glyphs::{draw_autoshape_glyph, symbol_type_label, tool_key, tool_label};
@@ -89,6 +93,9 @@ pub struct Shell {
     /// between, and bounded — a 4K page at the 64× ceiling would be a
     /// 262k-pixel-wide raster, so the effective scale clamps to 4×).
     raster_scale: f64,
+    /// Cached Optimize preview: the encoded page's texture, the byte
+    /// size label, and the stamp it was made from.
+    optimize_preview: Option<(u64, egui::TextureHandle, String)>,
     /// Injected platform services.
     fs: std::rc::Rc<dyn engine::platform::FileSystem>,
     dialogs: Box<dyn engine::platform::Dialogs>,
@@ -431,6 +438,7 @@ impl Shell {
             view: View::default(),
             raster: None,
             raster_scale: 1.0,
+            optimize_preview: None,
             fs,
             dialogs,
             status: "ready".to_owned(),
@@ -2163,22 +2171,18 @@ impl Shell {
                 // the current one, which becomes active on insert.
                 let page = self.editor.page;
                 let current = self.editor.frame;
-                self.run_command(
+                let at = current + 1;
+                if self.run_command(
                     "frame.add",
                     serde_json::json!({
                         "page": page, "how_many": 1,
                         "location": "after current", "current": current,
                     }),
-                );
-                let count = self
-                    .editor
-                    .document()
-                    .pages
-                    .get(page)
-                    .map(|p| p.info.frame_count)
-                    .unwrap_or(0);
-                if count > 0 {
-                    self.editor.frame = (count - 1) as usize;
+                ) {
+                    // The new state sits right behind the current one —
+                    // not at the end of the page.
+                    self.editor.frame = at;
+                    self.raster = None;
                 }
             }
             menus::SelAction::BreakApart => {

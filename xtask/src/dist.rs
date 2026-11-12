@@ -16,6 +16,8 @@
 
 use crate::util::{run_in, run_in_with_env, sha256_hex, workspace_root};
 use base64::Engine as _;
+// `Yaml::load_from_str` is provided by this trait, not inherent.
+use saphyr::LoadableYamlNode as _;
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::{Read as _, Write as _};
 use std::net::{TcpListener, TcpStream};
@@ -1122,11 +1124,13 @@ fn parse_recipes() -> Result<usize, String> {
         checked += 1;
     }
     // The Flatpak manifest is data, not a script: a YAML parse proves
-    // structure. The serde_yaml dependency lives in xtask's Cargo.toml.
+    // structure. The saphyr dependency lives in xtask's Cargo.toml;
+    // `serde_yaml` was rejected here because it is unmaintained and
+    // drags in the `unsafe-libyaml` advisory.
     let manifest = workspace_root().join("packaging/flatpak/dev.firecraft.FireCraft.yml");
     let yaml = std::fs::read_to_string(&manifest)
         .map_err(|e| format!("read {}: {e}", manifest.display()))?;
-    serde_yaml::from_str::<serde_yaml::Value>(&yaml).map_err(|e| {
+    saphyr::Yaml::load_from_str(&yaml).map_err(|e| {
         format!("packaging/flatpak/dev.firecraft.FireCraft.yml does not parse: {e}")
     })?;
     checked += 1;
