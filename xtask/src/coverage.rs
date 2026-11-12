@@ -66,6 +66,15 @@ pub fn run() -> Result<(), String> {
     if let Ok(report) = parse_lcov_report(&workspace_root().join("lcov.info")) {
         report.print_breakdown();
     }
+    diagnose_file(
+        &workspace_root().join("lcov.info"),
+        "shell/mod.rs",
+        &workspace_root().join("crates/app/src/shell/mod.rs"),
+    );
+    let target = std::env::var_os("CARGO_TARGET_DIR")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| workspace_root().join("target"));
+    diagnose_profiles(&target);
 
     let pass_lines = lines >= LINE_THRESHOLD;
     let pass_funcs = funcs >= FUNCTION_THRESHOLD;
@@ -186,6 +195,110 @@ impl CoverageReport {
                 c.lines_hit, c.lines_found, c.funcs_hit, c.funcs_found
             );
         }
+    }
+}
+
+/// Prints the raw lcov sections for one source file, and what is on
+/// disk next to them.
+///
+/// Diagnostic only: the breakdown says *which* file moved; this says
+/// where that file's counters come from — how many lcov sections the
+/// file has, how many line records each carries, and how many lines
+/// the file actually has in the checkout.
+fn diagnose_file(lcov: &std::path::Path, suffix: &str, source: &std::path::Path) {
+    let Ok(text) = std::fs::read_to_string(lcov) else {
+        eprintln!("[diagnose] {suffix}: the lcov file could not be read");
+        return;
+    };
+    let on_disk = std::fs::read_to_string(source)
+        .map(|text| text.lines().count())
+        .unwrap_or(0);
+    eprintln!("[diagnose] {suffix}: {on_disk} line(s) on disk");
+
+    let mut matching = 0usize;
+    let mut in_section = false;
+    let mut da = 0usize;
+    let mut min_line = u64::MAX;
+    let mut max_line = 0u64;
+    let mut lf = 0u64;
+    let mut lh = 0u64;
+    for line in text.lines() {
+        let line = line.trim();
+        if let Some(file) = line.strip_prefix("SF:") {
+            if in_section {
+                eprintln!(
+                    "[diagnose] {suffix}: section with {da} DA record(s), lines {lh}/{lf}, \
+                     DA lines {min_line}..{max_line}"
+                );
+            }
+            in_section = file.ends_with(suffix);
+            da = 0;
+            min_line = u64::MAX;
+            max_line = 0;
+            lf = 0;
+            lh = 0;
+            if in_section {
+                matching += 1;
+            }
+            continue;
+        }
+        if !in_section {
+            continue;
+        }
+        if let Some(rest) = line.strip_prefix("DA:") {
+            da += 1;
+            if let Some((number, _)) = rest.split_once(',') {
+                if let Ok(number) = number.parse::<u64>() {
+                    min_line = min_line.min(number);
+                    max_line = max_line.max(number);
+                }
+            }
+        } else if let Some(number) = line.strip_prefix("LF:") {
+            lf = number.parse().unwrap_or(0);
+        } else if let Some(number) = line.strip_prefix("LH:") {
+            lh = number.parse().unwrap_or(0);
+        }
+    }
+    if in_section {
+        eprintln!(
+            "[diagnose] {suffix}: section with {da} DA record(s), lines {lh}/{lf}, \
+             DA lines {min_line}..{max_line}"
+        );
+    }
+    eprintln!("[diagnose] {suffix}: {matching} section(s)");
+}
+
+/// Lists the profile files under the target directory.
+///
+/// A stale profile from an earlier build is merged into the next
+/// measurement, so the measurement's inputs have to be visible.
+fn diagnose_profiles(target: &std::path::Path) {
+    fn walk(dir: &std::path::Path, depth: usize, found: &mut Vec<String>) {
+        if depth == 0 {
+            return;
+        }
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                walk(&path, depth - 1, found);
+            } else if path.extension().is_some_and(|ext| ext == "profraw") {
+                found.push(path.display().to_string());
+            }
+        }
+    }
+
+    let mut found = Vec::new();
+    walk(target, 4, &mut found);
+    eprintln!(
+        "[diagnose] profiles under {}: {} file(s)",
+        target.display(),
+        found.len()
+    );
+    for path in found.iter().take(40) {
+        eprintln!("[diagnose]   {path}");
     }
 }
 
