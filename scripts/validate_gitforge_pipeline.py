@@ -57,6 +57,7 @@ def validate(path: Path) -> list[str]:
 
     names: list[str] = []
     indegree: dict[str, int] = {}
+    cache_sources: set[str] = set()
     for job in jobs:
         name = job.get("name")
         if not name:
@@ -78,11 +79,52 @@ def validate(path: Path) -> list[str]:
         if timeout is not None and not TIMEOUT_RE.match(str(timeout)):
             errors.append(f"job {name}: timeout {timeout!r} must match <int><s|m|h>")
 
+        cache = job.get("cache")
+        if cache is not None and not isinstance(cache, dict):
+            errors.append(f"job {name}: cache must be a mapping")
+        elif isinstance(cache, dict):
+            source = cache.get("source")
+            if source is None:
+                errors.append(
+                    f"job {name}: cache must name its own directory (source: "
+                    "\"{cache_root}/cargo/{image}-<job>\"); the bare default is "
+                    "shared by every job and serializes the fleet"
+                )
+            elif not isinstance(source, str):
+                errors.append(f"job {name}: cache source must be a string")
+            else:
+                # The runner takes an EXCLUSIVE lock on every writable host
+                # directory a job mounts (GitForge GF-11), so two jobs on one
+                # cache directory cannot run at the same time. A source shared
+                # by every job would serialize the whole fleet into one lane.
+                if not source.endswith(name):
+                    errors.append(
+                        f"job {name}: cache source must end with the job name so each job "
+                        f"owns its own cache directory (got {source!r})"
+                    )
+                if source in cache_sources:
+                    errors.append(
+                        f"job {name}: cache source {source!r} is already used by another job; "
+                        "two jobs on one cache directory serialize each other"
+                    )
+                cache_sources.add(source)
+
         steps = job.get("steps") or []
         if isinstance(steps, list):
+            runs_cargo = False
             for step in steps:
                 if not isinstance(step, dict) or not step.get("name") or not step.get("run"):
                     errors.append(f"job {name}: every step needs name and run")
+                    continue
+                run = str(step["run"])
+                runs_cargo |= re.search(r"\bcargo(?:\s|$)", run) is not None
+                if re.search(r"CARGO_TARGET_DIR=/tmp/", run):
+                    errors.append(
+                        f"job {name}: Cargo target output must use the declared host cache, "
+                        "not a disposable container /tmp directory"
+                    )
+            if runs_cargo and not isinstance(cache, dict):
+                errors.append(f"job {name}: Cargo work must declare a cache: block")
 
     for ref in (n for job in jobs for n in job.get("needs", []) or []):
         if ref not in names:

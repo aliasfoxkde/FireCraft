@@ -20,11 +20,18 @@
 #   multi-command block here sets it: without it a mid-block failure is
 #   invisible whenever a later command happens to succeed. That masking
 #   once hid a failing gate for dozens of runs (decision 0086).
-# - CARGO_TARGET_DIR=/tmp/ci-target: no rustc write pattern survives the
-#   sshfs workspace bridge under load (clippy metadata bursts and codegen
-#   both EPERM'd on fedora), so all compilation lands on the
-#   container-local overlay2 disk. Steps within a job share one
-#   container, so heavy steps are grouped to reuse the warm target dir.
+# - `cache:` mounts a host-local Cargo target directory at `/cargo-target`
+#   and exports `CARGO_TARGET_DIR`. This keeps rustc writes off the sshfs
+#   workspace bridge while reusing compiled artifacts across runs.
+#   The runner holds an EXCLUSIVE advisory lock on every writable host
+#   directory a job mounts, for the job's whole lifetime (GitForge GF-11):
+#   two jobs writing one target tree would clobber each other's binaries.
+#   So the cache directory is PER JOB — `.../cargo/{image}-<job-name>` —
+#   and not one directory per image. A single shared directory would
+#   serialize every Cargo job in the fleet into one lane, which is the
+#   throughput problem this cache is meant to fix. Each job keeps its own
+#   warm tree; no two jobs contend for it. Two runs of the SAME job still
+#   contend, by design: that is the case the lock exists for.
 # - Job sandboxes run with CARGO_NET_OFFLINE=false: the image's
 #   registry cache is a FAST FLOOR, not a wall. A crate already in the
 #   cache touches the network not at all; a crate that is not costs one
@@ -66,12 +73,14 @@ environment: {}
 jobs:
   - name: fmt-layers
     image: firecraft-ci-rust:1
+    cache:
+      source: "{cache_root}/cargo/{image}-fmt-layers"
     steps:
       - name: Rust formatting check
         run: cargo fmt --all -- --check
       - name: Layer-table gate
         # Compiles xtask alone; the gate itself is cargo metadata.
-        run: CARGO_TARGET_DIR=/tmp/ci-target cargo run --locked -p xtask -- layers
+        run: cargo run --locked -p xtask -- layers
     # 45m: the gate compiles xtask, so it carries the workspace's
     # build wave. Measured 20.1 min on 2026-11-11 with 9 runs in
     # flight (0.3 min idle); the previous 20m budget killed a run that
@@ -80,16 +89,21 @@ jobs:
 
   - name: clippy-test
     image: firecraft-ci-rust:1
+    cache:
+      source: "{cache_root}/cargo/{image}-clippy-test"
     needs: [fmt-layers]
     steps:
       - name: Cargo clippy (deny warnings, all targets)
-        run: CARGO_TARGET_DIR=/tmp/ci-target cargo clippy --workspace --all-targets --locked -- -D warnings
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: Web crate clippy (workspace-excluded, trunk)
-        run: cd web && CARGO_TARGET_DIR=/tmp/ci-web-target cargo clippy --all-targets --locked -- -D warnings
+        # The web crate is a separate workspace with its own lockfile, so it
+        # keeps its own target tree — inside the job's cache mount, so the
+        # artifacts survive the job.
+        run: cd web && CARGO_TARGET_DIR=/cargo-target/web cargo clippy --all-targets --locked -- -D warnings
       - name: Workspace tests
         # Same container as the clippy step: the warm target dir carries
         # over, so the test build only completes what clippy checked.
-        run: CARGO_TARGET_DIR=/tmp/ci-target cargo test --workspace --locked --no-fail-fast -- --test-threads=2
+        run: cargo test --workspace --locked --no-fail-fast -- --test-threads=2
     # The egui/eframe graph is the bulk of the workspace; the wall
     # absorbs co-tenant build waves on these shared hosts.
     # 150m: measured 76.9 min on 2026-11-11 with 9 runs in flight.
@@ -97,38 +111,44 @@ jobs:
 
   - name: wasm-web
     image: firecraft-ci-rust:1
+    cache:
+      source: "{cache_root}/cargo/{image}-wasm-web"
     needs: [clippy-test]
     steps:
       - name: Wasm compile gate + smoke suite + trunk bundle
-        # CARGO_TARGET_DIR is inherited by xtask's child cargo calls and
-        # by trunk's cargo build, keeping every rustc write off the
+        # The cache exports CARGO_TARGET_DIR to xtask's child cargo calls
+        # and trunk's cargo build, keeping every rustc write off the
         # sshfs bridge. With wasm-bindgen-test-runner + node baked into
         # the image, the fwpng smoke suite executes for real (no
         # compile-only downgrade), and trunk builds the web bundle.
-        run: CARGO_TARGET_DIR=/tmp/ci-target cargo run --locked -p xtask -- wasm
+        run: cargo run --locked -p xtask -- wasm
     # 90m: measured 45.6 min on 2026-11-11 with 9 runs in flight.
     timeout: 90m
 
   - name: corpus-golden
     image: firecraft-ci-rust:1
+    cache:
+      source: "{cache_root}/cargo/{image}-corpus-golden"
     needs: [wasm-web]
     steps:
       - name: Corpus digests + doc-model round-trips
-        run: CARGO_TARGET_DIR=/tmp/ci-target cargo run --locked -p xtask -- corpus
+        run: cargo run --locked -p xtask -- corpus
       - name: Golden render pins + determinism
-        run: CARGO_TARGET_DIR=/tmp/ci-target cargo run --locked -p xtask -- golden
+        run: cargo run --locked -p xtask -- golden
     # 45m: measured 19.6 min on 2026-11-11 with 9 runs in flight.
     timeout: 45m
 
   - name: perf-budgets
     image: firecraft-ci-rust:1
+    cache:
+      source: "{cache_root}/cargo/{image}-perf-budgets"
     needs: [corpus-golden]
     steps:
       - name: Performance budgets (open / frame / save / peak memory)
         # M12: the parity table's ceilings, enforced on the runner
         # fleet. The report line names the host, so a trip is
         # diagnosable as regression vs environment shift.
-        run: CARGO_TARGET_DIR=/tmp/ci-target cargo run --locked -p xtask -- perf
+        run: cargo run --locked -p xtask -- perf
     # 45m: measured 14.3 min on 2026-11-11 with 9 runs in flight, but
     # two runs were killed at the previous 20m budget while still
     # working (one on 2026-11-11 at 20.2 min, one at 20.3 min). The
@@ -137,7 +157,9 @@ jobs:
 
   - name: fuzz
     image: firecraft-ci-rust:1
-    needs: [corpus-golden]
+    cache:
+      source: "{cache_root}/cargo/{image}-fuzz"
+    needs: [perf-budgets]
     steps:
       - name: Stable fuzz drivers (anchors + panic_hunt + scripting arms)
         # The stable-toolchain driver set from `xtask ci`; the
@@ -150,7 +172,7 @@ jobs:
         # needed). A crate missing from the cache costs one small
         # fetch; the full error still reaches only the job log ledger,
         # not the bounded receipt.
-        run: CARGO_TARGET_DIR=/tmp/ci-target cargo run --locked -p xtask -- fuzz-quick
+        run: cargo run --locked -p xtask -- fuzz-quick
     # 30m proved too tight: a cold sandbox target dir spends ~20m
     # compiling before fuzz-quick starts (dfd7f46 run was killed by
     # the watchdog 10m into the campaign itself).
@@ -160,6 +182,8 @@ jobs:
 
   - name: generated-docs
     image: firecraft-ci-rust:1
+    cache:
+      source: "{cache_root}/cargo/{image}-generated-docs"
     needs: [fuzz]
     steps:
       - name: Parity floors + scorecard + stamps + reachability + panel snapshot, then drift check
@@ -191,11 +215,11 @@ jobs:
           set -e
           cp docs/planning/generated/parity.md /tmp/parity.committed
           cp docs/planning/generated/scorecard.md /tmp/scorecard.committed
-          CARGO_TARGET_DIR=/tmp/ci-target cargo run --locked -p xtask -- parity
-          CARGO_TARGET_DIR=/tmp/ci-target cargo run --locked -p xtask -- scorecard
-          CARGO_TARGET_DIR=/tmp/ci-target cargo run --locked -p xtask -- stamps
-          CARGO_TARGET_DIR=/tmp/ci-target cargo run --locked -p xtask -- reachability
-          CARGO_TARGET_DIR=/tmp/ci-target cargo run --locked -p xtask -- panel-snapshot
+          cargo run --locked -p xtask -- parity
+          cargo run --locked -p xtask -- scorecard
+          cargo run --locked -p xtask -- stamps
+          cargo run --locked -p xtask -- reachability
+          cargo run --locked -p xtask -- panel-snapshot
           cmp /tmp/parity.committed docs/planning/generated/parity.md
           cmp /tmp/scorecard.committed docs/planning/generated/scorecard.md
     # 45m: measured 16.1 min on 2026-11-11 with 9 runs in flight.
@@ -203,6 +227,8 @@ jobs:
 
   - name: release
     image: firecraft-ci-rust:1
+    cache:
+      source: "{cache_root}/cargo/{image}-release"
     needs: [generated-docs]
     steps:
       - name: Ref report
@@ -238,8 +264,8 @@ jobs:
           set -e
           echo "release-path build — the CI image ships no git, so this step cannot detect the ref; the ref is on the pipeline run (pipeline_runs.ref_name) and in the release workflow's arguments"
       - name: "Web bundle (bridge smoke)"
-        # Same container as the tag report; the fresh job target dir
-        # builds the release profile from scratch, which is the point:
+        # Same container as the tag report; the release profile remains
+        # distinct under the shared target cache's release subdirectory.
         # the bundle must come from tag bytes, not a warm debug cache.
         #
         # The bridge smoke RUNS here: `dist --web` serves the staged
@@ -250,9 +276,9 @@ jobs:
         # `chromium` package), so no skip switch is needed — and none is
         # accepted: a missing browser or a failed round trip must fail
         # the job, not pass it quietly.
-        run: CARGO_TARGET_DIR=/tmp/ci-dist-target cargo run --locked -p xtask -- dist --web
+        run: cargo run --locked -p xtask -- dist --web
       - name: Native set + deb read-back
-        run: CARGO_TARGET_DIR=/tmp/ci-dist-target cargo run --locked -p xtask -- dist --native
+        run: cargo run --locked -p xtask -- dist --native
       - name: DEB install verification (clean Debian 12)
         # The package must be installable, launchable and removable on
         # the platform it declares. `packaging/deb/verify-install.sh` is
