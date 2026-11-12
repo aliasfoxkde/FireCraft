@@ -17,29 +17,42 @@
 
 ---
 
-## 1. State snapshot (2026-11-07; PR #8 working branch)
+## 1. State snapshot (2026-11-11; main `b61f198`)
 
-- **Source state:** `main` is at `5fac7a2` (v0.2.5-era development;
-  the latest tag is `v0.2.5`). The tag and current `main` are different
-  snapshots. See [`PROGRESS.md`](PROGRESS.md) for build and release
-  evidence and [`TASKS.md`](TASKS.md) for current work.
-- **Engine and parity:** 252 registry commands (`engine::catalog::ids()`
-  is the live authority); 268 carried / 3 partial / 0 missing of the 356
-  DOM verbs. Live generated files and source calls are authoritative
-  for counts.
-- **Menu census:** 2 of 294 menu rows remain non-dispatching. The 19.6
-  wiring campaign is complete; remaining rows belong to future feature
-  work or evidence gates. The live census is derived and gated by
-  `menus::tests::inert_count_never_rises`.
-- **Current UI front:** Phase 22 shell fidelity and screenshot-driven
-  responsive review. The tracked screenshot was replaced on 2026-11-04
-  with a capture of the current shell; its receipts and limits are in
-  [`tasks/T22-screenshot-ui.md`](tasks/T22-screenshot-ui.md).
-
+- **Source and release:** canonical `main` is `b61f198` after the
+  shell-lineage/release trains and post-train RustSec work. The latest
+  published release remains `v0.2.5` (2026-11-03); current source has
+  moved beyond that tag. See [PROGRESS.md](PROGRESS.md) for dated build,
+  CI and deployment receipts.
+- **Engine and parity:** 253 registered commands; the CS6 DOM matrix is
+  268 carried / 3 partial / 0 missing of 356 verbs. The latest
+  shell-reachability measurement is 164/253 = 64.82%; the one-way floor
+  remains 59.59%. These measures answer different questions: DOM verbs,
+  shell-bound commands, and complete end-user UI/workflow parity must
+  not be conflated.
+- **Menu census:** 2 inert rows of 296. The 19.6 menu-wiring campaign is
+  complete; eight additional rows are explicitly feature/evidence-gated.
+- **Delivered work:** Phase 21's user-facing deliverables landed with
+  #107. Phase 20.1 and 20.5–20.7 are on main. Optimize/timeline work is
+  in open PR #118; the mask stack is in open PR #113. Check the live
+  [TASKS.md](TASKS.md) before selecting work.
+- **Phase 22:** screenshot acceptance and panel/tool/context-menu
+  foundations landed; bitmap inspector gaps and remaining CS6 chrome
+  keep the phase partial. The full user-visible inventory is
+  [CS6-PARITY.md](CS6-PARITY.md).
+- **Release/deployment:** #104 reconciled the deployed JavaScript,
+  Wasm and WebOS `appinfo` with v0.2.5 release bytes. Cloudflare's
+  analytics injection explains the remaining HTML hash difference.
+  Republish from the exact release artifact is pending (T18). No
+  non-Linux native artifact is certified by recipe or cross-compile
+  alone; see [ARTIFACT-MATRIX.md](release/ARTIFACT-MATRIX.md).
+- **Open integration work:** #120 removes the deprecated YAML parser;
+  #122 improves history-rewind command discovery; #123 reconciles docs.
+  Recheck each PR's current state before depending on it.
 - **Clean-room invariants:** `source/` and Adobe-derived local extracts
   are reference-only and never committed. Adobe-authored corpus files
   are test oracles. Assets require an attribution row in
-  [`ATTRIBUTION.md`](ATTRIBUTION.md).
+  [ATTRIBUTION.md](ATTRIBUTION.md).
 
 ## 2. Where everything lives
 
@@ -270,10 +283,11 @@ touching `web/` or the smoke.**
 
 ### Suggested order
 
-**Current front:** Phase 22 shell fidelity and the screenshot-driven
-responsive audit. After that, take queued Phase 20/21 work from
-[`TASKS.md`](TASKS.md). Phase 19 and 19b are complete. Re-verify the
-browser path after any `web/` change (§6.2).
+**Current front:** complete the open Phase 20 PRs (#118 Optimize/timeline;
+#113 mask-stack extension), then close the remaining Phase 22 inspector and
+chrome gaps with evidence. Phase 21's user-facing deliverables and Phase 19/19b
+are landed. Check [`TASKS.md`](TASKS.md) before selecting work; do not restart
+completed phases. Re-verify the browser path after any `web/` or shell change (§6.2).
 
 ## 5. Parity-matrix regeneration recipe
 
@@ -369,9 +383,14 @@ Phase 10 defects passed every desktop gate. The working pattern
    `corpus/fixtures/` proves the menu open; `expect_download` proves
    save. Check `pageerror` after every step (`unreachable` = a wasm
    panic).
-3. Redeploy Pages and repeat step 2 against the live URL — check the
-   served `MANIFEST.sha256` hash matches `dist/web` before
-   diagnosing anything (edge propagation lags a few minutes).
+3. For the live site, compare the served JavaScript, Wasm and `appinfo.json`
+   with the tagged release manifest first. Cloudflare Pages injects an
+   analytics beacon into served `index.html`/`host.html`; those HTML digests
+   therefore differ from the pre-deploy bundle even when the executable
+   assets match. This exact discrepancy was reconciled by #104 on
+   2026-11-11. Do not call the deployment an unknown revision based only
+   on the injected HTML. Record the release source SHA, JS/Wasm hashes,
+   appinfo hash and cache state; then repeat the bridge and file handoff smoke.
 
 ### 6.3 Release + deploy doors
 
@@ -384,15 +403,20 @@ Phase 10 defects passed every desktop gate. The working pattern
   cli tar.gz, deb, MANIFEST.sha256 → `dist/native/`) and
   `dist --web`. Web zip is manual, files at root:
   `cd dist/web && zip -qr ../firecraft-web-<v>.zip .`
-- **Publish:** tag, `git push gitforge main --tags`, `git push origin
-  main --tags`, `gh release create vX.Y.Z --notes-file
-  docs/releases/vX.Y.Z.md <5 assets>`. GitForge has no release-asset
-  surface (tags only); GitHub carries the assets. The release notes are
-  tracked in `docs/releases/` (13.3, closed) — `dist/release-notes.txt`
-  is gitignored staging and can be stale; do not ship it.
-- **Pages:** `wrangler pages deploy dist/web --project-name
-  firecraft-web` (authenticated via `CLOUDFLARE_API_TOKEN`;
-  <https://firecraft-web.pages.dev>, direct-upload project).
+- **Tag/release:** follow [RELEASING.md](RELEASING.md). The tag-triggered
+  GitHub Actions workflow builds native Linux, WebAssembly, source, SBOM,
+  checksums and the release manifest, validates the aggregate, and creates
+  a **draft** GitHub Release. Inspect the draft and all receipts; publication
+  remains an explicit operator action. Do not create a second manual release
+  with `gh release create` for the same tag. GitForge carries Git refs/tags,
+  not release assets. Release notes are tracked in `docs/releases/`;
+  `dist/release-notes.txt` is gitignored staging and can be stale.
+- **Pages:** deployment remains manual and is not part of the current tag
+  workflow: `wrangler pages deploy dist/web --project-name firecraft-web`
+  (authenticated via `CLOUDFLARE_API_TOKEN`; direct-upload project). Deploy
+  the exact `dist/web` from the release build and reconcile served JS/Wasm/
+  appinfo against the release manifest. Account for Cloudflare's injected
+  analytics beacon in served HTML (T18/#104).
 
 ## 7. Session-close checklist
 

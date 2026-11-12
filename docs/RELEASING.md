@@ -156,15 +156,42 @@ release notes — the dist manifests cover only what the fleet built.
 
 Regenerates `docs/CHANGELOG.md` from the conventional-commit log
 (grouped by type, git log order, every commit accounted for) and
-verifies the license files against the dual claim and the version
-stamps. **The verb writes the file** — it is a step of the canonical
-gate, so every gate run leaves a regenerated copy in the working tree.
-Commit the regenerated copy deliberately rather than being surprised by
-it in a diff. A changelog generated from the log cannot contain its own
-tip commit, so the file is never byte-identical to a freshly generated
-one.
+verifies the license files against the Apache-2.0 claim and the
+version stamps. **The verb writes the file** — it is a step of the
+canonical gate, so every gate run leaves a regenerated copy in the
+working tree. Commit the regenerated copy deliberately rather than
+being surprised by it in a diff.
 
-The stamp half of that verb is also available on its own:
+The regeneration is **additive**: the entries the committed file
+already carries are kept, and the log only adds to them. A changelog
+generated from the log alone cannot reproduce the file — a PR that
+lands as a squash merge is one commit in `main`'s history, so the
+branch's own commits are unreachable from the log, and a log-only
+regeneration deleted every entry that arrived that way (issue #121,
+decision 0094).
+
+Two release verbs bracket the notes:
+
+    cargo run -p xtask -- changelog --check
+
+The **freshness gate**: it fails when the committed file is not what
+the generator produces, and names the first line that differs. Run it
+after committing the regenerated file; a release must not ship notes
+that omit the commits it releases. The tip commit is exempt from the
+comparison — a file cannot record the hash of the commit that writes
+it — so the notes are regenerated in the release commit itself. It
+needs git, like the generator, so it cannot run in the CI image.
+
+    cargo run -p xtask -- changelog --cut <version>
+
+**Freezes** the unreleased block into a released `## <version>`
+section and starts an empty unreleased block after it. The version
+must be the one the workspace carries — stamp the workspace first
+(`cargo run -p xtask -- stamp <version>`), because a changelog
+section and a "Current version" line that disagree identify nothing.
+The cut refuses a version the file already carries a section for.
+
+The stamp half of the generator is also available on its own:
 
     cargo run -p xtask -- stamps
 
@@ -240,8 +267,10 @@ Every step below is one the repository can actually perform today.
    read-back passes.
 5. `xtask dist --source` and `xtask dist --sbom` green — clean-extract
    verification and CycloneDX output present.
-6. `xtask changelog` refreshed and the regenerated
-   `docs/CHANGELOG.md` committed.
+6. `xtask changelog --cut <version>` run at the stamped version, the
+   regenerated `docs/CHANGELOG.md` committed, and
+   `xtask changelog --check` green — the committed file is exactly
+   what the generator produces.
 7. Off-fleet recipes executed on their platforms (only for those
    targets being released); hashes recorded in the release notes. If a
    recipe was not executed on its target platform, it is not a release

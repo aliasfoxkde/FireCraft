@@ -20,7 +20,7 @@
 | Surface | State | Evidence |
 |---|---|---|
 | Fireworks PNG format | Complete | `crates/fwpng`, `crates/doc/src/fwmap.rs`; node tree round-trips |
-| Engine command registry | **252 commands** | `engine::catalog::ids()` — 252 as of 2026-11-07 |
+| Engine command registry | **253 commands** | `engine::catalog::ids()` — 253 as of 2026-11-11 |
 | CS6 DOM verb parity | **268 C / 3 P / 0 M / 85 N** | `docs/planning/generated/dom-parity.md` (356 verbs) |
 | ExtendScript host | Complete | `crates/scripting` — runs the CS6 `.jsf` corpus headless |
 | Web bridge | Exposes **all** commands | `web/src/main.rs` — `apply(name, payload)` |
@@ -41,7 +41,7 @@ shell reaches 72; after Phase 11's paint family it reaches 77;
 > **Note (2026-11-02):** the reachability picture above is a
 > point-in-time audit snapshot. The command palette (19.4,
 > `4458f3a`) makes **every** registry command executable from the
-> GUI, and the inert count has fallen 190 → **2 of 294** menu
+> GUI, and the inert count has fallen 190 → **2 of 296** menu
 > items (19.1–19.6 batches 1–17 + 19b.1/batch 2; derived + gated by
 > `menus::tests::inert_count_never_rises`). The family table below is
 > superseded by [`NEXT.md`](NEXT.md) Phases 19–21 as the work list;
@@ -51,8 +51,9 @@ shell reaches 72; after Phase 11's paint family it reaches 77;
 > not just audited. The xtask step `cargo run -p xtask --
 > reachability` derives the bound set from `crates/app/src` and holds
 > it to a floor in `.reachability-floor.tsv` (one-way ratchet). The
-> measurement it took on `main`: **245 registry commands, 146 bound =
-> 59.59%**, 99 unreachable — the floor is pinned at 59.59%. The
+> measurement it took on the release train at 2026-11-11: **253
+> registry commands, 168 bound = 66.40%**, 85 unreachable — the floor is
+> pinned at 66.40%. The
 > `comm` line above counts *any* occurrence of a command name in the
 > shell crate; the gate counts the same bindings outside `#[cfg(test)]`
 > code and reports them as a share, so the two numbers are close but
@@ -83,7 +84,7 @@ $ comm -23 <(engine::catalog::ids()) <(command names in crates/app/src)
 Supporting evidence:
 
 - **190 of 265 CS6 menu items rendered disabled** (`Action::Inert`,
-  `crates/app/src/menus.rs`) **at audit time** — now 2 of 294, and
+  `crates/app/src/menus.rs`) **at audit time** — now 2 of 296, and
   the census is test-gated. The shell refuses to pretend.
 - **The app could not open a raster image.** *(fixed 2026-10-21)*
   `File > Open` called `Editor::open` → `app_cli::io::open`, which
@@ -133,8 +134,8 @@ authoritative source that supersedes this table.
 | **aegis** | Baseline clean; scan 0.17 s | `.aegisignore` excludes `target/`, `web/dist/`, `fuzz/`; baseline is content-keyed (decision 0074), which supersedes the rule-class and per-finding suppression of decision 0070 |
 | **Coverage** | floors 81.1 % lines / 78.7 % funcs (`xtask/src/coverage.rs`) | Local `llvm-cov` fails on stale artifacts; CI works |
 | **Code** | 144,122 Rust lines | No `unwrap()`/`panic!()` outside `#[cfg(test)]`; no `todo!`/`unimplemented!` |
-| **Registry** | 252 commands | Every command executable from the GUI via the Ctrl+P palette (19.4); menu reachability is the remaining gap |
-| **Menu reachability** | 2 inert of 294 items | *live* — derived + gated (`menus::tests::inert_count_never_rises`) |
+| **Registry** | 253 commands | Every command executable from the GUI via the Ctrl+P palette (19.4); menu reachability is the remaining gap |
+| **Menu reachability** | 2 inert of 296 items | *live* — derived + gated (`menus::tests::inert_count_never_rises`) |
 | **Parity** | 268 C / 3 P / 0 M / 85 N | 3 P rows are evidence-gated (Phase 12 oracle) |
 | **Decision docs** | 90 (0001–0090) | Next: 0091 |
 | **Web bundle** | 21,608,249 B observed; 25,000,000 B warning / 50,000,000 B hard cap | Policy decision 0090; web build uses Rust opt-level=z and Binaryen wasm-opt=z. Cap is a guardrail, not a target; A/B size evidence remains required |
@@ -367,6 +368,15 @@ export preview. FireCraft has the format writers
 surface. Build the panel over the existing `ExportOptions` / `EXPv`
 model.
 
+**Landed 2026-11-11** as Phase 20.2 (ticket
+[T7](tasks/T7-optimize-panel.md), decision
+[0095](decisions/0095-optimize-panel-honors-only-what-export-honors.md)):
+the panel edits the `EXPv` fields the export honors (`FMTi`, `JPQi`,
+`JPPb`, `FCLi`, `PLDi`, `FLPi`, `AACb`, `AADb`) and previews the page
+through the export's own resolution. Still open: Adam7 interlacing
+(`GFIb` is disclosed and clearable, not writable) and CS6's
+selective-JPEG quality table.
+
 ---
 
 ## 13. Phase 18 — Deployment and verification hardening · M
@@ -402,7 +412,7 @@ model.
 | 14 Symbol depth | 14 | M | — |
 | 15 Page/frame/document/cell | 15 | M | — |
 | 16 Remaining families | 16 | M | Tier-1 slice **done** |
-| 17 Optimize panel | 17 | M | — |
+| 17 Optimize panel | 17 | M | **done** (Phase 20.2, 2026-11-11) |
 | 18.1 Desktop release + e2e test | 18 | M | — |
 | 18.2 Browser smoke depth | 18 | M | — |
 | 18.3/18.4 Off-fleet artifacts | 18 | — | Hardware |

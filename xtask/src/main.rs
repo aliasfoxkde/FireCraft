@@ -12,7 +12,9 @@
 //! fuzz
 //! campaign), `parity` (rising-only parity floors), `scorecard`
 //! (milestone status), `changelog` (release chore: generated
-//! CHANGELOG + license/version stamps), `stamps` (the git-free
+//! CHANGELOG + license/version stamps; `--check` is the release
+//! freshness gate and `--cut <version>` freezes the unreleased block
+//! into a released section), `stamps` (the git-free
 //! license/version stamp checks, for a CI image that ships no git),
 //! `stamp <version>` (move every release version stamp together —
 //! the workspace, the member manifests, the path dependencies' version
@@ -52,7 +54,7 @@ mod webgolden;
 
 use std::process::ExitCode;
 
-const USAGE: &str = "usage: cargo run -p xtask -- <ci [--full]|ci-no-fmt|aegis [--bless|--report]|coverage [--bless|--measure]|layers|wasm|corpus [--report]|corpus-gen|library-gen|hero-gen|styles-gen|scripts|floor|golden [--bless]|svg-golden [--bless]|svg-roundtrip [--measure]|web-golden [--bless|--measure]|perf [--bless|--measure]|dist --web|--native|--source|--sbom|--manifest|--verify-manifest|fuzz|fuzz-quick|panic-hunt|reachability [--bless]|panel-snapshot [--bless]|parity|scorecard|stamps|stamp <version>>";
+const USAGE: &str = "usage: cargo run -p xtask -- <ci [--full]|ci-no-fmt|aegis [--bless|--report]|coverage [--bless|--measure]|layers|wasm|corpus [--report]|corpus-gen|library-gen|hero-gen|styles-gen|scripts|floor|golden [--bless]|svg-golden [--bless]|svg-roundtrip [--measure]|web-golden [--bless|--measure]|perf [--bless|--measure]|dist --web|--native|--source|--sbom|--manifest|--verify-manifest|fuzz|fuzz-quick|panic-hunt|reachability [--bless]|panel-snapshot [--bless]|parity|scorecard|changelog [--check|--cut <version>]|stamps|stamp <version>>";
 
 fn main() -> ExitCode {
     match std::env::args().nth(1).as_deref() {
@@ -149,7 +151,23 @@ fn main() -> ExitCode {
         Some("panic-hunt") => finish("panic-hunt", fuzz::panic_hunt()),
         Some("parity") => finish("parity", status::parity()),
         Some("scorecard") => finish("scorecard", status::scorecard()),
-        Some("changelog") => finish("changelog", changelog::run()),
+        // `changelog` regenerates the committed changelog from the log
+        // and verifies the release stamps. `--check` is the release
+        // freshness gate: it fails when the committed file is not what
+        // the generator produces. `--cut <version>` freezes the
+        // unreleased block into a released version section, and
+        // refuses a version the workspace does not carry.
+        Some("changelog") => match std::env::args().nth(2).as_deref() {
+            Some("--check") => finish("changelog --check", changelog::check()),
+            Some("--cut") => match std::env::args().nth(3) {
+                Some(version) => finish("changelog --cut", changelog::cut(&version)),
+                None => {
+                    eprintln!("{USAGE}");
+                    ExitCode::FAILURE
+                }
+            },
+            _ => finish("changelog", changelog::run()),
+        },
         Some("stamps") => finish("stamps", changelog::stamps()),
         // `stamp <version>` moves every release version stamp together:
         // the workspace version, the member manifests that carry their

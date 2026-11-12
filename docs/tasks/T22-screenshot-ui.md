@@ -1,6 +1,6 @@
 # T22 — Screenshot-driven shell and responsive UI audit
 
-**Status:** screenshot audit complete. The tracked screenshot (`docs/img/app-main.png`), 1920×1080 capture, and empty/vector/bitmap state set are recorded below. Panel inventory (22.1) and tool strip (22.2) are complete in the current PR branch; the remaining Phase 22 work is the separate CS6 chrome audit (22.5).
+**Status:** screenshot audit complete. The tracked screenshot (`docs/img/app-main.png`), 1920×1080 capture, and empty/vector/bitmap state set are recorded below. Panel inventory (22.1) and tool strip (22.2) landed on `main` with the shell-lineage train (#107) on 2026-11-11; the remaining Phase 22 work is the separate CS6 chrome audit (22.5).
 
 **Objective:** align the editor's working shell with the clean-room CS6 reference notes while keeping controls visible and usable at ordinary browser sizes.
 

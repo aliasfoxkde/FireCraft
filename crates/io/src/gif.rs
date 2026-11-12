@@ -21,7 +21,7 @@ use std::collections::HashMap;
 use std::io::Cursor;
 
 use color_quant::NeuQuant;
-use doc::{Cell, Document, Layer, LayerList, Page, PageInfo};
+use doc::{Cell, DEFAULT_FRAME_DURATION, Document, Layer, LayerList, Page, PageInfo};
 use gif::{ColorOutput, DecodeOptions, DisposalMethod, Frame, Repeat};
 use raster::TILE_SIDE;
 
@@ -39,7 +39,7 @@ const BANK_TILES: usize = 4096;
 /// default was not observable without the binary — revisit against
 /// real-corpus `FNDi` evidence when the `EXPv` mapping lands (M8
 /// task 8).
-const DEFAULT_DELAY_CS: i64 = 10;
+const DEFAULT_DELAY_CS: i64 = DEFAULT_FRAME_DURATION;
 /// Mean absolute channel error above which a frame gets its own
 /// local palette instead of the global quantization.
 const LOCAL_PALETTE_ERROR: f64 = 8.0;
