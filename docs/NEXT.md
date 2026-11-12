@@ -1,5 +1,14 @@
 # FireCraft — Roadmap detail
 
+> **Current execution snapshot (2026-11-11; main `b61f198`):** Phase 21's
+> user-facing deliverables have landed. Phase 20.1 and 20.5–20.7 are on
+> main; Optimize/timeline landed 2026-11-11 in #118 and the mask stack
+> landed 2026-11-11 in #113 as `PARTIAL`. Phase 22 remains partial: the
+> user-visible parity matrix is published, but bitmap inspector
+> capabilities and remaining CS6 chrome are still open/evidence-gated.
+> Use [TASKS.md](TASKS.md) for live status and [PROGRESS.md](PROGRESS.md)
+> for measured receipts. An open PR is not a landed feature.
+
 > Current task state is tracked in [`TASKS.md`](TASKS.md), with a dated
 > snapshot in [`PROGRESS.md`](PROGRESS.md). This file is the detailed
 > phase plan, not a second live ledger.
@@ -372,9 +381,9 @@ evidence work, tracked outside that campaign.
   floor recorded in **`.reachability-floor.tsv`**. The floor is a
   one-way ratchet: `--bless` may raise it (reachability improved) and
   refuses to lower it (a regression is fixed, not forgiven). Measured
-  on the merged train at 2026-11-11: **257 registry commands, 172
-  bound by the shell = 66.93%**, 85 unreachable; the floor is pinned
-  at 66.93%.
+  on the release train at 2026-11-11: **253 registry commands, 168
+  bound by the shell = 66.40%**, 85 unreachable; the floor is pinned
+  at 66.40%.
   (The command palette makes the *palette* reach 100% — the gate
   deliberately measures the CS6-visible surface instead, which is the
   surface the 19.x batches widen. Decision
@@ -386,7 +395,9 @@ evidence work, tracked outside that campaign.
   (`INERT_CEILING`), so a newly inert row fails the test until the
   ceiling is deliberately re-pinned. Per-item tracking references were
   dropped as unnecessary — the count is the honest metric and the gate
-  refuses any rise in it.
+  refuses any rise in it. **Latest census (2026-11-11): 2 inert rows of
+  296 total**, with eight separate feature/evidence-gated rows. The
+  19.6 wiring campaign is complete; do not keep it in progress.
 - **19b.4 Wasm budget re-pin** (S) — **DONE (2026-11-03)**: re-measured
   and re-pinned with evidence. `xtask dist --web` observed
   **21,235,599 B** (trunk --release, wasm-opt 2, rustc 1.99, wasm-opt
@@ -428,8 +439,7 @@ evidence work, tracked outside that campaign.
   [0094](decisions/0094-animation-timeline-shell.md)). Still open:
   playback (CS6's `Play Animation`), state thumbnails, per-side onion
   opacity, screenshot acceptance.
-- **20.4 Mask stack UI** (M): add/remove/mode/link/move.
-- **20.4 Mask stack UI** (M): add/remove/mode/link/move. — **PARTIAL
+- **20.4 Mask stack UI** (M): add/remove/mode/link/move. **PARTIAL
   2026-11-11**: the stack, its operators, and its fold landed. The
   model holds a level's combine mode and persists it
   (`mask.setStackMode`, decisions [0092](decisions/0092-mask-stack-combine-mode.md)
@@ -439,7 +449,8 @@ evidence work, tracked outside that campaign.
   its enable flag, operator, link flag, reorder arrows and remove
   button, and can add a level. The structural commands undo
   byte-exactly. Still open: the screenshot acceptance; ticket
-  [T9](tasks/T9-mask-stack.md).
+  [T9](tasks/T9-mask-stack.md). This is a FireCraft extension, not a
+  CS6 parity claim.
 - **20.5 Multi-document tabs** (M): **LANDED 2026-11-07** — Open/New
   park the active document as a `DocTab`; Close promotes the newest
   parked tab (refuses dirty documents); the tab strip shows the
@@ -449,10 +460,24 @@ evidence work, tracked outside that campaign.
   `new_parks_the_current_document`,
   `close_refuses_a_dirty_document`. (Window-menu panel toggles landed
   in Phase 19.6 batches 3 and 10.)
-- **20.6 History panel click-to-rewind** (S): journal replay to seq N.
-- **20.7 Slice/hotspot behavior editing + HTML preview** (M).
+- **20.6 History panel click-to-rewind** (S): **LANDED 2026-11-11**
+  in #107 — journal replay to seq N; the session-scoped rewind
+  command is also discoverable from the command palette and MCP
+  list/run surface in open PR #122.
+- **20.7 Slice/hotspot behavior editing + HTML preview** (M):
+  **LANDED 2026-11-11** in #107.
 
 ### Phase 21 — Modern differentiators (P2)
+
+**Delivery status (2026-11-11):** all six planned user-facing
+deliverables landed on main with #107: autosave/recovery, HiDPI canvas,
+command palette v2, preferences, accessibility work, and in-app
+scripting. Decision 0067 continues to document the known screen-reader
+limitations of the web canvas; landing the desktop/accesskit work does
+not mean the web canvas has full screen-reader parity. The remaining
+effect-cache view-transform optimization noted under 21.2 is a separate
+performance follow-up, not a reason to reopen the delivered MVP features.
+
 
 - **21.1 Autosave + crash recovery** (M): periodic journal snapshot to
   a sidecar; restore prompt on open. — **LANDED 2026-11-07**, per
@@ -491,9 +516,11 @@ evidence work, tracked outside that campaign.
   drag (0.5×–3×, Reset to platform default) applies to the context
   each frame and rides `ShellLayout`, so it persists like the panel
   set. Gate: `preferences_scale_round_trips_the_layout`. The
-  Preferences menu row also left the inert census, now 2 of 294.
-- **21.5 accesskit** desktop + web re-audit (0067 records the web
-  blocker).
+  Preferences menu row also left the inert census, now 2 of 296.
+- **21.5 accesskit** desktop + web re-audit — **LANDED 2026-11-11**
+  in #107 for the supported desktop/accessibility surface. Decision
+  0067 remains the authority for the web-canvas screen-reader limitation;
+  do not describe that limitation as resolved.
 - **21.6 In-app scripting** (S): Commands menu → run `.jsf`/`.fwsteps`.
   — **LANDED 2026-11-07**: `.jsf` running through the scripting host
   had landed with the automation milestone (Commands ▸ Run Script /
@@ -686,9 +713,9 @@ scope, so no license path is attempted.
    `catalog::ids()` − UI-bound commands only shrinks (mirror of the
    call-table test). Unreachable commands with no gate means drift.
    — **DONE (2026-11-10)**, tracked as 19b.2: `cargo run -p xtask --
-   reachability`, wired into `ci`. Measures **257 registry commands,
-   172 bound by the shell = 66.93%**, 85 unreachable; the floor lives
-   in **`.reachability-floor.tsv`** (pinned at 66.93%) and is a one-way
+   reachability`, wired into `ci`. Measures **253 registry commands,
+   168 bound by the shell = 66.40%**, 85 unreachable; the floor lives
+   in **`.reachability-floor.tsv`** (pinned at 66.40%) and is a one-way
    ratchet.
 3. **Inert-drift test**: an inert menu row may not be added silently.
    — **DONE (2026-11-02)**, tracked as 19b.3: the census is derived

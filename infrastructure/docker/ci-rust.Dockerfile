@@ -31,7 +31,7 @@
 #   cp --parents fuzz/Cargo.toml fuzz/Cargo.lock "$tmp"/
 #   cp --parents -r fuzz/src fuzz/fuzz_targets "$tmp"/
 #   docker build -f infrastructure/docker/ci-rust.Dockerfile \
-#          -t firecraft-ci-rust:1 "$tmp"
+#          -t firecraft-ci-rust:2 "$tmp"
 #
 # cargo fetch needs each workspace member's manifest plus its declared
 # targets (src/ and benches/ — compose's criterion bench breaks manifest
@@ -41,7 +41,7 @@
 # the GitForge runner has a hard 60-second sandbox-acquisition cap and
 # will never pull the image itself:
 #
-#   docker save firecraft-ci-rust:1 | ssh <host> docker load
+#   docker save firecraft-ci-rust:2 | ssh <host> docker load
 #
 # Size guard: keep the image within a few GB — both known daemons run
 # overlay2, so the practical limits are LAN transfer time and fleet disk.
@@ -82,7 +82,7 @@ FROM rust:1.99-slim-bookworm
 # lockfile comes from a git source. No libssl: nothing in the graph
 # builds openssl-sys.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates \
+    && apt-get install -y --no-install-recommends ca-certificates git \
     && rm -rf /var/lib/apt/lists/* \
     && rustup component add rustfmt clippy \
     && rustup target add wasm32-unknown-unknown

@@ -1,17 +1,23 @@
 # Automation
 
-FireCraft's CLI, script host, GUI, and browser bridge share the command registry. Automation is useful for repeatable edits, batch export, document inspection, and agent-driven workflows.
+FireCraft's GUI, CLI, scripting host, journal, MCP server and browser bridge are designed to use the same engine command service. This makes repeatable edits, batch export, document inspection, replay and agent-driven workflows possible without implementing a second document mutation model.
 
-## Command line
+## Command coverage
 
-`firecraft-cli` can inspect and convert documents, apply command steps, import/export, batch-process folders, replay scripts, and serve a JSON-lines or MCP interface. See [USAGE.md](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/USAGE.md) for the complete command list and argument shapes.
+The engine currently registers **253 command IDs**. The latest shell-reachability measurement is **164/253 (64.82%)** in the CS6-visible UI. The command palette exposes the full registry; the reachability metric deliberately measures the designed shell surface, not the palette. DOM/API parity is tracked separately at 268 carried / 3 partial / 0 missing of 356 verbs.
 
-## ExtendScript and steps
+These figures must not be described as complete GUI parity. The [CS6 user-visible matrix](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/CS6-PARITY.md) records menus, tools, panels, inspector fields, workflows and evidence-gated gaps.
 
-The script host runs a supported subset of Fireworks `.jsf` automation in a sandbox. Its exact behavior and gaps are recorded in the [script report](https://github.com/aliasfoxkde/FireCraft/blob/main/corpus/scripts-report.json) and [decision records](https://github.com/aliasfoxkde/FireCraft/tree/main/docs/decisions).
+## Command line and scripts
+
+The native `firecraft-cli` supports document inspection and conversion, imports/exports, command application, batch operations, journal/step replay, and JSON-lines control. The scripting host runs a supported subset of Fireworks `.jsf` automation; the app also replays `.fwsteps` journals. See [USAGE.md](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/USAGE.md), the [script corpus report](https://github.com/aliasfoxkde/FireCraft/blob/main/corpus/scripts-report.json), and current decisions for exact limits.
 
 ## MCP and browser bridge
 
-The CLI MCP server exposes document inspection, command application, undo/redo, export, and command discovery. The browser host accepts the documented `postMessage` protocol. See [WEBOS.md](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/WEBOS.md) for message details.
+The native MCP server exposes document inspection, command application, undo/redo, export and command discovery. The browser host uses a documented `postMessage` bridge. The same command semantics should be preserved across GUI, CLI, MCP, and the future WebOS SDK adapter; browser apps use a host bridge, not an in-browser TCP listener.
 
-Automation coverage does not imply that every operation has an equivalent polished GUI control. The [Parity Roadmap](Parity-Roadmap) tracks the shell work separately.
+- [Browser/WebOS protocol](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/WEBOS.md)
+- [FireCraft platform integration and SDK direction](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/WEBOS-PLATFORM-INTEGRATION.md)
+- [Automation usage guide](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/USAGE.md)
+
+Automation coverage does not imply that every operation has an equivalent polished menu, panel or inspector workflow.
