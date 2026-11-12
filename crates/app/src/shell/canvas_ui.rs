@@ -523,7 +523,25 @@ impl Shell {
         let texture = match &self.raster {
             Some((texture, made)) if *made == stamp && !stale_scale => texture.clone(),
             _ => {
-                let result = if at_one {
+                // Onion skinning (20.3): the page's own settings decide
+                // whether the neighbouring states ghost behind the
+                // current one. The compositor reads the same counts
+                // from the page, so the canvas cannot disagree with
+                // the States panel.
+                let onionning = self
+                    .editor
+                    .document()
+                    .pages
+                    .get(self.editor.page)
+                    .is_some_and(|page| page.info.onion_before > 0 || page.info.onion_after > 0);
+                let result = if onionning {
+                    compose::render_onion(
+                        self.editor.document(),
+                        self.editor.page,
+                        self.editor.frame,
+                        if at_one { 1.0 } else { desired_scale },
+                    )
+                } else if at_one {
                     compose::render(self.editor.document(), self.editor.page, self.editor.frame)
                 } else {
                     compose::render_scaled(

@@ -381,14 +381,13 @@ evidence work, tracked outside that campaign.
   floor recorded in **`.reachability-floor.tsv`**. The floor is a
   one-way ratchet: `--bless` may raise it (reachability improved) and
   refuses to lower it (a regression is fixed, not forgiven). Measured
-  on `main` at 2026-11-10: **245 registry commands, 146 bound by the
-  shell = 59.59%**, 99 unreachable; the floor was pinned at 59.59%.
-  **Latest post-train measurement (2026-11-11): 253 registry commands,
-  164 shell-bound = 64.82%.** The floor remains 59.59%; the improvement
-  is recorded, not used to silently re-bless a higher floor. The command
-  palette reaches all registry commands, but this gate deliberately
-  measures the CS6-visible surface. Decision
-  [`0087`](decisions/0087-ui-work-gates.md).
+  on the release train at 2026-11-11: **253 registry commands, 168
+  bound by the shell = 66.40%**, 85 unreachable; the floor is pinned
+  at 66.40%.
+  (The command palette makes the *palette* reach 100% — the gate
+  deliberately measures the CS6-visible surface instead, which is the
+  surface the 19.x batches widen. Decision
+  [`0087`](decisions/0087-ui-work-gates.md).)
 - **19b.3 Inert-drift test** (S): every non-Help/Command `Action::Inert`
   item carries a tracking reference, so an inert item cannot be added
   silently. — **LANDED 2026-11-02** in the stronger form: the census
@@ -420,21 +419,41 @@ evidence work, tracked outside that campaign.
   double-click enters, Esc cancels, focus loss / tool switch commits
   ([T20](tasks/T20-text-editing.md)). Kittest focus tests deferred —
   see the ticket's residual note.
-- **20.2 Optimize panel** (M): palette/bitrate over `ExportOptions`
-  plus live preview. **Implemented in open PR #118**; do not mark
-  shipped until merge and the release/e2e evidence is attached.
-- **20.3 Animation timeline** (M): frame strip, per-frame timing,
-  onion skinning, and frame operations. **Implemented in open PR #118**;
-  the compositor-side onion-skin renderer landed earlier in #100.
-- **20.4 Mask stack UI** (M): add/remove/mode/link/move. **In open PR
-  #113**; this is a FireCraft extension, not a CS6 parity claim.
-- **20.5 Multi-document tabs** (M): **LANDED 2026-11-11** in #107 —
-  Open/New park the active document as a `DocTab`; Close promotes the
-  newest parked tab and refuses dirty documents; the tab strip switches
-  documents and marks unsaved edits.
+- **20.2 Optimize panel** (M): **LANDED 2026-11-11** — the panel's
+  controls are the fields the export honors (`FMTi`, `JPQi`/`JPPb`/
+  `FCLi`, `PLDi`/`FLPi`/`AACb`/`AADb`), the live preview encodes the
+  page through the same `io::expv` resolution the export uses, and
+  PNG's Adam7 interlace is disclosed and clearable rather than offered
+  as a knob that breaks the export ([T7](tasks/T7-optimize-panel.md),
+  decision
+  [0095](decisions/0095-optimize-panel-honors-only-what-export-honors.md)).
+  Still open: Adam7 interlacing, CS6's selective-JPEG quality table,
+  screenshot acceptance.
+- **20.3 Animation timeline** (M): **SHELL LANDED 2026-11-11** — the
+  `States` panel is the strip (the page's own `FRCi` count), the delay
+  field writes `frame.setDuration` into the record the GIF exporter
+  reads, and the onion toggle writes `page.setOnionSkinning` while the
+  canvas calls `compose::render_onion`; Add / Duplicate / Delete
+  State and Distribute to States are in the panel
+  ([T8](tasks/T8-animation-timeline.md), decision
+  [0094](decisions/0094-animation-timeline-shell.md)). Still open:
+  playback (CS6's `Play Animation`), state thumbnails, per-side onion
+  opacity, screenshot acceptance.
+- **20.4 Mask stack UI** (M): add/remove/mode/link/move. **In open
+  PR #113**; this is a FireCraft extension, not a CS6 parity claim.
+- **20.5 Multi-document tabs** (M): **LANDED 2026-11-07** — Open/New
+  park the active document as a `DocTab`; Close promotes the newest
+  parked tab (refuses dirty documents); the tab strip shows the
+  active doc plus parked tabs, click to switch, a dot marks unsaved
+  edits. Gate: `open_parks_the_previous_document`,
+  `activate_tab_swaps_state`, `close_promotes_the_last_parked_tab`,
+  `new_parks_the_current_document`,
+  `close_refuses_a_dirty_document`. (Window-menu panel toggles landed
+  in Phase 19.6 batches 3 and 10.)
 - **20.6 History panel click-to-rewind** (S): **LANDED 2026-11-11**
-  in #107; the session-scoped rewind command is also discoverable from
-  the command palette and MCP list/run surface in open PR #122.
+  in #107 — journal replay to seq N; the session-scoped rewind
+  command is also discoverable from the command palette and MCP
+  list/run surface in open PR #122.
 - **20.7 Slice/hotspot behavior editing + HTML preview** (M):
   **LANDED 2026-11-11** in #107.
 
@@ -684,9 +703,9 @@ scope, so no license path is attempted.
    `catalog::ids()` − UI-bound commands only shrinks (mirror of the
    call-table test). Unreachable commands with no gate means drift.
    — **DONE (2026-11-10)**, tracked as 19b.2: `cargo run -p xtask --
-   reachability`, wired into `ci`. Measures **245 registry commands,
-   146 bound by the shell = 59.59%**, 99 unreachable; the floor lives
-   in **`.reachability-floor.tsv`** (pinned at 59.59%) and is a one-way
+   reachability`, wired into `ci`. Measures **253 registry commands,
+   168 bound by the shell = 66.40%**, 85 unreachable; the floor lives
+   in **`.reachability-floor.tsv`** (pinned at 66.40%) and is a one-way
    ratchet.
 3. **Inert-drift test**: an inert menu row may not be added silently.
    — **DONE (2026-11-02)**, tracked as 19b.3: the census is derived
