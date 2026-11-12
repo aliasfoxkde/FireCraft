@@ -81,6 +81,16 @@ jobs:
         run: |
           python3 scripts/validate_workflow_pins.py .github/workflows
           bash scripts/validate_workflow_pins-selftest.sh
+      # The release path — the script that stages the artifacts and builds
+      # the `gh release create` call, and the rule that decides whether a
+      # tag is a production release or a rehearsal — is exercised here
+      # against a stub `gh`, because in the workflow it runs once, on a
+      # tag, with no test around it.
+      - name: The release path is exercised
+        run: |
+          bash tests/release-assets-selftest.sh
+          bash scripts/classify_release_mode-selftest.sh
+          bash scripts/validate_release_aggregate-selftest.sh
   docs:
     name: docs-only-check
     runs-on: ubuntu-latest
