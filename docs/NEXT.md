@@ -372,9 +372,9 @@ evidence work, tracked outside that campaign.
   floor recorded in **`.reachability-floor.tsv`**. The floor is a
   one-way ratchet: `--bless` may raise it (reachability improved) and
   refuses to lower it (a regression is fixed, not forgiven). Measured
-  on the mask-stack branch at 2026-11-11: **257 registry commands, 168
-  bound by the shell = 65.37%**, 89 unreachable; the floor is pinned at
-  65.37%.
+  on the merged train at 2026-11-11: **257 registry commands, 172
+  bound by the shell = 66.93%**, 85 unreachable; the floor is pinned
+  at 66.93%.
   (The command palette makes the *palette* reach 100% — the gate
   deliberately measures the CS6-visible surface instead, which is the
   surface the 19.x batches widen. Decision
@@ -408,10 +408,26 @@ evidence work, tracked outside that campaign.
   double-click enters, Esc cancels, focus loss / tool switch commits
   ([T20](tasks/T20-text-editing.md)). Kittest focus tests deferred —
   see the ticket's residual note.
-- **20.2 Optimize panel** (M): palette/bitrate over `ExportOptions` +
-  live preview (export preview exists).
-- **20.3 Animation timeline** (M): frames strip, per-frame timing,
-  onion skinning, `symbol.tween`.
+- **20.2 Optimize panel** (M): **LANDED 2026-11-11** — the panel's
+  controls are the fields the export honors (`FMTi`, `JPQi`/`JPPb`/
+  `FCLi`, `PLDi`/`FLPi`/`AACb`/`AADb`), the live preview encodes the
+  page through the same `io::expv` resolution the export uses, and
+  PNG's Adam7 interlace is disclosed and clearable rather than offered
+  as a knob that breaks the export ([T7](tasks/T7-optimize-panel.md),
+  decision
+  [0095](decisions/0095-optimize-panel-honors-only-what-export-honors.md)).
+  Still open: Adam7 interlacing, CS6's selective-JPEG quality table,
+  screenshot acceptance.
+- **20.3 Animation timeline** (M): **SHELL LANDED 2026-11-11** — the
+  `States` panel is the strip (the page's own `FRCi` count), the delay
+  field writes `frame.setDuration` into the record the GIF exporter
+  reads, and the onion toggle writes `page.setOnionSkinning` while the
+  canvas calls `compose::render_onion`; Add / Duplicate / Delete
+  State and Distribute to States are in the panel
+  ([T8](tasks/T8-animation-timeline.md), decision
+  [0094](decisions/0094-animation-timeline-shell.md)). Still open:
+  playback (CS6's `Play Animation`), state thumbnails, per-side onion
+  opacity, screenshot acceptance.
 - **20.4 Mask stack UI** (M): add/remove/mode/link/move.
 - **20.4 Mask stack UI** (M): add/remove/mode/link/move. — **PARTIAL
   2026-11-11**: the stack, its operators, and its fold landed. The
@@ -671,8 +687,8 @@ scope, so no license path is attempted.
    call-table test). Unreachable commands with no gate means drift.
    — **DONE (2026-11-10)**, tracked as 19b.2: `cargo run -p xtask --
    reachability`, wired into `ci`. Measures **257 registry commands,
-   168 bound by the shell = 65.37%**, 89 unreachable; the floor lives
-   in **`.reachability-floor.tsv`** (pinned at 65.37%) and is a one-way
+   172 bound by the shell = 66.93%**, 85 unreachable; the floor lives
+   in **`.reachability-floor.tsv`** (pinned at 66.93%) and is a one-way
    ratchet.
 3. **Inert-drift test**: an inert menu row may not be added silently.
    — **DONE (2026-11-02)**, tracked as 19b.3: the census is derived

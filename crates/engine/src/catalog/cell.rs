@@ -2,7 +2,7 @@
 //! (state) management family — add, delete, duplicate, reorder,
 //! distribute.
 
-use doc::{Cell, Document, ObjectData, ObjectId};
+use doc::{Cell, DEFAULT_FRAME_DURATION, Document, ObjectData, ObjectId};
 
 use crate::access;
 use crate::command::TypedCommand;
@@ -82,9 +82,6 @@ fn how_many(command: &'static str, how_many: i64) -> Result<usize, EngineError> 
 fn frame_count(document: &Document, page: usize) -> usize {
     document.pages[page].info.frame_count.max(0) as usize
 }
-
-/// The `FNDi` Frame Duration default the GIF exporter documents.
-pub(crate) const DEFAULT_FRAME_DURATION: i64 = 10;
 
 /// Map key for the duplicate-frame remap table — `ObjectId` is `Hash`
 /// but not `Ord` (see `doc::library` for the same idiom).

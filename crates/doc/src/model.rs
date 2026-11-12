@@ -410,6 +410,14 @@ pub struct PageInfo {
     pub frame_durations: Vec<i64>,
 }
 
+/// The delay a state carries when the page records none — hundredths
+/// of a second, the GIF delay field's own default.
+///
+/// One constant for the three consumers that must agree: the engine's
+/// `frame.setDuration` mints it for a state the page does not time, the
+/// GIF exporter writes it, and the States panel shows it.
+pub const DEFAULT_FRAME_DURATION: i64 = 10;
+
 /// An ordered layer list (`LYLv`).
 #[derive(Clone, Debug, Default, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]

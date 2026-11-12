@@ -7,14 +7,11 @@
 
 mod support;
 
+use doc::DEFAULT_FRAME_DURATION;
 use engine::Session;
 use serde_json::json;
 
 use support::sample_document;
-
-/// The `FNDi` default the GIF exporter documents: ten hundredths of a
-/// second.
-const DEFAULT_FRAME_DURATION: i64 = 10;
 
 fn session() -> Session {
     let (document, _) = sample_document();

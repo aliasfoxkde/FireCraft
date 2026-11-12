@@ -51,9 +51,9 @@ shell reaches 72; after Phase 11's paint family it reaches 77;
 > not just audited. The xtask step `cargo run -p xtask --
 > reachability` derives the bound set from `crates/app/src` and holds
 > it to a floor in `.reachability-floor.tsv` (one-way ratchet). The
-> measurement it took on the mask-stack branch: **257 registry
-> commands, 168 bound = 65.37%**, 89 unreachable — the floor is pinned
-> at 65.37%. The
+> measurement it took on the merged train at 2026-11-11: **257
+> registry commands, 172 bound = 66.93%**, 85 unreachable — the floor is
+> pinned at 66.93%. The
 > `comm` line above counts *any* occurrence of a command name in the
 > shell crate; the gate counts the same bindings outside `#[cfg(test)]`
 > code and reports them as a share, so the two numbers are close but
@@ -368,6 +368,15 @@ export preview. FireCraft has the format writers
 surface. Build the panel over the existing `ExportOptions` / `EXPv`
 model.
 
+**Landed 2026-11-11** as Phase 20.2 (ticket
+[T7](tasks/T7-optimize-panel.md), decision
+[0095](decisions/0095-optimize-panel-honors-only-what-export-honors.md)):
+the panel edits the `EXPv` fields the export honors (`FMTi`, `JPQi`,
+`JPPb`, `FCLi`, `PLDi`, `FLPi`, `AACb`, `AADb`) and previews the page
+through the export's own resolution. Still open: Adam7 interlacing
+(`GFIb` is disclosed and clearable, not writable) and CS6's
+selective-JPEG quality table.
+
 ---
 
 ## 13. Phase 18 — Deployment and verification hardening · M
@@ -403,7 +412,7 @@ model.
 | 14 Symbol depth | 14 | M | — |
 | 15 Page/frame/document/cell | 15 | M | — |
 | 16 Remaining families | 16 | M | Tier-1 slice **done** |
-| 17 Optimize panel | 17 | M | — |
+| 17 Optimize panel | 17 | M | **done** (Phase 20.2, 2026-11-11) |
 | 18.1 Desktop release + e2e test | 18 | M | — |
 | 18.2 Browser smoke depth | 18 | M | — |
 | 18.3/18.4 Off-fleet artifacts | 18 | — | Hardware |
