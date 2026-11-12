@@ -801,7 +801,9 @@ impl Shell {
 
     /// Takes a panel out of its tab group. A group that drops below
     /// two members is no longer a group, and dissolves — the members
-    /// it leaves behind keep the dock the group was in.
+    /// it leaves behind keep the dock the group was in, and so does
+    /// the panel that left: it was drawn in that dock a moment ago,
+    /// so it must not jump to the other one.
     pub(crate) fn leave_group(&mut self, name: &'static str) {
         let Some(index) = self.group_index(name) else {
             return;
@@ -826,6 +828,7 @@ impl Shell {
                 for member in &members {
                     self.panel_homes.push((*member, home));
                 }
+                self.panel_homes.push((name, home));
             }
             return;
         }
@@ -1089,11 +1092,15 @@ mod tests {
     /// target has to be there before a drag reaches it.
     fn draw_one_frame(shell: &mut Shell) {
         let ctx = egui::Context::default();
-        let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+        let output = ctx.run_ui(egui::RawInput::default(), |ui| {
             let _ = shell.dock(ui);
             let _ = shell.left_dock(ui);
             shell.finish_panel_drag(ui, None, None);
         });
+        // The frame's font textures are never applied — there is no
+        // window to paint them into — and dropping them unapplied is
+        // a panic in epaint.
+        output.drop_without_applying_deltas();
         cancel_panel_drag(&ctx);
     }
 
