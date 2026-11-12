@@ -44,6 +44,11 @@ New-Item -ItemType Directory -Force -Path $Bin, $Lic | Out-Null
 Copy-Item "target\$Target\release\firecraft.exe" $Bin
 Copy-Item "target\$Target\release\firecraft-cli.exe" $Bin
 Copy-Item LICENSE "$Lic\LICENSE"
+# NOTICE travels with the binaries. Apache-2.0 4(d) requires a
+# distribution to carry the attribution notices when the work has a
+# NOTICE file, and this one carries the Adobe trademark disclaimer —
+# a Windows install that omits it ships a legally incomplete bundle.
+Copy-Item NOTICE "$Lic\NOTICE"
 
 Write-Host "==> portable zip $Portable"
 Compress-Archive -Path "$Stage\firecraft-$Version" -DestinationPath $Portable -Force
@@ -52,11 +57,27 @@ Compress-Archive -Path "$Stage\firecraft-$Version" -DestinationPath $Portable -F
 $Isscc = Get-Command ISCC.exe -ErrorAction SilentlyContinue
 if ($Isscc) {
     Write-Host "==> Inno Setup installer $Installer"
-    # The checked-in .iss carries a __APPVERSION__ stand-in; the
-    # substituted copy is staged so the tree never carries generated
-    # files.
-    $Iss = (Get-Content packaging\windows\firecraft.iss -Raw) `
-        -replace '__APPVERSION__', $Version
+    # The checked-in .iss carries two stand-ins: __APPVERSION__ and
+    # __LICENSEFILE__. The substituted copy is staged so the tree never
+    # carries generated files.
+    #
+    # The license path is substituted as an ABSOLUTE path. The staged
+    # .iss lives in the stage directory, so a relative path would be
+    # resolved against the stage, not against the repository root —
+    # the committed `..\..\LICENSE` pointed at a file that exists in
+    # the repository but not next to the staged script, and the
+    # compiler would have failed on a license it could not find.
+    #
+    # The substitution goes through a MatchEvaluator rather than
+    # -replace: a Windows path may contain `$`, which the replacement
+    # syntax would read as a capture-group reference.
+    Copy-Item LICENSE "$Stage\LICENSE"
+    $LicenseFile = (Resolve-Path "$Stage\LICENSE").Path
+    $IssText = Get-Content packaging\windows\firecraft.iss -Raw
+    $Iss = [regex]::Replace($IssText, '__APPVERSION__|__LICENSEFILE__', {
+        param($match)
+        if ($match.Value -eq '__APPVERSION__') { $Version } else { '"' + $LicenseFile + '"' }
+    })
     $StagedIss = "$Stage\firecraft.iss"
     $Iss | Set-Content -Encoding UTF8 $StagedIss
     & ISCC "/O$Stage" $StagedIss
