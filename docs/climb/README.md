@@ -122,7 +122,7 @@ Baseline measured **2026-11-13 on `main` @ `1ac3dbc`**. History lives in
 | # | Metric | Dir | Baseline | Summit target | How to measure (until `xtask climb` exists) |
 |---|---|---|---|---|---|
 | S1 | Gate green on `main` | = | green (GitHub backup CI, last 15 runs) | green | `cargo run -p xtask -- ci` |
-| S2 | Shell-bound registry commands | ↑ | 168 / 253 (66.40 %) | 253 minus script-only-by-decision = 100 % | `cargo run -p xtask -- reachability` (stderr line) |
+| S2 | Shell-bound registry commands | ↑ | 164 / 253 (64.82 %) | 253 minus script-only-by-decision = 100 % | `cargo run -p xtask -- reachability` (stderr line) |
 | S3 | `ReportGap(` sites in menus | ↓ | 52 | each remaining one has a decision row | `grep -c 'ReportGap(' crates/app/src/menus.rs` |
 | S4 | Inert menu rows | ↓ | 2 of 296 | 0 | `cargo test -p app menus::tests::inert_count_never_rises` (pinned value in test) |
 | S5a | CS6-PARITY rows **implemented** | ↑ | 82 | ≥ 115 | `grep -oE '\| \*\*implemented\*\*' docs/CS6-PARITY.md \| wc -l` |
