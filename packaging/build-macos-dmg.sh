@@ -6,6 +6,13 @@
 # runs this on macOS (Xcode command-line tools required) and owns the
 # artifact. See docs/TOOLCHAINS.md for the no-untested-claims
 # rule. Run from the repository root.
+#
+# Known gaps this recipe does not close (audited 2026-11-12, ticket
+# T27-42): the bundle carries no icon — CFBundleIconFile is unset
+# because the repository has no .icns, and the brand refresh
+# (issue #131) owns the artwork — and the bundle is signed ad-hoc, so
+# Gatekeeper refuses a quarantined download until it is signed and
+# notarized (ticket T27-45).
 set -euo pipefail
 
 readonly TARGETS="aarch64-apple-darwin x86_64-apple-darwin"
@@ -29,6 +36,14 @@ version() {
 }
 
 readonly VERSION="$(version)"
+# `readonly` returns success whatever the substitution did, so an
+# unreadable version would otherwise produce a file named
+# `firecraft--macos-universal.dmg` and a bundle whose Info.plist
+# carries an empty version. Fail closed instead.
+if [ -z "${VERSION}" ]; then
+    echo "==> no version under [workspace.package] in Cargo.toml" >&2
+    exit 1
+fi
 readonly OUT="firecraft-${VERSION}-macos-universal.dmg"
 
 echo "==> rustup targets"
@@ -71,6 +86,16 @@ PLIST
 
 install -m 644 LICENSE \
     "${STAGE}/${APP}/Contents/Resources/licenses/LICENSE"
+# NOTICE travels with the bundle: Apache-2.0 4(d) requires the
+# attribution notices to travel with the distribution, and this one
+# carries the Adobe trademark disclaimer.
+install -m 644 NOTICE \
+    "${STAGE}/${APP}/Contents/Resources/licenses/NOTICE"
+
+# The drag-to-install layout: the volume carries the bundle and a
+# symlink to /Applications, so the user drops the app on the folder
+# instead of the command line.
+ln -s /Applications "${STAGE}/Applications"
 
 echo "==> codesign (ad-hoc; swap -s - for your identity to distribute)"
 codesign --force --deep -s - "${STAGE}/${APP}"

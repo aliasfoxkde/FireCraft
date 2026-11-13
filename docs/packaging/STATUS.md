@@ -38,6 +38,14 @@ Recipe: `packaging/build-macos-dmg.sh`. **Off-fleet.** Requires:
 The repo carries the recipe; no CI runner has a macOS toolchain. The
 operator who has a Mac owns the artifact and is responsible for verifying it.
 
+Audited 2026-11-12 (ticket [T27-42](../tasks/T27-42-macos-architectures.md),
+decision [0101](../decisions/0101-off-fleet-packaging-recipe-audit.md)): the
+recipe builds both slices and combines them into one universal2 bundle, and it
+now fails closed on an unreadable version and ships `NOTICE` beside `LICENSE`.
+Two gaps stay open and are recorded, not faked: the bundle has no icon (the
+brand work owns the artwork) and it is signed ad-hoc, which Gatekeeper refuses
+until the bundle is signed and notarized.
+
 ## Windows
 
 Recipe: `packaging/build-windows.ps1`. **Off-fleet.** Requires:
@@ -49,6 +57,18 @@ Recipe: `packaging/build-windows.ps1`. **Off-fleet.** Requires:
 The repo carries the recipe; no CI runner has a Windows toolchain. The
 operator who has a Windows machine owns the artifact and is responsible
 for verifying it.
+
+Audited 2026-11-12 (ticket [T27-35](../tasks/T27-35-windows-build-script-audit.md),
+decision [0101](../decisions/0101-off-fleet-packaging-recipe-audit.md)): the
+installer recipe could not have compiled as written — the staged script
+resolved its license path against the stage instead of the repository — and
+the distribution omitted `NOTICE`. Both are fixed, the installer now names a
+publisher, and the `.iss` compiles only through the recipe, which substitutes
+the version and the license path. A third defect — the recipe moved an
+installer name the compiler never produces, so a successful compile was
+reported as a failure — is fixed too. One assumption stays open for the
+operator: an MSVC build needs the Microsoft C runtime on the machine that runs
+it.
 
 ## Adding a new platform
 

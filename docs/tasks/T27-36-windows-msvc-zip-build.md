@@ -25,6 +25,14 @@ recorded.
 the artifact matrix itself names the MSVC operator build as the release-path
 authority.
 
+**Open decision for the operator (2026-11-12, from the T27-35 audit).** An MSVC build
+links the Microsoft C runtime dynamically, so the binaries need `vcruntime140.dll` (and
+friends) on the machine that runs them. Two honest options, both recorded rather than
+chosen silently: install the VC++ 2015-2022 redistributable on the smoke VM (T27-38),
+or build with `-C target-feature=+crt-static` so the binaries carry the runtime
+themselves. Whichever is taken, the receipt names it — the clean-VM smoke is the row
+that proves it.
+
 **Blockers:** a Windows runner with the MSVC toolchain.
 
 **Stopping condition:** an MSVC-built ZIP exists with a recorded digest, and the
