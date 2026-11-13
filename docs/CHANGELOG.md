@@ -12,6 +12,7 @@ Current version: **0.2.5**.
 
 ### Features
 
+- **app**: the animation timeline and the Optimize panel (#118) (99abfb6)
 - **site**: launch FireCraft marketing website (#11) (0ca5e3d)
 - **app**: in-canvas text editing and menu burn-down to 2 inert (ed82eae)
 - **app**: CS6 screen modes, Alt retouch swap, aegis gate (49a4e61)
@@ -185,6 +186,10 @@ Current version: **0.2.5**.
 
 ### Fixes
 
+- **ci**: pin the measuring toolchain to 1.99.1 (#135) (55a0e54)
+- **xtask**: keep the changelog's squashed entries on regeneration (#125) (bc8abfb)
+- **app**: a group's bounds must not swallow the canvas origin (#124) (d882d9b)
+- **xtask**: swap serde_yaml for saphyr in the Flatpak manifest parse (#120) (1bd32d9)
 - **aegis**: adjudicate the self-test's reserved-domain Git identity (cd6184b)
 - **aegis**: adjudicate the wiki's GraphQL-batch prose finding (a3fe33b)
 - **xtask**: keep the changelog's squashed entries on regeneration (47f7b32)
@@ -238,6 +243,9 @@ Current version: **0.2.5**.
 
 ### Documentation
 
+- the coverage measurement is toolchain-bound, and 85 carried commands are unbound (6b78d68)
+- **release**: the live web deployment's digest receipt — it is not the v0.2.5 release bytes (#127) (8d5c442)
+- reconcile FireCraft status, execution docs, and wiki sources (#123) (e39705e)
 - drop trailing whitespace from the project status header (c49b208)
 - **wiki**: clarify open Optimize panel work (4d98aaa)
 - **ledger**: qualify mask-stack PR mergeability status (dbdd34f)
@@ -408,6 +416,7 @@ Current version: **0.2.5**.
 
 ### Chores
 
+- **ci**: pin every workflow action to a commit SHA (#130) (6f106af)
 - **release**: name releases by version alone (#22) (625eb80)
 - **release**: v0.2.5 stamps, notes, operator checklist, aegis hygiene (3a4832b)
 - **release**: v0.2.4 version stamps + changelog + notes (291d658)
@@ -433,6 +442,7 @@ Current version: **0.2.5**.
 
 ### Other
 
+- brand: refresh FireCraft flame identity and editor artwork (#119) (75efbed)
 - merge: the shell-lineage train into main (#107) (658f015)
 - Brand refresh and README overhaul (#10) (1c7d840)
 - wip(app,web): localStorage session persistence (21.1 partial) (7014638)
