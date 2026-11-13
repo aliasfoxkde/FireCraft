@@ -332,7 +332,7 @@ acceptance hook. Ordered by how much of the product it unlocks.
 | 4 | ~~In-canvas text editing~~ **CLOSED 2026-11-06** — double-click edits in place: `TextEdit` overlay on the text frame, commit/cancel/focus routing (§G) | E, H, I | 20.1 | — |
 | 5 | The CS6 tool strip's remaining items: the 3D tool (the screen-mode cycle and the Alt-hold variants **landed 2026-11-06**) | B | 22.5 | P2 |
 | 6 | ~~Multi-document tabs~~ **CLOSED — landed on main 2026-11-11 in #107** — park on Open/New, Close promotes the last tab, dirty dots, the strip folds in Full Screen (§E) | E | 20.5 | — |
-| 7 | The animation timeline (States panel) — **open PR #118; not yet on main** | C | 20.3 | P1 |
+| 7 | The animation timeline (States panel) — **landed on main 2026-11-11 in #118**: the strip is the page's own state count, the delay field writes `frame.setDuration`, the onion toggle writes `page.setOnionSkinning`; **playback landed 2026-11-12** (CS6's `Play Animation`, decision [0096](decisions/0096-animation-playback-clock.md)) — the state thumbnails and a document-level loop count remain | C | 20.3 | P1 |
 | 8 | ~~History click-to-rewind~~ **CLOSED — landed on main 2026-11-11 in #107**; command-palette/MCP discoverability refinement remains in PR #122 | C, E | 20.6 | — |
 | 9 | ~~Slice/hotspot behaviour editing and HTML preview~~ **CLOSED — landed on main 2026-11-11 in #107** | C, F, I | 20.7 | — |
 | 10 | Autosave and crash recovery — **LANDED 2026-11-07** — web: whole-document localStorage persistence with boot restore; desktop: journal sidecar snapshot with Recover/Discard prompt, undo intact across the crash boundary | E | 21.1 | P1 |

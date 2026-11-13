@@ -137,6 +137,11 @@ pub struct Shell {
     /// saved through `App::save` and restored at startup. The window
     /// *geometry* itself persists through egui's own area memory.
     layout: ShellLayout,
+    /// The animation clock (issue #116): whether the page's states
+    /// are advancing on their own delays, and where the clock is.
+    /// Session state — the animation itself lives in the document's
+    /// per-state delays.
+    playback: timeline::Playback,
     /// The Help ▸ About `FireCraft` window is open.
     pub(crate) about_open: bool,
     /// The keyboard-shortcuts help panel is open (F1 / Help menu).
@@ -498,6 +503,7 @@ impl Shell {
             options_bar_hidden: false,
             screen_mode: ScreenMode::Standard,
             layout: ShellLayout::default(),
+            playback: timeline::Playback::default(),
             ctx: None,
             tabs: Vec::new(),
         }
@@ -3034,6 +3040,16 @@ impl eframe::App for Shell {
         // visible the same frame.
         self.shortcuts(ui.ctx());
         self.dropped_files(ui.ctx());
+        // The animation clock (issue #116): the frame's elapsed time
+        // is the clock's only environmental input — the decision
+        // itself reads the elapsed time and the delays as data.
+        let elapsed_cs = (ui.input(|input| input.stable_dt) * 100.0) as i64;
+        self.playback_tick(elapsed_cs);
+        if self.playback.playing() {
+            // Playback needs frame after frame: egui paints on
+            // demand, so an idle window would freeze the animation.
+            ui.ctx().request_repaint();
+        }
         #[cfg(target_arch = "wasm32")]
         self.persist_tick();
         #[cfg(not(target_arch = "wasm32"))]
