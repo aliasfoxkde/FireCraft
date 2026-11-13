@@ -52,10 +52,16 @@
 # wasm-bindgen-cli pin MUST equal the wasm-bindgen version in
 # Cargo.lock — a mismatched smoke runner rejects the generated bindings.
 #
+# The Rust image is pinned to the patch, not to the minor: the coverage
+# floor is a number about this compiler's instrumentation, and the
+# GitHub workflows pin rustc 1.99.1 to match. `rust:1.99` and
+# `rust:1.99.1-slim-bookworm` are the same image today; the explicit
+# patch keeps a future `rust:1.99` from moving under the floor.
+#
 # Do NOT rebuild merely because a lockfile moved. The baked registry is a
 # fast floor, not a wall — see the CARGO_NET_OFFLINE note at the bottom
 # for why, and for the failure it replaces.
-FROM rust:1.99-slim-bookworm AS fetch
+FROM rust:1.99.1-slim-bookworm AS fetch
 # WORKDIR must precede the COPYs: with the default cwd of /, "./" lands
 # the manifests at / and cargo fetch resolves the workspace from
 # /Cargo.toml, where no crates/ tree exists.
@@ -71,7 +77,7 @@ COPY fuzz/ ./fuzz/
 RUN cargo fetch --locked \
     && cargo fetch --locked --manifest-path fuzz/Cargo.toml
 
-FROM rust:1.99-slim-bookworm
+FROM rust:1.99.1-slim-bookworm
 
 # No nodejs here: bookworm's nodejs is 18, and the wasm-bindgen 0.2.129
 # test runtime traps in its V8 before running a single smoke test
