@@ -117,6 +117,13 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
+          # The toolchain is pinned, not floating.  The coverage floor is a
+          # number about this compiler's instrumentation: rustc 1.100.0
+          # measures the same source 4.9 points lower than 1.99.1 does
+          # (decision 0102).  A floating `stable` moved that floor
+          # silently, and the GitForge image (rust:1.99) kept the old
+          # number, so the two pipelines disagreed.
+          toolchain: 1.99.1
           components: rustfmt
       - name: Check formatting
         run: cargo fmt --all -- --check
@@ -133,6 +140,11 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
+          # Pinned to the compiler the coverage floor was measured with
+          # (decision 0102).  `stable` is not a measurement basis: 1.100.0
+          # reads the same source 4.9 points lower than 1.99.1 does, and
+          # the GitForge image stays on 1.99.
+          toolchain: 1.99.1
           components: clippy, rustfmt
       - name: Install Aegis
         run: |

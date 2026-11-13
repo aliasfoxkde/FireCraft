@@ -17,7 +17,8 @@ that all artifacts bind to one tag SHA and that the gate fails closed.
 permissions are least-privilege; build, sign and publish are separate jobs; all
 artifacts bind to one tag SHA; the gate fails on missing outputs, a version mismatch,
 a checksum mismatch, unexpected extra artifacts and a skipped required platform; a
-safe test-release mode exists.
+safe test-release mode exists; the toolchain is pinned to the compiler the gate's
+floors were measured with, and the gate names the compiler that measured it.
 
 **Verification:**
 
@@ -77,6 +78,21 @@ self-test that runs in the same CI step:
   the notes), and refusing a checksum dump as a production description, a missing
   notes file, an empty asset list, an unknown mode, an empty source tree, a
   stale destination and a duplicate basename.
+
+**Evidence (2026-11-12, second half of the day):** decision
+[0102](../decisions/0102-coverage-floor-is-measured-with-a-pinned-toolchain.md) —
+the toolchain is pinned:
+
+* *The toolchain is pinned, not floating.* `ci.yml` (`fmt` and `gate`) and
+  `release.yml` install `toolchain: 1.99.1`; `infrastructure/docker/ci-rust.Dockerfile`
+  builds `rust:1.99.1-slim-bookworm`. The unpinned `stable` moved the coverage
+  floor silently: rustc 1.100.0 measures a byte-identical Rust tree at
+  77.0 % lines / 76.1 % functions where 1.99.1 measures 81.9 / 78.9 — the same
+  commit, and the same tree, on either side of the floor. The GitForge image
+  stayed on 1.99, so the two pipelines disagreed about the same commit.
+* *The gate names the compiler that measured it.* `xtask/src/coverage.rs`
+  prints `measured with rustc <version>` and warns when that is not the
+  version the floors were measured with. Unit tests cover the version parser.
 
 **Already satisfied before this change:** least-privilege permissions (`contents: read`
 at workflow level, `contents: write` only for the draft-release job); build and
