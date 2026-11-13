@@ -441,8 +441,12 @@ evidence work, tracked outside that campaign.
   canvas calls `compose::render_onion`; Add / Duplicate / Delete
   State and Distribute to States are in the panel
   ([T8](tasks/T8-animation-timeline.md), decision
-  [0094](decisions/0094-animation-timeline-shell.md)). Still open:
-  playback (CS6's `Play Animation`), state thumbnails, per-side onion
+  [0094](decisions/0094-animation-timeline-shell.md)). **PLAYBACK
+  LANDED 2026-11-12** — the panel has CS6's `Play Animation` as a
+  clock over elapsed-time data, with a `Loop` checkbox, and the view
+  follows the playhead (decision
+  [0096](decisions/0096-animation-playback-clock.md)). Still open:
+  state thumbnails, a document-level loop count, per-side onion
   opacity, screenshot acceptance.
 - **20.4 Mask stack UI** (M): add/remove/mode/link/move. **PARTIAL
   2026-11-11**: the stack, its operators, and its fold landed. The
@@ -465,10 +469,15 @@ evidence work, tracked outside that campaign.
   `new_parks_the_current_document`,
   `close_refuses_a_dirty_document`. (Window-menu panel toggles landed
   in Phase 19.6 batches 3 and 10.)
-- **20.6 History panel click-to-rewind** (S): **LANDED 2026-11-11**
-  in #107 — journal replay to seq N; the session-scoped rewind
-  command is also discoverable from the command palette and MCP
-  list/run surface in open PR #122.
+- **20.6 History panel click-to-rewind** (S): **LANDED 2026-11-11** — the
+  clickable History rows (the engine half, decision 0082) and the
+  command surface: `history.rewind` is a session-scoped id, so every
+  surface that enumerates commands enumerates
+  `catalog::all_ids()` — the command palette offers it (with its
+  payload grounded one step below the document's live depth) and
+  `firecraft.listCommands` advertises it
+  ([T10](tasks/T10-history-rewind-command.md), decision
+  [0096](decisions/0096-the-rewind-is-a-command-every-surface-can-name.md)).
 - **20.7 Slice/hotspot behavior editing + HTML preview** (M):
   **LANDED 2026-11-11** in #107.
 

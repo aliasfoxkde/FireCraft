@@ -129,6 +129,20 @@ jobs:
         run: cargo fmt --all -- --check
       - name: Check web formatting
         run: cargo fmt --manifest-path web/Cargo.toml -- --check
+
+      # The GitForge pipeline definition is parsed server-side by
+      # `PipelineDefinition::parse`, which has no dry-run endpoint: a
+      # malformed `.gitforge.yml` fails every run at parse time, after
+      # the commit has already landed. This is the offline check of the
+      # same contract, and it also enforces the per-job Cargo cache
+      # directories that keep the runner's exclusive mount lock from
+      # serializing the whole fleet.
+      - name: Validate the GitForge pipeline definition
+        run: |
+          set -euo pipefail
+          python3 -m venv /tmp/pipeline-venv
+          /tmp/pipeline-venv/bin/pip install --quiet pyyaml
+          /tmp/pipeline-venv/bin/python scripts/validate_gitforge_pipeline.py .gitforge.yml
   gate:
     name: gate
     runs-on: ubuntu-latest

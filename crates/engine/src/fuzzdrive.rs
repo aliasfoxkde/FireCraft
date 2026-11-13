@@ -3078,6 +3078,13 @@ pub fn payload_template(name: &str, rng: &mut FuzzRng, document: &Document) -> s
             "contiguous": rng.chance(3),
             "mode": rng.pick(&["replace", "add", "subtract", "intersect"]).copied(),
         }),
+        // The session-scoped rewind names a depth in the undo
+        // history. The depth is a *count*, not an index, so the
+        // template aims one past the top of a fresh session: a
+        // refused call, exactly like the other out-of-range arms.
+        crate::session::REWIND_ID => serde_json::json!({
+            "depth": rng.below(4),
+        }),
         other => {
             let _ = other;
             // A catalog command without a builder: an empty payload is
