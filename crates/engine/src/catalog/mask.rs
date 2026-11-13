@@ -308,7 +308,12 @@ fn mask_gray_plane(
             Ok(SelectionMask {
                 width: dims.0,
                 height: dims.1,
-                alpha: flat.chunks_exact(4).map(|pixel| pixel[0]).collect(),
+                alpha: flat
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
+                    .map(|pixel| pixel[0])
+                    .collect(),
             })
         }
         ObjectData::Path(path) => {
@@ -1289,7 +1294,7 @@ impl TypedCommand for SetMaskMode {
                     u32::try_from(width).unwrap_or(0),
                     u32::try_from(height).unwrap_or(0),
                 );
-                for (slot, pixel) in plane.alpha.iter_mut().zip(flat.chunks_exact(4)) {
+                for (slot, pixel) in plane.alpha.iter_mut().zip(flat.as_chunks::<4>().0) {
                     *slot = pixel[0];
                 }
                 let contours = plane_to_path(&plane, image.location);

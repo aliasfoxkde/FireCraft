@@ -12,6 +12,20 @@ Current version: **0.2.5**.
 
 ### Features
 
+- **shapes**: the rounded and chamfered rectangles (15db5ef5)
+- **panels**: the slices, styles, and channel verbs (98e6cacc)
+- **panels**: the rectangle, mask, and pattern (cead811e)
+- **panels**: the master page and the shared layers (cd39489d)
+- **panels**: the properties panel carries the element mask (599bbab2)
+- **panels**: the filters panel bakes and renames (42bc4661)
+- **panels**: the markup verbs and the button text (765989ba)
+- **panels**: the symbol family reaches the engine (6862d8a4)
+- **panels**: the text dials, guides, layer move (48062e2a)
+- **panels**: the Properties panel writes the text object's layout (7b8ded50)
+- **panels**: the States panel reorders the states and fans the selection (d3e94f82)
+- **panels**: the Styles panel redefines and scales styles (3c08b67d)
+- **panels**: the Pages panel renames and deletes pages (a2e23cc8)
+- **shell**: route the selection verbs through the engine (c2d89476)
 - **app,cli**: the history rewind is a command every surface can name (#122) (1ac3dbcd)
 - **app**: the panels dock left or right, and remember where (#128) (54b9f10f)
 - **animation**: play the states on their own delays (#133) (f364900d)
@@ -349,6 +363,9 @@ Current version: **0.2.5**.
 
 ### Fixes
 
+- **app**: preserve filter edits across frames and restore page scale after master rendering (47886aa8)
+- **shell**: the panels compile again, and the queue is measured (6d9bda24)
+- **engine**: read a uniform mask's coverage through the renderer's view (a904fbf0)
 - **release**: audit the off-fleet packaging recipes and fix their defects (#134) (7c711be5)
 - **aegis**: adjudicate decision 0103's coverage counters as zip-code FPs (3b1f7b11)
 - **ci**: pin the measuring toolchain to 1.99.1 (#135) (55a0e541)
@@ -446,6 +463,13 @@ Current version: **0.2.5**.
 
 ### Documentation
 
+- the coverage measurement is toolchain-bound, and 85 carried commands are unbound (#142) (ddf19fb4)
+- **tasks**: record the mask bindings (471ca153)
+- **tasks**: record the filter bake and rename bindings (7a787ec5)
+- **tasks**: record the markup and button-text bindings (2542ba1a)
+- **tasks**: record the symbol family bindings (c8dbb2ce)
+- **tasks**: record the batch F bindings (a935042a)
+- **tasks**: record the reachability campaign on the live board (22e28227)
 - **changelog**: restore the nine squash rows the pre-merge regeneration never saw (#145) (98053cef)
 - the coverage measurement is toolchain-bound, and 85 carried commands are unbound (6b78d68f)
 - **release**: the live web deployment's digest receipt — it is not the v0.2.5 release bytes (#127) (8d5c4429)
@@ -623,6 +647,7 @@ Current version: **0.2.5**.
 
 ### Tests
 
+- **shell**: fwplain restates nothing the base style already says (4a0c3fcf)
 - **app**: editor gesture-surface battery — 30 tests (cbfe7eba)
 - **io**: webp dimension-mismatch + corrected format gates (cb432c43)
 - **io**: gif still-frame + gate battery (1a1b9a4e)
