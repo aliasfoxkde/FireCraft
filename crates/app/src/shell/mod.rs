@@ -6932,7 +6932,11 @@ mod tests {
         shell.remove_character_markup(id, "b");
         assert_eq!(run_changes(&shell, id).bold, Some(false));
         shell.apply_character_markup(id, "fwplain");
-        assert_eq!(run_changes(&shell, id).bold, Some(false));
+        // The base now says plain, so the run group re-diffs and the
+        // redundant override is stripped: `None` restates nothing the
+        // base does not already say (the engine pins the same shape
+        // in catalog/text.rs's fwplain test).
+        assert_eq!(run_changes(&shell, id).bold, None);
         shell.apply_font_markup(id, "size", "24pt");
         assert_eq!(run_changes(&shell, id).size, Some(24.0));
         shell.remove_font_markup(id, "size");
