@@ -36,3 +36,6 @@ lcov.info
 
 # Session scratch: throwaway helper scripts and probe artifacts
 /.claude/scratch/
+
+# Python bytecode from the offline pipeline validator
+__pycache__/

@@ -64,7 +64,7 @@ Some of these items are partially implemented or still planned. The authoritativ
 
 ## Screenshots
 
-The images below are repository screenshots of the application. They are point-in-time views; consult the roadmap for current implementation status.
+The images below are views of the application: the first is a repository screenshot, the second a vector mock-up of the dark theme. They are point-in-time views; consult the roadmap for current implementation status.
 
 <p align="center">
   <img src="docs/img/app-main.png" alt="FireCraft application workspace" width="960" />
@@ -72,11 +72,13 @@ The images below are repository screenshots of the application. They are point-i
 
 The first capture is a 1280×800 frame of the current shell with a vector object selected, taken from the optimized web bundle built on 2026-11-04. It is evidence for that build and state, not a general parity claim — see the [screenshot audit](docs/tasks/T22-screenshot-ui.md) for the captures, measurements, and their limits.
 
-The same workspace in the dark theme — Tools panel down the left edge, a vector object selected on a transparent canvas, and the Optimize panel previewing a PNG-24 export:
+The dark theme, with the FireCraft flame mark under edit and its path nodes live:
 
 <p align="center">
-  <img src="docs/img/app-dark.png" alt="FireCraft in dark mode: the Tools panel down the left edge, a vector fox logo selected on a transparent 800×600 canvas, and the Optimize panel showing a PNG-24 preview at 100% quality." width="960" />
+  <img src="docs/img/app-preview-dark.svg" alt="FireCraft in dark mode: the Tools panel down the left edge, the flame mark selected on a transparent 800×600 canvas with live path nodes on its outline, and the Optimize panel showing a PNG-24 preview at 100% quality." width="960" />
 </p>
+
+The dark-mode image is original vector artwork — a mock-up of the shell, not a screen capture — so the mark on the canvas is the project's own. The capture above it is the real one, and it is evidence for the build it came from, not a general parity claim.
 
 ## Get started
 
