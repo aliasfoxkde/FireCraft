@@ -80,6 +80,160 @@ impl TimelineStrip {
     }
 }
 
+/// The animation clock: whether the animation is playing, and where it
+/// is (issue #116).
+///
+/// The clock is a *core over data*: it never reads the wall clock, the
+/// environment or the document. The shell hands it the elapsed time
+/// and the per-state delays, and it answers with the state to show —
+/// so the timing is testable without sleeping and without a running
+/// UI.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(super) struct Playback {
+    /// Whether the clock is running.
+    playing: bool,
+    /// Whether the clock wraps around at the last state.
+    looping: bool,
+    /// The state the clock is showing.
+    current: usize,
+    /// Hundredths of a second left on the current state.
+    remaining_cs: i64,
+    /// The page the clock was started on.
+    page: usize,
+    /// The state count the clock was started with.
+    states: usize,
+    /// The journal length the clock was started with.
+    journal_len: usize,
+}
+
+/// What the clock decided this frame.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Step {
+    /// The clock keeps running; the state does not change.
+    Idle,
+    /// Show this state.
+    Advance(usize),
+    /// The clock stopped.
+    Stop,
+}
+
+impl Playback {
+    /// Starts the clock on `state`.
+    ///
+    /// `durations` is the animation's per-state delay list, already
+    /// resolved to the format default where the document records
+    /// none. The page and the journal length are recorded as the
+    /// clock's *context*: a page switch or a document edit is one of
+    /// the conditions that stops playback, and the clock has to know
+    /// what the session looked like when it started.
+    pub(super) fn start(
+        &mut self,
+        state: usize,
+        durations: &[i64],
+        page: usize,
+        journal_len: usize,
+    ) {
+        self.playing = true;
+        self.current = state.min(durations.len().saturating_sub(1));
+        self.remaining_cs = durations
+            .get(self.current)
+            .copied()
+            .unwrap_or(doc::DEFAULT_FRAME_DURATION);
+        self.page = page;
+        self.states = durations.len();
+        self.journal_len = journal_len;
+    }
+
+    /// Stops the clock. The state stays where it is.
+    pub(super) fn stop(&mut self) {
+        self.playing = false;
+    }
+
+    /// Whether the clock is running.
+    pub(super) fn playing(&self) -> bool {
+        self.playing
+    }
+
+    /// Whether the clock wraps around at the last state.
+    pub(super) fn looping(&self) -> bool {
+        self.looping
+    }
+
+    /// Sets whether the clock wraps around at the last state.
+    pub(super) fn set_looping(&mut self, looping: bool) {
+        self.looping = looping;
+    }
+
+    /// The state the clock is showing.
+    pub(super) fn current(&self) -> usize {
+        self.current
+    }
+
+    /// Whether the session still looks the way it did when the clock
+    /// started: the same page, the same state count, the same journal
+    /// length.
+    ///
+    /// A change in any of them is one of the conditions that stops
+    /// playback — a page switch, a state added or removed, or an edit
+    /// to the document. The check is a pure function of the two
+    /// sides, so it can be tested without a running shell.
+    pub(super) fn context_holds(&self, page: usize, states: usize, journal_len: usize) -> bool {
+        page == self.page && states == self.states && journal_len == self.journal_len
+    }
+}
+
+/// Advances the clock by `elapsed_cs` hundredths of a second.
+///
+/// `durations` is the animation's per-state delay list. The elapsed
+/// time and the delays are the clock's *only* inputs — the decision
+/// reads nothing else, so the timing is testable without sleeping.
+///
+/// The clock stops at the last state unless it was told to loop. A
+/// frame longer than the delay it crosses carries the surplus into the
+/// next state rather than losing it, so a slow frame does not make the
+/// animation drift late.
+pub(super) fn tick(clock: &mut Playback, elapsed_cs: i64, durations: &[i64]) -> Step {
+    if !clock.playing() {
+        return Step::Idle;
+    }
+    if durations.is_empty() {
+        clock.stop();
+        return Step::Stop;
+    }
+    // A frame's elapsed time is bounded: a backgrounded window or a
+    // debugger breakpoint must not run the animation through the
+    // whole timeline at once.
+    let elapsed = elapsed_cs.clamp(0, 60_000);
+    clock.remaining_cs -= elapsed;
+    let mut advanced = false;
+    while clock.remaining_cs <= 0 {
+        let next = clock.current() + 1;
+        if next >= durations.len() {
+            if !clock.looping() {
+                clock.stop();
+                return Step::Stop;
+            }
+            clock.current = 0;
+        } else {
+            clock.current = next;
+        }
+        // A zero delay still advances the state, but it cannot leave
+        // the clock with nothing left to count down.
+        let delay = durations
+            .get(clock.current())
+            .copied()
+            .unwrap_or(doc::DEFAULT_FRAME_DURATION)
+            .max(1);
+        clock.remaining_cs += delay;
+        advanced = true;
+    }
+    if advanced {
+        Step::Advance(clock.current())
+    } else {
+        Step::Idle
+    }
+}
+
 impl Shell {
     /// The States panel: the page's animation strip.
     ///
@@ -105,6 +259,10 @@ impl Shell {
                         let response =
                             ui.selectable_label(current == row.index, format!("{}", row.index + 1));
                         if response.clicked() {
+                            // A hand on the strip stops the clock: the
+                            // user is choosing the state, so the
+                            // animation is no longer driving it.
+                            self.playback.stop();
                             self.editor.frame = row.index;
                             self.raster = None;
                         }
@@ -116,6 +274,39 @@ impl Shell {
                     }
                 });
             });
+
+        // The playback control: CS6's Play Animation. The clock holds
+        // the animation's own timing, so the panel only starts and
+        // stops it.
+        ui.horizontal(|ui| {
+            if self.playback.playing() {
+                if ui
+                    .button("Stop")
+                    .on_hover_text("stop the animation where it is")
+                    .clicked()
+                {
+                    self.playback.stop();
+                }
+            } else if ui
+                .button("Play")
+                .on_hover_text("CS6's Play Animation: the states advance on their own delays")
+                .clicked()
+            {
+                self.start_playback(page, current, &strip);
+                // egui paints on demand: the frame that starts the
+                // clock has to ask for the frame that advances it, or
+                // the animation waits for the next input event.
+                ui.ctx().request_repaint();
+            }
+            let mut looping = self.playback.looping();
+            if ui
+                .checkbox(&mut looping, "Loop")
+                .on_hover_text("play the states again from the first one")
+                .changed()
+            {
+                self.playback.set_looping(looping);
+            }
+        });
 
         // The delay of the active state. Applied when the field loses
         // the focus, so a drag is one journal entry, not one per frame.
@@ -333,6 +524,57 @@ impl Shell {
                 );
             }
         });
+    }
+
+    /// Starts the animation clock on the current state.
+    ///
+    /// The clock records the page, the state count and the journal
+    /// length as it starts: those are the session facts a page switch,
+    /// an edit or a state-count change would contradict, and the
+    /// clock stops when one of them no longer holds.
+    fn start_playback(&mut self, page: usize, current: usize, strip: &TimelineStrip) {
+        let durations: Vec<i64> = strip.frames.iter().map(|row| row.duration).collect();
+        let journal_len = self.editor.session.journal_len();
+        self.playback.start(current, &durations, page, journal_len);
+    }
+
+    /// Advances the animation clock by one frame's elapsed time.
+    ///
+    /// The clock stops on the conditions CS6 stops on: a document
+    /// edit, a page switch, a change in the state count, and the end
+    /// of the last state. The first three are facts about the
+    /// session rather than about the clock, so they are checked
+    /// here; the last one is the clock's own decision.
+    pub(super) fn playback_tick(&mut self, elapsed_cs: i64) {
+        if !self.playback.playing() {
+            return;
+        }
+        let page = self.editor.page;
+        let Some(strip) = TimelineStrip::read(self.editor.document(), page) else {
+            self.playback.stop();
+            return;
+        };
+        // The session facts the clock started with: the same page, the
+        // same state count, the same journal length. One of them
+        // failing is a page switch, a state added or removed, or an
+        // edit to the document.
+        let journal_len = self.editor.session.journal_len();
+        if !self
+            .playback
+            .context_holds(page, strip.frames.len(), journal_len)
+        {
+            self.playback.stop();
+            return;
+        }
+        let durations: Vec<i64> = strip.frames.iter().map(|row| row.duration).collect();
+        match tick(&mut self.playback, elapsed_cs, &durations) {
+            Step::Idle => {}
+            Step::Advance(index) => {
+                self.editor.frame = index;
+                self.raster = None;
+            }
+            Step::Stop => self.playback.stop(),
+        }
     }
 
     /// CS6's Add State: an empty state right after the current one,
@@ -807,5 +1049,160 @@ mod tests {
         assert_eq!(elements(&shell, layer, 0).len(), 1);
         assert_eq!(elements(&shell, layer, 1).len(), 1);
         assert_eq!(elements(&shell, layer, 2).len(), 1);
+    }
+    /// The delays the animation example uses: three states at 10, 25
+    /// and 10 hundredths of a second.
+    const DELAYS: [i64; 3] = [10, 25, 10];
+
+    /// A clock started on the first of `durations`.
+    fn started_clock(durations: &[i64]) -> Playback {
+        let mut clock = Playback::default();
+        clock.start(0, durations, 0, 7);
+        clock
+    }
+
+    #[test]
+    fn the_clock_waits_for_the_state_delay() {
+        let mut clock = started_clock(&DELAYS);
+        assert_eq!(tick(&mut clock, 9, &DELAYS), Step::Idle);
+        assert_eq!(clock.current(), 0, "the state holds until the delay is up");
+        assert_eq!(tick(&mut clock, 1, &DELAYS), Step::Advance(1));
+    }
+
+    #[test]
+    fn the_clock_advances_on_the_recorded_delays() {
+        let mut clock = started_clock(&DELAYS);
+        assert_eq!(tick(&mut clock, 10, &DELAYS), Step::Advance(1));
+        assert_eq!(tick(&mut clock, 25, &DELAYS), Step::Advance(2));
+    }
+
+    #[test]
+    fn the_clock_stops_at_the_last_state() {
+        let mut clock = started_clock(&DELAYS);
+        assert_eq!(tick(&mut clock, 10, &DELAYS), Step::Advance(1));
+        assert_eq!(tick(&mut clock, 25, &DELAYS), Step::Advance(2));
+        assert_eq!(tick(&mut clock, 10, &DELAYS), Step::Stop);
+        assert!(!clock.playing(), "the clock stopped at the last state");
+        assert_eq!(clock.current(), 2, "the last state stays on screen");
+    }
+
+    #[test]
+    fn the_clock_loops_when_asked() {
+        let mut clock = started_clock(&DELAYS);
+        clock.set_looping(true);
+        assert_eq!(tick(&mut clock, 10, &DELAYS), Step::Advance(1));
+        assert_eq!(tick(&mut clock, 25, &DELAYS), Step::Advance(2));
+        assert_eq!(tick(&mut clock, 10, &DELAYS), Step::Advance(0));
+        assert!(clock.playing(), "the loop keeps the clock running");
+    }
+
+    #[test]
+    fn a_long_frame_carries_its_surplus_into_the_next_state() {
+        let mut clock = started_clock(&DELAYS);
+        // One frame of 30 cs crosses the first delay and spends 20 cs
+        // of the second.
+        assert_eq!(tick(&mut clock, 30, &DELAYS), Step::Advance(1));
+        // The remaining 5 cs of the second delay are still owed, so
+        // the animation is neither early nor late.
+        assert_eq!(tick(&mut clock, 4, &DELAYS), Step::Idle);
+        assert_eq!(tick(&mut clock, 1, &DELAYS), Step::Advance(2));
+    }
+
+    #[test]
+    fn a_zero_delay_advances_without_stalling() {
+        let mut clock = started_clock(&[0, 10]);
+        assert_eq!(tick(&mut clock, 1, &[0, 10]), Step::Advance(1));
+        assert!(clock.playing(), "the clock did not stall on the zero delay");
+    }
+
+    #[test]
+    fn a_stopped_clock_does_not_move() {
+        let mut clock = started_clock(&DELAYS);
+        clock.stop();
+        assert_eq!(tick(&mut clock, 100, &DELAYS), Step::Idle);
+        assert_eq!(clock.current(), 0);
+    }
+
+    #[test]
+    fn the_clock_keeps_the_session_it_started_with() {
+        let clock = started_clock(&DELAYS);
+        assert!(clock.context_holds(0, 3, 7), "nothing changed");
+        assert!(!clock.context_holds(1, 3, 7), "the page changed");
+        assert!(!clock.context_holds(0, 4, 7), "a state was added");
+        assert!(!clock.context_holds(0, 3, 8), "the document was edited");
+    }
+
+    /// A shell over a page whose three states carry the example's
+    /// delays.
+    fn shell_with_delays() -> Shell {
+        let mut shell = shell_with_states(3);
+        for (frame, duration) in DELAYS.iter().enumerate() {
+            assert!(
+                shell.run_command(
+                    "frame.setDuration",
+                    serde_json::json!({ "page": 0, "frame": frame, "duration": duration }),
+                ),
+                "the delay must be recorded",
+            );
+        }
+        shell
+    }
+
+    /// Starts the clock on the shell's first state.
+    fn start(shell: &mut Shell) {
+        let strip = TimelineStrip::read(shell.editor.document(), 0).expect("the page is there");
+        shell.start_playback(0, 0, &strip);
+        assert!(shell.playback.playing(), "the clock started");
+    }
+
+    #[test]
+    fn playback_moves_the_view_to_the_next_state() {
+        let mut shell = shell_with_delays();
+        start(&mut shell);
+        shell.playback_tick(10);
+        assert_eq!(shell.editor.frame, 1, "the view followed the playhead");
+        shell.playback_tick(25);
+        assert_eq!(shell.editor.frame, 2);
+        // The last state ends the playback.
+        shell.playback_tick(10);
+        assert!(!shell.playback.playing());
+        assert_eq!(shell.editor.frame, 2);
+    }
+
+    #[test]
+    fn playback_stops_when_the_document_is_edited() {
+        let mut shell = shell_with_delays();
+        start(&mut shell);
+        assert!(shell.run_command(
+            "frame.setDuration",
+            serde_json::json!({ "page": 0, "frame": 0, "duration": 11 }),
+        ));
+        shell.playback_tick(10);
+        assert!(!shell.playback.playing(), "an edit stops the playback");
+    }
+
+    #[test]
+    fn playback_stops_when_the_state_count_changes() {
+        let mut shell = shell_with_delays();
+        start(&mut shell);
+        assert!(shell.run_command(
+            "frame.add",
+            serde_json::json!({ "page": 0, "how_many": 1, "location": "end" }),
+        ));
+        shell.playback_tick(10);
+        assert!(!shell.playback.playing(), "a new state stops the playback");
+    }
+
+    #[test]
+    fn playback_stops_when_the_page_changes() {
+        let mut shell = shell_with_delays();
+        start(&mut shell);
+        assert!(shell.run_command("page.add", serde_json::json!({ "index": null })));
+        shell.editor.page = 1;
+        shell.playback_tick(10);
+        assert!(
+            !shell.playback.playing(),
+            "a page switch stops the playback"
+        );
     }
 }

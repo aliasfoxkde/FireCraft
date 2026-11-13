@@ -4,8 +4,13 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
+use std::rc::Rc;
+
 use app::editor::Editor;
+use app_cli::mcp;
 use base64::Engine as _;
+use engine::Session;
+use engine::platform::{FileSystem, MemoryFs};
 
 /// Imports one 2×2 opaque-red raster and returns its id.
 fn import_raster(editor: &mut Editor, name: &str) -> doc::ObjectId {
@@ -91,4 +96,69 @@ fn a_rewind_past_the_recorded_depth_is_refused() {
         "{error}"
     );
     assert_eq!(editor.session.undo_len(), base + 1);
+}
+
+/// The MCP surface names the session-scoped rewind and runs it: a
+/// command an agent cannot discover is a command the agent cannot
+/// use.
+#[test]
+fn the_mcp_surface_lists_and_runs_the_rewind() {
+    let base = Editor::untitled().session.document().clone();
+    let mut session = Session::new(base);
+
+    let call = |session: &mut Session, name: &str, arguments: serde_json::Value| {
+        mcp::handle(
+            session,
+            Rc::new(MemoryFs::new()) as Rc<dyn FileSystem>,
+            &serde_json::json!({
+                "jsonrpc": "2.0", "id": 1, "method": "tools/call",
+                "params": { "name": name, "arguments": arguments },
+            }),
+        )
+        .expect("tools/call answers")
+    };
+
+    // The discovery list carries the session-scoped id beside the
+    // registry's.
+    let reply = call(
+        &mut session,
+        "firecraft.listCommands",
+        serde_json::json!({}),
+    );
+    let text = reply["result"]["content"][0]["text"]
+        .as_str()
+        .expect("text");
+    assert!(
+        text.split('\n').any(|line| line == engine::REWIND_ID),
+        "the rewind is listed: {text}"
+    );
+
+    // And it runs: one step of the undo stack is taken back.
+    let before = session.undo_len();
+    session
+        .apply(
+            "object.createPath",
+            serde_json::json!({
+                "kind": "rect", "x": 10.0, "y": 20.0,
+                "width": 80.0, "height": 40.0,
+                "page": 0, "layer": 0, "cell": 0, "name": "plate",
+            }),
+        )
+        .expect("create");
+    assert_eq!(session.undo_len(), before + 1);
+
+    let reply = call(
+        &mut session,
+        "firecraft.apply",
+        serde_json::json!({
+            "command": engine::REWIND_ID,
+            "args": { "depth": before },
+        }),
+    );
+    assert_eq!(
+        reply["result"]["isError"],
+        serde_json::json!(false),
+        "{reply}"
+    );
+    assert_eq!(session.undo_len(), before);
 }

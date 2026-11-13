@@ -20,6 +20,7 @@
 //! inventory, the dock, and the open/closed bookkeeping.
 
 use super::*;
+use egui::Widget;
 
 /// The panels this shell implements, in the CS6 right-dock order.
 pub(crate) const PANELS: &[PanelSpec] = &[
@@ -170,7 +171,7 @@ pub(crate) enum PanelKind {
 }
 
 /// Which edge the panel column docks to.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum DockSide {
     /// The column hugs the left edge of the window.
     Left,
@@ -187,12 +188,54 @@ impl DockSide {
             DockSide::Right => "right",
         }
     }
+
+    /// The other dock: where a panel goes when it is moved.
+    #[must_use]
+    pub fn other(self) -> Self {
+        match self {
+            DockSide::Left => DockSide::Right,
+            DockSide::Right => DockSide::Left,
+        }
+    }
 }
 
 /// The edge the panel column docks to. CS6 keeps the group on the
 /// right; the panel-snapshot gate pins the choice, so moving the
 /// column is a deliberate re-pin, never a silent drift.
 const DOCK_SIDE: DockSide = DockSide::Right;
+
+/// A tab group: the panels that share one slot in a dock.
+///
+/// CS6 lets a panel be dropped onto another panel's title; the two
+/// then share one header row and the tab strip switches between
+/// them. The group — not the panel — is what the dock draws and
+/// moves, so a group is anchored on its first member: the anchor is
+/// the member the group is drawn at, and the member a move carries
+/// with it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct PanelGroup {
+    /// The panels in the group, in tab order. The first member is
+    /// the group's anchor.
+    pub(crate) members: Vec<&'static str>,
+    /// The member whose content the group shows.
+    pub(crate) active: &'static str,
+}
+
+/// The payload a panel drag carries: which panel is being moved.
+#[derive(Clone, Copy)]
+struct PanelDrag {
+    /// The dragged panel's CS6 name.
+    name: &'static str,
+}
+
+/// Drops a panel drag in flight. Called when the docks are not
+/// drawn: a payload left behind would move a panel on a later
+/// release, long after the drag the user made.
+pub(crate) fn cancel_panel_drag(ctx: &egui::Context) {
+    if egui::DragAndDrop::has_payload_of_type::<PanelDrag>(ctx) {
+        egui::DragAndDrop::clear_payload(ctx);
+    }
+}
 
 /// One panel of the CS6 inventory, as plain data.
 ///
@@ -254,6 +297,28 @@ fn panel_id(name: &str) -> String {
     name.to_lowercase().replace(' ', "-")
 }
 
+/// The spec of a panel this shell knows, including the Web Layer
+/// panel — which has no Window-menu row but is a panel all the same.
+pub(crate) fn panel_spec(name: &str) -> Option<PanelSpec> {
+    PANELS
+        .iter()
+        .copied()
+        .find(|spec| spec.name == name)
+        .or_else(|| (WEB_PANEL == name).then_some(WEB_PANEL_SPEC))
+}
+
+/// The panels the dock draws, in CS6's order: the toggleable panels
+/// and then the always-present Web Layer panel.
+///
+/// The Web Layer panel is a panel like any other, so it can be
+/// tabbed with another panel — it only differs in that it carries no
+/// close button.
+fn dock_roster() -> Vec<PanelSpec> {
+    let mut roster: Vec<PanelSpec> = PANELS.to_vec();
+    roster.push(WEB_PANEL_SPEC);
+    roster
+}
+
 /// The width of the right dock, in points — CS6's dock is a narrow
 /// column; the canvas keeps the rest.
 pub(crate) const DOCK_WIDTH: f32 = 258.0;
@@ -268,32 +333,130 @@ impl Shell {
     /// `Hide Panels` (the CS6 Tab key) folds the whole dock; the
     /// Window menu toggles one panel at a time, and a panel closed
     /// with its own close button leaves the rest of the dock alone.
-    pub(crate) fn dock(&mut self, ui: &mut egui::Ui) {
+    ///
+    /// Returns the column's inner rect — the drop target a dragged
+    /// panel is released over.
+    pub(crate) fn dock(&mut self, ui: &mut egui::Ui) -> Option<egui::Rect> {
         if self.panels_hidden {
-            return;
+            return None;
         }
-        egui::Panel::right(egui::Id::new("cs6_dock"))
+        self.dock_column(ui, DockSide::Right)
+    }
+
+    /// The left panel column — the second dock a panel can live in.
+    ///
+    /// It exists only when a panel is docked left or a panel is being
+    /// dragged: a drop target has to be there before the drag
+    /// reaches it, or there would be nowhere to drop the panel.
+    pub(crate) fn left_dock(&mut self, ui: &mut egui::Ui) -> Option<egui::Rect> {
+        if self.panels_hidden {
+            return None;
+        }
+        let dragging = egui::DragAndDrop::has_payload_of_type::<PanelDrag>(ui.ctx());
+        if !dragging && self.panels_in_dock(DockSide::Left).is_empty() {
+            return None;
+        }
+        self.dock_column(ui, DockSide::Left)
+    }
+
+    /// One dock column: the panels that live in it, stacked.
+    fn dock_column(&mut self, ui: &mut egui::Ui, side: DockSide) -> Option<egui::Rect> {
+        let (column_id, scroll_id) = match side {
+            DockSide::Left => ("cs6_left_dock", "cs6_left_dock_scroll"),
+            DockSide::Right => ("cs6_dock", "cs6_dock_scroll"),
+        };
+        let column = match side {
+            DockSide::Left => egui::Panel::left(egui::Id::new(column_id)),
+            DockSide::Right => egui::Panel::right(egui::Id::new(column_id)),
+        };
+        let mut rect = None;
+        column
             .resizable(true)
             .default_size(DOCK_WIDTH)
             .show_separator_line(true)
             .show(ui, |ui| {
+                rect = Some(ui.max_rect());
                 // The column scrolls: CS6's dock does too when the
                 // stack is taller than the window, and it is what keeps
                 // every panel reachable at a short viewport.
                 egui::ScrollArea::vertical()
-                    .id_salt("cs6_dock_scroll")
+                    .id_salt(scroll_id)
                     .auto_shrink([false, false])
                     .show(ui, |ui| {
-                        for spec in PANELS {
-                            if self.panel_shown(spec.name) {
-                                self.dock_section(ui, spec, true);
+                        for spec in dock_roster() {
+                            if !self.panel_shown(spec.name) {
+                                continue;
+                            }
+                            if self.panel_home(spec.name) != side {
+                                continue;
+                            }
+                            match self.group_index(spec.name) {
+                                // A panel that is alone in the dock
+                                // draws its own header.
+                                None => {
+                                    let closable = spec.kind != PanelKind::WebLayer;
+                                    self.dock_section(ui, &spec, closable, side);
+                                }
+                                // A tab group draws once, at its anchor.
+                                Some(index) => {
+                                    let is_anchor =
+                                        self.panel_groups[index].members.first().copied()
+                                            == Some(spec.name);
+                                    if is_anchor {
+                                        self.dock_group(ui, index, side);
+                                    }
+                                }
                             }
                         }
-                        // The Web Layer panel is always present and
-                        // carries no close button.
-                        self.dock_section(ui, &WEB_PANEL_SPEC, false);
                     });
             });
+        rect
+    }
+
+    /// Resolves a finished panel drag: a panel released over another
+    /// panel's title joins that panel's tab group, a panel released
+    /// over a dock column moves into that column, and a release
+    /// anywhere else cancels the move. Either way the payload is
+    /// consumed — a payload left behind would keep the left column on
+    /// screen forever.
+    pub(crate) fn finish_panel_drag(
+        &mut self,
+        ui: &egui::Ui,
+        right: Option<egui::Rect>,
+        left: Option<egui::Rect>,
+    ) {
+        if !ui.input(|input| input.pointer.any_released()) {
+            return;
+        }
+        let Some(drag) = egui::DragAndDrop::take_payload::<PanelDrag>(ui.ctx()) else {
+            return;
+        };
+        let Some(pointer) = ui.ctx().pointer_interact_pos() else {
+            return;
+        };
+        // A panel dropped on another panel's title is tabbed with it
+        // — CS6's gesture. The title is the drop target, so a panel
+        // dropped on the column's empty space still moves.
+        let title = self
+            .panel_title_rects
+            .iter()
+            .find(|(name, rect)| *name != drag.name && rect.contains(pointer))
+            .map(|(name, _)| *name);
+        if let Some(target) = title {
+            self.group_panels(drag.name, target);
+            return;
+        }
+        let over = |column: Option<egui::Rect>| column.is_some_and(|rect| rect.contains(pointer));
+        let target = if over(left) {
+            Some(DockSide::Left)
+        } else if over(right) {
+            Some(DockSide::Right)
+        } else {
+            None
+        };
+        if let Some(side) = target {
+            self.move_panel_to_dock(drag.name, side);
+        }
     }
 
     /// One panel in the dock: a CS6 header (collapse arrow, name,
@@ -302,59 +465,408 @@ impl Shell {
     /// The header's expanded state is egui's own, keyed on the
     /// panel's name, so it survives a restart the way CS6's collapsed
     /// panels do.
-    fn dock_section(&mut self, ui: &mut egui::Ui, spec: &PanelSpec, closable: bool) {
+    ///
+    /// The panel's title is its drag handle — CS6 moves a panel by
+    /// its header — and the small arrow beside the close button
+    /// moves it to the other dock for anyone who cannot drag.
+    ///
+    /// The title's rect is recorded as the drop target that tabs this
+    /// panel with another one.
+    fn dock_section(
+        &mut self,
+        ui: &mut egui::Ui,
+        spec: &PanelSpec,
+        closable: bool,
+        side: DockSide,
+    ) {
         let mut close = false;
+        let mut move_to_other = false;
+        let mut title_rect = None;
         let state = egui::collapsing_header::CollapsingState::load_with_default_open(
             ui.ctx(),
             egui::Id::new(("cs6_dock_panel", spec.name)),
             true,
         );
         let header = state.show_header(ui, |ui| {
-            ui.strong(spec.name);
-            if closable {
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    close = ui.small_button("×").clicked();
-                });
+            let drag_id = egui::Id::new(("cs6_panel_drag", spec.name));
+            let dragging = ui.ctx().is_being_dragged(drag_id);
+            let _drag = ui.dnd_drag_source(drag_id, PanelDrag { name: spec.name }, |ui| {
+                let title = ui.strong(spec.name);
+                title_rect = Some(title.rect);
+            });
+            if !dragging {
+                // The title senses clicks as well as drags, so egui
+                // waits for the pointer to move before it calls the
+                // drag started: a click that never moved drops
+                // nothing and merges no panels.
+                let rect = title_rect.unwrap_or(egui::Rect::NOTHING);
+                let _title = ui.interact(rect, drag_id, egui::Sense::click());
             }
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if closable {
+                    close = ui.small_button("×").clicked();
+                }
+                move_to_other = ui
+                    .small_button(match side {
+                        DockSide::Left => "»",
+                        DockSide::Right => "«",
+                    })
+                    .on_hover_text(match side {
+                        DockSide::Left => "Move the panel to the right dock",
+                        DockSide::Right => "Move the panel to the left dock",
+                    })
+                    .clicked();
+            });
         });
         header.body_unindented(|ui| {
             ui.set_min_width(DOCK_CONTENT_WIDTH);
-            match spec.kind {
-                PanelKind::Properties => self.properties_panel(ui),
-                PanelKind::Pages => self.pages_section(ui),
-                PanelKind::States => self.states_section(ui),
-                PanelKind::Layers => self.layers_section(ui),
-                PanelKind::Styles => self.styles_panel(ui),
-                PanelKind::Library => self.library_panel(ui),
-                PanelKind::History => self.history_section(ui),
-                PanelKind::ColorMixer => self.fill_stroke_panel(ui),
-                PanelKind::Swatches => self.swatches_panel(ui),
-                PanelKind::Info => self.info_panel(ui),
-                PanelKind::AutoShapes => self.auto_shapes_panel(ui),
-                PanelKind::Url => self.url_panel(ui),
-                PanelKind::Behaviors => self.behaviors_panel(ui),
-                PanelKind::WebLayer => self.web_panel(ui),
-                PanelKind::Optimize => self.optimize_panel(ui),
-                PanelKind::Slices => self.slices_panel(ui),
-                PanelKind::HtmlPreview => self.html_preview_panel(ui),
-                PanelKind::CssProperties => self.css_properties_panel(ui),
-                PanelKind::FindReplace => self.find_replace_panel(ui),
-                PanelKind::CommonLibrary => self.common_library_panel(ui),
-            }
+            self.draw_panel_content(ui, spec);
         });
+        if let Some(rect) = title_rect {
+            self.panel_title_rects.push((spec.name, rect));
+        }
         // The close button and the Window menu are the same switch.
         if close {
             self.hide_panel(spec.name);
         }
+        if move_to_other {
+            self.move_panel_to_dock(spec.name, side.other());
+        }
+    }
+
+    /// One slot of the dock holding a tab group: the group's tab
+    /// strip in the header row, the active member's content below.
+    ///
+    /// CS6 draws a tabbed group as one panel with a row of tabs, and
+    /// the tab strip is the group's header: the collapse arrow folds
+    /// the whole group, and a tab switches the content.
+    ///
+    /// The group is dragged by its tabs, and the tab a panel is
+    /// dropped on is the tab it joins.
+    fn dock_group(&mut self, ui: &mut egui::Ui, group_index: usize, side: DockSide) {
+        let Some(group) = self.panel_groups.get(group_index) else {
+            return;
+        };
+        let members = group.members.clone();
+        let active = group.active;
+        let Some(anchor) = members.first().copied() else {
+            return;
+        };
+        let mut activate: Option<&'static str> = None;
+        let mut close = false;
+        let mut move_to_other = false;
+        let mut ungroup = false;
+        let mut tab_rects: Vec<(&'static str, egui::Rect)> = Vec::new();
+        let state = egui::collapsing_header::CollapsingState::load_with_default_open(
+            ui.ctx(),
+            egui::Id::new(("cs6_dock_group", anchor)),
+            true,
+        );
+        let header = state.show_header(ui, |ui| {
+            ui.horizontal(|ui| {
+                for member in &members {
+                    let selected = *member == active;
+                    let drag_id = egui::Id::new(("cs6_panel_drag", *member));
+                    let dragging = ui.ctx().is_being_dragged(drag_id);
+                    let drag = ui.dnd_drag_source(
+                        drag_id,
+                        PanelDrag { name: member },
+                        // The tab is drawn, not clicked: the drag source
+                        // below owns the click, so that a single widget
+                        // can both switch the tab and drag the group.
+                        |ui| {
+                            egui::Button::selectable(selected, *member)
+                                .sense(egui::Sense::hover())
+                                .ui(ui)
+                        },
+                    );
+                    // One widget, both senses. egui postpones the
+                    // click-or-drag decision until the pointer moves,
+                    // so a click still switches the tab and a drag
+                    // still moves the group.
+                    let clicked = !dragging
+                        && ui
+                            .interact(drag.response.rect, drag_id, egui::Sense::click())
+                            .clicked();
+                    if clicked {
+                        activate = Some(*member);
+                    }
+                    tab_rects.push((*member, drag.response.rect));
+                }
+            });
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                close = ui
+                    .small_button("×")
+                    .on_hover_text("Close this panel")
+                    .clicked();
+                ungroup = ui
+                    .small_button("split")
+                    .on_hover_text("Ungroup the panels")
+                    .clicked();
+                move_to_other = ui
+                    .small_button(match side {
+                        DockSide::Left => "»",
+                        DockSide::Right => "«",
+                    })
+                    .on_hover_text(match side {
+                        DockSide::Left => "Move the panel group to the right dock",
+                        DockSide::Right => "Move the panel group to the left dock",
+                    })
+                    .clicked();
+            });
+        });
+        header.body_unindented(|ui| {
+            ui.set_min_width(DOCK_CONTENT_WIDTH);
+            if let Some(spec) = panel_spec(active) {
+                self.draw_panel_content(ui, &spec);
+            }
+        });
+        for (name, rect) in tab_rects {
+            self.panel_title_rects.push((name, rect));
+        }
+        if let Some(member) = activate {
+            self.set_active_tab(group_index, member);
+        }
+        if close {
+            self.hide_panel(active);
+        }
+        if ungroup {
+            self.ungroup_group(anchor);
+        }
+        if move_to_other {
+            self.move_panel_to_dock(anchor, side.other());
+        }
+    }
+
+    /// The content a panel draws. Shared by the plain dock panels and
+    /// by the tab groups, so a tabbed panel shows exactly what it
+    /// shows on its own.
+    fn draw_panel_content(&mut self, ui: &mut egui::Ui, spec: &PanelSpec) {
+        match spec.kind {
+            PanelKind::Properties => self.properties_panel(ui),
+            PanelKind::Pages => self.pages_section(ui),
+            PanelKind::States => self.states_section(ui),
+            PanelKind::Layers => self.layers_section(ui),
+            PanelKind::Styles => self.styles_panel(ui),
+            PanelKind::Library => self.library_panel(ui),
+            PanelKind::History => self.history_section(ui),
+            PanelKind::ColorMixer => self.fill_stroke_panel(ui),
+            PanelKind::Swatches => self.swatches_panel(ui),
+            PanelKind::Info => self.info_panel(ui),
+            PanelKind::AutoShapes => self.auto_shapes_panel(ui),
+            PanelKind::Url => self.url_panel(ui),
+            PanelKind::Behaviors => self.behaviors_panel(ui),
+            PanelKind::WebLayer => self.web_panel(ui),
+            PanelKind::Optimize => self.optimize_panel(ui),
+            PanelKind::Slices => self.slices_panel(ui),
+            PanelKind::HtmlPreview => self.html_preview_panel(ui),
+            PanelKind::CssProperties => self.css_properties_panel(ui),
+            PanelKind::FindReplace => self.find_replace_panel(ui),
+            PanelKind::CommonLibrary => self.common_library_panel(ui),
+        }
+    }
+
+    /// The group a panel belongs to, if it is in one.
+    fn group_of(&self, name: &'static str) -> Option<&PanelGroup> {
+        self.panel_groups
+            .iter()
+            .find(|group| group.members.contains(&name))
+    }
+
+    /// The index of the group a panel belongs to, if it is in one.
+    fn group_index(&self, name: &'static str) -> Option<usize> {
+        self.panel_groups
+            .iter()
+            .position(|group| group.members.contains(&name))
+    }
+
+    /// The anchor of the group a panel belongs to: the panel the
+    /// group is drawn at, and the member a move carries with it.
+    fn group_anchor_of(&self, name: &'static str) -> Option<&'static str> {
+        self.group_of(name)
+            .and_then(|group| group.members.first().copied())
+    }
+
+    /// The dock a panel lives in. A panel the user has not moved
+    /// lives in the right stack, where CS6 keeps its panel group. A
+    /// panel in a tab group lives where its group does.
+    pub(crate) fn panel_home(&self, name: &'static str) -> DockSide {
+        let anchor = self.group_anchor_of(name);
+        self.panel_homes
+            .iter()
+            .find(|(panel, _)| match anchor {
+                Some(anchor) => *panel == anchor,
+                None => *panel == name,
+            })
+            .map_or(DOCK_SIDE, |(_, side)| *side)
+    }
+
+    /// Moves a panel into a dock. A panel that belongs to a tab group
+    /// takes the whole group with it — the group is one slot.
+    ///
+    /// A panel moved back to the default dock drops out of the moved
+    /// set, so the saved layout stays small and "not mentioned" keeps
+    /// meaning "the default".
+    pub(crate) fn move_panel_to_dock(&mut self, name: &'static str, side: DockSide) {
+        let members: Vec<&'static str> = self
+            .group_of(name)
+            .map_or_else(|| vec![name], |group| group.members.clone());
+        let Some(anchor) = members.first().copied() else {
+            return;
+        };
+        for member in &members {
+            self.panel_homes.retain(|(moved, _)| moved != member);
+        }
+        if side != DOCK_SIDE {
+            self.panel_homes.push((anchor, side));
+        }
+    }
+
+    /// Tabs a panel with another one: the two share one slot, and
+    /// the tab strip switches between them.
+    ///
+    /// A panel that is already in a group brings its group along —
+    /// the two groups merge — and the dragged panel becomes the
+    /// group's active tab. The merged group keeps the target's dock:
+    /// the group is one slot, and it stays where the target was.
+    pub(crate) fn group_panels(&mut self, panel: &'static str, target: &'static str) {
+        if panel == target {
+            return;
+        }
+        let mut members: Vec<&'static str> = self
+            .group_of(target)
+            .map_or_else(|| vec![target], |group| group.members.clone());
+        if let Some(group) = self.group_of(panel) {
+            for member in &group.members {
+                if !members.contains(member) {
+                    members.push(*member);
+                }
+            }
+        }
+        if !members.contains(&panel) {
+            members.push(panel);
+        }
+        let Some(anchor) = members.first().copied() else {
+            return;
+        };
+        // The merged group stays in the dock the target was in.
+        let home = self.panel_home(target);
+        // The groups that took part are replaced by the merged one.
+        self.panel_groups.retain(|group| {
+            !group
+                .members
+                .iter()
+                .any(|member| *member == panel || *member == target)
+        });
+        // A member's dock is the group's dock now.
+        for member in &members {
+            self.panel_homes.retain(|(moved, _)| moved != member);
+        }
+        if home != DOCK_SIDE {
+            self.panel_homes.push((anchor, home));
+        }
+        self.panel_groups.push(PanelGroup {
+            members,
+            active: panel,
+        });
+    }
+
+    /// Switches a tab group to another member.
+    pub(crate) fn set_active_tab(&mut self, group_index: usize, member: &'static str) {
+        if let Some(group) = self.panel_groups.get_mut(group_index)
+            && group.members.contains(&member)
+        {
+            group.active = member;
+        }
+    }
+
+    /// Splits a tab group: every member becomes its own panel again,
+    /// and every member keeps the dock the group was in.
+    pub(crate) fn ungroup_group(&mut self, name: &'static str) {
+        let Some(members) = self.group_of(name).map(|group| group.members.clone()) else {
+            return;
+        };
+        let home = self.panel_home(name);
+        self.panel_groups
+            .retain(|group| !group.members.contains(&name));
+        for member in &members {
+            self.panel_homes.retain(|(moved, _)| moved != member);
+        }
+        if home != DOCK_SIDE {
+            for member in &members {
+                self.panel_homes.push((*member, home));
+            }
+        }
+    }
+
+    /// Takes a panel out of its tab group. A group that drops below
+    /// two members is no longer a group, and dissolves — the members
+    /// it leaves behind keep the dock the group was in, and so does
+    /// the panel that left: it was drawn in that dock a moment ago,
+    /// so it must not jump to the other one.
+    pub(crate) fn leave_group(&mut self, name: &'static str) {
+        let Some(index) = self.group_index(name) else {
+            return;
+        };
+        let home = self.panel_home(name);
+        let anchor_before = self.panel_groups[index].members.first().copied();
+        if let Some(group) = self.panel_groups.get_mut(index) {
+            group.members.retain(|member| *member != name);
+            if group.active == name {
+                group.active = group.members.first().copied().unwrap_or(name);
+            }
+        }
+        let members = self.panel_groups[index].members.clone();
+        if members.len() < 2 {
+            // The group dissolves; the members keep its dock.
+            self.panel_groups.remove(index);
+            for member in &members {
+                self.panel_homes.retain(|(moved, _)| moved != member);
+            }
+            self.panel_homes.retain(|(moved, _)| *moved != name);
+            if home != DOCK_SIDE {
+                for member in &members {
+                    self.panel_homes.push((*member, home));
+                }
+                self.panel_homes.push((name, home));
+            }
+            return;
+        }
+        // The group survives. If its anchor left, the dock follows
+        // the group to its new anchor.
+        let anchor_after = members.first().copied();
+        if anchor_after != anchor_before {
+            if let Some(previous) = anchor_before {
+                self.panel_homes.retain(|(moved, _)| *moved != previous);
+            }
+            if home != DOCK_SIDE
+                && let Some(anchor) = anchor_after
+            {
+                self.panel_homes.push((anchor, home));
+            }
+        }
+    }
+
+    /// The panels that live in a dock, in CS6's roster order.
+    pub(crate) fn panels_in_dock(&self, side: DockSide) -> Vec<&'static str> {
+        PANELS
+            .iter()
+            .filter(|spec| self.panel_home(spec.name) == side)
+            .map(|spec| spec.name)
+            .collect()
     }
 
     /// Records a panel as hidden (the Window menu's toggle uses the
     /// same list).
+    ///
+    /// A hidden panel leaves its tab group: a tab for a panel the
+    /// user cannot see is a tab that shows nothing.
     fn hide_panel(&mut self, name: &'static str) {
         if let Some(pos) = self.panel_hidden.iter().position(|n| *n == name) {
             self.panel_hidden.remove(pos);
         }
         self.panel_hidden.push(name);
+        self.leave_group(name);
     }
 
     /// The panels CS6 opens on a fresh document — the initial value of
@@ -372,6 +884,10 @@ impl Shell {
 #[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 mod tests {
     use super::*;
+    // The shell's scripted-dialogs helpers live in the shell module's
+    // own test module. They are visible here because this module is a
+    // child of the shell.
+    use super::super::tests::{gui_editor, gui_shell};
 
     /// The panel inventory carries the CS6 panel names the Window menu
     /// toggles, and every one of those names is a panel this shell
@@ -455,5 +971,176 @@ mod tests {
     fn the_dock_width_is_cs6s() {
         const { assert!(DOCK_WIDTH >= 240.0) };
         const { assert!(DOCK_WIDTH <= 300.0) };
+    }
+
+    /// The spec lookup knows every panel of the inventory — including
+    /// the Web Layer panel, which has no Window-menu row but is a
+    /// panel all the same — and refuses a name that is not a panel.
+    #[test]
+    fn the_spec_lookup_knows_every_panel() {
+        assert_eq!(
+            panel_spec("Properties").map(|spec| spec.name),
+            Some("Properties")
+        );
+        assert_eq!(
+            panel_spec(WEB_PANEL).map(|spec| spec.kind),
+            Some(PanelKind::WebLayer)
+        );
+        assert!(panel_spec("Not A Panel").is_none());
+    }
+
+    /// The dock's roster is the toggleable panels in CS6's order,
+    /// followed by the always-present Web Layer panel.
+    #[test]
+    fn the_dock_roster_carries_the_web_panel_last() {
+        let roster = dock_roster();
+        assert_eq!(roster.len(), PANELS.len() + 1);
+        assert_eq!(roster.first().map(|spec| spec.name), Some("Properties"));
+        assert_eq!(roster.last().map(|spec| spec.name), Some(WEB_PANEL));
+    }
+
+    /// A dock side names itself for the panel snapshot, and a panel
+    /// moves to the other side.
+    #[test]
+    fn a_dock_side_names_itself_and_has_an_other() {
+        assert_eq!(DockSide::Left.as_str(), "left");
+        assert_eq!(DockSide::Right.as_str(), "right");
+        assert_eq!(DockSide::Left.other(), DockSide::Right);
+        assert_eq!(DockSide::Right.other(), DockSide::Left);
+    }
+
+    /// A tab group switches to another member, and refuses a member
+    /// it does not have and a group that does not exist.
+    #[test]
+    fn a_group_switches_to_another_member() {
+        let mut shell = gui_shell(gui_editor());
+        shell.group_panels("Layers", "Properties");
+        assert_eq!(shell.panel_groups.len(), 1);
+
+        shell.set_active_tab(0, "Properties");
+        assert_eq!(shell.panel_groups[0].active, "Properties");
+
+        // A member the group does not have is refused.
+        shell.set_active_tab(0, "History");
+        assert_eq!(shell.panel_groups[0].active, "Properties");
+
+        // A group that does not exist is refused.
+        shell.set_active_tab(9, "Properties");
+        assert_eq!(shell.panel_groups[0].active, "Properties");
+    }
+
+    /// Splitting a group gives every member its own slot again, and
+    /// every member keeps the dock the group was in.
+    #[test]
+    fn splitting_a_group_gives_every_member_its_own_slot() {
+        let mut shell = gui_shell(gui_editor());
+        shell.move_panel_to_dock("Properties", DockSide::Left);
+        shell.group_panels("Layers", "Properties");
+        assert_eq!(shell.panel_groups.len(), 1);
+
+        shell.ungroup_group("Properties");
+        assert!(shell.panel_groups.is_empty(), "the group is split");
+        assert_eq!(shell.panel_home("Properties"), DockSide::Left);
+        assert_eq!(shell.panel_home("Layers"), DockSide::Left);
+
+        // A panel that is in no group changes nothing.
+        shell.ungroup_group("History");
+        assert!(shell.panel_groups.is_empty());
+    }
+
+    /// A panel that leaves its group takes the group with it: the
+    /// group dissolves when it drops below two members, and the
+    /// members keep the dock the group was in.
+    #[test]
+    fn a_panel_that_leaves_its_group_dissolves_it() {
+        let mut shell = gui_shell(gui_editor());
+        shell.move_panel_to_dock("Properties", DockSide::Left);
+        shell.group_panels("Layers", "Properties");
+        assert_eq!(shell.panel_groups.len(), 1);
+
+        shell.leave_group("Layers");
+        assert!(shell.panel_groups.is_empty(), "a group of one is no group");
+        assert_eq!(shell.panel_home("Properties"), DockSide::Left);
+        assert_eq!(shell.panel_home("Layers"), DockSide::Left);
+
+        // A panel that is in no group changes nothing.
+        shell.leave_group("History");
+        assert!(shell.panel_groups.is_empty());
+    }
+
+    /// The panels of a dock are the panels that live in it, in CS6's
+    /// roster order.
+    #[test]
+    fn a_dock_lists_the_panels_that_live_in_it() {
+        let mut shell = gui_shell(gui_editor());
+        assert!(shell.panels_in_dock(DockSide::Left).is_empty());
+        assert_eq!(
+            shell.panels_in_dock(DockSide::Right),
+            PANELS.iter().map(|spec| spec.name).collect::<Vec<_>>()
+        );
+
+        shell.move_panel_to_dock("Layers", DockSide::Left);
+        assert_eq!(shell.panels_in_dock(DockSide::Left), vec!["Layers"]);
+        assert!(!shell.panels_in_dock(DockSide::Right).contains(&"Layers"));
+    }
+
+    /// One headless frame with the dock drawn: the right dock, the
+    /// left dock, and the drag resolution all run without a window.
+    ///
+    /// The left dock exists only while a panel is in it or a drag is
+    /// in flight, so the frame moves a panel left first — the drop
+    /// target has to be there before a drag reaches it.
+    fn draw_one_frame(shell: &mut Shell) {
+        let ctx = egui::Context::default();
+        let output = ctx.run_ui(egui::RawInput::default(), |ui| {
+            let _ = shell.dock(ui);
+            let _ = shell.left_dock(ui);
+            shell.finish_panel_drag(ui, None, None);
+        });
+        // The frame's font textures are never applied — there is no
+        // window to paint them into — and dropping them unapplied is
+        // a panic in epaint.
+        output.drop_without_applying_deltas();
+        cancel_panel_drag(&ctx);
+    }
+
+    /// The dock draws: the panels CS6 opens on a fresh document are
+    /// in it, a panel moved to the other dock is in the other dock,
+    /// and a tab group draws once, at its anchor.
+    #[test]
+    fn the_dock_draws_the_panels_cs6_opens() {
+        let mut shell = gui_shell(gui_editor());
+        draw_one_frame(&mut shell);
+
+        // The right dock draws the panels that are open by default.
+        assert!(
+            shell
+                .panels_in_dock(DockSide::Right)
+                .contains(&"Properties"),
+            "the right dock draws Properties"
+        );
+        // The left dock has no panel in it yet, and no drag is in
+        // flight, so it is not drawn at all.
+        assert!(shell.panels_in_dock(DockSide::Left).is_empty());
+
+        // A panel moved to the other dock moves with it.
+        shell.move_panel_to_dock("Properties", DockSide::Left);
+        draw_one_frame(&mut shell);
+        assert_eq!(shell.panel_home("Properties"), DockSide::Left);
+        assert_eq!(shell.panels_in_dock(DockSide::Left), vec!["Properties"]);
+    }
+
+    /// A tab group draws as one slot: the group's members share the
+    /// slot, and the group is drawn at its anchor.
+    #[test]
+    fn a_tab_group_draws_as_one_slot() {
+        let mut shell = gui_shell(gui_editor());
+        shell.group_panels("Layers", "Properties");
+        assert_eq!(shell.panel_groups.len(), 1);
+        draw_one_frame(&mut shell);
+        // The frame drew the group; the group's members are still
+        // one slot, and the group survived the frame.
+        assert_eq!(shell.panel_groups.len(), 1);
+        assert_eq!(shell.panel_groups[0].members, vec!["Properties", "Layers"]);
     }
 }

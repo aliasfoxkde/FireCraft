@@ -179,6 +179,9 @@ impl Shell {
                 self.status = format!("{name} panel shown.");
             } else {
                 self.panel_hidden.push(name);
+                // A hidden panel leaves its tab group: a tab for a
+                // panel the user cannot see shows nothing.
+                self.leave_group(name);
                 self.status = format!("{name} panel hidden.");
             }
         } else {
