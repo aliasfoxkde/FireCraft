@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="docs/img/logo.svg" alt="FireCraft flame mark" width="112" height="112" />
+  <img src="docs/img/logo.png" alt="FireCraft flame mark" width="112" height="112" />
   <h1>FireCraft</h1>
   <p><strong>Create. Edit. Design.</strong></p>
   <p>A modern, open-source graphics editor inspired by the workflows of Adobe Fireworks CS6.</p>
@@ -166,10 +166,12 @@ The GUI and automation interfaces are intended to drive the same engine commands
 
 ## Brand and assets
 
-The FireCraft identity is built around a clean, custom-traced flame silhouette and a vertical ember-red-to-orange gradient. The canonical logo is SVG; matching raster exports supply the Linux application icon and repository artwork. The vector-editing illustration below shows the same flame in an active design state, with Bézier anchors, tangent handles, path outlines, and the gradient control line. It is brand artwork—not an application screenshot and not an Adobe or Fireworks asset.
+FireCraft uses the approved flame artwork as its single visual identity. The same supplied image—with its red-to-orange flame gradient, blue Bézier nodes and handles, gradient-direction indicator, and transparent background—is reused throughout the project. The README, website, favicon, and desktop application icon use identical artwork; there are no separately redrawn logo variants.
+
+The master artwork is stored at [`assets/branding/firecraft-approved-master.png`](assets/branding/firecraft-approved-master.png). The README and platform-specific asset locations are byte-identical exports of that master image, not alternate interpretations.
 
 <p align="center">
-  <img src="docs/img/firecraft-vector-brand-study.svg" alt="FireCraft flame mark in a vector editor, with Bézier nodes, curve handles, and gradient direction controls visible" width="420" />
+  <img src="docs/img/logo.png" alt="The approved FireCraft flame artwork shown in vector-editing mode, with Bézier nodes, curve handles, and gradient direction controls" width="256" />
 </p>
 
 Third-party assets must retain their license notices and be recorded in [`docs/ATTRIBUTION.md`](docs/ATTRIBUTION.md). FireCraft's source is licensed under Apache-2.0.
