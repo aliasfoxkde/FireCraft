@@ -24,6 +24,16 @@ name: Release
 on:
   push:
     tags: ["v*"]
+  # A manual run is a rehearsal of the release path. It can never cut a
+  # production release: the mode classifier rejects a production-shaped
+  # tag here (see the "Classify the release mode" step), and the
+  # rehearsal release is a prerelease titled `TEST <version>`.
+  workflow_dispatch:
+    inputs:
+      rehearsal_tag:
+        description: "Disposable rehearsal tag, e.g. v0.2.6-dryrun.1 (never a production tag)"
+        required: true
+        type: string
 
 # Least privilege by default (read-only checkout + artifact upload);
 # the `release` job widens to `contents: write` because `gh release
@@ -42,15 +52,41 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Determine the release version
+        # The version every artifact carries is the workspace version —
+        # not the tag. The tag names what is being released; the version
+        # names what was built. On a tag push the two agree (xtask's
+        # manifest generator refuses to build a tag that disagrees with
+        # the tree), and on a rehearsal the tag is a disposable name
+        # while the artifacts still describe the version they carry.
+        id: version
+        run: |
+          set -euo pipefail
+          version=$(cargo metadata --no-deps --format-version 1 \
+            | jq -r '.packages[] | select(.name == "xtask") | .version')
+          if [ -z "$version" ] || [ "$version" = "null" ]; then
+            echo "::error::could not read the workspace version from cargo metadata"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "the workspace builds version $version"
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          # The release artifacts are built with the compiler the gate
+          # judged, not with whatever `stable` happens to be that week
+          # (decision 0102).
+          toolchain: 1.99.1
 
       - name: Cache cargo
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ~/.cargo
           key: cargo-release-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
@@ -136,13 +172,13 @@ jobs:
 
       - name: Zip web bundle
         env:
-          TAG: ${{ github.ref_name }}
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
           # The zip name must match the checksum step's path exactly —
-          # "${TAG}" keeps the "v" (v0.2.2) while the artifacts are
-          # named without it (0.2.2), matching the native set.
+          # the artifacts are named by the version they carry, without
+          # the tag's "v" prefix.
           cd dist/web
-          zip -qr "../firecraft-web-${TAG#v}.zip" .
+          zip -qr "../firecraft-web-${VERSION}.zip" .
           cd ../..
 
       - name: Generate checksums
@@ -153,16 +189,16 @@ jobs:
           # Bare filenames (sed strips the dist/ prefix) so the aggregate
           # job's `sha256sum -c` works against the flat artifacts/ dir.
           (
-            sha256sum "dist/native/firecraft-${TAG#v}-linux-x86_64.tar.gz"
-            sha256sum "dist/native/firecraft-cli-${TAG#v}-linux-x86_64.tar.gz"
-            sha256sum "dist/native/firecraft_${TAG#v}_amd64.deb"
-            sha256sum "dist/firecraft-web-${TAG#v}.zip"
-            sha256sum "dist/source/firecraft-${TAG#v}-source.tar.gz"
-            sha256sum "dist/sbom/firecraft-${TAG#v}-sbom.cdx.json"
+            sha256sum "dist/native/firecraft-${VERSION}-linux-x86_64.tar.gz"
+            sha256sum "dist/native/firecraft-cli-${VERSION}-linux-x86_64.tar.gz"
+            sha256sum "dist/native/firecraft_${VERSION}_amd64.deb"
+            sha256sum "dist/firecraft-web-${VERSION}.zip"
+            sha256sum "dist/source/firecraft-${VERSION}-source.tar.gz"
+            sha256sum "dist/sbom/firecraft-${VERSION}-sbom.cdx.json"
             sha256sum dist/native/MANIFEST.sha256
           ) | sed 's# dist/native/# #; s# dist/source/# #; s# dist/sbom/# #; s# dist/# #' > dist/RELEASE_SHA256.txt
         env:
-          TAG: ${{ github.ref_name }}
+          VERSION: ${{ steps.version.outputs.version }}
 
       - name: Generate release manifest
         # The machine-readable release manifest (T27-54): one JSON
@@ -178,7 +214,7 @@ jobs:
           cargo run --quiet --package xtask -- dist --verify-manifest
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: release-artifacts
           path: |
@@ -212,10 +248,10 @@ jobs:
       # yet hold a .git, so a checkout placed after the download erases
       # the artifacts it just downloaded.
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Download artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: release-artifacts
           path: artifact-tree/
@@ -237,127 +273,97 @@ jobs:
         # required artifact, misnamed, empty, or whose digests disagree
         # with RELEASE_SHA256.txt — before gh release create runs. The
         # release manifest is checked against the same assets: it must
-        # carry the tag's version, list every published asset, and
-        # describe each one with the digest and size the asset actually
-        # has.
+        # carry the build's version, list every published asset, describe
+        # each one with the digest and size the asset actually has, and
+        # represent every required platform.
+        #
+        # The gate lives in scripts/validate_release_aggregate.sh so it
+        # can be exercised by its own self-test: in the workflow it runs
+        # once, on a tag, with nothing around it to tell it apart from a
+        # run that is merely quiet.
         env:
-          TAG: ${{ github.ref_name }}
+          VERSION: ${{ needs.build.outputs.version }}
         run: |
           set -euo pipefail
-          # Without nullglob an unmatched glob expands to the literal
-          # pattern, which would be validated as a file name.
-          shopt -s nullglob
-          expected=(
-            "firecraft-${TAG#v}-linux-x86_64.tar.gz"
-            "firecraft-cli-${TAG#v}-linux-x86_64.tar.gz"
-            "firecraft_${TAG#v}_amd64.deb"
-            "firecraft-web-${TAG#v}.zip"
-            "firecraft-${TAG#v}-source.tar.gz"
-            "firecraft-${TAG#v}-sbom.cdx.json"
-            "MANIFEST.sha256"
-            "RELEASE_SHA256.txt"
-            "release-manifest.json"
-          )
-          fail=0
-          for name in "${expected[@]}"; do
-            path="artifacts/$name"
-            if [ ! -f "$path" ]; then
-              echo "::error::required artifact missing: $name"
-              fail=1
-            elif [ ! -s "$path" ]; then
-              echo "::error::required artifact empty: $name"
-              fail=1
+          bash scripts/validate_release_aggregate.sh artifacts "$VERSION"
+
+      - name: Classify the release mode
+        # The tag decides whether this run cuts a release or rehearses
+        # one. The rule lives in scripts/classify_release_mode.sh and
+        # fails closed on every tag it does not recognise. A manual run
+        # may only rehearse: a production release requires a tag push.
+        id: mode
+        env:
+          EVENT: ${{ github.event_name }}
+          PUSHED_TAG: ${{ github.ref_name }}
+          REHEARSAL_TAG: ${{ inputs.rehearsal_tag }}
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT" = workflow_dispatch ]; then
+            tag="$REHEARSAL_TAG"
+            if [ -z "$tag" ]; then
+              echo "::error::a manual run must name its disposable rehearsal tag (e.g. v${VERSION}-dryrun.1)"
+              exit 1
             fi
-          done
-          # Every digested file must still match its recorded hash —
-          # a mismatch after download means a corrupted/mislabeled asset.
-          # The aggregate includes the native manifest's own digest;
-          # it is not recursive, so verify it along with every other file.
-          (cd artifacts && sha256sum -c RELEASE_SHA256.txt) || fail=1
-          # The release manifest must agree with the assets it describes:
-          # the same version, the same digests, the same sizes, and every
-          # published asset listed. jq ships in the runner image.
-          manifest="artifacts/release-manifest.json"
-          if [ -f "$manifest" ]; then
-            if ! command -v jq >/dev/null 2>&1; then
-              echo "::error::jq is required to validate the release manifest"
-              fail=1
-            else
-              if ! schema=$(jq -r '.schema // ""' "$manifest"); then
-                echo "::error::the release manifest is not valid JSON"
-                fail=1
-              elif [ "$schema" != "firecraft.release-manifest/1" ]; then
-                echo "::error::the release manifest carries an unknown schema: $schema"
-                fail=1
-              fi
-              if ! version=$(jq -r '.version // ""' "$manifest"); then
-                echo "::error::the release manifest is not valid JSON"
-                fail=1
-              elif [ "$version" != "${TAG#v}" ]; then
-                echo "::error::the release manifest describes version $version, the tag is ${TAG#v}"
-                fail=1
-              fi
-              # Every artifact the manifest lists must be present with the
-              # recorded digest and the recorded size.
-              if jq -r '.artifacts[] | "\(.sha256)  \(.name)"' "$manifest" > "$RUNNER_TEMP/manifest.sha256"; then
-                (cd artifacts && sha256sum -c "$RUNNER_TEMP/manifest.sha256") || fail=1
-              else
-                echo "::error::the release manifest lists no artifacts"
-                fail=1
-              fi
-              while read -r name size; do
-                if [ -z "$name" ]; then
-                  continue
-                fi
-                actual=$(stat -c%s "artifacts/$name" 2>/dev/null || echo "")
-                if [ "$actual" != "$size" ]; then
-                  echo "::error::the release manifest records $size B for $name, the asset is ${actual:-missing} B"
-                  fail=1
-                fi
-              done < <(jq -r '.artifacts[] | "\(.name) \(.size)"' "$manifest")
-              # Every published asset must be listed in the manifest: a
-              # manifest that omits an asset is as wrong as one that
-              # misdescribes it.
-              for name in "${expected[@]}"; do
-                if [ "$name" != "release-manifest.json" ]; then
-                  if ! jq -e --arg n "$name" '.artifacts | any(.name == $n)' "$manifest" >/dev/null; then
-                    echo "::error::$name is not listed in the release manifest"
-                    fail=1
-                  fi
-                fi
-              done
+            mode=$(bash scripts/classify_release_mode.sh "$tag" "$VERSION")
+            if [ "$mode" != test ]; then
+              echo "::error::a manual run may only rehearse — '$tag' is a production release tag"
+              exit 1
             fi
+          else
+            tag="$PUSHED_TAG"
+            mode=$(bash scripts/classify_release_mode.sh "$tag" "$VERSION")
           fi
-          # Version consistency: no artifact of one version may carry a
-          # different version string in its name than the tag.
-          for f in artifacts/*; do
-            case "$(basename "$f")" in
-              *"${TAG#v}"*) ;;
-              *.sha256|*.txt) ;;
-              # The manifest's name is fixed — the release names it
-              # release-manifest.json — so its version is checked inside
-              # the document above, not in the file name.
-              release-manifest.json) ;;
-              *) echo "::error::artifact name does not carry the tag version: $(basename "$f")"; fail=1 ;;
-            esac
-          done
-          if [ "$fail" -ne 0 ]; then
-            echo "::error::aggregate validation failed — refusing to create the release"
+          echo "release_tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
+          echo "release tag $tag is a $mode run of version ${VERSION}"
+
+      - name: Create the rehearsal tag
+        # A rehearsal tag does not exist yet: `gh release create` would
+        # create it at the default branch, and the release would then
+        # describe a commit that did not build the artifacts. The tag is
+        # created here, at the exact commit the build ran on, so the
+        # artifacts and the tag bind to one SHA. It is a disposable
+        # rehearsal tag: it carries the `-dryrun.<n>` marker, the
+        # classifier has already accepted that shape, and an existing
+        # tag is never overwritten.
+        if: steps.mode.outputs.mode == 'test' && github.event_name == 'workflow_dispatch'
+        env:
+          RELEASE_TAG: ${{ steps.mode.outputs.release_tag }}
+        run: |
+          set -euo pipefail
+          if git rev-parse -q --verify "refs/tags/$RELEASE_TAG" >/dev/null; then
+            echo "::error::the tag $RELEASE_TAG already exists — refusing to overwrite it"
             exit 1
           fi
-          echo "aggregate validation ok: ${#expected[@]} required artifacts present, digests verified"
+          if git ls-remote --exit-code --tags origin "refs/tags/$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "::error::the tag $RELEASE_TAG already exists on the remote — refusing to overwrite it"
+            exit 1
+          fi
+          git tag "$RELEASE_TAG" "$GITHUB_SHA"
+          git push origin "refs/tags/$RELEASE_TAG"
+          echo "created the disposable rehearsal tag $RELEASE_TAG at $GITHUB_SHA"
 
       - name: Create draft release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ steps.mode.outputs.release_tag }}
+          MODE: ${{ steps.mode.outputs.mode }}
         run: |
           set -euo pipefail
-          # Release body: the tracked notes in docs/releases/. Falls back
-          # to the checksum list only if that file is missing, so a release
-          # is never published with a bare SHA dump as its description.
+          # Release body: the tracked notes in docs/releases/. A
+          # production release must carry them — a release whose
+          # description is a checksum dump is not a release. A rehearsal
+          # may fall back to the checksum list, because its description
+          # is never the published one.
           notes="docs/releases/${TAG}.md"
-          if [ ! -f "$notes" ]; then
+          if [ "$MODE" = production ]; then
+            if [ ! -f "$notes" ]; then
+              echo "::error::$notes not found — a production release must carry its tracked release notes"
+              exit 1
+            fi
+          elif [ ! -f "$notes" ]; then
             echo "::warning::${notes} not found; using checksum list as release body"
             notes="artifacts/RELEASE_SHA256.txt"
           fi
@@ -366,7 +372,7 @@ jobs:
           # aborts the command with "unknown shorthand flag: 'a' in -a".
           # packaging/release-assets.sh owns that construction so it can
           # be tested directly instead of asserted on here.
-          bash packaging/release-assets.sh create "$TAG" release-assets.zlist "$notes"
+          bash packaging/release-assets.sh create "$TAG" release-assets.zlist "$notes" "$MODE"
 
       # Uncomment to also deploy to Cloudflare Pages on every tag push.
       # Requires CLOUDFLARE_API_TOKEN in repo secrets.
