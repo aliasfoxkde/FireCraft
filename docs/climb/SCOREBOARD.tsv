@@ -1,0 +1,2 @@
+date	commit	rung	S1_gate	S2_bound	S2_registry	S3_reportgap	S4_inert	S5a_impl	S5b_partial	S5c_missing	S6_tests	S7_godfiles	S8_wasm_raw	S9_live_traceable	S10_smoke_receipts	S11_open_issues	S12_branches	S13_coverage	note
+2026-11-13	1ac3dbc	baseline	green	168	253	52	2	82	25	11	1810	18	21271259	no	0	70	34	81.1	audit baseline; S1 from GitHub backup CI; S8 last recorded in SESSIONS.md
