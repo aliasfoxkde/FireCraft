@@ -632,12 +632,14 @@ impl Shell {
         self.smart_guides = self.layout.smart_guides;
         self.ui_scale = self.layout.ui_scale;
         // Recents naming a command this build lacks are dropped —
-        // same rule as the panel inventory above.
+        // same rule as the panel inventory above. The list is the
+        // registry's ids plus the session-scoped ones, because the
+        // palette offers both.
         self.palette.recents = self
             .layout
             .palette_recents
             .iter()
-            .filter(|recent| engine::catalog::ids().contains(&recent.as_str()))
+            .filter(|recent| engine::catalog::all_ids().contains(&recent.as_str()))
             .cloned()
             .collect();
     }
@@ -4389,7 +4391,7 @@ mod tests {
         restored.palette.filter.clear();
         let hits = restored.palette_matches();
         assert_eq!(&hits[..2], ["object.setOpacity", "autoshape.rect"]);
-        assert_eq!(hits.len(), engine::catalog::ids().len());
+        assert_eq!(hits.len(), engine::catalog::all_ids().len());
     }
 
     /// reachable by an empty filter, carries a non-null payload
@@ -4401,11 +4403,15 @@ mod tests {
         let mut shell = gui_shell(gui_editor());
         shell.toggle_palette();
         assert!(shell.palette.open, "the palette opens on demand");
-        let catalog = engine::catalog::ids();
+        let catalog = engine::catalog::all_ids();
         assert_eq!(
             shell.palette_matches(),
             catalog,
             "palette lists the catalog"
+        );
+        assert!(
+            catalog.contains(&engine::REWIND_ID),
+            "the session-scoped rewind is offered alongside the registry"
         );
         for name in catalog {
             let payload = shell.payload_for(name);
@@ -4421,6 +4427,44 @@ mod tests {
         }
     }
 
+    /// The palette runs the session-scoped rewind: the command is
+    /// offered beside the registry's ids, its payload is grounded to
+    /// the live history (one step back, not a fuzz depth), and running
+    /// it takes that step back.
+    #[test]
+    fn palette_runs_the_session_scoped_rewind() {
+        let mut shell = gui_shell(gui_editor());
+        assert!(
+            shell.palette_matches().contains(&engine::REWIND_ID),
+            "the palette offers the rewind"
+        );
+        let before = shell.editor.session.undo_len();
+        let id = shell.editor.current_cell().expect("cell").elements[0];
+        shell
+            .editor
+            .apply(
+                "object.rename",
+                serde_json::json!({ "id": id, "name": "renamed" }),
+            )
+            .expect("rename");
+        assert_eq!(shell.editor.session.undo_len(), before + 1);
+
+        // The grounded payload names the depth below where the
+        // document sits — the step the run takes back.
+        let payload = shell.payload_for(engine::REWIND_ID);
+        assert_eq!(
+            payload["depth"],
+            serde_json::json!(before),
+            "the payload is grounded to the live history"
+        );
+        assert!(
+            shell.run_palette_command(engine::REWIND_ID),
+            "the rewind runs: {status}",
+            status = shell.status
+        );
+        assert_eq!(shell.editor.session.undo_len(), before);
+    }
+
     /// The palette filter narrows by substring (case-insensitive), the
     /// selection index is reset when the query changes, and grounding
     /// clamps the fuzzdrive template's out-of-range targets to the
@@ -4429,7 +4473,7 @@ mod tests {
     #[test]
     fn palette_filters_and_grounds_payloads() {
         let mut shell = gui_shell(gui_editor());
-        let total = engine::catalog::ids().len();
+        let total = engine::catalog::all_ids().len();
 
         shell.palette.filter = "rect".to_owned();
         for name in shell.palette_matches() {

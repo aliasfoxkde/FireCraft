@@ -18,8 +18,9 @@
 //!   CLI `export` verb).
 //! - `firecraft.undo` / `firecraft.redo` — step the session's undo
 //!   stack; the step label comes back as text.
-//! - `firecraft.listCommands` — every registry command id the session
-//!   binds (`engine::catalog::ids()` authority), one per line.
+//! - `firecraft.listCommands` — every command id the session runs
+//!   (the registry's ids plus the session-scoped ones — the
+//!   `engine::catalog::all_ids()` authority), one per line.
 //!
 //! Resources: `document://current` is the `info` summary as
 //! `application/json` — agents can read it without a tool round-trip.
@@ -333,10 +334,15 @@ fn undo_tool(session: &mut Session, id: serde_json::Value, redo: bool) -> serde_
     }
 }
 
-/// `firecraft.listCommands`: the registry ids the session binds, one
+/// `firecraft.listCommands`: every command id the session runs, one
 /// per line (sorted — discovery wants scan order, not insertion order).
+///
+/// The list is the registry's ids plus the session-scoped ones
+/// (`history.rewind`): a command `firecraft.apply` can run belongs in
+/// the discovery list, or an agent cannot find it.
 fn list_commands_tool(session: &Session, id: serde_json::Value) -> serde_json::Value {
     let mut names = session.command_names();
+    names.extend(engine::catalog::session_ids());
     names.sort_unstable();
     tool_result(id, false, &names.join("\n"))
 }

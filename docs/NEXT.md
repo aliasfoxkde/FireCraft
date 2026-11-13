@@ -459,10 +459,15 @@ evidence work, tracked outside that campaign.
   `new_parks_the_current_document`,
   `close_refuses_a_dirty_document`. (Window-menu panel toggles landed
   in Phase 19.6 batches 3 and 10.)
-- **20.6 History panel click-to-rewind** (S): **LANDED 2026-11-11**
-  in #107 — journal replay to seq N; the session-scoped rewind
-  command is also discoverable from the command palette and MCP
-  list/run surface in open PR #122.
+- **20.6 History panel click-to-rewind** (S): **LANDED 2026-11-11** — the
+  clickable History rows (the engine half, decision 0082) and the
+  command surface: `history.rewind` is a session-scoped id, so every
+  surface that enumerates commands enumerates
+  `catalog::all_ids()` — the command palette offers it (with its
+  payload grounded one step below the document's live depth) and
+  `firecraft.listCommands` advertises it
+  ([T10](tasks/T10-history-rewind-command.md), decision
+  [0096](decisions/0096-the-rewind-is-a-command-every-surface-can-name.md)).
 - **20.7 Slice/hotspot behavior editing + HTML preview** (M):
   **LANDED 2026-11-11** in #107.
 
