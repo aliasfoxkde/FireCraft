@@ -13,13 +13,17 @@
 
 - **Release:** `v0.2.5` is the latest tag; `main` carries the
   shell-lineage train (#107) and the post-train dependency work
-  (#117) beyond it. The live Pages deployment was reconciled on
-  2026-11-11 (#104): its JavaScript, wasm and `appinfo` match the
-  released v0.2.5 web bytes; `host.html`/`index.html` differ only by
-  Cloudflare's injected analytics beacon. Decision recorded in #104:
-  the release bytes are the source of truth; republishing from the
-  release artifact is the pending next step (T18 row in
-  [`TASKS.md`](TASKS.md)).
+  (#117) beyond it. The live Pages deployment was measured on
+  2026-11-11: its trunk asset name and wasm digest match neither the
+  published v0.2.5 release asset nor a rebuild of the v0.2.5 tag, so
+  the live build corresponds to no identifiable release and its source
+  revision is unknown. The earlier reconciliation (#104) inferred a
+  match from equal file sizes and an identical `appinfo.json`; the
+  digest measurement falsifies it. The served `index.html` differs
+  only by the substituted asset names and Cloudflare's injected
+  analytics beacon — that difference is explained. Republishing from a
+  named commit, with its digests recorded, is the pending next step
+  (T18 row in [`TASKS.md`](TASKS.md)).
 - **Build evidence:** the earlier optimized `dist/web/` distribution,
   built 2026-11-04 16:45 local time, had a 21,274,323-byte wasm
   (below the 21,500,000-byte ceiling). It was built from `56ee1bf`,
@@ -85,8 +89,8 @@
 | Earlier optimized `dist/web/` | 2026-11-04 16:45 local; 21,274,323-byte wasm; manifest verified | Build from `56ee1bf`, whose Git tree matches `5fac7a2`; deployment comparison and earlier bridge smoke |
 | T22 optimized rebuild in `dist/web/` | 2026-11-04; 21,271,259-byte wasm | `5fac7a2` plus dock and inspector changes; six browser captures and interaction checks in [T22](tasks/T22-screenshot-ui.md#receipts--2026-11-04) |
 | Raw `web/dist/` | 2026-11-04 18:21 local; 95,583,065-byte wasm | Development output; not the optimized distribution |
-| Browser smoke | Earlier optimized artifact: bridge smoke in session history; T22 rebuild: six captures and interaction checks in T22 | Local end-to-end proof for each recorded artifact; the live deployment was reconciled against the release bytes on 2026-11-11 (#104) |
-| Live Pages | Reconciled 2026-11-11 (#104) | JS/wasm/appinfo match the released v0.2.5 web bytes; `host.html`/`index.html` differ only by Cloudflare's injected beacon; release bytes are the source of truth |
+| Browser smoke | Earlier optimized artifact: bridge smoke in session history; T22 rebuild: six captures and interaction checks in T22 | Local end-to-end proof for each recorded artifact; the live deployment was measured against the release bytes on 2026-11-11 — it is neither the release asset nor a rebuild of the tag |
+| Live Pages | Measured 2026-11-11 by digest | The live bundle's trunk asset name (`2274ac8c2925b61d`) and wasm digest (`f4f0a3f0…`) match neither the published v0.2.5 release asset nor a rebuild of the v0.2.5 tag; the live build corresponds to no identifiable release and its source revision is unknown. `index.html` differs only by the substituted asset names and Cloudflare's injected beacon |
 
 <!-- /coderabbit-ai-generated:v1 -->
 

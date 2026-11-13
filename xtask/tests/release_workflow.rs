@@ -227,7 +227,7 @@ fn stage_flattens_the_artifact_tree_into_the_release_asset_set() {
 fn create_passes_the_assets_positionally_to_gh_release_create() {
     let sandbox = Sandbox::new("argv");
     write_release_tree(&sandbox);
-    sandbox.write("notes.md", "release notes");
+    sandbox.write("docs/releases/v0.2.5.md", "release notes");
     let output = run_script(&sandbox, &["stage", "src", "flat", "assets.zlist"]);
     assert!(
         output.status.success(),
@@ -238,7 +238,7 @@ fn create_passes_the_assets_positionally_to_gh_release_create() {
     let (bin, argv_out) = install_stub_gh(&sandbox);
     let output = run_create(
         &sandbox,
-        &["v0.2.5", "assets.zlist", "notes.md"],
+        &["v0.2.5", "assets.zlist", "docs/releases/v0.2.5.md"],
         &bin,
         &argv_out,
     );
@@ -261,7 +261,7 @@ fn create_passes_the_assets_positionally_to_gh_release_create() {
         "0.2.5".to_string(),
         "--draft".to_string(),
         "--notes-file".to_string(),
-        "notes.md".to_string(),
+        "docs/releases/v0.2.5.md".to_string(),
         "flat/RELEASE_SHA256.txt".to_string(),
         "flat/firecraft-web-0.2.5.zip".to_string(),
         "flat/MANIFEST.sha256".to_string(),
@@ -283,7 +283,7 @@ fn create_keeps_a_filename_with_a_space_in_one_argument() {
     let sandbox = Sandbox::new("space");
     sandbox.write("src/native/firecraft 0.2.5 linux.tar.gz", "spaced");
     sandbox.write("src/RELEASE_SHA256.txt", "checksums");
-    sandbox.write("notes.md", "release notes");
+    sandbox.write("docs/releases/v0.2.5.md", "release notes");
     let output = run_script(&sandbox, &["stage", "src", "flat", "assets.zlist"]);
     assert!(
         output.status.success(),
@@ -294,7 +294,7 @@ fn create_keeps_a_filename_with_a_space_in_one_argument() {
     let (bin, argv_out) = install_stub_gh(&sandbox);
     let output = run_create(
         &sandbox,
-        &["v0.2.5", "assets.zlist", "notes.md"],
+        &["v0.2.5", "assets.zlist", "docs/releases/v0.2.5.md"],
         &bin,
         &argv_out,
     );
@@ -331,13 +331,13 @@ fn stage_refuses_an_empty_artifact_tree() {
 #[test]
 fn create_refuses_to_run_with_an_empty_asset_list() {
     let sandbox = Sandbox::new("no-assets");
-    sandbox.write("notes.md", "release notes");
+    sandbox.write("docs/releases/v0.2.5.md", "release notes");
     sandbox.write("assets.zlist", "");
 
     let (bin, argv_out) = install_stub_gh(&sandbox);
     let output = run_create(
         &sandbox,
-        &["v0.2.5", "assets.zlist", "notes.md"],
+        &["v0.2.5", "assets.zlist", "docs/releases/v0.2.5.md"],
         &bin,
         &argv_out,
     );

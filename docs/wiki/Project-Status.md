@@ -23,7 +23,7 @@ FireCraft is a functional Rust graphics editor with a shared document engine and
 
 ## Deployment and release
 
-The 2026-11-11 deployment reconciliation (#104) found that the live site's JavaScript, Wasm and WebOS app metadata match the v0.2.5 release bytes. Cloudflare injects an analytics beacon into the served HTML, which accounts for the remaining HTML-manifest difference. Republish from the canonical release artifact is pending.
+The live deployment is **not** the v0.2.5 release artifact and is **not** reproducible from the v0.2.5 tag — measured 2026-11-11 by digest. The live bundle's trunk asset name (`2274ac8c2925b61d`) and wasm digest (`f4f0a3f0…`) match neither the published v0.2.5 release asset (`f9dbe2f14305b2d9` / `a8a4fa4f…`) nor a rebuild of the v0.2.5 tag (`103c62d3366aef17` / `5934702f…`), so the live build corresponds to no identifiable release and its source revision is unknown. The served `index.html` differs from the build's own only by the substituted asset names and the Cloudflare analytics beacon — that difference is explained. Do not infer the live build from the source version alone: every commit since the v0.2.5 stamp reports version `0.2.5`. The measurement is in [T18](../tasks/T18-release.md#deployment-receipt--2026-11-11).
 
 The current release program keeps standalone FireCraft and embeddable developer artifacts as complementary targets. A packaging recipe or cross-compile is not a verified release.
 
