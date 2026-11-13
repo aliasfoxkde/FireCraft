@@ -223,6 +223,20 @@ pub struct Shell {
     /// Window-menu panel visibility: names of right-dock panels the
     /// user closed. Absent = shown (CS6 default is everything open).
     panel_hidden: Vec<&'static str>,
+    /// The panels the user has moved out of the right stack, and the
+    /// dock each now lives in. Only *moved* panels are listed: an
+    /// unlisted panel is in CS6's default dock, so the saved layout
+    /// stays small and "not mentioned" keeps meaning "the default".
+    panel_homes: Vec<(&'static str, DockSide)>,
+    /// The tab groups: the panels that share one slot in a dock.
+    /// Empty for the default arrangement — a panel is on its own
+    /// until the user drops it on another panel's title.
+    panel_groups: Vec<panel_windows::PanelGroup>,
+    /// The panels' title rects, recorded each frame. They are the
+    /// drop targets that tab a panel with another one, so they are
+    /// frame-local: a rect from an earlier frame is a rect from a
+    /// layout that no longer exists.
+    panel_title_rects: Vec<(&'static str, egui::Rect)>,
     /// The URL panel's edit-in-progress state — the object it edits
     /// and the link/alt text being typed.
     url_draft: Option<panels_web::UrlDraft>,
@@ -369,6 +383,18 @@ impl ScreenMode {
 struct ShellLayout {
     /// The panel names currently hidden from the dock.
     panel_hidden: Vec<String>,
+    /// The panels the user moved out of the right stack, and the dock
+    /// each now lives in. `#[serde(default)]` — a layout saved
+    /// before panels could move carries no homes, which is the
+    /// default arrangement.
+    #[serde(default)]
+    panel_homes: Vec<(String, DockSide)>,
+    /// The tab groups: the panels that share one slot, and the tab
+    /// each group shows. `#[serde(default)]` — a layout saved
+    /// before panels could be tabbed carries no groups, which is the
+    /// default arrangement.
+    #[serde(default)]
+    panel_groups: Vec<PanelGroupLayout>,
     /// The Tab-key fold of the whole panel group.
     panels_hidden: bool,
     /// The left tool dock fold.
@@ -388,6 +414,16 @@ struct ShellLayout {
     palette_recents: Vec<String>,
 }
 
+/// The persisted form of a tab group: the panels that share one
+/// slot in a dock, and the tab the group shows.
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
+struct PanelGroupLayout {
+    /// The panels in the group, in tab order.
+    members: Vec<String>,
+    /// The member whose content the group shows.
+    active: String,
+}
+
 impl Default for ShellLayout {
     fn default() -> Self {
         Self {
@@ -395,6 +431,8 @@ impl Default for ShellLayout {
                 .into_iter()
                 .map(str::to_owned)
                 .collect(),
+            panel_homes: Vec::new(),
+            panel_groups: Vec::new(),
             panels_hidden: false,
             tools_hidden: false,
             options_bar_hidden: false,
@@ -494,6 +532,12 @@ impl Shell {
             // CS6's fresh-document roster: Properties/Pages/States/
             // Layers open, the rest of the panel inventory closed.
             panel_hidden: Self::default_open_panels(),
+            // No panel has been moved yet: every panel is in CS6's
+            // default dock.
+            panel_homes: Vec::new(),
+            // No panel is tabbed with another yet.
+            panel_groups: Vec::new(),
+            panel_title_rects: Vec::new(),
             url_draft: None,
             swap_target: None,
             find_query: None,
@@ -538,6 +582,47 @@ impl Shell {
             .filter(|panel| saved.contains(&panel.name))
             .map(|panel| panel.name)
             .collect();
+        // The same rule for the moved panels: a home naming a panel
+        // this build lacks is dropped, and the last entry for a panel
+        // wins.
+        let mut homes: Vec<(&'static str, DockSide)> = Vec::new();
+        for (name, side) in &self.layout.panel_homes {
+            if let Some(spec) = panel_windows::panel_spec(name) {
+                homes.retain(|(moved, _)| *moved != spec.name);
+                homes.push((spec.name, *side));
+            }
+        }
+        self.panel_homes = homes;
+        // The same rule for the tab groups: a group naming a panel
+        // this build lacks loses that member, a group that drops
+        // below two members dissolves, and a panel can be in only one
+        // group — the last group that claims it wins.
+        let mut groups: Vec<panel_windows::PanelGroup> = Vec::new();
+        for group in &self.layout.panel_groups {
+            let mut members: Vec<&'static str> = Vec::new();
+            for member in &group.members {
+                let Some(spec) = panel_windows::panel_spec(member) else {
+                    continue;
+                };
+                if members.contains(&spec.name) {
+                    continue;
+                }
+                for existing in groups.iter_mut() {
+                    existing.members.retain(|claimed| *claimed != spec.name);
+                }
+                members.push(spec.name);
+            }
+            if members.len() < 2 {
+                continue;
+            }
+            let active = panel_windows::panel_spec(&group.active)
+                .map(|spec| spec.name)
+                .filter(|name| members.contains(name))
+                .unwrap_or(members[0]);
+            groups.push(panel_windows::PanelGroup { members, active });
+        }
+        groups.retain(|group| group.members.len() > 1);
+        self.panel_groups = groups;
         self.panels_hidden = self.layout.panels_hidden;
         self.tools_hidden = self.layout.tools_hidden;
         self.options_bar_hidden = self.layout.options_bar_hidden;
@@ -564,6 +649,23 @@ impl Shell {
                 .panel_hidden
                 .iter()
                 .map(|name| (*name).to_owned())
+                .collect(),
+            panel_homes: self
+                .panel_homes
+                .iter()
+                .map(|(name, side)| ((*name).to_owned(), *side))
+                .collect(),
+            panel_groups: self
+                .panel_groups
+                .iter()
+                .map(|group| PanelGroupLayout {
+                    members: group
+                        .members
+                        .iter()
+                        .map(|name| (*name).to_owned())
+                        .collect(),
+                    active: group.active.to_owned(),
+                })
                 .collect(),
             panels_hidden: self.panels_hidden,
             tools_hidden: self.tools_hidden,
@@ -3079,8 +3181,23 @@ impl eframe::App for Shell {
         // panels. A side panel *reserves* its width, so the canvas
         // shrinks instead of being covered, and the column scrolls so
         // every panel stays reachable at any viewport height.
+        //
+        // The left column appears when a panel has been moved out of
+        // the right stack, or while a panel is being dragged — the
+        // drop target has to be there before the drag reaches it.
         if !self.panels_hidden && !full_screen {
-            self.dock(ui);
+            // The title rects are this frame's drop targets, so they
+            // are recorded afresh: a panel dropped on another panel's
+            // title is tabbed with it.
+            self.panel_title_rects.clear();
+            let right = self.dock(ui);
+            let left = self.left_dock(ui);
+            self.finish_panel_drag(ui, right, left);
+        } else {
+            // No dock is drawn, so no drop can be resolved — a drag
+            // still in flight is cancelled rather than left to move a
+            // panel on a later release.
+            panel_windows::cancel_panel_drag(ui.ctx());
         }
         if !full_screen {
             egui::Panel::bottom(egui::Id::new("status")).show(ui, |ui| {
@@ -4033,6 +4150,150 @@ mod tests {
             restored.panel_hidden.len(),
             "no unknown panel names survive apply_layout"
         );
+    }
+
+    /// A panel moved out of the right stack lives in the other dock,
+    /// and moving it back returns it to the default arrangement —
+    /// where it drops out of the moved set entirely, so the saved
+    /// layout only ever names panels that are actually moved.
+    #[test]
+    fn a_moved_panel_lives_in_the_other_dock() {
+        let mut shell = gui_shell(gui_editor());
+        assert_eq!(shell.panel_home("Properties"), DockSide::Right);
+        assert!(shell.panels_in_dock(DockSide::Left).is_empty());
+
+        shell.move_panel_to_dock("Properties", DockSide::Left);
+        assert_eq!(shell.panel_home("Properties"), DockSide::Left);
+        assert_eq!(shell.panels_in_dock(DockSide::Left), vec!["Properties"]);
+        assert!(
+            !shell
+                .panels_in_dock(DockSide::Right)
+                .contains(&"Properties")
+        );
+
+        // Back to the default dock: the panel is not "moved" any more.
+        shell.move_panel_to_dock("Properties", DockSide::Right);
+        assert_eq!(shell.panel_home("Properties"), DockSide::Right);
+        assert!(shell.panel_homes.is_empty());
+    }
+
+    /// The moved panels survive a save: the layout round-trips the
+    /// homes, and a home naming a panel this build lacks is dropped
+    /// rather than resurrected.
+    #[test]
+    fn the_panel_homes_round_trip_through_save() {
+        let mut shell = gui_shell(gui_editor());
+        shell.move_panel_to_dock("History", DockSide::Left);
+        shell.move_panel_to_dock("Web Layer", DockSide::Left);
+        let saved = shell.capture_layout();
+        assert_eq!(saved.panel_homes.len(), 2);
+
+        let encoded = ron_mid_encoded(&saved);
+        let decoded: ShellLayout = ron::from_str(&encoded).expect("layout decodes");
+        let mut restored = gui_shell(gui_editor());
+        restored.layout = decoded;
+        restored.apply_layout();
+        assert_eq!(restored.panel_home("History"), DockSide::Left);
+        assert_eq!(restored.panel_home("Web Layer"), DockSide::Left);
+        assert_eq!(restored.panel_home("Properties"), DockSide::Right);
+
+        // A home naming a panel this build lacks is dropped.
+        let mut foreign = shell.capture_layout();
+        foreign
+            .panel_homes
+            .push(("Not A Panel".to_owned(), DockSide::Left));
+        let mut restored = gui_shell(gui_editor());
+        restored.layout = foreign;
+        restored.apply_layout();
+        assert_eq!(restored.panel_homes.len(), 2, "unknown home dropped");
+    }
+
+    /// A panel dropped on another panel's title is tabbed with it:
+    /// the two share one slot, the dropped panel is the tab the
+    /// group shows, and the group is one unit — a move carries the
+    /// whole group.
+    #[test]
+    fn a_dropped_panel_is_tabbed_with_the_panel_it_landed_on() {
+        let mut shell = gui_shell(gui_editor());
+        assert!(shell.panel_groups.is_empty(), "no group before the drop");
+
+        shell.group_panels("Layers", "Properties");
+        assert_eq!(shell.panel_groups.len(), 1);
+        assert_eq!(shell.panel_groups[0].members, vec!["Properties", "Layers"]);
+        assert_eq!(shell.panel_groups[0].active, "Layers");
+
+        // The group is one slot: the members live where the group
+        // does, and a move carries both.
+        shell.move_panel_to_dock("Layers", DockSide::Left);
+        assert_eq!(shell.panel_home("Properties"), DockSide::Left);
+        assert_eq!(shell.panel_home("Layers"), DockSide::Left);
+        assert_eq!(
+            shell.panels_in_dock(DockSide::Left),
+            vec!["Properties", "Layers"]
+        );
+    }
+
+    /// A closed panel leaves its tab group, and a group that drops
+    /// below two members is no longer a group.
+    #[test]
+    fn closing_a_panel_dissolves_its_group() {
+        let mut shell = gui_shell(gui_editor());
+        shell.group_panels("Layers", "Properties");
+        assert_eq!(shell.panel_groups.len(), 1);
+
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::TogglePanel(
+            "Layers",
+        )));
+        assert!(shell.panel_groups.is_empty(), "a group of one is no group");
+    }
+
+    /// The tab groups survive a save: the group and the tab it shows
+    /// round-trip, a group naming a panel this build lacks loses that
+    /// member, and a group of one dissolves.
+    #[test]
+    fn the_panel_groups_round_trip_through_save() {
+        let mut shell = gui_shell(gui_editor());
+        shell.group_panels("Layers", "Properties");
+        let saved = shell.capture_layout();
+        assert_eq!(saved.panel_groups.len(), 1);
+
+        let encoded = ron_mid_encoded(&saved);
+        let decoded: ShellLayout = ron::from_str(&encoded).expect("layout decodes");
+        let mut restored = gui_shell(gui_editor());
+        restored.layout = decoded;
+        restored.apply_layout();
+        assert_eq!(restored.panel_groups.len(), 1);
+        assert_eq!(
+            restored.panel_groups[0].members,
+            vec!["Properties", "Layers"]
+        );
+        assert_eq!(restored.panel_groups[0].active, "Layers");
+
+        // A group naming panels this build lacks carries nothing.
+        let mut foreign = shell.capture_layout();
+        foreign.panel_groups.push(PanelGroupLayout {
+            members: vec!["Not A Panel".to_owned(), "Also Not A Panel".to_owned()],
+            active: "Not A Panel".to_owned(),
+        });
+        let mut restored = gui_shell(gui_editor());
+        restored.layout = foreign;
+        restored.apply_layout();
+        assert_eq!(
+            restored.panel_groups.len(),
+            1,
+            "a group of unknown panels carries nothing"
+        );
+
+        // A group of one is not a group.
+        let mut lonely = shell.capture_layout();
+        lonely.panel_groups.push(PanelGroupLayout {
+            members: vec!["Swatches".to_owned()],
+            active: "Swatches".to_owned(),
+        });
+        let mut restored = gui_shell(gui_editor());
+        restored.layout = lonely;
+        restored.apply_layout();
+        assert_eq!(restored.panel_groups.len(), 1, "a group of one dissolves");
     }
 
     /// The tool-flyout hold decision is a pure function of elapsed
