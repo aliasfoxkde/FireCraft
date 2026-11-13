@@ -57,6 +57,11 @@ columns when re-blessing.
 The floors were raised 60% → 81.1% lines / 78.7% functions (measured
 baseline, 2026-10-26). The gate is rising-only from here.
 **2026-10-26: 81.1/78.8 measured, floors 81.1/78.7; 14.1 landed.**
+**2026-11-12: the floor is a claim about a compiler too.** rustc 1.100.0
+measures a byte-identical tree at 77.0%/76.1% where 1.99.1 measures
+81.9%/78.9%, so the CI toolchain is now pinned to 1.99.1 and the gate names
+the compiler that measured it (decision 0102). A re-bless names its compiler
+as well.
 
 - **14.1 Editor surface tests** — LANDED 2026-10-26 (`cbfe7eb`, 30
   tests). The listed residuals are all covered since: `import_styles`
