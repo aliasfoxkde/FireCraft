@@ -431,7 +431,66 @@ this dated audit.
 
 ---
 
-## 16. Closed work (for context — do not reopen without new evidence)
+## 16. The surface gap — 85 carried commands the shell never binds (2026-11-12)
+
+The audit in §1.2 and the phases in §3–§13 track verbs the engine
+does **not** carry. This section tracks the other half of the same
+gap: verbs the engine **does** carry, and the shell's designed
+surface never binds.
+
+The reachability gate measures it. `xtask/src/reachability.rs` scans
+`crates/app/src` for the command ids the shell hands the engine —
+string literals before each file's first `#[cfg(test)]` marker — and
+compares them against `engine::catalog::ids()`. The floor lives in
+`.reachability-floor.tsv` and is a one-way ratchet: the unreachable
+share may fall and never rise.
+
+At the 2026-11-12 measurement: **168 of 253 registry commands bound
+(66.40 %), 85 unreachable**, against a 66.40 % floor.
+
+The command palette (Ctrl+P) can run every registered command, so it
+does not count — the metric is about the surface CS6 actually shows a
+user: the menu bar, the panels, the dialogs and the canvas tools.
+
+The 85, by family:
+
+| Family | Count | Commands | Issue |
+|---|---|---|---|
+| `text.*` | 17 | `setTextParaIndent`, `setTextParaSpacingBefore`, `setTextParaSpacingAfter`, `setTextRectangle`, `setTextRectangleAuto`, `setTextRectangleAutoFromPoint`, `setTextRuns`, `applyCharacterMarkup`, `removeCharacterMarkup`, `applyFontMarkup`, `removeFontMarkup`, `setTextCustomAntiAliasStrength`, `setTextCustomAntiAliasSharpness`, `setTextCustomAntiAliasOverSample`, `setTextOnPathOffset`, `replaceButtonTextStrings`, `replaceButtonTextStringsInInstances` | [#136](https://github.com/aliasfoxkde/FireCraft/issues/136) |
+| `symbol.*` | 16 | `setAnimInstanceNumFrames`, `setAnimInstanceLoopCount`, `setAnimInstanceOffsetDist`, `setAnimInstanceRotationAmount`, `setAnimInstanceScaleAmount`, `setAnimInstanceStartEndOpacity`, `setButtonOptions`, `setButtonAutoSlice`, `setButtonShowDownOnLoad`, `setButtonIncludeDownState`, `setButtonIncludeOverWhileDownState`, `setParam`, `setCustomData`, `editDetach`, `editReorder`, `duplicateSymbolForAlias` | [#137](https://github.com/aliasfoxkde/FireCraft/issues/137) |
+| `selection.*` + `filter.*` | 13 | `selectAll`, `selectNone`, `selectInverse`, `selectAllOnLayer`, `duplicateToFrames`, `duplicateToFrameRange`, `distributeToFrames`, `filter.selection`, `filter.selectionByID`, `filter.selectionByName`, `filter.convolveSelection`, `filter.motionBlurSelection`, `filter.setEffectName` | [#138](https://github.com/aliasfoxkde/FireCraft/issues/138) |
+| `page.*` + `cell.*` + `document.*` + `frame.*` | 11 | `page.setName`, `page.delete`, `page.setMaster`, `page.unsetMaster`, `page.addMasterLayer`, `page.changeGuide`, `page.removeGuide`, `cell.setVisible`, `cell.setLocked`, `document.deleteAllInDocument`, `frame.reorder` | [#139](https://github.com/aliasfoxkde/FireCraft/issues/139) |
+| `mask.*` + `bitmap.*` + `layer.*` + `object.*` + `path.*` + `style.*` | 18 | `mask.setMode`, `mask.setShowAttrs`, `mask.moveBy`, `mask.moveContentsBy`, `bitmap.setPixelMask`, `bitmap.movePixelMaskBy`, `layer.setSharing`, `layer.shareToPages`, `layer.detachShared`, `object.moveToCell`, `object.resize`, `object.setGroupType`, `path.cropSelection`, `path.setPatternFill`, `path.warp`, `style.redefineByName`, `style.redefineByIndex`, `style.scaleStyles` | [#140](https://github.com/aliasfoxkde/FireCraft/issues/140) |
+| `hotspot.*` + `slice.*` + `primitive.*` + `autoshape.*` + `clipboard.*` | 10 | `hotspot.setRectangle`, `hotspot.appendPoint`, `hotspot.copyToHotspot`, `slice.setBackground`, `slice.appendPoint`, `primitive.setRectRoundness`, `primitive.setRectSides`, `autoshape.rect`, `autoshape.redraw`, `clipboard.pasteFromChannelToChannel` | [#141](https://github.com/aliasfoxkde/FireCraft/issues/141) |
+
+Three of these are worth naming here, because the gap is not always a
+missing surface:
+
+- **The selection family is a routing defect, not a missing
+  feature.** The shell implements Select All and Select Inverse — but
+  over the editor's own cell selection (`ShellAction::SelectAll`,
+  `fn select_inverse` in `crates/app/src/shell/mod.rs`) instead of by
+  dispatching `selection.selectAll` / `selection.selectInverse`. The
+  behaviour exists; the engine's selection model, undo and scripting
+  surface are not what the user gets.
+- **The `text.*` paragraph verbs need layout work, not only a
+  binding.** The model and the FWMAP round-trip already carry
+  `PINf` / `PSBf` / `PSAf`; the text layout engine does not apply
+  them yet. A panel field that writes a value the renderer ignores is
+  not a binding — it is a surface that engages and changes nothing.
+- **The `symbol.setAnimInstance*` family closes a recorded residual.**
+  The loop count is the "document-level loop count (CS6's
+  `{loopCount:%Ai}`)" that `NEXT.md` phase 20.3 and `TASKS.md` row 8
+  still list as open.
+
+The order of work follows the families above, and each batch lands on
+its own branch with a pull request. When a batch lands, the floor is
+re-pinned deliberately (`cargo run -p xtask -- reachability --bless`);
+the bless refuses to lower it.
+
+---
+
+## 17. Closed work (for context — do not reopen without new evidence)
 
 - **M0–M15** (2026-10-10 → 10-13): the whole milestone ladder.
 - **The DOM verb-surface campaign** (tasks #86–#134): 356 CS6 verbs
