@@ -202,8 +202,11 @@ const CLASS_NOTES: &[(&str, &str)] = &[
         "zip-code",
         "Matches any 5-digit run: CS6 command ids, the JPEG dimension \
          ceiling (65535), menu ids, CS6 palette-instance ids (the 48xxx \
-         family), a canvas dimension in a render-scale test, CVE id \
-         suffixes, the civil-date epoch constant (36524) in the SBOM \
+         family), a canvas dimension in a render-scale test, the scale \
+         factor of the brand mark's placement transform in the dark-mode \
+         mock-up and in the decision record that adjudicates it, CVE id \
+         suffixes, the civil-date epoch constant (36524) \
+         in the SBOM \
          timestamp builder, plus the headless-browser virtual-time \
          budget (60000), decision 0074's table of adjudicated classes \
          and the rule identifiers quoted by the Aegis adjudication \

@@ -243,7 +243,6 @@ Current version: **0.2.5**.
 
 ### Documentation
 
-- the coverage measurement is toolchain-bound, and 85 carried commands are unbound (6b78d68)
 - **release**: the live web deployment's digest receipt — it is not the v0.2.5 release bytes (#127) (8d5c442)
 - reconcile FireCraft status, execution docs, and wiki sources (#123) (e39705e)
 - drop trailing whitespace from the project status header (c49b208)
