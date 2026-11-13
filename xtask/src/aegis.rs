@@ -208,9 +208,11 @@ const CLASS_NOTES: &[(&str, &str)] = &[
          suffixes, the civil-date epoch constant (36524) \
          in the SBOM \
          timestamp builder, plus the headless-browser virtual-time \
-         budget (60000), and decision 0074's table of adjudicated classes \
+         budget (60000), decision 0074's table of adjudicated classes \
          and the rule identifiers quoted by the Aegis adjudication \
-         tickets. The v1 MVP roadmap's RPC-emulation row names the legacy \
+         tickets, and the coverage counters decision 0103 quotes \
+         verbatim from a gate run (measured/total line and function \
+         counts, not postal data). The v1 MVP roadmap's RPC-emulation row names the legacy \
          Fireworks RPC TCP port — a protocol number, not postal data. \
          This repository holds no postal data.",
     ),
