@@ -163,6 +163,7 @@ progress:
 | Post-train RustSec lockfile clear — #117 (`b61f198`): `zbus_xml` 5.1.0→5.2.1 (drops `quick-xml` 0.38.4, clearing RUSTSEC-2026-0194/0195) and `tokio` 1.53.2→1.54.1 (clears RUSTSEC-2026-0386); `cargo audit` exit 0. The `serde_yaml`/`unsafe-libyaml` removal (RUSTSEC-2024-0449) rides PR #120 (saphyr swap in xtask's Flatpak parse) | 2026-11-11 |
 | Post-train issue triage — closed with evidence: #79, #81, #86, #94, #98, #109, #111, #112 (all fixed by #107/#108's content or #14; squash broke the auto-close links); progress-commented and left open: #75, #76, #78, #93, #97, #110; filed #121 (`xtask changelog` cannot regenerate main's committed CHANGELOG after a squash merge) | 2026-11-11 |
 | Command-count and menu-census doc repair — README, GAPS, FEATURES, HANDOFF, CS6-PARITY, PROGRESS and NEXT quoted stale pre-train numbers (252 commands / 294 items); corrected to the gated truth: **253 registered commands** (measured by `xtask reachability`, 164 bound = 64.82%) and **2 inert of 296** (the pinned census) | 2026-11-11 |
+| Changelog squash-row repair — the #123 gate's changelog step ran before its merge commit existed, so `git log` never saw main's nine squash rows (#118/#119/#120/#123/#124/#125/#127/#130/#135); regenerated additively on `55a0e54` (399 → 408 unreleased entries, none dropped) — the missing rows included #120's saphyr dependency swap flagged by the 2026-11-13 audit | 2026-11-13 |
 
 ## Blocked or evidence-gated
 
