@@ -76,6 +76,38 @@ thread_local! {
         const { std::cell::RefCell::new(None) };
 }
 
+struct FilterBakeFields {
+    category: String,
+    name: String,
+    guid: String,
+    width: i64,
+    height: i64,
+    values: String,
+    affects_alpha: bool,
+    blur_type: String,
+    angle: f64,
+    distance: u32,
+    samples: u32,
+}
+
+impl Default for FilterBakeFields {
+    fn default() -> Self {
+        Self {
+            category: String::new(),
+            name: String::new(),
+            guid: String::new(),
+            width: 3,
+            height: 3,
+            values: "0,0,0,0,1,0,0,0,0".to_owned(),
+            affects_alpha: false,
+            blur_type: "linear".to_owned(),
+            angle: 0.0,
+            distance: 10,
+            samples: 8,
+        }
+    }
+}
+
 /// The eframe app. Holds the editor core plus everything window-shaped.
 /// Platform services are trait objects: the desktop build injects
 /// [`EnvDialogs`] + `StdFs`, the wasm build (crate `firecraft-web`)
@@ -164,6 +196,10 @@ pub struct Shell {
     ui_scale: Option<f32>,
     /// The Styles panel's new-style name field.
     style_name: String,
+    /// Filter rename drafts, keyed by object, stack position and original effect identity.
+    filter_names: std::collections::HashMap<(doc::ObjectId, usize, String, String), String>,
+    /// Bake controls retain edits between UI frames.
+    filter_bake: FilterBakeFields,
     /// The Styles panel's text-scale factor.
     style_scale: f64,
     /// The Properties panel's channel pair: the clipboard channel
@@ -478,6 +514,8 @@ impl Shell {
             recovery_path: Self::default_recovery_path(),
             ui_scale: None,
             style_name: String::new(),
+            filter_names: std::collections::HashMap::new(),
+            filter_bake: FilterBakeFields::default(),
             style_scale: 1.0,
             channel_from: "red",
             channel_to: "alpha",
@@ -6976,6 +7014,91 @@ mod tests {
         match shell.editor.document().registry.get(id) {
             Some(doc::ObjectData::Path(path)) => path.effects[index].clone(),
             _ => panic!("not a path"),
+        }
+    }
+
+    #[test]
+    fn filter_rename_uses_the_draft_from_an_earlier_frame() {
+        let (mut shell, id) = two_path_shell();
+        shell.apply_filter_preset(id, FILTER_FAMILIES[0].1[0]);
+        let effect = effect_of(&shell, id, 0);
+        let key = (id, 0, effect.category.clone(), effect.internal_name.clone());
+        shell.filter_names.insert(key.clone(), "edited name".into());
+        let ctx = egui::Context::default();
+        ctx.global_style_mut(|style| style.animation_time = 0.0);
+        let draw = |shell: &mut Shell, input| {
+            ctx.run_ui(input, |ui| {
+                egui::CentralPanel::default().show(ui, |ui| {
+                    shell.filter_panel(ui, id, std::slice::from_ref(&effect));
+                });
+            })
+        };
+        draw(&mut shell, egui::RawInput::default()).drop_without_applying_deltas();
+        for label in [format!("1. {}", effect.internal_name), "rename".to_owned()] {
+            let mut output = draw(&mut shell, egui::RawInput::default());
+            output.textures_delta.clear();
+            let position = output
+                .shapes
+                .iter()
+                .find_map(|shape| match &shape.shape {
+                    egui::epaint::Shape::Text(text) if text.galley.job.text == label => {
+                        Some(text.visual_bounding_rect().center())
+                    }
+                    _ => None,
+                })
+                .expect("control is visible");
+            for pressed in [true, false] {
+                let input = egui::RawInput {
+                    events: vec![
+                        egui::Event::PointerMoved(position),
+                        egui::Event::PointerButton {
+                            pos: position,
+                            button: egui::PointerButton::Primary,
+                            pressed,
+                            modifiers: egui::Modifiers::default(),
+                        },
+                    ],
+                    ..Default::default()
+                };
+                draw(&mut shell, input).drop_without_applying_deltas();
+            }
+        }
+        assert_eq!(effect_of(&shell, id, 0).internal_name, "edited name");
+        assert_eq!(shell.filter_names[&key], "edited name");
+    }
+
+    #[test]
+    fn filter_bake_inputs_survive_ui_frames() {
+        let (mut shell, _) = two_path_shell();
+        shell.filter_bake = FilterBakeFields {
+            category: "test category".into(),
+            name: "test filter".into(),
+            guid: "test id".into(),
+            width: 1,
+            height: 1,
+            values: "2".into(),
+            affects_alpha: true,
+            blur_type: "radial".into(),
+            angle: 45.0,
+            distance: 20,
+            samples: 16,
+        };
+        let ctx = egui::Context::default();
+        for _ in 0..2 {
+            ctx.run_ui(egui::RawInput::default(), |ui| {
+                egui::CentralPanel::default().show(ui, |ui| shell.filter_bake_fields(ui));
+            })
+            .drop_without_applying_deltas();
+            let fields = &shell.filter_bake;
+            assert_eq!(fields.category, "test category");
+            assert_eq!(fields.name, "test filter");
+            assert_eq!(fields.guid, "test id");
+            assert_eq!((fields.width, fields.height), (1, 1));
+            assert_eq!(fields.values, "2");
+            assert!(fields.affects_alpha);
+            assert_eq!(fields.blur_type, "radial");
+            assert_eq!(fields.angle, 45.0);
+            assert_eq!((fields.distance, fields.samples), (20, 16));
         }
     }
 

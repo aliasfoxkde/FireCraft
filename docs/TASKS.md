@@ -38,7 +38,21 @@
 > Per-artifact evidence state:
 > [`release/ARTIFACT-MATRIX.md`](release/ARTIFACT-MATRIX.md).
 
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:02fc8616d93d636ed040496ef1a26a0ee890ba0a52cbd6956e427d86c81c5473 -->
+
 ## In flight
+
+Review follow-up: [filter controls and master transform](tasks/filter-controls-review.md) <!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:84b20441c095cd11716da1ee0963a86f9429fc177faf73c2a278afd30da90aff -->
+
+— fixed; focused tests pass; the app suite retains a confirmed baseline markup-test failure.
+
+<!-- /coderabbit-ai-generated:v1 -->
+
+<!-- /coderabbit-ai-generated:v1 -->
 
 | Priority | Task | Status | Detail |
 |---|---|---|---|
