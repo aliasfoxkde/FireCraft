@@ -180,3 +180,17 @@ fn a_document_without_a_master_renders_only_its_own_layers() {
         "no master, no shared base"
     );
 }
+
+#[test]
+fn master_paths_preserve_the_scale_for_the_requested_page() {
+    let mut document = document_with_master();
+    let green = filled_square(&mut document.registry, 8.0, GREEN_RAW);
+    document.pages[1].layers.layers[0].cells = vec![cell(vec![green])];
+    for scale in [0.5, 2.0] {
+        let rendered = compose::render_scaled(&document, 1, 0, scale).expect("renders");
+        let inside = (8.0 * scale) as u32;
+        let outside = (12.0 * scale) as u32;
+        assert_eq!(pixel(&rendered, inside, inside), [0, 255, 0, 255]);
+        assert_eq!(pixel(&rendered, outside, outside), [255, 255, 255, 255]);
+    }
+}

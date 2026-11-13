@@ -3911,7 +3911,17 @@ impl Shell {
                     });
                     // The effect's own name: CS6's `setEffectName`
                     // renames it under its category.
-                    let mut new_name = effect.internal_name.clone();
+                    let key = (
+                        id,
+                        index,
+                        effect.category.clone(),
+                        effect.internal_name.clone(),
+                    );
+                    let mut new_name = self
+                        .filter_names
+                        .get(&key)
+                        .cloned()
+                        .unwrap_or_else(|| effect.internal_name.clone());
                     ui.horizontal(|ui| {
                         ui.add(egui::TextEdit::singleline(&mut new_name).desired_width(96.0));
                         if ui.small_button("rename").clicked() {
@@ -3922,6 +3932,7 @@ impl Shell {
                             );
                         }
                     });
+                    self.filter_names.insert(key, new_name);
                     self.filter_param_rows(ui, id, index, effect);
                 });
         }
@@ -3955,16 +3966,15 @@ impl Shell {
     /// The bake verbs read the document's selection, so the panel
     /// syncs the view's selection into the document first.
     pub(super) fn filter_bake_fields(&mut self, ui: &mut egui::Ui) {
+        let mut fields = std::mem::take(&mut self.filter_bake);
         ui.heading("Bake");
-        let mut category = String::new();
-        let mut name = String::new();
         ui.horizontal(|ui| {
-            ui.add(egui::TextEdit::singleline(&mut category).hint_text("category"));
-            ui.add(egui::TextEdit::singleline(&mut name).hint_text("filter name"));
+            ui.add(egui::TextEdit::singleline(&mut fields.category).hint_text("category"));
+            ui.add(egui::TextEdit::singleline(&mut fields.name).hint_text("filter name"));
         });
         ui.horizontal(|ui| {
             if ui.button("bake").clicked() {
-                self.bake_filter(&category, &name);
+                self.bake_filter(&fields.category, &fields.name);
             }
             if ui
                 .button("bake by catalog name")
@@ -3973,82 +3983,91 @@ impl Shell {
                 )
                 .clicked()
             {
-                self.bake_filter_by_name(&category, &name);
+                self.bake_filter_by_name(&fields.category, &fields.name);
             }
         });
-        let mut guid = String::new();
         ui.horizontal(|ui| {
-            ui.add(egui::TextEdit::singleline(&mut guid).hint_text("EffectMoaID"));
+            ui.add(egui::TextEdit::singleline(&mut fields.guid).hint_text("EffectMoaID"));
             if ui.button("bake by id").clicked() {
-                self.bake_filter_by_id(&guid);
+                self.bake_filter_by_id(&fields.guid);
             }
         });
         // The convolution kernel: raw integer coefficients, row
         // major, exactly as the dom takes them.
-        let mut width = 3i64;
-        let mut height = 3i64;
-        let mut values = "0,0,0,0,1,0,0,0,0".to_owned();
-        let mut affects_alpha = false;
         ui.horizontal(|ui| {
             ui.add(
-                egui::DragValue::new(&mut width)
+                egui::DragValue::new(&mut fields.width)
                     .speed(1.0)
                     .range(1..=7)
                     .prefix("w "),
             );
             ui.add(
-                egui::DragValue::new(&mut height)
+                egui::DragValue::new(&mut fields.height)
                     .speed(1.0)
                     .range(1..=7)
                     .prefix("h "),
             );
             ui.add(
-                egui::TextEdit::singleline(&mut values)
+                egui::TextEdit::singleline(&mut fields.values)
                     .desired_width(160.0)
                     .hint_text("kernel values"),
             );
         });
         ui.horizontal(|ui| {
-            ui.checkbox(&mut affects_alpha, "affects alpha");
+            ui.checkbox(&mut fields.affects_alpha, "affects alpha");
             if ui.button("convolve").clicked() {
-                match parse_kernel(&values, width, height) {
-                    Ok(kernel) => self.convolve_selection(width, height, kernel, affects_alpha),
+                match parse_kernel(&fields.values, fields.width, fields.height) {
+                    Ok(kernel) => self.convolve_selection(
+                        fields.width,
+                        fields.height,
+                        kernel,
+                        fields.affects_alpha,
+                    ),
                     Err(detail) => self.status = format!("kernel refused: {detail}"),
                 }
             }
         });
         // The motion blur: the dom's three kinds.
-        let mut blur_type = "linear".to_owned();
-        let mut angle = 0.0f64;
-        let mut distance = 10u32;
-        let mut samples = 8u32;
         ui.horizontal(|ui| {
             egui::ComboBox::from_label("blur")
-                .selected_text(blur_type.clone())
+                .selected_text(fields.blur_type.clone())
                 .show_ui(ui, |ui| {
                     for choice in ["linear", "radial", "zoom"] {
-                        if ui.selectable_label(blur_type == choice, choice).clicked() {
-                            blur_type = choice.to_owned();
+                        if ui
+                            .selectable_label(fields.blur_type == choice, choice)
+                            .clicked()
+                        {
+                            fields.blur_type = choice.to_owned();
                         }
                     }
                 });
-            ui.add(egui::DragValue::new(&mut angle).speed(1.0).prefix("angle "));
             ui.add(
-                egui::DragValue::new(&mut distance)
+                egui::DragValue::new(&mut fields.angle)
+                    .speed(1.0)
+                    .prefix("angle "),
+            );
+            ui.add(
+                egui::DragValue::new(&mut fields.distance)
                     .speed(1.0)
                     .range(0..=400)
                     .prefix("distance "),
             );
             ui.add(
-                egui::DragValue::new(&mut samples)
+                egui::DragValue::new(&mut fields.samples)
                     .speed(1.0)
                     .range(0..=100)
                     .prefix("samples "),
             );
         });
         if ui.button("motion blur").clicked() {
-            self.motion_blur_selection(&blur_type, angle, distance, samples);
+            self.motion_blur_selection(
+                &fields.blur_type,
+                fields.angle,
+                fields.distance,
+                fields.samples,
+            );
         }
+        self.filter_bake = fields;
     }
 
     /// Bake the named filter into the selection.

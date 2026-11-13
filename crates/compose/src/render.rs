@@ -311,9 +311,12 @@ pub(crate) fn render_scaled_inner(
     // CS6's master page is the document's shared base (decision
     // 0115). It walks first, in its own state.
     if let Some((base_layers, base_frame)) = master_layers(document, page, frame) {
+        let transform = *walk.ctx.transform();
         walk.frame = base_frame;
         walk_layers(base_layers, &mut walk, true)?;
         walk.frame = frame;
+        // Master paths may reset the shared context; retain the caller's scale.
+        walk.ctx.set_transform(transform);
     }
     walk_layers(page_layers, &mut walk, true)?;
     ctx.reset_transform();
