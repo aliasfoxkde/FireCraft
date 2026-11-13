@@ -429,6 +429,13 @@ Phase 10 defects passed every desktop gate. The working pattern
   with `gh release create` for the same tag. GitForge carries Git refs/tags,
   not release assets. Release notes are tracked in `docs/releases/`;
   `dist/release-notes.txt` is gitignored staging and can be stale.
+  **Release modes:** the tag decides the mode — `vX.Y.Z` is a production
+  release, `vX.Y.Z-dryrun.N` is a rehearsal (`TEST`-titled prerelease),
+  and `scripts/classify_release_mode.sh` refuses every other shape. A
+  manual `workflow_dispatch` run may only rehearse. The aggregate gate is
+  `scripts/validate_release_aggregate.sh`; its failure modes are
+  demonstrated by `scripts/validate_release_aggregate-selftest.sh`
+  ([decision 0100](decisions/0100-release-mode-classification-and-a-tested-release-gate.md)).
 - **Pages:** deployment remains manual and is not part of the current tag
   workflow: `wrangler pages deploy dist/web --project-name firecraft-web`
   (authenticated via `CLOUDFLARE_API_TOKEN`; direct-upload project). Deploy

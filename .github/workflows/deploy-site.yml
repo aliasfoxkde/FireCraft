@@ -3,10 +3,14 @@ name: Deploy FireCraft marketing site
 on:
   push:
     branches: [main]
+    # The trigger is the deployed content, not this file. The workflow's own
+    # source is not part of the Pages deployment — the deploy step publishes
+    # `site/` — so listing it here made every edit to this file a production
+    # publication. Production deploys stay tied to a change in what is
+    # published; a deliberate redeploy is `workflow_dispatch`.
     paths:
       - "site/**"
       - "wrangler.toml"
-      - ".github/workflows/deploy-site.yml"
   workflow_dispatch:
 
 permissions:
@@ -22,7 +26,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Check out source
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Validate static site
         run: |
           test -s site/index.html
@@ -33,7 +37,7 @@ jobs:
           grep -q 'prefers-reduced-motion' site/styles.css
           grep -q 'loadRelease' site/app.js
       - name: Deploy to Cloudflare Pages
-        uses: cloudflare/wrangler-action@v3
+        uses: cloudflare/wrangler-action@9acf94ace14e7dc412b076f2c5c20b8ce93c79cd # v3.15.0
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
