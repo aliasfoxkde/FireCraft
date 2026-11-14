@@ -7167,7 +7167,7 @@ mod tests {
             Some("red")
         );
         shell.remove_symbol_custom_data(id, "colour");
-        assert!(custom_data_of(&shell, id).get("colour").is_none());
+        assert!(!custom_data_of(&shell, id).contains_key("colour"));
     }
 
     /// The definition's content: the panel lifts an object out of the
@@ -7446,7 +7446,7 @@ mod tests {
     #[test]
     fn the_bake_verbs_carry_the_dom_payloads() {
         let (mut shell, _id) = two_path_shell();
-        shell.convolve_selection(3, 3, vec![0, 0, 0, 0], false);
+        shell.convolve_selection(3, 3, &[0, 0, 0, 0], false);
         assert!(
             shell.status.contains("filter.convolveSelection failed"),
             "{}",

@@ -383,6 +383,7 @@ impl AutoShape {
     /// Shapes panel's path: a `size`-square box at (`x`, `y`). The
     /// line-based shapes run along the box's horizontal midline.
     #[must_use]
+    #[allow(clippy::too_many_arguments)]
     pub fn payload_in_rect(
         self,
         page: usize,

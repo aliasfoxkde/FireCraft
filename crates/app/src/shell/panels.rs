@@ -1578,9 +1578,7 @@ impl Shell {
     /// than re-deriving the ownership rule.
     pub(super) fn mask_facts(&self, id: doc::ObjectId) -> Option<MaskFacts> {
         let document = self.editor.document();
-        let Some(enabled) = engine::catalog::element_mask_state(document, id) else {
-            return None;
-        };
+        let enabled = engine::catalog::element_mask_state(document, id)?;
         let mask_kind = |group: &GroupObject| {
             group
                 .children
@@ -2101,6 +2099,7 @@ impl Shell {
     /// symbol number; the options live on the definition's linked
     /// slices, so the write names the symbol number too and the
     /// engine applies the payload to every linked slice.
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn symbol_button_fields(
         &mut self,
         ui: &mut egui::Ui,
@@ -2149,13 +2148,13 @@ impl Shell {
             let name_field =
                 ui.add(egui::TextEdit::singleline(&mut slice_name).hint_text("slice name"));
             if link_field.lost_focus() && link_field.changed() {
-                self.set_button_options(number, Some(link.clone()), None, None);
+                self.set_button_options(number, Some(&link), None, None);
             }
             if alt_field.lost_focus() && alt_field.changed() {
-                self.set_button_options(number, None, Some(alt.clone()), None);
+                self.set_button_options(number, None, Some(&alt), None);
             }
             if name_field.lost_focus() && name_field.changed() {
-                self.set_button_options(number, None, None, Some(slice_name.clone()));
+                self.set_button_options(number, None, None, Some(&slice_name));
             }
         });
         if !linked.found {
@@ -2267,9 +2266,9 @@ impl Shell {
     pub(super) fn set_button_options(
         &mut self,
         number: i64,
-        link: Option<String>,
-        alt: Option<String>,
-        slice_name: Option<String>,
+        link: Option<&str>,
+        alt: Option<&str>,
+        slice_name: Option<&str>,
     ) {
         self.run_command(
             "symbol.setButtonOptions",
@@ -4023,7 +4022,7 @@ impl Shell {
                     Ok(kernel) => self.convolve_selection(
                         fields.width,
                         fields.height,
-                        kernel,
+                        &kernel,
                         fields.affects_alpha,
                     ),
                     Err(detail) => self.status = format!("kernel refused: {detail}"),
@@ -4113,7 +4112,7 @@ impl Shell {
         &mut self,
         width: i64,
         height: i64,
-        values: Vec<i64>,
+        values: &[i64],
         affects_alpha: bool,
     ) {
         if !self.sync_document_selection() {

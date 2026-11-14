@@ -223,16 +223,16 @@ pub(crate) fn draw_autoshape_glyph(
                 for step in 0..=6 {
                     let angle = start + (end - start) * step as f64 / 6.0;
                     points.push(Pos2::new(
-                        (center.0 + (radius as f64 * angle.cos()) as f32),
-                        (center.1 + (radius as f64 * angle.sin()) as f32),
+                        center.0 + (radius as f64 * angle.cos()) as f32,
+                        center.1 + (radius as f64 * angle.sin()) as f32,
                     ));
                 }
                 // The straight edge to the next arc's start.
                 let next = centers[(index + 1) % 4];
                 let next_angle = arcs[(index + 1) % 4].0;
                 points.push(Pos2::new(
-                    (next.0 + (radius as f64 * next_angle.cos()) as f32),
-                    (next.1 + (radius as f64 * next_angle.sin()) as f32),
+                    next.0 + (radius as f64 * next_angle.cos()) as f32,
+                    next.1 + (radius as f64 * next_angle.sin()) as f32,
                 ));
             }
             points.push(points[0]);
