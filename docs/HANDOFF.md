@@ -17,24 +17,25 @@
 
 ---
 
-## 1. State snapshot (2026-11-11; main `b61f198`)
+## 1. State snapshot (2026-11-14; main `ad3fc655`)
 
-- **Source and release:** canonical `main` is `b61f198` after the
-  shell-lineage/release trains and post-train RustSec work. The latest
-  published release remains `v0.2.5` (2026-11-03); current source has
+- **Source and release:** canonical `main` is `ad3fc655` after the
+  reachability wave (#143) and the artwork consolidation (#144). The
+  latest published release remains `v0.2.5` (2026-11-03); current source has
   moved beyond that tag. See [PROGRESS.md](PROGRESS.md) for dated build,
   CI and deployment receipts.
-- **Engine and parity:** 253 registered commands; the CS6 DOM matrix is
+- **Engine and parity:** 257 registered commands; the CS6 DOM matrix is
   268 carried / 3 partial / 0 missing of 356 verbs. The latest
-  shell-reachability measurement is 164/253 = 64.82%; the one-way floor
-  remains 59.59%. These measures answer different questions: DOM verbs,
+  shell-reachability measurement is 249/257 = 96.89% (2026-11-14, after
+  #143); the one-way floor was deliberately re-blessed to 96.89% in
+  the wave-closeout. These measures answer different questions: DOM verbs,
   shell-bound commands, and complete end-user UI/workflow parity must
   not be conflated.
 - **Menu census:** 2 inert rows of 296. The 19.6 menu-wiring campaign is
   complete; eight additional rows are explicitly feature/evidence-gated.
 - **Delivered work:** Phase 21's user-facing deliverables landed with
-  #107. Phase 20.1 and 20.5–20.7 are on main. Optimize/timeline work is
-  in open PR #118; the mask stack is in open PR #113. Check the live
+  #107. Phase 20.1–20.3 and 20.5–20.7 are on main (Optimize/timeline
+  #118 merged); the mask stack is in open PR #113. Check the live
   [TASKS.md](TASKS.md) before selecting work.
 - **Phase 22:** screenshot acceptance and panel/tool/context-menu
   foundations landed; bitmap inspector gaps and remaining CS6 chrome
@@ -46,9 +47,9 @@
   Republish from the exact release artifact is pending (T18). No
   non-Linux native artifact is certified by recipe or cross-compile
   alone; see [ARTIFACT-MATRIX.md](release/ARTIFACT-MATRIX.md).
-- **Open integration work:** #120 removes the deprecated YAML parser;
-  #122 improves history-rewind command discovery; #123 reconciles docs.
-  Recheck each PR's current state before depending on it.
+- **Open integration work:** recheck each PR's current state before
+  depending on it — the previously open #118, #120, #122 and #123 have
+  all merged.
 - **Clean-room invariants:** `source/` and Adobe-derived local extracts
   are reference-only and never committed. Adobe-authored corpus files
   are test oracles. Assets require an attribution row in
