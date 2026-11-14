@@ -11,10 +11,11 @@ use super::unknown::UnknownBag;
 use super::writer::{mapped_indices, splice, write, write_style_library};
 use crate::model::{
     Canvas, Cell, Contour, Document, DocumentInfo, Effect, EffectProperty, EffectValue,
-    ExportOptions, Grid, GroupObject, Guides, ImageObject, Layer, LayerList, NineSliceGuides, Page,
-    PageInfo, PaintStyle, PathObject, PathPoint, PrimitiveSource, SharedLayerDef, SharedLayerLink,
-    SliceBackground, SliceBehavior, SliceObject, StyleEntry, StyleText, SymbolAnimation,
-    SymbolDefinition, SymbolInstanceObject, SymbolType, TextObject, TextRun, TextStyle, TileRef,
+    ExportOptions, Grid, GroupObject, Guides, ImageObject, Layer, LayerList, MASK_STACK_MODE_KEY,
+    MaskCombineMode, NineSliceGuides, Page, PageInfo, PaintStyle, PathObject, PathPoint,
+    PrimitiveSource, SharedLayerDef, SharedLayerLink, SliceBackground, SliceBehavior, SliceObject,
+    StyleEntry, StyleText, SymbolAnimation, SymbolDefinition, SymbolInstanceObject, SymbolType,
+    TextObject, TextRun, TextStyle, TileRef,
 };
 use crate::registry::{ObjectData, ObjectId, Registry};
 use fwpng::nodetree::{Node, NodeValue, parse, serialize};
@@ -334,6 +335,7 @@ fn sample_document() -> Document {
         }),
     }));
     let group_id = doc.registry.insert(ObjectData::Group(GroupObject {
+        stack_mode: None,
         group_type: 1,
         name: Some("grp".into()),
         children: vec![text_id, slice_id],
@@ -602,6 +604,376 @@ fn lnkb_writes_only_when_unlinked_and_round_trips() {
     assert!(!bytes.is_empty());
 }
 
+// --- decision 0092: the mask stack's combine mode ----------------------
+
+/// The sample document's group — the mask level the mode rides on.
+fn sample_group_id(doc: &Document) -> ObjectId {
+    doc.registry
+        .iter()
+        .find(|(_, o)| matches!(o, ObjectData::Group(_)))
+        .map(|(id, _)| id)
+        .expect("sample carries a group")
+}
+
+/// The group's mode, read back through the model.
+fn group_mode(doc: &Document, id: ObjectId) -> Option<MaskCombineMode> {
+    match doc.registry.get(id) {
+        Some(ObjectData::Group(g)) => g.stack_mode,
+        other => panic!("group vanished: {other:?}"),
+    }
+}
+
+/// The group's data node in a written tree, when it carries one.
+fn group_data_node(tree: &[Node]) -> Option<&Node> {
+    let mut groups = Vec::new();
+    find_nodes(tree, b"GRPv", &mut groups);
+    let group = groups.first()?;
+    kids_of(group).iter().find(|node| &node.fourcc == b"DTAv")
+}
+
+#[test]
+fn the_mask_stack_mode_is_written_and_read_back() {
+    // A fresh file: the mode rides in the group's data node.
+    let mut doc = sample_document();
+    let group_id = sample_group_id(&doc);
+    if let Some(ObjectData::Group(slot)) = doc.registry.get_mut(group_id) {
+        slot.stack_mode = Some(MaskCombineMode::Subtract);
+    }
+    let (_bytes, doc2, _bag2) = round_trip_bytes(&doc, &UnknownBag::new());
+    assert_eq!(
+        group_mode(&doc2, group_id),
+        Some(MaskCombineMode::Subtract),
+        "the mode survives bytes"
+    );
+
+    // No mode: no data node is minted for it.
+    if let Some(ObjectData::Group(slot)) = doc.registry.get_mut(group_id) {
+        slot.stack_mode = None;
+    }
+    let (tree, _stats) = write(&doc, &UnknownBag::new()).expect("write");
+    assert!(
+        group_data_node(&tree).is_none(),
+        "a group without a mode writes no data node"
+    );
+}
+
+#[test]
+fn the_model_owns_the_mode_key_and_foreign_data_survives() {
+    // A file whose group carries a data node: a CS6 author's entry and
+    // the mask stack's mode.
+    let doc = sample_document();
+    let group_id = sample_group_id(&doc);
+    let (mut tree, _stats) = write(&doc, &UnknownBag::new()).expect("write");
+    let mut groups = Vec::new();
+    find_nodes(&tree, b"GRPv", &mut groups);
+    assert_eq!(groups.len(), 1, "the sample carries one group");
+    let group = find_node_mut(&mut tree, b"GRPv").expect("the sample carries one group");
+    children_mut(group).push(n_k(
+        b"DTAv",
+        vec![
+            n_k(
+                b"DCEv",
+                vec![n_s(b"DCKs", "tooltips"), n_s(b"DCVs", "a CS6 tip")],
+            ),
+            n_k(
+                b"DCEv",
+                vec![n_s(b"DCKs", MASK_STACK_MODE_KEY), n_s(b"DCVs", "intersect")],
+            ),
+        ],
+    ));
+    let bytes = serialize(&tree);
+    let parsed = parse(&bytes).expect("reparse");
+    let (doc2, bag2) = read(&parsed).expect("read");
+    assert_eq!(
+        group_mode(&doc2, group_id),
+        Some(MaskCombineMode::Intersect),
+        "the mode is read out of the data node"
+    );
+
+    // The model wins over the file: a changed mode is what is written.
+    let mut doc3 = doc2.clone();
+    if let Some(ObjectData::Group(slot)) = doc3.registry.get_mut(group_id) {
+        slot.stack_mode = Some(MaskCombineMode::Invert);
+    }
+    let (tree2, _stats) = write(&doc3, &bag2).expect("write");
+    let data_node = group_data_node(&tree2).expect("the group carries its data node");
+    let entries: Vec<(&str, &str)> = kids_of(data_node)
+        .iter()
+        .filter_map(|entry| {
+            let kids = kids_of(entry);
+            let key = kids.first().and_then(|k| k.as_str())?;
+            let value = kids.get(1).and_then(|v| v.as_str())?;
+            Some((key, value))
+        })
+        .collect();
+    assert_eq!(
+        entries,
+        vec![("tooltips", "a CS6 tip"), (MASK_STACK_MODE_KEY, "invert"),],
+        "the foreign entry survives and the mode is rewritten"
+    );
+}
+
+#[test]
+fn an_unrecognized_mode_spelling_survives_the_round_trip() {
+    // A file from a future FireCraft carries a mode this build does
+    // not know. The model canonicalizes it to the default — but the
+    // file's own spelling must not be lost, because the model cannot
+    // express it.
+    let doc = sample_document();
+    let group_id = sample_group_id(&doc);
+    let (mut tree, _stats) = write(&doc, &UnknownBag::new()).expect("write");
+    let mut groups = Vec::new();
+    find_nodes(&tree, b"GRPv", &mut groups);
+    assert_eq!(groups.len(), 1, "the sample carries one group");
+    let group = find_node_mut(&mut tree, b"GRPv").expect("the sample carries one group");
+    children_mut(group).push(n_k(
+        b"DTAv",
+        vec![n_k(
+            b"DCEv",
+            vec![n_s(b"DCKs", MASK_STACK_MODE_KEY), n_s(b"DCVs", "gigantic")],
+        )],
+    ));
+    let bytes = serialize(&tree);
+    let parsed = parse(&bytes).expect("reparse");
+    let (doc2, bag2) = read(&parsed).expect("read");
+    assert_eq!(
+        group_mode(&doc2, group_id),
+        None,
+        "an unknown spelling canonicalizes to the default"
+    );
+
+    let (tree2, _stats) = write(&doc2, &bag2).expect("write");
+    let data_node = group_data_node(&tree2).expect("the group carries its data node");
+    let values: Vec<&str> = kids_of(data_node)
+        .iter()
+        .filter_map(|entry| {
+            let kids = kids_of(entry);
+            kids.first().and_then(|k| k.as_str())?;
+            kids.get(1).and_then(|v| v.as_str())
+        })
+        .collect();
+    assert_eq!(
+        values,
+        vec!["gigantic"],
+        "the spelling the model cannot express survives verbatim"
+    );
+}
+
+// --- decision 0093: the mask stack's shape -----------------------------
+
+/// A mask stack: two nested mask groups, each holding a mask and the
+/// level below it, plus the content the bottom level restricts.
+///
+/// The shape is the stack itself (decision 0093): the outer group is
+/// the top level, its content child is the level below, and the
+/// bottom level's content child is the masked object.
+fn mask_stack_document() -> (Document, Vec<ObjectId>) {
+    let mut doc = Document::default();
+    let content = doc.registry.insert(ObjectData::Path(PathObject {
+        contours: Vec::new(),
+        primitive: None,
+        even_odd: false,
+        paint: None,
+        fill_start: None,
+        fill_end: None,
+        fill_third: None,
+        brush_placement: None,
+        fill_on_top: Some(false),
+        locked: false,
+        visible: true,
+        opacity: 1000,
+        blend: 0,
+        name: Some("content".to_owned()),
+        effects: Vec::new(),
+    }));
+    let bottom_mask = doc.registry.insert(ObjectData::Path(PathObject {
+        contours: Vec::new(),
+        primitive: None,
+        even_odd: false,
+        paint: None,
+        fill_start: None,
+        fill_end: None,
+        fill_third: None,
+        brush_placement: None,
+        fill_on_top: Some(false),
+        locked: false,
+        visible: true,
+        opacity: 1000,
+        blend: 0,
+        name: Some("bottom-mask".to_owned()),
+        effects: Vec::new(),
+    }));
+    let top_mask = doc.registry.insert(ObjectData::Path(PathObject {
+        contours: Vec::new(),
+        primitive: None,
+        even_odd: false,
+        paint: None,
+        fill_start: None,
+        fill_end: None,
+        fill_third: None,
+        brush_placement: None,
+        fill_on_top: Some(false),
+        locked: false,
+        visible: true,
+        opacity: 1000,
+        blend: 0,
+        name: Some("top-mask".to_owned()),
+        effects: Vec::new(),
+    }));
+    // The bottom level: `GRTi` 2 (shape mask), its content child is
+    // the masked object.
+    let bottom = doc.registry.insert(ObjectData::Group(GroupObject {
+        stack_mode: Some(MaskCombineMode::Add),
+        group_type: 2,
+        name: None,
+        children: vec![bottom_mask, content],
+        opacity: 1000,
+        blend: 0,
+        visible: true,
+        locked: false,
+        mask_hidden: false,
+        mask_linked: None,
+        effects: Vec::new(),
+    }));
+    // The top level: its content child is the level below.
+    let top = doc.registry.insert(ObjectData::Group(GroupObject {
+        stack_mode: Some(MaskCombineMode::Subtract),
+        group_type: 2,
+        name: None,
+        children: vec![top_mask, bottom],
+        opacity: 1000,
+        blend: 0,
+        visible: true,
+        locked: false,
+        mask_hidden: false,
+        mask_linked: None,
+        effects: Vec::new(),
+    }));
+    doc.pages.push(Page {
+        info: PageInfo {
+            version: None,
+            revision: None,
+            frame_count: 1,
+            frame_count_duplicate: 1,
+            request_id: 0,
+            canvas: Canvas::default(),
+            onion_before: 0,
+            onion_after: 0,
+            frame_durations: Vec::new(),
+        },
+        name: None,
+        is_master: false,
+        is_linked: false,
+        page_id: None,
+        last_export_dir: None,
+        last_export_file: None,
+        layers: LayerList {
+            layers: vec![Layer {
+                cells: vec![Cell {
+                    elements: vec![top],
+                    ..Cell::default()
+                }],
+                ..Layer::default()
+            }],
+        },
+        grid: None,
+        guides: Guides::default(),
+        export: None,
+    });
+    (doc, vec![content, bottom_mask, top_mask, bottom, top])
+}
+
+/// The document's single root group — the top level of the stack.
+fn root_group(doc: &Document) -> GroupObject {
+    let id = doc.pages[0].layers.layers[0].cells[0].elements[0];
+    match doc.registry.get(id) {
+        Some(ObjectData::Group(group)) => group.clone(),
+        other => panic!("the root is not a group: {other:?}"),
+    }
+}
+
+/// The group among `children`, if any.
+fn child_group(doc: &Document, children: &[ObjectId]) -> GroupObject {
+    for id in children {
+        if let Some(ObjectData::Group(group)) = doc.registry.get(*id) {
+            return group.clone();
+        }
+    }
+    panic!("no group among {children:?}");
+}
+
+/// The names of the objects in `ids`, in order.
+fn names_of(doc: &Document, ids: &[ObjectId]) -> Vec<String> {
+    ids.iter()
+        .map(|id| {
+            let name = match doc.registry.get(*id) {
+                Some(ObjectData::Path(path)) => path.name.clone(),
+                Some(ObjectData::Text(text)) => text.name.clone(),
+                Some(ObjectData::Group(group)) => group.name.clone(),
+                Some(ObjectData::Image(image)) => image.name.clone(),
+                Some(ObjectData::Slice(slice)) => slice.name.clone(),
+                Some(ObjectData::SymbolInstance(symbol)) => symbol.name.clone(),
+                None => None,
+            };
+            name.unwrap_or_default()
+        })
+        .collect()
+}
+
+#[test]
+fn a_mask_stack_survives_the_round_trip() {
+    let (doc, _ids) = mask_stack_document();
+    let (bytes, doc2, _bag2) = round_trip_bytes(&doc, &UnknownBag::new());
+    assert!(!bytes.is_empty());
+
+    // The stack's shape survives: the top level holds its mask and the
+    // level below, and the bottom level holds its mask and the content.
+    // The reader mints its own object ids, so the assertions name the
+    // objects rather than index into the registry.
+    let top = root_group(&doc2);
+    assert_eq!(top.group_type, 2, "the top level is a shape mask");
+    assert_eq!(
+        top.stack_mode,
+        Some(MaskCombineMode::Subtract),
+        "the top mode"
+    );
+    assert_eq!(
+        names_of(&doc2, &top.children[..1]),
+        vec!["top-mask"],
+        "the top level holds its mask"
+    );
+
+    let bottom = child_group(&doc2, &top.children);
+    assert_eq!(bottom.group_type, 2, "the bottom level is a shape mask");
+    assert_eq!(
+        bottom.stack_mode,
+        Some(MaskCombineMode::Add),
+        "the bottom mode"
+    );
+    assert_eq!(
+        names_of(&doc2, &bottom.children),
+        vec!["bottom-mask", "content"],
+        "the bottom level holds its mask and the content"
+    );
+}
+
+#[test]
+fn a_disabled_level_survives_the_round_trip() {
+    // A disabled level is a `GRTi` 0 group whose mask artwork is
+    // hidden (`MNAb`) — the shape `mask.enable` leaves behind. It must
+    // still read as disabled after the file round trip, or the level
+    // would silently come back enabled.
+    let (mut doc, ids) = mask_stack_document();
+    if let Some(ObjectData::Group(group)) = doc.registry.get_mut(ids[4]) {
+        group.group_type = 0;
+        group.mask_hidden = true;
+    }
+    let (_bytes, doc2, _bag2) = round_trip_bytes(&doc, &UnknownBag::new());
+    let top = root_group(&doc2);
+    assert_eq!(top.group_type, 0, "the level stays a plain group");
+    assert!(top.mask_hidden, "the level stays disabled");
+}
+
 // --- M10: symbol wire contract (MSYi / NGSv / ANNi family) --------------
 
 /// Collect references to every node carrying `fourcc`, at any depth.
@@ -621,6 +993,21 @@ fn kids_of(node: &Node) -> &[Node] {
         NodeValue::Children(kids) => kids,
         _ => panic!("expected a container node"),
     }
+}
+
+/// The first node carrying `fourcc`, at any depth, mutably.
+fn find_node_mut<'a>(nodes: &'a mut [Node], fourcc: &[u8; 4]) -> Option<&'a mut Node> {
+    for node in nodes.iter_mut() {
+        if &node.fourcc == fourcc {
+            return Some(node);
+        }
+        if let NodeValue::Children(kids) = &mut node.value
+            && let Some(found) = find_node_mut(kids, fourcc)
+        {
+            return Some(found);
+        }
+    }
+    None
 }
 
 #[test]
@@ -1459,6 +1846,7 @@ fn model_structs_are_fully_constructed() {
         effects: Vec::new(),
     };
     let _group = GroupObject {
+        stack_mode: None,
         group_type: 0,
         name: None,
         children: Vec::new(),

@@ -1055,6 +1055,7 @@ mod tests {
             effects: Vec::new(),
         }));
         let group = document.registry.insert(ObjectData::Group(GroupObject {
+            stack_mode: None,
             group_type: 0,
             name: None,
             children: Vec::new(),

@@ -10,13 +10,13 @@
 //! canonicalizes rather than reproduces the omission.
 
 use crate::fwmap::unknown::UnknownBag;
-use crate::fwmap::{FourCC, MapError};
+use crate::fwmap::{FourCC, MapError, data_entry_value, is_data_entry};
 use crate::model::{
     Cell, Contour, Document, Effect, EffectProperty, EffectValue, ExportOptions, Fill, FillShape,
     Gradient, GradientStop, Grid, GroupObject, Guides, ImageObject, Layer, LayerList,
-    NineSliceGuides, PaintStyle, PathObject, PathPoint, PatternTile, PrimitiveSource,
-    SharedLayerDef, SliceObject, StyleEntry, SymbolDefinition, SymbolInstanceObject, TextObject,
-    TextOnPath, TextRun, TextStyle, TileRef,
+    MASK_STACK_MODE_KEY, MaskCombineMode, NineSliceGuides, PaintStyle, PathObject, PathPoint,
+    PatternTile, PrimitiveSource, SharedLayerDef, SliceObject, StyleEntry, SymbolDefinition,
+    SymbolInstanceObject, TextObject, TextOnPath, TextRun, TextStyle, TileRef,
 };
 use crate::registry::{ObjectData, ObjectId};
 use fwpng::nodetree::{Node, NodeValue};
@@ -241,6 +241,84 @@ pub(crate) fn mapped_indices(bagged: &[(usize, Node)], mapped_len: usize) -> Vec
         } else {
             out.push(i);
         }
+    }
+    out
+}
+
+/// The `DCEv` entry a mask stack's combine mode rides in: a key/value
+/// pair inside the mask group's `DTAv` data node (decision 0092).
+fn stack_mode_entry(mode: MaskCombineMode) -> Node {
+    n_kids(
+        *b"DCEv",
+        vec![
+            n_s(*b"DCKs", MASK_STACK_MODE_KEY),
+            n_s(*b"DCVs", mode.as_str()),
+        ],
+    )
+}
+
+/// Rewrites the mask stack mode inside a preserved group's `DTAv`.
+///
+/// The model owns the `MASK_STACK_MODE_KEY` entry, so the model wins
+/// over whatever the file carried: the entry is rewritten with the
+/// model's mode, or dropped when the model says the level carries no
+/// mode. It keeps its place among the data node's children, so a tree
+/// that was canonical on read re-serializes byte-identically.
+///
+/// One exception: an entry whose value the model cannot parse (a
+/// spelling from a future `FireCraft`) is *not* the model's to drop —
+/// the model cannot express it, so the bag keeps it verbatim. Every
+/// other entry — a CS6 author's `tooltips`, a nested value the model
+/// cannot express — is preserved verbatim too.
+fn merge_stack_modes(
+    bagged: &[(usize, Node)],
+    mode: Option<MaskCombineMode>,
+) -> Vec<(usize, Node)> {
+    let mut out = Vec::with_capacity(bagged.len());
+    for (index, node) in bagged {
+        if node.fourcc != *b"DTAv" {
+            out.push((*index, node.clone()));
+            continue;
+        }
+        let Some(kids) = node.as_children() else {
+            out.push((*index, node.clone()));
+            continue;
+        };
+        let mut children = Vec::with_capacity(kids.len() + 1);
+        let mut rewritten = false;
+        for kid in kids {
+            if !is_data_entry(kid, MASK_STACK_MODE_KEY) {
+                children.push(kid.clone());
+                continue;
+            }
+            let recognized = data_entry_value(kid)
+                .and_then(MaskCombineMode::parse)
+                .is_some();
+            match mode {
+                Some(mode) => {
+                    if rewritten {
+                        // A repeated key would lose data on rewrite;
+                        // the first one wins and the rest are dropped.
+                        continue;
+                    }
+                    rewritten = true;
+                    children.push(stack_mode_entry(mode));
+                }
+                None => {
+                    // The model holds the default union. An entry the
+                    // model can read is the model's to replace (it
+                    // goes); an entry it cannot read is preserved.
+                    if recognized {
+                        continue;
+                    }
+                    children.push(kid.clone());
+                }
+            }
+        }
+        if !rewritten && let Some(mode) = mode {
+            children.push(stack_mode_entry(mode));
+        }
+        out.push((*index, n_kids(*b"DTAv", children)));
     }
     out
 }
@@ -1164,9 +1242,18 @@ impl Writer<'_> {
     }
 
     fn write_group_object(&mut self, object: &GroupObject, path: &str) -> Result<Node, MapError> {
-        // Dictionary order: LCKb? GRTi ELMv OBNs? … MNAb? … LNKb? … VISb? OPAi? BLDi?
+        // Dictionary order: LCKb? GRTi ELMv OBNs? DTAv? … MNAb? … LNKb? … VISb? OPAi? BLDi?
         // MNAb is never present with the value `false` (dictionary);
         // LNKb is never present with the value `true` (dictionary).
+        //
+        // The group's preserved children are taken up front: the mask
+        // stack's combine mode rides in the group's `DTAv` data node
+        // (decision 0092), and the writer owns that key — so it has to
+        // know whether a `DTAv` was preserved before it decides to
+        // emit one.
+        let bagged = self.bag.take_under(path);
+        let preserves_dtav = bagged.iter().any(|(_, node)| node.fourcc == *b"DTAv");
+
         let mut mapped = Vec::new();
         if object.locked {
             mapped.push(n_b(*b"LCKb", true));
@@ -1175,6 +1262,9 @@ impl Writer<'_> {
         mapped.push(self.write_elements(&object.children, path)?);
         if let Some(name) = &object.name {
             mapped.push(n_s(*b"OBNs", name));
+        }
+        if !preserves_dtav && let Some(mode) = object.stack_mode {
+            mapped.push(n_kids(*b"DTAv", vec![stack_mode_entry(mode)]));
         }
         mapped.extend(self.write_effects(&object.effects, path)?);
         if object.mask_hidden {
@@ -1186,7 +1276,7 @@ impl Writer<'_> {
         mapped.push(n_b(*b"VISb", object.visible));
         mapped.push(n_i(*b"OPAi", object.opacity));
         mapped.push(n_i(*b"BLDi", object.blend));
-        let children = self.splice_container(mapped, path);
+        let children = splice(mapped, &merge_stack_modes(&bagged, object.stack_mode));
         Ok(n_kids(*b"GRPv", children))
     }
 

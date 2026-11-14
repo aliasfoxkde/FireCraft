@@ -14,8 +14,8 @@ use crate::cache::EffectCache;
 use crate::convert::{abgr, blend_mode, to_bezpath};
 use crate::effects;
 use doc::{
-    Document, FillShape, Gradient, GroupObject, Layer, NineSliceGuides, ObjectData, PathObject,
-    SymbolInstanceObject, SymbolType, TileBank, TileRef,
+    Document, FillShape, Gradient, GroupObject, Layer, MaskCombineMode, NineSliceGuides,
+    ObjectData, ObjectId, PathObject, SymbolInstanceObject, SymbolType, TileBank, TileRef,
 };
 use filters::Surface;
 use geom::{Affine, transform::map_rect};
@@ -1173,10 +1173,254 @@ fn paint_stroke(color: i64, geometry: &vello_cpu::kurbo::BezPath, ctx: &mut Rend
     ctx.stroke_path(geometry);
 }
 
+/// `GRTi` 1 — a grayscale (pixel) mask group: the mask child is a
+/// raster whose gray level is the coverage.
+const GRAYSCALE_MASK_GROUP: i64 = 1;
+
+/// `GRTi` 2 — a shape (vector) mask group: the mask child is a path
+/// whose painted coverage is the coverage.
+const SHAPE_MASK_GROUP: i64 = 2;
+
+/// `GRTi` 0 — a regular group, and the shape a disabled mask group
+/// takes (decision 0020).
+const REGULAR_GROUP: i64 = 0;
+
+/// True when the group is mask-structured (decision 0020): its first
+/// child is the mask, the rest is the content the mask restricts.
+fn is_mask_group(group: &GroupObject) -> bool {
+    matches!(group.group_type, GRAYSCALE_MASK_GROUP | SHAPE_MASK_GROUP)
+}
+
+/// True when the group is a *disabled* mask group: `GRTi` 0 with the
+/// mask-first child order and the mask's own artwork hidden — the
+/// structure `mask.enable` restores (decision 0020).
+///
+/// The artwork flag is what separates a disabled mask from a plain
+/// group that happens to hold an image or a path first: a plain group
+/// keeps the flag off, so it draws every child as it always did.
+fn is_disabled_mask_group(group: &GroupObject, document: &Document) -> bool {
+    group.group_type == REGULAR_GROUP
+        && group.mask_hidden
+        && group.children.len() > 1
+        && matches!(
+            document.registry.get(group.children[0]),
+            Some(ObjectData::Image(_)) | Some(ObjectData::Path(_))
+        )
+}
+
+/// Renders a mask-structured group: the group's first child is the
+/// mask (the coverage), its remaining children are the content the
+/// coverage restricts (decision 0020).
+///
+/// A mask group's content child may itself be a mask group — that is
+/// how a stack of levels is spelled (decision 0092). The innermost
+/// group is the bottom level, the outermost the top level, and each
+/// level's `stack_mode` is the operator that combines that level's
+/// coverage with the coverage below it. The bottom level has no
+/// coverage below it, so it replaces the coverage outright (the base
+/// mask of a Photoshop layer-mask pair carries no blend mode); every
+/// level above it combines with the level below.
+///
+/// The mask child is not drawn as content: a mask restricts, it does
+/// not paint.
+fn render_mask_group(group: &GroupObject, walk: &mut Walk) -> Result<(), ComposeError> {
+    let stack = mask_stack(group, walk)?;
+    let mut pixels = stack.pixels;
+    apply_coverage(&mut pixels, &stack.coverage);
+
+    // The group's own filters see the masked composite (the coverage
+    // is applied before the filter, as it is inside the group).
+    let plan = effects::plan(&group.effects);
+    if !plan.ops.is_empty() {
+        let key = crate::cache::hash_pixels(&pixels, walk.canvas, &plan);
+        pixels = match walk.cache.get(key).map(|entry| entry.pixels.clone()) {
+            Some(pixels) => pixels,
+            None => apply_filtered(pixels, walk.canvas, &plan, key, walk.cache)?,
+        };
+    }
+    paint_surface(&pixels, walk.canvas, group.blend, group.opacity, walk.ctx)
+}
+
+/// A mask stack's outcome: the content's own pixels, and the coverage
+/// the stack folds them against.
+struct MaskStack {
+    /// The content's pixels, before the coverage applies.
+    pixels: Vec<u8>,
+    /// The folded coverage, one byte per pixel (255 = fully covered).
+    coverage: Vec<u8>,
+}
+
+/// Folds a mask stack into one coverage map, and returns it with the
+/// content's pixels.
+fn mask_stack(group: &GroupObject, walk: &mut Walk) -> Result<MaskStack, ComposeError> {
+    let canvas_pixels = usize::from(walk.canvas.0) * usize::from(walk.canvas.1);
+    let Some(&mask_id) = group.children.first() else {
+        // A mask group with no mask child is malformed: the children
+        // draw as they are and nothing is restricted.
+        return Ok(MaskStack {
+            pixels: render_ids(&group.children, walk)?,
+            coverage: vec![255; canvas_pixels],
+        });
+    };
+    let content_ids = level_children(group, walk.document);
+    if content_ids.is_empty() {
+        return Ok(MaskStack {
+            pixels: render_ids(&group.children, walk)?,
+            coverage: vec![255; canvas_pixels],
+        });
+    }
+
+    // The content: the next level down of the stack, or the object
+    // the stack restricts.
+    let (pixels, below) = match content_ids {
+        [content_id] => match walk.document.registry.get(*content_id) {
+            Some(ObjectData::Group(inner)) if is_mask_group(inner) => {
+                let stack = mask_stack(inner, walk)?;
+                (stack.pixels, Some(stack.coverage))
+            }
+            _ => (render_ids(content_ids, walk)?, None),
+        },
+        _ => (render_ids(content_ids, walk)?, None),
+    };
+
+    let level = mask_coverage(mask_id, walk)?;
+    // The bottom level replaces the coverage below it (there is none);
+    // every level above combines with the coverage below it.
+    let coverage = match below {
+        Some(below) => combine_coverage(
+            &below,
+            &level,
+            group.stack_mode.unwrap_or(MaskCombineMode::Add),
+        ),
+        None => level,
+    };
+    Ok(MaskStack { pixels, coverage })
+}
+
+/// The children a mask level draws, skipping a disabled level: a
+/// disabled level contributes no coverage, so the level below it
+/// stands in for it.
+fn level_children<'a>(group: &'a GroupObject, document: &'a Document) -> &'a [ObjectId] {
+    let mut children = group.children.get(1..).unwrap_or_default();
+    while let Some(first) = children.first() {
+        let Some(ObjectData::Group(inner)) = document.registry.get(*first) else {
+            break;
+        };
+        if !is_disabled_mask_group(inner, document) {
+            break;
+        }
+        children = inner.children.get(1..).unwrap_or_default();
+    }
+    children
+}
+
+/// Renders objects into a fresh full-canvas buffer, in order.
+fn render_ids(ids: &[ObjectId], walk: &mut Walk) -> Result<Vec<u8>, ComposeError> {
+    let mut offscreen = RenderContext::new(walk.canvas.0, walk.canvas.1);
+    for id in ids {
+        render_object(
+            *id,
+            &mut Walk {
+                document: walk.document,
+                frame: walk.frame,
+                canvas: walk.canvas,
+                cache: &mut *walk.cache,
+                text_engine: &mut *walk.text_engine,
+                ctx: &mut offscreen,
+                stack: walk.stack,
+            },
+        )?;
+    }
+    flush_offscreen(offscreen, walk.canvas)
+}
+
+/// The coverage a mask child contributes: the gray level of a raster
+/// mask, the painted coverage of a shape mask.
+fn mask_coverage(mask_id: ObjectId, walk: &mut Walk) -> Result<Vec<u8>, ComposeError> {
+    let pixels = render_ids(&[mask_id], walk)?;
+    let grayscale = matches!(
+        walk.document.registry.get(mask_id),
+        Some(ObjectData::Image(_))
+    );
+    let mut coverage = vec![0u8; pixels.len() / 4];
+    for (slot, chunk) in coverage.iter_mut().zip(pixels.as_chunks::<4>().0) {
+        let (red, green, blue, alpha) = (chunk[0], chunk[1], chunk[2], chunk[3]);
+        *slot = if grayscale {
+            // A raster mask carries its coverage as a gray level in the
+            // color channels; the alpha carries the mask's own opacity.
+            // Read the level back out of the premultiplied pixels.
+            if alpha == 0 {
+                0
+            } else {
+                let level = (u32::from(red) + u32::from(green) + u32::from(blue)) / 3;
+                let restored = level * 255 + u32::from(alpha) / 2;
+                ((restored / u32::from(alpha)).min(255)) as u8
+            }
+        } else {
+            alpha
+        };
+    }
+    Ok(coverage)
+}
+
+/// Combines a level's coverage with the coverage below it.
+///
+/// - `Add` — the union of the two coverages.
+/// - `Subtract` — the level's coverage cut out of the coverage below.
+/// - `Intersect` — the overlap of the two coverages.
+/// - `Invert` — the level's inverted coverage stands in for the
+///   coverage below.
+fn combine_coverage(below: &[u8], level: &[u8], mode: MaskCombineMode) -> Vec<u8> {
+    below
+        .iter()
+        .zip(level)
+        .map(|(&below, &level)| {
+            let (below, level) = (u32::from(below), u32::from(level));
+            let combined = match mode {
+                MaskCombineMode::Add => below + level - (below * level) / 255,
+                MaskCombineMode::Subtract => (below * (255 - level)) / 255,
+                MaskCombineMode::Intersect => (below * level) / 255,
+                MaskCombineMode::Invert => 255 - level,
+            };
+            combined.min(255) as u8
+        })
+        .collect()
+}
+
+/// Applies a coverage map to premultiplied content pixels: the
+/// coverage scales the alpha, and the color scales with it, so the
+/// pixels stay premultiplied.
+fn apply_coverage(pixels: &mut [u8], coverage: &[u8]) {
+    for (chunk, &cover) in pixels.as_chunks_mut::<4>().0.iter_mut().zip(coverage) {
+        let cover = u32::from(cover);
+        for channel in chunk.iter_mut() {
+            *channel = ((u32::from(*channel) * cover + 127) / 255).min(255) as u8;
+        }
+    }
+}
+
 fn render_group(group: &GroupObject, walk: &mut Walk) -> Result<(), ComposeError> {
     if !group.visible {
         return Ok(());
     }
+    if is_mask_group(group) {
+        return render_mask_group(group, walk);
+    }
+    // A disabled mask group draws its content unmasked: the mask
+    // child's own artwork is hidden, and the coverage does not apply.
+    // A disabled level of a stack contributes no coverage of its own,
+    // but the level below it still applies.
+    let children: &[ObjectId] = if is_disabled_mask_group(group, walk.document) {
+        if let [content] = &group.children[1..]
+            && let Some(ObjectData::Group(inner)) = walk.document.registry.get(*content)
+            && is_mask_group(inner)
+        {
+            return render_mask_group(inner, walk);
+        }
+        &group.children[1..]
+    } else {
+        &group.children
+    };
     let plan = effects::plan(&group.effects);
     if plan.ops.is_empty() {
         walk.ctx.push_layer(
@@ -1186,10 +1430,7 @@ fn render_group(group: &GroupObject, walk: &mut Walk) -> Result<(), ComposeError
             None,
             None,
         );
-        // Mask-structured groups composite all children unmasked this
-        // milestone (masks as pixel content are M6/M7; `MNAb` is
-        // carried by the model only).
-        for id in &group.children {
+        for id in children {
             render_object(*id, walk)?;
         }
         walk.ctx.pop_layer();
@@ -1200,7 +1441,7 @@ fn render_group(group: &GroupObject, walk: &mut Walk) -> Result<(), ComposeError
     // child's own effects already applied); the group's blend/opacity
     // wrap the filtered image, as on the unfiltered path.
     let mut offscreen = RenderContext::new(walk.canvas.0, walk.canvas.1);
-    for id in &group.children {
+    for id in children {
         render_object(
             *id,
             &mut Walk {

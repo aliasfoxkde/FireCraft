@@ -117,9 +117,11 @@
   gate (`cargo run -p xtask -- reachability`, wired into `ci`) derives
   the shell's bound command set from the shell crate's own source and
   holds it to a one-way floor in `.reachability-floor.tsv` — measured
-  at introduction as **253 registry commands, 168 bound = 66.40%**, 85
-  unreachable; **re-measured 2026-11-14 after #143: 257 commands, 249
-  bound = 96.89%, 8 unreachable** (floor re-bless pending). The panel
+  at introduction as **253 registry commands, 168 bound = 66.40%**,
+  floor re-pinned to **172/257 (66.93%)** by #113's lane;
+  **re-measured 2026-11-14 after #143: 257 commands, 249 bound =
+  96.89%, 8 unreachable** (the next deliberate bless moves the floor
+  there). The panel
   snapshot (`crates/app/panels.snapshot`, 19 panels) pins the panel
   set's structure; `egui_kittest` is obtainable (0.36.2 matches the
   locked egui) but its pixel path needs a wgpu adapter the CI image
