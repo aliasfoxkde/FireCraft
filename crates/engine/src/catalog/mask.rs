@@ -22,7 +22,7 @@ use geom::{Point, Vec2};
 
 use super::object::{Owner, attach_cell, content_bounds, detach, find_owner, translate_object};
 use crate::access;
-use crate::bitmap::{check_editable, gather, scatter, touched_tiles};
+use crate::bitmap::{assemble_rgba, check_editable, gather, scatter, touched_tiles};
 use crate::command::TypedCommand;
 use crate::delta::{Delta, ObjectInverse};
 use crate::error::EngineError;
@@ -303,12 +303,16 @@ fn mask_gray_plane(
                     detail: "mask image and content do not overlay (locations differ)".to_owned(),
                 });
             }
-            let flat = gather(mask, &document.tiles, name)?;
+            // The coverage is read through the renderer's view: a
+            // solid matte slot is the file's flat color for the tile,
+            // and the renderer bakes it to that color (decision
+            // 0034), so a uniform mask reads as the gray it stands
+            // for — a "reveal all" mask is opaque, not empty.
+            let flat = assemble_rgba(document, mask, name)?;
             Ok(SelectionMask {
                 width: dims.0,
                 height: dims.1,
                 alpha: flat
-                    .pixels
                     .as_chunks::<4>()
                     .0
                     .iter()
@@ -1293,16 +1297,15 @@ impl TypedCommand for SetMaskMode {
                     }
                 };
                 let (width, height) = check_editable(&image, NAME)?;
-                let flat = gather(&image, &document.tiles, NAME)?;
+                // The renderer's view again: a uniform matte mask is
+                // the solid color it stands for, and its coverage is
+                // that gray.
+                let flat = assemble_rgba(document, &image, NAME)?;
                 let mut plane = SelectionMask::empty(
                     u32::try_from(width).unwrap_or(0),
                     u32::try_from(height).unwrap_or(0),
                 );
-                for (slot, pixel) in plane
-                    .alpha
-                    .iter_mut()
-                    .zip(flat.pixels.as_chunks::<4>().0.iter())
-                {
+                for (slot, pixel) in plane.alpha.iter_mut().zip(flat.as_chunks::<4>().0) {
                     *slot = pixel[0];
                 }
                 let contours = plane_to_path(&plane, image.location);
@@ -3104,6 +3107,84 @@ mod tests {
         assert_eq!(path.contours.len(), 1);
         assert_eq!(path.contours[0].point_count, 4);
         assert!(document.registry.get(mask_id).is_none());
+    }
+
+    /// A uniform mask is a solid matte — the file's flat color for
+    /// the tile — and the renderer bakes a matte to that color, so
+    /// the mask's coverage must read the same way: a "reveal all"
+    /// mask is opaque, not empty.
+    #[test]
+    fn a_uniform_mask_reads_its_coverage_through_the_matte() {
+        let (mut document, image_id) = image_document();
+        AddMask
+            .apply_json(
+                &mut document,
+                serde_json::json!({ "id": image_id, "mode": "reveal all" }),
+            )
+            .unwrap();
+        let group_id = cell_element(&document, 0).unwrap();
+        let ObjectData::Group(group) = document.registry.get(group_id).unwrap() else {
+            panic!("cell should reference the mask group");
+        };
+        let ObjectData::Image(content) = document.registry.get(image_id).unwrap() else {
+            panic!("the content should be an image");
+        };
+        let coverage = mask_gray_plane(&document, NAME, group.children[0], content).unwrap();
+        assert!(
+            coverage.alpha.iter().all(|&gray| gray == 255),
+            "a reveal-all mask is opaque"
+        );
+    }
+
+    /// The uniform mask converts to a vector mask: its coverage is
+    /// the whole rectangle, so the traced boundary is the rectangle.
+    #[test]
+    fn a_uniform_mask_converts_to_a_vector_mask() {
+        let (mut document, image_id) = image_document();
+        AddMask
+            .apply_json(
+                &mut document,
+                serde_json::json!({ "id": image_id, "mode": "reveal all" }),
+            )
+            .unwrap();
+        let group_id = cell_element(&document, 0).unwrap();
+        SetMaskMode
+            .apply_json(
+                &mut document,
+                serde_json::json!({ "id": image_id, "mode": "mask to path" }),
+            )
+            .unwrap();
+        let ObjectData::Group(group) = document.registry.get(group_id).unwrap() else {
+            panic!("group vanished");
+        };
+        assert_eq!(group.group_type, SHAPE_MASK);
+        let ObjectData::Path(path) = document.registry.get(group.children[0]).unwrap() else {
+            panic!("the replacement mask should be a path");
+        };
+        assert_eq!(path.contours.len(), 1, "the rectangle's boundary");
+    }
+
+    /// A "hide all" mask is empty coverage, and an empty coverage has
+    /// no boundary to trace — the conversion refuses, as it must.
+    #[test]
+    fn an_empty_mask_has_no_boundary_to_trace() {
+        let (mut document, image_id) = image_document();
+        AddMask
+            .apply_json(
+                &mut document,
+                serde_json::json!({ "id": image_id, "mode": "hide all" }),
+            )
+            .unwrap();
+        let error = SetMaskMode
+            .apply_json(
+                &mut document,
+                serde_json::json!({ "id": image_id, "mode": "mask to path" }),
+            )
+            .unwrap_err();
+        assert!(
+            matches!(error, EngineError::InvalidState { .. }),
+            "{error:?}"
+        );
     }
 
     #[test]

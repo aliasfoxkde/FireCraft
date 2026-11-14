@@ -290,11 +290,15 @@ pub enum AutoShape {
     Measure,
     /// `autoshape.connectorLine`.
     ConnectorLine,
+    /// `autoshape.rect` — the Rounded Rectangle tool.
+    RoundedRect,
+    /// `autoshape.rect` — the Chamfer Rectangle tool.
+    ChamferRect,
 }
 
 impl AutoShape {
     /// Menu order.
-    pub const ALL: [AutoShape; 10] = [
+    pub const ALL: [AutoShape; 12] = [
         AutoShape::Star,
         AutoShape::Polygon,
         AutoShape::Spiral,
@@ -305,6 +309,8 @@ impl AutoShape {
         AutoShape::ArrowLine,
         AutoShape::Measure,
         AutoShape::ConnectorLine,
+        AutoShape::RoundedRect,
+        AutoShape::ChamferRect,
     ];
 
     /// Menu label.
@@ -321,6 +327,8 @@ impl AutoShape {
             AutoShape::ArrowLine => "Arrow Line",
             AutoShape::Measure => "Measure",
             AutoShape::ConnectorLine => "Connector Line",
+            AutoShape::RoundedRect => "Rounded Rectangle",
+            AutoShape::ChamferRect => "Chamfer Rectangle",
         }
     }
 
@@ -338,6 +346,9 @@ impl AutoShape {
             AutoShape::ArrowLine => "autoshape.arrowLine",
             AutoShape::Measure => "autoshape.measure",
             AutoShape::ConnectorLine => "autoshape.connectorLine",
+            // The three rectangle tools share one generator and
+            // differ only in the corner treatment they ask for.
+            AutoShape::RoundedRect | AutoShape::ChamferRect => "autoshape.rect",
         }
     }
 
@@ -345,7 +356,14 @@ impl AutoShape {
     /// shapes take the frame center + radius, frame-based shapes the
     /// normalized frame, line-based shapes the raw endpoints.
     #[must_use]
-    fn payload(self, drag: &Drag, page: usize, layer: usize, frame: usize) -> serde_json::Value {
+    fn payload(
+        self,
+        drag: &Drag,
+        page: usize,
+        layer: usize,
+        frame: usize,
+        corner: f64,
+    ) -> serde_json::Value {
         let (sx, sy) = (drag.start.x, drag.start.y);
         let (cx, cy) = (drag.current.x, drag.current.y);
         // Frame origin/size, normalized so drags in any direction
@@ -358,13 +376,14 @@ impl AutoShape {
             start: (sx, sy),
             end: (cx, cy),
         };
-        self.payload_from(&placement, page, layer, frame)
+        self.payload_from(&placement, page, layer, frame, corner)
     }
 
     /// The payload for a shape inserted without a drag — the Auto
     /// Shapes panel's path: a `size`-square box at (`x`, `y`). The
     /// line-based shapes run along the box's horizontal midline.
     #[must_use]
+    #[allow(clippy::too_many_arguments)]
     pub fn payload_in_rect(
         self,
         page: usize,
@@ -373,6 +392,7 @@ impl AutoShape {
         x: f64,
         y: f64,
         size: f64,
+        corner: f64,
     ) -> serde_json::Value {
         let mid = y + size / 2.0;
         let placement = Placement {
@@ -383,7 +403,7 @@ impl AutoShape {
             start: (x, mid),
             end: (x + size, mid),
         };
-        self.payload_from(&placement, page, layer, frame)
+        self.payload_from(&placement, page, layer, frame, corner)
     }
 
     /// The registry payload for one shape placement. Every shape
@@ -397,6 +417,7 @@ impl AutoShape {
         page: usize,
         layer: usize,
         frame: usize,
+        corner: f64,
     ) -> serde_json::Value {
         let frame_json = serde_json::json!({
             "page": page, "layer": layer, "cell": frame, "name": null,
@@ -460,6 +481,19 @@ impl AutoShape {
                 "startX": sx, "startY": sy, "endX": cx, "endY": cy,
                 "elbowX": cx, "elbowY": (sy + cy) / 2.0,
                 "corner1": 4.0, "corner2": 4.0, "vertical": false,
+            }),
+            // The three rectangle tools share one generator; only the
+            // corner treatment differs. The radius is clamped so the
+            // cut never exceeds half the shorter side.
+            AutoShape::RoundedRect => serde_json::json!({
+                "x": x, "y": y, "width": width, "height": height,
+                "corner": corner.min(0.5 * width.min(height)).max(0.0),
+                "kind": "round",
+            }),
+            AutoShape::ChamferRect => serde_json::json!({
+                "x": x, "y": y, "width": width, "height": height,
+                "corner": corner.min(0.5 * width.min(height)).max(0.0),
+                "kind": "chamfer",
             }),
         };
         if let (Some(object), Some(place)) = (value.as_object_mut(), frame_json.as_object()) {
@@ -1014,6 +1048,9 @@ pub struct Editor {
     pub wand_tolerance: u8,
     /// The feather radius the panel's slider applies.
     pub feather_radius: u8,
+    /// The corner radius the rectangle tools cut with (view state — the
+    /// engine re-reads it from every placement's payload).
+    pub rect_corner: f64,
 }
 
 impl Editor {
@@ -1088,6 +1125,7 @@ impl Editor {
             pixel_mode: PixelSelectMode::Replace,
             wand_tolerance: 32,
             feather_radius: 2,
+            rect_corner: 12.0,
         }
     }
 
@@ -2413,7 +2451,13 @@ impl Editor {
             Tool::AutoShape(shape) => {
                 self.apply(
                     shape.command(),
-                    shape.payload(&drag, self.page, self.active_layer(), self.frame),
+                    shape.payload(
+                        &drag,
+                        self.page,
+                        self.active_layer(),
+                        self.frame,
+                        self.rect_corner,
+                    ),
                 )?;
                 true
             }

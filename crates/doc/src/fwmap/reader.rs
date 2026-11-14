@@ -951,6 +951,13 @@ impl Reader {
                             uid: uid.unwrap_or_default(),
                             is_primary: is_primary.unwrap_or(false),
                         }),
+                        // A link slot carries no layer body, so it has
+                        // no `DISb` to read: it defaults to a display
+                        // layer, the way `layer.add` mints one. The
+                        // derive-default is `false` (smart-reference
+                        // display), which would render the shared
+                        // content nowhere.
+                        display: true,
                         ..Layer::default()
                     });
                 }

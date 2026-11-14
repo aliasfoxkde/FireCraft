@@ -3352,6 +3352,9 @@ fn shared_layers_round_trip_losslessly() {
             uid: "fc00dead-beef-4000-8000-000000000001".into(),
             is_primary: false,
         }),
+        // A link slot carries no body, so it has no `DISb` on the
+        // wire: the reader defaults it to a display layer.
+        display: true,
         ..Layer::default()
     });
 
