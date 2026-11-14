@@ -16,7 +16,10 @@ fn bytes(document: &doc::Document) -> Vec<u8> {
     serde_json::to_vec(document).unwrap()
 }
 
-const SEEDS: [u64; 3] = [0x1, 0xDEAD_BEEF, 0x5EED_F00D];
+/// `0x1`, `0xDEAD_BEEF`, `0x5EED_F00D` are the fixed sweep; the fourth is
+/// the `panic_hunt` seed that exposed `symbol.breakApart` leaking a copied group's
+/// child slots on undo (regression pin — never remove it).
+const SEEDS: [u64; 4] = [0x1, 0xDEAD_BEEF, 0x5EED_F00D, 14_348_260_817_485_884_532];
 const STEPS: usize = 64;
 
 #[test]
