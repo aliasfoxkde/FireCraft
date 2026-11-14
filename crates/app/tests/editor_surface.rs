@@ -61,7 +61,7 @@ fn autoshape_labels_commands_and_defaults() {
         assert_eq!(shape.label(), label, "{label}");
         assert_eq!(shape.command(), command, "{label}");
     }
-    assert_eq!(AutoShape::ALL.len(), 10);
+    assert_eq!(AutoShape::ALL.len(), 12);
 }
 
 #[test]
