@@ -562,6 +562,7 @@ Current version: **0.2.5**.
 
 ### Documentation
 
+- **changelog**: regenerate after the main re-merge (0470cda4)
 - renumber the mask-stack decision to 0092 (097ef7d9)
 - restate the reachability measurement after the mask command (885be17d)
 - decision 0091, the T9 ticket, and the Phase 20 ledger (a3141fdd)
@@ -999,6 +1000,7 @@ Current version: **0.2.5**.
 
 ### Other
 
+- brand: use the approved flame artwork consistently (#144) (ad3fc655)
 - wip(keymap): preserve the CS6 keymap binding work in progress (385ec681)
 - wip(app,web): localStorage session persistence (21.1 partial) (70146380)
 - brand: retire the fox motif from the published artwork (#132) (96444dc4)
