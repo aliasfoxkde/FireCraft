@@ -38,7 +38,21 @@
 > Per-artifact evidence state:
 > [`release/ARTIFACT-MATRIX.md`](release/ARTIFACT-MATRIX.md).
 
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:02fc8616d93d636ed040496ef1a26a0ee890ba0a52cbd6956e427d86c81c5473 -->
+
 ## In flight
+
+Review follow-up: [filter controls and master transform](tasks/filter-controls-review.md) <!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:84b20441c095cd11716da1ee0963a86f9429fc177faf73c2a278afd30da90aff -->
+
+— fixed; focused tests pass; the app suite retains a confirmed baseline markup-test failure.
+
+<!-- /coderabbit-ai-generated:v1 -->
+
+<!-- /coderabbit-ai-generated:v1 -->
 
 | Priority | Task | Status | Detail |
 |---|---|---|---|
@@ -52,6 +66,7 @@
 | P2 | Coverage and test quality ratchet | Open | Replace the old aspirational 99% label with measured per-crate targets and snapshots; [NEXT.md](NEXT.md). |
 | P2 | Phase 22.1: the dockable panel set — docking, tab groups, layout persistence | Complete | [issue #91](https://github.com/aliasfoxkde/FireCraft/issues/91). Docking (a panel moves between the left and right columns, by drag or by the header arrow), tab groups (a panel dropped on another panel's title shares its slot — the group is one unit that the dock draws, moves and saves), and their persistence landed 2026-11-11 in PR #128; the merge waits on that branch's receipts. |
 | P2 | Aegis gate: content-keyed baseline, so a doc edit no longer fails the gate | **Done — landed on `main`** | [decisions/0074-aegis-content-keyed-baseline.md](decisions/0074-aegis-content-keyed-baseline.md). The baseline keys on content (pattern, file, digest) rather than on line, and every rule class stays armed. |
+| P1 | Close the measured reachability gap — bind the engine commands the shell never reached | **In progress — open PR #143** | The reachability gate measured 85 registry commands the engine could execute and the shell's designed surface could not. The branch binds seventy-six of them, family by family, with no menu row added: the Select verbs go through the engine's selection door ([0104](decisions/0104-the-shells-selection-verbs-go-through-the-engine.md)), the Pages panel renames and deletes pages ([0105](decisions/0105-the-pages-panel-renames-and-deletes-pages.md)), the Styles panel redefines and scales styles ([0106](decisions/0106-the-styles-panel-redefines-and-scales-styles.md)), the States panel reorders the states and fans the selection onto them ([0107](decisions/0107-the-states-panel-reorders-and-fans-the-selection.md)), the Properties panel writes the text object's paragraph layout and fits its box ([0108](decisions/0108-the-properties-panel-writes-the-text-layout.md)), its rendering dials and run list ([0109](decisions/0109-the-text-properties-write-the-rendering-dials.md)), the Pages panel lists the guides while the Layers panel moves the selection ([0110](decisions/0110-the-guides-and-the-layer-move-reach-the-engine.md)), and the symbol instance's panel carries the whole symbol family — the button's flags and options, the animation span, the parameters and custom data, the definition's contents ([0111](decisions/0111-the-symbol-panel-carries-the-symbol-family.md)) — while the text panel carries the markup verbs and the button carries its text ([0112](decisions/0112-the-markup-verbs-and-the-button-text.md)), and the Filters panel bakes and renames ([0113](decisions/0113-the-filters-panel-bakes-and-renames.md)), and the Properties panel carries the element mask ([0114](decisions/0114-the-properties-panel-carries-the-mask.md)), and the Pages panel marks the master page while the Layers panel shares layers ([0115](decisions/0115-the-pages-panel-marks-the-master-and-the-layers-panel-shares.md)), and the panel edits the rectangle primitive, the bitmap's pixel mask, and the pattern fill ([0116](decisions/0116-the-panel-edits-the-rectangle-the-pixel-mask-and-the-pattern.md)), and the Slices panel moves the web object and edits its background, the Styles panel updates the named style, and the Properties panel pastes a channel ([0117](decisions/0117-the-slices-panel-moves-the-web-object-and-the-style-panel-updates.md)). The measurement moves from 168 bound commands of 253 (66.4 %) to **244 of 253 (96.4 %)**. Issues [#136](https://github.com/aliasfoxkde/FireCraft/issues/136)–[#141](https://github.com/aliasfoxkde/FireCraft/issues/141). |
 
 ### Release & tooling lanes in flight
 

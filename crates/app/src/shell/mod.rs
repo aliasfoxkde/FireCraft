@@ -76,6 +76,38 @@ thread_local! {
         const { std::cell::RefCell::new(None) };
 }
 
+struct FilterBakeFields {
+    category: String,
+    name: String,
+    guid: String,
+    width: i64,
+    height: i64,
+    values: String,
+    affects_alpha: bool,
+    blur_type: String,
+    angle: f64,
+    distance: u32,
+    samples: u32,
+}
+
+impl Default for FilterBakeFields {
+    fn default() -> Self {
+        Self {
+            category: String::new(),
+            name: String::new(),
+            guid: String::new(),
+            width: 3,
+            height: 3,
+            values: "0,0,0,0,1,0,0,0,0".to_owned(),
+            affects_alpha: false,
+            blur_type: "linear".to_owned(),
+            angle: 0.0,
+            distance: 10,
+            samples: 8,
+        }
+    }
+}
+
 /// The eframe app. Holds the editor core plus everything window-shaped.
 /// Platform services are trait objects: the desktop build injects
 /// [`EnvDialogs`] + `StdFs`, the wasm build (crate `firecraft-web`)
@@ -169,9 +201,26 @@ pub struct Shell {
     ui_scale: Option<f32>,
     /// The Styles panel's new-style name field.
     style_name: String,
+    /// Filter rename drafts, keyed by object, stack position and original effect identity.
+    filter_names: std::collections::HashMap<(doc::ObjectId, usize, String, String), String>,
+    /// Bake controls retain edits between UI frames.
+    filter_bake: FilterBakeFields,
+    /// The Styles panel's text-scale factor.
+    style_scale: f64,
+    /// The Properties panel's channel pair: the clipboard channel
+    /// pasted in, and the image channel it lands in.
+    channel_from: &'static str,
+    channel_to: &'static str,
+    /// The States panel's range fan: the first and last state the
+    /// selection's range fan covers (`-1` = the current state).
+    fan_first: i64,
+    fan_last: i64,
     /// The layer whose name is being edited in the Layers panel
     /// (`None` = no inline rename open).
     rename_layer: Option<usize>,
+    /// The page whose name is being edited in the Pages panel
+    /// (`None` = no inline rename open).
+    rename_page: Option<usize>,
     /// View-menu toggles + the open grid dialog. Display state only —
     /// the guides and grid themselves live in the document, so a move
     /// drag's snapping reads them through the editor like every other
@@ -508,7 +557,15 @@ impl Shell {
             recovery_path: Self::default_recovery_path(),
             ui_scale: None,
             style_name: String::new(),
+            filter_names: std::collections::HashMap::new(),
+            filter_bake: FilterBakeFields::default(),
+            style_scale: 1.0,
+            channel_from: "red",
+            channel_to: "alpha",
+            fan_first: 0,
+            fan_last: 0,
             rename_layer: None,
+            rename_page: None,
             show_grid: false,
             snap_to_grid: false,
             show_guides: true,
@@ -1695,19 +1752,8 @@ impl Shell {
                 Ok(name) => self.status = format!("redid {name}"),
                 Err(error) => self.status = format!("redo failed: {error}"),
             },
-            menus::ShellAction::Deselect => {
-                self.editor.set_selection(Vec::new());
-                self.status = "deselected".to_owned();
-            }
-            menus::ShellAction::SelectAll => {
-                let ids = self
-                    .editor
-                    .current_cell()
-                    .map_or_else(Vec::new, |cell| cell.elements.clone());
-                let picked = ids.len();
-                self.editor.set_selection(ids);
-                self.status = format!("selected {picked} object(s)");
-            }
+            menus::ShellAction::Deselect => self.deselect(),
+            menus::ShellAction::SelectAll => self.select_all(),
             menus::ShellAction::SelectInverse => self.select_inverse(),
             menus::ShellAction::Copy => self.clipboard_copy(false),
             menus::ShellAction::Cut => self.clipboard_copy(true),
@@ -1946,21 +1992,82 @@ impl Shell {
         }
     }
 
-    /// Select ▸ Select Inverse: everything in the current cell the
-    /// selection does not cover. The cell is the editor's scope (one
-    /// layer, one state) — the same scope Select All covers.
-    fn select_inverse(&mut self) {
-        let selected = self.editor.live_selection();
-        let ids: Vec<doc::ObjectId> = self
-            .editor
-            .current_cell()
-            .map_or_else(Vec::new, |cell| cell.elements.clone())
-            .into_iter()
-            .filter(|id| !selected.contains(id))
-            .collect();
-        let picked = ids.len();
-        self.editor.set_selection(ids);
+    /// Select ▸ Select All: CS6's `dom.selectAll()` — every object of
+    /// the page in the current state, across layers.
+    ///
+    /// The scope belongs to the engine, so the selection goes through
+    /// `selection.selectAll`: the command door journals it, undo can
+    /// take it back, and the scripting host sees the same scope the
+    /// menu does. The view follows the document's selection.
+    fn select_all(&mut self) {
+        let payload = serde_json::json!({
+            "page": self.editor.page,
+            "frame": self.editor.frame,
+        });
+        if !self.run_command("selection.selectAll", payload) {
+            return;
+        }
+        self.editor.adopt_document_selection();
+        let picked = self.editor.live_selection().len();
         self.status = format!("selected {picked} object(s)");
+    }
+
+    /// Select ▸ Deselect: CS6's `dom.selectNone()` — the object
+    /// selection goes empty. The engine clears it, so the document and
+    /// the view agree afterwards.
+    fn deselect(&mut self) {
+        if self.editor.live_selection().is_empty()
+            && self.editor.document().object_selection.is_empty()
+        {
+            // Nothing to clear — the command would be a no-op that
+            // only adds an undo step.
+            self.status = "deselected".to_owned();
+            return;
+        }
+        if !self.run_command("selection.selectNone", serde_json::json!({})) {
+            return;
+        }
+        self.editor.adopt_document_selection();
+        self.status = "deselected".to_owned();
+    }
+
+    /// Select ▸ Select Inverse: everything in the page-and-state scope
+    /// the selection does not cover. The complement is the engine's,
+    /// so the view's selection lands in the document first and the
+    /// document's answer comes back as the view's selection.
+    fn select_inverse(&mut self) {
+        if let Err(error) = self.editor.sync_selection() {
+            self.status = format!("selection failed: {error}");
+            return;
+        }
+        let payload = serde_json::json!({
+            "page": self.editor.page,
+            "frame": self.editor.frame,
+        });
+        if !self.run_command("selection.selectInverse", payload) {
+            return;
+        }
+        self.editor.adopt_document_selection();
+        let picked = self.editor.live_selection().len();
+        self.status = format!("selected {picked} object(s)");
+    }
+
+    /// The Layers panel's "select this layer's objects": CS6's
+    /// `dom.selectAllOnLayer(layerIndex, bRememberSelection,
+    /// bToggleSelection)` with the plain replace semantics. The
+    /// engine scopes it to one layer and state; the view follows.
+    pub(super) fn select_layer_objects(&mut self, layer: usize) {
+        let payload = serde_json::json!({
+            "page": self.editor.page,
+            "layer": layer,
+            "frame": self.editor.frame,
+        });
+        if !self.run_command("selection.selectAllOnLayer", payload) {
+            return;
+        }
+        self.editor.adopt_document_selection();
+        let picked = self.editor.live_selection().len();
+        self.status = format!("selected {picked} object(s) on layer {layer}");
     }
 
     /// Edit ▸ Copy / Cut: the engine's clipboard commands read the
@@ -4875,6 +4982,39 @@ mod tests {
         }
     }
 
+    /// The image behind a name, for the channel assertions.
+    fn shell_image(shell: &Shell, name: &str) -> doc::ObjectId {
+        shell
+            .editor
+            .document()
+            .registry
+            .iter()
+            .find_map(|(id, object)| match object {
+                ObjectData::Image(image) if image.name.as_deref() == Some(name) => Some(id),
+                _ => None,
+            })
+            .unwrap_or_else(|| panic!("no image named {name:?}"))
+    }
+
+    /// The alpha byte of an image's first tile — the coverage a
+    /// channel paste writes.
+    fn image_alpha(shell: &Shell, id: doc::ObjectId) -> Option<u8> {
+        let image = match shell.editor.document().registry.get(id) {
+            Some(ObjectData::Image(image)) => image,
+            _ => return None,
+        };
+        match image.tiles.first() {
+            Some(doc::TileRef::Tile(tile_id)) => shell
+                .editor
+                .document()
+                .tiles
+                .get(*tile_id)
+                .map(|tile| tile.pixels()[3]),
+            Some(doc::TileRef::Matte(argb)) => Some(((*argb >> 24) & 0xff) as u8),
+            None => None,
+        }
+    }
+
     /// Edit ▸ Copy / Paste: the clipboard crosses the engine's command
     /// door — the view's selection lands in the document first, the
     /// paste re-mints onto the active layer, and the pasted object
@@ -4921,14 +5061,314 @@ mod tests {
     }
 
     /// Select ▸ Select Inverse: the complement of the selection within
-    /// the cell the editor edits.
+    /// the page the editor edits — every object of the page and state
+    /// the selection does not cover.
     #[test]
-    fn select_inverse_complements_the_cell() {
+    fn select_inverse_complements_the_page() {
         let mut shell = gui_shell(gui_editor_two());
         let ids = shell.editor.current_cell().unwrap().elements.clone();
         shell.editor.set_selection(vec![ids[0]]);
         shell.run_action(&menus::Action::Shell(menus::ShellAction::SelectInverse));
         assert_eq!(shell.editor.selection_set, vec![ids[1]]);
+    }
+
+    /// A rect on the editor's active layer, for the cross-layer
+    /// selection tests.
+    fn rect_on_active_layer(editor: &mut Editor, x: f64, y: f64) -> doc::ObjectId {
+        editor.tool = Tool::Rect;
+        editor.begin_drag(geom::Point::new(x, y));
+        editor.drag_to(geom::Point::new(x + 60.0, y + 40.0));
+        editor.end_drag().unwrap();
+        editor
+            .current_cell()
+            .unwrap()
+            .elements
+            .last()
+            .copied()
+            .unwrap()
+    }
+
+    /// Select ▸ Select All: CS6's `dom.selectAll()` covers every object
+    /// of the page in the current state — across layers, not only the
+    /// active one — and the selection goes through the engine's
+    /// command door, so the journal carries it.
+    #[test]
+    fn select_all_covers_every_layer_of_the_page() {
+        let mut editor = gui_editor();
+        let lower = editor.current_cell().unwrap().elements[0];
+        editor
+            .apply("layer.add", serde_json::json!({ "page": 0 }))
+            .unwrap();
+        editor.set_active_layer(1);
+        let upper = rect_on_active_layer(&mut editor, 60.0, 60.0);
+        assert_ne!(lower, upper);
+
+        let mut shell = gui_shell(editor);
+        let journal_before = shell.editor.session.journal_len();
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::SelectAll));
+        assert_eq!(
+            shell.editor.selection_set.len(),
+            2,
+            "select all covers both layers"
+        );
+        assert!(
+            shell.editor.selection_set.contains(&lower)
+                && shell.editor.selection_set.contains(&upper),
+            "select all picks the objects of every layer"
+        );
+        assert!(
+            shell.editor.session.journal_len() > journal_before,
+            "the selection went through the command door"
+        );
+        assert!(
+            shell
+                .editor
+                .session
+                .journal_lines()
+                .contains("selection.selectAll"),
+            "the journal names the command"
+        );
+    }
+
+    /// Select ▸ Deselect: the object selection goes empty in the
+    /// document as well as in the view — CS6's `dom.selectNone()`.
+    #[test]
+    fn deselect_clears_the_document_selection() {
+        let mut shell = gui_shell(gui_editor());
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::SelectAll));
+        assert!(!shell.editor.document().object_selection.is_empty());
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::Deselect));
+        assert!(
+            shell.editor.document().object_selection.is_empty(),
+            "the document's selection is empty"
+        );
+        assert!(
+            shell.editor.selection_set.is_empty(),
+            "the view's selection is empty"
+        );
+    }
+
+    /// The Layers panel's "select this layer's objects": the engine's
+    /// `selection.selectAllOnLayer` scopes the selection to one layer
+    /// and state, whatever else the page carries.
+    #[test]
+    fn select_layer_objects_scopes_to_one_layer() {
+        let mut editor = gui_editor();
+        let lower = editor.current_cell().unwrap().elements[0];
+        editor
+            .apply("layer.add", serde_json::json!({ "page": 0 }))
+            .unwrap();
+        editor.set_active_layer(1);
+        rect_on_active_layer(&mut editor, 60.0, 60.0);
+        let upper = editor.document().pages[0].layers.layers[1].cells[0].elements[0];
+
+        let mut shell = gui_shell(editor);
+        shell.select_layer_objects(0);
+        assert_eq!(
+            shell.editor.selection_set,
+            vec![lower],
+            "only the named layer's object is selected"
+        );
+        shell.select_layer_objects(1);
+        assert_eq!(
+            shell.editor.selection_set,
+            vec![upper],
+            "the other layer's object replaces it"
+        );
+    }
+
+    /// The Pages panel's rename and delete: `page.setName` renames the
+    /// page and `page.delete` removes it — and the last page cannot
+    /// go.
+    #[test]
+    fn the_pages_panel_renames_and_deletes_pages() {
+        let mut shell = gui_shell(gui_editor());
+        shell.run_command("page.add", serde_json::json!({ "index": null }));
+        assert_eq!(shell.editor.document().pages.len(), 2);
+        shell.run_command(
+            "page.setName",
+            serde_json::json!({ "page": 1, "name": "second" }),
+        );
+        assert_eq!(
+            shell.editor.document().pages[1].name.as_deref(),
+            Some("second"),
+            "the page carries its new name"
+        );
+        shell.delete_page(1);
+        assert_eq!(shell.editor.document().pages.len(), 1, "the page is gone");
+        shell.delete_page(0);
+        assert_eq!(
+            shell.editor.document().pages.len(),
+            1,
+            "the last page stays"
+        );
+        assert!(
+            shell.status.contains("failed"),
+            "the refusal is reported: {}",
+            shell.status
+        );
+    }
+
+    /// The Styles panel's redefine and scale: the selection's
+    /// appearance becomes the named style, and the scale multiplies
+    /// every style's text size.
+    #[test]
+    fn the_styles_panel_redefines_and_scales_styles() {
+        let mut shell = gui_shell(gui_editor());
+        let id = shell.editor.current_cell().unwrap().elements[0];
+        shell.editor.set_selection(vec![id]);
+        shell.run_command(
+            "style.redefineFromSelection",
+            serde_json::json!({ "name": "mine", "source": id }),
+        );
+        assert_eq!(
+            shell.editor.document().styles.len(),
+            1,
+            "the style is defined"
+        );
+        shell.redefine_style(0, id);
+        let before = shell.editor.document().styles[0].text.size;
+        shell.scale_styles(2.0);
+        assert_eq!(
+            shell.editor.document().styles[0].text.size,
+            before * 2.0,
+            "the scale multiplied the text size"
+        );
+    }
+
+    /// The Properties panel's text layout: the paragraph's indent
+    /// and spacing reach the text's style.
+    #[test]
+    fn the_text_properties_write_the_paragraph_layout() {
+        let (mut shell, id) = text_shell("hello");
+        shell.set_paragraph_indent(id, 12.0);
+        shell.set_paragraph_spacing_before(id, 4.0);
+        shell.set_paragraph_spacing_after(id, 6.0);
+        let style = match shell.editor.document().registry.get(id) {
+            Some(ObjectData::Text(text)) => text.style.clone(),
+            _ => None,
+        };
+        let style = style.expect("the text carries a style");
+        assert_eq!(style.paragraph_indent, Some(12.0));
+        assert_eq!(style.space_before, Some(4.0));
+        assert_eq!(style.space_after, Some(6.0));
+    }
+
+    /// "Fit box to text": the frame shrinks to the text it holds.
+    #[test]
+    fn the_text_box_fits_its_text() {
+        let (mut shell, id) = text_shell("hello");
+        let frame =
+            |shell: &Shell, id: doc::ObjectId| match shell.editor.document().registry.get(id) {
+                Some(ObjectData::Text(text)) => text.frame,
+                _ => panic!("the text is there"),
+            };
+        let before = frame(&shell, id);
+        shell.fit_text_box();
+        let after = frame(&shell, id);
+        assert!(
+            after.width() < before.width(),
+            "the frame shrank to the text: {before:?} -> {after:?}"
+        );
+        assert!(after.width() > 0.0, "the frame still holds the text");
+    }
+
+    /// The text properties' anti-alias dials: the custom sharpness,
+    /// strength and oversampling reach the text object.
+    #[test]
+    fn the_text_properties_write_the_anti_alias_dials() {
+        let (mut shell, id) = text_shell("hello");
+        shell.set_custom_anti_alias_sharpness(id, 200);
+        shell.set_custom_anti_alias_strength(id, 64);
+        shell.set_custom_anti_alias_over_sample(id, 16);
+        let text = match shell.editor.document().registry.get(id) {
+            Some(ObjectData::Text(text)) => text.clone(),
+            _ => panic!("the text is there"),
+        };
+        assert_eq!(text.anti_alias_sharpness, Some(200));
+        assert_eq!(text.anti_alias_strength, Some(64));
+        assert_eq!(text.anti_alias_oversample, Some(16));
+    }
+
+    /// The text properties' run field: one line per run, in order.
+    #[test]
+    fn the_text_properties_write_the_runs() {
+        let (mut shell, id) = text_shell("hello");
+        shell.set_text_runs(id, "one\ntwo");
+        let text = match shell.editor.document().registry.get(id) {
+            Some(ObjectData::Text(text)) => text.clone(),
+            _ => panic!("the text is there"),
+        };
+        let runs: Vec<&str> = text.runs.iter().map(|run| run.text.as_str()).collect();
+        assert_eq!(runs, vec!["one", "two"], "the runs are in order");
+    }
+
+    /// The text properties' frame: the box the text flows inside is
+    /// written, and the object's own placement stays put.
+    #[test]
+    fn the_text_properties_write_the_text_frame() {
+        let (mut shell, id) = text_shell("hello");
+        shell.set_text_rectangle(id, 120.0, 30.0);
+        let text = match shell.editor.document().registry.get(id) {
+            Some(ObjectData::Text(text)) => text.clone(),
+            _ => panic!("the text is there"),
+        };
+        assert_eq!(text.frame.width(), 120.0, "the frame carries the width");
+        assert_eq!(text.frame.height(), 30.0, "the frame carries the height");
+        assert_eq!(text.frame.x0, 10.0, "the frame kept its corner");
+    }
+
+    /// The Pages panel's guide rows: a guide moves and goes away.
+    #[test]
+    fn the_guides_move_and_go_away() {
+        let mut shell = gui_shell(gui_editor());
+        shell.run_command(
+            "page.addGuide",
+            serde_json::json!({ "page": 0, "position": 100.0, "kind": "horizontal" }),
+        );
+        assert_eq!(
+            shell.editor.document().pages[0].guides.horizontal,
+            vec![100.0],
+            "the guide is on the page"
+        );
+        shell.change_guide(0, "horizontal", 100.0, 150.0);
+        assert_eq!(
+            shell.editor.document().pages[0].guides.horizontal,
+            vec![150.0],
+            "the guide moved"
+        );
+        shell.remove_guide(0, "horizontal", 150.0);
+        assert!(
+            shell.editor.document().pages[0]
+                .guides
+                .horizontal
+                .is_empty(),
+            "the guide is gone"
+        );
+    }
+
+    /// The Layers panel's "move the selection here": the object
+    /// leaves its layer for the named one.
+    #[test]
+    fn the_selection_moves_to_another_layer() {
+        let mut editor = gui_editor();
+        let id = editor.current_cell().unwrap().elements[0];
+        editor.set_selection(vec![id]);
+        editor
+            .apply("layer.add", serde_json::json!({ "page": 0 }))
+            .unwrap();
+        let mut shell = gui_shell(editor);
+        shell.move_selection_to_layer(1);
+        let page = &shell.editor.document().pages[0];
+        assert!(
+            page.layers.layers[0].cells[0].elements.is_empty(),
+            "the object left the lower layer"
+        );
+        assert_eq!(
+            page.layers.layers[1].cells[0].elements,
+            vec![id],
+            "the object landed on the upper layer"
+        );
     }
 
     /// Modify ▸ Group / Ungroup: the group lands in the cell where the
@@ -6610,5 +7050,944 @@ mod tests {
         shell.run_action(&menus::Action::Shell(menus::ShellAction::CloseDocument));
         assert_eq!(shell.tabs.len(), tabs_before, "close refused");
         assert!(shell.status.contains("unsaved"), "{}", shell.status);
+    }
+
+    /// A shell whose selection is one instance of a fresh definition
+    /// of the given kind. The instance is the view's selection too,
+    /// so the selection-scoped verbs reach it.
+    fn symbol_instance_shell(kind: &str) -> (Shell, doc::ObjectId) {
+        let mut shell = gui_shell(gui_editor());
+        shell
+            .editor
+            .apply(
+                "library.add",
+                serde_json::json!({ "name": "def", "symbol_type": kind }),
+            )
+            .expect("the definition was added");
+        let symbol = shell.editor.document().symbols[0].symbol_number;
+        shell
+            .editor
+            .apply(
+                "symbol.createInstance",
+                serde_json::json!({
+                    "page": 0, "layer": 0, "cell": 0, "symbol": symbol,
+                    "x": 10.0, "y": 10.0,
+                }),
+            )
+            .expect("the instance was created");
+        let elements = &shell.editor.current_cell().expect("a cell").elements;
+        let id = elements[elements.len() - 1];
+        shell.editor.selection_set = vec![id];
+        shell.editor.selection = Some(id);
+        (shell, id)
+    }
+
+    /// The animation carrier of an instance.
+    fn animation_of(shell: &Shell, id: doc::ObjectId) -> doc::SymbolAnimation {
+        match shell.editor.document().registry.get(id) {
+            Some(doc::ObjectData::SymbolInstance(instance)) => instance
+                .animation
+                .clone()
+                .expect("the instance carries an animation"),
+            _ => panic!("not a symbol instance"),
+        }
+    }
+
+    /// The instance's custom-data store.
+    fn custom_data_of(
+        shell: &Shell,
+        id: doc::ObjectId,
+    ) -> std::collections::BTreeMap<String, String> {
+        match shell.editor.document().registry.get(id) {
+            Some(doc::ObjectData::SymbolInstance(instance)) => instance.custom_data.clone(),
+            _ => panic!("not a symbol instance"),
+        }
+    }
+
+    /// The animation panel's six writes reach the instance's `ANNi`
+    /// family: the frame count, the travel, the rotation, the
+    /// scaling and the opacity ramp.
+    #[test]
+    fn the_animation_fields_write_the_span() {
+        let (mut shell, id) = symbol_instance_shell("animation");
+        shell.set_anim_num_frames(5);
+        assert_eq!(animation_of(&shell, id).frames, 5);
+        // CS6's deprecated spelling writes the same field.
+        shell.set_anim_loop_count(3);
+        assert_eq!(animation_of(&shell, id).frames, 3);
+        shell.set_anim_offset(2.0, -3.0);
+        let animation = animation_of(&shell, id);
+        assert_eq!(animation.x_shift, 2.0);
+        assert_eq!(animation.y_shift, -3.0);
+        shell.set_anim_rotation(45.0);
+        assert_eq!(animation_of(&shell, id).rotation, Some(45));
+        shell.set_anim_scale(200.0);
+        assert_eq!(animation_of(&shell, id).scaling, 200.0);
+        // The wire speaks 0–100; the model stores per mille.
+        shell.set_anim_opacity(20.0, 80.0);
+        let animation = animation_of(&shell, id);
+        assert_eq!(animation.start_opacity, Some(200));
+        assert_eq!(animation.end_opacity, Some(800));
+    }
+
+    /// The button's four state flags live on the definition; the
+    /// panel writes them through the engine.
+    #[test]
+    fn the_button_flags_write_the_definition() {
+        let (mut shell, _id) = symbol_instance_shell("button");
+        let number = shell.editor.document().symbols[0].symbol_number;
+        shell.set_button_auto_slice(number, true);
+        shell.set_button_include_down_state(number, true);
+        shell.set_button_show_down_on_load(number, true);
+        shell.set_button_include_over_while_down(number, true);
+        let definition = &shell.editor.document().symbols[0];
+        assert_eq!(definition.auto_slice, Some(true));
+        assert_eq!(definition.include_down_state, Some(true));
+        assert_eq!(definition.show_down_on_load, Some(true));
+        assert_eq!(definition.include_over_while_down, Some(true));
+    }
+
+    /// The instance's parameters and custom data reach the engine's
+    /// `currentValues` and `DTAv` stores.
+    #[test]
+    fn the_instance_carries_parameters_and_custom_data() {
+        let (mut shell, id) = symbol_instance_shell("graphic");
+        shell.set_symbol_param(id, "size", "text", "42");
+        let values: Vec<serde_json::Value> = serde_json::from_str(
+            custom_data_of(&shell, id)
+                .get("currentValues")
+                .expect("currentValues"),
+        )
+        .expect("the parameter array parses");
+        assert_eq!(values[0]["name"], serde_json::json!("size"));
+        assert_eq!(values[0]["value"], serde_json::json!("42"));
+        shell.set_symbol_custom_data(id, "colour", "red");
+        assert_eq!(
+            custom_data_of(&shell, id).get("colour").map(String::as_str),
+            Some("red")
+        );
+        shell.remove_symbol_custom_data(id, "colour");
+        assert!(!custom_data_of(&shell, id).contains_key("colour"));
+    }
+
+    /// The definition's content: the panel lifts an object out of the
+    /// symbol and moves one within the symbol's z-order.
+    #[test]
+    fn the_definition_content_detaches_and_reorders() {
+        let mut editor = gui_editor();
+        let first = editor.current_cell().unwrap().elements[0];
+        let second = rect_on_active_layer(&mut editor, 100.0, 100.0);
+        editor.set_selection(vec![first, second]);
+        editor
+            .apply(
+                "symbol.create",
+                serde_json::json!({
+                    "ids": vec![first, second],
+                    "name": "def",
+                    "symbol_type": "graphic",
+                }),
+            )
+            .expect("the definition was created");
+        let mut shell = gui_shell(editor);
+        let symbol = shell.editor.document().symbols[0].symbol_number;
+        assert_eq!(
+            shell.editor.document().symbols[0].layers.layers[0].cells[0].elements,
+            vec![first, second],
+            "the definition holds both objects"
+        );
+        // Move the lower object up: the engine's target index is the
+        // position after the object leaves the list.
+        shell.reorder_symbol_object(symbol, first, 1);
+        assert_eq!(
+            shell.editor.document().symbols[0].layers.layers[0].cells[0].elements,
+            vec![second, first],
+            "the object moved up"
+        );
+        // Lift the top object out of the symbol.
+        shell.detach_symbol_object(symbol, first);
+        assert_eq!(
+            shell.editor.document().symbols[0].layers.layers[0].cells[0].elements,
+            vec![second],
+            "the object left the symbol"
+        );
+    }
+
+    /// "Duplicate for alias": the selected instance points at a copy
+    /// of the definition it named.
+    #[test]
+    fn the_instance_can_be_duplicated_for_an_alias() {
+        let (mut shell, id) = symbol_instance_shell("graphic");
+        let number = shell.editor.document().symbols[0].symbol_number;
+        let before = shell.editor.document().symbols.len();
+        shell.duplicate_symbol_for_alias();
+        assert_eq!(
+            shell.editor.document().symbols.len(),
+            before + 1,
+            "the library gained the copy"
+        );
+        match shell.editor.document().registry.get(id) {
+            Some(doc::ObjectData::SymbolInstance(instance)) => {
+                assert_ne!(
+                    instance.symbol_number, number,
+                    "the instance points at the copy"
+                );
+            }
+            _ => panic!("not a symbol instance"),
+        }
+    }
+
+    /// A text object's first run's stated changes.
+    fn run_changes(shell: &Shell, id: doc::ObjectId) -> doc::TextStyle {
+        match shell.editor.document().registry.get(id) {
+            Some(doc::ObjectData::Text(text)) => text.runs.first().expect("a run").changes.clone(),
+            _ => panic!("not a text object"),
+        }
+    }
+
+    /// The markup verbs restyle the *runs*, not the base style.
+    #[test]
+    fn the_markup_verbs_restyle_the_runs() {
+        let (mut shell, id) = text_shell("hello");
+        shell.apply_character_markup(id, "b");
+        assert_eq!(run_changes(&shell, id).bold, Some(true));
+        shell.remove_character_markup(id, "b");
+        assert_eq!(run_changes(&shell, id).bold, Some(false));
+        shell.apply_character_markup(id, "fwplain");
+        // The base now says plain, so the run group re-diffs and the
+        // redundant override is stripped: `None` restates nothing the
+        // base does not already say (the engine pins the same shape
+        // in catalog/text.rs's fwplain test).
+        assert_eq!(run_changes(&shell, id).bold, None);
+        shell.apply_font_markup(id, "size", "24pt");
+        assert_eq!(run_changes(&shell, id).size, Some(24.0));
+        shell.remove_font_markup(id, "size");
+        assert_eq!(run_changes(&shell, id).size, None);
+    }
+
+    /// A shell with one button definition carrying a text item, and
+    /// one instance of it.
+    fn button_with_text_shell() -> (Shell, doc::ObjectId) {
+        let mut editor = gui_editor();
+        editor
+            .apply(
+                "text.createText",
+                serde_json::json!({
+                    "page": 0, "layer": editor.active_layer(), "cell": 0,
+                    "x": 10.0, "y": 10.0, "width": 200.0, "height": 40.0,
+                    "text": "Old", "name": null,
+                }),
+            )
+            .expect("the text was created");
+        let text_id = editor.current_cell().expect("a cell").elements[1];
+        editor.set_selection(vec![text_id]);
+        editor
+            .apply(
+                "symbol.create",
+                serde_json::json!({
+                    "ids": vec![text_id], "name": "button", "symbol_type": "button",
+                }),
+            )
+            .expect("the button was created");
+        let symbol = editor.document().symbols[0].symbol_number;
+        editor
+            .apply(
+                "symbol.createInstance",
+                serde_json::json!({
+                    "page": 0, "layer": 0, "cell": 0, "symbol": symbol,
+                    "x": 40.0, "y": 40.0,
+                }),
+            )
+            .expect("the instance was created");
+        let elements = &editor.current_cell().expect("a cell").elements;
+        let id = elements[elements.len() - 1];
+        editor.selection_set = vec![id];
+        editor.selection = Some(id);
+        (gui_shell(editor), id)
+    }
+
+    /// The button definition's text item's characters.
+    fn button_text_of(shell: &Shell) -> String {
+        let definition = &shell.editor.document().symbols[0];
+        let cell = &definition.layers.layers[0].cells[0];
+        let id = cell.elements[0];
+        match shell.editor.document().registry.get(id) {
+            Some(doc::ObjectData::Text(text)) => text
+                .runs
+                .first()
+                .map(|run| run.text.clone())
+                .unwrap_or_default(),
+            _ => panic!("not a text object"),
+        }
+    }
+
+    /// The button's text: one verb across the library's button
+    /// definitions, one across the definitions the selected instances
+    /// reference.
+    #[test]
+    fn the_button_text_reaches_the_library_and_the_instances() {
+        let (mut shell, id) = button_with_text_shell();
+        shell.replace_button_text("Library");
+        assert_eq!(button_text_of(&shell), "Library");
+        shell.editor.selection_set = vec![id];
+        shell.editor.selection = Some(id);
+        shell.replace_button_text_in_instances("Instance");
+        assert_eq!(button_text_of(&shell), "Instance");
+    }
+
+    /// One effect of an object.
+    fn effect_of(shell: &Shell, id: doc::ObjectId, index: usize) -> doc::Effect {
+        match shell.editor.document().registry.get(id) {
+            Some(doc::ObjectData::Path(path)) => path.effects[index].clone(),
+            _ => panic!("not a path"),
+        }
+    }
+
+    #[test]
+    fn filter_rename_uses_the_draft_from_an_earlier_frame() {
+        let (mut shell, id) = two_path_shell();
+        shell.apply_filter_preset(id, FILTER_FAMILIES[0].1[0]);
+        let effect = effect_of(&shell, id, 0);
+        let key = (id, 0, effect.category.clone(), effect.internal_name.clone());
+        shell.filter_names.insert(key.clone(), "edited name".into());
+        let ctx = egui::Context::default();
+        ctx.global_style_mut(|style| style.animation_time = 0.0);
+        let draw = |shell: &mut Shell, input| {
+            ctx.run_ui(input, |ui| {
+                egui::CentralPanel::default().show(ui, |ui| {
+                    shell.filter_panel(ui, id, std::slice::from_ref(&effect));
+                });
+            })
+        };
+        draw(&mut shell, egui::RawInput::default()).drop_without_applying_deltas();
+        for label in [format!("1. {}", effect.internal_name), "rename".to_owned()] {
+            let mut output = draw(&mut shell, egui::RawInput::default());
+            output.textures_delta.clear();
+            let position = output
+                .shapes
+                .iter()
+                .find_map(|shape| match &shape.shape {
+                    egui::epaint::Shape::Text(text) if text.galley.job.text == label => {
+                        Some(text.visual_bounding_rect().center())
+                    }
+                    _ => None,
+                })
+                .expect("control is visible");
+            for pressed in [true, false] {
+                let input = egui::RawInput {
+                    events: vec![
+                        egui::Event::PointerMoved(position),
+                        egui::Event::PointerButton {
+                            pos: position,
+                            button: egui::PointerButton::Primary,
+                            pressed,
+                            modifiers: egui::Modifiers::default(),
+                        },
+                    ],
+                    ..Default::default()
+                };
+                draw(&mut shell, input).drop_without_applying_deltas();
+            }
+        }
+        assert_eq!(effect_of(&shell, id, 0).internal_name, "edited name");
+        assert_eq!(shell.filter_names[&key], "edited name");
+    }
+
+    #[test]
+    fn filter_bake_inputs_survive_ui_frames() {
+        let (mut shell, _) = two_path_shell();
+        shell.filter_bake = FilterBakeFields {
+            category: "test category".into(),
+            name: "test filter".into(),
+            guid: "test id".into(),
+            width: 1,
+            height: 1,
+            values: "2".into(),
+            affects_alpha: true,
+            blur_type: "radial".into(),
+            angle: 45.0,
+            distance: 20,
+            samples: 16,
+        };
+        let ctx = egui::Context::default();
+        for _ in 0..2 {
+            ctx.run_ui(egui::RawInput::default(), |ui| {
+                egui::CentralPanel::default().show(ui, |ui| shell.filter_bake_fields(ui));
+            })
+            .drop_without_applying_deltas();
+            let fields = &shell.filter_bake;
+            assert_eq!(fields.category, "test category");
+            assert_eq!(fields.name, "test filter");
+            assert_eq!(fields.guid, "test id");
+            assert_eq!((fields.width, fields.height), (1, 1));
+            assert_eq!(fields.values, "2");
+            assert!(fields.affects_alpha);
+            assert_eq!(fields.blur_type, "radial");
+            assert_eq!(fields.angle, 45.0);
+            assert_eq!((fields.distance, fields.samples), (20, 16));
+        }
+    }
+
+    /// CS6's `setEffectName`: the effect keeps its category and takes
+    /// the new internal name.
+    #[test]
+    fn the_effect_can_be_renamed() {
+        let (mut shell, id) = two_path_shell();
+        shell.apply_filter_preset(id, FILTER_FAMILIES[0].1[0]);
+        let effect = effect_of(&shell, id, 0);
+        let category = effect.category.clone();
+        let old_name = effect.internal_name.clone();
+        shell.rename_filter_effect(&category, &old_name, "renamed");
+        assert_eq!(effect_of(&shell, id, 0).internal_name, "renamed");
+    }
+
+    /// The bake verbs carry the dom's own payload shapes: the
+    /// convolution kernel's count must match its sides, and the
+    /// motion blur's kind must be one the dom knows.
+    #[test]
+    fn the_bake_verbs_carry_the_dom_payloads() {
+        let (mut shell, _id) = two_path_shell();
+        shell.convolve_selection(3, 3, &[0, 0, 0, 0], false);
+        assert!(
+            shell.status.contains("filter.convolveSelection failed"),
+            "{}",
+            shell.status
+        );
+        shell.motion_blur_selection("sideways", 0.0, 10, 8);
+        assert!(
+            shell.status.contains("filter.motionBlurSelection failed"),
+            "{}",
+            shell.status
+        );
+    }
+
+    /// A shell whose selection carries an element mask.
+    fn masked_shell(mode: &str) -> (Shell, doc::ObjectId) {
+        let mut editor = gui_editor();
+        let id = editor.current_cell().expect("a cell").elements[0];
+        editor
+            .apply(
+                "mask.add",
+                serde_json::json!({ "id": id, "mode": mode, "enter_edit_mode": false }),
+            )
+            .expect("the mask was added");
+        editor.set_selection(vec![id]);
+        (gui_shell(editor), id)
+    }
+
+    /// The mask group that owns the masked object.
+    fn mask_group_of(shell: &Shell, id: doc::ObjectId) -> (doc::ObjectId, doc::GroupObject) {
+        for (group_id, data) in shell.editor.document().registry.iter() {
+            let doc::ObjectData::Group(group) = data else {
+                continue;
+            };
+            if group.children.get(1) == Some(&id) {
+                return (group_id, group.clone());
+            }
+        }
+        panic!("object {id:?} carries no mask group");
+    }
+
+    /// The mask image's location.
+    fn mask_location(shell: &Shell, group: &doc::GroupObject) -> geom::Point {
+        let mask_id = group.children.first().copied().expect("a mask child");
+        match shell.editor.document().registry.get(mask_id) {
+            Some(doc::ObjectData::Image(image)) => image.location,
+            _ => panic!("the mask child is not an image"),
+        }
+    }
+
+    /// The masked content's first anchor.
+    fn content_anchor(shell: &Shell, id: doc::ObjectId) -> geom::Point {
+        match shell.editor.document().registry.get(id) {
+            Some(doc::ObjectData::Path(path)) => path
+                .contours
+                .first()
+                .and_then(|contour| contour.points.first())
+                .map(|point| point.anchor)
+                .expect("a contour"),
+            _ => panic!("the content is not a path"),
+        }
+    }
+
+    /// The mask panel's two nudges move different things: the mask
+    /// image follows `mask.moveBy`, and the content it hides follows
+    /// `mask.moveContentsBy`.
+    #[test]
+    fn the_mask_nudges_move_the_mask_and_the_content() {
+        let (mut shell, id) = masked_shell("reveal all");
+        let facts = shell.mask_facts(id).expect("the selection carries a mask");
+        assert!(facts.raster, "a minted mask is a grayscale mask");
+        assert!(facts.enabled, "a fresh mask is enabled");
+        assert!(!facts.hidden, "the mask's attributes start visible");
+
+        let (_group, group) = mask_group_of(&shell, id);
+        let mask_before = mask_location(&shell, &group);
+        let content_before = content_anchor(&shell, id);
+        shell.mask_nudge(id, 3.0, 0.0, false);
+        let (_group, group) = mask_group_of(&shell, id);
+        let mask_moved = mask_location(&shell, &group);
+        assert_eq!(mask_moved.x, mask_before.x + 3.0, "the mask moved");
+        assert_eq!(
+            content_anchor(&shell, id),
+            content_before,
+            "the content stayed where it was"
+        );
+
+        shell.mask_nudge(id, 0.0, 4.0, true);
+        assert_eq!(
+            content_anchor(&shell, id).y,
+            content_before.y + 4.0,
+            "the content moved"
+        );
+        let (_group, group) = mask_group_of(&shell, id);
+        assert_eq!(
+            mask_location(&shell, &group),
+            mask_moved,
+            "the mask stayed where it was"
+        );
+    }
+
+    /// The mask converts between CS6's raster and vector forms, and
+    /// the conversion rewrites the mask child and the group's kind.
+    #[test]
+    fn the_mask_converts_between_raster_and_vector() {
+        let (mut shell, id) = masked_shell("reveal all");
+        shell.mask_set_mode(id, "mask to path");
+        let facts = shell.mask_facts(id).expect("the selection carries a mask");
+        assert!(!facts.raster, "the mask is a vector mask now");
+        shell.mask_set_mode(id, "mask to image");
+        let facts = shell.mask_facts(id).expect("the selection carries a mask");
+        assert!(facts.raster, "the mask is a raster mask again");
+    }
+
+    /// The mask's own fill and stroke can be hidden and shown again.
+    #[test]
+    fn the_mask_attributes_can_be_hidden_and_shown() {
+        let (mut shell, id) = masked_shell("reveal all");
+        shell.mask_set_show_attrs(id, false);
+        let facts = shell.mask_facts(id).expect("the selection carries a mask");
+        assert!(facts.hidden, "the mask's attributes are hidden");
+        shell.mask_set_show_attrs(id, true);
+        let facts = shell.mask_facts(id).expect("the selection carries a mask");
+        assert!(!facts.hidden, "the mask's attributes are shown again");
+    }
+
+    /// The Pages panel's master star: one master per document, the
+    /// master's own layer list grows through the engine, and clearing
+    /// the master hands the page back.
+    #[test]
+    fn the_pages_panel_marks_the_master_page() {
+        let mut shell = gui_shell(gui_editor());
+        shell.set_master_page(0);
+        assert!(shell.editor.document().pages[0].is_master);
+
+        // A second master demotes the first.
+        shell
+            .editor
+            .apply("page.add", serde_json::json!({ "index": null }))
+            .unwrap();
+        shell.set_master_page(1);
+        assert!(!shell.editor.document().pages[0].is_master);
+        assert!(shell.editor.document().pages[1].is_master);
+
+        // The master's own layer list grows through the engine.
+        let before = shell.editor.document().pages[1].layers.layers.len();
+        shell.add_master_layer();
+        assert_eq!(
+            shell.editor.document().pages[1].layers.layers.len(),
+            before + 1
+        );
+
+        shell.unset_master_page();
+        assert!(!shell.editor.document().pages[1].is_master);
+    }
+
+    /// The Layers panel's sharing section: the active layer shares
+    /// with every page, a page's link can leave and come back, a page
+    /// can detach its own copy, and unsharing gives the pages their
+    /// own layers again.
+    #[test]
+    fn the_layers_panel_shares_layers() {
+        let mut shell = gui_shell(gui_editor());
+        shell
+            .editor
+            .apply("page.add", serde_json::json!({ "index": null }))
+            .unwrap();
+        shell.share_layer(0);
+
+        let uid = shell.editor.document().shared_layer_defs[0].uid.clone();
+        assert_eq!(
+            shell.editor.document().shared_layer_defs.len(),
+            1,
+            "one definition"
+        );
+        assert_eq!(
+            shell.editor.document().pages[0].layers.layers[0]
+                .shared_link
+                .as_ref()
+                .map(|link| link.uid.clone()),
+            Some(uid.clone()),
+            "the owner slot became the link"
+        );
+        assert!(
+            shell.editor.document().pages[1].layers.layers[0]
+                .shared_link
+                .as_ref()
+                .is_some_and(|link| link.uid == uid),
+            "the other page carries the link"
+        );
+
+        // The link can leave a page and come back.
+        shell.share_layer_with_page(0, 0, 1, false);
+        assert!(
+            shell.editor.document().pages[1]
+                .layers
+                .layers
+                .iter()
+                .all(|layer| layer.shared_link.is_none()),
+            "the link left the page"
+        );
+        shell.share_layer_with_page(0, 0, 1, true);
+        assert!(
+            shell.editor.document().pages[1]
+                .layers
+                .layers
+                .iter()
+                .any(|layer| layer.shared_link.is_some()),
+            "the link came back"
+        );
+
+        // A page can detach its own copy.
+        shell.detach_shared_layer(1, 0);
+        assert!(
+            shell.editor.document().pages[1].layers.layers[0]
+                .shared_link
+                .is_none(),
+            "the page holds its own copy"
+        );
+        assert_eq!(
+            shell.editor.document().shared_layer_defs.len(),
+            1,
+            "the definition stays"
+        );
+
+        // Unsharing gives the pages their own layers back.
+        shell.unshare_layer(0, 0);
+        assert!(shell.editor.document().shared_layer_defs.is_empty());
+        assert!(
+            shell.editor.document().pages[0].layers.layers[0]
+                .shared_link
+                .is_none(),
+            "the owner holds a real layer"
+        );
+    }
+
+    /// The Properties panel's rectangle section: the corner radius
+    /// and the source rectangle travel through the engine's primitive
+    /// commands.
+    #[test]
+    fn the_properties_panel_rounds_a_rectangle() {
+        let mut shell = gui_shell(gui_editor());
+        let id = shell.editor.current_cell().unwrap().elements[0];
+        let primitive = shell_path(&shell, id).primitive.clone().unwrap();
+        assert_eq!(primitive.radius, 0.0, "the tool draws a sharp rectangle");
+
+        // The radius, in pixels.
+        shell.set_rect_radius(id, 8.0);
+        let primitive = shell_path(&shell, id).primitive.clone().unwrap();
+        assert_eq!(primitive.radius, 8.0, "the radius reached the source");
+
+        // The radius, as a fraction of the short side: the plate is
+        // 80x40, so half roundness is half the stadium radius.
+        shell.set_rect_roundness(id, 0.5);
+        let primitive = shell_path(&shell, id).primitive.clone().unwrap();
+        let side = primitive.rect.width().min(primitive.rect.height());
+        assert_eq!(primitive.radius, side / 4.0);
+
+        // The source rectangle moves.
+        shell.set_rect_sides(id, [0.0, 0.0, 20.0, 10.0]);
+        let primitive = shell_path(&shell, id).primitive.clone().unwrap();
+        assert_eq!(primitive.rect.x0, 0.0);
+        assert_eq!(primitive.rect.width(), 20.0);
+        assert_eq!(primitive.rect.height(), 10.0);
+    }
+
+    /// The Properties panel's pixel-mask section: the mask is set,
+    /// moved, and cleared over the bitmap.
+    #[test]
+    fn the_bitmap_panel_moves_the_pixel_mask() {
+        let mut shell = gui_shell(gui_editor());
+        shell
+            .editor
+            .apply(
+                "bitmap.addImage",
+                serde_json::json!({
+                    "x": 0.0, "y": 0.0, "width": 16.0, "height": 16.0,
+                    "page": 0, "layer": 0, "cell": 0, "name": "tile",
+                }),
+            )
+            .unwrap();
+        let image_id = shell
+            .editor
+            .document()
+            .registry
+            .iter()
+            .find_map(|(id, object)| match object {
+                ObjectData::Image(_) => Some(id),
+                _ => None,
+            })
+            .unwrap();
+
+        shell.select_all_pixels(image_id, 16, 16);
+        let selection = shell.editor.document().selection.clone().unwrap();
+        assert_eq!((selection.width, selection.height), (16, 16));
+        assert!(
+            selection.alpha.iter().all(|&byte| byte == 255),
+            "every pixel is covered"
+        );
+
+        // The selection slides without its pixels: the left column
+        // leaves the frame.
+        shell.move_pixel_mask(image_id, 1, 0);
+        let moved = shell.editor.document().selection.clone().unwrap();
+        assert_eq!(moved.alpha[0], 0, "the left column slid away");
+        assert_eq!(moved.alpha[1], 255, "the rest stayed");
+
+        shell.clear_pixel_mask(image_id);
+        assert!(
+            shell.editor.document().selection.is_none(),
+            "the mask is gone"
+        );
+    }
+
+    /// The Fill & Stroke panel's pattern section: an image in the
+    /// document becomes the selection's repeating fill.
+    #[test]
+    fn the_fill_panel_applies_a_pattern() {
+        let mut shell = gui_shell(gui_editor());
+        shell
+            .editor
+            .apply(
+                "bitmap.addImage",
+                serde_json::json!({
+                    "x": 0.0, "y": 0.0, "width": 16.0, "height": 16.0,
+                    "page": 0, "layer": 0, "cell": 0, "name": "tile",
+                }),
+            )
+            .unwrap();
+        let image_id = shell
+            .editor
+            .document()
+            .registry
+            .iter()
+            .find_map(|(id, object)| match object {
+                ObjectData::Image(_) => Some(id),
+                _ => None,
+            })
+            .unwrap();
+        let plate = shell.editor.current_cell().unwrap().elements[0];
+
+        shell.fill_with_pattern(plate, image_id);
+        let path = shell_path(&shell, plate);
+        let fill = path
+            .paint
+            .as_ref()
+            .and_then(|paint| paint.fill.clone())
+            .unwrap();
+        assert_eq!(fill.shape, doc::FillShape::Pattern, "the fill is a pattern");
+        assert!(fill.pattern.is_some(), "the pattern carries its tile");
+    }
+
+    /// The Slices panel's editors: the web object's rectangle moves,
+    /// and its background knobs carry their own fields.
+    #[test]
+    fn the_slices_panel_edits_the_web_object() {
+        let mut shell = gui_shell(gui_editor());
+        shell
+            .editor
+            .apply(
+                "slice.create",
+                serde_json::json!({
+                    "shape": "rect", "x": 10.0, "y": 20.0,
+                    "width": 100.0, "height": 50.0, "page": 0, "name": "band",
+                }),
+            )
+            .unwrap();
+        let id = shell
+            .editor
+            .document()
+            .registry
+            .iter()
+            .find_map(|(id, object)| match object {
+                ObjectData::Slice(slice) if slice.name.as_deref() == Some("band") => Some(id),
+                _ => None,
+            })
+            .unwrap();
+
+        // The rectangle moves the web object.
+        shell.set_hotspot_rectangle(id, 0.0, 0.0, 40.0, 30.0, false);
+        assert!(!shell.status.contains("failed"), "{}", shell.status);
+        let frame = match shell.editor.document().registry.get(id) {
+            Some(ObjectData::Slice(slice)) => slice.frame,
+            _ => panic!("the slice is gone"),
+        };
+        assert_eq!(
+            (frame.x0, frame.y0, frame.x1, frame.y1),
+            (0.0, 0.0, 40.0, 30.0),
+            "the web object moved"
+        );
+
+        // The background knobs carry their own fields.
+        shell.set_slice_background(id, "is_background", serde_json::json!(true));
+        shell.set_slice_background(id, "repeat", serde_json::json!(2));
+        shell.set_slice_background(id, "h_position", serde_json::json!(3));
+        shell.set_slice_background(id, "h_value", serde_json::json!(12));
+        let background = match shell.editor.document().registry.get(id) {
+            Some(ObjectData::Slice(slice)) => slice.background.clone().unwrap(),
+            _ => panic!("the slice is gone"),
+        };
+        assert_eq!(background.is_background, Some(true));
+        assert_eq!(background.repeat, Some(2));
+        assert_eq!(background.h_position, Some(3));
+        assert_eq!(background.h_value, Some(12));
+        assert_eq!(
+            background.v_position, None,
+            "the field the user did not touch stays unset"
+        );
+    }
+
+    /// The Slices panel's "Selection → hotspot": the selection becomes
+    /// a web object of its own.
+    #[test]
+    fn the_slices_panel_makes_a_web_object_from_the_selection() {
+        let mut shell = gui_shell(gui_editor());
+        let id = shell.editor.current_cell().unwrap().elements[0];
+        shell.editor.set_selection(vec![id]);
+        let before = shell
+            .editor
+            .document()
+            .registry
+            .iter()
+            .filter(|(_, object)| matches!(object, ObjectData::Slice(_)))
+            .count();
+
+        shell.copy_selection_to_web_object("hotspot");
+        assert!(!shell.status.contains("failed"), "{}", shell.status);
+        let after = shell
+            .editor
+            .document()
+            .registry
+            .iter()
+            .filter(|(_, object)| matches!(object, ObjectData::Slice(_)))
+            .count();
+        assert_eq!(after, before + 1, "the selection became a web object");
+    }
+
+    /// The Styles panel's "Update Named": the existing style of the
+    /// typed name takes the selection's appearance, and a name with no
+    /// style is refused rather than creating one.
+    #[test]
+    fn the_styles_panel_updates_a_named_style() {
+        let mut shell = gui_shell(gui_editor());
+        let id = shell.editor.current_cell().unwrap().elements[0];
+        shell
+            .editor
+            .apply(
+                "style.redefineFromSelection",
+                serde_json::json!({ "name": "band", "source": id }),
+            )
+            .unwrap();
+        assert_eq!(shell.editor.document().styles.len(), 1, "one style");
+
+        // The selection takes a fill; the style follows it.
+        shell
+            .editor
+            .apply(
+                "object.setFill",
+                serde_json::json!({ "id": id, "color_raw": 0x00ff_0000 }),
+            )
+            .unwrap();
+        shell.style_name = "band".to_owned();
+        shell.update_named_style(id);
+        assert!(!shell.status.contains("failed"), "{}", shell.status);
+        assert_eq!(
+            shell.editor.document().styles.len(),
+            1,
+            "the update replaced the style instead of adding one"
+        );
+        assert_eq!(shell.editor.document().styles[0].name, "band");
+        assert_eq!(
+            shell.editor.document().styles[0].paint.fill_raw,
+            0x00ff_0000,
+            "the style carries the new fill"
+        );
+
+        // A name with no style is refused — an update never creates.
+        shell.style_name = "absent".to_owned();
+        shell.update_named_style(id);
+        assert!(shell.status.contains("failed"), "{}", shell.status);
+        assert_eq!(shell.editor.document().styles.len(), 1, "no style appeared");
+    }
+
+    /// The Properties panel's channel section: the clipboard's channel
+    /// lands in the image's own.
+    #[test]
+    fn the_properties_panel_pastes_a_channel() {
+        let mut shell = gui_shell(gui_editor());
+        // A source bitmap, opaque.
+        shell
+            .editor
+            .apply(
+                "bitmap.addImage",
+                serde_json::json!({
+                    "x": 0.0, "y": 0.0, "width": 16.0, "height": 16.0,
+                    "page": 0, "layer": 0, "cell": 0, "name": "source",
+                }),
+            )
+            .unwrap();
+        let source = shell_image(&shell, "source");
+        shell
+            .editor
+            .apply(
+                "bitmap.fill",
+                serde_json::json!({ "id": source, "color_raw": -1 }),
+            )
+            .unwrap();
+        assert_eq!(
+            image_alpha(&shell, source),
+            Some(255),
+            "the source bitmap is opaque"
+        );
+
+        // A target bitmap, empty.
+        shell
+            .editor
+            .apply(
+                "bitmap.addImage",
+                serde_json::json!({
+                    "x": 100.0, "y": 100.0, "width": 16.0, "height": 16.0,
+                    "page": 0, "layer": 0, "cell": 0, "name": "target",
+                }),
+            )
+            .unwrap();
+        let target = shell_image(&shell, "target");
+        assert_eq!(
+            image_alpha(&shell, target),
+            Some(0),
+            "the target bitmap starts empty"
+        );
+
+        // The source goes to the clipboard.
+        shell.editor.set_selection(vec![source]);
+        shell.editor.sync_selection().unwrap();
+        shell
+            .editor
+            .apply("clipboard.copy", serde_json::json!({}))
+            .unwrap();
+
+        // The clipboard's alpha lands in the target's alpha.
+        shell.paste_channel(target, "alpha", "alpha");
+        assert!(!shell.status.contains("failed"), "{}", shell.status);
+        assert_eq!(image_alpha(&shell, target), Some(255), "the channel landed");
     }
 }

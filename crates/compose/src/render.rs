@@ -298,21 +298,43 @@ pub(crate) fn render_scaled_inner(
     }
     let mut text_engine = None;
     let page_layers = &document.pages[page].layers.layers;
-    walk_layers(
-        page_layers,
-        &mut Walk {
-            document,
-            frame,
-            canvas: (width, height),
-            cache,
-            text_engine: &mut text_engine,
-            ctx: &mut ctx,
-            stack: &[],
-        },
-        true,
-    )?;
+    let mut walk = Walk {
+        document,
+        frame,
+        canvas: (width, height),
+        cache,
+        text_engine: &mut text_engine,
+        ctx: &mut ctx,
+        stack: &[],
+    };
+    // The master page's layers stand behind every other page's —
+    // CS6's master page is the document's shared base (decision
+    // 0115). It walks first, in its own state.
+    if let Some((base_layers, base_frame)) = master_layers(document, page, frame) {
+        let transform = *walk.ctx.transform();
+        walk.frame = base_frame;
+        walk_layers(base_layers, &mut walk, true)?;
+        walk.frame = frame;
+        // Master paths may reset the shared context; retain the caller's scale.
+        walk.ctx.set_transform(transform);
+    }
+    walk_layers(page_layers, &mut walk, true)?;
     ctx.reset_transform();
     finish(ctx, resources, width, height)
+}
+
+/// The master page's layer list and the state it renders in, when the
+/// document has a master page other than the one being rendered.
+///
+/// A master page with fewer states than the page repeats its last
+/// one, so the shared base never vanishes on a later state.
+fn master_layers(document: &Document, page: usize, frame: usize) -> Option<(&[Layer], usize)> {
+    let master = document.pages.iter().position(|p| p.is_master)?;
+    if master == page {
+        return None;
+    }
+    let states = document.pages[master].info.frame_count.max(1) as usize;
+    Some((&document.pages[master].layers.layers, frame.min(states - 1)))
 }
 
 /// Rounds and range-checks a page's canvas to the rasterizer's pixel
@@ -384,19 +406,24 @@ fn render_inner(
     // never pay for the font database.
     let mut text_engine = None;
     let page_layers = &document.pages[page].layers.layers;
-    walk_layers(
-        page_layers,
-        &mut Walk {
-            document,
-            frame,
-            canvas: (width, height),
-            cache,
-            text_engine: &mut text_engine,
-            ctx: &mut ctx,
-            stack: &[],
-        },
-        true,
-    )?;
+    let mut walk = Walk {
+        document,
+        frame,
+        canvas: (width, height),
+        cache,
+        text_engine: &mut text_engine,
+        ctx: &mut ctx,
+        stack: &[],
+    };
+    // The master page's layers stand behind every other page's —
+    // CS6's master page is the document's shared base (decision
+    // 0115). It walks first, in its own state.
+    if let Some((base_layers, base_frame)) = master_layers(document, page, frame) {
+        walk.frame = base_frame;
+        walk_layers(base_layers, &mut walk, true)?;
+        walk.frame = frame;
+    }
+    walk_layers(page_layers, &mut walk, true)?;
     finish(ctx, resources, width, height)
 }
 
