@@ -363,6 +363,8 @@ Current version: **0.2.5**.
 
 ### Fixes
 
+- **clippy**: re-apply the app-side lints lost to a mid-gate revert (876f1722)
+- **clippy**: clear the 12 lints CI never reached on this branch (c2e30f7a)
 - **app**: preserve filter edits across frames and restore page scale after master rendering (47886aa8)
 - **shell**: the panels compile again, and the queue is measured (6d9bda24)
 - **engine**: read a uniform mask's coverage through the renderer's view (a904fbf0)
