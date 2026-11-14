@@ -467,7 +467,7 @@ evidence work, tracked outside that campaign.
   payload grounded one step below the document's live depth) and
   `firecraft.listCommands` advertises it
   ([T10](tasks/T10-history-rewind-command.md), decision
-  [0096](decisions/0096-the-rewind-is-a-command-every-surface-can-name.md)).
+  [0106](decisions/0106-the-rewind-is-a-command-every-surface-can-name.md)).
 - **20.7 Slice/hotspot behavior editing + HTML preview** (M):
   **LANDED 2026-11-11** in #107.
 

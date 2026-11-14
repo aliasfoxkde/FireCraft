@@ -67,11 +67,12 @@ can run in parallel with P2.
   returns only frozen or historical contexts (SESSIONS, HISTORY, CHANGELOG).
 - **Moves:** —
 
-### C1.04 — De-duplicate decision numbers `[ ]`
+### C1.04 — De-duplicate decision numbers `[x]`
 - **Needs:** C0.04 · **Size:** XS
 - **Steps:**
-  1. Two files are numbered 0101:
-     - `0101-brand-mark-in-the-mock-up.md`
+  1. Two files were numbered 0101:
+     - `0104-brand-mark-in-the-mock-up.md` (renamed from 0101; the older
+       `0101-off-fleet-packaging-recipe-audit.md` keeps its number)
      - `0101-off-fleet-packaging-recipe-audit.md`
   2. Keep the older one, judged by
      `git log --diff-filter=A --format=%ad -- <file>`. Rename the other with

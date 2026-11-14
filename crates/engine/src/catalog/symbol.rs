@@ -260,6 +260,7 @@ fn duplicate_subtree(
     command: &'static str,
     id: ObjectId,
     depth: usize,
+    inserted: &mut Vec<ObjectId>,
 ) -> Result<ObjectId, EngineError> {
     if depth > MAX_NESTING {
         return Err(EngineError::InvalidState {
@@ -273,14 +274,26 @@ fn duplicate_subtree(
             let children = group.children.clone();
             let mut copied = Vec::with_capacity(children.len());
             for child in children {
-                copied.push(duplicate_subtree(document, command, child, depth + 1)?);
+                copied.push(duplicate_subtree(
+                    document,
+                    command,
+                    child,
+                    depth + 1,
+                    inserted,
+                )?);
             }
             group.children = copied;
             ObjectData::Group(group)
         }
         other => other,
     };
-    Ok(document.registry.insert(object))
+    let copy = document.registry.insert(object);
+    // Insertion order: a child lands before its parent. Every caller's
+    // `Created` inverses must be pushed in this same order, so undo
+    // retracts parents first and `Registry::retract_insert` can pop the
+    // tracking slot it allocated.
+    inserted.push(copy);
+    Ok(copy)
 }
 
 /// Read-only walk proving [`duplicate_subtree`] can complete: every
@@ -632,8 +645,15 @@ impl TypedCommand for BreakApart {
         // Duplicate first: every copy registers before anything else
         // moves, so undo's LIFO retraction order lines up.
         let mut copies = Vec::with_capacity(content.len());
+        let mut created = Vec::new();
         for element in &content {
-            copies.push(duplicate_subtree(document, NAME, *element, 0)?);
+            copies.push(duplicate_subtree(
+                document,
+                NAME,
+                *element,
+                0,
+                &mut created,
+            )?);
         }
 
         // The anchor is the instance's pre-detach stacking position —
@@ -709,8 +729,8 @@ impl TypedCommand for BreakApart {
             }
         };
 
-        let mut deltas = Vec::with_capacity(copies.len() + placed.len() + 3);
-        for copy in &copies {
+        let mut deltas = Vec::with_capacity(created.len() + placed.len() + 3);
+        for copy in &created {
             deltas.push(Delta::Object {
                 id: *copy,
                 inverse: ObjectInverse::Created,
@@ -2770,6 +2790,99 @@ mod tests {
         assert!(document.registry.get(instance).is_some());
         assert_eq!(cell_elements(&document), &[instance, ids[1]]);
         assert_eq!(serde_json::to_vec(&document).unwrap(), original);
+    }
+
+    /// A definition whose content is a group copies the group *and* its
+    /// children. Undo must retract every one of those slots, not just the
+    /// group root — the `panic_hunt` seed this pins left one child slot
+    /// behind, so the document no longer compared equal.
+    #[test]
+    fn break_apart_of_a_group_copy_retracts_every_copied_slot() {
+        let (mut document, ids) = testdoc::sample_document();
+        let group = document
+            .registry
+            .insert(ObjectData::Group(doc::GroupObject {
+                group_type: 0,
+                name: Some("content".to_owned()),
+                children: vec![ids[0], ids[1]],
+                opacity: 1000,
+                blend: 0,
+                visible: true,
+                locked: false,
+                mask_hidden: false,
+                mask_linked: None,
+                effects: Vec::new(),
+            }));
+        document.symbols.push(SymbolDefinition {
+            name: "grouped".to_owned(),
+            symbol_number: 3,
+            origin: geom::Point::ZERO,
+            frame_count: 1,
+            layers: LayerList {
+                layers: vec![Layer {
+                    name: String::new(),
+                    display: true,
+                    cells: vec![Cell {
+                        locked: false,
+                        visible: true,
+                        elements: vec![group],
+                    }],
+                    ..Layer::default()
+                }],
+            },
+            background_raw: 0,
+            symbol_type: SymbolType::Graphic,
+            nine_slice: None,
+            auto_slice: Some(true),
+            include_down_state: Some(false),
+            show_down_on_load: Some(false),
+            include_over_while_down: Some(false),
+            op_code: None,
+        });
+        let instance = document
+            .registry
+            .insert(ObjectData::SymbolInstance(SymbolInstanceObject {
+                symbol_number: 3,
+                transform: geom::Affine::IDENTITY,
+                locked: false,
+                name: None,
+                animation: None,
+                custom_data: std::collections::BTreeMap::new(),
+            }));
+        document.pages[0].layers.layers[0].cells[0].elements = vec![instance];
+        let original = serde_json::to_vec(&document).unwrap();
+
+        let registry = registry();
+        let delta = registry
+            .execute(
+                &mut document,
+                "symbol.breakApart",
+                json!({ "id": instance }),
+            )
+            .unwrap();
+        let placed = {
+            let elements = cell_elements(&document);
+            assert_eq!(
+                elements.len(),
+                1,
+                "the group copy takes the instance's slot"
+            );
+            let copy = elements[0];
+            match document.registry.get(copy).unwrap() {
+                ObjectData::Group(group) => assert_eq!(group.children.len(), 2),
+                other => panic!("wrong object kind: {other:?}"),
+            }
+            copy
+        };
+
+        delta.apply_inverse(&mut document).unwrap();
+        assert!(document.registry.get(placed).is_none());
+        assert!(document.registry.get(instance).is_some());
+        assert_eq!(
+            serde_json::to_vec(&document).unwrap(),
+            original,
+            "undo must retract the copied group and every copied child"
+        );
     }
 
     #[test]
