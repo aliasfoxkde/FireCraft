@@ -2,12 +2,12 @@
 
 > **Current execution snapshot (2026-11-11; main `b61f198`):** Phase 21's
 > user-facing deliverables have landed. Phase 20.1 and 20.5–20.7 are on
-> main; Optimize/timeline are in open PR #118 and the mask stack is in
-> open PR #113. Phase 22 remains partial: the user-visible parity matrix
-> is published, but bitmap inspector capabilities and remaining CS6 chrome
-> are still open/evidence-gated. Use [TASKS.md](TASKS.md) for live status
-> and [PROGRESS.md](PROGRESS.md) for measured receipts. An open PR is not
-> a landed feature.
+> main; Optimize/timeline landed 2026-11-11 in #118 and the mask stack
+> landed 2026-11-11 in #113 as `PARTIAL`. Phase 22 remains partial: the
+> user-visible parity matrix is published, but bitmap inspector
+> capabilities and remaining CS6 chrome are still open/evidence-gated.
+> Use [TASKS.md](TASKS.md) for live status and [PROGRESS.md](PROGRESS.md)
+> for measured receipts. An open PR is not a landed feature.
 
 > Current task state is tracked in [`TASKS.md`](TASKS.md), with a dated
 > snapshot in [`PROGRESS.md`](PROGRESS.md). This file is the detailed
@@ -448,8 +448,18 @@ evidence work, tracked outside that campaign.
   [0096](decisions/0096-animation-playback-clock.md)). Still open:
   state thumbnails, a document-level loop count, per-side onion
   opacity, screenshot acceptance.
-- **20.4 Mask stack UI** (M): add/remove/mode/link/move. **In open
-  PR #113**; this is a FireCraft extension, not a CS6 parity claim.
+- **20.4 Mask stack UI** (M): add/remove/mode/link/move. **PARTIAL
+  2026-11-11**: the stack, its operators, and its fold landed. The
+  model holds a level's combine mode and persists it
+  (`mask.setStackMode`, decisions [0092](decisions/0092-mask-stack-combine-mode.md)
+  and [0093](decisions/0093-mask-stack-levels-and-folding.md)); the
+  compositor folds the levels bottom-up into one coverage and applies
+  it to the content's pixels; the panel lists one row per level with
+  its enable flag, operator, link flag, reorder arrows and remove
+  button, and can add a level. The structural commands undo
+  byte-exactly. Still open: the screenshot acceptance; ticket
+  [T9](tasks/T9-mask-stack.md). This is a FireCraft extension, not a
+  CS6 parity claim.
 - **20.5 Multi-document tabs** (M): **LANDED 2026-11-07** — Open/New
   park the active document as a `DocTab`; Close promotes the newest
   parked tab (refuses dirty documents); the tab strip shows the

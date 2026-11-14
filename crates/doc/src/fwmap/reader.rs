@@ -7,15 +7,16 @@
 //! primitive carrying a projective `MTXv`) is bagged whole — preservation
 //! never waits on semantics.
 
-use crate::fwmap::MapError;
 use crate::fwmap::unknown::UnknownBag;
+use crate::fwmap::{MapError, data_entry_value, is_data_entry};
 use crate::model::{
     Canvas, Cell, Contour, Dither, Document, DocumentInfo, Effect, EffectProperty, EffectValue,
     ExportOptions, Fill, FillShape, Gradient, GradientStop, Grid, GroupObject, Guides, ImageObject,
-    Layer, LayerList, NineSliceGuides, Page, PageInfo, PaintStyle, PathObject, PathPoint,
-    PatternTile, PrimitiveSource, SharedLayerDef, SharedLayerLink, SliceBackground, SliceBehavior,
-    SliceObject, StyleEntry, StyleText, SymbolAnimation, SymbolDefinition, SymbolInstanceObject,
-    SymbolType, TextObject, TextOnPath, TextRun, TextStyle, TileRef,
+    Layer, LayerList, MASK_STACK_MODE_KEY, MaskCombineMode, NineSliceGuides, Page, PageInfo,
+    PaintStyle, PathObject, PathPoint, PatternTile, PrimitiveSource, SharedLayerDef,
+    SharedLayerLink, SliceBackground, SliceBehavior, SliceObject, StyleEntry, StyleText,
+    SymbolAnimation, SymbolDefinition, SymbolInstanceObject, SymbolType, TextObject, TextOnPath,
+    TextRun, TextStyle, TileRef,
 };
 use crate::registry::{ObjectData, ObjectId, Registry};
 use fwpng::nodetree::{Node, NodeValue};
@@ -2167,10 +2168,32 @@ impl Reader {
         })
     }
 
+    /// `DTAv` children → the mask level's combine mode (decision
+    /// 0092). The node itself stays bagged either way — foreign data
+    /// round-trips verbatim — but the `DCEv` entry keyed
+    /// [`MASK_STACK_MODE_KEY`] is read into the model. An unknown
+    /// spelling canonicalizes to the default (the absent mode); the
+    /// writer owns that key, so the entry is rewritten in canonical
+    /// form or dropped — except an unknown spelling, which the model
+    /// cannot express and which therefore survives verbatim in the
+    /// bag.
+    fn read_stack_mode(children: &[Node]) -> Option<MaskCombineMode> {
+        for child in children {
+            if !is_data_entry(child, MASK_STACK_MODE_KEY) {
+                continue;
+            }
+            if let Some(mode) = data_entry_value(child).and_then(MaskCombineMode::parse) {
+                return Some(mode);
+            }
+        }
+        None
+    }
+
     fn read_group(&mut self, children: &[Node], path: &str) -> Result<ObjectData, MapError> {
         let (mut group_type, mut opacity, mut blend) = (None, None, None);
         let (mut visible, mut locked, mut mask_hidden) = (None, None, None);
         let (mut name, mut element_ids, mut mask_linked) = (None, None, None);
+        let mut stack_mode: Option<MaskCombineMode> = None;
         let mut effects = Vec::new();
 
         for (i, child) in children.iter().enumerate() {
@@ -2194,6 +2217,18 @@ impl Reader {
                         self.bag_node(path, i, child);
                     }
                 }
+                // The mask level's combine mode rides in the group's
+                // custom data as a `DCEv` entry keyed
+                // `MASK_STACK_MODE_KEY` (decision 0092). The node is
+                // bagged as well, so foreign entries round-trip
+                // verbatim; the writer owns the mode key itself.
+                b"DTAv" => {
+                    let kids = children_of(child, path)?;
+                    if let Some(mode) = Self::read_stack_mode(kids) {
+                        stack_mode = Some(mode);
+                    }
+                    self.bag_node(path, i, child);
+                }
                 // DTAv / IMGv / MRMv / ISSv and anything else:
                 // preserved (EFLv maps below).
                 b"EFLv" => {
@@ -2205,6 +2240,7 @@ impl Reader {
         }
 
         Ok(ObjectData::Group(GroupObject {
+            stack_mode,
             group_type: group_type.unwrap_or(0),
             name,
             children: element_ids.unwrap_or_default(),

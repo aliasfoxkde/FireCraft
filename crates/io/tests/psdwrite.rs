@@ -219,6 +219,7 @@ fn scripted_document_round_trips_semantically() {
         true,
     );
     let group = document.registry.insert(ObjectData::Group(GroupObject {
+        stack_mode: None,
         group_type: 0,
         name: Some("pair".to_owned()),
         children: vec![first, second],
@@ -403,6 +404,7 @@ fn nested_groups_nest_through_the_pair_walk() {
         true,
     );
     let inner = document.registry.insert(ObjectData::Group(GroupObject {
+        stack_mode: None,
         group_type: 0,
         name: Some("inner".to_owned()),
         children: vec![leaf_a, leaf_b],
@@ -415,6 +417,7 @@ fn nested_groups_nest_through_the_pair_walk() {
         effects: Vec::new(),
     }));
     let outer = document.registry.insert(ObjectData::Group(GroupObject {
+        stack_mode: None,
         group_type: 0,
         name: Some("outer".to_owned()),
         children: vec![inner],
@@ -486,6 +489,7 @@ fn structural_gates_refuse_with_reasons() {
     let mut broken = document(vec![("broken", true, Vec::new())]);
     let dangling = doc::ObjectId::from_parts(9_999, 0);
     let group = broken.registry.insert(ObjectData::Group(GroupObject {
+        stack_mode: None,
         group_type: 0,
         name: Some("broken".to_owned()),
         children: vec![dangling],
@@ -517,6 +521,7 @@ fn structural_gates_refuse_with_reasons() {
     let mut child = leaf;
     for level in 0..70 {
         child = deep.registry.insert(ObjectData::Group(GroupObject {
+            stack_mode: None,
             group_type: 0,
             name: Some(format!("shell-{level}")),
             children: vec![child],

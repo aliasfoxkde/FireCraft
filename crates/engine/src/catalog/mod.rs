@@ -69,6 +69,20 @@ pub fn element_mask_state(document: &Document, id: ObjectId) -> Option<bool> {
     mask::element_mask_state(document, id)
 }
 
+/// One level of an element mask stack.
+pub use mask::MaskLevel;
+
+/// The mask stack behind `id`, top level first.
+///
+/// `id` is the stack's top group, any level's group, the mask a level
+/// holds, or the object the stack restricts. Empty when `id` carries
+/// no element mask. A disabled level is skipped — it contributes no
+/// coverage, so the level below it takes its place.
+#[must_use]
+pub fn element_mask_stack(document: &Document, id: ObjectId) -> Vec<MaskLevel> {
+    mask::element_mask_stack(document, id)
+}
+
 /// Every registered built-in, sorted (surfaces enumerate this).
 #[must_use]
 pub fn ids() -> Vec<&'static str> {

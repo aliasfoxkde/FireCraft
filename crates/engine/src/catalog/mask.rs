@@ -15,8 +15,8 @@
 //! retraction rule the frame family documented.
 
 use doc::{
-    Contour, Document, GroupObject, ImageObject, ObjectData, ObjectId, PathObject, PathPoint,
-    SelectionMask, TileRef,
+    Contour, Document, GroupObject, ImageObject, MaskCombineMode, ObjectData, ObjectId, PathObject,
+    PathPoint, SelectionMask, TileRef,
 };
 use geom::{Point, Vec2};
 
@@ -48,6 +48,10 @@ pub(crate) fn install(registry: &mut CommandRegistry) -> Result<(), EngineError>
     registry.register(RemoveMask)?;
     registry.register(SetMaskMode)?;
     registry.register(SetMaskShowAttrs)?;
+    registry.register(SetMaskStackMode)?;
+    registry.register(AddMaskLevel)?;
+    registry.register(RemoveMaskLevel)?;
+    registry.register(MoveMaskLevel)?;
     registry.register(PathToMarquee)?;
     registry.register(MarqueeToPath)?;
     registry.register(SaveJpegMask)?;
@@ -742,6 +746,7 @@ impl TypedCommand for AddMask {
         };
         let mask_id = document.registry.insert(ObjectData::Image(mask_image));
         let group_id = document.registry.insert(ObjectData::Group(GroupObject {
+            stack_mode: None,
             group_type: GRAYSCALE_MASK,
             name: None,
             children: vec![mask_id, target_id],
@@ -846,7 +851,13 @@ impl TypedCommand for EnableMask {
             };
             group.group_type = group_type;
         } else {
+            // A disabled mask keeps the mask-first child order, so the
+            // mask's own artwork is hidden (`MNAb`) — that flag is also
+            // what tells the compositor the group is a disabled mask
+            // and not a plain group that happens to hold an image
+            // first (decision 0020).
             group.group_type = REGULAR_GROUP;
+            group.mask_hidden = true;
         }
         if let Some(ObjectData::Group(slot)) = document.registry.get_mut(resolved.id) {
             *slot = group.clone();
@@ -1384,6 +1395,696 @@ impl TypedCommand for SetMaskShowAttrs {
                 object: Box::new(ObjectData::Group(resolved.group)),
             },
         })
+    }
+}
+
+// --- mask.setStackMode --------------------------------------------------
+
+/// `mask.setStackMode` — sets the combine mode of a mask level inside
+/// a mask stack (decision 0092). A `FireCraft` extension: CS6 has one
+/// element mask per object and no stack, so the mode rides in the mask
+/// group's data node and the default is the union ("add").
+///
+/// The mode is stored and persisted, not yet rendered — the panel that
+/// shows and changes it is the Phase 20 mask stack UI.
+struct SetMaskStackMode;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct SetMaskStackModePayload {
+    /// The mask group, or the object it masks.
+    id: ObjectId,
+    /// "add" / "subtract" / "intersect" / "invert".
+    mode: String,
+}
+
+impl TypedCommand for SetMaskStackMode {
+    type Payload = SetMaskStackModePayload;
+
+    fn name(&self) -> &'static str {
+        "mask.setStackMode"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "mask.setStackMode";
+        let mode =
+            MaskCombineMode::parse(&payload.mode).ok_or_else(|| EngineError::BadPayload {
+                name: NAME.to_owned(),
+                detail: format!(
+                    "mode {:?} is not one of \"add\"/\"subtract\"/\"intersect\"/\"invert\"",
+                    payload.mode
+                ),
+            })?;
+        // A level of a stack carries the mode, and a disabled level
+        // keeps its place in the stack — so the resolution accepts the
+        // disabled shape too, but never a plain group.
+        let resolved =
+            mask_group_of(document, payload.id).ok_or_else(|| EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: format!(
+                    "object {} (generation {}) carries no element mask",
+                    payload.id.index(),
+                    payload.id.generation()
+                ),
+            })?;
+        let Some(ObjectData::Group(previous)) = document.registry.get(resolved) else {
+            return Err(EngineError::MissingTarget {
+                name: NAME.to_owned(),
+                detail: "the mask group is not live".to_owned(),
+            });
+        };
+        let previous = previous.clone();
+        let mut group = previous.clone();
+        group.stack_mode = Some(mode);
+        if let Some(ObjectData::Group(slot)) = document.registry.get_mut(resolved) {
+            *slot = group.clone();
+        }
+        Ok(Delta::Object {
+            id: resolved,
+            inverse: ObjectInverse::Mutated {
+                object: Box::new(ObjectData::Group(previous)),
+            },
+        })
+    }
+}
+
+// --- the mask stack ------------------------------------------------------
+
+/// One level of an element mask stack.
+///
+/// A stack is spelled as nested mask groups: the outermost group is
+/// the top level, and each group's content child is the level below it
+/// (decision 0092). The innermost level's content is the object the
+/// stack restricts.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct MaskLevel {
+    /// The mask group that carries the level.
+    pub group: ObjectId,
+    /// The mask object the level draws its coverage from.
+    pub mask: ObjectId,
+    /// The level's combine mode — the default union when the group
+    /// carries none.
+    pub mode: MaskCombineMode,
+    /// Whether the level's mask is enabled. A disabled level
+    /// contributes no coverage at all.
+    pub enabled: bool,
+    /// Whether the level's mask is linked to its content — the
+    /// default. An unlinked level's mask moves on its own.
+    pub linked: bool,
+}
+
+/// True when the group type marks a live (enabled) mask group.
+fn is_enabled_mask_group(group_type: i64) -> bool {
+    group_type == GRAYSCALE_MASK || group_type == SHAPE_MASK
+}
+
+/// True when the group is a disabled mask level: the `GRTi` 0 shape
+/// `mask.enable` leaves behind, told apart from a plain group by the
+/// mask-first child order and the `MNAb` flag (decision 0020).
+pub(crate) fn is_disabled_mask_group(document: &Document, group: &GroupObject) -> bool {
+    group.group_type == REGULAR_GROUP
+        && group.mask_hidden
+        && group.children.len() > 1
+        && matches!(
+            document.registry.get(group.children[0]),
+            Some(ObjectData::Image(_)) | Some(ObjectData::Path(_))
+        )
+}
+
+/// The mask group behind `id`: the group itself when `id` is a mask
+/// group, else the group holding `id` in its mask slot (`ELMv[0]`) or
+/// its content slot (`ELMv[1]`).
+///
+/// A disabled level counts: `mask.enable` turns a level into a
+/// `GRTi` 0 group, and the stack still has that level in it.
+fn mask_group_of(document: &Document, id: ObjectId) -> Option<ObjectId> {
+    match document.registry.get(id) {
+        Some(ObjectData::Group(group)) if is_mask_group_kind(document, group) => Some(id),
+        _ => {
+            let Owner::Group {
+                id: parent,
+                position,
+            } = find_owner(document, id)?
+            else {
+                return None;
+            };
+            if position > 1 {
+                return None;
+            }
+            let Some(ObjectData::Group(group)) = document.registry.get(parent) else {
+                return None;
+            };
+            if !is_mask_group_kind(document, group) {
+                return None;
+            }
+            Some(parent)
+        }
+    }
+}
+
+/// True when the group is a mask group — enabled (`GRTi` 1/2) or
+/// disabled (the `GRTi` 0 shape `mask.enable` leaves behind).
+fn is_mask_group_kind(document: &Document, group: &GroupObject) -> bool {
+    is_enabled_mask_group(group.group_type) || is_disabled_mask_group(document, group)
+}
+
+/// The mask stack behind `id`, top level first.
+///
+/// `id` is the stack's top group, any level's group, the mask a level
+/// holds, or the object the stack restricts. Empty when `id` carries
+/// no element mask. A disabled level stays in the list — it carries
+/// no coverage, but the panel still shows it.
+pub(crate) fn element_mask_stack(document: &Document, id: ObjectId) -> Vec<MaskLevel> {
+    let Some(top) = top_mask_group(document, id) else {
+        return Vec::new();
+    };
+    let mut levels = Vec::new();
+    let mut current = top;
+    while let Some(ObjectData::Group(group)) = document.registry.get(current) {
+        let Some(&mask) = group.children.first() else {
+            break;
+        };
+        levels.push(MaskLevel {
+            group: current,
+            mask,
+            mode: group.stack_mode.unwrap_or(MaskCombineMode::Add),
+            enabled: is_enabled_mask_group(group.group_type),
+            // `LNKb` is written only when the mask is *un*linked; its
+            // absence means the mask is linked to its content.
+            linked: group.mask_linked != Some(false),
+        });
+        let Some(content) = group.children.get(1).copied() else {
+            break;
+        };
+        match document.registry.get(content) {
+            Some(ObjectData::Group(inner)) if is_mask_group_kind(document, inner) => {
+                current = content;
+            }
+            _ => break,
+        }
+    }
+    levels
+}
+
+/// The top level's group of the stack `id` belongs to.
+fn top_mask_group(document: &Document, id: ObjectId) -> Option<ObjectId> {
+    let mut current = mask_group_of(document, id)?;
+    // Walk up while the group is the content of another mask group:
+    // the outermost group is the stack's top level.
+    while let Some(Owner::Group {
+        id: parent,
+        position,
+    }) = find_owner(document, current)
+    {
+        if position != 1 {
+            break;
+        }
+        let Some(ObjectData::Group(group)) = document.registry.get(parent) else {
+            break;
+        };
+        if !is_mask_group_kind(document, group) {
+            break;
+        }
+        current = parent;
+    }
+    Some(current)
+}
+
+/// The level a command names: the mask group itself, or the group
+/// holding the named mask.
+fn level_group(document: &Document, id: ObjectId) -> Option<ObjectId> {
+    mask_group_of(document, id)
+}
+
+// --- mask.addLevel ------------------------------------------------------
+
+/// `mask.addLevel` — adds a level to an element mask stack.
+///
+/// A `FireCraft` extension (decision 0092): CS6 has one element mask
+/// per object and no stack, so a stack is `FireCraft`'s own shape. The
+/// new level wraps the stack's top level: the level's mask is the
+/// named source object (moved into the stack), or a uniform "reveal
+/// all" raster over the content's bounds when no source is named.
+struct AddMaskLevel;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct AddMaskLevelPayload {
+    /// The masked object, or any object in its stack — the stack to
+    /// extend.
+    id: ObjectId,
+    /// The object whose shape becomes the new level's mask. It moves
+    /// into the stack. Without a source, the level's mask is a
+    /// uniform "reveal all" raster over the content's bounds.
+    #[serde(default)]
+    source: Option<ObjectId>,
+    /// The new level's combine mode ("add" when absent).
+    #[serde(default)]
+    mode: Option<String>,
+}
+
+impl TypedCommand for AddMaskLevel {
+    type Payload = AddMaskLevelPayload;
+
+    fn name(&self) -> &'static str {
+        "mask.addLevel"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "mask.addLevel";
+        let mode = match &payload.mode {
+            Some(value) => {
+                MaskCombineMode::parse(value).ok_or_else(|| EngineError::BadPayload {
+                    name: NAME.to_owned(),
+                    detail: format!(
+                        "mode {value:?} is not one of \"add\"/\"subtract\"/\"intersect\"/\"invert\""
+                    ),
+                })?
+            }
+            None => MaskCombineMode::Add,
+        };
+        let top =
+            top_mask_group(document, payload.id).ok_or_else(|| EngineError::MissingTarget {
+                name: NAME.to_owned(),
+                detail: format!(
+                    "object {} (generation {}) carries no element mask stack",
+                    payload.id.index(),
+                    payload.id.generation()
+                ),
+            })?;
+        let owner = find_owner(document, top).ok_or_else(|| EngineError::MissingTarget {
+            name: NAME.to_owned(),
+            detail: format!(
+                "mask group {} (generation {}) is referenced by no cell or group",
+                top.index(),
+                top.generation()
+            ),
+        })?;
+
+        // The new level's mask.
+        let mut deltas = Vec::new();
+        let (group_type, source, mint) = match payload.source {
+            Some(source) => {
+                let kind = group_type_of_mask(access::object(document, NAME, source)?).ok_or_else(
+                    || EngineError::InvalidState {
+                        name: NAME.to_owned(),
+                        detail: format!(
+                            "source {} (generation {}) is neither a bitmap nor a vector mask",
+                            source.index(),
+                            source.generation()
+                        ),
+                    },
+                )?;
+                if source == top {
+                    return Err(EngineError::InvalidState {
+                        name: NAME.to_owned(),
+                        detail: "the source is the stack's own top level".to_owned(),
+                    });
+                }
+                if contains(document, top, source) {
+                    return Err(EngineError::InvalidState {
+                        name: NAME.to_owned(),
+                        detail: "the source is already part of the stack".to_owned(),
+                    });
+                }
+                if contains(document, source, top) {
+                    return Err(EngineError::InvalidState {
+                        name: NAME.to_owned(),
+                        detail: "the source already holds the stack".to_owned(),
+                    });
+                }
+                (kind, Some(source), None)
+            }
+            None => {
+                // No source: the level's mask is a uniform "reveal
+                // all" raster over the content's bounds.
+                let content = document
+                    .registry
+                    .get(top)
+                    .and_then(|object| match object {
+                        ObjectData::Group(group) => group.children.get(1).copied(),
+                        _ => None,
+                    })
+                    .ok_or_else(|| EngineError::InvalidState {
+                        name: NAME.to_owned(),
+                        detail: "the mask group carries no content child".to_owned(),
+                    })?;
+                let bounds = bounds_of(document, NAME, content)?;
+                (GRAYSCALE_MASK, None, Some(uniform_mask_image(bounds, 255)))
+            }
+        };
+
+        // The source moves into the stack: it leaves the container it
+        // was in.
+        if let Some(source) = source {
+            deltas.push(detach(document, NAME, source)?);
+        }
+        // The top level leaves its container; the new level takes its
+        // place.
+        deltas.push(detach(document, NAME, top)?);
+
+        let mask_id = match (source, mint) {
+            (Some(source), _) => source,
+            (None, Some(image)) => {
+                let mask_id = document.registry.insert(ObjectData::Image(image));
+                deltas.push(Delta::Object {
+                    id: mask_id,
+                    inverse: ObjectInverse::Created,
+                });
+                mask_id
+            }
+            (None, None) => {
+                return Err(EngineError::InvalidState {
+                    name: NAME.to_owned(),
+                    detail: "the level's mask could not be prepared".to_owned(),
+                });
+            }
+        };
+
+        // The new level wraps the stack's top level.
+        let group = document.registry.insert(ObjectData::Group(GroupObject {
+            group_type,
+            name: None,
+            children: vec![mask_id, top],
+            opacity: 1000,
+            blend: 0,
+            visible: true,
+            locked: false,
+            mask_hidden: false,
+            mask_linked: None,
+            stack_mode: Some(mode),
+            effects: Vec::new(),
+        }));
+        deltas.push(Delta::Object {
+            id: group,
+            inverse: ObjectInverse::Created,
+        });
+        deltas.push(attach_at(document, NAME, owner, group)?);
+        Ok(Delta::Group(deltas))
+    }
+}
+
+/// True when `ancestor` holds `id` at any depth.
+fn contains(document: &Document, ancestor: ObjectId, id: ObjectId) -> bool {
+    let Some(ObjectData::Group(group)) = document.registry.get(ancestor) else {
+        return false;
+    };
+    group
+        .children
+        .iter()
+        .any(|&child| child == id || contains(document, child, id))
+}
+
+// --- mask.removeLevel ---------------------------------------------------
+
+/// `mask.removeLevel` — removes one level from an element mask stack.
+///
+/// The level's content child takes the level's place: removing the
+/// bottom level leaves the object unmasked, removing a level above it
+/// leaves the level below.
+struct RemoveMaskLevel;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct RemoveMaskLevelPayload {
+    /// The level's mask group, or the mask it holds.
+    id: ObjectId,
+}
+
+impl TypedCommand for RemoveMaskLevel {
+    type Payload = RemoveMaskLevelPayload;
+
+    fn name(&self) -> &'static str {
+        "mask.removeLevel"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "mask.removeLevel";
+        let group_id =
+            level_group(document, payload.id).ok_or_else(|| EngineError::MissingTarget {
+                name: NAME.to_owned(),
+                detail: format!(
+                    "object {} (generation {}) is not a level of an element mask stack",
+                    payload.id.index(),
+                    payload.id.generation()
+                ),
+            })?;
+        let owner = find_owner(document, group_id).ok_or_else(|| EngineError::MissingTarget {
+            name: NAME.to_owned(),
+            detail: format!(
+                "mask group {} (generation {}) is referenced by no cell or group",
+                group_id.index(),
+                group_id.generation()
+            ),
+        })?;
+        let group = match document.registry.get(group_id) {
+            Some(ObjectData::Group(group)) => group.clone(),
+            _ => {
+                return Err(EngineError::MissingTarget {
+                    name: NAME.to_owned(),
+                    detail: "the mask group is not live".to_owned(),
+                });
+            }
+        };
+        let Some(content) = group.children.get(1).copied() else {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: "the mask group carries no content child".to_owned(),
+            });
+        };
+
+        // The level leaves its container; its content takes its place.
+        let mut deltas = vec![detach(document, NAME, group_id)?];
+        deltas.push(attach_at(document, NAME, owner, content)?);
+        // The level's own group and mask leave the document.
+        if let Some(object) = document.registry.remove(group_id) {
+            deltas.push(Delta::Object {
+                id: group_id,
+                inverse: ObjectInverse::Removed {
+                    object: Box::new(object),
+                },
+            });
+        }
+        if let Some(mask_id) = group.children.first().copied()
+            && let Some(mask) = document.registry.remove(mask_id)
+        {
+            deltas.push(Delta::Object {
+                id: mask_id,
+                inverse: ObjectInverse::Removed {
+                    object: Box::new(mask),
+                },
+            });
+        }
+        Ok(Delta::Group(deltas))
+    }
+}
+
+// --- mask.moveLevel -----------------------------------------------------
+
+/// `mask.moveLevel` — moves one level of an element mask stack up or
+/// down.
+///
+/// A stack is nested mask groups, so a move is a swap between the
+/// level and its neighbour: the levels keep their masks and their
+/// combine modes, and only their order changes.
+struct MoveMaskLevel;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct MoveMaskLevelPayload {
+    /// The level's mask group, or the mask it holds.
+    id: ObjectId,
+    /// `1` moves the level up (toward the top of the stack), `-1`
+    /// moves it down.
+    delta: i64,
+}
+
+impl TypedCommand for MoveMaskLevel {
+    type Payload = MoveMaskLevelPayload;
+
+    fn name(&self) -> &'static str {
+        "mask.moveLevel"
+    }
+
+    fn apply(
+        &self,
+        document: &mut Document,
+        payload: &Self::Payload,
+    ) -> Result<Delta, EngineError> {
+        const NAME: &str = "mask.moveLevel";
+        let group_id =
+            level_group(document, payload.id).ok_or_else(|| EngineError::MissingTarget {
+                name: NAME.to_owned(),
+                detail: format!(
+                    "object {} (generation {}) is not a level of an element mask stack",
+                    payload.id.index(),
+                    payload.id.generation()
+                ),
+            })?;
+        if payload.delta == 0 {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: "a level moves by one step".to_owned(),
+            });
+        }
+        let group = match document.registry.get(group_id) {
+            Some(ObjectData::Group(group)) => group.clone(),
+            _ => {
+                return Err(EngineError::MissingTarget {
+                    name: NAME.to_owned(),
+                    detail: "the mask group is not live".to_owned(),
+                });
+            }
+        };
+        let content = group.children.get(1).copied();
+
+        if payload.delta > 0 {
+            // Up: the level above is the group that holds this one as
+            // its content child. The two swap places.
+            let Some(Owner::Group {
+                id: above,
+                position: 1,
+            }) = find_owner(document, group_id)
+            else {
+                return Err(EngineError::InvalidState {
+                    name: NAME.to_owned(),
+                    detail: "the level is already at the top of the stack".to_owned(),
+                });
+            };
+            let Some(ObjectData::Group(above_group)) = document.registry.get(above) else {
+                return Err(EngineError::MissingTarget {
+                    name: NAME.to_owned(),
+                    detail: "the level above is not live".to_owned(),
+                });
+            };
+            if !is_enabled_mask_group(above_group.group_type) {
+                return Err(EngineError::InvalidState {
+                    name: NAME.to_owned(),
+                    detail: "the level is already at the top of the stack".to_owned(),
+                });
+            }
+            let above_group = above_group.clone();
+            let owner = find_owner(document, above).ok_or_else(|| EngineError::MissingTarget {
+                name: NAME.to_owned(),
+                detail: "the level above is referenced by no cell or group".to_owned(),
+            })?;
+            // The level above takes over what this level held, and
+            // this level takes the level above's place.
+            let below = content.ok_or_else(|| EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: "the level carries no content child".to_owned(),
+            })?;
+            let mut deltas = vec![detach(document, NAME, above)?];
+            set_group_child(document, above, below)?;
+            set_group_child(document, group_id, above)?;
+            deltas.push(attach_at(document, NAME, owner, group_id)?);
+            deltas.push(Delta::Object {
+                id: above,
+                inverse: ObjectInverse::Mutated {
+                    object: Box::new(ObjectData::Group(above_group)),
+                },
+            });
+            deltas.push(Delta::Object {
+                id: group_id,
+                inverse: ObjectInverse::Mutated {
+                    object: Box::new(ObjectData::Group(group)),
+                },
+            });
+            return Ok(Delta::Group(deltas));
+        }
+
+        // Down: the level below is the group this level holds as its
+        // content child. The two swap places.
+        let Some(below_id) = content else {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: "the level carries no content child".to_owned(),
+            });
+        };
+        let Some(ObjectData::Group(below_group)) = document.registry.get(below_id) else {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: "the level below is not a mask group".to_owned(),
+            });
+        };
+        if !is_enabled_mask_group(below_group.group_type) {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: "the level is already at the bottom of the stack".to_owned(),
+            });
+        }
+        let below_group = below_group.clone();
+        let deeper = below_group.children.get(1).copied();
+        let owner = find_owner(document, group_id).ok_or_else(|| EngineError::MissingTarget {
+            name: NAME.to_owned(),
+            detail: "the level is referenced by no cell or group".to_owned(),
+        })?;
+        // This level takes the level below's place in the container,
+        // holds what the level below held, and the level below holds
+        // this level.
+        let mut deltas = vec![detach(document, NAME, group_id)?];
+        if let Some(deeper) = deeper {
+            set_group_child(document, group_id, deeper)?;
+        }
+        set_group_child(document, below_id, group_id)?;
+        deltas.push(attach_at(document, NAME, owner, below_id)?);
+        deltas.push(Delta::Object {
+            id: below_id,
+            inverse: ObjectInverse::Mutated {
+                object: Box::new(ObjectData::Group(below_group)),
+            },
+        });
+        deltas.push(Delta::Object {
+            id: group_id,
+            inverse: ObjectInverse::Mutated {
+                object: Box::new(ObjectData::Group(group)),
+            },
+        });
+        Ok(Delta::Group(deltas))
+    }
+}
+
+/// Repoints a mask group's content child.
+fn set_group_child(
+    document: &mut Document,
+    id: ObjectId,
+    child: ObjectId,
+) -> Result<(), EngineError> {
+    match document.registry.get_mut(id) {
+        Some(ObjectData::Group(group)) => {
+            let Some(slot) = group.children.get_mut(1) else {
+                return Err(EngineError::InvalidState {
+                    name: "mask.moveLevel".to_owned(),
+                    detail: format!(
+                        "mask group {} (generation {}) carries no content child",
+                        id.index(),
+                        id.generation()
+                    ),
+                });
+            };
+            *slot = child;
+            Ok(())
+        }
+        _ => Err(EngineError::MissingTarget {
+            name: "mask.moveLevel".to_owned(),
+            detail: format!(
+                "mask group {} (generation {}) is not live",
+                id.index(),
+                id.generation()
+            ),
+        }),
     }
 }
 
@@ -2002,6 +2703,7 @@ mod tests {
         );
         let mask_id = document.registry.insert(ObjectData::Image(mask_image));
         let group_id = document.registry.insert(ObjectData::Group(GroupObject {
+            stack_mode: None,
             group_type: GRAYSCALE_MASK,
             name: None,
             children: vec![mask_id, image_id],
@@ -2229,6 +2931,59 @@ mod tests {
     }
 
     #[test]
+    fn set_stack_mode_records_the_level_mode_and_refuses_a_bad_spelling() {
+        let (mut document, image_id) = image_document();
+        AddMask
+            .apply_json(
+                &mut document,
+                serde_json::json!({ "id": image_id, "mode": "reveal all" }),
+            )
+            .unwrap();
+        let group_id = cell_element(&document, 0).unwrap();
+
+        // The masked object addresses its level.
+        SetMaskStackMode
+            .apply_json(
+                &mut document,
+                serde_json::json!({ "id": image_id, "mode": "subtract" }),
+            )
+            .unwrap();
+        let ObjectData::Group(group) = document.registry.get(group_id).unwrap() else {
+            panic!("group vanished");
+        };
+        assert_eq!(group.stack_mode, Some(MaskCombineMode::Subtract));
+
+        // So does the group itself.
+        SetMaskStackMode
+            .apply_json(
+                &mut document,
+                serde_json::json!({ "id": group_id, "mode": "intersect" }),
+            )
+            .unwrap();
+        let ObjectData::Group(group) = document.registry.get(group_id).unwrap() else {
+            panic!("group vanished");
+        };
+        assert_eq!(group.stack_mode, Some(MaskCombineMode::Intersect));
+
+        // A spelling the model does not know is a typed refusal, and
+        // the level keeps its mode.
+        let error = SetMaskStackMode
+            .apply_json(
+                &mut document,
+                serde_json::json!({ "id": group_id, "mode": "additive" }),
+            )
+            .unwrap_err();
+        assert!(
+            matches!(error, EngineError::BadPayload { .. }),
+            "an unknown mode is a bad payload: {error:?}"
+        );
+        let ObjectData::Group(group) = document.registry.get(group_id).unwrap() else {
+            panic!("group vanished");
+        };
+        assert_eq!(group.stack_mode, Some(MaskCombineMode::Intersect));
+    }
+
+    #[test]
     fn move_by_moves_mask_contents_move_content() {
         let (mut document, image_id) = image_document();
         AddMask
@@ -2296,6 +3051,7 @@ mod tests {
         // Shape-mask group over the image: path covering the left half.
         let path_id = document.registry.insert(square_path(0.0, 0.0, 4.0));
         let group_id = document.registry.insert(ObjectData::Group(GroupObject {
+            stack_mode: None,
             group_type: SHAPE_MASK,
             name: None,
             children: vec![path_id, image_id],

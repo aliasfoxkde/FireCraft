@@ -14,7 +14,7 @@
 # The bless verb refuses to lower the floor.
 #
 # metric<TAB>value
-registry_commands	253
-shell_bound_commands	168
-reachable_percent	66.40
-floor_reachable_percent	66.40
+registry_commands	257
+shell_bound_commands	172
+reachable_percent	66.93
+floor_reachable_percent	66.93
