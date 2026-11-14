@@ -54,7 +54,7 @@ mod webgolden;
 
 use std::process::ExitCode;
 
-const USAGE: &str = "usage: cargo run -p xtask -- <ci [--full]|ci-no-fmt|aegis [--bless|--report]|coverage [--bless|--measure]|layers|wasm|corpus [--report]|corpus-gen|library-gen|hero-gen|styles-gen|scripts|floor|golden [--bless]|svg-golden [--bless]|svg-roundtrip [--measure]|web-golden [--bless|--measure]|perf [--bless|--measure]|dist --web|--native|--source|--sbom|--manifest|--verify-manifest|fuzz|fuzz-quick|panic-hunt|reachability [--bless]|panel-snapshot [--bless]|parity|scorecard|changelog [--check|--cut <version>]|stamps|stamp <version>>";
+const USAGE: &str = "usage: cargo run -p xtask -- <ci [--full]|ci-no-fmt|aegis [--bless|--report]|coverage [--bless|--measure]|layers|wasm|corpus [--report]|corpus-gen|library-gen|hero-gen|styles-gen|scripts|floor|golden [--bless]|svg-golden [--bless]|svg-roundtrip [--measure]|web-golden [--bless|--measure]|perf [--bless|--measure]|dist --web|--native|--source|--sbom|--manifest|--verify-manifest|fuzz|fuzz-quick|panic-hunt|reachability [--bless|--list]|panel-snapshot [--bless]|parity|scorecard|changelog [--check|--cut <version>]|stamps|stamp <version>>";
 
 fn main() -> ExitCode {
     match std::env::args().nth(1).as_deref() {
@@ -80,6 +80,7 @@ fn main() -> ExitCode {
         Some("floor") => finish("floor", floor::run()),
         Some("reachability") => match std::env::args().nth(2).as_deref() {
             Some("--bless") => finish("reachability --bless", reachability::bless()),
+            Some("--list") => finish("reachability --list", reachability::list()),
             _ => finish("reachability", reachability::run()),
         },
         Some("panel-snapshot") => match std::env::args().nth(2).as_deref() {
