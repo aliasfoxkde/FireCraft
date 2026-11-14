@@ -12,6 +12,7 @@ Current version: **0.2.5**.
 
 ### Features
 
+- **shell**: close the measured reachability gap in the shell's panels (#143) (78abb531)
 - **shapes**: the rounded and chamfered rectangles (15db5ef5)
 - **panels**: the slices, styles, and channel verbs (98e6cacc)
 - **panels**: the rectangle, mask, and pattern (cead811e)
@@ -465,7 +466,10 @@ Current version: **0.2.5**.
 
 ### Documentation
 
+- **changelog**: record the aegis re-bless (b29befc2)
 - the coverage measurement is toolchain-bound, and 85 carried commands are unbound (#142) (ddf19fb4)
+- attribute approved master artwork consistently (0bac4b74)
+- use approved FireCraft master artwork (ea4c0b84)
 - **tasks**: record the mask bindings (471ca153)
 - **tasks**: record the filter bake and rename bindings (7a787ec5)
 - **tasks**: record the markup and button-text bindings (2542ba1a)
@@ -742,6 +746,7 @@ Current version: **0.2.5**.
 
 ### Chores
 
+- **aegis**: re-bless the baseline after the SVG deletions (ce5665fc)
 - **ci**: pin every workflow action to a commit SHA (#130) (6f106af5)
 - **release**: name releases by version alone (#22) (625eb809)
 - **release**: v0.2.5 stamps, notes, operator checklist, aegis hygiene (3a4832bc)
@@ -791,6 +796,9 @@ Current version: **0.2.5**.
 
 ### Other
 
+- web: use approved master artwork as favicon (a6e1d0af)
+- site: use approved master artwork for all brand placements (2320d77f)
+- brand: replace inconsistent assets with approved master artwork (159df093)
 - brand: retire the fox motif from the published artwork (#132) (96444dc4)
 - brand: refresh FireCraft flame identity and editor artwork (#119) (75efbedc)
 - merge: the shell-lineage train into main (#107) (658f015a)
