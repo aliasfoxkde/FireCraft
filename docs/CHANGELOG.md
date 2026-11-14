@@ -796,6 +796,7 @@ Current version: **0.2.5**.
 
 ### Other
 
+- brand: use the approved flame artwork consistently (#144) (ad3fc655)
 - web: use approved master artwork as favicon (a6e1d0af)
 - site: use approved master artwork for all brand placements (2320d77f)
 - brand: replace inconsistent assets with approved master artwork (159df093)

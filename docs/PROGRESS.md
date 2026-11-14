@@ -5,7 +5,7 @@
 > Historical narrative: [`HISTORY.md`](HISTORY.md) and
 > [`SESSIONS.md`](SESSIONS.md).
 
-## Snapshot (2026-11-11, post-train; based on `main` at `b61f198`)
+## Snapshot (2026-11-14, post-reachability-wave; based on `main` at `ad3fc655`)
 
 <!-- coderabbit-ai-generated:v1 -->
 
@@ -79,8 +79,9 @@
   too: the command palette offers it (its payload grounded one step
   below the document's live depth, not a fuzz depth) and the MCP
   bridge's `firecraft.listCommands` advertises it. The registry
-  catalog and the reachability measurement are unchanged — the id is
-  not a registry id, so 168/253 (66.40%) stands.
+  catalog and the reachability measurement are unchanged by that
+  change — the id is not a registry id (the measurement it stood
+  beside then, 168/253, has since risen to 249/257 with #143).
 
 ## Build and deployment evidence
 
@@ -115,8 +116,10 @@
 - **UI-work gates landed (2026-11-10, issue #94):** the reachability
   gate (`cargo run -p xtask -- reachability`, wired into `ci`) derives
   the shell's bound command set from the shell crate's own source and
-  holds it to a one-way floor in `.reachability-floor.tsv` — **253
-  registry commands, 168 bound = 66.40%**, 85 unreachable. The panel
+  holds it to a one-way floor in `.reachability-floor.tsv` — measured
+  at introduction as **253 registry commands, 168 bound = 66.40%**, 85
+  unreachable; **re-measured 2026-11-14 after #143: 257 commands, 249
+  bound = 96.89%, 8 unreachable** (floor re-bless pending). The panel
   snapshot (`crates/app/panels.snapshot`, 19 panels) pins the panel
   set's structure; `egui_kittest` is obtainable (0.36.2 matches the
   locked egui) but its pixel path needs a wgpu adapter the CI image

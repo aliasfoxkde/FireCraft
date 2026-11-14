@@ -1,9 +1,10 @@
 # FireCraft — Roadmap detail
 
-> **Current execution snapshot (2026-11-11; main `b61f198`):** Phase 21's
+> **Current execution snapshot (2026-11-14; main `ad3fc655`):** Phase 21's
 > user-facing deliverables have landed. Phase 20.1 and 20.5–20.7 are on
-> main; Optimize/timeline are in open PR #118 and the mask stack is in
-> open PR #113. Phase 22 remains partial: the user-visible parity matrix
+> main; the mask stack is in open PR #113. The reachability wave's PR
+> #143 and the artwork PR #144 merged 2026-11-14 (249/257 commands
+> bound = 96.89%). Phase 22 remains partial: the user-visible parity matrix
 > is published, but bitmap inspector capabilities and remaining CS6 chrome
 > are still open/evidence-gated. Use [TASKS.md](TASKS.md) for live status
 > and [PROGRESS.md](PROGRESS.md) for measured receipts. An open PR is not
@@ -388,7 +389,10 @@ evidence work, tracked outside that campaign.
   refuses to lower it (a regression is fixed, not forgiven). Measured
   on the release train at 2026-11-11: **253 registry commands, 168
   bound by the shell = 66.40%**, 85 unreachable; the floor is pinned
-  at 66.40%.
+  at 66.40%. Re-measured 2026-11-14 after PR #143: **257 registry
+  commands, 249 bound = 96.89%**, 8 unreachable (the floor re-pin
+  rides the wave-closeout; `--bless` raises it to the new
+  measurement).
   (The command palette makes the *palette* reach 100% — the gate
   deliberately measures the CS6-visible surface instead, which is the
   surface the 19.x batches widen. Decision
@@ -717,10 +721,11 @@ scope, so no license path is attempted.
    `catalog::ids()` − UI-bound commands only shrinks (mirror of the
    call-table test). Unreachable commands with no gate means drift.
    — **DONE (2026-11-10)**, tracked as 19b.2: `cargo run -p xtask --
-   reachability`, wired into `ci`. Measures **253 registry commands,
-   168 bound by the shell = 66.40%**, 85 unreachable; the floor lives
-   in **`.reachability-floor.tsv`** (pinned at 66.40%) and is a one-way
-   ratchet.
+   reachability`, wired into `ci`. Measured 253 registry commands /
+   168 bound (66.40%) at introduction; **re-measured 2026-11-14 after
+   PR #143: 257 commands, 249 bound = 96.89%, 8 unreachable**; the
+   floor lives in **`.reachability-floor.tsv`** (pinned at 66.40%
+   pending the deliberate re-bless) and is a one-way ratchet.
 3. **Inert-drift test**: an inert menu row may not be added silently.
    — **DONE (2026-11-02)**, tracked as 19b.3: the census is derived
    from `MENUBAR` and gated against `INERT_CEILING` (8 of 289 items),
