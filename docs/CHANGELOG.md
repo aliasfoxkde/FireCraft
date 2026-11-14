@@ -12,6 +12,7 @@ Current version: **0.2.5**.
 
 ### Features
 
+- **shell**: close the measured reachability gap in the shell's panels (#143) (78abb531)
 - **shapes**: the rounded and chamfered rectangles (15db5ef5)
 - **panels**: the slices, styles, and channel verbs (98e6cacc)
 - **panels**: the rectangle, mask, and pattern (cead811e)
@@ -465,6 +466,7 @@ Current version: **0.2.5**.
 
 ### Documentation
 
+- **changelog**: record the aegis re-bless (b29befc2)
 - the coverage measurement is toolchain-bound, and 85 carried commands are unbound (#142) (ddf19fb4)
 - attribute approved master artwork consistently (0bac4b74)
 - use approved FireCraft master artwork (ea4c0b84)
