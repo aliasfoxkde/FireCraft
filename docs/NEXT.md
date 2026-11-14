@@ -389,11 +389,10 @@ evidence work, tracked outside that campaign.
   one-way ratchet: `--bless` may raise it (reachability improved) and
   refuses to lower it (a regression is fixed, not forgiven). Measured
   on the release train at 2026-11-11: **253 registry commands, 168
-  bound by the shell = 66.40%**, 85 unreachable; the floor is pinned
+  bound by the shell = 66.40%**, 85 unreachable; the floor was pinned
   at 66.40%. Re-measured 2026-11-14 after PR #143: **257 registry
-  commands, 249 bound = 96.89%**, 8 unreachable (the floor re-pin
-  rides the wave-closeout; `--bless` raises it to the new
-  measurement).
+  commands, 249 bound = 96.89%**, 8 unreachable; the floor was
+  deliberately re-blessed to 96.89% in the wave-closeout PR.
   (The command palette makes the *palette* reach 100% — the gate
   deliberately measures the CS6-visible surface instead, which is the
   surface the 19.x batches widen. Decision
@@ -735,8 +734,9 @@ scope, so no license path is attempted.
    reachability`, wired into `ci`. Measured 253 registry commands /
    168 bound (66.40%) at introduction; **re-measured 2026-11-14 after
    PR #143: 257 commands, 249 bound = 96.89%, 8 unreachable**; the
-   floor lives in **`.reachability-floor.tsv`** (pinned at 66.40%
-   pending the deliberate re-bless) and is a one-way ratchet.
+   floor lives in **`.reachability-floor.tsv`**, deliberately
+   re-blessed to 96.89% in the wave-closeout PR, and is a one-way
+   ratchet.
 3. **Inert-drift test**: an inert menu row may not be added silently.
    — **DONE (2026-11-02)**, tracked as 19b.3: the census is derived
    from `MENUBAR` and gated against `INERT_CEILING` (8 of 289 items),

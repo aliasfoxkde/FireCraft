@@ -12,6 +12,7 @@ Current version: **0.2.5**.
 
 ### Features
 
+- **app,engine**: the mask stack — model, persistence, fold, and level panel (#113) (bb5a01f8)
 - **shell**: close the measured reachability gap in the shell's panels (#143) (78abb531)
 - **app,engine**: a mask level links and unlinks its own mask (0418c24b)
 - **app**: the mask stack's level panel, and its persistence (7a45bcbc)
