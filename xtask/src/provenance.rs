@@ -264,12 +264,12 @@ fn verify_statement(
     check_predicate(statement)?;
     let subjects = read_subjects(statement)?;
     let source_sha = read_source_sha(statement)?;
-    if let Some(expected) = expected_source_sha {
-        if source_sha != expected {
-            return Err(format!(
-                "the statement was made from {source_sha}, this build is {expected}"
-            ));
-        }
+    if let Some(expected) = expected_source_sha
+        && source_sha != expected
+    {
+        return Err(format!(
+            "the statement was made from {source_sha}, this build is {expected}"
+        ));
     }
     if let Some(expected) = expected_subjects {
         let covered: Vec<&str> = subjects
