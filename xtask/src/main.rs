@@ -26,7 +26,10 @@
 //! when a metric moves the wrong way against the last recorded row),
 //! `panel-snapshot` (the CS6 panel inventory, against a committed
 //! golden), `dist --manifest` / `dist --verify-manifest` (the
-//! machine-readable release manifest and its verification).
+//! machine-readable release manifest and its verification),
+//! `dist --provenance` / `dist --verify-provenance` (the in-toto
+//! provenance statement that binds every published artifact's digest to
+//! the source revision, and its verification).
 //! Diagnostics go to stderr; stdout stays clean so output can
 //! be piped.
 
@@ -45,6 +48,7 @@ mod layers;
 mod library;
 mod panelsnapshot;
 mod perf;
+mod provenance;
 mod reachability;
 mod scripts;
 mod stamp;
@@ -58,7 +62,7 @@ mod webgolden;
 
 use std::process::ExitCode;
 
-const USAGE: &str = "usage: cargo run -p xtask -- <ci [--full]|ci-no-fmt|aegis [--bless|--report]|coverage [--bless|--measure]|layers|wasm|corpus [--report]|corpus-gen|library-gen|hero-gen|styles-gen|scripts|floor|golden [--bless]|svg-golden [--bless]|svg-roundtrip [--measure]|web-golden [--bless|--measure]|perf [--bless|--measure]|dist --web|--native|--source|--sbom|--manifest|--verify-manifest|fuzz|fuzz-quick|panic-hunt|reachability [--bless|--list]|climb [--append [rung]|--check]|panel-snapshot [--bless]|parity|scorecard|changelog [--check|--cut <version>]|stamps|stamp <version>>";
+const USAGE: &str = "usage: cargo run -p xtask -- <ci [--full]|ci-no-fmt|aegis [--bless|--report]|coverage [--bless|--measure]|layers|wasm|corpus [--report]|corpus-gen|library-gen|hero-gen|styles-gen|scripts|floor|golden [--bless]|svg-golden [--bless]|svg-roundtrip [--measure]|web-golden [--bless|--measure]|perf [--bless|--measure]|dist --web|--native|--source|--sbom|--manifest|--verify-manifest|--provenance|--verify-provenance|fuzz|fuzz-quick|panic-hunt|reachability [--bless|--list]|climb [--append [rung]|--check]|panel-snapshot [--bless]|parity|scorecard|changelog [--check|--cut <version>]|stamps|stamp <version>>";
 
 fn main() -> ExitCode {
     match std::env::args().nth(1).as_deref() {
@@ -155,6 +159,8 @@ fn main() -> ExitCode {
             Some("--sbom") => finish("dist --sbom", dist::sbom()),
             Some("--manifest") => finish("dist --manifest", dist::manifest()),
             Some("--verify-manifest") => finish("dist --verify-manifest", dist::verify_manifest()),
+            Some("--provenance") => finish("dist --provenance", provenance::generate()),
+            Some("--verify-provenance") => finish("dist --verify-provenance", provenance::verify()),
             _ => {
                 eprintln!("{USAGE}");
                 ExitCode::FAILURE

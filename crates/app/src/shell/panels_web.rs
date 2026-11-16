@@ -1643,15 +1643,21 @@ mod tests {
     fn the_find_and_replace_panel_dispatches_text_set_text() {
         let (mut shell, id) = text_shell("alpha alpha");
         shell.replace_text(id, "alpha", "beta");
+        // The effect is read before the undo: undoing the step puts the
+        // old text back, so a check after it would read the state the
+        // panel was supposed to have replaced.
+        let characters = {
+            let Some(doc::ObjectData::Text(text)) = shell.editor.document().registry.get(id) else {
+                panic!("the object is a text object");
+            };
+            text_characters(text)
+        };
+        assert_eq!(characters, "beta beta");
         assert_eq!(
             shell.editor.undo().expect("the replacement is undoable"),
             "text.setText",
             "the panel dispatches the text verb"
         );
-        let Some(doc::ObjectData::Text(text)) = shell.editor.document().registry.get(id) else {
-            panic!("the object is a text object");
-        };
-        assert_eq!(text_characters(text), "beta beta");
     }
 
     /// The Slices panel's type editor reaches the registry as the
@@ -1660,12 +1666,19 @@ mod tests {
     fn the_slices_panel_dispatches_the_slice_verbs() {
         let (mut shell, plate, _) = slice_shell();
         assert!(shell.set_slice_kind(plate, SliceKind::Hotspot));
+        // The effect is read before the undo: undoing the step puts the
+        // previous slice type back, so a check after it would read the
+        // type the panel was supposed to have replaced.
+        assert_eq!(
+            slice_of(&shell, plate).slice_type,
+            None,
+            "a hotspot carries no slice type"
+        );
         assert_eq!(
             shell.editor.undo().expect("the type change is undoable"),
             "slice.setType",
             "the panel dispatches the slice verb"
         );
-        assert_eq!(slice_of(&shell, plate).slice_type, None);
     }
 
     /// The CSS Properties panel renders the slice's background knobs
@@ -1675,6 +1688,15 @@ mod tests {
     fn the_css_properties_panel_dispatches_the_background_verb() {
         let (mut shell, plate, _) = slice_shell();
         shell.set_slice_background(plate, "repeat", serde_json::json!(2));
+        // The effect is read before the undo: undoing the step puts the
+        // previous background back, so a check after it would read the
+        // knob the panel was supposed to have set.
+        let slice = slice_of(&shell, plate);
+        assert_eq!(slice.background.as_ref().and_then(|bg| bg.repeat), Some(2));
+        assert!(
+            slice_css(&slice).contains("background-repeat: repeat-x"),
+            "the CSS panel renders the knob it set"
+        );
         assert_eq!(
             shell
                 .editor
@@ -1682,12 +1704,6 @@ mod tests {
                 .expect("the background change is undoable"),
             "slice.setBackground",
             "the panel dispatches the background verb"
-        );
-        let slice = slice_of(&shell, plate);
-        assert_eq!(slice.background.as_ref().and_then(|bg| bg.repeat), Some(2));
-        assert!(
-            slice_css(&slice).contains("background-repeat: repeat-x"),
-            "the CSS panel renders the knob it set"
         );
     }
 
