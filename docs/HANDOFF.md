@@ -38,9 +38,9 @@
 - **Delivered work:** Phase 21's user-facing deliverables landed with
   #107. Phase 20.1–20.3 and 20.5–20.7 are on main (Optimize/timeline
   #118 merged); the mask stack landed in #113 as `PARTIAL` (stack,
-  fold and level panel; screenshot acceptance + add/remove/move still
-  open, issue #114). Check the live [TASKS.md](TASKS.md) before
-  selecting work.
+  fold, level panel and the level add/remove/move affordances;
+  screenshot acceptance + mask sampling resolution still open, issue
+  #114). Check the live [TASKS.md](TASKS.md) before selecting work.
 - **Phase 22:** screenshot acceptance and panel/tool/context-menu
   foundations landed; bitmap inspector gaps and remaining CS6 chrome
   keep the phase partial. The full user-visible inventory is

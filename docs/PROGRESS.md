@@ -104,9 +104,10 @@
   inert-menu burn-down to 2 of 298), and all of Phase 21 shipped with
   #107. Phase 20 continues — 20.1, 20.5–20.7 shipped with #107 and
   20.2 Optimize + 20.3 animation timeline with #118, and the mask
-  stack (#113) landed as `PARTIAL` — its screenshot acceptance and
-  add/remove/move affordances remain open (issue #114); Phase 22
-  chrome work remains open.
+  stack (#113) landed as `PARTIAL` — its level add/remove/move
+  affordances shipped with the panel; the screenshot acceptance and
+  the compositor's mask sampling resolution remain open (issue
+  #114); Phase 22 chrome work remains open.
 - **Phase 20 daily-driver features — two landed 2026-11-11:** the
   Optimize panel (20.2, decision 0094's sibling [0095](decisions/0095-optimize-panel-honors-only-what-export-honors.md))
   edits the `EXPv` fields the export honors and previews the page

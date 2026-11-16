@@ -463,10 +463,14 @@ evidence work, tracked outside that campaign.
   compositor folds the levels bottom-up into one coverage and applies
   it to the content's pixels; the panel lists one row per level with
   its enable flag, operator, link flag, reorder arrows and remove
-  button, and can add a level. The structural commands undo
-  byte-exactly. Still open: the screenshot acceptance; ticket
-  [T9](tasks/T9-mask-stack.md). This is a FireCraft extension, not a
-  CS6 parity claim.
+  button, and can add a level; `mask.addLevel`/`mask.removeLevel`/
+  `mask.moveLevel` are dispatched from that panel. The structural
+  commands undo byte-exactly. Still open: the screenshot acceptance
+  and the compositor's mask sampling resolution (a level's mask is
+  sampled at the canvas resolution, not the mask image's own);
+  ticket [T9](tasks/T9-mask-stack.md), follow-up
+  [#114](https://github.com/aliasfoxkde/FireCraft/issues/114). This
+  is a FireCraft extension, not a CS6 parity claim.
 - **20.5 Multi-document tabs** (M): **LANDED 2026-11-07** — Open/New
   park the active document as a `DocTab`; Close promotes the newest
   parked tab (refuses dirty documents); the tab strip shows the
