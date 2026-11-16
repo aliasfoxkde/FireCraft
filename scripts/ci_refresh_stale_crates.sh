@@ -18,17 +18,20 @@
 #
 # The failure is a false red, and it is silent about its cause: the log
 # shows a compile error for a function that IS in the checked-out tree.
-# Observed 2026-11-16 on branch `climb/C4.08-selective-jpeg` (GitForge run
-# 29199c4e): the `generated-docs` job failed with
+# Measured 2026-11-16 on branch `climb/C8.04-missing-docs-campaign`
+# (GitForge run 90f22916): the `layers` job failed with
 #
 #     error[E0425]: cannot find function `menu_census` in module `app::menus`
 #       --> xtask/src/climb.rs:140:39
 #
-# while `crates/app/src/menus.rs` in that same tree defines the function.
-# The branch's workspace was checked out at 04:43; the `generated-docs`
-# job ran at 06:13; between the two, the icon branch — cut from `main`,
-# which has no `xtask/src/climb.rs` and no `menu_census` — rebuilt the
-# shared cache. Cargo served the icon branch's `app` artifact.
+# while `crates/app/src/menus.rs` in that same tree defines the function
+# (line 2324), and neither `main` nor the chrome branch defines it at
+# all. The timeline, from the runner's own log: the chrome branch's
+# `layers` job held the cache and rebuilt `app` at 15:07:46, writing
+# `app`'s fingerprint file; the campaign's `layers` job took the cache
+# lock at 15:08:29 — AFTER the chrome build — and its checkout was from
+# 15:04, so cargo served the chrome branch's `app` artifact and xtask was
+# compiled against a crate that has no `menu_census`.
 #
 # WHAT IT DOES. For every workspace crate, compare the crate's sources
 # with the newest cached fingerprint of that crate. If a source is
@@ -37,6 +40,17 @@
 # from another tree, so the crate's sources are refreshed and cargo
 # rebuilds it. Crates whose sources are newer — the normal case — keep
 # the warm cache, so this costs nothing when there is nothing to fix.
+#
+# THE REFERENCE IS THE FINGERPRINT FILE, NOT ITS DIRECTORY. Cargo
+# rewrites a fingerprint file in place (`File::create` + write), which
+# updates the FILE's mtime and leaves the enclosing directory's mtime
+# where it was. A first version of this script compared the sources with
+# the fingerprint DIRECTORY's mtime; that mtime is stale by months, so
+# every source looked newer than the cache and nothing was ever
+# refreshed — which is why the 90f22916 run above still failed with the
+# refresh step in place. The comparison now uses the newest FILE in the
+# crate's fingerprint directory, which is the timestamp cargo itself
+# compares against.
 #
 # The platform defect this compensates for is not here: the CI cache is
 # scoped per job instead of per commit (or per run), and a job's
@@ -67,22 +81,28 @@ package_name() {
   sed -n 's/^name[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' "$1" | head -1
 }
 
-# One walk of the cache collects the newest fingerprint directory per
-# crate. The fingerprint directories are named `<crate>-<hash>`, so the
-# crate's name is the directory's name up to its last dash. The walk is
-# a single pass because the cache lives on the NAS, where a listing
-# costs; the depth covers the host target, the wasm target and the web
-# crate's own target tree (`<target>/web/<triple>/debug/.fingerprint/`).
+# One walk of the cache collects, per crate, the newest FILE in any of
+# that crate's fingerprint directories. The fingerprint directories are
+# named `<crate>-<hash>`, so the crate's name is the directory's name up
+# to its last dash. The walk is a single pass because the cache lives on
+# the NAS, where a listing costs; the depth covers the host target, the
+# wasm target and the web crate's own target tree
+# (`<target>/web/<triple>/debug/.fingerprint/`).
+#
+# The reference is a FILE, not its directory: cargo rewrites a
+# fingerprint file in place, so the file's mtime is the build time cargo
+# compares against while the directory's mtime stays where it was.
 declare -A newest
-while IFS= read -r fp; do
-  [ -n "$fp" ] || continue
-  base="${fp##*/}"
+while IFS= read -r fingerprint_file; do
+  [ -n "$fingerprint_file" ] || continue
+  directory="${fingerprint_file%/*}"
+  base="${directory##*/}"
   name="${base%-*}"
   [ -n "$name" ] || continue
-  if [ -z "${newest[$name]+x}" ] || [ "$fp" -nt "${newest[$name]}" ]; then
-    newest[$name]="$fp"
+  if [ -z "${newest[$name]+x}" ] || [ "$fingerprint_file" -nt "${newest[$name]}" ]; then
+    newest[$name]="$fingerprint_file"
   fi
-done < <(find "$target" -maxdepth 6 -type d -path '*/.fingerprint/*' 2>/dev/null)
+done < <(find "$target" -maxdepth 7 -type f -path '*/.fingerprint/*/*' 2>/dev/null)
 
 refreshed=0
 checked=0
