@@ -38,6 +38,8 @@
 //!   at the format layer; substitution behavior beyond this table waits
 //!   on corpus evidence.
 
+#![deny(missing_docs)]
+
 use cosmic_text::{
     Align, Attrs, Buffer, CacheKey, CacheKeyFlags, Family, FontSystem, Metrics, Shaping, Style,
     SwashCache, Weight,
