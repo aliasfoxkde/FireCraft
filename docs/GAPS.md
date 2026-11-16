@@ -41,7 +41,7 @@ shell reaches 72; after Phase 11's paint family it reaches 77;
 > **Note (2026-11-02):** the reachability picture above is a
 > point-in-time audit snapshot. The command palette (19.4,
 > `4458f3a`) makes **every** registry command executable from the
-> GUI, and the inert count has fallen 190 → **2 of 296** menu
+> GUI, and the inert count has fallen 190 → **2 of 297** menu
 > items (19.1–19.6 batches 1–17 + 19b.1/batch 2; derived + gated by
 > `menus::tests::inert_count_never_rises`). The family table below is
 > superseded by [`NEXT.md`](NEXT.md) Phases 19–21 as the work list;
@@ -84,7 +84,7 @@ $ comm -23 <(engine::catalog::ids()) <(command names in crates/app/src)
 Supporting evidence:
 
 - **190 of 265 CS6 menu items rendered disabled** (`Action::Inert`,
-  `crates/app/src/menus.rs`) **at audit time** — now 2 of 296, and
+  `crates/app/src/menus.rs`) **at audit time** — now 2 of 297, and
   the census is test-gated. The shell refuses to pretend.
 - **The app could not open a raster image.** *(fixed 2026-10-21)*
   `File > Open` called `Editor::open` → `app_cli::io::open`, which
@@ -135,7 +135,7 @@ authoritative source that supersedes this table.
 | **Coverage** | floors 81.1 % lines / 78.7 % funcs (`xtask/src/coverage.rs`), measured with rustc 1.99.1 | The toolchain is pinned (decision 0102): rustc 1.100.0 reads the same tree 4.9 points lower, so a floating `stable` moved the floor. Local `llvm-cov` fails on stale artifacts; CI works |
 | **Code** | 144,122 Rust lines | No `unwrap()`/`panic!()` outside `#[cfg(test)]`; no `todo!`/`unimplemented!` |
 | **Registry** | 253 commands | Every command executable from the GUI via the Ctrl+P palette (19.4); menu reachability is the remaining gap |
-| **Menu reachability** | 2 inert of 296 items | *live* — derived + gated (`menus::tests::inert_count_never_rises`) |
+| **Menu reachability** | 2 inert of 297 items | *live* — derived + gated (`menus::tests::inert_count_never_rises`) |
 | **Parity** | 268 C / 3 P / 0 M / 85 N | 3 P rows are evidence-gated (Phase 12 oracle) |
 | **Decision docs** | 92 (0001–0092) | Next: 0093 |
 | **Web bundle** | 21,608,249 B observed; 25,000,000 B warning / 50,000,000 B hard cap | Policy decision 0090; web build uses Rust opt-level=z and Binaryen wasm-opt=z. Cap is a guardrail, not a target; A/B size evidence remains required |

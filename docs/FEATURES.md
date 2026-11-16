@@ -35,7 +35,7 @@ verbs.
 Surfaces that drive it:
 
 - **GUI** — the shell (`crates/app/src/shell/`); menus map CS6 menu
-  ids to actions (`crates/app/src/menus.rs`; 2 of 296 items still
+  ids to actions (`crates/app/src/menus.rs`; 2 of 297 items still
   render inert — the 19.6 burn-down closed the rest, and the census
   is derived (`menus::tests::inert_worklist`) and test-gated), and the Ctrl+P
   command palette makes **every** registry command executable from

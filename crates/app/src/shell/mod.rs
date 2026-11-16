@@ -7630,6 +7630,85 @@ mod tests {
         assert!(!facts.hidden, "the mask's attributes are shown again");
     }
 
+    /// The mask panel's *make plain group* row dispatches
+    /// `object.setGroupType` from the panel control itself — the
+    /// click lands, the group's `GRTi` goes 1/2 → 0, and the
+    /// compositor honours it: a *hide all* mask stops masking, so the
+    /// content it was hiding appears. Retyping without the renderer
+    /// following would be a field that engages and changes nothing.
+    #[test]
+    fn the_mask_panel_row_makes_the_mask_group_plain() {
+        let (mut shell, id) = masked_shell("hide all");
+        let facts = shell.mask_facts(id).expect("the selection carries a mask");
+        let group_id = facts.group_id;
+        assert!(facts.enabled, "the row only shows for an enabled mask");
+        let before = compose::render(
+            shell.editor.document(),
+            shell.editor.page,
+            shell.editor.frame,
+        )
+        .expect("renders");
+
+        let ctx = egui::Context::default();
+        ctx.global_style_mut(|style| style.animation_time = 0.0);
+        let draw = |shell: &mut Shell, input| {
+            ctx.run_ui(input, |ui| {
+                egui::CentralPanel::default().show(ui, |ui| {
+                    shell.mask_panel(ui, id);
+                });
+            })
+        };
+        draw(&mut shell, egui::RawInput::default()).drop_without_applying_deltas();
+        let mut output = draw(&mut shell, egui::RawInput::default());
+        output.textures_delta.clear();
+        let position = output
+            .shapes
+            .iter()
+            .find_map(|shape| match &shape.shape {
+                egui::epaint::Shape::Text(text) if text.galley.job.text == "make plain group" => {
+                    Some(text.visual_bounding_rect().center())
+                }
+                _ => None,
+            })
+            .expect("the row is visible while the mask is enabled");
+        for pressed in [true, false] {
+            let input = egui::RawInput {
+                events: vec![
+                    egui::Event::PointerMoved(position),
+                    egui::Event::PointerButton {
+                        pos: position,
+                        button: egui::PointerButton::Primary,
+                        pressed,
+                        modifiers: egui::Modifiers::default(),
+                    },
+                ],
+                ..Default::default()
+            };
+            draw(&mut shell, input).drop_without_applying_deltas();
+        }
+
+        let group_type = match shell.editor.document().registry.get(group_id) {
+            Some(ObjectData::Group(group)) => group.group_type,
+            _ => panic!("the mask owner is still a group"),
+        };
+        assert_eq!(group_type, 0, "the mask group became a plain group");
+        let after = compose::render(
+            shell.editor.document(),
+            shell.editor.page,
+            shell.editor.frame,
+        )
+        .expect("renders");
+        assert_ne!(
+            before.pixels, after.pixels,
+            "the compositor honours the retyped group"
+        );
+        assert_eq!(
+            shell.editor.session.undo().expect("an undo step"),
+            "object.setGroupType",
+            "the panel dispatched the verb"
+        );
+    }
+
     /// The Pages panel's master star: one master per document, the
     /// master's own layer list grows through the engine, and clearing
     /// the master hands the page back.

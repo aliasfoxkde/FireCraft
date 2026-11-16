@@ -3909,7 +3909,7 @@ mod tests {
     fn menu_item_total_is_pinned() {
         let (total, _) = census();
         assert_eq!(
-            total, 296,
+            total, 297,
             "menu item total changed — update the docs that quote it"
         );
     }
