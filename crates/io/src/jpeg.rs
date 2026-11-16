@@ -339,8 +339,10 @@ mod selective {
         let mut squared = 0.0f64;
         let mut count = 0.0f64;
         for (index, (before, after)) in original
-            .chunks_exact(4)
-            .zip(decoded.chunks_exact(4))
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .zip(decoded.as_chunks::<4>().0.iter())
             .enumerate()
         {
             let x = u32::try_from(index % SIDE as usize).unwrap_or(0);

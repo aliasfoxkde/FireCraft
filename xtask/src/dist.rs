@@ -260,6 +260,14 @@ pub fn sbom() -> Result<(), String> {
     let packages = meta["packages"]
         .as_array()
         .ok_or("cargo metadata: no packages array")?;
+    let resolved: Vec<(String, String)> = packages
+        .iter()
+        .filter_map(|pkg| {
+            let name = pkg["name"].as_str()?.to_owned();
+            let version = pkg["version"].as_str()?.to_owned();
+            Some((name, version))
+        })
+        .collect();
     let mut package_refs = BTreeMap::new();
     let spdx_ids = spdx_license_ids()?;
     for pkg in packages {
@@ -323,7 +331,7 @@ pub fn sbom() -> Result<(), String> {
         &std::fs::read_to_string(workspace_root().join("Cargo.lock"))
             .map_err(|e| format!("read Cargo.lock: {e}"))?,
     );
-    compare_with_lock(&components, &locked)?;
+    compare_with_lock(&components, &resolved, &locked)?;
 
     let path = out.join(format!("firecraft-{version}-sbom.cdx.json"));
     let text = serde_json::to_string_pretty(&bom).map_err(|e| format!("encode sbom: {e}"))?;
@@ -428,15 +436,25 @@ fn lock_value(text: &str) -> String {
         .to_owned()
 }
 
-/// Compare the SBOM's components with the locked graph, package by
-/// package.
+/// Compare the SBOM's components with the resolved graph and the lock,
+/// package by package.
 ///
 /// The SBOM is generated from `cargo metadata --locked`, so the two
 /// inventories come from the same lockfile — and the comparison is
-/// what proves it.  A component the lockfile does not pin, or a pinned
-/// package the SBOM does not list, means one of the two is wrong.
+/// what proves it.  A component the lockfile does not pin, or a
+/// resolved package the SBOM does not list, means one of the two is
+/// wrong.
+///
+/// The lock file is feature-independent: it pins the optional
+/// dependencies of every package in the graph, whether or not this
+/// build enables them.  A package that is pinned but not enabled is
+/// not compiled into the artifact, so it is not part of what the SBOM
+/// claims to describe; requiring it in the SBOM would make the gate
+/// fail on a build that is exactly right.  The packages the build
+/// *resolves* are the ones the SBOM has to cover.
 fn compare_with_lock(
     components: &[serde_json::Value],
+    resolved: &[(String, String)],
     locked: &[(String, String)],
 ) -> Result<(), String> {
     let listed: BTreeSet<(String, String)> = components
@@ -447,9 +465,10 @@ fn compare_with_lock(
             Some((name, version))
         })
         .collect();
+    let enabled: BTreeSet<(String, String)> = resolved.iter().cloned().collect();
     let pinned: BTreeSet<(String, String)> = locked.iter().cloned().collect();
 
-    let missing: Vec<&(String, String)> = pinned.difference(&listed).collect();
+    let missing: Vec<&(String, String)> = enabled.difference(&listed).collect();
     let extra: Vec<&(String, String)> = listed.difference(&pinned).collect();
     if missing.is_empty() && extra.is_empty() {
         return Ok(());
@@ -457,7 +476,7 @@ fn compare_with_lock(
     let mut report = String::new();
     for (name, version) in &missing {
         report.push_str(&format!(
-            "\n  in Cargo.lock but not in the SBOM: {name} {version}"
+            "\n  in the resolved graph but not in the SBOM: {name} {version}"
         ));
     }
     for (name, version) in &extra {
@@ -466,7 +485,7 @@ fn compare_with_lock(
         ));
     }
     Err(format!(
-        "the SBOM does not match the locked graph:{}",
+        "the SBOM does not match the resolved graph:{}",
         report
     ))
 }
@@ -2157,15 +2176,41 @@ version = \"0.1.0\"
             serde_json::json!({ "name": "engine", "version": "0.2.5" }),
             serde_json::json!({ "name": "serde", "version": "1.0.219" }),
         ];
-        assert!(compare_with_lock(&components, &cargo_lock_packages(LOCK)).is_ok());
+        assert!(
+            compare_with_lock(
+                &components,
+                &cargo_lock_packages(LOCK),
+                &cargo_lock_packages(LOCK)
+            )
+            .is_ok()
+        );
     }
 
     #[test]
-    fn a_locked_package_the_sbom_omits_is_a_failure() {
+    fn a_resolved_package_the_sbom_omits_is_a_failure() {
         let components = vec![serde_json::json!({ "name": "engine", "version": "0.2.5" })];
-        let error = compare_with_lock(&components, &cargo_lock_packages(LOCK)).unwrap_err();
+        let error = compare_with_lock(
+            &components,
+            &cargo_lock_packages(LOCK),
+            &cargo_lock_packages(LOCK),
+        )
+        .unwrap_err();
         assert!(error.contains("serde"), "{error}");
-        assert!(error.contains("Cargo.lock"), "{error}");
+        assert!(error.contains("resolved graph"), "{error}");
+    }
+
+    /// A package the lock file pins but this build does not enable is
+    /// not compiled into the artifact, so it is not part of what the
+    /// SBOM claims to describe. The lock file lists the optional
+    /// dependencies of the whole graph; the SBOM lists what was built.
+    #[test]
+    fn a_locked_package_the_build_does_not_resolve_is_not_a_failure() {
+        let components = vec![serde_json::json!({ "name": "engine", "version": "0.2.5" })];
+        let resolved = vec![("engine".to_owned(), "0.2.5".to_owned())];
+        assert!(
+            compare_with_lock(&components, &resolved, &cargo_lock_packages(LOCK)).is_ok(),
+            "a locked package the build does not resolve must not fail the gate"
+        );
     }
 
     #[test]
@@ -2175,7 +2220,12 @@ version = \"0.1.0\"
             serde_json::json!({ "name": "serde", "version": "1.0.219" }),
             serde_json::json!({ "name": "ghost", "version": "0.0.1" }),
         ];
-        let error = compare_with_lock(&components, &cargo_lock_packages(LOCK)).unwrap_err();
+        let error = compare_with_lock(
+            &components,
+            &cargo_lock_packages(LOCK),
+            &cargo_lock_packages(LOCK),
+        )
+        .unwrap_err();
         assert!(error.contains("ghost"), "{error}");
     }
 
