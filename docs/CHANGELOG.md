@@ -12,6 +12,12 @@ Current version: **0.2.5**.
 
 ### Features
 
+- **xtask**: the release states where its bytes came from (12801919)
+- **release**: the deployment comparison is a tracked tool and a report (ea5f7cda)
+- **xtask**: validate the SBOM against its schema (9f5ba35e)
+- **xtask**: the climb altimeter gates the tree it measures (a474297d)
+- **xtask**: the coverage gate prints its inputs (7766d175)
+- **xtask**: the altimeter measures the scoreboard (c36f934a)
 - **app**: the Auto Shapes panel gains an Insert/Redraw mode (7e985105)
 - **app**: the polygon web tools commit through appendPoint replay (c25d8bd5)
 - **app**: Edit ▸ Delete All... asks before emptying the document (ecd33807)
@@ -405,6 +411,18 @@ Current version: **0.2.5**.
 
 ### Fixes
 
+- **xtask**: the SBOM inventory is the lockfile's (36fab869)
+- **filters**: the variant fields carry their own docs (C8.04.5) (7fa89678)
+- **doc**: the variant fields carry their own docs (C8.04.7) (7aa9dd61)
+- **xtask**: the statement check collapses into one condition (28bede1b)
+- **app**: the panel tests read the effect before the undo (3b46120c)
+- **xtask**: the schema validator keeps its promises (04638b06)
+- **app**: the panel test reads the text object out of the registry (223f7458)
+- **xtask**: the schema test helper borrows its schema (49a85545)
+- **xtask**: the schema test reuses its schema by clone (2d8bcdd7)
+- **xtask**: the schema validator satisfies the clippy gate (8ab35aae)
+- **xtask**: the SBOM validator compiles and matches the lockfile (39dede9e)
+- **xtask**: the coverage gate counts lines found, not counters (cd80f862)
 - **doc**: make the mask stack's model compile and pass the gates (0214fc30)
 - **packaging**: declare the libraries the desktop binary loads (8deafc4f)
 - **xtask**: let the stamp tests use expect() (42734714)
@@ -569,6 +587,14 @@ Current version: **0.2.5**.
 
 ### Documentation
 
+- **ledger**: wave-2 closeout — snapshots to post-#150 state, stale quotes repaired #151 (23fe963c)
+- **climb**: the C8.04 shells and the class CI caught (555bda86)
+- **climb**: the C8.04 missing_docs rows (d8a47fe6)
+- **release**: the Android gate and the RPM deferral are decided (4474ab3f)
+- **release**: every closed row cites its evidence as a link (bb99adba)
+- **release**: reconcile the board and its tickets (101c1cb7)
+- **climb**: correct the audit baseline's S2 to the measured 164 (64bd1ea7)
+- **climb**: audit and hill-climb handoff to v1.0 (0322d904)
 - **ledger**: wave closeout — floor re-pinned to 96.89%, snapshots to post-wave state (#148) (44aa5466)
 - **ledger**: record the reachability wave landing and re-measure (3bfffe08)
 - **changelog**: regenerate after the main re-merge (0470cda4)
@@ -834,6 +860,8 @@ Current version: **0.2.5**.
 
 ### Tests
 
+- **app**: the web panels dispatch their commands (#152) (02b9cec2)
+- **app**: the web panels dispatch their own verbs (3d6d9ab1)
 - **engine**: capture the rewind reference state after the first edit (0674cf10)
 - **app**: make the rewind depths relative to the seeded document (b81e2e22)
 - **engine**: stale-id refusal tests for filter commands (fb3a92f9)
@@ -882,6 +910,7 @@ Current version: **0.2.5**.
 
 ### Style
 
+- **xtask**: rustfmt the coverage gate (eee94f16)
 - **xtask**: format scoped web build invocation (54be3909)
 - rustfmt the history-rewind change (8e19488f)
 - **xtask**: apply rustfmt to the new aegis report verb (8ada85c1)
@@ -938,6 +967,7 @@ Current version: **0.2.5**.
 
 ### Build
 
+- **release**: the board and its tickets must agree (d8bf8b4f)
 - **web**: optimize wasm output and set 50 MB safety ceiling (9c089b36)
 - raise MSRV to 1.95 and bump time past CVE-2026-25727 (c74b179f)
 
@@ -948,6 +978,20 @@ Current version: **0.2.5**.
 
 ### Chores
 
+- **aegis**: the new findings are adjudicated false positives (8206a1c6)
+- **app-cli**: the crate denies an undocumented public item (C8.04.13) (98b26468)
+- **app**: the crate denies an undocumented public item (C8.04.12) (3341c449)
+- **scripting**: the crate denies an undocumented public item (423f646c)
+- **engine**: the crate denies an undocumented public item (98f71ba5)
+- **webexport**: the crate denies an undocumented public item (57cb39de)
+- **io**: the crate denies an undocumented public item (bf432810)
+- **doc**: the crate denies an undocumented public item (be69d741)
+- **compose**: the crate denies an undocumented public item (c1163484)
+- **filters**: the crate denies an undocumented public item (c298dc91)
+- **text**: the crate denies an undocumented public item (0dc9e4ff)
+- **vector**: the crate denies an undocumented public item (8ba8bfe5)
+- **raster**: the crate denies an undocumented public item (918fc479)
+- **fwpng**: the crate denies an undocumented public item (7b19d548)
 - **git**: ignore the session scratch directory (36026ff1)
 - **aegis**: bless the release receipt identifiers (1ac80e40)
 - **aegis**: re-bless the baseline for the merged tree (cfde42a3)
