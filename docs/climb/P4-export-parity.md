@@ -129,7 +129,7 @@ node dictionary and the corpus, never from the binary. Rungs tagged
 - **Verify:** a Playwright screenshot plus `cargo test -p app optimize`.
 - **Moves:** S5a +1 / S5b −1 (the Optimize row).
 
-### C4.07 — Adam7 interlaced PNG `[ ]`
+### C4.07 — Adam7 interlaced PNG `[x]`
 - **Needs:** C4.03 · **Tags:** `[HOST:linux]` · **Size:** M
 - **Steps:**
   1. `png.rs` refuses interlace today, because the `png` crate can't write
@@ -147,6 +147,17 @@ node dictionary and the corpus, never from the binary. Rungs tagged
   RGBA, RGB and indexed.
 - **Verify:** `cargo test -p io png::interlace`.
 - **Moves:** S6 ↑; the Optimize residual (#23) shrinks.
+- **Done (2026-11-16):** `crates/fwpng/src/adam7.rs` writes the seven
+  passes and their filtered rows; `fwpng::image::encode_rgba8_interlaced`
+  writes the IHDR with the interlace method set, and
+  `io::png::encode_with` honors `PngOptions::interlaced` — the refusal is
+  gone (decision
+  [0120](../../decisions/0120-the-png-interlace-is-written-as-adam7-passes.md)).
+  The round trip is pinned by `crates/fwpng/src/image.rs` (the `png`
+  crate's decoder reassembles the passes) and `crates/io/tests/expv.rs`.
+  The export path is RGBA8, so the RGB and indexed layouts the step
+  names are not reachable through it and are not written; the writer
+  takes RGBA8 like the rest of the export path.
 
 ### C4.08 — Selective JPEG quality `[ ]`
 - **Needs:** C0.01 · **Tags:** `[EVIDENCE]` `[HOST:linux]` · **Size:** M

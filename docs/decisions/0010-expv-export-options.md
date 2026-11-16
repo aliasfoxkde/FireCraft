@@ -75,6 +75,13 @@ from `EXPv GFIb` produces `ExportError::Unsupported` naming Adam7
 rather than silently writing progressive. When the codec grows an
 interlaced encoder this flips to honored with a corpus pin.
 
+**Flipped 2026-11-16** by decision
+[0120](0120-the-png-interlace-is-written-as-adam7-passes.md): the
+workspace writes the Adam7 passes itself
+(`crates/fwpng/src/adam7.rs`), the flag is honored, and the Optimize
+panel offers the knob for PNG. The pin is the round trip in
+`crates/fwpng/src/adam7.rs` and `crates/io/tests/expv.rs`.
+
 ### 6. Dither is a real-value feature, tested under palette pressure
 
 Error-diffusion dither only changes output when the palette misses. A

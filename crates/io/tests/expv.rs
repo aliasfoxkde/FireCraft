@@ -2,7 +2,7 @@
 //! the per-format option derivation, the GIF loop spellings (a written
 //! NETSCAPE count of 0 *is* infinite, so play-never omits the
 //! extension), Floyd–Steinberg dithering on the global palette, and
-//! the loud refusal of interlaced PNG output.
+//! the interlace flag reaching the PNG encoder as Adam7 passes.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
@@ -114,7 +114,7 @@ fn jpeg_options_fall_back_to_expv_then_defaults() {
 }
 
 #[test]
-fn png_options_carry_interlace_and_encode_refuses_it() {
+fn png_options_carry_the_interlace_flag_and_the_encoder_honors_it() {
     let export = doc::ExportOptions {
         interlaced: Some(true),
         ..doc::ExportOptions::default()
@@ -123,14 +123,21 @@ fn png_options_carry_interlace_and_encode_refuses_it() {
     assert!(options.interlaced);
 
     let plane = io::Plane::new(2, 1, &[255, 0, 0, 255, 0, 255, 0, 255]).unwrap();
-    let error = png::encode_with(&plane, &options).expect_err("interlace is refused");
-    assert!(
-        error.to_string().contains("Adam7"),
-        "refusal names the missing encoder: {error}"
-    );
+    let bytes = png::encode_with(&plane, &options).expect("interlaced PNG encodes");
+    // The IHDR's last byte is the interlace method: 1 is Adam7.
+    let ihdr = bytes
+        .windows(4)
+        .position(|window| window == b"IHDR")
+        .expect("the file carries an IHDR");
+    assert_eq!(bytes[ihdr + 16], 1, "the PNG is interlaced");
 
     assert!(!png_options(None).interlaced);
-    png::encode_with(&plane, &png_options(None)).expect("plain PNG still encodes");
+    let plain = png::encode_with(&plane, &png_options(None)).expect("plain PNG still encodes");
+    let ihdr = plain
+        .windows(4)
+        .position(|window| window == b"IHDR")
+        .expect("the file carries an IHDR");
+    assert_eq!(plain[ihdr + 16], 0, "the plain PNG is not interlaced");
 }
 
 // --- dither through the real encoder -------------------------------------

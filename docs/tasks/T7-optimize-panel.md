@@ -36,31 +36,38 @@ Decision
   through `io::expv` and shows the decoded result with its byte size,
   cached against the settings, the page, the frame, and the
   document's journal state.
-- **Interlacing is disclosed, not offered.** The `GFIb` flag cannot be
-  written by this build (no Adam7 pass encoder), so the row shows the
-  recorded state disabled with the reason, and a page that records the
-  flag is offered a way to clear it. The panel never writes the flag
-  as a side effect.
+- **Interlacing is offered where the export honors it.** The `GFIb`
+  flag is written as the seven Adam7 passes (decision
+  [0120](../decisions/0120-the-png-interlace-is-written-as-adam7-passes.md)):
+  `crates/fwpng/src/adam7.rs` owns the pass geometry and the row
+  filters, `fwpng::image::encode_rgba8_interlaced` writes the stream,
+  and `io::png::encode_with` honors `PngOptions::interlaced`. The
+  panel offers the knob for PNG and clears the flag for the formats
+  that cannot honor it, the same rule the dither and the JPEG quality
+  follow.
 - **A knob the format cannot use is cleared.** Switching to JPEG
   retires a recorded GIF dither rather than leaving a setting behind
   that the JPEG path cannot honor. This needed an engine change: the
   `page.setExport` payload now distinguishes a JSON `null` (clear) from
   an absent key (keep).
-- **Tests.** `crates/app/tests/optimize_panel.rs` (8) covers the
+- **Tests.** `crates/app/tests/optimize_panel.rs` (9) covers the
   binding end to end — the payload reaching the page's record, the
   record reaching the export resolution the encoders read, a format
   change clearing the inapplicable knobs, one edit being one undoable
-  step, and the interlace flag only being cleared on request.
-  `crates/app/src/shell/optimize.rs` (7) covers the settings' own
+  step, and the interlace flag being written for PNG and cleared for
+  the formats that cannot honor it.
+  `crates/app/src/shell/optimize.rs` (8) covers the settings' own
   reading and writing. `crates/engine/src/catalog/page.rs` (3 new)
   covers the animated knobs and the clear-versus-keep semantics.
+  `crates/fwpng/src/adam7.rs` (4) covers the pass geometry, the
+  filter arithmetic, and the row count each pass contributes.
 
 **Open:**
 
-- **No Adam7 interlacing.** PNG (and GIF) interlaced output needs a
-  pass encoder the `png` crate does not provide. Named work, not a
-  panel defect.
 - **No selective-JPEG quality table.** CS6's Optimize panel carries a
   per-component quality table; this build has one global `JPQi`.
 - **The panel is unstyled relative to the rest of the dock**, and the
   Phase 22 screenshot audit has not covered it.
+- **No GIF interlace.** The flag is PNG's; the GIF encoder does not
+  read it, and the panel clears it rather than promising an effect it
+  cannot deliver.

@@ -143,7 +143,19 @@ fn an_optimize_edit_is_one_undoable_step() {
 }
 
 #[test]
-fn the_interlace_flag_is_only_cleared_on_request() {
+fn the_panel_writes_the_interlace_flag_for_a_png() {
+    let mut editor = Editor::untitled();
+    let mut panel = settings(&editor);
+    panel.format = 2;
+    panel.interlaced = true;
+    editor
+        .apply("page.setExport", panel.payload(0))
+        .expect("the panel's payload is a valid command");
+    assert!(settings(&editor).interlaced());
+}
+
+#[test]
+fn the_panel_clears_the_interlace_flag_for_a_format_that_cannot_honor_it() {
     let mut editor = Editor::untitled();
     // A document that records interlaced output (CS6 wrote the flag).
     editor
@@ -151,14 +163,14 @@ fn the_interlace_flag_is_only_cleared_on_request() {
         .expect("the flag is a valid command");
     assert!(settings(&editor).interlaced());
 
-    // Another edit leaves the flag alone: the panel never writes it as
-    // a side effect.
+    // Switching to a format that cannot honor the flag retires it
+    // rather than leaving a setting behind the encoder ignores.
     let mut panel = settings(&editor);
     panel.format = 1;
     editor
         .apply("page.setExport", panel.payload(0))
         .expect("the panel's payload is a valid command");
-    assert!(settings(&editor).interlaced());
+    assert!(!settings(&editor).interlaced());
 
     editor
         .apply("page.setExport", json!({ "page": 0, "interlaced": false }))

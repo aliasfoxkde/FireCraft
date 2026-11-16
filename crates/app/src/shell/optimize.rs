@@ -2,10 +2,11 @@
 //! `EXPv` record, with a live preview of what the settings produce.
 //!
 //! The panel offers exactly the controls the export pipeline honors
-//! (decision 0095). A setting the codecs cannot honor — PNG's Adam7
-//! interlace — is shown as recorded, disabled, and explained, with a
-//! one-click way to clear it, rather than offered as a knob that
-//! breaks the export.
+//! (decision 0095). A setting the codecs cannot honor is shown as
+//! recorded, disabled, and explained, with a one-click way to clear
+//! it, rather than offered as a knob that breaks the export. The
+//! PNG interlace was such a setting until the Adam7 pass encoder
+//! landed; it is now a knob the export honors (decision 0120).
 //!
 //! The preview encodes the *current* page through the same resolution
 //! the exporter uses (`io::expv`), so what the panel shows is what the
@@ -44,8 +45,8 @@ pub struct OptimizeSettings {
     pub anim_crop: bool,
     /// `AADb` — animated inter-frame difference.
     pub anim_diff: bool,
-    /// `GFIb` — interlaced output. Recorded, shown, and never edited:
-    /// this build has no Adam7 pass encoder (decision 0095).
+    /// `GFIb` — interlaced output. Honored for PNG: the encoder writes
+    /// the seven Adam7 passes (decision 0120).
     pub interlaced: bool,
 }
 
@@ -75,16 +76,20 @@ impl OptimizeSettings {
     /// The knobs that do not apply to the chosen format are *cleared*
     /// rather than left behind: a page that records a GIF dither and
     /// then exports as JPEG should not keep a dither it cannot honor.
+    /// The interlace flag follows the same rule — it is written for
+    /// PNG, the format that can honor it, and cleared for the others.
     #[must_use]
     pub fn payload(&self, page: usize) -> serde_json::Value {
         let jpeg = self.format == 1;
         let gif = self.format == 0;
+        let png = self.format == 2;
         serde_json::json!({
             "page": page,
             "format": self.format,
             "jpeg_quality": jpeg.then_some(self.jpeg_quality),
             "jpeg_progressive": jpeg.then_some(self.jpeg_progressive),
             "matte_raw": self.matte_raw,
+            "interlaced": png.then_some(self.interlaced),
             "dither": gif.then_some(self.dither),
             "frame_loop": gif.then_some(self.frame_loop),
             "anim_crop": gif.then_some(self.anim_crop),
@@ -166,21 +171,17 @@ impl Shell {
                 ui.label("frame difference");
                 changed |= ui.checkbox(&mut settings.anim_diff, "").changed();
             }
-            // The interlace row: CS6 offers it, this build cannot write
-            // it. A recorded flag blocks the PNG export, so the row
-            // says so and offers the way out.
-            ui.label("interlaced");
-            ui.add_enabled(
-                false,
-                egui::Checkbox::new(&mut settings.interlaced, "not supported"),
-            )
-            .on_hover_text(
-                "PNG and GIF interlacing need an Adam7 pass encoder, which this build does not \
-                 have. A recorded flag blocks the PNG export.",
-            );
+            // The interlace row: CS6 offers it for PNG, and this build
+            // writes the seven Adam7 passes, so it is a knob the
+            // export honors (decision 0120). For the other formats
+            // the flag is cleared rather than left behind.
+            if settings.format == 2 {
+                ui.label("interlaced");
+                changed |= ui.checkbox(&mut settings.interlaced, "").changed();
+            }
         });
-        if settings.interlaced {
-            ui.label("This page records interlaced output. Clear it to export a PNG.");
+        if settings.interlaced && settings.format != 2 {
+            ui.label("This page records interlaced output, which only PNG can honor.");
             if ui.button("Clear interlaced flag").clicked()
                 && self.run_command(
                     "page.setExport",
@@ -411,9 +412,9 @@ mod tests {
     }
 
     #[test]
-    fn the_payload_never_writes_the_interlace_flag() {
-        // The flag is cleared through its own command, never as a
-        // side effect of another edit.
+    fn the_payload_writes_the_interlace_flag_for_a_png() {
+        // PNG is the format that can honor the flag, so the panel
+        // writes it (decision 0120).
         let settings = OptimizeSettings {
             format: 2,
             jpeg_quality: 90,
@@ -426,7 +427,26 @@ mod tests {
             interlaced: true,
         };
         let payload = settings.payload(0);
-        assert!(payload.get("interlaced").is_none());
+        assert_eq!(payload["interlaced"], true);
+    }
+
+    #[test]
+    fn the_payload_clears_the_interlace_flag_for_a_format_that_cannot_honor_it() {
+        // The flag is a knob the JPEG path cannot use, so it is
+        // cleared rather than left behind.
+        let settings = OptimizeSettings {
+            format: 1,
+            jpeg_quality: 90,
+            jpeg_progressive: false,
+            matte_raw: None,
+            dither: 0,
+            frame_loop: 0,
+            anim_crop: false,
+            anim_diff: false,
+            interlaced: true,
+        };
+        let payload = settings.payload(0);
+        assert!(payload["interlaced"].is_null());
     }
 
     #[test]

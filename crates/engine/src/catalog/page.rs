@@ -877,7 +877,8 @@ struct SetPageExportPayload {
     #[serde(default, deserialize_with = "double_option")]
     matte_raw: Option<Option<i64>>,
     /// `GFIb` — interlaced output.
-    interlaced: Option<bool>,
+    #[serde(default, deserialize_with = "double_option")]
+    interlaced: Option<Option<bool>>,
     /// `PLDi` — palette dither level 0..=100.
     #[serde(default, deserialize_with = "double_option")]
     dither: Option<Option<i64>>,
@@ -968,7 +969,7 @@ impl TypedCommand for SetPageExport {
                 export.matte_raw = matte;
             }
             if let Some(interlaced) = payload.interlaced {
-                export.interlaced = Some(interlaced);
+                export.interlaced = interlaced;
             }
             if let Some(dither) = payload.dither {
                 export.dither = dither;

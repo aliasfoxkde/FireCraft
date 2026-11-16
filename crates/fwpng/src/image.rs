@@ -5,7 +5,7 @@
 //! handles the ordinary image stream so callers can display a document
 //! without understanding the node tree.
 
-use std::io::Cursor;
+use std::io::{Cursor, Write};
 
 use crate::error::FwPngError;
 
@@ -69,9 +69,7 @@ fn png_decode_err(err: &png::DecodingError) -> FwPngError {
 
 /// Encodes straight-alpha RGBA8 pixels as a standard PNG (the write
 /// side of [`decode_standard_rgba8`]): 8-bit RGBA, no interlace — the
-/// export path for rasterized pages. (Interlaced *output* would need
-/// an Adam7 pass encoder the `png` crate does not provide; the flag is
-/// preserved in the model and the export path refuses it loudly.)
+/// export path for rasterized pages.
 ///
 /// # Errors
 /// [`FwPngError::PngEncode`] when the `png` crate rejects the write
@@ -102,6 +100,59 @@ pub fn encode_rgba8(width: u32, height: u32, rgba8: &[u8]) -> Result<Vec<u8>, Fw
                 reason: err.to_string(),
             })?;
     }
+    Ok(out)
+}
+
+/// Encodes straight-alpha RGBA8 pixels as an Adam7-interlaced PNG.
+///
+/// The `png` crate cannot write the seven passes an interlaced PNG
+/// carries, so this writer builds the stream itself: the IHDR with
+/// the interlace flag set, the filtered pass stream from
+/// [`crate::adam7`], and the IDAT that carries it. The result decodes
+/// to the same pixels as the non-interlaced write.
+///
+/// # Errors
+/// [`FwPngError::UnsupportedImage`] when the buffer does not hold
+/// `width * height * 4` bytes, [`FwPngError::PngEncode`] when the
+/// compressor fails.
+pub fn encode_rgba8_interlaced(
+    width: u32,
+    height: u32,
+    rgba8: &[u8],
+) -> Result<Vec<u8>, FwPngError> {
+    let expected = width as usize * height as usize * 4;
+    if rgba8.len() != expected {
+        return Err(FwPngError::UnsupportedImage {
+            layout: format!(
+                "encode: {} bytes for {width}x{height} (want {expected})",
+                rgba8.len()
+            ),
+        });
+    }
+    let stream = crate::adam7::scanlines(width, height, rgba8);
+    let mut compressor = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::default());
+    compressor
+        .write_all(&stream)
+        .map_err(|err| FwPngError::PngEncode {
+            reason: err.to_string(),
+        })?;
+    let idat = compressor.finish().map_err(|err| FwPngError::PngEncode {
+        reason: err.to_string(),
+    })?;
+
+    let mut out = Vec::new();
+    out.extend_from_slice(&crate::chunk::PNG_SIGNATURE);
+    let mut ihdr = Vec::with_capacity(13);
+    ihdr.extend_from_slice(&width.to_be_bytes());
+    ihdr.extend_from_slice(&height.to_be_bytes());
+    ihdr.push(8); // bit depth
+    ihdr.push(6); // colour type: truecolour with alpha
+    ihdr.push(0); // compression method
+    ihdr.push(0); // filter method
+    ihdr.push(1); // interlace method: Adam7
+    crate::chunk::write_chunk(&mut out, b"IHDR", &ihdr);
+    crate::chunk::write_chunk(&mut out, b"IDAT", &idat);
+    crate::chunk::write_chunk(&mut out, b"IEND", &[]);
     Ok(out)
 }
 
@@ -215,5 +266,43 @@ mod tests {
     #[test]
     fn encode_rejects_a_short_buffer() {
         assert!(super::encode_rgba8(2, 1, &[1, 2, 3]).is_err());
+    }
+
+    #[test]
+    fn an_interlaced_png_decodes_to_the_same_pixels() {
+        // The `png` crate's decoder reads interlaced streams, so the
+        // round trip is the proof that the seven passes carry every
+        // pixel: the decoder reassembles them.
+        let width = 9u32;
+        let height = 7u32;
+        let mut pixels = Vec::with_capacity((width * height * 4) as usize);
+        for y in 0..height {
+            for x in 0..width {
+                pixels.extend_from_slice(&[(x * 20) as u8, (y * 30) as u8, 90, 255]);
+            }
+        }
+        let encoded =
+            super::encode_rgba8_interlaced(width, height, &pixels).expect("the interlace encodes");
+        let decoded = decode_standard_rgba8(&encoded).expect("the interlace decodes");
+        assert_eq!(decoded.width, width);
+        assert_eq!(decoded.height, height);
+        assert_eq!(decoded.rgba8, pixels);
+    }
+
+    #[test]
+    fn an_interlaced_png_declares_the_interlace_method() {
+        let encoded = super::encode_rgba8_interlaced(2, 2, &[0u8; 16]).expect("encodes");
+        let ihdr = encoded
+            .windows(4)
+            .position(|window| window == b"IHDR")
+            .expect("the file carries an IHDR");
+        // The IHDR's data is width, height, depth, colour, compression,
+        // filter, interlace — the last of them says Adam7.
+        assert_eq!(encoded[ihdr + 16], 1);
+    }
+
+    #[test]
+    fn an_interlaced_png_rejects_a_short_buffer() {
+        assert!(super::encode_rgba8_interlaced(2, 1, &[1, 2, 3]).is_err());
     }
 }

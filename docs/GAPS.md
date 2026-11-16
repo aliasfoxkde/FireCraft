@@ -373,9 +373,12 @@ model.
 [0095](decisions/0095-optimize-panel-honors-only-what-export-honors.md)):
 the panel edits the `EXPv` fields the export honors (`FMTi`, `JPQi`,
 `JPPb`, `FCLi`, `PLDi`, `FLPi`, `AACb`, `AADb`) and previews the page
-through the export's own resolution. Still open: Adam7 interlacing
-(`GFIb` is disclosed and clearable, not writable) and CS6's
-selective-JPEG quality table.
+through the export's own resolution. **Adam7 interlacing landed
+2026-11-16** (decision
+[0120](decisions/0120-the-png-interlace-is-written-as-adam7-passes.md)):
+the workspace writes the seven passes, the export honors `GFIb`, and
+the panel offers the knob for PNG. Still open: CS6's
+selective-JPEG quality table and the panel's screenshot acceptance.
 
 ---
 
