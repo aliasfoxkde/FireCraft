@@ -223,7 +223,7 @@ pub fn source() -> Result<(), String> {
 }
 
 /// sha256 of a file (hex), same digest form `write_manifest` uses.
-fn sha256_hex_file(path: &Path) -> Result<String, String> {
+pub(crate) fn sha256_hex_file(path: &Path) -> Result<String, String> {
     let bytes = std::fs::read(path).map_err(|e| format!("read {}: {e}", path.display()))?;
     Ok(sha256_hex(&bytes))
 }
@@ -1588,6 +1588,10 @@ pub const MANIFEST_SCHEMA: &str = "firecraft.release-manifest/1";
 /// The manifest's file name inside the release output directory.
 pub const MANIFEST_FILE_NAME: &str = "release-manifest.json";
 
+/// The provenance statement's file name inside the release output
+/// directory.
+pub const PROVENANCE_FILE_NAME: &str = "provenance.intoto.json";
+
 /// Verification status of an artifact whose digest was corroborated by
 /// an independently recorded checksum list.
 const VERIFICATION_VERIFIED: &str = "verified";
@@ -1609,16 +1613,16 @@ const CHECKSUM_LISTS: &[&str] = &[
 ];
 
 /// One published release asset.
-struct ArtifactSpec {
+pub(crate) struct ArtifactSpec {
     /// Canonical published name — the asset's basename, which is how a
     /// release names it.
-    name: String,
+    pub(crate) name: String,
     /// Path relative to the release output directory.
-    rel_path: String,
+    pub(crate) rel_path: String,
     /// Package format.
-    format: &'static str,
+    pub(crate) format: &'static str,
     /// Target triple the artifact was built for.
-    target: &'static str,
+    pub(crate) target: &'static str,
 }
 
 /// The build-time facts a manifest records about the run that produced
@@ -1628,21 +1632,21 @@ struct ArtifactSpec {
 /// edge — in [`manifest_context`] — and handed to the generator as
 /// data. The generator is therefore a pure function of its inputs, and
 /// the same inputs produce the same manifest bytes.
-struct ManifestContext {
+pub(crate) struct ManifestContext {
     /// Workspace version the artifacts carry.
-    version: String,
+    pub(crate) version: String,
     /// Release tag the artifacts were cut from — absent when the build
     /// was not made from a tagged commit.
-    tag: Option<String>,
+    pub(crate) tag: Option<String>,
     /// Git revision the artifacts were built from.
-    source_sha: String,
+    pub(crate) source_sha: String,
     /// Workflow run URL — absent outside CI.
-    run_url: Option<String>,
+    pub(crate) run_url: Option<String>,
     /// Workflow run id — absent outside CI.
-    run_id: Option<String>,
+    pub(crate) run_id: Option<String>,
     /// UTC build timestamp — the one field that is build-time data by
     /// definition.
-    built_at: String,
+    pub(crate) built_at: String,
 }
 
 /// The published release asset set for `version`.
@@ -1652,7 +1656,7 @@ struct ManifestContext {
 /// rather than globbing, because a glob such as `firecraft-web-*.zip`
 /// picks up older versions left in `dist/` — and a scan would let a
 /// stale file into the manifest.
-fn release_specs(version: &str) -> Vec<ArtifactSpec> {
+pub(crate) fn release_specs(version: &str) -> Vec<ArtifactSpec> {
     vec![
         ArtifactSpec {
             name: format!("firecraft-{version}-linux-x86_64.tar.gz"),
@@ -1700,6 +1704,12 @@ fn release_specs(version: &str) -> Vec<ArtifactSpec> {
             name: "RELEASE_SHA256.txt".to_owned(),
             rel_path: "RELEASE_SHA256.txt".to_owned(),
             format: "sha256",
+            target: TARGET_ANY,
+        },
+        ArtifactSpec {
+            name: PROVENANCE_FILE_NAME.to_owned(),
+            rel_path: PROVENANCE_FILE_NAME.to_owned(),
+            format: "json",
             target: TARGET_ANY,
         },
     ]
@@ -1771,7 +1781,7 @@ fn load_checksum_lists(root: &Path) -> Result<Vec<ChecksumList>, String> {
 /// The digest comes from [`sha256_hex_file`], the same helper the
 /// release manifests themselves use, so the manifest records the same
 /// digest form as the rest of the release path.
-fn digest_and_size(path: &Path) -> Result<(String, u64), String> {
+pub(crate) fn digest_and_size(path: &Path) -> Result<(String, u64), String> {
     let digest = sha256_hex_file(path)?;
     let size = std::fs::metadata(path)
         .map_err(|e| format!("stat {}: {e}", path.display()))?
@@ -1859,7 +1869,7 @@ fn render_manifest(value: &serde_json::Value) -> Result<String, String> {
 /// This is the edge — the only place that touches process-global state.
 /// Everything downstream takes the values as data, so the generator can
 /// be exercised in a test without touching the environment.
-fn manifest_context(version: &str) -> Result<ManifestContext, String> {
+pub(crate) fn manifest_context(version: &str) -> Result<ManifestContext, String> {
     let root = workspace_root();
     let source_sha = git_value(&root, &["rev-parse", "HEAD"])?.ok_or_else(|| {
         "could not read the source revision: `git rev-parse HEAD` failed".to_owned()
