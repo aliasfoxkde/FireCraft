@@ -3495,36 +3495,72 @@ impl Editor {
             }
             Tool::PolygonSlice | Tool::PolygonHotspot => {
                 let command = if self.tool == Tool::PolygonSlice {
-                    "slice.create"
+                    "slice.appendPoint"
                 } else {
-                    "hotspot.create"
+                    "hotspot.appendPoint"
                 };
-                let mut x = f64::MAX;
-                let mut y = f64::MAX;
-                let mut right = f64::MIN;
-                let mut bottom = f64::MIN;
-                let anchors: Vec<serde_json::Value> = draft
-                    .points
-                    .iter()
-                    .map(|point| {
-                        x = x.min(point.x);
-                        y = y.min(point.y);
-                        right = right.max(point.x);
-                        bottom = bottom.max(point.y);
-                        serde_json::json!({ "x": point.x, "y": point.y })
-                    })
-                    .collect();
-                self.apply(
-                    command,
-                    serde_json::json!({
-                        "shape": "polygon",
-                        "x": x, "y": y,
-                        "width": right - x, "height": bottom - y,
-                        "points": anchors,
-                        "page": self.page,
-                        "name": null, "link": null, "alt": null,
-                    }),
-                )?;
+                // Design C: the draft replays through the append
+                // state machine — point 1 takes the create branch
+                // (a fresh one-point open polyline), every later
+                // point appends, and the final anchor closes the
+                // outline against the start. One transaction, so the
+                // whole polygon lands as one undo step named for the
+                // verb; a refusal aborts it and the document is
+                // untouched. The local draft UX (click-to-plot) is
+                // unchanged — only the commit moved.
+                let page = self.page;
+                let restore = self.document().object_selection.clone();
+                let first = points[0];
+                let last = points[points.len() - 1];
+                let close = ((last[0] - first[0]).powi(2) + (last[1] - first[1]).powi(2)).sqrt();
+                self.session.begin_transaction(command)?;
+                let replay = (|| -> Result<(), EngineError> {
+                    // Guarantee the create branch: no open polygon
+                    // of this class can swallow the first point.
+                    self.apply("selection.set", serde_json::json!({ "ids": [] }))?;
+                    let delta = self.apply_delta(
+                        command,
+                        serde_json::json!({
+                            "x": first[0], "y": first[1],
+                            "tolerance": 0.0, "page": page,
+                        }),
+                    )?;
+                    let mut created = Vec::new();
+                    collect_created(&delta, &mut created);
+                    let Some(id) = created.last().copied() else {
+                        return Err(EngineError::InvalidState {
+                            name: command.to_owned(),
+                            detail: "the create branch minted no object".to_owned(),
+                        });
+                    };
+                    self.apply("selection.set", serde_json::json!({ "ids": [id] }))?;
+                    for (index, point) in points.iter().enumerate().skip(1) {
+                        // The final anchor closes the outline: the
+                        // engine closes when the new point lands
+                        // within tolerance of the start, so hand it
+                        // exactly that distance — the same formula
+                        // the engine measures with.
+                        let tolerance = if index + 1 == points.len() {
+                            close
+                        } else {
+                            0.0
+                        };
+                        self.apply(
+                            command,
+                            serde_json::json!({
+                                "x": point[0], "y": point[1],
+                                "tolerance": tolerance, "page": page,
+                            }),
+                        )?;
+                    }
+                    self.apply("selection.set", serde_json::json!({ "ids": restore }))?;
+                    Ok(())
+                })();
+                if let Err(error) = replay {
+                    let _ = self.session.abort_transaction();
+                    return Err(error);
+                }
+                self.session.commit_transaction()?;
             }
             _ => {}
         }
