@@ -681,7 +681,8 @@ mod tests {
                 }
             }
         });
-        let errors = validator(schema).validate(&json!({ "serialNumber": "urn:uuid:NOPE" }));
+        let errors =
+            validator(schema.clone()).validate(&json!({ "serialNumber": "urn:uuid:NOPE" }));
         assert_eq!(errors.len(), 1);
         let good = validator(schema).validate(&json!({
             "serialNumber": "urn:uuid:12345678-1234-1234-1234-123456789012"
