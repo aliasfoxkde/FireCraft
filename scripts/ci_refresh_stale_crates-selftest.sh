@@ -10,6 +10,13 @@
 # So both directions are demonstrated here, with the mtimes laid out by
 # hand, against a synthetic workspace and a synthetic cache.
 #
+# The `delta` case is the regression for the defect that shipped first:
+# cargo rewrites a fingerprint FILE in place and never touches the
+# fingerprint DIRECTORY's mtime, so a comparison against the directory
+# sees a months-old timestamp and decides that every source is newer
+# than the cache. That is how GitForge run 90f22916 failed with this
+# step already in place.
+#
 # Usage: bash scripts/ci_refresh_stale_crates-selftest.sh
 set -uo pipefail
 
@@ -40,8 +47,10 @@ bad() {
 ws="$work/workspace"
 target="$work/target"
 mkdir -p "$ws/crates/alpha/src" "$ws/crates/beta/src" "$ws/crates/gamma/src" \
-  "$ws/xtask/src" "$target/debug/.fingerprint/alpha-1111111111111111" \
+  "$ws/crates/delta/src" "$ws/xtask/src" \
+  "$target/debug/.fingerprint/alpha-1111111111111111" \
   "$target/debug/.fingerprint/beta-2222222222222222" \
+  "$target/debug/.fingerprint/delta-4444444444444444" \
   "$target/wasm32-unknown-unknown/debug/.fingerprint/gamma-3333333333333333"
 
 printf '[package]\nname = "alpha"\n' >"$ws/crates/alpha/Cargo.toml"
@@ -50,12 +59,15 @@ printf '[package]\nname = "beta"\n' >"$ws/crates/beta/Cargo.toml"
 printf 'pub fn beta() {}\n' >"$ws/crates/beta/src/lib.rs"
 printf '[package]\nname = "gamma"\n' >"$ws/crates/gamma/Cargo.toml"
 printf 'pub fn gamma() {}\n' >"$ws/crates/gamma/src/lib.rs"
+printf '[package]\nname = "delta"\n' >"$ws/crates/delta/Cargo.toml"
+printf 'pub fn delta() {}\n' >"$ws/crates/delta/src/lib.rs"
 printf '[package]\nname = "xtask"\n' >"$ws/xtask/Cargo.toml"
 printf 'fn main() {}\n' >"$ws/xtask/src/main.rs"
 
 # The fingerprints are the cache's records of the last build.
 for fp in "$target/debug/.fingerprint/alpha-1111111111111111/lib-alpha" \
   "$target/debug/.fingerprint/beta-2222222222222222/lib-beta" \
+  "$target/debug/.fingerprint/delta-4444444444444444/lib-delta" \
   "$target/wasm32-unknown-unknown/debug/.fingerprint/gamma-3333333333333333/lib-gamma"; do
   printf 'fingerprint\n' >"$fp"
 done
@@ -66,6 +78,10 @@ done
 # artifact built from another tree, so the script must refresh it.
 # gamma: the crate lives under the wasm target — the script must look
 # there too.
+# delta: the cache is NEWER than the checkout, but the fingerprint
+# DIRECTORY's mtime is old — the shape cargo leaves behind when it
+# rewrites a fingerprint file in place. The crate must still be
+# refreshed.
 # xtask: no cached fingerprint at all — nothing to refresh.
 now="$(date +%s)"
 for f in "$ws/crates/alpha/src/lib.rs" "$ws/crates/alpha/Cargo.toml"; do
@@ -73,18 +89,29 @@ for f in "$ws/crates/alpha/src/lib.rs" "$ws/crates/alpha/Cargo.toml"; do
 done
 for f in "$ws/crates/beta/src/lib.rs" "$ws/crates/beta/Cargo.toml" \
   "$ws/crates/gamma/src/lib.rs" "$ws/crates/gamma/Cargo.toml" \
+  "$ws/crates/delta/src/lib.rs" "$ws/crates/delta/Cargo.toml" \
   "$ws/xtask/src/main.rs" "$ws/xtask/Cargo.toml"; do
   touch -d "@$((now - 3600))" "$f"
 done
 for fp in "$target/debug/.fingerprint/alpha-1111111111111111/lib-alpha" \
   "$target/debug/.fingerprint/beta-2222222222222222/lib-beta" \
+  "$target/debug/.fingerprint/delta-4444444444444444/lib-delta" \
   "$target/wasm32-unknown-unknown/debug/.fingerprint/gamma-3333333333333333/lib-gamma"; do
   touch -d "@$((now - 1800))" "$fp"
+done
+# The fingerprint directories themselves keep an old mtime, as they do on
+# a real cache: cargo rewrites the file inside them in place.
+for dir in "$target/debug/.fingerprint/alpha-1111111111111111" \
+  "$target/debug/.fingerprint/beta-2222222222222222" \
+  "$target/debug/.fingerprint/delta-4444444444444444" \
+  "$target/wasm32-unknown-unknown/debug/.fingerprint/gamma-3333333333333333"; do
+  touch -d "@$((now - 86400 * 30))" "$dir"
 done
 
 alpha_before="$(stat -c %Y "$ws/crates/alpha/src/lib.rs")"
 beta_before="$(stat -c %Y "$ws/crates/beta/src/lib.rs")"
 gamma_before="$(stat -c %Y "$ws/crates/gamma/src/lib.rs")"
+delta_before="$(stat -c %Y "$ws/crates/delta/src/lib.rs")"
 xtask_before="$(stat -c %Y "$ws/xtask/src/main.rs")"
 
 output="$(bash "$script" "$ws" "$target" 2>&1)"
@@ -115,6 +142,14 @@ if [ "$gamma_before" != "$gamma_after" ] && [ "$gamma_after" -gt "$gamma_before"
   ok "a crate under the wasm target directory is refreshed"
 else
   bad "a crate under the wasm target directory is refreshed" "mtime $gamma_before -> $gamma_after"
+fi
+
+delta_after="$(stat -c %Y "$ws/crates/delta/src/lib.rs")"
+if [ "$delta_before" != "$delta_after" ] && [ "$delta_after" -gt "$delta_before" ]; then
+  ok "a crate is refreshed when the fingerprint FILE is newer but its directory is old"
+else
+  bad "a crate is refreshed when the fingerprint FILE is newer but its directory is old" \
+    "mtime $delta_before -> $delta_after"
 fi
 
 xtask_after="$(stat -c %Y "$ws/xtask/src/main.rs")"
