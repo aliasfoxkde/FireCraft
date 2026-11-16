@@ -17,6 +17,8 @@
 //! convolutions run on premultiplied channels directly, point ops
 //! round-trip each pixel through [`color::unpremultiply`] first.
 
+#![deny(missing_docs)]
+
 mod bevel;
 mod clouds;
 mod convolve;
@@ -171,11 +173,13 @@ impl Surface {
         out
     }
 
+    /// The surface width in pixels.
     #[must_use]
     pub fn width(&self) -> u32 {
         self.width
     }
 
+    /// The surface height in pixels.
     #[must_use]
     pub fn height(&self) -> u32 {
         self.height

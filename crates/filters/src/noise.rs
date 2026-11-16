@@ -16,6 +16,8 @@ pub struct SplitMix64 {
 }
 
 impl SplitMix64 {
+    /// A generator seeded with `seed`; the same seed replays the same
+    /// stream on every platform.
     #[must_use]
     pub fn new(seed: u64) -> Self {
         Self { state: seed }
