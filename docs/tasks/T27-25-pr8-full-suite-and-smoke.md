@@ -19,9 +19,9 @@ smoke all pass on the PR head, and the results are recorded with the SHA.
 
 **Verification:** `cargo run -p xtask -- ci && cargo run -p xtask -- dist --web`
 
-**Evidence:** none yet.
+**Evidence:** none yet — PR #8 was closed unmerged; its review findings are re-hosted in issue #47 and the parity gate in closed issue #86.
 
-**Blockers:** T27-23, T27-24; the Aegis findings in T27-12/13 also gate the CI leg.
+**Blockers:** T27-23, T27-24
 
 **Stopping condition:** all four checks pass on the PR head SHA, or every failure is
 recorded with its cause and owner.

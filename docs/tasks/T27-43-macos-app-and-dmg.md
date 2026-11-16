@@ -19,9 +19,9 @@ version, minimum system version, icons, embedded licenses and the required
 
 **Verification:** `hdiutil verify <dmg> && shasum -a 256 <dmg>`
 
-**Evidence:** none yet.
+**Evidence:** —
 
-**Blockers:** a macOS host.
+**Blockers:** macOS host
 
 **Stopping condition:** the `.app` and `.dmg` exist, the DMG verifies, and the bundle's
 metadata is captured.

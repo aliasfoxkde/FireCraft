@@ -20,9 +20,9 @@ distribution and version.
 
 **Verification:** `docker run <distro-image> bash -lc 'apt install ./firecraft_*.deb && firecraft --version'`
 
-**Evidence:** only Debian 12 has been exercised for the DEB.
+**Evidence:** only Debian 12 has been exercised for the DEB — the rehearsal receipt `docs/release/RECEIPT-0.2.5-DRYRUN-3.md` records the Debian-family DEB build; no Fedora-family image exists on this fleet.
 
-**Blockers:** no Fedora-family image is available locally.
+**Blockers:** no Fedora-family image is available locally
 
 **Stopping condition:** a matrix of distro × display results exists, and the gaps are
 listed explicitly rather than inferred.

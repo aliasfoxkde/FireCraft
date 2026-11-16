@@ -19,9 +19,9 @@ feasible / not-feasible / feasible-later verdict with its conditions.
 
 **Verification:** `rustup target list | grep aarch64-pc-windows`
 
-**Evidence:** the artifact matrix records Windows ARM64 as "unassessed".
+**Evidence:** Matrix records Windows ARM64 as "unassessed"
 
-**Blockers:** none.
+**Blockers:** —
 
 **Stopping condition:** the assessment is committed and the matrix's Windows ARM64 row
 is updated from "unassessed" to the verdict.

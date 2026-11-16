@@ -19,10 +19,9 @@ against the CycloneDX 1.5 schema; it is compared component-by-component against
 
 **Verification:** `cargo run -p xtask -- dist --sbom && jq .metadata.component dist/sbom/firecraft-0.2.5-sbom.cdx.json`
 
-**Evidence:** commit `00fdd61` marks the updated SBOM implementation as
-verification-pending; the earlier artifact was only JSON-validated on the fleet.
+**Evidence:** `00fdd61` marks the updated SBOM verification pending; the earlier artifact was JSON-validated only
 
-**Blockers:** none beyond T27-06.
+**Blockers:** —
 
 **Stopping condition:** the schema validation and the `Cargo.lock` component comparison
 both pass, and the published file verifies.

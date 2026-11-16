@@ -21,9 +21,9 @@ files match the ZIP's contents.
 `__APPVERSION__` and `__LICENSEFILE__` stand-ins, which the recipe substitutes and
 which the compiler cannot resolve by itself (decision 0101).
 
-**Evidence:** parse-checked only; never built.
+**Evidence:** Parse-checked only; never built
 
-**Blockers:** `ISCC` on a Windows host.
+**Blockers:** ISCC
 
 **Stopping condition:** a `.exe` installer exists with a recorded digest and its
 compiled metadata is captured.

@@ -24,12 +24,9 @@ conditions.
 
 **Verification:** `test -f docs/research/android-feasibility.md`
 
-**Evidence:** the report concludes "feasible with bounded work" — the GPU stack is
-glow-backed (EGL), not wgpu, and `accesskit` with `android-native-activity` forces
-GameActivity. Its disposition is "experimental"; it is a feasibility finding, not a
-gate decision.
+**Evidence:** Feasible with bounded work; GameActivity forced by the accesskit conflict; disposition experimental
 
-**Blockers:** none — this row can start now.
+**Blockers:** —
 
 **Stopping condition:** a decision record exists, and T27-47 is unblocked (approve) or
 formally closed (defer).

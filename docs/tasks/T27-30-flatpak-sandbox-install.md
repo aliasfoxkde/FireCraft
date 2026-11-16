@@ -20,11 +20,9 @@ writing and the set is minimal.
 
 **Verification:** `flatpak run dev.firecraft.FireCraft`
 
-**Evidence:** the manifest declares `--device=dri --share=ipc --socket=x11
---socket=wayland --socket=fallback-x11 --filesystem=xdg-documents
---talk-name=org.freedesktop.portal.Desktop`; none of it has been exercised.
+**Evidence:** the manifest declares `--device=dri --share=ipc --socket=x11 --socket=wayland --socket=fallback-x11 --filesystem=xdg-documents --talk-name=org.freedesktop.portal.Desktop`; none of it has been exercised — the bundle has never been built (T27-29).
 
-**Blockers:** a Flatpak SDK/runtime host.
+**Blockers:** a Flatpak SDK/runtime host
 
 **Stopping condition:** the install → run → portal round trip → remove sequence is
 recorded with a per-permission justification.

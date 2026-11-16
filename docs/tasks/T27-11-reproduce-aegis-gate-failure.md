@@ -25,12 +25,9 @@ offending finding is enumerated with its rule id, file and line.
 > `cargo run -p xtask -- aegis`. The reproduction recorded below is the historical
 > one, taken on 2026-11-08 against the baseline of that day.
 
-**Evidence:** reproduced 2026-11-08 — 5 findings absent from the 520-entry baseline:
-`gdpr-personal-data` (`docs/RELEASE-ENGINEERING-PLAN.md:155`), `pci-cardholder-data`
-(`docs/research/android-feasibility.md:62`), `ssrf-localhost` (`xtask/src/dist.rs:1040`),
-`zip-code` (`xtask/src/dist.rs:468`, `xtask/src/dist.rs:960`).
+**Evidence:** 5 new findings vs a 520-entry baseline (2026-11-08) **Done:** 2026-11-08.
 
-**Blockers:** none.
+**Blockers:** —
 
 **Stopping condition:** the finding list exists with file/line for each entry.
 Completed 2026-11-08.

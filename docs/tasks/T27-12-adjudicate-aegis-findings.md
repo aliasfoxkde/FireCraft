@@ -1,6 +1,6 @@
 # T27-12 — Adjudicate each of the new Aegis findings
 
-> **RP:** RP-00 · **Priority:** P0 · **Status:** IMPLEMENTED
+> **RP:** RP-00 · **Priority:** P0 · **Status:** BUILD VERIFIED
 > **Board row:** [EXECUTION-BOARD.md §6](../release/EXECUTION-BOARD.md)
 > **Depends on:** T27-11
 
@@ -26,10 +26,9 @@ positive, with the reason written and the evidence that supports the classificat
 > `cargo run -p xtask -- aegis`. The adjudication below is the historical one,
 > taken on 2026-11-09 against the baseline of that day.
 
-**Evidence:** known false-positive classes: `pan` → PCI rule; large literals → zip-code
-rule. `gdpr-personal-data` and `ssrf-localhost` are not yet classified.
+**Evidence:** All five findings are adjudicated as verified false positives, each with a written reason in `xtask/src/aegis.rs` `CLASS_NOTES` (`gdpr-personal-data`, `pci-cardholder-data`, `ssrf-localhost`, `zip-code`, `australian-tfn`). The baseline is content-keyed (decision 0074, commit `ad598a4`) and was re-blessed for the parity-matrix and slice-hotspot content (decisions 0083, 0084). The scan is the Aegis leg of the canonical gate and is green on the candidate heads. **Done:** 2026-11-12: adjudication reasons recorded in `xtask/src/aegis.rs`.
 
-**Blockers:** none — T27-11 is complete, so this row can start now.
+**Blockers:** —
 
 **Stopping condition:** all findings have a written verdict and a named next action
 per finding.

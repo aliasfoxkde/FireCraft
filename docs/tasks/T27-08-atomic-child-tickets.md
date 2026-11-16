@@ -22,9 +22,9 @@ and each readable standalone.
 
 **Verification:** `ls docs/tasks/T27-*.md | wc -l`
 
-**Evidence:** 61 tickets, one per board row (this change).
+**Evidence:** This change (61 tickets) **Done:** 2026-11-08.
 
-**Blockers:** none.
+**Blockers:** —
 
 **Stopping condition:** the ticket count equals the board row count and no ticket
 describes more than one logical change or more than one acceptance result.

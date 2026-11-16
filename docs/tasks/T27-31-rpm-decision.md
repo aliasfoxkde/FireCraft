@@ -21,10 +21,9 @@ outcome.
 
 **Verification:** `grep -n 'Status' docs/decisions/0070-rpm-deferred.md`
 
-**Evidence:** `docs/decisions/0070-rpm-deferred.md`, accepted 2026-11-06. The matrix
-records RPM as "unsupported (decision 0070)" with no artifact.
+**Evidence:** `docs/decisions/0070-rpm-deferred.md` (accepted 2026-11-06)
 
-**Blockers:** none.
+**Blockers:** —
 
 **Stopping condition:** the deferral is retained or formally superseded, and the
 matrix and the certification report agree.

@@ -1,6 +1,6 @@
 # T27-35 — Audit `build-windows.ps1` and the Inno Setup configuration
 
-> **RP:** RP-02 · **Priority:** P1 · **Status:** IMPLEMENTED (audited 2026-11-12)
+> **RP:** RP-02 · **Priority:** P1 · **Status:** IMPLEMENTED(audited 2026-11-12)
 > **Board row:** [EXECUTION-BOARD.md §6](../release/EXECUTION-BOARD.md)
 > **Depends on:** T27-04
 
@@ -23,10 +23,9 @@ set are documented; every value that must match a version stamp is identified.
 plus, in this change, the fixes the audit produced are visible in the diff of the two
 recipe files.
 
-**Evidence:** [decision 0101](../../decisions/0101-off-fleet-packaging-recipe-audit.md)
-records the audit and its consequences; the two recipe files carry the fixes inline.
+**Evidence:** The audit is the ticket itself (`docs/tasks/T27-35-windows-build-script-audit.md`): eight environment assumptions with their risks, the identity and shortcut tables, the four version-metadata couplings. It found four defects, all fixed in the recipes — the installer could not have compiled (the staged script resolved `LicenseFile` against the stage, not the repository), the distribution omitted `NOTICE` (Apache-2.0 4(d)), the substitution could have mangled a `$` in a path, and the recipe moved an installer name the compiler never produces, so a successful compile was reported as a failure. Decision 0101. Still not parse-checked on this fleet (no `pwsh`, no `ISCC`). **Done:** 2026-11-12: audit written, four defects fixed in the recipes.
 
-**Blockers:** no Windows host. The build rows (T27-36/37/38) remain open.
+**Blockers:** No Windows host (the build rows T27-36/37/38)
 
 **Stopping condition:** the audit is committed with a per-assumption risk list. **Met
 2026-11-12** — the audit is below, and the four defects it found are fixed in the

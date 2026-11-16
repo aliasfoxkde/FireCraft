@@ -20,9 +20,9 @@ physical ARM64 device and passes import → edit → export.
 
 **Verification:** `adb install <apk> && adb shell am start -n dev.firecraft.FireCraft/.MainActivity`
 
-**Evidence:** no native entrypoint and no CI image exist.
+**Evidence:** No native entrypoint, no CI image
 
-**Blockers:** the T27-46 gate outcome; no NDK/SDK image; no physical ARM64 device.
+**Blockers:** T27-46 outcome; NDK/SDK image; physical ARM64 device
 
 **Stopping condition:** an APK installs and passes the round trip on a physical ARM64
 device, or the row is closed with the deferral decision recorded.
