@@ -1,7 +1,7 @@
 //! A JSON Schema (draft-07) validator, restricted to the keywords the
-//! CycloneDX schema uses.
+//! `CycloneDX` schema uses.
 //!
-//! The SBOM gate validates its output against the published CycloneDX
+//! The SBOM gate validates its output against the published `CycloneDX`
 //! 1.5 schema (T27-55).  The schema is the authority, so the validator
 //! reads it rather than re-implementing its rules — but a JSON Schema
 //! implementation is a big dependency to add to a gate crate, and the
@@ -14,7 +14,7 @@
 //! unknown keyword would report a document as valid when the schema
 //! says otherwise, which is the failure mode a gate must not have.
 //!
-//! The keywords the CycloneDX 1.5 schema uses:
+//! The keywords the `CycloneDX` 1.5 schema uses:
 //! `type`, `properties`, `required`, `additionalProperties`,
 //! `additionalItems`, `items`, `enum`, `const`, `pattern`, `format`,
 //! `oneOf`, `anyOf`, `allOf`, `uniqueItems`, `minItems`, `maxItems`,
@@ -204,19 +204,19 @@ impl Validator {
         path: &str,
         errors: &mut Vec<String>,
     ) {
-        if let Some(choices) = schema.get("enum").and_then(Value::as_array) {
-            if !choices.contains(document) {
-                errors.push(format!(
-                    "{path}: {} is not one of the {} allowed values",
-                    document,
-                    choices.len()
-                ));
-            }
+        if let Some(choices) = schema.get("enum").and_then(Value::as_array)
+            && !choices.contains(document)
+        {
+            errors.push(format!(
+                "{path}: {} is not one of the {} allowed values",
+                document,
+                choices.len()
+            ));
         }
-        if let Some(expected) = schema.get("const") {
-            if document != expected {
-                errors.push(format!("{path}: expected {expected}, found {document}"));
-            }
+        if let Some(expected) = schema.get("const")
+            && document != expected
+        {
+            errors.push(format!("{path}: expected {expected}, found {document}"));
         }
     }
 
@@ -231,12 +231,11 @@ impl Validator {
         let Some(text) = document.as_str() else {
             return;
         };
-        if let Some(pattern) = schema.get("pattern").and_then(Value::as_str) {
-            if let Some(compiled) = self.patterns.get(pattern) {
-                if !compiled.is_match(text) {
-                    errors.push(format!("{path}: {text:?} does not match {pattern:?}"));
-                }
-            }
+        if let Some(pattern) = schema.get("pattern").and_then(Value::as_str)
+            && let Some(compiled) = self.patterns.get(pattern)
+            && !compiled.is_match(text)
+        {
+            errors.push(format!("{path}: {text:?} does not match {pattern:?}"));
         }
         if let Some(format) = schema.get("format").and_then(Value::as_str) {
             // In draft-07 `format` is an annotation, not an assertion:
@@ -262,15 +261,15 @@ impl Validator {
         let Some(number) = document.as_f64() else {
             return;
         };
-        if let Some(minimum) = schema.get("minimum").and_then(Value::as_f64) {
-            if number < minimum {
-                errors.push(format!("{path}: {number} is below the minimum {minimum}"));
-            }
+        if let Some(minimum) = schema.get("minimum").and_then(Value::as_f64)
+            && number < minimum
+        {
+            errors.push(format!("{path}: {number} is below the minimum {minimum}"));
         }
-        if let Some(maximum) = schema.get("maximum").and_then(Value::as_f64) {
-            if number > maximum {
-                errors.push(format!("{path}: {number} is above the maximum {maximum}"));
-            }
+        if let Some(maximum) = schema.get("maximum").and_then(Value::as_f64)
+            && number > maximum
+        {
+            errors.push(format!("{path}: {number} is above the maximum {maximum}"));
         }
     }
 
@@ -322,21 +321,21 @@ impl Validator {
             }
             _ => {}
         }
-        if let Some(minimum) = schema.get("minItems").and_then(Value::as_u64) {
-            if (items.len() as u64) < minimum {
-                errors.push(format!(
-                    "{path}: {} item(s) is fewer than the {minimum} the schema requires",
-                    items.len()
-                ));
-            }
+        if let Some(minimum) = schema.get("minItems").and_then(Value::as_u64)
+            && (items.len() as u64) < minimum
+        {
+            errors.push(format!(
+                "{path}: {} item(s) is fewer than the {minimum} the schema requires",
+                items.len()
+            ));
         }
-        if let Some(maximum) = schema.get("maxItems").and_then(Value::as_u64) {
-            if (items.len() as u64) > maximum {
-                errors.push(format!(
-                    "{path}: {} item(s) is more than the {maximum} the schema allows",
-                    items.len()
-                ));
-            }
+        if let Some(maximum) = schema.get("maxItems").and_then(Value::as_u64)
+            && (items.len() as u64) > maximum
+        {
+            errors.push(format!(
+                "{path}: {} item(s) is more than the {maximum} the schema allows",
+                items.len()
+            ));
         }
         if schema.get("uniqueItems") == Some(&Value::Bool(true)) {
             for (index, item) in items.iter().enumerate() {
