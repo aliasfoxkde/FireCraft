@@ -130,7 +130,8 @@ pub fn encode_rgba8_interlaced(
         });
     }
     let stream = crate::adam7::scanlines(width, height, rgba8);
-    let mut compressor = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::default());
+    let mut compressor =
+        flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::default());
     compressor
         .write_all(&stream)
         .map_err(|err| FwPngError::PngEncode {
