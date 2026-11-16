@@ -2483,18 +2483,40 @@ impl Editor {
                 false
             }
             Tool::Crop => {
-                // CS6's Crop tool: the page's canvas window moves to
-                // the dragged rectangle, so what falls outside it is
+                // CS6's Crop tool: with vector paths selected the
+                // blade cuts them to the dragged rectangle
+                // (`path.cropSelection` — every selected path is
+                // intersected with it, and one entirely outside is
+                // dropped). With no path under it, the tool keeps
+                // CS6's document crop: the page's canvas window moves
+                // to the rectangle, so what falls outside it is
                 // cropped away.
-                self.apply(
-                    "document.setDocumentCanvasRect",
-                    serde_json::json!({
-                        "page": self.page,
-                        "x": x.min(drag.current.x), "y": y.min(drag.current.y),
-                        "width": width.abs().max(1.0),
-                        "height": height.abs().max(1.0),
-                    }),
-                )?;
+                let ids = self.live_selection();
+                let paths_only = !ids.is_empty()
+                    && ids.iter().all(|id| {
+                        matches!(self.document().registry.get(*id), Some(ObjectData::Path(_)))
+                    });
+                if paths_only {
+                    // The crop reads `Document::object_selection`,
+                    // so the view's selection lands there first.
+                    self.sync_selection()?;
+                    let (x0, y0) = (x.min(drag.current.x), y.min(drag.current.y));
+                    let (x1, y1) = (x.max(drag.current.x), y.max(drag.current.y));
+                    self.apply(
+                        "path.cropSelection",
+                        serde_json::json!({ "rect": [x0, y0, x1, y1] }),
+                    )?;
+                } else {
+                    self.apply(
+                        "document.setDocumentCanvasRect",
+                        serde_json::json!({
+                            "page": self.page,
+                            "x": x.min(drag.current.x), "y": y.min(drag.current.y),
+                            "width": width.abs().max(1.0),
+                            "height": height.abs().max(1.0),
+                        }),
+                    )?;
+                }
                 false
             }
             Tool::Scale => {
@@ -2520,9 +2542,17 @@ impl Editor {
                 )?;
                 false
             }
-            Tool::Freeform | Tool::ReshapeArea => {
-                // CS6's Freeform and Reshape Area: the drag pushes or
-                // pulls the selected path's points.
+            Tool::Freeform => {
+                // CS6's Freeform: the drag pushes the selected
+                // path's points inside a ring at the grab — full
+                // displacement at the center, linear falloff to the
+                // drag's own length (`path.warp`).
+                self.warp_selection(x, y, width, height)?;
+                false
+            }
+            Tool::ReshapeArea => {
+                // CS6's Reshape Area: the drag pushes or pulls the
+                // selected path's points.
                 self.reshape_selection(width, height)?;
                 false
             }
@@ -2631,6 +2661,38 @@ impl Editor {
         self.live_selection()
             .into_iter()
             .find(|id| matches!(document.registry.get(*id), Some(ObjectData::Path(_))))
+    }
+
+    /// CS6's Freeform tool: the drag pushes the selected path's
+    /// points inside a ring centered on the grab — full displacement
+    /// at the center, linear falloff to `radius` (the drag's own
+    /// length, so the gesture's reach is the distance it travelled).
+    ///
+    /// # Errors
+    /// The engine refuses the command; the document is untouched.
+    fn warp_selection(&mut self, x: f64, y: f64, dx: f64, dy: f64) -> Result<(), EngineError> {
+        let Some(id) = self.selected_path() else {
+            return Err(EngineError::InvalidState {
+                name: "path.warp".to_owned(),
+                detail: "no path is selected".to_owned(),
+            });
+        };
+        let radius = dx.hypot(dy);
+        if !radius.is_finite() || radius <= 0.0 {
+            return Err(EngineError::BadPayload {
+                name: "path.warp".to_owned(),
+                detail: "the push ring needs a non-zero drag".to_owned(),
+            });
+        }
+        self.apply(
+            "path.warp",
+            serde_json::json!({
+                "id": id,
+                "x": x, "y": y,
+                "radius": radius,
+                "dx": dx, "dy": dy,
+            }),
+        )
     }
 
     /// CS6's Freeform and Reshape Area: the drag pushes or pulls the
@@ -4346,6 +4408,92 @@ mod tests {
             before,
             all_anchors(&editor, id),
             "the vertical-only skew committed"
+        );
+    }
+
+    /// The Freeform tool pushes through `path.warp`: the grab's own
+    /// anchor takes the full drag while anchors beyond the ring do
+    /// not move — the local deformation the rigid `path.reshapeArea`
+    /// translate never produced.
+    #[test]
+    fn the_freeform_tool_pushes_through_path_warp() {
+        let mut editor = Editor::untitled();
+        let id = rect_at(&mut editor, 10.0, 10.0);
+        editor.set_selection(vec![id]);
+        let before = all_anchors(&editor, id);
+
+        editor.tool = Tool::Freeform;
+        editor.begin_drag(geom::Point::new(10.0, 10.0));
+        editor.drag_to(geom::Point::new(30.0, 10.0));
+        editor.end_drag().unwrap();
+
+        let after = all_anchors(&editor, id);
+        let moved: Vec<_> = before
+            .iter()
+            .zip(&after)
+            .filter(|(was, now)| was != now)
+            .collect();
+        assert_eq!(moved.len(), 1, "only the ring's interior moved");
+        assert_eq!(
+            after[0],
+            geom::Point::new(30.0, 10.0),
+            "the grabbed anchor took the whole drag"
+        );
+        assert_eq!(
+            editor.session.undo().expect("an undo step"),
+            "path.warp",
+            "the gesture dispatched the warp"
+        );
+    }
+
+    /// The Crop tool with paths selected cuts them to the blade
+    /// (`path.cropSelection`), not the canvas.
+    #[test]
+    fn the_crop_tool_cuts_the_selected_paths() {
+        let mut editor = Editor::untitled();
+        let id = rect_at(&mut editor, 10.0, 10.0);
+        editor.set_selection(vec![id]);
+
+        editor.tool = Tool::Crop;
+        editor.begin_drag(geom::Point::new(0.0, 0.0));
+        editor.drag_to(geom::Point::new(20.0, 20.0));
+        editor.end_drag().unwrap();
+
+        for anchor in all_anchors(&editor, id) {
+            assert!(
+                (10.0..=20.0).contains(&anchor.x) && (10.0..=20.0).contains(&anchor.y),
+                "every anchor lies inside the blade, got {anchor:?}"
+            );
+        }
+        assert_eq!(
+            editor.session.undo().expect("an undo step"),
+            "path.cropSelection",
+            "the gesture dispatched the crop"
+        );
+    }
+
+    /// With no path selected the Crop tool keeps CS6's document
+    /// crop: the canvas window moves to the blade.
+    #[test]
+    fn the_crop_tool_moves_the_canvas_without_a_path_selection() {
+        let mut editor = Editor::untitled();
+
+        editor.tool = Tool::Crop;
+        editor.begin_drag(geom::Point::new(5.0, 7.0));
+        editor.drag_to(geom::Point::new(25.0, 47.0));
+        editor.end_drag().unwrap();
+
+        let canvas = &editor.document().pages[0].info.canvas;
+        assert_eq!((canvas.x, canvas.y), (5.0, 7.0), "the window moved");
+        assert_eq!(
+            (canvas.width, canvas.height),
+            (20.0, 40.0),
+            "the window took the blade"
+        );
+        assert_eq!(
+            editor.session.undo().expect("an undo step"),
+            "document.setDocumentCanvasRect",
+            "the gesture kept the document crop"
         );
     }
 
