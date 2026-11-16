@@ -186,7 +186,7 @@ jobs:
     needs: [fuzz]
     skip_if: '[[ "$CI_CHANGE_INCLUDE_CODE" == "1" || "$CI_CHANGE_INCLUDE_CRATES" == "1" || "$CI_CHANGE_INCLUDE_GENERATED" == "1" || "$CI_CHANGE_IS_TAG" == "1" ]]'
     steps:
-      - name: Parity floors + scorecard + stamps + reachability + panel snapshot, then drift check
+      - name: Parity floors + scorecard + stamps + reachability + panel snapshot + icon survey, then drift check
         # The committed generated docs must byte-equal what the gates
         # produce: copies are taken before regenerating, and cmp fails
         # the job on any hand-edit (git is not assumed in the checkout).
@@ -211,17 +211,26 @@ jobs:
         # and both are rising-only or byte-exact: the pipeline is the
         # authoritative measurement oracle for the shell's coverage of
         # the command registry and for the CS6 panel inventory.
+        #
+        # `icon-survey` is the same kind of check for the shipped icon
+        # set: the survey names every icon's upstream, licence, and
+        # attribution row, and it carries the measured cost of the pack
+        # in the web bundle. Its generator FAILS when an icon has no
+        # attribution row, so the drift check is also the licence check.
         run: |
           set -e
           cp docs/planning/generated/parity.md /tmp/parity.committed
           cp docs/planning/generated/scorecard.md /tmp/scorecard.committed
+          cp docs/planning/generated/icon-resources-survey.md /tmp/icon-survey.committed
           CARGO_TARGET_DIR=/tmp/ci-target cargo run --locked -p xtask -- parity
           CARGO_TARGET_DIR=/tmp/ci-target cargo run --locked -p xtask -- scorecard
           CARGO_TARGET_DIR=/tmp/ci-target cargo run --locked -p xtask -- stamps
           CARGO_TARGET_DIR=/tmp/ci-target cargo run --locked -p xtask -- reachability
           CARGO_TARGET_DIR=/tmp/ci-target cargo run --locked -p xtask -- panel-snapshot
+          CARGO_TARGET_DIR=/tmp/ci-target cargo run --locked -p xtask -- icon-survey
           cmp /tmp/parity.committed docs/planning/generated/parity.md
           cmp /tmp/scorecard.committed docs/planning/generated/scorecard.md
+          cmp /tmp/icon-survey.committed docs/planning/generated/icon-resources-survey.md
     # 45m: measured 16.1 min on 2026-11-11 with 9 runs in flight.
     timeout: 45m
 

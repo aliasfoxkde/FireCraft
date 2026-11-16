@@ -1,0 +1,15 @@
+# The icon pack's measured cost in the web bundle.
+#
+# Two arms, built from the same tree on 2026-11-15 with the CI image
+# (firecraft-ci-rust:2, `trunk build --release`, CARGO_PROFILE_RELEASE_OPT_LEVEL=z):
+#
+#   with the icon pack    — main as shipped
+#   without the icon table— the same tree with `static ICONS` emptied
+#
+# The difference is what the 73 embedded icons cost the bundle.
+# Regenerating the survey: `cargo run -p xtask -- icon-survey`.
+# Thresholds: 25,000,000 B investigation, 50,000,000 B hard ceiling.
+#
+# arm	source	bytes
+with the icon pack	main@55a0e541	15592313
+without the icon table	main@55a0e541, ICONS emptied	15560629
