@@ -88,7 +88,16 @@ const CLASS_NOTES: &[(&str, &str)] = &[
     (
         "credit-card-number-generic",
         "The same glyph-position golden value, seen by the generic \
-         card-number rule.",
+         card-number rule, and the synthetic cargo fingerprint directory \
+         name the CI cache-refresh self-test creates: a placeholder whose \
+         sixteen digits are all the same, not a card number.",
+    ),
+    (
+        "credit-card-visa",
+        "The synthetic cargo fingerprint directory name the CI \
+         cache-refresh self-test creates: a placeholder whose sixteen \
+         digits are all the same. It is a file name in a shell test, not a \
+         card number.",
     ),
     (
         "email-address",
@@ -129,7 +138,10 @@ const CLASS_NOTES: &[(&str, &str)] = &[
          word share one line: the automation wiki's sentence about the \
          CLI's bulk work and the bounds it reports. FireCraft serves no \
          GraphQL endpoint and ships no GraphQL schema, so the missing \
-         depth guard this rule reports does not exist here.",
+         depth guard this rule reports does not exist here. It also fires \
+         on the CI cache-refresh script's directory walk, whose recursion \
+         bound matches the rule's second alternative; the script walks a \
+         build cache, not a query.",
     ),
     (
         "international-phone",
@@ -214,6 +226,8 @@ const CLASS_NOTES: &[(&str, &str)] = &[
          verbatim from a gate run (measured/total line and function \
          counts, not postal data). The v1 MVP roadmap's RPC-emulation row names the legacy \
          Fireworks RPC TCP port — a protocol number, not postal data. \
+         The seconds-per-day constant in the CI cache-refresh self-test's \
+         timestamp arithmetic is a duration, not postal data. \
          This repository holds no postal data.",
     ),
 ];
