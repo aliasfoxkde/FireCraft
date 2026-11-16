@@ -13,9 +13,10 @@
 //! regression against the default. The resolved table is what the
 //! shell dispatches from and what the published table prints.
 
+use crate::editor::Tool;
 use crate::menus::{
     Action, Arrange, CTRL, CTRL_ALT, CTRL_SHIFT, Mods, NONE, SHIFT, SelAction, ShellAction,
-    Shortcut, Tool,
+    Shortcut,
 };
 
 /// The keymap sets FireCraft ships.

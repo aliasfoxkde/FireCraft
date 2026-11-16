@@ -147,8 +147,13 @@ impl Shell {
                             )
                             .wrap(),
                         );
-                        ui.add(egui::Label::new(format!("Keymap set: {}", set.label())).italics())
-                            .wrap();
+                        ui.add(
+                            egui::Label::new(
+                                egui::RichText::new(format!("Keymap set: {}", set.label()))
+                                    .italics(),
+                            )
+                            .wrap(),
+                        );
                         ui.separator();
                         // Every binding carries the section it is filed
                         // under; a new heading starts wherever that
