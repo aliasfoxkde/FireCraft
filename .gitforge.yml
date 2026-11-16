@@ -83,11 +83,34 @@ jobs:
         run: bash scripts/detect-changes.sh
     timeout: 5m
 
+  - name: release-ledger
+    image: firecraft-ci-rust:2
+    needs: [detect-changes]
+    steps:
+      - name: The release board and its tickets agree
+        # `docs/release/EXECUTION-BOARD.md` §6 is the plan of record for
+        # the 61 release tasks: which are done, on what evidence, and
+        # what still blocks them. Each row has one ticket under
+        # `docs/tasks/`, and the two must state the same status,
+        # evidence and blockers. A board that claims progress its
+        # tickets do not record is a plan that reports work nobody did.
+        #
+        # The gate is bash+awk on purpose: this image ships no python3
+        # (ca-certificates, git, chromium, rust), so a python gate would
+        # only ever run on a maintainer's laptop — which is not a gate.
+        # Its self-test runs here too, so the gate's own failure modes
+        # are exercised on every push rather than trusted.
+        run: |
+          set -e
+          bash scripts/verify_release_ledger.sh .
+          bash scripts/verify_release_ledger-selftest.sh
+    timeout: 5m
+
   - name: fmt-layers
     image: firecraft-ci-rust:2
     cache:
       source: "{cache_root}/cargo/{image}-fmt-layers"
-    needs: [detect-changes]
+    needs: [release-ledger]
     steps:
       - name: Rust formatting check
         run: cargo fmt --all -- --check

@@ -91,6 +91,15 @@ jobs:
           bash tests/release-assets-selftest.sh
           bash scripts/classify_release_mode-selftest.sh
           bash scripts/validate_release_aggregate-selftest.sh
+      # The release execution board is the plan of record: it says which
+      # of the 61 release tasks are done, with what evidence, and what
+      # still blocks them. It and the tickets it names must say the same
+      # thing — a board that claims progress its tickets do not record
+      # is a plan that reports work nobody did.
+      - name: The release board and its tickets agree
+        run: |
+          bash scripts/verify_release_ledger.sh .
+          bash scripts/verify_release_ledger-selftest.sh
   docs:
     name: docs-only-check
     runs-on: ubuntu-latest

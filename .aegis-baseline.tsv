@@ -21,22 +21,27 @@
 # Matches the 9-digit observed value range in the PNG node dictionary
 # (0..141663582), the run of SVG path control coordinates in the brand
 # mark's bezier paths and in the brand study illustration's control
-# points, and the GitHub release and asset identifiers quoted in the
-# release receipts; this repository holds no tax identifiers.
-australian-tfn	./docs/release/EXECUTION-BOARD.md	35b904df2c6f31c493260dde331b4104ae508d471dc06ce7595bf3ad5a681134	1
-australian-tfn	./docs/release/EXECUTION-BOARD.md	a3a2cc550be9d1627cd6ebe8554832486df9ae30304ab8ca9b141b1f88bb4e99	1
+# points, and the GitHub release, asset, run and check identifiers
+# quoted in the release receipts; this repository holds no tax
+# identifiers.
+australian-tfn	./docs/release/EXECUTION-BOARD.md	35b904df2c6f31c493260dde331b4104ae508d471dc06ce7595bf3ad5a681134	3
+australian-tfn	./docs/release/EXECUTION-BOARD.md	a3a2cc550be9d1627cd6ebe8554832486df9ae30304ab8ca9b141b1f88bb4e99	2
 australian-tfn	./docs/release/RECEIPT-0.2.5-DRYRUN-3.md	35b904df2c6f31c493260dde331b4104ae508d471dc06ce7595bf3ad5a681134	1
 australian-tfn	./docs/release/RECEIPT-0.2.5-DRYRUN-3.md	a3a2cc550be9d1627cd6ebe8554832486df9ae30304ab8ca9b141b1f88bb4e99	1
 australian-tfn	./docs/research/fireworks-png-nodes.md	1004a585bc60d363038c5889d022bd6f58278338fe66f97483316133e316f41a	1
+australian-tfn	./docs/tasks/T27-19-draft-release-test-tag.md	35b904df2c6f31c493260dde331b4104ae508d471dc06ce7595bf3ad5a681134	1
+australian-tfn	./docs/tasks/T27-52-source-archive.md	a3a2cc550be9d1627cd6ebe8554832486df9ae30304ab8ca9b141b1f88bb4e99	1
 australian-tfn	./xtask/src/aegis.rs	1004a585bc60d363038c5889d022bd6f58278338fe66f97483316133e316f41a	1
 # Matches the same 9-digit observed value range in the PNG node
-# dictionary and the GitHub release and asset identifiers quoted in the
-# release receipts; this repository holds no banking data.
-bank-routing-number	./docs/release/EXECUTION-BOARD.md	35b904df2c6f31c493260dde331b4104ae508d471dc06ce7595bf3ad5a681134	1
-bank-routing-number	./docs/release/EXECUTION-BOARD.md	a3a2cc550be9d1627cd6ebe8554832486df9ae30304ab8ca9b141b1f88bb4e99	1
+# dictionary and the GitHub release, asset, run and check identifiers
+# quoted in the release receipts; this repository holds no banking data.
+bank-routing-number	./docs/release/EXECUTION-BOARD.md	35b904df2c6f31c493260dde331b4104ae508d471dc06ce7595bf3ad5a681134	3
+bank-routing-number	./docs/release/EXECUTION-BOARD.md	a3a2cc550be9d1627cd6ebe8554832486df9ae30304ab8ca9b141b1f88bb4e99	2
 bank-routing-number	./docs/release/RECEIPT-0.2.5-DRYRUN-3.md	35b904df2c6f31c493260dde331b4104ae508d471dc06ce7595bf3ad5a681134	1
 bank-routing-number	./docs/release/RECEIPT-0.2.5-DRYRUN-3.md	a3a2cc550be9d1627cd6ebe8554832486df9ae30304ab8ca9b141b1f88bb4e99	1
 bank-routing-number	./docs/research/fireworks-png-nodes.md	1004a585bc60d363038c5889d022bd6f58278338fe66f97483316133e316f41a	1
+bank-routing-number	./docs/tasks/T27-19-draft-release-test-tag.md	35b904df2c6f31c493260dde331b4104ae508d471dc06ce7595bf3ad5a681134	1
+bank-routing-number	./docs/tasks/T27-52-source-archive.md	a3a2cc550be9d1627cd6ebe8554832486df9ae30304ab8ca9b141b1f88bb4e99	1
 bank-routing-number	./xtask/src/aegis.rs	1004a585bc60d363038c5889d022bd6f58278338fe66f97483316133e316f41a	1
 # The GitForge API row names the credential file that holds the bearer
 # token; the row contains no token.
@@ -54,7 +59,10 @@ credit-card-number-generic	./xtask/src/aegis.rs	ae9b46ed1c3eff9a64786a2171b0f694
 # configures for its temporary repositories. The address uses the
 # .invalid top-level domain reserved by RFC 2606 for exactly this
 # purpose, so it can never resolve to a real mailbox; the repository
-# holds no personal addresses.
+# holds no personal addresses. It also matches the export-scale filename
+# the climb plan's export-parity document uses as its example: a file
+# name that carries a scale marker before its extension, not a mailbox.
+email-address	./docs/climb/P4-export-parity.md	70de8b1cfdc1e34390ce5cb5567686e31d0a9c728604c4435dc42878291dfa8d	1
 email-address	./tests/detect-changes-selftest.sh	852e7b941ea2052143c1b0a0f7b007a06c49c056312aac64e2649dc35d13f994	1
 # The scripting crate's own boa context.eval() call — that crate
 # implements the CS6 scripting DOM's eval() — plus Rust curve-segment
@@ -85,8 +93,7 @@ gdpr-personal-data	./xtask/src/aegis.rs	d85533ba786e27667c68f55c37f3d5a70d6cd7a1
 # adjudication tickets and the release execution board; the abbreviation
 # is a rule identifier, not a reference to anyone's data.
 gdpr-reference	./docs/decisions/0074-aegis-content-keyed-baseline.md	8b16477e3abe1de345a6e82f360db77b5e238983ad685cec9fef0d0bc009aed3	3
-gdpr-reference	./docs/release/EXECUTION-BOARD.md	8b16477e3abe1de345a6e82f360db77b5e238983ad685cec9fef0d0bc009aed3	2
-gdpr-reference	./docs/tasks/T27-11-reproduce-aegis-gate-failure.md	8b16477e3abe1de345a6e82f360db77b5e238983ad685cec9fef0d0bc009aed3	1
+gdpr-reference	./docs/release/EXECUTION-BOARD.md	8b16477e3abe1de345a6e82f360db77b5e238983ad685cec9fef0d0bc009aed3	3
 gdpr-reference	./docs/tasks/T27-12-adjudicate-aegis-findings.md	8b16477e3abe1de345a6e82f360db77b5e238983ad685cec9fef0d0bc009aed3	7
 gdpr-reference	./xtask/src/aegis.rs	8b16477e3abe1de345a6e82f360db77b5e238983ad685cec9fef0d0bc009aed3	2
 # Fires on English prose where a bulk-operation word and a bound word
@@ -108,10 +115,11 @@ path-traversal	./docs/planning/generated/scorecard.md	d24059df4850652d14de7bcd5b
 path-traversal	./xtask/src/status.rs	d24059df4850652d14de7bcd5b2d806833567be8055cdc8f60cdc0005bd96de4	1
 # Matches the word "pan" in pan-zoom, hand-pan and two-finger pan
 # identifiers, in the Hand tool's "Pan the artboard" menu label,
-# including the Android feasibility note's touch gesture, in the session
-# log's prose about that adjudication, and in decision 0074's table of
-# adjudicated classes and the rule identifiers quoted by the Aegis
-# adjudication tickets; the five credit-card-* rules stay armed.
+# including the Android feasibility note's touch gesture and the climb
+# plan's modern-features gesture list, in the session log's prose about
+# that adjudication, and in decision 0074's table of adjudicated classes
+# and the rule identifiers quoted by the Aegis adjudication tickets; the
+# five credit-card-* rules stay armed.
 pci-cardholder-data	./crates/app/src/canvas.rs	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	15
 pci-cardholder-data	./crates/app/src/canvas.rs	fd92d952db92eff57586865ef7b6ae62897642d1abedbe203d56e2d4ced964ed	1
 pci-cardholder-data	./crates/app/src/editor.rs	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	1
@@ -121,6 +129,7 @@ pci-cardholder-data	./crates/app/src/shell/mod.rs	00e37ffae0562ab6818d8f4f97457a
 pci-cardholder-data	./docs/NEXT.md	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	1
 pci-cardholder-data	./docs/SESSIONS.md	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	5
 pci-cardholder-data	./docs/SESSIONS.md	e6205bc8ab80302276cc2b94e571d9aeafa567c0517146ac4396a4f6a8cead1a	1
+pci-cardholder-data	./docs/climb/P7-modern-features.md	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	2
 pci-cardholder-data	./docs/decisions/0074-aegis-content-keyed-baseline.md	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	1
 pci-cardholder-data	./docs/decisions/0083-aegis-rebless-parity-matrix.md	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	1
 pci-cardholder-data	./docs/decisions/0084-aegis-rebless-slice-hotspot.md	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	3
@@ -131,12 +140,11 @@ pci-cardholder-data	./docs/planning/firecraft/M5-editor-shell.md	00e37ffae0562ab
 pci-cardholder-data	./docs/planning/firecraft/ROADMAP.md	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	2
 pci-cardholder-data	./docs/planning/generated/parity.md	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	3
 pci-cardholder-data	./docs/planning/generated/scorecard.md	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	2
-pci-cardholder-data	./docs/release/EXECUTION-BOARD.md	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	1
 pci-cardholder-data	./docs/research/android-feasibility.md	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	1
 pci-cardholder-data	./docs/research/fw-code-notes.md	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	1
 pci-cardholder-data	./docs/research/fw-ui-evidence.md	fd92d952db92eff57586865ef7b6ae62897642d1abedbe203d56e2d4ced964ed	1
 pci-cardholder-data	./docs/tasks/T22-screenshot-ui.md	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	1
-pci-cardholder-data	./docs/tasks/T27-12-adjudicate-aegis-findings.md	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	3
+pci-cardholder-data	./docs/tasks/T27-12-adjudicate-aegis-findings.md	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	2
 pci-cardholder-data	./docs/tasks/T27-12-adjudicate-aegis-findings.md	7c84e9e401dade7b4eb1539d1c1d3072ece79aa89418712b802340f871614197	2
 pci-cardholder-data	./xtask/src/aegis.rs	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	1
 pci-cardholder-data	./xtask/src/aegis.rs	fd92d952db92eff57586865ef7b6ae62897642d1abedbe203d56e2d4ced964ed	1
@@ -183,13 +191,16 @@ sql-query	./docs/research/fw-ui-evidence.md	d7a39f416c7b9033673d6c465a646be64ce5
 sql-query	./docs/research/fw-ui-evidence.md	fbfaf459bf28ef75433705459453e22c20a8057f2a19f57a93e1660db5c3e0e7	1
 sql-query	./docs/tasks/T22-screenshot-ui.md	6ba454ee08d4ce45364f6e849176079be5c628c2e176eb31ae1671451b5c401a	1
 # Matches the same 9-digit observed value range in the PNG node
-# dictionary and the GitHub release and asset identifiers quoted in the
-# release receipts; this repository holds no social-security numbers.
-ssn-no-dashes	./docs/release/EXECUTION-BOARD.md	35b904df2c6f31c493260dde331b4104ae508d471dc06ce7595bf3ad5a681134	1
-ssn-no-dashes	./docs/release/EXECUTION-BOARD.md	a3a2cc550be9d1627cd6ebe8554832486df9ae30304ab8ca9b141b1f88bb4e99	1
+# dictionary and the GitHub release, asset, run and check identifiers
+# quoted in the release receipts; this repository holds no
+# social-security numbers.
+ssn-no-dashes	./docs/release/EXECUTION-BOARD.md	35b904df2c6f31c493260dde331b4104ae508d471dc06ce7595bf3ad5a681134	3
+ssn-no-dashes	./docs/release/EXECUTION-BOARD.md	a3a2cc550be9d1627cd6ebe8554832486df9ae30304ab8ca9b141b1f88bb4e99	2
 ssn-no-dashes	./docs/release/RECEIPT-0.2.5-DRYRUN-3.md	35b904df2c6f31c493260dde331b4104ae508d471dc06ce7595bf3ad5a681134	1
 ssn-no-dashes	./docs/release/RECEIPT-0.2.5-DRYRUN-3.md	a3a2cc550be9d1627cd6ebe8554832486df9ae30304ab8ca9b141b1f88bb4e99	1
 ssn-no-dashes	./docs/research/fireworks-png-nodes.md	1004a585bc60d363038c5889d022bd6f58278338fe66f97483316133e316f41a	1
+ssn-no-dashes	./docs/tasks/T27-19-draft-release-test-tag.md	35b904df2c6f31c493260dde331b4104ae508d471dc06ce7595bf3ad5a681134	1
+ssn-no-dashes	./docs/tasks/T27-52-source-archive.md	a3a2cc550be9d1627cd6ebe8554832486df9ae30304ab8ca9b141b1f88bb4e99	1
 ssn-no-dashes	./xtask/src/aegis.rs	1004a585bc60d363038c5889d022bd6f58278338fe66f97483316133e316f41a	1
 # A loopback listener in the release smoke test, a localhost maintainer
 # address, prose naming the local GitForge API, the local preview URL in
@@ -202,9 +213,8 @@ ssrf-localhost	./docs/SESSIONS.md	49960de5880e8c687434170f6476605b8fe4aeb9a28632
 ssrf-localhost	./docs/SITE-DEPLOYMENT.md	49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763	1
 ssrf-localhost	./docs/decisions/0074-aegis-content-keyed-baseline.md	49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763	1
 ssrf-localhost	./docs/decisions/0083-aegis-rebless-parity-matrix.md	49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763	1
-ssrf-localhost	./docs/release/EXECUTION-BOARD.md	49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763	2
+ssrf-localhost	./docs/release/EXECUTION-BOARD.md	49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763	3
 ssrf-localhost	./docs/tasks/T22-screenshot-ui.md	49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763	1
-ssrf-localhost	./docs/tasks/T27-11-reproduce-aegis-gate-failure.md	49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763	1
 ssrf-localhost	./docs/tasks/T27-12-adjudicate-aegis-findings.md	12ca17b49af2289436f303e0166030a21e525d266e209267433801a8fd4071a0	1
 ssrf-localhost	./docs/tasks/T27-12-adjudicate-aegis-findings.md	49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763	6
 ssrf-localhost	./packaging/deb/control	49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763	1
