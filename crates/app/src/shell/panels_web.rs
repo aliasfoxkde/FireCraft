@@ -114,17 +114,51 @@ pub(super) struct WebSnapshot {
 impl Shell {
     /// Window ▸ Auto Shapes: the CS6 shape gallery. CS6 drags a shape
     /// from the panel onto the canvas; a click here inserts the same
-    /// shape at the canvas center.
+    /// shape at the canvas center. The explicit Insert/Redraw mode
+    /// decides what a click does — Redraw re-runs the chosen
+    /// generator into the selected path instead of minting a new one
+    /// (decision 0028's parametric redraw, the surface decision 0117
+    /// said the verb lacked).
     pub(super) fn auto_shapes_panel(&mut self, ui: &mut egui::Ui) {
-        ui.label("Click a shape to insert it at the canvas center.");
+        ui.horizontal(|ui| {
+            let insert = ui.selectable_label(!self.autoshape_redraw, "Insert");
+            let redraw = ui.selectable_label(self.autoshape_redraw, "Redraw");
+            if insert.clicked() {
+                self.autoshape_redraw = false;
+            }
+            if redraw.clicked() {
+                self.autoshape_redraw = true;
+            }
+        });
+        if self.autoshape_redraw {
+            ui.label(
+                "Redraw mode: click a shape to regenerate the selected path \
+                 from the panel's box and corner.",
+            );
+        } else {
+            ui.label("Click a shape to insert it at the canvas center.");
+        }
         ui.separator();
         let roster = shape_roster();
         egui::Grid::new("auto_shapes")
             .num_columns(2)
             .show(ui, |ui| {
                 for (label, kind) in roster {
-                    if ui.button(label).clicked() {
-                        self.insert_shape(kind, label);
+                    // Redraw re-runs an `autoshape.*` generator; the
+                    // two primitives have no library entry to
+                    // re-run, so their rows stand down in redraw
+                    // mode rather than pretend.
+                    let redrawable = matches!(kind, ShapeKind::Auto(_));
+                    let enabled = redrawable || !self.autoshape_redraw;
+                    let clicked = ui.add_enabled(enabled, egui::Button::new(label)).clicked();
+                    if clicked {
+                        if self.autoshape_redraw {
+                            if let ShapeKind::Auto(shape) = kind {
+                                self.redraw_shape(shape, label);
+                            }
+                        } else {
+                            self.insert_shape(kind, label);
+                        }
                     }
                     ui.end_row();
                 }
@@ -167,6 +201,46 @@ impl Shell {
         };
         if inserted {
             self.status = format!("{label} inserted.");
+        }
+    }
+
+    /// `autoshape.redraw` — the panel's Redraw mode: re-run the
+    /// chosen library generator into the selected path (decision
+    /// 0028's parametric redraw). The payload is the insert payload
+    /// minus placement — page/layer/cell/name are dead weight on an
+    /// object that already sits in its cell — plus the target id and
+    /// the `kind` string the command id carries (`autoshape.star` →
+    /// `star`). Any selected path is a valid target, like the engine
+    /// says; with none selected the row reports so and dispatches
+    /// nothing (never a silent no-op).
+    pub(super) fn redraw_shape(&mut self, shape: AutoShape, label: &str) {
+        let Some(target) = self.editor.live_selection().into_iter().find(|id| {
+            matches!(
+                self.editor.document().registry.get(*id),
+                Some(doc::ObjectData::Path(_))
+            )
+        }) else {
+            self.status = "Redraw needs a selected path".to_owned();
+            return;
+        };
+        let (x, y, size) = self.insert_box();
+        let mut params = shape.payload_in_rect(0, 0, 0, x, y, size, self.editor.rect_corner);
+        if let Some(object) = params.as_object_mut() {
+            for key in ["page", "layer", "cell", "name"] {
+                object.remove(key);
+            }
+        }
+        let command = shape.command();
+        let kind = command.strip_prefix("autoshape.").unwrap_or(command);
+        if self.run_command(
+            "autoshape.redraw",
+            serde_json::json!({
+                "id": target,
+                "kind": kind,
+                "params": params,
+            }),
+        ) {
+            self.status = format!("{label} redrawn.");
         }
     }
 

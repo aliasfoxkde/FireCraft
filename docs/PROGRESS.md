@@ -51,7 +51,7 @@
   Modify ▸ Mask enable/disable is CS6's single toggle row: the
   engine reads the mask's state, the shell sends the opposite, and the
   row's label flips between "Enable Mask" and "Disable Mask".
-- **Menu reachability:** 2 of 296 rows currently use `Action::Inert`; eight additional rows have explicit feature/evidence gates. The
+- **Menu reachability:** 2 of 298 rows currently use `Action::Inert`; eight additional rows have explicit feature/evidence gates. The
 
   19.6 campaign (batches 1–17) is complete, and the Window menu's
   panel rows (including Optimize, CSS Properties, Find and Replace,
@@ -81,7 +81,8 @@
   bridge's `firecraft.listCommands` advertises it. The registry
   catalog and the reachability measurement are unchanged by that
   change — the id is not a registry id (the measurement it stood
-  beside then, 168/253, has since risen to 249/257 with #143).
+  beside then, 168/253, has since risen to 257/257 (100%) — #143,
+  then the wave-2 bindings that closed the last eight).
 
 ## Build and deployment evidence
 
@@ -120,7 +121,9 @@
   at introduction as **253 registry commands, 168 bound = 66.40%**,
   re-pinned to **172/257 (66.93%)** by #113's lane, then deliberately
   re-blessed to **249/257 (96.89%)** in the wave-closeout PR
-  (2026-11-14; 8 unreachable). The panel
+  (2026-11-14; 8 unreachable), then to **257/257 (100%)** when the
+  wave-2 bindings closed those eight (0 unreachable, floor re-blessed
+  2026-11-14). The panel
   snapshot (`crates/app/panels.snapshot`, 19 panels) pins the panel
   set's structure; `egui_kittest` is obtainable (0.36.2 matches the
   locked egui) but its pixel path needs a wgpu adapter the CI image
