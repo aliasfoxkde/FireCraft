@@ -22,7 +22,7 @@ requiring maintainer approval, and the 11-point artifact ladder.
 
 **Verification:** `test -f docs/release/EXECUTION-BOARD.md`
 
-**Evidence:** `docs/release/EXECUTION-BOARD.md` (this change) **Done:** 2026-11-08.
+**Evidence:** [`docs/release/EXECUTION-BOARD.md`](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/release/EXECUTION-BOARD.md) (this change) **Done:** 2026-11-08.
 
 **Blockers:** —
 

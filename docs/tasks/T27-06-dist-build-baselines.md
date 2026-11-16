@@ -20,7 +20,7 @@ recorded size and SHA-256; failures are recorded with their cause.
 
 **Verification:** `cargo run -p xtask -- dist --native && cargo run -p xtask -- dist --web && cargo run -p xtask -- dist --source && cargo run -p xtask -- dist --sbom`
 
-**Evidence:** All four `dist` lanes ran from the release tag. The rehearsal's `build artifacts` job (run 42937560976, head SHA `384687f`) produced the native set, the web bundle, the source archive and the SBOM and wrote the release-wide checksum list. The eight published assets carry their sizes and SHA-256 digests: the native tarball, the CLI tarball, the DEB, the web ZIP (7,394,859 B), the source archive, the SBOM, `MANIFEST.sha256` (425 B) and `RELEASE_SHA256.txt` (seven entries covering the other seven assets). Receipt: `docs/release/RECEIPT-0.2.5-DRYRUN-3.md`. **Done:** 2026-11-12: the rehearsal produced the four lanes with their digests.
+**Evidence:** All four `dist` lanes ran from the release tag. The rehearsal's `build artifacts` job (run 42937560976, head SHA `384687f`) produced the native set, the web bundle, the source archive and the SBOM and wrote the release-wide checksum list. The eight published assets carry their sizes and SHA-256 digests: the native tarball, the CLI tarball, the DEB, the web ZIP (7,394,859 B), the source archive, the SBOM, `MANIFEST.sha256` (425 B) and `RELEASE_SHA256.txt` (seven entries covering the other seven assets). Receipt: [`docs/release/RECEIPT-0.2.5-DRYRUN-3.md`](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/release/RECEIPT-0.2.5-DRYRUN-3.md). **Done:** 2026-11-12: the rehearsal produced the four lanes with their digests.
 
 **Blockers:** —
 

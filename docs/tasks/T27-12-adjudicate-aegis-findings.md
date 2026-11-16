@@ -26,7 +26,7 @@ positive, with the reason written and the evidence that supports the classificat
 > `cargo run -p xtask -- aegis`. The adjudication below is the historical one,
 > taken on 2026-11-09 against the baseline of that day.
 
-**Evidence:** All five findings are adjudicated as verified false positives, each with a written reason in `xtask/src/aegis.rs` `CLASS_NOTES` (`gdpr-personal-data`, `pci-cardholder-data`, `ssrf-localhost`, `zip-code`, `australian-tfn`). The baseline is content-keyed (decision 0074, commit `ad598a4`) and was re-blessed for the parity-matrix and slice-hotspot content (decisions 0083, 0084). The scan is the Aegis leg of the canonical gate and is green on the candidate heads. **Done:** 2026-11-12: adjudication reasons recorded in `xtask/src/aegis.rs`.
+**Evidence:** All five findings are adjudicated as verified false positives, each with a written reason in [`xtask/src/aegis.rs`](https://github.com/aliasfoxkde/FireCraft/blob/main/xtask/src/aegis.rs) `CLASS_NOTES` (`gdpr-personal-data`, `pci-cardholder-data`, `ssrf-localhost`, `zip-code`, `australian-tfn`). The baseline is content-keyed (decision 0074, commit `ad598a4`) and was re-blessed for the parity-matrix and slice-hotspot content (decisions 0083, 0084). The scan is the Aegis leg of the canonical gate and is green on the candidate heads. **Done:** 2026-11-12: adjudication reasons recorded in `xtask/src/aegis.rs`.
 
 **Blockers:** —
 

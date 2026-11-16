@@ -18,6 +18,7 @@
 #   * a ticket's evidence disagrees with its row (EVIDENCE);
 #   * a ticket's blockers disagree with its row (BLOCKERS);
 #   * an advanced status carries no completion date (NO DATE);
+#   * an advanced status cites no evidence link (NO LINK);
 #   * a blocked row names no blocker (NO BLOCKER).
 #
 # Every problem is reported; the script exits 1 if any were found, so a
@@ -201,6 +202,14 @@ END {
     }
     if (inlist(st, advanced) && r_done[id] == DASH) {
       printf("NO DATE %s: status=%s\n", id, st) > "/dev/stderr"
+      problems++
+    }
+    # A closed row must cite its evidence as a link — a markdown link or
+    # a URL — so a reader can follow the receipt instead of trusting a
+    # prose path. The board's own acceptance criterion says "a cited
+    # evidence link".
+    if (inlist(st, advanced) && index(r_evidence[id], "](") == 0 && index(r_evidence[id], "https://") == 0) {
+      printf("NO LINK %s: status=%s\n", id, st) > "/dev/stderr"
       problems++
     }
     if (st == "BLOCKED" && r_blockers[id] == DASH) {

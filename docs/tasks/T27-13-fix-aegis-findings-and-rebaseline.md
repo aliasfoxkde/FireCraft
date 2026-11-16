@@ -27,7 +27,7 @@ previous one except for the adjudicated entries; the scan is clean.
 > `cargo run -p xtask -- aegis`. The re-pin recorded below is the historical one,
 > taken on 2026-11-09 against the baseline of that day.
 
-**Evidence:** No finding was genuine. The 520-entry line-keyed `.aegis-baseline.json` was replaced by the content-keyed `.aegis-baseline.tsv` (decision 0074) and re-blessed for new content (decisions 0083, 0084); the suppression stays narrow — a per-class reason, no disabled rule. The Aegis leg of the gate is green on `main` `e39705e` (check 131002941116) and on the candidate heads. **Done:** 2026-11-12: baseline regenerated; Aegis leg green in CI.
+**Evidence:** No finding was genuine. The 520-entry line-keyed `.aegis-baseline.json` was replaced by the content-keyed [`.aegis-baseline.tsv`](https://github.com/aliasfoxkde/FireCraft/blob/main/.aegis-baseline.tsv) ([decision 0074](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/decisions/0074-aegis-content-keyed-baseline.md)) and re-blessed for new content (decisions 0083, 0084); the suppression stays narrow — a per-class reason, no disabled rule. The Aegis leg of the gate is green on `main` `e39705e` (check 131002941116) and on the candidate heads. **Done:** 2026-11-12: baseline regenerated; Aegis leg green in CI.
 
 **Blockers:** —
 

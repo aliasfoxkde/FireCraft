@@ -20,7 +20,7 @@ artifact still fails the step closed.
 
 **Verification:** `gh release create --help`
 
-**Evidence:** `release.yml:207` used `assets+=(-a "$f")`; `gh release create` has no `-a` flag in gh 2.46 — assets are positional `[<files>...]`. **Fixed and exercised**: the rehearsal's `create draft release` job (run 42937560976) succeeded and the draft carries 8 uploaded assets, so the positional invocation works against the real CLI. **Done:** 2026-11-11: rehearsal `v0.2.5-dryrun.3`, run 42937560976.
+**Evidence:** [`release.yml`](https://github.com/aliasfoxkde/FireCraft/blob/main/.github/workflows/release.yml) used `assets+=(-a "$f")`; `gh release create` has no `-a` flag in gh 2.46 — assets are positional `[<files>...]`. **Fixed and exercised**: the rehearsal's `create draft release` job (run 42937560976) succeeded and the draft carries 8 uploaded assets, so the positional invocation works against the real CLI. **Done:** 2026-11-11: rehearsal `v0.2.5-dryrun.3`, run 42937560976.
 
 **Blockers:** —
 

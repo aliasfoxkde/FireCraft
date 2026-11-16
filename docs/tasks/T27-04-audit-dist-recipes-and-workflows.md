@@ -21,7 +21,7 @@ parse-checkability on this fleet is recorded.
 
 **Verification:** `cargo run -p xtask -- dist --help; ls packaging; grep -rn 'uses:' .github/workflows/`
 
-**Evidence:** `docs/release/ARTIFACT-MATRIX.md` maps every dist subcommand, packaging recipe, workflow and version stamp to what it does and does not cover; `docs/release/PHASE-0-AUDIT.md` §2 records the artifact state and §6 the claims that remain unverified. **Done:** 2026-11-09: matrix and audit merged (PR #107).
+**Evidence:** [`docs/release/ARTIFACT-MATRIX.md`](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/release/ARTIFACT-MATRIX.md) maps every dist subcommand, packaging recipe, workflow and version stamp to what it does and does not cover; `docs/release/PHASE-0-AUDIT.md` §2 records the artifact state and §6 the claims that remain unverified. **Done:** 2026-11-09: matrix and audit merged (PR #107).
 
 **Blockers:** —
 

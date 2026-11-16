@@ -19,7 +19,7 @@ and the `fmt` job remains SUCCESS.
 
 **Verification:** `gh pr checks 9`
 
-**Evidence:** The Aegis failure that blocked the backup CI on PR #9 (runs `42401632606`, `42401626535`) was adjudicated and rebaselined (T27-12, T27-13, PR #18); the gate is green on `main` `e39705e` (`fmt` 131002886797, `gate` 131002941116) and on every candidate head. PR #9 itself was closed unmerged, so its own runs remain a historical FAILURE and this row closes on the green gate, not on that PR's head. **Done:** 2026-11-12: gate green on `main` and the candidate heads.
+**Evidence:** The Aegis failure that blocked the backup CI on PR #9 (runs `42401632606`, `42401626535`) was adjudicated and rebaselined (T27-12, T27-13, PR #18); the gate is green on `main` `e39705e` ([`fmt` 131002886797](https://github.com/aliasfoxkde/FireCraft/runs/131002886797), [`gate` 131002941116](https://github.com/aliasfoxkde/FireCraft/runs/131002941116)) and on every candidate head. PR #9 itself was closed unmerged, so its own runs remain a historical FAILURE and this row closes on the green gate, not on that PR's head. **Done:** 2026-11-12: gate green on `main` and the candidate heads.
 
 **Blockers:** —
 

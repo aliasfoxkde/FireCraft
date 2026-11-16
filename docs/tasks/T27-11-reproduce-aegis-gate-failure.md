@@ -25,7 +25,7 @@ offending finding is enumerated with its rule id, file and line.
 > `cargo run -p xtask -- aegis`. The reproduction recorded below is the historical
 > one, taken on 2026-11-08 against the baseline of that day.
 
-**Evidence:** 5 new findings vs a 520-entry baseline (2026-11-08) **Done:** 2026-11-08.
+**Evidence:** 5 new findings vs a 520-entry baseline (2026-11-08) — adjudicated in [decision 0074](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/decisions/0074-aegis-content-keyed-baseline.md) **Done:** 2026-11-08.
 
 **Blockers:** —
 

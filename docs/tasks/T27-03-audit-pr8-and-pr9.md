@@ -22,7 +22,7 @@ rejection-with-reason.
 
 **Verification:** `gh pr view 9 --json reviews,comments && gh pr view 8 --json reviews`
 
-**Evidence:** PR disposition plan: `docs/release/PHASE-0-AUDIT.md` §7. PR #8 (`feat/dock-inspector-parity-matrix`) was closed unmerged; its shell-lineage work landed through the train (PR #107, closed issue #86). PR #9 (`docs/cross-platform-release-plan`) was closed unmerged; its documents are on `main` (`docs/RELEASE-ENGINEERING-PLAN.md`, `docs/release/ARTIFACT-MATRIX.md`, `docs/research/android-feasibility.md`, decision 0070). **Done:** 2026-11-09: audit §7 merged (PR #107).
+**Evidence:** PR disposition plan: [`docs/release/PHASE-0-AUDIT.md`](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/release/PHASE-0-AUDIT.md) §7. PR #8 (`feat/dock-inspector-parity-matrix`) was closed unmerged; its shell-lineage work landed through the train (PR #107, closed issue #86). PR #9 (`docs/cross-platform-release-plan`) was closed unmerged; its documents are on `main` (`docs/RELEASE-ENGINEERING-PLAN.md`, `docs/release/ARTIFACT-MATRIX.md`, `docs/research/android-feasibility.md`, decision 0070). **Done:** 2026-11-09: audit §7 merged (PR #107).
 
 **Blockers:** —
 

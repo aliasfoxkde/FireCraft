@@ -19,7 +19,7 @@ recorded.
 
 **Verification:** `cargo run -p xtask -- dist --web && (cd dist/web && sha256sum -c MANIFEST.sha256)`
 
-**Evidence:** The bundle was built from the tag's commit and published with its manifest: the rehearsal's `build artifacts` job (run 42937560976, head SHA `384687f`) ran `dist --web` successfully and published `firecraft-web-0.2.5-dryrun.3.zip` (7,394,859 B, sha256 `57054d06…`) with `MANIFEST.sha256` (425 B, sha256 `e71ce485…`); the release-wide list covers the ZIP and the manifest verifies with `sha256sum -c`. The WASM is stamped and inside the budget — the GitForge release job for `fcfe6db1` logged `wasm 15573974 B (warning 25000000, hard ceiling 50000000)`, 5 files. **Done:** 2026-11-12: the rehearsal published the web bundle and its manifest.
+**Evidence:** The bundle was built from the tag's commit and published with its manifest: the rehearsal's `build artifacts` job (run 42937560976, head SHA `384687f`) ran `dist --web` successfully and published `firecraft-web-0.2.5-dryrun.3.zip` (7,394,859 B, sha256 `57054d06…`) with `MANIFEST.sha256` (425 B, sha256 `e71ce485…`); the release-wide list covers the ZIP and the manifest verifies with `sha256sum -c`. Receipt: [`docs/release/RECEIPT-0.2.5-DRYRUN-3.md`](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/release/RECEIPT-0.2.5-DRYRUN-3.md). The WASM is stamped and inside the budget — the GitForge release job for `fcfe6db1` logged `wasm 15573974 B (warning 25000000, hard ceiling 50000000)`, 5 files. **Done:** 2026-11-12: the rehearsal published the web bundle and its manifest.
 
 **Blockers:** —
 

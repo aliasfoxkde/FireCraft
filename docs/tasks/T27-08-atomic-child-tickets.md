@@ -22,7 +22,7 @@ and each readable standalone.
 
 **Verification:** `ls docs/tasks/T27-*.md | wc -l`
 
-**Evidence:** This change (61 tickets) **Done:** 2026-11-08.
+**Evidence:** [This change (61 tickets)](https://github.com/aliasfoxkde/FireCraft/tree/main/docs/tasks) **Done:** 2026-11-08.
 
 **Blockers:** —
 

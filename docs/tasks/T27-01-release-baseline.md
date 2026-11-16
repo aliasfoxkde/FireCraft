@@ -24,7 +24,7 @@ command that produced each fact.
 
 **Verification:** `git rev-parse origin/main && cargo run -p xtask -- ci`
 
-**Evidence:** `docs/release/PHASE-0-AUDIT.md` (dated 2026-11-09) is the dated baseline audit: the audited baseline `main` @ `5fac7a2`, the host and toolchains, the tag and asset inventory, and each artifact's true state, with the PR disposition plan in §7 and the blocker register in §4. **Done:** 2026-11-09: `docs/release/PHASE-0-AUDIT.md` merged (PR #107).
+**Evidence:** [`docs/release/PHASE-0-AUDIT.md`](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/release/PHASE-0-AUDIT.md) (dated 2026-11-09) is the dated baseline audit: the audited baseline `main` @ `5fac7a2`, the host and toolchains, the tag and asset inventory, and each artifact's true state, with the PR disposition plan in §7 and the blocker register in §4. **Done:** 2026-11-09: `docs/release/PHASE-0-AUDIT.md` merged (PR #107).
 
 **Blockers:** —
 

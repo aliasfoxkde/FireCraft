@@ -19,7 +19,7 @@ aggregate the tag workflow expects.
 
 **Verification:** `gh release list && gh release view v0.2.5 --json assets`
 
-**Evidence:** `gh release view v0.2.5 --json assets` — tag `v0.2.5` → commit `3a4832b` carries 5 assets (desktop tar.gz 22,084,726 B, CLI tar.gz 8,072,377 B, web zip 7,174,826 B, DEB 14,819,904 B, `MANIFEST.sha256` 398 B) and no SBOM, no source archive and no `RELEASE_SHA256.txt`. Recorded in `docs/release/PHASE-0-AUDIT.md` §2. **Done:** 2026-11-09: audit §2 merged (PR #107).
+**Evidence:** `gh release view v0.2.5 --json assets` — tag `v0.2.5` → commit `3a4832b` carries 5 assets (desktop tar.gz 22,084,726 B, CLI tar.gz 8,072,377 B, web zip 7,174,826 B, DEB 14,819,904 B, `MANIFEST.sha256` 398 B) and no SBOM, no source archive and no `RELEASE_SHA256.txt`. Recorded in [`docs/release/PHASE-0-AUDIT.md`](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/release/PHASE-0-AUDIT.md) §2. **Done:** 2026-11-09: audit §2 merged (PR #107).
 
 **Blockers:** —
 
