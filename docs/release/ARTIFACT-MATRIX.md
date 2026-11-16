@@ -34,9 +34,10 @@
 - **Blocker** is the verified blocker ID from the audit's register
   (§4). A blocker ID means the condition was *observed*, not inferred.
 - The evidence ladder has a hard ceiling at **rung 8** for everything in
-  this repository: no artifact is signed and no provenance/attestation
-  exists (B-14), so **no artifact can reach rung 9**, and therefore
-  **nothing is `CERTIFIED`**.
+  this repository: no artifact is signed, and the provenance statement
+  that now exists (row 15) is **unsigned**, so there is still nothing a
+  consumer can verify independently (B-14) — **no artifact can reach
+  rung 9**, and therefore **nothing is `CERTIFIED`**.
 
 ## Target matrix
 
@@ -56,7 +57,7 @@
 | 12 | Source | tar.gz | `firecraft-0.2.5-source.tar.gz` — the canonical name; **not on `main`** | `xtask dist --source` (git archive of HEAD; the verb verifies a clean extraction and runs `cargo metadata --locked` inside it). The verb exists on this branch and on the PR #9 / #12 trees | `BUILD VERIFIED` | 3 | produced 2026-11-09 on `docs/release-execution-board` @ `08eae4a`: 3.35 MB, 661 entries, sha256 `a0fcaafe…`; clean-extract + `cargo metadata --locked` verified inside the verb. **That build predates the rename**: it shipped as `FireCraft-0.2.5-source.tar.gz`, and the rehearsal (v0.2.5-dryrun.3) exposed the capitalised name as a naming defect. `xtask/src/dist.rs` now emits the lowercase name; the row's receipt is not yet re-earned against it (see [RECEIPT-0.2.5-DRYRUN-3.md](RECEIPT-0.2.5-DRYRUN-3.md), T27-52) | F-9 (the verb is absent from `main`), B-13 (never published) |
 | 13 | SBOM | CycloneDX 1.5 JSON | `firecraft-0.2.5-sbom.cdx.json` — **not on `main`** | `xtask dist --sbom` over the locked dependency graph; the serial is a deterministic UUIDv8 derived from the locked graph. The verb exists on this branch and on the PR #9 / #12 trees | `BUILD VERIFIED` | 3 | produced 2026-11-09 on `docs/release-execution-board` @ `08eae4a`: 249 KB, 493 components, 494 dependency edges, sha256 `837a731b…` | F-9 (the verb is absent from `main`), B-13 (never published) |
 | 14 | Metadata | checksums / manifest | `dist/native/MANIFEST.sha256` (3 native artifacts) and `dist/web/MANIFEST.sha256` (5 bundle files) | `xtask dist --native` / `dist --web`; `release.yml` additionally writes a release-wide `RELEASE_SHA256.txt` over 8 assets | `PUBLISHED` | 11 | `MANIFEST.sha256` attached to release v0.2.5 (398 B, 3 native files) and embedded in the web ZIP (532 B). Both checked against the published downloads on 2026-11-09 — 3/3 and 5/5 pass | B-17 (neither list covers the ZIP files themselves and no release-wide `RELEASE_SHA256.txt` was ever published, although `release.yml` writes one), B-21 (the manifest and the assets it covers were published out of band, so the list is self-consistent but not independently attested) |
-| 15 | Metadata | provenance / attestation | **nothing on any branch** | no generator, no `gh attestation` step, no in-toto/SLSA material anywhere in the repository | `NOT STARTED` | 0 | nothing exists | B-14 |
+| 15 | Metadata | provenance / attestation | `xtask dist --provenance` writes `dist/provenance.intoto.json` — an in-toto Statement v1 whose predicate is SLSA provenance v1, carrying each published asset's basename and SHA-256, the source commit, the workflow and the runner; `xtask dist --verify-provenance` re-hashes the artifacts the statement names and fails closed. The statement is **unsigned** and no release run has produced one | `release.yml` step "Generate provenance statement" runs `dist --provenance` then `dist --verify-provenance` after the checksum list and before the manifest, so the manifest lists the statement; `scripts/validate_release_aggregate.sh` names `provenance.intoto.json` a required asset, so a release without it fails | `BUILD VERIFIED` | 1 | the generator, the fail-closed verifier and their unit tests (shape, determinism, every rejection path) exist in `xtask/src/provenance.rs`, and the workflow step is wired. **No CI receipt and no published statement** — the release workflow has never run with the step | B-14 (nothing published), the attestation identity (the statement carries no signature, so `gh attestation verify` cannot pass) |
 | 16 | Metadata | release manifest (JSON) | `dist/release-manifest.json` on `feat/release-manifest` — not on `main`, never published | `xtask dist --manifest` (schema `firecraft.release-manifest/1`); `xtask dist --verify-manifest` re-checks it against the files; `release.yml` generates it after the other assets and publishes it as a ninth release asset | `IMPLEMENTED` | 0 | generator, verifier and unit tests (shape, determinism, rejection paths) exist in `xtask/src/dist.rs`; the aggregate validation checks the manifest against the downloaded assets. **No CI receipt, no published manifest** — [decision 0089](../decisions/0089-release-manifest-shape.md) | B-14 (nothing published), T27-53 (the canonical naming the asset table inherits is still open) |
 | 17 | Metadata | signature (Authenticode / Developer ID / GPG) | **nothing**; no signing identity is configured anywhere | no signing step in any workflow; signing remains an operator ceremony | `NOT STARTED` | 0 | nothing exists | B-14 — no artifact can reach rung 9 until this is resolved, so **no artifact can be `CERTIFIED`** |
 | 18 | Android arm64 | APK/AAB | feasibility report only — [android-feasibility.md](../research/android-feasibility.md) | not started: no native entrypoint, no NDK/SDK CI image | `DEFERRED` | 0 | the report concludes "feasible with bounded work"; the gate decision is recorded in [decision 0121](../decisions/0121-the-android-gate-defers-the-native-port.md) — defer the port, keep Android experimental | no NDK/SDK image, no physical ARM64 device |
@@ -68,12 +69,12 @@
 
 | Status | Count | Artifacts |
 |---|---|---|
-| `NOT STARTED` | 7 | AppImage, Flatpak, Windows ZIP, Windows installer, macOS DMG, provenance/attestation, signature |
+| `NOT STARTED` | 6 | AppImage, Flatpak, Windows ZIP, Windows installer, macOS DMG, signature |
 | `READY` | 0 | — |
 | `IN PROGRESS` | 0 | — |
 | `BLOCKED` | 0 | — |
 | `IMPLEMENTED` | 1 | release manifest JSON |
-| `BUILD VERIFIED` | 3 | WebOS package, source archive, SBOM |
+| `BUILD VERIFIED` | 4 | WebOS package, source archive, SBOM, provenance/attestation |
 | `INSTALLED` | 0 | — |
 | `LAUNCHED` | 0 | — |
 | `SMOKE TESTED` | 0 | — |
@@ -238,8 +239,8 @@ artifacts without it). Tracked by issue #81 / task #158, defect **B-6**.
    and their verbs do not exist on `main` (F-9).
 7. **No release-wide checksum file has ever been published** (B-17),
    and every published asset reports a null GitHub digest.
-8. **Nothing is signed and no provenance exists** (B-14), so nothing
-   can be `CERTIFIED`.
+8. **Nothing is signed, and the provenance statement that now exists is
+   unsigned** (B-14), so nothing can be `CERTIFIED`.
 9. **RPM is deferred** by [decision 0070](../decisions/0070-rpm-deferred.md)
    and is **not** reinstated by
    [decision 0075](../decisions/0075-release-scope-mvp.md).
@@ -260,7 +261,9 @@ artifacts without it). Tracked by issue #81 / task #158, defect **B-6**.
   Whether it is configured in repository secrets is `UNVERIFIED` (audit
   §6). No signing credentials are configured anywhere — Windows
   Authenticode, macOS Developer ID, and GPG/nonce provenance are all
-  absent (RP-06 scope, B-14).
+  absent (RP-06 scope, B-14). The release build job also carries no
+  OIDC attestation identity (`id-token: write`, `attestations: write`),
+  so the provenance statement it generates is unsigned.
 
 ## Scope note
 
