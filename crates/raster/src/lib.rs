@@ -4,6 +4,7 @@
 //! blocks — the same geometry as the Fireworks `mkBT` tile cache — held in
 //! copy-on-write `Arc` storage so snapshots of a document are cheap and
 //! edits deep-copy only the tile actually touched.
+#![deny(missing_docs)]
 
 pub mod store;
 pub mod tile;
