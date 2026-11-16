@@ -1,12 +1,12 @@
 # FireCraft — Roadmap detail
 
-> **Current execution snapshot (2026-11-14; main `44aa5466`):** Phase 21's
+> **Current execution snapshot (2026-11-16; main `23f872e0`):** Phase 21's
 > user-facing deliverables have landed. Phase 20.1 and 20.5–20.7 are on
 > main; Optimize/timeline landed 2026-11-11 in #118 and the mask stack
-> landed in #113 as `PARTIAL`. The reachability wave (#143) and the
-> artwork consolidation (#144) merged 2026-11-14, and the wave-2
-> branch closes the last eight commands (257/257 bound = 100%, floor
-> re-blessed to 100%). Phase 22 remains partial: the
+> landed in #113 as `PARTIAL`. The reachability wave (#143), the
+> artwork consolidation (#144) and the wave-2 closeout (#150) merged
+> 2026-11-14 → 11-16: **257/257 commands bound = 100%, floor
+> re-blessed to 100%**. Phase 22 remains partial: the
 > user-visible parity matrix is published, but bitmap inspector
 > capabilities and remaining CS6 chrome are still open/evidence-gated.
 > Use [TASKS.md](TASKS.md) for live status and [PROGRESS.md](PROGRESS.md)

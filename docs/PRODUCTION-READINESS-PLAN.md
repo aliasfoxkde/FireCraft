@@ -69,12 +69,12 @@ This is a dated execution baseline, not a substitute for refreshing GitHub
 before each session. The current live task ledger and release artifact matrix
 are authoritative for task and platform status.
 
-- **Canonical source:** `main` at `b61f198` on 2026-11-11. The latest
+- **Canonical source:** `main` at `23f872e0` on 2026-11-16. The latest
   published version remains `v0.2.5` (2026-11-03); the source tree has
   advanced beyond that tag.
-- **Editor surface:** 253 registered engine commands; 164 are bound in the
-  CS6-visible shell surface (64.82%, latest measurement 2026-11-11). The
-  generated DOM matrix is 268 carried / 3 partial / 0 missing of 356 verbs.
+- **Editor surface:** 257 registered engine commands; all 257 are bound
+  in the CS6-visible shell surface (100%, latest measurement 2026-11-16).
+  The generated DOM matrix is 268 carried / 3 partial / 0 missing of 356 verbs.
   These are separate measurements and neither establishes complete
   end-user GUI parity.
 - **Menus and panels:** 2 inert menu rows of 298; eight additional rows
@@ -83,8 +83,8 @@ are authoritative for task and platform status.
   `docs/CS6-PARITY.md`.
 - **Recent delivered work:** Phase 21's user-facing deliverables and Phase
   20.1/20.5–20.7 landed in the 2026-11-11 shell-lineage train (#107).
-  Optimize/timeline work is in open PR #118; the mask stack is in open
-  PR #113. These are not shipped until merged.
+  Optimize/timeline landed in #118 and the mask stack landed in #113
+  (as `PARTIAL`); both are merged.
 - **WASM/release policy:** the web-only Cargo `opt-level=z` and Binaryen
   `wasm-opt=z` path is scoped to Trunk; decision 0090 sets a
   25,000,000-byte investigation warning and 50,000,000-byte hard ceiling.

@@ -20,7 +20,7 @@
 | Surface | State | Evidence |
 |---|---|---|
 | Fireworks PNG format | Complete | `crates/fwpng`, `crates/doc/src/fwmap.rs`; node tree round-trips |
-| Engine command registry | **253 commands** | `engine::catalog::ids()` — 253 as of 2026-11-11 |
+| Engine command registry | **257 commands** | `engine::catalog::ids()` — 257 as of 2026-11-16 |
 | CS6 DOM verb parity | **268 C / 3 P / 0 M / 85 N** | `docs/planning/generated/dom-parity.md` (356 verbs) |
 | ExtendScript host | Complete | `crates/scripting` — runs the CS6 `.jsf` corpus headless |
 | Web bridge | Exposes **all** commands | `web/src/main.rs` — `apply(name, payload)` |
@@ -432,6 +432,15 @@ this dated audit.
 ---
 
 ## 16. The surface gap — 85 carried commands the shell never binds (2026-11-12)
+
+> **Landed 2026-11-16:** this gap is closed. #143 bound 77 commands
+> (2026-11-14), and wave-2 (#150, decision
+> [0118](decisions/0118-the-last-eight-verbs-reach-their-named-surfaces.md))
+> bound the last eight on the surfaces decision 0117 named —
+> **257/257 = 100%, 0 unreachable**, floor deliberately re-blessed to
+> 100%. Issues #138–#141 are closed with measured evidence; #136 and
+> #137 remain open on renderer-honours criteria only. The 2026-11-12
+> measurement below is kept as the audit snapshot it was.
 
 The audit in §1.2 and the phases in §3–§13 track verbs the engine
 does **not** carry. This section tracks the other half of the same
