@@ -66,4 +66,3 @@ or partial facts were corrected:
 
 **Blocker.** `docs/TASKS.md` is owned by another agent in this session — cleared:
 the cross-reference landed, and the board's T27-59 row no longer names it.
-
