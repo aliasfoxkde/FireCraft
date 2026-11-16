@@ -225,8 +225,13 @@ here as an open evidence gap rather than guessed.
      resource-naming convention: `ID_WINDOW_…` is the command-id
      family CS6 reserves for window-menu items, and the sibling
      `ID_WINDOW_TILE_VERT` is unambiguously the Window menu's *Tile
-     Vertically* row. The bar resource was never decoded, so no
-     decoded menu listing confirms the tile-horizontally row
+     Vertically* row. The bar resource **was** decoded — the
+     `RT_MENU` 128 tree was walked and transcribed into
+     `crates/app/src/menus.rs`, the Window menu's rows among them —
+     but the decoded listing was not re-read for this row: the
+     transcription was short 57651, and the row was reinstated on
+     the naming convention rather than on a fresh walk of the tree,
+     so no decoded menu listing confirms the tile-horizontally row
      directly.
 
    The row therefore stands on the naming convention rather than on
