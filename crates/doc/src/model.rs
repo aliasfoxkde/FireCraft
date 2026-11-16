@@ -30,6 +30,7 @@ pub struct Effect {
 pub struct EffectProperty {
     /// `DCKs` key (e.g. "`EffectMoaID`", "`gaussian_blur_radius`").
     pub key: String,
+    /// `DCVs` — the property's value, in the node's own type.
     pub value: EffectValue,
 }
 
@@ -511,8 +512,12 @@ pub struct Guides {
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum SymbolType {
+    /// A graphic symbol: the `MSYi` node is omitted rather than stored
+    /// as a zero.
     Graphic,
+    /// A button symbol (`MSYi` = 1).
     Button,
+    /// An animation symbol (`MSYi` = 2).
     Animation,
     /// An `MSYi` value outside the observed set, preserved verbatim.
     Other(i64),

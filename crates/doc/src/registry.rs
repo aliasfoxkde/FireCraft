@@ -58,6 +58,7 @@ pub struct Registry {
 }
 
 impl Registry {
+    /// An empty registry: no slots, no free list.
     #[must_use]
     pub fn new() -> Self {
         Self::default()

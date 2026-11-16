@@ -12,6 +12,8 @@
 //! re-emitted. `fwpng` itself stays a standalone crate; this crate
 //! depends on it (L1 over L0), not the other way around.
 
+#![deny(missing_docs)]
+
 pub mod fwmap;
 pub mod library;
 pub mod model;

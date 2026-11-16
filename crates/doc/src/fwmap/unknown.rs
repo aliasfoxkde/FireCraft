@@ -25,6 +25,7 @@ pub struct UnknownBag {
 }
 
 impl UnknownBag {
+    /// An empty bag: nothing is preserved yet.
     #[must_use]
     pub fn new() -> Self {
         Self::default()
