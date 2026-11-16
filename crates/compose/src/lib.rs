@@ -16,6 +16,8 @@
 //! document's unknown bag. Blend values beyond the rasterizer's 16 W3C
 //! mix modes fall back to Normal (recorded limitation, ADR 0002).
 
+#![deny(missing_docs)]
+
 mod cache;
 mod convert;
 #[allow(clippy::module_name_repetitions)]
