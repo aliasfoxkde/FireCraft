@@ -1318,7 +1318,7 @@ pub struct ExportOptions {
     /// selective quality applies at all. FireCraft-side, like
     /// `jpeg_selective_quality` (decision 0122).
     pub jpeg_selective_enabled: Option<bool>,
-    /// FireCraft's mask source: use the document's *current* selection
+    /// `FireCraft`'s mask source: use the document's *current* selection
     /// as the JPEG mask instead of the mask saved with
     /// `mask.saveJPEG`. FireCraft-side (decision 0122).
     pub jpeg_selective_use_selection: Option<bool>,

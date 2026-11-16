@@ -38,7 +38,7 @@ pub struct OptimizeSettings {
     pub jpeg_selective_quality: i64,
     /// CS6's "Enable Selective Quality" checkbox.
     pub jpeg_selective_enabled: bool,
-    /// FireCraft's mask source: the current selection instead of the
+    /// `FireCraft`'s mask source: the current selection instead of the
     /// saved JPEG mask.
     pub jpeg_selective_use_selection: bool,
     /// `FCLi` — the matte, ABGR raw. `None` leaves the choice to the

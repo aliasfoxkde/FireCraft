@@ -881,7 +881,7 @@ struct SetPageExportPayload {
     /// (decision 0122).
     #[serde(default, deserialize_with = "double_option")]
     jpeg_selective_enabled: Option<Option<bool>>,
-    /// FireCraft's mask source: the current selection instead of the
+    /// `FireCraft`'s mask source: the current selection instead of the
     /// saved JPEG mask. FireCraft-side (decision 0122).
     #[serde(default, deserialize_with = "double_option")]
     jpeg_selective_use_selection: Option<Option<bool>>,
