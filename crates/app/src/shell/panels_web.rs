@@ -1685,6 +1685,37 @@ mod tests {
         );
     }
 
+    /// The behavior the panel attaches reaches the published page.
+    ///
+    /// The panel's contract is the exported page's: a swap behavior
+    /// that never appears in the HTML is a behavior the user attached
+    /// and nothing else, which is the user-visible half of issue
+    /// #93's stopping condition.
+    #[test]
+    fn an_attached_behavior_reaches_the_exported_page() {
+        let (mut shell, plate, _) = slice_shell();
+        assert!(
+            shell.add_targeted_behavior(plate, SWAP_IMAGE_BEHAVIOR, "button"),
+            "the swap behavior attaches"
+        );
+        let options = webexport::WebExportOptions::default();
+        let export = app_cli::ops::export_web(
+            shell.editor.document(),
+            &options,
+            webexport::Workflow::HtmlAndImages,
+        )
+        .expect("the web export runs");
+        let html = export.html.expect("the workflow writes a page");
+        assert!(
+            html.contains("MM_swapImage"),
+            "the exported page carries the behavior:\n{html}"
+        );
+        assert!(
+            html.contains("'button'"),
+            "the exported page names the swap target:\n{html}"
+        );
+    }
+
     /// The swap point names the target slice, not the slice the
     /// behavior is added to — even when the two overlap.
     #[test]
