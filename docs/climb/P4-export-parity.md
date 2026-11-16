@@ -148,11 +148,27 @@ node dictionary and the corpus, never from the binary. Rungs tagged
 - **Verify:** `cargo test -p io png::interlace`.
 - **Moves:** S6 ↑; the Optimize residual (#23) shrinks.
 
-### C4.08 — Selective JPEG quality `[ ]`
+### C4.08 — Selective JPEG quality `[x]`
+- **Landed:** the selective JPEG compresses the **masked** region at the
+  entered value and the rest of the image at the main Quality slider's
+  value — CS6's rule, from its reference manual, not the other way round
+  (step 1 below had it backwards). The mask is the document's
+  `jpeg_mask` (the one `mask.saveJPEG` writes); the entered value is a
+  FireCraft-side `ExportOptions` field, because no `EXPv` node for it
+  has been pinned (decision [0122](../decisions/0122-the-selective-jpeg-holds-the-mask-and-the-second-quality.md)).
+  The encoder composites: it encodes at each quality, decodes both,
+  blends them per the mask's coverage, and encodes the blend at the
+  better of the two — a JPEG scan carries one quantization table per
+  component, so two qualities cannot share one scan. The Optimize panel
+  carries "Selective quality", "enable selective quality" and "use
+  current selection".
 - **Needs:** C0.01 · **Tags:** `[EVIDENCE]` `[HOST:linux]` · **Size:** M
 - **Steps:**
-  1. CS6's selective JPEG uses a lower quality outside a saved selection
-     mask.
+  1. CS6's selective JPEG compresses the **masked** region at the
+     entered "Selective quality" and the rest of the image at the main
+     Quality slider's value. Its manual says so plainly: entering a low
+     value compresses the *selected* area more than the rest of the
+     image, and its example puts the selection at 90 and the rest at 50.
   2. Establish where the selection and the secondary quality are stored.
      Check `docs/tasks/T7-optimize-panel.md`, the dictionary, and the
      corpus.
@@ -162,8 +178,9 @@ node dictionary and the corpus, never from the binary. Rungs tagged
      decoded result. Record the approach in a decision.
   4. Add the UI in the Optimize panel: "Selective quality" plus a checkbox to
      use the current saved selection.
-- **Done when:** a test shows lower PSNR outside the mask and equal PSNR
-  inside it.
+- **Done when:** a test shows the masked region's PSNR following the
+  entered quality (higher than the main quality lifts it, lower drops
+  it) while the unmasked region's stays at the main quality's level.
 - **Verify:** `cargo test -p io jpeg::selective`.
 - **Moves:** closes the second residual of #23.
 

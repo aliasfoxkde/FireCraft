@@ -101,8 +101,32 @@ fn the_jpeg_quality_reaches_the_export_resolution() {
         .expect("the panel's payload is a valid command");
 
     let export = io::expv::for_page(editor.document(), 0);
-    let options = io::expv::jpeg_options(export, io::expv::StatedJpeg::default());
+    let options =
+        io::expv::jpeg_options(editor.document(), export, io::expv::StatedJpeg::default());
     assert_eq!(options.quality, 42);
+}
+
+#[test]
+fn the_selective_quality_reaches_the_export_resolution() {
+    let mut editor = Editor::untitled();
+    let mut panel = settings(&editor);
+    panel.format = 1;
+    panel.jpeg_selective_quality = 35;
+    panel.jpeg_selective_enabled = true;
+    editor
+        .apply("page.setExport", panel.payload(0))
+        .expect("the panel's payload is a valid command");
+
+    let read = settings(&editor);
+    assert_eq!(read.jpeg_selective_quality, 35);
+    assert!(read.jpeg_selective_enabled);
+
+    // The export resolution sees the value, but only acts on it when
+    // the document carries a mask to select with.
+    let export = io::expv::for_page(editor.document(), 0);
+    let options =
+        io::expv::jpeg_options(editor.document(), export, io::expv::StatedJpeg::default());
+    assert!(options.selective.is_none(), "no mask, nothing to select");
 }
 
 #[test]

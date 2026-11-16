@@ -60,7 +60,12 @@ Decision
 - **No Adam7 interlacing.** PNG (and GIF) interlaced output needs a
   pass encoder the `png` crate does not provide. Named work, not a
   panel defect.
-- **No selective-JPEG quality table.** CS6's Optimize panel carries a
-  per-component quality table; this build has one global `JPQi`.
+- **The selective JPEG carries one quality, not a table.** CS6's
+  Optimize panel carries a per-component quality table; this build
+  offers one "Selective quality" value for the masked region, and the
+  rest of the image keeps the main Quality slider's value (decision
+  [0122](../decisions/0122-the-selective-jpeg-holds-the-mask-and-the-second-quality.md)).
+  The value is FireCraft-side: no `EXPv` node for it has been pinned,
+  so it is honored at export time and lost when the document is saved.
 - **The panel is unstyled relative to the rest of the dock**, and the
   Phase 22 screenshot audit has not covered it.

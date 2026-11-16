@@ -85,7 +85,7 @@ fn jpeg_options_stated_flags_win_over_expv() {
         progressive: false,
         matte: Matte::Black,
     };
-    let options = jpeg_options(Some(&export), stated);
+    let options = jpeg_options(&doc::Document::default(), Some(&export), stated);
     assert_eq!(options.quality, 88, "explicit CLI quality wins");
     assert!(options.progressive, "EXPv progressive applies");
     assert_eq!(options.matte, Matte::Black, "explicit matte wins");
@@ -98,7 +98,11 @@ fn jpeg_options_fall_back_to_expv_then_defaults() {
         matte_raw: Some(0x00_10_20_30),
         ..doc::ExportOptions::default()
     };
-    let options = jpeg_options(Some(&export), StatedJpeg::default());
+    let options = jpeg_options(
+        &doc::Document::default(),
+        Some(&export),
+        StatedJpeg::default(),
+    );
     assert_eq!(options.quality, 72);
     assert!(!options.progressive);
     assert_eq!(
@@ -108,9 +112,52 @@ fn jpeg_options_fall_back_to_expv_then_defaults() {
     );
 
     // With no record at all: quality 90, white matte.
-    let defaults = jpeg_options(None, StatedJpeg::default());
+    let defaults = jpeg_options(&doc::Document::default(), None, StatedJpeg::default());
     assert_eq!(defaults.quality, 90);
     assert_eq!(defaults.matte, Matte::White);
+}
+
+#[test]
+fn the_selective_quality_resolves_to_the_document_mask() {
+    let mut document = doc::Document::default();
+    let mut mask = doc::SelectionMask::empty(4, 4);
+    mask.set(0, 0, 255);
+    document.jpeg_mask = Some(mask.clone());
+
+    let export = doc::ExportOptions {
+        jpeg_selective_enabled: Some(true),
+        jpeg_selective_quality: Some(40),
+        ..doc::ExportOptions::default()
+    };
+    let selective =
+        io::expv::selective_jpeg(&document, Some(&export)).expect("the saved mask selects");
+    assert_eq!(selective.quality, 40);
+    assert_eq!(selective.mask, mask);
+
+    // Without the enable flag the selective quality does not apply.
+    let disabled = doc::ExportOptions {
+        jpeg_selective_quality: Some(40),
+        ..doc::ExportOptions::default()
+    };
+    assert!(io::expv::selective_jpeg(&document, Some(&disabled)).is_none());
+
+    // Without a mask there is nothing to select.
+    let bare = doc::Document::default();
+    assert!(io::expv::selective_jpeg(&bare, Some(&export)).is_none());
+
+    // The current selection can stand in for the saved mask.
+    let mut selection = doc::SelectionMask::empty(4, 4);
+    selection.set(1, 1, 255);
+    document.selection = Some(selection.clone());
+    let current = doc::ExportOptions {
+        jpeg_selective_enabled: Some(true),
+        jpeg_selective_quality: Some(40),
+        jpeg_selective_use_selection: Some(true),
+        ..doc::ExportOptions::default()
+    };
+    let selective =
+        io::expv::selective_jpeg(&document, Some(&current)).expect("the selection selects");
+    assert_eq!(selective.mask, selection);
 }
 
 #[test]

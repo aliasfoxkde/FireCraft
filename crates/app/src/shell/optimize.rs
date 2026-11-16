@@ -33,6 +33,14 @@ pub struct OptimizeSettings {
     pub jpeg_quality: i64,
     /// `JPPb` — progressive JPEG scans.
     pub jpeg_progressive: bool,
+    /// CS6's "Selective quality" — the quality the masked region of a
+    /// JPEG export is compressed at. FireCraft-side (decision 0122).
+    pub jpeg_selective_quality: i64,
+    /// CS6's "Enable Selective Quality" checkbox.
+    pub jpeg_selective_enabled: bool,
+    /// FireCraft's mask source: the current selection instead of the
+    /// saved JPEG mask.
+    pub jpeg_selective_use_selection: bool,
     /// `FCLi` — the matte, ABGR raw. `None` leaves the choice to the
     /// codec default.
     pub matte_raw: Option<i64>,
@@ -61,6 +69,9 @@ impl OptimizeSettings {
             format: export.format.unwrap_or(2).clamp(0, 2),
             jpeg_quality: export.jpeg_quality.unwrap_or(90).clamp(0, 100),
             jpeg_progressive: export.jpeg_progressive.unwrap_or(false),
+            jpeg_selective_quality: export.jpeg_selective_quality.unwrap_or(90).clamp(0, 100),
+            jpeg_selective_enabled: export.jpeg_selective_enabled.unwrap_or(false),
+            jpeg_selective_use_selection: export.jpeg_selective_use_selection.unwrap_or(false),
             matte_raw: export.matte_raw,
             dither: export.dither.unwrap_or(0).clamp(0, 100),
             frame_loop: export.frame_loop.unwrap_or(0),
@@ -84,6 +95,9 @@ impl OptimizeSettings {
             "format": self.format,
             "jpeg_quality": jpeg.then_some(self.jpeg_quality),
             "jpeg_progressive": jpeg.then_some(self.jpeg_progressive),
+            "jpeg_selective_quality": jpeg.then_some(self.jpeg_selective_quality),
+            "jpeg_selective_enabled": jpeg.then_some(self.jpeg_selective_enabled),
+            "jpeg_selective_use_selection": jpeg.then_some(self.jpeg_selective_use_selection),
             "matte_raw": self.matte_raw,
             "dither": gif.then_some(self.dither),
             "frame_loop": gif.then_some(self.frame_loop),
@@ -135,6 +149,33 @@ impl Shell {
                     .changed();
                 ui.label("progressive");
                 changed |= ui.checkbox(&mut settings.jpeg_progressive, "").changed();
+                // CS6's selective quality: the masked region of the
+                // image is compressed at its own quality and the rest
+                // at the main one.
+                ui.label("selective quality");
+                changed |= ui
+                    .add_enabled(
+                        settings.jpeg_selective_enabled,
+                        egui::Slider::new(&mut settings.jpeg_selective_quality, 0..=100i64)
+                            .text("%"),
+                    )
+                    .on_hover_text(
+                        "The quality the masked region of the image is compressed at. The rest of \
+                         the image keeps the main quality.",
+                    )
+                    .changed();
+                ui.label("enable selective quality");
+                changed |= ui
+                    .checkbox(&mut settings.jpeg_selective_enabled, "")
+                    .changed();
+                ui.label("use current selection");
+                changed |= ui
+                    .checkbox(&mut settings.jpeg_selective_use_selection, "")
+                    .on_hover_text(
+                        "Use the current selection as the JPEG mask instead of the mask saved \
+                         with Modify > Selective JPEG > Save Selection as JPEG Mask.",
+                    )
+                    .changed();
                 ui.label("matte");
                 egui::ComboBox::new("optimize_matte", "")
                     .selected_text(matte_name(settings.matte_raw))
@@ -270,7 +311,8 @@ impl Shell {
         let plane = io::Plane::new(u32::from(render.width), u32::from(render.height), &straight)
             .map_err(|error| error.to_string())?;
         if settings.format == 1 {
-            let options = io::expv::jpeg_options(Some(&export), io::expv::StatedJpeg::default());
+            let options =
+                io::expv::jpeg_options(document, Some(&export), io::expv::StatedJpeg::default());
             return io::jpeg::encode(&plane, &options).map_err(|error| error.to_string());
         }
         let options = io::expv::png_options(Some(&export));
@@ -368,6 +410,9 @@ mod tests {
             format: 1,
             jpeg_quality: 55,
             jpeg_progressive: true,
+            jpeg_selective_quality: 40,
+            jpeg_selective_enabled: true,
+            jpeg_selective_use_selection: true,
             matte_raw: Some(MATTE_WHITE),
             dither: 20,
             frame_loop: 3,
@@ -380,6 +425,9 @@ mod tests {
         assert_eq!(payload["format"], 1);
         assert_eq!(payload["jpeg_quality"], 55);
         assert_eq!(payload["jpeg_progressive"], true);
+        assert_eq!(payload["jpeg_selective_quality"], 40);
+        assert_eq!(payload["jpeg_selective_enabled"], true);
+        assert_eq!(payload["jpeg_selective_use_selection"], true);
         assert_eq!(payload["matte_raw"], MATTE_WHITE);
         // The GIF knobs are cleared while the format is JPEG.
         assert!(payload["dither"].is_null());
@@ -393,6 +441,9 @@ mod tests {
             format: 0,
             jpeg_quality: 55,
             jpeg_progressive: true,
+            jpeg_selective_quality: 40,
+            jpeg_selective_enabled: true,
+            jpeg_selective_use_selection: true,
             matte_raw: None,
             dither: 20,
             frame_loop: 3,
@@ -408,6 +459,9 @@ mod tests {
         // The JPEG knobs are cleared while the format is GIF.
         assert!(payload["jpeg_quality"].is_null());
         assert!(payload["jpeg_progressive"].is_null());
+        assert!(payload["jpeg_selective_quality"].is_null());
+        assert!(payload["jpeg_selective_enabled"].is_null());
+        assert!(payload["jpeg_selective_use_selection"].is_null());
     }
 
     #[test]
@@ -418,6 +472,9 @@ mod tests {
             format: 2,
             jpeg_quality: 90,
             jpeg_progressive: false,
+            jpeg_selective_quality: 40,
+            jpeg_selective_enabled: true,
+            jpeg_selective_use_selection: true,
             matte_raw: None,
             dither: 0,
             frame_loop: 0,

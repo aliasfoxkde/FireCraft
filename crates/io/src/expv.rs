@@ -51,8 +51,15 @@ pub struct StatedJpeg {
 
 /// JPEG options from `JPQi`/`JPPb`/`FCLi`: stated flags win, then the
 /// document's recorded settings, then the codec defaults.
+///
+/// The document is consulted for the JPEG mask, so the export knows
+/// which region CS6's selective quality applies to.
 #[must_use]
-pub fn jpeg_options(export: Option<&ExportOptions>, stated: StatedJpeg) -> jpeg::JpegOptions {
+pub fn jpeg_options(
+    document: &doc::Document,
+    export: Option<&ExportOptions>,
+    stated: StatedJpeg,
+) -> jpeg::JpegOptions {
     let quality = stated
         .quality
         .or_else(|| {
@@ -73,8 +80,42 @@ pub fn jpeg_options(export: Option<&ExportOptions>, stated: StatedJpeg) -> jpeg:
         quality,
         progressive,
         matte,
+        selective: selective_jpeg(document, export),
         ..jpeg::JpegOptions::default()
     }
+}
+
+/// The selective-JPEG settings a document's export settings ask for.
+///
+/// `None` when the export settings do not enable the selective
+/// quality, when they record no selective quality value, or when the
+/// document carries no mask to select with.
+///
+/// The mask is the one saved with `mask.saveJPEG` — CS6's "Save
+/// Selection as JPEG Mask" — unless the export settings ask for the
+/// current selection instead.
+#[must_use]
+pub fn selective_jpeg(
+    document: &doc::Document,
+    export: Option<&ExportOptions>,
+) -> Option<jpeg::SelectiveJpeg> {
+    let export = export?;
+    if !export.jpeg_selective_enabled.unwrap_or(false) {
+        return None;
+    }
+    let quality = export.jpeg_selective_quality?.clamp(1, 100) as u8;
+    let mask = if export.jpeg_selective_use_selection.unwrap_or(false) {
+        document
+            .selection
+            .as_ref()
+            .or(document.jpeg_mask.as_ref())?
+    } else {
+        document.jpeg_mask.as_ref()?
+    };
+    Some(jpeg::SelectiveJpeg {
+        quality,
+        mask: mask.clone(),
+    })
 }
 
 /// PNG options from `GFIb`.

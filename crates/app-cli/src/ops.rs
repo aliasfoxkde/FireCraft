@@ -172,7 +172,7 @@ pub fn export_raster(
                 progressive: flags.progressive,
                 matte: flags.matte,
             };
-            let options = ::io::expv::jpeg_options(export, stated);
+            let options = ::io::expv::jpeg_options(document, export, stated);
             ::io::jpeg::encode(&plane, &options).map_err(codec_err)
         }
         "bmp" => {

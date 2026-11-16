@@ -873,6 +873,18 @@ struct SetPageExportPayload {
     /// `JPPb` — progressive JPEG scans.
     #[serde(default, deserialize_with = "double_option")]
     jpeg_progressive: Option<Option<bool>>,
+    /// CS6's "Selective quality" — the quality the masked region of a
+    /// JPEG export is compressed at. FireCraft-side (decision 0122).
+    #[serde(default, deserialize_with = "double_option")]
+    jpeg_selective_quality: Option<Option<i64>>,
+    /// CS6's "Enable Selective Quality" checkbox. FireCraft-side
+    /// (decision 0122).
+    #[serde(default, deserialize_with = "double_option")]
+    jpeg_selective_enabled: Option<Option<bool>>,
+    /// FireCraft's mask source: the current selection instead of the
+    /// saved JPEG mask. FireCraft-side (decision 0122).
+    #[serde(default, deserialize_with = "double_option")]
+    jpeg_selective_use_selection: Option<Option<bool>>,
     /// `FCLi` — matte color, ABGR raw.
     #[serde(default, deserialize_with = "double_option")]
     matte_raw: Option<Option<i64>>,
@@ -941,6 +953,15 @@ impl TypedCommand for SetPageExport {
                 detail: "dither must be 0..=100".to_owned(),
             });
         }
+        if payload
+            .jpeg_selective_quality
+            .is_some_and(|q| q.is_some_and(|q| !(0..=100).contains(&q)))
+        {
+            return Err(EngineError::InvalidState {
+                name: NAME.to_owned(),
+                detail: "the selective quality must be 0..=100".to_owned(),
+            });
+        }
         if payload.format.is_some_and(|f| !(-1..=4).contains(&f)) {
             return Err(EngineError::InvalidState {
                 name: NAME.to_owned(),
@@ -963,6 +984,15 @@ impl TypedCommand for SetPageExport {
             }
             if let Some(progressive) = payload.jpeg_progressive {
                 export.jpeg_progressive = progressive;
+            }
+            if let Some(quality) = payload.jpeg_selective_quality {
+                export.jpeg_selective_quality = quality;
+            }
+            if let Some(enabled) = payload.jpeg_selective_enabled {
+                export.jpeg_selective_enabled = enabled;
+            }
+            if let Some(use_selection) = payload.jpeg_selective_use_selection {
+                export.jpeg_selective_use_selection = use_selection;
             }
             if let Some(matte) = payload.matte_raw {
                 export.matte_raw = matte;

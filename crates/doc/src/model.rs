@@ -1307,6 +1307,21 @@ pub struct ExportOptions {
     pub jpeg_colour: Option<i64>,
     /// `JPPb` — progressive JPEG scans.
     pub jpeg_progressive: Option<bool>,
+    /// CS6's "Selective quality" — the quality the *masked* region of
+    /// a JPEG export is compressed at; the rest of the image takes the
+    /// main `JPQi` value. FireCraft-side: the format's export-settings
+    /// table carries no proven node for CS6's selective quality, so
+    /// the value is honored at export time and is not yet written to
+    /// the file (decision 0122).
+    pub jpeg_selective_quality: Option<i64>,
+    /// CS6's "Enable Selective Quality" checkbox — whether the
+    /// selective quality applies at all. FireCraft-side, like
+    /// `jpeg_selective_quality` (decision 0122).
+    pub jpeg_selective_enabled: Option<bool>,
+    /// FireCraft's mask source: use the document's *current* selection
+    /// as the JPEG mask instead of the mask saved with
+    /// `mask.saveJPEG`. FireCraft-side (decision 0122).
+    pub jpeg_selective_use_selection: Option<bool>,
     /// `GFIb` — interlaced output (PNG today; GIF interlace has no
     /// codec path yet).
     pub interlaced: Option<bool>,

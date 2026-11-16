@@ -227,7 +227,7 @@ pub fn anchor_expv(data: &[u8]) {
     let export = io::expv::for_page(&document, 0).cloned();
     let gif = io::expv::gif_options(export.as_ref());
     assert!(gif.dither <= 100, "dither out of range: {}", gif.dither);
-    let jpeg = io::expv::jpeg_options(export.as_ref(), io::expv::StatedJpeg::default());
+    let jpeg = io::expv::jpeg_options(doc, export.as_ref(), io::expv::StatedJpeg::default());
     assert!(
         (1..=100).contains(&jpeg.quality),
         "jpeg quality out of range: {}",

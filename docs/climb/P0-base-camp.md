@@ -9,7 +9,23 @@ prints every metric.
 
 ---
 
-### C0.01 — Climbing gear: confirm the toolchain `[ ]`
+### C0.01 — Climbing gear: confirm the toolchain `[x]`
+- **Landed:** the toolchain is pinned at 1.99.1 and the gate's result on
+  `main` is recorded. The measurement runs in the CI image
+  (`infrastructure/docker/ci-rust.Dockerfile`: `FROM
+  rust:1.99.1-slim-bookworm`), not on this host: the host's `rustc` is
+  **1.99.0** — below the pin — and the host's admission policy denies
+  direct cargo compilation, so `cargo run -p xtask -- ci` cannot be run
+  here at all. The gate is therefore measured where it is authoritative:
+  GitForge run `9ba47446` on `main` (`44aa5466`, 2026-11-14), 10 of 10
+  jobs green, `clippy-test` clean under `-D warnings` across every
+  crate and the workspace test suite green, `wasm-web`,
+  `corpus-golden`, `perf-budgets`, `fuzz`, `generated-docs` and
+  `release` all succeeded. The `target/` symlink exists in the main
+  checkout (`/nas/Temp/repos/FireCraft/target` →
+  `/nas/Dev/Targets/firecraft-target`); a fresh worktree has none and
+  needs its own target dir — a stale binary in a shared target dir
+  measures the wrong tree.
 - **Needs:** — · **Tags:** `[HOST:linux]` · **Size:** XS
 - **Steps:**
   1. `rustc --version` must print `1.99.1`; CI pins it in
