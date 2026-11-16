@@ -241,6 +241,7 @@ impl Importer<'_> {
                             .document
                             .registry
                             .insert(ObjectData::Group(GroupObject {
+                                stack_mode: None,
                                 group_type: 0,
                                 name: non_empty(group.id()),
                                 children,

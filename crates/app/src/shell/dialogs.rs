@@ -57,6 +57,38 @@ impl Default for NumericTransformDialog {
     }
 }
 
+/// The Scale To dialog's fields — CS6's Modify ▸ Transform ▸ Scale
+/// To…: an exact pixel box for the selection, seeded from its
+/// current bounds. Applying keeps the selection's top-left corner in
+/// place (`object.resize`).
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct ScaleToDialog {
+    /// Target selection width in pixels.
+    pub width: f64,
+    /// Target selection height in pixels.
+    pub height: f64,
+}
+
+/// What a confirmed action runs once the user says yes. This is the
+/// shell's confirmation mechanism — decision 0117 named its absence
+/// as the reason `document.deleteAllInDocument` could not be bound
+/// ("a confirmed action that does not exist yet").
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ConfirmAction {
+    /// Empty the document (`document.deleteAllInDocument`).
+    DeleteAll,
+}
+
+/// The confirm dialog's state: the question asked, and what "Yes"
+/// runs. "No" (or any dismissal) leaves the document untouched.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct ConfirmDialog {
+    /// The question shown to the user.
+    pub question: String,
+    /// What "Yes" runs.
+    pub action: ConfirmAction,
+}
+
 /// The Feather dialog's field — Select ▸ Feather…: softens the active
 /// pixel selection's edge by a radius in pixels (1..=64, the engine's
 /// kernel cap).
@@ -744,6 +776,100 @@ impl Shell {
             }
         });
         self.numeric_transform = Some(dialog);
+    }
+
+    /// The Scale To dialog: the selection's exact target width and
+    /// height in pixels. OK applies `object.resize`; Cancel closes
+    /// without touching the document.
+    pub(super) fn scale_to_dialog_ui(&mut self, ui: &mut egui::Ui) {
+        let Some(dialog) = self.scale_to.take() else {
+            return;
+        };
+        let mut dialog = dialog;
+        let mut apply = false;
+        egui::Grid::new("scale_to")
+            .num_columns(2)
+            .spacing([8.0, 6.0])
+            .show(ui, |ui| {
+                ui.add(egui::DragValue::new(&mut dialog.width).range(1.0..=100_000.0));
+                ui.label("Width");
+                ui.add(egui::DragValue::new(&mut dialog.height).range(1.0..=100_000.0));
+                ui.label("Height");
+            });
+        ui.separator();
+        ui.horizontal(|ui| {
+            apply |= ui.button("OK").clicked();
+            if ui.button("Cancel").clicked() {
+                self.status = "scale to cancelled".to_owned();
+            }
+        });
+        if apply {
+            self.apply_scale_to(&dialog);
+            return;
+        }
+        self.scale_to = Some(dialog);
+    }
+
+    /// Resizes the selection to the dialog's exact box — CS6 keeps
+    /// the top-left corner in place (`object.resize`). A refusal
+    /// lands on the status line; the dialog closes either way.
+    pub(super) fn apply_scale_to(&mut self, dialog: &ScaleToDialog) {
+        self.scale_to = None;
+        let ids = self.editor.live_selection();
+        if ids.is_empty() {
+            self.status = "nothing selected".to_owned();
+            return;
+        }
+        if self.run_command(
+            "object.resize",
+            serde_json::json!({
+                "ids": ids,
+                "width": dialog.width,
+                "height": dialog.height,
+            }),
+        ) {
+            self.status = format!("selection resized to {}×{}", dialog.width, dialog.height);
+        }
+    }
+
+    /// The confirm dialog: the question, and Yes/No. Yes runs the
+    /// action; No closes without touching the document.
+    pub(super) fn confirm_dialog_ui(&mut self, ui: &mut egui::Ui) {
+        let Some(dialog) = self.confirm.take() else {
+            return;
+        };
+        ui.label(&dialog.question);
+        ui.separator();
+        let mut confirmed = false;
+        let mut declined = false;
+        ui.horizontal(|ui| {
+            confirmed = ui.button("Yes").clicked();
+            declined |= ui.button("No").clicked();
+        });
+        if confirmed {
+            self.run_confirm(dialog.action);
+            return;
+        }
+        if !declined {
+            self.confirm = Some(dialog);
+        } else {
+            self.status = "cancelled".to_owned();
+        }
+    }
+
+    /// Runs a confirmed action. The dialog has already closed, so a
+    /// refusal lands on the status line with nothing left open.
+    pub(super) fn run_confirm(&mut self, action: ConfirmAction) {
+        match action {
+            ConfirmAction::DeleteAll => {
+                if self.run_command("document.deleteAllInDocument", serde_json::json!({})) {
+                    self.status = "every object in the document deleted".to_owned();
+                    // The old selection ids no longer resolve;
+                    // clear the view so no panel reads them.
+                    self.editor.set_selection(Vec::new());
+                }
+            }
+        }
     }
 
     /// The Feather dialog: the radius slider over the active pixel

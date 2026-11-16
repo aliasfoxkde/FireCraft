@@ -1,0 +1,171 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 760" width="1280" height="760" role="img" aria-labelledby="title desc">
+  <title id="title">FireCraft in dark mode, editing the flame mark</title>
+  <desc id="desc">A mock-up of the FireCraft workspace in dark mode: the FireCraft flame mark sits on the artboard with live path nodes on its outline, a layers panel lists the mark's parts, and a timeline runs along the bottom.</desc>
+  <defs>
+    <linearGradient id="flame" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f51e2b"/>
+      <stop offset=".52" stop-color="#f83b24"/>
+      <stop offset="1" stop-color="#ff781b"/>
+    </linearGradient>
+    <linearGradient id="glow" x1="560" y1="230" x2="560" y2="480" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ff8b24" stop-opacity=".22"/>
+      <stop offset="1" stop-color="#ff8b24" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- chrome -->
+  <rect width="1280" height="760" fill="#1b1e25"/>
+  <rect x="0" y="0" width="1280" height="34" fill="#232630"/>
+  <rect x="0" y="33" width="1280" height="1" fill="#333845"/>
+  <g font-family="DejaVu Sans, sans-serif" font-size="11" fill="#b7bac3">
+    <text x="18" y="21">File</text>
+    <text x="52" y="21">Edit</text>
+    <text x="90" y="21">Modify</text>
+    <text x="140" y="21">Text</text>
+    <text x="180" y="21">Select</text>
+    <text x="228" y="21">Command</text>
+    <text x="290" y="21">View</text>
+    <text x="330" y="21">Window</text>
+    <text x="382" y="21">Help</text>
+    <text x="1050" y="21" fill="#7d828d">untitled.fw.png — 100%</text>
+  </g>
+  <g fill="#3a3f4c">
+    <circle cx="1236" cy="17" r="4"/>
+    <circle cx="1252" cy="17" r="4"/>
+    <circle cx="1268" cy="17" r="4"/>
+  </g>
+
+  <!-- tool strip -->
+  <rect x="0" y="34" width="56" height="684" fill="#21242d"/>
+  <rect x="55" y="34" width="1" height="684" fill="#333845"/>
+  <g fill="none" stroke="#8d93a0" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M22 56l12 20-8-1-4 7z"/>
+    <path d="M22 96l12 20-8-1-4 7z" opacity=".55"/>
+    <path d="M18 140h18M18 148h18M18 156h18"/>
+    <circle cx="27" cy="196" r="8"/>
+    <path d="M27 196l6-5"/>
+    <path d="M20 240h14v14H20z"/>
+    <path d="M22 286h10M22 292h10" opacity=".55"/>
+  </g>
+  <text x="27" y="336" font-family="DejaVu Sans, sans-serif" font-size="13" fill="#8d93a0" text-anchor="middle">T</text>
+  <g fill="none" stroke="#8d93a0" stroke-width="1.6" opacity=".55">
+    <path d="M20 380h14M20 388h14M20 396h9"/>
+    <circle cx="27" cy="440" r="7"/>
+  </g>
+
+  <!-- canvas -->
+  <rect x="56" y="34" width="944" height="606" fill="#2a2e37"/>
+  <rect x="300" y="90" width="520" height="520" fill="#20242e"/>
+  <rect x="299.5" y="89.5" width="521" height="521" fill="none" stroke="#3c414d"/>
+  <ellipse cx="560" cy="380" rx="200" ry="150" fill="url(#glow)"/>
+
+
+  <!-- the flame mark -->
+  <g transform="translate(403.79 193.46) scale(0.31214)">
+    <path d="M 539.70,70.00 C 531.97,73.77 533.90,97.14 512.46,121.58 C 491.02,146.01 430.65,193.63 411.04,216.62 C 391.44,239.60 397.43,242.79 394.82,259.50 C 392.21,276.21 400.13,312.43 395.40,316.87 C 390.66,321.32 372.02,299.58 366.42,286.16 C 360.82,272.73 364.78,240.47 361.79,236.32 C 358.79,232.17 350.97,244.05 348.46,261.24 C 345.95,278.43 339.96,304.41 346.72,339.47 C 353.48,374.54 382.74,443.69 389.02,471.60 C 395.30,499.52 387.77,497.97 384.39,506.95 C 381.01,515.94 375.60,521.15 368.74,525.50 C 361.88,529.85 350.97,533.90 343.24,533.03 C 335.51,532.16 330.88,539.79 322.38,520.28 C 313.88,500.77 302.00,440.79 292.24,415.97 C 282.49,391.15 274.76,382.65 263.85,371.35 C 252.93,360.05 239.70,352.61 226.76,348.17 C 213.82,343.72 184.55,338.51 186.19,344.69 C 187.83,350.87 224.05,367.87 236.61,385.26 C 249.17,402.64 258.15,427.27 261.53,449.00 C 264.91,470.73 264.81,480.01 256.89,515.65 C 248.97,551.29 220.96,628.07 214.01,662.84 C 207.06,697.61 212.46,706.02 215.17,724.27 C 217.87,742.53 221.45,754.99 230.24,772.37 C 239.03,789.76 253.03,811.59 267.90,828.58 C 282.78,845.58 300.36,860.94 319.48,874.37 C 338.61,887.79 360.63,899.96 382.65,909.14 C 404.67,918.31 455.86,939.47 451.61,929.42 C 447.36,919.38 376.08,868.19 357.15,848.87 C 338.22,829.55 342.08,825.69 338.03,813.52 C 333.97,801.35 329.62,794.30 332.81,775.85 C 336.00,757.40 337.64,735.57 357.15,702.83 C 376.66,670.09 431.13,607.11 449.87,579.39 C 468.61,551.67 464.55,557.95 469.58,536.51 C 474.60,515.07 482.32,473.83 480.01,450.74 C 477.69,427.66 449.49,398.68 455.67,398.01 C 461.85,397.33 502.22,426.21 517.10,446.68 C 531.97,467.16 541.73,495.65 544.91,520.86 C 548.10,546.07 544.33,566.74 536.22,597.94 C 528.11,629.14 501.26,680.52 496.23,708.05 C 491.21,735.57 501.45,751.51 506.08,763.10 C 510.72,774.69 517.48,775.17 524.05,777.59 C 530.62,780.00 534.19,785.70 545.49,777.59 C 556.79,769.47 582.48,746.20 591.85,728.91 C 601.22,711.62 604.02,692.88 601.70,673.85 C 599.39,654.83 572.92,615.42 577.94,614.74 C 582.97,614.07 617.45,649.80 631.84,669.80 C 646.23,689.79 657.82,717.41 664.29,734.70 C 670.76,751.99 670.57,758.37 670.67,773.53 C 670.76,788.69 669.89,808.59 664.87,825.69 C 659.85,842.78 649.90,862.20 640.53,876.11 C 631.16,890.01 602.38,910.78 608.66,909.14 C 614.94,907.50 653.96,886.92 678.20,866.25 C 702.44,845.58 735.09,808.50 754.12,785.12 C 773.14,761.75 782.71,747.07 792.37,726.01 C 802.02,704.96 809.56,683.32 812.07,658.79 C 814.58,634.25 812.26,602.09 807.43,578.81 C 802.60,555.54 789.47,512.75 783.09,519.12 C 776.72,525.50 776.43,613.30 769.18,617.06 C 761.94,620.83 761.65,574.66 739.63,541.73 C 717.61,508.79 662.26,454.99 637.06,419.45 C 611.85,383.90 595.81,331.46 588.38,328.46 C 580.94,325.47 600.16,398.68 592.43,401.48 C 584.71,404.28 552.25,366.52 542.01,345.27 C 531.78,324.02 527.24,310.21 531.00,273.99 C 534.77,237.77 559.98,157.12 564.62,127.95 C 569.25,98.78 562.97,108.63 558.82,98.98 C 554.67,89.32 547.42,66.23 539.70,70.00 Z" fill="url(#flame)"/>
+  </g>
+
+
+  <!-- live path selection -->
+  <g fill="none" stroke="#6ea8fe" stroke-width="1.4">
+    <rect x="462" y="215" width="196" height="269" stroke-dasharray="5 4"/>
+  </g>
+  <g fill="#0f1218" stroke="#6ea8fe" stroke-width="1.4">
+    <rect x="458" y="211" width="8" height="8"/>
+    <rect x="556" y="211" width="8" height="8"/>
+    <rect x="654" y="211" width="8" height="8"/>
+    <rect x="458" y="346" width="8" height="8"/>
+    <rect x="654" y="346" width="8" height="8"/>
+    <rect x="458" y="480" width="8" height="8"/>
+    <rect x="556" y="480" width="8" height="8"/>
+    <rect x="654" y="480" width="8" height="8"/>
+  </g>
+  <g fill="#6ea8fe">
+    <rect x="532" y="261" width="7" height="7"/>
+    <rect x="516" y="359" width="7" height="7"/>
+    <rect x="471" y="421" width="7" height="7"/>
+    <rect x="546" y="318" width="7" height="7"/>
+    <rect x="613" y="430" width="7" height="7"/>
+    <rect x="635" y="364" width="7" height="7"/>
+  </g>
+  <g stroke="#6ea8fe" stroke-width="1.2" opacity=".8">
+    <path d="M536 265L550 277"/>
+    <path d="M520 363L534 375"/>
+    <path d="M475 425L489 437"/>
+    <path d="M550 322L564 334"/>
+  </g>
+
+  <!-- right panels -->
+  <rect x="1000" y="34" width="280" height="684" fill="#21242d"/>
+  <rect x="999" y="34" width="1" height="684" fill="#333845"/>
+  <rect x="1000" y="34" width="280" height="26" fill="#262a34"/>
+  <text x="1014" y="51" font-family="DejaVu Sans, sans-serif" font-size="9.5" letter-spacing="1.6" fill="#8d93a0">LAYERS</text>
+  <g font-family="DejaVu Sans, sans-serif" font-size="11.5">
+    <rect x="1000" y="60" width="280" height="26" fill="#2f3542"/>
+    <rect x="1000" y="60" width="2" height="26" fill="#f0a94c"/>
+    <g fill="#8d93a0">
+      <circle cx="1016" cy="73" r="3.5"/>
+      <circle cx="1016" cy="99" r="3.5"/>
+      <circle cx="1016" cy="125" r="3.5"/>
+    </g>
+    <text x="1032" y="77" fill="#f0f0f2">flame-mark</text>
+    <text x="1032" y="103" fill="#a9adb8">base-glow</text>
+    <text x="1032" y="129" fill="#a9adb8">background</text>
+  </g>
+  <rect x="1000" y="210" width="280" height="1" fill="#333845"/>
+  <rect x="1000" y="210" width="280" height="26" fill="#262a34"/>
+  <text x="1014" y="227" font-family="DejaVu Sans, sans-serif" font-size="9.5" letter-spacing="1.6" fill="#8d93a0">PROPERTIES</text>
+  <g font-family="DejaVu Sans, sans-serif" font-size="11" fill="#a9adb8">
+    <text x="1014" y="256">X</text>
+    <text x="1050" y="256" fill="#d9dbe1">462</text>
+    <text x="1114" y="256">Y</text>
+    <text x="1146" y="256" fill="#d9dbe1">215</text>
+    <text x="1014" y="284">W</text>
+    <text x="1050" y="284" fill="#d9dbe1">196</text>
+    <text x="1114" y="284">H</text>
+    <text x="1146" y="284" fill="#d9dbe1">269</text>
+    <text x="1014" y="320">Fill</text>
+    <text x="1014" y="348">Stroke</text>
+    <text x="1014" y="376">Blend</text>
+    <text x="1014" y="404">Opacity</text>
+  </g>
+  <rect x="1050" y="310" width="14" height="14" fill="#e8622a"/>
+  <text x="1074" y="322" font-family="DejaVu Sans, sans-serif" font-size="11" fill="#d9dbe1">#E8622A</text>
+  <text x="1050" y="322" font-family="DejaVu Sans, sans-serif" font-size="11" fill="#6f7481">—</text>
+  <text x="1050" y="350" font-family="DejaVu Sans, sans-serif" font-size="11" fill="#d9dbe1">none</text>
+  <text x="1050" y="378" font-family="DejaVu Sans, sans-serif" font-size="11" fill="#d9dbe1">Normal</text>
+  <text x="1050" y="406" font-family="DejaVu Sans, sans-serif" font-size="11" fill="#d9dbe1">100%</text>
+
+  <!-- timeline -->
+  <rect x="56" y="640" width="944" height="78" fill="#21242d"/>
+  <rect x="56" y="640" width="944" height="1" fill="#333845"/>
+  <text x="74" y="662" font-family="DejaVu Sans, sans-serif" font-size="9.5" letter-spacing="1.6" fill="#8d93a0">TIMELINE</text>
+  <g stroke="#3a3f4c" stroke-width="1">
+    <path d="M74 690h880"/>
+    <path d="M74 676v28"/>
+    <path d="M194 682v16"/>
+    <path d="M314 682v16"/>
+    <path d="M434 682v16"/>
+    <path d="M554 682v16"/>
+    <path d="M674 682v16"/>
+    <path d="M794 682v16"/>
+    <path d="M914 676v28"/>
+  </g>
+  <rect x="74" y="678" width="120" height="22" fill="#2f3542" stroke="#f0a94c" stroke-width="1.2"/>
+  <g font-family="DejaVu Sans, sans-serif" font-size="9.5" fill="#7d828d">
+    <text x="74" y="712">0:00</text>
+    <text x="884" y="712">0:10</text>
+  </g>
+
+  <!-- status bar -->
+  <rect x="0" y="718" width="1280" height="42" fill="#232630"/>
+  <rect x="0" y="718" width="1280" height="1" fill="#333845"/>
+  <g font-family="DejaVu Sans, sans-serif" font-size="10.5" fill="#7d828d">
+    <text x="18" y="744">100%</text>
+    <text x="70" y="744">Snap: 8px grid</text>
+    <text x="176" y="744">RGB / 8</text>
+    <text x="252" y="744">5 layers</text>
+    <text x="330" y="744">flame-mark · path</text>
+    <text x="1140" y="744">DARK MODE</text>
+  </g>
+</svg>

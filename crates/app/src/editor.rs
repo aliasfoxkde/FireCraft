@@ -290,11 +290,15 @@ pub enum AutoShape {
     Measure,
     /// `autoshape.connectorLine`.
     ConnectorLine,
+    /// `autoshape.rect` — the Rounded Rectangle tool.
+    RoundedRect,
+    /// `autoshape.rect` — the Chamfer Rectangle tool.
+    ChamferRect,
 }
 
 impl AutoShape {
     /// Menu order.
-    pub const ALL: [AutoShape; 10] = [
+    pub const ALL: [AutoShape; 12] = [
         AutoShape::Star,
         AutoShape::Polygon,
         AutoShape::Spiral,
@@ -305,6 +309,8 @@ impl AutoShape {
         AutoShape::ArrowLine,
         AutoShape::Measure,
         AutoShape::ConnectorLine,
+        AutoShape::RoundedRect,
+        AutoShape::ChamferRect,
     ];
 
     /// Menu label.
@@ -321,6 +327,8 @@ impl AutoShape {
             AutoShape::ArrowLine => "Arrow Line",
             AutoShape::Measure => "Measure",
             AutoShape::ConnectorLine => "Connector Line",
+            AutoShape::RoundedRect => "Rounded Rectangle",
+            AutoShape::ChamferRect => "Chamfer Rectangle",
         }
     }
 
@@ -338,6 +346,9 @@ impl AutoShape {
             AutoShape::ArrowLine => "autoshape.arrowLine",
             AutoShape::Measure => "autoshape.measure",
             AutoShape::ConnectorLine => "autoshape.connectorLine",
+            // The three rectangle tools share one generator and
+            // differ only in the corner treatment they ask for.
+            AutoShape::RoundedRect | AutoShape::ChamferRect => "autoshape.rect",
         }
     }
 
@@ -345,7 +356,14 @@ impl AutoShape {
     /// shapes take the frame center + radius, frame-based shapes the
     /// normalized frame, line-based shapes the raw endpoints.
     #[must_use]
-    fn payload(self, drag: &Drag, page: usize, layer: usize, frame: usize) -> serde_json::Value {
+    fn payload(
+        self,
+        drag: &Drag,
+        page: usize,
+        layer: usize,
+        frame: usize,
+        corner: f64,
+    ) -> serde_json::Value {
         let (sx, sy) = (drag.start.x, drag.start.y);
         let (cx, cy) = (drag.current.x, drag.current.y);
         // Frame origin/size, normalized so drags in any direction
@@ -358,13 +376,14 @@ impl AutoShape {
             start: (sx, sy),
             end: (cx, cy),
         };
-        self.payload_from(&placement, page, layer, frame)
+        self.payload_from(&placement, page, layer, frame, corner)
     }
 
     /// The payload for a shape inserted without a drag — the Auto
     /// Shapes panel's path: a `size`-square box at (`x`, `y`). The
     /// line-based shapes run along the box's horizontal midline.
     #[must_use]
+    #[allow(clippy::too_many_arguments)]
     pub fn payload_in_rect(
         self,
         page: usize,
@@ -373,6 +392,7 @@ impl AutoShape {
         x: f64,
         y: f64,
         size: f64,
+        corner: f64,
     ) -> serde_json::Value {
         let mid = y + size / 2.0;
         let placement = Placement {
@@ -383,7 +403,7 @@ impl AutoShape {
             start: (x, mid),
             end: (x + size, mid),
         };
-        self.payload_from(&placement, page, layer, frame)
+        self.payload_from(&placement, page, layer, frame, corner)
     }
 
     /// The registry payload for one shape placement. Every shape
@@ -397,6 +417,7 @@ impl AutoShape {
         page: usize,
         layer: usize,
         frame: usize,
+        corner: f64,
     ) -> serde_json::Value {
         let frame_json = serde_json::json!({
             "page": page, "layer": layer, "cell": frame, "name": null,
@@ -460,6 +481,19 @@ impl AutoShape {
                 "startX": sx, "startY": sy, "endX": cx, "endY": cy,
                 "elbowX": cx, "elbowY": (sy + cy) / 2.0,
                 "corner1": 4.0, "corner2": 4.0, "vertical": false,
+            }),
+            // The three rectangle tools share one generator; only the
+            // corner treatment differs. The radius is clamped so the
+            // cut never exceeds half the shorter side.
+            AutoShape::RoundedRect => serde_json::json!({
+                "x": x, "y": y, "width": width, "height": height,
+                "corner": corner.min(0.5 * width.min(height)).max(0.0),
+                "kind": "round",
+            }),
+            AutoShape::ChamferRect => serde_json::json!({
+                "x": x, "y": y, "width": width, "height": height,
+                "corner": corner.min(0.5 * width.min(height)).max(0.0),
+                "kind": "chamfer",
             }),
         };
         if let (Some(object), Some(place)) = (value.as_object_mut(), frame_json.as_object()) {
@@ -1014,6 +1048,9 @@ pub struct Editor {
     pub wand_tolerance: u8,
     /// The feather radius the panel's slider applies.
     pub feather_radius: u8,
+    /// The corner radius the rectangle tools cut with (view state — the
+    /// engine re-reads it from every placement's payload).
+    pub rect_corner: f64,
 }
 
 impl Editor {
@@ -1088,6 +1125,7 @@ impl Editor {
             pixel_mode: PixelSelectMode::Replace,
             wand_tolerance: 32,
             feather_radius: 2,
+            rect_corner: 12.0,
         }
     }
 
@@ -2413,7 +2451,13 @@ impl Editor {
             Tool::AutoShape(shape) => {
                 self.apply(
                     shape.command(),
-                    shape.payload(&drag, self.page, self.active_layer(), self.frame),
+                    shape.payload(
+                        &drag,
+                        self.page,
+                        self.active_layer(),
+                        self.frame,
+                        self.rect_corner,
+                    ),
                 )?;
                 true
             }
@@ -2439,18 +2483,40 @@ impl Editor {
                 false
             }
             Tool::Crop => {
-                // CS6's Crop tool: the page's canvas window moves to
-                // the dragged rectangle, so what falls outside it is
+                // CS6's Crop tool: with vector paths selected the
+                // blade cuts them to the dragged rectangle
+                // (`path.cropSelection` — every selected path is
+                // intersected with it, and one entirely outside is
+                // dropped). With no path under it, the tool keeps
+                // CS6's document crop: the page's canvas window moves
+                // to the rectangle, so what falls outside it is
                 // cropped away.
-                self.apply(
-                    "document.setDocumentCanvasRect",
-                    serde_json::json!({
-                        "page": self.page,
-                        "x": x.min(drag.current.x), "y": y.min(drag.current.y),
-                        "width": width.abs().max(1.0),
-                        "height": height.abs().max(1.0),
-                    }),
-                )?;
+                let ids = self.live_selection();
+                let paths_only = !ids.is_empty()
+                    && ids.iter().all(|id| {
+                        matches!(self.document().registry.get(*id), Some(ObjectData::Path(_)))
+                    });
+                if paths_only {
+                    // The crop reads `Document::object_selection`,
+                    // so the view's selection lands there first.
+                    self.sync_selection()?;
+                    let (x0, y0) = (x.min(drag.current.x), y.min(drag.current.y));
+                    let (x1, y1) = (x.max(drag.current.x), y.max(drag.current.y));
+                    self.apply(
+                        "path.cropSelection",
+                        serde_json::json!({ "rect": [x0, y0, x1, y1] }),
+                    )?;
+                } else {
+                    self.apply(
+                        "document.setDocumentCanvasRect",
+                        serde_json::json!({
+                            "page": self.page,
+                            "x": x.min(drag.current.x), "y": y.min(drag.current.y),
+                            "width": width.abs().max(1.0),
+                            "height": height.abs().max(1.0),
+                        }),
+                    )?;
+                }
                 false
             }
             Tool::Scale => {
@@ -2476,9 +2542,17 @@ impl Editor {
                 )?;
                 false
             }
-            Tool::Freeform | Tool::ReshapeArea => {
-                // CS6's Freeform and Reshape Area: the drag pushes or
-                // pulls the selected path's points.
+            Tool::Freeform => {
+                // CS6's Freeform: the drag pushes the selected
+                // path's points inside a ring at the grab — full
+                // displacement at the center, linear falloff to the
+                // drag's own length (`path.warp`).
+                self.warp_selection(x, y, width, height)?;
+                false
+            }
+            Tool::ReshapeArea => {
+                // CS6's Reshape Area: the drag pushes or pulls the
+                // selected path's points.
                 self.reshape_selection(width, height)?;
                 false
             }
@@ -2587,6 +2661,38 @@ impl Editor {
         self.live_selection()
             .into_iter()
             .find(|id| matches!(document.registry.get(*id), Some(ObjectData::Path(_))))
+    }
+
+    /// CS6's Freeform tool: the drag pushes the selected path's
+    /// points inside a ring centered on the grab — full displacement
+    /// at the center, linear falloff to `radius` (the drag's own
+    /// length, so the gesture's reach is the distance it travelled).
+    ///
+    /// # Errors
+    /// The engine refuses the command; the document is untouched.
+    fn warp_selection(&mut self, x: f64, y: f64, dx: f64, dy: f64) -> Result<(), EngineError> {
+        let Some(id) = self.selected_path() else {
+            return Err(EngineError::InvalidState {
+                name: "path.warp".to_owned(),
+                detail: "no path is selected".to_owned(),
+            });
+        };
+        let radius = dx.hypot(dy);
+        if !radius.is_finite() || radius <= 0.0 {
+            return Err(EngineError::BadPayload {
+                name: "path.warp".to_owned(),
+                detail: "the push ring needs a non-zero drag".to_owned(),
+            });
+        }
+        self.apply(
+            "path.warp",
+            serde_json::json!({
+                "id": id,
+                "x": x, "y": y,
+                "radius": radius,
+                "dx": dx, "dy": dy,
+            }),
+        )
     }
 
     /// CS6's Freeform and Reshape Area: the drag pushes or pulls the
@@ -3389,36 +3495,72 @@ impl Editor {
             }
             Tool::PolygonSlice | Tool::PolygonHotspot => {
                 let command = if self.tool == Tool::PolygonSlice {
-                    "slice.create"
+                    "slice.appendPoint"
                 } else {
-                    "hotspot.create"
+                    "hotspot.appendPoint"
                 };
-                let mut x = f64::MAX;
-                let mut y = f64::MAX;
-                let mut right = f64::MIN;
-                let mut bottom = f64::MIN;
-                let anchors: Vec<serde_json::Value> = draft
-                    .points
-                    .iter()
-                    .map(|point| {
-                        x = x.min(point.x);
-                        y = y.min(point.y);
-                        right = right.max(point.x);
-                        bottom = bottom.max(point.y);
-                        serde_json::json!({ "x": point.x, "y": point.y })
-                    })
-                    .collect();
-                self.apply(
-                    command,
-                    serde_json::json!({
-                        "shape": "polygon",
-                        "x": x, "y": y,
-                        "width": right - x, "height": bottom - y,
-                        "points": anchors,
-                        "page": self.page,
-                        "name": null, "link": null, "alt": null,
-                    }),
-                )?;
+                // Design C: the draft replays through the append
+                // state machine — point 1 takes the create branch
+                // (a fresh one-point open polyline), every later
+                // point appends, and the final anchor closes the
+                // outline against the start. One transaction, so the
+                // whole polygon lands as one undo step named for the
+                // verb; a refusal aborts it and the document is
+                // untouched. The local draft UX (click-to-plot) is
+                // unchanged — only the commit moved.
+                let page = self.page;
+                let restore = self.document().object_selection.clone();
+                let first = points[0];
+                let last = points[points.len() - 1];
+                let close = ((last[0] - first[0]).powi(2) + (last[1] - first[1]).powi(2)).sqrt();
+                self.session.begin_transaction(command)?;
+                let replay = (|| -> Result<(), EngineError> {
+                    // Guarantee the create branch: no open polygon
+                    // of this class can swallow the first point.
+                    self.apply("selection.set", serde_json::json!({ "ids": [] }))?;
+                    let delta = self.apply_delta(
+                        command,
+                        serde_json::json!({
+                            "x": first[0], "y": first[1],
+                            "tolerance": 0.0, "page": page,
+                        }),
+                    )?;
+                    let mut created = Vec::new();
+                    collect_created(&delta, &mut created);
+                    let Some(id) = created.last().copied() else {
+                        return Err(EngineError::InvalidState {
+                            name: command.to_owned(),
+                            detail: "the create branch minted no object".to_owned(),
+                        });
+                    };
+                    self.apply("selection.set", serde_json::json!({ "ids": [id] }))?;
+                    for (index, point) in points.iter().enumerate().skip(1) {
+                        // The final anchor closes the outline: the
+                        // engine closes when the new point lands
+                        // within tolerance of the start, so hand it
+                        // exactly that distance — the same formula
+                        // the engine measures with.
+                        let tolerance = if index + 1 == points.len() {
+                            close
+                        } else {
+                            0.0
+                        };
+                        self.apply(
+                            command,
+                            serde_json::json!({
+                                "x": point[0], "y": point[1],
+                                "tolerance": tolerance, "page": page,
+                            }),
+                        )?;
+                    }
+                    self.apply("selection.set", serde_json::json!({ "ids": restore }))?;
+                    Ok(())
+                })();
+                if let Err(error) = replay {
+                    let _ = self.session.abort_transaction();
+                    return Err(error);
+                }
+                self.session.commit_transaction()?;
             }
             _ => {}
         }
@@ -4302,6 +4444,92 @@ mod tests {
             before,
             all_anchors(&editor, id),
             "the vertical-only skew committed"
+        );
+    }
+
+    /// The Freeform tool pushes through `path.warp`: the grab's own
+    /// anchor takes the full drag while anchors beyond the ring do
+    /// not move — the local deformation the rigid `path.reshapeArea`
+    /// translate never produced.
+    #[test]
+    fn the_freeform_tool_pushes_through_path_warp() {
+        let mut editor = Editor::untitled();
+        let id = rect_at(&mut editor, 10.0, 10.0);
+        editor.set_selection(vec![id]);
+        let before = all_anchors(&editor, id);
+
+        editor.tool = Tool::Freeform;
+        editor.begin_drag(geom::Point::new(10.0, 10.0));
+        editor.drag_to(geom::Point::new(30.0, 10.0));
+        editor.end_drag().unwrap();
+
+        let after = all_anchors(&editor, id);
+        let moved: Vec<_> = before
+            .iter()
+            .zip(&after)
+            .filter(|(was, now)| was != now)
+            .collect();
+        assert_eq!(moved.len(), 1, "only the ring's interior moved");
+        assert_eq!(
+            after[0],
+            geom::Point::new(30.0, 10.0),
+            "the grabbed anchor took the whole drag"
+        );
+        assert_eq!(
+            editor.session.undo().expect("an undo step"),
+            "path.warp",
+            "the gesture dispatched the warp"
+        );
+    }
+
+    /// The Crop tool with paths selected cuts them to the blade
+    /// (`path.cropSelection`), not the canvas.
+    #[test]
+    fn the_crop_tool_cuts_the_selected_paths() {
+        let mut editor = Editor::untitled();
+        let id = rect_at(&mut editor, 10.0, 10.0);
+        editor.set_selection(vec![id]);
+
+        editor.tool = Tool::Crop;
+        editor.begin_drag(geom::Point::new(0.0, 0.0));
+        editor.drag_to(geom::Point::new(20.0, 20.0));
+        editor.end_drag().unwrap();
+
+        for anchor in all_anchors(&editor, id) {
+            assert!(
+                (10.0..=20.0).contains(&anchor.x) && (10.0..=20.0).contains(&anchor.y),
+                "every anchor lies inside the blade, got {anchor:?}"
+            );
+        }
+        assert_eq!(
+            editor.session.undo().expect("an undo step"),
+            "path.cropSelection",
+            "the gesture dispatched the crop"
+        );
+    }
+
+    /// With no path selected the Crop tool keeps CS6's document
+    /// crop: the canvas window moves to the blade.
+    #[test]
+    fn the_crop_tool_moves_the_canvas_without_a_path_selection() {
+        let mut editor = Editor::untitled();
+
+        editor.tool = Tool::Crop;
+        editor.begin_drag(geom::Point::new(5.0, 7.0));
+        editor.drag_to(geom::Point::new(25.0, 47.0));
+        editor.end_drag().unwrap();
+
+        let canvas = &editor.document().pages[0].info.canvas;
+        assert_eq!((canvas.x, canvas.y), (5.0, 7.0), "the window moved");
+        assert_eq!(
+            (canvas.width, canvas.height),
+            (20.0, 40.0),
+            "the window took the blade"
+        );
+        assert_eq!(
+            editor.session.undo().expect("an undo step"),
+            "document.setDocumentCanvasRect",
+            "the gesture kept the document crop"
         );
     }
 

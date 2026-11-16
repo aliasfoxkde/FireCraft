@@ -200,6 +200,62 @@ pub(crate) fn draw_autoshape_glyph(
                 stroke,
             ));
         }
+        AutoShape::RoundedRect => {
+            // The rounded box: four quarter-circle arcs joined by the
+            // straight edges.
+            let (half_w, half_h, radius) = (6.0f32, 6.0f32, 3.0f32);
+            let mut points = Vec::new();
+            // The four arc centers, clockwise from the top-left.
+            let centers = [
+                (c.x - half_w + radius, c.y - half_h + radius),
+                (c.x + half_w - radius, c.y - half_h + radius),
+                (c.x + half_w - radius, c.y + half_h - radius),
+                (c.x - half_w + radius, c.y + half_h - radius),
+            ];
+            // Each arc runs from its start angle to its end angle.
+            let arcs = [
+                (std::f64::consts::PI, 1.5 * std::f64::consts::PI),
+                (1.5 * std::f64::consts::PI, 2.0 * std::f64::consts::PI),
+                (0.0, 0.5 * std::f64::consts::PI),
+                (0.5 * std::f64::consts::PI, std::f64::consts::PI),
+            ];
+            for (index, (center, (start, end))) in centers.iter().zip(arcs.iter()).enumerate() {
+                for step in 0..=6 {
+                    let angle = start + (end - start) * step as f64 / 6.0;
+                    points.push(Pos2::new(
+                        center.0 + (radius as f64 * angle.cos()) as f32,
+                        center.1 + (radius as f64 * angle.sin()) as f32,
+                    ));
+                }
+                // The straight edge to the next arc's start.
+                let next = centers[(index + 1) % 4];
+                let next_angle = arcs[(index + 1) % 4].0;
+                points.push(Pos2::new(
+                    next.0 + (radius as f64 * next_angle.cos()) as f32,
+                    next.1 + (radius as f64 * next_angle.sin()) as f32,
+                ));
+            }
+            points.push(points[0]);
+            painter.add(egui::Shape::line(points, stroke));
+        }
+        AutoShape::ChamferRect => {
+            // The chamfered box: eight straight sides.
+            let (half_w, half_h, cut) = (6.0f32, 6.0f32, 3.0f32);
+            painter.add(egui::Shape::line(
+                vec![
+                    Pos2::new(c.x - half_w + cut, c.y - half_h),
+                    Pos2::new(c.x + half_w - cut, c.y - half_h),
+                    Pos2::new(c.x + half_w, c.y - half_h + cut),
+                    Pos2::new(c.x + half_w, c.y + half_h - cut),
+                    Pos2::new(c.x + half_w - cut, c.y + half_h),
+                    Pos2::new(c.x - half_w + cut, c.y + half_h),
+                    Pos2::new(c.x - half_w, c.y + half_h - cut),
+                    Pos2::new(c.x - half_w, c.y - half_h + cut),
+                    Pos2::new(c.x - half_w + cut, c.y - half_h),
+                ],
+                stroke,
+            ));
+        }
     }
 }
 

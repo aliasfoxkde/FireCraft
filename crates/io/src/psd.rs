@@ -685,6 +685,7 @@ fn build_model(
                     .document
                     .registry
                     .insert(ObjectData::Group(GroupObject {
+                        stack_mode: None,
                         group_type: 0,
                         name: non_empty(&shell.name),
                         children,

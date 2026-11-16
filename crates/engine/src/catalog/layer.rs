@@ -626,6 +626,12 @@ impl TypedCommand for SetLayerSharing {
                         uid: uid.clone(),
                         is_primary: false,
                     }),
+                    // A link slot is a display layer (CS6's `DISb`):
+                    // the derive-default is `false` (smart-reference
+                    // display), which would render the shared content
+                    // nowhere — the link's flag gates the definition's
+                    // body in the walk.
+                    display: true,
                     ..Layer::default()
                 };
             } else {
@@ -645,6 +651,10 @@ impl TypedCommand for SetLayerSharing {
                             uid: uid.clone(),
                             is_primary: false,
                         }),
+                        // A link slot renders its definition's content
+                        // — it must be a display layer (see the owner
+                        // slot above).
+                        display: true,
                         ..Layer::default()
                     },
                 );
@@ -748,6 +758,9 @@ impl TypedCommand for ShareLayerToPages {
                         uid: uid.clone(),
                         is_primary: false,
                     }),
+                    // A link slot renders its definition's content —
+                    // it must be a display layer.
+                    display: true,
                     ..Layer::default()
                 },
             );
@@ -905,6 +918,67 @@ mod sharing_tests {
             serde_json::to_vec(&document).unwrap(),
             before,
             "undo removes the definition and every link"
+        );
+    }
+
+    #[test]
+    fn shared_links_are_display_layers() {
+        let (mut document, _) = testdoc::sample_document();
+        SetLayerSharing
+            .apply_json(
+                &mut document,
+                json!({ "page": 0, "layer": 0, "shared": true }),
+            )
+            .unwrap();
+        // The renderer gates the definition's body on the link's own
+        // display flag: a link minted with the derive-default
+        // (`false`, smart-reference display) would render the shared
+        // content nowhere.
+        for page in &document.pages {
+            for layer in &page.layers.layers {
+                if layer.shared_link.is_some() {
+                    assert!(
+                        layer.display,
+                        "a link slot renders its definition's content"
+                    );
+                }
+            }
+        }
+        // A link inserted later is a display layer too.
+        ShareLayerToPages
+            .apply_json(
+                &mut document,
+                json!({
+                    "page": 0, "layer": 0,
+                    "add_to_pages": null, "delete_from_pages": [1],
+                }),
+            )
+            .unwrap();
+        assert!(
+            document.pages[1]
+                .layers
+                .layers
+                .iter()
+                .all(|layer| layer.shared_link.is_none()),
+            "the link left the page"
+        );
+        ShareLayerToPages
+            .apply_json(
+                &mut document,
+                json!({
+                    "page": 0, "layer": 0,
+                    "add_to_pages": [1], "delete_from_pages": null,
+                }),
+            )
+            .unwrap();
+        let inserted = document.pages[1]
+            .layers
+            .layers
+            .iter()
+            .find(|layer| layer.shared_link.is_some());
+        assert!(
+            inserted.is_some_and(|layer| layer.display),
+            "a re-added link renders its definition's content"
         );
     }
 
