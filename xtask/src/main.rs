@@ -40,6 +40,7 @@ mod floor;
 mod fuzz;
 mod golden;
 mod hero;
+mod jsonschema;
 mod layers;
 mod library;
 mod panelsnapshot;

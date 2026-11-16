@@ -337,6 +337,14 @@ jobs:
         run: cargo run --locked -p xtask -- dist --web
       - name: Native set + deb read-back
         run: cargo run --locked -p xtask -- dist --native
+      - name: SBOM (CycloneDX 1.5, validated against the schema and the lockfile)
+        # The SBOM is the document the release publishes about its own
+        # dependencies. `dist --sbom` validates it against the vendored
+        # CycloneDX 1.5 schema and compares its component inventory with
+        # `Cargo.lock` before writing it (decision 0119), so a
+        # non-conforming or incomplete SBOM fails here rather than
+        # reaching the published asset.
+        run: cargo run --locked -p xtask -- dist --sbom
       - name: DEB install verification (clean Debian 12)
         # The package must be installable, launchable and removable on
         # the platform it declares. `packaging/deb/verify-install.sh` is
