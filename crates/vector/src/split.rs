@@ -16,8 +16,11 @@ const MIN_PIECE: f64 = SNAP;
 /// One true-geometry span between consecutive split parameters.
 #[derive(Clone, Debug)]
 pub struct Piece {
+    /// The span's geometry, re-parameterized to the piece's own extent.
     pub geom: Seg,
+    /// The piece's first point.
     pub start: Point,
+    /// The piece's last point.
     pub end: Point,
 }
 

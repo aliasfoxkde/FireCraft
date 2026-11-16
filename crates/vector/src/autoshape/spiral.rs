@@ -15,10 +15,13 @@ use super::{ELLIPSE_BCP_CONST, open_contour, shape};
 use doc::model::{Contour, PathObject, PathPoint};
 use geom::Point;
 
-/// Tightness bounds (`k.minB`/`k.maxB`): the evalB control maps the
-/// drag control onto this window; outside it `cot b ≤ 0` would stop
-/// the radius from ever reaching the limit.
+/// Lower tightness bound (`k.minB`): the spiral's tightest allowed
+/// half-turn angle, in degrees. The evalB control maps the drag
+/// control onto the `[min, max]` window; outside it `cot b ≤ 0` would
+/// stop the radius from ever reaching the limit.
 pub const MIN_TIGHTNESS_DEG: f64 = 50.0;
+/// Upper tightness bound (`k.maxB`): the spiral's loosest allowed
+/// half-turn angle, in degrees.
 pub const MAX_TIGHTNESS_DEG: f64 = 89.0;
 
 /// `k.ppc` — nodes per full turn on the open spiral.

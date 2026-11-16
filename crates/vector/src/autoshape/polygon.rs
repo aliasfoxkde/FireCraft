@@ -16,8 +16,9 @@ use super::{closed_contour, corner, shape};
 use doc::model::{Contour, PathObject, PathPoint};
 use geom::Point;
 
-/// The script's constants: corner-count floor/ceiling.
+/// Floor on the corner count: the script's `minNodes`.
 pub const MIN_POINTS: u32 = 3;
+/// Ceiling on the corner count: the script's `maxNodes`.
 pub const MAX_POINTS: u32 = 25;
 
 /// Smart Polygon parameters (`createPolygon(R, r, N, S)` /

@@ -16,6 +16,7 @@ use geom::Point;
 /// The script's constants: corner-count floor/ceiling and the handle
 /// clamp (`maxHandleSize`).
 pub const MIN_POINTS: u32 = 3;
+/// Ceiling on the corner count: the script's `maxNodes`.
 pub const MAX_POINTS: u32 = 50;
 const MAX_HANDLE: f64 = 3000.0;
 

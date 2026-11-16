@@ -19,7 +19,9 @@ use kurbo::{CubicBez, Line, PathEl};
 /// One span of a contour: a true cubic or a straight line.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Seg {
+    /// A straight span between two points.
     Line(Line),
+    /// A true cubic Bézier span.
     Cubic(CubicBez),
 }
 

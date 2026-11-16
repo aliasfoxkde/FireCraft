@@ -10,6 +10,8 @@
 //! in `docs/decisions/0003-path-booleans.md`. Every numeric gate is a
 //! named constant here so proofs stay tolerance-pinned.
 
+#![deny(missing_docs)]
+
 mod arrange;
 mod autoshape;
 mod boolean;

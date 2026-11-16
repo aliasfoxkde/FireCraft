@@ -29,8 +29,9 @@ use geom::Point;
 pub struct LShapeParams {
     /// Frame origin: top-left of the shape's bounding box.
     pub origin: Point,
-    /// Overall width (`width`) and height (`height`).
+    /// Overall width (`width`) of the L's bounding box.
     pub width: f64,
+    /// Overall height (`height`) of the L's bounding box.
     pub height: f64,
     /// Shaft thickness (`thickness`): the horizontal arm's height.
     pub thickness: f64,
@@ -58,8 +59,9 @@ impl LShapeParams {
 pub struct ArrowParams {
     /// Frame origin: top-left of the shape's bounding box.
     pub origin: Point,
-    /// Overall width (`width`) and height (`height`).
+    /// Overall width (`width`) of the arrow's bounding box.
     pub width: f64,
+    /// Overall height (`height`) of the arrow's bounding box.
     pub height: f64,
     /// Shaft thickness (`thickness`).
     pub thickness: f64,
