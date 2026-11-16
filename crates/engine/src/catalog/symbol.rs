@@ -2811,6 +2811,7 @@ mod tests {
                 locked: false,
                 mask_hidden: false,
                 mask_linked: None,
+                stack_mode: None,
                 effects: Vec::new(),
             }));
         document.symbols.push(SymbolDefinition {
