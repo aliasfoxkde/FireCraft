@@ -3267,7 +3267,7 @@ mod tests {
     }
 
     /// A shell whose selection is a text object carrying `text`.
-    fn text_shell(text: &str) -> (Shell, doc::ObjectId) {
+    pub(super) fn text_shell(text: &str) -> (Shell, doc::ObjectId) {
         let mut editor = Editor::untitled();
         editor
             .apply(
