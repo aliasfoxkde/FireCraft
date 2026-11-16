@@ -12,6 +12,11 @@ Current version: **0.2.5**.
 
 ### Features
 
+- **release**: the deployment comparison is a tracked tool and a report (ea5f7cda)
+- **xtask**: validate the SBOM against its schema (9f5ba35e)
+- **xtask**: the climb altimeter gates the tree it measures (a474297d)
+- **xtask**: the coverage gate prints its inputs (7766d175)
+- **xtask**: the altimeter measures the scoreboard (c36f934a)
 - **xtask**: print the reachability gap (T28) (98a73831)
 - **app,engine**: the mask stack — model, persistence, fold, and level panel (#113) (bb5a01f8)
 - **shell**: close the measured reachability gap in the shell's panels (#143) (78abb531)
@@ -400,6 +405,14 @@ Current version: **0.2.5**.
 
 ### Fixes
 
+- **app**: the panel tests read the effect before the undo (15b2d339)
+- **xtask**: the schema validator keeps its promises (2e72be01)
+- **app**: the panel test reads the text object out of the registry (223f7458)
+- **xtask**: the schema test helper borrows its schema (49a85545)
+- **xtask**: the schema test reuses its schema by clone (2d8bcdd7)
+- **xtask**: the schema validator satisfies the clippy gate (8ab35aae)
+- **xtask**: the SBOM validator compiles and matches the lockfile (39dede9e)
+- **xtask**: the coverage gate counts lines found, not counters (cd80f862)
 - **engine**: break apart retracts every copied group slot (678eea92)
 - **doc**: make the mask stack's model compile and pass the gates (0214fc30)
 - **packaging**: declare the libraries the desktop binary loads (8deafc4f)
@@ -565,6 +578,10 @@ Current version: **0.2.5**.
 
 ### Documentation
 
+- **release**: the Android gate and the RPM deferral are decided (4474ab3f)
+- **release**: every closed row cites its evidence as a link (bb99adba)
+- **release**: reconcile the board and its tickets (101c1cb7)
+- **ledger**: wave closeout — floor re-pinned to 96.89%, snapshots to post-wave state (#148) (44aa5466)
 - **climb**: restore the measured S2 baseline and reconcile stale rows (405d1fee)
 - **decisions**: renumber three duplicate decision numbers (f9eb9be6)
 - **climb**: correct the audit baseline's S2 to the measured 164 (64bd1ea7)
@@ -834,6 +851,7 @@ Current version: **0.2.5**.
 
 ### Tests
 
+- **app**: the web panels dispatch their own verbs (3d6d9ab1)
 - **engine**: capture the rewind reference state after the first edit (0674cf10)
 - **app**: make the rewind depths relative to the seeded document (b81e2e22)
 - **engine**: stale-id refusal tests for filter commands (fb3a92f9)
@@ -882,6 +900,7 @@ Current version: **0.2.5**.
 
 ### Style
 
+- **xtask**: rustfmt the coverage gate (eee94f16)
 - **xtask**: format scoped web build invocation (54be3909)
 - rustfmt the history-rewind change (8e19488f)
 - **xtask**: apply rustfmt to the new aegis report verb (8ada85c1)
@@ -938,6 +957,7 @@ Current version: **0.2.5**.
 
 ### Build
 
+- **release**: the board and its tickets must agree (d8bf8b4f)
 - **web**: optimize wasm output and set 50 MB safety ceiling (9c089b36)
 - raise MSRV to 1.95 and bump time past CVE-2026-25727 (c74b179f)
 
@@ -948,6 +968,7 @@ Current version: **0.2.5**.
 
 ### Chores
 
+- **aegis**: the new findings are adjudicated false positives (94049e6a)
 - **generated**: refresh the gate's generated outputs (24d9fe63)
 - **xtask**: drop the four phantom crates from the layer table (3fb38594)
 - **io**: restate the workspace denies the crate had dropped (ff7e5cca)
