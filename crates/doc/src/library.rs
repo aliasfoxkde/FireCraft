@@ -29,10 +29,18 @@ pub enum ExtractError {
     /// No definition carries the name.
     UnknownSymbol(String),
     /// A member id referenced by a definition is not in the registry.
-    DanglingMember { symbol: String, id: ObjectId },
+    DanglingMember {
+        /// The symbol whose definition carries the member.
+        symbol: String,
+        /// The member id, as the definition spells it.
+        id: ObjectId,
+    },
     /// A member references a tile id the source bank does not carry
     /// (a corrupt source document).
-    MissingTile { tile: u32 },
+    MissingTile {
+        /// The tile id the member points at.
+        tile: u32,
+    },
 }
 
 impl std::fmt::Display for ExtractError {
