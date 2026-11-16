@@ -114,12 +114,20 @@ hour than any individual panel.
    return shape.
 3. `SESSIONS.md` archived; `NEXT.md` shrinks to the open queue (G12).
 
-Status 2026-11-15: the verb exists in the audit worktree — `climb`
-measures S2–S8/S12 from the tree, `climb --append` records a row, and
-`climb --check` ratchets them. Its first run reports `S12_branches`
-34 → 123 against the recorded baseline, so the ratchet is already
-finding G11. It is deliberately not wired into `ci` yet: the baseline it
-compares against is still the 164 board (W0.3).
+Status: **landed.** `climb` measures S2–S8/S12 from the tree,
+`--append` records a row, and `--check` runs inside `xtask ci` after
+`reachability`, silent on stdout. The board was re-blessed from the
+merged tree (S2 249/257, S6 1896, S7 18, S12 123), so the old 164 and
+the stale 34-branch count are both gone. Re-blessing is what makes the
+ratchet legal: `climb --check` now holds those numbers instead of
+failing on them.
+
+C0.02–C0.05 are closed on the `gh pr view … MERGED` record, C0.07 and
+C0.08 with this change. Still open in P0: **C0.01** (record the pinned
+toolchain's wall time on `main`), **C0.06** (salvage `fix/web-ux-round1`),
+**C0.09** (S12 ≤ 4 — the 123 is real), and **C0.10** (`SESSIONS.md`
+archive). So P0's exit check is still unmet on S12 and S11, not on the
+measurement.
 
 **Exit:** deliberately lowering a metric fails `ci`; a vulnerable advisory
 fails `ci`; `SESSIONS.md` is no longer a second ledger.

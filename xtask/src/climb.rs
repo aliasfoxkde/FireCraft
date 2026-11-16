@@ -69,10 +69,34 @@ pub fn append(rung: Option<&str>) -> Result<(), String> {
 }
 
 /// `xtask climb --check`: fail when a ratcheted metric moved backwards.
+///
+/// A gate stays off stdout: the measured row goes to stdout only when a
+/// human asks for it, so `ci` keeps its data channel clean.
 pub fn check() -> Result<(), String> {
     let row = measure("check")?;
     let base = baseline()?;
-    let mut regressions = Vec::new();
+    let regressions = regressions(&row, &base);
+    if regressions.is_empty() {
+        eprintln!(
+            "[xtask] climb --check: every ratcheted metric holds {}",
+            base.commit
+        );
+        return Ok(());
+    }
+    Err(format!(
+        "climb --check: {} metric(s) moved backwards against {}:\n  {}",
+        regressions.len(),
+        base.commit,
+        regressions.join("\n  ")
+    ))
+}
+
+/// The metrics that moved the wrong way against `base`.
+///
+/// Split from `check` so the direction rules — and the set of metrics
+/// that carries one — are testable without running a measurement.
+fn regressions(row: &Row, base: &Baseline) -> Vec<String> {
+    let mut out = Vec::new();
 
     // (name, now, was): a value that must never fall.
     for (name, now, was) in [
@@ -81,7 +105,7 @@ pub fn check() -> Result<(), String> {
         ("S6_tests", row.s6_tests, base.s6_tests),
     ] {
         if now < was {
-            regressions.push(format!("{name} fell {was} -> {now}"));
+            out.push(format!("{name} fell {was} -> {now}"));
         }
     }
 
@@ -95,27 +119,17 @@ pub fn check() -> Result<(), String> {
         ("S12_branches", row.s12_branches, base.s12_branches),
     ] {
         if now > was {
-            regressions.push(format!("{name} rose {was} -> {now}"));
+            out.push(format!("{name} rose {was} -> {now}"));
         }
     }
 
     if let (Some(now), Some(was)) = (row.s8_wasm_raw, base.s8_wasm_raw)
         && now > was
     {
-        regressions.push(format!("S8_wasm_raw rose {was} -> {now}"));
+        out.push(format!("S8_wasm_raw rose {was} -> {now}"));
     }
 
-    util::write_stdout_line(&row.to_tsv())?;
-    if regressions.is_empty() {
-        eprintln!("[xtask] climb --check: every ratcheted metric holds its baseline");
-        return Ok(());
-    }
-    Err(format!(
-        "climb --check: {} metric(s) moved backwards against {}:\n  {}",
-        regressions.len(),
-        base.commit,
-        regressions.join("\n  ")
-    ))
+    out
 }
 
 /// One measurement of the whole board.
@@ -324,7 +338,23 @@ impl Row {
 mod tests {
     #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-    use super::Row;
+    use super::{Baseline, Row, regressions};
+
+    fn base() -> Baseline {
+        Baseline {
+            commit: "1ac3dbc".to_owned(),
+            s2_bound: 249,
+            s3_reportgap: 52,
+            s4_inert: 2,
+            s5a_impl: 82,
+            s5b_partial: 25,
+            s5c_missing: 11,
+            s6_tests: 1885,
+            s7_godfiles: 18,
+            s8_wasm_raw: Some(21_271_259),
+            s12_branches: 123,
+        }
+    }
 
     fn row() -> Row {
         Row {
@@ -365,5 +395,49 @@ mod tests {
         let cells: Vec<&str> = line.split('\t').collect();
         assert_eq!(cells[13], "n/a");
         assert_eq!(cells[4], "249");
+    }
+
+    #[test]
+    fn a_row_at_its_baseline_regresses_nothing() {
+        let mut r = row();
+        r.s2_bound = 249;
+        r.s6_tests = 1885;
+        r.s12_branches = 123;
+        assert!(regressions(&r, &base()).is_empty());
+    }
+
+    #[test]
+    fn a_rising_test_count_is_not_a_regression() {
+        let mut r = row();
+        r.s6_tests = 1896;
+        assert!(regressions(&r, &base()).is_empty());
+    }
+
+    #[test]
+    fn each_direction_is_flagged() {
+        let mut r = row();
+        r.s2_bound = 248;
+        r.s7_godfiles = 19;
+        let found = regressions(&r, &base());
+        assert!(found.iter().any(|m| m.contains("S2_bound fell 249 -> 248")));
+        assert!(
+            found
+                .iter()
+                .any(|m| m.contains("S7_godfiles rose 18 -> 19"))
+        );
+        assert_eq!(found.len(), 2, "{found:?}");
+    }
+
+    #[test]
+    fn wasm_growth_is_flagged_only_when_both_sides_measured() {
+        let mut r = row();
+        r.s8_wasm_raw = Some(21_300_000);
+        assert!(
+            regressions(&r, &base())
+                .iter()
+                .any(|m| m.contains("S8_wasm_raw"))
+        );
+        r.s8_wasm_raw = None;
+        assert!(regressions(&r, &base()).is_empty());
     }
 }

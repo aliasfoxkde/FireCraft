@@ -21,7 +21,9 @@
 //! requirements, the DEB control file and `Cargo.lock` — its package
 //! entries and its dependency references),
 //! `reachability` (the shell's
-//! share of the command registry, against a rising floor),
+//! share of the command registry, against a rising floor), `climb`
+//! (the scoreboard ratchet: measure S2–S8/S12 from the tree and fail
+//! when a metric moves the wrong way against the last recorded row),
 //! `panel-snapshot` (the CS6 panel inventory, against a committed
 //! golden), `dist --manifest` / `dist --verify-manifest` (the
 //! machine-readable release manifest and its verification).
@@ -256,6 +258,7 @@ fn run_ci(full: Option<&str>, skip_fmt: bool) -> ExitCode {
         ("perf", perf::run),
         ("fuzz", fuzz::quick),
         ("reachability", reachability::run),
+        ("climb", climb::check),
         ("panel-snapshot", panelsnapshot::run),
         ("parity", status::parity),
         ("scorecard", status::scorecard),
