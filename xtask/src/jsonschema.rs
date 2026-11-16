@@ -8,11 +8,11 @@
 //! schema uses a small, knowable set of keywords.
 //!
 //! So the validator implements that set and **refuses to run against a
-//! schema that uses anything else**: [`Validator::new`] walks every
-//! schema position in the document and fails on a keyword this file
-//! does not implement.  A validator that silently ignored an unknown
-//! keyword would report a document as valid when the schema says
-//! otherwise, which is the failure mode a gate must not have.
+//! schema that uses anything else**: [`Validator::with_siblings`] walks
+//! every schema position in the document and fails on a keyword this
+//! file does not implement.  A validator that silently ignored an
+//! unknown keyword would report a document as valid when the schema
+//! says otherwise, which is the failure mode a gate must not have.
 //!
 //! The keywords the CycloneDX 1.5 schema uses:
 //! `type`, `properties`, `required`, `additionalProperties`,
@@ -78,19 +78,14 @@ pub struct Validator {
 }
 
 impl Validator {
-    /// Compile a schema, or say why it cannot be used.
-    ///
-    /// Fails when the schema uses a validation keyword this validator
-    /// does not implement: a document validated against a partially
-    /// understood schema is not a validated document.
-    pub fn new(schema: &Value) -> Result<Self, String> {
-        Self::with_siblings(schema, BTreeMap::new())
-    }
-
     /// Compile a schema with the sibling schemas its `$ref`s name.
     ///
     /// The `CycloneDX` schema points at `spdx.schema.json` for the
     /// SPDX identifier list, so the sibling is supplied by file name.
+    ///
+    /// Fails when the schema uses a validation keyword this validator
+    /// does not implement: a document validated against a partially
+    /// understood schema is not a validated document.
     pub fn with_siblings(
         schema: &Value,
         siblings: BTreeMap<String, Value>,
@@ -244,19 +239,14 @@ impl Validator {
             }
         }
         if let Some(format) = schema.get("format").and_then(Value::as_str) {
-            match format {
-                "date-time" => {
-                    if !is_rfc3339(text) {
-                        errors.push(format!("{path}: {text:?} is not an RFC 3339 date-time"));
-                    }
-                }
-                // The schema uses these two as assertions on strings the
-                // SBOM does not carry in this shape; they are accepted
-                // rather than checked.
-                "idn-email" | "iri-reference" => {}
-                other => errors.push(format!(
-                    "{path}: the schema's format {other:?} is not implemented"
-                )),
+            // In draft-07 `format` is an annotation, not an assertion:
+            // a validator that does not implement a format says
+            // nothing about the document.  Only `date-time` is
+            // asserted here, because the SBOM's one timestamp is the
+            // field where a wrong value would otherwise pass silently;
+            // every other format is accepted and not checked.
+            if format == "date-time" && !is_rfc3339(text) {
+                errors.push(format!("{path}: {text:?} is not an RFC 3339 date-time"));
             }
         }
     }
@@ -398,6 +388,17 @@ impl Validator {
         }
     }
 
+    /// Whether the document satisfies one branch of a combinator.
+    ///
+    /// The branch is checked against a throwaway error list: `anyOf`
+    /// and `oneOf` care whether the branch accepted the document, not
+    /// what the branch would have said about it.
+    fn satisfies(&self, branch: &Value, document: &Value, path: &str) -> bool {
+        let mut errors = Vec::new();
+        self.check(&branch.clone(), document, path, &mut errors);
+        errors.is_empty()
+    }
+
     /// The document against `allOf`, `anyOf` and `oneOf`.
     fn check_combinators(
         &self,
@@ -413,10 +414,9 @@ impl Validator {
             }
         }
         if let Some(branches) = schema.get("anyOf").and_then(Value::as_array) {
-            let satisfied = branches.iter().any(|branch| {
-                self.check(&branch.clone(), document, path, &mut Vec::new())
-                    .is_empty()
-            });
+            let satisfied = branches
+                .iter()
+                .any(|branch| self.satisfies(branch, document, path));
             if !satisfied {
                 errors.push(format!(
                     "{path}: the document matches none of the {} alternatives the schema allows",
@@ -427,10 +427,7 @@ impl Validator {
         if let Some(branches) = schema.get("oneOf").and_then(Value::as_array) {
             let matched = branches
                 .iter()
-                .filter(|branch| {
-                    self.check(&branch.clone(), document, path, &mut Vec::new())
-                        .is_empty()
-                })
+                .filter(|branch| self.satisfies(branch, document, path))
                 .count();
             if matched != 1 {
                 errors.push(format!(
@@ -615,7 +612,7 @@ mod tests {
     use std::collections::BTreeMap;
 
     fn validator(schema: serde_json::Value) -> Validator {
-        Validator::new(&schema).unwrap()
+        Validator::with_siblings(&schema, BTreeMap::new()).unwrap()
     }
 
     #[test]
@@ -842,7 +839,7 @@ mod tests {
             "type": "object",
             "dependentRequired": { "name": ["version"] }
         });
-        let error = Validator::new(&schema).unwrap_err();
+        let error = Validator::with_siblings(&schema, BTreeMap::new()).unwrap_err();
         assert!(error.contains("dependentRequired"), "{error}");
     }
 

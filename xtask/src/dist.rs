@@ -322,7 +322,7 @@ pub fn sbom() -> Result<(), String> {
     let locked = cargo_lock_packages(
         &std::fs::read_to_string(workspace_root().join("Cargo.lock"))
             .map_err(|e| format!("read Cargo.lock: {e}"))?,
-    )?;
+    );
     compare_with_lock(&components, &locked)?;
 
     let path = out.join(format!("firecraft-{version}-sbom.cdx.json"));
