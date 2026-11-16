@@ -17,25 +17,30 @@
 
 ---
 
-## 1. State snapshot (2026-11-11; main `b61f198`)
+## 1. State snapshot (2026-11-16; main `23f872e0`)
 
-- **Source and release:** canonical `main` is `b61f198` after the
-  shell-lineage/release trains and post-train RustSec work. The latest
-  published release remains `v0.2.5` (2026-11-03); current source has
+- **Source and release:** canonical `main` is `23f872e0` after the
+  reachability wave (#143), the artwork consolidation (#144) and the
+  wave-2 closeout (#150, decision 0118). The
+  latest published release remains `v0.2.5` (2026-11-03); current source has
   moved beyond that tag. See [PROGRESS.md](PROGRESS.md) for dated build,
   CI and deployment receipts.
-- **Engine and parity:** 253 registered commands; the CS6 DOM matrix is
+- **Engine and parity:** 257 registered commands; the CS6 DOM matrix is
   268 carried / 3 partial / 0 missing of 356 verbs. The latest
-  shell-reachability measurement is 164/253 = 64.82%; the one-way floor
-  remains 59.59%. These measures answer different questions: DOM verbs,
+  shell-reachability measurement is **257/257 = 100%** (2026-11-16,
+  wave-2 merged as #150); the one-way floor was deliberately
+  re-blessed to 100% (it stood at 96.89% after #143's wave-closeout).
+  These measures answer different questions: DOM verbs,
   shell-bound commands, and complete end-user UI/workflow parity must
   not be conflated.
-- **Menu census:** 2 inert rows of 296. The 19.6 menu-wiring campaign is
+- **Menu census:** 2 inert rows of 298. The 19.6 menu-wiring campaign is
   complete; eight additional rows are explicitly feature/evidence-gated.
 - **Delivered work:** Phase 21's user-facing deliverables landed with
-  #107. Phase 20.1 and 20.5–20.7 are on main. Optimize/timeline work is
-  in open PR #118; the mask stack is in open PR #113. Check the live
-  [TASKS.md](TASKS.md) before selecting work.
+  #107. Phase 20.1–20.3 and 20.5–20.7 are on main (Optimize/timeline
+  #118 merged); the mask stack landed in #113 as `PARTIAL` (stack,
+  fold, level panel and the level add/remove/move affordances;
+  screenshot acceptance + mask sampling resolution still open, issue
+  #114). Check the live [TASKS.md](TASKS.md) before selecting work.
 - **Phase 22:** screenshot acceptance and panel/tool/context-menu
   foundations landed; bitmap inspector gaps and remaining CS6 chrome
   keep the phase partial. The full user-visible inventory is
@@ -46,9 +51,9 @@
   Republish from the exact release artifact is pending (T18). No
   non-Linux native artifact is certified by recipe or cross-compile
   alone; see [ARTIFACT-MATRIX.md](release/ARTIFACT-MATRIX.md).
-- **Open integration work:** #120 removes the deprecated YAML parser;
-  #122 improves history-rewind command discovery; #123 reconciles docs.
-  Recheck each PR's current state before depending on it.
+- **Open integration work:** recheck each PR's current state before
+  depending on it — the previously open #118, #120, #122 and #123 have
+  all merged.
 - **Clean-room invariants:** `source/` and Adobe-derived local extracts
   are reference-only and never committed. Adobe-authored corpus files
   are test oracles. Assets require an attribution row in
@@ -160,7 +165,7 @@ verifiable.
 ### Current program: Phases 20–22
 
 Phase 19's canvas work and menu wiring campaign (batches 1–17) are
-complete. The live menu census is 2 inert rows of 296; eight other rows
+complete. The live menu census is 2 inert rows of 298; eight other rows
 have explicit feature/evidence gates and are not considered inert.
 Path-node add/delete, the reachability gate, and the wasm budget
 re-pin are also complete.
@@ -322,14 +327,32 @@ the absolute repo path.
   this fleet's problem. Read the truth from the store:
   `sudo sqlite3 /var/lib/gitforge/gitforge.db "SELECT id,name,status,
   capacity,last_heartbeat FROM runners;"`.
+- **Measured throughput (2026-11-12, read from the store):** one
+  online runner (`swarmone-docker`, capacity 4 — so four jobs
+  concurrently, no more), `fedora-docker` offline since 15:13 and
+  `t5500-docker` offline since 2026-10-11. Job *starts* measured with
+  `julianday(started_at) > julianday('now') - N/1440.0` (compare
+  timestamps with `julianday`, never with `datetime()` string
+  comparison — the `T` separator breaks lexical ordering and
+  over-counts): 10 starts in the last hour, 37 in three hours, 53 in
+  six. That is **≈12 job starts per hour, one start every ~5
+  minutes** — the runner is saturated, and the queue is the
+  bottleneck, not the code.
+  A pipeline is **ten** jobs (`detect-changes`, `fmt-layers`, `layers`,
+  `clippy-test`, `wasm-web`, `corpus-golden`, `perf-budgets`, `fuzz`,
+  `generated-docs`, `release`), so one pipeline costs ~50 minutes of
+  queue time and a merge campaign of nine PR branches costs ~7 hours.
+  Budget for that when sequencing a campaign; do not read a long
+  queue as a hung runner.
 - **Find the run:** `GET /api/pipeline-runs?limit=15` — match
   `commit_hash` (field name is `commit_hash`, *not* `sha`; both are
-  `None` in the list view — fetch jobs to identify a run by its 7-job
-  shape).
+  `None` in the list view — fetch jobs to identify a run by its
+  ten-job shape).
 - **Wait + jobs:** `GET /api/pipeline-runs/{id}` until status is
-  terminal; `GET /api/pipeline-runs/{id}/jobs` for the 7 jobs
-  (fmt-layers, clippy-test, wasm-web, corpus-golden, perf-budgets,
-  fuzz, generated-docs). All must be `succeeded`. ~15–18 min.
+  terminal; `GET /api/pipeline-runs/{id}/jobs` for the ten jobs
+  (detect-changes, fmt-layers, layers, clippy-test, wasm-web,
+  corpus-golden, perf-budgets, fuzz, generated-docs, release). All
+  must be `succeeded`. ~15–18 min once the pipeline has the runner.
 - **Job logs:** `GET /api/jobs/{job_id}/logs` — walk
   `data.logs[].chunk` or `data.receipt.step_results[].stdout/stderr`
   (helper: `/var/tmp/getjoblog.py`).

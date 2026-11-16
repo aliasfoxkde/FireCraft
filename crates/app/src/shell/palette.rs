@@ -3,13 +3,13 @@
 
 use super::*;
 
-/// The command palette: Ctrl+P opens; typing filters `catalog::ids()`
-/// by substring; Enter runs the top hit through `Editor::apply` (the
-/// same registry the menus and the journal use). Payload templates
-/// come from the engine's fuzzdrive table — the same table whose
-/// coverage test (`the_call_table_covers_the_catalog`) guarantees one
-/// arm per registered command. Templates are built lazily, for the
-/// visible page of hits only.
+/// The command palette: Ctrl+P opens; typing filters
+/// `catalog::all_ids()` by substring; Enter runs the top hit through
+/// `Editor::apply` (the same registry the menus and the journal use).
+/// Payload templates come from the engine's fuzzdrive table — the same
+/// table whose coverage test (`the_call_table_covers_the_catalog`)
+/// guarantees one arm per registered command. Templates are built
+/// lazily, for the visible page of hits only.
 #[derive(Default)]
 pub(crate) struct CommandPalette {
     pub(super) open: bool,
@@ -55,9 +55,13 @@ impl Shell {
     /// first. An empty filter shows the recents, then the catalog in
     /// order. Ties and unscored names keep catalog order (stable
     /// sort).
+    ///
+    /// The catalog is the registry's ids *plus* the session-scoped
+    /// ones (`history.rewind`): a command the engine can run belongs
+    /// in the palette even when the registry cannot own it.
     pub(super) fn palette_matches(&self) -> Vec<&'static str> {
         let query = self.palette.filter.to_lowercase();
-        let catalog = engine::catalog::ids();
+        let catalog = engine::catalog::all_ids();
         if query.is_empty() {
             // Recents first (deduplicated, catalog-resident only),
             // then the remaining catalog in order.
@@ -103,8 +107,28 @@ impl Shell {
 
     /// The payload template for one command under one seed.
     pub(super) fn payload_for_seed(&self, name: &str, seed: u64) -> serde_json::Value {
+        if name == engine::REWIND_ID {
+            // The rewind's payload names a depth in the undo history.
+            // A palette run is a *user's* undo — one step back from
+            // where the document sits now — not a fuzz depth.
+            return serde_json::json!({ "depth": self.rewind_depth() });
+        }
         let mut rng = engine::fuzzdrive::FuzzRng::new(seed);
         engine::fuzzdrive::payload_template(name, &mut rng, self.editor.document())
+    }
+
+    /// The depth the palette's rewind lands on: one step below the
+    /// document's current place in the undo history.
+    ///
+    /// The history's rows are the document as opened (depth `0`) plus
+    /// one row per recorded edit, so the row count is the depth the
+    /// document sits at plus one.
+    fn rewind_depth(&self) -> usize {
+        self.editor
+            .session
+            .history_entries()
+            .len()
+            .saturating_sub(2)
     }
 
     /// Grounds a template to the live editor state. The fuzzdrive
@@ -370,7 +394,7 @@ impl Shell {
                     ui.weak(format!(
                         "{} of {}",
                         names.len(),
-                        engine::catalog::ids().len()
+                        engine::catalog::all_ids().len()
                     ));
                 });
             });

@@ -16,7 +16,10 @@ records the installer as "recipe-only, never built".
 publisher, install scope, program files destination and shortcut set; the installed
 files match the ZIP's contents.
 
-**Verification:** `ISCC packaging/windows/firecraft.iss`
+**Verification:** `packaging\build-windows.ps1` on a Windows host with `ISCC.exe` on
+`PATH`. The `.iss` is compiled **through the recipe**, not on its own: it carries the
+`__APPVERSION__` and `__LICENSEFILE__` stand-ins, which the recipe substitutes and
+which the compiler cannot resolve by itself (decision 0101).
 
 **Evidence:** parse-checked only; never built.
 

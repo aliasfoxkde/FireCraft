@@ -16,7 +16,7 @@ tests cover state transitions; full gate green.
 **Verification:** `cargo test -p app`, manual canvas check (rendered
 frames), full gate before commit.
 
-## Status — PARTIAL (2026-11-11)
+## Status — PARTIAL (2026-11-12)
 
 **Landed** (decision
 [0094](../decisions/0094-animation-timeline-shell.md), on the engine
@@ -50,13 +50,23 @@ and compositor half of
   transitions, and Distribute to States spreading a layer's items one
   per state. `crates/app/src/shell/timeline.rs` covers the strip's
   own reading of the page.
+- **Playback (decision
+  [0096](../decisions/0096-animation-playback-clock.md)).** The
+  States panel has a `Play`/`Stop` control and a `Loop` checkbox:
+  CS6's `Play Animation`. The clock is a core over data — the
+  frame's elapsed time and the per-state delays are its only
+  inputs — so the timing is tested without sleeping. The view
+  follows the playhead, the clock stops at the last state unless it
+  is told to loop, and a document edit, a page switch or a change in
+  the state count stops it.
 
 **Open:**
 
-- **No playback.** CS6's `Play Animation` is not wired: the timeline
-  is a place to edit an animation, not yet to watch one. The missing
-  piece is a timer that advances the active state on the state's own
-  delay.
+- **The loop is a preview setting.** CS6 carries a loop *count* in
+  the document's animation settings (`{loopCount:%Ai}`); FireCraft's
+  `Loop` checkbox is a session setting and is not written into the
+  document. Carrying the count would need a new model field and a
+  new engine command.
 - **The strip shows numbers, not thumbnails.** CS6's States window
   shows a picture of every state; rendering one per state per frame
   is separate work.

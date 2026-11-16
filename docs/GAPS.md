@@ -20,7 +20,7 @@
 | Surface | State | Evidence |
 |---|---|---|
 | Fireworks PNG format | Complete | `crates/fwpng`, `crates/doc/src/fwmap.rs`; node tree round-trips |
-| Engine command registry | **253 commands** | `engine::catalog::ids()` — 253 as of 2026-11-11 |
+| Engine command registry | **257 commands** | `engine::catalog::ids()` — 257 as of 2026-11-16 |
 | CS6 DOM verb parity | **268 C / 3 P / 0 M / 85 N** | `docs/planning/generated/dom-parity.md` (356 verbs) |
 | ExtendScript host | Complete | `crates/scripting` — runs the CS6 `.jsf` corpus headless |
 | Web bridge | Exposes **all** commands | `web/src/main.rs` — `apply(name, payload)` |
@@ -41,7 +41,7 @@ shell reaches 72; after Phase 11's paint family it reaches 77;
 > **Note (2026-11-02):** the reachability picture above is a
 > point-in-time audit snapshot. The command palette (19.4,
 > `4458f3a`) makes **every** registry command executable from the
-> GUI, and the inert count has fallen 190 → **2 of 296** menu
+> GUI, and the inert count has fallen 190 → **2 of 298** menu
 > items (19.1–19.6 batches 1–17 + 19b.1/batch 2; derived + gated by
 > `menus::tests::inert_count_never_rises`). The family table below is
 > superseded by [`NEXT.md`](NEXT.md) Phases 19–21 as the work list;
@@ -51,9 +51,9 @@ shell reaches 72; after Phase 11's paint family it reaches 77;
 > not just audited. The xtask step `cargo run -p xtask --
 > reachability` derives the bound set from `crates/app/src` and holds
 > it to a floor in `.reachability-floor.tsv` (one-way ratchet). The
-> measurement it took on the release train at 2026-11-11: **253
-> registry commands, 168 bound = 66.40%**, 85 unreachable — the floor is
-> pinned at 66.40%. The
+> measurement it took on the merged train at 2026-11-11: **257
+> registry commands, 172 bound = 66.93%**, 85 unreachable — the floor is
+> pinned at 66.93%. The
 > `comm` line above counts *any* occurrence of a command name in the
 > shell crate; the gate counts the same bindings outside `#[cfg(test)]`
 > code and reports them as a share, so the two numbers are close but
@@ -84,7 +84,7 @@ $ comm -23 <(engine::catalog::ids()) <(command names in crates/app/src)
 Supporting evidence:
 
 - **190 of 265 CS6 menu items rendered disabled** (`Action::Inert`,
-  `crates/app/src/menus.rs`) **at audit time** — now 2 of 296, and
+  `crates/app/src/menus.rs`) **at audit time** — now 2 of 298, and
   the census is test-gated. The shell refuses to pretend.
 - **The app could not open a raster image.** *(fixed 2026-10-21)*
   `File > Open` called `Editor::open` → `app_cli::io::open`, which
@@ -134,10 +134,10 @@ authoritative source that supersedes this table.
 | **aegis** | Baseline clean; scan 0.17 s | `.aegisignore` excludes `target/`, `web/dist/`, `fuzz/`; baseline is content-keyed (decision 0074), which supersedes the rule-class and per-finding suppression of decision 0070 |
 | **Coverage** | floors 81.1 % lines / 78.7 % funcs (`xtask/src/coverage.rs`), measured with rustc 1.99.1 | The toolchain is pinned (decision 0102): rustc 1.100.0 reads the same tree 4.9 points lower, so a floating `stable` moved the floor. Local `llvm-cov` fails on stale artifacts; CI works |
 | **Code** | 144,122 Rust lines | No `unwrap()`/`panic!()` outside `#[cfg(test)]`; no `todo!`/`unimplemented!` |
-| **Registry** | 253 commands | Every command executable from the GUI via the Ctrl+P palette (19.4); menu reachability is the remaining gap |
-| **Menu reachability** | 2 inert of 296 items | *live* — derived + gated (`menus::tests::inert_count_never_rises`) |
+| **Registry** | 257 commands | Every command executable from the GUI via the Ctrl+P palette (19.4); menu reachability is the remaining gap |
+| **Menu reachability** | 2 inert of 298 items | *live* — derived + gated (`menus::tests::inert_count_never_rises`) |
 | **Parity** | 268 C / 3 P / 0 M / 85 N | 3 P rows are evidence-gated (Phase 12 oracle) |
-| **Decision docs** | 90 (0001–0090) | Next: 0091 |
+| **Decision docs** | 92 (0001–0092) | Next: 0093 |
 | **Web bundle** | 21,608,249 B observed; 25,000,000 B warning / 50,000,000 B hard cap | Policy decision 0090; web build uses Rust opt-level=z and Binaryen wasm-opt=z. Cap is a guardrail, not a target; A/B size evidence remains required |
 
 
@@ -431,7 +431,75 @@ this dated audit.
 
 ---
 
-## 16. Closed work (for context — do not reopen without new evidence)
+## 16. The surface gap — 85 carried commands the shell never binds (2026-11-12)
+
+> **Landed 2026-11-16:** this gap is closed. #143 bound 77 commands
+> (2026-11-14), and wave-2 (#150, decision
+> [0118](decisions/0118-the-last-eight-verbs-reach-their-named-surfaces.md))
+> bound the last eight on the surfaces decision 0117 named —
+> **257/257 = 100%, 0 unreachable**, floor deliberately re-blessed to
+> 100%. Issues #138–#141 are closed with measured evidence; #136 and
+> #137 remain open on renderer-honours criteria only. The 2026-11-12
+> measurement below is kept as the audit snapshot it was.
+
+The audit in §1.2 and the phases in §3–§13 track verbs the engine
+does **not** carry. This section tracks the other half of the same
+gap: verbs the engine **does** carry, and the shell's designed
+surface never binds.
+
+The reachability gate measures it. `xtask/src/reachability.rs` scans
+`crates/app/src` for the command ids the shell hands the engine —
+string literals before each file's first `#[cfg(test)]` marker — and
+compares them against `engine::catalog::ids()`. The floor lives in
+`.reachability-floor.tsv` and is a one-way ratchet: the unreachable
+share may fall and never rise.
+
+At the 2026-11-12 measurement: **168 of 253 registry commands bound
+(66.40 %), 85 unreachable**, against a 66.40 % floor.
+
+The command palette (Ctrl+P) can run every registered command, so it
+does not count — the metric is about the surface CS6 actually shows a
+user: the menu bar, the panels, the dialogs and the canvas tools.
+
+The 85, by family:
+
+| Family | Count | Commands | Issue |
+|---|---|---|---|
+| `text.*` | 17 | `setTextParaIndent`, `setTextParaSpacingBefore`, `setTextParaSpacingAfter`, `setTextRectangle`, `setTextRectangleAuto`, `setTextRectangleAutoFromPoint`, `setTextRuns`, `applyCharacterMarkup`, `removeCharacterMarkup`, `applyFontMarkup`, `removeFontMarkup`, `setTextCustomAntiAliasStrength`, `setTextCustomAntiAliasSharpness`, `setTextCustomAntiAliasOverSample`, `setTextOnPathOffset`, `replaceButtonTextStrings`, `replaceButtonTextStringsInInstances` | [#136](https://github.com/aliasfoxkde/FireCraft/issues/136) |
+| `symbol.*` | 16 | `setAnimInstanceNumFrames`, `setAnimInstanceLoopCount`, `setAnimInstanceOffsetDist`, `setAnimInstanceRotationAmount`, `setAnimInstanceScaleAmount`, `setAnimInstanceStartEndOpacity`, `setButtonOptions`, `setButtonAutoSlice`, `setButtonShowDownOnLoad`, `setButtonIncludeDownState`, `setButtonIncludeOverWhileDownState`, `setParam`, `setCustomData`, `editDetach`, `editReorder`, `duplicateSymbolForAlias` | [#137](https://github.com/aliasfoxkde/FireCraft/issues/137) |
+| `selection.*` + `filter.*` | 13 | `selectAll`, `selectNone`, `selectInverse`, `selectAllOnLayer`, `duplicateToFrames`, `duplicateToFrameRange`, `distributeToFrames`, `filter.selection`, `filter.selectionByID`, `filter.selectionByName`, `filter.convolveSelection`, `filter.motionBlurSelection`, `filter.setEffectName` | [#138](https://github.com/aliasfoxkde/FireCraft/issues/138) |
+| `page.*` + `cell.*` + `document.*` + `frame.*` | 11 | `page.setName`, `page.delete`, `page.setMaster`, `page.unsetMaster`, `page.addMasterLayer`, `page.changeGuide`, `page.removeGuide`, `cell.setVisible`, `cell.setLocked`, `document.deleteAllInDocument`, `frame.reorder` | [#139](https://github.com/aliasfoxkde/FireCraft/issues/139) |
+| `mask.*` + `bitmap.*` + `layer.*` + `object.*` + `path.*` + `style.*` | 18 | `mask.setMode`, `mask.setShowAttrs`, `mask.moveBy`, `mask.moveContentsBy`, `bitmap.setPixelMask`, `bitmap.movePixelMaskBy`, `layer.setSharing`, `layer.shareToPages`, `layer.detachShared`, `object.moveToCell`, `object.resize`, `object.setGroupType`, `path.cropSelection`, `path.setPatternFill`, `path.warp`, `style.redefineByName`, `style.redefineByIndex`, `style.scaleStyles` | [#140](https://github.com/aliasfoxkde/FireCraft/issues/140) |
+| `hotspot.*` + `slice.*` + `primitive.*` + `autoshape.*` + `clipboard.*` | 10 | `hotspot.setRectangle`, `hotspot.appendPoint`, `hotspot.copyToHotspot`, `slice.setBackground`, `slice.appendPoint`, `primitive.setRectRoundness`, `primitive.setRectSides`, `autoshape.rect`, `autoshape.redraw`, `clipboard.pasteFromChannelToChannel` | [#141](https://github.com/aliasfoxkde/FireCraft/issues/141) |
+
+Three of these are worth naming here, because the gap is not always a
+missing surface:
+
+- **The selection family is a routing defect, not a missing
+  feature.** The shell implements Select All and Select Inverse — but
+  over the editor's own cell selection (`ShellAction::SelectAll`,
+  `fn select_inverse` in `crates/app/src/shell/mod.rs`) instead of by
+  dispatching `selection.selectAll` / `selection.selectInverse`. The
+  behaviour exists; the engine's selection model, undo and scripting
+  surface are not what the user gets.
+- **The `text.*` paragraph verbs need layout work, not only a
+  binding.** The model and the FWMAP round-trip already carry
+  `PINf` / `PSBf` / `PSAf`; the text layout engine does not apply
+  them yet. A panel field that writes a value the renderer ignores is
+  not a binding — it is a surface that engages and changes nothing.
+- **The `symbol.setAnimInstance*` family closes a recorded residual.**
+  The loop count is the "document-level loop count (CS6's
+  `{loopCount:%Ai}`)" that `NEXT.md` phase 20.3 and `TASKS.md` row 8
+  still list as open.
+
+The order of work follows the families above, and each batch lands on
+its own branch with a pull request. When a batch lands, the floor is
+re-pinned deliberately (`cargo run -p xtask -- reachability --bless`);
+the bless refuses to lower it.
+
+---
+
+## 17. Closed work (for context — do not reopen without new evidence)
 
 - **M0–M15** (2026-10-10 → 10-13): the whole milestone ladder.
 - **The DOM verb-surface campaign** (tasks #86–#134): 356 CS6 verbs
