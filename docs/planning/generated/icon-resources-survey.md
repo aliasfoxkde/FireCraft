@@ -8,9 +8,9 @@ and whether the runtime table embeds it in the binary.
 ## Summary
 
 - Shipped SVG icons: **73** (29,004 B)
-- Other files under `assets/icons/`: **2** (9,471 B) — the licence file
+- Other files under `assets/icons/`: **2** (18,208 B) — the licence file
   and the application icon PNG
-- Total under `assets/icons/`: **38,475 B**
+- Total under `assets/icons/`: **47,212 B**
 - Icons embedded in the binary by `crates/app/src/shell/icons.rs`: **73** of 73
 
 ## The icon set
@@ -96,7 +96,7 @@ and whether the runtime table embeds it in the binary.
 | File | Bytes | What it is | Attribution row |
 |---|---:|---|---|
 | `assets/icons/LICENSE-lucide.txt` | 3,208 | The Lucide licence (ISC) and the Feather licence (MIT) for the icons above | L25 (`assets/icons/*.svg`) |
-| `assets/icons/hicolor/256x256/apps/firecraft.png` | 6,263 | The Linux desktop application icon | L43 (`assets/icons/hicolor/256x256/apps/firecraft.png`), L51 (`assets/icons/hicolor/256x256/apps/firecraft.png`) |
+| `assets/icons/hicolor/256x256/apps/firecraft.png` | 15,000 | The Linux desktop application icon | L41 (`assets/icons/hicolor/256x256/apps/firecraft.png`), L50 (`assets/icons/hicolor/256x256/apps/firecraft.png`) |
 
 ## Measured size cost in the web bundle
 
