@@ -134,8 +134,29 @@ Baseline measured **2026-11-13 on `main` @ `1ac3dbc`**. History lives in
 | S9 | Live web deploy traceable to a commit | = | **no** (#30) | yes | `curl -s https://firecraft-web.pages.dev/version.json` (after C3.01) |
 | S10 | Release artifacts with a SMOKE TESTED receipt | ↑ | 0 certified; Linux tar/CLI/deb/web published | all in-scope (see P9) | `docs/release/ARTIFACT-MATRIX.md` |
 | S11 | Open issues | ↓ | 70 | only post-v1 enhancements | `gh issue list --state open --limit 500 --json number \| jq length` |
-| S12 | Remote branches besides `main` | ↓ | 34 | only open-PR branches | `git branch -r \| grep -vc 'main$\|HEAD'` |
+| S12 | Remote branch heads besides `main` | ↓ | 77 (measured 2026-11-16) | only open-PR branches | `cargo run -p xtask -- climb` (the S12 column; `n/a` when no remote is reachable) |
 | S13 | Workspace line coverage | ↑ | 81.1 % line / 78.7 % fn (gate floors in `xtask/src/coverage.rs`, measured 2026-10-30) | ≥ 85 % line, plus per-crate floors | `cargo run -p xtask -- coverage` |
+
+### How S12 is measured
+
+S12 counts the **distinct branch heads the remotes carry**, besides
+`main`: `git ls-remote --heads <remote>` over every configured remote,
+unioned by name. It is a property of the remotes, not of the checkout that
+runs the measurement.
+
+The older reading — `git branch -r | grep -vc 'main$\|HEAD'` — counted
+the clone's *remote-tracking refs*, which is whatever the clone's last
+fetch happened to bring. Measured on 2026-11-16, that gave 0 for the CI
+runner's checkout, 23 and 78 for older CI checkouts, and 154 for a full
+clone; it also counted a branch twice when it existed on both remotes
+(79 `origin` refs + 77 `gitforge` refs for 77 distinct branches). A
+number that describes the clone's fetch history cannot ratchet anything.
+
+When no remote answers — the CI image is offline by contract, and the
+runner's checkout's remote is a host path its container does not mount —
+S12 measures `n/a` and the ratchet skips it: a metric that could not be
+measured has not moved. See
+[`docs/decisions/0124-the-branch-count-is-measured-from-the-remotes.md`](../decisions/0124-the-branch-count-is-measured-from-the-remotes.md).
 
 ## Numbering map (old schemes → climb)
 
@@ -159,7 +180,7 @@ Several numbering schemes collide in the old docs. Refer to work by its
 - **Clean-room.** Never open, copy or commit anything from `source/`. Never
   decompile. Base behaviour on `.jsf` scripts, help text and observation, and
   write the evidence into a `docs/decisions/NNNN-*.md` record (the next free
-  number is above **0112**; check with `ls docs/decisions | tail -3`).
+  number is above **0124**; check with `ls docs/decisions | tail -3`).
 - **No `unwrap`/`expect`/`panic!`/`todo!`** in non-test code. Hostile
   sizes take caps and return `Result` (AGENTS.md "Numbers are hostile").
 - **Never break wasm.** No C dependencies or threads in core crates.

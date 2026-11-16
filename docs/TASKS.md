@@ -114,6 +114,7 @@ Commands menu). Scope detail stays in
 | 21 | egui_kittest snapshot gates per panel/toolbar | — | `NOT STARTED` | quality lane | needs a stable per-panel harness |
 | 22 | Screenshot-driven frontend audit + systematic refinement | — | `IN PROGRESS` | frontend lane | audit against the CS6 shell-parity directive; record screenshots per panel |
 | 25 | Responsive/adaptive layout audit + fixes | — | `NOT STARTED` | frontend lane | follows the responsive audit in the current UI work |
+| 28 | `climb`'s S12 branch count was transcribed, not measured | [decisions/0124](decisions/0124-the-branch-count-is-measured-from-the-remotes.md) | `IMPLEMENTED` — the metric is now `git ls-remote --heads` over every configured remote, unioned by name, so it counts distinct remote branch heads besides `main` instead of the clone's remote-tracking refs; a clone set with no reachable remote measures `n/a` and the ratchet does not compare it | quality lane | the board's S12 column still carries the transcribed 143/145 until a row measured by this method replaces them; `climb --check` is a local-only gate (it is in `xtask ci` but not in `.gitforge.yml`), so its verdict is only as good as the clone it runs in |
 
 ### Production readiness and T27 work-package detail
 

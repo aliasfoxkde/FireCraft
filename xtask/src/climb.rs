@@ -34,7 +34,7 @@ pub struct Row {
     s9_live_traceable: String,
     s10_smoke_receipts: String,
     s11_open_issues: String,
-    s12_branches: usize,
+    s12_branches: String,
     s13_coverage: String,
     note: String,
 }
@@ -116,11 +116,19 @@ fn regressions(row: &Row, base: &Baseline) -> Vec<String> {
         ("S5b_partial", row.s5b_partial, base.s5b_partial),
         ("S5c_missing", row.s5c_missing, base.s5c_missing),
         ("S7_godfiles", row.s7_godfiles, base.s7_godfiles),
-        ("S12_branches", row.s12_branches, base.s12_branches),
     ] {
         if now > was {
             out.push(format!("{name} rose {was} -> {now}"));
         }
+    }
+
+    // S12 is measured from the remotes, so it is `n/a` when no remote
+    // answers — the CI image is offline by contract. A metric that could
+    // not be measured has not moved: it is not compared.
+    if let (Ok(now), Some(was)) = (row.s12_branches.parse::<usize>(), base.s12_branches)
+        && now > was
+    {
+        out.push(format!("S12_branches rose {was} -> {now}"));
     }
 
     if let (Some(now), Some(was)) = (row.s8_wasm_raw, base.s8_wasm_raw)
@@ -161,7 +169,7 @@ fn measure(rung: &str) -> Result<Row, String> {
         s9_live_traceable: "n/a".to_owned(),
         s10_smoke_receipts: "n/a".to_owned(),
         s11_open_issues: "n/a".to_owned(),
-        s12_branches: remote_branches(&root)?,
+        s12_branches: remote_branches(&root),
         s13_coverage: "n/a".to_owned(),
         note: if rung == "check" {
             "measured by xtask climb --check; S1/S9/S10/S11/S13 need external state".to_owned()
@@ -183,7 +191,7 @@ struct Baseline {
     s6_tests: usize,
     s7_godfiles: usize,
     s8_wasm_raw: Option<usize>,
-    s12_branches: usize,
+    s12_branches: Option<usize>,
 }
 
 fn baseline() -> Result<Baseline, String> {
@@ -207,7 +215,7 @@ fn baseline() -> Result<Baseline, String> {
         s6_tests: number(f.get(11)),
         s7_godfiles: number(f.get(12)),
         s8_wasm_raw: f.get(13).and_then(|v| v.parse().ok()),
-        s12_branches: number(f.get(17)),
+        s12_branches: f.get(17).and_then(|v| v.parse().ok()),
     })
 }
 
@@ -250,17 +258,54 @@ fn test_count(root: &Path) -> Result<usize, String> {
     Ok(count)
 }
 
-fn remote_branches(root: &Path) -> Result<usize, String> {
-    let (stdout, _) = util::capture_in(
-        Some(root),
-        "git",
-        &["for-each-ref", "refs/remotes", "--format=%(refname:short)"],
-    )?;
-    Ok(stdout
-        .lines()
-        .filter(|line| !line.trim().is_empty())
-        .filter(|line| !line.ends_with("/HEAD") && !line.ends_with("/main"))
-        .count())
+/// The number of branch heads on the remotes, besides `main`.
+///
+/// Measured FROM THE REMOTES, with `git ls-remote --heads`, not from the
+/// clone's remote-tracking refs. The two are different numbers, and the
+/// old measurement was the one that cannot mean anything:
+///
+/// - A clone's remote-tracking refs are whatever its last fetch brought.
+///   The CI runner's checkout measured 0 remote branches on 2026-11-16
+///   while a full clone measured 154, and older CI checkouts measured
+///   23 and 78 — the number measured the clone, not the repository.
+/// - A clone with two remotes counts every branch twice, once per
+///   remote it exists on: this checkout carries 79 `origin` refs and 77
+///   `gitforge` refs for 77 distinct branches.
+///
+/// The union over the remotes keeps the metric's meaning ("remote
+/// branches besides `main`") and makes it a property of the remotes
+/// rather than of the clone's fetch history.
+///
+/// When no remote answers — the CI image is offline by contract, and the
+/// runner's checkout's remote is a host path its container does not
+/// mount — the metric is `n/a`, like the other measurements that need
+/// state outside the tree. A number no environment can reproduce is
+/// worse than an honest gap: it makes the ratchet fire on the clone that
+/// fetched most recently and stay silent on the one that did not.
+fn remote_branches(root: &Path) -> String {
+    let (remotes, _) = util::capture_in(Some(root), "git", &["remote"]).unwrap_or_default();
+    let mut branches: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+    for remote in remotes.lines().map(str::trim).filter(|r| !r.is_empty()) {
+        let (stdout, _) =
+            util::capture_in(Some(root), "git", &["ls-remote", "--heads", remote]).unwrap_or_default();
+        for line in stdout.lines() {
+            let Some(reference) = line.split_whitespace().nth(1) else {
+                continue;
+            };
+            let Some(name) = reference.strip_prefix("refs/heads/") else {
+                continue;
+            };
+            if name == "main" || name.ends_with("/HEAD") {
+                continue;
+            }
+            branches.insert(name.to_owned());
+        }
+    }
+    if branches.is_empty() {
+        "n/a".to_owned()
+    } else {
+        branches.len().to_string()
+    }
 }
 
 fn wasm_bytes(root: &Path) -> Option<usize> {
@@ -352,7 +397,7 @@ mod tests {
             s6_tests: 1885,
             s7_godfiles: 18,
             s8_wasm_raw: Some(21_271_259),
-            s12_branches: 123,
+            s12_branches: Some(123),
         }
     }
 
@@ -375,7 +420,7 @@ mod tests {
             s9_live_traceable: "n/a".to_owned(),
             s10_smoke_receipts: "n/a".to_owned(),
             s11_open_issues: "n/a".to_owned(),
-            s12_branches: 123,
+            s12_branches: "123".to_owned(),
             s13_coverage: "n/a".to_owned(),
             note: "test".to_owned(),
         }
@@ -402,8 +447,28 @@ mod tests {
         let mut r = row();
         r.s2_bound = 249;
         r.s6_tests = 1885;
-        r.s12_branches = 123;
+        r.s12_branches = "123".to_owned();
         assert!(regressions(&r, &base()).is_empty());
+    }
+
+    #[test]
+    fn an_unmeasurable_branch_count_is_not_a_regression() {
+        // The CI image is offline by contract, so S12 measures `n/a`.
+        // A metric that could not be measured has not moved.
+        let mut r = row();
+        r.s12_branches = "n/a".to_owned();
+        assert!(regressions(&r, &base()).is_empty());
+    }
+
+    #[test]
+    fn a_rising_branch_count_is_flagged() {
+        let mut r = row();
+        r.s12_branches = "124".to_owned();
+        assert!(
+            regressions(&r, &base())
+                .iter()
+                .any(|m| m.contains("S12_branches rose 123 -> 124"))
+        );
     }
 
     #[test]
