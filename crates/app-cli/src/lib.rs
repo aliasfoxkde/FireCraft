@@ -5,6 +5,8 @@
 //! [`engine`] command registry — open/save wrap the full `.fw.png`
 //! read/write path, and journal replay goes through [`engine::Session`].
 
+#![deny(missing_docs)]
+
 pub mod channel;
 pub mod info;
 pub mod io;
@@ -18,7 +20,10 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// Library error: one message, printed to stderr by the binary.
 #[derive(Debug)]
-pub struct CliError(pub String);
+pub struct CliError(
+    /// The message — the whole error, already formatted for the user.
+    pub String,
+);
 
 impl std::fmt::Display for CliError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
