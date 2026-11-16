@@ -23,6 +23,7 @@
 | **missing** | no UI path exists |
 | **evidence-gated** | the CS6 behaviour itself is not yet established, so FireCraft's coverage cannot be judged; the gate is named |
 | **not applicable** | the CS6 workflow has no counterpart in FireCraft's scope (or the CS6 side is a documented refusal) |
+| **deliberately different** | the CS6 behaviour is established, and FireCraft differs from it **on purpose**: the row names the reason and the owner |
 
 Evidence codes: **`M`** = `crates/app/src/menus.rs` (the CS6 `RT_MENU`
 transcription); **`E`** = `crates/app/src/editor.rs`; **`S`** =
@@ -187,6 +188,9 @@ Eighteen have a Window-menu row; five do not.
 | Dock geometry persists across restart | yes | eframe `persistence` + `ShellLayout` snapshot | **implemented** | `D` 0067/0069, `S/mod.rs` | — |
 | The dock **reserves** width so the canvas shrinks rather than being covered | yes (a dock) | yes — `egui::Panel::right`, 258 pt, scrolling column | **implemented** | `S/panel_windows.rs:154` | 22.5 |
 | Every panel reachable at 1280×800 | yes | T22 captures and reachability check complete for the recorded build; dock scroll verified at 1280×400. The newer dock/panel inventory still needs a capture. | **verified for captured build; newer dock evidence-gated** | [T22 receipts](tasks/T22-screenshot-ui.md#receipts--2026-11-04) | 22.5 / T22 |
+| Panel **header row** — collapse arrow, title, overflow, close | yes (the panel's title bar carries the collapse arrow and the panel menu) | every panel's header row carries the collapse arrow, the title and the overflow (the panel menu, `▾`), and every panel the Window menu can reopen also carries the close button; the Web Layer panel keeps CS6's asymmetry and gets no close button | **implemented** — the row's affordances are pinned by the panel-snapshot gate | `S/panel_windows.rs::dock_section`, `crates/app/panels.snapshot` | 22.5 |
+| The panel **menu**'s item list | not established by our evidence | the overflow menu carries the two dock-level commands the CS6 help documents (the double arrow that collapses/expands every panel in the column, and *Hide Panels*) | **evidence-gated** — the button is reproduced; its CS6 item list is not established | `R` ("The panel header row"), `S/panel_windows.rs::PanelMenu` | 22.5 |
+| The chrome **palette** | CS6 owns **no** palette: its eight Preferences categories set no colour, so the greys it draws are the host OS's. Measured on the reference run: `#D6D6D6` frame and bars, `#EDEDED` panel interiors, `#999999` canvas surround, `#FFFFFF` page, and **no** saturated hue anywhere in the chrome | FireCraft defines its own **dark** neutral scheme — panel `#3C3C3C`, window `#323232`, canvas `#282828`, raised surface `#444444`, text `#DDDDDD` (7.2:1 on the raised fill, WCAG AAA), selection `#2F5D8A` — every colour but the selection accent a grey, so the chrome keeps CS6's *neutrality* | **deliberately different** — *reason*: CS6 has no palette to reproduce, and FireCraft's primary target is the WebOS build, whose sibling apps and system theme are dark; a light grey chrome would break the family. *Owner*: shell | `R` ("The CS6 chrome palette and panel header"), `S/glyphs.rs` (`CHROME_*`, pinned by `the_chrome_carries_the_recorded_palette`) | 22.5 |
 
 
 <!-- /coderabbit-ai-generated:v1 -->

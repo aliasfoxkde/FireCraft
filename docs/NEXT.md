@@ -644,8 +644,17 @@ scope, so no license path is attempted.
   not faked.
 - **22.5 CS6 chrome** (M): menu bar order, tool strip placement,
   document tab strip, status bar, panel headers with the CS6
-  collapse/close affordances, and the CS6 color scheme (a dark
-  neutral chrome, not egui's default light look). **Landed
+  collapse/close affordances, and the chrome's colour scheme.
+  **The colour scheme was measured, not assumed (2026-11-16):** CS6
+  owns *no* palette — its eight Preferences categories set no colour,
+  so the greys a CS6 install draws are the host OS's, and the
+  reference run renders `#D6D6D6`/`#EDEDED`/`#999999` with **no**
+  saturated hue anywhere in the chrome. FireCraft therefore keeps its
+  own **dark** neutral scheme (every colour but the selection accent a
+  grey), recorded as **deliberately different** with its reason and
+  owner in CS6-PARITY §C, and the values are pinned by
+  `glyphs::tests::the_chrome_carries_the_recorded_palette`.
+  **Landed
   2026-11-06:** the three-mode screen cycle (Standard / Full Screen
   with Menus / Full Screen, fwref 1178–1185 — the control no longer
   aliases Tab), the Alt-hold retouch swap (Blur↔Sharpen,

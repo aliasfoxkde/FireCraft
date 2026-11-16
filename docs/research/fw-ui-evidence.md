@@ -569,6 +569,92 @@ now has both helpers, `argb_raw` (bitmap/retouch) and `abgr_raw`
 not a Lucide file — Lucide has no `slice-knife` icon. It is excluded
 from the Lucide row in `docs/ATTRIBUTION.md` and carries its own row.
 
+## The CS6 chrome palette and panel header (measured 2026-11-16)
+
+Two questions the Phase 22.5 chrome close-out had to answer before
+anything could be implemented: *what colour is CS6's chrome* and *what
+does a CS6 panel's header row carry*. The first had no answer in the
+repo; the second was half-answered.
+
+### CS6 owns no palette
+
+CS6's Preferences carry **eight** categories — General, Edit, Guides
+and Grids, Type, Photoshop Import and open, Launch and Edit, Plug-ins,
+Restore default preferences — and **not one of them sets a colour**
+(CS6 help, "Set preferences", p. 285). There is no "Interface Colors"
+category, no light/dark switch, no theme setting. The greys a CS6
+install draws are therefore **the host operating system's**, not
+Adobe's: CS6 has no palette of its own to reproduce.
+
+What *is* reproducible is the neutrality: CS6's chrome is **hue-free
+greys**, and any palette that carries a hue is, by that measure, not
+CS6's.
+
+### What the reference install rendered
+
+The reference install running under Wine on this host (a screenshot
+kept as an uncommitted working note under `/var/tmp/`, 1777×1137)
+measures, over its whole 2,020,449 pixels:
+
+| region | colour | share |
+|---|---|---|
+| application frame, panel bars, bottom bar | `#D6D6D6` | 22 % |
+| panel interiors | `#EDEDED` (with `#EEEEEE`/`#EFEFEF`/`#F0F0F0` steps) | 5 % |
+| canvas surround — the grey the page sits on | `#999999` | 39 % |
+| the page itself | `#FFFFFF` | 6 % |
+
+**Hue check.** Pixels where blue dominates red by more than 18 count
+16,133 (0.8 %), and none of them forms an area — they are JPEG noise
+around the menu bar's antialiased text, spread over dozens of
+distinct values. The chrome carries **no saturated hue at all**.
+
+Recipe (re-measure; the working note itself is never committed):
+
+```sh
+python3 - <<'PY'
+from PIL import Image
+from collections import Counter
+im = Image.open("/var/tmp/cs6-layout.jpg").convert("RGB")
+print(Counter(im.getdata()).most_common(8))
+blues = [(p, n) for p, n in Counter(im.getdata()).items() if p[2] - p[0] > 18]
+print("blue-dominant pixels:", sum(n for _, n in blues))
+PY
+```
+
+### The panel header row
+
+From the CS6 help ("Dock and undock panels", "Manipulate panel
+groups", "Collapse and expand panel icons"):
+
+- A panel **group** has a *title bar* — "the area above the tabs" —
+  which is what you drag to move the group.
+- The group's panels are **tabs** in one row; double-clicking a tab
+  (or the empty space beside the tabs) minimizes or maximizes a panel.
+- The panel's **title bar carries a double arrow**: clicking it
+  collapses the panel to its icon, and "to collapse or expand all
+  panel icons in a column, click the double arrow at the top of the
+  dock".
+- Every panel also carries a **panel menu** (the triangle button in
+  its title bar).
+
+FireCraft's per-panel header row reproduces the four affordances CS6
+puts on a panel: the collapse arrow, the title, the overflow (the
+panel menu) and — for every panel the Window menu can reopen — the
+close button. The Web Layer panel keeps CS6's asymmetry: it has no
+Window-menu row, so nothing could reopen it, and it gets no close
+button either.
+
+Two parts of the CS6 anatomy are **not** reproduced, and are recorded
+as open rather than quietly dropped:
+
+- the *dock-level* tab-group structure (CS6's right dock is five
+  stacked tab-groups, one panel expanded at a time — the flat column
+  FireCraft draws is a 22.1 gap), and
+- the **exact item list of a CS6 panel menu**. Our evidence
+  establishes that the button exists, not what is on it, so
+  FireCraft's overflow menu carries only the commands the help
+  documents (the dock's double arrow, and *Hide Panels*).
+
 ## Clean-room statement
 
 Evidence extracted from the local `source/` install is used to
