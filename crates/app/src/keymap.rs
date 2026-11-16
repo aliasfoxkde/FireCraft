@@ -3,7 +3,7 @@
 //! CS6's own keymap — the `Fireworks.xml` resource transcribed in
 //! [`crate::menus`] — is the default and stays byte-identical in
 //! behaviour. The other sets bind the *shared verbs* the way the
-//! products whose muscle memory FireCraft borrows bind them, so a
+//! products whose muscle memory `FireCraft` borrows bind them, so a
 //! user arriving from Illustrator or Photoshop is not fighting the
 //! shell on every keystroke.
 //!
@@ -19,7 +19,7 @@ use crate::menus::{
     Shortcut,
 };
 
-/// The keymap sets FireCraft ships.
+/// The keymap sets `FireCraft` ships.
 #[derive(
     Clone, Copy, Debug, Default, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize,
 )]
@@ -32,7 +32,7 @@ pub enum KeymapSet {
     Illustrator,
     /// Adobe Photoshop's defaults.
     Photoshop,
-    /// Adobe FreeHand's defaults.
+    /// Adobe `FreeHand`'s defaults.
     FreeHand,
     /// The Web Standard conventions (the browser's and the platform's).
     WebStandard,
@@ -250,9 +250,9 @@ static PHOTOSHOP: &[Binding] = &[
     ),
 ];
 
-/// Adobe FreeHand's defaults, for the shared verbs.
+/// Adobe `FreeHand`'s defaults, for the shared verbs.
 ///
-/// Source: Macromedia's *FreeHand MX Keyboard Shortcuts* — the
+/// Source: Macromedia's `FreeHand MX Keyboard Shortcuts` — the
 /// product's own shortcut sheet. Macromedia shipped one sheet per
 /// platform; this is the Mac one, read with `Command` as `Ctrl` and
 /// `Option` as `Alt` (the two products differ only in those two
