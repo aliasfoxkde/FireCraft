@@ -23,6 +23,8 @@
 //!   A hotspot spanning several regions therefore emits one area, not
 //!   a per-region clip.
 
+#![deny(missing_docs)]
+
 pub mod batch;
 pub mod css;
 pub mod html;
