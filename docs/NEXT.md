@@ -1,13 +1,16 @@
 # FireCraft — Roadmap detail
 
-> **Current execution snapshot (2026-11-11; main `b61f198`):** Phase 21's
+> **Current execution snapshot (2026-11-16; main `23f872e0`):** Phase 21's
 > user-facing deliverables have landed. Phase 20.1 and 20.5–20.7 are on
-> main; Optimize/timeline are in open PR #118 and the mask stack is in
-> open PR #113. Phase 22 remains partial: the user-visible parity matrix
-> is published, but bitmap inspector capabilities and remaining CS6 chrome
-> are still open/evidence-gated. Use [TASKS.md](TASKS.md) for live status
-> and [PROGRESS.md](PROGRESS.md) for measured receipts. An open PR is not
-> a landed feature.
+> main; Optimize/timeline landed 2026-11-11 in #118 and the mask stack
+> landed in #113 as `PARTIAL`. The reachability wave (#143), the
+> artwork consolidation (#144) and the wave-2 closeout (#150) merged
+> 2026-11-14 → 11-16: **257/257 commands bound = 100%, floor
+> re-blessed to 100%**. Phase 22 remains partial: the
+> user-visible parity matrix is published, but bitmap inspector
+> capabilities and remaining CS6 chrome are still open/evidence-gated.
+> Use [TASKS.md](TASKS.md) for live status and [PROGRESS.md](PROGRESS.md)
+> for measured receipts. An open PR is not a landed feature.
 
 > Current task state is tracked in [`TASKS.md`](TASKS.md), with a dated
 > snapshot in [`PROGRESS.md`](PROGRESS.md). This file is the detailed
@@ -236,7 +239,7 @@ of replacing it, fill/stroke swatch panel bound to
 Phase 19 batches 19.1–19.5 landed 2026-10-31 → 11-01: transform
 handles + Numeric Transform, Subselect path-node editing, the gradient
 fill editor, the command palette, and the grid/guides/snap set. The
-inert count is 2 of 296 items (was 190); 19.6's menu-wiring
+inert count is 2 of 298 items (was 190); 19.6's menu-wiring
 
 campaign is complete and the Text ▸ Font submenu landed 2026-11-06. The remaining rows require separate feature or
 evidence work, tracked outside that campaign.
@@ -387,8 +390,12 @@ evidence work, tracked outside that campaign.
   one-way ratchet: `--bless` may raise it (reachability improved) and
   refuses to lower it (a regression is fixed, not forgiven). Measured
   on the release train at 2026-11-11: **253 registry commands, 168
-  bound by the shell = 66.40%**, 85 unreachable; the floor is pinned
-  at 66.40%.
+  bound by the shell = 66.40%**, 85 unreachable; the floor was pinned
+  at 66.40%. Re-measured 2026-11-14 after PR #143: **257 registry
+  commands, 249 bound = 96.89%**, 8 unreachable; the floor was
+  deliberately re-blessed to 96.89% in the wave-closeout PR.
+  Re-measured 2026-11-14 after the wave-2 bindings: **257 of 257
+  bound = 100%, 0 unreachable**, floor re-blessed to 100%.
   (The command palette makes the *palette* reach 100% — the gate
   deliberately measures the CS6-visible surface instead, which is the
   surface the 19.x batches widen. Decision
@@ -400,8 +407,8 @@ evidence work, tracked outside that campaign.
   (`INERT_CEILING`), so a newly inert row fails the test until the
   ceiling is deliberately re-pinned. Per-item tracking references were
   dropped as unnecessary — the count is the honest metric and the gate
-  refuses any rise in it. **Latest census (2026-11-11): 2 inert rows of
-  296 total**, with eight separate feature/evidence-gated rows. The
+  refuses any rise in it. **Latest census (2026-11-14): 2 inert rows of
+  298 total**, with eight separate feature/evidence-gated rows. The
   19.6 wiring campaign is complete; do not keep it in progress.
 - **19b.4 Wasm budget re-pin** (S) — **DONE (2026-11-03)**: re-measured
   and re-pinned with evidence. `xtask dist --web` observed
@@ -441,11 +448,29 @@ evidence work, tracked outside that campaign.
   canvas calls `compose::render_onion`; Add / Duplicate / Delete
   State and Distribute to States are in the panel
   ([T8](tasks/T8-animation-timeline.md), decision
-  [0094](decisions/0094-animation-timeline-shell.md)). Still open:
-  playback (CS6's `Play Animation`), state thumbnails, per-side onion
+  [0094](decisions/0094-animation-timeline-shell.md)). **PLAYBACK
+  LANDED 2026-11-12** — the panel has CS6's `Play Animation` as a
+  clock over elapsed-time data, with a `Loop` checkbox, and the view
+  follows the playhead (decision
+  [0096](decisions/0096-animation-playback-clock.md)). Still open:
+  state thumbnails, a document-level loop count, per-side onion
   opacity, screenshot acceptance.
-- **20.4 Mask stack UI** (M): add/remove/mode/link/move. **In open
-  PR #113**; this is a FireCraft extension, not a CS6 parity claim.
+- **20.4 Mask stack UI** (M): add/remove/mode/link/move. **PARTIAL
+  2026-11-11**: the stack, its operators, and its fold landed. The
+  model holds a level's combine mode and persists it
+  (`mask.setStackMode`, decisions [0092](decisions/0092-mask-stack-combine-mode.md)
+  and [0093](decisions/0093-mask-stack-levels-and-folding.md)); the
+  compositor folds the levels bottom-up into one coverage and applies
+  it to the content's pixels; the panel lists one row per level with
+  its enable flag, operator, link flag, reorder arrows and remove
+  button, and can add a level; `mask.addLevel`/`mask.removeLevel`/
+  `mask.moveLevel` are dispatched from that panel. The structural
+  commands undo byte-exactly. Still open: the screenshot acceptance
+  and the compositor's mask sampling resolution (a level's mask is
+  sampled at the canvas resolution, not the mask image's own);
+  ticket [T9](tasks/T9-mask-stack.md), follow-up
+  [#114](https://github.com/aliasfoxkde/FireCraft/issues/114). This
+  is a FireCraft extension, not a CS6 parity claim.
 - **20.5 Multi-document tabs** (M): **LANDED 2026-11-07** — Open/New
   park the active document as a `DocTab`; Close promotes the newest
   parked tab (refuses dirty documents); the tab strip shows the
@@ -455,10 +480,15 @@ evidence work, tracked outside that campaign.
   `new_parks_the_current_document`,
   `close_refuses_a_dirty_document`. (Window-menu panel toggles landed
   in Phase 19.6 batches 3 and 10.)
-- **20.6 History panel click-to-rewind** (S): **LANDED 2026-11-11**
-  in #107 — journal replay to seq N; the session-scoped rewind
-  command is also discoverable from the command palette and MCP
-  list/run surface in open PR #122.
+- **20.6 History panel click-to-rewind** (S): **LANDED 2026-11-11** — the
+  clickable History rows (the engine half, decision 0082) and the
+  command surface: `history.rewind` is a session-scoped id, so every
+  surface that enumerates commands enumerates
+  `catalog::all_ids()` — the command palette offers it (with its
+  payload grounded one step below the document's live depth) and
+  `firecraft.listCommands` advertises it
+  ([T10](tasks/T10-history-rewind-command.md), decision
+  [0096](decisions/0096-the-rewind-is-a-command-every-surface-can-name.md)).
 - **20.7 Slice/hotspot behavior editing + HTML preview** (M):
   **LANDED 2026-11-11** in #107.
 
@@ -511,7 +541,7 @@ performance follow-up, not a reason to reopen the delivered MVP features.
   drag (0.5×–3×, Reset to platform default) applies to the context
   each frame and rides `ShellLayout`, so it persists like the panel
   set. Gate: `preferences_scale_round_trips_the_layout`. The
-  Preferences menu row also left the inert census, now 2 of 296.
+  Preferences menu row also left the inert census, now 2 of 298.
 - **21.5 accesskit** desktop + web re-audit — **LANDED 2026-11-11**
   in #107 for the supported desktop/accessibility surface. Decision
   0067 remains the authority for the web-canvas screen-reader limitation;
@@ -727,10 +757,13 @@ scope, so no license path is attempted.
    `catalog::ids()` − UI-bound commands only shrinks (mirror of the
    call-table test). Unreachable commands with no gate means drift.
    — **DONE (2026-11-10)**, tracked as 19b.2: `cargo run -p xtask --
-   reachability`, wired into `ci`. Measures **253 registry commands,
-   168 bound by the shell = 66.40%**, 85 unreachable; the floor lives
-   in **`.reachability-floor.tsv`** (pinned at 66.40%) and is a one-way
-   ratchet.
+   reachability`, wired into `ci`. Measured 253 registry commands /
+   168 bound (66.40%) at introduction; **re-measured 2026-11-14 after
+   PR #143: 257 commands, 249 bound = 96.89%, 8 unreachable**; then
+   re-measured after the wave-2 bindings: **257 of 257 bound = 100%,
+   0 unreachable**; the floor lives in **`.reachability-floor.tsv`**,
+   deliberately re-blessed to 100% (from 96.89% in the wave-closeout
+   PR), and is a one-way ratchet.
 3. **Inert-drift test**: an inert menu row may not be added silently.
    — **DONE (2026-11-02)**, tracked as 19b.3: the census is derived
    from `MENUBAR` and gated against `INERT_CEILING` (8 of 289 items),

@@ -834,6 +834,11 @@ impl TypedCommand for AddMasterLayer {
             })
             .collect();
         let mut layer = Layer {
+            // A new layer is a display layer (CS6's `DISb`): the
+            // derive-default is `false` (smart-reference display),
+            // which would render nothing — `layer.add` mints the same
+            // way.
+            display: true,
             cells,
             ..Layer::default()
         };
@@ -1383,6 +1388,11 @@ mod structure_tests {
                 .cells
                 .iter()
                 .all(|cell| cell.visible && !cell.locked)
+        );
+        assert!(
+            layers[0].display,
+            "a master layer is a display layer — the derive-default \
+             (smart-reference display) would render nothing"
         );
         delta.apply_inverse(&mut document).unwrap();
         assert_eq!(document.pages[0].layers.layers.len(), 2);

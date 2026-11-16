@@ -16,9 +16,12 @@ enforce server-side, plus the graph invariants the runner expects:
   verbatim via `sh -c` and never applies it — prefer cd inside run)
 - timeout strings parse as <int><s|m|h>
 - `needs` references must name jobs in this pipeline
-- the graph must stay a single chain (all jobs of one run share ONE
-  per-run workspace; the runner has capacity 2 — fan-out re-introduces the
-  dsc run 907dc1bf class of race where sibling jobs mutate the same tree)
+- the graph must have exactly one root and every job must hang off it
+- a job must not JOIN two parents: all jobs of one run share ONE
+  per-run workspace, so a join means two writers in one tree (the dsc
+  run 907dc1bf class of race). A FORK is allowed — the pipeline fans
+  perf-budgets and fuzz out of corpus-golden, and each of those jobs
+  owns a separate cache directory, so they never share a target tree
 
 Exit 0 prints a summary; exit 1 lists violations. stdlib-only.
 """
@@ -57,6 +60,7 @@ def validate(path: Path) -> list[str]:
 
     names: list[str] = []
     indegree: dict[str, int] = {}
+    cache_sources: set[str] = set()
     for job in jobs:
         name = job.get("name")
         if not name:
@@ -78,11 +82,52 @@ def validate(path: Path) -> list[str]:
         if timeout is not None and not TIMEOUT_RE.match(str(timeout)):
             errors.append(f"job {name}: timeout {timeout!r} must match <int><s|m|h>")
 
+        cache = job.get("cache")
+        if cache is not None and not isinstance(cache, dict):
+            errors.append(f"job {name}: cache must be a mapping")
+        elif isinstance(cache, dict):
+            source = cache.get("source")
+            if source is None:
+                errors.append(
+                    f"job {name}: cache must name its own directory (source: "
+                    "\"{cache_root}/cargo/{image}-<job>\"); the bare default is "
+                    "shared by every job and serializes the fleet"
+                )
+            elif not isinstance(source, str):
+                errors.append(f"job {name}: cache source must be a string")
+            else:
+                # The runner takes an EXCLUSIVE lock on every writable host
+                # directory a job mounts (GitForge GF-11), so two jobs on one
+                # cache directory cannot run at the same time. A source shared
+                # by every job would serialize the whole fleet into one lane.
+                if not source.endswith(name):
+                    errors.append(
+                        f"job {name}: cache source must end with the job name so each job "
+                        f"owns its own cache directory (got {source!r})"
+                    )
+                if source in cache_sources:
+                    errors.append(
+                        f"job {name}: cache source {source!r} is already used by another job; "
+                        "two jobs on one cache directory serialize each other"
+                    )
+                cache_sources.add(source)
+
         steps = job.get("steps") or []
         if isinstance(steps, list):
+            runs_cargo = False
             for step in steps:
                 if not isinstance(step, dict) or not step.get("name") or not step.get("run"):
                     errors.append(f"job {name}: every step needs name and run")
+                    continue
+                run = str(step["run"])
+                runs_cargo |= re.search(r"\bcargo(?:\s|$)", run) is not None
+                if re.search(r"CARGO_TARGET_DIR=/tmp/", run):
+                    errors.append(
+                        f"job {name}: Cargo target output must use the declared host cache, "
+                        "not a disposable container /tmp directory"
+                    )
+            if runs_cargo and not isinstance(cache, dict):
+                errors.append(f"job {name}: Cargo work must declare a cache: block")
 
     for ref in (n for job in jobs for n in job.get("needs", []) or []):
         if ref not in names:
@@ -91,31 +136,39 @@ def validate(path: Path) -> list[str]:
     roots = [n for n in names if indegree.get(n, 0) == 0]
     if len(roots) != 1:
         errors.append(
-            "pipeline must be a single chain: expected exactly one root job, "
+            "pipeline must have exactly one root job, "
             f"found {len(roots)} ({', '.join(roots) or 'none'})"
         )
     for job in jobs:
         if len(job.get("needs", []) or []) > 1:
             errors.append(
                 f"job {job['name']} joins {len(job['needs'])} parents; "
-                "single-chain policy forbids joins (shared workspace race)"
+                "a join is forbidden (the run's single shared workspace "
+                "would be written by two jobs at once)"
             )
 
-    reachable = 0
-    if roots:
-        nxt = {n: [] for n in names}
-        for job in jobs:
-            for ref in job.get("needs", []) or []:
+    # Reachability over the DAG. A fork (two jobs needing the same
+    # parent) is allowed; a job that no path from the root reaches is
+    # not — such a job never runs.
+    nxt = {n: [] for n in names}
+    for job in jobs:
+        for ref in job.get("needs", []) or []:
+            if ref in nxt:
                 nxt[ref].append(job["name"])
-        cursor = roots[0]
-        while cursor is not None:
-            reachable += 1
-            children = nxt[cursor]
-            cursor = children[0] if len(children) == 1 else None
-        if reachable != len(names):
-            errors.append(
-                f"pipeline is not fully connected: {reachable}/{len(names)} jobs reachable"
-            )
+    seen = set()
+    stack = list(roots)
+    while stack:
+        node = stack.pop()
+        if node in seen:
+            continue
+        seen.add(node)
+        stack.extend(nxt.get(node, []))
+    if roots and len(seen) != len(names):
+        unreachable = sorted(set(names) - seen)
+        errors.append(
+            f"pipeline is not fully connected: {len(seen)}/{len(names)} jobs reachable "
+            f"from the root (unreachable: {', '.join(unreachable)})"
+        )
 
     return errors
 
@@ -138,8 +191,7 @@ def main() -> int:
         "version": doc["version"],
         "trigger_on": doc["trigger_on"],
         "jobs": [j["name"] for j in jobs],
-        "chain": [j["name"] for j in jobs] == [j["name"] for j in sorted(jobs, key=lambda x: 0)]
-        or None,
+        "root": next((j["name"] for j in jobs if not j.get("needs")), None),
     }
     print(f"✓ {path} is structurally valid")
     print(json.dumps(summary, indent=2))

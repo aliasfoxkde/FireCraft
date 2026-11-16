@@ -5,7 +5,7 @@
 > Historical narrative: [`HISTORY.md`](HISTORY.md) and
 > [`SESSIONS.md`](SESSIONS.md).
 
-## Snapshot (2026-11-11, post-train; based on `main` at `b61f198`)
+## Snapshot (2026-11-16, post-wave-2; based on `main` at `23f872e0`)
 
 <!-- coderabbit-ai-generated:v1 -->
 
@@ -51,7 +51,7 @@
   Modify ▸ Mask enable/disable is CS6's single toggle row: the
   engine reads the mask's state, the shell sends the opposite, and the
   row's label flips between "Enable Mask" and "Disable Mask".
-- **Menu reachability:** 2 of 296 rows currently use `Action::Inert`; eight additional rows have explicit feature/evidence gates. The
+- **Menu reachability:** 2 of 298 rows currently use `Action::Inert`; eight additional rows have explicit feature/evidence gates. The
 
   19.6 campaign (batches 1–17) is complete, and the Window menu's
   panel rows (including Optimize, CSS Properties, Find and Replace,
@@ -73,6 +73,16 @@
   evidence.
 - **Clean-room boundary:** local CS6 files and Adobe-derived extracts
   remain uncommitted; visual assets require attribution.
+- **History rewind as a command (2026-11-11, decision 0096):** the
+  session-scoped `history.rewind` is enumerated by
+  `catalog::all_ids()`, so every surface that lists commands lists it
+  too: the command palette offers it (its payload grounded one step
+  below the document's live depth, not a fuzz depth) and the MCP
+  bridge's `firecraft.listCommands` advertises it. The registry
+  catalog and the reachability measurement are unchanged by that
+  change — the id is not a registry id (the measurement it stood
+  beside then, 168/253, has since risen to 257/257 (100%) — #143,
+  then the wave-2 bindings that closed the last eight).
 
 ## Build and deployment evidence
 
@@ -91,10 +101,13 @@
   fraction of it, so the program is reachability + canvas, not
   repair. 19.1–19.6 all landed (transform handles, path-node editing,
   gradient editor, command palette, guides/grid/snap, and the
-  inert-menu burn-down to 2 of 296), and all of Phase 21 shipped with
+  inert-menu burn-down to 2 of 298), and all of Phase 21 shipped with
   #107. Phase 20 continues — 20.1, 20.5–20.7 shipped with #107 and
-  20.2 Optimize + 20.3 animation timeline with #118, leaving the
-  mask stack (#113); Phase 22 chrome work remains open.
+  20.2 Optimize + 20.3 animation timeline with #118, and the mask
+  stack (#113) landed as `PARTIAL` — its level add/remove/move
+  affordances shipped with the panel; the screenshot acceptance and
+  the compositor's mask sampling resolution remain open (issue
+  #114); Phase 22 chrome work remains open.
 - **Phase 20 daily-driver features — two landed 2026-11-11:** the
   Optimize panel (20.2, decision 0094's sibling [0095](decisions/0095-optimize-panel-honors-only-what-export-honors.md))
   edits the `EXPv` fields the export honors and previews the page
@@ -102,13 +115,18 @@
   decision [0094](decisions/0094-animation-timeline-shell.md)) makes
   the `States` panel the strip, writes per-state delays through
   `frame.setDuration`, and makes onion skinning a canvas toggle.
-  Mask stack (#113) remains open; history rewind (20.6) and slice
-  behavior editing (20.7) landed with #107.
+  Mask stack (#113) landed 2026-11-14 as `PARTIAL`; history rewind
+  (20.6) and slice behavior editing (20.7) landed with #107.
 - **UI-work gates landed (2026-11-10, issue #94):** the reachability
   gate (`cargo run -p xtask -- reachability`, wired into `ci`) derives
   the shell's bound command set from the shell crate's own source and
-  holds it to a one-way floor in `.reachability-floor.tsv` — **253
-  registry commands, 168 bound = 66.40%**, 85 unreachable. The panel
+  holds it to a one-way floor in `.reachability-floor.tsv` — measured
+  at introduction as **253 registry commands, 168 bound = 66.40%**,
+  re-pinned to **172/257 (66.93%)** by #113's lane, then deliberately
+  re-blessed to **249/257 (96.89%)** in the wave-closeout PR
+  (2026-11-14; 8 unreachable), then to **257/257 (100%)** when the
+  wave-2 bindings closed those eight (0 unreachable, floor re-blessed
+  2026-11-14). The panel
   snapshot (`crates/app/panels.snapshot`, 19 panels) pins the panel
   set's structure; `egui_kittest` is obtainable (0.36.2 matches the
   locked egui) but its pixel path needs a wgpu adapter the CI image

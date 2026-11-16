@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="docs/img/logo.svg" alt="FireCraft flame mark" width="112" height="112" />
+  <img src="docs/img/logo.png" alt="FireCraft flame mark" width="112" height="112" />
   <h1>FireCraft</h1>
   <p><strong>Create. Edit. Design.</strong></p>
   <p>A modern, open-source graphics editor inspired by the workflows of Adobe Fireworks CS6.</p>
@@ -27,7 +27,7 @@ The goal is not to reproduce Adobe's code or redistribute its assets. The goal i
 
 The workspace version is 0.2.5. Development continues beyond that release: the active roadmap includes editor reachability, daily-driver canvas workflows, and a dedicated CS6-inspired shell-fidelity campaign. FireCraft is functional software under active development—not yet a feature-complete replacement for every Fireworks CS6 workflow.
 
-The current documented engine surface includes **253 registered commands** and a CS6 DOM parity matrix of **268 carried, 3 partial (evidence-gated), and 0 missing**. These figures describe the engine/DOM surface, not complete GUI parity: some commands are available through the command palette or automation surfaces before they have a corresponding menu or polished inspector workflow.
+The current documented engine surface includes **257 registered commands** and a CS6 DOM parity matrix of **268 carried, 3 partial (evidence-gated), and 0 missing**. These figures describe the engine/DOM surface, not complete GUI parity: some commands are available through the command palette or automation surfaces before they have a corresponding menu or polished inspector workflow.
 
 ### What is implemented
 
@@ -64,7 +64,7 @@ Some of these items are partially implemented or still planned. The authoritativ
 
 ## Screenshots
 
-The images below are repository screenshots of the application. They are point-in-time views; consult the roadmap for current implementation status.
+The images below are views of the application: the first is a repository screenshot, the second a vector mock-up of the dark theme. They are point-in-time views; consult the roadmap for current implementation status.
 
 <p align="center">
   <img src="docs/img/app-main.png" alt="FireCraft application workspace" width="960" />
@@ -72,11 +72,13 @@ The images below are repository screenshots of the application. They are point-i
 
 The first capture is a 1280×800 frame of the current shell with a vector object selected, taken from the optimized web bundle built on 2026-11-04. It is evidence for that build and state, not a general parity claim — see the [screenshot audit](docs/tasks/T22-screenshot-ui.md) for the captures, measurements, and their limits.
 
-The same workspace in the dark theme — Tools panel down the left edge, a vector object selected on a transparent canvas, and the Optimize panel previewing a PNG-24 export:
+The dark theme, with the FireCraft flame mark under edit and its path nodes live:
 
 <p align="center">
-  <img src="docs/img/app-dark.png" alt="FireCraft in dark mode: the Tools panel down the left edge, a vector fox logo selected on a transparent 800×600 canvas, and the Optimize panel showing a PNG-24 preview at 100% quality." width="960" />
+  <img src="docs/img/app-preview-dark.svg" alt="FireCraft in dark mode: the Tools panel down the left edge, the flame mark selected on a transparent 800×600 canvas with live path nodes on its outline, and the Optimize panel showing a PNG-24 preview at 100% quality." width="960" />
 </p>
+
+The dark-mode image is original vector artwork — a mock-up of the shell, not a screen capture — so the mark on the canvas is the project's own. The capture above it is the real one, and it is evidence for the build it came from, not a general parity claim.
 
 ## Get started
 
@@ -166,10 +168,12 @@ The GUI and automation interfaces are intended to drive the same engine commands
 
 ## Brand and assets
 
-The FireCraft identity is built around a clean, custom-traced flame silhouette and a vertical ember-red-to-orange gradient. The canonical logo is SVG; matching raster exports supply the Linux application icon and repository artwork. The vector-editing illustration below shows the same flame in an active design state, with Bézier anchors, tangent handles, path outlines, and the gradient control line. It is brand artwork—not an application screenshot and not an Adobe or Fireworks asset.
+FireCraft uses the approved flame artwork as its single visual identity. The same supplied image—with its red-to-orange flame gradient, blue Bézier nodes and handles, gradient-direction indicator, and transparent background—is reused throughout the project. The README, website, favicon, and desktop application icon use identical artwork; there are no separately redrawn logo variants.
+
+The master artwork is stored at [`assets/branding/firecraft-approved-master.png`](assets/branding/firecraft-approved-master.png). The README and platform-specific asset locations are byte-identical exports of that master image, not alternate interpretations.
 
 <p align="center">
-  <img src="docs/img/firecraft-vector-brand-study.svg" alt="FireCraft flame mark in a vector editor, with Bézier nodes, curve handles, and gradient direction controls visible" width="420" />
+  <img src="docs/img/logo.png" alt="The approved FireCraft flame artwork shown in vector-editing mode, with Bézier nodes, curve handles, and gradient direction controls" width="256" />
 </p>
 
 Third-party assets must retain their license notices and be recorded in [`docs/ATTRIBUTION.md`](docs/ATTRIBUTION.md). FireCraft's source is licensed under Apache-2.0.
