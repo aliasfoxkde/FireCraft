@@ -14,6 +14,8 @@
 //! Layer position: L4 (may depend on `doc`/`engine`/`compose`; the
 //! engine never depends on this crate).
 
+#![deny(missing_docs)]
+
 use std::rc::Rc;
 
 use boa_engine::{Context, JsResult, JsValue, Source, js_string, native_function::NativeFunction};
@@ -69,6 +71,7 @@ pub enum Outcome {
 /// here.
 #[derive(Clone, Debug, Default)]
 pub struct ScriptReport {
+    /// How the run ended: completed, threw, or hit a sandbox limit.
     pub outcome: Outcome,
     /// Throw message or limit description, when not completed.
     pub message: Option<String>,

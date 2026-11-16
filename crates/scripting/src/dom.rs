@@ -39,8 +39,11 @@ pub struct AttachView {
     /// wire has no node for them and CS6 keeps them in app
     /// preferences, not in the document.
     pub show_grid: bool,
+    /// Whether canvas guides are drawn.
     pub show_guides: bool,
+    /// Whether drags and moves snap to the grid.
     pub snap_to_grid: bool,
+    /// Whether drags and moves snap to guides.
     pub snap_to_guides: bool,
 }
 
