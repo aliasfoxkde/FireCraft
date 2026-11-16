@@ -51,7 +51,7 @@
   Modify ▸ Mask enable/disable is CS6's single toggle row: the
   engine reads the mask's state, the shell sends the opposite, and the
   row's label flips between "Enable Mask" and "Disable Mask".
-- **Menu reachability:** 2 of 297 rows currently use `Action::Inert`; eight additional rows have explicit feature/evidence gates. The
+- **Menu reachability:** 2 of 298 rows currently use `Action::Inert`; eight additional rows have explicit feature/evidence gates. The
 
   19.6 campaign (batches 1–17) is complete, and the Window menu's
   panel rows (including Optimize, CSS Properties, Find and Replace,

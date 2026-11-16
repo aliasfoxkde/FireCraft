@@ -4,8 +4,8 @@
 //! goes through the injected [`engine::platform`] traits ([`EnvDialogs`]
 //! in [`dialogs`]; real modal dialogs land with desktop integration).
 pub(crate) use dialogs::{
-    CanvasColorDialog, CanvasSizeDialog, DisplayState, EnvDialogs, ExportDialog, FeatherDialog,
-    ImageSizeDialog, NumericTransformDialog, ScaleToDialog,
+    CanvasColorDialog, CanvasSizeDialog, ConfirmAction, ConfirmDialog, DisplayState, EnvDialogs,
+    ExportDialog, FeatherDialog, ImageSizeDialog, NumericTransformDialog, ScaleToDialog,
 };
 pub(crate) use filters_ui::{
     FILTER_BOOL_KEYS, FILTER_FAMILIES, FILTER_PARAMS, FilterPreset, filter_preset,
@@ -139,6 +139,8 @@ pub struct Shell {
     pub(crate) numeric_transform: Option<NumericTransformDialog>,
     /// Open Scale To dialog, if any.
     pub(crate) scale_to: Option<ScaleToDialog>,
+    /// Open confirm dialog, if any (the shell's Yes/No mechanism).
+    pub(crate) confirm: Option<ConfirmDialog>,
     /// Open Feather dialog, if any.
     pub(crate) feather: Option<FeatherDialog>,
     /// Open Canvas Size dialog, if any.
@@ -539,6 +541,7 @@ impl Shell {
             export_dialog: None,
             numeric_transform: None,
             scale_to: None,
+            confirm: None,
             feather: None,
             canvas_size: None,
             canvas_color: None,
@@ -1673,6 +1676,12 @@ impl Shell {
                 } else {
                     self.status = "the selection has no bounds".to_owned();
                 }
+            }
+            menus::ShellAction::DeleteAll => {
+                self.confirm = Some(ConfirmDialog {
+                    question: "Delete all objects in the document? This can be undone.".to_owned(),
+                    action: ConfirmAction::DeleteAll,
+                });
             }
             menus::ShellAction::TransformMode(mode) => {
                 self.editor.transform_mode = match mode {
@@ -3403,6 +3412,12 @@ impl eframe::App for Shell {
                 .resizable(false)
                 .collapsible(false)
                 .show(ui.ctx(), |ui| self.scale_to_dialog_ui(ui));
+        }
+        if self.confirm.is_some() {
+            egui::Window::new("Confirm")
+                .resizable(false)
+                .collapsible(false)
+                .show(ui.ctx(), |ui| self.confirm_dialog_ui(ui));
         }
         if self.feather.is_some() {
             egui::Window::new("Feather Selection")
@@ -5514,6 +5529,119 @@ mod tests {
             "the dialog dispatched the resize"
         );
         assert!(shell.scale_to.is_none(), "OK closes the dialog");
+    }
+
+    /// Edit ▸ Delete All… asks first: the row opens the confirm
+    /// dialog, "No" leaves the document untouched, and "Yes" empties
+    /// it through `document.deleteAllInDocument` — the confirmed
+    /// action decision 0117 said did not exist yet. The rendered page
+    /// goes blank with the objects, and the undo label carries the
+    /// verb, so one undo brings everything back.
+    #[test]
+    fn delete_all_asks_before_emptying_the_document() {
+        let mut shell = gui_shell(gui_editor());
+        let before = compose::render(
+            shell.editor.document(),
+            shell.editor.page,
+            shell.editor.frame,
+        )
+        .expect("renders");
+        let objects = shell.editor.current_cell().expect("a cell").elements.len();
+        assert!(objects > 0, "the fixture starts with objects");
+
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::DeleteAll));
+        assert_eq!(
+            shell.confirm.clone().expect("the confirm dialog").action,
+            ConfirmAction::DeleteAll,
+            "the row opens the delete-all confirmation"
+        );
+
+        // Draw the dialog and click "No": nothing happens.
+        let ctx = egui::Context::default();
+        ctx.global_style_mut(|style| style.animation_time = 0.0);
+        let click = |shell: &mut Shell, label: &str, ctx: &egui::Context| {
+            let draw = |shell: &mut Shell, input| {
+                ctx.run_ui(input, |ui| {
+                    egui::CentralPanel::default().show(ui, |ui| {
+                        shell.confirm_dialog_ui(ui);
+                    });
+                })
+            };
+            draw(shell, egui::RawInput::default()).drop_without_applying_deltas();
+            let mut output = draw(shell, egui::RawInput::default());
+            output.textures_delta.clear();
+            let position = output
+                .shapes
+                .iter()
+                .find_map(|shape| match &shape.shape {
+                    egui::epaint::Shape::Text(text) if text.galley.job.text == label => {
+                        Some(text.visual_bounding_rect().center())
+                    }
+                    _ => None,
+                })
+                .expect("the button is visible");
+            for pressed in [true, false] {
+                let input = egui::RawInput {
+                    events: vec![
+                        egui::Event::PointerMoved(position),
+                        egui::Event::PointerButton {
+                            pos: position,
+                            button: egui::PointerButton::Primary,
+                            pressed,
+                            modifiers: egui::Modifiers::default(),
+                        },
+                    ],
+                    ..Default::default()
+                };
+                draw(shell, input).drop_without_applying_deltas();
+            }
+        };
+        click(&mut shell, "No", &ctx);
+        assert!(
+            shell.confirm.is_none(),
+            "No closes the dialog without confirming"
+        );
+        let still_there = compose::render(
+            shell.editor.document(),
+            shell.editor.page,
+            shell.editor.frame,
+        )
+        .expect("renders");
+        assert_eq!(
+            before.pixels, still_there.pixels,
+            "declining leaves the document untouched"
+        );
+        assert!(shell.confirm.is_none(), "the dialog stayed closed");
+
+        // Ask again and click "Yes": every object goes, the render
+        // goes with them, and one undo carries the verb's name.
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::DeleteAll));
+        click(&mut shell, "Yes", &ctx);
+        assert!(shell.confirm.is_none(), "Yes closes the dialog");
+        let after = compose::render(
+            shell.editor.document(),
+            shell.editor.page,
+            shell.editor.frame,
+        )
+        .expect("renders");
+        assert_ne!(
+            before.pixels, after.pixels,
+            "the compositor honours the empty document"
+        );
+        assert!(
+            shell
+                .editor
+                .current_cell()
+                .expect("a cell")
+                .elements
+                .is_empty(),
+            "every top-level element is gone"
+        );
+        assert_eq!(
+            shell.editor.session.undo().expect("an undo step"),
+            "document.deleteAllInDocument",
+            "the confirmed action dispatched the verb"
+        );
     }
 
     /// The Layers panel's three mutating surfaces: rename, the

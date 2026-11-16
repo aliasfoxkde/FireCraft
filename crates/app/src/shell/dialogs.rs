@@ -69,6 +69,26 @@ pub(crate) struct ScaleToDialog {
     pub height: f64,
 }
 
+/// What a confirmed action runs once the user says yes. This is the
+/// shell's confirmation mechanism — decision 0117 named its absence
+/// as the reason `document.deleteAllInDocument` could not be bound
+/// ("a confirmed action that does not exist yet").
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ConfirmAction {
+    /// Empty the document (`document.deleteAllInDocument`).
+    DeleteAll,
+}
+
+/// The confirm dialog's state: the question asked, and what "Yes"
+/// runs. "No" (or any dismissal) leaves the document untouched.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct ConfirmDialog {
+    /// The question shown to the user.
+    pub question: String,
+    /// What "Yes" runs.
+    pub action: ConfirmAction,
+}
+
 /// The Feather dialog's field — Select ▸ Feather…: softens the active
 /// pixel selection's edge by a radius in pixels (1..=64, the engine's
 /// kernel cap).
@@ -809,6 +829,46 @@ impl Shell {
             }),
         ) {
             self.status = format!("selection resized to {}×{}", dialog.width, dialog.height);
+        }
+    }
+
+    /// The confirm dialog: the question, and Yes/No. Yes runs the
+    /// action; No closes without touching the document.
+    pub(super) fn confirm_dialog_ui(&mut self, ui: &mut egui::Ui) {
+        let Some(dialog) = self.confirm.take() else {
+            return;
+        };
+        ui.label(&dialog.question);
+        ui.separator();
+        let mut confirmed = false;
+        let mut declined = false;
+        ui.horizontal(|ui| {
+            confirmed = ui.button("Yes").clicked();
+            declined |= ui.button("No").clicked();
+        });
+        if confirmed {
+            self.run_confirm(dialog.action);
+            return;
+        }
+        if !declined {
+            self.confirm = Some(dialog);
+        } else {
+            self.status = "cancelled".to_owned();
+        }
+    }
+
+    /// Runs a confirmed action. The dialog has already closed, so a
+    /// refusal lands on the status line with nothing left open.
+    pub(super) fn run_confirm(&mut self, action: ConfirmAction) {
+        match action {
+            ConfirmAction::DeleteAll => {
+                if self.run_command("document.deleteAllInDocument", serde_json::json!({})) {
+                    self.status = "every object in the document deleted".to_owned();
+                    // The old selection ids no longer resolve;
+                    // clear the view so no panel reads them.
+                    self.editor.set_selection(Vec::new());
+                }
+            }
         }
     }
 

@@ -31,7 +31,7 @@
   the wave-closeout. These measures answer different questions: DOM verbs,
   shell-bound commands, and complete end-user UI/workflow parity must
   not be conflated.
-- **Menu census:** 2 inert rows of 297. The 19.6 menu-wiring campaign is
+- **Menu census:** 2 inert rows of 298. The 19.6 menu-wiring campaign is
   complete; eight additional rows are explicitly feature/evidence-gated.
 - **Delivered work:** Phase 21's user-facing deliverables landed with
   #107. Phase 20.1–20.3 and 20.5–20.7 are on main (Optimize/timeline
@@ -161,7 +161,7 @@ verifiable.
 ### Current program: Phases 20–22
 
 Phase 19's canvas work and menu wiring campaign (batches 1–17) are
-complete. The live menu census is 2 inert rows of 297; eight other rows
+complete. The live menu census is 2 inert rows of 298; eight other rows
 have explicit feature/evidence gates and are not considered inert.
 Path-node add/delete, the reachability gate, and the wasm budget
 re-pin are also complete.

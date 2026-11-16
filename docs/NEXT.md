@@ -238,7 +238,7 @@ of replacing it, fill/stroke swatch panel bound to
 Phase 19 batches 19.1–19.5 landed 2026-10-31 → 11-01: transform
 handles + Numeric Transform, Subselect path-node editing, the gradient
 fill editor, the command palette, and the grid/guides/snap set. The
-inert count is 2 of 297 items (was 190); 19.6's menu-wiring
+inert count is 2 of 298 items (was 190); 19.6's menu-wiring
 
 campaign is complete and the Text ▸ Font submenu landed 2026-11-06. The remaining rows require separate feature or
 evidence work, tracked outside that campaign.
@@ -405,7 +405,7 @@ evidence work, tracked outside that campaign.
   ceiling is deliberately re-pinned. Per-item tracking references were
   dropped as unnecessary — the count is the honest metric and the gate
   refuses any rise in it. **Latest census (2026-11-14): 2 inert rows of
-  297 total**, with eight separate feature/evidence-gated rows. The
+  298 total**, with eight separate feature/evidence-gated rows. The
   19.6 wiring campaign is complete; do not keep it in progress.
 - **19b.4 Wasm budget re-pin** (S) — **DONE (2026-11-03)**: re-measured
   and re-pinned with evidence. `xtask dist --web` observed
@@ -534,7 +534,7 @@ performance follow-up, not a reason to reopen the delivered MVP features.
   drag (0.5×–3×, Reset to platform default) applies to the context
   each frame and rides `ShellLayout`, so it persists like the panel
   set. Gate: `preferences_scale_round_trips_the_layout`. The
-  Preferences menu row also left the inert census, now 2 of 297.
+  Preferences menu row also left the inert census, now 2 of 298.
 - **21.5 accesskit** desktop + web re-audit — **LANDED 2026-11-11**
   in #107 for the supported desktop/accessibility surface. Decision
   0067 remains the authority for the web-canvas screen-reader limitation;

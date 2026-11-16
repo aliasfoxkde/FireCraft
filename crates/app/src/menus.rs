@@ -119,6 +119,9 @@ pub enum ShellAction {
     /// exact pixel box, keeping its top-left corner in place
     /// (`object.resize`).
     ScaleTo,
+    /// Edit ▸ Delete All…: opens the confirmation dialog that, on
+    /// Yes, empties the document (`document.deleteAllInDocument`).
+    DeleteAll,
     /// Set how the selection's transform handles behave: CS6's Free
     /// Transform (scale, the default) vs Distort (corner handles move
     /// independently, setting the quadrangle).
@@ -883,6 +886,15 @@ pub static EDIT: Menu = Menu {
         ),
         item(57637, "Paste", "Ctrl+V", Action::Shell(ShellAction::Paste)),
         item(57632, "Clear", "Del", Action::Sel(SelAction::Delete)),
+        // This build's own row — CS6's `dom.deleteAllInDocument()`
+        // has no menu row of its own (decision 0117), so it ships
+        // behind a confirmation the shell did not yet have.
+        item(
+            0,
+            "Delete All...",
+            "",
+            Action::Shell(ShellAction::DeleteAll),
+        ),
         Entry::Sep,
         item(
             35430,
@@ -3508,6 +3520,7 @@ pub fn action_name(action: Action) -> String {
             ShellAction::Revert => "Revert".into(),
             ShellAction::NumericTransform => "Numeric Transform".into(),
             ShellAction::ScaleTo => "Scale To".into(),
+            ShellAction::DeleteAll => "Delete All".into(),
             ShellAction::TransformMode(TransformMode::Scale) => "Free Transform".into(),
             ShellAction::TransformMode(TransformMode::Distort) => "Distort".into(),
             ShellAction::Palette => "Command palette".into(),
@@ -3903,13 +3916,14 @@ mod tests {
     /// inert count. A change here means the surface changed —
     /// update the docs in the same change.
     ///
-    /// The two web-panel rows (Slices, HTML Preview) are this build's
-    /// own, so the total is two above the CS6 transcription.
+    /// The two web-panel rows (Slices, HTML Preview) and Edit ▸ Delete
+    /// All... are this build's own, so the total is three above the
+    /// CS6 transcription.
     #[test]
     fn menu_item_total_is_pinned() {
         let (total, _) = census();
         assert_eq!(
-            total, 297,
+            total, 298,
             "menu item total changed — update the docs that quote it"
         );
     }

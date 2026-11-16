@@ -12,6 +12,9 @@ Current version: **0.2.5**.
 
 ### Features
 
+- **app**: the mask panel's "make plain group" row retypes the mask group (eb8c3dae)
+- **app**: Modify ▸ Transform ▸ "Scale To..." resizes to an exact box (44d8722f)
+- **app**: the Freeform tool warps and the Crop tool cuts the selection (f7ab6e8f)
 - **app,engine**: the mask stack — model, persistence, fold, and level panel (#113) (bb5a01f8)
 - **shell**: close the measured reachability gap in the shell's panels (#143) (78abb531)
 - **app,engine**: a mask level links and unlinks its own mask (0418c24b)
@@ -563,6 +566,7 @@ Current version: **0.2.5**.
 
 ### Documentation
 
+- **ledger**: wave closeout — floor re-pinned to 96.89%, snapshots to post-wave state (#148) (44aa5466)
 - **ledger**: record the reachability wave landing and re-measure (3bfffe08)
 - **changelog**: regenerate after the main re-merge (0470cda4)
 - renumber the mask-stack decision to 0092 (097ef7d9)

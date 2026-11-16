@@ -77,7 +77,7 @@ are authoritative for task and platform status.
   generated DOM matrix is 268 carried / 3 partial / 0 missing of 356 verbs.
   These are separate measurements and neither establishes complete
   end-user GUI parity.
-- **Menus and panels:** 2 inert menu rows of 297; eight additional rows
+- **Menus and panels:** 2 inert menu rows of 298; eight additional rows
   remain explicitly feature/evidence-gated. The 19.6 inert-menu wiring
   campaign is complete. The CS6 user-visible matrix is published in
   `docs/CS6-PARITY.md`.
