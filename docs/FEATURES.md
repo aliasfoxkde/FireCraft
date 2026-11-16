@@ -27,7 +27,7 @@ host, and the browser bridge all drive.
 ## The command registry
 
 One registry serves every surface. The live count is
-`engine::catalog::ids()` — 253 as of 2026-11-11 (a point-in-time
+`engine::catalog::ids()` — 257 as of 2026-11-16 (a point-in-time
 number; the call is the authority). The CS6 DOM parity matrix stands
 at **268 carried / 3 partial (evidence-gated) / 0 missing** across 356
 verbs.

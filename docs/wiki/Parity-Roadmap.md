@@ -9,7 +9,7 @@ This page summarizes FireCraft's current user-visible parity work. It does not c
 Keep three independent measures separate:
 
 - **DOM/API parity:** 268 carried, 3 partial, 0 missing of 356 verbs. This describes scripting/API compatibility.
-- **Shell command reachability:** 164 of 253 registered engine commands are bound in the CS6-visible shell surface (64.82%, measured 2026-11-11). The command palette exposes the full command registry, but that does not mean every operation has a polished contextual GUI.
+- **Shell command reachability:** 257 of 257 registered engine commands are bound in the CS6-visible shell surface (100%, measured 2026-11-16 after the wave-2 closeout, #150). The command palette exposes the full command registry, but that does not mean every operation has a polished contextual GUI.
 - **User-visible feature parity:** each menu, tool, panel, inspector field, workflow, import/export path, canvas interaction, keymap and selection state is classified in the [parity matrix](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/CS6-PARITY.md).
 
 A DOM command being carried does not prove that its GUI surface exists. A row appearing in a menu does not prove that the behavior is complete. Each claim needs a working UI path and evidence.

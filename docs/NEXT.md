@@ -1,12 +1,12 @@
 # FireCraft — Roadmap detail
 
-> **Current execution snapshot (2026-11-14; main `44aa5466`):** Phase 21's
+> **Current execution snapshot (2026-11-16; main `23f872e0`):** Phase 21's
 > user-facing deliverables have landed. Phase 20.1 and 20.5–20.7 are on
 > main; Optimize/timeline landed 2026-11-11 in #118 and the mask stack
-> landed in #113 as `PARTIAL`. The reachability wave (#143) and the
-> artwork consolidation (#144) merged 2026-11-14, and the wave-2
-> branch closes the last eight commands (257/257 bound = 100%, floor
-> re-blessed to 100%). Phase 22 remains partial: the
+> landed in #113 as `PARTIAL`. The reachability wave (#143), the
+> artwork consolidation (#144) and the wave-2 closeout (#150) merged
+> 2026-11-14 → 11-16: **257/257 commands bound = 100%, floor
+> re-blessed to 100%**. Phase 22 remains partial: the
 > user-visible parity matrix is published, but bitmap inspector
 > capabilities and remaining CS6 chrome are still open/evidence-gated.
 > Use [TASKS.md](TASKS.md) for live status and [PROGRESS.md](PROGRESS.md)
@@ -463,10 +463,14 @@ evidence work, tracked outside that campaign.
   compositor folds the levels bottom-up into one coverage and applies
   it to the content's pixels; the panel lists one row per level with
   its enable flag, operator, link flag, reorder arrows and remove
-  button, and can add a level. The structural commands undo
-  byte-exactly. Still open: the screenshot acceptance; ticket
-  [T9](tasks/T9-mask-stack.md). This is a FireCraft extension, not a
-  CS6 parity claim.
+  button, and can add a level; `mask.addLevel`/`mask.removeLevel`/
+  `mask.moveLevel` are dispatched from that panel. The structural
+  commands undo byte-exactly. Still open: the screenshot acceptance
+  and the compositor's mask sampling resolution (a level's mask is
+  sampled at the canvas resolution, not the mask image's own);
+  ticket [T9](tasks/T9-mask-stack.md), follow-up
+  [#114](https://github.com/aliasfoxkde/FireCraft/issues/114). This
+  is a FireCraft extension, not a CS6 parity claim.
 - **20.5 Multi-document tabs** (M): **LANDED 2026-11-07** — Open/New
   park the active document as a `DocTab`; Close promotes the newest
   parked tab (refuses dirty documents); the tab strip shows the

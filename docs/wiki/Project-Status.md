@@ -10,12 +10,12 @@ FireCraft is a functional Rust graphics editor with a shared document engine and
 
 | Surface | Current state |
 |---|---|
-| Engine commands | 253 registered command IDs |
-| Shell reachability | 164/253 = 64.82% in the 2026-11-11 measurement; the command palette exposes the full registry, but this gate measures the CS6-visible shell |
+| Engine commands | 257 registered command IDs |
+| Shell reachability | 257/257 = 100% in the 2026-11-16 measurement (wave-2, #150); the command palette exposes the full registry, but this gate measures the CS6-visible shell |
 | CS6 DOM matrix | 268 carried / 3 partial / 0 missing of 356 verbs; this is scripting/API parity, not GUI parity |
 | Menu census | 2 inert rows of 298; eight other rows are explicitly feature/evidence-gated |
 | User-visible parity | Full inventory published in [CS6-PARITY.md](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/CS6-PARITY.md) |
-| Phase 20 | 20.1 and 20.5–20.7 are on main; Optimize/timeline are in [PR #118](https://github.com/aliasfoxkde/FireCraft/pull/118), mask stack in [PR #113](https://github.com/aliasfoxkde/FireCraft/pull/113) |
+| Phase 20 | 20.1 and 20.5–20.7 are on main; Optimize/timeline landed in [PR #118](https://github.com/aliasfoxkde/FireCraft/pull/118), mask stack landed in [PR #113](https://github.com/aliasfoxkde/FireCraft/pull/113) as `PARTIAL` (level add/remove/move shipped; screenshot acceptance + mask sampling resolution open, issue #114) |
 | Phase 21 | User-facing modern deliverables landed in the 2026-11-11 train |
 | Phase 22 | Partial: core panel/tool/context surfaces landed; remaining inspector and chrome details are tracked |
 | Published artifacts | Linux x86_64 GUI/CLI archives, DEB, and web bundle in v0.2.5 |

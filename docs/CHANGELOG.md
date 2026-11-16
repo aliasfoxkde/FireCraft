@@ -1009,6 +1009,7 @@ Current version: **0.2.5**.
 
 ### Other
 
+- The last eight verbs reach their named surfaces #150 (23f872e0)
 - brand: use the approved flame artwork consistently (#144) (ad3fc655)
 - wip(keymap): preserve the CS6 keymap binding work in progress (385ec681)
 - wip(app,web): localStorage session persistence (21.1 partial) (70146380)

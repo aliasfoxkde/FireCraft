@@ -17,27 +17,30 @@
 
 ---
 
-## 1. State snapshot (2026-11-14; main `ad3fc655`)
+## 1. State snapshot (2026-11-16; main `23f872e0`)
 
-- **Source and release:** canonical `main` is `ad3fc655` after the
-  reachability wave (#143) and the artwork consolidation (#144). The
+- **Source and release:** canonical `main` is `23f872e0` after the
+  reachability wave (#143), the artwork consolidation (#144) and the
+  wave-2 closeout (#150, decision 0118). The
   latest published release remains `v0.2.5` (2026-11-03); current source has
   moved beyond that tag. See [PROGRESS.md](PROGRESS.md) for dated build,
   CI and deployment receipts.
 - **Engine and parity:** 257 registered commands; the CS6 DOM matrix is
   268 carried / 3 partial / 0 missing of 356 verbs. The latest
-  shell-reachability measurement is 257/257 = 100% (2026-11-14, after
-  the wave-2 branch closed the last eight); the one-way floor was
-  deliberately re-blessed to 100% (it stood at 96.89% after #143's
-  wave-closeout). These measures answer different questions: DOM verbs,
+  shell-reachability measurement is **257/257 = 100%** (2026-11-16,
+  wave-2 merged as #150); the one-way floor was deliberately
+  re-blessed to 100% (it stood at 96.89% after #143's wave-closeout).
+  These measures answer different questions: DOM verbs,
   shell-bound commands, and complete end-user UI/workflow parity must
   not be conflated.
 - **Menu census:** 2 inert rows of 298. The 19.6 menu-wiring campaign is
   complete; eight additional rows are explicitly feature/evidence-gated.
 - **Delivered work:** Phase 21's user-facing deliverables landed with
   #107. Phase 20.1–20.3 and 20.5–20.7 are on main (Optimize/timeline
-  #118 merged); the mask stack is in open PR #113. Check the live
-  [TASKS.md](TASKS.md) before selecting work.
+  #118 merged); the mask stack landed in #113 as `PARTIAL` (stack,
+  fold, level panel and the level add/remove/move affordances;
+  screenshot acceptance + mask sampling resolution still open, issue
+  #114). Check the live [TASKS.md](TASKS.md) before selecting work.
 - **Phase 22:** screenshot acceptance and panel/tool/context-menu
   foundations landed; bitmap inspector gaps and remaining CS6 chrome
   keep the phase partial. The full user-visible inventory is

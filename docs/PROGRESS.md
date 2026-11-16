@@ -5,7 +5,7 @@
 > Historical narrative: [`HISTORY.md`](HISTORY.md) and
 > [`SESSIONS.md`](SESSIONS.md).
 
-## Snapshot (2026-11-14, post-reachability-wave; based on `main` at `ad3fc655`)
+## Snapshot (2026-11-16, post-wave-2; based on `main` at `23f872e0`)
 
 <!-- coderabbit-ai-generated:v1 -->
 
@@ -101,10 +101,13 @@
   fraction of it, so the program is reachability + canvas, not
   repair. 19.1–19.6 all landed (transform handles, path-node editing,
   gradient editor, command palette, guides/grid/snap, and the
-  inert-menu burn-down to 2 of 296), and all of Phase 21 shipped with
+  inert-menu burn-down to 2 of 298), and all of Phase 21 shipped with
   #107. Phase 20 continues — 20.1, 20.5–20.7 shipped with #107 and
-  20.2 Optimize + 20.3 animation timeline with #118, leaving the
-  mask stack (#113); Phase 22 chrome work remains open.
+  20.2 Optimize + 20.3 animation timeline with #118, and the mask
+  stack (#113) landed as `PARTIAL` — its level add/remove/move
+  affordances shipped with the panel; the screenshot acceptance and
+  the compositor's mask sampling resolution remain open (issue
+  #114); Phase 22 chrome work remains open.
 - **Phase 20 daily-driver features — two landed 2026-11-11:** the
   Optimize panel (20.2, decision 0094's sibling [0095](decisions/0095-optimize-panel-honors-only-what-export-honors.md))
   edits the `EXPv` fields the export honors and previews the page
@@ -112,8 +115,8 @@
   decision [0094](decisions/0094-animation-timeline-shell.md)) makes
   the `States` panel the strip, writes per-state delays through
   `frame.setDuration`, and makes onion skinning a canvas toggle.
-  Mask stack (#113) remains open; history rewind (20.6) and slice
-  behavior editing (20.7) landed with #107.
+  Mask stack (#113) landed 2026-11-14 as `PARTIAL`; history rewind
+  (20.6) and slice behavior editing (20.7) landed with #107.
 - **UI-work gates landed (2026-11-10, issue #94):** the reachability
   gate (`cargo run -p xtask -- reachability`, wired into `ci`) derives
   the shell's bound command set from the shell crate's own source and
