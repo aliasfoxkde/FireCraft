@@ -610,8 +610,8 @@ mod tests {
     use serde_json::json;
     use std::collections::BTreeMap;
 
-    fn validator(schema: serde_json::Value) -> Validator {
-        Validator::with_siblings(&schema, BTreeMap::new()).unwrap()
+    fn validator(schema: &serde_json::Value) -> Validator {
+        Validator::with_siblings(schema, BTreeMap::new()).unwrap()
     }
 
     #[test]
@@ -622,7 +622,7 @@ mod tests {
             "properties": { "name": { "type": "string" } },
             "additionalProperties": false
         });
-        let errors = validator(schema).validate(&json!({ "name": "firecraft" }));
+        let errors = validator(&schema).validate(&json!({ "name": "firecraft" }));
         assert!(errors.is_empty(), "{errors:?}");
     }
 
@@ -632,7 +632,7 @@ mod tests {
             "type": "object",
             "required": ["name"]
         });
-        let errors = validator(schema).validate(&json!({ "version": "1" }));
+        let errors = validator(&schema).validate(&json!({ "version": "1" }));
         assert_eq!(errors.len(), 1);
         assert!(errors[0].contains("name"), "{errors:?}");
     }
@@ -644,7 +644,7 @@ mod tests {
             "properties": { "name": { "type": "string" } },
             "additionalProperties": false
         });
-        let errors = validator(schema).validate(&json!({ "name": "x", "extra": 1 }));
+        let errors = validator(&schema).validate(&json!({ "name": "x", "extra": 1 }));
         assert_eq!(errors.len(), 1);
         assert!(errors[0].contains("extra"), "{errors:?}");
     }
@@ -655,7 +655,7 @@ mod tests {
             "type": "object",
             "properties": { "metadata": { "type": "object" } }
         });
-        let errors = validator(schema).validate(&json!({ "metadata": "nope" }));
+        let errors = validator(&schema).validate(&json!({ "metadata": "nope" }));
         assert_eq!(errors.len(), 1);
         assert!(errors[0].starts_with("/metadata:"), "{errors:?}");
     }
@@ -666,7 +666,7 @@ mod tests {
             "type": "object",
             "properties": { "type": { "enum": ["library", "application"] } }
         });
-        let errors = validator(schema).validate(&json!({ "type": "firmware" }));
+        let errors = validator(&schema).validate(&json!({ "type": "firmware" }));
         assert_eq!(errors.len(), 1);
     }
 
@@ -681,10 +681,9 @@ mod tests {
                 }
             }
         });
-        let errors =
-            validator(schema.clone()).validate(&json!({ "serialNumber": "urn:uuid:NOPE" }));
+        let errors = validator(&schema).validate(&json!({ "serialNumber": "urn:uuid:NOPE" }));
         assert_eq!(errors.len(), 1);
-        let good = validator(schema).validate(&json!({
+        let good = validator(&schema).validate(&json!({
             "serialNumber": "urn:uuid:12345678-1234-1234-1234-123456789012"
         }));
         assert!(good.is_empty(), "{good:?}");
@@ -699,7 +698,7 @@ mod tests {
                 "component": { "type": "object", "required": ["name"] }
             }
         });
-        let errors = validator(schema).validate(&json!({ "component": { "version": "1" } }));
+        let errors = validator(&schema).validate(&json!({ "component": { "version": "1" } }));
         assert_eq!(errors.len(), 1);
         assert!(errors[0].contains("name"), "{errors:?}");
     }
@@ -710,7 +709,7 @@ mod tests {
             "type": "object",
             "properties": { "component": { "$ref": "#/definitions/missing" } }
         });
-        let errors = validator(schema).validate(&json!({ "component": {} }));
+        let errors = validator(&schema).validate(&json!({ "component": {} }));
         assert_eq!(errors.len(), 1);
         assert!(errors[0].contains("does not resolve"), "{errors:?}");
     }
@@ -751,11 +750,11 @@ mod tests {
                 { "type": "integer" }
             ]
         });
-        assert!(validator(schema.clone()).validate(&json!("x")).is_empty());
-        assert!(validator(schema.clone()).validate(&json!(3)).is_empty());
-        let errors = validator(schema.clone()).validate(&json!(true));
+        assert!(validator(&schema).validate(&json!("x")).is_empty());
+        assert!(validator(&schema).validate(&json!(3)).is_empty());
+        let errors = validator(&schema).validate(&json!(true));
         assert_eq!(errors.len(), 1);
-        let both = validator(schema).validate(&json!({ "a": 1 }));
+        let both = validator(&schema).validate(&json!({ "a": 1 }));
         assert_eq!(both.len(), 1);
     }
 
@@ -767,8 +766,8 @@ mod tests {
                 { "type": "integer" }
             ]
         });
-        assert!(validator(schema.clone()).validate(&json!("x")).is_empty());
-        let errors = validator(schema).validate(&json!(true));
+        assert!(validator(&schema).validate(&json!("x")).is_empty());
+        let errors = validator(&schema).validate(&json!(true));
         assert_eq!(errors.len(), 1);
     }
 
@@ -781,11 +780,11 @@ mod tests {
             ]
         });
         assert!(
-            validator(schema.clone())
+            validator(&schema)
                 .validate(&json!({ "name": "x" }))
                 .is_empty()
         );
-        let errors = validator(schema).validate(&json!({ "version": "1" }));
+        let errors = validator(&schema).validate(&json!({ "version": "1" }));
         assert_eq!(errors.len(), 1);
     }
 
@@ -798,15 +797,13 @@ mod tests {
             "uniqueItems": true,
             "items": { "type": "string" }
         });
-        assert!(validator(schema.clone()).validate(&json!(["a"])).is_empty());
-        assert_eq!(validator(schema.clone()).validate(&json!([])).len(), 1);
+        assert!(validator(&schema).validate(&json!(["a"])).is_empty());
+        assert_eq!(validator(&schema).validate(&json!([])).len(), 1);
         assert_eq!(
-            validator(schema.clone())
-                .validate(&json!(["a", "b", "c"]))
-                .len(),
+            validator(&schema).validate(&json!(["a", "b", "c"])).len(),
             1
         );
-        assert_eq!(validator(schema).validate(&json!(["a", "a"])).len(), 1);
+        assert_eq!(validator(&schema).validate(&json!(["a", "a"])).len(), 1);
     }
 
     #[test]
@@ -816,9 +813,9 @@ mod tests {
             "minLength": 2,
             "maxLength": 4
         });
-        assert!(validator(schema.clone()).validate(&json!("abc")).is_empty());
-        assert_eq!(validator(schema.clone()).validate(&json!("a")).len(), 1);
-        assert_eq!(validator(schema).validate(&json!("abcde")).len(), 1);
+        assert!(validator(&schema).validate(&json!("abc")).is_empty());
+        assert_eq!(validator(&schema).validate(&json!("a")).len(), 1);
+        assert_eq!(validator(&schema).validate(&json!("abcde")).len(), 1);
     }
 
     #[test]
@@ -828,9 +825,9 @@ mod tests {
             "minimum": 0,
             "maximum": 10
         });
-        assert!(validator(schema.clone()).validate(&json!(5)).is_empty());
-        assert_eq!(validator(schema.clone()).validate(&json!(-1)).len(), 1);
-        assert_eq!(validator(schema).validate(&json!(11)).len(), 1);
+        assert!(validator(&schema).validate(&json!(5)).is_empty());
+        assert_eq!(validator(&schema).validate(&json!(-1)).len(), 1);
+        assert_eq!(validator(&schema).validate(&json!(11)).len(), 1);
     }
 
     #[test]
