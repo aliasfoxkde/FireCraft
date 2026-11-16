@@ -256,42 +256,25 @@ pub fn sbom() -> Result<(), String> {
         serde_json::from_slice(&raw.stdout).map_err(|e| format!("parse cargo metadata: {e}"))?;
     let version = workspace_version()?;
 
-    let mut components = Vec::new();
     let packages = meta["packages"]
         .as_array()
         .ok_or("cargo metadata: no packages array")?;
-    let mut package_refs = BTreeMap::new();
     let spdx_ids = spdx_license_ids()?;
-    for pkg in packages {
-        let name = pkg["name"]
-            .as_str()
-            .ok_or("cargo metadata: package without name")?;
-        let ver = pkg["version"]
-            .as_str()
-            .ok_or("cargo metadata: package without version")?;
-        let (bom_ref, purl) = package_bom_ref(pkg)?;
-        let id = pkg["id"]
-            .as_str()
-            .ok_or("cargo metadata: package without id")?;
-        package_refs.insert(id.to_owned(), bom_ref.clone());
-        let mut component = serde_json::json!({
-            "type": "library",
-            "name": name,
-            "version": ver,
-            "bom-ref": bom_ref,
-        });
-        if let Some(purl) = purl {
-            component["purl"] = serde_json::json!(purl);
-        }
-        if let Some(license) = pkg["license"].as_str() {
-            component["licenses"] = serde_json::json!([license_choice(license, &spdx_ids)]);
-        }
-        components.push(component);
-    }
+    let locked = cargo_lock_inventory(
+        &std::fs::read_to_string(workspace_root().join("Cargo.lock"))
+            .map_err(|e| format!("read Cargo.lock: {e}"))?,
+    );
+    let inventory = sbom_inventory(packages, &locked, &spdx_ids)?;
+    let components = inventory.components;
 
     let root_ref = format!("urn:firecraft:application:firecraft@{version}");
-    let dependencies = cyclonedx_dependencies(&meta, &package_refs, &root_ref)?;
-    let serial = uuid_from_graph(packages)?;
+    let dependencies = cyclonedx_dependencies(
+        &meta,
+        &inventory.package_refs,
+        &inventory.pinned_only,
+        &root_ref,
+    )?;
+    let serial = uuid_from_graph(&inventory.references)?;
     let bom = serde_json::json!({
         "bomFormat": "CycloneDX",
         "specVersion": "1.5",
@@ -319,10 +302,6 @@ pub fn sbom() -> Result<(), String> {
     // anything (T27-55).  Both checks run before the file is written,
     // so a non-conforming artifact never reaches the release surface.
     validate_against_schema(&bom)?;
-    let locked = cargo_lock_packages(
-        &std::fs::read_to_string(workspace_root().join("Cargo.lock"))
-            .map_err(|e| format!("read Cargo.lock: {e}"))?,
-    );
     compare_with_lock(&components, &locked)?;
 
     let path = out.join(format!("firecraft-{version}-sbom.cdx.json"));
@@ -336,6 +315,125 @@ pub fn sbom() -> Result<(), String> {
         locked.len()
     );
     Ok(())
+}
+
+/// The SBOM's component inventory and the references it is built from.
+struct SbomInventory {
+    /// The `components` array.
+    components: Vec<serde_json::Value>,
+    /// The bom-ref of every component, in the order they were added.
+    references: Vec<String>,
+    /// The bom-refs of the components the lockfile pins but the
+    /// resolved graph does not contain.
+    pinned_only: Vec<String>,
+    /// The metadata package id to bom-ref map the dependency edges are
+    /// built from.
+    package_refs: BTreeMap<String, String>,
+}
+
+/// Build the component inventory from the resolved graph and the
+/// locked inventory.
+///
+/// Two inventories describe the build, and they are not the same set:
+/// `cargo metadata` reports the resolved graph, while `Cargo.lock`
+/// pins the complete set — Cargo resolves the lockfile independently
+/// of any one feature selection, so it pins packages that no enabled
+/// feature activates and the resolved graph therefore omits (a
+/// `cargo metadata` inventory of this workspace is 560 packages; the
+/// lockfile pins 562). A supply-chain document that could omit a
+/// crate a build might link is not evidence, so the pinned inventory
+/// wins: every locked package the resolved graph does not carry
+/// becomes a component too, with no resolved edge — it is pinned, not
+/// linked.
+fn sbom_inventory(
+    resolved: &[serde_json::Value],
+    locked: &[LockedPackage],
+    spdx_ids: &BTreeSet<String>,
+) -> Result<SbomInventory, String> {
+    // The registry publishes a sha256 for each package's archive, and
+    // the lockfile records it. It is the digest a consumer needs to
+    // verify the crate it downloads, so it rides along with the
+    // component.
+    let checksums: BTreeMap<(String, String), String> = locked
+        .iter()
+        .filter_map(|package| {
+            let checksum = package.checksum.clone()?;
+            Some(((package.name.clone(), package.version.clone()), checksum))
+        })
+        .collect();
+
+    let mut components = Vec::new();
+    let mut references = Vec::new();
+    let mut pinned_only = Vec::new();
+    let mut package_refs = BTreeMap::new();
+    let mut listed: BTreeSet<(String, String)> = BTreeSet::new();
+
+    for pkg in resolved {
+        let name = pkg["name"]
+            .as_str()
+            .ok_or("cargo metadata: package without name")?;
+        let version = pkg["version"]
+            .as_str()
+            .ok_or("cargo metadata: package without version")?;
+        let (bom_ref, purl) = package_bom_ref(pkg)?;
+        let id = pkg["id"]
+            .as_str()
+            .ok_or("cargo metadata: package without id")?;
+        package_refs.insert(id.to_owned(), bom_ref.clone());
+        listed.insert((name.to_owned(), version.to_owned()));
+        let mut component = serde_json::json!({
+            "type": "library",
+            "name": name,
+            "version": version,
+            "bom-ref": bom_ref,
+        });
+        if let Some(purl) = purl {
+            component["purl"] = serde_json::json!(purl);
+        }
+        if let Some(license) = pkg["license"].as_str() {
+            component["licenses"] = serde_json::json!([license_choice(license, spdx_ids)]);
+        }
+        if let Some(checksum) = checksums.get(&(name.to_owned(), version.to_owned())) {
+            component["hashes"] = serde_json::json!([{
+                "alg": "SHA-256",
+                "content": checksum,
+            }]);
+        }
+        components.push(component);
+        references.push(bom_ref);
+    }
+
+    for package in locked {
+        if listed.contains(&(package.name.clone(), package.version.clone())) {
+            continue;
+        }
+        let (bom_ref, purl) = locked_bom_ref(package);
+        let mut component = serde_json::json!({
+            "type": "library",
+            "name": package.name,
+            "version": package.version,
+            "bom-ref": bom_ref,
+        });
+        if let Some(purl) = purl {
+            component["purl"] = serde_json::json!(purl);
+        }
+        if let Some(checksum) = checksums.get(&(package.name.clone(), package.version.clone())) {
+            component["hashes"] = serde_json::json!([{
+                "alg": "SHA-256",
+                "content": checksum,
+            }]);
+        }
+        components.push(component);
+        references.push(bom_ref.clone());
+        pinned_only.push(bom_ref);
+    }
+
+    Ok(SbomInventory {
+        components,
+        references,
+        pinned_only,
+        package_refs,
+    })
 }
 
 /// The `CycloneDX` 1.5 schema the SBOM is validated against.
@@ -381,25 +479,53 @@ fn validate_against_schema(bom: &serde_json::Value) -> Result<(), String> {
     ))
 }
 
-/// The packages the lockfile pins, as (name, version) pairs.
+/// One `[[package]]` entry in `Cargo.lock`.
+///
+/// The lockfile is the *complete* pinned inventory. Cargo resolves the
+/// lockfile independently of any one feature selection, so it pins
+/// packages that a given build's resolved graph does not contain — an
+/// optional dependency that no enabled feature activates, for
+/// instance. `cargo metadata` reports the resolved graph, so the two
+/// inventories are not the same set.
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct LockedPackage {
+    name: String,
+    version: String,
+    /// The registry or git source the lockfile pins, absent for a
+    /// workspace member.
+    source: Option<String>,
+    /// The sha256 the registry publishes for the package's archive.
+    checksum: Option<String>,
+}
+
+/// The packages the lockfile pins.
 ///
 /// Only `[[package]]` sections count: `[[patch.unused]]` entries name
 /// packages the graph does not use, and the SBOM does not list them.
-fn cargo_lock_packages(text: &str) -> Vec<(String, String)> {
+fn cargo_lock_inventory(text: &str) -> Vec<LockedPackage> {
     let mut packages = Vec::new();
     let mut section = "";
     let mut name: Option<String> = None;
     let mut version: Option<String> = None;
+    let mut source: Option<String> = None;
+    let mut checksum: Option<String> = None;
     for line in text.lines() {
         let line = line.trim();
         if line.starts_with("[[") && line.ends_with("]]") {
             if section == "[[package]]"
                 && let (Some(n), Some(v)) = (name.take(), version.take())
             {
-                packages.push((n, v));
+                packages.push(LockedPackage {
+                    name: n,
+                    version: v,
+                    source: source.take(),
+                    checksum: checksum.take(),
+                });
             }
             name = None;
             version = None;
+            source = None;
+            checksum = None;
             section = line;
             continue;
         }
@@ -410,14 +536,55 @@ fn cargo_lock_packages(text: &str) -> Vec<(String, String)> {
             name = Some(lock_value(rest));
         } else if let Some(rest) = line.strip_prefix("version = ") {
             version = Some(lock_value(rest));
+        } else if let Some(rest) = line.strip_prefix("source = ") {
+            source = Some(lock_value(rest));
+        } else if let Some(rest) = line.strip_prefix("checksum = ") {
+            checksum = Some(lock_value(rest));
         }
     }
     if section == "[[package]]"
         && let (Some(n), Some(v)) = (name, version)
     {
-        packages.push((n, v));
+        packages.push(LockedPackage {
+            name: n,
+            version: v,
+            source,
+            checksum,
+        });
     }
     packages
+}
+
+/// The bom-ref and purl for a package the lockfile pins.
+///
+/// A crates.io package gets the same Cargo purl the metadata path
+/// gives it, so a package named by both inventories has one reference
+/// either way. Every other source gets a `urn:firecraft:cargo:`
+/// reference whose digest is over the lockfile's own source string.
+fn locked_bom_ref(package: &LockedPackage) -> (String, Option<String>) {
+    const CRATES_IO: &str = "registry+https://github.com/rust-lang/crates.io-index";
+    if package.source.as_deref() == Some(CRATES_IO) {
+        let purl = format!("pkg:cargo/{}@{}", package.name, package.version);
+        return (purl.clone(), Some(purl));
+    }
+    // The identity is the source for a sourced package, and the
+    // package's own name for one the lockfile records without a
+    // source — a workspace member or a path dependency, for which
+    // Cargo.lock records no path. A workspace member is always in the
+    // resolved graph, so the name-keyed identity is only ever used for
+    // a pinned package nothing here links.
+    let identity = package
+        .source
+        .clone()
+        .unwrap_or_else(|| format!("path:{}", package.name));
+    let digest = sha256_hex(identity.as_bytes());
+    (
+        format!(
+            "urn:firecraft:cargo:{}@{}:{}",
+            package.name, package.version, digest
+        ),
+        None,
+    )
 }
 
 /// One quoted TOML value, unquoted.
@@ -431,13 +598,13 @@ fn lock_value(text: &str) -> String {
 /// Compare the SBOM's components with the locked graph, package by
 /// package.
 ///
-/// The SBOM is generated from `cargo metadata --locked`, so the two
-/// inventories come from the same lockfile — and the comparison is
-/// what proves it.  A component the lockfile does not pin, or a pinned
-/// package the SBOM does not list, means one of the two is wrong.
+/// The SBOM's inventory is the lockfile's, so the comparison is what
+/// proves it — it is an assertion, not a discovery. A component the
+/// lockfile does not pin, or a pinned package the SBOM does not list,
+/// means one of the two is wrong.
 fn compare_with_lock(
     components: &[serde_json::Value],
-    locked: &[(String, String)],
+    locked: &[LockedPackage],
 ) -> Result<(), String> {
     let listed: BTreeSet<(String, String)> = components
         .iter()
@@ -447,7 +614,10 @@ fn compare_with_lock(
             Some((name, version))
         })
         .collect();
-    let pinned: BTreeSet<(String, String)> = locked.iter().cloned().collect();
+    let pinned: BTreeSet<(String, String)> = locked
+        .iter()
+        .map(|package| (package.name.clone(), package.version.clone()))
+        .collect();
 
     let missing: Vec<&(String, String)> = pinned.difference(&listed).collect();
     let extra: Vec<&(String, String)> = listed.difference(&pinned).collect();
@@ -542,10 +712,17 @@ fn package_bom_ref(package: &serde_json::Value) -> Result<(String, Option<String
 }
 
 /// Emits the `CycloneDX` dependency edges from Cargo's resolved graph,
-/// plus a `FireCraft` application root pointing at all workspace members.
+/// plus a `FireCraft` application root pointing at all workspace
+/// members.
+///
+/// A package the lockfile pins but the resolved graph does not contain
+/// has no resolved edge, and it is listed with an empty one: it is
+/// pinned, not linked, and saying so is more useful than leaving the
+/// component out of the graph entirely.
 fn cyclonedx_dependencies(
     metadata: &serde_json::Value,
     package_refs: &BTreeMap<String, String>,
+    pinned_only: &[String],
     root_ref: &str,
 ) -> Result<Vec<serde_json::Value>, String> {
     let nodes = metadata["resolve"]["nodes"]
@@ -577,6 +754,13 @@ fn cyclonedx_dependencies(
         }));
     }
 
+    for reference in pinned_only {
+        dependencies.push(serde_json::json!({
+            "ref": reference,
+            "dependsOn": [],
+        }));
+    }
+
     let members = metadata["workspace_members"]
         .as_array()
         .ok_or("cargo metadata: workspace_members is missing")?;
@@ -600,12 +784,9 @@ fn cyclonedx_dependencies(
 /// Deterministic serial from the locked graph: UUIDv8-shaped digest of
 /// the sorted package bom-refs, so source/version changes are reflected
 /// without depending on absolute checkout paths.
-fn uuid_from_graph(packages: &[serde_json::Value]) -> Result<String, String> {
+fn uuid_from_graph(references: &[String]) -> Result<String, String> {
     use sha2::Digest as _;
-    let mut names: Vec<String> = packages
-        .iter()
-        .map(|package| package_bom_ref(package).map(|(reference, _)| reference))
-        .collect::<Result<_, _>>()?;
+    let mut names = references.to_vec();
     names.sort();
     names.dedup();
     let mut hasher = sha2::Sha256::new();
@@ -2108,6 +2289,7 @@ mod sbom_tests {
         let dependencies = cyclonedx_dependencies(
             &metadata,
             &refs,
+            &[],
             "urn:firecraft:application:firecraft@0.1.0",
         )
         .unwrap();
@@ -2142,12 +2324,20 @@ version = \"0.1.0\"
 
     #[test]
     fn the_lockfile_reader_counts_packages_and_ignores_unused_patches() {
+        let packages = cargo_lock_inventory(LOCK);
+        assert_eq!(packages.len(), 2);
+        assert_eq!(packages[0].name, "engine");
+        assert_eq!(packages[0].version, "0.2.5");
+        assert_eq!(packages[0].source, None);
+        assert_eq!(packages[1].name, "serde");
+        assert_eq!(packages[1].version, "1.0.219");
         assert_eq!(
-            cargo_lock_packages(LOCK),
-            vec![
-                ("engine".to_owned(), "0.2.5".to_owned()),
-                ("serde".to_owned(), "1.0.219".to_owned()),
-            ]
+            packages[1].source.as_deref(),
+            Some("registry+https://github.com/rust-lang/crates.io-index")
+        );
+        assert_eq!(
+            packages[1].checksum.as_deref(),
+            Some("d6f7df5f0ea5c0e0b0a8f0a1e0b3d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2")
         );
     }
 
@@ -2157,13 +2347,13 @@ version = \"0.1.0\"
             serde_json::json!({ "name": "engine", "version": "0.2.5" }),
             serde_json::json!({ "name": "serde", "version": "1.0.219" }),
         ];
-        assert!(compare_with_lock(&components, &cargo_lock_packages(LOCK)).is_ok());
+        assert!(compare_with_lock(&components, &cargo_lock_inventory(LOCK)).is_ok());
     }
 
     #[test]
     fn a_locked_package_the_sbom_omits_is_a_failure() {
         let components = vec![serde_json::json!({ "name": "engine", "version": "0.2.5" })];
-        let error = compare_with_lock(&components, &cargo_lock_packages(LOCK)).unwrap_err();
+        let error = compare_with_lock(&components, &cargo_lock_inventory(LOCK)).unwrap_err();
         assert!(error.contains("serde"), "{error}");
         assert!(error.contains("Cargo.lock"), "{error}");
     }
@@ -2175,8 +2365,106 @@ version = \"0.1.0\"
             serde_json::json!({ "name": "serde", "version": "1.0.219" }),
             serde_json::json!({ "name": "ghost", "version": "0.0.1" }),
         ];
-        let error = compare_with_lock(&components, &cargo_lock_packages(LOCK)).unwrap_err();
+        let error = compare_with_lock(&components, &cargo_lock_inventory(LOCK)).unwrap_err();
         assert!(error.contains("ghost"), "{error}");
+    }
+
+    /// A resolved graph that carries only the workspace member, and a
+    /// lockfile that pins one more package — the shape Cargo produces
+    /// when an optional dependency is pinned but no enabled feature
+    /// activates it.
+    const PINNED_ONLY_LOCK: &str = "\
+# This file is automatically @generated by Cargo.
+version = 4
+
+[[package]]
+name = \"engine\"
+version = \"0.2.5\"
+
+[[package]]
+name = \"glob\"
+version = \"0.3.4\"
+source = \"registry+https://github.com/rust-lang/crates.io-index\"
+checksum = \"e4eba85ea1d0a966a983acd07deee566e67395d2d96b6fb39e62b5a833f1eb0b\"
+";
+
+    #[test]
+    fn a_locked_package_the_resolved_graph_omits_is_still_a_component() {
+        let resolved = vec![serde_json::json!({
+            "id": "path+file:///workspace/crates/engine#engine@0.2.5",
+            "name": "engine",
+            "version": "0.2.5",
+            "source": null,
+            "manifest_path": workspace_root().join("crates/engine/Cargo.toml").display().to_string(),
+        })];
+        let inventory = sbom_inventory(
+            &resolved,
+            &cargo_lock_inventory(PINNED_ONLY_LOCK),
+            &BTreeSet::new(),
+        )
+        .unwrap();
+        let names: Vec<&str> = inventory
+            .components
+            .iter()
+            .filter_map(|component| component["name"].as_str())
+            .collect();
+        assert_eq!(names, vec!["engine", "glob"]);
+        assert_eq!(inventory.pinned_only.len(), 1);
+        assert!(inventory.pinned_only[0].starts_with("pkg:cargo/glob@0.3.4"));
+    }
+
+    #[test]
+    fn a_component_carries_the_archive_digest_the_lockfile_records() {
+        let resolved = vec![serde_json::json!({
+            "id": "path+file:///workspace/crates/engine#engine@0.2.5",
+            "name": "engine",
+            "version": "0.2.5",
+            "source": null,
+            "manifest_path": workspace_root().join("crates/engine/Cargo.toml").display().to_string(),
+        })];
+        let inventory = sbom_inventory(
+            &resolved,
+            &cargo_lock_inventory(PINNED_ONLY_LOCK),
+            &BTreeSet::new(),
+        )
+        .unwrap();
+        let glob = inventory
+            .components
+            .iter()
+            .find(|component| component["name"] == "glob")
+            .unwrap();
+        assert_eq!(glob["hashes"][0]["alg"], "SHA-256");
+        assert_eq!(
+            glob["hashes"][0]["content"],
+            "e4eba85ea1d0a966a983acd07deee566e67395d2d96b6fb39e62b5a833f1eb0b"
+        );
+        assert_eq!(glob["purl"], "pkg:cargo/glob@0.3.4");
+    }
+
+    #[test]
+    fn a_pinned_but_unlinked_package_carries_an_empty_dependency_edge() {
+        let metadata = serde_json::json!({
+            "workspace_members": [],
+            "resolve": { "nodes": []}
+        });
+        let dependencies = cyclonedx_dependencies(
+            &metadata,
+            &BTreeMap::new(),
+            &["pkg:cargo/glob@0.3.4".to_owned()],
+            "urn:firecraft:application:firecraft@0.1.0",
+        )
+        .unwrap();
+        let pinned = dependencies
+            .iter()
+            .find(|entry| entry["ref"] == "pkg:cargo/glob@0.3.4")
+            .unwrap();
+        assert_eq!(pinned["dependsOn"], serde_json::json!([]));
+        // The application root stays last, so a reader that follows
+        // the array sees the root where it expects it.
+        assert_eq!(
+            dependencies.last().unwrap()["ref"],
+            "urn:firecraft:application:firecraft@0.1.0"
+        );
     }
 
     #[test]
