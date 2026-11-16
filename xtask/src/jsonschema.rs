@@ -62,6 +62,10 @@ const ANNOTATIONS: &[&str] = &[
     "definitions",
     "description",
     "examples",
+    // The SPDX sibling schema carries `meta:enum` — a map of every
+    // identifier to its licence name — beside the `enum` that does
+    // the validating. It is tooling metadata, not a rule.
+    "meta:enum",
     "title",
 ];
 
@@ -236,6 +240,22 @@ impl Validator {
             && !compiled.is_match(text)
         {
             errors.push(format!("{path}: {text:?} does not match {pattern:?}"));
+        }
+        if let Some(minimum) = schema.get("minLength").and_then(Value::as_u64) {
+            let length = text.chars().count() as u64;
+            if length < minimum {
+                errors.push(format!(
+                    "{path}: {text:?} is {length} character(s) long, the schema requires {minimum}"
+                ));
+            }
+        }
+        if let Some(maximum) = schema.get("maxLength").and_then(Value::as_u64) {
+            let length = text.chars().count() as u64;
+            if length > maximum {
+                errors.push(format!(
+                    "{path}: {text:?} is {length} character(s) long, the schema allows {maximum}"
+                ));
+            }
         }
         if let Some(format) = schema.get("format").and_then(Value::as_str) {
             // In draft-07 `format` is an annotation, not an assertion:
