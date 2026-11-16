@@ -68,7 +68,7 @@ marked ↻: clone them as `C8.nn.k` for each crate.
 - **Verify:** `cargo run -p xtask -- coverage`.
 - **Moves:** S13 ↑, S6 ↑.
 
-### C8.04 ↻ — Deny `missing_docs` in one more crate (#29) `[ ]`
+### C8.04 ↻ — Deny `missing_docs` in one more crate (#29) `[x]`
 - **Needs:** C0.01 · **Tags:** `[HOST:linux]` · **Size:** S per crate
 - **Order** (lowest layer first; `geom` and `color` are done): `fwpng` →
   `raster` → `vector` → `text` → `filters` → `compose` → `doc` → `io` →
@@ -82,6 +82,47 @@ marked ↻: clone them as `C8.nn.k` for each crate.
 - **Done when:** `cargo doc -p <crate> --no-deps` and clippy are clean.
 - **Verify:** `cargo clippy -p <crate> -- -D warnings`.
 - **Moves:** after the last crate, close #29 and #80.
+- **Landed:** the whole order list, as eleven clones of this rung, on the
+  branch `climb/C8.04-missing-docs-campaign`. The count came first: a
+  scan of every `pub` item, field, variant and trait item in the eleven
+  crates found **32 undocumented public items** — `vector` 9 (`LShapeParams`
+  and `ArrowParams` height, the `MAX_POINTS`/`MAX_TIGHTNESS_DEG` ceilings,
+  the `Seg` variants, the `Piece` fields), `engine` 3 (`History::new`,
+  `Journal::new`, `MemoryFs::new`), `doc` 6 (`EffectProperty::value`, the
+  three `SymbolType` variants, `Registry::new`, `UnknownBag::new`),
+  `scripting` 4 (`ScriptReport::outcome`, three `AttachView` flags),
+  `filters` 3 (`Surface::width`, `Surface::height`, `SplitMix64::new`),
+  `io` 2 (the `webp_lossy` quality ceilings) and `webexport` 0 — the one
+  hit there was a `pub` field on a `pub(crate)` struct, which the lint
+  does not see. `fwpng`, `raster`, `text` and `compose` had none, so their
+  clones are the lint line alone. Every doc says what the item does and
+  its contract; nothing was demoted to `pub(crate)`, because every gap
+  was reachable public API.
+  Two counts matter for the next agent. `missing_docs` does **not** fire
+  on a `pub` item inside a private module, so the shell's and the
+  catalog's private enums are not gaps; and it does **not** fire on a
+  `pub use` re-export of an item documented at its definition — so the
+  crates' long `pub use` lists are not gaps either. The `pub mod`
+  declarations are satisfied by the `//!` inner docs of the module files.
+  The residual: `app` and `app-cli` are the two public crates still
+  without the lint. They are L5 shells and the rung's order list stops at
+  `scripting`, so they are clones C8.04.12 and C8.04.13, not part of this
+  landing.
+- **Clones:**
+
+  | Clone | Crate | Commit | Branch |
+  |---|---|---|---|
+  | C8.04.1 | `fwpng` | `7b19d548` | `climb/C8.04.1-fwpng-missing-docs` |
+  | C8.04.2 | `raster` | `918fc479` | `climb/C8.04.2-raster-missing-docs` |
+  | C8.04.3 | `vector` | `8ba8bfe5` | `climb/C8.04.3-vector-missing-docs` |
+  | C8.04.4 | `text` | `0dc9e4ff` | `climb/C8.04.4-text-missing-docs` |
+  | C8.04.5 | `filters` | `c298dc91` | `climb/C8.04.5-filters-missing-docs` |
+  | C8.04.6 | `compose` | `c1163484` | `climb/C8.04.6-compose-missing-docs` |
+  | C8.04.7 | `doc` | `be69d741` | `climb/C8.04.7-doc-missing-docs` |
+  | C8.04.8 | `io` | `bf432810` | `climb/C8.04.8-io-missing-docs` |
+  | C8.04.9 | `webexport` | `57cb39de` | `climb/C8.04.9-webexport-missing-docs` |
+  | C8.04.10 | `engine` | `98f71ba5` | `climb/C8.04.10-engine-missing-docs` |
+  | C8.04.11 | `scripting` | `423f646c` | `climb/C8.04.11-scripting-missing-docs` |
 
 ### C8.05 — Pixel panel snapshots in CI (decision 0087) `[ ]`
 - **Needs:** C2.01 · **Tags:** `[HOST:linux]` · **Size:** M
