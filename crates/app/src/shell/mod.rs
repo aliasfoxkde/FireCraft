@@ -163,6 +163,10 @@ pub struct Shell {
     close_requested: bool,
     /// The Auto Shape flyout is open (toggled by its tool button).
     autoshape_flyout: bool,
+    /// The Auto Shapes panel's mode: insert at the canvas center
+    /// (default) vs regenerate the selected path (`autoshape.redraw`,
+    /// decision 0028's parametric redraw).
+    autoshape_redraw: bool,
     /// The open tool-group flyout: the group's name, its tools, and
     /// the screen position it opened at (CS6's press-and-hold list).
     tool_flyout: Option<(&'static str, Vec<Tool>, Pos2)>,
@@ -552,6 +556,7 @@ impl Shell {
             canvas_rect: None,
             close_requested: false,
             autoshape_flyout: false,
+            autoshape_redraw: false,
             tool_flyout: None,
             tool_press: None,
             about_open: false,
@@ -4060,6 +4065,145 @@ mod tests {
                 .len(),
             before + 1,
             "the primitive lands too"
+        );
+    }
+
+    /// The Auto Shapes panel's Insert/Redraw toggle: with a path
+    /// selected, a Redraw-mode click re-runs that generator into it —
+    /// `autoshape.redraw` dispatched from the panel itself — and the
+    /// compositor follows the new contours. The contours come out
+    /// exactly as a fresh insert of the same shape bakes them, so the
+    /// redraw is the generator running again, not a move. With no
+    /// path selected the row reports so and dispatches nothing.
+    #[test]
+    fn the_autoshapes_panel_redraws_the_selected_path() {
+        let mut shell = gui_shell(gui_editor());
+        let id = shell.editor.current_cell().expect("a cell").elements[0];
+        shell.editor.set_selection(vec![id]);
+        shell.editor.rect_corner = 30.0;
+        let before_path = shell_path(&shell, id);
+        let registered = shell.editor.document().registry.iter().count();
+        let before = compose::render(
+            shell.editor.document(),
+            shell.editor.page,
+            shell.editor.frame,
+        )
+        .expect("renders");
+
+        let ctx = egui::Context::default();
+        ctx.global_style_mut(|style| style.animation_time = 0.0);
+        let click = |shell: &mut Shell, label: &str, ctx: &egui::Context| {
+            let draw = |shell: &mut Shell, input| {
+                ctx.run_ui(input, |ui| {
+                    egui::CentralPanel::default().show(ui, |ui| {
+                        shell.auto_shapes_panel(ui);
+                    });
+                })
+            };
+            draw(shell, egui::RawInput::default()).drop_without_applying_deltas();
+            let mut output = draw(shell, egui::RawInput::default());
+            output.textures_delta.clear();
+            let position = output
+                .shapes
+                .iter()
+                .find_map(|shape| match &shape.shape {
+                    egui::epaint::Shape::Text(text) if text.galley.job.text == label => {
+                        Some(text.visual_bounding_rect().center())
+                    }
+                    _ => None,
+                })
+                .unwrap_or_else(|| panic!("the row {label:?} is visible"));
+            for pressed in [true, false] {
+                let input = egui::RawInput {
+                    events: vec![
+                        egui::Event::PointerMoved(position),
+                        egui::Event::PointerButton {
+                            pos: position,
+                            button: egui::PointerButton::Primary,
+                            pressed,
+                            modifiers: egui::Modifiers::default(),
+                        },
+                    ],
+                    ..Default::default()
+                };
+                draw(shell, input).drop_without_applying_deltas();
+            }
+        };
+
+        // Flip the panel to Redraw mode, then click the shape row.
+        click(&mut shell, "Redraw", &ctx);
+        assert!(shell.autoshape_redraw, "the toggle sets redraw mode");
+        click(&mut shell, "Rounded Rectangle", &ctx);
+
+        assert_eq!(
+            shell.editor.document().registry.iter().count(),
+            registered,
+            "the redraw mutates in place — nothing new was minted"
+        );
+        let redrawn = shell_path(&shell, id);
+        assert_ne!(
+            redrawn.contours, before_path.contours,
+            "the generator re-baked the path"
+        );
+        let after = compose::render(
+            shell.editor.document(),
+            shell.editor.page,
+            shell.editor.frame,
+        )
+        .expect("renders");
+        assert_ne!(
+            before.pixels, after.pixels,
+            "the compositor honours the regenerated contours"
+        );
+
+        // One undo step, named for the verb the panel dispatched; it
+        // takes the path back to its original contours.
+        assert_eq!(
+            shell.editor.session.undo().expect("an undo step"),
+            "autoshape.redraw",
+            "the panel dispatched the redraw verb"
+        );
+        assert_eq!(
+            shell_path(&shell, id).contours,
+            before_path.contours,
+            "undo restores the original path"
+        );
+
+        // The redrawn contours equal what a fresh insert of the same
+        // shape bakes with the panel's box and corner — the same
+        // generator, run again.
+        shell.insert_shape(
+            super::panels_web::ShapeKind::Auto(crate::editor::AutoShape::RoundedRect),
+            "Rounded Rectangle",
+        );
+        let fresh_id = shell
+            .editor
+            .current_cell()
+            .expect("a cell")
+            .elements
+            .last()
+            .copied()
+            .expect("the insert landed");
+        assert_ne!(fresh_id, id, "the insert minted a second object");
+        let fresh = shell_path(&shell, fresh_id);
+        assert_eq!(
+            redrawn.contours, fresh.contours,
+            "redraw and insert run the same generator over the same parameters"
+        );
+
+        // No path selected: the row reports and dispatches nothing.
+        let journal = shell.editor.session.journal_len();
+        shell.editor.set_selection(Vec::new());
+        shell.redraw_shape(crate::editor::AutoShape::Star, "Star");
+        assert!(
+            shell.status.contains("Redraw needs a selected path"),
+            "{}",
+            shell.status
+        );
+        assert_eq!(
+            shell.editor.session.journal_len(),
+            journal,
+            "the refusal dispatched nothing"
         );
     }
 
