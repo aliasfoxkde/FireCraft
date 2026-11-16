@@ -1553,6 +1553,16 @@ impl Shell {
                 if ui.button(mode).clicked() {
                     self.mask_set_mode(id, mode);
                 }
+                // The mask group stops being one: `GRTi` 1/2 → 0
+                // with `MNAb` untouched, so the content draws
+                // unmasked *and* the mask's own artwork joins the
+                // group as an ordinary member. Distinct from Disable
+                // Mask (`mask.enable`), which hides that artwork —
+                // and it only appears where the verb has a group to
+                // retype, so it never lands as a Noop.
+                if ui.button("make plain group").clicked() {
+                    self.mask_make_plain_group(facts.group_id);
+                }
             }
             let label = if facts.hidden {
                 "show mask attributes"
@@ -1633,6 +1643,34 @@ impl Shell {
         self.run_command(
             "mask.setMode",
             serde_json::json!({ "id": id, "mode": mode }),
+        );
+    }
+
+    /// `object.setGroupType` — CS6's *Make Plain Group*: the mask
+    /// group stops being one.
+    ///
+    /// The verb walks the document's selection and retypes only
+    /// groups whose `GRTi` is not already 0, so the owning mask group
+    /// is selected before it runs — the same bridge
+    /// [`Self::paste_channel`] uses. What changes is `GRTi` 1/2 → 0
+    /// with `MNAb` untouched: the compositor stops masking and draws
+    /// every child as ordinary artwork, so the mask's own image joins
+    /// the group as a visible member. That is the whole difference
+    /// from *Disable Mask* (`mask.enable`), which hides that artwork
+    /// on the way out.
+    ///
+    /// Decision 0117 read this verb as a no-op — "the only action it
+    /// could carry would leave the document unchanged" — which holds
+    /// only where the group is already plain. The row lives where the
+    /// group is not.
+    pub(super) fn mask_make_plain_group(&mut self, group_id: doc::ObjectId) {
+        self.editor.set_selection(vec![group_id]);
+        if !self.sync_document_selection() {
+            return;
+        }
+        self.run_command(
+            "object.setGroupType",
+            serde_json::json!({ "group_type": "normal" }),
         );
     }
 
