@@ -1648,7 +1648,7 @@ mod tests {
             "text.setText",
             "the panel dispatches the text verb"
         );
-        let doc::ObjectData::Text(text) = shell.editor.document().registry.get(id) else {
+        let Some(doc::ObjectData::Text(text)) = shell.editor.document().registry.get(id) else {
             panic!("the object is a text object");
         };
         assert_eq!(text_characters(text), "beta beta");
