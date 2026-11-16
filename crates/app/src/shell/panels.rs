@@ -101,15 +101,34 @@ impl Shell {
         });
         ui.weak("Scales the whole interface (HiDPI displays). Persists across sessions.");
         ui.add_space(6.0);
+        ui.heading("Keyboard");
+        ui.horizontal(|ui| {
+            ui.label("Keymap set:");
+            let mut set = self.keymap();
+            egui::ComboBox::from_id_salt("keymap_set")
+                .selected_text(set.label())
+                .show_ui(ui, |ui| {
+                    for candidate in crate::keymap::KeymapSet::ALL {
+                        ui.selectable_value(&mut set, candidate, candidate.label());
+                    }
+                });
+            if set != self.keymap() {
+                self.set_keymap(set);
+            }
+        });
+        ui.weak("The set in force changes what the keys do and what the menu bar prints. CS6's own keymap is the default.");
+        ui.add_space(6.0);
         if ui.button("Close").clicked() {
             self.preferences_open = false;
         }
     }
 
-    /// The keyboard-shortcuts help panel: every binding in the
-    /// SHORTCUTS table, grouped by the table's section structure.
+    /// The keyboard-shortcuts help panel: every binding in force,
+    /// grouped by the table's section structure.
     pub(super) fn help_panel(&mut self, ctx: &egui::Context) {
         let mut open = self.help_open;
+        let set = self.keymap();
+        let bindings = self.keymap_bindings.clone();
         egui::Window::new("Keyboard Shortcuts")
             .open(&mut open)
             .resizable(true)
@@ -128,20 +147,20 @@ impl Shell {
                             )
                             .wrap(),
                         );
+                        ui.add(egui::Label::new(format!("Keymap set: {}", set.label())).italics())
+                            .wrap();
                         ui.separator();
                         // Every binding carries the section it is filed
                         // under; a new heading starts wherever that
                         // section changes.
                         let mut row = 0usize;
-                        while row < menus::SHORTCUTS.len() {
-                            let title = menus::SHORTCUTS[row].group;
+                        while row < bindings.len() {
+                            let title = bindings[row].group;
                             let start = row;
-                            while row < menus::SHORTCUTS.len()
-                                && menus::SHORTCUTS[row].group == title
-                            {
+                            while row < bindings.len() && bindings[row].group == title {
                                 row += 1;
                             }
-                            let section = &menus::SHORTCUTS[start..row];
+                            let section = &bindings[start..row];
                             ui.heading(title);
                             egui::Grid::new(title.to_string())
                                 .num_columns(2)

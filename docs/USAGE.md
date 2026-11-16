@@ -84,27 +84,33 @@ raster images (a raster opens as a fresh document).
 
 ### Editing
 
-`Ctrl+Z` / `Ctrl+Shift+Z` undo/redo · `Ctrl+X`/`C`/`V` cut/copy/paste ·
-`Delete` or `Backspace` clears the selection · `Ctrl+A` select all ·
-`Ctrl+D` deselect · `Ctrl+G`/`Ctrl+U` group/ungroup ·
-`Ctrl+Alt+E` merge down · `Ctrl+J` join paths (union).
+`Ctrl+Z` / `Ctrl+Shift+Z` undo/redo · `Ctrl+X`/`Ctrl+C`/`Ctrl+V`
+cut/copy/paste · `Delete` or `Backspace` clears the selection ·
+`Ctrl+A` select all · `Ctrl+D` deselect · `Ctrl+G`/`Ctrl+U`
+group/ungroup · `Ctrl+Alt+E` merge down · `Ctrl+J` join paths
+(union).
 
 ### Tools (one-key selects)
 
 | Key | Tool | Key | Tool |
 |---|---|---|---|
-| `V` | Pointer | `B` | Paintbrush |
-| `R` | Rectangle | `N` | Pencil |
-| `E` | Ellipse | `Y` | Eraser |
-| `O` | Line | `G` | Paint bucket |
-| `T` | Text | `D` | Gradient |
-| `Z` | Zoom | `I` | Eyedropper |
-| `H` | Hand | `M` | Marquee |
-| `L` | Lasso | `P` | Polygonal marquee |
-| `W` | Magic wand | | |
+| `V` | Pointer | `A` | Subselect |
+| `Q` | Scale | `C` | Crop |
+| `M` | Marquee | `L` | Lasso |
+| `W` | Magic wand | `B` | Paintbrush |
+| `E` | Eraser | `R` | Blur |
+| `D` | Dodge | `S` | Rubber stamp |
+| `N` | Line | `P` | Pen |
+| `U` | Rectangle | `T` | Text |
+| `O` | Freeform | `Y` | Knife |
+| `J` | Hotspot | `K` | Slice |
+| `Num2` | Show/hide slices | `I` | Eyedropper |
+| `G` | Paint bucket | `H` | Hand |
+| `Z` | Zoom | | |
 
 Pixel-selection tools compose with modifiers (add/subtract/intersect)
-while dragging.
+while dragging. The complete table — every binding, not only the
+one-key selects — is in [`SHORTCUTS.md`](SHORTCUTS.md).
 
 ### View
 
@@ -122,6 +128,13 @@ View menu carries the full zoom ladder (6%–6400%).
 `F1` opens the keyboard-shortcuts panel — the live binding map, from
 the same table the dispatcher runs. Plain keys don't fire while a
 text field has focus.
+
+The whole table is published as [`SHORTCUTS.md`](SHORTCUTS.md): every
+binding the shell knows, and what each alternative keymap set changes.
+Edit ▸ Preferences ▸ Keyboard picks the set — Fireworks CS6's own
+keymap is the default; the Illustrator, Photoshop, FreeHand and Web
+Standard sets rebind the shared verbs those products bind
+differently, and every other verb keeps the CS6 binding.
 
 ## The browser build
 

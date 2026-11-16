@@ -207,6 +207,13 @@ pub struct Shell {
     /// The user's UI scale factor (`pixels_per_point`): `None` follows
     /// the platform default. Persisted with the layout.
     ui_scale: Option<f32>,
+    /// The keymap set in force: CS6's own keymap unless the user
+    /// chose another in the preferences. Persisted with the layout.
+    keymap: crate::keymap::KeymapSet,
+    /// The resolved keymap: the CS6 table with the active set's
+    /// overrides applied. Recomputed when the set changes, so the
+    /// dispatch loop and the help panel read the same table.
+    keymap_bindings: Vec<crate::menus::Shortcut>,
     /// The Styles panel's new-style name field.
     style_name: String,
     /// Filter rename drafts, keyed by object, stack position and original effect identity.
@@ -466,6 +473,11 @@ struct ShellLayout {
     /// The user's UI scale (`pixels_per_point`); `None` follows the
     /// platform default.
     ui_scale: Option<f32>,
+    /// The keymap set in force — CS6's own keymap unless the user
+    /// chose another. `#[serde(default)]` — a layout saved before
+    /// the sets existed carries none, which is CS6.
+    #[serde(default)]
+    keymap: crate::keymap::KeymapSet,
     /// The palette's recently-run commands, most recent first.
     #[serde(default)]
     palette_recents: Vec<String>,
@@ -498,6 +510,7 @@ impl Default for ShellLayout {
             show_rulers: false,
             smart_guides: true,
             ui_scale: None,
+            keymap: crate::keymap::KeymapSet::default(),
             palette_recents: Vec::new(),
         }
     }
@@ -567,6 +580,8 @@ impl Shell {
             #[cfg(not(target_arch = "wasm32"))]
             recovery_path: Self::default_recovery_path(),
             ui_scale: None,
+            keymap: crate::keymap::KeymapSet::default(),
+            keymap_bindings: crate::keymap::KeymapSet::default().bindings(),
             style_name: String::new(),
             filter_names: std::collections::HashMap::new(),
             filter_bake: FilterBakeFields::default(),
@@ -699,6 +714,7 @@ impl Shell {
         self.show_rulers = self.layout.show_rulers;
         self.smart_guides = self.layout.smart_guides;
         self.ui_scale = self.layout.ui_scale;
+        self.set_keymap(self.layout.keymap);
         // Recents naming a command this build lacks are dropped —
         // same rule as the panel inventory above. The list is the
         // registry's ids plus the session-scoped ones, because the
@@ -745,6 +761,7 @@ impl Shell {
             show_rulers: self.show_rulers,
             smart_guides: self.smart_guides,
             ui_scale: self.ui_scale,
+            keymap: self.keymap,
             palette_recents: self.palette.recents.clone(),
         }
     }
@@ -1345,16 +1362,43 @@ impl Shell {
     /// The visible label of one menu row. Rows whose label depends on
     /// live document state resolve it here; the rest show the label
     /// the CS6 resource table carries.
+    ///
+    /// The accelerator printed is the one in force: the active
+    /// keymap set's binding for the row's verb when the set overrides
+    /// it, and the CS6 text otherwise.
     fn item_label(&self, item: &menus::Item) -> String {
         let label = match item.dynamic {
             Some(menus::DynamicLabel::MaskToggle) => self.mask_toggle_label(),
             None => item.label,
         };
+        if let Some(binding) = self.keymap.binding(item.action) {
+            let shortcut = menus::Shortcut {
+                group: item.label,
+                mods: binding.mods,
+                key: binding.key,
+                action: item.action,
+            };
+            return format!("{}\t{}", label, shortcut.label());
+        }
         if item.accel.is_empty() {
             label.to_owned()
         } else {
             format!("{}\t{}", label, item.accel)
         }
+    }
+
+    /// Chooses the keymap set in force. The resolved table is rebuilt
+    /// here, so the dispatch loop, the menu bar and the help panel
+    /// read the same bindings.
+    pub(crate) fn set_keymap(&mut self, set: crate::keymap::KeymapSet) {
+        self.keymap = set;
+        self.keymap_bindings = set.bindings();
+    }
+
+    /// The keymap set in force.
+    #[must_use]
+    pub(crate) fn keymap(&self) -> crate::keymap::KeymapSet {
+        self.keymap
     }
 
     /// Whether a row applies to the current selection. An inert row
@@ -2975,7 +3019,7 @@ impl Shell {
                         _ => {}
                     }
                 }
-                for shortcut in menus::SHORTCUTS {
+                for shortcut in &self.keymap_bindings {
                     if shortcut.key != *key
                         || shortcut.mods.ctrl != modifiers.ctrl
                         || shortcut.mods.alt != modifiers.alt
@@ -6541,6 +6585,44 @@ mod tests {
         other.layout = saved;
         other.apply_layout();
         assert_eq!(other.ui_scale, Some(1.5));
+    }
+
+    /// The keymap set in force rides the persisted layout: the set
+    /// chosen in Preferences restores with the layout, so the choice
+    /// survives a restart.
+    #[test]
+    fn the_keymap_set_round_trips_the_layout() {
+        let mut shell = gui_shell(gui_editor());
+        assert_eq!(shell.keymap(), crate::keymap::KeymapSet::Cs6);
+        shell.set_keymap(crate::keymap::KeymapSet::Photoshop);
+        let saved = shell.capture_layout();
+        assert_eq!(saved.keymap, crate::keymap::KeymapSet::Photoshop);
+        // A fresh shell restores the set with the layout.
+        let mut other = gui_shell(gui_editor());
+        other.layout = saved;
+        other.apply_layout();
+        assert_eq!(other.keymap(), crate::keymap::KeymapSet::Photoshop);
+    }
+
+    /// The set in force is what the shell dispatches from: choosing
+    /// another set replaces the binding table the key handler reads.
+    #[test]
+    fn the_keymap_set_replaces_the_dispatch_table() {
+        let mut shell = gui_shell(gui_editor());
+        assert_eq!(shell.keymap_bindings.len(), menus::SHORTCUTS.len());
+        shell.set_keymap(crate::keymap::KeymapSet::Illustrator);
+        for binding in crate::keymap::KeymapSet::Illustrator.overrides() {
+            let resolved = shell
+                .keymap_bindings
+                .iter()
+                .find(|shortcut| shortcut.action == binding.action)
+                .expect("the verb stays bound");
+            assert_eq!(
+                (resolved.mods, resolved.key),
+                (binding.mods, binding.key),
+                "the dispatch table carries the set's binding"
+            );
+        }
     }
 
     /// The Canvas Size dialog opens seeded with the live canvas,
