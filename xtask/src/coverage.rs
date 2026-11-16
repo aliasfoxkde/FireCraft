@@ -177,9 +177,7 @@ impl FileMetrics {
     /// measurement whatever produced it.
     fn impossible(&self) -> bool {
         match self.on_disk {
-            Some(lines) => {
-                self.da_records > lines as f64 || self.lines_found > lines as f64
-            }
+            Some(lines) => self.da_records > lines as f64 || self.lines_found > lines as f64,
             None => false,
         }
     }
@@ -261,7 +259,10 @@ fn report_breakdown(measurement: &Measurement) {
             file.da_records,
             on_disk,
             if file.counted_more_than_once() {
-                format!("  <- counted once per build (LF/DA {:.2})", file.line_ratio())
+                format!(
+                    "  <- counted once per build (LF/DA {:.2})",
+                    file.line_ratio()
+                )
             } else {
                 String::new()
             },
