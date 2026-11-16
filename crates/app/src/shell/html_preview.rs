@@ -603,8 +603,8 @@ mod tests {
             )),
             ..egui::RawInput::default()
         };
-        context.run(input, |context| {
-            egui::CentralPanel::default().show(context, |ui| {
+        context.run_ui(input, |ui| {
+            egui::CentralPanel::default().show(ui, |ui| {
                 shell.html_preview_panel(ui);
             });
         })
