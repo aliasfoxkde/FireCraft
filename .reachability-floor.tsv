@@ -15,6 +15,6 @@
 #
 # metric<TAB>value
 registry_commands	257
-shell_bound_commands	249
-reachable_percent	96.89
-floor_reachable_percent	96.89
+shell_bound_commands	257
+reachable_percent	100.00
+floor_reachable_percent	100.00

@@ -12,6 +12,9 @@ Current version: **0.2.5**.
 
 ### Features
 
+- **app**: the Auto Shapes panel gains an Insert/Redraw mode (7e985105)
+- **app**: the polygon web tools commit through appendPoint replay (c25d8bd5)
+- **app**: Edit ▸ Delete All... asks before emptying the document (ecd33807)
 - **app**: the mask panel's "make plain group" row retypes the mask group (eb8c3dae)
 - **app**: Modify ▸ Transform ▸ "Scale To..." resizes to an exact box (44d8722f)
 - **app**: the Freeform tool warps and the Crop tool cuts the selection (f7ab6e8f)
