@@ -603,11 +603,18 @@ mod tests {
             )),
             ..egui::RawInput::default()
         };
-        context.run_ui(input, |ui| {
+        let mut output = context.run_ui(input, |ui| {
             egui::CentralPanel::default().show(ui, |ui| {
                 shell.html_preview_panel(ui);
             });
-        })
+        });
+        // The panel draws the exported page's images, so the frame
+        // carries texture deltas. Nothing applies them here — the test
+        // has no GPU — and egui refuses to drop an unapplied delta, so
+        // the frame is cleared the same way the shell's own headless
+        // draws clear it.
+        output.textures_delta.clear();
+        output
     }
 
     /// The markup the preview is currently showing.
