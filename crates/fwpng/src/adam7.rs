@@ -184,7 +184,13 @@ mod tests {
         assert_eq!(pass_extent(8, 0, 8), 1);
         assert_eq!(pass_extent(9, 0, 8), 2);
         assert_eq!(pass_extent(8, 4, 8), 1);
-        assert_eq!(pass_extent(7, 4, 8), 0, "a pass beyond the image is empty");
+        // The pass holds every pixel at `start + k * step` the image
+        // covers, so a step that overshoots the image does not empty
+        // a pass whose start is still inside it: pixel 4 of a
+        // seven-pixel-wide image is in the pass.
+        assert_eq!(pass_extent(7, 4, 8), 1, "the start is inside");
+        assert_eq!(pass_extent(4, 4, 8), 0, "the edge is empty");
+        assert_eq!(pass_extent(3, 4, 8), 0, "beyond the image is empty");
         assert_eq!(pass_extent(16, 0, 8), 2);
         assert_eq!(pass_extent(16, 0, 4), 4);
     }
