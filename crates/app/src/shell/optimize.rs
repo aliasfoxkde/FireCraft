@@ -542,7 +542,6 @@ mod tests {
             .editor
             .apply("page.setExport", high.payload(0))
             .expect("the panel's payload applies");
-        let settings = OptimizeSettings::read(&shell.editor.document().pages[0]);
         let exported = app_cli::ops::export_raster(shell.editor.document(), "page.jpg", &flags)
             .expect("the export encodes");
         assert_ne!(
