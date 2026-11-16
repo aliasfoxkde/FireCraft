@@ -4106,6 +4106,33 @@ mod tests {
         }
     }
 
+    /// The four web panels this build adds are closed by default, so
+    /// their Window-menu rows are the only way to reach them. Each
+    /// row must be bound to the panel toggle — an unbound row is an
+    /// inert menu entry.
+    #[test]
+    fn the_web_panels_have_a_bound_window_row() {
+        let window = MENUBAR
+            .iter()
+            .find(|menu| menu.label == "Window")
+            .expect("the bar carries a Window menu");
+        let items = walk(window.entries);
+        for panel in [
+            "Slices",
+            "CSS Properties",
+            "Find and Replace",
+            "Common Library",
+        ] {
+            assert!(
+                items.iter().any(|item| matches!(
+                    item.action,
+                    Action::Shell(ShellAction::TogglePanel(name)) if name == panel
+                )),
+                "the Window menu has no bound row for {panel}"
+            );
+        }
+    }
+
     /// Every action in the table resolves to a help-panel description
     /// (no placeholder or panic path), and the F1 binding exists.
     #[test]

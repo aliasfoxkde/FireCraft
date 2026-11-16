@@ -1610,4 +1610,105 @@ mod tests {
         );
         assert!(!plate_frame.contains(point), "{point:?} is on the receiver");
     }
+
+    /// A shell holding one text object carrying `text`.
+    fn text_shell(text: &str) -> (Shell, doc::ObjectId) {
+        let mut editor = crate::editor::Editor::untitled();
+        editor
+            .apply(
+                "text.createText",
+                serde_json::json!({
+                    "page": 0, "layer": 0, "cell": 0,
+                    "x": 0.0, "y": 0.0, "width": 80.0, "height": 20.0,
+                    "text": text, "name": null,
+                }),
+            )
+            .expect("the text object is created");
+        let id = editor
+            .document()
+            .registry
+            .iter()
+            .find_map(|(id, data)| match data {
+                doc::ObjectData::Text(_) => Some(id),
+                _ => None,
+            })
+            .expect("the text object is registered");
+        (super::super::tests::gui_shell(editor), id)
+    }
+
+    /// The Find and Replace panel's row reaches the registry as the
+    /// `text.setText` verb — the panel's own verb, not a silent
+    /// in-panel edit that no other surface would see.
+    #[test]
+    fn the_find_and_replace_panel_dispatches_text_set_text() {
+        let (mut shell, id) = text_shell("alpha alpha");
+        shell.replace_text(id, "alpha", "beta");
+        assert_eq!(
+            shell.editor.undo().expect("the replacement is undoable"),
+            "text.setText",
+            "the panel dispatches the text verb"
+        );
+        let doc::ObjectData::Text(text) = shell.editor.document().registry.get(id) else {
+            panic!("the object is a text object");
+        };
+        assert_eq!(text_characters(text), "beta beta");
+    }
+
+    /// The Slices panel's type editor reaches the registry as the
+    /// `slice.setType` verb.
+    #[test]
+    fn the_slices_panel_dispatches_the_slice_verbs() {
+        let (mut shell, plate, _) = slice_shell();
+        assert!(shell.set_slice_kind(plate, SliceKind::Hotspot));
+        assert_eq!(
+            shell.editor.undo().expect("the type change is undoable"),
+            "slice.setType",
+            "the panel dispatches the slice verb"
+        );
+        assert_eq!(slice_of(&shell, plate).slice_type, None);
+    }
+
+    /// The CSS Properties panel renders the slice's background knobs
+    /// as declarations, and the knob it edits reaches the registry
+    /// as `slice.setBackground`.
+    #[test]
+    fn the_css_properties_panel_dispatches_the_background_verb() {
+        let (mut shell, plate, _) = slice_shell();
+        shell.set_slice_background(plate, "repeat", serde_json::json!(2));
+        assert_eq!(
+            shell
+                .editor
+                .undo()
+                .expect("the background change is undoable"),
+            "slice.setBackground",
+            "the panel dispatches the background verb"
+        );
+        let slice = slice_of(&shell, plate);
+        assert_eq!(slice.background.as_ref().and_then(|bg| bg.repeat), Some(2));
+        assert!(
+            slice_css(&slice).contains("background-repeat: repeat-x"),
+            "the CSS panel renders the knob it set"
+        );
+    }
+
+    /// The four web panels the Window menu names are open by default
+    /// in CS6 but closed in this build — the menu row is the only
+    /// way to reach them, so the row must be bound to the toggle and
+    /// the toggle must move the panel's visibility.
+    #[test]
+    fn the_web_panels_open_from_the_window_menu() {
+        for name in [
+            "Slices",
+            "CSS Properties",
+            "Find and Replace",
+            "Common Library",
+        ] {
+            let mut shell = super::super::tests::gui_shell(crate::editor::Editor::untitled());
+            assert!(!shell.panel_shown(name), "{name} starts closed");
+            shell.run_action(&crate::menus::Action::Shell(
+                crate::menus::ShellAction::TogglePanel(name),
+            ));
+            assert!(shell.panel_shown(name), "{name} opens from the menu");
+        }
+    }
 }
