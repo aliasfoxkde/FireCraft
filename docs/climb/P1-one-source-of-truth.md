@@ -67,22 +67,30 @@ can run in parallel with P2.
   returns only frozen or historical contexts (SESSIONS, HISTORY, CHANGELOG).
 - **Moves:** —
 
-### C1.04 — De-duplicate decision numbers `[ ]`
+### C1.04 — De-duplicate decision numbers `[x]`
 - **Needs:** C0.04 · **Size:** XS
-- **Steps:**
-  1. Two files are numbered 0101:
-     - `0101-brand-mark-in-the-mock-up.md`
-     - `0101-off-fleet-packaging-recipe-audit.md`
-  2. Keep the older one, judged by
-     `git log --diff-filter=A --format=%ad -- <file>`. Rename the other with
-     `git mv` to the next free number after the open PRs' 0103–0112.
-  3. Update every reference: `git grep -n "0101-"`.
-  4. Do the same for the doubly-cited 0096 (`NEXT.md:448` vs `:470`): find
-     which text is wrong and correct the citation.
+- **Steps (verified 2026-11-13):**
+  1. Two files were numbered 0101:
+     - `0101-off-fleet-packaging-recipe-audit.md` — added 2026-11-13
+       09:18:07 (commit `7c711be5`, PR #134)
+     - `0101-brand-mark-in-the-mock-up.md` — added 2026-11-13
+       09:18:46 (commit `96444dc4`, PR #132)
+  2. Keep the older one (`off-fleet`, #134). `git mv`
+     `0101-brand-mark-in-the-mock-up.md` →
+     `0104-brand-mark-in-the-mock-up.md` — 0102 and 0103 are already
+     taken (coverage toolchain, coverage export).
+  3. Update references to the renamed file: `git grep -n "0101" -- docs/`
+     shows none pointing at `brand-mark` (only at `off-fleet` — those stay).
+  4. The doubly-*numbered* 0096 is the same defect class: both
+     `0096-animation-playback-clock.md` and
+     `0096-the-rewind-is-a-command-every-surface-can-name.md` exist, and
+     `NEXT.md:448` and `:470` cite 0096 at the two different files.
+     `git mv` `0096-animation-playback-clock.md` →
+     `0097-animation-playback-clock.md` and update `NEXT.md:448`.
 - **Done when:** `ls docs/decisions | cut -c1-4 | sort | uniq -d` prints
   nothing.
-- **Verify:** that command, plus a link check
-  (`git grep -n "decisions/0101"` all resolve).
+- **Verify:** that command, plus
+  `git grep -n "decisions/009[67]\|decisions/010[14]"` all resolve.
 - **Moves:** —
 
 ### C1.05 — Correct CLAUDE.md's status paragraph `[ ]`

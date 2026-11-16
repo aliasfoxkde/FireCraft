@@ -30,6 +30,7 @@
 
 mod aegis;
 mod changelog;
+mod climb;
 mod corpus;
 mod coverage;
 mod dist;
@@ -54,7 +55,7 @@ mod webgolden;
 
 use std::process::ExitCode;
 
-const USAGE: &str = "usage: cargo run -p xtask -- <ci [--full]|ci-no-fmt|aegis [--bless|--report]|coverage [--bless|--measure]|layers|wasm|corpus [--report]|corpus-gen|library-gen|hero-gen|styles-gen|scripts|floor|golden [--bless]|svg-golden [--bless]|svg-roundtrip [--measure]|web-golden [--bless|--measure]|perf [--bless|--measure]|dist --web|--native|--source|--sbom|--manifest|--verify-manifest|fuzz|fuzz-quick|panic-hunt|reachability [--bless]|panel-snapshot [--bless]|parity|scorecard|changelog [--check|--cut <version>]|stamps|stamp <version>>";
+const USAGE: &str = "usage: cargo run -p xtask -- <ci [--full]|ci-no-fmt|aegis [--bless|--report]|coverage [--bless|--measure]|layers|wasm|corpus [--report]|corpus-gen|library-gen|hero-gen|styles-gen|scripts|floor|golden [--bless]|svg-golden [--bless]|svg-roundtrip [--measure]|web-golden [--bless|--measure]|perf [--bless|--measure]|dist --web|--native|--source|--sbom|--manifest|--verify-manifest|fuzz|fuzz-quick|panic-hunt|reachability [--bless|--list]|climb [--append [rung]|--check]|panel-snapshot [--bless]|parity|scorecard|changelog [--check|--cut <version>]|stamps|stamp <version>>";
 
 fn main() -> ExitCode {
     match std::env::args().nth(1).as_deref() {
@@ -80,7 +81,17 @@ fn main() -> ExitCode {
         Some("floor") => finish("floor", floor::run()),
         Some("reachability") => match std::env::args().nth(2).as_deref() {
             Some("--bless") => finish("reachability --bless", reachability::bless()),
+            Some("--list") => finish("reachability --list", reachability::list()),
             _ => finish("reachability", reachability::run()),
+        },
+        Some("climb") => match std::env::args().nth(2).as_deref() {
+            Some("--append") => {
+                let rung = std::env::args().nth(3);
+                finish("climb --append", climb::append(rung.as_deref()))
+            }
+            Some("--check") => finish("climb --check", climb::check()),
+            Some(rung) => finish("climb", climb::emit(Some(rung))),
+            None => finish("climb", climb::emit(None)),
         },
         Some("panel-snapshot") => match std::env::args().nth(2).as_deref() {
             Some("--bless") => finish("panel-snapshot --bless", panelsnapshot::bless()),

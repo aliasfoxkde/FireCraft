@@ -446,6 +446,9 @@ Current version: **0.2.5**.
 
 ### Documentation
 
+- **climb**: correct the audit baseline's S2 to the measured 164 (64bd1ea7)
+- the coverage measurement is toolchain-bound, and 85 carried commands are unbound (#142) (ddf19fb4)
+- **climb**: audit and hill-climb handoff to v1.0 (0322d904)
 - **changelog**: restore the nine squash rows the pre-merge regeneration never saw (#145) (98053cef)
 - the coverage measurement is toolchain-bound, and 85 carried commands are unbound (6b78d68f)
 - **release**: the live web deployment's digest receipt — it is not the v0.2.5 release bytes (#127) (8d5c4429)

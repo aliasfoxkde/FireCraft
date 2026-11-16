@@ -6,6 +6,10 @@ of two things:
 - recorded as **script-only by decision**, as CS6 itself exposes some of
   these only to `.jsf`.
 
+The C0.07 tooling (`xtask reachability`), the C5.00 floor and the C5.21
+allowlist are in place; the remaining rungs C5.01–C5.20 are the per-family
+binding and allowlist work.
+
 Issues #136–#141 close.
 
 **Exit check:**
@@ -286,5 +290,6 @@ prevent conflicts. Rungs C5.01–C5.20 are independent of each other unless
   3. Update GAPS-style counts in `docs/TASKS.md`.
 - **Done when:** `--list` is empty apart from the allowlist, and the issues
   are closed by the maintainer.
-- **Verify:** `cargo run -q -p xtask -- reachability --list | wc -l` = 0.
+- **Verify:** `cargo run -q -p xtask -- reachability --list 2>/dev/null | wc -l`
+  = 0 (stdout is the list only; the `[xtask]` summary goes to stderr).
 - **Moves:** S2 at summit.

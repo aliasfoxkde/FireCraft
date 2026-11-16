@@ -11,6 +11,13 @@
 # counts behind it.
 #
 # Regenerate with: cargo run -p xtask -- reachability --bless
+# (run before committing any binding change: it re-measures and re-pins
+# the floor). `--list` prints the unreachable registry ids, one per
+# line, to stdout (the `[xtask]` summary goes to stderr, so stdout stays
+# pipeable):
+#
+#   cargo run -q -p xtask -- reachability --list 2>/dev/null
+#
 # The bless verb refuses to lower the floor.
 #
 # metric<TAB>value
