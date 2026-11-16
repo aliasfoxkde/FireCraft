@@ -18,13 +18,22 @@
 //! The gate prints its own inputs beside its verdict: the compiler that
 //! measured, the profile files the export merged, and, per file, the
 //! export's counters next to the file's `DA` record count and its
-//! on-disk line count.  A file that is compiled more than once — the
-//! app library and its unit-test binary both compile
-//! `crates/app/src/shell/mod.rs` — is listed once but counted twice,
-//! so its reported line count outruns the file it claims to measure and
-//! its coverage reads at about half.  That reads like a regression and
-//! is not one; the breakdown is what tells the two apart
-//! (decision 0103).
+//! on-disk line count.
+//!
+//! The export reports two different line counts for the same file, and
+//! the difference is not a defect: `LF` is the lines the export
+//! *found*, `DA` is the lines it wrote a counter for, and the second is
+//! normally a little smaller than the first.  So `LF > DA` means
+//! nothing on its own — it is true of most files in an ordinary
+//! export.  What is a defect is a file whose reported line count
+//! outruns the file itself: a file cannot have more lines than it
+//! has.  That is a gate failure, and the gate names the file.
+//!
+//! A file that is compiled more than once — the app library and its
+//! unit-test binary both compile `crates/app/src/shell/mod.rs` —
+//! reports roughly *twice* its own lines, so its coverage reads at
+//! about half and the drop looks like a regression.  That is the
+//! ratio the gate reports, not the inequality (decision 0104).
 
 use crate::util::workspace_root;
 use std::io::Read as _;
@@ -48,6 +57,21 @@ const FUNCTION_THRESHOLD: f64 = 78.7;
 /// gate compares is the number the floor was measured with; the gate
 /// warns — it does not fail — when it is measured with anything else.
 const MEASURED_WITH: &str = "1.99.1";
+
+/// The ratio of reported lines to `DA` records above which the export
+/// is counted once per build.
+///
+/// An ordinary export reports a few percent more lines than it wrote
+/// counters for: `LF` counts the lines found, `DA` counts the lines
+/// carrying a counter.  Across the 171 files of the pinned run the
+/// largest ordinary ratio was 1.33 (a six-record file), and the
+/// measured tree sat at 1.03.  A file compiled in two builds reports
+/// roughly twice its own lines: the 1.100.0 export of
+/// `crates/app/src/shell/mod.rs` read 8138 lines for 5297 records,
+/// 1.54, and claimed more lines than the file had.  A doubled file
+/// lands near 2.0, so the cut sits well below it and well above the
+/// ordinary spread (decision 0104).
+const DOUBLE_COUNT_RATIO: f64 = 1.5;
 
 /// Render a failed `cargo llvm-cov` invocation for the operator.
 ///
@@ -129,19 +153,33 @@ pub struct FileMetrics {
 impl FileMetrics {
     /// Whether the export counted this file more than once.
     ///
-    /// The export lists each source line once but sums the line counts
-    /// of every build of the file, so a file compiled twice reports more
-    /// lines than it has — and reads at about half its coverage.
+    /// The export lists each source line once but reports the lines it
+    /// found for every build of the file, so a file compiled twice
+    /// reports roughly twice its own lines — and reads at about half
+    /// its coverage.  The ordinary export reports a little *more*
+    /// lines than it wrote counters for, so the ratio, not the
+    /// inequality, is the signal.
     fn counted_more_than_once(&self) -> bool {
-        self.lines_found > self.da_records
+        self.da_records > 0.0 && self.lines_found >= self.da_records * DOUBLE_COUNT_RATIO
     }
 
-    /// Whether the export claims more instrumented lines than the file
-    /// has.  A file cannot have more lines than it has, so this is a
-    /// broken measurement whatever produced it.
+    /// The ratio of reported lines to `DA` records.
+    fn line_ratio(&self) -> f64 {
+        if self.da_records > 0.0 {
+            self.lines_found / self.da_records
+        } else {
+            0.0
+        }
+    }
+
+    /// Whether the export claims more lines than the file has.  A file
+    /// cannot have more lines than it has, so this is a broken
+    /// measurement whatever produced it.
     fn impossible(&self) -> bool {
         match self.on_disk {
-            Some(lines) => self.da_records > lines as f64,
+            Some(lines) => {
+                self.da_records > lines as f64 || self.lines_found > lines as f64
+            }
             None => false,
         }
     }
@@ -203,7 +241,8 @@ fn profraws_in(dir: &std::path::Path, depth: usize) -> usize {
 /// Each row carries the export's counters next to the file's `DA`
 /// record count and its on-disk line count, so a reader can see at a
 /// glance whether the reported line count outruns the file it claims
-/// to measure.  A file counted once per build is marked as such.
+/// to measure.  A file the export counted once per build is marked
+/// with the ratio that says so.
 fn report_breakdown(measurement: &Measurement) {
     let files = &measurement.files;
     eprintln!("[coverage] breakdown: {} measured file(s)", files.len());
@@ -222,9 +261,9 @@ fn report_breakdown(measurement: &Measurement) {
             file.da_records,
             on_disk,
             if file.counted_more_than_once() {
-                "  <- counted once per build"
+                format!("  <- counted once per build (LF/DA {:.2})", file.line_ratio())
             } else {
-                ""
+                String::new()
             },
         );
     }
@@ -307,7 +346,8 @@ pub fn run() -> Result<(), String> {
 
     if let Some(file) = impossible(&measurement.files).first() {
         return Err(format!(
-            "the coverage export claims {} instrumented line(s) for {}, which has {} line(s) on disk",
+            "the coverage export claims {} line(s) found and {} instrumented line(s) for {}, which has {} line(s) on disk",
+            file.lines_found,
             file.da_records,
             file.name,
             file.on_disk.unwrap_or(0),
@@ -605,11 +645,22 @@ mod tests {
     #[test]
     fn a_file_counted_once_per_build_is_named() {
         // The export sums the line counts of a file's builds but lists
-        // each line once: LF outruns DA, and the file is counted twice.
+        // each line once: LF outruns DA by about half, and the file is
+        // counted twice.  This is the 1.100.0 export of shell/mod.rs.
         let files = vec![metrics("shell/mod.rs", 5297.0, 8138.0, Some(6309))];
         let twice = counted_twice(&files);
         assert_eq!(twice.len(), 1);
         assert_eq!(twice[0].name, "shell/mod.rs");
+    }
+
+    #[test]
+    fn an_ordinary_export_gap_is_not_a_double_count() {
+        // The ordinary export reports more lines found than it wrote
+        // counters for.  LF > DA is true of most files and says
+        // nothing; only the ratio does.  These are the pinned run's
+        // numbers for shell/mod.rs.
+        let files = vec![metrics("shell/mod.rs", 5167.0, 5304.0, Some(7993))];
+        assert!(counted_twice(&files).is_empty());
     }
 
     #[test]
@@ -621,6 +672,15 @@ mod tests {
     #[test]
     fn more_instrumented_lines_than_the_file_has_is_impossible() {
         let files = vec![metrics("short.rs", 100.0, 100.0, Some(10))];
+        assert_eq!(impossible(&files).len(), 1);
+    }
+
+    #[test]
+    fn more_lines_found_than_the_file_has_is_impossible() {
+        // The export's line count is the claim that broke: 8138 lines
+        // found for a file with 6309 lines on disk.  The `DA` count was
+        // inside the file, so only checking it would have missed this.
+        let files = vec![metrics("shell/mod.rs", 5297.0, 8138.0, Some(6309))];
         assert_eq!(impossible(&files).len(), 1);
     }
 

@@ -97,6 +97,33 @@ where the instrumented lines actually covered are 2996 of 5297 —
   to be, so pinning the wrapper version and adding the source digest to
   the cache key is the next tool-level change, on its own branch.
 
+## Receipt
+
+The pinned run (rustc 1.99.1, head `7766d175`, GitHub run
+`43785126332`) printed what this decision asked for:
+
+```
+[coverage] measured with rustc 1.99.1
+[coverage] lines 81.9% (threshold 81%) ✓
+[coverage] functions 79.1% (threshold 79%) ✓
+[coverage] regions 0.0% (not gated)
+[coverage] inventory: 83 profile file(s) merged, 171 file(s) measured, 3 excluded file(s) (5280 line(s))
+[coverage] breakdown: 171 measured file(s)
+  .../crates/app/src/shell/mod.rs: lines 4172/5304, funcs 281/365, DA 5167 record(s), 7993 line(s) on disk
+```
+
+The on-disk count bounds both: 7993 ≥ 5304 ≥ 5167. Across all 171
+measured files, none claimed more lines than it had — 0 with `LF`
+above its on-disk count, 0 with `DA` above it — and the floor was not
+re-blessed (81.1 % / 78.7 % unchanged; measured 81.9 % / 79.1 %).
+
+The closing check above asked for `LF == DA`. The run reads 5304
+against 5167: `LF` is the lines the export found, `DA` the lines it
+wrote a counter for, and the two differ for 138 of the 171 files —
+the ordinary case, not a defect. The check is restated, and the
+gate's marker corrected with it, in decision
+[0118](0118-the-export-counts-lines-found-and-lines-with-counters.md).
+
 See also decision [0102](0102-coverage-floor-is-measured-with-a-pinned-toolchain.md)
 — the same defect one layer up: the floor was a claim about a compiler
 nobody named.
