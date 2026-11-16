@@ -1,6 +1,6 @@
 # T27-46 — Re-read the Android feasibility report and record the gate decision
 
-> **RP:** RP-04 · **Priority:** P2 · **Status:** READY
+> **RP:** RP-04 · **Priority:** P2 · **Status:** IMPLEMENTED
 > **Board row:** [EXECUTION-BOARD.md §6](../release/EXECUTION-BOARD.md)
 > **Depends on:** T27-04
 
@@ -24,7 +24,7 @@ conditions.
 
 **Verification:** `test -f docs/research/android-feasibility.md`
 
-**Evidence:** Feasible with bounded work; GameActivity forced by the accesskit conflict; disposition experimental
+**Evidence:** The report is re-read against the current lockfile (every pinned version unchanged: eframe 0.36.2, egui 0.36.2, winit 0.30.13, android-activity 0.6.1, glow 0.17.0, glutin 0.32.3, boa_engine 0.20.0) and the accesskit + `android-native-activity` conflict is re-confirmed in the vendored `eframe-0.36.2/src/lib.rs:148–153`; the gate decision is recorded in [0121](../decisions/0121-the-android-gate-defers-the-native-port.md) — defer the port, keep Android experimental **Done:** 2026-11-16.
 
 **Blockers:** —
 
