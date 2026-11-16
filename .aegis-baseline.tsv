@@ -47,6 +47,10 @@ bank-routing-number	./xtask/src/aegis.rs	1004a585bc60d363038c5889d022bd6f5827833
 # token; the row contains no token.
 bearer-token-url	./docs/NEXT.md	e2c69d19c5b81831c31fa61fe8fd0b18ce2c7ae21cf1062aadcb8e67b49daf34	1
 bearer-token-url	./xtask/src/aegis.rs	0063f0d1147604f6ef4939d76884d546fb4d0d94c48f9e92f6b2b38296f1432c	1
+# Individually adjudicated as a false positive; see decision 0074.
+bitcoin-address	./xtask/schema/cyclonedx-bom-1.5.schema.json	16f6ee48f07ca0a2c3f5ebad9e3912853b26412bb37eb0653282afbf3c684fec	1
+# Individually adjudicated as a false positive; see decision 0074.
+cors-misconfiguration	./xtask/schema/cyclonedx-bom-1.5.schema.json	b20c31b1e0dc6e8c5dfc6e27866b862c895a4a54f0b7aac7e2a1ef736d893ff1	1
 # A glyph-position golden value (27.345314025878906); its digit run
 # matches the Amex shape, and it is a float literal, not a card number.
 credit-card-amex	./crates/text/tests/layout.rs	ae9b46ed1c3eff9a64786a2171b0f694350bb589478b4327f5f82836c23e8da9	1
@@ -174,6 +178,7 @@ phone-number	./docs/research/fireworks-png-nodes.md	ebebc7bc31b4fd88112f19c0e000
 phone-number	./docs/research/fireworks-png-nodes.md	f3e0457469e6aea7d9ba1b0d8851a4bee518b0163cb0e141a778bcda96f3742f	1
 phone-number	./docs/research/fireworks-png-nodes.md	f807212b6748a8300fc3702322caa515edf0a6ed9bbc86e94c451e351b080c60	3
 phone-number	./docs/research/fireworks-png-nodes.md	f83e39c0ea6003e6777a7c158434b5489b13ce5c0926b72f7743d0572779db85	2
+phone-number	./xtask/schema/cyclonedx-bom-1.5.schema.json	669e3fa526ea7f5625d28bfaf40a753fb8937ed3acef7387d6184e3711ed8c18	1
 phone-number	./xtask/src/aegis.rs	748fed306ccd4b6085713b6163c116c0efe758606b9d6cca947d0b782975fd6f	1
 # The same JavaScript-shaped regex, seen by the hardening rule.
 security-hardening-path-traversal	./docs/PLANNING.md	8970fe80e5b5b5afefbcb8f72dbd3ec6561a516a7b9364ec2518217dd2fc7298	1
@@ -202,6 +207,10 @@ ssn-no-dashes	./docs/research/fireworks-png-nodes.md	1004a585bc60d363038c5889d02
 ssn-no-dashes	./docs/tasks/T27-19-draft-release-test-tag.md	35b904df2c6f31c493260dde331b4104ae508d471dc06ce7595bf3ad5a681134	1
 ssn-no-dashes	./docs/tasks/T27-52-source-archive.md	a3a2cc550be9d1627cd6ebe8554832486df9ae30304ab8ca9b141b1f88bb4e99	1
 ssn-no-dashes	./xtask/src/aegis.rs	1004a585bc60d363038c5889d022bd6f58278338fe66f97483316133e316f41a	1
+# Individually adjudicated as a false positive; see decision 0074.
+ssrf	./scripts/reconcile_deployment.py	02080ee9df2029343f4a9ce242af5ea993a030cc7d8e206f90eb5ab207dd5d52	1
+ssrf	./scripts/reconcile_deployment.py	c416978a40667a3e3ea44fa69257a535027b73bc902d74fe68d2eeb45e6455f1	2
+ssrf	./scripts/reconcile_deployment.py	d05e0f3dbb221796ceb128ab510efe70824de9a8aed222d87352bfc1ac2b278d	1
 # A loopback listener in the release smoke test, a localhost maintainer
 # address, prose naming the local GitForge API, the local preview URL in
 # the site deployment guide, and the loopback bind quoted by the Aegis
@@ -216,8 +225,9 @@ ssrf-localhost	./docs/decisions/0083-aegis-rebless-parity-matrix.md	49960de5880e
 ssrf-localhost	./docs/release/EXECUTION-BOARD.md	49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763	3
 ssrf-localhost	./docs/tasks/T22-screenshot-ui.md	49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763	1
 ssrf-localhost	./docs/tasks/T27-12-adjudicate-aegis-findings.md	12ca17b49af2289436f303e0166030a21e525d266e209267433801a8fd4071a0	1
-ssrf-localhost	./docs/tasks/T27-12-adjudicate-aegis-findings.md	49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763	6
+ssrf-localhost	./docs/tasks/T27-12-adjudicate-aegis-findings.md	49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763	7
 ssrf-localhost	./packaging/deb/control	49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763	1
+ssrf-localhost	./scripts/reconcile_deployment-selftest.py	12ca17b49af2289436f303e0166030a21e525d266e209267433801a8fd4071a0	5
 ssrf-localhost	./xtask/src/aegis.rs	49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763	2
 ssrf-localhost	./xtask/src/dist.rs	12ca17b49af2289436f303e0166030a21e525d266e209267433801a8fd4071a0	1
 # A comment quoting a V8 crash dump observed in CI; it documents a
@@ -648,6 +658,7 @@ zip-code	./docs/planning/generated/parity.md	db4859f7fe2245f0d7160995d4d60a96d09
 zip-code	./docs/planning/generated/parity.md	eea32706ceeea18ece420ede85bbc9dc629a96c899a0782cdd0543e260698320	1
 zip-code	./docs/planning/generated/scorecard.md	848e3fb85d62f31af8c03726f527aff81df44cca545728554b1bc26b40e4de0f	1
 zip-code	./docs/planning/v1-roadmap.md	9766638817ec53c323baa6aaa5f8d10a6105299553621601c5e71d0c47b10e5b	1
+zip-code	./docs/release/DEPLOYMENT-RECONCILIATION.json	9e9216bd5240a707e6640d26961949aeec6b703c97ac3204c208be22981ff877	1
 zip-code	./docs/release/PHASE-0-AUDIT.md	3e6d8748577115dd136761901582abce3093fbb973a08c35be9efe6781fb4f4d	4
 zip-code	./docs/research/fireworks-png-nodes.md	492f431bae35265f2e5f4ed49bd8c58dda912431be561504846988d00d05d117	2
 zip-code	./docs/research/fireworks-png-nodes.md	9a37837cdde1d7b36fc789a2d4558af7652d6bb2f7ea5d1a7451ea416f34ef5a	1
@@ -697,6 +708,9 @@ zip-code	./docs/research/fw-ui-evidence.md	ffdfd59d08e67eeff2569e91641bb6adb12fc
 zip-code	./docs/tasks/T27-12-adjudicate-aegis-findings.md	6f21ec723dd82aa7bd36bc81cc4008e4f6359fe8ce68f793af23b7123bdbf3a6	1
 zip-code	./docs/tasks/T27-12-adjudicate-aegis-findings.md	d55d01d0341ed0ba2cd99b322e8c5b609254f47d10c7cd12b99b4922effeba44	1
 zip-code	./site/assets/app-preview-dark.svg	16b024b09ebcb9d66f6a9968858d7e01081e51a14a4922edf3c8e3c2009c0000	1
+zip-code	./xtask/schema/cyclonedx-bom-1.5.schema.json	2f8c341cfba7dbae13b543198125c62c118349e8ff38ca7a4c4593a4819550c8	1
+zip-code	./xtask/schema/cyclonedx-bom-1.5.schema.json	d66d3f2c187ac5996d755bd3b2695ea0acb0ada05ab3863041b30df40ba7426a	3
+zip-code	./xtask/schema/cyclonedx-bom-1.5.schema.json	dc137b7c3d59a3512aa33b3913ab0403af3243e29849ed6792734534d25b94d5	2
 zip-code	./xtask/src/aegis.rs	6f21ec723dd82aa7bd36bc81cc4008e4f6359fe8ce68f793af23b7123bdbf3a6	1
 zip-code	./xtask/src/aegis.rs	d55d01d0341ed0ba2cd99b322e8c5b609254f47d10c7cd12b99b4922effeba44	1
 zip-code	./xtask/src/aegis.rs	f2f89ede8e7d4b3d2243dea1ca96b8ece56f793811d9708b4a0181bf81a50011	1
