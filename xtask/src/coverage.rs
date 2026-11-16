@@ -14,6 +14,17 @@
 //! Region (branch) coverage is NOT gated: collecting it requires
 //! `--branch`, which causes test failures under deny-listed lints.
 //! Branch metrics are still visible in lcov.info for manual inspection.
+//!
+//! The gate prints its own inputs beside its verdict: the compiler that
+//! measured, the profile files the export merged, and, per file, the
+//! export's counters next to the file's `DA` record count and its
+//! on-disk line count.  A file that is compiled more than once — the
+//! app library and its unit-test binary both compile
+//! `crates/app/src/shell/mod.rs` — is listed once but counted twice,
+//! so its reported line count outruns the file it claims to measure and
+//! its coverage reads at about half.  That reads like a regression and
+//! is not one; the breakdown is what tells the two apart
+//! (decision 0103).
 
 use crate::util::workspace_root;
 use std::io::Read as _;
@@ -92,6 +103,167 @@ fn report_measuring_toolchain() {
     }
 }
 
+/// One file's counters, as the coverage export reports them.
+///
+/// The export's own numbers are the file's; `da_records` and `on_disk`
+/// are the file's own, and the difference between them is what makes a
+/// merged measurement visible.
+#[derive(Debug, Clone, PartialEq)]
+pub struct FileMetrics {
+    /// The path the export named (`SF:`).
+    pub name: String,
+    /// Instrumented lines the export listed (`DA:` records).
+    pub da_records: f64,
+    /// Lines the export found (`LF:`).
+    pub lines_found: f64,
+    /// Lines the export covered (`LH:`).
+    pub lines_hit: f64,
+    /// Functions the export found (`FNF:`).
+    pub funcs_found: f64,
+    /// Functions the export covered (`FNH:`).
+    pub funcs_hit: f64,
+    /// The file's own line count on disk, when it can be read.
+    pub on_disk: Option<usize>,
+}
+
+impl FileMetrics {
+    /// Whether the export counted this file more than once.
+    ///
+    /// The export lists each source line once but sums the line counts
+    /// of every build of the file, so a file compiled twice reports more
+    /// lines than it has — and reads at about half its coverage.
+    fn counted_more_than_once(&self) -> bool {
+        self.lines_found > self.da_records
+    }
+
+    /// Whether the export claims more instrumented lines than the file
+    /// has.  A file cannot have more lines than it has, so this is a
+    /// broken measurement whatever produced it.
+    fn impossible(&self) -> bool {
+        match self.on_disk {
+            Some(lines) => self.da_records > lines as f64,
+            None => false,
+        }
+    }
+}
+
+/// The file's own line count on disk.
+///
+/// `None` when the file cannot be read — a path outside the workspace,
+/// or a file the measurement saw before the tree changed under it.
+fn on_disk_lines(name: &str) -> Option<usize> {
+    std::fs::read_to_string(workspace_root().join(name))
+        .ok()
+        .map(|text| text.lines().count())
+}
+
+/// The number of `.profraw` files the measurement merged.
+///
+/// The profiles are the measurement's other input: the export's numbers
+/// are the merge of these files, so the count belongs in the log beside
+/// the numbers.  `cargo-llvm-cov` writes them under the target
+/// directory's `llvm-cov` profile directory.
+fn count_profraws() -> usize {
+    profraws_in(&target_dir(), 3)
+}
+
+/// The directory cargo writes its build artifacts into.
+///
+/// `CARGO_TARGET_DIR` wins when it is set: the profiles the measurement
+/// merged were written wherever the build wrote them.
+fn target_dir() -> std::path::PathBuf {
+    match std::env::var("CARGO_TARGET_DIR") {
+        Ok(dir) if !dir.trim().is_empty() => std::path::PathBuf::from(dir),
+        _ => workspace_root().join("target"),
+    }
+}
+
+/// The `.profraw` files under one directory, to a bounded depth.
+fn profraws_in(dir: &std::path::Path, depth: usize) -> usize {
+    if depth == 0 {
+        return 0;
+    }
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return 0;
+    };
+    let mut count = 0;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            count += profraws_in(&path, depth - 1);
+        } else if path.extension().and_then(|ext| ext.to_str()) == Some("profraw") {
+            count += 1;
+        }
+    }
+    count
+}
+
+/// Print the per-file breakdown beside the verdict.
+///
+/// Each row carries the export's counters next to the file's `DA`
+/// record count and its on-disk line count, so a reader can see at a
+/// glance whether the reported line count outruns the file it claims
+/// to measure.  A file counted once per build is marked as such.
+fn report_breakdown(measurement: &Measurement) {
+    let files = &measurement.files;
+    eprintln!("[coverage] breakdown: {} measured file(s)", files.len());
+    for file in files {
+        let on_disk = match file.on_disk {
+            Some(lines) => lines.to_string(),
+            None => "unreadable".to_owned(),
+        };
+        eprintln!(
+            "  {}: lines {}/{}, funcs {}/{}, DA {} record(s), {} line(s) on disk{}",
+            file.name,
+            file.lines_hit,
+            file.lines_found,
+            file.funcs_hit,
+            file.funcs_found,
+            file.da_records,
+            on_disk,
+            if file.counted_more_than_once() {
+                "  <- counted once per build"
+            } else {
+                ""
+            },
+        );
+    }
+}
+
+/// The files the export counted once per build.
+fn counted_twice(files: &[FileMetrics]) -> Vec<&FileMetrics> {
+    files
+        .iter()
+        .filter(|file| file.counted_more_than_once())
+        .collect()
+}
+
+/// What one measurement says.
+///
+/// The export's totals, every file's own counters, and what the gate
+/// excluded — the parts of the run that a reader needs to judge the
+/// verdict.
+#[derive(Debug)]
+pub struct Measurement {
+    /// Line coverage, as a percentage.
+    pub lines_pct: f64,
+    /// Function coverage, as a percentage.
+    pub funcs_pct: f64,
+    /// Region (branch) coverage, as a percentage.  Not gated.
+    pub regions_pct: f64,
+    /// Every measured file, with its own counters.
+    pub files: Vec<FileMetrics>,
+    /// How many files the gate excluded.
+    pub excluded_files: usize,
+    /// How many lines the excluded files hold.
+    pub excluded_lines: f64,
+}
+
+/// The files whose export claims more lines than they have.
+fn impossible(files: &[FileMetrics]) -> Vec<&FileMetrics> {
+    files.iter().filter(|file| file.impossible()).collect()
+}
+
 /// Run the coverage gate.  Exits 0 if all thresholds are met or exceeded.
 pub fn run() -> Result<(), String> {
     let output = Command::new("cargo")
@@ -104,7 +276,9 @@ pub fn run() -> Result<(), String> {
         return Err(failure_context(&output));
     }
 
-    let (lines, funcs, _regions) = parse_lcov(&workspace_root().join("lcov.info"))?;
+    let measurement = parse_lcov(&workspace_root().join("lcov.info"))?;
+    let lines = measurement.lines_pct;
+    let funcs = measurement.funcs_pct;
 
     report_measuring_toolchain();
 
@@ -123,14 +297,80 @@ pub fn run() -> Result<(), String> {
         FUNCTION_THRESHOLD,
         if pass_funcs { "✓" } else { "FAIL" }
     );
+    eprintln!(
+        "[coverage] regions {:.1}% (not gated)",
+        measurement.regions_pct
+    );
+
+    report_inventory(&measurement);
+    report_breakdown(&measurement);
+
+    if let Some(file) = impossible(&measurement.files).first() {
+        return Err(format!(
+            "the coverage export claims {} instrumented line(s) for {}, which has {} line(s) on disk",
+            file.da_records,
+            file.name,
+            file.on_disk.unwrap_or(0),
+        ));
+    }
 
     if pass_lines && pass_funcs {
         Ok(())
     } else {
         Err(format!(
-            "coverage below threshold: lines={:.1}%/{:.0}%, funcs={:.1}%/{:.0}%",
-            lines, LINE_THRESHOLD, funcs, FUNCTION_THRESHOLD
+            "coverage below threshold: lines={:.1}%/{:.0}%, funcs={:.1}%/{:.0}%{}",
+            lines,
+            LINE_THRESHOLD,
+            funcs,
+            FUNCTION_THRESHOLD,
+            counted_twice_reason(&measurement.files),
         ))
+    }
+}
+
+/// Name the files whose measurement counts them more than once.
+///
+/// A red gate whose denominator counts a file once per build is not a
+/// coverage regression; it is the export's merge showing through, and
+/// the message says which files are in it rather than leaving the
+/// reader to guess from a percentage.
+fn counted_twice_reason(files: &[FileMetrics]) -> String {
+    let twice = counted_twice(files);
+    if twice.is_empty() {
+        return String::new();
+    }
+    format!(
+        "; {} file(s) counted once per build inflate the denominator: {}",
+        twice.len(),
+        twice
+            .iter()
+            .map(|file| file.name.as_str())
+            .collect::<Vec<_>>()
+            .join(", ")
+    )
+}
+
+/// Print the measurement's other inputs: the profiles it merged and the
+/// files it counted once per build.
+fn report_inventory(measurement: &Measurement) {
+    eprintln!(
+        "[coverage] inventory: {} profile file(s) merged, {} file(s) measured, {} excluded file(s) ({} line(s))",
+        count_profraws(),
+        measurement.files.len(),
+        measurement.excluded_files,
+        measurement.excluded_lines
+    );
+    let twice = counted_twice(&measurement.files);
+    if !twice.is_empty() {
+        eprintln!(
+            "[coverage] {} file(s) counted once per build: {}",
+            twice.len(),
+            twice
+                .iter()
+                .map(|file| file.name.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
     }
 }
 
@@ -148,9 +388,12 @@ pub fn measure() -> Result<(), String> {
         return Err(failure_context(&output));
     }
 
-    let (lines, funcs, _regions) = parse_lcov(&workspace_root().join("lcov.info"))?;
+    let measurement = parse_lcov(&workspace_root().join("lcov.info"))?;
+    let lines = measurement.lines_pct;
+    let funcs = measurement.funcs_pct;
 
     report_measuring_toolchain();
+    report_inventory(&measurement);
 
     eprintln!(
         "[coverage --measure] lines={:.1}%, functions={:.1}%",
@@ -160,6 +403,7 @@ pub fn measure() -> Result<(), String> {
         "[coverage --measure] current thresholds: lines>={:.0}%, functions>={:.0}%",
         LINE_THRESHOLD, FUNCTION_THRESHOLD
     );
+    report_breakdown(&measurement);
     eprintln!(
         "[coverage --measure] run `xtask coverage --bless` to update thresholds from these values"
     );
@@ -181,7 +425,8 @@ pub fn bless() -> Result<(), String> {
     Ok(())
 }
 
-fn parse_lcov(path: &std::path::Path) -> Result<(f64, f64, f64), String> {
+/// Parse the export: the totals, and every file's own counters.
+fn parse_lcov(path: &std::path::Path) -> Result<Measurement, String> {
     let mut text = String::new();
     // lcov.info is written relative to workspace_root(), which is also
     // where this process runs when invoked via `cargo run -p xtask`.
@@ -208,29 +453,79 @@ fn parse_lcov(path: &std::path::Path) -> Result<(f64, f64, f64), String> {
     let mut regions_hit: f64 = 0.0;
     let mut regions_found: f64 = 0.0;
     let mut current_excluded = false;
+    let mut excluded_files: usize = 0;
+    let mut excluded_lines: f64 = 0.0;
+    let mut files: Vec<FileMetrics> = Vec::new();
+    let mut current: Option<FileMetrics> = None;
 
     for line in text.lines() {
         let line = line.trim();
         if let Some(file) = line.strip_prefix("SF:") {
+            if let Some(finished) = current.take() {
+                files.push(finished);
+            }
             current_excluded = EXCLUDED.iter().any(|ex| file.ends_with(ex));
+            if current_excluded {
+                excluded_files += 1;
+            } else {
+                current = Some(FileMetrics {
+                    name: file.to_owned(),
+                    da_records: 0.0,
+                    lines_found: 0.0,
+                    lines_hit: 0.0,
+                    funcs_found: 0.0,
+                    funcs_hit: 0.0,
+                    on_disk: on_disk_lines(file),
+                });
+            }
             continue;
         }
         if current_excluded {
+            // The excluded file's lines are counted so the log can say
+            // how much the exclusions took out of the measure.
+            if let Some(n) = line.strip_prefix("LF:") {
+                excluded_lines += n.parse::<f64>().unwrap_or(0.0);
+            }
             continue;
         }
-        if let Some(n) = line.strip_prefix("LH:") {
-            lines_hit += n.parse::<f64>().unwrap_or(0.0);
+        if line.starts_with("DA:") {
+            // The record's payload is `<line>,<count>`; what matters here
+            // is how many records the file has.
+            if let Some(file) = current.as_mut() {
+                file.da_records += 1.0;
+            }
+        } else if let Some(n) = line.strip_prefix("LH:") {
+            let value = n.parse::<f64>().unwrap_or(0.0);
+            lines_hit += value;
+            if let Some(file) = current.as_mut() {
+                file.lines_hit += value;
+            }
         } else if let Some(n) = line.strip_prefix("LF:") {
-            lines_found += n.parse::<f64>().unwrap_or(0.0);
+            let value = n.parse::<f64>().unwrap_or(0.0);
+            lines_found += value;
+            if let Some(file) = current.as_mut() {
+                file.lines_found += value;
+            }
         } else if let Some(n) = line.strip_prefix("FNH:") {
-            funcs_hit += n.parse::<f64>().unwrap_or(0.0);
+            let value = n.parse::<f64>().unwrap_or(0.0);
+            funcs_hit += value;
+            if let Some(file) = current.as_mut() {
+                file.funcs_hit += value;
+            }
         } else if let Some(n) = line.strip_prefix("FNF:") {
-            funcs_found += n.parse::<f64>().unwrap_or(0.0);
+            let value = n.parse::<f64>().unwrap_or(0.0);
+            funcs_found += value;
+            if let Some(file) = current.as_mut() {
+                file.funcs_found += value;
+            }
         } else if let Some(n) = line.strip_prefix("RH:") {
             regions_hit += n.parse::<f64>().unwrap_or(0.0);
         } else if let Some(n) = line.strip_prefix("RF:") {
             regions_found += n.parse::<f64>().unwrap_or(0.0);
         }
+    }
+    if let Some(finished) = current.take() {
+        files.push(finished);
     }
 
     let lines_pct = if lines_found > 0.0 {
@@ -249,12 +544,33 @@ fn parse_lcov(path: &std::path::Path) -> Result<(f64, f64, f64), String> {
         0.0
     };
 
-    Ok((lines_pct, funcs_pct, regions_pct))
+    Ok(Measurement {
+        lines_pct,
+        funcs_pct,
+        regions_pct,
+        files,
+        excluded_files,
+        excluded_lines,
+    })
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{MEASURED_WITH, rustc_version};
+    #![allow(clippy::unwrap_used, clippy::expect_used)]
+
+    use super::{FileMetrics, MEASURED_WITH, counted_twice, impossible, parse_lcov, rustc_version};
+
+    fn metrics(name: &str, da: f64, lf: f64, on_disk: Option<usize>) -> FileMetrics {
+        FileMetrics {
+            name: name.to_owned(),
+            da_records: da,
+            lines_found: lf,
+            lines_hit: 0.0,
+            funcs_found: 0.0,
+            funcs_hit: 0.0,
+            on_disk,
+        }
+    }
 
     #[test]
     fn a_version_line_yields_its_version() {
@@ -284,5 +600,103 @@ mod tests {
         // The floors are a claim about this compiler's instrumentation;
         // the workflows pin to the same version.
         assert_eq!(MEASURED_WITH, "1.99.1");
+    }
+
+    #[test]
+    fn a_file_counted_once_per_build_is_named() {
+        // The export sums the line counts of a file's builds but lists
+        // each line once: LF outruns DA, and the file is counted twice.
+        let files = vec![metrics("shell/mod.rs", 5297.0, 8138.0, Some(6309))];
+        let twice = counted_twice(&files);
+        assert_eq!(twice.len(), 1);
+        assert_eq!(twice[0].name, "shell/mod.rs");
+    }
+
+    #[test]
+    fn a_file_counted_once_is_not_named() {
+        let files = vec![metrics("shell/mod.rs", 5297.0, 5297.0, Some(6309))];
+        assert!(counted_twice(&files).is_empty());
+    }
+
+    #[test]
+    fn more_instrumented_lines_than_the_file_has_is_impossible() {
+        let files = vec![metrics("short.rs", 100.0, 100.0, Some(10))];
+        assert_eq!(impossible(&files).len(), 1);
+    }
+
+    #[test]
+    fn an_unreadable_file_is_not_impossible() {
+        let files = vec![metrics("gone.rs", 100.0, 100.0, None)];
+        assert!(impossible(&files).is_empty());
+    }
+
+    #[test]
+    fn the_export_keeps_each_file_da_records_beside_its_line_count() {
+        // The whole point of the breakdown: LF and DA are different
+        // numbers for the same file, and both are reported.
+        let dir =
+            std::env::temp_dir().join(format!("firecraft-lcov-{}-{}", std::process::id(), line!()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("lcov.info");
+        std::fs::write(
+            &path,
+            "SF:crates/app/src/shell/mod.rs\n\
+             DA:302,1\nDA:303,0\nDA:304,1\n\
+             LH:2\nLF:9\nFNH:1\nFNF:3\nend_of_record\n",
+        )
+        .unwrap();
+
+        let measurement = parse_lcov(&path).unwrap();
+        assert_eq!(measurement.files.len(), 1);
+        assert_eq!(measurement.files[0].da_records, 3.0);
+        assert_eq!(measurement.files[0].lines_found, 9.0);
+        assert_eq!(measurement.files[0].lines_hit, 2.0);
+        assert_eq!(measurement.files[0].funcs_found, 3.0);
+        assert!(
+            (measurement.lines_pct - 22.222222).abs() < 0.001,
+            "{measurement:?}"
+        );
+        assert!(
+            (measurement.funcs_pct - 33.333333).abs() < 0.001,
+            "{measurement:?}"
+        );
+
+        std::fs::remove_file(&path).unwrap();
+        std::fs::remove_dir(&dir).unwrap();
+    }
+
+    #[test]
+    fn an_excluded_file_leaves_the_measure_but_is_still_reported() {
+        // The exclusions take lines out of the score; the log says how
+        // many, so the score can be read against what was left out.
+        let dir = std::env::temp_dir().join(format!(
+            "firecraft-lcov-x-{}-{}",
+            std::process::id(),
+            line!()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("lcov.info");
+        std::fs::write(
+            &path,
+            "SF:crates/app/src/shell/panels.rs\n\
+             DA:1,0\nLH:0\nLF:3402\nFNH:0\nFNF:9\nend_of_record\n\
+             SF:crates/app/src/shell/mod.rs\n\
+             DA:302,1\nLH:1\nLF:9\nFNH:1\nFNF:3\nend_of_record\n",
+        )
+        .unwrap();
+
+        let measurement = parse_lcov(&path).unwrap();
+        assert_eq!(measurement.excluded_files, 1);
+        assert_eq!(measurement.excluded_lines, 3402.0);
+        assert_eq!(measurement.files.len(), 1);
+        assert_eq!(measurement.files[0].name, "crates/app/src/shell/mod.rs");
+        // The excluded file's lines are not in the denominator.
+        assert!(
+            (measurement.lines_pct - 11.111111).abs() < 0.001,
+            "{measurement:?}"
+        );
+
+        std::fs::remove_file(&path).unwrap();
+        std::fs::remove_dir(&dir).unwrap();
     }
 }
