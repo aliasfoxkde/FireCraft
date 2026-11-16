@@ -611,6 +611,7 @@ fn paste_as_mask_core(
     let container = detach(document, name, target)?;
     let mask_id = document.registry.insert(mask_data);
     let group_id = document.registry.insert(ObjectData::Group(GroupObject {
+        stack_mode: None,
         group_type,
         name: None,
         children: vec![mask_id, target],
@@ -997,6 +998,7 @@ mod clipboard_tests {
         // write — while the healthy sibling stays cuttable.
         let (mut document, ids) = testdoc::sample_document();
         let group_id = document.registry.insert(ObjectData::Group(GroupObject {
+            stack_mode: None,
             group_type: 0,
             name: None,
             children: vec![ids[0]],
@@ -1045,6 +1047,7 @@ mod clipboard_tests {
     fn group_capture_is_subtree_closed_and_paste_rewrites_children() {
         let (mut document, ids) = testdoc::sample_document();
         let group_id = document.registry.insert(ObjectData::Group(GroupObject {
+            stack_mode: None,
             group_type: 0,
             name: None,
             children: vec![ids[0], ids[1]],
@@ -1195,6 +1198,7 @@ mod clipboard_tests {
             effects: Vec::new(),
         }));
         let group_id = document.registry.insert(ObjectData::Group(GroupObject {
+            stack_mode: None,
             group_type: 1,
             name: None,
             children: vec![mask_id, ids[1]],
@@ -1263,6 +1267,7 @@ mod clipboard_tests {
             effects: Vec::new(),
         }));
         let group_id = document.registry.insert(ObjectData::Group(GroupObject {
+            stack_mode: None,
             group_type: 1,
             name: None,
             children: vec![mask_id, ids[1]],

@@ -23,33 +23,11 @@
 # mark's bezier paths and in the brand study illustration's control
 # points, and the GitHub release and asset identifiers quoted in the
 # release receipts; this repository holds no tax identifiers.
-australian-tfn	./docs/img/firecraft-vector-brand-study.svg	0c0abeaf013ea7ee28c7a1845ec462ed9d0dab7f9626410681d6a15aa9fb1571	1
-australian-tfn	./docs/img/firecraft-vector-brand-study.svg	1c302c0eb6b2ce0b6aef4f72d11808bda6520a11205cf024c4c3daac3a12af82	1
-australian-tfn	./docs/img/firecraft-vector-brand-study.svg	353c47b7c0c49557e6633299b2b3a0fcde5225767f34c7b9adb4aeca93828a12	1
-australian-tfn	./docs/img/firecraft-vector-brand-study.svg	35cfec73ccc227e05beb1e83e362115cca1c7c3fc069d46409b6991d55d98832	1
-australian-tfn	./docs/img/firecraft-vector-brand-study.svg	3f6b4537820958292cce8c427bfdc41471fc888d3a72f03d10626eb14af1d7bf	1
-australian-tfn	./docs/img/firecraft-vector-brand-study.svg	9dcd9e35a6849672bbac768a10fd9b4e129927a8ff2fbdc7071f3ad9476aa26b	1
-australian-tfn	./docs/img/firecraft-vector-brand-study.svg	a0a8bfc013ddd013fca944ea60389439a7e53c084ebd29212bc1d574e7d76ea4	1
-australian-tfn	./docs/img/firecraft-vector-brand-study.svg	aeb1fc08a4a9be5bcb199d08741fc70a918c5c6e19d235065322ca14d883c6ca	1
-australian-tfn	./docs/img/firecraft-vector-brand-study.svg	d00ab12cded9655f939e14f6024d4e48daaa8ce7e4fc134b559b9a9b6c14004a	1
-australian-tfn	./docs/img/firecraft-vector-brand-study.svg	de8b5b18744fbaf5793608ae575935b9a21b4cb73bf7ac8b40bfece617ae39c5	1
-australian-tfn	./docs/img/firecraft-vector-brand-study.svg	e49c25e5ee81346b9847741058ee71dd73eabcfc7aec25c71f947843ff4e33a5	1
 australian-tfn	./docs/release/EXECUTION-BOARD.md	35b904df2c6f31c493260dde331b4104ae508d471dc06ce7595bf3ad5a681134	1
 australian-tfn	./docs/release/EXECUTION-BOARD.md	a3a2cc550be9d1627cd6ebe8554832486df9ae30304ab8ca9b141b1f88bb4e99	1
 australian-tfn	./docs/release/RECEIPT-0.2.5-DRYRUN-3.md	35b904df2c6f31c493260dde331b4104ae508d471dc06ce7595bf3ad5a681134	1
 australian-tfn	./docs/release/RECEIPT-0.2.5-DRYRUN-3.md	a3a2cc550be9d1627cd6ebe8554832486df9ae30304ab8ca9b141b1f88bb4e99	1
 australian-tfn	./docs/research/fireworks-png-nodes.md	1004a585bc60d363038c5889d022bd6f58278338fe66f97483316133e316f41a	1
-australian-tfn	./site/assets/firecraft-vector-brand-study.svg	0c0abeaf013ea7ee28c7a1845ec462ed9d0dab7f9626410681d6a15aa9fb1571	1
-australian-tfn	./site/assets/firecraft-vector-brand-study.svg	1c302c0eb6b2ce0b6aef4f72d11808bda6520a11205cf024c4c3daac3a12af82	1
-australian-tfn	./site/assets/firecraft-vector-brand-study.svg	353c47b7c0c49557e6633299b2b3a0fcde5225767f34c7b9adb4aeca93828a12	1
-australian-tfn	./site/assets/firecraft-vector-brand-study.svg	35cfec73ccc227e05beb1e83e362115cca1c7c3fc069d46409b6991d55d98832	1
-australian-tfn	./site/assets/firecraft-vector-brand-study.svg	3f6b4537820958292cce8c427bfdc41471fc888d3a72f03d10626eb14af1d7bf	1
-australian-tfn	./site/assets/firecraft-vector-brand-study.svg	9dcd9e35a6849672bbac768a10fd9b4e129927a8ff2fbdc7071f3ad9476aa26b	1
-australian-tfn	./site/assets/firecraft-vector-brand-study.svg	a0a8bfc013ddd013fca944ea60389439a7e53c084ebd29212bc1d574e7d76ea4	1
-australian-tfn	./site/assets/firecraft-vector-brand-study.svg	aeb1fc08a4a9be5bcb199d08741fc70a918c5c6e19d235065322ca14d883c6ca	1
-australian-tfn	./site/assets/firecraft-vector-brand-study.svg	d00ab12cded9655f939e14f6024d4e48daaa8ce7e4fc134b559b9a9b6c14004a	1
-australian-tfn	./site/assets/firecraft-vector-brand-study.svg	de8b5b18744fbaf5793608ae575935b9a21b4cb73bf7ac8b40bfece617ae39c5	1
-australian-tfn	./site/assets/firecraft-vector-brand-study.svg	e49c25e5ee81346b9847741058ee71dd73eabcfc7aec25c71f947843ff4e33a5	1
 australian-tfn	./xtask/src/aegis.rs	1004a585bc60d363038c5889d022bd6f58278338fe66f97483316133e316f41a	1
 # Matches the same 9-digit observed value range in the PNG node
 # dictionary and the GitHub release and asset identifiers quoted in the

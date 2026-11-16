@@ -15,6 +15,8 @@ mod reader;
 mod unknown;
 mod writer;
 
+use fwpng::nodetree::Node;
+
 #[cfg(test)]
 mod tests;
 
@@ -24,6 +26,40 @@ pub use writer::{WriteStats, write, write_style_library};
 
 /// A Fireworks node `FourCC` (`PTHv`, `OPAi`, …).
 pub type FourCC = [u8; 4];
+
+/// `true` for a `DCEv` data entry filed under `key`.
+///
+/// A data entry is a `DCEv` node whose first child is a `DCKs` string
+/// naming the key. The value child is deliberately not required to be
+/// well formed: an entry whose value is broken is still *the* entry
+/// for that key, and the model owns the key — the reader reads it, the
+/// writer rewrites or drops it.
+pub(crate) fn is_data_entry(node: &Node, key: &str) -> bool {
+    if node.fourcc != *b"DCEv" {
+        return false;
+    }
+    let Some(kids) = node.as_children() else {
+        return false;
+    };
+    let Some(first) = kids.first() else {
+        return false;
+    };
+    first.fourcc == *b"DCKs" && first.as_str() == Some(key)
+}
+
+/// The string value of a `DCEv` data entry.
+///
+/// `None` when the entry's value child is missing or is not a
+/// `DCVs` string — the entry is still *the* entry for its key, but it
+/// carries no value the model can read.
+pub(crate) fn data_entry_value(node: &Node) -> Option<&str> {
+    let kids = node.as_children()?;
+    let value = kids.get(1)?;
+    if value.fourcc != *b"DCVs" {
+        return None;
+    }
+    value.as_str()
+}
 
 /// Mapping failures. Type-level violations on *known* nodes are errors;
 /// anything merely outside the mapped spine is preserved instead.

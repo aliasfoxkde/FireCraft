@@ -1221,6 +1221,7 @@ mod selection_tests {
         let group = document
             .registry
             .insert(doc::ObjectData::Group(doc::GroupObject {
+                stack_mode: None,
                 group_type: 0,
                 name: None,
                 children: vec![ids[0], ids[1]],
@@ -1302,6 +1303,7 @@ mod selection_tests {
         let group2 = document
             .registry
             .insert(doc::ObjectData::Group(doc::GroupObject {
+                stack_mode: None,
                 group_type: 0,
                 name: None,
                 children: vec![group1, outsider],
@@ -1346,6 +1348,7 @@ mod selection_tests {
         let group = document
             .registry
             .insert(doc::ObjectData::Group(doc::GroupObject {
+                stack_mode: None,
                 group_type: 0,
                 name: None,
                 children: vec![child],
