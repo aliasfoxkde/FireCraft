@@ -1,7 +1,7 @@
 # 0122 — The Cargo cache is scoped per job, not per commit, and the pipeline refreshes the crates it may have contaminated
 
-Date: 2026-11-16 · Tickets: C4.08 ([P4-export-parity](../climb/P4-export-parity.md)) ·
-Status: accepted
+Date: 2026-11-16 · Tickets: C4.08 (the climb plan's P4 export-parity sheet,
+`docs/climb/P4-export-parity.md`) · Status: accepted
 
 ## Context
 
