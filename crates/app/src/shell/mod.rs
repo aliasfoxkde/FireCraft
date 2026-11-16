@@ -8432,7 +8432,20 @@ mod tests {
 
     /// Draws the canvas once: the world↔screen mapping a gesture is
     /// aimed through settles on the first frame.
+    ///
+    /// The input carries a fixed screen size and a raised texture
+    /// cap: egui's default viewport is 10 000 points square, which
+    /// fits the page at a scale whose raster is wider than the
+    /// default texture side.
     fn draw_canvas(shell: &mut Shell, ctx: &egui::Context, input: egui::RawInput) {
+        let input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(1024.0, 768.0),
+            )),
+            max_texture_side: Some(8192),
+            ..input
+        };
         ctx.run_ui(input, |ui| {
             egui::CentralPanel::default().show(ui, |ui| {
                 shell.canvas(ui);
