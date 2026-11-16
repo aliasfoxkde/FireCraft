@@ -655,6 +655,144 @@ as open rather than quietly dropped:
   FireCraft's overflow menu carries only the commands the help
   documents (the dock's double arrow, and *Hide Panels*).
 
+## The FireCraft chrome, measured (2026-11-16)
+
+The rows above answer *what CS6 draws*. This section answers the
+question the Phase 22.5 close-out had to close: **what FireCraft
+draws, measured off the running shell**, and how it compares.
+
+### What was captured, and from what
+
+| | |
+|---|---|
+| build | `a34a40347b9e7201630dacf68e65a02f874104cb` (`feat/cs6-chrome-closeout`) |
+| binary | `firecraft` (crates/app), built in the CI image on fedora, `cargo build --locked --release -p app` |
+| surface | the native desktop shell under `Xvfb` (X11, 1280×800×24), captured with ImageMagick `import` on the app window |
+| frames | `docs/img/chrome-1280x800.png` (sha256 `ddc811ec…4e5b`) and `docs/img/chrome-1280x400.png` (sha256 `ec3d9db9…495`) — the second is the same window resized to 1280×400 |
+
+**Limitation, stated plainly.** These are captures of the **native**
+shell, not of the web bundle. The headless-chromium path over the web
+bundle produced no frame in this environment: `page.screenshot` times
+out at 120 s in "taking page screenshot", and a CDP
+`Page.captureScreenshot` kills the renderer (the playwright driver
+dies with `EPIPE`). The same failure reproduces against the
+**known-good** bundle the earlier T22 receipts used (`dist/web`,
+2026-11-04, `firecraft-web-25ef8a220b81e769_bg.wasm`), so the blocker
+is this host's SwiftShader/compositor path, **not** this branch. The
+web bundle's own gate is the repo's bridge smoke (`xtask dist --web`),
+which exercises the wasm side; the egui chrome is the same code in
+both builds, and the pixels below are measured from the build that
+compiles it natively.
+
+### What the 1280×800 frame measures
+
+Over its 1,024,000 pixels:
+
+| colour | pixels | share | what it is |
+|---|---|---|---|
+| `#FFFFFF` | 572,357 | 55.89 % | the document page |
+| `#3C3C3C` | 367,652 | 35.90 % | the chrome: menu bar, tool-options row, tool strip, dock, status bar |
+| `#202020` | 41,312 | 4.03 % | the canvas surround the page sits on |
+| `#080808` | 17,029 | 1.66 % | the band above the page (canvas top) |
+| `#101010` | 4,967 | 0.49 % | the page's shadow edge |
+| `#2F5D8A` | 3,351 | 0.33 % | the selection accent |
+| `#DDDDDD` | 767 | 0.07 % | the chrome's text |
+| `#444444` | 172 | 0.02 % | raised surfaces (fields, rows) |
+
+Geometry, read off the pixels:
+
+| region | extent |
+|---|---|
+| menu bar | y 0–27 (text rows 6–17) |
+| tool-options row | y 28–45 (text rows 29–39) |
+| left tool strip | x 0–33 |
+| canvas surround | x 34–70, and y 46–78 above the page |
+| document page | x 71–904, y 79–764 — 834 × 686 px, pure `#FFFFFF` |
+| right dock | x 933–1279 (347 px), panel fill; the selected row's accent at x 914–932 |
+| status bar | y 777–799 (text rows 787–796) |
+
+The menu bar reads (OCR) `File Edit View Select Modify Text Commands
+Filters Window Help` — CS6's own menu set, in CS6's order. The
+tool-options row reads `Pointer () — 143% +. Fit F1 For all
+shortcuts`. The status bar reads `ready untitled - page 1 - state 1 -
+undo 2 - redo 0 - journal 2`.
+
+### The hue check, per region
+
+"Blue-dominant" is a pixel whose blue exceeds its red by more than 18 —
+the same discriminator used on the CS6 reference frame.
+
+| region | blue-dominant | reading |
+|---|---|---|
+| menu bar | 0 px (0.00 %) | hue-free |
+| tool-options row | 0 px (0.00 %) | hue-free |
+| status bar | 0 px (0.00 %) | hue-free |
+| right dock | 1,793 px (0.71 %) | all of it the deliberate accent `#2F5D8A` (1,359 px) |
+| tool strip | 607 px (2.44 %) | the accent (525 px) plus coloured icon art |
+| canvas area | 1,621 px (0.25 %) | the accent |
+
+Over the whole frame: 4,021 blue-dominant pixels (0.39 %), of which
+3,351 are exactly the accent `#2F5D8A`; the rest are antialiasing
+along edges and one 8×17 cyan icon in the dock (136 px). **The chrome
+bars carry no hue at all** — which is the property the CS6 reference
+frame establishes (`#D6D6D6`/`#EDEDED`/`#999999` greys, 0.8 %
+blue-dominant and all of that JPEG noise around antialiased menu text).
+
+Contrast, measured from the frame: `#DDDDDD` on the panel fill
+`#3C3C3C` is **8.12:1**; on the raised surface `#444444` it is
+**7.17:1** — both above the WCAG 2.1 AAA threshold of 7:1 that
+`the_chrome_text_keeps_aaa_contrast` pins.
+
+### Against the CS6 reference rows
+
+| role | CS6 reference | FireCraft, measured | verdict |
+|---|---|---|---|
+| frame / bars | `#D6D6D6` | `#3C3C3C` | **deliberately different** — dark, not light |
+| panel interiors | `#EDEDED` | `#3C3C3C` | **deliberately different** |
+| canvas surround | `#999999` | `#202020` | **deliberately different** |
+| the page | `#FFFFFF` | `#FFFFFF` | reproduced |
+| text | the host OS's greys | `#DDDDDD` | neutral grey |
+| hue in the chrome bars | none | none | **reproduced** |
+
+The lightness difference is the deliberate one already recorded in
+`docs/CS6-PARITY.md` §C (*reason*: CS6 owns no palette to reproduce,
+and FireCraft's primary target is the WebOS build, whose sibling apps
+and system theme are dark; *owner*: shell). What this section adds is
+the **measurement** behind that row: the recorded greys are the ones
+the running shell actually paints, the chrome bars are hue-free in
+the same way CS6's are, and the one hue in the frame is the
+documented selection accent.
+
+### The short viewport (1280×400)
+
+The same window at 1280×400 keeps every region: the menu bar and
+tool-options row are unchanged (identical text rows 6–17 and 29–39),
+the tool strip is unchanged, the page is clipped at row 376, and the
+dock's drawn content runs to row 397 instead of 586 — the dock is a
+scrolling column, so the panels below the fold stay reachable rather
+than disappearing. The palette does not shift with the viewport: panel
+fill 40.66 %, accent 0.42 %, text 0.10 %.
+
+### Recipe (re-measure)
+
+```sh
+# the native shell under a virtual X server, captured by the X server
+Xvfb :93 -screen 0 1280x800x24 &
+DISPLAY=:93 firecraft &
+DISPLAY=:93 import -window "$(DISPLAY=:93 xdotool search --name FireCraft | head -1)" out.png
+DISPLAY=:93 xdotool windowsize <window-id> 1280 400   # the short viewport
+
+# the measurements
+python3 - <<'PY'
+from PIL import Image
+from collections import Counter
+im = Image.open("out.png").convert("RGB")
+print(Counter(im.getdata()).most_common(8))
+blues = [(p, n) for p, n in Counter(im.getdata()).items() if p[2] - p[0] > 18]
+print("blue-dominant pixels:", sum(n for _, n in blues))
+PY
+```
+
 ## Clean-room statement
 
 Evidence extracted from the local `source/` install is used to
