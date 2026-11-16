@@ -286,8 +286,8 @@ fn remote_branches(root: &Path) -> String {
     let (remotes, _) = util::capture_in(Some(root), "git", &["remote"]).unwrap_or_default();
     let mut branches: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
     for remote in remotes.lines().map(str::trim).filter(|r| !r.is_empty()) {
-        let (stdout, _) =
-            util::capture_in(Some(root), "git", &["ls-remote", "--heads", remote]).unwrap_or_default();
+        let (stdout, _) = util::capture_in(Some(root), "git", &["ls-remote", "--heads", remote])
+            .unwrap_or_default();
         for line in stdout.lines() {
             let Some(reference) = line.split_whitespace().nth(1) else {
                 continue;
