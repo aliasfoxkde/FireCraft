@@ -587,6 +587,7 @@ Current version: **0.2.5**.
 
 ### Documentation
 
+- **release**: the provenance statement is implemented, and it is unsigned (3ee8b578)
 - **ledger**: wave-2 closeout — snapshots to post-#150 state, stale quotes repaired #151 (23fe963c)
 - **climb**: the C8.04 shells and the class CI caught (555bda86)
 - **climb**: the C8.04 missing_docs rows (d8a47fe6)
@@ -978,6 +979,7 @@ Current version: **0.2.5**.
 
 ### Chores
 
+- **generated**: refresh the changelog after the main merge (918ad55b)
 - **aegis**: the new findings are adjudicated false positives (8206a1c6)
 - **app-cli**: the crate denies an undocumented public item (C8.04.13) (98b26468)
 - **app**: the crate denies an undocumented public item (C8.04.12) (3341c449)
