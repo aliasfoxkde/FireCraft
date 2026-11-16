@@ -17,6 +17,7 @@
 //!
 //! Chunk byte offsets are provisional until pinned against the reference
 //! corpus in milestone M2 (see `docs/planning/firecraft/M2-fwpng-read.md`).
+#![deny(missing_docs)]
 
 pub mod chunk;
 pub mod document;
