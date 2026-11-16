@@ -1168,21 +1168,32 @@ impl Shell {
             return;
         };
         ui.label(format!("Target: {}", snapshot.name));
-        let Some(doc::ObjectData::Slice(slice)) = self.editor.document().registry.get(snapshot.id)
-        else {
-            return;
-        };
-        let css = slice_css(slice);
-        if css.is_empty() {
+        let Some(css) = self.css_properties_text() else {
             ui.label("(no CSS properties — this slice carries no background)");
             return;
-        }
+        };
         ui.add(
             egui::TextEdit::multiline(&mut css.as_str())
                 .desired_width(DOCK_CONTENT_WIDTH)
                 .desired_rows(6)
                 .interactive(false),
         );
+    }
+
+    /// The CSS the panel shows: the selected web object's
+    /// declarations. `None` when the selection is not a web object or
+    /// carries nothing the panel can express.
+    ///
+    /// Read-only by design — the edit surfaces are the slice verbs,
+    /// and this panel dispatches nothing.
+    fn css_properties_text(&self) -> Option<String> {
+        let snapshot = self.selected_web_object()?;
+        let doc::ObjectData::Slice(slice) = self.editor.document().registry.get(snapshot.id)?
+        else {
+            return None;
+        };
+        let css = slice_css(slice);
+        (!css.is_empty()).then_some(css)
     }
 
     /// Window ▸ Find and Replace: searches text objects and replaces
@@ -1287,23 +1298,32 @@ impl Shell {
                     egui::DragAndDrop::set_payload(ui.ctx(), *number);
                 }
                 if row.clicked() {
-                    let (x, y) = self.symbol_insert_translation(*number);
-                    let placed = self.run_command(
-                        "symbol.createInstance",
-                        serde_json::json!({
-                            "symbol": number,
-                            "x": x, "y": y,
-                            "page": self.editor.page,
-                            "layer": self.editor.active_layer(),
-                            "cell": self.editor.frame,
-                        }),
-                    );
+                    let placed = self.place_symbol_instance(*number);
                     if placed {
                         self.status = format!("{name} instance inserted.");
                     }
                 }
             });
         }
+    }
+
+    /// Places an instance of the symbol `number` at the panel's
+    /// placement point (`symbol.createInstance`).
+    ///
+    /// The click and the drag both land here, so the verb this panel
+    /// dispatches is one thing — and one thing a regression can name.
+    fn place_symbol_instance(&mut self, number: i64) -> bool {
+        let (x, y) = self.symbol_insert_translation(number);
+        self.run_command(
+            "symbol.createInstance",
+            serde_json::json!({
+                "symbol": number,
+                "x": x, "y": y,
+                "page": self.editor.page,
+                "layer": self.editor.active_layer(),
+                "cell": self.editor.frame,
+            }),
+        )
     }
 }
 
@@ -1683,5 +1703,153 @@ mod tests {
             "{point:?} is not on the target"
         );
         assert!(!plate_frame.contains(point), "{point:?} is on the receiver");
+    }
+
+    /// The name of the last command that reached the registry.
+    ///
+    /// The panels' contract with the engine is the *command*, not the
+    /// document mutation it leaves behind: a panel that wrote the
+    /// document directly would leave the journal empty, and the undo
+    /// stack would miss the step.
+    fn last_command(shell: &Shell) -> &str {
+        match shell.editor.session.journal_entries().last() {
+            Some(entry) => entry.name.as_str(),
+            None => "",
+        }
+    }
+
+    /// The Find-and-Replace panel's replace goes through the engine's
+    /// `text.setText` verb, with the rewritten run as its payload.
+    #[test]
+    fn the_find_and_replace_panel_dispatches_set_text() {
+        let (mut shell, id) = super::super::tests::text_shell("a cat in a hat");
+        shell.replace_text(id, "cat", "dog");
+        assert_eq!(last_command(&shell), "text.setText");
+        let entry = shell
+            .editor
+            .session
+            .journal_entries()
+            .last()
+            .expect("the replace is journaled");
+        assert_eq!(entry.payload["id"], serde_json::json!(id));
+        assert_eq!(entry.payload["text"], serde_json::json!("a dog in a hat"));
+    }
+
+    /// The Slices panel's editors dispatch the slice verbs:
+    /// `slice.setType` for the type, `hotspot.setShape` for the
+    /// shape, `slice.setExport` for the export override.
+    #[test]
+    fn the_slices_panel_dispatches_the_slice_verbs() {
+        let (mut shell, plate, _) = slice_shell();
+        assert!(shell.set_slice_kind(plate, SliceKind::Hotspot));
+        assert_eq!(last_command(&shell), "slice.setType");
+        assert!(shell.set_slice_shape(plate, SliceShape::Ellipse));
+        assert_eq!(last_command(&shell), "hotspot.setShape");
+        assert!(shell.set_slice_format(plate, Some(ExportFormat::Jpeg)));
+        assert_eq!(last_command(&shell), "slice.setExport");
+    }
+
+    /// The CSS Properties panel is read-only by design: it renders
+    /// the selected web object's declarations and dispatches nothing.
+    ///
+    /// The regression pins both halves — the panel shows the CSS the
+    /// slice's background knobs produce, and reading it adds no
+    /// command to the journal.
+    #[test]
+    fn the_css_properties_panel_dispatches_nothing() {
+        let (mut shell, plate, _) = slice_shell();
+        shell
+            .editor
+            .apply(
+                "slice.setBackground",
+                serde_json::json!({ "id": plate, "repeat": 1 }),
+            )
+            .expect("the background applies");
+        shell.editor.set_selection(vec![plate]);
+        shell.editor.sync_selection().expect("the selection syncs");
+        let before = shell.editor.session.journal_entries().len();
+        let css = shell.css_properties_text().expect("the slice carries CSS");
+        assert!(
+            css.contains("background-repeat: repeat"),
+            "the CSS is the slice's declarations: {css}"
+        );
+        assert_eq!(
+            shell.editor.session.journal_entries().len(),
+            before,
+            "the CSS panel dispatches no command"
+        );
+    }
+
+    /// The Common Library panel places an instance through
+    /// `symbol.createInstance`, naming the symbol it placed.
+    #[test]
+    fn the_common_library_panel_dispatches_create_instance() {
+        let mut shell = super::super::tests::gui_shell(super::super::tests::gui_editor());
+        let id = shell.editor.current_cell().expect("a cell").elements[0];
+        shell
+            .editor
+            .apply(
+                "symbol.create",
+                serde_json::json!({
+                    "ids": [id], "name": "library symbol", "symbol_type": "graphic",
+                }),
+            )
+            .expect("the symbol is created");
+        let number = shell.editor.document().symbols[0].symbol_number;
+        assert!(shell.place_symbol_instance(number));
+        assert_eq!(last_command(&shell), "symbol.createInstance");
+        let entry = shell
+            .editor
+            .session
+            .journal_entries()
+            .last()
+            .expect("the placement is journaled");
+        assert_eq!(entry.payload["symbol"], serde_json::json!(number));
+    }
+
+    /// The Window-menu row that opens a panel.
+    fn window_row(label: &str) -> Option<crate::menus::Item> {
+        crate::menus::WINDOW
+            .entries
+            .iter()
+            .find_map(|entry| match entry {
+                crate::menus::Entry::Item(item) if item.label == label => Some(*item),
+                _ => None,
+            })
+    }
+
+    /// The four web panels are reachable: their Window-menu row
+    /// toggles a panel the inventory knows, and the toggle opens it.
+    ///
+    /// The menu census (`menus::tests::inert_count_never_rises`)
+    /// counts inert *command* rows; a panel row that reported a gap
+    /// instead of toggling would sit in that census as an active row
+    /// while the panel stayed shut. These four carry their own
+    /// reachability regression so that cannot happen.
+    #[test]
+    fn the_web_panels_are_reachable_from_the_window_menu() {
+        for name in [
+            "Slices",
+            "CSS Properties",
+            "Find and Replace",
+            "Common Library",
+        ] {
+            let row = window_row(name).unwrap_or_else(|| panic!("{name} has no Window-menu row"));
+            assert_eq!(
+                row.action,
+                crate::menus::Action::Shell(crate::menus::ShellAction::TogglePanel(name)),
+                "{name} does not toggle its panel"
+            );
+            assert!(
+                super::super::panel_windows::panel_inventory()
+                    .iter()
+                    .any(|panel| panel.header == name),
+                "{name} is not in the panel inventory"
+            );
+            let mut shell = super::super::tests::gui_shell(crate::editor::Editor::untitled());
+            assert!(!shell.panel_shown(name), "{name} starts closed");
+            shell.toggle_panel(name);
+            assert!(shell.panel_shown(name), "{name} does not open");
+        }
     }
 }
