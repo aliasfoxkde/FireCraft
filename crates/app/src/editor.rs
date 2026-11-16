@@ -3906,6 +3906,10 @@ pub fn selection_edges(mask: &doc::SelectionMask) -> Vec<[f64; 4]> {
     edges
 }
 
+/// The world-space box that holds every control point of `path` — the
+/// anchors and, where a segment is curved, its primary and secondary
+/// handles. The box is the path's editable extent, not the shape the
+/// curve draws; a path with no points gives the empty rectangle.
 #[must_use]
 pub fn bounds_of(path: &doc::PathObject) -> geom::Rect {
     let mut points = Vec::new();
@@ -3946,16 +3950,9 @@ fn distance_point_segment(p: geom::Point, a: &geom::Point, b: &geom::Point) -> f
     (p.x - cx).hypot(p.y - cy)
 }
 
-/// World-space bounding box of any object: paths by contour points
-/// ([`bounds_of`]), text and slices by frame, images by location plus
-/// pixel size, groups by union over children, symbol instances by the
-/// definition's content bounds mapped through the instance transform.
-/// Depth-capped so a malformed (impossible-in-practice) group cycle
-/// cannot recurse forever; an unknown or empty kind gives a zero box
-/// that never hits.
-#[must_use]
 /// The union bounds of a selection — the space a transform handle
 /// scales in. `None` when nothing in the set carries bounds.
+#[must_use]
 pub fn union_selection_bounds(document: &Document, ids: &[ObjectId]) -> Option<geom::Rect> {
     let mut out: Option<geom::Rect> = None;
     for id in ids {
@@ -3993,6 +3990,13 @@ fn union_bounds(bounds: impl Iterator<Item = geom::Rect>) -> geom::Rect {
     out.unwrap_or(geom::Rect::ZERO)
 }
 
+/// World-space bounding box of any object: paths by contour points
+/// ([`bounds_of`]), text and slices by frame, images by location plus
+/// pixel size, groups by union over children, symbol instances by the
+/// definition's content bounds mapped through the instance transform.
+/// Depth-capped so a malformed (impossible-in-practice) group cycle
+/// cannot recurse forever; an unknown or empty kind gives a zero box
+/// that never hits.
 #[must_use]
 pub fn object_bounds(document: &Document, data: &ObjectData, depth: u8) -> geom::Rect {
     const MAX_DEPTH: u8 = 32;

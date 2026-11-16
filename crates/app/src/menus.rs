@@ -83,14 +83,21 @@ pub enum DocumentAction {
 /// Shell-level behaviors — plumbing that never goes through the engine.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ShellAction {
+    /// File ▸ New — replace the open document with an empty one.
     New,
+    /// File ▸ Open… — replace the open document with a file from disk.
     Open,
     /// File ▸ Import… — place a raster (PNG/JPEG/GIF/BMP/TIFF/WebP)
     /// into the current document on the active layer.
     Import,
+    /// File ▸ Save — write the document back to the file it came from.
     Save,
+    /// File ▸ Save As… — write the document to a new file and adopt it.
     SaveAs,
+    /// File ▸ Export… — open the export dialog over the live document.
     Export,
+    /// File ▸ Export Preview… — the export preview, a rendered copy of
+    /// the canvas with the export settings applied.
     ExportPreview,
     /// File ▸ Export Wizard…: the export dialog, opened by its own
     /// CS6 row (the same dialog as File ▸ Export).
@@ -121,10 +128,15 @@ pub enum ShellAction {
     TransformMode(TransformMode),
     /// The command palette (Ctrl+P): every registered engine command.
     Palette,
+    /// File ▸ Quit — leave the application.
     Quit,
+    /// Edit ▸ Undo — revert the last journal step.
     Undo,
+    /// Edit ▸ Redo — re-apply the step that was last undone.
     Redo,
+    /// Select ▸ Deselect — clear the current selection.
     Deselect,
+    /// Select ▸ Select All — select every object in the current cell.
     SelectAll,
     /// Select ▸ Select Inverse — everything in the current cell the
     /// selection does not cover.
@@ -139,11 +151,15 @@ pub enum ShellAction {
     PasteAsMask,
     /// Edit ▸ Paste Inside — paste the clipboard inside the selection.
     PasteInside,
+    /// View ▸ Zoom In — magnify the canvas view.
     ZoomIn,
+    /// View ▸ Zoom Out — shrink the canvas view.
     ZoomOut,
     /// Set an absolute magnification (fraction: 1.0 = 100%).
     ZoomTo(f32),
+    /// View ▸ Fit All — zoom so the whole document fits the canvas.
     FitAll,
+    /// Help ▸ About Fireworks — the about dialog.
     About,
     /// Help ▸ Keyboard Shortcuts — the shortcut map panel (F1).
     ShowShortcuts,
@@ -442,9 +458,13 @@ pub enum SelAction {
 /// The Modify ▸ Arrange items; dispatch resolves the numeric index.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Arrange {
+    /// Modify ▸ Arrange ▸ Bring to Front.
     Front,
+    /// Modify ▸ Arrange ▸ Bring Forward — one step up the stack.
     Forward,
+    /// Modify ▸ Arrange ▸ Send Backward — one step down the stack.
     Backward,
+    /// Modify ▸ Arrange ▸ Send to Back.
     Back,
 }
 
@@ -466,6 +486,8 @@ pub struct Item {
     pub label: &'static str,
     /// Accelerator as CS6 displays it ("" when none).
     pub accel: &'static str,
+    /// The verb the row dispatches: an engine command, a document
+    /// action, or a shell behavior.
     pub action: Action,
     /// Set when the visible label depends on live document state; the
     /// shell resolves it at render time.
@@ -488,7 +510,9 @@ pub enum DynamicLabel {
 /// A menu-tree node: a separator, a command row, or a submenu.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Entry {
+    /// A separator row: drawn as a divider, never dispatched.
     Sep,
+    /// A command row — the item and the verb it dispatches.
     Item(Item),
     /// Submenu (id 0 — popups carry no command id in the dump).
     Sub(&'static str, &'static [Entry]),
@@ -497,7 +521,10 @@ pub enum Entry {
 /// One top-level menu bar title with its tree.
 #[derive(Clone, Copy)]
 pub struct Menu {
+    /// The menu bar title, as CS6 spells it.
     pub label: &'static str,
+    /// The menu's rows, in display order; submenus nest their own
+    /// entries.
     pub entries: &'static [Entry],
 }
 
@@ -2306,8 +2333,11 @@ fn walk_items(entries: &'static [Entry]) -> Vec<&'static Item> {
 /// One shortcut modifier triple.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Mods {
+    /// Whether Ctrl is held.
     pub ctrl: bool,
+    /// Whether Alt is held.
     pub alt: bool,
+    /// Whether Shift is held.
     pub shift: bool,
 }
 
@@ -2366,8 +2396,11 @@ pub struct Shortcut {
     /// The section heading this binding is filed under in the help
     /// panel — the CS6 menu it belongs to.
     pub group: &'static str,
+    /// The modifier keys the binding requires.
     pub mods: Mods,
+    /// The key the binding listens for.
     pub key: egui::Key,
+    /// The verb the binding dispatches.
     pub action: Action,
 }
 

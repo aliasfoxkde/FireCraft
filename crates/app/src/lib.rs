@@ -6,6 +6,8 @@
 //! journal replay drive. Tests exercise the core without a window;
 //! the window is glue.
 
+#![deny(missing_docs)]
+
 pub mod canvas;
 pub mod editor;
 pub mod menus;
