@@ -85,6 +85,7 @@ pub struct MemoryFs {
 
 #[cfg(feature = "memory-fs")]
 impl MemoryFs {
+    /// An empty in-memory filesystem: nothing written yet.
     #[must_use]
     pub fn new() -> Self {
         Self::default()

@@ -35,6 +35,7 @@ pub struct Journal {
 }
 
 impl Journal {
+    /// An empty journal: no entries, the next sequence number is 1.
     #[must_use]
     pub fn new() -> Self {
         Self {

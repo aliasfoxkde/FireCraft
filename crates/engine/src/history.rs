@@ -45,6 +45,7 @@ struct TransactionBuffer {
 }
 
 impl History {
+    /// An empty history: no steps, no open transaction.
     #[must_use]
     pub fn new() -> Self {
         Self::default()

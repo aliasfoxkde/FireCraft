@@ -11,6 +11,8 @@
 //! A failed command leaves the document untouched: handlers capture
 //! before they mutate and validate before they capture.
 
+#![deny(missing_docs)]
+
 pub mod access;
 pub mod bitmap;
 pub mod brush;
