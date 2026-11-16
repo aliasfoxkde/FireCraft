@@ -10,9 +10,11 @@ use libwebp_sys::{WebPEncodeRGBA, WebPFree};
 
 use crate::{ExportError, Plane};
 
-/// WebP encoding quality. libwebp range 0..=100.
+/// Lowest WebP encoding quality libwebp accepts (0..=100).
 pub const MIN_QUALITY: f32 = 0.0;
+/// Highest WebP encoding quality libwebp accepts (0..=100).
 pub const MAX_QUALITY: f32 = 100.0;
+/// The quality used when the caller names none — libwebp's own default.
 pub const DEFAULT_QUALITY: f32 = 75.0;
 
 /// Encodes a plane as lossy WebP (VP8).

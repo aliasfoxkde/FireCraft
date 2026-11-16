@@ -10,6 +10,8 @@
 //! save first, then raster import, SVG, PSD, and animated GIF ↔
 //! states. See `docs/planning/firecraft/M8-import-export.md`.
 
+#![deny(missing_docs)]
+
 pub mod bmp;
 pub mod expv;
 pub mod gif;
