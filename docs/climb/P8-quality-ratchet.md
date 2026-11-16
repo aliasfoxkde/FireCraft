@@ -108,6 +108,24 @@ marked ↻: clone them as `C8.nn.k` for each crate.
   without the lint. They are L5 shells and the rung's order list stops at
   `scripting`, so they are clones C8.04.12 and C8.04.13, not part of this
   landing.
+- **Landed (clones 12 and 13):** the two shells are denied the lint
+  too, so every public crate in the workspace now carries it. `app`
+  closed 32 gaps — the `ShellAction` and `Arrange` variants that name
+  the CS6 rows, the `Item`/`Entry`/`Menu`/`Mods`/`Shortcut` fields, and
+  the editor's two bounds functions; one of them was a misplaced doc
+  paragraph that described `object_bounds` while sitting on
+  `union_selection_bounds`, and it moved to the function it describes.
+  `app-cli` closed one: the public tuple field of `CliError`. Nothing
+  was demoted to `pub(crate)`.
+- **What CI caught that the scan did not:** a struct variant's named
+  fields each need their own doc, not the variant's — `missing_docs`
+  points at the field, not at the variant. The static scan missed the
+  class because it looked for a doc comment above the item, and an
+  inline variant (`DanglingMember { symbol: String, id: ObjectId }`) has
+  none to find. The `doc` and `filters` clones failed on it — seven
+  fields in two crates — and were fixed on their own branches
+  (`e3fdedb8`, `d419a5c1`). The lesson for the next agent: a scan is a
+  lower bound on the lint, and the compiler is the authority.
 - **Clones:**
 
   | Clone | Crate | Commit | Branch |
@@ -116,13 +134,15 @@ marked ↻: clone them as `C8.nn.k` for each crate.
   | C8.04.2 | `raster` | `918fc479` | `climb/C8.04.2-raster-missing-docs` |
   | C8.04.3 | `vector` | `8ba8bfe5` | `climb/C8.04.3-vector-missing-docs` |
   | C8.04.4 | `text` | `0dc9e4ff` | `climb/C8.04.4-text-missing-docs` |
-  | C8.04.5 | `filters` | `c298dc91` | `climb/C8.04.5-filters-missing-docs` |
+  | C8.04.5 | `filters` | `c298dc91` + `d419a5c1` | `climb/C8.04.5-filters-missing-docs` |
   | C8.04.6 | `compose` | `c1163484` | `climb/C8.04.6-compose-missing-docs` |
-  | C8.04.7 | `doc` | `be69d741` | `climb/C8.04.7-doc-missing-docs` |
+  | C8.04.7 | `doc` | `be69d741` + `e3fdedb8` | `climb/C8.04.7-doc-missing-docs` |
   | C8.04.8 | `io` | `bf432810` | `climb/C8.04.8-io-missing-docs` |
   | C8.04.9 | `webexport` | `57cb39de` | `climb/C8.04.9-webexport-missing-docs` |
   | C8.04.10 | `engine` | `98f71ba5` | `climb/C8.04.10-engine-missing-docs` |
   | C8.04.11 | `scripting` | `423f646c` | `climb/C8.04.11-scripting-missing-docs` |
+  | C8.04.12 | `app` | `3341c449` | `climb/C8.04.12-app-missing-docs` |
+  | C8.04.13 | `app-cli` | `98b26468` | `climb/C8.04.13-app-cli-missing-docs` |
 
 ### C8.05 — Pixel panel snapshots in CI (decision 0087) `[ ]`
 - **Needs:** C2.01 · **Tags:** `[HOST:linux]` · **Size:** M
