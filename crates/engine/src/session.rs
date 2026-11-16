@@ -36,8 +36,13 @@ pub struct HistoryEntry {
     pub depth: usize,
 }
 
+/// The counter that hands each session its identity.
+static NEXT_SESSION_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+
 /// One open editing session over one document.
 pub struct Session {
+    /// The session's identity — unique for the life of the process.
+    id: u64,
     registry: CommandRegistry,
     document: Document,
     history: History,
@@ -63,6 +68,7 @@ impl Session {
     #[must_use]
     pub fn with_registry(document: Document, registry: CommandRegistry) -> Self {
         Self {
+            id: NEXT_SESSION_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
             registry,
             document,
             history: History::new(),
@@ -70,6 +76,19 @@ impl Session {
             open_txn: None,
             dirty: false,
         }
+    }
+
+    /// The session's identity — unique for the life of the process.
+    ///
+    /// Two sessions are two documents, even when their change stamps
+    /// match: a freshly opened file and a freshly created one both
+    /// carry an empty history, an empty journal and no undo. A view
+    /// that caches per document — the HTML preview — needs this to
+    /// tell the two apart; without it the preview keeps showing the
+    /// previous document's page.
+    #[must_use]
+    pub fn id(&self) -> u64 {
+        self.id
     }
 
     /// Applies one command. When a transaction is open the command
