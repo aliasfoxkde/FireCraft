@@ -113,18 +113,12 @@ impl Floor {
 }
 
 /// `xtask reachability --list`: print the registry commands the shell
-/// does not bind, one per line, sorted.
+/// does not bind, one per line, sorted, to stdout.
 ///
-/// Everything goes to stderr. The workspace denies `print_stdout` and
-/// every other xtask verb keeps its output there (AGENTS.md: xtask
-/// prints diagnostics to stderr so output stays pipeable), so a consumer
-/// strips the one `[xtask]` summary line rather than requiring a special
-/// stream:
-///
-/// ```text
-/// cargo run -q -p xtask -- reachability --list 2>&1 >/dev/null \
-///   | grep -v '^\[xtask\]'
-/// ```
+/// stdout stays the data channel (AGENTS.md: xtask prints diagnostics to
+/// stderr so output stays pipeable), so the summary line goes to stderr
+/// and only the list goes to stdout — the output can be piped into a
+/// task list or a test harness.
 pub fn list() -> Result<(), String> {
     let root = workspace_root();
     let registry = engine::catalog::ids();
@@ -136,7 +130,7 @@ pub fn list() -> Result<(), String> {
         registry.len()
     );
     for id in &lines {
-        eprintln!("{id}");
+        crate::util::write_stdout_line(id)?;
     }
     Ok(())
 }
@@ -248,7 +242,7 @@ fn evaluate(
 /// literal it passes to `run_command` / `apply`. The scan reads the
 /// shell crate's own source rather than a hand-maintained table, so
 /// the number cannot drift away from the code.
-fn bound_commands(dir: &Path, registry: &[&str]) -> Result<BTreeSet<String>, String> {
+pub(crate) fn bound_commands(dir: &Path, registry: &[&str]) -> Result<BTreeSet<String>, String> {
     let known: BTreeSet<&str> = registry.iter().copied().collect();
     let mut bound = BTreeSet::new();
     for file in rust_files(dir)? {

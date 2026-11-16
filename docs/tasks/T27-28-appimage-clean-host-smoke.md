@@ -19,8 +19,8 @@ receipt are recorded.
 
 **Verification:** `sha256sum dist/firecraft-*-linux-x86_64.AppImage`
 
-**Evidence:** none yet.
+**Evidence:** —
 
-**Blockers:** a clean host with a display or an equivalent headless path.
+**Blockers:** Clean host
 
 **Stopping condition:** a successful round trip with a recorded digest.

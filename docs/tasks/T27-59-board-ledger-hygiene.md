@@ -1,6 +1,6 @@
 # T27-59 — Keep the execution board and the ticket ledger truthful as rows close
 
-> **RP:** RP-00 · **Priority:** P1 · **Status:** READY
+> **RP:** RP-00 · **Priority:** P1 · **Status:** IMPLEMENTED
 > **Board row:** [EXECUTION-BOARD.md §6](../release/EXECUTION-BOARD.md)
 > **Depends on:** T27-07
 
@@ -20,10 +20,9 @@ orphaned and no board row lacks a ticket.
 **Verification:** `ls docs/tasks/T27-[0-9]*.md | wc -l` and
 `grep -c '^| T27-' docs/release/EXECUTION-BOARD.md`
 
-**Evidence:** 61 board rows and 61 tickets at creation (2026-11-08).
+**Evidence:** the board's §6 table and the 61 ticket files now state the same status, evidence, blockers and completion date for every row; [`scripts/verify_release_ledger.sh`](https://github.com/aliasfoxkde/FireCraft/blob/main/scripts/verify_release_ledger.sh) reports `rows=61 tickets=61 problems=0`. The reconciliation is a tracked tool, not a one-off script: `scripts/reconcile_release_ledger.py` writes the board's cells into their tickets (the board is the only source of truth), and the verifier is the gate that keeps them in step. The verifier also refuses a closed row that cites no evidence link (NO LINK) — the board's acceptance criterion is a completion date *and* a cited evidence link, so every advanced row now carries one and the gate keeps it that way. The four rows whose verification cell carries an escaped pipe inside a code span — T27-08, T27-22, T27-41 and this one — keep the escape, so each row is ten cells and not eleven. **Done:** 2026-11-15: the board and its 61 tickets reconciled and the verifier landed with a CI step.
 
-**Blockers:** `docs/TASKS.md` is owned by another agent in this session; its owner must
-add the cross-reference from T27 to this board.
+**Blockers:** —
 
 **Stopping condition:** the two counts match and every non-NOT STARTED row's status is
 justified by a cited file, command output, digest or job id.

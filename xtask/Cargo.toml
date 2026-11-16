@@ -13,6 +13,11 @@ description = "FireCraft verification gates: ci, layers, wasm, corpus, parity, s
 flate2 = "1"
 png = "0.18"
 serde_json = "1"
+# The SBOM gate validates its output against the published CycloneDX 1.5
+# JSON schema, whose `pattern` constraints are regular expressions
+# (T27-55).  `regex` is already in the workspace lockfile, so this adds
+# no new crate to the graph.
+regex = "1"
 # Flatpak manifest parse-check in the dist gate (RP-01).  `serde_yaml`
 # was dropped: it is `0.9.34+deprecated` and pulls `unsafe-libyaml`
 # (RUSTSEC-2024-0449).  saphyr is a pure-Rust YAML 1.2 parser; only the

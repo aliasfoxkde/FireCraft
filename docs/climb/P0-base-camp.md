@@ -25,7 +25,7 @@ prints every metric.
 - **Verify:** the gate output is pasted (last 30 lines).
 - **Moves:** S1 is confirmed locally, not just on GitHub's backup CI.
 
-### C0.02 — Fix PR #143's red test and land it `[ ]`
+### C0.02 — Fix PR #143's red test and land it `[x]`
 - **Needs:** C0.01 · **Tags:** `[HOST:linux]` `[MAINTAINER]` (merge) ·
   **Size:** S
 - **Steps:**
@@ -47,7 +47,7 @@ prints every metric.
 - **Verify:** `tail -4 .reachability-floor.tsv` on `main`.
 - **Moves:** S2 168 → 196.
 
-### C0.03 — Land PR #113 (mask stack) `[ ]`
+### C0.03 — Land PR #113 (mask stack) `[x]`
 - **Needs:** C0.02 · **Tags:** `[HOST:linux]` `[HOST:browser]`
   `[MAINTAINER]` · **Size:** S
 - **Steps:**
@@ -65,7 +65,7 @@ prints every metric.
 - **Verify:** `git log origin/main --oneline | grep -i mask`.
 - **Moves:** S5a +1 (mask stack row), S2 ≥ 196.
 
-### C0.04 — Land PR #142 with corrected numbers `[ ]`
+### C0.04 — Land PR #142 with corrected numbers `[x]`
 - **Needs:** C0.03 · **Tags:** `[DOCS]` `[MAINTAINER]` · **Size:** XS
 - **Steps:**
   1. `git checkout docs/reachability-gap-and-coverage-measurement && git merge origin/main`.
@@ -78,7 +78,7 @@ prints every metric.
   `253 - shell_bound_commands`.
 - **Moves:** — (truthfulness).
 
-### C0.05 — Land PR #144 (approved artwork) `[ ]`
+### C0.05 — Land PR #144 (approved artwork) `[x]`
 - **Needs:** C0.02 · **Tags:** `[HOST:browser]` `[MAINTAINER]` · **Size:** XS
 - **Steps:** merge `origin/main` in. Resolve against #132 (fox motif
   retired) by keeping #132's removals plus #144's flame assets. Check that
@@ -108,7 +108,11 @@ prints every metric.
 - **Verify:** `cargo test -p app <new test names>`.
 - **Moves:** S6 ↑ if ported.
 
-### C0.07 — `xtask reachability --list` `[ ]`
+### C0.07 — `xtask reachability --list` `[x]`
+- **Landed:** `reachability --list` prints the unreachable ids to stdout
+  (one per line); 85 lines here, which is `257 - 249`. It shares
+  `util::write_stdout_line` with `climb`, because `println!` is denied
+  workspace-wide — the first version of this rung could not pass clippy.
 - **Needs:** C0.01 · **Tags:** `[HOST:linux]` · **Size:** XS
 - **Steps:**
   1. In `xtask/src/reachability.rs`, `run_inner` already builds
@@ -121,7 +125,12 @@ prints every metric.
 - **Verify:** that command.
 - **Moves:** S6 +1. Unblocks P5.
 
-### C0.08 — Build the altimeter: `xtask climb` `[ ]`
+### C0.08 — Build the altimeter: `xtask climb` `[x]`
+- **Landed:** `xtask climb` measures S2–S8/S12 from the tree;
+  `--append` records a row; `--check` runs as a `ci` step after
+  `reachability` and is silent on stdout. Its first baseline caught the
+  one drifted metric (S12 34 → 123), which is why the board now records
+  the measured 123 instead of the stale 34.
 - **Needs:** C0.07 · **Tags:** `[HOST:linux]` · **Size:** M
 - **Steps:**
   1. Create `xtask/src/climb.rs`, and register `Some("climb")` in

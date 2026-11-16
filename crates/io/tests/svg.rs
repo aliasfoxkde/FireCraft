@@ -237,6 +237,7 @@ fn groups_nest_their_children() {
     let mut inner = square();
     inner.opacity = 250;
     let mut group = GroupObject {
+        stack_mode: None,
         group_type: 0,
         name: None,
         children: Vec::new(),
@@ -917,6 +918,7 @@ fn group_wrapper_carries_opacity_and_filter_together() {
     let mut document = document(Vec::new());
     let square = document.registry.insert(ObjectData::Path(square()));
     let group = document.registry.insert(ObjectData::Group(GroupObject {
+        stack_mode: None,
         group_type: 0,
         name: None,
         children: vec![square],

@@ -312,6 +312,7 @@ fn group_opacity_composes_over_its_children() {
         0,
     );
     let group = doc.registry.insert(ObjectData::Group(doc::GroupObject {
+        stack_mode: None,
         group_type: 0,
         name: None,
         children: vec![blue],
@@ -479,6 +480,7 @@ fn repeated_renders_are_byte_identical() {
         0,
     );
     let group = doc.registry.insert(ObjectData::Group(doc::GroupObject {
+        stack_mode: None,
         group_type: 0,
         name: None,
         children: vec![red],
@@ -928,6 +930,7 @@ fn group_filters_apply_to_the_child_composite() {
         0,
     );
     let group = doc.registry.insert(ObjectData::Group(doc::GroupObject {
+        stack_mode: None,
         group_type: 0,
         name: None,
         children: vec![left, right],
@@ -965,6 +968,7 @@ fn nested_inverts_cancel_exactly() {
             set_effects(&mut doc, rect, vec![effect("invert", &[])]);
         }
         let group = doc.registry.insert(ObjectData::Group(doc::GroupObject {
+            stack_mode: None,
             group_type: 0,
             name: None,
             children: vec![rect],

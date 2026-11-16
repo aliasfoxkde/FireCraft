@@ -1,13 +1,15 @@
 # FireCraft — Roadmap detail
 
-> **Current execution snapshot (2026-11-11; main `b61f198`):** Phase 21's
+> **Current execution snapshot (2026-11-14; main `ad3fc655`):** Phase 21's
 > user-facing deliverables have landed. Phase 20.1 and 20.5–20.7 are on
-> main; Optimize/timeline are in open PR #118 and the mask stack is in
-> open PR #113. Phase 22 remains partial: the user-visible parity matrix
-> is published, but bitmap inspector capabilities and remaining CS6 chrome
-> are still open/evidence-gated. Use [TASKS.md](TASKS.md) for live status
-> and [PROGRESS.md](PROGRESS.md) for measured receipts. An open PR is not
-> a landed feature.
+> main; Optimize/timeline landed 2026-11-11 in #118 and the mask stack
+> landed in #113 as `PARTIAL`. The reachability wave (#143) and the
+> artwork consolidation (#144) merged 2026-11-14 (249/257 commands
+> bound = 96.89%). Phase 22 remains partial: the
+> user-visible parity matrix is published, but bitmap inspector
+> capabilities and remaining CS6 chrome are still open/evidence-gated.
+> Use [TASKS.md](TASKS.md) for live status and [PROGRESS.md](PROGRESS.md)
+> for measured receipts. An open PR is not a landed feature.
 
 > Current task state is tracked in [`TASKS.md`](TASKS.md), with a dated
 > snapshot in [`PROGRESS.md`](PROGRESS.md). This file is the detailed
@@ -387,8 +389,10 @@ evidence work, tracked outside that campaign.
   one-way ratchet: `--bless` may raise it (reachability improved) and
   refuses to lower it (a regression is fixed, not forgiven). Measured
   on the release train at 2026-11-11: **253 registry commands, 168
-  bound by the shell = 66.40%**, 85 unreachable; the floor is pinned
-  at 66.40%.
+  bound by the shell = 66.40%**, 85 unreachable; the floor was pinned
+  at 66.40%. Re-measured 2026-11-14 after PR #143: **257 registry
+  commands, 249 bound = 96.89%**, 8 unreachable; the floor was
+  deliberately re-blessed to 96.89% in the wave-closeout PR.
   (The command palette makes the *palette* reach 100% — the gate
   deliberately measures the CS6-visible surface instead, which is the
   surface the 19.x batches widen. Decision
@@ -448,8 +452,18 @@ evidence work, tracked outside that campaign.
   [0096](decisions/0096-animation-playback-clock.md)). Still open:
   state thumbnails, a document-level loop count, per-side onion
   opacity, screenshot acceptance.
-- **20.4 Mask stack UI** (M): add/remove/mode/link/move. **In open
-  PR #113**; this is a FireCraft extension, not a CS6 parity claim.
+- **20.4 Mask stack UI** (M): add/remove/mode/link/move. **PARTIAL
+  2026-11-11**: the stack, its operators, and its fold landed. The
+  model holds a level's combine mode and persists it
+  (`mask.setStackMode`, decisions [0092](decisions/0092-mask-stack-combine-mode.md)
+  and [0093](decisions/0093-mask-stack-levels-and-folding.md)); the
+  compositor folds the levels bottom-up into one coverage and applies
+  it to the content's pixels; the panel lists one row per level with
+  its enable flag, operator, link flag, reorder arrows and remove
+  button, and can add a level. The structural commands undo
+  byte-exactly. Still open: the screenshot acceptance; ticket
+  [T9](tasks/T9-mask-stack.md). This is a FireCraft extension, not a
+  CS6 parity claim.
 - **20.5 Multi-document tabs** (M): **LANDED 2026-11-07** — Open/New
   park the active document as a `DocTab`; Close promotes the newest
   parked tab (refuses dirty documents); the tab strip shows the
@@ -467,7 +481,7 @@ evidence work, tracked outside that campaign.
   payload grounded one step below the document's live depth) and
   `firecraft.listCommands` advertises it
   ([T10](tasks/T10-history-rewind-command.md), decision
-  [0106](decisions/0106-the-rewind-is-a-command-every-surface-can-name.md)).
+  [0122](decisions/0122-the-rewind-is-a-command-every-surface-can-name.md)).
 - **20.7 Slice/hotspot behavior editing + HTML preview** (M):
   **LANDED 2026-11-11** in #107.
 
@@ -717,9 +731,11 @@ scope, so no license path is attempted.
    `catalog::ids()` − UI-bound commands only shrinks (mirror of the
    call-table test). Unreachable commands with no gate means drift.
    — **DONE (2026-11-10)**, tracked as 19b.2: `cargo run -p xtask --
-   reachability`, wired into `ci`. Measures **253 registry commands,
-   168 bound by the shell = 66.40%**, 85 unreachable; the floor lives
-   in **`.reachability-floor.tsv`** (pinned at 66.40%) and is a one-way
+   reachability`, wired into `ci`. Measured 253 registry commands /
+   168 bound (66.40%) at introduction; **re-measured 2026-11-14 after
+   PR #143: 257 commands, 249 bound = 96.89%, 8 unreachable**; the
+   floor lives in **`.reachability-floor.tsv`**, deliberately
+   re-blessed to 96.89% in the wave-closeout PR, and is a one-way
    ratchet.
 3. **Inert-drift test**: an inert menu row may not be added silently.
    — **DONE (2026-11-02)**, tracked as 19b.3: the census is derived

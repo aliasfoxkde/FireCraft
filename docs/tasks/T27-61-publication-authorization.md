@@ -20,10 +20,9 @@ re-verified against `RELEASE_SHA256.txt` after publication.
 
 **Verification:** `gh release edit <tag> --draft=false`
 
-**Evidence:** no authorization exists. The v0.2.5 release was published previously and
-carries 5 assets while the tag workflow now expects 8.
+**Evidence:** Campaign §20 forbids publishing a production release without explicit maintainer approval
 
-**Blockers:** maintainer authorization; T27-60.
+**Blockers:** Maintainer authorization
 
 **Stopping condition:** a written authorization is recorded and the published release's
 digests are re-verified against the pre-publication list.

@@ -1,6 +1,6 @@
 # T27-13 — Fix the genuine Aegis findings, suppress the false positives narrowly, regenerate the baseline
 
-> **RP:** RP-00 · **Priority:** P0 · **Status:** IMPLEMENTED
+> **RP:** RP-00 · **Priority:** P0 · **Status:** BUILD VERIFIED
 > **Board row:** [EXECUTION-BOARD.md §6](../release/EXECUTION-BOARD.md)
 > **Depends on:** T27-12
 
@@ -27,10 +27,9 @@ previous one except for the adjudicated entries; the scan is clean.
 > `cargo run -p xtask -- aegis`. The re-pin recorded below is the historical one,
 > taken on 2026-11-09 against the baseline of that day.
 
-**Evidence:** baseline held 520 entries; 36 findings were not in it and 2 had moved
-lines.
+**Evidence:** No finding was genuine. The 520-entry line-keyed `.aegis-baseline.json` was replaced by the content-keyed [`.aegis-baseline.tsv`](https://github.com/aliasfoxkde/FireCraft/blob/main/.aegis-baseline.tsv) ([decision 0074](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/decisions/0074-aegis-content-keyed-baseline.md)) and re-blessed for new content (decisions 0083, 0084); the suppression stays narrow — a per-class reason, no disabled rule. The Aegis leg of the gate is green on `main` `e39705e` (check 131002941116) and on the candidate heads. **Done:** 2026-11-12: baseline regenerated; Aegis leg green in CI.
 
-**Blockers:** none — T27-12 is complete.
+**Blockers:** —
 
 **Stopping condition:** the scan is clean, the baseline diff shows only the adjudicated
 changes, and `xtask ci` passes.

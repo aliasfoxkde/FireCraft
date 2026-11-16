@@ -32,6 +32,10 @@ use crate::shell::slice_editor::{
 /// panel.
 const INSERT_SIZE: f64 = 120.0;
 
+/// The background slice's repeat modes (`CBRi`): no repeat, repeat
+/// both ways, repeat across, repeat down.
+const REPEAT_LABELS: [&str; 4] = ["no repeat", "repeat both", "repeat x", "repeat y"];
+
 thread_local! {
     /// The Behaviors panel's editor draft: the CS6 event/action pair
     /// the panel is set to add next. CS6 keeps this choice in its
@@ -125,6 +129,17 @@ impl Shell {
                     ui.end_row();
                 }
             });
+        ui.separator();
+        // The rectangle tools' corner cut — CS6's tool options strip
+        // carries the same knob for the rounded and chamfered shapes.
+        ui.horizontal(|ui| {
+            ui.label("Corner");
+            ui.add(
+                egui::DragValue::new(&mut self.editor.rect_corner)
+                    .range(0.0..=200.0)
+                    .speed(0.5),
+            );
+        });
     }
 
     /// Inserts the panel's shape at the canvas center.
@@ -145,7 +160,8 @@ impl Shell {
                 }),
             ),
             ShapeKind::Auto(shape) => {
-                let payload = shape.payload_in_rect(page, layer, cell, x, y, size);
+                let payload =
+                    shape.payload_in_rect(page, layer, cell, x, y, size, self.editor.rect_corner);
                 self.run_command(shape.command(), payload)
             }
         };
@@ -632,6 +648,7 @@ impl Shell {
     /// reads the same selection the canvas writes.
     pub(super) fn slices_panel(&mut self, ui: &mut egui::Ui) {
         ui.weak("Click a slice or hotspot to select it on the canvas.");
+        self.web_object_from_selection(ui);
         ui.separator();
         let rows = slice_rows(self.editor.document());
         if rows.is_empty() {
@@ -738,6 +755,10 @@ impl Shell {
         // The anchor link and the alt text.
         self.slice_link_editor(ui, row.id, row.link.as_ref(), row.alt.as_ref(), true);
 
+        // The web object's own rectangle and its background knobs.
+        self.slice_rectangle_editor(ui, row.id);
+        self.slice_background_editor(ui, row.id);
+
         ui.label(row.behavior_count());
         if ui
             .button("Show HTML preview")
@@ -746,6 +767,268 @@ impl Shell {
         {
             self.toggle_panel("HTML Preview");
         }
+    }
+
+    /// The web object's own rectangle — CS6's hotspot rectangle. The
+    /// fields move (or copy) the object to the rectangle the user
+    /// types (`hotspot.setRectangle`).
+    fn slice_rectangle_editor(&mut self, ui: &mut egui::Ui, id: doc::ObjectId) {
+        let Some(frame) = self
+            .editor
+            .document()
+            .registry
+            .get(id)
+            .and_then(|object| match object {
+                doc::ObjectData::Slice(slice) => Some(slice.frame),
+                _ => None,
+            })
+        else {
+            return;
+        };
+        ui.heading("Rectangle");
+        let mut left = frame.x0;
+        let mut top = frame.y0;
+        let mut right = frame.x1;
+        let mut bottom = frame.y1;
+        ui.horizontal(|ui| {
+            ui.add(egui::DragValue::new(&mut left).speed(1.0).prefix("L "));
+            ui.add(egui::DragValue::new(&mut top).speed(1.0).prefix("T "));
+            ui.add(egui::DragValue::new(&mut right).speed(1.0).prefix("R "));
+            ui.add(egui::DragValue::new(&mut bottom).speed(1.0).prefix("B "));
+        });
+        ui.horizontal(|ui| {
+            if ui
+                .button("Move there")
+                .on_hover_text("move the web object to this rectangle")
+                .clicked()
+            {
+                self.set_hotspot_rectangle(id, left, top, right, bottom, false);
+            }
+            if ui
+                .button("Copy there")
+                .on_hover_text("copy the web object to this rectangle")
+                .clicked()
+            {
+                self.set_hotspot_rectangle(id, left, top, right, bottom, true);
+            }
+        });
+    }
+
+    /// Moves the selected web object to the rectangle — or copies it
+    /// there (`hotspot.setRectangle`).
+    ///
+    /// The verb addresses the document's selection, so the object is
+    /// selected before it runs.
+    pub(super) fn set_hotspot_rectangle(
+        &mut self,
+        id: doc::ObjectId,
+        left: f64,
+        top: f64,
+        right: f64,
+        bottom: f64,
+        make_copy: bool,
+    ) {
+        self.editor.set_selection(vec![id]);
+        if let Err(error) = self.editor.sync_selection() {
+            self.status = format!("selection failed: {error}");
+            return;
+        }
+        self.run_command(
+            "hotspot.setRectangle",
+            serde_json::json!({
+                "rect": {
+                    "left": left, "top": top, "right": right, "bottom": bottom,
+                },
+                "make_copy": make_copy,
+            }),
+        );
+    }
+
+    /// The background-slice knobs (`CBTb` and the cell-background
+    /// family): the slice's own background, how it repeats, how it
+    /// attaches, and where it sits.
+    ///
+    /// Each control writes one field and leaves the rest alone — the
+    /// engine's tri-state fields make that a one-field payload.
+    fn slice_background_editor(&mut self, ui: &mut egui::Ui, id: doc::ObjectId) {
+        let Some(background) =
+            self.editor
+                .document()
+                .registry
+                .get(id)
+                .and_then(|object| match object {
+                    doc::ObjectData::Slice(slice) => Some(slice.background.clone()),
+                    _ => None,
+                })
+        else {
+            return;
+        };
+        ui.heading("Background");
+        let mut is_background = background
+            .as_ref()
+            .and_then(|background| background.is_background)
+            .unwrap_or(false);
+        if ui
+            .checkbox(&mut is_background, "background slice")
+            .on_hover_text("mark the slice as a background slice")
+            .changed()
+        {
+            self.set_slice_background(id, "is_background", serde_json::json!(is_background));
+        }
+        let repeat = background
+            .as_ref()
+            .and_then(|background| background.repeat)
+            .unwrap_or(0);
+        self.background_combo(ui, id, "repeat", repeat, 3, &REPEAT_LABELS);
+        let attachment = background
+            .as_ref()
+            .and_then(|background| background.attachment)
+            .unwrap_or(0);
+        self.background_combo(ui, id, "attachment", attachment, 1, &["fixed", "scroll"]);
+        let h_position = background
+            .as_ref()
+            .and_then(|background| background.h_position)
+            .unwrap_or(0);
+        self.background_combo(
+            ui,
+            id,
+            "h_position",
+            h_position,
+            3,
+            &["left", "center", "right", "value"],
+        );
+        if h_position == 3 {
+            let h_value = background
+                .as_ref()
+                .and_then(|background| background.h_value)
+                .unwrap_or(0);
+            let mut value = h_value;
+            if ui
+                .add(egui::DragValue::new(&mut value).speed(1.0).prefix("x "))
+                .changed()
+            {
+                self.set_slice_background(id, "h_value", serde_json::json!(value));
+            }
+        }
+        let v_position = background
+            .as_ref()
+            .and_then(|background| background.v_position)
+            .unwrap_or(0);
+        self.background_combo(
+            ui,
+            id,
+            "v_position",
+            v_position,
+            3,
+            &["top", "center", "bottom", "value"],
+        );
+        if v_position == 3 {
+            let v_value = background
+                .as_ref()
+                .and_then(|background| background.v_value)
+                .unwrap_or(0);
+            let mut value = v_value;
+            if ui
+                .add(egui::DragValue::new(&mut value).speed(1.0).prefix("y "))
+                .changed()
+            {
+                self.set_slice_background(id, "v_value", serde_json::json!(value));
+            }
+        }
+    }
+
+    /// One background knob: a dropdown over `0..=max`, labeled with
+    /// `labels`, writing the field only when the choice changes.
+    fn background_combo(
+        &mut self,
+        ui: &mut egui::Ui,
+        id: doc::ObjectId,
+        field: &str,
+        current: i64,
+        max: i64,
+        labels: &[&str],
+    ) {
+        let current = current.clamp(0, max);
+        let mut value = current;
+        egui::ComboBox::from_id_salt((field, id))
+            .selected_text(labels[value as usize])
+            .show_ui(ui, |ui| {
+                for option in 0..=max {
+                    if ui
+                        .selectable_label(value == option, labels[option as usize])
+                        .clicked()
+                    {
+                        value = option;
+                    }
+                }
+            });
+        if value != current {
+            self.set_slice_background(id, field, serde_json::json!(value));
+        }
+    }
+
+    /// Writes one background field (`slice.setBackground`).
+    ///
+    /// The engine's fields are tri-state — absent leaves the field
+    /// alone, a value sets it — so the payload carries the one field
+    /// the user changed.
+    pub(super) fn set_slice_background(
+        &mut self,
+        id: doc::ObjectId,
+        field: &str,
+        value: serde_json::Value,
+    ) {
+        let mut body = serde_json::Map::new();
+        body.insert("id".to_owned(), serde_json::json!(id));
+        body.insert(field.to_owned(), value);
+        self.run_command("slice.setBackground", serde_json::Value::Object(body));
+    }
+
+    /// The selection becomes a web object — CS6's "Copy as Hotspot"
+    /// and "Copy as Slice" (`hotspot.copyToHotspot`).
+    fn web_object_from_selection(&mut self, ui: &mut egui::Ui) {
+        ui.horizontal(|ui| {
+            if ui
+                .button("Selection → hotspot")
+                .on_hover_text("make a hotspot covering the selection")
+                .clicked()
+            {
+                self.copy_selection_to_web_object("hotspot");
+            }
+            if ui
+                .button("Selection → slice")
+                .on_hover_text("make a slice covering the selection")
+                .clicked()
+            {
+                self.copy_selection_to_web_object("slice");
+            }
+        });
+    }
+
+    /// Copies the selection into a new web object of the given kind
+    /// (`hotspot.copyToHotspot`).
+    ///
+    /// CS6 asks what to do when several objects are selected; the
+    /// headless path has no one to ask, so the panel states its
+    /// choice — one web object per selected object.
+    pub(super) fn copy_selection_to_web_object(&mut self, kind: &str) {
+        if self.editor.live_selection().is_empty() {
+            self.status = "nothing selected".to_owned();
+            return;
+        }
+        if let Err(error) = self.editor.sync_selection() {
+            self.status = format!("selection failed: {error}");
+            return;
+        }
+        self.run_command(
+            "hotspot.copyToHotspot",
+            serde_json::json!({
+                "page": self.editor.page,
+                "hotspot_type": kind,
+                "what_if_multiple": "multiple",
+                "make_rectangular": true,
+            }),
+        );
     }
 
     /// Sets a web object's type (`slice.setType`): a foreground
@@ -1155,7 +1438,7 @@ mod tests {
     /// line-bound ones.
     #[test]
     fn the_panel_payload_places_every_shape_family() {
-        let star = AutoShape::Star.payload_in_rect(0, 1, 2, 10.0, 20.0, 100.0);
+        let star = AutoShape::Star.payload_in_rect(0, 1, 2, 10.0, 20.0, 100.0, 12.0);
         assert_eq!(star["centerX"], 60.0);
         assert_eq!(star["centerY"], 70.0);
         assert_eq!(star["outer"], 50.0);
@@ -1163,17 +1446,37 @@ mod tests {
         assert_eq!(star["layer"], 1);
         assert_eq!(star["cell"], 2);
 
-        let lshape = AutoShape::LShape.payload_in_rect(0, 0, 0, 10.0, 20.0, 100.0);
+        let lshape = AutoShape::LShape.payload_in_rect(0, 0, 0, 10.0, 20.0, 100.0, 12.0);
         assert_eq!(lshape["x"], 10.0);
         assert_eq!(lshape["y"], 20.0);
         assert_eq!(lshape["width"], 100.0);
         assert_eq!(lshape["height"], 100.0);
 
-        let measure = AutoShape::Measure.payload_in_rect(0, 0, 0, 10.0, 20.0, 100.0);
+        let measure = AutoShape::Measure.payload_in_rect(0, 0, 0, 10.0, 20.0, 100.0, 12.0);
         assert_eq!(measure["startX"], 10.0);
         assert_eq!(measure["startY"], 70.0);
         assert_eq!(measure["endX"], 110.0);
         assert_eq!(measure["endY"], 70.0);
+    }
+
+    /// The two corner-cut rectangles carry their own corner radius
+    /// and their own corner treatment, and the cut never exceeds
+    /// half the shorter side.
+    #[test]
+    fn the_rectangle_tools_carry_their_corner() {
+        let rounded = AutoShape::RoundedRect.payload_in_rect(0, 0, 0, 10.0, 20.0, 100.0, 8.0);
+        assert_eq!(rounded["kind"], "round");
+        assert_eq!(rounded["corner"], 8.0);
+        assert_eq!(rounded["x"], 10.0);
+        assert_eq!(rounded["width"], 100.0);
+
+        let chamfer = AutoShape::ChamferRect.payload_in_rect(0, 0, 0, 10.0, 20.0, 100.0, 8.0);
+        assert_eq!(chamfer["kind"], "chamfer");
+        assert_eq!(chamfer["corner"], 8.0);
+
+        // A cut wider than half the box is clamped.
+        let clamped = AutoShape::RoundedRect.payload_in_rect(0, 0, 0, 0.0, 0.0, 40.0, 500.0);
+        assert_eq!(clamped["corner"], 20.0);
     }
 
     /// An empty field clears the stored value; a filled one is sent
@@ -1306,5 +1609,122 @@ mod tests {
             "{point:?} is not on the target"
         );
         assert!(!plate_frame.contains(point), "{point:?} is on the receiver");
+    }
+
+    /// A shell holding one text object carrying `text`.
+    fn text_shell(text: &str) -> (Shell, doc::ObjectId) {
+        let mut editor = crate::editor::Editor::untitled();
+        editor
+            .apply(
+                "text.createText",
+                serde_json::json!({
+                    "page": 0, "layer": 0, "cell": 0,
+                    "x": 0.0, "y": 0.0, "width": 80.0, "height": 20.0,
+                    "text": text, "name": null,
+                }),
+            )
+            .expect("the text object is created");
+        let id = editor
+            .document()
+            .registry
+            .iter()
+            .find_map(|(id, data)| match data {
+                doc::ObjectData::Text(_) => Some(id),
+                _ => None,
+            })
+            .expect("the text object is registered");
+        (super::super::tests::gui_shell(editor), id)
+    }
+
+    /// The Find and Replace panel's row reaches the registry as the
+    /// `text.setText` verb — the panel's own verb, not a silent
+    /// in-panel edit that no other surface would see.
+    #[test]
+    fn the_find_and_replace_panel_dispatches_text_set_text() {
+        let (mut shell, id) = text_shell("alpha alpha");
+        shell.replace_text(id, "alpha", "beta");
+        // The effect is read before the undo: undoing the step puts the
+        // old text back, so a check after it would read the state the
+        // panel was supposed to have replaced.
+        let characters = {
+            let Some(doc::ObjectData::Text(text)) = shell.editor.document().registry.get(id) else {
+                panic!("the object is a text object");
+            };
+            text_characters(text)
+        };
+        assert_eq!(characters, "beta beta");
+        assert_eq!(
+            shell.editor.undo().expect("the replacement is undoable"),
+            "text.setText",
+            "the panel dispatches the text verb"
+        );
+    }
+
+    /// The Slices panel's type editor reaches the registry as the
+    /// `slice.setType` verb.
+    #[test]
+    fn the_slices_panel_dispatches_the_slice_verbs() {
+        let (mut shell, plate, _) = slice_shell();
+        assert!(shell.set_slice_kind(plate, SliceKind::Hotspot));
+        // The effect is read before the undo: undoing the step puts the
+        // previous slice type back, so a check after it would read the
+        // type the panel was supposed to have replaced.
+        assert_eq!(
+            slice_of(&shell, plate).slice_type,
+            None,
+            "a hotspot carries no slice type"
+        );
+        assert_eq!(
+            shell.editor.undo().expect("the type change is undoable"),
+            "slice.setType",
+            "the panel dispatches the slice verb"
+        );
+    }
+
+    /// The CSS Properties panel renders the slice's background knobs
+    /// as declarations, and the knob it edits reaches the registry
+    /// as `slice.setBackground`.
+    #[test]
+    fn the_css_properties_panel_dispatches_the_background_verb() {
+        let (mut shell, plate, _) = slice_shell();
+        shell.set_slice_background(plate, "repeat", serde_json::json!(2));
+        // The effect is read before the undo: undoing the step puts the
+        // previous background back, so a check after it would read the
+        // knob the panel was supposed to have set.
+        let slice = slice_of(&shell, plate);
+        assert_eq!(slice.background.as_ref().and_then(|bg| bg.repeat), Some(2));
+        assert!(
+            slice_css(&slice).contains("background-repeat: repeat-x"),
+            "the CSS panel renders the knob it set"
+        );
+        assert_eq!(
+            shell
+                .editor
+                .undo()
+                .expect("the background change is undoable"),
+            "slice.setBackground",
+            "the panel dispatches the background verb"
+        );
+    }
+
+    /// The four web panels the Window menu names are open by default
+    /// in CS6 but closed in this build — the menu row is the only
+    /// way to reach them, so the row must be bound to the toggle and
+    /// the toggle must move the panel's visibility.
+    #[test]
+    fn the_web_panels_open_from_the_window_menu() {
+        for name in [
+            "Slices",
+            "CSS Properties",
+            "Find and Replace",
+            "Common Library",
+        ] {
+            let mut shell = super::super::tests::gui_shell(crate::editor::Editor::untitled());
+            assert!(!shell.panel_shown(name), "{name} starts closed");
+            shell.run_action(&crate::menus::Action::Shell(
+                crate::menus::ShellAction::TogglePanel(name),
+            ));
+            assert!(shell.panel_shown(name), "{name} opens from the menu");
+        }
     }
 }

@@ -1,6 +1,6 @@
 # T27-42 — Audit the DMG script and verify both macOS architectures build
 
-> **RP:** RP-03 · **Priority:** P1 · **Status:** IN PROGRESS (audited 2026-11-12; the build half needs a macOS host)
+> **RP:** RP-03 · **Priority:** P1 · **Status:** IN PROGRESS(audited 2026-11-12; the build half needs a macOS host)
 > **Board row:** [EXECUTION-BOARD.md §6](../release/EXECUTION-BOARD.md)
 > **Depends on:** T27-04
 
@@ -19,13 +19,9 @@ and written; `lipo -info` confirms the slices actually present in the artifact.
 
 **Verification:** `lipo -info <binary>`
 
-**Evidence:** the audit below; [decision
-0101](../../decisions/0101-off-fleet-packaging-recipe-audit.md) records the
-consequences. The `lipo -info` receipt does not exist yet — no macOS host.
+**Evidence:** The audit half is done (`docs/tasks/T27-42-macos-architectures.md`): seven environment assumptions with risks, the bundle identity table, and the universal2 decision — one universal2 DMG, because `lipo` already combines both slices, so the release asset list has one macOS entry. Two defects fixed in the recipe: `NOTICE` was missing from the bundle (Apache-2.0 4(d)) and an unreadable version failed silently (`readonly` masks a command substitution's status). The build half — both slices built, `lipo -info` receipt — has never run. Decision 0101. **Done:** 2026-11-12: audit half closed; the slice receipt is outstanding.
 
-**Blockers:** no macOS host. The build and slice-verification halves of this row are
-still open; T27-43 (bundle and DMG), T27-44 (native tests) and T27-45 (signing) depend
-on them.
+**Blockers:** macOS host
 
 **Stopping condition:** both slices are built and verified, and the universal2 decision
 is recorded. **Half met 2026-11-12** — the decision is recorded and the script is

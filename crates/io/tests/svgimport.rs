@@ -442,6 +442,7 @@ fn square_round_trips_bit_exact() {
 #[test]
 fn opacity_and_blend_wrapper_round_trips() {
     let group = GroupObject {
+        stack_mode: None,
         group_type: 0,
         name: None,
         children: vec![],

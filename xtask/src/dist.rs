@@ -261,6 +261,7 @@ pub fn sbom() -> Result<(), String> {
         .as_array()
         .ok_or("cargo metadata: no packages array")?;
     let mut package_refs = BTreeMap::new();
+    let spdx_ids = spdx_license_ids()?;
     for pkg in packages {
         let name = pkg["name"]
             .as_str()
@@ -283,9 +284,7 @@ pub fn sbom() -> Result<(), String> {
             component["purl"] = serde_json::json!(purl);
         }
         if let Some(license) = pkg["license"].as_str() {
-            component["licenses"] = serde_json::json!([
-                { "license": { "id": license } }
-            ]);
+            component["licenses"] = serde_json::json!([license_choice(license, &spdx_ids)]);
         }
         components.push(component);
     }
@@ -315,16 +314,193 @@ pub fn sbom() -> Result<(), String> {
         "components": components,
         "dependencies": dependencies,
     });
+    // An SBOM that does not conform to the schema, or that does not
+    // match the locked graph it claims to describe, is not evidence of
+    // anything (T27-55).  Both checks run before the file is written,
+    // so a non-conforming artifact never reaches the release surface.
+    validate_against_schema(&bom)?;
+    let locked = cargo_lock_packages(
+        &std::fs::read_to_string(workspace_root().join("Cargo.lock"))
+            .map_err(|e| format!("read Cargo.lock: {e}"))?,
+    );
+    compare_with_lock(&components, &locked)?;
+
     let path = out.join(format!("firecraft-{version}-sbom.cdx.json"));
     let text = serde_json::to_string_pretty(&bom).map_err(|e| format!("encode sbom: {e}"))?;
     std::fs::write(&path, text.as_bytes()).map_err(|e| format!("write {}: {e}", path.display()))?;
     let digest = sha256_hex_file(&path)?;
     eprintln!(
-        "[xtask] dist sbom: {} ({} components, {digest})",
+        "[xtask] dist sbom: {} ({} components, {} locked package(s), schema-valid, {digest})",
         path.display(),
-        components.len()
+        components.len(),
+        locked.len()
     );
     Ok(())
+}
+
+/// The `CycloneDX` 1.5 schema the SBOM is validated against.
+///
+/// Vendored from the `CycloneDX` specification repository under the
+/// Apache-2.0 license; see `docs/ATTRIBUTION.md`.
+const CYCLONEDX_1_5_SCHEMA: &str = include_str!("../schema/cyclonedx-bom-1.5.schema.json");
+
+/// The SPDX identifier list the `CycloneDX` schema points at by name.
+///
+/// The schema's `license.id` is `$ref: "spdx.schema.json"`, so the
+/// validator needs the sibling to resolve it.
+const SPDX_SCHEMA: &str = include_str!("../schema/spdx.schema.json");
+
+/// The `CycloneDX` 1.5 schema, parsed.
+fn cyclonedx_schema() -> Result<serde_json::Value, String> {
+    serde_json::from_str(CYCLONEDX_1_5_SCHEMA)
+        .map_err(|e| format!("parse the CycloneDX 1.5 schema: {e}"))
+}
+
+/// The SPDX identifier schema, parsed.
+fn spdx_schema() -> Result<serde_json::Value, String> {
+    serde_json::from_str(SPDX_SCHEMA).map_err(|e| format!("parse the SPDX schema: {e}"))
+}
+
+/// Validate the SBOM against the `CycloneDX` 1.5 schema.
+///
+/// The schema is the authority on what a `CycloneDX` document is, so the
+/// SBOM is measured against it rather than against this gate's idea of
+/// one.  The validator implements the keywords the schema uses and
+/// refuses a schema that uses any other.
+fn validate_against_schema(bom: &serde_json::Value) -> Result<(), String> {
+    let siblings = BTreeMap::from([("spdx.schema.json".to_owned(), spdx_schema()?)]);
+    let validator = crate::jsonschema::Validator::with_siblings(&cyclonedx_schema()?, siblings)
+        .map_err(|e| format!("the CycloneDX 1.5 schema cannot be used: {e}"))?;
+    let errors = validator.validate(bom);
+    if errors.is_empty() {
+        return Ok(());
+    }
+    Err(format!(
+        "the SBOM does not conform to the CycloneDX 1.5 schema:\n  {}",
+        errors.join("\n  ")
+    ))
+}
+
+/// The packages the lockfile pins, as (name, version) pairs.
+///
+/// Only `[[package]]` sections count: `[[patch.unused]]` entries name
+/// packages the graph does not use, and the SBOM does not list them.
+fn cargo_lock_packages(text: &str) -> Vec<(String, String)> {
+    let mut packages = Vec::new();
+    let mut section = "";
+    let mut name: Option<String> = None;
+    let mut version: Option<String> = None;
+    for line in text.lines() {
+        let line = line.trim();
+        if line.starts_with("[[") && line.ends_with("]]") {
+            if section == "[[package]]"
+                && let (Some(n), Some(v)) = (name.take(), version.take())
+            {
+                packages.push((n, v));
+            }
+            name = None;
+            version = None;
+            section = line;
+            continue;
+        }
+        if section != "[[package]]" {
+            continue;
+        }
+        if let Some(rest) = line.strip_prefix("name = ") {
+            name = Some(lock_value(rest));
+        } else if let Some(rest) = line.strip_prefix("version = ") {
+            version = Some(lock_value(rest));
+        }
+    }
+    if section == "[[package]]"
+        && let (Some(n), Some(v)) = (name, version)
+    {
+        packages.push((n, v));
+    }
+    packages
+}
+
+/// One quoted TOML value, unquoted.
+fn lock_value(text: &str) -> String {
+    text.trim()
+        .trim_start_matches('"')
+        .trim_end_matches('"')
+        .to_owned()
+}
+
+/// Compare the SBOM's components with the locked graph, package by
+/// package.
+///
+/// The SBOM is generated from `cargo metadata --locked`, so the two
+/// inventories come from the same lockfile — and the comparison is
+/// what proves it.  A component the lockfile does not pin, or a pinned
+/// package the SBOM does not list, means one of the two is wrong.
+fn compare_with_lock(
+    components: &[serde_json::Value],
+    locked: &[(String, String)],
+) -> Result<(), String> {
+    let listed: BTreeSet<(String, String)> = components
+        .iter()
+        .filter_map(|component| {
+            let name = component["name"].as_str()?.to_owned();
+            let version = component["version"].as_str()?.to_owned();
+            Some((name, version))
+        })
+        .collect();
+    let pinned: BTreeSet<(String, String)> = locked.iter().cloned().collect();
+
+    let missing: Vec<&(String, String)> = pinned.difference(&listed).collect();
+    let extra: Vec<&(String, String)> = listed.difference(&pinned).collect();
+    if missing.is_empty() && extra.is_empty() {
+        return Ok(());
+    }
+    let mut report = String::new();
+    for (name, version) in &missing {
+        report.push_str(&format!(
+            "\n  in Cargo.lock but not in the SBOM: {name} {version}"
+        ));
+    }
+    for (name, version) in &extra {
+        report.push_str(&format!(
+            "\n  in the SBOM but not in Cargo.lock: {name} {version}"
+        ));
+    }
+    Err(format!(
+        "the SBOM does not match the locked graph:{}",
+        report
+    ))
+}
+
+/// The SPDX identifiers the schema allows as a licence *identifier*.
+///
+/// The schema's `license.id` is `$ref: "spdx.schema.json"` — an enum of
+/// SPDX identifiers — and its `expression` branch carries an SPDX
+/// *expression*.  A crate licensed "MIT OR Apache-2.0" is not an
+/// identifier, so the identifier list is read from the schema rather
+/// than guessed from the licence string.
+fn spdx_license_ids() -> Result<BTreeSet<String>, String> {
+    let schema = spdx_schema()?;
+    let Some(values) = schema["enum"].as_array() else {
+        return Err("the SPDX schema carries no identifier list".to_owned());
+    };
+    Ok(values
+        .iter()
+        .filter_map(|value| value.as_str().map(str::to_owned))
+        .collect())
+}
+
+/// The licence record for one package.
+///
+/// A licence the schema knows as an identifier goes in the `license`
+/// branch; anything else — an SPDX expression, or a licence string the
+/// schema does not list — goes in the `expression` branch, which is
+/// where the schema puts a string that is not an identifier.
+fn license_choice(license: &str, spdx_ids: &BTreeSet<String>) -> serde_json::Value {
+    if spdx_ids.contains(license) {
+        serde_json::json!({ "license": { "id": license } })
+    } else {
+        serde_json::json!({ "expression": license })
+    }
 }
 
 /// Stable `CycloneDX` identity for one Cargo package. Only crates.io
@@ -1932,6 +2108,109 @@ mod sbom_tests {
         assert_eq!(app["dependsOn"][0], "pkg:cargo/serde@1.0.0");
         let root = dependencies.last().unwrap();
         assert_eq!(root["dependsOn"][0], "urn:firecraft:app");
+    }
+
+    /// A lockfile with two real packages and one unused patch entry.
+    const LOCK: &str = "\
+# This file is automatically @generated by Cargo.
+version = 4
+
+[[package]]
+name = \"engine\"
+version = \"0.2.5\"
+
+[[package]]
+name = \"serde\"
+version = \"1.0.219\"
+source = \"registry+https://github.com/rust-lang/crates.io-index\"
+checksum = \"d6f7df5f0ea5c0e0b0a8f0a1e0b3d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2\"
+
+[[patch.unused]]
+name = \"patched\"
+version = \"0.1.0\"
+";
+
+    #[test]
+    fn the_lockfile_reader_counts_packages_and_ignores_unused_patches() {
+        assert_eq!(
+            cargo_lock_packages(LOCK),
+            vec![
+                ("engine".to_owned(), "0.2.5".to_owned()),
+                ("serde".to_owned(), "1.0.219".to_owned()),
+            ]
+        );
+    }
+
+    #[test]
+    fn an_inventory_that_matches_the_lockfile_passes() {
+        let components = vec![
+            serde_json::json!({ "name": "engine", "version": "0.2.5" }),
+            serde_json::json!({ "name": "serde", "version": "1.0.219" }),
+        ];
+        assert!(compare_with_lock(&components, &cargo_lock_packages(LOCK)).is_ok());
+    }
+
+    #[test]
+    fn a_locked_package_the_sbom_omits_is_a_failure() {
+        let components = vec![serde_json::json!({ "name": "engine", "version": "0.2.5" })];
+        let error = compare_with_lock(&components, &cargo_lock_packages(LOCK)).unwrap_err();
+        assert!(error.contains("serde"), "{error}");
+        assert!(error.contains("Cargo.lock"), "{error}");
+    }
+
+    #[test]
+    fn an_sbom_component_the_lockfile_does_not_pin_is_a_failure() {
+        let components = vec![
+            serde_json::json!({ "name": "engine", "version": "0.2.5" }),
+            serde_json::json!({ "name": "serde", "version": "1.0.219" }),
+            serde_json::json!({ "name": "ghost", "version": "0.0.1" }),
+        ];
+        let error = compare_with_lock(&components, &cargo_lock_packages(LOCK)).unwrap_err();
+        assert!(error.contains("ghost"), "{error}");
+    }
+
+    #[test]
+    fn the_vendored_schema_uses_only_keywords_the_validator_implements() {
+        let siblings = BTreeMap::from([(
+            "spdx.schema.json".to_owned(),
+            serde_json::from_str(SPDX_SCHEMA).expect("the SPDX schema parses"),
+        )]);
+        crate::jsonschema::Validator::with_siblings(
+            &serde_json::from_str(CYCLONEDX_1_5_SCHEMA).expect("the vendored schema parses"),
+            siblings,
+        )
+        .expect("the vendored schema is usable");
+    }
+
+    #[test]
+    fn a_minimal_document_conforms_and_a_missing_field_does_not() {
+        let good = serde_json::json!({
+            "bomFormat": "CycloneDX",
+            "specVersion": "1.5",
+            "version": 1
+        });
+        assert!(validate_against_schema(&good).is_ok());
+
+        let bad = serde_json::json!({ "specVersion": "1.5", "version": 1 });
+        let error = validate_against_schema(&bad).unwrap_err();
+        assert!(error.contains("bomFormat"), "{error}");
+    }
+
+    #[test]
+    fn a_licence_the_schema_lists_is_an_identifier_and_an_expression_is_not() {
+        let ids = spdx_license_ids().unwrap();
+        assert!(
+            ids.contains("MIT"),
+            "the SPDX identifier list is missing MIT"
+        );
+        assert!(!ids.contains("MIT OR Apache-2.0"));
+
+        let identifier = license_choice("MIT", &ids);
+        assert_eq!(identifier["license"]["id"], "MIT");
+
+        let expression = license_choice("MIT OR Apache-2.0", &ids);
+        assert_eq!(expression["expression"], "MIT OR Apache-2.0");
+        assert!(expression.get("license").is_none());
     }
 }
 

@@ -19,11 +19,9 @@ and non-ASCII characters work; the results are recorded.
 
 **Verification:** the Windows runner release receipt.
 
-**Evidence:** the 2026-11-06 Wine smoke covered a CLI `import` → `export` PNG round
-trip and a GUI launch showing a real 1024×768 "FireCraft" window on Xvfb. Wine is
-supplementary runtime evidence, not the Windows target.
+**Evidence:** the 2026-11-06 Wine smoke covered a CLI `import` → `export` PNG round trip and a GUI launch showing a real 1024×768 "FireCraft" window on Xvfb; Wine is supplementary runtime evidence, not the Windows target.
 
-**Blockers:** a clean Windows VM.
+**Blockers:** a clean Windows VM
 
 **Stopping condition:** the full round trip passes on a clean Windows VM, with the
 receipt attached.
