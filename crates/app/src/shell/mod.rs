@@ -5,7 +5,7 @@
 //! in [`dialogs`]; real modal dialogs land with desktop integration).
 pub(crate) use dialogs::{
     CanvasColorDialog, CanvasSizeDialog, DisplayState, EnvDialogs, ExportDialog, FeatherDialog,
-    ImageSizeDialog, NumericTransformDialog,
+    ImageSizeDialog, NumericTransformDialog, ScaleToDialog,
 };
 pub(crate) use filters_ui::{
     FILTER_BOOL_KEYS, FILTER_FAMILIES, FILTER_PARAMS, FilterPreset, filter_preset,
@@ -137,6 +137,8 @@ pub struct Shell {
     export_dialog: Option<ExportDialog>,
     /// Open Numeric Transform dialog, if any.
     pub(crate) numeric_transform: Option<NumericTransformDialog>,
+    /// Open Scale To dialog, if any.
+    pub(crate) scale_to: Option<ScaleToDialog>,
     /// Open Feather dialog, if any.
     pub(crate) feather: Option<FeatherDialog>,
     /// Open Canvas Size dialog, if any.
@@ -536,6 +538,7 @@ impl Shell {
             status: "ready".to_owned(),
             export_dialog: None,
             numeric_transform: None,
+            scale_to: None,
             feather: None,
             canvas_size: None,
             canvas_color: None,
@@ -1657,6 +1660,19 @@ impl Shell {
             }
             menus::ShellAction::NumericTransform => {
                 self.numeric_transform = Some(NumericTransformDialog::default());
+            }
+            menus::ShellAction::ScaleTo => {
+                let ids = self.editor.live_selection();
+                if ids.is_empty() {
+                    self.status = "nothing selected".to_owned();
+                } else if let Some(bounds) = union_selection_bounds(self.editor.document(), &ids) {
+                    self.scale_to = Some(ScaleToDialog {
+                        width: bounds.width(),
+                        height: bounds.height(),
+                    });
+                } else {
+                    self.status = "the selection has no bounds".to_owned();
+                }
             }
             menus::ShellAction::TransformMode(mode) => {
                 self.editor.transform_mode = match mode {
@@ -3381,6 +3397,12 @@ impl eframe::App for Shell {
                 .resizable(false)
                 .collapsible(false)
                 .show(ui.ctx(), |ui| self.numeric_transform_dialog_ui(ui));
+        }
+        if self.scale_to.is_some() {
+            egui::Window::new("Scale To")
+                .resizable(false)
+                .collapsible(false)
+                .show(ui.ctx(), |ui| self.scale_to_dialog_ui(ui));
         }
         if self.feather.is_some() {
             egui::Window::new("Feather Selection")
@@ -5456,6 +5478,42 @@ mod tests {
             "the whole dialog is one undo step"
         );
         assert!(shell.numeric_transform.is_none(), "OK closes the dialog");
+    }
+
+    /// Modify ▸ Transform ▸ Scale To…: the dialog seeds from the
+    /// selection's bounds and resizes it to the exact box through
+    /// `object.resize`.
+    #[test]
+    fn scale_to_dialog_resizes_to_the_exact_box() {
+        let mut shell = gui_shell(gui_editor());
+        let id = shell.editor.current_cell().unwrap().elements[0];
+        shell.editor.set_selection(vec![id]);
+        let before = crate::editor::bounds_of(&shell_path(&shell, id));
+
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::ScaleTo));
+        let seeded = shell.scale_to.clone().expect("the dialog opened");
+        assert_eq!(
+            (seeded.width, seeded.height),
+            (before.width(), before.height()),
+            "the fields seed from the selection's bounds"
+        );
+
+        shell.apply_scale_to(&ScaleToDialog {
+            width: 80.0,
+            height: 10.0,
+        });
+        let after = crate::editor::bounds_of(&shell_path(&shell, id));
+        assert_eq!(
+            (after.width(), after.height()),
+            (80.0, 10.0),
+            "the selection took the exact box"
+        );
+        assert_eq!(
+            shell.editor.session.undo().expect("an undo step"),
+            "object.resize",
+            "the dialog dispatched the resize"
+        );
+        assert!(shell.scale_to.is_none(), "OK closes the dialog");
     }
 
     /// The Layers panel's three mutating surfaces: rename, the

@@ -115,6 +115,10 @@ pub enum ShellAction {
     /// Modify ▸ Transform ▸ Numeric Transform (Scale/Skew route here
     /// too): opens the numeric dialog over the live selection.
     NumericTransform,
+    /// Modify ▸ Transform ▸ Scale To…: resize the selection to an
+    /// exact pixel box, keeping its top-left corner in place
+    /// (`object.resize`).
+    ScaleTo,
     /// Set how the selection's transform handles behave: CS6's Free
     /// Transform (scale, the default) vs Distort (corner handles move
     /// independently, setting the quadrangle).
@@ -1532,6 +1536,9 @@ pub static MODIFY: Menu = Menu {
                     "",
                     Action::Shell(ShellAction::NumericTransform),
                 ),
+                // id 0: the static mirror carries no resource id for
+                // this row (the Filters submenu's convention).
+                item(0, "Scale To...", "", Action::Shell(ShellAction::ScaleTo)),
                 item(
                     35061,
                     "Skew",
@@ -3500,6 +3507,7 @@ pub fn action_name(action: Action) -> String {
             ShellAction::SaveAll => "Save all".into(),
             ShellAction::Revert => "Revert".into(),
             ShellAction::NumericTransform => "Numeric Transform".into(),
+            ShellAction::ScaleTo => "Scale To".into(),
             ShellAction::TransformMode(TransformMode::Scale) => "Free Transform".into(),
             ShellAction::TransformMode(TransformMode::Distort) => "Distort".into(),
             ShellAction::Palette => "Command palette".into(),
