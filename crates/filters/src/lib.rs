@@ -65,9 +65,19 @@ pub enum SurfaceError {
     /// A zero-sized image is never valid: the compositor cannot place it.
     ZeroDimension,
     /// `width * height * 4` does not fit the platform `usize`.
-    TooLarge { width: u32, height: u32 },
+    TooLarge {
+        /// The image width in pixels.
+        width: u32,
+        /// The image height in pixels.
+        height: u32,
+    },
     /// The pixel slice is not `width * height * 4` bytes.
-    PixelCountMismatch { expected: usize, actual: usize },
+    PixelCountMismatch {
+        /// The byte count the dimensions call for.
+        expected: usize,
+        /// The byte count the slice actually carries.
+        actual: usize,
+    },
 }
 
 impl std::fmt::Display for SurfaceError {
