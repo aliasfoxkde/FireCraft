@@ -1780,6 +1780,34 @@ mod tests {
         );
     }
 
+    /// The slice's background knob reaches the registry as the
+    /// `slice.setBackground` verb.
+    ///
+    /// The knob is the *Slices* panel's editor; the CSS Properties
+    /// panel only renders what it produced. The effect is read before
+    /// the undo: undoing the step puts the previous background back, so
+    /// a check after it would read the value the knob was supposed to
+    /// have set.
+    #[test]
+    fn the_background_knob_reaches_the_registry_as_a_verb() {
+        let (mut shell, plate, _) = slice_shell();
+        shell.set_slice_background(plate, "repeat", serde_json::json!(2));
+        let slice = slice_of(&shell, plate);
+        assert_eq!(slice.background.as_ref().and_then(|bg| bg.repeat), Some(2));
+        assert!(
+            slice_css(&slice).contains("background-repeat: repeat-x"),
+            "the CSS panel renders the knob it set"
+        );
+        assert_eq!(
+            shell
+                .editor
+                .undo()
+                .expect("the background change is undoable"),
+            "slice.setBackground",
+            "the panel dispatches the background verb"
+        );
+    }
+
     /// The Common Library panel places an instance through
     /// `symbol.createInstance`, naming the symbol it placed.
     #[test]

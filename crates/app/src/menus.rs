@@ -2286,6 +2286,42 @@ pub static MENUBAR: &[Menu] = &[
     FILE, EDIT, VIEW, SELECT, MODIFY, TEXT, COMMANDS, FILTERS, WINDOW, HELP,
 ];
 
+/// The menu-bar census: `(total items, inert items)` over the whole bar.
+///
+/// This is the single source of truth for the inert count the docs and
+/// the `xtask climb` altimeter quote (scoreboard S4). It walks every
+/// submenu recursively; `Entry::Sep` separators are not items and do
+/// not count. A row is inert when its action is [`Action::Inert`] — a
+/// CS6 row the shell draws but does not yet execute.
+#[must_use]
+pub fn menu_census() -> (usize, usize) {
+    let mut total = 0usize;
+    let mut inert = 0usize;
+    for menu in MENUBAR {
+        for item in walk_items(menu.entries) {
+            total += 1;
+            if matches!(item.action, Action::Inert) {
+                inert += 1;
+            }
+        }
+    }
+    (total, inert)
+}
+
+/// Walks `entries` into a flat, in-order list of items, descending into
+/// submenus. `Entry::Sep` separators are not items and are skipped.
+fn walk_items(entries: &'static [Entry]) -> Vec<&'static Item> {
+    let mut items = Vec::new();
+    for entry in entries {
+        match entry {
+            Entry::Sep => {}
+            Entry::Item(item) => items.push(item),
+            Entry::Sub(_, sub) => items.extend(walk_items(sub)),
+        }
+    }
+    items
+}
+
 /// One shortcut modifier triple.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Mods {
@@ -3701,16 +3737,11 @@ mod tests {
     /// when the count falls, ratchet this down to the new number.
     const INERT_CEILING: usize = 2;
 
+    /// The canonical walk lives on the app side as
+    /// [`super::walk_items`]; the tests keep this one-line alias so the
+    /// existing call sites read unchanged.
     fn walk(entries: &'static [Entry]) -> Vec<&'static Item> {
-        let mut items = Vec::new();
-        for entry in entries {
-            match entry {
-                Entry::Sep => {}
-                Entry::Item(item) => items.push(item),
-                Entry::Sub(_, sub) => items.extend(walk(sub)),
-            }
-        }
-        items
+        walk_items(entries)
     }
 
     /// The ten-menu CS6 bar, in order — the structural headline of M13.
@@ -3783,17 +3814,7 @@ mod tests {
 
     /// (total items, inert items) over the whole bar.
     fn census() -> (usize, usize) {
-        let mut total = 0usize;
-        let mut inert = 0usize;
-        for menu in MENUBAR {
-            for item in walk(menu.entries) {
-                total += 1;
-                if matches!(item.action, Action::Inert) {
-                    inert += 1;
-                }
-            }
-        }
-        (total, inert)
+        menu_census()
     }
 
     /// Prints every inert row with its menu, id, and label — the
@@ -4104,6 +4125,33 @@ mod tests {
             "HTML Preview",
         ] {
             assert!(labels.contains(&expected), "Window menu missing {expected}");
+        }
+    }
+
+    /// The four web panels this build adds are closed by default, so
+    /// their Window-menu rows are the only way to reach them. Each
+    /// row must be bound to the panel toggle — an unbound row is an
+    /// inert menu entry.
+    #[test]
+    fn the_web_panels_have_a_bound_window_row() {
+        let window = MENUBAR
+            .iter()
+            .find(|menu| menu.label == "Window")
+            .expect("the bar carries a Window menu");
+        let items = walk(window.entries);
+        for panel in [
+            "Slices",
+            "CSS Properties",
+            "Find and Replace",
+            "Common Library",
+        ] {
+            assert!(
+                items.iter().any(|item| matches!(
+                    item.action,
+                    Action::Shell(ShellAction::TogglePanel(name)) if name == panel
+                )),
+                "the Window menu has no bound row for {panel}"
+            );
         }
     }
 

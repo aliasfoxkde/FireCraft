@@ -1,0 +1,89 @@
+{
+  "bundle": {
+    "files": 5,
+    "label": "v0.2.5 firecraft-web-0.2.5.zip (github release asset)",
+    "manifest_sha256": "faf9b71633a1ad7204b96eb61368e64829d7fe1d8c8e15d45d10b78da00ab781"
+  },
+  "deployment": {
+    "deployment_id": "unknown",
+    "deployment_id_reason": "the deployment id comes from the Cloudflare Pages API, which needs a CLOUDFLARE_API_TOKEN; without it the report names the URL only",
+    "files": 5,
+    "manifest_sha256": "61e3aeda5e8dcc340725a52c6a421422198f29b9ee8c1ed9a91832f372985261",
+    "url": "https://firecraft-web.pages.dev"
+  },
+  "differences": [
+    "firecraft-web-2274ac8c2925b61d.js",
+    "firecraft-web-2274ac8c2925b61d_bg.wasm",
+    "firecraft-web-f9dbe2f14305b2d9.js",
+    "firecraft-web-f9dbe2f14305b2d9_bg.wasm",
+    "host.html",
+    "index.html"
+  ],
+  "files": [
+    {
+      "actual_sha256": "7d039c36f28e9b1f67f5ee45fd7bdfd705873e716cc13b09d093be19ea0a3ffa",
+      "bytes": 250,
+      "expected_sha256": "7d039c36f28e9b1f67f5ee45fd7bdfd705873e716cc13b09d093be19ea0a3ffa",
+      "name": "appinfo.json",
+      "served_bytes": 250,
+      "served_content_type": "application/json",
+      "served_sha256": "7d039c36f28e9b1f67f5ee45fd7bdfd705873e716cc13b09d093be19ea0a3ffa",
+      "status": "match"
+    },
+    {
+      "actual_sha256": "be288850f59400b3e890ebd46effa496c1107dac64487f0489a2aee537661bbf",
+      "bytes": 86028,
+      "expected_sha256": "be288850f59400b3e890ebd46effa496c1107dac64487f0489a2aee537661bbf",
+      "name": "firecraft-web-f9dbe2f14305b2d9.js",
+      "note": "the deployment served an HTML page for this name, so the file is not deployed under it",
+      "served_bytes": 2409,
+      "served_content_type": "text/html; charset=utf-8",
+      "served_sha256": "ab347f1f9cabcd92693c862508da05a20158e05abf48a5d790df4fa82ecf1f80",
+      "status": "differ"
+    },
+    {
+      "actual_sha256": "a8a4fa4f28aa81a9e5fa6bb2a24eec1fe8a38b7ae4759333e12cc8c38b201865",
+      "bytes": 21238451,
+      "expected_sha256": "a8a4fa4f28aa81a9e5fa6bb2a24eec1fe8a38b7ae4759333e12cc8c38b201865",
+      "name": "firecraft-web-f9dbe2f14305b2d9_bg.wasm",
+      "note": "the deployment served an HTML page for this name, so the file is not deployed under it",
+      "served_bytes": 2409,
+      "served_content_type": "text/html; charset=utf-8",
+      "served_sha256": "ab347f1f9cabcd92693c862508da05a20158e05abf48a5d790df4fa82ecf1f80",
+      "status": "differ"
+    },
+    {
+      "actual_sha256": "379720ccf30a557fbefd0f01d72be25f1d91ce4e0992b025c9dab29427e7fcaa",
+      "bytes": 1995,
+      "expected_sha256": "379720ccf30a557fbefd0f01d72be25f1d91ce4e0992b025c9dab29427e7fcaa",
+      "name": "host.html",
+      "served_bytes": 2209,
+      "served_content_type": "text/html; charset=utf-8",
+      "served_sha256": "c2da096511be46b417f7712dda957e245537fc255a294551ec1908f62ca7530e",
+      "status": "differ"
+    },
+    {
+      "actual_sha256": "fb2a51405aeb3e63a061daf949391e901dfc8e7d09476f31b409a8b56879e2b9",
+      "bytes": 2195,
+      "expected_sha256": "fb2a51405aeb3e63a061daf949391e901dfc8e7d09476f31b409a8b56879e2b9",
+      "name": "index.html",
+      "served_bytes": 2409,
+      "served_content_type": "text/html; charset=utf-8",
+      "served_sha256": "ab347f1f9cabcd92693c862508da05a20158e05abf48a5d790df4fa82ecf1f80",
+      "status": "differ"
+    }
+  ],
+  "generated": "2026-11-16T03:36:27Z",
+  "inventory": {
+    "only_in_bundle": [
+      "firecraft-web-f9dbe2f14305b2d9.js",
+      "firecraft-web-f9dbe2f14305b2d9_bg.wasm"
+    ],
+    "only_in_deployment": [
+      "firecraft-web-2274ac8c2925b61d.js",
+      "firecraft-web-2274ac8c2925b61d_bg.wasm"
+    ]
+  },
+  "result": "differences",
+  "schema": "firecraft.deployment-reconciliation/1"
+}

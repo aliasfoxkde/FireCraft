@@ -19,10 +19,9 @@ Hotspot → Pen, and fail against the pre-fix behaviour.
 
 **Verification:** `cargo test -p app`
 
-**Evidence:** CodeRabbit Major on `crates/app/src/editor.rs:3271-3276` — Pen points
-folded into a Hotspot commit.
+**Evidence:** CodeRabbit Major on `crates/app/src/editor.rs:3271-3276` (Pen points folded into a Hotspot commit)
 
-**Blockers:** none.
+**Blockers:** —
 
 **Stopping condition:** the tests exist, they fail on the old behaviour and pass on the
 new, and the fix is committed with its receipt.

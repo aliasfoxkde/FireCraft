@@ -21,7 +21,9 @@
 //! requirements, the DEB control file and `Cargo.lock` — its package
 //! entries and its dependency references),
 //! `reachability` (the shell's
-//! share of the command registry, against a rising floor),
+//! share of the command registry, against a rising floor), `climb`
+//! (the scoreboard ratchet: measure S2–S8/S12 from the tree and fail
+//! when a metric moves the wrong way against the last recorded row),
 //! `panel-snapshot` (the CS6 panel inventory, against a committed
 //! golden), `dist --manifest` / `dist --verify-manifest` (the
 //! machine-readable release manifest and its verification).
@@ -30,6 +32,7 @@
 
 mod aegis;
 mod changelog;
+mod climb;
 mod corpus;
 mod coverage;
 mod dist;
@@ -37,6 +40,7 @@ mod floor;
 mod fuzz;
 mod golden;
 mod hero;
+mod jsonschema;
 mod layers;
 mod library;
 mod panelsnapshot;
@@ -55,7 +59,7 @@ mod webgolden;
 
 use std::process::ExitCode;
 
-const USAGE: &str = "usage: cargo run -p xtask -- <ci [--full]|ci-no-fmt|aegis [--bless|--report]|coverage [--bless|--measure]|layers|wasm|corpus [--report]|corpus-gen|library-gen|hero-gen|styles-gen|scripts|floor|golden [--bless]|svg-golden [--bless]|svg-roundtrip [--measure]|web-golden [--bless|--measure]|perf [--bless|--measure]|dist --web|--native|--source|--sbom|--manifest|--verify-manifest|fuzz|fuzz-quick|panic-hunt|reachability [--bless]|panel-snapshot [--bless]|shortcuts [--bless]|parity|scorecard|changelog [--check|--cut <version>]|stamps|stamp <version>>";
+const USAGE: &str = "usage: cargo run -p xtask -- <ci [--full]|ci-no-fmt|aegis [--bless|--report]|coverage [--bless|--measure]|layers|wasm|corpus [--report]|corpus-gen|library-gen|hero-gen|styles-gen|scripts|floor|golden [--bless]|svg-golden [--bless]|svg-roundtrip [--measure]|web-golden [--bless|--measure]|perf [--bless|--measure]|dist --web|--native|--source|--sbom|--manifest|--verify-manifest|fuzz|fuzz-quick|panic-hunt|reachability [--bless|--list]|climb [--append [rung]|--check]|panel-snapshot [--bless]|shortcuts [--bless]|parity|scorecard|changelog [--check|--cut <version>]|stamps|stamp <version>>";
 
 fn main() -> ExitCode {
     match std::env::args().nth(1).as_deref() {
@@ -81,7 +85,17 @@ fn main() -> ExitCode {
         Some("floor") => finish("floor", floor::run()),
         Some("reachability") => match std::env::args().nth(2).as_deref() {
             Some("--bless") => finish("reachability --bless", reachability::bless()),
+            Some("--list") => finish("reachability --list", reachability::list()),
             _ => finish("reachability", reachability::run()),
+        },
+        Some("climb") => match std::env::args().nth(2).as_deref() {
+            Some("--append") => {
+                let rung = std::env::args().nth(3);
+                finish("climb --append", climb::append(rung.as_deref()))
+            }
+            Some("--check") => finish("climb --check", climb::check()),
+            Some(rung) => finish("climb", climb::emit(Some(rung))),
+            None => finish("climb", climb::emit(None)),
         },
         Some("panel-snapshot") => match std::env::args().nth(2).as_deref() {
             Some("--bless") => finish("panel-snapshot --bless", panelsnapshot::bless()),
@@ -250,6 +264,7 @@ fn run_ci(full: Option<&str>, skip_fmt: bool) -> ExitCode {
         ("perf", perf::run),
         ("fuzz", fuzz::quick),
         ("reachability", reachability::run),
+        ("climb", climb::check),
         ("panel-snapshot", panelsnapshot::run),
         ("shortcuts", shortcuts::run),
         ("parity", status::parity),

@@ -21,10 +21,9 @@ notarization.
 
 **Verification:** `codesign -dv --verbose=4 <app> && spctl -a -vvv <app>`
 
-**Evidence:** no Developer ID credential is configured anywhere; notarization and
-signing are listed as not configured in the artifact matrix.
+**Evidence:** No Developer ID credential configured
 
-**Blockers:** no Developer ID credential.
+**Blockers:** No Developer ID credential
 
 **Stopping condition:** `spctl` accepts the artifact and the notarization log is
 attached, or the row stays open naming the missing credential.

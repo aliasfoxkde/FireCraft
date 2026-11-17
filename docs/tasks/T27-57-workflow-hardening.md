@@ -1,6 +1,6 @@
 # T27-57 — Harden the release workflows
 
-> **RP:** RP-06 · **Priority:** P1 · **Status:** IN PROGRESS
+> **RP:** RP-06 · **Priority:** P1 · **Status:** BUILD VERIFIED
 > **Board row:** [EXECUTION-BOARD.md §6](../release/EXECUTION-BOARD.md)
 > **Depends on:** T27-18
 
@@ -107,8 +107,9 @@ flag, so it does not yet demonstrate this mode. The three self-tests and the pin
 check are in the GitHub backup CI; mirroring them into the GitForge pipeline
 waits for the `:2` pipeline shape (PR #123, PR #129).
 
-**Blockers:** none. The remaining work is the end-to-end rehearsal run and the
-GitForge mirror.
+**Evidence:** **Pinning implemented 2026-11-11** (decision [0099](../decisions/0099-workflow-actions-are-pinned.md)): all 19 action references in `ci.yml`, `release.yml` and `deploy-site.yml` name a 40-hex commit SHA with the version in a trailing comment; `scripts/validate_workflow_pins.py` fails the CI on an unpinned reference, and `scripts/validate_workflow_pins-selftest.sh` demonstrates each failure mode with one deliberately broken input. Least-privilege permissions were already declared (`contents: read` at workflow level, `contents: write` only for the draft-release job) and the aggregate gate already fails closed on a missing, empty, misnamed or digest-mismatched artifact. The deploy trigger no longer includes the workflow's own file, so a workflow edit is not a production publication. **Both remaining criteria implemented 2026-11-12** (decision [0100](../decisions/0100-release-mode-classification-and-a-tested-release-gate.md)): the aggregate gate moved out of inline YAML into `scripts/validate_release_aggregate.sh`, which now also rejects an artifact the release does not publish and requires every required platform (`x86_64-unknown-linux-gnu`, `wasm32-unknown-unknown`) to be represented in the release manifest; `scripts/validate_release_aggregate-selftest.sh` breaks a complete artifact set one thing at a time — missing, empty, extra artifact, checksum mismatch, manifest version mismatch, manifest digest mismatch, an unlisted asset, an unknown schema, a skipped platform, and a platform the manifest does not represent. A safe test-release mode exists: `scripts/classify_release_mode.sh` maps `vX.Y.Z` to production and `vX.Y.Z-dryrun.N` to a rehearsal and refuses every other shape; a manual `workflow_dispatch` run may only rehearse; a rehearsal release is a prerelease titled `TEST <version>` whose notes carry a do-not-publish banner, and its disposable tag is created at the commit that built the artifacts. `scripts/classify_release_mode-selftest.sh` demonstrates each refused shape, and `tests/release-assets-selftest.sh` drives the `gh` argument vector against a stub. **Toolchain pinned 2026-11-12** (decision [0102](../decisions/0102-coverage-floor-is-measured-with-a-pinned-toolchain.md)): the workflows install `toolchain: 1.99.1` and the CI image is `rust:1.99.1-slim-bookworm`, because the unpinned `stable` moved the coverage floor silently — rustc 1.100.0 measures a byte-identical Rust tree at 77.0%/76.1% where 1.99.1 measures 81.9%/78.9%, while the GitForge image stayed on 1.99. The gate now names the compiler that measured it. **Outstanding**: the rehearsal path has not been run end to end through `workflow_dispatch` (it needs this workflow on `main`); the manual rehearsal in issue #99 predates the `TEST` title and the prerelease flag **Done:** 2026-11-12: `gate` green on head `002eb56` (PR #130, merged 2026-11-12).
+
+**Blockers:** —
 
 **Stopping condition:** every `uses:` is a full commit SHA, the permission set is
 least-privilege, and the failure-mode checks are demonstrated with one deliberately

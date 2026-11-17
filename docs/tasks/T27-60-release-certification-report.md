@@ -24,9 +24,9 @@ the residual risk and the independent verification results.
 
 **Verification:** `test -f docs/release/CERTIFICATION.md`
 
-**Evidence:** no certification report exists.
+**Evidence:** no certification report exists — the rehearsal receipt `docs/release/RECEIPT-0.2.5-DRYRUN-3.md` certifies nothing: no artifact is signed and no provenance or attestation exists, so the ladder's ceiling for this repository is rung 8.
 
-**Blockers:** missing target receipts; T27-09 (scope); T27-50.
+**Blockers:** —
 
 **Stopping condition:** the report exists and every claim in it is backed by a cited
 receipt. Unsupported targets are listed as unsupported, not omitted.

@@ -112,6 +112,43 @@ impl Floor {
     }
 }
 
+/// `xtask reachability --list`: print the registry commands the shell
+/// does not bind, one per line, sorted, to stdout.
+///
+/// stdout stays the data channel (AGENTS.md: xtask prints diagnostics to
+/// stderr so output stays pipeable), so the summary line goes to stderr
+/// and only the list goes to stdout — the output can be piped into a
+/// task list or a test harness.
+pub fn list() -> Result<(), String> {
+    let root = workspace_root();
+    let registry = engine::catalog::ids();
+    let bound = bound_commands(&root.join(SHELL_SOURCE), &registry)?;
+    let lines = unreachable_lines(&registry, &bound);
+    eprintln!(
+        "[xtask] reachability --list: {} of {} registry commands are unreachable",
+        lines.len(),
+        registry.len()
+    );
+    for id in &lines {
+        crate::util::write_stdout_line(id)?;
+    }
+    Ok(())
+}
+
+/// The registry ids the shell does not bind, sorted, as the lines
+/// `--list` prints.
+///
+/// The list is derived, never hand-written: the gate reads the shell
+/// crate's own source (the same scan the floor uses), so a binding that
+/// is added or removed moves the list without a second edit.
+fn unreachable_lines(registry: &[&str], bound: &BTreeSet<String>) -> Vec<String> {
+    registry
+        .iter()
+        .filter(|id| !bound.contains(**id))
+        .map(|id| (*id).to_owned())
+        .collect()
+}
+
 fn run_inner(bless: bool) -> Result<(), String> {
     let root = workspace_root();
     let registry = engine::catalog::ids();
@@ -205,7 +242,7 @@ fn evaluate(
 /// literal it passes to `run_command` / `apply`. The scan reads the
 /// shell crate's own source rather than a hand-maintained table, so
 /// the number cannot drift away from the code.
-fn bound_commands(dir: &Path, registry: &[&str]) -> Result<BTreeSet<String>, String> {
+pub(crate) fn bound_commands(dir: &Path, registry: &[&str]) -> Result<BTreeSet<String>, String> {
     let known: BTreeSet<&str> = registry.iter().copied().collect();
     let mut bound = BTreeSet::new();
     for file in rust_files(dir)? {
@@ -565,6 +602,28 @@ mod tests {
         assert_eq!(parsed.shell_bound_commands, 146);
         assert_eq!(parsed.reachable_hundredths, 5959);
         assert_eq!(parsed.floor_hundredths, 5959);
+    }
+
+    /// The `--list` selection: exactly the registry ids the shell does
+    /// not bind, sorted, one per line — the output a pipe can consume.
+    #[test]
+    fn the_list_is_the_unbound_registry_ids_sorted() {
+        let (registry, bound) = sample();
+        let lines = unreachable_lines(&registry, &bound);
+        assert_eq!(lines, vec!["text.setAttrs"]);
+    }
+
+    /// An empty registry and a fully-bound registry both list nothing.
+    #[test]
+    fn the_list_is_empty_when_everything_is_reachable() {
+        let registry: Vec<&str> = vec![];
+        let empty: BTreeSet<String> = BTreeSet::new();
+        assert!(unreachable_lines(&registry, &empty).is_empty());
+
+        let (registry, bound) = sample();
+        let mut all = bound;
+        all.insert("text.setAttrs".to_owned());
+        assert!(unreachable_lines(&registry, &all).is_empty());
     }
 
     /// The scan helper the gate uses, over one source text.

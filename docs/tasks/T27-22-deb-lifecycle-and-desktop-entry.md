@@ -1,6 +1,6 @@
 # T27-22 — Verify DEB reinstall/remove/purge and ship a desktop entry and icon
 
-> **RP:** RP-01 · **Priority:** P0 · **Status:** NOT STARTED
+> **RP:** RP-01 · **Priority:** P0 · **Status:** IMPLEMENTED
 > **Board row:** [EXECUTION-BOARD.md §6](../release/EXECUTION-BOARD.md)
 > **Depends on:** T27-21
 
@@ -21,12 +21,9 @@ installed binary.
 
 **Verification:** `dpkg -l; dpkg -P; dpkg-deb --contents … | grep -E 'desktop|icons'`
 
-**Evidence:** `build_deb` currently stages only `usr/bin/{firecraft,firecraft-cli}` and
-`usr/share/doc/firecraft/copyright` — no `.desktop`, no icons, no MIME association.
-The 2026-11-06 clean-container smoke exercised the CLI only, so it does not cover
-desktop integration.
+**Evidence:** The row's premise is fixed in the tree. `build_deb` stages the desktop entry and the icon from the in-tree originals — `usr/share/applications/firecraft.desktop` and `usr/share/icons/hicolor/256x256/apps/firecraft.png` (`xtask/src/dist.rs:973`) — and the gate reads the built package back with `dpkg-deb --contents` and fails closed when either is missing. **The exercise against the fixed package has not been run**: [`packaging/deb/verify-install.sh`](https://github.com/aliasfoxkde/FireCraft/blob/main/packaging/deb/verify-install.sh) carries the eight stages (install, desktop entry, icon, CLI, CLI document round trip, GUI launch, upgrade, uninstall, reinstall), and the recorded negative control is the *published* v0.2.3 package, which installs cleanly and then fails stage 2 — no desktop entry (audit §11.6). The defect is fixed; the reinstall / remove / purge receipt against a package that carries the desktop entry does not exist. **Done:** 2026-11-11: the desktop entry and the icon landed in the DEB payload (PR #107); the clean-container receipt is outstanding.
 
-**Blockers:** none beyond T27-21.
+**Blockers:** the clean-container eight-stage run against a package built from the fixed tree (the CI image and a built .deb)
 
 **Stopping condition:** the package contents include the desktop entry and icons, and
 the install → reinstall → remove → purge sequence passes with the outputs recorded.

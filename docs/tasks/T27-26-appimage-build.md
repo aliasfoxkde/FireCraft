@@ -19,11 +19,9 @@ closed on a missing desktop entry as it did before.
 
 **Verification:** `packaging/build-appimage.sh && ls -l dist/firecraft-*-linux-x86_64.AppImage`
 
-**Evidence:** the 2026-11-06 linuxdeploy run failed with "ERROR: Icon entry missing"
-and produced no image; the fix landed as `a4d74a0` (in-tree original icon + `Icon=firecraft`
-+ staging). A full linuxdeploy run has not been re-executed since.
+**Evidence:** `a4d74a0` fixed the missing `Icon=` blocker; a full re-run is still pending
 
-**Blockers:** `linuxdeploy` is not available on the build host.
+**Blockers:** linuxdeploy binary on the build host
 
 **Stopping condition:** an `.AppImage` exists, its size and SHA-256 are recorded, and
 the build log shows a continuous linuxdeploy run.

@@ -20,11 +20,9 @@ marked approved rather than recommended.
 
 **Verification:** `grep -n 'Approved by' docs/decisions/00XX-*.md`
 
-**Evidence:** `docs/RELEASE-ENGINEERING-PLAN.md` §1.1 recommends; **no approval
-exists**. This board records the MVP as a recommendation only.
+**Evidence:** `RELEASE-ENGINEERING-PLAN.md` §1.1 recommends; approval does not exist
 
-**Blockers:** maintainer decision required — nothing in the repository can substitute
-for it.
+**Blockers:** Maintainer decision required
 
 **Stopping condition:** a decision record exists and the board cites it. Until then
 T27-10, T27-60 and T27-61 remain blocked on this row.

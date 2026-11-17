@@ -1,6 +1,6 @@
 # T27-16 — Make the release path run the web bridge smoke with no skip
 
-> **RP:** RP-00 · **Priority:** P0 · **Status:** NOT STARTED
+> **RP:** RP-00 · **Priority:** P0 · **Status:** BUILD VERIFIED
 > **Board row:** [EXECUTION-BOARD.md §6](../release/EXECUTION-BOARD.md)
 > **Depends on:** T27-05
 
@@ -21,10 +21,9 @@ rendered DOM, not from the page source.
 
 **Verification:** `grep -n FIRECRAFT_DIST_SKIP_SMOKE .gitforge.yml .github/workflows/*.yml`
 
-**Evidence:** `.gitforge.yml:168` sets `FIRECRAFT_DIST_SKIP_SMOKE=1` for the release
-job; the artifact matrix does not record this skip.
+**Evidence:** The row's premise was wrong and is corrected here. `FIRECRAFT_DIST_SKIP_SMOKE` appears nowhere in `.gitforge.yml` or the GitHub workflows on `main` (it survives only in [`xtask/src/dist.rs`](https://github.com/aliasfoxkde/FireCraft/blob/main/xtask/src/dist.rs) (line 52) as a comment, in the docs, and in issue #110), and `infrastructure/docker/ci-rust.Dockerfile:127` installs bookworm `chromium` for exactly this smoke. The smoke runs in CI: the GitForge `release` job logs `[xtask] dist web: 5 file(s), wasm 15573974 B (warning 25000000, hard ceiling 50000000), manifest MANIFEST.sha256, smoke green` and `[xtask] dist --web ok` — most recently job `ecb488d1-8965-443f-8309-71405883d754` for commit `fcfe6db1`, finished 2026-11-12T06:18:54Z, and 12 release jobs carry that line. **Done:** 2026-11-12: smoke green in the GitForge release job.
 
-**Blockers:** chromium is missing from the CI image.
+**Blockers:** —
 
 **Stopping condition:** the release job's smoke runs without the skip, or the skip is
 removed from the release lane and the reason is recorded.
