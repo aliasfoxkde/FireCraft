@@ -3458,15 +3458,15 @@ impl Editor {
     pub fn add_draft_point(&mut self, world: geom::Point) -> Result<bool, EngineError> {
         let pending_tool = self.draft.as_ref().map(|draft| draft.tool);
         let mut converted = false;
-        if let Some(tool) = pending_tool {
-            if tool != self.tool {
-                converted = self.commit_draft()?;
-                if !converted {
-                    // Too few points to become an object: the path
-                    // cannot be committed, so it is dropped rather
-                    // than carried into the other tool's path.
-                    self.draft = None;
-                }
+        if let Some(tool) = pending_tool
+            && tool != self.tool
+        {
+            converted = self.commit_draft()?;
+            if !converted {
+                // Too few points to become an object: the path
+                // cannot be committed, so it is dropped rather
+                // than carried into the other tool's path.
+                self.draft = None;
             }
         }
         match self.draft.as_mut() {
