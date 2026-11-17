@@ -243,11 +243,11 @@ ssrf-localhost	./docs/SESSIONS.md	49960de5880e8c687434170f6476605b8fe4aeb9a28632
 ssrf-localhost	./docs/SITE-DEPLOYMENT.md	49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763	1
 ssrf-localhost	./docs/decisions/0074-aegis-content-keyed-baseline.md	49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763	1
 ssrf-localhost	./docs/decisions/0083-aegis-rebless-parity-matrix.md	49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763	1
-ssrf-localhost	./docs/release/EXECUTION-BOARD.md	49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763	3
+ssrf-localhost	./docs/release/EXECUTION-BOARD.md	49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763	4
 ssrf-localhost	./docs/tasks/T22-screenshot-ui.md	49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763	1
 ssrf-localhost	./docs/tasks/T27-12-adjudicate-aegis-findings.md	12ca17b49af2289436f303e0166030a21e525d266e209267433801a8fd4071a0	1
 ssrf-localhost	./docs/tasks/T27-12-adjudicate-aegis-findings.md	49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763	7
-ssrf-localhost	./docs/tasks/T27-24-pr8-remaining-findings.md	49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763	2
+ssrf-localhost	./docs/tasks/T27-24-pr8-remaining-findings.md	49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763	5
 ssrf-localhost	./packaging/deb/control	49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763	1
 ssrf-localhost	./scripts/install-aegis-selftest.sh	12ca17b49af2289436f303e0166030a21e525d266e209267433801a8fd4071a0	2
 ssrf-localhost	./scripts/reconcile_deployment-selftest.py	12ca17b49af2289436f303e0166030a21e525d266e209267433801a8fd4071a0	5
@@ -744,7 +744,7 @@ zip-code	./docs/tasks/T27-24-pr8-remaining-findings.md	36b212ef149cc79e63eb10917
 zip-code	./docs/tasks/T27-24-pr8-remaining-findings.md	6a0d62bf9572742690225db40eb2eb3b89fd0574bcadf54e48f4f71b1b090977	1
 zip-code	./docs/tasks/T27-24-pr8-remaining-findings.md	8f0287fed25004a3261c7953e4c8286dd2f639c21b55323b7c931781c6f6abcb	1
 zip-code	./docs/tasks/T27-24-pr8-remaining-findings.md	b3cb7d030fce5d1824bae203e63a8455fbf0b817f8b5d9a2174c704179204471	1
-zip-code	./docs/tasks/T27-24-pr8-remaining-findings.md	dabf5c8b9082180e7d7ae1ee52a9417fc76be7e3e80aed2a8f3cccf1cd1c162d	3
+zip-code	./docs/tasks/T27-24-pr8-remaining-findings.md	dabf5c8b9082180e7d7ae1ee52a9417fc76be7e3e80aed2a8f3cccf1cd1c162d	4
 zip-code	./docs/tasks/T27-41-windows-arm64-assessment.md	36b212ef149cc79e63eb109177f831812969fa8e86f9c09b405448276b0ec76f	1
 zip-code	./docs/tasks/T27-41-windows-arm64-assessment.md	6a0d62bf9572742690225db40eb2eb3b89fd0574bcadf54e48f4f71b1b090977	2
 zip-code	./docs/tasks/T27-41-windows-arm64-assessment.md	8f0287fed25004a3261c7953e4c8286dd2f639c21b55323b7c931781c6f6abcb	1
