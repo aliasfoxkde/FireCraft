@@ -100,6 +100,15 @@ a file exists, the dictionary (no `MTXv` on paths) is the authority.
 The image refusal flips the day the resample pass lands — the command
 detail strings name that dependency explicitly so the gap is greppable.
 
+**Amended 2026-11-16 by [decision
+0132](0132-the-inspector-commits-on-the-value-not-the-widget-flags.md).**
+The resample pass has landed, so `object.setBounds` now accepts a
+bitmap target: it resamples the pixels onto the requested grid and
+lands the frame on the requested box. The rest of the transform family
+still refuses an image target, and a bitmap *inside a group* still
+refuses `object.setBounds` — a group's members ride the caller's
+matrix, and the family has no resample path through it.
+
 ## Consequences
 
 - Parity rows `scaleSelection`, `rotateSelection`, `skewSelection`,

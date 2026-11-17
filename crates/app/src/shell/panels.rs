@@ -2140,6 +2140,48 @@ impl Shell {
         // symbol, or move it within the symbol's z-order.
         self.symbol_content_fields(ui, number, &cells);
 
+        // The instance's filters are the definition's. CS6 shows the
+        // symbol's effect stack on an instance, and "modifying an
+        // instance with the Properties panel affects the symbol and
+        // all other instances" — so the stack here is the
+        // definition's, read-only: the edit belongs to the
+        // definition's own objects, and the instance inherits it
+        // (decision 0132).
+        let inherited: Vec<doc::Effect> = {
+            let document = self.editor.document();
+            let mut effects = Vec::new();
+            for layer in &cells {
+                for cell in layer {
+                    for element in cell {
+                        match document.registry.get(*element) {
+                            Some(ObjectData::Path(path)) => {
+                                effects.extend(path.effects.iter().cloned());
+                            }
+                            Some(ObjectData::Text(text)) => {
+                                effects.extend(text.effects.iter().cloned());
+                            }
+                            Some(ObjectData::Group(group)) => {
+                                effects.extend(group.effects.iter().cloned());
+                            }
+                            Some(ObjectData::Image(image)) => {
+                                effects.extend(image.effects.iter().cloned());
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+            effects
+        };
+        ui.heading("Filters");
+        ui.label(format!("inherited from {name}"));
+        if inherited.is_empty() {
+            ui.label("(none)");
+        }
+        for (index, effect) in inherited.iter().enumerate() {
+            ui.label(format!("{}. {}", index + 1, effect.internal_name));
+        }
+
         // "Duplicate for alias": the selected instances point at
         // fresh copies of the definitions they name.
         if ui
@@ -2210,13 +2252,19 @@ impl Shell {
             let alt_field = ui.add(egui::TextEdit::singleline(&mut alt).hint_text("alt text"));
             let name_field =
                 ui.add(egui::TextEdit::singleline(&mut slice_name).hint_text("slice name"));
-            if link_field.lost_focus() && link_field.changed() {
+            // The commit is the *value*, not the widget's flags:
+            // `egui`'s `Response::changed()` is true only in the frame
+            // the text moved and `Response::lost_focus()` only in the
+            // frame the focus left, so the two never land together
+            // (decision 0132). The field commits when it loses focus
+            // and the text differs from the slice's.
+            if link_field.lost_focus() && link != linked.link {
                 self.set_button_options(number, Some(&link), None, None);
             }
-            if alt_field.lost_focus() && alt_field.changed() {
+            if alt_field.lost_focus() && alt != linked.alt {
                 self.set_button_options(number, None, Some(&alt), None);
             }
-            if name_field.lost_focus() && name_field.changed() {
+            if name_field.lost_focus() && slice_name != linked.slice_name {
                 self.set_button_options(number, None, None, Some(&slice_name));
             }
         });
@@ -3220,34 +3268,33 @@ impl Shell {
             });
         // The runs: one line per run. The base style rides along
         // unchanged — the command writes the run list alone.
-        let mut runs = text
+        let stored = text
             .runs
             .iter()
             .map(|run| run.text.clone())
             .collect::<Vec<String>>()
             .join("\n");
+        let mut runs = stored.clone();
         let field = ui.add(
             egui::TextEdit::multiline(&mut runs)
                 .hint_text("runs, one per line (click away to apply)"),
         );
-        if field.changed() && field.lost_focus() {
+        // The commit is the value: `egui`'s `Response::changed()` is
+        // true only in the frame the text moved and `Response::
+        // lost_focus()` only in the frame the focus left, so the two
+        // never land together (decision 0132). The field commits when
+        // it loses focus and the runs differ from the text's.
+        if field.lost_focus() && runs != stored {
             self.set_text_runs(id, &runs);
         }
         // The frame the text flows inside.
         let mut width = text.frame.width() as f32;
         let mut height = text.frame.height() as f32;
         ui.horizontal(|ui| {
-            let wide = ui.add(
-                egui::DragValue::new(&mut width)
-                    .speed(1.0)
-                    .prefix("text W "),
-            );
-            let tall = ui.add(
-                egui::DragValue::new(&mut height)
-                    .speed(1.0)
-                    .prefix("text H "),
-            );
-            if wide.changed() || tall.changed() {
+            let wide = ui.add(numeric_field(&mut width, "text W "));
+            let tall = ui.add(numeric_field(&mut height, "text H "));
+            let moved = width != text.frame.width() as f32 || height != text.frame.height() as f32;
+            if moved && (wide.changed() || tall.changed()) {
                 self.set_text_rectangle(id, width as f64, height as f64);
             }
         });
@@ -3365,9 +3412,13 @@ impl Shell {
         let mut background_raw = canvas.background_raw;
         let mut applied = false;
         ui.horizontal(|ui| {
-            let w = ui.add(egui::DragValue::new(&mut width).speed(1.0).prefix("W "));
-            let h = ui.add(egui::DragValue::new(&mut height).speed(1.0).prefix("H "));
-            applied |= (w.lost_focus() && w.changed()) || (h.lost_focus() && h.changed());
+            let w = ui.add(numeric_field(&mut width, "W "));
+            let h = ui.add(numeric_field(&mut height, "H "));
+            // The commit is the value, not the widget's flags: the
+            // canvas's size in the document is the comparison
+            // (decision 0132).
+            applied |= (w.changed() || h.changed())
+                && (width != canvas.width as f32 || height != canvas.height as f32);
         });
         if applied && width > 0.0 && height > 0.0 {
             self.run_command(
@@ -3384,7 +3435,8 @@ impl Shell {
                 .add(
                     egui::DragValue::new(&mut resolution)
                         .speed(1.0)
-                        .suffix(" px"),
+                        .suffix(" px")
+                        .update_while_editing(false),
                 )
                 .on_hover_text("document resolution");
             if ui.checkbox(&mut unit_cm, "per cm").changed() {
@@ -3396,7 +3448,7 @@ impl Shell {
                     }),
                 );
             }
-            if res.lost_focus() && res.changed() && resolution > 0.0 {
+            if res.changed() && resolution != canvas.resolution as f32 && resolution > 0.0 {
                 self.run_command(
                     "document.setResolution",
                     serde_json::json!({
@@ -3665,15 +3717,20 @@ impl Shell {
         }
     }
 
-    /// Bitmap properties: the pixel geometry as a readout, then the
-    /// shared display controls.
+    /// Bitmap properties: the CS6 geometry strip, the pixel readout,
+    /// the mask and channel sections, then the shared display
+    /// controls.
     ///
-    /// The X/Y/W/H strip is read-only here and the CS6 fill/stroke
-    /// editors are absent: `object.setBounds` refuses images (a
-    /// transform that rewrites geometry needs the resample pass —
-    /// decision 0019) and `IMGv` carries no fill/stroke nodes in this
-    /// build. Both are recorded as open work in `docs/CS6-PARITY.md`
-    /// rather than faked.
+    /// The X/Y/W/H strip edits the bitmap: CS6's Property inspector
+    /// and Info panel both take a new width (W) or height (H) for an
+    /// object, and for a bitmap that means the pixels are resampled
+    /// onto the new grid — which is what `object.setBounds` now does
+    /// for a bitmap target (decision 0132).
+    ///
+    /// The CS6 fill/stroke editors are absent, and deliberately so:
+    /// `IMGv` carries no fill/stroke node, and CS6's bitmap tools
+    /// live in the separate **Image Editing** command panel. The
+    /// disposition is recorded in `docs/CS6-PARITY.md` §D.
     pub(super) fn image_properties(
         &mut self,
         ui: &mut egui::Ui,
@@ -3681,6 +3738,7 @@ impl Shell {
         image: &ImageObject,
     ) {
         ui.label(format!("object {} (gen {})", id.index(), id.generation()));
+        self.geometry_fields(ui, id);
         ui.label(format!(
             "bitmap {}x{} px, {} tile(s) of {} px",
             image.pixels.0,
@@ -3921,7 +3979,19 @@ impl Shell {
     }
 
     /// CS6's Properties X/Y/W/H strip: the selection's union box,
-    /// applied on Enter through `object.setBounds`.
+    /// applied through `object.setBounds`.
+    ///
+    /// The strip commits the way CS6's does: a typed value lands when
+    /// the edit is committed (Enter or focus loss), and a dragged
+    /// spinner lands every frame it moves.
+    ///
+    /// The commit signal is the *value*, not the widget's response
+    /// flags. `egui`'s `Response::changed()` is true only in the frame
+    /// the value moved, and `Response::lost_focus()` only in the frame
+    /// the focus left — so `lost_focus() && changed()` is true in
+    /// neither: the two never land in the same frame (decision 0132).
+    /// The strip therefore reads the value, and asks whether it
+    /// differs from the box the document holds.
     pub(super) fn geometry_fields(&mut self, ui: &mut egui::Ui, id: doc::ObjectId) {
         let document = self.editor.session.document();
         let Some(bounds) = crate::editor::union_selection_bounds(document, &[id]) else {
@@ -3932,13 +4002,18 @@ impl Shell {
         let mut w = bounds.width() as f32;
         let mut h = bounds.height() as f32;
         ui.horizontal(|ui| {
-            let x_field = ui.add(egui::DragValue::new(&mut x).speed(1.0).prefix("X "));
-            let y_field = ui.add(egui::DragValue::new(&mut y).speed(1.0).prefix("Y "));
-            let w_field = ui.add(egui::DragValue::new(&mut w).speed(1.0).prefix("W "));
-            let h_field = ui.add(egui::DragValue::new(&mut h).speed(1.0).prefix("H "));
-            let applied = [x_field, y_field, w_field, h_field]
-                .into_iter()
-                .any(|field| field.lost_focus() && field.changed());
+            let x_field = ui.add(numeric_field(&mut x, "X "));
+            let y_field = ui.add(numeric_field(&mut y, "Y "));
+            let w_field = ui.add(numeric_field(&mut w, "W "));
+            let h_field = ui.add(numeric_field(&mut h, "H "));
+            let moved = x != bounds.x0 as f32
+                || y != bounds.y0 as f32
+                || w != bounds.width() as f32
+                || h != bounds.height() as f32;
+            let applied = moved
+                && [x_field, y_field, w_field, h_field]
+                    .into_iter()
+                    .any(|field| field.changed());
             if applied && w > 0.0 && h > 0.0 {
                 let _ = self.editor.apply(
                     "object.setBounds",
@@ -4575,6 +4650,20 @@ impl Shell {
             serde_json::json!({ "id": id, "shape": "linear", "stops": payload, "alpha": [] }),
         );
     }
+}
+
+/// One numeric inspector field: a `DragValue` with the field's own
+/// prefix ("W ").
+///
+/// `update_while_editing(false)` is the commit rule: a typed value
+/// lands when the edit is committed (Enter or focus loss) instead of
+/// on every keystroke, so the command fires once per edit. A dragged
+/// spinner still moves the value every frame it is dragged.
+fn numeric_field<'a>(value: &'a mut f32, prefix: &'a str) -> egui::DragValue<'a> {
+    egui::DragValue::new(value)
+        .speed(1.0)
+        .prefix(prefix)
+        .update_while_editing(false)
 }
 
 /// A display label for one object: its stored name when it has one,

@@ -8637,4 +8637,266 @@ mod tests {
             "the click leaves the path alone",
         );
     }
+
+    /// A shell whose selection is a bitmap, imported through the
+    /// engine's own command so the panel reads what the document
+    /// holds.
+    fn image_shell(name: &str) -> (Shell, doc::ObjectId) {
+        let mut editor = Editor::untitled();
+        editor
+            .apply(
+                "bitmap.importFile",
+                serde_json::json!({
+                    "width": 8, "height": 6,
+                    "pixels": vec![255u8; 8 * 6 * 4],
+                    "bounds": {
+                        "left": 10.0, "top": 20.0,
+                        "right": 18.0, "bottom": 26.0,
+                    },
+                    "maintain_aspect_ratio": false,
+                    "page": 0, "layer": editor.active_layer(), "cell": 0,
+                    "name": name,
+                }),
+            )
+            .expect("the bitmap is imported");
+        let id = editor
+            .document()
+            .registry
+            .iter()
+            .find_map(|(id, data)| match data {
+                doc::ObjectData::Image(image) if image.name.as_deref() == Some(name) => Some(id),
+                _ => None,
+            })
+            .expect("the bitmap is registered");
+        editor.set_selection(vec![id]);
+        (gui_shell(editor), id)
+    }
+
+    /// A shell whose selection is a group holding two rectangles.
+    fn group_shell() -> (Shell, doc::ObjectId) {
+        let mut shell = gui_shell(gui_editor_two());
+        let ids = shell.editor.current_cell().unwrap().elements.clone();
+        shell.editor.set_selection(ids);
+        shell.run_action(&menus::Action::Sel(menus::SelAction::Group));
+        let id = shell.editor.current_cell().unwrap().elements[0];
+        shell.editor.set_selection(vec![id]);
+        (shell, id)
+    }
+
+    /// Every string one inspector frame drew, in draw order.
+    fn inspector_labels(shell: &mut Shell) -> Vec<String> {
+        let ctx = egui::Context::default();
+        ctx.global_style_mut(|style| style.animation_time = 0.0);
+        let output = ctx.run_ui(egui::RawInput::default(), |ui| {
+            egui::CentralPanel::default().show(ui, |ui| {
+                shell.properties_panel(ui);
+            });
+        });
+        output
+            .shapes
+            .iter()
+            .filter_map(|shape| match &shape.shape {
+                egui::epaint::Shape::Text(text) => Some(text.galley.job.text.clone()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// Whether the inspector drew a field named `field`: a
+    /// `DragValue` prefix ("X "), a plain label ("opacity"), or a
+    /// label that starts with the field's words ("bitmap 8x6 px").
+    fn drew_field(labels: &[String], field: &str) -> bool {
+        labels.iter().any(|label| {
+            let label = label.trim();
+            label == field || label.starts_with(&format!("{field} "))
+        })
+    }
+
+    /// Asserts the inspector's field set for one selection kind: the
+    /// fields the kind must carry, and the ones it must not.
+    fn assert_field_set(labels: &[String], present: &[&str], absent: &[&str]) {
+        for field in present {
+            assert!(
+                drew_field(labels, field),
+                "the {field:?} field is drawn: {labels:?}",
+            );
+        }
+        for field in absent {
+            assert!(
+                !drew_field(labels, field),
+                "the {field:?} field is not drawn: {labels:?}",
+            );
+        }
+    }
+
+    /// The inspector's field set follows the selection kind — CS6's
+    /// Property inspector swaps its fields per kind, and these are
+    /// the rows of `docs/CS6-PARITY.md` §D.
+    #[test]
+    fn the_inspector_field_set_follows_the_selection_kind() {
+        // A vector path: the geometry strip, the display quartet, the
+        // effects list — and none of the other kinds' fields.
+        let (mut shell, _id) = one_path_shell();
+        let labels = inspector_labels(&mut shell);
+        assert_field_set(
+            &labels,
+            &[
+                "X", "Y", "W", "H", "opacity", "blend", "visible", "locked", "Filters",
+            ],
+            &["font", "size", "bitmap", "instance of", "shape:"],
+        );
+
+        // Text: the path's set plus the type fields.
+        let (mut shell, _id) = text_shell("hello");
+        let labels = inspector_labels(&mut shell);
+        assert_field_set(
+            &labels,
+            &[
+                "X", "Y", "W", "H", "opacity", "blend", "visible", "locked", "Filters", "font",
+                "size",
+            ],
+            &["bitmap", "instance of", "shape:"],
+        );
+
+        // A bitmap: the geometry strip (CS6's Property inspector takes
+        // a new W or H for a bitmap, and the pixels resample), the
+        // display quartet, the effects list, the pixel readout — and
+        // no fill/stroke (the `IMGv` node carries none, and CS6's
+        // bitmap tools live in the separate Image Editing panel).
+        let (mut shell, _id) = image_shell("plate");
+        let labels = inspector_labels(&mut shell);
+        assert_field_set(
+            &labels,
+            &[
+                "X", "Y", "W", "H", "opacity", "blend", "visible", "locked", "Filters", "bitmap",
+            ],
+            &["font", "size", "instance of", "shape:"],
+        );
+
+        // A symbol instance: the definition's facts and the inherited
+        // effect stack — no geometry strip, no display quartet.
+        let (mut shell, _id) = symbol_instance_shell("graphic");
+        let labels = inspector_labels(&mut shell);
+        assert_field_set(
+            &labels,
+            &["instance of", "Filters", "inherited from"],
+            &[
+                "X", "Y", "W", "H", "opacity", "bitmap", "font", "size", "shape:",
+            ],
+        );
+
+        // A slice: the web object's own fields and the geometry
+        // strip — no display quartet, and no effect list (a slice
+        // carries no `EFLv` spine).
+        let (mut shell, _id) = slice_shell("cut");
+        let labels = inspector_labels(&mut shell);
+        assert_field_set(
+            &labels,
+            &["X", "Y", "W", "H", "type", "shape:"],
+            &[
+                "opacity", "blend", "visible", "locked", "Filters", "bitmap", "font", "size",
+            ],
+        );
+
+        // A group: the geometry strip, the display quartet, the
+        // member list, the effects list.
+        let (mut shell, _id) = group_shell();
+        let labels = inspector_labels(&mut shell);
+        assert_field_set(
+            &labels,
+            &[
+                "X", "Y", "W", "H", "opacity", "blend", "visible", "locked", "Filters", "Contents",
+            ],
+            &["font", "size", "bitmap", "instance of", "shape:"],
+        );
+
+        // Nothing selected: the document's own fields.
+        let mut shell = gui_shell(Editor::untitled());
+        let labels = inspector_labels(&mut shell);
+        assert_field_set(
+            &labels,
+            &["Document", "W", "H", "per cm", "canvas color"],
+            &["Filters", "opacity", "bitmap", "font", "size"],
+        );
+    }
+
+    /// The inspector's geometry strip edits the object: a click on the
+    /// width field and one step up lands a new width, and the bitmap
+    /// resamples to it (decision 0132).
+    ///
+    /// The commit rule is the value's, not the widget's flags, so the
+    /// test drives the widget the way a user does — click the field,
+    /// then step the value — and reads the document afterwards.
+    #[test]
+    fn the_geometry_strip_resizes_the_selected_bitmap() {
+        let (mut shell, id) = image_shell("plate");
+        let ctx = egui::Context::default();
+        ctx.global_style_mut(|style| style.animation_time = 0.0);
+        let draw = |shell: &mut Shell, input: egui::RawInput| {
+            ctx.run_ui(input, |ui| {
+                egui::CentralPanel::default().show(ui, |ui| {
+                    shell.properties_panel(ui);
+                });
+            })
+        };
+        // The width field: the strip draws the field's prefix and its
+        // value as one galley ("W 8"), or the prefix on its own when
+        // the widget splits them.
+        let output = draw(&mut shell, egui::RawInput::default());
+        let position = output
+            .shapes
+            .iter()
+            .filter_map(|shape| match &shape.shape {
+                egui::epaint::Shape::Text(text) => {
+                    let label = text.galley.job.text.trim();
+                    let is_width = label == "W"
+                        || label
+                            .strip_prefix("W ")
+                            .is_some_and(|value| value.parse::<f64>().is_ok());
+                    is_width.then(|| text.visual_bounding_rect().center())
+                }
+                _ => None,
+            })
+            .next()
+            .expect("the width field is drawn");
+        // Click the field: it takes the focus and enters its edit mode.
+        for pressed in [true, false] {
+            let input = egui::RawInput {
+                events: vec![
+                    egui::Event::PointerMoved(position),
+                    egui::Event::PointerButton {
+                        pos: position,
+                        button: egui::PointerButton::Primary,
+                        pressed,
+                        modifiers: egui::Modifiers::default(),
+                    },
+                ],
+                ..Default::default()
+            };
+            draw(&mut shell, input);
+        }
+        // One step up in the focused field: the value moves by one.
+        let input = egui::RawInput {
+            events: vec![egui::Event::Key {
+                key: egui::Key::ArrowUp,
+                physical_key: None,
+                pressed: true,
+                repeat: false,
+                modifiers: egui::Modifiers::default(),
+            }],
+            ..Default::default()
+        };
+        draw(&mut shell, input);
+        // The bitmap took the new width and kept its place.
+        let image = match shell.editor.document().registry.get(id) {
+            Some(doc::ObjectData::Image(image)) => image,
+            other => panic!("not an image: {other:?}"),
+        };
+        assert_eq!(image.pixels, (9, 6), "the pixel grid took the new width");
+        assert_eq!(
+            image.location,
+            geom::Point::new(10.0, 20.0),
+            "the bitmap kept its place"
+        );
+    }
 }

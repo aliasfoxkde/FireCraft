@@ -203,14 +203,14 @@ dispatches at `S/panels.rs::properties_panel`.
 
 | Selection | CS6 field set | FireCraft | Verdict | Evidence | Ticket |
 |---|---|---|---|---|---|
-| Nothing selected | document-level fields (canvas, page, zoom) | "nothing selected" | **partial** — no document-level fields in the inspector | `S/panels.rs::properties_panel` | 22.4 |
+| Nothing selected | document-level fields (canvas, page, zoom) | the document's own fields: canvas size, resolution (with its unit), and the canvas colour | **implemented** | `S/panels.rs::document_properties` | — |
 | Vector path | X/Y/W/H, opacity, blend, visibility, lock, name, fill, stroke, stroke style, effects | X/Y/W/H, opacity, blend, visible, locked, name, fill/stroke + gradient editor, effects list | **implemented** | `S/panels.rs::path_properties`, `S/panels.rs::geometry_fields`, `S/panels.rs::display_controls` | — |
 | Text | the path set **plus** font, size, bold/italic/underline, alignment, text content | all present; characters apply on Enter | **implemented** | `S/panels.rs::text_properties` | 20.1 |
-| Bitmap / image | the path set, minus the fill/stroke the `IMGv` node does not carry; CS6's bitmap-specific tools live in the separate **Image Editing** command panel | name, opacity, blend, visible, locked, a pixel-size readout, and the effects list. X/Y/W/H is a readout: `object.setBounds` refuses images (decision 0019) | **partial** | `S/panels.rs::image_properties`, `R:fw-ui-evidence.md` | 22.4 |
-| Symbol instance | definition, symbol number, type, placed-at, Edit/Break Apart, per-state counts, nine-slice guides | all present | **implemented** | `S/panels.rs::symbol_instance_properties` | — |
+| Bitmap / image | the path set, minus the fill/stroke the `IMGv` node does not carry; CS6's bitmap-specific tools live in the separate **Image Editing** command panel | name, opacity, blend, visible, locked, a pixel-size readout, the effects list, and an **editable** X/Y/W/H strip: a new width or height resamples the pixels (decision 0132). The absent fill/stroke editors match CS6 — the `IMGv` node carries no fill/stroke, and CS6's bitmap tools live in the separate **Image Editing** panel | **implemented** | `S/panels.rs::image_properties`, `S/panels.rs::geometry_fields`, `E/object.rs::SetBoundsObject` | — |
+| Symbol instance | definition, symbol number, type, placed-at, Edit/Break Apart, per-state counts, nine-slice guides | all present, plus the definition's inherited filter stack, read-only (decision 0132) | **implemented** | `S/panels.rs::symbol_instance_properties` | — |
 | Slice / hotspot | link, alt text, type, name, frame geometry | all present in the inspector; the link fields are the *same editor* the **URL** panel renders, so the two cannot disagree | **implemented** | `S/panels.rs::slice_properties`, `S/panels_web.rs::slice_link_editor` | — |
-| Group | member list, enter-group | member list, display controls, geometry; **no** enter-group | **partial** | `S/panels.rs::group_properties` | 22.4 |
-| Effects list | per-effect rows with per-parameter fields, removable, addable | present for path, text, **group and bitmap**; **not** for instances (the function returns early) | **partial** | `S/panels.rs::filter_panel`, `S/panels.rs::filter_param_rows` | 22.4 |
+| Group | member list, enter-group | member list, display controls, geometry; **no** enter-group | **partial** — enter-group is a command, not a field | `S/panels.rs::group_properties` | 22.4 |
+| Effects list | per-effect rows with per-parameter fields, removable, addable | present for path, text, **group and bitmap**; for an **instance** the definition's stack is listed read-only, labelled "inherited from" (decision 0132) | **implemented** | `S/panels.rs::filter_panel`, `S/panels.rs::filter_param_rows`, `S/panels.rs::symbol_instance_properties` | — |
 
 ---
 
@@ -331,7 +331,7 @@ acceptance hook. Ordered by how much of the product it unlocks.
 | # | Gap | Rows | Ticket | Priority |
 |---|---|---|---|---|
 | 1 | ~~The five missing CS6 panels (Optimize, Common Library, CSS Properties, Find and Replace, Slices)~~ **CLOSED 2026-11-06** — all five have Window-menu rows and real content (`S/panels.rs::optimize_panel`, `S/panels_web.rs::slices_panel`, `::css_properties_panel`, `::find_replace_panel`, `::common_library_panel`); **Project** and **Site** (CS6 panels with no FireCraft counterpart) remain **missing** | C | 22.1 | P0 |
-| 2 | The inspector's remaining per-kind gaps: document-level fields, multi-selection fields, the image transform strip, and enter-group | D, I | 22.4 | P0 |
+| 2 | The inspector's remaining per-kind gap: **enter-group** for a group selection. The document-level fields, the multi-selection fields and the **image transform strip** landed 2026-11-06 and **2026-11-16** (decision [0132](decisions/0132-the-inspector-commits-on-the-value-not-the-widget-flags.md): the strip is editable, a bitmap's bounds resample its pixels, and the per-kind field sets are pinned by a regression) | D, I | 22.4 | P0 |
 | 3 | The right dock's five-tab-group structure and the bottom Properties dock — the **panel inventory landed 2026-11-06** (18 panels in CS6's order, collapse/close headers, scrolling column); what is left is the *structure*: CS6 stacks them as five tab-groups with Properties in the bottom dock, FireCraft runs one flat column | C | 22.1 | P0 |
 | 4 | ~~In-canvas text editing~~ **CLOSED 2026-11-06** — double-click edits in place: `TextEdit` overlay on the text frame, commit/cancel/focus routing (§G) | E, H, I | 20.1 | — |
 | 5 | The CS6 tool strip's remaining items: the 3D tool (the screen-mode cycle and the Alt-hold variants **landed 2026-11-06**) | B | 22.5 | P2 |
@@ -365,11 +365,14 @@ acceptance hook. Ordered by how much of the product it unlocks.
   test suite (142 unit tests plus the integration suites), and three
   new unit tests over the shared link editor's re-seed rule. The
   bitmap's fill/stroke absence is grounded in the vendored node
-  dictionary (`IMGv` carries no fill/stroke node) and in decision
-  0019 (`object.setBounds` refuses bitmaps); CS6's bitmap-specific
+  dictionary (`IMGv` carries no fill/stroke node); CS6's bitmap-specific
   tools are evidenced by the install's own **Image Editing** command
   panel, recorded in
   [`research/fw-ui-evidence.md`](research/fw-ui-evidence.md).
+- The 2026-11-16 inspector work (issue #88, decision 0132) replaced
+  decision 0019's refusal: `object.setBounds` resamples a bitmap
+  target, so the bitmap's X/Y/W/H strip edits the pixels. The
+  fill/stroke absence is unchanged — it is CS6's own field set.
 - The sampling check in the running browser at normal viewport sizes was
   performed on 2026-11-04 against a fresh optimized `xtask dist --web`
   bundle (wasm 21,271,259 B, under the 21,500,000 B ceiling). Six

@@ -688,10 +688,22 @@ scope, so no license path is attempted.
   bounds, opacity-min/blend-min/visible-AND/locked-OR with every
   edit fanned out per id); a group's member rows select the child
   (enter-group by selection). Test
-  `inspector_document_and_multi_selection_sets`. Remaining 22.4:
-  the bitmap X/Y/W/H strip and bitmap fill/stroke, both blocked by
-  decision 0019 and the absent `IMGv` fill/stroke nodes — recorded,
-  not faked.
+  `inspector_document_and_multi_selection_sets`. **LANDED 2026-11-16**
+  (issue #88, [decision
+  0132](decisions/0132-the-inspector-commits-on-the-value-not-the-widget-flags.md)):
+  the per-kind field sets are pinned by a regression that renders the
+  inspector for each selection class and asserts the field list
+  against the `CS6-PARITY` §D rows; the numeric fields commit on the
+  *value* rather than on `lost_focus() && changed()` — a conjunction
+  `egui` can never satisfy, which had left the geometry strip, the
+  canvas size, the resolution, the text frame and the slice's
+  link/alt/name inert; a bitmap's X/Y/W/H strip is editable and
+  `object.setBounds` resamples the pixels; an instance lists the
+  definition's filters read-only. The bitmap's absent fill/stroke
+  editors are CS6's own field set (no `IMGv` fill/stroke node, and
+  CS6's bitmap tools live in the separate **Image Editing** command
+  panel), not a gap. Remaining 22.4: enter-group for a group
+  selection, and a resample path for a bitmap inside a group.
 - **22.5 CS6 chrome** (M): menu bar order, tool strip placement,
   document tab strip, status bar, panel headers with the CS6
   collapse/close affordances, and the CS6 color scheme (a dark
