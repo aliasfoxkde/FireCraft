@@ -30,7 +30,11 @@ mod timeline;
 
 pub use optimize::OptimizeSettings;
 
-pub use glyphs::apply_cs6_theme;
+pub use glyphs::apply_chrome_theme;
+pub use glyphs::{
+    CHROME_ACCENT, CHROME_ACCENT_STROKE, CHROME_CANVAS_FILL, CHROME_PANEL_FILL,
+    CHROME_SURFACE_FILL, CHROME_TEXT, CHROME_WINDOW_FILL,
+};
 pub(crate) use glyphs::{draw_autoshape_glyph, symbol_type_label, tool_key, tool_label};
 pub use panel_windows::{DockSide, PanelSummary, panel_inventory};
 
@@ -522,7 +526,7 @@ impl Shell {
     /// panel set and dock folds.
     #[must_use]
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        apply_cs6_theme(&cc.egui_ctx);
+        apply_chrome_theme(&cc.egui_ctx);
         let layout = cc
             .storage
             .and_then(|storage| eframe::get_value::<ShellLayout>(storage, "shell_layout"))

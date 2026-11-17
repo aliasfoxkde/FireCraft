@@ -6,30 +6,69 @@
 
 use super::*;
 
-/// The CS6 chrome look: near-black charcoal panels, square corners,
-/// small type. Applied once at startup; `eww`-era Fireworks was dark
-/// graphite against a mid-gray canvas.
+// ---------------------------------------------------------------------------
+// The chrome palette
+// ---------------------------------------------------------------------------
+//
+// CS6 owns **no** palette of its own. Its Preferences carry eight
+// categories — General, Edit, Guides and Grids, Type, Photoshop Import
+// and open, Launch and Edit, Plug-ins, Restore default preferences —
+// and not one of them sets a colour; the chrome greys a CS6 install
+// draws are the host operating system's, not Adobe's
+// (`docs/research/fw-ui-evidence.md`, "The CS6 chrome palette
+// (measured)"). The reference run measured on this host renders the
+// application frame and the panel bars at `#D6D6D6`, panel interiors at
+// `#EDEDED`, the canvas surround at `#999999`, and carries **no**
+// saturated hue anywhere in the chrome — the "CS6 neutral" the parity
+// matrix asks for is *hue-free greys*, not a particular lightness.
+//
+// FireCraft therefore defines its own neutral scheme, dark rather
+// than light, and records the difference as deliberate
+// (`docs/CS6-PARITY.md` §C). The values below are the recorded ones;
+// the test at the end of this file pins them, so the scheme cannot
+// drift without a deliberate re-pin.
+
+/// The chrome's background — the dock, the tool strip, the bars.
+pub const CHROME_PANEL_FILL: Color32 = Color32::from_rgb(0x3c, 0x3c, 0x3c);
+/// Floating windows and dialogs.
+pub const CHROME_WINDOW_FILL: Color32 = Color32::from_rgb(0x32, 0x32, 0x32);
+/// The canvas surround — the grey the page sits on.
+pub const CHROME_CANVAS_FILL: Color32 = Color32::from_rgb(0x28, 0x28, 0x28);
+/// Fields, rows and other raised surfaces.
+pub const CHROME_SURFACE_FILL: Color32 = Color32::from_rgb(0x44, 0x44, 0x44);
+/// The chrome's text colour.
+pub const CHROME_TEXT: Color32 = Color32::from_rgb(0xdd, 0xdd, 0xdd);
+/// The selection fill — the one hue in the chrome.
+pub const CHROME_ACCENT: Color32 = Color32::from_rgb(0x2f, 0x5d, 0x8a);
+/// The selection stroke.
+pub const CHROME_ACCENT_STROKE: Color32 = Color32::from_rgb(0x50, 0x7e, 0xab);
+
+/// The chrome look: charcoal panels, square corners, small type, one
+/// blue selection accent. Applied once at startup.
 ///
 /// Public because the web entry point builds the shell through
 /// [`Shell::with_platform`] (which has no creation context), and a
 /// web build that skipped this rendered egui's default light theme —
-/// the single loudest difference from the CS6 look.
-pub fn apply_cs6_theme(ctx: &egui::Context) {
+/// the single loudest difference from the recorded chrome.
+///
+/// The name says *chrome*, not *CS6*, on purpose: CS6 has no palette
+/// of its own to reproduce (see the constants above).
+pub fn apply_chrome_theme(ctx: &egui::Context) {
     // The tool-strip icons are embedded Lucide SVGs; the loader
     // rasterizes them at the exact on-screen size. Idempotent.
     egui_extras::install_image_loaders(ctx);
     ctx.all_styles_mut(|style| {
         let visuals = &mut style.visuals;
         visuals.dark_mode = true;
-        visuals.panel_fill = Color32::from_rgb(0x3c, 0x3c, 0x3c);
-        visuals.window_fill = Color32::from_rgb(0x32, 0x32, 0x32);
-        visuals.extreme_bg_color = Color32::from_rgb(0x28, 0x28, 0x28);
-        visuals.faint_bg_color = Color32::from_rgb(0x44, 0x44, 0x44);
+        visuals.panel_fill = CHROME_PANEL_FILL;
+        visuals.window_fill = CHROME_WINDOW_FILL;
+        visuals.extreme_bg_color = CHROME_CANVAS_FILL;
+        visuals.faint_bg_color = CHROME_SURFACE_FILL;
         // 0xdd against the darkest fill we put text on (faint 0x44)
         // is 7.2:1 — WCAG 2.1 AAA (≥7:1). 0xd9 was 6.9:1, a hair short.
-        visuals.override_text_color = Some(Color32::from_rgb(0xdd, 0xdd, 0xdd));
-        visuals.selection.bg_fill = Color32::from_rgb(0x2f, 0x5d, 0x8a);
-        visuals.selection.stroke = (1.0, Color32::from_rgb(0x50, 0x7e, 0xab)).into();
+        visuals.override_text_color = Some(CHROME_TEXT);
+        visuals.selection.bg_fill = CHROME_ACCENT;
+        visuals.selection.stroke = (1.0, CHROME_ACCENT_STROKE).into();
         visuals.window_corner_radius = egui::CornerRadius::ZERO;
         visuals.menu_corner_radius = egui::CornerRadius::ZERO;
         for widget in [
@@ -266,5 +305,91 @@ pub(crate) fn symbol_type_label(kind: &SymbolType) -> String {
         SymbolType::Button => "button".to_owned(),
         SymbolType::Animation => "animation".to_owned(),
         SymbolType::Other(raw) => format!("other ({raw})"),
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+mod tests {
+    use super::*;
+
+    /// The WCAG 2.1 relative-luminance of a colour.
+    fn luminance(color: Color32) -> f64 {
+        let channel = |raw: u8| {
+            let value = f64::from(raw) / 255.0;
+            if value <= 0.039_28 {
+                value / 12.92
+            } else {
+                ((value + 0.055) / 1.055).powf(2.4)
+            }
+        };
+        0.2126 * channel(color.r()) + 0.7152 * channel(color.g()) + 0.0722 * channel(color.b())
+    }
+
+    /// The contrast ratio between two colours (1.0 … 21.0).
+    fn contrast_ratio(a: Color32, b: Color32) -> f64 {
+        let (light, dark) = if luminance(a) > luminance(b) {
+            (luminance(a), luminance(b))
+        } else {
+            (luminance(b), luminance(a))
+        };
+        (light + 0.05) / (dark + 0.05)
+    }
+
+    /// The applied chrome carries the recorded palette — the values
+    /// `docs/CS6-PARITY.md` §C records and
+    /// `docs/research/fw-ui-evidence.md` measures.
+    #[test]
+    fn the_chrome_carries_the_recorded_palette() {
+        let ctx = egui::Context::default();
+        apply_chrome_theme(&ctx);
+        let visuals = ctx.style_of(egui::Theme::Dark).visuals.clone();
+        assert_eq!(visuals.panel_fill, CHROME_PANEL_FILL);
+        assert_eq!(visuals.window_fill, CHROME_WINDOW_FILL);
+        assert_eq!(visuals.extreme_bg_color, CHROME_CANVAS_FILL);
+        assert_eq!(visuals.faint_bg_color, CHROME_SURFACE_FILL);
+        assert_eq!(visuals.selection.bg_fill, CHROME_ACCENT);
+        assert_eq!(visuals.override_text_color, Some(CHROME_TEXT));
+        assert!(visuals.dark_mode);
+    }
+
+    /// The chrome's text stays at WCAG 2.1 AAA against the *lightest*
+    /// surface it is drawn on — the raised fill, not the panel.
+    ///
+    /// The recorded claim is 7.2:1 against `#444444`; the test holds
+    /// the floor at AAA's 7:1 so a palette edit that costs contrast
+    /// fails here rather than in a reviewer's eye.
+    #[test]
+    fn the_chrome_text_keeps_aaa_contrast() {
+        let ratio = contrast_ratio(CHROME_TEXT, CHROME_SURFACE_FILL);
+        assert!(
+            ratio >= 7.0,
+            "chrome text on the raised fill is {ratio:.2}:1 — below AAA"
+        );
+    }
+
+    /// The chrome is neutral: every colour but the selection accent
+    /// is a grey, which is what "the CS6 neutral palette" means
+    /// (CS6 itself owns no palette — see the module comment).
+    #[test]
+    fn the_chrome_is_neutral_but_for_the_selection_accent() {
+        for color in [
+            CHROME_PANEL_FILL,
+            CHROME_WINDOW_FILL,
+            CHROME_CANVAS_FILL,
+            CHROME_SURFACE_FILL,
+            CHROME_TEXT,
+        ] {
+            assert_eq!(
+                (color.r(), color.g(), color.b()),
+                (color.r(), color.r(), color.r()),
+                "a chrome colour carries a hue"
+            );
+        }
+        assert_ne!(
+            (CHROME_ACCENT.r(), CHROME_ACCENT.g(), CHROME_ACCENT.b()),
+            (CHROME_ACCENT.r(), CHROME_ACCENT.r(), CHROME_ACCENT.r()),
+            "the selection accent is the one hue the chrome allows"
+        );
     }
 }
