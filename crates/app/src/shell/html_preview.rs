@@ -718,7 +718,9 @@ mod tests {
         editor.tool = crate::editor::Tool::PolygonHotspot;
         let plotted = [(10.0, 10.0), (60.0, 10.0), (60.0, 40.0)];
         for (x, y) in plotted {
-            editor.add_draft_point(geom::Point::new(x, y));
+            editor
+                .add_draft_point(geom::Point::new(x, y))
+                .expect("the point plots");
         }
         editor.commit_draft().expect("the append replay applies");
 
@@ -791,7 +793,9 @@ mod tests {
         editor.tool = crate::editor::Tool::PolygonSlice;
         let plotted = [(20.0, 30.0), (80.0, 30.0), (80.0, 70.0)];
         for (x, y) in plotted {
-            editor.add_draft_point(geom::Point::new(x, y));
+            editor
+                .add_draft_point(geom::Point::new(x, y))
+                .expect("the point plots");
         }
         editor.commit_draft().expect("the append replay applies");
 

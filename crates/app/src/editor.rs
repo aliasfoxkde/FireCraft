@@ -758,6 +758,10 @@ pub struct PolygonDraft {
 pub struct PointDraft {
     /// The vertices, in page coordinates.
     pub points: Vec<geom::Point>,
+    /// The tool that started the path. The path belongs to it: a Pen
+    /// path stays a Pen path even when the user picks another tool
+    /// before the path is committed.
+    pub tool: Tool,
 }
 
 /// One place computes the constrained drag geometry — the
@@ -3442,20 +3446,48 @@ impl Editor {
     /// Adds a vertex to the path being plotted. CS6's Pen, Polygon
     /// Slice and Polygon Hotspot all place their points with clicks,
     /// one click each.
-    pub fn add_draft_point(&mut self, world: geom::Point) {
+    ///
+    /// A plotted path belongs to the tool that started it. Picking
+    /// another tool converts the pending path explicitly: it is
+    /// committed as the tool that plotted it, so its points can never
+    /// be folded into the other tool's object. The answer says whether
+    /// that conversion committed a path.
+    ///
+    /// # Errors
+    /// The engine refuses the conversion; the document is untouched.
+    pub fn add_draft_point(&mut self, world: geom::Point) -> Result<bool, EngineError> {
+        let pending_tool = self.draft.as_ref().map(|draft| draft.tool);
+        let mut converted = false;
+        if let Some(tool) = pending_tool
+            && tool != self.tool
+        {
+            converted = self.commit_draft()?;
+            if !converted {
+                // Too few points to become an object: the path
+                // cannot be committed, so it is dropped rather
+                // than carried into the other tool's path.
+                self.draft = None;
+            }
+        }
         match self.draft.as_mut() {
             Some(draft) => draft.points.push(world),
             None => {
                 self.draft = Some(PointDraft {
                     points: vec![world],
+                    tool: self.tool,
                 });
             }
         }
+        Ok(converted)
     }
 
     /// Commits the plotted path: the Pen's polyline, a polygon slice
     /// or a polygon hotspot. A refused commit keeps the draft, so the
     /// next click adds the point that was missing.
+    ///
+    /// The commit follows the draft's own tool, not the tool that
+    /// happens to be selected: a path plotted with the Pen is a
+    /// polyline even if the user picked another tool since.
     ///
     /// # Errors
     /// The engine refuses the creation; the document is untouched.
@@ -3463,12 +3495,19 @@ impl Editor {
         let Some(draft) = self.draft.as_ref() else {
             return Ok(false);
         };
-        let minimum = match self.tool {
+        let tool = draft.tool;
+        let plotted = draft.points.len();
+        let minimum = match tool {
             Tool::Pen => 2,
             Tool::PolygonSlice | Tool::PolygonHotspot => 3,
-            _ => return Ok(false),
+            _ => {
+                // A path plotted by a tool that cannot make one is
+                // dropped, not left pending forever.
+                self.draft = None;
+                return Ok(false);
+            }
         };
-        if draft.points.len() < minimum {
+        if plotted < minimum {
             return Ok(false);
         }
         let Some(draft) = self.draft.take() else {
@@ -3479,7 +3518,7 @@ impl Editor {
             .iter()
             .map(|point| [point.x, point.y])
             .collect();
-        match self.tool {
+        match tool {
             Tool::Pen => {
                 self.apply(
                     "object.createPolyline",
@@ -3494,7 +3533,7 @@ impl Editor {
                 )?;
             }
             Tool::PolygonSlice | Tool::PolygonHotspot => {
-                let command = if self.tool == Tool::PolygonSlice {
+                let command = if tool == Tool::PolygonSlice {
                     "slice.appendPoint"
                 } else {
                     "hotspot.appendPoint"
