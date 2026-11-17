@@ -24,7 +24,7 @@ Produce a complete, version-consistent release set for FireCraft with:
 
 The release should be reproducible from a clean, tagged source tree and must never mix outputs from different commits or versions.
 
-## 1.1 MVP v1 candidate — recommended first release cut
+## 1.1 MVP v1 candidate — the approved release scope
 
 The complete matrix below is the cross-platform roadmap, not a reason to
 hold the first stable release indefinitely. For an initial public MVP,
@@ -52,10 +52,13 @@ follow-on targets and must not be advertised as supported production
 packages until their target-specific acceptance evidence exists. RPM is
 deferred by decision 0070.
 
-This is a recommended scope cut for maintainer approval, not an automatic
-change to the long-term cross-platform target matrix. If v1 is required to
-include every platform in that matrix, retain the full matrix as a release
-blocker and plan the corresponding native-runner work explicitly.
+This scope cut was approved by the maintainer on 2026-11-17 and is
+recorded in [decision 0075](decisions/0075-release-scope-mvp.md), the
+repository's release-scope authority. The approval narrows what a
+*release* must contain; it does not change the long-term cross-platform
+target matrix in §3, and it does not retire any of the extended targets
+above. A later cut that includes every platform in that matrix needs its
+own scope decision and its own approval.
 
 ## 2. Baseline inventory and constraints
 

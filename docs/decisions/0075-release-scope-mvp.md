@@ -1,7 +1,9 @@
 # 0075 — Release scope: the MVP candidate and the extended campaign
 
 Date: 2026-11-09 · Ticket: [T27](../tasks/T27-cross-platform-release.md) ·
-Status: **recommended — awaiting maintainer approval**
+Status: **accepted** · Approved by: **Michael Kinney** (maintainer) on
+**2026-11-17** — the MVP candidate scope below is the approved release
+scope.
 
 ## Decision
 
@@ -32,30 +34,48 @@ compete with this record:
 Where this record, the plan, and the audit disagree about *what exists*,
 the audit wins; the audit is dated and evidence-backed. Where they
 disagree about *what should be released*, this record wins, because it
-is the scope authority — but only once the maintainer has approved it.
+is the scope authority — and the maintainer approved it on 2026-11-17.
 
 ### Approval state
 
-**The maintainer has not approved an MVP scope.** The campaign mandate
-is explicit on this point: *"Record the maintainer's approved scope. Do
-not treat a recommendation as approval."*
+**The maintainer has approved the MVP candidate scope.** The campaign
+mandate is explicit on this point: *"Record the maintainer's approved
+scope. Do not treat a recommendation as approval."* This record is that
+record.
 
-Therefore:
+- **Approved by:** Michael Kinney (maintainer) on 2026-11-17, recorded
+  by the *Status* line above. Nothing else in the repository implies
+  approval; a plan, a ticket, a matrix, or a plan's own "recommended"
+  wording is not approval.
+- **The approved scope is the MVP candidate below** — items 1 through 9
+  of the candidate table. A release cut must contain those items and
+  must satisfy the candidate's gate conditions; nothing else is
+  authorized for a release cut.
+- **The full cross-platform target matrix in
+  `docs/RELEASE-ENGINEERING-PLAN.md` §3 remains the standing campaign
+  matrix.** The approval narrows what a *release* must contain; it does
+  not delete the extended targets, and it does not retire the plan's
+  work order.
+- **Nothing outside the candidate is a supported production package.**
+  Windows, macOS, AppImage, Flatpak, Android, ARM64 and RPM stay in the
+  extended campaign, each with its own target-specific acceptance
+  evidence, and none of them may be advertised as supported before that
+  evidence exists.
+- The approval covers *scope*, not *readiness*. An item inside the
+  approved scope is still `NOT STARTED`, `BUILD VERIFIED` or `BLOCKED`
+  until it carries its own receipt; the scope decision authorizes the
+  cut, it does not certify its artifacts.
 
-- The scope below is a **recommendation**.
-- **The approved scope of this repository is currently unset.** No
-  release cut is authorized against a scope that has not been approved.
-- Until an approval is recorded here, the **full cross-platform target
-  matrix in `docs/RELEASE-ENGINEERING-PLAN.md` §3 remains the standing
-  scope**, and the MVP candidate below is a proposal to narrow it.
-- The approval is recorded by changing the *Status* line of this record
-  to `accepted` and naming the approver and date. Nothing else in the
-  repository implies approval; a plan, a ticket, a matrix, or a plan's
-  own "recommended" wording is not approval.
+The approval was recorded after the evidence baseline was taken
+(`docs/release/PHASE-0-AUDIT.md`, 2026-11-09). The candidate's
+"candidate status today" column below therefore describes the state at
+the audit date, not the state at the approval date; the per-artifact
+current state is [`docs/release/ARTIFACT-MATRIX.md`](../release/ARTIFACT-MATRIX.md),
+which remains the evidence ledger and is updated as artifacts move.
 
-### MVP candidate scope (recommended, not approved)
+### MVP candidate scope (approved 2026-11-17)
 
-| # | Item | Campaign mandate wording | Candidate status today (audit 2026-11-09) |
+| # | Item | Campaign mandate wording | Status at the audit date (2026-11-09) |
 |---|---|---|---|
 | 1 | Web / WASM bundle | Web/WASM | `PUBLISHED` — rung 11 for the published ZIP; the deployed bundle is unreconciled (B-6) and the published bytes were never smoke-tested (F-16) |
 | 2 | Linux x86_64 desktop archive | Linux x86_64 desktop archive | `PUBLISHED` — rung 11 |
@@ -72,13 +92,13 @@ remediation merged, the canonical gate green, the packaged artifacts
 verified, and the deployed web hashes matching the tagged build before
 publishing.
 
-### Extended campaign scope (recommended, not approved)
+### Extended campaign scope (not in the approved release scope)
 
-These are **not** part of the MVP candidate and are not to be advertised
-as supported production packages until their own target-specific
-acceptance evidence exists.
+These are **not** part of the approved release scope and are not to be
+advertised as supported production packages until their own
+target-specific acceptance evidence exists.
 
-| # | Item | Campaign mandate wording | Candidate status today | Blocking condition |
+| # | Item | Campaign mandate wording | Status at the audit date (2026-11-09) | Blocking condition |
 |---|---|---|---|---|
 | 10 | Linux AppImage | Linux AppImage | `NOT STARTED` — rung 1 | `linuxdeploy` absent (B-8); no pinned copy vendored |
 | 11 | Linux Flatpak | Linux Flatpak | `NOT STARTED` — rung 1 | `flatpak` / `flatpak-builder` absent (B-11); no recipe on `main` |
@@ -122,7 +142,7 @@ second copy.
 - `docs/RELEASE-ENGINEERING-PLAN.md` §1.1 keeps its "recommended"
   wording; the plan's own §1.1 already states that it is a
   recommendation, and this record confirms it.
-- An MVP cut, if approved, does not delete the extended campaign. It
+- The approved MVP cut does not delete the extended campaign. It
   narrows what a *release* must contain; the extended items stay in
   the matrix as follow-on targets with their own evidence gates.
 - The T27 stopping condition — "close T27 only when RP-08's

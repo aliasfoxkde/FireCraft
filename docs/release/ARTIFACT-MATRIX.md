@@ -266,5 +266,6 @@ artifacts without it). Tracked by issue #81 / task #158, defect **B-6**.
 
 This matrix describes **evidence state**, not release scope. Which of
 these artifacts constitute an acceptable release cut is decided by
-[decision 0075](../decisions/0075-release-scope-mvp.md), whose approval
-state is *recommended — awaiting maintainer approval*.
+[decision 0075](../decisions/0075-release-scope-mvp.md), which is
+**accepted** (Michael Kinney, 2026-11-17): the approved release scope is
+the MVP candidate scope in that record.
