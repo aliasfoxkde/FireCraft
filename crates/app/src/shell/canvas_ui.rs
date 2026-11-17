@@ -1309,14 +1309,20 @@ impl Shell {
                     // CS6 plots these with clicks: one click, one
                     // vector point.
                     let world = self.view.to_world(local);
-                    self.editor.add_draft_point(world);
-                    self.status = format!(
-                        "point {} plotted",
-                        self.editor
-                            .draft
-                            .as_ref()
-                            .map_or(0, |draft| draft.points.len())
-                    );
+                    match self.editor.add_draft_point(world) {
+                        Ok(_) => {
+                            self.status = format!(
+                                "point {} plotted",
+                                self.editor
+                                    .draft
+                                    .as_ref()
+                                    .map_or(0, |draft| draft.points.len())
+                            );
+                        }
+                        Err(error) => {
+                            self.status = format!("the plotted path failed: {error}");
+                        }
+                    }
                 }
                 Tool::Zoom => {
                     let factor = if ui.input(|i| i.modifiers.alt) {
