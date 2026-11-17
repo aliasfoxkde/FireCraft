@@ -8694,14 +8694,19 @@ mod tests {
                 shell.properties_panel(ui);
             });
         });
-        output
+        let labels = output
             .shapes
             .iter()
             .filter_map(|shape| match &shape.shape {
                 egui::epaint::Shape::Text(text) => Some(text.galley.job.text.clone()),
                 _ => None,
             })
-            .collect()
+            .collect();
+        // The frame's texture deltas are never applied here, so they
+        // must be cleared before the output is dropped: epaint panics
+        // when a delta is dropped unapplied.
+        output.drop_without_applying_deltas();
+        labels
     }
 
     /// Whether the inspector drew a field named `field`: a
