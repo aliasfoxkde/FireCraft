@@ -584,4 +584,153 @@ mod tests {
         assert!(!cache.layout.cells.is_empty());
         assert!(cache.layout.width > 0.0);
     }
+
+    /// The Polygon Hotspot tool commits through the append state
+    /// machine (decision 0029's Design C): point 1 takes
+    /// `hotspot.appendPoint`'s create branch, each later point
+    /// appends, and the final anchor closes the outline — one undo
+    /// step named for the verb. The anchors reach the exported image
+    /// map, so the geometry the replay writes is the geometry a
+    /// browser would hit.
+    #[test]
+    fn the_polygon_hotspot_tool_commits_through_append_point() {
+        let mut editor = crate::editor::Editor::untitled();
+        // A slice covering the canvas gives the hotspot a host piece
+        // — the map hangs off the piece under the hotspot's center.
+        editor.tool = crate::editor::Tool::Slice;
+        editor.begin_drag(geom::Point::new(0.0, 0.0));
+        editor.drag_to(geom::Point::new(320.0, 240.0));
+        editor.end_drag().expect("slice.create applies");
+
+        let selection_before = editor.document().object_selection.clone();
+        editor.tool = crate::editor::Tool::PolygonHotspot;
+        let plotted = [(10.0, 10.0), (60.0, 10.0), (60.0, 40.0)];
+        for (x, y) in plotted {
+            editor.add_draft_point(geom::Point::new(x, y));
+        }
+        editor.commit_draft().expect("the append replay applies");
+
+        let hotspots: Vec<_> = editor
+            .document()
+            .registry
+            .iter()
+            .filter_map(|(id, data)| match data {
+                doc::ObjectData::Slice(slice) if slice.slice_type.is_none() => {
+                    Some((id, slice.clone()))
+                }
+                _ => None,
+            })
+            .collect();
+        assert_eq!(hotspots.len(), 1, "one polygon hotspot was created");
+        let hotspot = &hotspots[0].1;
+        assert_eq!(hotspot.shape, 2, "the area is a polygon");
+        let contour = hotspot.contours.first().expect("the outline");
+        assert!(contour.closed, "the final anchor closes the outline");
+        let anchors: Vec<(f64, f64)> = contour
+            .points
+            .iter()
+            .map(|point| (point.anchor.x, point.anchor.y))
+            .collect();
+        assert_eq!(
+            anchors,
+            plotted.to_vec(),
+            "every plotted anchor landed in order"
+        );
+        assert_eq!(
+            editor.document().object_selection,
+            selection_before,
+            "the replay restores the selection it started with"
+        );
+
+        // The exported image map carries those anchors.
+        let options = webexport::WebExportOptions::default();
+        let cache = build_cache(editor.document(), &options);
+        assert!(cache.error.is_none(), "{:?}", cache.error);
+        assert!(cache.html.contains("<map "), "the export writes a map");
+        assert!(
+            cache
+                .html
+                .contains("shape=\"poly\" coords=\"10,10,60,10,60,40\""),
+            "the map carries the replayed anchors"
+        );
+
+        // One undo step, named for the verb the tool replays.
+        assert_eq!(
+            editor.session.undo().expect("an undo step"),
+            "hotspot.appendPoint",
+            "the tool dispatched the append verb"
+        );
+        assert!(
+            !editor
+                .document()
+                .registry
+                .iter()
+                .any(|(_, data)| matches!(data, doc::ObjectData::Slice(slice) if slice.slice_type.is_none())),
+            "undo takes the replayed hotspot away"
+        );
+    }
+
+    /// The Polygon Slice tool takes the same replay through
+    /// `slice.appendPoint`, and the frame grows to carry every
+    /// anchor.
+    #[test]
+    fn the_polygon_slice_tool_commits_through_append_point() {
+        let mut editor = crate::editor::Editor::untitled();
+        editor.tool = crate::editor::Tool::PolygonSlice;
+        let plotted = [(20.0, 30.0), (80.0, 30.0), (80.0, 70.0)];
+        for (x, y) in plotted {
+            editor.add_draft_point(geom::Point::new(x, y));
+        }
+        editor.commit_draft().expect("the append replay applies");
+
+        let slices: Vec<_> = editor
+            .document()
+            .registry
+            .iter()
+            .filter_map(|(id, data)| match data {
+                doc::ObjectData::Slice(slice) if slice.slice_type.is_some() => {
+                    Some((id, slice.clone()))
+                }
+                _ => None,
+            })
+            .collect();
+        assert_eq!(slices.len(), 1, "one polygon slice was created");
+        let slice = &slices[0].1;
+        assert_eq!(slice.shape, 2, "the slice is a polygon");
+        let contour = slice.contours.first().expect("the outline");
+        assert!(contour.closed, "the final anchor closes the outline");
+        let anchors: Vec<(f64, f64)> = contour
+            .points
+            .iter()
+            .map(|point| (point.anchor.x, point.anchor.y))
+            .collect();
+        assert_eq!(
+            anchors,
+            plotted.to_vec(),
+            "every plotted anchor landed in order"
+        );
+        assert_eq!(
+            (
+                slice.frame.x0,
+                slice.frame.y0,
+                slice.frame.x1,
+                slice.frame.y1
+            ),
+            (20.0, 30.0, 80.0, 70.0),
+            "the frame carries the anchors"
+        );
+        assert_eq!(
+            editor.session.undo().expect("an undo step"),
+            "slice.appendPoint",
+            "the tool dispatched the append verb"
+        );
+        assert!(
+            !editor
+                .document()
+                .registry
+                .iter()
+                .any(|(_, data)| matches!(data, doc::ObjectData::Slice(_))),
+            "undo takes the replayed slice away"
+        );
+    }
 }

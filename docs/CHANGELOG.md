@@ -18,6 +18,12 @@ Current version: **0.2.5**.
 - **xtask**: the coverage gate prints its inputs (7766d175)
 - **xtask**: the altimeter measures the scoreboard (c36f934a)
 - **xtask**: print the reachability gap (T28) (98a73831)
+- **app**: the Auto Shapes panel gains an Insert/Redraw mode (7e985105)
+- **app**: the polygon web tools commit through appendPoint replay (c25d8bd5)
+- **app**: Edit ▸ Delete All... asks before emptying the document (ecd33807)
+- **app**: the mask panel's "make plain group" row retypes the mask group (eb8c3dae)
+- **app**: Modify ▸ Transform ▸ "Scale To..." resizes to an exact box (44d8722f)
+- **app**: the Freeform tool warps and the Crop tool cuts the selection (f7ab6e8f)
 - **app,engine**: the mask stack — model, persistence, fold, and level panel (#113) (bb5a01f8)
 - **shell**: close the measured reachability gap in the shell's panels (#143) (78abb531)
 - **app,engine**: a mask level links and unlinks its own mask (0418c24b)
@@ -1033,6 +1039,7 @@ Current version: **0.2.5**.
 
 ### Other
 
+- The last eight verbs reach their named surfaces #150 (23f872e0)
 - brand: use the approved flame artwork consistently (#144) (ad3fc655)
 - wip(keymap): preserve the CS6 keymap binding work in progress (385ec681)
 - wip(app,web): localStorage session persistence (21.1 partial) (70146380)

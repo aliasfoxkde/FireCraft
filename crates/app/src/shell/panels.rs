@@ -101,15 +101,34 @@ impl Shell {
         });
         ui.weak("Scales the whole interface (HiDPI displays). Persists across sessions.");
         ui.add_space(6.0);
+        ui.heading("Keyboard");
+        ui.horizontal(|ui| {
+            ui.label("Keymap set:");
+            let mut set = self.keymap();
+            egui::ComboBox::from_id_salt("keymap_set")
+                .selected_text(set.label())
+                .show_ui(ui, |ui| {
+                    for candidate in crate::keymap::KeymapSet::ALL {
+                        ui.selectable_value(&mut set, candidate, candidate.label());
+                    }
+                });
+            if set != self.keymap() {
+                self.set_keymap(set);
+            }
+        });
+        ui.weak("The set in force changes what the keys do and what the menu bar prints. CS6's own keymap is the default.");
+        ui.add_space(6.0);
         if ui.button("Close").clicked() {
             self.preferences_open = false;
         }
     }
 
-    /// The keyboard-shortcuts help panel: every binding in the
-    /// SHORTCUTS table, grouped by the table's section structure.
+    /// The keyboard-shortcuts help panel: every binding in force,
+    /// grouped by the table's section structure.
     pub(super) fn help_panel(&mut self, ctx: &egui::Context) {
         let mut open = self.help_open;
+        let set = self.keymap();
+        let bindings = self.keymap_bindings.clone();
         egui::Window::new("Keyboard Shortcuts")
             .open(&mut open)
             .resizable(true)
@@ -128,20 +147,25 @@ impl Shell {
                             )
                             .wrap(),
                         );
+                        ui.add(
+                            egui::Label::new(
+                                egui::RichText::new(format!("Keymap set: {}", set.label()))
+                                    .italics(),
+                            )
+                            .wrap(),
+                        );
                         ui.separator();
                         // Every binding carries the section it is filed
                         // under; a new heading starts wherever that
                         // section changes.
                         let mut row = 0usize;
-                        while row < menus::SHORTCUTS.len() {
-                            let title = menus::SHORTCUTS[row].group;
+                        while row < bindings.len() {
+                            let title = bindings[row].group;
                             let start = row;
-                            while row < menus::SHORTCUTS.len()
-                                && menus::SHORTCUTS[row].group == title
-                            {
+                            while row < bindings.len() && bindings[row].group == title {
                                 row += 1;
                             }
-                            let section = &menus::SHORTCUTS[start..row];
+                            let section = &bindings[start..row];
                             ui.heading(title);
                             egui::Grid::new(title.to_string())
                                 .num_columns(2)
@@ -1553,6 +1577,16 @@ impl Shell {
                 if ui.button(mode).clicked() {
                     self.mask_set_mode(id, mode);
                 }
+                // The mask group stops being one: `GRTi` 1/2 → 0
+                // with `MNAb` untouched, so the content draws
+                // unmasked *and* the mask's own artwork joins the
+                // group as an ordinary member. Distinct from Disable
+                // Mask (`mask.enable`), which hides that artwork —
+                // and it only appears where the verb has a group to
+                // retype, so it never lands as a Noop.
+                if ui.button("make plain group").clicked() {
+                    self.mask_make_plain_group(facts.group_id);
+                }
             }
             let label = if facts.hidden {
                 "show mask attributes"
@@ -1633,6 +1667,34 @@ impl Shell {
         self.run_command(
             "mask.setMode",
             serde_json::json!({ "id": id, "mode": mode }),
+        );
+    }
+
+    /// `object.setGroupType` — CS6's *Make Plain Group*: the mask
+    /// group stops being one.
+    ///
+    /// The verb walks the document's selection and retypes only
+    /// groups whose `GRTi` is not already 0, so the owning mask group
+    /// is selected before it runs — the same bridge
+    /// [`Self::paste_channel`] uses. What changes is `GRTi` 1/2 → 0
+    /// with `MNAb` untouched: the compositor stops masking and draws
+    /// every child as ordinary artwork, so the mask's own image joins
+    /// the group as a visible member. That is the whole difference
+    /// from *Disable Mask* (`mask.enable`), which hides that artwork
+    /// on the way out.
+    ///
+    /// Decision 0117 read this verb as a no-op — "the only action it
+    /// could carry would leave the document unchanged" — which holds
+    /// only where the group is already plain. The row lives where the
+    /// group is not.
+    pub(super) fn mask_make_plain_group(&mut self, group_id: doc::ObjectId) {
+        self.editor.set_selection(vec![group_id]);
+        if !self.sync_document_selection() {
+            return;
+        }
+        self.run_command(
+            "object.setGroupType",
+            serde_json::json!({ "group_type": "normal" }),
         );
     }
 

@@ -20,7 +20,7 @@ physical ARM64 device and passes import → edit → export.
 
 **Verification:** `adb install <apk> && adb shell am start -n dev.firecraft.FireCraft/.MainActivity`
 
-**Evidence:** Closed with the deferral: [decision 0121](../decisions/0121-the-android-gate-defers-the-native-port.md) — the stack is sound (no crate on the critical path blocks `aarch64-linux-android`), but this fleet has no NDK/SDK CI image and no physical ARM64 device, so the port cannot be exercised and no support is claimed
+**Evidence:** Closed with the deferral: [decision 0121](../decisions/0121-the-android-gate-defers-the-native-port.md) — the stack is sound (no crate on the critical path blocks `aarch64-linux-android`), but this fleet has no NDK/SDK CI image and no physical ARM64 device, so the port cannot be exercised and no support is claimed **Done:** 2026-11-16: deferred by decision 0121.
 
 **Blockers:** an Android SDK/NDK CI image; a physical ARM64 device reachable with `adb`
 

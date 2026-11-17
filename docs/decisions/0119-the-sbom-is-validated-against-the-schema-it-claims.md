@@ -29,11 +29,23 @@ claims to describe. The two defects that made this reachable:
    SPDX *identifiers* — so `"MIT OR Apache-2.0"`, which is an SPDX
    *expression*, is not a valid identifier. The field was wrong for
    every crate whose licence is an expression, and no check said so.
-2. **The inventory was never compared.** The SBOM is generated from
-   `cargo metadata --locked` and the lockfile is what `--locked` means,
-   so the two come from the same source — but nothing *checked* it, so
-   a generator change that dropped or renamed a package would have
-   shipped a plausible, schema-shaped, wrong document.
+2. **The inventory was never compared.** The SBOM was generated from
+   `cargo metadata --locked`, and the generator assumed that the
+   lockfile and the metadata graph were the same set of packages. They
+   are not, and the assumption was the defect: `cargo metadata`
+   reports the *resolved* graph — the packages the current feature
+   selection actually activates — while `Cargo.lock` pins the
+   *complete* inventory, because Cargo resolves the lockfile
+   independently of any one feature selection. Optional and
+   platform-specific dependencies that no enabled feature activates
+   are pinned but absent from the resolved graph. Measured on this
+   workspace: 560 packages resolved, 562 pinned, the difference being
+   `glob 0.3.4` and `libwebp-sys 0.14.4` — the webp-codec chain that
+   nothing here enables. A generator that took the metadata graph as
+   the inventory therefore shipped a document that omitted two crates
+   the lockfile names, and nothing *checked* it, so a generator change
+   that dropped or renamed a package would equally have shipped a
+   plausible, schema-shaped, wrong document.
 
 ## Decision
 
@@ -59,18 +71,34 @@ claims to describe. The two defects that made this reachable:
   and writes `{"license": {"id": ...}}` only for a string the schema
   lists; every other licence — an expression such as
   `"MIT OR Apache-2.0"` — goes in the schema's `expression` branch.
-- **The inventory is compared against the lockfile.** The gate reads
-  `Cargo.lock`'s `[[package]]` sections and compares them with the
-  SBOM's components as sets of (name, version). A package the
-  lockfile pins that the SBOM does not list, or a component the SBOM
-  lists that the lockfile does not pin, fails the gate and names both
-  sides.
+- **The inventory is the lockfile's, and it is a superset of the
+  build.** The gate reads `Cargo.lock`'s `[[package]]` sections and
+  takes that as the inventory: every locked package becomes a
+  component, whether or not the current feature selection resolves it.
+  A package the lockfile pins but the resolved graph omits is listed
+  as a component with an **empty dependency edge** — it is pinned, not
+  linked — and carries the archive digest the lockfile records for it.
+  A build on another platform, or under another feature set, links it,
+  so a document that omitted it would understate what can end up in a
+  shipped binary.
+- **The inventory is compared against the lockfile.** The gate then
+  compares the SBOM's components with the lockfile as sets of (name,
+  version). A package the lockfile pins that the SBOM does not list,
+  or a component the SBOM lists that the lockfile does not pin, fails
+  the gate and names both sides. The comparison is a real assertion
+  only because the inventory is the lockfile's; it is a tautology
+  against a resolved graph, which is where the two-package omission
+  hid.
 
 ## Consequences
 
 - The SBOM is now a claim the gate can falsify: it is a document that
   conforms to the published schema and whose inventory is the
   lockfile's, checked before it is written.
+- The document names 562 components for a 560-package resolved graph.
+  That is deliberate: two of them are pinned but not linked here, and
+  the point of a supply-chain document is the set of things that can
+  be built, not the set that this machine happened to activate.
 - The licence defect above is fixed by construction rather than by
   enumeration: the set of identifiers comes from the schema, so a new
   SPDX identifier needs no change here, and a licence string that is

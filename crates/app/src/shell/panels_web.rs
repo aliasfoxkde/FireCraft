@@ -114,17 +114,51 @@ pub(super) struct WebSnapshot {
 impl Shell {
     /// Window ▸ Auto Shapes: the CS6 shape gallery. CS6 drags a shape
     /// from the panel onto the canvas; a click here inserts the same
-    /// shape at the canvas center.
+    /// shape at the canvas center. The explicit Insert/Redraw mode
+    /// decides what a click does — Redraw re-runs the chosen
+    /// generator into the selected path instead of minting a new one
+    /// (decision 0028's parametric redraw, the surface decision 0117
+    /// said the verb lacked).
     pub(super) fn auto_shapes_panel(&mut self, ui: &mut egui::Ui) {
-        ui.label("Click a shape to insert it at the canvas center.");
+        ui.horizontal(|ui| {
+            let insert = ui.selectable_label(!self.autoshape_redraw, "Insert");
+            let redraw = ui.selectable_label(self.autoshape_redraw, "Redraw");
+            if insert.clicked() {
+                self.autoshape_redraw = false;
+            }
+            if redraw.clicked() {
+                self.autoshape_redraw = true;
+            }
+        });
+        if self.autoshape_redraw {
+            ui.label(
+                "Redraw mode: click a shape to regenerate the selected path \
+                 from the panel's box and corner.",
+            );
+        } else {
+            ui.label("Click a shape to insert it at the canvas center.");
+        }
         ui.separator();
         let roster = shape_roster();
         egui::Grid::new("auto_shapes")
             .num_columns(2)
             .show(ui, |ui| {
                 for (label, kind) in roster {
-                    if ui.button(label).clicked() {
-                        self.insert_shape(kind, label);
+                    // Redraw re-runs an `autoshape.*` generator; the
+                    // two primitives have no library entry to
+                    // re-run, so their rows stand down in redraw
+                    // mode rather than pretend.
+                    let redrawable = matches!(kind, ShapeKind::Auto(_));
+                    let enabled = redrawable || !self.autoshape_redraw;
+                    let clicked = ui.add_enabled(enabled, egui::Button::new(label)).clicked();
+                    if clicked {
+                        if self.autoshape_redraw {
+                            if let ShapeKind::Auto(shape) = kind {
+                                self.redraw_shape(shape, label);
+                            }
+                        } else {
+                            self.insert_shape(kind, label);
+                        }
                     }
                     ui.end_row();
                 }
@@ -167,6 +201,46 @@ impl Shell {
         };
         if inserted {
             self.status = format!("{label} inserted.");
+        }
+    }
+
+    /// `autoshape.redraw` — the panel's Redraw mode: re-run the
+    /// chosen library generator into the selected path (decision
+    /// 0028's parametric redraw). The payload is the insert payload
+    /// minus placement — page/layer/cell/name are dead weight on an
+    /// object that already sits in its cell — plus the target id and
+    /// the `kind` string the command id carries (`autoshape.star` →
+    /// `star`). Any selected path is a valid target, like the engine
+    /// says; with none selected the row reports so and dispatches
+    /// nothing (never a silent no-op).
+    pub(super) fn redraw_shape(&mut self, shape: AutoShape, label: &str) {
+        let Some(target) = self.editor.live_selection().into_iter().find(|id| {
+            matches!(
+                self.editor.document().registry.get(*id),
+                Some(doc::ObjectData::Path(_))
+            )
+        }) else {
+            self.status = "Redraw needs a selected path".to_owned();
+            return;
+        };
+        let (x, y, size) = self.insert_box();
+        let mut params = shape.payload_in_rect(0, 0, 0, x, y, size, self.editor.rect_corner);
+        if let Some(object) = params.as_object_mut() {
+            for key in ["page", "layer", "cell", "name"] {
+                object.remove(key);
+            }
+        }
+        let command = shape.command();
+        let kind = command.strip_prefix("autoshape.").unwrap_or(command);
+        if self.run_command(
+            "autoshape.redraw",
+            serde_json::json!({
+                "id": target,
+                "kind": kind,
+                "params": params,
+            }),
+        ) {
+            self.status = format!("{label} redrawn.");
         }
     }
 
@@ -1094,21 +1168,32 @@ impl Shell {
             return;
         };
         ui.label(format!("Target: {}", snapshot.name));
-        let Some(doc::ObjectData::Slice(slice)) = self.editor.document().registry.get(snapshot.id)
-        else {
-            return;
-        };
-        let css = slice_css(slice);
-        if css.is_empty() {
+        let Some(css) = self.css_properties_text() else {
             ui.label("(no CSS properties — this slice carries no background)");
             return;
-        }
+        };
         ui.add(
             egui::TextEdit::multiline(&mut css.as_str())
                 .desired_width(DOCK_CONTENT_WIDTH)
                 .desired_rows(6)
                 .interactive(false),
         );
+    }
+
+    /// The CSS the panel shows: the selected web object's
+    /// declarations. `None` when the selection is not a web object or
+    /// carries nothing the panel can express.
+    ///
+    /// Read-only by design — the edit surfaces are the slice verbs,
+    /// and this panel dispatches nothing.
+    fn css_properties_text(&self) -> Option<String> {
+        let snapshot = self.selected_web_object()?;
+        let doc::ObjectData::Slice(slice) = self.editor.document().registry.get(snapshot.id)?
+        else {
+            return None;
+        };
+        let css = slice_css(slice);
+        (!css.is_empty()).then_some(css)
     }
 
     /// Window ▸ Find and Replace: searches text objects and replaces
@@ -1213,23 +1298,32 @@ impl Shell {
                     egui::DragAndDrop::set_payload(ui.ctx(), *number);
                 }
                 if row.clicked() {
-                    let (x, y) = self.symbol_insert_translation(*number);
-                    let placed = self.run_command(
-                        "symbol.createInstance",
-                        serde_json::json!({
-                            "symbol": number,
-                            "x": x, "y": y,
-                            "page": self.editor.page,
-                            "layer": self.editor.active_layer(),
-                            "cell": self.editor.frame,
-                        }),
-                    );
+                    let placed = self.place_symbol_instance(*number);
                     if placed {
                         self.status = format!("{name} instance inserted.");
                     }
                 }
             });
         }
+    }
+
+    /// Places an instance of the symbol `number` at the panel's
+    /// placement point (`symbol.createInstance`).
+    ///
+    /// The click and the drag both land here, so the verb this panel
+    /// dispatches is one thing — and one thing a regression can name.
+    fn place_symbol_instance(&mut self, number: i64) -> bool {
+        let (x, y) = self.symbol_insert_translation(number);
+        self.run_command(
+            "symbol.createInstance",
+            serde_json::json!({
+                "symbol": number,
+                "x": x, "y": y,
+                "page": self.editor.page,
+                "layer": self.editor.active_layer(),
+                "cell": self.editor.frame,
+            }),
+        )
     }
 }
 
@@ -1611,86 +1705,93 @@ mod tests {
         assert!(!plate_frame.contains(point), "{point:?} is on the receiver");
     }
 
-    /// A shell holding one text object carrying `text`.
-    fn text_shell(text: &str) -> (Shell, doc::ObjectId) {
-        let mut editor = crate::editor::Editor::untitled();
-        editor
-            .apply(
-                "text.createText",
-                serde_json::json!({
-                    "page": 0, "layer": 0, "cell": 0,
-                    "x": 0.0, "y": 0.0, "width": 80.0, "height": 20.0,
-                    "text": text, "name": null,
-                }),
-            )
-            .expect("the text object is created");
-        let id = editor
-            .document()
-            .registry
-            .iter()
-            .find_map(|(id, data)| match data {
-                doc::ObjectData::Text(_) => Some(id),
-                _ => None,
-            })
-            .expect("the text object is registered");
-        (super::super::tests::gui_shell(editor), id)
+    /// The name of the last command that reached the registry.
+    ///
+    /// The panels' contract with the engine is the *command*, not the
+    /// document mutation it leaves behind: a panel that wrote the
+    /// document directly would leave the journal empty, and the undo
+    /// stack would miss the step.
+    fn last_command(shell: &Shell) -> &str {
+        match shell.editor.session.journal_entries().last() {
+            Some(entry) => entry.name.as_str(),
+            None => "",
+        }
     }
 
-    /// The Find and Replace panel's row reaches the registry as the
-    /// `text.setText` verb — the panel's own verb, not a silent
-    /// in-panel edit that no other surface would see.
+    /// The Find-and-Replace panel's replace goes through the engine's
+    /// `text.setText` verb, with the rewritten run as its payload.
     #[test]
-    fn the_find_and_replace_panel_dispatches_text_set_text() {
-        let (mut shell, id) = text_shell("alpha alpha");
-        shell.replace_text(id, "alpha", "beta");
-        // The effect is read before the undo: undoing the step puts the
-        // old text back, so a check after it would read the state the
-        // panel was supposed to have replaced.
-        let characters = {
-            let Some(doc::ObjectData::Text(text)) = shell.editor.document().registry.get(id) else {
-                panic!("the object is a text object");
-            };
-            text_characters(text)
-        };
-        assert_eq!(characters, "beta beta");
-        assert_eq!(
-            shell.editor.undo().expect("the replacement is undoable"),
-            "text.setText",
-            "the panel dispatches the text verb"
-        );
+    fn the_find_and_replace_panel_dispatches_set_text() {
+        let (mut shell, id) = super::super::tests::text_shell("a cat in a hat");
+        shell.replace_text(id, "cat", "dog");
+        assert_eq!(last_command(&shell), "text.setText");
+        let entry = shell
+            .editor
+            .session
+            .journal_entries()
+            .last()
+            .expect("the replace is journaled");
+        assert_eq!(entry.payload["id"], serde_json::json!(id));
+        assert_eq!(entry.payload["text"], serde_json::json!("a dog in a hat"));
     }
 
-    /// The Slices panel's type editor reaches the registry as the
-    /// `slice.setType` verb.
+    /// The Slices panel's editors dispatch the slice verbs:
+    /// `slice.setType` for the type, `hotspot.setShape` for the
+    /// shape, `slice.setExport` for the export override.
     #[test]
     fn the_slices_panel_dispatches_the_slice_verbs() {
         let (mut shell, plate, _) = slice_shell();
         assert!(shell.set_slice_kind(plate, SliceKind::Hotspot));
-        // The effect is read before the undo: undoing the step puts the
-        // previous slice type back, so a check after it would read the
-        // type the panel was supposed to have replaced.
-        assert_eq!(
-            slice_of(&shell, plate).slice_type,
-            None,
-            "a hotspot carries no slice type"
+        assert_eq!(last_command(&shell), "slice.setType");
+        assert!(shell.set_slice_shape(plate, SliceShape::Ellipse));
+        assert_eq!(last_command(&shell), "hotspot.setShape");
+        assert!(shell.set_slice_format(plate, Some(ExportFormat::Jpeg)));
+        assert_eq!(last_command(&shell), "slice.setExport");
+    }
+
+    /// The CSS Properties panel is read-only by design: it renders
+    /// the selected web object's declarations and dispatches nothing.
+    ///
+    /// The regression pins both halves — the panel shows the CSS the
+    /// slice's background knobs produce, and reading it adds no
+    /// command to the journal.
+    #[test]
+    fn the_css_properties_panel_dispatches_nothing() {
+        let (mut shell, plate, _) = slice_shell();
+        shell
+            .editor
+            .apply(
+                "slice.setBackground",
+                serde_json::json!({ "id": plate, "repeat": 1 }),
+            )
+            .expect("the background applies");
+        shell.editor.set_selection(vec![plate]);
+        shell.editor.sync_selection().expect("the selection syncs");
+        let before = shell.editor.session.journal_entries().len();
+        let css = shell.css_properties_text().expect("the slice carries CSS");
+        assert!(
+            css.contains("background-repeat: repeat"),
+            "the CSS is the slice's declarations: {css}"
         );
         assert_eq!(
-            shell.editor.undo().expect("the type change is undoable"),
-            "slice.setType",
-            "the panel dispatches the slice verb"
+            shell.editor.session.journal_entries().len(),
+            before,
+            "the CSS panel dispatches no command"
         );
     }
 
-    /// The CSS Properties panel renders the slice's background knobs
-    /// as declarations, and the knob it edits reaches the registry
-    /// as `slice.setBackground`.
+    /// The slice's background knob reaches the registry as the
+    /// `slice.setBackground` verb.
+    ///
+    /// The knob is the *Slices* panel's editor; the CSS Properties
+    /// panel only renders what it produced. The effect is read before
+    /// the undo: undoing the step puts the previous background back, so
+    /// a check after it would read the value the knob was supposed to
+    /// have set.
     #[test]
-    fn the_css_properties_panel_dispatches_the_background_verb() {
+    fn the_background_knob_reaches_the_registry_as_a_verb() {
         let (mut shell, plate, _) = slice_shell();
         shell.set_slice_background(plate, "repeat", serde_json::json!(2));
-        // The effect is read before the undo: undoing the step puts the
-        // previous background back, so a check after it would read the
-        // knob the panel was supposed to have set.
         let slice = slice_of(&shell, plate);
         assert_eq!(slice.background.as_ref().and_then(|bg| bg.repeat), Some(2));
         assert!(
@@ -1707,24 +1808,76 @@ mod tests {
         );
     }
 
-    /// The four web panels the Window menu names are open by default
-    /// in CS6 but closed in this build — the menu row is the only
-    /// way to reach them, so the row must be bound to the toggle and
-    /// the toggle must move the panel's visibility.
+    /// The Common Library panel places an instance through
+    /// `symbol.createInstance`, naming the symbol it placed.
     #[test]
-    fn the_web_panels_open_from_the_window_menu() {
+    fn the_common_library_panel_dispatches_create_instance() {
+        let mut shell = super::super::tests::gui_shell(super::super::tests::gui_editor());
+        let id = shell.editor.current_cell().expect("a cell").elements[0];
+        shell
+            .editor
+            .apply(
+                "symbol.create",
+                serde_json::json!({
+                    "ids": [id], "name": "library symbol", "symbol_type": "graphic",
+                }),
+            )
+            .expect("the symbol is created");
+        let number = shell.editor.document().symbols[0].symbol_number;
+        assert!(shell.place_symbol_instance(number));
+        assert_eq!(last_command(&shell), "symbol.createInstance");
+        let entry = shell
+            .editor
+            .session
+            .journal_entries()
+            .last()
+            .expect("the placement is journaled");
+        assert_eq!(entry.payload["symbol"], serde_json::json!(number));
+    }
+
+    /// The Window-menu row that opens a panel.
+    fn window_row(label: &str) -> Option<crate::menus::Item> {
+        crate::menus::WINDOW
+            .entries
+            .iter()
+            .find_map(|entry| match entry {
+                crate::menus::Entry::Item(item) if item.label == label => Some(*item),
+                _ => None,
+            })
+    }
+
+    /// The four web panels are reachable: their Window-menu row
+    /// toggles a panel the inventory knows, and the toggle opens it.
+    ///
+    /// The menu census (`menus::tests::inert_count_never_rises`)
+    /// counts inert *command* rows; a panel row that reported a gap
+    /// instead of toggling would sit in that census as an active row
+    /// while the panel stayed shut. These four carry their own
+    /// reachability regression so that cannot happen.
+    #[test]
+    fn the_web_panels_are_reachable_from_the_window_menu() {
         for name in [
             "Slices",
             "CSS Properties",
             "Find and Replace",
             "Common Library",
         ] {
+            let row = window_row(name).unwrap_or_else(|| panic!("{name} has no Window-menu row"));
+            assert_eq!(
+                row.action,
+                crate::menus::Action::Shell(crate::menus::ShellAction::TogglePanel(name)),
+                "{name} does not toggle its panel"
+            );
+            assert!(
+                super::super::panel_windows::panel_inventory()
+                    .iter()
+                    .any(|panel| panel.header == name),
+                "{name} is not in the panel inventory"
+            );
             let mut shell = super::super::tests::gui_shell(crate::editor::Editor::untitled());
             assert!(!shell.panel_shown(name), "{name} starts closed");
-            shell.run_action(&crate::menus::Action::Shell(
-                crate::menus::ShellAction::TogglePanel(name),
-            ));
-            assert!(shell.panel_shown(name), "{name} opens from the menu");
+            shell.toggle_panel(name);
+            assert!(shell.panel_shown(name), "{name} does not open");
         }
     }
 }

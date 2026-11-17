@@ -83,7 +83,11 @@ one has a reason that is a design question rather than an oversight:
   not have.
 
 The gate's ratchet stays where the measurements put it; these nine
-remain measured gaps with reasons, not silent ones.
+remain measured gaps with reasons, not silent ones. *Superseded in
+part:* [0118](0118-the-last-eight-verbs-reach-their-named-surfaces.md)
+answers each reason with the surface this section named (the canvas
+gesture, the dialog, the confirmed action) — all nine are bound, at
+257/257.
 
 ## Consequences
 

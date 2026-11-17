@@ -55,11 +55,16 @@ cors-misconfiguration	./xtask/schema/cyclonedx-bom-1.5.schema.json	b20c31b1e0dc6
 credit-card-amex	./crates/text/tests/layout.rs	ae9b46ed1c3eff9a64786a2171b0f694350bb589478b4327f5f82836c23e8da9	1
 credit-card-amex	./xtask/src/aegis.rs	ae9b46ed1c3eff9a64786a2171b0f694350bb589478b4327f5f82836c23e8da9	1
 # The same glyph-position golden value, seen by the generic card-number
-# rule.
+# rule, and the synthetic cargo fingerprint directory name the CI
+# cache-refresh self-test creates: a placeholder whose sixteen digits
+# are all the same, not a card number.
 credit-card-number-generic	./crates/text/tests/layout.rs	ae9b46ed1c3eff9a64786a2171b0f694350bb589478b4327f5f82836c23e8da9	1
 credit-card-number-generic	./scripts/ci_refresh_stale_crates-selftest.sh	e92b90d3f5a1714a0f5908f36ab3c13dc3f3d8715d704827e084498aac1a87a3	4
 credit-card-number-generic	./xtask/src/aegis.rs	ae9b46ed1c3eff9a64786a2171b0f694350bb589478b4327f5f82836c23e8da9	1
 # Individually adjudicated as a false positive; see decision 0074.
+# The synthetic cargo fingerprint directory name the CI cache-refresh
+# self-test creates: a placeholder whose sixteen digits are all the
+# same. It is a file name in a shell test, not a card number.
 credit-card-visa	./scripts/ci_refresh_stale_crates-selftest.sh	e92b90d3f5a1714a0f5908f36ab3c13dc3f3d8715d704827e084498aac1a87a3	4
 # Matches the throwaway Git identity the change-detection self-test
 # configures for its temporary repositories. The address uses the
@@ -104,7 +109,9 @@ gdpr-reference	./xtask/src/aegis.rs	8b16477e3abe1de345a6e82f360db77b5e238983ad68
 # share one line: the automation wiki's sentence about the CLI's bulk
 # work and the bounds it reports. FireCraft serves no GraphQL endpoint
 # and ships no GraphQL schema, so the missing depth guard this rule
-# reports does not exist here.
+# reports does not exist here. It also fires on the CI cache-refresh
+# script's directory walk, whose recursion bound matches the rule's
+# second alternative; the script walks a build cache, not a query.
 graphql-batch-limit	./docs/wiki/Automation.md	ab6b3237ab28e713976df30ac7efe4871e983337248a8bef9fa68ffddcaca0e9	1
 graphql-batch-limit	./scripts/ci_refresh_stale_crates.sh	39008786e531d1d2537e8ec529dda553cc38f52d25aa89accdb2b731ada736b3	1
 graphql-batch-limit	./xtask/src/aegis.rs	623e18d37f4ff3f0c0acf509bcbc0b05490287b62a01eabef8d9b48776356521	1
@@ -250,8 +257,10 @@ xml-external-entity	./packaging/build-macos-dmg.sh	7b16906a7de9206c7488979eb86e8
 # adjudication tickets, and the coverage counters decision 0103 quotes
 # verbatim from a gate run (measured/total line and function counts, not
 # postal data). The v1 MVP roadmap's RPC-emulation row names the legacy
-# Fireworks RPC TCP port — a protocol number, not postal data. This
-# repository holds no postal data.
+# Fireworks RPC TCP port — a protocol number, not postal data. The
+# seconds-per-day constant in the CI cache-refresh self-test's timestamp
+# arithmetic is a duration, not postal data. This repository holds no
+# postal data.
 zip-code	./crates/app-cli/src/mcp.rs	0e5c81ceee464db1c0cb9ed801d134fab0dd2a28c0dc62e35aa21a8e13ff0ebc	1
 zip-code	./crates/app-cli/src/mcp.rs	20d70708103e5223b6f2fb00f00947832fb93d12ebef11eb10bc5599efefe184	1
 zip-code	./crates/app-cli/src/mcp.rs	e27c72fe629f258a871404eed323c0cf57a7a26c19dc8d5a6ac90770241af8f5	1
