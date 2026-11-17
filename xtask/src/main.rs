@@ -25,7 +25,9 @@
 //! (the scoreboard ratchet: measure S2–S8/S12 from the tree and fail
 //! when a metric moves the wrong way against the last recorded row),
 //! `panel-snapshot` (the CS6 panel inventory, against a committed
-//! golden), `dist --manifest` / `dist --verify-manifest` (the
+//! golden), `icon-survey` (the shipped icon set's sources, licences,
+//! attribution rows, and measured bundle cost),
+//! `dist --manifest` / `dist --verify-manifest` (the
 //! machine-readable release manifest and its verification).
 //! Diagnostics go to stderr; stdout stays clean so output can
 //! be piped.
@@ -40,6 +42,7 @@ mod floor;
 mod fuzz;
 mod golden;
 mod hero;
+mod iconsurvey;
 mod jsonschema;
 mod layers;
 mod library;
@@ -59,7 +62,7 @@ mod webgolden;
 
 use std::process::ExitCode;
 
-const USAGE: &str = "usage: cargo run -p xtask -- <ci [--full]|ci-no-fmt|aegis [--bless|--report]|coverage [--bless|--measure]|layers|wasm|corpus [--report]|corpus-gen|library-gen|hero-gen|styles-gen|scripts|floor|golden [--bless]|svg-golden [--bless]|svg-roundtrip [--measure]|web-golden [--bless|--measure]|perf [--bless|--measure]|dist --web|--native|--source|--sbom|--manifest|--verify-manifest|fuzz|fuzz-quick|panic-hunt|reachability [--bless|--list]|climb [--append [rung]|--check]|panel-snapshot [--bless]|shortcuts [--bless]|parity|scorecard|changelog [--check|--cut <version>]|stamps|stamp <version>>";
+const USAGE: &str = "usage: cargo run -p xtask -- <ci [--full]|ci-no-fmt|aegis [--bless|--report]|coverage [--bless|--measure]|layers|wasm|corpus [--report]|corpus-gen|library-gen|hero-gen|styles-gen|scripts|floor|golden [--bless]|svg-golden [--bless]|svg-roundtrip [--measure]|web-golden [--bless|--measure]|perf [--bless|--measure]|dist --web|--native|--source|--sbom|--manifest|--verify-manifest|fuzz|fuzz-quick|panic-hunt|reachability [--bless|--list]|climb [--append [rung]|--check]|panel-snapshot [--bless]|icon-survey [--check]|shortcuts [--bless]|parity|scorecard|changelog [--check|--cut <version>]|stamps|stamp <version>>";
 
 fn main() -> ExitCode {
     match std::env::args().nth(1).as_deref() {
@@ -100,6 +103,10 @@ fn main() -> ExitCode {
         Some("panel-snapshot") => match std::env::args().nth(2).as_deref() {
             Some("--bless") => finish("panel-snapshot --bless", panelsnapshot::bless()),
             _ => finish("panel-snapshot", panelsnapshot::run()),
+        },
+        Some("icon-survey") => match std::env::args().nth(2).as_deref() {
+            Some("--check") => finish("icon-survey --check", iconsurvey::check()),
+            _ => finish("icon-survey", iconsurvey::run()),
         },
         Some("shortcuts") => match std::env::args().nth(2).as_deref() {
             Some("--bless") => finish("shortcuts --bless", shortcuts::bless()),
@@ -266,6 +273,7 @@ fn run_ci(full: Option<&str>, skip_fmt: bool) -> ExitCode {
         ("reachability", reachability::run),
         ("climb", climb::check),
         ("panel-snapshot", panelsnapshot::run),
+        ("icon-survey", iconsurvey::check),
         ("shortcuts", shortcuts::run),
         ("parity", status::parity),
         ("scorecard", status::scorecard),
