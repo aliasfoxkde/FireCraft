@@ -4,12 +4,16 @@
 //! ```text
 //! L0  fwpng, geom, color, raster      foundations, zero cross-deps
 //! L1  doc                             document model
-//! L2  vector, filters, text, ops      feature engines
-//! L3  compose, gpu, engine            rendering + orchestration
+//! L2  vector, filters, text           feature engines
+//! L3  compose, engine                 rendering + orchestration
 //! L4  io, scripting, webexport        import/export codecs + web export
-//! L5  app, app-cli, automation        shells
-//! L6  testkit                         test-only, may depend on anything
+//! L5  app, app-cli, firecraft-web     shells
+//! L6  (unused)                        test-only crates may depend on anything
 //! L7  xtask                           verification tooling
+//!
+//! Only crates that exist belong in the table. Registering a name with no
+//! package hides nothing — `run` checks every real package — but it makes
+//! the tier map describe a workspace that is not there.
 //! ```
 
 use crate::util::cargo_metadata;
@@ -23,9 +27,7 @@ const LAYERS: &[(&str, u8)] = &[
     ("vector", 2),
     ("filters", 2),
     ("text", 2),
-    ("ops", 2),
     ("compose", 3),
-    ("gpu", 3),
     ("engine", 3),
     ("io", 4),
     ("scripting", 4),
@@ -33,8 +35,6 @@ const LAYERS: &[(&str, u8)] = &[
     ("app", 5),
     ("app-cli", 5),
     ("firecraft-web", 5),
-    ("automation", 5),
-    ("testkit", 6),
     ("xtask", 7),
 ];
 

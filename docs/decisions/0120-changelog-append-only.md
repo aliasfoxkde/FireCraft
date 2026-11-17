@@ -1,4 +1,4 @@
-# 0094 — The changelog is additive: the committed file is history, the log is only new material
+# 0120 — The changelog is additive: the committed file is history, the log is only new material
 
 **Status:** accepted
 **Date:** 2026-11-11

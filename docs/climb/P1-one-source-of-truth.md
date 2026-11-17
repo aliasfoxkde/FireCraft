@@ -78,7 +78,11 @@ can run in parallel with P2.
   2. Keep the older one (`off-fleet`, #134). `git mv`
      `0101-brand-mark-in-the-mock-up.md` →
      `0104-brand-mark-in-the-mock-up.md` — 0102 and 0103 are already
-     taken (coverage toolchain, coverage export).
+     taken (coverage toolchain, coverage export). **Re-numbered again
+     after the merge with `main` (2026-11-16): 0104–0118 are now
+     taken by the shell-lineage decisions, so the three renumbered
+     files moved to 0120 (changelog, append-only), 0130 (the rewind
+     command) and 0123 (the brand mark).**
   3. Update references to the renamed file: `git grep -n "0101" -- docs/`
      shows none pointing at `brand-mark` (only at `off-fleet` — those stay).
   4. The doubly-*numbered* 0096 is the same defect class: both
@@ -87,6 +91,24 @@ can run in parallel with P2.
      `NEXT.md:448` and `:470` cite 0096 at the two different files.
      `git mv` `0096-animation-playback-clock.md` →
      `0097-animation-playback-clock.md` and update `NEXT.md:448`.
+  5. The merge with `main` (2026-11-16) produced three more duplicate
+     numbers — both sides numbered their own records in the same range:
+     - `0118-the-export-counts-lines-found-and-lines-with-counters.md`
+       against `0118-the-last-eight-verbs-reach-their-named-surfaces.md`
+     - `0122-the-cargo-cache-is-scoped-per-job-not-per-commit.md`
+       against `0122-the-rewind-is-a-command-every-surface-can-name.md`
+     - `0123-brand-mark-in-the-mock-up.md` against
+       `0123-the-release-workflow-branch-is-superseded-by-main.md`
+     The record `main` already numbered keeps its number — `0118` is the
+     last-eight-verbs record, cited from `GAPS.md`, `HANDOFF.md`,
+     `TASKS.md` and decision 0117. The other record of each pair moves to
+     the next free number: the export-counts record to 0129, the rewind
+     record to 0130, the release-workflow record to 0131. The cargo-cache
+     record keeps 0122 (cited by `.gitforge.yml` and the cache-refresh
+     script) and the brand-mark record keeps 0123 (keyed by path in the
+     aegis baseline). The two records that kept their number but carried
+     a stale heading — the changelog record and the brand-mark record —
+     now carry the number their filename states.
 - **Done when:** `ls docs/decisions | cut -c1-4 | sort | uniq -d` prints
   nothing.
 - **Verify:** that command, plus
