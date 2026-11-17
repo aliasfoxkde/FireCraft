@@ -23,6 +23,7 @@
 | **missing** | no UI path exists |
 | **evidence-gated** | the CS6 behaviour itself is not yet established, so FireCraft's coverage cannot be judged; the gate is named |
 | **not applicable** | the CS6 workflow has no counterpart in FireCraft's scope (or the CS6 side is a documented refusal) |
+| **deliberately different** | the CS6 behaviour is established, and FireCraft differs from it **on purpose**: the row names the reason and the owner |
 
 Evidence codes: **`M`** = `crates/app/src/menus.rs` (the CS6 `RT_MENU`
 transcription); **`E`** = `crates/app/src/editor.rs`; **`S`** =
@@ -97,14 +98,18 @@ without decoding the bar resource:
 
 **The basis of the tile-horizontally placement.** The *command
 definition* is directly evidenced by `MENU_DESCRIPTION_MAP` (**R**).
-The *Window-menu placement* is not read off a decoded menu dump — the
-bar resource was never decoded. It follows from CS6's own
-resource-naming convention: `ID_WINDOW_…` is the command-id family
-CS6 reserves for window-menu items, and the sibling
-`ID_WINDOW_TILE_VERT` is unambiguously the Window menu's *Tile
-Vertically* row. The row's Window-menu placement therefore rests on
-the naming convention, and this matrix records it that way rather
-than as a decoded-menu observation.
+The bar resource *was* decoded — the `RT_MENU` 128 tree of
+`Fireworks Resources.dll` was walked and its ten-menu item tree, with
+its resource command ids, transcribed into `crates/app/src/menus.rs`,
+the Window menu's rows among them — but the decoded listing was
+**not** re-read for this row: the transcription was short 57651, and
+the row was reinstated on CS6's own resource-naming convention
+instead, `ID_WINDOW_…` being the command-id family CS6 reserves
+for window-menu items and the sibling `ID_WINDOW_TILE_VERT`
+unambiguously the Window menu's *Tile Vertically* row. The row's
+Window-menu placement therefore rests on the naming convention, and
+this matrix records it that way rather than as a decoded-menu
+observation.
 
 ---
 
@@ -183,10 +188,13 @@ Eighteen have a Window-menu row; five do not.
 | Left dock holds the ToolPalette | yes | left tool panel, 34 px | **partial** — placement matches; the *toolbar* form does not | **R**, `S/mod.rs` (the left `Panel` arm) | 22.2 |
 | Top dock holds the Main toolbar (778×28) | yes | a main toolbar row exists | **partial** — the row exists; its *contents* are not the CS6 main toolbar | **R** | 22.5 |
 | Bottom dock holds the Properties tab-group | yes | properties live in the right dock instead | **partial** | **R** | 22.1 |
-| Panels dockable left↔right, collapsible, resizable | yes | resizable + collapsible + reopenable from the Window menu; **not** left↔right movable | **partial** | `S/panel_windows.rs::dock_section` | 22.1 |
+| Panels dockable left↔right, collapsible, resizable | yes | resizable + collapsible + reopenable from the Window menu; movable between the left and right columns by drag or by the `«`/`»` header arrow (landed 2026-11-11, PR #128) | **implemented** | `S/panel_windows.rs::move_panel_to_dock`, `S/mod.rs` (`a_moved_panel_lives_in_the_other_dock`) | 22.1 |
 | Dock geometry persists across restart | yes | eframe `persistence` + `ShellLayout` snapshot | **implemented** | `D` 0067/0069, `S/mod.rs` | — |
 | The dock **reserves** width so the canvas shrinks rather than being covered | yes (a dock) | yes — `egui::Panel::right`, 258 pt, scrolling column | **implemented** | `S/panel_windows.rs:154` | 22.5 |
-| Every panel reachable at 1280×800 | yes | T22 captures and reachability check complete for the recorded build; dock scroll verified at 1280×400. The newer dock/panel inventory still needs a capture. | **verified for captured build; newer dock evidence-gated** | [T22 receipts](tasks/T22-screenshot-ui.md#receipts--2026-11-04) | 22.5 / T22 |
+| Every panel reachable at 1280×800 | yes | **re-captured for the current dock** (2026-11-16, build `a34a4034`): the frame at 1280×800 puts the dock at x 933–1279 and its drawn content ends at row 586, so the whole column fits; the same window at 1280×400 clips the page at row 376 and the dock's content at row 397, and the column scrolls, so the panels below the fold stay reachable | **verified for the captured build** — frames `docs/img/chrome-1280x800.png` and `docs/img/chrome-1280x400.png` | [the measured chrome](research/fw-ui-evidence.md#the-firecraft-chrome-measured-2026-11-16), [T22 receipts](tasks/T22-screenshot-ui.md#receipts--2026-11-04) | 22.5 / T22 |
+| Panel **header row** — collapse arrow, title, overflow, close | yes (the panel's title bar carries the collapse arrow and the panel menu) | every panel's header row carries the collapse arrow, the title and the overflow (the panel menu, `▾`), and every panel the Window menu can reopen also carries the close button; the Web Layer panel keeps CS6's asymmetry and gets no close button | **implemented** — the row's affordances are pinned by the panel-snapshot gate | `S/panel_windows.rs::dock_section`, `crates/app/panels.snapshot` | 22.5 |
+| The panel **menu**'s item list | not established by our evidence | the overflow menu carries the two dock-level commands the CS6 help documents (the double arrow that collapses/expands every panel in the column, and *Hide Panels*) | **evidence-gated** — the button is reproduced; its CS6 item list is not established | `R` ("The panel header row"), `S/panel_windows.rs::PanelMenu` | 22.5 |
+| The chrome **palette** | CS6 owns **no** palette: its eight Preferences categories set no colour, so the greys it draws are the host OS's. Measured on the reference run: `#D6D6D6` frame and bars, `#EDEDED` panel interiors, `#999999` canvas surround, `#FFFFFF` page, and **no** saturated hue anywhere in the chrome | FireCraft defines its own **dark** neutral scheme — panel `#3C3C3C`, window `#323232`, canvas `#282828`, raised surface `#444444`, text `#DDDDDD` (7.2:1 on the raised fill, WCAG AAA), selection `#2F5D8A` — every colour but the selection accent a grey, so the chrome keeps CS6's *neutrality* | **deliberately different** — *reason*: CS6 has no palette to reproduce, and FireCraft's primary target is the WebOS build, whose sibling apps and system theme are dark; a light grey chrome would break the family. *Owner*: shell — **measured** on the running shell (2026-11-16, build `a34a4034`): panel fill `#3C3C3C` 35.90 %, canvas surround `#202020` 4.03 %, page `#FFFFFF` 55.89 %, text `#DDDDDD` 0.07 %, accent `#2F5D8A` 0.33 %, and **0.00 %** blue-dominant pixels in the menu bar, tool-options row and status bar | `R` ("The CS6 chrome palette and panel header"), `S/glyphs.rs` (`CHROME_*`, pinned by `the_chrome_carries_the_recorded_palette`), [the measured chrome](research/fw-ui-evidence.md#the-firecraft-chrome-measured-2026-11-16) | 22.5 |
 
 
 <!-- /coderabbit-ai-generated:v1 -->
@@ -226,7 +234,7 @@ dispatches at `S/panels.rs::properties_panel`.
 | Print / Page Setup | report the gap (no printing) | **not applicable** — FireCraft has no printing story | `M` id 57605, id 57607 | — |
 | **Autosave / crash recovery** | web: whole-document localStorage persistence with boot restore; desktop: journal sidecar snapshot with a Recover/Discard offer, undo intact across the boundary (**21.1, landed 2026-11-07**) | **implemented** | `S/mod.rs::check_recovery`, `S/mod.rs::recovery_ui` | — |
 | **Preferences dialog** | Edit ▸ Preferences… opens a real dialog (UI scale, persisted in `ShellLayout`) (**21.4, landed 2026-11-07**) | **implemented** | `M` id 35034, `S/panels.rs::preferences_ui` | — |
-| **Keyboard Shortcuts editor** | the Help row opens a *read-only* binding table, not an editor; the four alternative keymap sets are absent | **partial** | `S/panels.rs::help_panel` | 21.4 |
+| **Keyboard Shortcuts editor** | the Help row opens a *read-only* binding table, not an editor; the four alternative keymap sets are selectable in Preferences ▸ Keyboard (**landed 2026-11-16**, decision [0126](decisions/0126-the-keymap-sets-are-overrides-of-the-cs6-table.md)) and the whole table is published as [`SHORTCUTS.md`](SHORTCUTS.md) | **partial** — the sets and the published table are there; per-verb rebinding is not | `S/panels.rs::help_panel`, `S/panels.rs::preferences_ui`, `M:keymap.rs` | 21.4 |
 | Save Steps As Command / Replay | History panel's Save Steps…/Replay… | **implemented** | `S/panels.rs::history_section` | 20.6 |
 | **In-app scripting** (Commands ▸ Run Script…) | Run Script runs `.jsf` through the scripting host and `.fwsteps` through journal replay (**21.6, landed 2026-11-07**); the sibling *Manage Saved Commands…* row is still inert and CS6's extension installer is a recorded gap | **partial** — the runner is there, the saved-command manager is not | `M` id 35319, `S/mod.rs::run_script_file` | 21.6 |
 
@@ -279,7 +287,7 @@ dispatches at `S/panels.rs::properties_panel`.
 | **CS6's full keymap** (the `Fireworks.xml` set: 128 command ids) | the transcribed tree prints CS6's own accelerators on its rows and every **live** printed accelerator is bound to that row's action. Measured on the tree: 298 rows, 105 of them printing an accelerator, of which 6 are display-only `ReportGap` rows (exempt by design) — **99 live printed accelerators, all bound** | **implemented** for the tree — the gate `menus::tests::cs6_keymap_is_fully_bound` re-derives the requirement on every run: each live row's printed accelerator is parsed by the same `menus::parse_accel` the binding table is written against, and must resolve to a binding carrying that row's action | `M:SHORTCUTS`, `M:tests::cs6_keymap_is_fully_bound`, `D` 0080 | 22.5 |
 | **CS6's own keymap file** (the `Fireworks.xml` set, measured against the binding table) | the tree's accelerators are CS6's, and CS6's keymap file binds **133** shortcut entries across its **128** command ids. FireCraft's **167** bindings cover **all 133** entries — **all 128** command ids fully bound | **implemented** — the reference application's own keymap file is transcribed into `menus::tests::CS6_KEYMAP` (one row per `<shortcut>` entry: command id, modifier bitfield, virtual-key code, and the action FireCraft answers it with) and `menus::tests::cs6_keymap_entries_are_bound` asserts that every entry resolves to a binding carrying that action, so a binding removed from the table fails the build. The 16 bindings added to close the last gaps are `cmd_Quit` (Ctrl+Q), `cmd_BigNudge{Left,Right,Up,Down}` (Shift+Arrow — the 10 px nudge), `cmd_cssproperties` (Ctrl+F7), `cmd_commonlib_form_elements` (Ctrl+Shift+L), `cmd_HideOrShowAllPanels` (Ctrl+Shift+H), `cmd_TextStyle_{Plain,Bold,Italic}` (F5/F6/F7), `cmd_RepeatXtra` (Ctrl+Alt+Shift+X), `cmd_browse` (Ctrl+Shift+O), `cmd_SnapToPixel` (Ctrl+K), `cmd_ViewEditGuides` (Ctrl+Alt+Shift+G) and `cmd_jquery` (Ctrl+F10). Twelve of the sixteen answer with a real FireCraft action; the four that name a capability this build does not ship — `cmd_browse` (Adobe Bridge), `cmd_SnapToPixel` (no view snap mode), `cmd_ViewEditGuides` (no guides editor) and `cmd_jquery` (no jQuery widget panel) — answer with a named gap, so no accelerator in the reference keymap is dead. One deliberate divergence remains and is asserted by `menus::tests::cs6_print_diverges_to_the_palette`: CS6's `cmd_Print` is Ctrl+P, while FireCraft opens the command palette on Ctrl+P | `M:SHORTCUTS`, `M:tests::CS6_KEYMAP`, **R** (keymap section), `D` 0080 | 22.5 |
 
-| Four alternative keymap sets (Illustrator / Photoshop / FreeHand / Web Standard) | none | **missing** | **R** | 21.4 |
+| Four alternative keymap sets (Illustrator / Photoshop / FreeHand / Web Standard) | four sets rebind the shared verbs each vendor publishes differently — Illustrator 3, Photoshop 3, FreeHand 13, Web Standard 2 — and CS6's own keymap stays the default and byte-identical (**landed 2026-11-16**, decision [0126](decisions/0126-the-keymap-sets-are-overrides-of-the-cs6-table.md)); the bindings are transcribed from Adobe's published Illustrator and Photoshop default-shortcut references and Macromedia's *FreeHand MX Keyboard Shortcuts* sheet, and the full table is published as [`SHORTCUTS.md`](SHORTCUTS.md) | **implemented** — a set is a set of overrides on the CS6 table, not a second copy of it: the resolution carries every CS6 verb, an overridden verb carries exactly one binding, and no keystroke is bound twice (`keymap::tests::a_set_binds_no_keystroke_twice`). Vendor bindings that land on a key CS6 already uses (Illustrator/Photoshop *ungroup* on `Ctrl+Shift+G`, *forward*/*backward* on `Ctrl+]`/`Ctrl+[`) are **not** carried over, because the shell dispatches every matching binding and one keystroke must fire one verb | `M:keymap.rs`, `M:tests`, **R** (SHORTCUTS.md) | 21.4 |
 | Screen-reader navigation | **not available** — the accesskit tree is unreachable on the web build; recorded refusal, not a gap | **not applicable** | `D` 0067 | 21.5 |
 
 ---
@@ -336,7 +344,7 @@ acceptance hook. Ordered by how much of the product it unlocks.
 | 8 | ~~History click-to-rewind~~ **CLOSED — landed on main 2026-11-11 in #107**; command-palette/MCP discoverability refinement remains in PR #122 | C, E | 20.6 | — |
 | 9 | ~~Slice/hotspot behaviour editing and HTML preview~~ **CLOSED — landed on main 2026-11-11 in #107** | C, F, I | 20.7 | — |
 | 10 | Autosave and crash recovery — **LANDED 2026-11-07** — web: whole-document localStorage persistence with boot restore; desktop: journal sidecar snapshot with Recover/Discard prompt, undo intact across the crash boundary | E | 21.1 | P1 |
-| 11 | The Keyboard Shortcuts editor and the four alternative keymaps — the **Preferences dialog CLOSED 2026-11-07** (§E) | E, H | 21.4 | P1 |
+| 11 | The four alternative keymaps — **LANDED 2026-11-16** (decision [0126](decisions/0126-the-keymap-sets-are-overrides-of-the-cs6-table.md)): Illustrator, Photoshop, FreeHand and Web Standard are selectable in Preferences ▸ Keyboard, persisted in `ShellLayout::keymap`, and the whole table is published as [`SHORTCUTS.md`](SHORTCUTS.md) (generated, gated). The **Keyboard Shortcuts editor** itself remains open — the Help row is a read-only table, not a per-verb rebinding editor. | E, H | 21.4 | P1 |
 | 12 | The in-app script console and saved commands — **LANDED 2026-11-07**: Commands ▸ Run Script runs `.jsf` (scripting host, landed with automation) and `.fwsteps` (journal replay onto the live document); CS6's broader extension installer remains a recorded gap | A, E | 21.6 | P1 |
 | 13 | ~~Command palette v2 (fuzzy, recents, save-steps)~~ **CLOSED 2026-11-07** — fuzzy subsequence scoring with a position bonus; recents persisted in `ShellLayout`; save-steps-as-command is the History panel's Save Steps…/Replay… journal file pair. | G | 21.3 | P2 |
 | 14 | ~~The Text ▸ Font submenu, *Repeat Filter*, the F1 grouping mismatch~~ **CLOSED 2026-11-06** — Font dispatches `text.setFont` over the renderer's five families (`RT_MENU` 128 ships a runtime-populated placeholder; the static list is the substitute, recorded as the evidence gap); Repeat Filter re-applies the session's last preset; the F1 groups now tile the table exactly, each binding carrying its own section (`menus::Shortcut.group`, gate `menus::tests::shortcut_sections_are_contiguous`). | A, H | — | — |

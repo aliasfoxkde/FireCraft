@@ -81,13 +81,60 @@ jobs:
     steps:
       - name: Classify the diff; unknown/empty diffs fail closed
         run: bash scripts/detect-changes.sh
+      - name: The stale-cache refresh's own self-test
+        # The step that keeps cargo from reusing another branch's
+        # artifact (decision 0122) decides from file mtimes alone, so a
+        # wrong decision in either direction is expensive: refreshing too
+        # much throws the warm cache away, refreshing too little lets
+        # cargo compile against another tree's crate. Its self-test runs
+        # here on every push rather than being trusted.
+        run: |
+          set -e
+          if [ -f scripts/ci_refresh_stale_crates-selftest.sh ]; then
+            bash scripts/ci_refresh_stale_crates-selftest.sh
+          fi
+    timeout: 5m
+
+  - name: release-ledger
+    image: firecraft-ci-rust:2
+    needs: [detect-changes]
+    steps:
+      - name: The release board and its tickets agree
+        # `docs/release/EXECUTION-BOARD.md` §6 is the plan of record for
+        # the 61 release tasks: which are done, on what evidence, and
+        # what still blocks them. Each row has one ticket under
+        # `docs/tasks/`, and the two must state the same status,
+        # evidence and blockers. A board that claims progress its
+        # tickets do not record is a plan that reports work nobody did.
+        #
+        # The gate is bash+awk on purpose: this image ships no python3
+        # (ca-certificates, git, chromium, rust), so a python gate would
+        # only ever run on a maintainer's laptop — which is not a gate.
+        # Its self-test runs here too, so the gate's own failure modes
+        # are exercised on every push rather than trusted.
+        run: |
+          set -e
+          bash scripts/verify_release_ledger.sh .
+          bash scripts/verify_release_ledger-selftest.sh
+      - name: The stale-cache refresh's own self-test
+        # The step that keeps cargo from reusing another branch's
+        # artifact (decision 0122) decides from file mtimes alone, so a
+        # wrong decision in either direction is expensive: refreshing too
+        # much throws the warm cache away, refreshing too little lets
+        # cargo compile against another tree's crate. Its self-test runs
+        # here on every push rather than being trusted.
+        run: |
+          set -e
+          if [ -f scripts/ci_refresh_stale_crates-selftest.sh ]; then
+            bash scripts/ci_refresh_stale_crates-selftest.sh
+          fi
     timeout: 5m
 
   - name: fmt-layers
     image: firecraft-ci-rust:2
     cache:
       source: "{cache_root}/cargo/{image}-fmt-layers"
-    needs: [detect-changes]
+    needs: [release-ledger]
     steps:
       - name: Rust formatting check
         run: cargo fmt --all -- --check
@@ -104,6 +151,24 @@ jobs:
     needs: [fmt-layers]
     skip_if: '[[ "$CI_CHANGE_INCLUDE_CODE" == "1" || "$CI_CHANGE_INCLUDE_CRATES" == "1" || "$CI_CHANGE_INCLUDE_TESTS" == "1" || "$CI_CHANGE_IS_TAG" == "1" ]]'
     steps:
+      - name: Refresh the crates the shared cache may hold from another tree
+        # The Cargo cache is mounted per JOB, not per commit, so cargo can
+        # reuse an artifact built from ANOTHER branch's tree when this
+        # checkout is older than the cache it mounts. The symptom is a
+        # false red: on 2026-11-16 (run 29199c4e) the generated-docs job
+        # failed to compile xtask with "cannot find function `menu_census`
+        # in module `app::menus`" — a function that IS in the checked-out
+        # tree. This refreshes only the crates whose sources are older
+        # than the cache, so the warm cache is kept everywhere else; the
+        # platform defect is recorded in
+        # docs/decisions/0122-the-cargo-cache-is-scoped-per-job-not-per-commit.md.
+        # The script is absent on branches that predate it, so it is
+        # skipped there; its own failure fails the job.
+        run: |
+          set -e
+          if [ -f scripts/ci_refresh_stale_crates.sh ]; then
+            bash scripts/ci_refresh_stale_crates.sh /workspace "${CARGO_TARGET_DIR:-/cargo-target}"
+          fi
       - name: Workspace layer-table gate
         run: cargo run --locked -p xtask -- layers
     # 45m: the gate compiles xtask, so it carries the workspace's
@@ -119,6 +184,15 @@ jobs:
     needs: [layers]
     skip_if: '[[ "$CI_CHANGE_INCLUDE_CODE" == "1" || "$CI_CHANGE_INCLUDE_CRATES" == "1" || "$CI_CHANGE_INCLUDE_TESTS" == "1" || "$CI_CHANGE_IS_TAG" == "1" ]]'
     steps:
+      - name: Refresh the crates the shared cache may hold from another tree
+        # See the note on the same step in the `layers` job: the cache is
+        # mounted per JOB, so cargo can reuse another branch's artifact
+        # when this checkout is older than the cache (decision 0122).
+        run: |
+          set -e
+          if [ -f scripts/ci_refresh_stale_crates.sh ]; then
+            bash scripts/ci_refresh_stale_crates.sh /workspace "${CARGO_TARGET_DIR:-/cargo-target}"
+          fi
       - name: Cargo clippy (deny warnings, all targets)
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: Web crate clippy (workspace-excluded, trunk)
@@ -142,6 +216,15 @@ jobs:
     needs: [clippy-test]
     skip_if: '[[ "$CI_CHANGE_INCLUDE_CODE" == "1" || "$CI_CHANGE_INCLUDE_CRATES" == "1" || "$CI_CHANGE_INCLUDE_TESTS" == "1" || "$CI_CHANGE_IS_TAG" == "1" ]]'
     steps:
+      - name: Refresh the crates the shared cache may hold from another tree
+        # See the note on the same step in the `layers` job: the cache is
+        # mounted per JOB, so cargo can reuse another branch's artifact
+        # when this checkout is older than the cache (decision 0122).
+        run: |
+          set -e
+          if [ -f scripts/ci_refresh_stale_crates.sh ]; then
+            bash scripts/ci_refresh_stale_crates.sh /workspace "${CARGO_TARGET_DIR:-/cargo-target}"
+          fi
       - name: Wasm compile gate + smoke suite + trunk bundle
         # The cache exports CARGO_TARGET_DIR to xtask's child cargo
         # calls and by trunk's cargo build, keeping every rustc write
@@ -159,6 +242,15 @@ jobs:
     needs: [wasm-web]
     skip_if: '[[ "$CI_CHANGE_INCLUDE_CODE" == "1" || "$CI_CHANGE_INCLUDE_CRATES" == "1" || "$CI_CHANGE_INCLUDE_TESTS" == "1" || "$CI_CHANGE_IS_TAG" == "1" ]]'
     steps:
+      - name: Refresh the crates the shared cache may hold from another tree
+        # See the note on the same step in the `layers` job: the cache is
+        # mounted per JOB, so cargo can reuse another branch's artifact
+        # when this checkout is older than the cache (decision 0122).
+        run: |
+          set -e
+          if [ -f scripts/ci_refresh_stale_crates.sh ]; then
+            bash scripts/ci_refresh_stale_crates.sh /workspace "${CARGO_TARGET_DIR:-/cargo-target}"
+          fi
       - name: Corpus digests + doc-model round-trips
         run: cargo run --locked -p xtask -- corpus
       - name: Golden render pins + determinism
@@ -173,6 +265,15 @@ jobs:
     needs: [corpus-golden]
     skip_if: '[[ "$CI_CHANGE_INCLUDE_CODE" == "1" || "$CI_CHANGE_INCLUDE_CRATES" == "1" || "$CI_CHANGE_IS_TAG" == "1" ]]'
     steps:
+      - name: Refresh the crates the shared cache may hold from another tree
+        # See the note on the same step in the `layers` job: the cache is
+        # mounted per JOB, so cargo can reuse another branch's artifact
+        # when this checkout is older than the cache (decision 0122).
+        run: |
+          set -e
+          if [ -f scripts/ci_refresh_stale_crates.sh ]; then
+            bash scripts/ci_refresh_stale_crates.sh /workspace "${CARGO_TARGET_DIR:-/cargo-target}"
+          fi
       - name: Performance budgets (open / frame / save / peak memory)
         # M12: the parity table's ceilings, enforced on the runner
         # fleet. The report line names the host, so a trip is
@@ -191,6 +292,15 @@ jobs:
     needs: [corpus-golden]
     skip_if: '[[ "$CI_CHANGE_INCLUDE_CODE" == "1" || "$CI_CHANGE_INCLUDE_CRATES" == "1" || "$CI_CHANGE_IS_TAG" == "1" ]]'
     steps:
+      - name: Refresh the crates the shared cache may hold from another tree
+        # See the note on the same step in the `layers` job: the cache is
+        # mounted per JOB, so cargo can reuse another branch's artifact
+        # when this checkout is older than the cache (decision 0122).
+        run: |
+          set -e
+          if [ -f scripts/ci_refresh_stale_crates.sh ]; then
+            bash scripts/ci_refresh_stale_crates.sh /workspace "${CARGO_TARGET_DIR:-/cargo-target}"
+          fi
       - name: Stable fuzz drivers (anchors + panic_hunt + scripting arms)
         # The stable-toolchain driver set from `xtask ci`; the
         # libfuzzer compile check and the wide campaign stay local
@@ -217,6 +327,16 @@ jobs:
     needs: [fuzz]
     skip_if: '[[ "$CI_CHANGE_INCLUDE_CODE" == "1" || "$CI_CHANGE_INCLUDE_CRATES" == "1" || "$CI_CHANGE_INCLUDE_GENERATED" == "1" || "$CI_CHANGE_IS_TAG" == "1" ]]'
     steps:
+      - name: Refresh the crates the shared cache may hold from another tree
+        # This is the job that failed on 2026-11-16 (run 29199c4e) with
+        # "cannot find function `menu_census` in module `app::menus`" for
+        # a function that IS in the tree: the cache is mounted per JOB,
+        # so cargo reused another branch's `app` artifact (decision 0122).
+        run: |
+          set -e
+          if [ -f scripts/ci_refresh_stale_crates.sh ]; then
+            bash scripts/ci_refresh_stale_crates.sh /workspace "${CARGO_TARGET_DIR:-/cargo-target}"
+          fi
       - name: Parity floors + scorecard + stamps + reachability + panel snapshot, then drift check
         # The committed generated docs must byte-equal what the gates
         # produce: copies are taken before regenerating, and cmp fails
@@ -251,6 +371,7 @@ jobs:
           cargo run --locked -p xtask -- stamps
           cargo run --locked -p xtask -- reachability
           cargo run --locked -p xtask -- panel-snapshot
+          cargo run --locked -p xtask -- shortcuts
           cmp /tmp/parity.committed docs/planning/generated/parity.md
           cmp /tmp/scorecard.committed docs/planning/generated/scorecard.md
     # 45m: measured 16.1 min on 2026-11-11 with 9 runs in flight.
@@ -263,6 +384,15 @@ jobs:
     needs: [generated-docs]
     skip_if: '[[ "$CI_CHANGE_INCLUDE_CODE" == "1" || "$CI_CHANGE_INCLUDE_CRATES" == "1" || "$CI_CHANGE_IS_TAG" == "1" ]]'
     steps:
+      - name: Refresh the crates the shared cache may hold from another tree
+        # See the note on the same step in the `layers` job: the cache is
+        # mounted per JOB, so cargo can reuse another branch's artifact
+        # when this checkout is older than the cache (decision 0122).
+        run: |
+          set -e
+          if [ -f scripts/ci_refresh_stale_crates.sh ]; then
+            bash scripts/ci_refresh_stale_crates.sh /workspace "${CARGO_TARGET_DIR:-/cargo-target}"
+          fi
       - name: Ref report
         # GitForge stamps every push AND every tag push as TriggerType::
         # Push with the ref name carried verbatim; trigger_on cannot
@@ -314,6 +444,14 @@ jobs:
         run: cargo run --locked -p xtask -- dist --web
       - name: Native set + deb read-back
         run: cargo run --locked -p xtask -- dist --native
+      - name: SBOM (CycloneDX 1.5, validated against the schema and the lockfile)
+        # The SBOM is the document the release publishes about its own
+        # dependencies. `dist --sbom` validates it against the vendored
+        # CycloneDX 1.5 schema and compares its component inventory with
+        # `Cargo.lock` before writing it (decision 0119), so a
+        # non-conforming or incomplete SBOM fails here rather than
+        # reaching the published asset.
+        run: cargo run --locked -p xtask -- dist --sbom
       - name: DEB install verification (clean Debian 12)
         # The package must be installable, launchable and removable on
         # the platform it declares. `packaging/deb/verify-install.sh` is

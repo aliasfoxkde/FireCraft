@@ -22,9 +22,7 @@ the actual requirement, the build succeeds.
 
 **Verification:** `cargo run -p xtask -- dist --native`
 
-**Evidence:** `b63a040` added `verify_deb_glibc_floor`; the control file now declares
-`Depends: libc6 (>= 2.35)`, which was raised from 2.31 after the clean-container
-smoke caught the mismatch.
+**Evidence:** `b63a040` added `verify_deb_glibc_floor`; control now floors `libc6 (>= 2.35)`; decision 0091 adds the run-time library set (`libx11-6`, `libxcursor1`, `libxrandr2`, `libxi6`, `libxkbcommon0`, `libxkbcommon-x11-0`, `libgl1`, `libgcc-s1`) with a build gate that refuses a control file that drops one
 
 The floor is only half of "the declared dependency must match the binaries". The
 desktop binary `dlopen`s the X11 and GL stack, so neither the ELF dynamic section
@@ -32,7 +30,7 @@ nor `dpkg-shlibdeps` can see those dependencies, and the package has to name the
 hand. Decision 0091 declares that set and adds a build gate that refuses a control
 file that drops one.
 
-**Blockers:** none.
+**Blockers:** —
 
 **Stopping condition:** both the failing and the passing cases are recorded with their
 outputs.

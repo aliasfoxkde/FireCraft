@@ -20,11 +20,9 @@ result is never recorded as signed.
 
 **Verification:** `signtool verify /pa <exe>`
 
-**Evidence:** no signing credential is configured anywhere — no Authenticode
-certificate, no Developer ID identity, no GPG/Sigstore identity (artifact matrix
-secrets inventory).
+**Evidence:** No signing credential configured anywhere
 
-**Blockers:** no Authenticode certificate is available.
+**Blockers:** No Authenticode certificate
 
 **Stopping condition:** the signature verifies on every shipped Windows artifact, or
 the row stays open with the missing credential named as the blocker. An ad-hoc or

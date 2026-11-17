@@ -19,9 +19,9 @@ preserved or removed exactly as the documentation states.
 
 **Verification:** the Windows runner release receipt.
 
-**Evidence:** none yet.
+**Evidence:** —
 
-**Blockers:** a clean Windows VM.
+**Blockers:** Clean Windows VM
 
 **Stopping condition:** all four transitions are recorded with their outcomes and the
 user-data behaviour is documented.

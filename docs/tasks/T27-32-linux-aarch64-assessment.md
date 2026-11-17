@@ -20,10 +20,9 @@ a clear feasible / not-feasible / feasible-later verdict with its conditions.
 
 **Verification:** `rustup target list --installed`
 
-**Evidence:** the artifact matrix records Linux aarch64 as "unassessed" — no
-assessment exists.
+**Evidence:** Matrix records aarch64 as "unassessed"
 
-**Blockers:** none.
+**Blockers:** —
 
 **Stopping condition:** the assessment is committed and the matrix's aarch64 row is
 updated from "unassessed" to the verdict.

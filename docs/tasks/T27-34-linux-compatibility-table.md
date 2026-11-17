@@ -21,7 +21,7 @@ untested combination; a reader can tell what is supported from what is merely bu
 
 **Evidence:** none yet.
 
-**Blockers:** T27-33.
+**Blockers:** T27-33
 
 **Stopping condition:** the table exists, is linked from the artifact matrix, and its
 "untested" column is non-empty where testing was not performed.

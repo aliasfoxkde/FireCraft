@@ -1,6 +1,6 @@
 # T27-31 — Re-validate the RPM deferral against current demand
 
-> **RP:** RP-01 · **Priority:** P2 · **Status:** READY
+> **RP:** RP-01 · **Priority:** P2 · **Status:** IMPLEMENTED
 > **Board row:** [EXECUTION-BOARD.md §6](../release/EXECUTION-BOARD.md)
 > **Depends on:** T27-03
 
@@ -21,10 +21,9 @@ outcome.
 
 **Verification:** `grep -n 'Status' docs/decisions/0070-rpm-deferred.md`
 
-**Evidence:** `docs/decisions/0070-rpm-deferred.md`, accepted 2026-11-06. The matrix
-records RPM as "unsupported (decision 0070)" with no artifact.
+**Evidence:** The deferral is re-checked against current demand and **retained**: no issue on the tracker asks for an RPM package (the only RPM mentions are this ledger's own rows), Fedora-family users are served by the tar.gz, and T27-33's second-distro-family check is a DEB/tar.gz exercise. The dated re-validation is recorded in [0070](../decisions/0070-rpm-deferred.md) and the matrix's RPM row cites it **Done:** 2026-11-16.
 
-**Blockers:** none.
+**Blockers:** —
 
 **Stopping condition:** the deferral is retained or formally superseded, and the
 matrix and the certification report agree.
