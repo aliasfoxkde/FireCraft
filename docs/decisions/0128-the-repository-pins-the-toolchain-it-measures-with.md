@@ -1,4 +1,4 @@
-# 0126 — The repository pins the toolchain it measures with
+# 0128 — The repository pins the toolchain it measures with
 
 Date: 2026-11-16 · Issues:
 [#146](https://github.com/aliasfoxkde/FireCraft/issues/146) ·
