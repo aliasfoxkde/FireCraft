@@ -23,6 +23,13 @@ x86_64, Docker 29.7.2 · **Artifacts built from:** `a8a59b35` on the same
 host, inside `rust:1.99-slim-bookworm` (Debian 12), so the DEB's glibc
 floor is the real one.
 
+**These are the published bytes.** The three artifacts tested here are
+byte-identical to the assets the release workflow published in the
+rehearsal `v0.2.5-dryrun.5` (draft release 449261624): the digests
+below are the digests the GitHub API reports for those assets. The
+matrix is therefore a receipt for the *published* artifacts, not for a
+local rebuild that merely resembles them.
+
 | Artifact | Bytes | sha256 |
 |---|---|---|
 | `firecraft_0.2.5_amd64.deb` | 16,228,104 | `7928369626375dfca80516551870d0ab7c98b3f3021ff5c82fc36a86dc39fa42` |
@@ -93,6 +100,18 @@ serves `wayland-0`, the desktop binary is launched with
 
 All six cells passed on 2026-11-17. The cell logs are the receipts.
 
+The matrix was run twice on that date. The first run exercised copies of
+the leg scripts; the second run — the one the receipts above describe —
+used the repository's own `scripts/release-matrix.sh` and
+`packaging/linux/leg-*.sh` at commit `8f9a602c`, with the same six
+cells and the same artifacts. The second run exists because the first
+run's copies were not the tracked scripts, and because the tracked
+Wayland leg had a real defect the copies did not have: it ran
+`apt-get install` on a fresh image whose package lists were never
+fetched, so the Debian and Ubuntu Wayland cells answered "Unable to
+locate package weston" and failed. The leg now refreshes the lists
+first, and all six cells pass with the tracked scripts.
+
 ## What is NOT tested
 
 These are gaps, not endorsements. Nothing in this table claims support
@@ -132,11 +151,13 @@ previous package to upgrade from, and none was supplied, so the upgrade
 transition is untested.
 
 **The published v0.2.5 release assets** — the artifacts tested here are
-built from `a8a59b35` in this repository. The *published* v0.2.5 assets
-were downloaded and checksum-verified on 2026-11-09, and their clean
+built from `a8a59b35` in this repository, and they are byte-identical
+to the assets the rehearsal published. The *production* `v0.2.5`
+release's own assets were published out of band (B-21): they were
+downloaded and checksum-verified on 2026-11-09, but their clean
 container receipts were taken against the **v0.2.3** package, not
-against these bytes; the published DEB still carries the open defects
-below.
+against those bytes, so the production DEB still carries the open
+defects below.
 
 ## Known defects on these platforms
 
@@ -175,5 +196,9 @@ every cell fails with "Permission denied" before it runs anything.
   its evidence state and blockers.
 - [EXECUTION-BOARD.md](EXECUTION-BOARD.md) — the per-unit ledger;
   T27-33 is the matrix, T27-34 is this document.
-- [RECEIPT-0.2.5-DRYRUN-3.md](RECEIPT-0.2.5-DRYRUN-3.md) — the
-  rehearsal receipt for the release workflow path.
+- [RECEIPT-0.2.5-DRYRUN-6.md](RECEIPT-0.2.5-DRYRUN-6.md) — the
+  rehearsal receipt for the release workflow path, and the run that
+  published the artifacts this table tests.
+- [RECEIPT-0.2.5-DRYRUN-3.md](RECEIPT-0.2.5-DRYRUN-3.md) — the first
+  rehearsal receipt; it found the source-archive and naming defects
+  this table's artifacts no longer carry.
