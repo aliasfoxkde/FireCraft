@@ -73,7 +73,7 @@ and whether the runtime table embeds it in the binary.
 | `assets/icons/scissors.svg` | 371 | Lucide — icon `scissors` | ISC (Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
 | `assets/icons/search.svg` | 275 | Lucide (Feather-derived) — icon `search` | MIT (Feather, via Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
 | `assets/icons/shield.svg` | 386 | Lucide — icon `shield` | ISC (Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
-| `assets/icons/slice-knife.svg` | 429 | FireCraft (original drawing) | Apache-2.0 | `LICENSE` | L26 (`assets/icons/slice-knife.svg`) | yes |
+| `assets/icons/slice-knife.svg` | 429 | FireCraft (original drawing) | Apache-2.0 | `LICENSE` | L28 (`assets/icons/slice-knife.svg`) | yes |
 | `assets/icons/sparkles.svg` | 567 | Lucide — icon `sparkles` | ISC (Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
 | `assets/icons/spline.svg` | 314 | Lucide — icon `spline` | ISC (Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
 | `assets/icons/square-dashed-mouse-pointer.svg` | 593 | Lucide — icon `square-dashed-mouse-pointer` | ISC (Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
@@ -96,7 +96,7 @@ and whether the runtime table embeds it in the binary.
 | File | Bytes | What it is | Attribution row |
 |---|---:|---|---|
 | `assets/icons/LICENSE-lucide.txt` | 3,208 | The Lucide licence (ISC) and the Feather licence (MIT) for the icons above | L25 (`assets/icons/*.svg`) |
-| `assets/icons/hicolor/256x256/apps/firecraft.png` | 15,000 | The Linux desktop application icon | L41 (`assets/icons/hicolor/256x256/apps/firecraft.png`), L50 (`assets/icons/hicolor/256x256/apps/firecraft.png`) |
+| `assets/icons/hicolor/256x256/apps/firecraft.png` | 15,000 | The Linux desktop application icon | L43 (`assets/icons/hicolor/256x256/apps/firecraft.png`), L52 (`assets/icons/hicolor/256x256/apps/firecraft.png`) |
 
 ## Measured size cost in the web bundle
 
