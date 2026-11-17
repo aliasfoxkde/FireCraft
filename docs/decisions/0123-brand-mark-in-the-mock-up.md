@@ -1,4 +1,4 @@
-# 0101 — The dark-mode mock-up shows the brand mark itself, and its placement transform is adjudicated
+# 0123 — The dark-mode mock-up shows the brand mark itself, and its placement transform is adjudicated
 
 Date: 2026-11-12 · Issue [#131](https://github.com/aliasfoxkde/FireCraft/issues/131) · Status: accepted
 

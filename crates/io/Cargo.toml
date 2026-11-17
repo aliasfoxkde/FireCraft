@@ -34,8 +34,11 @@ libwebp-sys = { version = "0.14.4", optional = true }
 default = []
 lossy-webp = ["libwebp-sys"]
 
-# lossy-webp requires libwebp-sys (pure-unsafe C FFI). We allow unsafe only
-# within the lossy-webp feature; the rest of the crate is forbid-safe.
+# lossy-webp requires libwebp-sys (pure-unsafe C FFI). The workspace sets
+# `unsafe_code = "forbid"`, which an inner `allow` cannot override, so this
+# crate restates the full lint table with that one key relaxed. Keep every
+# other workspace deny here: an explicit table replaces the workspace's,
+# so a key omitted from it is a lint that silently does not run.
 [lints.rust]
 unsafe_code = "allow"
 
@@ -43,8 +46,12 @@ unsafe_code = "allow"
 unwrap_used = "deny"
 expect_used = "deny"
 panic = "deny"
+todo = "deny"
 unimplemented = "deny"
 unreachable = "deny"
 dbg_macro = "deny"
 print_stdout = "deny"
 exit = "deny"
+doc_markdown = "deny"
+must_use_candidate = "deny"
+needless_pass_by_value = "deny"

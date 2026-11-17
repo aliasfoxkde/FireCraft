@@ -1,4 +1,4 @@
-# 0118 — The export counts lines found and lines with counters; the ratio is the signal
+# 0129 — The export counts lines found and lines with counters; the ratio is the signal
 
 Date: 2026-11-15 · Tickets: [T27-57](../tasks/T27-57-workflow-hardening.md) ·
 Amends: [0103](0103-coverage-export-counts-a-file-once-per-build.md) ·

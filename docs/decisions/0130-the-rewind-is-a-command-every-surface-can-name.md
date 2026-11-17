@@ -1,4 +1,4 @@
-# 0096 — The rewind is a command every surface can name
+# 0130 — The rewind is a command every surface can name
 
 Date: 2026-11-11 · Ticket: [T10](../tasks/T10-history-rewind-command.md) · Status: accepted
 
