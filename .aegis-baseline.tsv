@@ -24,24 +24,42 @@
 # points, and the GitHub release, asset, run and check identifiers
 # quoted in the release receipts; this repository holds no tax
 # identifiers.
+australian-tfn	./docs/TASKS.md	90854b2dc477585b494af511ebe7e260c09e9e6d1582f8d75c35733426d6d710	2
+australian-tfn	./docs/release/ARTIFACT-MATRIX.md	90854b2dc477585b494af511ebe7e260c09e9e6d1582f8d75c35733426d6d710	9
+australian-tfn	./docs/release/CERTIFICATION.md	90854b2dc477585b494af511ebe7e260c09e9e6d1582f8d75c35733426d6d710	2
 australian-tfn	./docs/release/EXECUTION-BOARD.md	35b904df2c6f31c493260dde331b4104ae508d471dc06ce7595bf3ad5a681134	3
-australian-tfn	./docs/release/EXECUTION-BOARD.md	a3a2cc550be9d1627cd6ebe8554832486df9ae30304ab8ca9b141b1f88bb4e99	2
+australian-tfn	./docs/release/EXECUTION-BOARD.md	90854b2dc477585b494af511ebe7e260c09e9e6d1582f8d75c35733426d6d710	1
+australian-tfn	./docs/release/EXECUTION-BOARD.md	a3a2cc550be9d1627cd6ebe8554832486df9ae30304ab8ca9b141b1f88bb4e99	1
+australian-tfn	./docs/release/EXECUTION-BOARD.md	f56a84c068b5f3241a93c04e12a698d51e771dfef255452d1b225b52854eaf76	1
+australian-tfn	./docs/release/LINUX-COMPAT.md	f56a84c068b5f3241a93c04e12a698d51e771dfef255452d1b225b52854eaf76	1
 australian-tfn	./docs/release/RECEIPT-0.2.5-DRYRUN-3.md	35b904df2c6f31c493260dde331b4104ae508d471dc06ce7595bf3ad5a681134	1
 australian-tfn	./docs/release/RECEIPT-0.2.5-DRYRUN-3.md	a3a2cc550be9d1627cd6ebe8554832486df9ae30304ab8ca9b141b1f88bb4e99	1
+australian-tfn	./docs/release/RECEIPT-0.2.5-DRYRUN-6.md	90854b2dc477585b494af511ebe7e260c09e9e6d1582f8d75c35733426d6d710	2
+australian-tfn	./docs/release/RECEIPT-0.2.5-DRYRUN-6.md	f56a84c068b5f3241a93c04e12a698d51e771dfef255452d1b225b52854eaf76	1
 australian-tfn	./docs/research/fireworks-png-nodes.md	1004a585bc60d363038c5889d022bd6f58278338fe66f97483316133e316f41a	1
 australian-tfn	./docs/tasks/T27-19-draft-release-test-tag.md	35b904df2c6f31c493260dde331b4104ae508d471dc06ce7595bf3ad5a681134	1
-australian-tfn	./docs/tasks/T27-52-source-archive.md	a3a2cc550be9d1627cd6ebe8554832486df9ae30304ab8ca9b141b1f88bb4e99	1
+australian-tfn	./docs/tasks/T27-19-draft-release-test-tag.md	90854b2dc477585b494af511ebe7e260c09e9e6d1582f8d75c35733426d6d710	1
+australian-tfn	./docs/tasks/T27-19-draft-release-test-tag.md	f56a84c068b5f3241a93c04e12a698d51e771dfef255452d1b225b52854eaf76	1
 australian-tfn	./xtask/src/aegis.rs	1004a585bc60d363038c5889d022bd6f58278338fe66f97483316133e316f41a	1
 # Matches the same 9-digit observed value range in the PNG node
 # dictionary and the GitHub release, asset, run and check identifiers
 # quoted in the release receipts; this repository holds no banking data.
+bank-routing-number	./docs/TASKS.md	90854b2dc477585b494af511ebe7e260c09e9e6d1582f8d75c35733426d6d710	2
+bank-routing-number	./docs/release/ARTIFACT-MATRIX.md	90854b2dc477585b494af511ebe7e260c09e9e6d1582f8d75c35733426d6d710	9
+bank-routing-number	./docs/release/CERTIFICATION.md	90854b2dc477585b494af511ebe7e260c09e9e6d1582f8d75c35733426d6d710	2
 bank-routing-number	./docs/release/EXECUTION-BOARD.md	35b904df2c6f31c493260dde331b4104ae508d471dc06ce7595bf3ad5a681134	3
-bank-routing-number	./docs/release/EXECUTION-BOARD.md	a3a2cc550be9d1627cd6ebe8554832486df9ae30304ab8ca9b141b1f88bb4e99	2
+bank-routing-number	./docs/release/EXECUTION-BOARD.md	90854b2dc477585b494af511ebe7e260c09e9e6d1582f8d75c35733426d6d710	1
+bank-routing-number	./docs/release/EXECUTION-BOARD.md	a3a2cc550be9d1627cd6ebe8554832486df9ae30304ab8ca9b141b1f88bb4e99	1
+bank-routing-number	./docs/release/EXECUTION-BOARD.md	f56a84c068b5f3241a93c04e12a698d51e771dfef255452d1b225b52854eaf76	1
+bank-routing-number	./docs/release/LINUX-COMPAT.md	f56a84c068b5f3241a93c04e12a698d51e771dfef255452d1b225b52854eaf76	1
 bank-routing-number	./docs/release/RECEIPT-0.2.5-DRYRUN-3.md	35b904df2c6f31c493260dde331b4104ae508d471dc06ce7595bf3ad5a681134	1
 bank-routing-number	./docs/release/RECEIPT-0.2.5-DRYRUN-3.md	a3a2cc550be9d1627cd6ebe8554832486df9ae30304ab8ca9b141b1f88bb4e99	1
+bank-routing-number	./docs/release/RECEIPT-0.2.5-DRYRUN-6.md	90854b2dc477585b494af511ebe7e260c09e9e6d1582f8d75c35733426d6d710	2
+bank-routing-number	./docs/release/RECEIPT-0.2.5-DRYRUN-6.md	f56a84c068b5f3241a93c04e12a698d51e771dfef255452d1b225b52854eaf76	1
 bank-routing-number	./docs/research/fireworks-png-nodes.md	1004a585bc60d363038c5889d022bd6f58278338fe66f97483316133e316f41a	1
 bank-routing-number	./docs/tasks/T27-19-draft-release-test-tag.md	35b904df2c6f31c493260dde331b4104ae508d471dc06ce7595bf3ad5a681134	1
-bank-routing-number	./docs/tasks/T27-52-source-archive.md	a3a2cc550be9d1627cd6ebe8554832486df9ae30304ab8ca9b141b1f88bb4e99	1
+bank-routing-number	./docs/tasks/T27-19-draft-release-test-tag.md	90854b2dc477585b494af511ebe7e260c09e9e6d1582f8d75c35733426d6d710	1
+bank-routing-number	./docs/tasks/T27-19-draft-release-test-tag.md	f56a84c068b5f3241a93c04e12a698d51e771dfef255452d1b225b52854eaf76	1
 bank-routing-number	./xtask/src/aegis.rs	1004a585bc60d363038c5889d022bd6f58278338fe66f97483316133e316f41a	1
 # The GitForge API row names the credential file that holds the bearer
 # token; the row contains no token.
@@ -209,13 +227,22 @@ sql-query	./docs/tasks/T22-screenshot-ui.md	6ba454ee08d4ce45364f6e849176079be5c6
 # dictionary and the GitHub release, asset, run and check identifiers
 # quoted in the release receipts; this repository holds no
 # social-security numbers.
+ssn-no-dashes	./docs/TASKS.md	90854b2dc477585b494af511ebe7e260c09e9e6d1582f8d75c35733426d6d710	2
+ssn-no-dashes	./docs/release/ARTIFACT-MATRIX.md	90854b2dc477585b494af511ebe7e260c09e9e6d1582f8d75c35733426d6d710	9
+ssn-no-dashes	./docs/release/CERTIFICATION.md	90854b2dc477585b494af511ebe7e260c09e9e6d1582f8d75c35733426d6d710	2
 ssn-no-dashes	./docs/release/EXECUTION-BOARD.md	35b904df2c6f31c493260dde331b4104ae508d471dc06ce7595bf3ad5a681134	3
-ssn-no-dashes	./docs/release/EXECUTION-BOARD.md	a3a2cc550be9d1627cd6ebe8554832486df9ae30304ab8ca9b141b1f88bb4e99	2
+ssn-no-dashes	./docs/release/EXECUTION-BOARD.md	90854b2dc477585b494af511ebe7e260c09e9e6d1582f8d75c35733426d6d710	1
+ssn-no-dashes	./docs/release/EXECUTION-BOARD.md	a3a2cc550be9d1627cd6ebe8554832486df9ae30304ab8ca9b141b1f88bb4e99	1
+ssn-no-dashes	./docs/release/EXECUTION-BOARD.md	f56a84c068b5f3241a93c04e12a698d51e771dfef255452d1b225b52854eaf76	1
+ssn-no-dashes	./docs/release/LINUX-COMPAT.md	f56a84c068b5f3241a93c04e12a698d51e771dfef255452d1b225b52854eaf76	1
 ssn-no-dashes	./docs/release/RECEIPT-0.2.5-DRYRUN-3.md	35b904df2c6f31c493260dde331b4104ae508d471dc06ce7595bf3ad5a681134	1
 ssn-no-dashes	./docs/release/RECEIPT-0.2.5-DRYRUN-3.md	a3a2cc550be9d1627cd6ebe8554832486df9ae30304ab8ca9b141b1f88bb4e99	1
+ssn-no-dashes	./docs/release/RECEIPT-0.2.5-DRYRUN-6.md	90854b2dc477585b494af511ebe7e260c09e9e6d1582f8d75c35733426d6d710	2
+ssn-no-dashes	./docs/release/RECEIPT-0.2.5-DRYRUN-6.md	f56a84c068b5f3241a93c04e12a698d51e771dfef255452d1b225b52854eaf76	1
 ssn-no-dashes	./docs/research/fireworks-png-nodes.md	1004a585bc60d363038c5889d022bd6f58278338fe66f97483316133e316f41a	1
 ssn-no-dashes	./docs/tasks/T27-19-draft-release-test-tag.md	35b904df2c6f31c493260dde331b4104ae508d471dc06ce7595bf3ad5a681134	1
-ssn-no-dashes	./docs/tasks/T27-52-source-archive.md	a3a2cc550be9d1627cd6ebe8554832486df9ae30304ab8ca9b141b1f88bb4e99	1
+ssn-no-dashes	./docs/tasks/T27-19-draft-release-test-tag.md	90854b2dc477585b494af511ebe7e260c09e9e6d1582f8d75c35733426d6d710	1
+ssn-no-dashes	./docs/tasks/T27-19-draft-release-test-tag.md	f56a84c068b5f3241a93c04e12a698d51e771dfef255452d1b225b52854eaf76	1
 ssn-no-dashes	./xtask/src/aegis.rs	1004a585bc60d363038c5889d022bd6f58278338fe66f97483316133e316f41a	1
 # The rule's regex fires on the HTTP client the Aegis installer uses —
 # the node `fetch(url)` fallback in `scripts/install-aegis.sh` — and
