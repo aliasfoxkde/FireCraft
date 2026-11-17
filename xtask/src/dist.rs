@@ -2842,8 +2842,9 @@ mod manifest_tests {
     #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
     use super::{
         ArtifactSpec, MANIFEST_FILE_NAME, MANIFEST_SCHEMA, ManifestContext, VERIFICATION_COMPUTED,
-        VERIFICATION_VERIFIED, build_manifest, digest_and_size, parse_checksum_list, release_specs,
-        render_manifest, verify_manifest_at,
+        VERIFICATION_VERIFIED, build_manifest, built_run_url, digest_and_size,
+        parse_checksum_list, release_specs, render_manifest, stated_tag_names_version,
+        verify_manifest_at,
     };
     use std::path::{Path, PathBuf};
 
