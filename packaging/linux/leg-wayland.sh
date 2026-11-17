@@ -43,7 +43,7 @@ if [ -z "$BIN" ] || [ ! -x "$BIN" ]; then
         echo "== the tar.gz is this family's artifact; unpack it"
         mkdir -p /opt/firecraft-tar
         tar xzf /artifacts/firecraft-[0-9]*-linux-x86_64.tar.gz -C /opt/firecraft-tar
-        BIN="$(find /opt/firecraft-tar -maxdepth 3 -type f -name firecraft | head -1)"
+        BIN="$(find /opt/firecraft-tar -maxdepth 3 -type f -name firecraft -print -quit)"
     fi
 fi
 [ -n "$BIN" ] && [ -x "$BIN" ] ||
