@@ -8835,11 +8835,12 @@ mod tests {
         let ctx = egui::Context::default();
         ctx.global_style_mut(|style| style.animation_time = 0.0);
         let draw = |shell: &mut Shell, input: egui::RawInput| {
-            ctx.run_ui(input, |ui| {
+            let output = ctx.run_ui(input, |ui| {
                 egui::CentralPanel::default().show(ui, |ui| {
                     shell.properties_panel(ui);
                 });
-            })
+            });
+            output
         };
         // The width field: the strip draws the field's prefix and its
         // value as one galley ("W 8"), or the prefix on its own when
@@ -8861,6 +8862,7 @@ mod tests {
             })
             .next()
             .expect("the width field is drawn");
+        output.drop_without_applying_deltas();
         // Click the field: it takes the focus and enters its edit mode.
         for pressed in [true, false] {
             let input = egui::RawInput {
@@ -8875,8 +8877,12 @@ mod tests {
                 ],
                 ..Default::default()
             };
-            draw(&mut shell, input);
+            draw(&mut shell, input).drop_without_applying_deltas();
         }
+        assert!(
+            ctx.memory(|memory| memory.focused()).is_some(),
+            "the click gave the width field the focus"
+        );
         // One step up in the focused field: the value moves by one.
         let input = egui::RawInput {
             events: vec![egui::Event::Key {
@@ -8888,7 +8894,7 @@ mod tests {
             }],
             ..Default::default()
         };
-        draw(&mut shell, input);
+        draw(&mut shell, input).drop_without_applying_deltas();
         // The bitmap took the new width and kept its place.
         let image = match shell.editor.document().registry.get(id) {
             Some(doc::ObjectData::Image(image)) => image,
