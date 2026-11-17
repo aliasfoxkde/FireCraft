@@ -32,7 +32,7 @@
 # The debt this leaves: the cache is still shared across branches, so
 # every job that compiles the workspace has to run this guard. A
 # per-branch cache directory in GitForge would remove the need for it
-# — see the debt note in decision 0126.
+# — see the debt note in decision 0127.
 
 set -euo pipefail
 

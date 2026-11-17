@@ -1,4 +1,4 @@
-# 0126 — A CI run compiles against this run's sources, not the cache's
+# 0127 — A CI run compiles against this run's sources, not the cache's
 
 Date: 2026-11-16 · Status: accepted
 
