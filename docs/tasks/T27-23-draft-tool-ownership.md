@@ -1,6 +1,6 @@
 # T27-23 — Track the originating tool in plotted-draft state, and cover it with regression tests
 
-> **RP:** Phase-2 (PR #8 remediation) · **Priority:** P0 · **Status:** IN PROGRESS
+> **RP:** Phase-2 (PR #8 remediation) · **Priority:** P0 · **Status:** IMPLEMENTED
 > **Board row:** [EXECUTION-BOARD.md §6](../release/EXECUTION-BOARD.md)
 > **Depends on:** T27-03
 
@@ -19,7 +19,7 @@ Hotspot → Pen, and fail against the pre-fix behaviour.
 
 **Verification:** `cargo test -p app`
 
-**Evidence:** CodeRabbit Major on `crates/app/src/editor.rs:3271-3276` (Pen points folded into a Hotspot commit) — reproduced against the current code and fixed on branch `fix/plotted-draft-keeps-its-tool`: the pending draft now records the tool that plotted it (`PointDraft::tool`), a tool switch converts the pending path explicitly (committed as the tool that plotted it, dropped when it has too few points to become an object), and `commit_draft` dispatches on the draft's own tool rather than the selected one. The regressions are in [`crates/app/tests/plotted_draft.rs`](https://github.com/aliasfoxkde/FireCraft/blob/fix/plotted-draft-keeps-its-tool/crates/app/tests/plotted_draft.rs) — Pen→Hotspot, Hotspot→Pen and the too-few-points drop.
+**Evidence:** CodeRabbit Major on `crates/app/src/editor.rs:3271-3276` (Pen points folded into a Hotspot commit) — reproduced against the current code and fixed: the pending draft now records the tool that plotted it (`PointDraft::tool`), a tool switch converts the pending path explicitly (committed as the tool that plotted it, dropped when it has too few points to become an object), and `commit_draft` dispatches on the draft's own tool rather than the selected one. The regressions are in [`crates/app/tests/plotted_draft.rs`](https://github.com/aliasfoxkde/FireCraft/blob/main/crates/app/tests/plotted_draft.rs) — Pen→Hotspot, Hotspot→Pen and the too-few-points drop. Merged as PR #171 → `d3e45cf9`; the GitHub `gate`, `fmt` and `classify-change` checks are green on that head and the GitForge pipeline for it (`93905d80`, head `7ff1321e`) succeeded. **Done:** 2026-11-17.
 
 **Blockers:** —
 

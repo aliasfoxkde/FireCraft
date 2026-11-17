@@ -53,6 +53,11 @@ temp/
 # them, so their findings can never stick to the baseline.
 .gitignore-scratch/
 
+# Session scratch: helper scripts, renumbered document copies and probe
+# artifacts. Git-ignored working files, not source; their content churns
+# with every session, so their findings can never stick to the baseline.
+.scratch/
+
 # Proprietary Adobe reference install (git-ignored working material,
 # see CLAUDE.md source/ rules). Third-party binaries and vendor JS —
 # every finding there is noise by definition, and the files churn.
