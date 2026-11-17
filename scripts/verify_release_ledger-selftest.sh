@@ -114,7 +114,12 @@ mutate_no_date() {
 }
 
 mutate_no_blocker() {
-  set_board_cell T27-09 9 "—"
+  # A row marked BLOCKED whose blocker cell is empty. The status cell is
+  # set as well as the blocker cell, so the case tests the rule — "a
+  # BLOCKED row names its blocker" — instead of testing whichever row
+  # happens to be blocked on the day the self-test runs.
+  set_board_cell T27-01 4 "BLOCKED"
+  set_board_cell T27-01 9 "—"
 }
 
 mutate_unknown_status() {
