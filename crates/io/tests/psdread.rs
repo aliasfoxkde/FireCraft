@@ -271,8 +271,9 @@ fn build_psd(
     out.extend_from_slice(&section(&[])); // color mode data
     out.extend_from_slice(&section(&[])); // image resources
 
-    let mut info = be16(layers.len() as u16);
-    for layer in &layers {
+    let count = layers.len();
+    let mut info = be16(count as u16);
+    for layer in layers {
         info.extend_from_slice(&layer.encode());
     }
     // The layer-and-mask section wraps the layer-info section.

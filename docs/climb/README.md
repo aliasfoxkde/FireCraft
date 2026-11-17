@@ -122,7 +122,7 @@ Baseline measured **2026-11-13 on `main` @ `1ac3dbc`**. History lives in
 | # | Metric | Dir | Baseline | Summit target | How to measure (until `xtask climb` exists) |
 |---|---|---|---|---|---|
 | S1 | Gate green on `main` | = | green (GitHub backup CI, last 15 runs) | green | `cargo run -p xtask -- ci` |
-| S2 | Shell-bound registry commands | ↑ | 164 / 253 (64.82 %) | 253 minus script-only-by-decision = 100 % | `cargo run -p xtask -- reachability` (stderr line) |
+| S2 | Shell-bound registry commands | ↑ | 168 / 253 (66.40 %) | 253 minus script-only-by-decision = 100 % | `cargo run -p xtask -- reachability` (stderr line) |
 | S3 | `ReportGap(` sites in menus | ↓ | 52 | each remaining one has a decision row | `grep -c 'ReportGap(' crates/app/src/menus.rs` |
 | S4 | Inert menu rows | ↓ | 2 of 296 | 0 | `cargo test -p app menus::tests::inert_count_never_rises` (pinned value in test) |
 | S5a | CS6-PARITY rows **implemented** | ↑ | 82 | ≥ 115 | `grep -oE '\| \*\*implemented\*\*' docs/CS6-PARITY.md \| wc -l` |
@@ -183,7 +183,7 @@ listed.
 
 | Decision | Blocks | Rung |
 |---|---|---|
-| Merge the four open PRs (#143 → #113 → #142 → #144) | P5, P6 | C0.02–C0.05 |
+| Merge the three open PRs (#143 → #113 → #144; #142 landed as `ddf19fb4`) | P5, P6 | C0.02–C0.05 |
 | Approve deleting 30 stale branches + 3 dry-run tags | S12 | C0.09 |
 | Approve closing/re-scoping ~15 issues | S11 | C0.10 |
 | Add Cloudflare secrets (`CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`) | site deploy, P3 deploy | C0.11, C3.03 |
