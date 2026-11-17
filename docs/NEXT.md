@@ -600,7 +600,10 @@ scope, so no license path is attempted.
   right, collapsible, resizable, and re-openable from the Window
   menu; the dock geometry persists. Accept: a panel can be collapsed
   and reopened, the right dock can be resized, and the layout survives
-  a restart. Left↔right movement remains open work toward the CS6 target.
+  a restart. Left↔right movement is implemented and tested: a panel's
+  title is its drag handle, both columns are drop targets, the `«`/`»`
+  header arrow moves a panel without dragging, and only *moved* panels
+  are persisted.
   — **PARTLY LANDED 2026-11-04**: `shell::panel_windows` uses a
   width-reserving `egui::Panel::right` dock (258 pt default width),
   with a scrolling column of collapsible, closable panel sections
@@ -616,7 +619,11 @@ scope, so no license path is attempted.
   Behaviors are real panels whose actions are engine commands. The
   remaining panel surfaces (Optimize, Common Library, CSS Properties,
   Find and Replace, Slices) landed 2026-11-06; the panel inventory is
-  complete (see `TASKS.md`). Left↔right docking movement remains open.
+  complete (see `TASKS.md`). The left↔right docking movement landed
+  2026-11-11 in PR #128, merged 2026-11-14 (`shell::panel_windows`:
+  `DockSide`, `left_dock`, `move_panel_to_dock`, the `«`/`»` header
+  arrow and the drag drop target; gated by `shell::tests::
+  a_moved_panel_lives_in_the_other_dock`).
   The normal-viewport reachability pass is recorded in
   [`tasks/T22-screenshot-ui.md`](tasks/T22-screenshot-ui.md).
   — **REACHABILITY MEASURED 2026-11-04**: the stack is now a dock that
@@ -687,8 +694,27 @@ scope, so no license path is attempted.
   not faked.
 - **22.5 CS6 chrome** (M): menu bar order, tool strip placement,
   document tab strip, status bar, panel headers with the CS6
-  collapse/close affordances, and the CS6 color scheme (a dark
-  neutral chrome, not egui's default light look). **Landed
+  collapse/close affordances, and the chrome's colour scheme.
+  **The colour scheme was measured, not assumed (2026-11-16):** CS6
+  owns *no* palette — its eight Preferences categories set no colour,
+  so the greys a CS6 install draws are the host OS's, and the
+  reference run renders `#D6D6D6`/`#EDEDED`/`#999999` with **no**
+  saturated hue anywhere in the chrome. FireCraft therefore keeps its
+  own **dark** neutral scheme (every colour but the selection accent a
+  grey), recorded as **deliberately different** with its reason and
+  owner in CS6-PARITY §C, and the values are pinned by
+  `glyphs::tests::the_chrome_carries_the_recorded_palette`.
+  **The chrome is now captured and measured (2026-11-16):** the
+  running shell was captured at 1280×800 and at a deliberately short
+  1280×400 (`docs/img/chrome-1280x800.png`,
+  `docs/img/chrome-1280x400.png`, build `a34a4034`), and the pixels
+  confirm the recorded greys — panel fill `#3C3C3C` 35.90 %, surround
+  `#202020` 4.03 %, page `#FFFFFF` 55.89 %, text `#DDDDDD` 0.07 %,
+  accent `#2F5D8A` 0.33 % — with **0.00 %** blue-dominant pixels in
+  the menu bar, tool-options row and status bar, so the chrome bars
+  are hue-free in the same way CS6's are. Receipt:
+  [research/fw-ui-evidence.md](research/fw-ui-evidence.md#the-firecraft-chrome-measured-2026-11-16).
+  **Landed
   2026-11-06:** the three-mode screen cycle (Standard / Full Screen
   with Menus / Full Screen, fwref 1178–1185 — the control no longer
   aliases Tab), the Alt-hold retouch swap (Blur↔Sharpen,
