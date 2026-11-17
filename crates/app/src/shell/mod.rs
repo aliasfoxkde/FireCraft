@@ -8835,12 +8835,11 @@ mod tests {
         let ctx = egui::Context::default();
         ctx.global_style_mut(|style| style.animation_time = 0.0);
         let draw = |shell: &mut Shell, input: egui::RawInput| {
-            let output = ctx.run_ui(input, |ui| {
+            ctx.run_ui(input, |ui| {
                 egui::CentralPanel::default().show(ui, |ui| {
                     shell.properties_panel(ui);
                 });
-            });
-            output
+            })
         };
         // The width field: the strip draws the field's prefix and its
         // value as one galley ("W 8"), or the prefix on its own when
