@@ -11,6 +11,7 @@ Keep three independent measures separate:
 - **DOM/API parity:** 268 carried, 3 partial, 0 missing of 356 verbs. This describes scripting/API compatibility.
 - **Shell command reachability:** 257 of 257 registered engine commands are bound in the CS6-visible shell surface (100%, measured 2026-11-16 after the wave-2 closeout, #150). The command palette exposes the full command registry, but that does not mean every operation has a polished contextual GUI.
 - **User-visible feature parity:** each menu, tool, panel, inspector field, workflow, import/export path, canvas interaction, keymap and selection state is classified in the [parity matrix](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/CS6-PARITY.md).
+- **Menu coverage:** the inert-row census is not a coverage number. Of the 298 menu rows, 2 render inert and 35 more dispatch `ShellAction::ReportGap` — they are clickable and say plainly that the feature is absent (document templates, printing, Adobe Bridge, and other surfaces this build does not ship). The matrix's *Gap-reporting rows* section is the authority for that middle state.
 
 A DOM command being carried does not prove that its GUI surface exists. A row appearing in a menu does not prove that the behavior is complete. Each claim needs a working UI path and evidence.
 
@@ -22,7 +23,7 @@ A DOM command being carried does not prove that its GUI surface exists. A row ap
 | Phase 22 — CS6 shell fidelity | In progress; panel inventory, tool strip, adaptive context menus and icon pack landed; inspector/chrome follow-ups remain |
 | Phase 20 — daily-driver editor workflows | Partially delivered: text editing and multi-document/history/slice workflows on main; Optimize/timeline in PR #118; mask stack in PR #113 |
 | Phase 21 — modern additions | User-facing deliverables landed: autosave/recovery, HiDPI, command palette, preferences, accessibility work and scripting |
-| Phase 19.6 — menu wiring | Complete: 2 inert of 298 rows; eight explicit feature/evidence gates remain |
+| Phase 19.6 — menu wiring | Complete: 2 inert of 298 rows; eight explicit feature/evidence gates remain; 35 further rows are clickable gap-reporting rows, so the inert count is not a coverage number |
 
 ## Remaining parity and quality work
 

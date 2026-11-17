@@ -101,7 +101,7 @@ jobs:
     steps:
       - name: The release board and its tickets agree
         # `docs/release/EXECUTION-BOARD.md` §6 is the plan of record for
-        # the 61 release tasks: which are done, on what evidence, and
+        # the 62 release tasks: which are done, on what evidence, and
         # what still blocks them. Each row has one ticket under
         # `docs/tasks/`, and the two must state the same status,
         # evidence and blockers. A board that claims progress its
@@ -130,11 +130,60 @@ jobs:
           fi
     timeout: 5m
 
+  - name: aegis
+    image: firecraft-ci-rust:2
+    cache:
+      source: "{cache_root}/cargo/{image}-aegis"
+    needs: [release-ledger]
+    # This job has NO skip_if: the Aegis secret/PII scan covers `docs/`,
+    # so a documentation-only change can add a finding the committed
+    # baseline does not carry. Every other Cargo job in this pipeline is
+    # skipped for a docs-only diff, which is how four Windows build
+    # literals reached `main` unblessed and then failed the NEXT code
+    # change's gate for content that change never touched (observed on
+    # `main` `c26adffc`: 5 uncovered findings). The scan is cheap — it is
+    # the only gate here that does not compile the workspace — and it must
+    # run on every push, or "the baseline is current" is a claim nobody
+    # checks.
+    steps:
+      - name: Refresh the crates the shared cache may hold from another tree
+        # See the note on the same step in the `layers` job: the cache
+        # is mounted per JOB, so cargo can reuse another branch's
+        # artifact when this checkout is older than the cache (decision
+        # 0122).
+        run: |
+          set -e
+          if [ -f scripts/ci_refresh_stale_crates.sh ]; then
+            bash scripts/ci_refresh_stale_crates.sh /workspace "${CARGO_TARGET_DIR:-/cargo-target}"
+          fi
+      - name: The installer's failure modes are exercised
+        # The installer is the only place the scanner's pin lives, and it
+        # is called by three jobs. Its self-test runs here, on every
+        # push, rather than being trusted: it proves that a mismatched
+        # checksum installs nothing, that a program which is not the
+        # scanner is refused, and that the install works on a machine
+        # with no curl, no wget and no python3 — which is this image.
+        run: |
+          set -e
+          bash scripts/install-aegis-selftest.sh
+      - name: Install the pinned Aegis scanner
+        # The CI image ships no curl and no wget; `scripts/install-aegis.sh`
+        # brings its own fetch and verifies the tarball's SHA-256. The
+        # same script and the same pin serve the GitHub jobs.
+        run: |
+          set -e
+          bash scripts/install-aegis.sh /usr/local/bin
+      - name: Aegis secret scan
+        run: cargo run --locked -p xtask -- aegis
+    # 45m: the job compiles xtask (the scan itself takes seconds) and
+    # shares the fleet with the other Cargo jobs.
+    timeout: 45m
+
   - name: fmt-layers
     image: firecraft-ci-rust:2
     cache:
       source: "{cache_root}/cargo/{image}-fmt-layers"
-    needs: [release-ledger]
+    needs: [aegis]
     steps:
       - name: Rust formatting check
         run: cargo fmt --all -- --check
