@@ -181,12 +181,24 @@ const CLASS_NOTES: &[(&str, &str)] = &[
          observed PNG value ranges.",
     ),
     (
+        "ssrf",
+        "The rule's regex fires on the HTTP client the Aegis installer \
+         uses — the node `fetch(url)` fallback in \
+         `scripts/install-aegis.sh` — and on the prose in decision 0132 \
+         that names the downloaders. The only URL this repository fetches \
+         is the pinned scanner release, whose SHA-256 the installer \
+         checks before it runs; no URL is user-controlled and nothing \
+         here serves a request on anyone's behalf.",
+    ),
+    (
         "ssrf-localhost",
         "A loopback listener in the release smoke test, a localhost \
          maintainer address, prose naming the local GitForge API, the \
-         local preview URL in the site deployment guide, and the loopback \
-         bind quoted by the Aegis adjudication tickets; the workspace has \
-         no HTTP client dependency.",
+         local preview URL in the site deployment guide, the loopback \
+         fixture server the Aegis installer's self-test binds to serve \
+         its tarball, and the loopback bind quoted by the Aegis \
+         adjudication tickets; the workspace has no HTTP client \
+         dependency.",
     ),
     (
         "sql-query",
@@ -234,6 +246,10 @@ const CLASS_NOTES: &[(&str, &str)] = &[
          Fireworks RPC TCP port — a protocol number, not postal data. \
          The seconds-per-day constant in the CI cache-refresh self-test's \
          timestamp arithmetic is a duration, not postal data. \
+         The Windows OS build, SDK and Visual Studio version numbers \
+         quoted by the Windows arm64 assessment and by the decision and \
+         ticket that record the Aegis scan defect (19041, 22621, 26100, \
+         37710) are build identifiers, not postal data. \
          This repository holds no postal data.",
     ),
 ];

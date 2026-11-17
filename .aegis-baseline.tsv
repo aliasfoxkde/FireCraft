@@ -217,14 +217,25 @@ ssn-no-dashes	./docs/research/fireworks-png-nodes.md	1004a585bc60d363038c5889d02
 ssn-no-dashes	./docs/tasks/T27-19-draft-release-test-tag.md	35b904df2c6f31c493260dde331b4104ae508d471dc06ce7595bf3ad5a681134	1
 ssn-no-dashes	./docs/tasks/T27-52-source-archive.md	a3a2cc550be9d1627cd6ebe8554832486df9ae30304ab8ca9b141b1f88bb4e99	1
 ssn-no-dashes	./xtask/src/aegis.rs	1004a585bc60d363038c5889d022bd6f58278338fe66f97483316133e316f41a	1
-# Individually adjudicated as a false positive; see decision 0074.
+# The rule's regex fires on the HTTP client the Aegis installer uses —
+# the node `fetch(url)` fallback in `scripts/install-aegis.sh` — and
+# on the prose in decision 0132 that names the downloaders. The only URL
+# this repository fetches is the pinned scanner release, whose SHA-256
+# the installer checks before it runs; no URL is user-controlled and
+# nothing here serves a request on anyone's behalf.
+ssrf	./docs/decisions/0132-the-secret-scan-runs-on-documentation-changes.md	fd120f0eb67622c8e916f52a1600854cf0a37bd77f8e867fc7ea240869cc021a	1
+ssrf	./docs/tasks/T27-24-pr8-remaining-findings.md	02080ee9df2029343f4a9ce242af5ea993a030cc7d8e206f90eb5ab207dd5d52	1
+ssrf	./scripts/install-aegis.sh	02080ee9df2029343f4a9ce242af5ea993a030cc7d8e206f90eb5ab207dd5d52	1
 ssrf	./scripts/reconcile_deployment.py	02080ee9df2029343f4a9ce242af5ea993a030cc7d8e206f90eb5ab207dd5d52	1
 ssrf	./scripts/reconcile_deployment.py	c416978a40667a3e3ea44fa69257a535027b73bc902d74fe68d2eeb45e6455f1	2
 ssrf	./scripts/reconcile_deployment.py	d05e0f3dbb221796ceb128ab510efe70824de9a8aed222d87352bfc1ac2b278d	1
+ssrf	./xtask/src/aegis.rs	02080ee9df2029343f4a9ce242af5ea993a030cc7d8e206f90eb5ab207dd5d52	1
 # A loopback listener in the release smoke test, a localhost maintainer
 # address, prose naming the local GitForge API, the local preview URL in
-# the site deployment guide, and the loopback bind quoted by the Aegis
-# adjudication tickets; the workspace has no HTTP client dependency.
+# the site deployment guide, the loopback fixture server the Aegis
+# installer's self-test binds to serve its tarball, and the loopback
+# bind quoted by the Aegis adjudication tickets; the workspace has no
+# HTTP client dependency.
 ssrf-localhost	./docs/NEXT.md	12ca17b49af2289436f303e0166030a21e525d266e209267433801a8fd4071a0	1
 ssrf-localhost	./docs/PLANNING.md	12ca17b49af2289436f303e0166030a21e525d266e209267433801a8fd4071a0	2
 ssrf-localhost	./docs/SESSIONS.md	12ca17b49af2289436f303e0166030a21e525d266e209267433801a8fd4071a0	1
@@ -236,7 +247,9 @@ ssrf-localhost	./docs/release/EXECUTION-BOARD.md	49960de5880e8c687434170f6476605
 ssrf-localhost	./docs/tasks/T22-screenshot-ui.md	49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763	1
 ssrf-localhost	./docs/tasks/T27-12-adjudicate-aegis-findings.md	12ca17b49af2289436f303e0166030a21e525d266e209267433801a8fd4071a0	1
 ssrf-localhost	./docs/tasks/T27-12-adjudicate-aegis-findings.md	49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763	7
+ssrf-localhost	./docs/tasks/T27-24-pr8-remaining-findings.md	49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763	2
 ssrf-localhost	./packaging/deb/control	49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763	1
+ssrf-localhost	./scripts/install-aegis-selftest.sh	12ca17b49af2289436f303e0166030a21e525d266e209267433801a8fd4071a0	2
 ssrf-localhost	./scripts/reconcile_deployment-selftest.py	12ca17b49af2289436f303e0166030a21e525d266e209267433801a8fd4071a0	5
 ssrf-localhost	./xtask/src/aegis.rs	49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763	2
 ssrf-localhost	./xtask/src/dist.rs	12ca17b49af2289436f303e0166030a21e525d266e209267433801a8fd4071a0	1
@@ -263,8 +276,11 @@ xml-external-entity	./packaging/build-macos-dmg.sh	7b16906a7de9206c7488979eb86e8
 # postal data). The v1 MVP roadmap's RPC-emulation row names the legacy
 # Fireworks RPC TCP port — a protocol number, not postal data. The
 # seconds-per-day constant in the CI cache-refresh self-test's timestamp
-# arithmetic is a duration, not postal data. This repository holds no
-# postal data.
+# arithmetic is a duration, not postal data. The Windows OS build, SDK
+# and Visual Studio version numbers quoted by the Windows arm64
+# assessment and by the decision and ticket that record the Aegis scan
+# defect (19041, 22621, 26100, 37710) are build identifiers, not postal
+# data. This repository holds no postal data.
 zip-code	./crates/app-cli/src/mcp.rs	0e5c81ceee464db1c0cb9ed801d134fab0dd2a28c0dc62e35aa21a8e13ff0ebc	1
 zip-code	./crates/app-cli/src/mcp.rs	20d70708103e5223b6f2fb00f00947832fb93d12ebef11eb10bc5599efefe184	1
 zip-code	./crates/app-cli/src/mcp.rs	e27c72fe629f258a871404eed323c0cf57a7a26c19dc8d5a6ac90770241af8f5	1
@@ -651,6 +667,10 @@ zip-code	./docs/decisions/0084-aegis-rebless-slice-hotspot.md	fec32d6024e177ac05
 zip-code	./docs/decisions/0103-coverage-export-counts-a-file-once-per-build.md	bcf0b1bb2411951d65d3d9e3856d4b3e3737dd7dffa88a5846980c6a5416eb26	1
 zip-code	./docs/decisions/0103-coverage-export-counts-a-file-once-per-build.md	de3ed9cafce0409e0a4e921f5d6de80f531d0a89de59df55a52b6b0705a5cf41	1
 zip-code	./docs/decisions/0123-brand-mark-in-the-mock-up.md	16b024b09ebcb9d66f6a9968858d7e01081e51a14a4922edf3c8e3c2009c0000	1
+zip-code	./docs/decisions/0132-the-secret-scan-runs-on-documentation-changes.md	36b212ef149cc79e63eb109177f831812969fa8e86f9c09b405448276b0ec76f	1
+zip-code	./docs/decisions/0132-the-secret-scan-runs-on-documentation-changes.md	6a0d62bf9572742690225db40eb2eb3b89fd0574bcadf54e48f4f71b1b090977	1
+zip-code	./docs/decisions/0132-the-secret-scan-runs-on-documentation-changes.md	8f0287fed25004a3261c7953e4c8286dd2f639c21b55323b7c931781c6f6abcb	1
+zip-code	./docs/decisions/0132-the-secret-scan-runs-on-documentation-changes.md	b3cb7d030fce5d1824bae203e63a8455fbf0b817f8b5d9a2174c704179204471	1
 zip-code	./docs/img/app-preview-dark.svg	16b024b09ebcb9d66f6a9968858d7e01081e51a14a4922edf3c8e3c2009c0000	1
 zip-code	./docs/planning/firecraft/M8-import-export.md	f2f89ede8e7d4b3d2243dea1ca96b8ece56f793811d9708b4a0181bf81a50011	2
 zip-code	./docs/planning/firecraft/M9-scripting.md	0e5c81ceee464db1c0cb9ed801d134fab0dd2a28c0dc62e35aa21a8e13ff0ebc	1
@@ -671,6 +691,7 @@ zip-code	./docs/planning/generated/parity.md	eea32706ceeea18ece420ede85bbc9dc629
 zip-code	./docs/planning/generated/scorecard.md	848e3fb85d62f31af8c03726f527aff81df44cca545728554b1bc26b40e4de0f	1
 zip-code	./docs/planning/v1-roadmap.md	9766638817ec53c323baa6aaa5f8d10a6105299553621601c5e71d0c47b10e5b	1
 zip-code	./docs/release/DEPLOYMENT-RECONCILIATION.json	9e9216bd5240a707e6640d26961949aeec6b703c97ac3204c208be22981ff877	1
+zip-code	./docs/release/EXECUTION-BOARD.md	dabf5c8b9082180e7d7ae1ee52a9417fc76be7e3e80aed2a8f3cccf1cd1c162d	1
 zip-code	./docs/release/PHASE-0-AUDIT.md	3e6d8748577115dd136761901582abce3093fbb973a08c35be9efe6781fb4f4d	4
 zip-code	./docs/research/fireworks-png-nodes.md	492f431bae35265f2e5f4ed49bd8c58dda912431be561504846988d00d05d117	2
 zip-code	./docs/research/fireworks-png-nodes.md	9a37837cdde1d7b36fc789a2d4558af7652d6bb2f7ea5d1a7451ea416f34ef5a	1
@@ -719,12 +740,25 @@ zip-code	./docs/research/fw-ui-evidence.md	fec32d6024e177ac05e94de175bfccd84ec3d
 zip-code	./docs/research/fw-ui-evidence.md	ffdfd59d08e67eeff2569e91641bb6adb12fc0bf42ef8f0f2c197ed14369f10d	3
 zip-code	./docs/tasks/T27-12-adjudicate-aegis-findings.md	6f21ec723dd82aa7bd36bc81cc4008e4f6359fe8ce68f793af23b7123bdbf3a6	1
 zip-code	./docs/tasks/T27-12-adjudicate-aegis-findings.md	d55d01d0341ed0ba2cd99b322e8c5b609254f47d10c7cd12b99b4922effeba44	1
+zip-code	./docs/tasks/T27-24-pr8-remaining-findings.md	36b212ef149cc79e63eb109177f831812969fa8e86f9c09b405448276b0ec76f	1
+zip-code	./docs/tasks/T27-24-pr8-remaining-findings.md	6a0d62bf9572742690225db40eb2eb3b89fd0574bcadf54e48f4f71b1b090977	1
+zip-code	./docs/tasks/T27-24-pr8-remaining-findings.md	8f0287fed25004a3261c7953e4c8286dd2f639c21b55323b7c931781c6f6abcb	1
+zip-code	./docs/tasks/T27-24-pr8-remaining-findings.md	b3cb7d030fce5d1824bae203e63a8455fbf0b817f8b5d9a2174c704179204471	1
+zip-code	./docs/tasks/T27-24-pr8-remaining-findings.md	dabf5c8b9082180e7d7ae1ee52a9417fc76be7e3e80aed2a8f3cccf1cd1c162d	3
+zip-code	./docs/tasks/T27-41-windows-arm64-assessment.md	36b212ef149cc79e63eb109177f831812969fa8e86f9c09b405448276b0ec76f	1
+zip-code	./docs/tasks/T27-41-windows-arm64-assessment.md	6a0d62bf9572742690225db40eb2eb3b89fd0574bcadf54e48f4f71b1b090977	2
+zip-code	./docs/tasks/T27-41-windows-arm64-assessment.md	8f0287fed25004a3261c7953e4c8286dd2f639c21b55323b7c931781c6f6abcb	1
+zip-code	./docs/tasks/T27-41-windows-arm64-assessment.md	b3cb7d030fce5d1824bae203e63a8455fbf0b817f8b5d9a2174c704179204471	1
 zip-code	./scripts/ci_refresh_stale_crates-selftest.sh	b045dd9c18caa8be1e17a4b902152cc1fd292b242b7b9dd74ba8c40896239424	1
 zip-code	./site/assets/app-preview-dark.svg	16b024b09ebcb9d66f6a9968858d7e01081e51a14a4922edf3c8e3c2009c0000	1
 zip-code	./xtask/schema/cyclonedx-bom-1.5.schema.json	2f8c341cfba7dbae13b543198125c62c118349e8ff38ca7a4c4593a4819550c8	1
 zip-code	./xtask/schema/cyclonedx-bom-1.5.schema.json	d66d3f2c187ac5996d755bd3b2695ea0acb0ada05ab3863041b30df40ba7426a	3
 zip-code	./xtask/schema/cyclonedx-bom-1.5.schema.json	dc137b7c3d59a3512aa33b3913ab0403af3243e29849ed6792734534d25b94d5	2
+zip-code	./xtask/src/aegis.rs	36b212ef149cc79e63eb109177f831812969fa8e86f9c09b405448276b0ec76f	1
+zip-code	./xtask/src/aegis.rs	6a0d62bf9572742690225db40eb2eb3b89fd0574bcadf54e48f4f71b1b090977	1
 zip-code	./xtask/src/aegis.rs	6f21ec723dd82aa7bd36bc81cc4008e4f6359fe8ce68f793af23b7123bdbf3a6	1
+zip-code	./xtask/src/aegis.rs	8f0287fed25004a3261c7953e4c8286dd2f639c21b55323b7c931781c6f6abcb	1
+zip-code	./xtask/src/aegis.rs	b3cb7d030fce5d1824bae203e63a8455fbf0b817f8b5d9a2174c704179204471	1
 zip-code	./xtask/src/aegis.rs	d55d01d0341ed0ba2cd99b322e8c5b609254f47d10c7cd12b99b4922effeba44	1
 zip-code	./xtask/src/aegis.rs	f2f89ede8e7d4b3d2243dea1ca96b8ece56f793811d9708b4a0181bf81a50011	1
 zip-code	./xtask/src/dist.rs	6f21ec723dd82aa7bd36bc81cc4008e4f6359fe8ce68f793af23b7123bdbf3a6	1
