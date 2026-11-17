@@ -8,6 +8,7 @@
 
 pub mod canvas;
 pub mod editor;
+pub mod keymap;
 pub mod menus;
 pub mod shell;
 pub mod toolstrip;

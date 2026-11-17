@@ -504,4 +504,49 @@ mod tests {
             .expect("the page must encode");
         assert_eq!(&bytes[..4], b"GIF8");
     }
+
+    /// The preview shows what the export produces.
+    ///
+    /// The panel's preview is worth nothing if it shows something
+    /// other than the file: the same record, the same resolution, the
+    /// same codec. The two halves are pinned together here, and the
+    /// change with them — a quality the panel applies is a quality the
+    /// exported bytes carry.
+    #[test]
+    fn the_preview_encodes_what_the_export_encodes() {
+        let mut shell = shell();
+        let low = OptimizeSettings {
+            format: 1,
+            jpeg_quality: 20,
+            ..OptimizeSettings::read(&shell.editor.document().pages[0])
+        };
+        shell
+            .editor
+            .apply("page.setExport", low.payload(0))
+            .expect("the panel's payload applies");
+        let settings = OptimizeSettings::read(&shell.editor.document().pages[0]);
+        let preview = shell
+            .encode_for_preview(&settings)
+            .expect("the preview encodes");
+        let flags = app_cli::ops::ExportFlags::default();
+        let exported = app_cli::ops::export_raster(shell.editor.document(), "page.jpg", &flags)
+            .expect("the export encodes");
+        assert_eq!(preview, exported, "the preview is the export");
+
+        // The change is visible in the exported bytes.
+        let high = OptimizeSettings {
+            jpeg_quality: 90,
+            ..settings
+        };
+        shell
+            .editor
+            .apply("page.setExport", high.payload(0))
+            .expect("the panel's payload applies");
+        let exported = app_cli::ops::export_raster(shell.editor.document(), "page.jpg", &flags)
+            .expect("the export encodes");
+        assert_ne!(
+            exported, preview,
+            "the quality change reaches the exported bytes"
+        );
+    }
 }
