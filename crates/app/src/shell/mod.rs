@@ -8643,6 +8643,8 @@ mod tests {
     /// holds.
     fn image_shell(name: &str) -> (Shell, doc::ObjectId) {
         let mut editor = Editor::untitled();
+        // The layer is read before the command borrows the editor.
+        let layer = editor.active_layer();
         editor
             .apply(
                 "bitmap.importFile",
@@ -8654,7 +8656,7 @@ mod tests {
                         "right": 18.0, "bottom": 26.0,
                     },
                     "maintain_aspect_ratio": false,
-                    "page": 0, "layer": editor.active_layer(), "cell": 0,
+                    "page": 0, "layer": layer, "cell": 0,
                     "name": name,
                 }),
             )
