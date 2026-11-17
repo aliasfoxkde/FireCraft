@@ -97,14 +97,18 @@ without decoding the bar resource:
 
 **The basis of the tile-horizontally placement.** The *command
 definition* is directly evidenced by `MENU_DESCRIPTION_MAP` (**R**).
-The *Window-menu placement* is not read off a decoded menu dump — the
-bar resource was never decoded. It follows from CS6's own
-resource-naming convention: `ID_WINDOW_…` is the command-id family
-CS6 reserves for window-menu items, and the sibling
-`ID_WINDOW_TILE_VERT` is unambiguously the Window menu's *Tile
-Vertically* row. The row's Window-menu placement therefore rests on
-the naming convention, and this matrix records it that way rather
-than as a decoded-menu observation.
+The bar resource *was* decoded — the `RT_MENU` 128 tree of
+`Fireworks Resources.dll` was walked and its ten-menu item tree, with
+its resource command ids, transcribed into `crates/app/src/menus.rs`,
+the Window menu's rows among them — but the decoded listing was
+**not** re-read for this row: the transcription was short 57651, and
+the row was reinstated on CS6's own resource-naming convention
+instead, `ID_WINDOW_…` being the command-id family CS6 reserves
+for window-menu items and the sibling `ID_WINDOW_TILE_VERT`
+unambiguously the Window menu's *Tile Vertically* row. The row's
+Window-menu placement therefore rests on the naming convention, and
+this matrix records it that way rather than as a decoded-menu
+observation.
 
 ---
 
@@ -183,7 +187,7 @@ Eighteen have a Window-menu row; five do not.
 | Left dock holds the ToolPalette | yes | left tool panel, 34 px | **partial** — placement matches; the *toolbar* form does not | **R**, `S/mod.rs` (the left `Panel` arm) | 22.2 |
 | Top dock holds the Main toolbar (778×28) | yes | a main toolbar row exists | **partial** — the row exists; its *contents* are not the CS6 main toolbar | **R** | 22.5 |
 | Bottom dock holds the Properties tab-group | yes | properties live in the right dock instead | **partial** | **R** | 22.1 |
-| Panels dockable left↔right, collapsible, resizable | yes | resizable + collapsible + reopenable from the Window menu; **not** left↔right movable | **partial** | `S/panel_windows.rs::dock_section` | 22.1 |
+| Panels dockable left↔right, collapsible, resizable | yes | resizable + collapsible + reopenable from the Window menu; movable between the left and right columns by drag or by the `«`/`»` header arrow (landed 2026-11-11, PR #128) | **implemented** | `S/panel_windows.rs::move_panel_to_dock`, `S/mod.rs` (`a_moved_panel_lives_in_the_other_dock`) | 22.1 |
 | Dock geometry persists across restart | yes | eframe `persistence` + `ShellLayout` snapshot | **implemented** | `D` 0067/0069, `S/mod.rs` | — |
 | The dock **reserves** width so the canvas shrinks rather than being covered | yes (a dock) | yes — `egui::Panel::right`, 258 pt, scrolling column | **implemented** | `S/panel_windows.rs:154` | 22.5 |
 | Every panel reachable at 1280×800 | yes | T22 captures and reachability check complete for the recorded build; dock scroll verified at 1280×400. The newer dock/panel inventory still needs a capture. | **verified for captured build; newer dock evidence-gated** | [T22 receipts](tasks/T22-screenshot-ui.md#receipts--2026-11-04) | 22.5 / T22 |

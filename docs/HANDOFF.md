@@ -202,7 +202,9 @@ re-pin are also complete.
 
 The next UI work is Phase 22.5: finish the CS6 chrome audit against the
 clean-room reference notes. Phase 22.1 (panel inventory) and 22.2 (tool
-strip) are complete in PR #8; screenshot acceptance is complete, and
+strip) are complete in PR #8; the 22.1 docking movement — a panel moves
+between the left and right columns — landed later in PR #128 (merged
+2026-11-14); screenshot acceptance is complete, and
 22.4 still has evidence-gated bitmap transform/fill-stroke work. The remaining Phase 22 items
 are the chrome audit and the evidence-gated bitmap transform/fill-stroke work. Phase 20
 contains daily-driver editing features; Phase 21 contains modern

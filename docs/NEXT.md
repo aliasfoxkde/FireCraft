@@ -600,7 +600,10 @@ scope, so no license path is attempted.
   right, collapsible, resizable, and re-openable from the Window
   menu; the dock geometry persists. Accept: a panel can be collapsed
   and reopened, the right dock can be resized, and the layout survives
-  a restart. Left↔right movement remains open work toward the CS6 target.
+  a restart. Left↔right movement is implemented and tested: a panel's
+  title is its drag handle, both columns are drop targets, the `«`/`»`
+  header arrow moves a panel without dragging, and only *moved* panels
+  are persisted.
   — **PARTLY LANDED 2026-11-04**: `shell::panel_windows` uses a
   width-reserving `egui::Panel::right` dock (258 pt default width),
   with a scrolling column of collapsible, closable panel sections
@@ -616,7 +619,11 @@ scope, so no license path is attempted.
   Behaviors are real panels whose actions are engine commands. The
   remaining panel surfaces (Optimize, Common Library, CSS Properties,
   Find and Replace, Slices) landed 2026-11-06; the panel inventory is
-  complete (see `TASKS.md`). Left↔right docking movement remains open.
+  complete (see `TASKS.md`). The left↔right docking movement landed
+  2026-11-11 in PR #128, merged 2026-11-14 (`shell::panel_windows`:
+  `DockSide`, `left_dock`, `move_panel_to_dock`, the `«`/`»` header
+  arrow and the drag drop target; gated by `shell::tests::
+  a_moved_panel_lives_in_the_other_dock`).
   The normal-viewport reachability pass is recorded in
   [`tasks/T22-screenshot-ui.md`](tasks/T22-screenshot-ui.md).
   — **REACHABILITY MEASURED 2026-11-04**: the stack is now a dock that
