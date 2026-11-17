@@ -340,21 +340,31 @@ the absolute repo path.
   six. That is **≈12 job starts per hour, one start every ~5
   minutes** — the runner is saturated, and the queue is the
   bottleneck, not the code.
-  A pipeline is **ten** jobs (`detect-changes`, `fmt-layers`, `layers`,
-  `clippy-test`, `wasm-web`, `corpus-golden`, `perf-budgets`, `fuzz`,
-  `generated-docs`, `release`), so one pipeline costs ~50 minutes of
+  A pipeline is **twelve** jobs (`detect-changes`, `release-ledger`,
+  `aegis`, `fmt-layers`, `layers`, `clippy-test`, `wasm-web`,
+  `corpus-golden`, `perf-budgets`, `fuzz`, `generated-docs`,
+  `release`), so one pipeline costs ~50 minutes of
   queue time and a merge campaign of nine PR branches costs ~7 hours.
   Budget for that when sequencing a campaign; do not read a long
   queue as a hung runner.
 - **Find the run:** `GET /api/pipeline-runs?limit=15` — match
   `commit_hash` (field name is `commit_hash`, *not* `sha`; both are
   `None` in the list view — fetch jobs to identify a run by its
-  ten-job shape).
+  twelve-job shape).
 - **Wait + jobs:** `GET /api/pipeline-runs/{id}` until status is
-  terminal; `GET /api/pipeline-runs/{id}/jobs` for the ten jobs
-  (detect-changes, fmt-layers, layers, clippy-test, wasm-web,
-  corpus-golden, perf-budgets, fuzz, generated-docs, release). All
+  terminal; `GET /api/pipeline-runs/{id}/jobs` for the twelve jobs
+  (detect-changes, release-ledger, aegis, fmt-layers, layers,
+  clippy-test, wasm-web, corpus-golden, perf-budgets, fuzz,
+  generated-docs, release). All
   must be `succeeded`. ~15–18 min once the pipeline has the runner.
+- **The Aegis leg (`aegis` job):** the secret/PII scan covers
+  `docs/`, so it runs on **every** change — the job carries no
+  `skip_if`, and the GitHub backup CI runs the same scan in its
+  `docs-only-check` job. Both systems install the scanner through
+  `scripts/install-aegis.sh` (one release URL, one pinned SHA-256,
+  one identity check) and both exercise the installer's failure
+  modes first with `scripts/install-aegis-selftest.sh`. A finding the
+  baseline does not cover fails the job; see decision 0132.
 - **Job logs:** `GET /api/jobs/{job_id}/logs` — walk
   `data.logs[].chunk` or `data.receipt.step_results[].stdout/stderr`
   (helper: `/var/tmp/getjoblog.py`).
