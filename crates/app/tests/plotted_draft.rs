@@ -2,12 +2,12 @@
 //!
 //! The Pen, the Polygon Slice and the Polygon Hotspot all place
 //! their points with clicks, one click each, and the pending path
-//! lives in the editor until it is committed. CodeRabbit's Major on
-//! the editor was that the pending path carried no tool: the commit
-//! read whichever tool happened to be selected, so a Pen's points
-//! could be folded into a Hotspot's outline — the user clicked three
-//! times with the Pen, picked the Hotspot, and got a hotspot that
-//! carried the Pen's geometry.
+//! lives in the editor until it is committed. The review's Major
+//! finding on the editor was that the pending path carried no tool:
+//! the commit read whichever tool happened to be selected, so a Pen's
+//! points could be folded into a Hotspot's outline — the user clicked
+//! three times with the Pen, picked the Hotspot, and got a hotspot
+//! that carried the Pen's geometry.
 //!
 //! The draft now records the tool that plotted it. Switching tools
 //! converts the pending path explicitly: it is committed as the tool
