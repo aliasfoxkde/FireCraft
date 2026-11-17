@@ -66,14 +66,16 @@ const CLASS_NOTES: &[(&str, &str)] = &[
         "Matches the 9-digit observed value range in the PNG node dictionary \
          (0..141663582), the run of SVG path control coordinates in the brand \
          mark's bezier paths and in the brand study illustration's control \
-         points, and the GitHub release and asset identifiers quoted in the \
-         release receipts; this repository holds no tax identifiers.",
+         points, and the GitHub release, asset, run and check identifiers \
+         quoted in the release receipts; this repository holds no tax \
+         identifiers.",
     ),
     (
         "bank-routing-number",
         "Matches the same 9-digit observed value range in the PNG node \
-         dictionary and the GitHub release and asset identifiers quoted in \
-         the release receipts; this repository holds no banking data.",
+         dictionary and the GitHub release, asset, run and check identifiers \
+         quoted in the release receipts; this repository holds no banking \
+         data.",
     ),
     (
         "bearer-token-url",
@@ -106,7 +108,10 @@ const CLASS_NOTES: &[(&str, &str)] = &[
          address uses the .invalid top-level domain reserved by \
          RFC 2606 for exactly this purpose, so it can never resolve \
          to a real mailbox; the repository holds no personal \
-         addresses.",
+         addresses. It also matches the export-scale filename the climb \
+         plan's export-parity document uses as its example: a file name \
+         that carries a scale marker before its extension, not a \
+         mailbox.",
     ),
     (
         "eval-usage",
@@ -162,7 +167,8 @@ const CLASS_NOTES: &[(&str, &str)] = &[
         "pci-cardholder-data",
         "Matches the word \"pan\" in pan-zoom, hand-pan and two-finger pan \
          identifiers, in the Hand tool's \"Pan the artboard\" menu label, \
-         including the Android feasibility note's touch gesture, in the \
+         including the Android feasibility note's touch gesture and the \
+         climb plan's modern-features gesture list, in the \
          session log's prose about that adjudication, and in decision \
          0074's table of adjudicated classes and the rule identifiers \
          quoted by the Aegis adjudication tickets; the five \
@@ -191,9 +197,9 @@ const CLASS_NOTES: &[(&str, &str)] = &[
     (
         "ssn-no-dashes",
         "Matches the same 9-digit observed value range in the PNG node \
-         dictionary and the GitHub release and asset identifiers quoted in \
-         the release receipts; this repository holds no social-security \
-         numbers.",
+         dictionary and the GitHub release, asset, run and check identifiers \
+         quoted in the release receipts; this repository holds no \
+         social-security numbers.",
     ),
     (
         "stack-trace-exposure",

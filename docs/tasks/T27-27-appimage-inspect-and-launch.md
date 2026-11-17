@@ -19,8 +19,8 @@ it launches under FUSE and again via `--appimage-extract-and-run`.
 
 **Verification:** `./firecraft-*-linux-x86_64.AppImage --appimage-extract-and-run`
 
-**Evidence:** none yet — the image has never been built since the icon fix.
+**Evidence:** —
 
-**Blockers:** FUSE availability on the host.
+**Blockers:** FUSE availability on the host
 
 **Stopping condition:** the inspection listing and both launch attempts are recorded.

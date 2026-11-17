@@ -7,10 +7,11 @@ This page is the documentation map. Start with the overview that matches your go
 ### I want to use FireCraft
 
 1. [Usage](USAGE.md): install/build, CLI examples, keyboard shortcuts, and browser embedding.
-2. [Features](FEATURES.md): implemented surfaces and their verification gates.
-3. [Release engineering](RELEASE-ENGINEERING-PLAN.md): standalone platform matrix, artifact evidence, SDK distribution and shared CI adoption.
-4. [WebOS embedding](WEBOS.md): current host page contract and browser bridge.
-5. [Platform integration](WEBOS-PLATFORM-INTEGRATION.md): future versioned SDK, command/capability contract and WebOS interoperability.
+2. [Keyboard shortcuts](SHORTCUTS.md): the published binding table, generated from the code.
+3. [Features](FEATURES.md): implemented surfaces and their verification gates.
+4. [Release engineering](RELEASE-ENGINEERING-PLAN.md): standalone platform matrix, artifact evidence, SDK distribution and shared CI adoption.
+5. [WebOS embedding](WEBOS.md): current host page contract and browser bridge.
+6. [Platform integration](WEBOS-PLATFORM-INTEGRATION.md): future versioned SDK, command/capability contract and WebOS interoperability.
 
 ### I want to understand project status
 
@@ -32,7 +33,7 @@ This page is the documentation map. Start with the overview that matches your go
 | Level | Documents | Use them for |
 |---|---|---|
 | Overview | [README](../README.md), this page, [Wiki](wiki/Home.md) | Project purpose and navigation |
-| User guide | [USAGE](USAGE.md), [FEATURES](FEATURES.md), [WEBOS](WEBOS.md) | Operating the app and understanding its surface |
+| User guide | [USAGE](USAGE.md), [SHORTCUTS](SHORTCUTS.md), [FEATURES](FEATURES.md), [WEBOS](WEBOS.md) | Operating the app and understanding its surface |
 | Current state | [PROGRESS](PROGRESS.md), [TASKS](TASKS.md), [NEXT](NEXT.md), [CS6-PARITY](CS6-PARITY.md) | What is true now and what comes next |
 | Engineering | [HANDOFF](HANDOFF.md), [PLANNING](PLANNING.md), [TOOLCHAINS](TOOLCHAINS.md), [RELEASING](RELEASING.md) | Building, architecture, and release work |
 | Evidence | [decisions](decisions/), [research](research/), [generated parity and scorecard](planning/generated/) | Specific technical claims and their basis |

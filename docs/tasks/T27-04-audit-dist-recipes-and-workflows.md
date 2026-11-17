@@ -1,6 +1,6 @@
 # T27-04 — Audit the dist implementation, packaging recipes, workflows and version stamps
 
-> **RP:** RP-00 · **Priority:** P0 · **Status:** IN PROGRESS
+> **RP:** RP-00 · **Priority:** P0 · **Status:** BUILD VERIFIED
 > **Board row:** [EXECUTION-BOARD.md §6](../release/EXECUTION-BOARD.md)
 > **Depends on:** none
 
@@ -21,11 +21,9 @@ parse-checkability on this fleet is recorded.
 
 **Verification:** `cargo run -p xtask -- dist --help; ls packaging; grep -rn 'uses:' .github/workflows/`
 
-**Evidence:** `docs/release/ARTIFACT-MATRIX.md`; `xtask/src/dist.rs` (1225 lines);
-`packaging/flatpak/dev.firecraft.FireCraft.yml` sources `type: dir, path: ..`;
-`.gitforge.yml:168` sets `FIRECRAFT_DIST_SKIP_SMOKE=1` for the release job.
+**Evidence:** [`docs/release/ARTIFACT-MATRIX.md`](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/release/ARTIFACT-MATRIX.md) maps every dist subcommand, packaging recipe, workflow and version stamp to what it does and does not cover; `docs/release/PHASE-0-AUDIT.md` §2 records the artifact state and §6 the claims that remain unverified. **Done:** 2026-11-09: matrix and audit merged (PR #107).
 
-**Blockers:** none.
+**Blockers:** —
 
 **Stopping condition:** the mapping exists and every downstream row's "Evidence" and
 "Blockers" columns can be traced back to it.

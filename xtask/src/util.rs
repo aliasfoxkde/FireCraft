@@ -99,6 +99,19 @@ pub fn run_in_with_env(
     }
 }
 
+/// Writes one data line to stdout, the channel the data-producing verbs
+/// (`reachability --list`, `climb`) use.
+///
+/// `print_stdout` is denied workspace-wide, and stdout is still the data
+/// channel: the line goes through a locked handle instead of a macro so
+/// the deny keeps covering every other call site.
+pub fn write_stdout_line(line: &str) -> Result<(), String> {
+    use std::io::Write as _;
+    let stdout = std::io::stdout();
+    let mut handle = stdout.lock();
+    writeln!(handle, "{line}").map_err(|e| format!("write stdout: {e}"))
+}
+
 /// Runs a program from `dir` and returns its stdout and stderr without
 /// interpreting the exit status.
 ///

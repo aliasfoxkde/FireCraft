@@ -570,6 +570,9 @@ Current version: **0.2.5**.
 ### Documentation
 
 - **ledger**: wave closeout — floor re-pinned to 96.89%, snapshots to post-wave state (#148) (44aa5466)
+- **climb**: correct the audit baseline's S2 to the measured 164 (64bd1ea7)
+- the coverage measurement is toolchain-bound, and 85 carried commands are unbound (#142) (ddf19fb4)
+- **climb**: audit and hill-climb handoff to v1.0 (0322d904)
 - **ledger**: record the reachability wave landing and re-measure (3bfffe08)
 - **changelog**: regenerate after the main re-merge (0470cda4)
 - renumber the mask-stack decision to 0092 (097ef7d9)

@@ -95,11 +95,46 @@ jobs:
           fi
     timeout: 5m
 
+  - name: release-ledger
+    image: firecraft-ci-rust:2
+    needs: [detect-changes]
+    steps:
+      - name: The release board and its tickets agree
+        # `docs/release/EXECUTION-BOARD.md` §6 is the plan of record for
+        # the 61 release tasks: which are done, on what evidence, and
+        # what still blocks them. Each row has one ticket under
+        # `docs/tasks/`, and the two must state the same status,
+        # evidence and blockers. A board that claims progress its
+        # tickets do not record is a plan that reports work nobody did.
+        #
+        # The gate is bash+awk on purpose: this image ships no python3
+        # (ca-certificates, git, chromium, rust), so a python gate would
+        # only ever run on a maintainer's laptop — which is not a gate.
+        # Its self-test runs here too, so the gate's own failure modes
+        # are exercised on every push rather than trusted.
+        run: |
+          set -e
+          bash scripts/verify_release_ledger.sh .
+          bash scripts/verify_release_ledger-selftest.sh
+      - name: The stale-cache refresh's own self-test
+        # The step that keeps cargo from reusing another branch's
+        # artifact (decision 0122) decides from file mtimes alone, so a
+        # wrong decision in either direction is expensive: refreshing too
+        # much throws the warm cache away, refreshing too little lets
+        # cargo compile against another tree's crate. Its self-test runs
+        # here on every push rather than being trusted.
+        run: |
+          set -e
+          if [ -f scripts/ci_refresh_stale_crates-selftest.sh ]; then
+            bash scripts/ci_refresh_stale_crates-selftest.sh
+          fi
+    timeout: 5m
+
   - name: fmt-layers
     image: firecraft-ci-rust:2
     cache:
       source: "{cache_root}/cargo/{image}-fmt-layers"
-    needs: [detect-changes]
+    needs: [release-ledger]
     steps:
       - name: Rust formatting check
         run: cargo fmt --all -- --check
@@ -344,6 +379,7 @@ jobs:
           cargo run --locked -p xtask -- reachability
           cargo run --locked -p xtask -- panel-snapshot
           cargo run --locked -p xtask -- icon-survey
+          cargo run --locked -p xtask -- shortcuts
           cmp /tmp/parity.committed docs/planning/generated/parity.md
           cmp /tmp/scorecard.committed docs/planning/generated/scorecard.md
           cmp /tmp/icon-survey.committed docs/planning/generated/icon-resources-survey.md
@@ -417,6 +453,14 @@ jobs:
         run: cargo run --locked -p xtask -- dist --web
       - name: Native set + deb read-back
         run: cargo run --locked -p xtask -- dist --native
+      - name: SBOM (CycloneDX 1.5, validated against the schema and the lockfile)
+        # The SBOM is the document the release publishes about its own
+        # dependencies. `dist --sbom` validates it against the vendored
+        # CycloneDX 1.5 schema and compares its component inventory with
+        # `Cargo.lock` before writing it (decision 0119), so a
+        # non-conforming or incomplete SBOM fails here rather than
+        # reaching the published asset.
+        run: cargo run --locked -p xtask -- dist --sbom
       - name: DEB install verification (clean Debian 12)
         # The package must be installable, launchable and removable on
         # the platform it declares. `packaging/deb/verify-install.sh` is

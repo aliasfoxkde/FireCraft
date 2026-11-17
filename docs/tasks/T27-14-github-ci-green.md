@@ -1,6 +1,6 @@
 # T27-14 — Get the GitHub backup CI green on PR #9
 
-> **RP:** RP-00 · **Priority:** P0 · **Status:** NOT STARTED
+> **RP:** RP-00 · **Priority:** P0 · **Status:** BUILD VERIFIED
 > **Board row:** [EXECUTION-BOARD.md §6](../release/EXECUTION-BOARD.md)
 > **Depends on:** T27-13
 
@@ -19,10 +19,9 @@ and the `fmt` job remains SUCCESS.
 
 **Verification:** `gh pr checks 9`
 
-**Evidence:** currently FAILURE on runs `42401632606` and `42401626535`, both on the
-Aegis gate.
+**Evidence:** The Aegis failure that blocked the backup CI on PR #9 (runs `42401632606`, `42401626535`) was adjudicated and rebaselined (T27-12, T27-13, PR #18); the gate is green on `main` `e39705e` ([`fmt` 131002886797](https://github.com/aliasfoxkde/FireCraft/runs/131002886797), [`gate` 131002941116](https://github.com/aliasfoxkde/FireCraft/runs/131002941116)) and on every candidate head. PR #9 itself was closed unmerged, so its own runs remain a historical FAILURE and this row closes on the green gate, not on that PR's head. **Done:** 2026-11-12: gate green on `main` and the candidate heads.
 
-**Blockers:** T27-13.
+**Blockers:** —
 
 **Stopping condition:** `gh pr checks 9` reports every required check successful on the
 candidate SHA — read from the check run, not from a watcher.

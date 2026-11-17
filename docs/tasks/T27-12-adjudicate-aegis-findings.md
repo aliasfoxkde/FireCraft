@@ -1,6 +1,6 @@
 # T27-12 — Adjudicate each of the new Aegis findings
 
-> **RP:** RP-00 · **Priority:** P0 · **Status:** IMPLEMENTED
+> **RP:** RP-00 · **Priority:** P0 · **Status:** BUILD VERIFIED
 > **Board row:** [EXECUTION-BOARD.md §6](../release/EXECUTION-BOARD.md)
 > **Depends on:** T27-11
 
@@ -26,10 +26,9 @@ positive, with the reason written and the evidence that supports the classificat
 > `cargo run -p xtask -- aegis`. The adjudication below is the historical one,
 > taken on 2026-11-09 against the baseline of that day.
 
-**Evidence:** known false-positive classes: `pan` → PCI rule; large literals → zip-code
-rule. `gdpr-personal-data` and `ssrf-localhost` are not yet classified.
+**Evidence:** All five findings are adjudicated as verified false positives, each with a written reason in [`xtask/src/aegis.rs`](https://github.com/aliasfoxkde/FireCraft/blob/main/xtask/src/aegis.rs) `CLASS_NOTES` (`gdpr-personal-data`, `pci-cardholder-data`, `ssrf-localhost`, `zip-code`, `australian-tfn`). The baseline is content-keyed (decision 0074, commit `ad598a4`) and was re-blessed for the parity-matrix and slice-hotspot content (decisions 0083, 0084). The scan is the Aegis leg of the canonical gate and is green on the candidate heads. **Done:** 2026-11-12: adjudication reasons recorded in `xtask/src/aegis.rs`.
 
-**Blockers:** none — T27-11 is complete, so this row can start now.
+**Blockers:** —
 
 **Stopping condition:** all findings have a written verdict and a named next action
 per finding.
@@ -77,6 +76,34 @@ named here is a citation, not the thing the rule detects.
 | `ssrf-localhost` | `docs/tasks/T27-12-adjudicate-aegis-findings.md` | false positive | This table quotes the rule identifier and the loopback bind it adjudicates. There is no request target and no untrusted input in the ticket. |
 | `pci-cardholder-data` | `docs/tasks/T27-12-adjudicate-aegis-findings.md` | false positive | This table quotes the rule identifier and the word the rule matches. A quoted word inside a citation is not cardholder data. |
 | `zip-code` | `docs/tasks/T27-12-adjudicate-aegis-findings.md` | false positive | This table quotes the two numeric literals it adjudicates so a reader can reproduce the classification. They are a date constant and a millisecond duration. |
+
+## Adjudication (2026-11-16): the vendored schema and the deployment tool
+
+Two additions to the tree brought eleven new baseline keys (nineteen
+findings — one key may cover several occurrences of the same content).
+All nineteen are verified false positives, so each is a narrowly
+scoped baseline entry: no rule class is disabled and no scanner
+coverage is reduced. The literals are **not** reproduced here: they are
+third-party samples and reference numbers, and a table that copied
+them would add findings of its own. Each row names the file and line
+so the classification can be reproduced.
+
+| Rule | Location | Verdict | Reason |
+|---|---|---|---|
+| `phone-number` | `xtask/schema/cyclonedx-bom-1.5.schema.json:385` | false positive | The specification's own sample subscriber number in a JSON-Schema `examples` array — the placeholder the specification publishes for that field. |
+| `bitcoin-address` | `xtask/schema/cyclonedx-bom-1.5.schema.json:726` | false positive | The specification's sample content digest in an `examples` array. A hash of example bytes, not a wallet. |
+| `zip-code` | `xtask/schema/cyclonedx-bom-1.5.schema.json:511` | false positive | The ISO/IEC standard number the schema's SWID prose quotes, and the ISO catalogue entry number in the link on the same line. Reference numbers, not postal data. |
+| `zip-code` | `xtask/schema/cyclonedx-bom-1.5.schema.json:610` | false positive | The same standard number, quoted again in the adjacent description. |
+| `zip-code` | `xtask/schema/cyclonedx-bom-1.5.schema.json:1977,2010,2036` | false positive | The CVE identifier the schema cites as an example of a vulnerability reference. |
+| `cors-misconfiguration` | `xtask/schema/cyclonedx-bom-1.5.schema.json:871` | false positive | The schema's description links to the ISO catalogue page; a remote link inside a static specification's prose is not a server's cross-origin policy, and this repository serves no origin. |
+| `ssrf` | `scripts/reconcile_deployment.py:65,67,74,80` | false positive | The tool fetches the published release's asset pages and the deployed site's manifest — fetching is its whole job. The URLs come from the release manifest and the site's own configuration; no untrusted input reaches them. |
+| `ssrf-localhost` | `scripts/reconcile_deployment-selftest.py` (five occurrences) | false positive | The self-test serves a directory on the loopback interface and reads it back, which is how it proves the comparison works against a live server. |
+| `zip-code` | `docs/release/DEPLOYMENT-RECONCILIATION.json:35` | false positive | A byte count in the reconciliation report. A file size, not postal data. |
+
+The vendored schema is third-party content (Apache-2.0, with its rows
+in `docs/ATTRIBUTION.md`), and its example values are the
+specification's own samples — the same reasoning that keeps the
+proprietary Adobe install out of the scan.
 
 ## Re-pinning
 

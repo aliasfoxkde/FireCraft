@@ -19,8 +19,8 @@ the results are recorded per macOS version.
 
 **Verification:** the macOS release receipt.
 
-**Evidence:** none yet.
+**Evidence:** —
 
-**Blockers:** a supported macOS host.
+**Blockers:** Supported macOS host
 
 **Stopping condition:** the receipt exists with per-version results.

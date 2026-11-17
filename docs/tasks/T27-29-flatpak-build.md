@@ -21,11 +21,9 @@ SHA asserted); the bundle's digest is recorded.
 
 **Verification:** `packaging/build-flatpak.sh && flatpak build-bundle`
 
-**Evidence:** the manifest is YAML-parse-checked by `dist --native` and has never been
-built — no Flatpak SDK is present on this fleet. `packaging/flatpak/dev.firecraft.FireCraft.yml:26`
-currently uses `type: dir` / `path: ..`.
+**Evidence:** Manifest is YAML-parse-checked by `dist --native`; never built
 
-**Blockers:** the Flatpak SDK 24.08 is absent from the fleet.
+**Blockers:** Flatpak SDK 24.08 absent on this fleet
 
 **Stopping condition:** a `.flatpak` bundle exists with a recorded digest and a
 recorded source revision.

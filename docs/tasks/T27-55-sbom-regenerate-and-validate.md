@@ -1,6 +1,6 @@
 # T27-55 — Regenerate and validate the CycloneDX SBOM
 
-> **RP:** RP-06 · **Priority:** P0 · **Status:** NOT STARTED
+> **RP:** RP-06 · **Priority:** P0 · **Status:** BUILD VERIFIED
 > **Board row:** [EXECUTION-BOARD.md §6](../release/EXECUTION-BOARD.md)
 > **Depends on:** T27-06
 
@@ -19,10 +19,9 @@ against the CycloneDX 1.5 schema; it is compared component-by-component against
 
 **Verification:** `cargo run -p xtask -- dist --sbom && jq .metadata.component dist/sbom/firecraft-0.2.5-sbom.cdx.json`
 
-**Evidence:** commit `00fdd61` marks the updated SBOM implementation as
-verification-pending; the earlier artifact was only JSON-validated on the fleet.
+**Evidence:** the CycloneDX 1.5 schema and the SPDX sibling it points at are vendored under `xtask/schema/`, and `xtask dist --sbom` validates the document it builds against them *before* writing it and compares its component inventory with `Cargo.lock`'s `[[package]]` sections, naming both sides of any difference (decision [0119](../decisions/0119-the-sbom-is-validated-against-the-schema-it-claims.md)). The validator refuses a schema that uses a keyword it does not implement, so a partial implementation cannot report a bad document as valid. The generator's licence field was wrong for every crate whose licence is an SPDX expression — `MIT OR Apache-2.0` is an expression, not an identifier — and the identifier list is now read from the schema itself. The comparison then failed on its first real run — the CI release job reported `in Cargo.lock but not in the SBOM: glob 0.3.4 / libwebp-sys 0.14.4` — because the inventory came from `cargo metadata`'s *resolved* graph (560 packages) while the lockfile *pins* 562: Cargo resolves the lockfile independently of any one feature selection, so optional and platform-specific crates that nothing here enables are pinned but not resolved. The generator now takes the lockfile as the inventory, lists the two pinned-but-unlinked packages as components with an empty dependency edge (pinned, not linked) and the archive digest the lockfile records, and the comparison is a real assertion rather than a tautology against a resolved graph. **Outstanding**: publishing the newly validated SBOM and verifying the download belongs to the next release rehearsal **Done:** 2026-11-16: schema validation and the `Cargo.lock` comparison implemented and verified, including the lockfile-inventory fix the first CI run exposed.
 
-**Blockers:** none beyond T27-06.
+**Blockers:** —
 
 **Stopping condition:** the schema validation and the `Cargo.lock` component comparison
 both pass, and the published file verifies.

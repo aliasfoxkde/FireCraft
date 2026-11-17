@@ -20,10 +20,9 @@ independently with `gh attestation verify`; the attestations are published.
 
 **Verification:** `gh attestation verify <digest> --repo aliasfoxkde/FireCraft`
 
-**Evidence:** not implemented — provenance is listed as "planned" in the artifact
-matrix, and no signing or attestation identity is configured.
+**Evidence:** not implemented — provenance is listed as "planned" in the artifact matrix, and no signing or attestation identity is configured.
 
-**Blockers:** T27-53; an attestation identity must exist.
+**Blockers:** T27-53; an attestation identity must exist
 
 **Stopping condition:** every published artifact has a verifiable attestation, or the
 row names the exact missing credential.

@@ -202,7 +202,9 @@ re-pin are also complete.
 
 The next UI work is Phase 22.5: finish the CS6 chrome audit against the
 clean-room reference notes. Phase 22.1 (panel inventory) and 22.2 (tool
-strip) are complete in PR #8; screenshot acceptance is complete, and
+strip) are complete in PR #8; the 22.1 docking movement — a panel moves
+between the left and right columns — landed later in PR #128 (merged
+2026-11-14); screenshot acceptance is complete, and
 22.4 still has evidence-gated bitmap transform/fill-stroke work. The remaining Phase 22 items
 are the chrome audit and the evidence-gated bitmap transform/fill-stroke work. Phase 20
 contains daily-driver editing features; Phase 21 contains modern
@@ -381,6 +383,26 @@ the absolute repo path.
     moves.
   - *Silent mid-compile death* = a stale image cache or an offline
     refusal → check the job-log ledger FIRST.
+  - *"cannot find function `<x>` in module `app::…`" at an
+    `xtask/src/climb.rs` call site* = a **false red**: the job
+    compiled against an `app` artifact built from a different tree.
+    Measured 2026-11-16 on six branch runs
+    (`a329bda0`, `e2e85b9b`, `57660fb8`, `5e48f383`, `b28fd3f5`,
+    `0757082e`, `a6b23df6`), every one with the same
+    `E0425: cannot find function 'menu_census' in module 'app::menus'`
+    while the run's own commit carries **both** the definition
+    (`crates/app/src/menus.rs`) and the call (`xtask/src/climb.rs`) —
+    so the tree was consistent and the *artifact* was not. The
+    mechanism is not yet identified (the pipeline declares no
+    `cache:` mount, the CI image bakes no target directory, and the
+    runner creates a fresh container for every workspace job), so the
+    owning component is **GitForge CI**, not this repository.
+    **What to do:** do not read the red as a source defect and do not
+    "fix" the call site; confirm the commit is self-consistent
+    (`git grep '<symbol>' <sha> -- crates/app`), then re-trigger the
+    run (an empty commit re-checks-out the tree and the job goes
+    green). Owner and the open question are recorded on the board
+    (`docs/TASKS.md`, CI/tooling lane).
 - **Local gates before any push:** the full gate is
   `cargo run -p xtask -- ci` (fmt, clippy `-D warnings`, tests, layers,
   wasm, corpus, goldens, perf, fuzz-quick, parity, scorecard,

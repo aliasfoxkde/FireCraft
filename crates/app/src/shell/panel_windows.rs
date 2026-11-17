@@ -6,7 +6,19 @@
 //! scrolls when the stack is taller than the window. egui has no dock
 //! system, so the column is a [`egui::SidePanel`] on the right: the
 //! panels are stacked inside it in CS6's order, each under a CS6
-//! header (collapse arrow, name, close button).
+//! header row.
+//!
+//! The CS6 header row carries four affordances, left to right: the
+//! collapse arrow, the panel title, the overflow (CS6's panel menu —
+//! the triangle button in the panel's title bar), and the close
+//! button. CS6 closes the Web Layer panel through no button at all —
+//! it has no Window-menu row, so nothing could reopen it — and
+//! `FireCraft` keeps that asymmetry. The overflow menu carries the two
+//! dock-level commands the CS6 help documents (the double arrow at
+//! the top of the dock collapses or expands every panel in the
+//! column; *Hide Panels* folds the dock away); the exact item list
+//! of a CS6 panel menu is not established by our evidence, so the
+//! menu carries only the documented ones.
 //!
 //! Why a side panel and not free-floating windows: the dock must
 //! *reserve* its width. As floating windows the panels covered the
@@ -170,6 +182,22 @@ pub(crate) enum PanelKind {
     CommonLibrary,
 }
 
+/// A command from a panel's CS6 panel menu (the overflow button in
+/// the header row).
+///
+/// The commands are the dock-level ones the CS6 help documents: the
+/// double arrow at the top of the dock collapses or expands every
+/// panel icon in the column, and *Hide Panels* folds the dock away.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum PanelMenu {
+    /// The double arrow: collapse every panel in the column.
+    CollapseAll,
+    /// The double arrow the other way: expand every panel.
+    ExpandAll,
+    /// CS6's *Hide Panels* — the Tab key.
+    HidePanels,
+}
+
 /// Which edge the panel column docks to.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum DockSide {
@@ -259,6 +287,28 @@ pub struct PanelSummary {
     pub visible_by_default: bool,
     /// Whether the Window menu carries a row that toggles the panel.
     pub toggleable: bool,
+    /// The affordances the panel's CS6 header row carries, left to
+    /// right.
+    ///
+    /// Pinned by the panel-snapshot gate so a header that loses its
+    /// overflow button — or a close button on the one panel CS6
+    /// leaves unclosable — fails the build instead of drifting.
+    pub affordances: Vec<&'static str>,
+}
+
+/// The CS6 header row's affordances, left to right.
+///
+/// Every panel carries the collapse arrow, its title and the overflow
+/// (the panel menu). The close button belongs to the panels the
+/// Window menu can reopen; the Web Layer panel has no Window-menu
+/// row, so nothing could reopen it, and CS6 gives it no close button
+/// either.
+fn header_affordances(spec: &PanelSpec) -> Vec<&'static str> {
+    let mut affordances = vec!["collapse", "title", "overflow"];
+    if spec.kind != PanelKind::WebLayer {
+        affordances.push("close");
+    }
+    affordances
 }
 
 /// The CS6 panel inventory, in dock order, as plain data.
@@ -278,6 +328,7 @@ pub fn panel_inventory() -> Vec<PanelSummary> {
             order,
             visible_by_default: spec.open_by_default,
             toggleable: true,
+            affordances: header_affordances(spec),
         })
         .collect();
     panels.push(PanelSummary {
@@ -287,6 +338,7 @@ pub fn panel_inventory() -> Vec<PanelSummary> {
         order: PANELS.len(),
         visible_by_default: true,
         toggleable: false,
+        affordances: header_affordances(&WEB_PANEL_SPEC),
     });
     panels
 }
@@ -317,6 +369,21 @@ fn dock_roster() -> Vec<PanelSpec> {
     let mut roster: Vec<PanelSpec> = PANELS.to_vec();
     roster.push(WEB_PANEL_SPEC);
     roster
+}
+
+/// Opens or closes every panel in the dock at once — CS6's double
+/// arrow at the top of the dock column.
+///
+/// The state lives in egui's own storage, keyed on the panel's name,
+/// so this writes the same place the header arrow writes.
+fn set_every_panel_open(ctx: &egui::Context, open: bool) {
+    for spec in dock_roster() {
+        let id = egui::Id::new(("cs6_dock_panel", spec.name));
+        let mut state =
+            egui::collapsing_header::CollapsingState::load_with_default_open(ctx, id, open);
+        state.set_open(open);
+        state.store(ctx);
+    }
 }
 
 /// The width of the right dock, in points — CS6's dock is a narrow
@@ -481,9 +548,11 @@ impl Shell {
     ) {
         let mut close = false;
         let mut move_to_other = false;
+        let mut choice: Option<PanelMenu> = None;
         let mut title_rect = None;
+        let ctx = ui.ctx().clone();
         let state = egui::collapsing_header::CollapsingState::load_with_default_open(
-            ui.ctx(),
+            &ctx,
             egui::Id::new(("cs6_dock_panel", spec.name)),
             true,
         );
@@ -516,8 +585,32 @@ impl Shell {
                         DockSide::Right => "Move the panel to the left dock",
                     })
                     .clicked();
+                // CS6's panel menu — the triangle button in the
+                // panel's title bar.
+                ui.menu_button("▾", |ui| {
+                    ui.selectable_value(
+                        &mut choice,
+                        Some(PanelMenu::CollapseAll),
+                        "Collapse all panels",
+                    );
+                    ui.selectable_value(
+                        &mut choice,
+                        Some(PanelMenu::ExpandAll),
+                        "Expand all panels",
+                    );
+                    ui.separator();
+                    ui.selectable_value(&mut choice, Some(PanelMenu::HidePanels), "Hide panels");
+                });
             });
         });
+        // The overflow menu's commands act on the whole dock, so they
+        // run after the header is laid out.
+        match choice {
+            Some(PanelMenu::CollapseAll) => set_every_panel_open(&ctx, false),
+            Some(PanelMenu::ExpandAll) => set_every_panel_open(&ctx, true),
+            Some(PanelMenu::HidePanels) => self.toggle_all_panels(),
+            None => {}
+        }
         header.body_unindented(|ui| {
             ui.set_min_width(DOCK_CONTENT_WIDTH);
             self.draw_panel_content(ui, spec);
@@ -971,6 +1064,72 @@ mod tests {
     fn the_dock_width_is_cs6s() {
         const { assert!(DOCK_WIDTH >= 240.0) };
         const { assert!(DOCK_WIDTH <= 300.0) };
+    }
+
+    /// Every panel's CS6 header row carries the collapse arrow, the
+    /// title and the overflow — and every panel the Window menu can
+    /// reopen also carries the close button.
+    #[test]
+    fn the_header_row_carries_cs6s_affordances() {
+        for panel in panel_inventory() {
+            assert_eq!(
+                &panel.affordances[..3],
+                &["collapse", "title", "overflow"],
+                "{} loses a CS6 header affordance",
+                panel.id
+            );
+            if panel.toggleable {
+                assert_eq!(
+                    panel.affordances.last(),
+                    Some(&"close"),
+                    "{} has no close button",
+                    panel.id
+                );
+            } else {
+                assert_eq!(
+                    panel.affordances.last(),
+                    Some(&"overflow"),
+                    "{} carries a close button it cannot reopen",
+                    panel.id
+                );
+            }
+        }
+    }
+
+    /// The Web Layer panel is the one CS6 panel with no close button:
+    /// it has no Window-menu row, so nothing could reopen it.
+    #[test]
+    fn the_web_layer_panel_has_no_close_button() {
+        let web = panel_inventory()
+            .into_iter()
+            .find(|panel| panel.id == "web-layer")
+            .expect("the Web Layer panel is in the inventory");
+        assert!(!web.toggleable);
+        assert!(!web.affordances.contains(&"close"));
+    }
+
+    /// CS6's double arrow at the top of the dock: every panel in the
+    /// column collapses (and comes back) at once.
+    #[test]
+    fn the_double_arrow_collapses_every_panel() {
+        let ctx = egui::Context::default();
+        set_every_panel_open(&ctx, true);
+
+        set_every_panel_open(&ctx, false);
+        for spec in dock_roster() {
+            let id = egui::Id::new(("cs6_dock_panel", spec.name));
+            let state = egui::collapsing_header::CollapsingState::load(&ctx, id)
+                .expect("the panel's stored state");
+            assert!(!state.is_open(), "{} stayed open", spec.name);
+        }
+
+        set_every_panel_open(&ctx, true);
+        for spec in dock_roster() {
+            let id = egui::Id::new(("cs6_dock_panel", spec.name));
+            let state = egui::collapsing_header::CollapsingState::load(&ctx, id)
+                .expect("the panel's stored state");
+            assert!(state.is_open(), "{} stayed collapsed", spec.name);
+        }
     }
 
     /// The spec lookup knows every panel of the inventory — including

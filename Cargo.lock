@@ -5494,6 +5494,7 @@ dependencies = [
  "image-compare",
  "io",
  "png 0.18.1",
+ "regex",
  "resvg",
  "saphyr",
  "scripting",

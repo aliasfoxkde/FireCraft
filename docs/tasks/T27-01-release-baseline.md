@@ -1,6 +1,6 @@
 # T27-01 — Record the repository release baseline
 
-> **RP:** RP-00 · **Priority:** P0 · **Status:** IN PROGRESS
+> **RP:** RP-00 · **Priority:** P0 · **Status:** BUILD VERIFIED
 > **Board row:** [EXECUTION-BOARD.md §2](../release/EXECUTION-BOARD.md)
 > **Depends on:** none
 
@@ -24,11 +24,9 @@ command that produced each fact.
 
 **Verification:** `git rev-parse origin/main && cargo run -p xtask -- ci`
 
-**Evidence:** `docs/release/EXECUTION-BOARD.md` §2 (baseline snapshot, verified
-2026-11-08): `main` = `5fac7a2`; tag `v0.2.5` → `3a4832b`; 5 published assets.
+**Evidence:** [`docs/release/PHASE-0-AUDIT.md`](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/release/PHASE-0-AUDIT.md) (dated 2026-11-09) is the dated baseline audit: the audited baseline `main` @ `5fac7a2`, the host and toolchains, the tag and asset inventory, and each artifact's true state, with the PR disposition plan in §7 and the blocker register in §4. **Done:** 2026-11-09: `docs/release/PHASE-0-AUDIT.md` merged (PR #107).
 
-**Blockers:** the canonical `xtask ci` gate has not yet been re-run on the release
-branch — see T27-05.
+**Blockers:** —
 
 **Stopping condition:** the baseline report exists in `docs/release/EXECUTION-BOARD.md`
 §2 with a verification date, and every fact carries the command that produced it.

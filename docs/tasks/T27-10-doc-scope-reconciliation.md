@@ -23,11 +23,9 @@ decision.
 
 **Verification:** `grep -rn '0\.2\.5' docs/RELEASING.md docs/TOOLCHAINS.md docs/tasks/T27-cross-platform-release.md`
 
-**Evidence:** `docs/release/ARTIFACT-MATRIX.md` is reconciled in this change; the
-remaining scope conflict is unresolved pending T27-09.
+**Evidence:** `docs/release/ARTIFACT-MATRIX.md` reconciled in this change
 
-**Blockers:** T27-09 (scope decision); `docs/TASKS.md` is owned by another agent in
-this session and is not edited here.
+**Blockers:** `docs/TASKS.md` is owned by another agent in this session
 
 **Stopping condition:** the documents agree, or the disagreement is recorded as an
 explicit blocker with an owner.
