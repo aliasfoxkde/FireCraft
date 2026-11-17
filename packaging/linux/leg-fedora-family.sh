@@ -31,10 +31,24 @@ fi
 echo "== the desktop tar.gz, unpacked and run"
 mkdir -p /opt/firecraft-tar
 tar xzf /artifacts/firecraft-[0-9]*-linux-x86_64.tar.gz -C /opt/firecraft-tar
-find /opt/firecraft-tar -maxdepth 3 -type f -name 'firecraft*'
-TAR_BIN="$(find /opt/firecraft-tar -maxdepth 3 -type f -name 'firecraft' -print -quit)"
+ls -R /opt/firecraft-tar
+# The archive's layout is `<version>/bin/firecraft`; a glob states it
+# without walking the tree.
+TAR_BIN=""
+for candidate in /opt/firecraft-tar/*/bin/firecraft; do
+    if [ -x "$candidate" ]; then
+        TAR_BIN="$candidate"
+        break
+    fi
+done
 [ -n "$TAR_BIN" ] || { echo "FAIL: the tar.gz carries no firecraft binary" >&2; exit 1; }
-TAR_CLI="$(find /opt/firecraft-tar -maxdepth 3 -type f -name 'firecraft-cli' -print -quit)"
+TAR_CLI=""
+for candidate in /opt/firecraft-tar/*/bin/firecraft-cli; do
+    if [ -x "$candidate" ]; then
+        TAR_CLI="$candidate"
+        break
+    fi
+done
 if [ -n "$TAR_CLI" ]; then
     "$TAR_CLI" --help | head -3
     echo "PASS: the tar.gz CLI runs"

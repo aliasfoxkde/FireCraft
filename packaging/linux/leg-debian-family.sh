@@ -32,8 +32,16 @@ bash /repo/packaging/deb/verify-install.sh \
 echo "== the desktop tar.gz, unpacked and run"
 mkdir -p /opt/firecraft-tar
 tar xzf /artifacts/firecraft-[0-9]*-linux-x86_64.tar.gz -C /opt/firecraft-tar
-find /opt/firecraft-tar -maxdepth 3 -type f -name 'firecraft*'
-TAR_BIN="$(find /opt/firecraft-tar -maxdepth 3 -type f -name 'firecraft' -print -quit)"
+ls -R /opt/firecraft-tar
+# The archive's layout is `<version>/bin/firecraft`; a glob states it
+# without walking the tree.
+TAR_BIN=""
+for candidate in /opt/firecraft-tar/*/bin/firecraft; do
+    if [ -x "$candidate" ]; then
+        TAR_BIN="$candidate"
+        break
+    fi
+done
 [ -n "$TAR_BIN" ] || { echo "FAIL: the tar.gz carries no firecraft binary" >&2; exit 1; }
 set +e
 timeout 25 xvfb-run -a "$TAR_BIN" >/tmp/tar-gui.log 2>&1

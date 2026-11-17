@@ -22,6 +22,10 @@ set -euo pipefail
 echo "== image: $(grep PRETTY_NAME /etc/os-release)"
 
 if command -v apt-get >/dev/null 2>&1; then
+    # The package lists must be refreshed first: a fresh image carries
+    # no lists, and `apt-get install` without them answers "Unable to
+    # locate package" for packages that exist.
+    apt-get update -qq >/dev/null
     apt-get install -y -qq --no-install-recommends \
         weston wayland-protocols libwayland-client0 libwayland-server0 \
         libxkbcommon0 libxkbcommon-x11-0 libgl1 libx11-6 libxcursor1 \
@@ -43,7 +47,14 @@ if [ -z "$BIN" ] || [ ! -x "$BIN" ]; then
         echo "== the tar.gz is this family's artifact; unpack it"
         mkdir -p /opt/firecraft-tar
         tar xzf /artifacts/firecraft-[0-9]*-linux-x86_64.tar.gz -C /opt/firecraft-tar
-        BIN="$(find /opt/firecraft-tar -maxdepth 3 -type f -name firecraft -print -quit)"
+        # The archive's layout is `<version>/bin/firecraft`; a glob
+        # states it without walking the tree.
+        for candidate in /opt/firecraft-tar/*/bin/firecraft; do
+            if [ -x "$candidate" ]; then
+                BIN="$candidate"
+                break
+            fi
+        done
     fi
 fi
 [ -n "$BIN" ] && [ -x "$BIN" ] ||

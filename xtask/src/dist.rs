@@ -2118,20 +2118,20 @@ fn run_url() -> Option<String> {
 /// Builds the canonical run URL from the three CI facts, or `None` when
 /// any of them is absent.
 ///
-/// `server` is the API root (`https://github.com`), `repository` is
+/// `host` is the API root (`https://github.com`), `repository` is
 /// `owner/name`, and `run_id` is the numeric run.
 fn built_run_url(
-    server: Option<&str>,
+    host: Option<&str>,
     repository: Option<&str>,
     run_id: Option<&str>,
 ) -> Option<String> {
-    let server = server?.trim_end_matches('/');
+    let host = host?.trim_end_matches('/');
     let repository = repository?;
     let run_id = run_id?;
-    if server.is_empty() || repository.is_empty() || run_id.is_empty() {
+    if host.is_empty() || repository.is_empty() || run_id.is_empty() {
         return None;
     }
-    Some(format!("{server}/{repository}/actions/runs/{run_id}"))
+    Some(format!("{host}/{repository}/actions/runs/{run_id}"))
 }
 
 /// The release tag the caller states for this build, when it states
