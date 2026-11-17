@@ -2244,9 +2244,11 @@ impl Shell {
         // The export options: the first linked slice is the read
         // side; the write reaches every slice linked to the symbol.
         let linked = self.linked_slice_facts(number);
-        let mut link = linked.link;
-        let mut alt = linked.alt;
-        let mut slice_name = linked.slice_name;
+        // The edits are copies: the stored values stay put, so the
+        // comparison below reads what the slice holds.
+        let mut link = linked.link.clone();
+        let mut alt = linked.alt.clone();
+        let mut slice_name = linked.slice_name.clone();
         ui.horizontal(|ui| {
             let link_field = ui.add(egui::TextEdit::singleline(&mut link).hint_text("link URL"));
             let alt_field = ui.add(egui::TextEdit::singleline(&mut alt).hint_text("alt text"));
@@ -3403,13 +3405,34 @@ impl Shell {
     /// background color, each writing through its document.* command.
     pub(super) fn document_properties(&mut self, ui: &mut egui::Ui) {
         ui.label("Document");
-        let document = self.editor.session.document();
-        let canvas = &document.info.canvas;
-        let mut width = canvas.width as f32;
-        let mut height = canvas.height as f32;
-        let mut resolution = canvas.resolution as f32;
-        let mut unit_cm = canvas.resolution_unit == 1;
-        let mut background_raw = canvas.background_raw;
+        // The canvas facts are copied out before the widgets run: the
+        // commands below borrow the shell mutably, so the document
+        // cannot stay borrowed across them.
+        let (
+            canvas_x,
+            canvas_y,
+            canvas_width,
+            canvas_height,
+            canvas_resolution,
+            canvas_resolution_unit,
+            mut background_raw,
+        ) = {
+            let document = self.editor.session.document();
+            let canvas = &document.info.canvas;
+            (
+                canvas.x,
+                canvas.y,
+                canvas.width,
+                canvas.height,
+                canvas.resolution,
+                canvas.resolution_unit,
+                canvas.background_raw,
+            )
+        };
+        let mut width = canvas_width as f32;
+        let mut height = canvas_height as f32;
+        let mut resolution = canvas_resolution as f32;
+        let mut unit_cm = canvas_resolution_unit == 1;
         let mut applied = false;
         ui.horizontal(|ui| {
             let w = ui.add(numeric_field(&mut width, "W "));
@@ -3418,14 +3441,14 @@ impl Shell {
             // canvas's size in the document is the comparison
             // (decision 0132).
             applied |= (w.changed() || h.changed())
-                && (width != canvas.width as f32 || height != canvas.height as f32);
+                && (width != canvas_width as f32 || height != canvas_height as f32);
         });
         if applied && width > 0.0 && height > 0.0 {
             self.run_command(
                 "document.setCanvasRect",
                 serde_json::json!({
                     "page": self.editor.frame,
-                    "x": canvas.x, "y": canvas.y,
+                    "x": canvas_x, "y": canvas_y,
                     "width": width, "height": height,
                 }),
             );
@@ -3448,7 +3471,7 @@ impl Shell {
                     }),
                 );
             }
-            if res.changed() && resolution != canvas.resolution as f32 && resolution > 0.0 {
+            if res.changed() && resolution != canvas_resolution as f32 && resolution > 0.0 {
                 self.run_command(
                     "document.setResolution",
                     serde_json::json!({
