@@ -1465,6 +1465,9 @@ fn parse_recipes() -> Result<usize, String> {
         "build-flatpak.sh",
         "build-macos-dmg.sh",
         "deb/verify-install.sh",
+        "linux/leg-debian-family.sh",
+        "linux/leg-fedora-family.sh",
+        "linux/leg-wayland.sh",
     ] {
         let script = workspace_root().join("packaging").join(name);
         let status = std::process::Command::new("bash")
@@ -1480,6 +1483,22 @@ fn parse_recipes() -> Result<usize, String> {
         }
         checked += 1;
     }
+    // The compatibility-matrix orchestrator lives beside the other
+    // repository scripts rather than under packaging/, because it drives
+    // the packaging recipes rather than producing a package.
+    let matrix = workspace_root().join("scripts/release-matrix.sh");
+    let status = std::process::Command::new("bash")
+        .args(["-n"])
+        .arg(&matrix)
+        .output()
+        .map_err(|e| format!("spawn bash -n: {e}"))?;
+    if !status.status.success() {
+        return Err(format!(
+            "scripts/release-matrix.sh does not parse:\n{}",
+            String::from_utf8_lossy(&status.stderr).trim()
+        ));
+    }
+    checked += 1;
     // The Flatpak manifest is data, not a script: a YAML parse proves
     // structure. The saphyr dependency lives in xtask's Cargo.toml;
     // `serde_yaml` was rejected here because it is unmaintained and

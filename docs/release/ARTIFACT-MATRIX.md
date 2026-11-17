@@ -89,6 +89,20 @@ published checksum lists on 2026-11-09, and the CLI binary was launched.
 Nothing has reached rung 9: no artifact is signed and no provenance
 exists.
 
+## Linux platform compatibility
+
+**What is tested on which Linux distribution is published separately**,
+in [LINUX-COMPAT.md](LINUX-COMPAT.md) — it is the authoritative table
+for "does this work on my machine", and it lists the untested
+combinations explicitly rather than leaving them to be inferred.
+
+As of 2026-11-17 the matrix has been run across three distro families
+and two display servers (Ubuntu 24.04, Debian 12, Fedora 45 × X11 and
+Wayland); all six cells pass, and the DEB's eight-stage package
+verification passes on both Debian-family cells. The AppImage and
+Flatpak rows above remain **never built**, and the RPM row remains
+**deferred** — the compat table says so in the same words.
+
 ## Build surfaces (what actually exists)
 
 - `xtask dist --native` — pinned Linux x86_64: builds `--locked`,
