@@ -30,9 +30,10 @@
 > date. A row with no receipt is `IMPLEMENTED` or `BLOCKED`.
 >
 > **Scope authority** for release work:
-> [decision 0075](decisions/0075-release-scope-mvp.md) — currently
-> *recommended — awaiting maintainer approval*, so the approved release
-> scope is **unset**. **Evidence baseline** for release work:
+> [decision 0075](decisions/0075-release-scope-mvp.md) — **accepted**
+> (approved by Michael Kinney on 2026-11-17), so the approved release
+> scope is the MVP candidate scope in that record. **Evidence baseline**
+> for release work:
 > [`release/PHASE-0-AUDIT.md`](release/PHASE-0-AUDIT.md) (PR #16,
 > dated 2026-11-09 — the link resolves once that PR merges).
 > Per-artifact evidence state:
@@ -139,11 +140,14 @@ progress:
 - **Nothing is `CERTIFIED`.** No artifact is signed and no provenance or
   attestation exists on any branch (B-14), so no artifact can reach
   evidence-ladder rung 9.
-- **The release scope is not approved.** Decision 0075 records the MVP
-  candidate and the extended campaign scope, and its status is
-  *recommended — awaiting maintainer approval*. Until the maintainer
-  approves it, the plan's full target matrix remains the standing scope
-  and no cut is authorized against a narrowed one.
+- **The release scope is approved, but nothing is certified.** Decision
+  0075 is **accepted** (Michael Kinney, 2026-11-17): the approved
+  release scope is the MVP candidate scope in that record. The plan's
+  full target matrix remains the standing *campaign* matrix — Windows,
+  macOS, AppImage, Flatpak, Android, ARM64 and RPM stay outside the
+  approved cut until each carries its own acceptance evidence. The
+  approval authorizes the cut; it does not certify any artifact, and
+  every item inside the scope still needs its own receipt.
 
 ## Phase 22 detail
 

@@ -29,13 +29,15 @@ without pretending a web wrapper is a native app.
 
 - [decision 0075 — release scope](../decisions/0075-release-scope-mvp.md)
   — **the release-scope authority.** It records the MVP candidate and
-  the extended campaign scope, and its approval state. As of 2026-11-09
-  the approved scope is **unset**: the maintainer has not approved an
-  MVP cut, so the plan's full target matrix remains the standing scope.
+  the extended campaign scope, and its approval state. It is
+  **accepted** (Michael Kinney, 2026-11-17): the approved release scope
+  is the MVP candidate scope in that record, and the plan's full target
+  matrix remains the standing *campaign* matrix outside that cut.
 - [RELEASE-ENGINEERING-PLAN.md](../RELEASE-ENGINEERING-PLAN.md) — the
   **work order**: RP-00 through RP-08, the target matrix, and per-target
-  acceptance criteria. Its §1.1 "MVP v1 candidate" is a *recommendation*
-  and is not scope authority on its own.
+  acceptance criteria. Its §1.1 "MVP v1 candidate" is the scope the
+  maintainer approved, but the plan is not the scope authority on its
+  own.
 - [PHASE-0-AUDIT.md](../release/PHASE-0-AUDIT.md) — the **evidence
   baseline**: what exists as of 2026-11-09, with receipts, the blocker
   register B-1…B-21, the documented-vs-implementation findings F-1…F-17,
@@ -89,7 +91,7 @@ separates the two for every work package.
 | RP-05 | Source, CLI, and web release assets | `IMPLEMENTED` — `xtask dist --source` and `xtask dist --sbom` are present on main and wired into `release.yml` | `BLOCKED` — generators exist, but no successful post-repair tag run has published and independently verified their outputs. The v0.2.5 web ZIP is historical, and the production deployment reconciliation is now a tracked tool and a machine-readable report (`scripts/reconcile_deployment.py`, [`docs/release/DEPLOYMENT-RECONCILIATION.json`](../release/DEPLOYMENT-RECONCILIATION.json)) whose result is `differences`: the live deployment names no release (B-6/B-21) | release-workflow lane | run a disposable tag end to end; clean-build the downloaded source archive, schema-validate the SBOM, and reconcile production Pages hashes |
 | RP-06 | Supply-chain metadata and signing | `IMPLEMENTED` — checksum generation, fail-closed aggregation, and `packaging/release-assets.sh` are on main | `BLOCKED` — canonical machine-readable release manifest, schema-valid published SBOM, provenance/attestation, and signing verification are still absent | release-workflow lane | validate SBOM; fix release staging edge cases; add manifest and provenance/signing; independently verify downloads |
 | RP-07 | Release orchestration and publication | `IMPLEMENTED` — `release.yml` builds native + web + source + SBOM, validates the aggregate fail-closed, and creates the draft release with positional assets (`packaging/release-assets.sh create`) | `NOT STARTED` — **the workflow has never produced a release.** All five recorded runs failed (B-4); all six published releases were operator-published by hand, and the shipped v0.2.5 web bundle is not the bundle the workflow built (B-21, F-16) | release-workflow lane | run the repaired workflow end to end on a disposable tag and attach the receipt to this ticket |
-| RP-08 | Final release certification | `NOT STARTED` | `NOT STARTED` — no artifact is `CERTIFIED`; no certification report exists | maintainer | blocked on RP-05…RP-07 evidence and on the scope approval in decision 0075 |
+| RP-08 | Final release certification | `NOT STARTED` | `NOT STARTED` — no artifact is `CERTIFIED`; no certification report exists | maintainer | blocked on RP-05…RP-07 evidence; the scope approval in decision 0075 is recorded (2026-11-17) and is no longer a blocker |
 
 ## Scope
 
