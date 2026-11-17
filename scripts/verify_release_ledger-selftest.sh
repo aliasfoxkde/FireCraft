@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Self-test for scripts/verify_release_ledger.sh — the gate that keeps the
-# release execution board and its 61 tickets saying the same thing.
+# release execution board and its 62 tickets saying the same thing.
 #
 # The gate is the only thing standing between a stale board and a release
 # plan that reports progress it never made, so every failure it is

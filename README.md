@@ -57,7 +57,7 @@ Some of these items are partially implemented or still planned. The authoritativ
 ## Start here
 
 - **Try the app:** [usage guide](docs/USAGE.md)
-- **See what works and what is incomplete:** [feature map](docs/FEATURES.md) · [current gaps](docs/GAPS.md)
+- **See what works and what is incomplete:** [feature map](docs/FEATURES.md) · [historical gaps audit](docs/GAPS.md)
 - **Browse all project docs:** [documentation index](docs/README.md)
 - **Current work and next tasks:** [task board](docs/TASKS.md)
 - **Contributing or handing off work:** [agent handoff](docs/HANDOFF.md) · [repository rules](AGENTS.md)

@@ -847,6 +847,13 @@ scope, so no license path is attempted.
   adjudicates each occurrence individually. A rule class that fires
   here gets a class note beside its rows in the baseline, never a
   class-wide switch.
+- Do not treat a documentation-only change as exempt from the Aegis
+  scan. The scan covers `docs/`, and since decision 0132 it runs on
+  documentation-only changes in both CI systems — the GitHub
+  `docs-only-check` job and the GitForge `aegis` job — so a literal in
+  a ticket or a decision is adjudicated when it lands, instead of
+  arriving unblessed and failing a later code change's pipeline for
+  content that change never touched.
 
 
 
