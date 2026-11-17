@@ -81,6 +81,18 @@ jobs:
     steps:
       - name: Classify the diff; unknown/empty diffs fail closed
         run: bash scripts/detect-changes.sh
+      - name: The stale-cache refresh's own self-test
+        # The step that keeps cargo from reusing another branch's
+        # artifact (decision 0122) decides from file mtimes alone, so a
+        # wrong decision in either direction is expensive: refreshing too
+        # much throws the warm cache away, refreshing too little lets
+        # cargo compile against another tree's crate. Its self-test runs
+        # here on every push rather than being trusted.
+        run: |
+          set -e
+          if [ -f scripts/ci_refresh_stale_crates-selftest.sh ]; then
+            bash scripts/ci_refresh_stale_crates-selftest.sh
+          fi
     timeout: 5m
 
   - name: release-ledger

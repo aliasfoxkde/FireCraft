@@ -176,10 +176,10 @@ pub async fn start() -> Result<(), wasm_bindgen::JsValue> {
             canvas,
             eframe::WebOptions::default(),
             Box::new(|cc| {
-                // The web build has no `Shell::new`, so the CS6 theme
-                // has to be applied here — without it the deployed app
-                // rendered egui's default light chrome.
-                app::shell::apply_cs6_theme(&cc.egui_ctx);
+                // The web build has no `Shell::new`, so the chrome
+                // theme has to be applied here — without it the
+                // deployed app rendered egui's default light chrome.
+                app::shell::apply_chrome_theme(&cc.egui_ctx);
                 let (editor, restored) = match restore_document() {
                     Some(editor) => (editor, true),
                     None => (app::editor::Editor::untitled(), false),

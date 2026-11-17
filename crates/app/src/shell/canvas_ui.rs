@@ -360,6 +360,33 @@ impl Shell {
         Pos2::new(screen.x, screen.y)
     }
 
+    /// Grabs the anchor of the selected path under a press and opens
+    /// the "Reshape" transaction — the node drag CS6's Subselect and
+    /// Vector Path tools share.
+    ///
+    /// The grab is anchored at the press, not at the pointer's later
+    /// position: egui resolves a press into a drag only after the
+    /// pointer has moved past the click threshold, so a grab that used
+    /// the current position would look for the node beside the pointer
+    /// instead of the one under the finger.
+    ///
+    /// Returns whether the reshape took the press. A refused
+    /// transaction counts as taken: the gesture is reported and no
+    /// other one starts on the same press.
+    fn begin_node_reshape(&mut self, press: geom::Point) -> bool {
+        let Some(id) = self.editor.selected_live() else {
+            return false;
+        };
+        let Some((contour, point)) = self.editor.node_at(press, f64::from(6.0 / self.view.zoom))
+        else {
+            return false;
+        };
+        if let Err(error) = self.editor.begin_node_drag(id, contour, point, press) {
+            self.status = format!("reshape failed: {error}");
+        }
+        true
+    }
+
     /// The entered definition's nine-slice guides in canvas-local
     /// space: the shape bounds plus one drag handle per edge, at the
     /// current insets. `None` when not editing a guided symbol.
@@ -709,7 +736,14 @@ impl Shell {
         // and edge handles around the whole selection — the frame is
         // also the transform gesture's geometry, since a press on a
         // handle starts a live scale (see the drag_started routing).
-        let union_frame = {
+        //
+        // The Vector Path tool is a path-editing tool: CS6 shows its
+        // anchors, not the selection frame, and a press on an anchor
+        // reshapes it — so the frame and its handles stay out of the
+        // way of that gesture.
+        let union_frame = if self.editor.tool == Tool::VectorPath {
+            None
+        } else {
             let ids = self.editor.live_selection();
             let frame =
                 crate::editor::union_selection_bounds(self.editor.document(), &ids).map(|bounds| {
@@ -740,9 +774,11 @@ impl Shell {
             frame
         };
 
-        // Subselect over exactly one path: draw the anchors as filled
-        // squares — the node-editing surface the drag grabs.
-        if self.editor.tool == Tool::Subselect {
+        // The node-editing tools over exactly one path: draw the
+        // anchors as filled squares — the surface the drag grabs.
+        // CS6's Vector Path edits the same nodes as the Subselect
+        // tool, so it shows them too.
+        if matches!(self.editor.tool, Tool::Subselect | Tool::VectorPath) {
             let ids = self.editor.live_selection();
             if let [only] = ids.as_slice() {
                 let document = self.editor.document();
@@ -923,6 +959,23 @@ impl Shell {
         {
             let local = pos - rect.left_top().to_vec2();
             let world = self.view.to_world(local);
+            // The press itself, not the pointer's position now: by
+            // the time egui reports a drag the pointer has already
+            // moved past the click threshold, so a grab that used
+            // the current position would look for the node beside
+            // the pointer instead of under the finger.
+            let press = ui
+                .input(|input| input.pointer.press_origin())
+                .map(|origin| {
+                    // The origin is in viewport space; the canvas
+                    // works in its own layer's space.
+                    let origin = ui
+                        .ctx()
+                        .layer_transform_from_global(response.layer_id)
+                        .map_or(origin, |transform| transform.mul_pos(origin));
+                    self.view.to_world(origin - rect.left_top().to_vec2())
+                })
+                .unwrap_or(world);
             match self.nine_slice_edge_at(local) {
                 Some(edge) => {
                     if let Some(symbol) = self.editor.symbol_scope
@@ -1004,13 +1057,9 @@ impl Shell {
                                 // anchor under the press instead:
                                 // the node drag outranks the move.
                                 if self.editor.tool == Tool::Subselect
-                                    && let Some(id) = self.editor.selected_live()
-                                    && let Some((contour, point)) =
-                                        self.editor.node_at(world, f64::from(6.0 / self.view.zoom))
-                                    && let Err(error) =
-                                        self.editor.begin_node_drag(id, contour, point, world)
+                                    && self.begin_node_reshape(press)
                                 {
-                                    self.status = format!("reshape failed: {error}");
+                                    // The reshape owns the press.
                                 } else if let Some(hit) = self.editor.hit_at(world) {
                                     let ids = if self.editor.selection_set.contains(&hit) {
                                         self.editor.live_selection()
@@ -1053,13 +1102,17 @@ impl Shell {
                                 // The polygon's vertices are
                                 // clicks, not a drag.
                             }
-                            Tool::Pen
-                            | Tool::VectorPath
-                            | Tool::PolygonSlice
-                            | Tool::PolygonHotspot => {
+                            Tool::VectorPath => {
+                                // CS6's Vector Path: a press on an
+                                // anchor of the selected path grabs
+                                // that node and the drag reshapes
+                                // it — the node drag the Subselect
+                                // tool shares.
+                                self.begin_node_reshape(press);
+                            }
+                            Tool::Pen | Tool::PolygonSlice | Tool::PolygonHotspot => {
                                 // CS6 plots these with clicks:
-                                // the Pen's vertices, the vector
-                                // path's nodes, the polygon's
+                                // the Pen's vertices, the polygon's
                                 // points.
                             }
                             Tool::SelectSimilar | Tool::Knife => {
@@ -1264,21 +1317,6 @@ impl Shell {
                             .as_ref()
                             .map_or(0, |draft| draft.points.len())
                     );
-                }
-                Tool::VectorPath => {
-                    // CS6's Vector Path: the click grabs the node
-                    // under the pointer and drags it.
-                    let world = self.view.to_world(local);
-                    let grabbed = self.editor.selected_live().and_then(|id| {
-                        self.editor
-                            .node_at(world, f64::from(6.0 / self.view.zoom))
-                            .map(|(contour, point)| (id, contour, point))
-                    });
-                    if let Some((id, contour, point)) = grabbed
-                        && let Err(error) = self.editor.begin_node_drag(id, contour, point, world)
-                    {
-                        self.status = format!("reshape failed: {error}");
-                    }
                 }
                 Tool::Zoom => {
                     let factor = if ui.input(|i| i.modifiers.alt) {

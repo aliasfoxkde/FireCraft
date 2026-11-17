@@ -22,7 +22,7 @@ ones carry a written reason naming the code that is actually correct.
 
 **Verification:** `cargo test -p app -p engine`
 
-**Evidence:** Candidates: `editor.rs:619` drag_quadrangle, `editor.rs:2376` redraw trace, `editor.rs:2595` live_selection, `panels_web.rs:574/595` payload, `retouch.rs:656/1149` saturating multiplication
+**Evidence:** Candidates: `editor.rs:619` drag_quadrangle, `editor.rs:2376` redraw trace, `editor.rs:2595` live_selection, `panels_web.rs:574/595` payload, `retouch.rs:656/1149` saturating multiplication. **One candidate is already verified live on `main`** at `978215e9`: the Vector Path node drag that a pure click never ends (§6, "PR #8 findings raised after the 2026-11-08 baseline") — `begin_node_drag` on click (`canvas_ui.rs:1268`), `end_node_drag` only on `drag_stopped` (`canvas_ui.rs:1152`)
 
 **Blockers:** —
 
