@@ -1,4 +1,4 @@
-# 0123 — The release-workflow branch is superseded by `main` and must not be merged
+# 0131 — The release-workflow branch is superseded by `main` and must not be merged
 
 Date: 2026-11-16 · Tickets: T27-59 (the board-ledger hygiene row),
 issue #72 · Status: accepted
