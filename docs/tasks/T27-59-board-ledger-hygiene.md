@@ -1,6 +1,6 @@
 # T27-59 — Keep the execution board and the ticket ledger truthful as rows close
 
-> **RP:** RP-00 · **Priority:** P1 · **Status:** READY
+> **RP:** RP-00 · **Priority:** P1 · **Status:** IN PROGRESS
 > **Board row:** [EXECUTION-BOARD.md §6](../release/EXECUTION-BOARD.md)
 > **Depends on:** T27-07
 
@@ -27,3 +27,42 @@ add the cross-reference from T27 to this board.
 
 **Stopping condition:** the two counts match and every non-NOT STARTED row's status is
 justified by a cited file, command output, digest or job id.
+
+---
+
+## Outcome (2026-11-16)
+
+The ledger was reconciled against `main` at `978215e9`.
+
+**Counts.** 61 board rows, 61 ticket files, no orphan ticket and no row without a
+ticket. The board's rows are grouped by RP, so their order differs from the tickets'
+numeric order — correspondence is by ID, not position.
+
+**Dates.** Every row in a completion state (`IMPLEMENTED`, `BUILD VERIFIED`,
+`SMOKE TESTED`) carries a `Done` date. One did not: T27-54's implementation had
+landed in `main` as `658f015a` (#107) on 2026-11-11 with an empty `Done` cell. It now
+carries both the date and the merge SHA.
+
+**Evidence.** Every row above `NOT STARTED` cites evidence. The rows that cited stale
+or partial facts were corrected:
+
+- **T27-03** — PR #9 and PR #8 are both **closed unmerged** (2026-11-10 and
+  2026-11-11), so their heads are `a0409ed6` and `d4c1c322`. The row's old evidence
+  cited the 2026-11-08 baseline SHAs and PR #8's 29-comment surface; PR #8 now carries
+  **38** inline comments and 9 review bodies, because nine were raised after the
+  baseline (2026-11-09 and 2026-11-10) and the PR was closed before anyone
+  dispositioned them. Every one of the nine is now enumerated and classified in
+  §6 of the board against `main` at `978215e9`: four are resolved, one is a **live
+  application defect** (a pure click with the Vector Path tool begins a node drag
+  that never ends — `begin_node_drag` on `clicked()` at `canvas_ui.rs:1268`,
+  `end_node_drag` only on `drag_stopped()` at `canvas_ui.rs:1152`), and four are
+  open documentation-accuracy items. The Major one is carried to T27-24; the
+  documentation ones to T27-10 and T27-24.
+- **T27-10** — the `docs/TASKS.md` cross-reference this row was blocked on now
+  exists (row 27 and the "Production readiness and T27 work-package detail"
+  section), so the blocker is cleared and the four open documentation findings are
+  listed against the row.
+- **T27-24** — its candidate list now names the verified-live Vector Path finding.
+
+**Blocker.** `docs/TASKS.md` is owned by another agent in this session — cleared:
+the cross-reference landed, and the board's T27-59 row no longer names it.
