@@ -104,6 +104,14 @@ jobs:
     needs: [fmt-layers]
     skip_if: '[[ "$CI_CHANGE_INCLUDE_CODE" == "1" || "$CI_CHANGE_INCLUDE_CRATES" == "1" || "$CI_CHANGE_INCLUDE_TESTS" == "1" || "$CI_CHANGE_IS_TAG" == "1" ]]'
     steps:
+      - name: Workspace crates are rebuilt from this run's sources
+        # The per-job Cargo cache is shared by every branch (decision
+        # 0098), and cargo judges a path dependency fresh by mtime. A run
+        # whose checkout predates the branch that last wrote the cache
+        # would compile against that branch's artifacts. The guard makes
+        # this run's sources newer than every artifact in the cache, so
+        # cargo rebuilds the workspace crates from this tree.
+        run: bash scripts/ci-fresh-workspace-crates.sh
       - name: Workspace layer-table gate
         run: cargo run --locked -p xtask -- layers
     # 45m: the gate compiles xtask, so it carries the workspace's
@@ -119,6 +127,14 @@ jobs:
     needs: [layers]
     skip_if: '[[ "$CI_CHANGE_INCLUDE_CODE" == "1" || "$CI_CHANGE_INCLUDE_CRATES" == "1" || "$CI_CHANGE_INCLUDE_TESTS" == "1" || "$CI_CHANGE_IS_TAG" == "1" ]]'
     steps:
+      - name: Workspace crates are rebuilt from this run's sources
+        # The per-job Cargo cache is shared by every branch (decision
+        # 0098), and cargo judges a path dependency fresh by mtime. A run
+        # whose checkout predates the branch that last wrote the cache
+        # would compile against that branch's artifacts. The guard makes
+        # this run's sources newer than every artifact in the cache, so
+        # cargo rebuilds the workspace crates from this tree.
+        run: bash scripts/ci-fresh-workspace-crates.sh
       - name: Cargo clippy (deny warnings, all targets)
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: Web crate clippy (workspace-excluded, trunk)
@@ -142,6 +158,14 @@ jobs:
     needs: [clippy-test]
     skip_if: '[[ "$CI_CHANGE_INCLUDE_CODE" == "1" || "$CI_CHANGE_INCLUDE_CRATES" == "1" || "$CI_CHANGE_INCLUDE_TESTS" == "1" || "$CI_CHANGE_IS_TAG" == "1" ]]'
     steps:
+      - name: Workspace crates are rebuilt from this run's sources
+        # The per-job Cargo cache is shared by every branch (decision
+        # 0098), and cargo judges a path dependency fresh by mtime. A run
+        # whose checkout predates the branch that last wrote the cache
+        # would compile against that branch's artifacts. The guard makes
+        # this run's sources newer than every artifact in the cache, so
+        # cargo rebuilds the workspace crates from this tree.
+        run: bash scripts/ci-fresh-workspace-crates.sh
       - name: Wasm compile gate + smoke suite + trunk bundle
         # The cache exports CARGO_TARGET_DIR to xtask's child cargo
         # calls and by trunk's cargo build, keeping every rustc write
@@ -159,6 +183,14 @@ jobs:
     needs: [wasm-web]
     skip_if: '[[ "$CI_CHANGE_INCLUDE_CODE" == "1" || "$CI_CHANGE_INCLUDE_CRATES" == "1" || "$CI_CHANGE_INCLUDE_TESTS" == "1" || "$CI_CHANGE_IS_TAG" == "1" ]]'
     steps:
+      - name: Workspace crates are rebuilt from this run's sources
+        # The per-job Cargo cache is shared by every branch (decision
+        # 0098), and cargo judges a path dependency fresh by mtime. A run
+        # whose checkout predates the branch that last wrote the cache
+        # would compile against that branch's artifacts. The guard makes
+        # this run's sources newer than every artifact in the cache, so
+        # cargo rebuilds the workspace crates from this tree.
+        run: bash scripts/ci-fresh-workspace-crates.sh
       - name: Corpus digests + doc-model round-trips
         run: cargo run --locked -p xtask -- corpus
       - name: Golden render pins + determinism
@@ -173,6 +205,14 @@ jobs:
     needs: [corpus-golden]
     skip_if: '[[ "$CI_CHANGE_INCLUDE_CODE" == "1" || "$CI_CHANGE_INCLUDE_CRATES" == "1" || "$CI_CHANGE_IS_TAG" == "1" ]]'
     steps:
+      - name: Workspace crates are rebuilt from this run's sources
+        # The per-job Cargo cache is shared by every branch (decision
+        # 0098), and cargo judges a path dependency fresh by mtime. A run
+        # whose checkout predates the branch that last wrote the cache
+        # would compile against that branch's artifacts. The guard makes
+        # this run's sources newer than every artifact in the cache, so
+        # cargo rebuilds the workspace crates from this tree.
+        run: bash scripts/ci-fresh-workspace-crates.sh
       - name: Performance budgets (open / frame / save / peak memory)
         # M12: the parity table's ceilings, enforced on the runner
         # fleet. The report line names the host, so a trip is
@@ -191,6 +231,14 @@ jobs:
     needs: [corpus-golden]
     skip_if: '[[ "$CI_CHANGE_INCLUDE_CODE" == "1" || "$CI_CHANGE_INCLUDE_CRATES" == "1" || "$CI_CHANGE_IS_TAG" == "1" ]]'
     steps:
+      - name: Workspace crates are rebuilt from this run's sources
+        # The per-job Cargo cache is shared by every branch (decision
+        # 0098), and cargo judges a path dependency fresh by mtime. A run
+        # whose checkout predates the branch that last wrote the cache
+        # would compile against that branch's artifacts. The guard makes
+        # this run's sources newer than every artifact in the cache, so
+        # cargo rebuilds the workspace crates from this tree.
+        run: bash scripts/ci-fresh-workspace-crates.sh
       - name: Stable fuzz drivers (anchors + panic_hunt + scripting arms)
         # The stable-toolchain driver set from `xtask ci`; the
         # libfuzzer compile check and the wide campaign stay local
@@ -217,6 +265,14 @@ jobs:
     needs: [fuzz]
     skip_if: '[[ "$CI_CHANGE_INCLUDE_CODE" == "1" || "$CI_CHANGE_INCLUDE_CRATES" == "1" || "$CI_CHANGE_INCLUDE_GENERATED" == "1" || "$CI_CHANGE_IS_TAG" == "1" ]]'
     steps:
+      - name: Workspace crates are rebuilt from this run's sources
+        # The per-job Cargo cache is shared by every branch (decision
+        # 0098), and cargo judges a path dependency fresh by mtime. A run
+        # whose checkout predates the branch that last wrote the cache
+        # would compile against that branch's artifacts. The guard makes
+        # this run's sources newer than every artifact in the cache, so
+        # cargo rebuilds the workspace crates from this tree.
+        run: bash scripts/ci-fresh-workspace-crates.sh
       - name: Parity floors + scorecard + stamps + reachability + panel snapshot, then drift check
         # The committed generated docs must byte-equal what the gates
         # produce: copies are taken before regenerating, and cmp fails
@@ -263,6 +319,14 @@ jobs:
     needs: [generated-docs]
     skip_if: '[[ "$CI_CHANGE_INCLUDE_CODE" == "1" || "$CI_CHANGE_INCLUDE_CRATES" == "1" || "$CI_CHANGE_IS_TAG" == "1" ]]'
     steps:
+      - name: Workspace crates are rebuilt from this run's sources
+        # The per-job Cargo cache is shared by every branch (decision
+        # 0098), and cargo judges a path dependency fresh by mtime. A run
+        # whose checkout predates the branch that last wrote the cache
+        # would compile against that branch's artifacts. The guard makes
+        # this run's sources newer than every artifact in the cache, so
+        # cargo rebuilds the workspace crates from this tree.
+        run: bash scripts/ci-fresh-workspace-crates.sh
       - name: Ref report
         # GitForge stamps every push AND every tag push as TriggerType::
         # Push with the ref name carried verbatim; trigger_on cannot
