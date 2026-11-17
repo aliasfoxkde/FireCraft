@@ -43,6 +43,7 @@ mod panelsnapshot;
 mod perf;
 mod reachability;
 mod scripts;
+mod shortcuts;
 mod stamp;
 mod status;
 mod styles;
@@ -54,7 +55,7 @@ mod webgolden;
 
 use std::process::ExitCode;
 
-const USAGE: &str = "usage: cargo run -p xtask -- <ci [--full]|ci-no-fmt|aegis [--bless|--report]|coverage [--bless|--measure]|layers|wasm|corpus [--report]|corpus-gen|library-gen|hero-gen|styles-gen|scripts|floor|golden [--bless]|svg-golden [--bless]|svg-roundtrip [--measure]|web-golden [--bless|--measure]|perf [--bless|--measure]|dist --web|--native|--source|--sbom|--manifest|--verify-manifest|fuzz|fuzz-quick|panic-hunt|reachability [--bless]|panel-snapshot [--bless]|parity|scorecard|changelog [--check|--cut <version>]|stamps|stamp <version>>";
+const USAGE: &str = "usage: cargo run -p xtask -- <ci [--full]|ci-no-fmt|aegis [--bless|--report]|coverage [--bless|--measure]|layers|wasm|corpus [--report]|corpus-gen|library-gen|hero-gen|styles-gen|scripts|floor|golden [--bless]|svg-golden [--bless]|svg-roundtrip [--measure]|web-golden [--bless|--measure]|perf [--bless|--measure]|dist --web|--native|--source|--sbom|--manifest|--verify-manifest|fuzz|fuzz-quick|panic-hunt|reachability [--bless]|panel-snapshot [--bless]|shortcuts [--bless]|parity|scorecard|changelog [--check|--cut <version>]|stamps|stamp <version>>";
 
 fn main() -> ExitCode {
     match std::env::args().nth(1).as_deref() {
@@ -85,6 +86,10 @@ fn main() -> ExitCode {
         Some("panel-snapshot") => match std::env::args().nth(2).as_deref() {
             Some("--bless") => finish("panel-snapshot --bless", panelsnapshot::bless()),
             _ => finish("panel-snapshot", panelsnapshot::run()),
+        },
+        Some("shortcuts") => match std::env::args().nth(2).as_deref() {
+            Some("--bless") => finish("shortcuts --bless", shortcuts::bless()),
+            _ => finish("shortcuts", shortcuts::run()),
         },
         Some("library-gen") => finish("library-gen", library::run()),
         Some("hero-gen") => finish("hero-gen", hero::run()),
@@ -246,6 +251,7 @@ fn run_ci(full: Option<&str>, skip_fmt: bool) -> ExitCode {
         ("fuzz", fuzz::quick),
         ("reachability", reachability::run),
         ("panel-snapshot", panelsnapshot::run),
+        ("shortcuts", shortcuts::run),
         ("parity", status::parity),
         ("scorecard", status::scorecard),
         ("changelog", changelog::run),

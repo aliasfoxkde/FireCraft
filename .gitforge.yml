@@ -251,6 +251,7 @@ jobs:
           cargo run --locked -p xtask -- stamps
           cargo run --locked -p xtask -- reachability
           cargo run --locked -p xtask -- panel-snapshot
+          cargo run --locked -p xtask -- shortcuts
           cmp /tmp/parity.committed docs/planning/generated/parity.md
           cmp /tmp/scorecard.committed docs/planning/generated/scorecard.md
     # 45m: measured 16.1 min on 2026-11-11 with 9 runs in flight.
