@@ -995,11 +995,16 @@ fn precheck_transform_closure(
     name: &'static str,
     id: ObjectId,
     seen: &mut std::collections::HashSet<ObjectId>,
+    allow_image: bool,
 ) -> Result<(), EngineError> {
     if !seen.insert(id) {
         return Ok(());
     }
     match access::object(document, name, id)? {
+        // A bitmap's geometry rewrite is a resample, not a matrix
+        // (decision 0132). The commands that own a resample pass allow
+        // the target; every other transform still refuses it.
+        ObjectData::Image(_) if allow_image => Ok(()),
         ObjectData::Image(_) => Err(EngineError::InvalidState {
             name: name.to_owned(),
             detail: format!(
@@ -1010,7 +1015,9 @@ fn precheck_transform_closure(
         ObjectData::Group(group) => {
             let children = group.children.clone();
             for child in children {
-                precheck_transform_closure(document, name, child, seen)?;
+                // A group's members ride the caller's matrix, so a
+                // bitmap inside one still has no resample path.
+                precheck_transform_closure(document, name, child, seen, false)?;
             }
             Ok(())
         }
@@ -1255,7 +1262,7 @@ fn transform_core(
     // leaves the document untouched.
     let mut seen = std::collections::HashSet::new();
     for id in &ids {
-        precheck_transform_closure(document, name, *id, &mut seen)?;
+        precheck_transform_closure(document, name, *id, &mut seen, false)?;
     }
     let pivot = match pivot {
         Some([x, y]) if x.is_finite() && y.is_finite() => geom::Point::new(x, y),
@@ -1724,6 +1731,9 @@ impl TypedCommand for ResizeObject {
 /// `object.setBounds` — CS6's `dom.setSelectionBounds(rect)`:
 /// "moves and resizes the selection in a single operation" — the union
 /// box lands exactly on the given rectangle.
+///
+/// A bitmap target resamples its pixel grid (decision 0132); every
+/// other target takes the caller's matrix.
 struct SetBoundsObject;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
@@ -1775,23 +1785,101 @@ impl TypedCommand for SetBoundsObject {
                 detail: "targets carry a degenerate selection box".to_owned(),
             });
         }
-        transform_core(
-            document,
-            NAME,
-            &payload.ids,
-            Some([bounds.x0, bounds.y0]),
-            |origin| {
-                Ok(
-                    geom::Affine::translate((payload.left - bounds.x0, payload.top - bounds.y0))
-                        * geom::scale_about(
-                            geom::Affine::IDENTITY,
-                            payload.width / bounds.width(),
-                            payload.height / bounds.height(),
-                            origin,
-                        ),
-                )
-            },
-        )
+        // The scale the whole selection takes, and the map every target
+        // rides: the union box lands exactly on the given rectangle.
+        let scale = (
+            payload.width / bounds.width(),
+            payload.height / bounds.height(),
+        );
+        let origin = geom::Point::new(bounds.x0, bounds.y0);
+        let matrix = geom::Affine::translate((payload.left - bounds.x0, payload.top - bounds.y0))
+            * geom::scale_about(geom::Affine::IDENTITY, scale.0, scale.1, origin);
+        // Bitmap targets resample; every other target takes the
+        // matrix.
+        let (images, others): (Vec<ObjectId>, Vec<ObjectId>) = {
+            let mut images = Vec::new();
+            let mut others = Vec::new();
+            for id in &payload.ids {
+                if matches!(
+                    access::object(document, NAME, *id),
+                    Ok(ObjectData::Image(_))
+                ) {
+                    images.push(*id);
+                } else {
+                    others.push(*id);
+                }
+            }
+            (images, others)
+        };
+        // Every fallible step resolves before any mutation: the
+        // closure precheck (a bitmap inside a group still has no
+        // resample path), then each bitmap's target grid and its
+        // assembled pixels.
+        let mut seen = std::collections::HashSet::new();
+        for id in &payload.ids {
+            let allow_image = images.contains(id);
+            precheck_transform_closure(document, NAME, *id, &mut seen, allow_image)?;
+        }
+        let mut plans = Vec::with_capacity(images.len());
+        for id in &images {
+            let Some(doc::ObjectData::Image(image)) = document.registry.get(*id) else {
+                continue;
+            };
+            let new_pixels =
+                crate::catalog::document::scaled_pixels(image.pixels, scale, NAME, *id)?;
+            let flat = crate::bitmap::assemble_rgba(document, image, NAME)?;
+            plans.push((*id, doc::ObjectData::Image(image.clone()), flat, new_pixels));
+        }
+        let mut deltas: Vec<Delta> = Vec::with_capacity(plans.len() + 1);
+        for (id, before, flat, new_pixels) in plans {
+            let doc::ObjectData::Image(old) = &before else {
+                return Err(EngineError::MissingTarget {
+                    name: NAME.to_owned(),
+                    detail: format!("image {} vanished mid-command", id.index()),
+                });
+            };
+            let resampled = crate::bitmap::resample_rgba(
+                &flat,
+                old.pixels.0,
+                old.pixels.1,
+                new_pixels.0,
+                new_pixels.1,
+            );
+            let (tiles, minted) =
+                crate::bitmap::retile_rgba(document, &resampled, new_pixels.0, new_pixels.1);
+            let Some(doc::ObjectData::Image(slot)) = document.registry.get_mut(id) else {
+                return Err(EngineError::MissingTarget {
+                    name: NAME.to_owned(),
+                    detail: format!("image {} vanished mid-command", id.index()),
+                });
+            };
+            // The frame moves to the mapped origin; the sub-pixel
+            // offset rides the same scale (the frame's own move does
+            // not apply to it).
+            slot.location = matrix * slot.location;
+            slot.offset = geom::Point::new(slot.offset.x * scale.0, slot.offset.y * scale.1);
+            slot.pixels = new_pixels;
+            slot.tiles = tiles;
+            deltas.push(Delta::Object {
+                id,
+                inverse: ObjectInverse::Mutated {
+                    object: Box::new(before),
+                },
+            });
+            if !minted.is_empty() {
+                deltas.push(Delta::Bank { added: minted });
+            }
+        }
+        if !others.is_empty() {
+            deltas.push(transform_core(
+                document,
+                NAME,
+                &others,
+                Some([bounds.x0, bounds.y0]),
+                |_| Ok(matrix),
+            )?);
+        }
+        Ok(Delta::Group(deltas))
     }
 }
 
@@ -3773,6 +3861,77 @@ mod tests {
             .unwrap();
         let bounds = union_bounds(&document, &[ids[0]]).expect("bounds");
         assert_eq!(bounds, geom::Rect::new(10.0, 20.0, 50.0, 100.0));
+    }
+
+    /// A bitmap target resamples: its pixel grid takes the frame's
+    /// scale and its frame lands on the requested box (decision 0132).
+    #[test]
+    fn set_bounds_resamples_a_bitmap_target() {
+        let (mut document, ids) = document_with(vec![image_object()]);
+        SetBoundsObject
+            .apply_json(
+                &mut document,
+                json!({ "ids": [ids[0]], "left": 10.0, "top": 20.0, "width": 8.0, "height": 6.0 }),
+            )
+            .unwrap();
+        let image = match document.registry.get(ids[0]) {
+            Some(ObjectData::Image(image)) => image,
+            other => panic!("not an image: {other:?}"),
+        };
+        assert_eq!(image.pixels, (8, 6), "the pixel grid took the scale");
+        assert_eq!(image.location, geom::Point::new(10.0, 20.0));
+        let bounds = union_bounds(&document, &[ids[0]]).expect("bounds");
+        assert_eq!(bounds, geom::Rect::new(10.0, 20.0, 18.0, 26.0));
+    }
+
+    /// The resample is undoable: the bitmap comes back byte for byte.
+    #[test]
+    fn set_bounds_undo_restores_the_bitmap_exactly() {
+        let (mut document, ids) = document_with(vec![image_object()]);
+        let before = serde_json::to_vec(&document).unwrap();
+        let delta = SetBoundsObject
+            .apply_json(
+                &mut document,
+                json!({ "ids": [ids[0]], "left": 10.0, "top": 20.0, "width": 8.0, "height": 6.0 }),
+            )
+            .unwrap();
+        delta.apply_inverse(&mut document).unwrap();
+        assert_eq!(serde_json::to_vec(&document).unwrap(), before);
+    }
+
+    /// The countercase: a bitmap inside a group rides the caller's
+    /// matrix, so it still has no resample path and the call refuses
+    /// before anything mutates.
+    #[test]
+    fn set_bounds_refuses_a_bitmap_inside_a_group() {
+        let (mut document, ids) = document_with(vec![image_object()]);
+        let group_id = document
+            .registry
+            .insert(ObjectData::Group(doc::GroupObject {
+                stack_mode: None,
+                group_type: 0,
+                name: None,
+                children: vec![ids[0]],
+                opacity: 1000,
+                blend: 0,
+                visible: true,
+                locked: false,
+                mask_hidden: false,
+                mask_linked: None,
+                effects: Vec::new(),
+            }));
+        let before = serde_json::to_vec(&document).unwrap();
+        let error = SetBoundsObject
+            .apply_json(
+                &mut document,
+                json!({ "ids": [group_id], "left": 0.0, "top": 0.0, "width": 8.0, "height": 8.0 }),
+            )
+            .unwrap_err();
+        assert!(
+            matches!(error, EngineError::InvalidState { .. }),
+            "{error:?}"
+        );
+        assert_eq!(serde_json::to_vec(&document).unwrap(), before);
     }
 
     #[test]

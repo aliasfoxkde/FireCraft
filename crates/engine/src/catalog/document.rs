@@ -572,10 +572,12 @@ struct SetDocumentImageSizePayload {
 }
 
 /// The scaled pixel dimensions for one resample — the pixel grid
-/// scales with the canvas. Guards the bank: the result must stay
-/// within the editable working space (`bitmap::check_editable` rules),
-/// or the resample would mint tiles no later command can re-gather.
-fn scaled_pixels(
+/// scales with the geometry the caller rewrites (the canvas here, an
+/// object's frame in `object.setBounds`). Guards the bank: the result
+/// must stay within the editable working space
+/// (`bitmap::check_editable` rules), or the resample would mint tiles
+/// no later command can re-gather.
+pub(crate) fn scaled_pixels(
     old: (i64, i64),
     scale: (f64, f64),
     name: &'static str,
