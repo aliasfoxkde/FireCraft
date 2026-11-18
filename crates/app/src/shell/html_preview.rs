@@ -697,6 +697,38 @@ mod tests {
         assert!(cache.layout.width > 0.0);
     }
 
+    /// The preview's own widgets are asserted through egui's harness.
+    ///
+    /// The harness draws the panel into the accessibility tree a
+    /// screen reader reads, so the panel's labels are queried as
+    /// widgets rather than compared as pixels. The image-snapshot
+    /// half of this coverage needs a renderer (`egui_kittest`'s `wgpu`
+    /// feature) and a verified Vulkan adapter, which the CI image
+    /// does not carry yet — that half is the ledger's queued item 21.
+    #[test]
+    fn the_preview_draws_its_widgets_through_the_harness() {
+        use egui_kittest::kittest::Queryable as _;
+
+        let mut shell = preview_shell("plate");
+        let mut harness = egui_kittest::Harness::new_ui(move |ui| {
+            shell.html_preview_panel(ui);
+        });
+        harness.run();
+
+        let source = harness.query_by_label_contains("HTML source");
+        assert!(
+            source.is_some(),
+            "the preview offers the exported markup:\n{:#?}",
+            harness.root()
+        );
+        let files = harness.query_by_label_contains("image file(s)");
+        assert!(
+            files.is_some(),
+            "the preview reports the exported files:\n{:#?}",
+            harness.root()
+        );
+    }
+
     /// The Polygon Hotspot tool commits through the append state
     /// machine (decision 0029's Design C): point 1 takes
     /// `hotspot.appendPoint`'s create branch, each later point

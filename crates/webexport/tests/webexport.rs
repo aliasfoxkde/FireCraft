@@ -252,6 +252,43 @@ fn behaviors_emit_hooks_and_the_runtime() {
 }
 
 #[test]
+fn a_behavior_naming_a_slice_swaps_to_the_file_that_slice_exported() {
+    let mut document = sliced_document();
+    let left = document
+        .registry
+        .iter()
+        .find_map(|(id, data)| match data {
+            doc::ObjectData::Slice(slice) if slice.name.as_deref() == Some("left") => Some(id),
+            _ => None,
+        })
+        .unwrap();
+    let Some(doc::ObjectData::Slice(slice)) = document.registry.get_mut(left) else {
+        panic!("the left slice")
+    };
+    // The behavior names the *slice* it points at; the file it swaps
+    // to is an export-time artifact (decision 0133).
+    slice.behaviors.push(doc::SliceBehavior { kind: 2 });
+    slice
+        .custom_data
+        .insert("swapTarget".to_owned(), "right".to_owned());
+
+    let exported = export(
+        &document,
+        &WebExportOptions::default(),
+        Workflow::HtmlAndImages,
+    )
+    .unwrap();
+    let html = exported.html.as_deref().unwrap();
+
+    assert!(html.contains("onMouseOver=\"MM_swapImage('left','','right.png',1);\""));
+    assert!(html.contains("onload=\"MM_preloadImages('right.png')\""));
+    assert!(
+        exported.files.iter().any(|file| file.name == "right.png"),
+        "the swap target is among the exported files"
+    );
+}
+
+#[test]
 fn expv_overrides_choose_the_codec() {
     let mut document = sliced_document();
     let jpeg_half = document

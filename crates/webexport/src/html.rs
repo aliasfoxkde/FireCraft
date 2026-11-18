@@ -4,6 +4,8 @@
 //! emission for hotspots. HTML 4 variant, no comments (deterministic
 //! bytes).
 
+use std::collections::BTreeMap;
+
 use crate::images::Piece;
 use crate::layout::Grid;
 use crate::naming;
@@ -24,17 +26,63 @@ fn escape(text: &str) -> String {
     out
 }
 
+/// The file each named web object wrote, keyed by every name a
+/// behavior can name it by: the slice's object name, its internal
+/// name, and each of those cleaned.
+///
+/// A behavior's `swapTarget` names the slice it points at — the
+/// engine's `slice.addSwapImageBehaviorFromPoint` stores the source
+/// slice's object name — while the file a swap points to is an
+/// export-time artifact (`naming`), never stored on the slice
+/// (decision 0017). The exporter therefore resolves the name to the
+/// file it just wrote (decision 0133). A target that names no slice
+/// is a file name the user typed and is emitted verbatim.
+fn target_files(objects: &[WebObject<'_>], pieces: &[Piece]) -> BTreeMap<String, String> {
+    let mut files: BTreeMap<String, String> = BTreeMap::new();
+    for piece in pieces {
+        let Some(index) = piece.object else { continue };
+        let slice = objects[index].slice;
+        let mut names: Vec<String> = Vec::new();
+        for name in [slice.name.as_deref(), slice.internal_name.as_deref()]
+            .into_iter()
+            .flatten()
+        {
+            names.push(name.to_owned());
+            names.push(naming::clean(name));
+        }
+        for name in names {
+            if !name.is_empty() {
+                files.entry(name).or_insert_with(|| piece.file.clone());
+            }
+        }
+    }
+    files
+}
+
+/// The files the export wrote, and the directory it wrote them in.
+///
+/// The two travel together: a behavior's target resolves to a file
+/// the export wrote, and that file is referenced where it was
+/// written, under the export's image directory (decision 0133).
+struct Targets<'a> {
+    files: &'a BTreeMap<String, String>,
+    images_dir: &'a str,
+}
+
 /// The behavior hooks one object's `<a>`/`<area>` carries, plus the
 /// files its behaviors preload: `(onMouseOver, onMouseOut, onClick,
 /// preloads)`. Kinds follow the template's constants — 2 swap image,
 /// 4 button down, 5 swap restore, 6 button highlight, 7 button
-/// restore. The swap/down file rides `DTAv` custom data under
-/// `swapTarget` (decision 0017); a behavior without a target emits no
-/// hook. Popup menus (9) and unobserved kinds stay unrendered (M11
-/// non-goal): no hook, payload preserved in the file.
+/// restore. The swap/down target rides `DTAv` custom data under
+/// `swapTarget` (decision 0017) and is resolved to the file the
+/// export wrote for the slice it names, at the path it wrote it
+/// (decision 0133); a behavior without a target emits no hook. Popup
+/// menus (9) and unobserved kinds stay unrendered (M11 non-goal): no
+/// hook, payload preserved in the file.
 fn hooks(
     name: &str,
     slice: &doc::SliceObject,
+    targets: &Targets<'_>,
 ) -> (Option<String>, Option<String>, Option<String>, Vec<String>) {
     let mut over = String::new();
     let mut out = String::new();
@@ -44,19 +92,27 @@ fn hooks(
         .custom_data
         .get("swapTarget")
         .map(String::as_str)
-        .filter(|target| !target.is_empty());
+        .filter(|target| !target.is_empty())
+        .map(|target| match targets.files.get(target) {
+            // A file the export wrote: reference it where it was
+            // written, next to the `<img src>` that names it.
+            Some(file) => format!("{}{file}", targets.images_dir),
+            // A file name the user typed: their own reference, used
+            // as given.
+            None => target.to_owned(),
+        });
     for behavior in &slice.behaviors {
         match behavior.kind {
             // Nav-bar highlight: over.
             6 => {
-                if let Some(target) = target {
+                if let Some(target) = target.as_deref() {
                     over.push_str(&format!("MM_nbGroup('over','{name}','{target}','',1);"));
                     preload.push(target.to_owned());
                 }
             }
             // Nav-bar down: click.
             4 => {
-                if let Some(target) = target {
+                if let Some(target) = target.as_deref() {
                     click.push_str(&format!(
                         "MM_nbGroup('down','navbar1','{name}','{target}',1);"
                     ));
@@ -65,7 +121,7 @@ fn hooks(
             }
             // Swap image: over, restore on out.
             2 => {
-                if let Some(target) = target {
+                if let Some(target) = target.as_deref() {
                     over.push_str(&format!("MM_swapImage('{name}','','{target}',1);"));
                     preload.push(target.to_owned());
                     out.push_str("MM_swapImgRestore();");
@@ -196,7 +252,12 @@ fn cut_index(cuts: &[u32], at: f64) -> Option<usize> {
 
 /// Anchors every hotspot (a `TSLi`-less web object) to the piece
 /// containing its center, in object order.
-fn anchor_hotspots(objects: &[WebObject<'_>], grid: &Grid, pieces: &[Piece]) -> Vec<Anchor> {
+fn anchor_hotspots(
+    objects: &[WebObject<'_>],
+    grid: &Grid,
+    pieces: &[Piece],
+    targets: &Targets<'_>,
+) -> Vec<Anchor> {
     let mut anchors = Vec::new();
     for (index, object) in objects.iter().enumerate() {
         if object.slice.slice_type.is_some() {
@@ -222,7 +283,7 @@ fn anchor_hotspots(objects: &[WebObject<'_>], grid: &Grid, pieces: &[Piece]) -> 
         // anchor name is the host image (the swap runtime addresses
         // images, and an area has none of its own).
         let host = naming::stem_of(&pieces[piece_index].file);
-        let (over, out, click, _) = hooks(host, object.slice);
+        let (over, out, click, _) = hooks(host, object.slice, targets);
         anchors.push(Anchor {
             piece: piece_index,
             hotspot: index,
@@ -246,7 +307,12 @@ pub(crate) fn write_html(
     let Some(page) = document.pages.get(options.page) else {
         return String::new();
     };
-    let anchors = anchor_hotspots(objects, grid, pieces);
+    let files = target_files(objects, pieces);
+    let targets = Targets {
+        files: &files,
+        images_dir: &options.images_dir,
+    };
+    let anchors = anchor_hotspots(objects, grid, pieces, &targets);
     let width = grid.x_cuts.last().copied().unwrap_or(0);
 
     // Behavior pass: runtime need and preload list, pieces first then
@@ -268,7 +334,7 @@ pub(crate) fn write_html(
         if let Some(index) = piece.object {
             let name = naming::stem_of(&piece.file);
             note(
-                hooks(name, objects[index].slice),
+                hooks(name, objects[index].slice, &targets),
                 &mut preloads,
                 &mut needs_runtime,
             );
@@ -276,7 +342,11 @@ pub(crate) fn write_html(
     }
     for anchor in &anchors {
         let hotspot = objects[anchor.hotspot].slice;
-        note(hooks("area", hotspot), &mut preloads, &mut needs_runtime);
+        note(
+            hooks("area", hotspot, &targets),
+            &mut preloads,
+            &mut needs_runtime,
+        );
     }
 
     let mut html = String::with_capacity(4096);
@@ -342,12 +412,12 @@ pub(crate) fn write_html(
             next_col = piece.col + piece.col_span;
             write_piece(
                 &mut html,
-                options,
                 objects,
                 grid,
                 piece_index,
                 piece,
                 &anchors,
+                &targets,
             );
         }
         if options.shim {
@@ -408,12 +478,12 @@ pub(crate) fn write_html(
 /// piece's position in the rasterizer's output.
 fn write_piece(
     html: &mut String,
-    options: &WebExportOptions,
     objects: &[WebObject<'_>],
     grid: &Grid,
     piece_index: usize,
     piece: &Piece,
     anchors: &[Anchor],
+    targets: &Targets<'_>,
 ) {
     let (_, _, w, h) = grid.cell_rect(piece.row, piece.col);
     let slice = piece.object.map(|index| objects[index].slice);
@@ -430,7 +500,7 @@ fn write_piece(
     let name = naming::stem_of(&piece.file);
     let mut anchor_open = false;
     if let Some(slice) = slice {
-        let (over, out, click, _) = hooks(name, slice);
+        let (over, out, click, _) = hooks(name, slice, targets);
         if over.is_some() || out.is_some() || click.is_some() || slice.link.is_some() {
             let href = slice
                 .link
@@ -451,7 +521,7 @@ fn write_piece(
             anchor_open = true;
         }
     }
-    let src = format!("{}{}", options.images_dir, piece.file);
+    let src = format!("{}{}", targets.images_dir, piece.file);
     let alt = slice
         .and_then(|slice| slice.alt.as_deref())
         .map(escape)
