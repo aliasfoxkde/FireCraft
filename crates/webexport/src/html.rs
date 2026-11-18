@@ -59,6 +59,16 @@ fn target_files(objects: &[WebObject<'_>], pieces: &[Piece]) -> BTreeMap<String,
     files
 }
 
+/// The files the export wrote, and the directory it wrote them in.
+///
+/// The two travel together: a behavior's target resolves to a file
+/// the export wrote, and that file is referenced where it was
+/// written, under the export's image directory (decision 0133).
+struct Targets<'a> {
+    files: &'a BTreeMap<String, String>,
+    images_dir: &'a str,
+}
+
 /// The behavior hooks one object's `<a>`/`<area>` carries, plus the
 /// files its behaviors preload: `(onMouseOver, onMouseOut, onClick,
 /// preloads)`. Kinds follow the template's constants — 2 swap image,
@@ -72,8 +82,7 @@ fn target_files(objects: &[WebObject<'_>], pieces: &[Piece]) -> BTreeMap<String,
 fn hooks(
     name: &str,
     slice: &doc::SliceObject,
-    files: &BTreeMap<String, String>,
-    images_dir: &str,
+    targets: &Targets<'_>,
 ) -> (Option<String>, Option<String>, Option<String>, Vec<String>) {
     let mut over = String::new();
     let mut out = String::new();
@@ -84,10 +93,10 @@ fn hooks(
         .get("swapTarget")
         .map(String::as_str)
         .filter(|target| !target.is_empty())
-        .map(|target| match files.get(target) {
+        .map(|target| match targets.files.get(target) {
             // A file the export wrote: reference it where it was
             // written, next to the `<img src>` that names it.
-            Some(file) => format!("{images_dir}{file}"),
+            Some(file) => format!("{}{file}", targets.images_dir),
             // A file name the user typed: their own reference, used
             // as given.
             None => target.to_owned(),
@@ -247,8 +256,7 @@ fn anchor_hotspots(
     objects: &[WebObject<'_>],
     grid: &Grid,
     pieces: &[Piece],
-    files: &BTreeMap<String, String>,
-    images_dir: &str,
+    targets: &Targets<'_>,
 ) -> Vec<Anchor> {
     let mut anchors = Vec::new();
     for (index, object) in objects.iter().enumerate() {
@@ -275,7 +283,7 @@ fn anchor_hotspots(
         // anchor name is the host image (the swap runtime addresses
         // images, and an area has none of its own).
         let host = naming::stem_of(&pieces[piece_index].file);
-        let (over, out, click, _) = hooks(host, object.slice, files, images_dir);
+        let (over, out, click, _) = hooks(host, object.slice, targets);
         anchors.push(Anchor {
             piece: piece_index,
             hotspot: index,
@@ -300,7 +308,11 @@ pub(crate) fn write_html(
         return String::new();
     };
     let files = target_files(objects, pieces);
-    let anchors = anchor_hotspots(objects, grid, pieces, &files, &options.images_dir);
+    let targets = Targets {
+        files: &files,
+        images_dir: &options.images_dir,
+    };
+    let anchors = anchor_hotspots(objects, grid, pieces, &targets);
     let width = grid.x_cuts.last().copied().unwrap_or(0);
 
     // Behavior pass: runtime need and preload list, pieces first then
@@ -322,7 +334,7 @@ pub(crate) fn write_html(
         if let Some(index) = piece.object {
             let name = naming::stem_of(&piece.file);
             note(
-                hooks(name, objects[index].slice, &files, &options.images_dir),
+                hooks(name, objects[index].slice, &targets),
                 &mut preloads,
                 &mut needs_runtime,
             );
@@ -331,7 +343,7 @@ pub(crate) fn write_html(
     for anchor in &anchors {
         let hotspot = objects[anchor.hotspot].slice;
         note(
-            hooks("area", hotspot, &files, &options.images_dir),
+            hooks("area", hotspot, &targets),
             &mut preloads,
             &mut needs_runtime,
         );
@@ -400,14 +412,12 @@ pub(crate) fn write_html(
             next_col = piece.col + piece.col_span;
             write_piece(
                 &mut html,
-                options,
                 objects,
                 grid,
                 piece_index,
                 piece,
                 &anchors,
-                &files,
-                &options.images_dir,
+                &targets,
             );
         }
         if options.shim {
@@ -468,14 +478,12 @@ pub(crate) fn write_html(
 /// piece's position in the rasterizer's output.
 fn write_piece(
     html: &mut String,
-    options: &WebExportOptions,
     objects: &[WebObject<'_>],
     grid: &Grid,
     piece_index: usize,
     piece: &Piece,
     anchors: &[Anchor],
-    files: &BTreeMap<String, String>,
-    images_dir: &str,
+    targets: &Targets<'_>,
 ) {
     let (_, _, w, h) = grid.cell_rect(piece.row, piece.col);
     let slice = piece.object.map(|index| objects[index].slice);
@@ -492,7 +500,7 @@ fn write_piece(
     let name = naming::stem_of(&piece.file);
     let mut anchor_open = false;
     if let Some(slice) = slice {
-        let (over, out, click, _) = hooks(name, slice, files, images_dir);
+        let (over, out, click, _) = hooks(name, slice, targets);
         if over.is_some() || out.is_some() || click.is_some() || slice.link.is_some() {
             let href = slice
                 .link
@@ -513,7 +521,7 @@ fn write_piece(
             anchor_open = true;
         }
     }
-    let src = format!("{}{}", options.images_dir, piece.file);
+    let src = format!("{}{}", targets.images_dir, piece.file);
     let alt = slice
         .and_then(|slice| slice.alt.as_deref())
         .map(escape)

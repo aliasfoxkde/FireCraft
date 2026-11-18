@@ -29,7 +29,7 @@ fn registry() -> CommandRegistry {
 fn fixture() -> doc::Document {
     let (width, height) = (8u32, 4u32);
     let mut rgba = Vec::with_capacity(width as usize * height as usize * 4);
-    for y in 0..height {
+    for _ in 0..height {
         for x in 0..width {
             let pixel = if x < 4 {
                 [255u8, 0, 0, 255]

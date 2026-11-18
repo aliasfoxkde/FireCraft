@@ -1711,8 +1711,13 @@ mod tests {
             "the exported page carries the behavior:\n{html}"
         );
         assert!(
-            html.contains("'button'"),
-            "the exported page names the swap target:\n{html}"
+            html.contains("MM_swapImage('plate','','button.png',1);"),
+            "the exported page names the file the target exported as:\n{html}"
+        );
+        assert!(
+            export.files.iter().any(|file| file.name == "button.png"),
+            "the file the swap points at is one the export wrote:\n{:#?}",
+            export.files
         );
     }
 

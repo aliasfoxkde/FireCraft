@@ -702,7 +702,7 @@ mod tests {
     /// The harness draws the panel into the accessibility tree a
     /// screen reader reads, so the panel's labels are queried as
     /// widgets rather than compared as pixels. The image-snapshot
-    /// half of this coverage needs a renderer (egui_kittest's `wgpu`
+    /// half of this coverage needs a renderer (`egui_kittest`'s `wgpu`
     /// feature) and a verified Vulkan adapter, which the CI image
     /// does not carry yet — that half is the ledger's queued item 21.
     #[test]
