@@ -97,6 +97,7 @@ Review follow-up: [filter controls and master transform](tasks/filter-controls-r
 | # | Task | Ticket |
 |---|---|---|
 | — | 20.4 Mask stack UI (add/remove/mode/link/move) — `PARTIAL`: the stack, its fold, and the level panel landed in #113 (decisions 0092/0093) with the level add/remove/move affordances; the screenshot acceptance and the compositor's mask sampling resolution remain ([#114](https://github.com/aliasfoxkde/FireCraft/issues/114)) — a FireCraft extension, not a CS6 parity claim | [tasks/T9-mask-stack.md](tasks/T9-mask-stack.md) |
+| — | 20.7 Slice behaviors + HTML preview — **the export-level receipt landed** (`crates/app-cli/tests/web_behavior_export.rs`): a behavior attached through the engine's command surface reaches the exported HTML as the `MM_*` markup, and the file it points at is one the export wrote. Writing the regression exposed a real defect — the model stores the *name* of the slice a swap points at, while the exporter emitted that name where the runtime needs a *file* — fixed by resolving the name to the exported file at export time ([decision 0133](decisions/0133-a-behavior-target-names-a-slice-and-the-exporter-resolves-the-file.md)). The egui_kittest snapshot of the preview is still open ([#93](https://github.com/aliasfoxkde/FireCraft/issues/93)); the per-panel harness it needs is the queued item 21 below | — |
 
 20.1 and 20.5–20.7 are already on `main`; do not reopen them.
 
