@@ -62,7 +62,7 @@ mod webgolden;
 
 use std::process::ExitCode;
 
-const USAGE: &str = "usage: cargo run -p xtask -- <ci [--full]|ci-no-fmt|aegis [--bless|--report]|coverage [--bless|--measure]|layers|wasm|corpus [--report]|corpus-gen|library-gen|hero-gen|styles-gen|scripts|floor|golden [--bless]|svg-golden [--bless]|svg-roundtrip [--measure]|web-golden [--bless|--measure]|perf [--bless|--measure]|dist --web|--native|--source|--sbom|--manifest|--verify-manifest|fuzz|fuzz-quick|panic-hunt|reachability [--bless|--list]|climb [--append [rung]|--check]|panel-snapshot [--bless]|icon-survey [--check]|shortcuts [--bless]|parity|scorecard|changelog [--check|--cut <version>]|stamps|stamp <version>>";
+const USAGE: &str = "usage: cargo run -p xtask -- <ci [--full]|ci-no-fmt|aegis [--bless|--report]|toolchain|coverage [--bless|--measure]|layers|wasm|corpus [--report]|corpus-gen|library-gen|hero-gen|styles-gen|scripts|floor|golden [--bless]|svg-golden [--bless]|svg-roundtrip [--measure]|web-golden [--bless|--measure]|perf [--bless|--measure]|dist --web|--native|--source|--sbom|--manifest|--verify-manifest|fuzz|fuzz-quick|panic-hunt|reachability [--bless|--list]|climb [--append [rung]|--check]|panel-snapshot [--bless]|icon-survey [--check]|shortcuts [--bless]|parity|scorecard|changelog [--check|--cut <version>]|stamps|stamp <version>>";
 
 fn main() -> ExitCode {
     match std::env::args().nth(1).as_deref() {
@@ -73,6 +73,7 @@ fn main() -> ExitCode {
             Some("--report") => finish("aegis --report", aegis::report()),
             _ => finish("aegis", aegis::run()),
         },
+        Some("toolchain") => finish("toolchain", stamp::toolchain()),
         Some("coverage") => match std::env::args().nth(2).as_deref() {
             Some("--bless") => finish("coverage --bless", coverage::bless()),
             Some("--measure") => finish("coverage --measure", coverage::measure()),
@@ -231,6 +232,10 @@ fn run_ci(full: Option<&str>, skip_fmt: bool) -> ExitCode {
             // content, not on line — see `xtask/src/aegis.rs`.
             aegis::run()
         }),
+        // The compiler pin, before the expensive steps: a box or a
+        // workflow that moved off the pinned rustc would otherwise
+        // burn a full gate before anyone saw why (issue #146).
+        ("toolchain", stamp::toolchain),
         ("coverage", coverage::run),
         ("fmt", || {
             util::cargo(&["fmt", "--all", "--", "--check"]).and_then(|()| {
@@ -280,7 +285,12 @@ fn run_ci(full: Option<&str>, skip_fmt: bool) -> ExitCode {
         ("changelog", changelog::run),
     ];
     if skip_fmt {
-        steps.remove(2); // remove "fmt" at index 2
+        // By name, not by index: steps are inserted above this point
+        // (the toolchain pin), and a hardcoded slot silently removes
+        // whatever has moved into it.
+        if let Some(position) = steps.iter().position(|(name, _)| *name == "fmt") {
+            steps.remove(position);
+        }
     }
     if full == Some("--full") || full == Some("full") {
         steps.insert(steps.len() - 2, ("fuzz-full", fuzz::full));
