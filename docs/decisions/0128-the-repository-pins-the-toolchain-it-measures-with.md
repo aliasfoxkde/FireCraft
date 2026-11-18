@@ -84,3 +84,9 @@ around, not a fix.
 
 See also decision [0102](0102-coverage-floor-is-measured-with-a-pinned-toolchain.md)
 — the same pin, one layer up.
+
+*Follow-up (2026-11-17):* the one-change rule above is now a measured
+check — the `toolchain` gate step (`cargo run -p xtask -- toolchain`)
+reads `rust-toolchain.toml` as the source of truth and fails closed,
+naming `file:line`, when any workflow `toolchain:` input or CI image
+`FROM rust:` base disagrees (issue #146).
