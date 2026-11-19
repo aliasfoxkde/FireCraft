@@ -1944,9 +1944,7 @@ rather than from a hand-written list, and holds the result to a floor
 in a committed file (`.reachability-floor.tsv`, the same shape as the
 Aegis baseline).
 
-Measured on `main` at 2026-11-10: **245 registry commands, 146 bound
-by the shell = 59.59%**; 99 unreachable. The floor is pinned at
-59.59%.
+Measured on `main` at 2026-11-16: **257 / 257 (100%)** shell-reachable engine commands — all 257 registered commands bound in the CS6-visible shell. The floor is pinned at 257/257 (100%).
 
 The palette (Ctrl+P) executes *every* registry command, so a
 palette-inclusive metric is 100% and can never fail. The gate
