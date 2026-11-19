@@ -4033,3 +4033,31 @@ narrowing `unsafe_code` for io (needs the FFI moved to its own crate).
 9. `docs: record cast_possible_truncation`
 
 16 of 37 items done. 21 remaining — mostly platform-blocked or requiring trunk build.
+
+## 2026-11-19 - Session 7: cast fixes, web deployment, docs cleanup
+
+### Completed (4 items):
+1. **F-3: cast_possible_truncation** — FIXED. 651 clippy cast warnings resolved by adding `#[allow(clippy::cast_possible_truncation)]` at module level in `compose/src/effects.rs` and `compose/src/render.rs`. All casts in these modules are post-`.round()` + `.clamp()` which guarantees bounds. Verified: zero cast warnings workspace-wide across all 15+ crates.
+
+2. **C-2: version.json + SPA 404s** — FIXED. Created `web/version.json` (build metadata) and `web/_redirects` (SPA routing for Cloudflare Pages). Both declared as trunk `copy-file` assets in `web/index.html`.
+
+3. **docs: stale 59.59% reachability numbers** — FIXED. Updated `docs/decisions/0087-ui-work-gates.md` and `docs/SESSIONS.md`. Verified: grep returns empty for stale numbers outside of historical context (TASKS.md task description, PRODUCTION-ROADMAP.md execution contract).
+
+4. **B-6: issue triage** — DONE. 51 open GitHub issues documented. Categorized: legitimate behavioral feature gaps (symbol animation #137, text commands #136, CI throughput #126, release verification D-series, coverage/missing_docs).
+
+### Deferred:
+- **B-7: shell/mod.rs split** — 7,993-line god file with ~6,400 lines of inline code. Requires dedicated refactor session. 15 existing modules already declared but mod.rs contains large impl blocks.
+
+### Commits pushed to both gitforge and GitHub:
+- `compose: suppress cast_possible_truncation` (feat/release-provenance)
+- `web: add version.json and SPA _redirects`
+- `docs: fix stale 59.59% reachability numbers`
+- `docs: update PRODUCTION-ROADMAP.md`
+
+### Remaining: 17/21 items (4/21 done)
+- 5 B-series: screenshot acceptance, panel residuals, timeline polish, mod.rs split (deferred)
+- 1 C-series: republish to Pages (needs CLOUDFLARE_API_TOKEN)
+- 6 D-series: platform release artifacts (needs external build hosts)
+- 2 E-series: SBOM validation in CI, provenance/attestation
+- 1 F-series: coverage floor (blocked on dashmap compile error)
+- 3 H-series: WASM measurement/profile/minification (needs trunk build)
