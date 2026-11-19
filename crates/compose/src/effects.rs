@@ -18,7 +18,11 @@
 //! that is absent or unparseable skips its effect (counted in
 //! [`Plan::skipped`]) — CS6 writes every parameter of an effect it
 //! saved, so absence means a stack we would otherwise be guessing at.
+//!
 
+/// All f64 casts here are after .round() + .clamp() which bounds values
+/// within the target type's range; clippy cannot infer this.
+#[allow(clippy::cast_possible_truncation)]
 use color::{BlendMode, Rgba8};
 use doc::{Effect, EffectValue, NodeValue};
 use filters::{CurvesKnots, Surface};

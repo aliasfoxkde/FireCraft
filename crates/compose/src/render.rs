@@ -1,4 +1,3 @@
-//! The document walk: page canvas → layer list → state cell → objects,
 //! painted bottom-first through per-object opacity/blend layers.
 //!
 //! Live effects (M7): an object whose stack interprets to kernels is
@@ -9,6 +8,9 @@
 //! canvas (not the shape's bounding box), so a blur's spread past the
 //! geometry survives and margin math reduces to the canvas edge
 //! (decision 0005).
+/// All f64/i64 casts here are after .round() + .clamp() which bounds values
+/// within the target type's range; clippy cannot infer this.
+#[allow(clippy::cast_possible_truncation)]
 
 use crate::cache::EffectCache;
 use crate::convert::{abgr, blend_mode, to_bezpath};
