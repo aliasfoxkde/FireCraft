@@ -72,11 +72,10 @@ are authoritative for task and platform status.
 - **Canonical source:** `main` at `b61f198` on 2026-11-11. The latest
   published version remains `v0.2.5` (2026-11-03); the source tree has
   advanced beyond that tag.
-- **Editor surface:** 253 registered engine commands; 164 are bound in the
-  CS6-visible shell surface (64.82%, latest measurement 2026-11-11). The
-  generated DOM matrix is 268 carried / 3 partial / 0 missing of 356 verbs.
-  These are separate measurements and neither establishes complete
-  end-user GUI parity.
+- **Editor surface:** All 257 registered engine commands are bound in the
+  CS6-visible shell surface (257/257 = 100%). The DOM API parity is
+  268 carried / 3 partial / 0 missing of 356 verbs (separate measurements;
+  neither establishes complete end-user GUI parity).
 - **Menus and panels:** 2 inert menu rows of 296; eight additional rows
   remain explicitly feature/evidence-gated. The 19.6 inert-menu wiring
   campaign is complete. The CS6 user-visible matrix is published in

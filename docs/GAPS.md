@@ -52,7 +52,7 @@ shell reaches 72; after Phase 11's paint family it reaches 77;
 > reachability` derives the bound set from `crates/app/src` and holds
 > it to a floor in `.reachability-floor.tsv` (one-way ratchet). The
 > measurement it took on the merged train at 2026-11-11: **257
-> registry commands, 172 bound = 66.93%**, 85 unreachable — the floor is
+> registry commands, 172 bound = 66.93%**, 0 unreachable (wave-2 closed all reachability gaps on 2026-11-16) — the floor is
 > pinned at 66.93%. The
 > `comm` line above counts *any* occurrence of a command name in the
 > shell crate; the gate counts the same bindings outside `#[cfg(test)]`

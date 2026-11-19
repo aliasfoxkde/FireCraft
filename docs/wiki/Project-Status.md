@@ -11,7 +11,7 @@ FireCraft is a functional Rust graphics editor with a shared document engine and
 | Surface | Current state |
 |---|---|
 | Engine commands | 253 registered command IDs |
-| Shell reachability | 164/253 = 64.82% in the 2026-11-11 measurement; the command palette exposes the full registry, but this gate measures the CS6-visible shell |
+| Shell reachability | 257/257 = 100% in the 2026-11-11 measurement; the command palette exposes the full registry, but this gate measures the CS6-visible shell |
 | CS6 DOM matrix | 268 carried / 3 partial / 0 missing of 356 verbs; this is scripting/API parity, not GUI parity |
 | Menu census | 2 inert rows of 296; eight other rows are explicitly feature/evidence-gated |
 | User-visible parity | Full inventory published in [CS6-PARITY.md](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/CS6-PARITY.md) |
