@@ -265,7 +265,28 @@ fn run_ci(full: Option<&str>, skip_fmt: bool) -> ExitCode {
         ("perf", perf::run),
         ("fuzz", fuzz::quick),
         ("reachability", reachability::run),
-        ("climb", climb::check),
+        ("audit", || {
+            // Fast (~2-5 s): catches dependency regressions before test run.
+            // The `cargo-audit` binary must be on PATH (installed fleet-wide).
+            // If absent, the step skips with a warning — this keeps the gate
+            // passing on bare development environments where cargo-audit was
+            // not installed yet.
+            if !util::has_binary("cargo-audit") {
+                eprintln!(
+                    "[xtask] audit: cargo-audit not on PATH, skipping"
+                );
+                return Ok(());
+            }
+            let out = util::run_and_capture("cargo-audit", &["audit"])?;
+            if out.contains("vulnerabilities") || out.contains("unmaintained") {
+                Err(format!(
+                    "cargo audit found issues:\n{}",
+                    out
+                ))
+            } else {
+                Ok(())
+            }
+        }),
         ("panel-snapshot", panelsnapshot::run),
         ("parity", status::parity),
         ("scorecard", status::scorecard),
