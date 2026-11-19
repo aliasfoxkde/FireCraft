@@ -391,7 +391,7 @@ evidence work, tracked outside that campaign.
   on the release train at 2026-11-11: **253 registry commands, 168
   bound by the shell = 66.40%**, 85 unreachable; the floor was pinned
   at 66.40%. Re-measured 2026-11-14 after PR #143: **257 registry
-  commands, 249 bound = 96.89%**, 8 unreachable; the floor was
+  commands, 249 bound = 96.89%, 8 unreachable (pre-wave-2; wave-2 closed all 8 on 2026-11-16); the floor was
   deliberately re-blessed to 96.89% in the wave-closeout PR.
   (The command palette makes the *palette* reach 100% — the gate
   deliberately measures the CS6-visible surface instead, which is the
@@ -568,139 +568,7 @@ be launched as an oracle: under Wine it fails its own configuration
 check ("Error: 1"), and the activation machinery is explicitly out of
 scope, so no license path is attempted.
 
-<!-- coderabbit-ai-generated:v1 -->
 
-<!-- coderabbit-ai-generated-section:v1:42ecf8717bacd73d9fd56477bf4610ea61f6985566267456938b76e4d56354c9 -->
-
-- **22.1 CS6 panel inventory + docking** (L): the left tool dock and
-  the right panel stack with the CS6 panel set (Properties, Layers,
-  Pages, Swatches, Color Mixer, Info, History, Optimize, Symbols,
-  Styles, Common Library, CSS Properties, Auto Shapes, URL,
-  Behaviors, Find and Replace, Slices). Panels are dockable left or
-  right, collapsible, resizable, and re-openable from the Window
-  menu; the dock geometry persists. Accept: a panel can be collapsed
-  and reopened, the right dock can be resized, and the layout survives
-  a restart. Left↔right movement remains open work toward the CS6 target.
-  — **PARTLY LANDED 2026-11-04**: `shell::panel_windows` uses a
-  width-reserving `egui::Panel::right` dock (258 pt default width),
-  with a scrolling column of collapsible, closable panel sections
-  and CS6's
-  fresh-document roster (Properties/Pages/States/Layers open, the
-  rest closed until asked for) and the Window menu toggling each.
-  The layout now persists across restarts (`eframe`'s `persistence`
-  feature): a `ShellLayout` snapshot (panel set, dock folds, display
-  toggles) saved through `App::save` — native to `storage_dir`, web
-  to localStorage — and restored at startup, filtered against the
-  current panel inventory. The web panels landed 2026-11-04
-  (`shell::panels_web`, decision 0069): Auto Shapes, URL, and
-  Behaviors are real panels whose actions are engine commands. The
-  remaining panel surfaces (Optimize, Common Library, CSS Properties,
-  Find and Replace, Slices) landed 2026-11-06; the panel inventory is
-  complete (see `TASKS.md`). Left↔right docking movement remains open.
-  The normal-viewport reachability pass is recorded in
-  [`tasks/T22-screenshot-ui.md`](tasks/T22-screenshot-ui.md).
-  — **REACHABILITY MEASURED 2026-11-04**: the stack is now a dock that
-  reserves its width rather than a set of floating windows, and the
-  capture round measured it — at 1280×800 every open panel is inside
-  the viewport, and at a deliberately short 1280×400 a wheel over the
-  dock moves the stack. The receipts, and the limits of the check, are
-  in the ticket.
-
-- **22.2 CS6 tool strip** (M): the CS6 tool set in CS6 order with
-  tool flyouts (shape tools, the modify sub-tools, the fill/stroke
-  pair, zoom/hand, and the eyedropper), each with an open-license
-  icon. Accept: every tool in the strip selects a working tool; the
-  flyout opens on press-and-hold. — **LANDED 2026-11-05**
-  (`app/src/toolstrip.rs`): the strip is CS6's, as data — the six
-  categories in CS6's order (Select, Bitmap, Vector, Web, Colors,
-  View), the twenty-four groups with their one-key shortcuts, and the
-  flyout memberships, all read from the CS6 help set and the book's
-  Table 1-1 (evidence in
-  [`research/fw-ui-evidence.md`](research/fw-ui-evidence.md)). CS6's
-  group-cycling rule is implemented: a group's key advances within
-  the group. The Modify trio (Scale/Skew/Distort), the retouch trio
-  (Blur/Sharpen/Smudge), Dodge/Burn, Knife, Freeform/Reshape Area and
-  the Colors section's four panel buttons are all in the strip. Open:
-  the Alt-hold tool variants and the three-mode screen switch
-  (ticket 22.5).
-- **22.3 Adaptive canvas context menu** (M): the right-click menu
-  changes with the selection — nothing selected, a bitmap, a vector
-  path, a text object, an instance, a multi-selection, and inside a
-  slice. Each variant is a CS6 verb subset over the same engine
-  commands the menus use. Accept: right-clicking each selection
-  class yields that class's verbs, and every one of them executes. —
-  **LANDED 2026-11-03** (`shell::canvas_ui::context_rows`): the popup
-  classifies the live selection (empty / bitmap / path / text /
-  instance / slice / group / multi) and offers that class's verb set;
-  no row is an inert placeholder.
-- **22.4 Property inspector** (L): the Properties panel shows the
-  selection's real attributes (fill, stroke, stroke style, effects,
-  text attributes) and edits them through the engine — not a
-  read-only summary. — **PARTLY LANDED 2026-11-03**: the Properties
-  panel edits opacity, blend, visibility, lock, name, text runs and
-  font attributes, and the live effect list; the CS6 X/Y/W/H
-  geometry strip now applies through `object.setBounds`. — **PER-KIND
-  FIELD SETS LANDED 2026-11-04**: the inspector dispatches every
-  selection kind. A group shows its display controls, geometry and
-  member list; a bitmap shows name, opacity, blend, visibility, lock,
-  a pixel-size readout and the effect list; a slice shows its name,
-  type (foreground / background / hotspot), frame geometry, and the
-  anchor link and alt text — the same editor the Window ▸ URL panel
-  renders, so the two surfaces cannot disagree. Still open: the
-  bitmap's X/Y/W/H strip (`object.setBounds` refuses bitmaps —
-  decision 0019) and any bitmap fill/stroke editor (`IMGv` carries
-  no fill/stroke node; CS6's bitmap tools are the separate Image
-  Editing command panel), the
-  document-level field set, the multi-selection field set, and
-  enter-group. — **DOC/MULTI/ENTER LANDED 2026-11-06**: nothing
-  selected shows the document field set (canvas W/H through
-  `document.setCanvasRect`, resolution + per-cm unit through
-  `document.setResolution`, canvas color through
-  `document.setCanvasColor` over the shared ABGR palette); a
-  2+-object selection shows the multi-selection set (count, union
-  bounds, opacity-min/blend-min/visible-AND/locked-OR with every
-  edit fanned out per id); a group's member rows select the child
-  (enter-group by selection). Test
-  `inspector_document_and_multi_selection_sets`. Remaining 22.4:
-  the bitmap X/Y/W/H strip and bitmap fill/stroke, both blocked by
-  decision 0019 and the absent `IMGv` fill/stroke nodes — recorded,
-  not faked.
-- **22.5 CS6 chrome** (M): menu bar order, tool strip placement,
-  document tab strip, status bar, panel headers with the CS6
-  collapse/close affordances, and the CS6 color scheme (a dark
-  neutral chrome, not egui's default light look). **Landed
-  2026-11-06:** the three-mode screen cycle (Standard / Full Screen
-  with Menus / Full Screen, fwref 1178–1185 — the control no longer
-  aliases Tab), the Alt-hold retouch swap (Blur↔Sharpen,
-  Dodge↔Burn, fwref 3555/3580; Smudge has no variant), and the
-  Window-menu arrangement trio (57650/57651/57652 with CS6's
-  labels; census 289→290). **Also landed 2026-11-06:** the Text ▸ Font
-  submenu (RT_MENU 128 ships a runtime-populated placeholder; the
-  transcription carries five renderer-known families through
-  `text.setFont`, census 290→294, gated by
-  `the_text_font_submenu_dispatches_set_font`). **Repeat Filter landed 2026-11-06** (`Action::RepeatFilter` re-applies
-  the session's last preset through `filter.add`, gated by
-  `repeat_filter_reapplies_the_last_preset`; inert census 3→2).
-  **CS6 keymap landed 2026-11-11** (decision 0080): the transcribed
-  tree prints CS6's own accelerators and every live printed
-  accelerator is bound to its row's action, held by
-  `menus::tests::cs6_keymap_is_fully_bound`; the binding table
-  carries its own section per row, gated by
-  `menus::tests::shortcut_sections_are_contiguous`. **The residual
-  keymap commands landed 2026-11-11**: the 16 bindings that close
-  them bring the table to 167 bindings in 40 sections, and every one
-  of CS6's 133 keymap-file entries across its 128 command ids now
-  resolves to a binding carrying the action this build answers it
-  with, held by `menus::tests::cs6_keymap_entries_are_bound` over
-  the transcribed `menus::tests::CS6_KEYMAP`. Remaining on 22.5:
-  the Main toolbar's contents (CS6-PARITY §A rows 54, 255, 257,
-  164).
-- **22.6 Icon pack integration** (M): ship the surveyed open-license
-  icon set, subset it to the Fireworks verb set, and record the
-  attribution rows. Accept: the wasm bundle grows by a documented,
-  measured amount and stays under the pinned ceiling.
-
-<!-- /coderabbit-ai-generated:v1 -->
 
 ### Quality gates for UI work (new)
 
@@ -733,7 +601,7 @@ scope, so no license path is attempted.
    — **DONE (2026-11-10)**, tracked as 19b.2: `cargo run -p xtask --
    reachability`, wired into `ci`. Measured 253 registry commands /
    168 bound (66.40%) at introduction; **re-measured 2026-11-14 after
-   PR #143: 257 commands, 249 bound = 96.89%, 8 unreachable**; the
+   PR #143: 257 commands, 249 bound = 96.89%, 8 unreachable** (pre-wave-2 closeout); the
    floor lives in **`.reachability-floor.tsv`**, deliberately
    re-blessed to 96.89% in the wave-closeout PR, and is a one-way
    ratchet.

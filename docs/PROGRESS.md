@@ -7,93 +7,7 @@
 
 ## Snapshot (2026-11-14, post-reachability-wave; based on `main` at `ad3fc655`)
 
-<!-- coderabbit-ai-generated:v1 -->
 
-<!-- coderabbit-ai-generated-section:v1:96efdab11c7df4b57fb72854f016b25100c7ae63868aab068c0acecdf0dbaf8c -->
-
-- **Release:** `v0.2.5` is the latest tag; `main` carries the
-  shell-lineage train (#107) and the post-train dependency work
-  (#117) beyond it. The live Pages deployment was measured on
-  2026-11-11: its trunk asset name and wasm digest match neither the
-  published v0.2.5 release asset nor a rebuild of the v0.2.5 tag, so
-  the live build corresponds to no identifiable release and its source
-  revision is unknown. The earlier reconciliation (#104) inferred a
-  match from equal file sizes and an identical `appinfo.json`; the
-  digest measurement falsifies it. The served `index.html` differs
-  only by the substituted asset names and Cloudflare's injected
-  analytics beacon — that difference is explained. Republishing from a
-  named commit, with its digests recorded, is the pending next step
-  (T18 row in [`TASKS.md`](TASKS.md)).
-- **Build evidence:** the earlier optimized `dist/web/` distribution,
-  built 2026-11-04 16:45 local time, had a 21,274,323-byte wasm
-  (below the 21,500,000-byte ceiling). It was built from `56ee1bf`,
-  whose Git tree matches `5fac7a2`; all five entries in its
-  `MANIFEST.sha256` verified. The deployment comparison and earlier
-  bridge smoke covered that artifact. The later [T22 rebuild](tasks/T22-screenshot-ui.md#receipts--2026-11-04)
-  used `5fac7a2` plus uncommitted dock and inspector changes, producing
-  a 21,271,259-byte optimized wasm in `dist/web/`; T22's six browser
-  captures and interaction checks covered this rebuilt artifact.
-  The 18:21 `web/dist/` output was a raw 95,583,065-byte wasm bundle,
-  not a release distribution. Neither directory is tracked by Git.
-- **CI evidence:** PRs since #107 each carry a double GitHub `gate`
-  receipt — a full `cargo run -p xtask -- ci` at roughly 30 minutes —
-  plus fmt, CodeQL and the language analysis jobs. The train itself
-  (#107: 32m52s + 32m48s), #115 (32m36s + 28m7s) and #117 (32m50s +
-  29m6s) are all double-green. Local full-gate receipts exist for the
-  post-train branches as well (`EXIT=0`, "all gates green").
-- **Engine and parity:** 253 command IDs (source is authoritative);
-  268 carried / 3 partial / 0 missing of the 356 DOM verbs.
-- **CS6 keymap parity (2026-11-10, decisions 0080 + 0085):** every
-  accelerator the menu bar prints is bound at the printed key —
-  `menus::parse_accel` is the single parser and
-  `menus::tests::cs6_keymap_is_fully_bound` holds the two in step
-  (`Action::Inert` and `ReportGap` rows stay display-only by design).
-  Modify ▸ Mask enable/disable is CS6's single toggle row: the
-  engine reads the mask's state, the shell sends the opposite, and the
-  row's label flips between "Enable Mask" and "Disable Mask".
-- **Menu reachability:** 2 of 296 rows currently use `Action::Inert`; eight additional rows have explicit feature/evidence gates. The
-
-  19.6 campaign (batches 1–17) is complete, and the Window menu's
-  panel rows (including Optimize, CSS Properties, Find and Replace,
-  and Common Library) all dispatch; the remaining rows are
-  feature work or explicit evidence gates. Census source:
-  `menus::tests::inert_worklist`; ceiling:
-  `menus::tests::inert_count_never_rises`.
-- **Current UI priority:** Phase 22.1 (panel inventory) and 22.2
-  (tool strip) landed on `main` with the shell-lineage train (#107);
-  22.5 (CS6 chrome audit) remains partial. Phase 21 is complete
-  (2026-11-11); Phase 20 continues with Optimize (T7), animation
-  timeline (T8) and the mask stack (PR #113). The screenshot
-  acceptance work is complete, with 1280×800 and 1920×1080 captures
-  and empty/vector/bitmap states recorded in
-  [T22](tasks/T22-screenshot-ui.md).
-- **Completed foundations:** M0–M15, DOM verb-surface campaign,
-  Phases 19.1–19.5, 19.6 menu wiring, and 19b. Three partial DOM
-  rows and the other evidence-gated items remain parked pending new
-  evidence.
-- **Clean-room boundary:** local CS6 files and Adobe-derived extracts
-  remain uncommitted; visual assets require attribution.
-- **History rewind as a command (2026-11-11, decision 0096):** the
-  session-scoped `history.rewind` is enumerated by
-  `catalog::all_ids()`, so every surface that lists commands lists it
-  too: the command palette offers it (its payload grounded one step
-  below the document's live depth, not a fuzz depth) and the MCP
-  bridge's `firecraft.listCommands` advertises it. The registry
-  catalog and the reachability measurement are unchanged by that
-  change — the id is not a registry id (the measurement it stood
-  beside then, 168/253, has since risen to 249/257 with #143).
-
-## Build and deployment evidence
-
-| Artifact or check | Observed | Meaning |
-|---|---|---|
-| Earlier optimized `dist/web/` | 2026-11-04 16:45 local; 21,274,323-byte wasm; manifest verified | Build from `56ee1bf`, whose Git tree matches `5fac7a2`; deployment comparison and earlier bridge smoke |
-| T22 optimized rebuild in `dist/web/` | 2026-11-04; 21,271,259-byte wasm | `5fac7a2` plus dock and inspector changes; six browser captures and interaction checks in [T22](tasks/T22-screenshot-ui.md#receipts--2026-11-04) |
-| Raw `web/dist/` | 2026-11-04 18:21 local; 95,583,065-byte wasm | Development output; not the optimized distribution |
-| Browser smoke | Earlier optimized artifact: bridge smoke in session history; T22 rebuild: six captures and interaction checks in T22 | Local end-to-end proof for each recorded artifact; the live deployment was measured against the release bytes on 2026-11-11 — it is neither the release asset nor a rebuild of the tag |
-| Live Pages | Measured 2026-11-11 by digest | The live bundle's trunk asset name (`2274ac8c2925b61d`) and wasm digest (`f4f0a3f0…`) match neither the published v0.2.5 release asset nor a rebuild of the v0.2.5 tag; the live build corresponds to no identifiable release and its source revision is unknown. `index.html` differs only by the substituted asset names and Cloudflare's injected beacon |
-
-<!-- /coderabbit-ai-generated:v1 -->
 
 - **Active work — the daily-driver expansion** (Phases 20–22,
   `docs/NEXT.md`): the engine is complete but the shell exposes a
@@ -120,7 +34,7 @@
   at introduction as **253 registry commands, 168 bound = 66.40%**,
   re-pinned to **172/257 (66.93%)** by #113's lane, then deliberately
   re-blessed to **249/257 (96.89%)** in the wave-closeout PR
-  (2026-11-14; 8 unreachable). The panel
+  (2026-11-14; 8 unreachable — closed by wave-2 on 2026-11-16; now 257/257 = 100%). The panel
   snapshot (`crates/app/panels.snapshot`, 19 panels) pins the panel
   set's structure; `egui_kittest` is obtainable (0.36.2 matches the
   locked egui) but its pixel path needs a wgpu adapter the CI image

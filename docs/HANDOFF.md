@@ -191,20 +191,8 @@ re-pin are also complete.
   before/after measurement. Decision 0079 keeps the historical
   measurement-based analysis.
 
-<!-- coderabbit-ai-generated:v1 -->
 
 
-<!-- coderabbit-ai-generated-section:v1:4afc23055932af30b8ed46b14fd136e53440f5d15864e46285de8cb752fb582a -->
-
-The next UI work is Phase 22.5: finish the CS6 chrome audit against the
-clean-room reference notes. Phase 22.1 (panel inventory) and 22.2 (tool
-strip) are complete in PR #8; screenshot acceptance is complete, and
-22.4 still has evidence-gated bitmap transform/fill-stroke work. The remaining Phase 22 items
-are the chrome audit and the evidence-gated bitmap transform/fill-stroke work. Phase 20
-contains daily-driver editing features; Phase 21 contains modern
-differentiators.
-
-<!-- /coderabbit-ai-generated:v1 -->
 
 The current task ledger is [`TASKS.md`](TASKS.md), the full roadmap is
 [`NEXT.md`](NEXT.md), and screenshot acceptance criteria are in
