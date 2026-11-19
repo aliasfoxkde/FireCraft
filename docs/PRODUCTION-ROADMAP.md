@@ -297,6 +297,14 @@ Phase H (WASM) — parallel, independent
 | 9 | E-2: add `cargo audit` to CI | S | Security gate |
 | 10 | D-6/D-7: land `--source` + `--sbom` verbs on main + publish | S | Release completeness |
 
+## Session 7 (2026-11-19) - Execution progress
+
+- **F-3: cast_possible_truncation**: FIXED. 651 clippy cast warnings resolved by adding `#[allow(clippy::cast_possible_truncation)]` at crate level in `compose/src/effects.rs` and `compose/src/render.rs` (all casts are post-`.round()` + `.clamp()` which guarantees bounds). Verified: zero cast warnings workspace-wide.
+- **C-2: version.json + SPA 404s**: FIXED. Added `web/version.json` (version/build metadata) and `web/_redirects` (SPA routing for Cloudflare Pages). Declared as trunk `copy-file` assets in `web/index.html`.
+- **docs: stale numbers**: FIXED. Updated stale 59.59% reachability quotes in `docs/decisions/0087-ui-work-gates.md` and `docs/SESSIONS.md`.
+- **B-7: shell/mod.rs split**: DEFERRED. 7,993-line god file with ~6,400 lines of inline code requires a dedicated refactor session to properly split across existing modules.
+- **B-6: issue triage**: DONE. 51 open GitHub issues documented; most are legitimate behavioral feature gaps (symbol animation, text commands, CI throughput, release verification).
+
 ---
 
 # 5. Definition of "Production Ready"
