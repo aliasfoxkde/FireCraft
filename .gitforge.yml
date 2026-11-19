@@ -8,8 +8,11 @@
 # the run-by-run history):
 # - `environment: {}` is REQUIRED: PipelineDefinition has no serde
 #   default, and a missing key fails every run at parse time.
-# - Jobs form a single chain: all jobs of one run share ONE per-run
-#   workspace, and the offline validator rejects fork/join graphs.
+# - Jobs form a DAG and may run concurrently after their dependencies
+#   complete. All jobs in one run share ONE per-run workspace, so sibling
+#   branches must have disjoint checkout write sets (Cargo target caches are
+#   separate per job). Keep that constraint in mind when adding parallel
+#   jobs; the pipeline validator permits fork/join graphs.
 # - Job- and step-level `env:` reach the container, but there is no
 #   ref- or commit-shaped variable to rely on: the pipeline-level
 #   `environment` must be present (`environment: {}` — the definition
