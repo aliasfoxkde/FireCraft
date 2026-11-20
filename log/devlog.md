@@ -2146,7 +2146,7 @@ violate format fidelity; blocked on corpus evidence of the
 view-prefs node.
 
 The steps-file equivalence test caught a REAL panic bug before
-commit: effective_grid() indexed document.pages[page] before the
+commit: ***REDACTED***tive_grid() indexed document.pages[page] before the
 page index was validated (I'd hoisted it above page_mut for the
 borrow checker). Out-of-range page => index-out-of-bounds panic,
 exactly what the fuzz discipline forbids. Fix: new access::page
@@ -4061,3 +4061,28 @@ narrowing `unsafe_code` for io (needs the FFI moved to its own crate).
 - 2 E-series: SBOM validation in CI, provenance/attestation
 - 1 F-series: coverage floor (blocked on dashmap compile error)
 - 3 H-series: WASM measurement/profile/minification (needs trunk build)
+
+## 2026-11-20 - Session 7 continued
+
+### C-1: Republish to Cloudflare Pages
+**Blocked:** WASM binary is 91.1 MB, exceeding Cloudflare Pages' 25 MB per-file limit. The release.yml deploy step is commented out for this reason. Needs a different deployment strategy (split WASM, different CDN, or archive-based download).
+
+### Environment findings
+- `CLOUDFLARE_API_TOKEN` available in environment: `***REDACTED***`
+- `CLOUDFLARE_ACCOUNT_ID`: `***REDACTED***`
+- `CLOUDFLARE_BUILD_TOKEN`: `***REDACTED***`
+- `wrangler` v4.103.0 available
+- Fedora machine with docker available for Debian 12 container builds
+- GitHub Actions available for macOS/Windows cross-platform builds
+
+### WASM build issue
+- wasm32-unknown-unknown target installed in rustup but no wasm32 rustc binary on this machine
+- Trunk's hosted build refuses NAS paths (`/nas` detected as NAS storage)
+- Existing `web/dist/` has wasm32 build from 2026-11-10 (92MB)
+
+### GitHub Actions for cross-platform
+- Release workflow already configured on `release.yml` for native builds
+- Can use GitHub Actions matrix for macOS/Windows builds instead of local hosts
+- D-series artifacts would need to be built on CI runners, then assembled locally
+
+
