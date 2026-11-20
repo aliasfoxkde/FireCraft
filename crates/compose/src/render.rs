@@ -1334,33 +1334,149 @@ fn render_ids(ids: &[ObjectId], walk: &mut Walk) -> Result<Vec<u8>, ComposeError
     flush_offscreen(offscreen, walk.canvas)
 }
 
-/// The coverage a mask child contributes: the gray level of a raster
-/// mask, the painted coverage of a shape mask.
+/// The native sampling ceiling for a raster mask, in pixels — `WPXi`/
+/// `HPXi` are hostile file input (AGENTS "Numbers are hostile"), and a
+/// mask claiming a sixty-thousand-pixel side on a 4×4 canvas must not
+/// allocate a 14 GB buffer. A mask beyond this ceiling (or beyond the
+/// rasterizer's `u16` extent) samples the way it did before issue
+/// #114's fix — at the canvas's resolution, correct but coarser for
+/// filtered masks — rather than failing a render that used to succeed.
+const MAX_MASK_NATIVE_PIXELS: usize = 64 * 1024 * 1024;
+
+/// The coverage a mask child contributes.
+///
+/// A raster mask is sampled at its **own** `WPXi`×`HPXi` resolution
+/// (issue #114): the image assembles, filters and folds on its native
+/// grid, and the resulting coverage is placed onto the canvas at the
+/// mask's location — so a live effect on the mask (a blur's feathered
+/// edge) computes against the mask's real extent, not against whichever
+/// canvas the artboard happens to have. A shape mask rasterizes at the
+/// output resolution instead: a vector's anti-aliasing belongs to the
+/// pixels the user sees.
 fn mask_coverage(mask_id: ObjectId, walk: &mut Walk) -> Result<Vec<u8>, ComposeError> {
-    let pixels = render_ids(&[mask_id], walk)?;
-    let grayscale = matches!(
-        walk.document.registry.get(mask_id),
-        Some(ObjectData::Image(_))
-    );
-    let mut coverage = vec![0u8; pixels.len() / 4];
-    for (slot, chunk) in coverage.iter_mut().zip(pixels.as_chunks::<4>().0) {
-        let (red, green, blue, alpha) = (chunk[0], chunk[1], chunk[2], chunk[3]);
-        *slot = if grayscale {
-            // A raster mask carries its coverage as a gray level in the
-            // color channels; the alpha carries the mask's own opacity.
-            // Read the level back out of the premultiplied pixels.
-            if alpha == 0 {
-                0
-            } else {
-                let level = (u32::from(red) + u32::from(green) + u32::from(blue)) / 3;
-                let restored = level * 255 + u32::from(alpha) / 2;
-                ((restored / u32::from(alpha)).min(255)) as u8
-            }
-        } else {
-            alpha
-        };
+    let canvas = walk.canvas;
+    let canvas_pixels = usize::from(canvas.0) * usize::from(canvas.1);
+    let Some(ObjectData::Image(image)) = walk.document.registry.get(mask_id) else {
+        let pixels = render_ids(&[mask_id], walk)?;
+        return Ok(shape_coverage(&pixels));
+    };
+    // Cloned so the registry borrow ends before `walk` is used mutably.
+    let image = image.clone();
+    let (extent_w, extent_h) = image.pixels;
+    if extent_w <= 0 || extent_h <= 0 {
+        // Nothing to sample: an empty extent covers nothing, exactly as
+        // a zero-sized assemble did at canvas resolution.
+        return Ok(vec![0; canvas_pixels]);
     }
-    Ok(coverage)
+    let Some(native) = native_mask_extent(extent_w, extent_h) else {
+        // Beyond the sampling ceiling: fall back to canvas-space
+        // rendering (the pre-#114 path), which clips the extent to the
+        // canvas and allocates nothing hostile.
+        let pixels = render_ids(&[mask_id], walk)?;
+        return Ok(gray_coverage(&pixels));
+    };
+    let coverage = native_mask_coverage(&image, native, walk)?;
+    Ok(place_coverage(&coverage, native, &image, canvas))
+}
+
+/// The native grid a raster mask samples on: its own extent when both
+/// sides fit the rasterizer's `u16` extent and the area fits
+/// [`MAX_MASK_NATIVE_PIXELS`], `None` when the caller must fall back to
+/// canvas-space sampling.
+fn native_mask_extent(extent_w: i64, extent_h: i64) -> Option<(u16, u16)> {
+    let width = usize::try_from(extent_w).ok()?;
+    let height = usize::try_from(extent_h).ok()?;
+    if width > usize::from(u16::MAX) || height > usize::from(u16::MAX) {
+        return None;
+    }
+    if width.checked_mul(height)? > MAX_MASK_NATIVE_PIXELS {
+        return None;
+    }
+    Some((width as u16, height as u16))
+}
+
+/// Renders a raster mask onto its own native grid and reads its
+/// coverage back — the same assemble → live-effect stack → paint
+/// pipeline [`render_image`] runs at canvas resolution, with the
+/// location zeroed so the buffer *is* the mask's extent.
+fn native_mask_coverage(
+    image: &doc::ImageObject,
+    native: (u16, u16),
+    walk: &mut Walk,
+) -> Result<Vec<u8>, ComposeError> {
+    let mut placed = image.clone();
+    placed.location = geom::Point::ZERO;
+    placed.offset = geom::Point::ZERO;
+    let mut offscreen = RenderContext::new(native.0, native.1);
+    render_image(walk.document, &placed, native, walk.cache, &mut offscreen)?;
+    let pixels = flush_offscreen(offscreen, native)?;
+    Ok(gray_coverage(&pixels))
+}
+
+/// Places a mask's native coverage onto the canvas-sized map at the
+/// mask's rounded location (`location + offset`, the same rounding
+/// `assemble_image` clips by); pixels outside the canvas or outside the
+/// mask's footprint contribute nothing — the region a mask does not
+/// cover stays uncovered.
+fn place_coverage(
+    coverage: &[u8],
+    native: (u16, u16),
+    image: &doc::ImageObject,
+    canvas: (u16, u16),
+) -> Vec<u8> {
+    let canvas_pixels = usize::from(canvas.0) * usize::from(canvas.1);
+    let mut out = vec![0u8; canvas_pixels];
+    // Document locations are untrusted f64; the casts saturate and the
+    // adds below are saturating, so a ±1e30 location lands outside the
+    // canvas and contributes nothing instead of wrapping.
+    let left = (image.location.x + image.offset.x).round() as i64;
+    let top = (image.location.y + image.offset.y).round() as i64;
+    for y in 0..i64::from(native.1) {
+        let canvas_y = top.saturating_add(y);
+        if !(0..i64::from(canvas.1)).contains(&canvas_y) {
+            continue;
+        }
+        for x in 0..i64::from(native.0) {
+            let canvas_x = left.saturating_add(x);
+            if !(0..i64::from(canvas.0)).contains(&canvas_x) {
+                continue;
+            }
+            let from = (y as usize * usize::from(native.0)) + x as usize;
+            let to = canvas_y as usize * usize::from(canvas.0) + canvas_x as usize;
+            out[to] = coverage[from];
+        }
+    }
+    out
+}
+
+/// The coverage each pixel of a rendered raster mask contributes: the
+/// gray level scaled by the mask's own opacity.
+///
+/// The buffer is premultiplied, so the average of the color channels
+/// *is* gray × opacity / 255 — the same coverage the engine's read
+/// path (`bitmap::assemble_rgba`) takes. An opaque mask reads its gray
+/// level exactly; a soft painted edge, a blur, or the image's own
+/// opacity fades the coverage instead of being divided back out (issue
+/// #114: a semi-transparent mask pixel used to contribute its full
+/// gray — soft edges rendered hard).
+fn gray_coverage(pixels: &[u8]) -> Vec<u8> {
+    pixels
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .map(|chunk| ((u32::from(chunk[0]) + u32::from(chunk[1]) + u32::from(chunk[2])) / 3) as u8)
+        .collect()
+}
+
+/// The coverage each pixel of a rendered shape mask contributes: the
+/// painted alpha.
+fn shape_coverage(pixels: &[u8]) -> Vec<u8> {
+    pixels
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .map(|chunk| chunk[3])
+        .collect()
 }
 
 /// Combines a level's coverage with the coverage below it.
@@ -1815,5 +1931,27 @@ mod tests {
     fn straight_alpha_unpremultiplies_partial_coverage() {
         // Half-alpha red: premultiplied (128, 0, 0, 128) → (255, 0, 0, 128).
         assert_eq!(straight_alpha(&[128, 0, 0, 128]), [255, 0, 0, 128]);
+    }
+
+    #[test]
+    fn native_mask_extent_accepts_ordinary_and_refuses_hostile_extents() {
+        // Ordinary masks sample at their own resolution.
+        assert_eq!(native_mask_extent(4, 4), Some((4, 4)));
+        // 8192² = 67,108,864 px — exactly at the cap, still native.
+        assert_eq!(native_mask_extent(8_192, 8_192), Some((8_192, 8_192)));
+        // One pixel past it.
+        assert_eq!(native_mask_extent(8_193, 8_192), None);
+        // One side past the rasterizer's u16 extent.
+        assert_eq!(native_mask_extent(65_536, 4), None);
+        // Area past the cap (12_000 × 6_000 = 72 MP) — a hostile
+        // `WPXi`/`HPXi` must not allocate a 288 MB buffer...
+        assert_eq!(native_mask_extent(12_000, 6_000), None);
+        // ...nor a u16×u16 extent 17 GB one.
+        assert_eq!(
+            native_mask_extent(i64::from(u16::MAX), i64::from(u16::MAX)),
+            None
+        );
+        // A negative extent never reaches the allocator.
+        assert_eq!(native_mask_extent(-1, 4), None);
     }
 }

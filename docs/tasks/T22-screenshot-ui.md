@@ -254,3 +254,57 @@ Full receipt, including the recipe and the per-region hue table:
 
 **Still open on 22.5:** the Main toolbar's contents (CS6-PARITY §A
 rows 54, 255, 257, 164).
+
+## Receipt — the mask stack section, 2026-11-19
+
+**Build.** This branch's tree at capture time (base `365c8bc4` plus
+the issue #114 changes — the capture is committed alongside them),
+`cargo build -p app -p app-cli`, debug profile.
+
+**Surface.** The native desktop shell under its own `Xvfb :95`
+(X11, 1280×800×24), captured from the app window with ImageMagick
+`import`. The frames are tracked as
+`docs/img/mask-stack-1280x800.png` (sha256 `1de945fa…837e`) and the
+dock crop `docs/img/mask-stack-panel.png` (sha256 `f354f152…7d27`).
+
+**Document.** A 640×400 flat `#f4f4f4` PNG imported with
+`firecraft-cli import`, then `firecraft-cli run-script mask-stack.jsf`
+queued `selection.selectAll`, `mask.add` (`"reveal all"`) and
+`mask.addLevel` (`"intersect"`). `firecraft-cli info` on the result
+reports `groups: 2, images: 3, live: 5` — the content image plus two
+mask images inside two mask groups, i.e. a genuine two-level stack
+rather than a hand-labelled panel.
+
+**Criterion — the section is styled like its neighbours.** OCR of the
+dock crop reads, top to bottom, `Mask stack`, `2 levels, numbered from
+the bottom`, `Mask 2 … intersect … remove … link`,
+`Mask 1 … add … remove … link`, `add level` — sitting between the
+`Mask` section above and `Filters` below. That is the Properties
+panel's house shape (separator, heading, fact readout, one row per
+level, foot), so the section no longer reads as unstyled beside the
+sections that carry CS6's own vocabulary. The rows are numbered from
+the bottom, matching CS6's mask numbering.
+
+**CS6 reference, and why there is no CS6 frame.** CS6 has no mask
+stack — one element mask per object — so there is no CS6 screenshot of
+this section to diff against; the evidence for the absence is the
+reference install's resource DLL, recorded in
+[T9](T9-mask-stack.md#authority) (the Modify ▸ Mask submenu carries
+`&Mask`, `&Reveal All`, `&Hide All`, `&Paste as Mask`, `&Group as
+Mask`, `&Disable Mask`, `&Delete Mask` and nothing naming a stack, a
+level, or a combine mode). The acceptance therefore compares the
+section against the CS6-owning sections beside it in the same panel —
+`Mask` and `Filters` — which is the comparison the issue asked for.
+
+**Measured, pre-existing, recorded rather than fixed here.**
+`ui.separator()` paints with `visuals.widgets.noninteractive.bg_stroke`,
+whose dark-theme default is `Color32::from_gray(60)` = `#3C3C3C`, and
+`apply_chrome_theme` sets `panel_fill` to the same `#3C3C3C` without
+overriding `bg_stroke`. A pixel scan of the dock column at 1280×800
+finds **no** non-background horizontal rule anywhere — so every
+separator in the app reads as spacing, not as a rule, and the mask
+stack section is indistinguishable from its neighbours in that
+respect. This is a global chrome property (it affects Align,
+Properties, Contents, Mask and Filters equally), not a mask-stack one,
+so fixing it belongs to a chrome acceptance of its own rather than
+being smuggled into #114.

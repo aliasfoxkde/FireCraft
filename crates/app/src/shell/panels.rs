@@ -1502,7 +1502,6 @@ impl Shell {
             self.document_properties(ui);
             return;
         };
-        self.mask_stack_panel(ui, id);
         let object = self.editor.document().registry.get(id).cloned();
         let effects = match object {
             Some(ObjectData::Path(path)) => {
@@ -1536,8 +1535,12 @@ impl Shell {
                 return;
             }
         };
-        // The element mask the selection carries, if any.
+        // The element mask the selection carries, if any, and its
+        // level stack — CS6 has one mask per object; the stack is
+        // FireCraft's extension, so it sits with the mask section it
+        // extends.
         self.mask_panel(ui, id);
+        self.mask_stack_panel(ui, id);
         // The live effect list: every kind that carries an `EFLv` spine.
         if let Some(effects) = effects {
             self.filter_panel(ui, id, &effects);
@@ -3584,21 +3587,29 @@ impl Shell {
         }
     }
 
-    /// The mask stack section of the Properties panel: the element
-    /// mask's levels, their state, and the way each level combines with
-    /// the coverage below it.
+    /// The mask stack section of the Properties panel: one row per
+    /// level — enable, operator, order, link — and a foot that adds
+    /// one.
     ///
-    /// A `FireCraft` extension (decision 0092): CS6 has one element mask
-    /// per object and no stack, so the level's mode defaults to the
-    /// union. The panel draws the section only when the selection
-    /// carries an element mask.
+    /// A `FireCraft` extension (decision 0092): CS6 has one element
+    /// mask per object and no stack. The section opens the way the
+    /// Mask section does (separator plus heading) and leads with a
+    /// fact readout, the Properties panel's house shape. It draws
+    /// nothing for a selection with no element mask, so it never
+    /// stands as an empty section beside the Mask section that only
+    /// renders for masked objects.
     pub(super) fn mask_stack_panel(&mut self, ui: &mut egui::Ui, id: doc::ObjectId) {
         let levels = engine::catalog::element_mask_stack(self.editor.document(), id);
         if levels.is_empty() {
             return;
         }
+        ui.separator();
         ui.heading("Mask stack");
         let count = levels.len();
+        ui.label(format!(
+            "{count} level{}, numbered from the bottom",
+            if count == 1 { "" } else { "s" }
+        ));
         for (index, level) in levels.iter().enumerate() {
             // The levels are listed top first; the mask numbers count
             // from the bottom, as CS6 numbers its masks.
