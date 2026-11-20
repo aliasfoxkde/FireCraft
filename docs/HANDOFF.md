@@ -404,17 +404,26 @@ the absolute repo path.
     `E0425: cannot find function 'menu_census' in module 'app::menus'`
     while the run's own commit carries **both** the definition
     (`crates/app/src/menus.rs`) and the call (`xtask/src/climb.rs`) —
-    so the tree was consistent and the *artifact* was not. The
-    mechanism is not yet identified (the pipeline declares no
-    `cache:` mount, the CI image bakes no target directory, and the
-    runner creates a fresh container for every workspace job), so the
-    owning component is **GitForge CI**, not this repository.
+    so the tree was consistent and the *artifact* was not.
+    **The mechanism is identified** (decision
+    [0122](decisions/0122-the-cargo-cache-is-scoped-per-job-not-per-commit.md)):
+    the pipeline's per-job `cache:` mount is scoped to the *job*, not
+    to the commit, so cargo can reuse another branch's `app` rlib. The
+    mitigation is in the tree — `scripts/ci_refresh_stale_crates.sh`
+    runs before any job compiles and refreshes only the crates whose
+    sources are newer than the cached copy. The last recurrence was
+    the `layers` job of run `5c64a539` (2026-11-16T15:05:32Z); the
+    mitigation landed in `702ad246` (2026-11-17T02:29Z) and the
+    store records **44 runs and 504 jobs with no recurrence since**.
+    The platform defect itself (the cache's scope) stays open with
+    the GitForge platform lane as its owner.
     **What to do:** do not read the red as a source defect and do not
     "fix" the call site; confirm the commit is self-consistent
     (`git grep '<symbol>' <sha> -- crates/app`), then re-trigger the
     run (an empty commit re-checks-out the tree and the job goes
-    green). Owner and the open question are recorded on the board
-    (`docs/TASKS.md`, CI/tooling lane).
+    green). If the mitigation's step is *absent* from the job's log,
+    the run predates the mitigation — that is a different situation
+    from a recurrence.
 - **Local gates before any push:** the full gate is
   `cargo run -p xtask -- ci` (fmt, clippy `-D warnings`, tests, layers,
   wasm, corpus, goldens, perf, fuzz-quick, parity, scorecard,

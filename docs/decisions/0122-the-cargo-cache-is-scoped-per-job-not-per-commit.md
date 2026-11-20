@@ -142,7 +142,16 @@ crates and refreshed nothing. The reference must be the fingerprint
 
 - A branch's CI verdict no longer depends on which other branch ran
   before it. The campaign branch is re-run on top of this step; its
-  `layers` job is the receipt.
+  `layers` job is the receipt. **Measured 2026-11-17**: the last
+  recurrence of this failure class was the `layers` job of run
+  `5c64a539` (2026-11-16T15:05:32Z), and this mitigation landed in
+  `702ad246` (2026-11-17T02:29Z). The GitForge job store records
+  **44 runs and 504 jobs** after that landing with **no recurrence**.
+  (A later `E0425` — `cannot find function 'stated_tag_names_version'
+  in this scope`, the `clippy-test` job of `c396b18a` — is a different
+  signature: a genuine source fault in the xtask manifest test, fixed
+  by `d1029347`. It is not this class and is not evidence against
+  this mitigation.)
 - The cost is bounded and paid only when the cache is actually
   contended: in the contended case the local crates are rebuilt, which
   is the price of a verdict that means something. Against the real
