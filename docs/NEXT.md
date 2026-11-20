@@ -455,8 +455,9 @@ evidence work, tracked outside that campaign.
   [0096](decisions/0096-animation-playback-clock.md)). Still open:
   state thumbnails, a document-level loop count, per-side onion
   opacity, screenshot acceptance.
-- **20.4 Mask stack UI** (M): add/remove/mode/link/move. **PARTIAL
-  2026-11-11**: the stack, its operators, and its fold landed. The
+- **20.4 Mask stack UI** (M): add/remove/mode/link/move. **LANDED
+  2026-11-11; the #114 follow-ups closed 2026-11-19** — the stack,
+  its operators, and its fold landed. The
   model holds a level's combine mode and persists it
   (`mask.setStackMode`, decisions [0092](decisions/0092-mask-stack-combine-mode.md)
   and [0093](decisions/0093-mask-stack-levels-and-folding.md)); the
@@ -465,11 +466,15 @@ evidence work, tracked outside that campaign.
   its enable flag, operator, link flag, reorder arrows and remove
   button, and can add a level; `mask.addLevel`/`mask.removeLevel`/
   `mask.moveLevel` are dispatched from that panel. The structural
-  commands undo byte-exactly. Still open: the screenshot acceptance
-  and the compositor's mask sampling resolution (a level's mask is
-  sampled at the canvas resolution, not the mask image's own);
-  ticket [T9](tasks/T9-mask-stack.md), follow-up
-  [#114](https://github.com/aliasfoxkde/FireCraft/issues/114). This
+  commands undo byte-exactly. Issue
+  [#114](https://github.com/aliasfoxkde/FireCraft/issues/114) closed
+  the two gaps that kept this `PARTIAL`: the compositor's mask
+  sampling resolution (a raster level's mask samples on its own
+  `WPXi`×`HPXi` grid — canvas-invariant; feather comes from the
+  artwork, gray × opacity, with no feather-radius control) and the
+  section's screenshot acceptance (a two-row frame, receipt in
+  [T22](tasks/T22-screenshot-ui.md#receipt--the-mask-stack-section-2026-11-19)).
+  Ticket [T9](tasks/T9-mask-stack.md). This
   is a FireCraft extension, not a CS6 parity claim.
 - **20.5 Multi-document tabs** (M): **LANDED 2026-11-07** — Open/New
   park the active document as a `DocTab`; Close promotes the newest
