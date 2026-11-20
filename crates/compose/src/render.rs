@@ -1336,11 +1336,11 @@ fn render_ids(ids: &[ObjectId], walk: &mut Walk) -> Result<Vec<u8>, ComposeError
 
 /// The native sampling ceiling for a raster mask, in pixels — `WPXi`/
 /// `HPXi` are hostile file input (AGENTS "Numbers are hostile"), and a
-/// mask claiming 60000×60000 on a 4×4 canvas must not allocate a
-/// 14 GB buffer. A mask beyond this ceiling (or beyond the rasterizer's
-/// `u16` extent) samples the way it did before issue #114's fix — at
-/// the canvas's resolution, correct but coarser for filtered masks —
-/// rather than failing a render that used to succeed.
+/// mask claiming a sixty-thousand-pixel side on a 4×4 canvas must not
+/// allocate a 14 GB buffer. A mask beyond this ceiling (or beyond the
+/// rasterizer's `u16` extent) samples the way it did before issue
+/// #114's fix — at the canvas's resolution, correct but coarser for
+/// filtered masks — rather than failing a render that used to succeed.
 const MAX_MASK_NATIVE_PIXELS: usize = 64 * 1024 * 1024;
 
 /// The coverage a mask child contributes.
