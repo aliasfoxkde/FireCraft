@@ -694,6 +694,30 @@ fn stage_web() -> Result<Vec<PathBuf>, String> {
             .map_err(|e| format!("stage {}: {e}", name.to_string_lossy()))?;
         staged.push(target);
     }
+    // Pre-compress .wasm and .js files with gzip so the web server can serve
+    // compressed versions. This is essential because the WASM binary (~92 MB)
+    // exceeds Cloudflare Pages' 25 MB per-object limit; gzip brings it under
+    // the threshold. The serving HTTP server (in serve.py or the web server)
+    // must also send the appropriate Content-Encoding header.
+    let compressible = &[".wasm", ".js", ".html"];
+    for path in &staged {
+        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+        if !compressible.contains(&ext) {
+            continue;
+        }
+        let gz = path.with_extension(format!("{ext}.gz"));
+        let mut encoder = flate2::write::GzEncoder::new(
+            std::fs::File::create(&gz).map_err(|e| format!("create {}: {e}", gz.display()))?,
+            flate2::Compression::best(),
+        );
+        if let Ok(bytes) = std::fs::read(path) {
+            encoder
+                .write_all(&bytes)
+                .map_err(|e| format!("compress {}: {e}", gz.display()))?;
+            encoder.finish().map_err(|e| format!("flush {}: {e}", gz.display()))?;
+            staged.push(gz);
+        }
+    }
 
     // Copy and stamp WebOS packaging files. appinfo.json MUST carry
     // the @VERSION@ placeholder: the v0.2.3→v0.2.4 window shipped a

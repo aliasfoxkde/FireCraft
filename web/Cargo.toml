@@ -6,7 +6,6 @@ rust-version = "1.95"
 license = "Apache-2.0"
 authors = ["FireCraft contributors"]
 repository = "https://github.com/aliasfoxkde/FireCraft"
-homepage = "https://github.com/aliasfoxkde/FireCraft"
 description = "FireCraft editor shell for the browser: the app shell under trunk, plus a postMessage bridge for WebOS embedding. Clean-room implementation."
 
 [[bin]]
