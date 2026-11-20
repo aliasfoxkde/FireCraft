@@ -4086,3 +4086,11 @@ narrowing `unsafe_code` for io (needs the FFI moved to its own crate).
 - D-series artifacts would need to be built on CI runners, then assembled locally
 
 
+
+## 2026-11-20 - Session 8
+### ci-cross.yml created
+Added .github/workflows/ci-cross.yml for per-commit native builds on macOS (aarch64) and Windows (x86_64-MSVC). Complements the Linux CI in ci.yml. Each runner builds and tests the native binary with `cargo build --release` + `cargo test --lib`.
+### WASM build served locally
+Built wasm32 binary and served via python3 HTTP server at http://192.168.1.201:8999/ for review. The existing build in web/dist/ was already available and serves correctly.
+### Deploy blocked
+Cloudflare Pages deploy blocked by 91.1MB WASM exceeding 25MB per-file limit. Alternative strategies (CDN hosting, split WASM, self-hosted) need maintainer decision.
