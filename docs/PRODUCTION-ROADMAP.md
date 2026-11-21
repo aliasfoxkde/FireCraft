@@ -109,12 +109,12 @@ The phases are ordered by **value per hour**: fix the measurement and deployment
 
 ## Phase C: Web Deployment Reconciliation (P0 — blocks production trust)
 
-**Goal:** the live deployment is the released artifact, not an orphan build. The WASM file exceeds Cloudflare Pages' 25 MB single-file limit (95.6 MB raw), so it is loaded from a CDN.
+**Goal:** the live deployment is the released artifact, not an orphan build. The WASM file (21.6 MB raw, ~4.5 MB gzipped) exceeds Cloudflare Pages' 25 MB single-file limit, so it is loaded from a CDN.
 
 ### C-1. WASM CDN deployment ✅ DONE (2026-11-20)
 
 - **What:** Upload the WASM to a GitHub Release; patch `index.html` + JS to reference the CDN URL at runtime.
-- **How:** `gh release create v0.2.6` → upload `firecraft-web-a259c7543f160268_bg.wasm` (95.6 MB) → patch `index.html` `init()` call with the release download URL → redeploy HTML/JS to Pages (~87 KB).
+- **How:** `gh release create v0.2.6` → upload `firecraft-web-a259c7543f160268_bg.wasm` (21.6 MB) → WASM served via proxy Worker (`firecraft-wasm-proxy.cyopsys.workers.dev`) with CORS headers → patch `index.html` `init()` call with the CDN URL → redeploy HTML/JS to Pages (~87 KB).
 - **Verification:** `head.firecraft-web.pages.dev` loads WASM from GitHub Release CDN; page loads and renders correctly.
 - **Note:** The wasm32 build with rustc 1.100.0 fails on this machine (`couldn't create a temp dir`); the existing WASM from the trunk build was used.
 
