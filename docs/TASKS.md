@@ -245,3 +245,61 @@ progress:
   this guard. Since app-cli::default = ["scripting"], the web build 
   was pulling scripting/boa_engine despite the app change. With the 
   fix, neither app nor app-cli pull scripting in the web build.
+
+## 2026-11-20: Production gap analysis (comprehensive audit)
+
+### 10 gaps identified and documented in docs/PRODUCTION-AUDIT-2026-11-20.md
+
+**G-1: CI toolchain mismatch** (BLOCKED)
+- CI uses rustc 1.99.1 which has the .rmeta version bug
+- rustc 1.100.0 works for wasm32 but fails native dashmap compilation
+- Fix: Update ci.yml to use rustc 1.100.0 for wasm32, keep 1.99.1 for native
+
+**G-2: Native workspace compilation fails on rustc 1.100.0**
+- dashmap fails due to std::cmp::Eq trait bound issues
+- Requires fix in rustc fork (external)
+
+**G-3: Live web deployment not v0.2.5**
+- Live bundle does not match published release bytes
+- Fix: Republish from canonical release bytes (requires deploy access)
+
+**G-4: Non-Linux release artifacts not verified**
+- Windows, macOS, AppImage, Flatpak, Android all NOT STARTED
+- Requires external build hosts (Windows/Mac/Flatpak SDK)
+
+**G-5: wasm32 gate excludes app/app-cli**
+- Only 11 pure crates validated for wasm32
+- If app/app-cli gain wasm-incompatible code it won't be caught
+- Mitigation: manually monitor for wasm32 compatibility
+
+**G-6: WASM 95 MB exceeds Cloudflare Pages 25 MB limit**
+- Raw: 95 MB, gzipped: 19.9 MB (under limit but needs Content-Encoding)
+- CDN loading strategy implemented in dist.rs
+
+**G-7: shell/mod.rs is 7,996-line god file**
+- 221 functions in one file, 13 submodules exist but mod.rs is not refactored
+- Requires manual extraction of logical modules
+
+**G-8: ~651 cast_possible_truncation warnings in native-only crates**
+- wasm32 pure crates have zero warnings (verified)
+- Native-only warnings blocked from verifying (rustc .rmeta bug)
+
+**G-9: No signing/provenance for released artifacts**
+- No Windows Authenticode, macOS Developer ID, or GPG credentials
+- Decision 0075 scope awaiting maintainer approval
+
+**G-10: Decision ID deduplication on main**
+- IDs 0094, 0096, 0101 each appear twice
+
+### Actionable next steps (prioritized)
+
+| Priority | Action | Blocked By |
+|---|---|---|
+| P0 | Update ci.yml to use rustc 1.100.0 for wasm32 | None — ready to implement |
+| P0 | Republish web from canonical release bytes | Deploy access |
+| P1 | Fix wasm32 gate for app-cli (--no-default-features) | None — ready to implement |
+| P1 | Dedup decision IDs 0094, 0096, 0101 | None — ready to implement |
+| P1 | Approve decision 0075 (release scope) | Maintainer |
+| P2 | Shell/mod.rs refactor | None — deferred |
+| P2 | Coverage floor ratchet | rustc fix (external) |
+| P2 | Cross-platform release verification | External build hosts |
