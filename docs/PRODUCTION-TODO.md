@@ -6,7 +6,13 @@
 
 ---
 
-## COMPLETED (2026-11-20)
+## COMPLETED (2026-11-21)
+
+### Merge to main
+- **PR #181:** https://github.com/aliasfoxkde/FireCraft/pull/181
+- **feat/wasm-cdn-deploy** merged into PR for main
+- 80 commits, 194 files changed
+- Awaiting maintainer merge
 
 ### WASM CDN + Pages Deployment ✅
  - Upload WASM to GitHub Release v0.2.6 (95.6 MB)
