@@ -154,10 +154,6 @@ pre-deploy bytes.
 | `index.html` (pre-injection) | `2617be68…` | `fb2a5140…` — different |
 | `appinfo.json` | `7d039c36…` | `7d039c36…` — **identical** |
 
-<!-- coderabbit-ai-generated:v1 -->
-
-<!-- coderabbit-ai-generated-section:v1:80cec6c38b55085d90003b5fad6dff9ca2922022c500d27f2f1ec3dafe246ad5 -->
-
 **Relationship: different artifact bytes; source relationship unknown
 unless established by a build receipt.** The shared `host.html` and
 `appinfo.json` show the two bundles carry the same WebOS shell files; the
@@ -169,9 +165,6 @@ is also *not* the CI-built bundle recorded in the audit (21,231,517 B,
 `cf1bec8315c7bfe5`): the live wasm differs from that by 140 B, so a
 **fifth** distinct wasm build of nominally the same 0.2.5 release now
 exists.
-
-<!-- /coderabbit-ai-generated:v1 -->
-### Decision
 
 Recorded as [decision 0088](../decisions/0088-web-deployment-source-of-truth.md).
 

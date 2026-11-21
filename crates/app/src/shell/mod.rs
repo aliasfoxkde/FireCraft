@@ -27,6 +27,9 @@ mod panels;
 mod panels_web;
 mod slice_editor;
 mod timeline;
+mod text_edit;
+mod file_operations;
+
 
 pub use optimize::OptimizeSettings;
 
@@ -259,72 +262,6 @@ pub struct Shell {
     /// position it opened at (the popup re-anchors there each frame,
     /// so a later pointer move does not drag it).
     pub(crate) context_menu: Option<Pos2>,
-    /// In-canvas text editing (20.1): the object being edited and the
-    /// live buffer. `Some` while the egui `TextEdit` overlay sits on the
-    /// text frame; commit writes `text.setText`, cancel (Esc or
-    /// switching tools) discards the buffer.
-    text_edit: Option<TextEditState>,
-    /// Filters ▸ Repeat Filter: the internal name of the last filter
-    /// applied from the Filters menu or the live-filters panel.
-    /// CS6 applies it to the current selection; with none applied
-    /// yet the row reports the CS6 "no filters to repeat" state.
-    last_filter: Option<&'static str>,
-    /// Window-menu panel visibility: names of right-dock panels the
-    /// user closed. Absent = shown (CS6 default is everything open).
-    panel_hidden: Vec<&'static str>,
-    /// The panels the user has moved out of the right stack, and the
-    /// dock each now lives in. Only *moved* panels are listed: an
-    /// unlisted panel is in CS6's default dock, so the saved layout
-    /// stays small and "not mentioned" keeps meaning "the default".
-    panel_homes: Vec<(&'static str, DockSide)>,
-    /// The tab groups: the panels that share one slot in a dock.
-    /// Empty for the default arrangement — a panel is on its own
-    /// until the user drops it on another panel's title.
-    panel_groups: Vec<panel_windows::PanelGroup>,
-    /// The panels' title rects, recorded each frame. They are the
-    /// drop targets that tab a panel with another one, so they are
-    /// frame-local: a rect from an earlier frame is a rect from a
-    /// layout that no longer exists.
-    panel_title_rects: Vec<(&'static str, egui::Rect)>,
-    /// The URL panel's edit-in-progress state — the object it edits
-    /// and the link/alt text being typed.
-    url_draft: Option<panels_web::UrlDraft>,
-    /// The Behaviors panel's chosen swap-image target (the slice's
-    /// name; `None` = not chosen yet).
-    swap_target: Option<String>,
-    /// The Find and Replace panel's query; `None` = not typed yet.
-    find_query: Option<String>,
-    /// The Find and Replace panel's replacement text.
-    find_replacement: Option<String>,
-    /// Window ▸ Hide Panels (Tab): all right-dock panels folded at
-    /// once, independent of per-panel visibility.
-    panels_hidden: bool,
-    /// Window ▸ Tools: the left tools dock is folded.
-    tools_hidden: bool,
-    /// Window ▸ Toolbars ▸ Main: the context options bar is hidden.
-    options_bar_hidden: bool,
-    /// The screen-mode control's cycle position (CS6's three view
-    /// modes: Standard, Full Screen with Menus, Full Screen). Display
-    /// state, not document state.
-    screen_mode: ScreenMode,
-    /// The last change stamp written by the persistence path: the web
-    /// persist sink and the desktop recovery sidecar share it, so the
-    /// debounce is one field. `None` until the first write, so an
-    /// untouched untitled document never seeds storage.
-    persisted: Option<(usize, usize, usize)>,
-    /// The live egui context, stashed each frame so code outside the
-    /// frame loop (the web bridge) can request a repaint after it
-    /// mutates the shell — without one, a bridge-loaded document sat
-    /// behind a stale untitled canvas until the next input event.
-    ctx: Option<egui::Context>,
-    /// Background document tabs (20.5). The active document lives in
-    /// the shell's own `editor`/`view`/`raster`/`doc_name`/`doc_path`
-    /// fields; switching swaps those with the parked tab's, so every
-    /// existing code path keeps operating on "the current document"
-    /// unchanged.
-    tabs: Vec<DocTab>,
-}
-
 /// One parked (background) document tab: the state that must survive
 /// switching away — the editing core, its view, the cached raster, and
 /// the file identity the tab strip and save path read.
@@ -335,20 +272,6 @@ struct DocTab {
     raster_scale: f64,
     doc_name: String,
     doc_path: Option<String>,
-}
-
-/// In-canvas text editing (20.1): the live editor state for one text
-/// object. `buffer` is what the overlay `TextEdit` shows; commit sends
-/// it through `text.setText` when it differs from `original`; cancel
-/// (Esc, or switching tools) drops it without touching the document.
-#[derive(Clone, Debug, PartialEq)]
-pub(crate) struct TextEditState {
-    /// The text object being edited.
-    pub(crate) id: doc::ObjectId,
-    /// The characters before editing started.
-    pub(crate) original: String,
-    /// The live edit buffer.
-    pub(crate) buffer: String,
 }
 
 /// A press-and-hold in progress on a tool-group leader: when it
