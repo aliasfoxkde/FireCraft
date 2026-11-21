@@ -14,7 +14,6 @@ path = "src/main.rs"
 
 [dependencies]
 app = { path = "../crates/app", default-features = false }
-app-cli = { path = "../crates/app-cli", default-features = false }
 base64 = "0.22"
 compose = { path = "../crates/compose" }
 eframe = { version = "0.36", default-features = false, features = [
