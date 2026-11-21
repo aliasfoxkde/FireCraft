@@ -714,7 +714,9 @@ fn stage_web() -> Result<Vec<PathBuf>, String> {
             encoder
                 .write_all(&bytes)
                 .map_err(|e| format!("compress {}: {e}", gz.display()))?;
-            encoder.finish().map_err(|e| format!("flush {}: {e}", gz.display()))?;
+            encoder
+                .finish()
+                .map_err(|e| format!("flush {}: {e}", gz.display()))?;
             staged.push(gz);
         }
     }

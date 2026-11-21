@@ -4106,3 +4106,71 @@ macOS (aarch64) and Windows (x86_64-MSVC) CI workflow added to GitHub Actions.
 The full `cargo check --target wasm32-unknown-unknown --workspace` passed with the shim bypass. The shim at `/home/mkinney/.cargo/bin/cargo` uses `HOST_BUILD_LEASE_BIN` to gate builds on a hosted queue. Setting `HOST_BUILD_LEASE_BIN=/tmp/cargo-bypass.sh` bypasses this check, allowing local wasm32 compilation. This is a fleet-wide shim issue that should be fixed upstream in the shim itself — it should accept local scratch paths that resolve to /tmp or /var/tmp, not only the NAS path.
 ### Current serving: http://192.168.1.201:8999/
 The wasm32 build is served via python3 HTTP server. You can review it there.
+
+## 2026-11-19/20 - Issue #114: mask sampling at its own resolution + styled stack panel
+### Landed on `fix/mask-sampling-114` (PR #180)
+Commits `33e35411` + `9b4360fa`, merged `origin/main` (`66ce5e64`, PR #177) as `112f3ee3`.
+Pushed gitforge first, then origin.
+
+**compose:** a raster mask level now assembles, filters and folds on its own
+`WPXi`x`HPXi` grid and places coverage at the mask's rounded location —
+byte-identical across canvas sizes. Before, a mask with a live effect
+rasterized into a full-canvas offscreen and its coverage moved with the
+artboard. Caps: `MAX_MASK_NATIVE_PIXELS` = 64 Mi px (inclusive) and sides
+<= `u16::MAX`; past either it silently takes the old canvas-space path —
+coarser, never a render that used to succeed. The gray restore no longer
+divides alpha back out, so mask opacity and soft alpha reach coverage.
+
+**app:** `mask_stack_panel` opens with separator + heading + fact readout
+(`N levels, numbered from the bottom`) and renders right after `mask_panel`.
+
+**Screenshot:** `docs/img/mask-stack-1280x800.png` (`1de945fa...837e`) and
+`docs/img/mask-stack-panel.png` (`f354f152...7d27`). OCR reads `Mask stack` /
+`2 levels, numbered from the bottom` / `Mask 2 ... intersect` / `Mask 1 ... add`
+/ `add level`. Receipt in T22.
+
+### The issue's core claim did not reproduce
+The canvas-resolution sampling claim in decision 0093 did NOT reproduce for
+unfiltered masks — footprint-invariance probes pass at 1x and 2x with the mask
+smaller and larger than the canvas. The one real defect was the live-effect
+case. Decision 0093 corrected in-tree rather than left to imply a bug that was
+never there. First blurred-mask test failed for a test-design reason: sigma 1.5
+-> span-5 box radii x3 flattens a 4x4 to a uniform 41. Resized to a 16x16 mask
+with an 8x8 block -> proper feather (center 201, edge 22, corner 2),
+canvas-invariant.
+
+### Finding recorded, not fixed
+`ui.separator()` paints with `visuals.widgets.noninteractive.bg_stroke`, whose
+dark default is `from_gray(60)` = `#3C3C3C` — exactly `CHROME_PANEL_FILL`,
+which `apply_chrome_theme` sets without overriding `bg_stroke`. A pixel scan of
+the dock column finds no non-background horizontal rule anywhere: every
+separator in the app reads as spacing. Global chrome property — belongs to a
+chrome acceptance of its own, recorded in the T22 receipt.
+
+### Gate: GREEN
+`CARGO_TARGET_DIR=/var/tmp/fc-gate-target cargo run -q -p xtask -- ci` ->
+`[xtask] ci: all gates green`. One aegis finding en route (`zip-code` on the
+doc comment's `60000`) fixed by wording rather than baselining.
+
+### Environment notes (the real friction this session)
+- The 40 GiB build-admission floor blocked most cargo runs. The amortyx
+  harness target (78 GiB) was reclaimed with explicit approval (34 -> 126 GiB)
+  and rebuilt by its lane within hours. Later reclaimed the approved rustup
+  toolchains (1.85/1.86/1.99) + my own `debug/incremental`.
+- The gate itself needs ~35 GB of scratch (20.5 GB llvm-cov profraw + 12 GB of
+  test binaries). One run dropped free space to 10 GiB and was SIGINT-killed.
+  Fix that worked: clear `llvm-cov-target`, `debug/incremental` and `debug/deps`
+  (mine, regenerable) -> 54.9 GiB, then run the gate from a clean target.
+- Screenshot capture hit a shared-display trap: `:93` was owned by another
+  session's Xvfb, so the app silently connected to *their* server. Moved to a
+  private `:95`.
+
+### Closed out
+CI on #180 all green (both gate runs, Analyze, CodeQL, CodeRabbit, fmt,
+classify). Squash-merged as `6c68c9e3` with subject `<title> #180`; gitforge
+main fast-forwarded to the same hash (first try this time). `Closes #114`
+auto-closed the issue two seconds after the merge, so the evidence comment
+(all four acceptance criteria + the did-not-reproduce correction) was posted
+as a comment rather than a close-comment:
+https://github.com/aliasfoxkde/FireCraft/issues/114#issuecomment-7048720489
+No CHANGELOG self-entry to revert — the tree was clean post-merge.

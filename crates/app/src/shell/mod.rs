@@ -979,6 +979,7 @@ impl Shell {
             }
             return;
         }
+        #[cfg(feature = "scripting")]
         let mut engine = match scripting::ScriptEngine::new(scripting::Limits::default()) {
             Ok(engine) => engine,
             Err(error) => {

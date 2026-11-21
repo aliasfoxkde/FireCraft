@@ -11,7 +11,6 @@
 /// All f64/i64 casts here are after .round() + .clamp() which bounds values
 /// within the target type's range; clippy cannot infer this.
 #[allow(clippy::cast_possible_truncation)]
-
 use crate::cache::EffectCache;
 use crate::convert::{abgr, blend_mode, to_bezpath};
 use crate::effects;

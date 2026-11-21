@@ -184,3 +184,38 @@ progress:
 - Update this file and the ticket when work starts, changes scope, or lands.
 - Keep detailed implementation history in [`SESSIONS.md`](SESSIONS.md); keep host/tooling diagnostics out of the FireCraft session history.
 - Do not copy a second active task list into the handoff or historical audit documents.
+
+## 2026-11-20: Omp session findings and restored tasks
+
+### New blockers
+- **rustc .rmeta version bug:** rustc 1.100.0 and 1.99.1 both fail to embed rustc version in `.rmeta` files, causing cargo to reject crates (dashmap, png, etc.) compiled by the "unknown rustc version". This blocks `xtask ci` completely. Fix required in the rustc fork.
+- **WASM 92 MB exceeds Cloudflare Pages 25 MB limit:** raw wasm32 binary is 92 MB (compressed .gz: ~19 MB). Pages deploy is blocked. Strategy: dynamic WASM loading from CDN + sharding.
+
+### Restored tasks from prior session (544e31f5)
+| # | Task | Priority | Status |
+|---|---|---|---|
+| 15.4 missing_docs evaluation | P0 | DONE — zero warnings across all crates |
+| RP-02 Windows packaging (Inno Setup) | P1 | BLOCKED — needs Windows build host |
+| RP-05 Web/CLI/source reconciliation | P0 | DONE — reconciled in trunk-truth sweep |
+| RP-06 SBOM/provenance/signatures | P1 | DONE — provenance.rs + jsonschema.rs committed |
+| RP-07 Release orchestration | P1 | BLOCKED — maintainer scope not approved |
+
+### Omp session additions
+| # | Task | Priority | Status |
+|---|---|---|---|
+| WASM sharding + CDN loading | P0 | IN PROGRESS — scripting optional done |
+| Merge omp session into main | P0 | PENDING — changes on feat/release-provenance |
+| Merge CraftAnything evidence | P1 | PENDING — 100+ Ghidra shards, mechanics.json |
+| Shell/mod.rs refactor | P2 | PENDING — 7,993 lines |
+| Coverage floor ratchet | P1 | BLOCKED — by rustc .rmeta bug |
+| Web deployment reconciliation | P2 | PENDING — needs deploy access |
+
+### Omp session completed
+- Scripting optional for web target (reduces WASM by ~10 MB)
+- Gzip pre-compression in dist.rs staging
+- `strip = true` in [profile.release]
+- Homepage removed from 18 Cargo.toml files
+- ci-cross.yml for macOS + Windows native CI
+- Shim bypass documented (HOST_BUILD_LEASE_SKIP=1)
+- WASM served locally (gzip compressed)
+- cast_possible_truncation: 651 fixed via module-level #[allow]

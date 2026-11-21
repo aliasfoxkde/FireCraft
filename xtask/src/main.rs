@@ -272,17 +272,12 @@ fn run_ci(full: Option<&str>, skip_fmt: bool) -> ExitCode {
             // passing on bare development environments where cargo-audit was
             // not installed yet.
             if !util::has_binary("cargo-audit") {
-                eprintln!(
-                    "[xtask] audit: cargo-audit not on PATH, skipping"
-                );
+                eprintln!("[xtask] audit: cargo-audit not on PATH, skipping");
                 return Ok(());
             }
             let out = util::run_and_capture("cargo-audit", &["audit"])?;
             if out.contains("vulnerabilities") || out.contains("unmaintained") {
-                Err(format!(
-                    "cargo audit found issues:\n{}",
-                    out
-                ))
+                Err(format!("cargo audit found issues:\n{}", out))
             } else {
                 Ok(())
             }
