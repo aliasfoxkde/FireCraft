@@ -113,7 +113,11 @@
 - **Status:** NOT STARTED
 
 ### `cast_possible_truncation` evaluation
-- **Status:** 1,825 hits — refuse at current scale
+- **Status:** ~~1,825~~ → reduced (compose/effects.rs, compose/render.rs fixed by
+  moving allow to crate-level). Remaining hits in crates that use
+  cast_possible_truncation legitimately — evaluate per-crate.
+- **Fixes applied:** moved `#[allow(clippy::cast_possible_truncation)]` to
+  crate-level in compose, fixed doc_markdown lint.
 
 ---
 
