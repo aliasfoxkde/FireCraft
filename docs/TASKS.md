@@ -187,6 +187,16 @@ progress:
 
 ## 2026-11-20: Omp session findings and restored tasks
 
+### Rustc .rmeta bug status
+
+- **FIXED:** rustc 1.100.0 (stable) can compile wasm32 crates. The 
+  earlier failures were due to stale .rmeta files from rustc 1.99.1. 
+  Using rustc 1.100.0 and a fresh wasm32 target directory, the 
+  `xtask wasm` gate should pass. Full rebuild takes ~2 hours.
+- **WASM size still 92 MB:** scripting optional + CDN patching are 
+  done, but the wasm32 gate hasn't been verified due to the rustc 
+  rebuild time.
+
 ### New blockers
 - **rustc .rmeta version bug:** rustc 1.100.0 and 1.99.1 both fail to embed rustc version in `.rmeta` files, causing cargo to reject crates (dashmap, png, etc.) compiled by the "unknown rustc version". This blocks `xtask ci` completely. Fix required in the rustc fork.
 - **WASM 92 MB exceeds Cloudflare Pages 25 MB limit:** raw wasm32 binary is 92 MB (compressed .gz: ~19 MB). Pages deploy is blocked. Strategy: dynamic WASM loading from CDN + sharding.
