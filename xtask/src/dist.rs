@@ -769,6 +769,7 @@ fn stage_web() -> Result<Vec<PathBuf>, String> {
     // the threshold. The serving HTTP server (in serve.py or the web server)
     // must also send the appropriate Content-Encoding header.
     let compressible = &[".wasm", ".js", ".html"];
+    let mut to_add = Vec::new();
     for path in &staged {
         let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
         if !compressible.contains(&ext) {
@@ -786,9 +787,10 @@ fn stage_web() -> Result<Vec<PathBuf>, String> {
             encoder
                 .finish()
                 .map_err(|e| format!("flush {}: {e}", gz.display()))?;
-            staged.push(gz);
+            to_add.push(gz);
         }
     }
+    staged.extend(to_add);
 
     // Copy and stamp WebOS packaging files. appinfo.json MUST carry
     // the @VERSION@ placeholder: the v0.2.3→v0.2.4 window shipped a
