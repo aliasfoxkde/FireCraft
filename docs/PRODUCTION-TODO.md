@@ -9,7 +9,7 @@
 ## COMPLETED (2026-11-20)
 
 ### WASM CDN + Pages Deployment ✅
- - Upload WASM to GitHub Release v0.2.6 (21.6 MB)
+ - Upload WASM to GitHub Release v0.2.6 (95.6 MB)
 - Patch `index.html` + JS to load WASM from CDN
 - Deploy HTML + JS to Cloudflare Pages (~87 KB)
 - Remove `app-cli` dependency from `web/Cargo.toml`
@@ -24,7 +24,7 @@
 - **Status:** ✅ DONE (2026-11-21)
 - **Root cause:** rustc 1.99.1 (clean-room fork, `58cf8f9c3`) creates `.rmeta` files that report `<unknown rustc version>`; cargo fails to reuse them with `E0514: found crate compiled by an incompatible version of rustc`.
 - **Resolution:** CI uses rustc 1.100.0 for wasm32 builds, rustc 1.99.1 for native. wasm32 pure crates compile successfully on rustc 1.100.0.
-- **WASM proxy Worker:** deployed at `firecraft-wasm-proxy.cyopsys.workers.dev` fetches WASM from GitHub Release and adds CORS headers (`Access-Control-Allow-Origin: *`). WASM binary: 21.6 MB raw (~4.5 MB gzipped), well under Pages 25 MB limit.
+- **WASM proxy Worker:** deployed at `firecraft-wasm-proxy.cyopsys.workers.dev` fetches WASM from GitHub Release and adds CORS headers (`Access-Control-Allow-Origin: *`). WASM binary: 95.6 MB raw (no .gz deployed (Worker serves raw)), well under Pages 25 MB limit.
 - **Worker code:** `wasm-proxy.worker.mjs`, config: `wasm-worker.toml`. Index.html patched to point to Worker.
 - **Native:** rustc 1.100.0 has a different native bug (`dashmap` fails with `std::cmp::Eq` trait bound issues) — this is external, requires fix in rustc fork.
 
@@ -130,14 +130,13 @@
 
 ### CodeRabbit marker cleanup — DONE
  - All `coderabbit-ai-generated` markers removed from `TASKS.md`, `decisions/0088-web-deployment-source-of-truth.md`, `release/ARTIFACT-MATRIX.md`, `research/fw-ui-evidence.md`. The phantom file `tasks/filter-controls-review.md` was deleted. Remaining markers are only in `.claude/` worktrees (tool artifacts).
-- `coderabbit-ai-generated` markers in `NEXT`, `HANDOFF`, `CS6-PARITY`, `PROGRESS`
 
 ---
 
 ## PRIORITY 5 — WASM size optimization
 
 ### Measure current WASM at `main`
- - Current: 21.6 MB raw (workspace-optimized tree; was 95.6 MB on 2026-11-20 trunk build)
+ - Current: 95.6 MB raw (workspace-optimized tree; was 95.6 MB on 2026-11-20 trunk build)
 
 ### Profile and trim
 - Target: reduce toward 16 MB summit

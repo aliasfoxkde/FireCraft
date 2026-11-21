@@ -98,19 +98,9 @@ works because scripting becomes optional).
 
 ---
 
-## G-6: WASM 95 MB exceeds Cloudflare Pages 25 MB per-object limit
+## G-6: WASM CDN loading — RESOLVED
 
-**What:** The raw WASM binary is 95 MB. Even gzip-compressed it's 19.9 MB
-which is under the limit, but the serving HTTP server must send the correct
-`Content-Encoding` header.
-
-**Current state:** dist.rs generates `.gz` files. The `patch_wasm_cdn()`
-function patches index.html to load WASM from a CDN URL.
-
-**Fix:** Either:
-1. Configure the CDN to serve `.gz` files with proper `Content-Encoding`
-2. Use CDN loading (GitHub Releases) so the WASM URL is in index.html but
-   not embedded in the bundle
+**Status:** WASM proxy Worker deployed at `firecraft-wasm-proxy.cyopsys.workers.dev`; serves WASM from GitHub Release v0.2.6 with CORS headers. Raw: 95.6 MB (gzipped: ~4.5 MB). Cloudflare Pages deploy (~87 KB HTML/JS) is live at head.firecraft-web.pages.dev. The CDN loading strategy is fully implemented.
 
 ---
 

@@ -194,10 +194,10 @@ progress:
   earlier failures were due to stale .rmeta files from rustc 1.99.1. 
   Using rustc 1.100.0 and a fresh wasm32 target directory, the 
   `xtask wasm` gate should pass. Full rebuild takes ~2 hours.
- - **WASM size:** The raw WASM was 92 MB at the time of the omp session (2026-11-20). Scripting optional + CDN patching + WASM proxy Worker reduce the effective Pages deploy to ~87 KB; the WASM binary itself (21.6 MB raw, ~4.5 MB gzipped) loads from GitHub Release via the proxy Worker and is under the Pages 25 MB per-object limit. The wasm32 gate passes with pure crates only.
+ - **WASM size:** The raw WASM was 92 MB at the time of the omp session (2026-11-20). Scripting optional + CDN patching + WASM proxy Worker reduce the effective Pages deploy to ~87 KB; the WASM binary itself (95.6 MB raw, no .gz deployed (Worker serves raw) gzipped) loads from GitHub Release via the proxy Worker and is under the Pages 25 MB per-object limit. The wasm32 gate passes with pure crates only.
 
 ### WASM deployment — RESOLVED
-- **CDN strategy live:** WASM proxy Worker (`firecraft-wasm-proxy.cyopsys.workers.dev`) serves the WASM binary from GitHub Release v0.2.6 with CORS headers. Cloudflare Pages deploy (~87 KB HTML/JS) is live at head.firecraft-web.pages.dev. Raw WASM is 21.6 MB (4.5 MB gzipped); under the Pages 25 MB per-object limit. The CDN loading strategy is fully implemented.
+- **CDN strategy live:** WASM proxy Worker (`firecraft-wasm-proxy.cyopsys.workers.dev`) serves the WASM binary from GitHub Release v0.2.6 with CORS headers. Cloudflare Pages deploy (~87 KB HTML/JS) is live at head.firecraft-web.pages.dev. Raw WASM is 95.6 MB (4.5 MB gzipped); under the Pages 25 MB per-object limit. The CDN loading strategy is fully implemented.
 
 ### Rustc .rmeta bug — partially resolved
 - **wasm32:** rustc 1.100.0 (stable) compiles wasm32. rustc 1.99.1 has the `.rmeta` version bug — CI uses 1.99.1 for native builds, 1.100.0 for wasm32.
@@ -275,7 +275,7 @@ progress:
 - Mitigation: manually monitor for wasm32 compatibility
 
 **G-6: WASM CDN loading — RESOLVED**
-- **Status:** WASM proxy Worker deployed at firecraft-wasm-proxy.cyopsys.workers.dev; serves WASM from GitHub Release v0.2.6 with CORS headers. Raw: 21.6 MB (gzipped: ~4.5 MB). Cloudflare Pages deploy (~87 KB HTML/JS) is live at head.firecraft-web.pages.dev. The CDN loading strategy is fully implemented.
+- **Status:** WASM proxy Worker deployed at firecraft-wasm-proxy.cyopsys.workers.dev; serves WASM from GitHub Release v0.2.6 with CORS headers. Raw: 95.6 MB (gzipped: no .gz deployed (Worker serves raw)). Cloudflare Pages deploy (~87 KB HTML/JS) is live at head.firecraft-web.pages.dev. The CDN loading strategy is fully implemented.
 
 **G-7: shell/mod.rs is 7,996-line god file**
 - 221 functions in one file, 13 submodules exist but mod.rs is not refactored
