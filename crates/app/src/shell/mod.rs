@@ -980,29 +980,31 @@ impl Shell {
             return;
         }
         #[cfg(feature = "scripting")]
-        let mut engine = match scripting::ScriptEngine::new(scripting::Limits::default()) {
-            Ok(engine) => engine,
-            Err(error) => {
-                self.status = format!("script engine: {error}");
-                return;
+        {
+            let mut engine = match scripting::ScriptEngine::new(scripting::Limits::default()) {
+                Ok(engine) => engine,
+                Err(error) => {
+                    self.status = format!("script engine: {error}");
+                    return;
+                }
+            };
+            // The run needs an `Rc`; the shell keeps its own — cloning is
+            // all it takes, no swap, and the shell's handle survives the
+            // script machinery's clones.
+            let fs_for_run = std::rc::Rc::clone(&self.fs);
+            let report = scripting::run_with_file_system(fs_for_run, || {
+                scripting::run_in_session(&mut self.editor.session, &mut engine, &name, &source)
+            });
+            if report.completed() {
+                self.status = format!("ran {name} ({} host call(s))", report.host_calls);
+                self.raster = None;
+                self.raster_scale = 1.0;
+            } else {
+                self.status = format!(
+                    "script {name} failed: {}",
+                    report.message.as_deref().unwrap_or("unknown error")
+                );
             }
-        };
-        // The run needs an `Rc`; the shell keeps its own — cloning is
-        // all it takes, no swap, and the shell's handle survives the
-        // script machinery's clones.
-        let fs_for_run = std::rc::Rc::clone(&self.fs);
-        let report = scripting::run_with_file_system(fs_for_run, || {
-            scripting::run_in_session(&mut self.editor.session, &mut engine, &name, &source)
-        });
-        if report.completed() {
-            self.status = format!("ran {name} ({} host call(s))", report.host_calls);
-            self.raster = None;
-            self.raster_scale = 1.0;
-        } else {
-            self.status = format!(
-                "script {name} failed: {}",
-                report.message.as_deref().unwrap_or("unknown error")
-            );
         }
     }
 
