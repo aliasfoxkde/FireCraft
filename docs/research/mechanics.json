@@ -1,0 +1,124 @@
+{
+  "version": 1,
+  "values": [
+    {
+      "name": "default canvas width",
+      "group": "canvas",
+      "value": 800,
+      "unit": "px",
+      "source": "function 0x402050"
+    },
+    {
+      "name": "default canvas height",
+      "group": "canvas",
+      "value": 600,
+      "unit": "px",
+      "source": "function 0x402050"
+    },
+    {
+      "name": "default document size offset",
+      "group": "canvas",
+      "value": 400,
+      "unit": "px",
+      "source": "function 0x401cb0"
+    },
+    {
+      "name": "default zoom",
+      "group": "zoom",
+      "value": 1.0,
+      "source": "function 0x9aa430"
+    },
+    {
+      "name": "minimum zoom",
+      "group": "zoom",
+      "value": 0.2,
+      "source": "function 0x9aa430"
+    },
+    {
+      "name": "maximum zoom",
+      "group": "zoom",
+      "value": 4.0,
+      "source": "function 0x9aa430"
+    },
+    {
+      "name": "zoom step factor",
+      "group": "zoom",
+      "value": 1.25,
+      "source": "function 0x9aa430"
+    },
+    {
+      "name": "undo history limit",
+      "group": "history",
+      "value": 20,
+      "source": "function 0x401cb0"
+    },
+    {
+      "name": "default brush size",
+      "group": "tools",
+      "value": 5,
+      "unit": "px",
+      "source": "function 0x402070"
+    },
+    {
+      "name": "default color model",
+      "group": "color",
+      "value": "HLS",
+      "source": "function 0x401cb0"
+    },
+    {
+      "name": "default fill color",
+      "group": "color",
+      "value": "0xFFFFFFFF",
+      "source": "function 0x401cb0"
+    },
+    {
+      "name": "default stroke color",
+      "group": "color",
+      "value": "0xFF000000",
+      "source": "function 0x401cb0"
+    },
+    {
+      "name": "default export format",
+      "group": "export",
+      "value": "PNG",
+      "source": "function 0x402060"
+    },
+    {
+      "name": "default export resolution",
+      "group": "export",
+      "value": 72,
+      "unit": "dpi",
+      "source": "function 0x402060"
+    },
+    {
+      "name": "export PNG quality",
+      "group": "export",
+      "value": 255,
+      "source": "function 0x402060"
+    },
+    {
+      "name": "swatch count",
+      "group": "palette",
+      "value": 288,
+      "source": "function 0xb75d00"
+    },
+    {
+      "name": "swatch grid columns",
+      "group": "palette",
+      "value": 24,
+      "source": "function 0xb75d00"
+    },
+    {
+      "name": "swatch grid rows",
+      "group": "palette",
+      "value": 12,
+      "source": "function 0xb75d00"
+    },
+    {
+      "name": "timeline frame label format",
+      "group": "timeline",
+      "value": "Frame# N of M",
+      "source": "function 0x6f2ccd0"
+    }
+  ]
+}
