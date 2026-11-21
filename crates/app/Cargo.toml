@@ -13,7 +13,7 @@ name = "firecraft"
 path = "src/main.rs"
 
 [dependencies]
-app-cli = { path = "../app-cli" }
+app-cli = { path = "../app-cli", optional = true }
 color = { path = "../color" }
 compose = { path = "../compose" }
 doc = { path = "../doc" }
@@ -40,6 +40,8 @@ scripting = { path = "../scripting", optional = true }
 
 [features]
 default = ["scripting"]
+
+native = ["app-cli"]
 
 [dev-dependencies]
 # The test-side mirror of eframe's own persistence encoding (its
