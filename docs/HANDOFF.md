@@ -26,8 +26,8 @@
   CI and deployment receipts.
 - **Engine and parity:** 257 registered commands; the CS6 DOM matrix is
   268 carried / 3 partial / 0 missing of 356 verbs. The latest
-  shell-reachability measurement is 249/257 = 96.89% (2026-11-14, after
-  #143); the one-way floor was deliberately re-blessed to 96.89% in
+  shell-reachability measurement is 257/257 = 100% (2026-11-16, after
+  #150); the floor was re-blessed to 100% and is rising-only
   the wave-closeout. These measures answer different questions: DOM verbs,
   shell-bound commands, and complete end-user UI/workflow parity must
   not be conflated.
