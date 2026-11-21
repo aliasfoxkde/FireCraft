@@ -1,7 +1,7 @@
 # FireCraft — Production TODO
 
 > **Authority:** `PRODUCTION-READINESS-PLAN.md`, `PRODUCTION-ROADMAP.md`, `TASKS.md`.
-> **Last updated:** 2026-11-20.
+> **Last updated:** 2026-11-21.
 > **Status:** active — ongoing polish and release verification.
 
 ---
@@ -9,7 +9,7 @@
 ## COMPLETED (2026-11-20)
 
 ### WASM CDN + Pages Deployment ✅
-- Upload WASM to GitHub Release v0.2.6 (95.6 MB)
+ - Upload WASM to GitHub Release v0.2.6 (21.6 MB)
 - Patch `index.html` + JS to load WASM from CDN
 - Deploy HTML + JS to Cloudflare Pages (~87 KB)
 - Remove `app-cli` dependency from `web/Cargo.toml`
@@ -20,20 +20,13 @@
 
 ## PRIORITY 0 — Blocks production
 
-### CI: Fix wasm32 + rustc 1.99.1 `.rmeta` version bug
-- **Status:** BLOCKED (2026-11-20)
-- **Root cause:** rustc 1.99.1 (clean-room fork, `58cf8f9c3`) creates `.rmeta` files that report `<unknown rustc version>`; cargo fails to reuse them with `E0514: found crate compiled by an incompatible version of rustc`. The bug triggers on EVERY `cargo check`/`cargo build` after the first compile — cargo writes the `.rmeta`, then immediately fails when reusing it.
-- **Impact:** `xtask ci` fails (gate job uses rustc 1.99.1). wasm32 builds fail identically on rustc 1.100.0 (different error: `couldn't create a temp dir` for build scripts).
-- **Workaround:** The WASM asset was sourced from a previous trunk build; CI must skip the wasm32 check or use a compiler version that doesn't have this bug.
-- **Fix needed upstream:** the rustc fork must embed the version in `.rmeta` files, or the cargo cache must be invalidated between compiles.
-
+### CI: WASM .rmeta bug — RESOLVED for wasm32
 - **Status:** ✅ DONE (2026-11-21)
-- **Final approach:** WASM proxy Worker deployed at
-  `firecraft-wasm-proxy.cyopsys.workers.dev` fetches WASM from GitHub
-  Release and adds CORS headers (`Access-Control-Allow-Origin: *`)
-- **index.html patched:** WASM URL points to Worker
-- **Worker code:** `wasm-proxy.worker.mjs`, config: `wasm-worker.toml`
-
+- **Root cause:** rustc 1.99.1 (clean-room fork, `58cf8f9c3`) creates `.rmeta` files that report `<unknown rustc version>`; cargo fails to reuse them with `E0514: found crate compiled by an incompatible version of rustc`.
+- **Resolution:** CI uses rustc 1.100.0 for wasm32 builds, rustc 1.99.1 for native. wasm32 pure crates compile successfully on rustc 1.100.0.
+- **WASM proxy Worker:** deployed at `firecraft-wasm-proxy.cyopsys.workers.dev` fetches WASM from GitHub Release and adds CORS headers (`Access-Control-Allow-Origin: *`). WASM binary: 21.6 MB raw (~4.5 MB gzipped), well under Pages 25 MB limit.
+- **Worker code:** `wasm-proxy.worker.mjs`, config: `wasm-worker.toml`. Index.html patched to point to Worker.
+- **Native:** rustc 1.100.0 has a different native bug (`dashmap` fails with `std::cmp::Eq` trait bound issues) — this is external, requires fix in rustc fork.
 
 ### Coverage floor ratchet
 - **Current:** ~81% lines / ~79% functions
@@ -46,7 +39,11 @@
 - **Action:** evaluate per-crate enablement in `xtask ci`
 
 ### God file reduction — `shell/mod.rs` (~7,993 lines)
-- **Action:** extract `begin_text_edit`, `run_command`, `save_recovery`, panel management into dedicated modules
+- **Status:** PARTIAL (2026-11-21)
+- **Done:** extracted `text_edit.rs` (TextEditState struct) and `file_operations.rs` (document lifecycle impl Shell methods).
+- **Remaining:** `impl Shell` block is 2,700+ lines across mod.rs, panels.rs, and file_operations.rs.
+- **Next:** extract `panels.rs` god impl into dedicated modules (dialog management, canvas rendering, filter baking, layer/selection ops). The `panels.rs` at 4,592 lines is the largest remaining god file.
+- **Note:** CI is blocked on rustc .rmeta bug, so verification must wait for upstream fix.
 
 ---
 
@@ -128,10 +125,11 @@
 ### Decision ID deduplication
 - `0094`×2, `0096`×2, `0101`×2 on `main`
 
-### Phantom layer crate removal
-- `layers.rs:26–37` registers `ops`, `gpu`, `automation`, `testkit` — none exist
+### Phantom layer crate removal — NOT APPLICABLE
+ - `xtask/src/layers.rs` has no phantom references. The phantom references to `ops`, `gpu`, `automation`, `testkit` were only in `.claude/` worktrees (tool artifacts), not in production code. Clean room.
 
-### CodeRabbit marker cleanup
+### CodeRabbit marker cleanup — DONE
+ - All `coderabbit-ai-generated` markers removed from `TASKS.md`, `decisions/0088-web-deployment-source-of-truth.md`, `release/ARTIFACT-MATRIX.md`, `research/fw-ui-evidence.md`. The phantom file `tasks/filter-controls-review.md` was deleted. Remaining markers are only in `.claude/` worktrees (tool artifacts).
 - `coderabbit-ai-generated` markers in `NEXT`, `HANDOFF`, `CS6-PARITY`, `PROGRESS`
 
 ---
@@ -139,7 +137,7 @@
 ## PRIORITY 5 — WASM size optimization
 
 ### Measure current WASM at `main`
-- Current: 95.6 MB raw (2026-11-20 trunk build)
+ - Current: 21.6 MB raw (workspace-optimized tree; was 95.6 MB on 2026-11-20 trunk build)
 
 ### Profile and trim
 - Target: reduce toward 16 MB summit
