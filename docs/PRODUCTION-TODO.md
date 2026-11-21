@@ -20,11 +20,13 @@
 
 ## PRIORITY 0 — Blocks production
 
-### CI: Fix wasm32 gate
-- **Status:** BLOCKED
-- **Issue:** `xtask ci` gate job uses rustc 1.99.1; coverage check on rustc 1.99.1 has an `.rmeta` version bug that prevents wasm32 from compiling. rustc 1.100.0 fails wasm32 builds (`couldn't create a temp dir`).
-- **Fix needed:** either (a) install rustc 1.100.0 as an additional CI toolchain and run wasm32 only on it, or (b) skip wasm32 in `xtask ci` and gate it separately.
-- **Status:** NOT STARTED
+### CI: Fix wasm32 + rustc 1.99.1 `.rmeta` version bug
+- **Status:** BLOCKED (2026-11-20)
+- **Root cause:** rustc 1.99.1 (clean-room fork, `58cf8f9c3`) creates `.rmeta` files that report `<unknown rustc version>`; cargo fails to reuse them with `E0514: found crate compiled by an incompatible version of rustc`. The bug triggers on EVERY `cargo check`/`cargo build` after the first compile — cargo writes the `.rmeta`, then immediately fails when reusing it.
+- **Impact:** `xtask ci` fails (gate job uses rustc 1.99.1). wasm32 builds fail identically on rustc 1.100.0 (different error: `couldn't create a temp dir` for build scripts).
+- **Workaround:** The WASM asset was sourced from a previous trunk build; CI must skip the wasm32 check or use a compiler version that doesn't have this bug.
+- **Fix needed upstream:** the rustc fork must embed the version in `.rmeta` files, or the cargo cache must be invalidated between compiles.
+
 
 ### Coverage floor ratchet
 - **Current:** ~81% lines / ~79% functions
