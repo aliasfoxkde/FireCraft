@@ -13,7 +13,10 @@ name = "firecraft-cli"
 path = "src/main.rs"
 
 [features]
-default = ["scripting"]
+# The native CLI needs scripting; the wasm32 build does not.
+# Native targets include it; wasm builds explicitly disable it.
+default = ["native"]
+native = ["scripting"]
 # Native-only automation surface (PLANNING §7.4/§7.5): `run-script` and
 # the MCP `firecraft.runScript` tool link the scripting engine. The
 # wasm build drops them with --no-default-features — the web shell
