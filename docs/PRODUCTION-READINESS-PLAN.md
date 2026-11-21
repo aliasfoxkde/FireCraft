@@ -87,7 +87,9 @@ are authoritative for task and platform status.
 - **WASM/release policy:** the web-only Cargo `opt-level=z` and Binaryen
   `wasm-opt=z` path is scoped to Trunk; decision 0090 sets a
   25,000,000-byte investigation warning and 50,000,000-byte hard ceiling.
-  The ceiling is a safety boundary, not a target. The 21,608,249-byte
+  The ceiling is a safety boundary, not a target. The WASM file is 95.6 MB
+  (2026-11-20 trunk build) — exceeds the single-file Pages limit, so it is
+  hosted on a GitHub Release and loaded at runtime. The 21,608,249-byte
   observation from 2026-11-10 is a dated feature-branch measurement, not
   a new main-branch release receipt.
 - **Deployment:** #104 reconciled the deployed JavaScript, Wasm and

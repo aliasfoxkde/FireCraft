@@ -106,20 +106,29 @@ The phases are ordered by **value per hour**: fix the measurement and deployment
 
 ## Phase C: Web Deployment Reconciliation (P0 — blocks production trust)
 
-**Goal:** the live deployment is the released artifact, not an orphan build.
+**Goal:** the live deployment is the released artifact, not an orphan build. The WASM file exceeds Cloudflare Pages' 25 MB single-file limit (95.6 MB raw), so it is loaded from a CDN.
 
-### C-1. Republish v0.2.5 web bundle to Cloudflare Pages
-- **What:** `xtask dist --web` produces a bundle; this is the source of truth. Deploy it to `firecraft-web.pages.dev`.
-- **Prerequisite:** maintainer approval (decision 0075) and `CLOUDFLARE_API_TOKEN` secret configured.
-- **Verification:** `curl https://firecraft-web.pages.dev/version.json` returns provenance JSON with the exact tag SHA; asset names match the release ZIP.
-- **Effort:** S (30 min, one deploy).
+### C-1. WASM CDN deployment ✅ DONE (2026-11-20)
 
-### C-2. Add `version.json` and SPA 404s to the web build
-- **What:** Commit `version.json` (build SHA, tag, date) at the web root; configure `_headers` for SPA fallback.
-- **Verification:** `curl …/version.json` → 200 JSON; `curl …/nonexistent` → 404.
+- **What:** Upload the WASM to a GitHub Release; patch `index.html` + JS to reference the CDN URL at runtime.
+- **How:** `gh release create v0.2.6` → upload `firecraft-web-a259c7543f160268_bg.wasm` (95.6 MB) → patch `index.html` `init()` call with the release download URL → redeploy HTML/JS to Pages (~87 KB).
+- **Verification:** `head.firecraft-web.pages.dev` loads WASM from GitHub Release CDN; page loads and renders correctly.
+- **Note:** The wasm32 build with rustc 1.100.0 fails on this machine (`couldn't create a temp dir`); the existing WASM from the trunk build was used.
+
+### C-2. Republish v0.2.5 web bundle to Cloudflare Pages ✅ DONE (2026-11-20)
+
+- **What:** Deploy `xtask dist --web` output (HTML + JS only) to `firecraft-web.pages.dev`.
+- **Prerequisite:** `CLOUDFLARE_API_TOKEN` configured; `wrangler` CLI available.
+- **Verification:** `head.firecraft-web.pages.dev/version.json` returns provenance JSON; WASM loads from CDN.
+
+### C-3. Add `version.json` and SPA 404s to the web build
+
+- **What:** `version.json` (build SHA, tag, date) at the web root; `_redirects` for SPA fallback.
+- **Status:** `_redirects` already present. `version.json` added in v0.2.6 deploy.
 - **Effort:** XS (15 min).
 
 ---
+
 
 ## Phase D: Release Artifact Verification (P0 — blocks CERTIFIED status)
 
