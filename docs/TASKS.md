@@ -219,3 +219,16 @@ progress:
 - Shim bypass documented (HOST_BUILD_LEASE_SKIP=1)
 - WASM served locally (gzip compressed)
 - cast_possible_truncation: 651 fixed via module-level #[allow]
+
+### Omp session follow-up (2026-11-20)
+- **Scripting cfg guard completeness:** all scripting:: references in 
+  app/shell/mod.rs run_script_file() were wrapped in a single 
+  `#[cfg(feature = "scripting")]` block, ensuring the .jsf scripting
+  path is fully excluded when scripting is disabled. Previously only 
+  the engine creation was guarded; the run/report/status lines were 
+  unconditionally present and would fail to compile without scripting.
+- **app-cli default-features=false for web build:** the web target 
+  already had app with default-features=false, but app-cli was missing 
+  this guard. Since app-cli::default = ["scripting"], the web build 
+  was pulling scripting/boa_engine despite the app change. With the 
+  fix, neither app nor app-cli pull scripting in the web build.
