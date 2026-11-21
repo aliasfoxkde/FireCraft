@@ -1,3 +1,20 @@
+## 2026-11-20 — WASM CDN deployment + Pages reconciliation
+
+- **WASM CDN:** the WASM file (95.6 MB) exceeds Cloudflare Pages' 25 MB limit.
+  Solution: upload WASM to GitHub Release v0.2.6, patch `index.html` to load
+  WASM from CDN at runtime, deploy HTML + JS (~87 KB) to Pages.
+- **Deployed:** `head.firecraft-web.pages.dev` loads WASM from GitHub Release CDN.
+- **v0.2.6 release:** created on GitHub with WASM asset. Live page returns
+  `version.json` with provenance.
+- **Cargo.toml:** removed `app-cli` dependency from `web/Cargo.toml` (not used
+  in web build; was pulled in as workspace member).
+- **rustc wasm32:** rustc 1.100.0 fails wasm32 builds (`couldn't create a temp
+  dir` for build scripts). rustc 1.99.1 works for individual crates. The
+  existing WASM from trunk build was used as a source asset.
+- **docs updated:** PRODUCTION-ROADMAP.md, TASKS.md, PRODUCTION-READINESS-PLAN.md
+  all reflect WASM CDN + Pages state.
+- **PR:** `feat/wasm-cdn-deploy` pushed to both remotes.
+
 # FireCraft devlog
 
 Untracked handoff journal. One entry per work session: what landed,
