@@ -1,3 +1,19 @@
+## 2026-11-21 — WASM proxy Worker + CORS fix
+
+- **Root cause:** GitHub Release downloads don't include CORS headers,
+  so browsers block WASM fetch from Pages (`No 'Access-Control-Allow-Origin'`)
+- **Solution:** Deploy a Cloudflare Worker (`firecraft-wasm-proxy`) that
+  fetches WASM from GitHub Release and adds CORS headers
+- **Worker:** `wasm-proxy.worker.mjs` — served at
+  `firecraft-wasm-proxy.cyopsys.workers.dev`
+- **CORS headers:** `Access-Control-Allow-Origin: *`, `GET` method,
+  `Content-Length` exposed, 1-year cache
+- **index.html patched:** WASM URL points to Worker
+- **Deployed:** WASM loads correctly at `feat-wasm-cdn-deploy.firecraft-web.pages.dev`
+- **WASM:** 95.6 MB raw (GitHub Release asset); gz was stale error response
+- **Remaining CI blocker:** rustc 1.99.1 `.rmeta` version bug prevents
+  `xtask ci` from passing
+
 ## 2026-11-20 — WASM CDN deployment + Pages reconciliation
 
 - **WASM CDN:** the WASM file (95.6 MB) exceeds Cloudflare Pages' 25 MB limit.

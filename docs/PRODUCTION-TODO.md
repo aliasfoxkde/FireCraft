@@ -27,6 +27,13 @@
 - **Workaround:** The WASM asset was sourced from a previous trunk build; CI must skip the wasm32 check or use a compiler version that doesn't have this bug.
 - **Fix needed upstream:** the rustc fork must embed the version in `.rmeta` files, or the cargo cache must be invalidated between compiles.
 
+- **Status:** ✅ DONE (2026-11-21)
+- **Final approach:** WASM proxy Worker deployed at
+  `firecraft-wasm-proxy.cyopsys.workers.dev` fetches WASM from GitHub
+  Release and adds CORS headers (`Access-Control-Allow-Origin: *`)
+- **index.html patched:** WASM URL points to Worker
+- **Worker code:** `wasm-proxy.worker.mjs`, config: `wasm-worker.toml`
+
 
 ### Coverage floor ratchet
 - **Current:** ~81% lines / ~79% functions
