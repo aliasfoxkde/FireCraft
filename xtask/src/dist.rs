@@ -660,6 +660,68 @@ fn build_timestamp() -> String {
     )
 }
 
+/// Patches the staging directory to load the WASM binary from a CDN URL
+/// if `WASM_CDN_URL` is set in the environment.
+///
+/// The trunk build auto-injects the local WASM path into `index.html` and
+/// the JS glue. When a CDN URL is provided, this function replaces those
+/// references so the browser fetches the WASM from the CDN instead.
+fn patch_wasm_cdn(out: &std::path::Path) -> Result<(), String> {
+    let Some(wasm_url) = std::env::var("WASM_CDN_URL").ok() else {
+        return Ok(());
+    };
+
+    // Find the local WASM filename in the staging directory
+    let local_wasm_name = out
+        .read_dir()
+        .map_err(|e| format!("read staging dir: {e}"))?
+        .filter_map(|e| e.ok())
+        .filter(|e| {
+            e.path()
+                .extension()
+                .and_then(|ext| ext.to_str())
+                .is_some_and(|ext| ext == "wasm")
+        })
+        .next()
+        .ok_or_else(|| "no .wasm file found in staging directory".to_owned())?
+        .file_name()
+        .to_string_lossy()
+        .into_owned();
+
+    // The local WASM path in HTML/JS starts with "/"
+    let local_ref = format!("/{}", local_wasm_name);
+
+    // Patch index.html
+    {
+        let html_path = out.join("index.html");
+        let html =
+            std::fs::read_to_string(&html_path).map_err(|e| format!("read index.html: {e}"))?;
+        let patched_html = html.replace(&local_ref, &wasm_url);
+        std::fs::write(&html_path, patched_html)
+            .map_err(|e| format!("write patched index.html: {e}"))?;
+    }
+
+    // Patch JS glue files
+    for entry in std::fs::read_dir(out).map_err(|e| format!("read dir: {e}"))? {
+        let entry = entry.map_err(|e| format!("read entry: {e}"))?;
+        let path = entry.path();
+        let ext = path.extension().and_then(|e| e.to_str());
+        if ext == Some("js") {
+            let js = std::fs::read_to_string(&path)
+                .map_err(|e| format!("read {}: {e}", path.display()))?;
+            let patched_js = js.replace(&local_ref, &wasm_url);
+            std::fs::write(&path, patched_js)
+                .map_err(|e| format!("write patched {}: {e}", path.display()))?;
+        }
+    }
+
+    eprintln!(
+        "[xtask] wasm CDN: replaced local path {} with {}",
+        local_ref, wasm_url
+    );
+    Ok(())
+}
+
 /// Builds the release bundle with trunk and stages a fresh copy under
 /// `dist/web/` — the staging directory starts empty every run, so a
 /// dist artifact can never carry leftovers from an older tree.
@@ -694,6 +756,13 @@ fn stage_web() -> Result<Vec<PathBuf>, String> {
             .map_err(|e| format!("stage {}: {e}", name.to_string_lossy()))?;
         staged.push(target);
     }
+    // If WASM_CDN_URL is set, patch the staging files to load the WASM
+    // from the CDN instead of a local path. This is the primary strategy
+    // for reducing the inlined WASM size when deploying to Cloudflare Pages.
+    if let Err(e) = patch_wasm_cdn(&out) {
+        eprintln!("[xtask] warning: wasm CDN patch failed: {e}");
+    }
+
     // Pre-compress .wasm and .js files with gzip so the web server can serve
     // compressed versions. This is essential because the WASM binary (~92 MB)
     // exceeds Cloudflare Pages' 25 MB per-object limit; gzip brings it under
