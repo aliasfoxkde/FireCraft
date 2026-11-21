@@ -228,7 +228,7 @@ progress:
 - ci-cross.yml for macOS + Windows native CI
 - Shim bypass documented (HOST_BUILD_LEASE_SKIP=1)
 - WASM served locally (gzip compressed)
-- cast_possible_truncation: 651 fixed via module-level #[allow]
+- cast_possible_truncation: ~651 fixed via module-level #[allow] in compose/effects.rs + compose/render.rs. wasm32 pure crates have zero truncation warnings; remaining ~651 are in native-only app/app-cli crates (blocked from verifying by rustc .rmeta bug)
 
 ### Omp session follow-up (2026-11-20)
 - **Scripting cfg guard completeness:** all scripting:: references in 
