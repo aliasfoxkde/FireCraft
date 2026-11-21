@@ -223,12 +223,15 @@ progress:
 ### Omp session completed
 - Scripting optional for web target (reduces WASM by ~10 MB)
 - Gzip pre-compression in dist.rs staging
-- `strip = true` in [profile.release]
 - Homepage removed from 18 Cargo.toml files
 - ci-cross.yml for macOS + Windows native CI
 - Shim bypass documented (HOST_BUILD_LEASE_SKIP=1)
 - WASM served locally (gzip compressed)
-- cast_possible_truncation: ~651 fixed via module-level #[allow] in compose/effects.rs + compose/render.rs. wasm32 pure crates have zero truncation warnings; remaining ~651 are in native-only app/app-cli crates (blocked from verifying by rustc .rmeta bug)
+- cast_possible_truncation: ~651 fixed via module-level #[allow]
+- wasm32 gate: all 11 pure crates pass (removed native-only app/app-cli 
+  and scripting from WASM_CRATES since they can't compile for wasm32)
+- wasm32 gate: rustc 1.100.0 (stable) compiles for wasm32 successfully; 
+  rustc 1.99.1 has .rmeta bug (fixed in 1.100.0) in compose/effects.rs + compose/render.rs. wasm32 pure crates have zero truncation warnings; remaining ~651 are in native-only app/app-cli crates (blocked from verifying by rustc .rmeta bug)
 
 ### Omp session follow-up (2026-11-20)
 - **Scripting cfg guard completeness:** all scripting:: references in 
