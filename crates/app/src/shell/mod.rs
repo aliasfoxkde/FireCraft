@@ -29,7 +29,7 @@ mod slice_editor;
 mod timeline;
 mod text_edit;
 mod file_operations;
-
+mod recovery;
 
 pub use optimize::OptimizeSettings;
 
@@ -262,6 +262,72 @@ pub struct Shell {
     /// position it opened at (the popup re-anchors there each frame,
     /// so a later pointer move does not drag it).
     pub(crate) context_menu: Option<Pos2>,
+    /// In-canvas text editing (20.1): the object being edited and the
+    /// live buffer. `Some` while the egui `TextEdit` overlay sits on the
+    /// text frame; commit writes `text.setText`, cancel (Esc or
+    /// switching tools) discards the buffer.
+    text_edit: Option<TextEditState>,
+    /// Filters ▸ Repeat Filter: the internal name of the last filter
+    /// applied from the Filters menu or the live-filters panel.
+    /// CS6 applies it to the current selection; with none applied
+    /// yet the row reports the CS6 "no filters to repeat" state.
+    last_filter: Option<&'static str>,
+    /// Window-menu panel visibility: names of right-dock panels the
+    /// user closed. Absent = shown (CS6 default is everything open).
+    panel_hidden: Vec<&'static str>,
+    /// The panels the user has moved out of the right stack, and the
+    /// dock each now lives in. Only *moved* panels are listed: an
+    /// unlisted panel is in CS6's default dock, so the saved layout
+    /// stays small and "not mentioned" keeps meaning "the default".
+    panel_homes: Vec<(&'static str, DockSide)>,
+    /// The tab groups: the panels that share one slot in a dock.
+    /// Empty for the default arrangement — a panel is on its own
+    /// until the user drops it on another panel's title.
+    panel_groups: Vec<panel_windows::PanelGroup>,
+    /// The panels' title rects, recorded each frame. They are the
+    /// drop targets that tab a panel with another one, so they are
+    /// frame-local: a rect from an earlier frame is a rect from a
+    /// layout that no longer exists.
+    panel_title_rects: Vec<(&'static str, egui::Rect)>,
+    /// The URL panel's edit-in-progress state — the object it edits
+    /// and the link/alt text being typed.
+    url_draft: Option<panels_web::UrlDraft>,
+    /// The Behaviors panel's chosen swap-image target (the slice's
+    /// name; `None` = not chosen yet).
+    swap_target: Option<String>,
+    /// The Find and Replace panel's query; `None` = not typed yet.
+    find_query: Option<String>,
+    /// The Find and Replace panel's replacement text.
+    find_replacement: Option<String>,
+    /// Window ▸ Hide Panels (Tab): all right-dock panels folded at
+    /// once, independent of per-panel visibility.
+    panels_hidden: bool,
+    /// Window ▸ Tools: the left tools dock is folded.
+    tools_hidden: bool,
+    /// Window ▸ Toolbars ▸ Main: the context options bar is hidden.
+    options_bar_hidden: bool,
+    /// The screen-mode control's cycle position (CS6's three view
+    /// modes: Standard, Full Screen with Menus, Full Screen). Display
+    /// state, not document state.
+    screen_mode: ScreenMode,
+    /// The last change stamp written by the persistence path: the web
+    /// persist sink and the desktop recovery sidecar share it, so the
+    /// debounce is one field. `None` until the first write, so an
+    /// untouched untitled document never seeds storage.
+    persisted: Option<(usize, usize, usize)>,
+    /// The live egui context, stashed each frame so code outside the
+    /// frame loop (the web bridge) can request a repaint after it
+    /// mutates the shell — without one, a bridge-loaded document sat
+    /// behind a stale untitled canvas until the next input event.
+    ctx: Option<egui::Context>,
+    /// Background document tabs (20.5). The active document lives in
+    /// the shell's own `editor`/`view`/`raster`/`doc_name`/`doc_path`
+    /// fields; switching swaps those with the parked tab's, so every
+    /// existing code path keeps operating on "the current document"
+    /// unchanged.
+    tabs: Vec<DocTab>,
+}
+
 /// One parked (background) document tab: the state that must survive
 /// switching away — the editing core, its view, the cached raster, and
 /// the file identity the tab strip and save path read.
@@ -272,6 +338,20 @@ struct DocTab {
     raster_scale: f64,
     doc_name: String,
     doc_path: Option<String>,
+}
+
+/// In-canvas text editing (20.1): the live editor state for one text
+/// object. `buffer` is what the overlay `TextEdit` shows; commit sends
+/// it through `text.setText` when it differs from `original`; cancel
+/// (Esc, or switching tools) drops it without touching the document.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct TextEditState {
+    /// The text object being edited.
+    pub(crate) id: doc::ObjectId,
+    /// The characters before editing started.
+    pub(crate) original: String,
+    /// The live edit buffer.
+    pub(crate) buffer: String,
 }
 
 /// A press-and-hold in progress on a tool-group leader: when it
@@ -733,133 +813,10 @@ impl Shell {
     /// a mutual exchange with the parked slot. The transient
     /// `Editor::untitled()` placeholders exist only between the two
     /// `replace`s and are both overwritten before the call returns.
-    fn activate_tab(&mut self, index: usize) {
-        if index >= self.tabs.len() {
-            return;
-        }
-        let active = DocTab {
-            editor: std::mem::replace(&mut self.editor, Editor::untitled()),
-            view: self.view,
-            raster: self.raster.take(),
-            raster_scale: self.raster_scale,
-            doc_name: std::mem::take(&mut self.doc_name),
-            doc_path: self.doc_path.take(),
-        };
-        let parked = std::mem::replace(
-            &mut self.tabs[index],
-            DocTab {
-                editor: active.editor,
-                view: active.view,
-                raster: active.raster,
-                raster_scale: active.raster_scale,
-                doc_name: active.doc_name,
-                doc_path: active.doc_path,
-            },
-        );
-        self.editor = parked.editor;
-        self.view = parked.view;
-        self.raster = parked.raster;
-        self.raster_scale = parked.raster_scale;
-        self.doc_name = parked.doc_name;
-        self.doc_path = parked.doc_path;
-        self.status = format!("switched to {}", self.doc_name);
-    }
 
     /// File → Open through the injected traits. A Fireworks PNG
     /// opens as a document; any other supported raster opens as a
     /// document sized to the image — one door, no guessing.
-    fn open_document(&mut self) {
-        let Some(path) = self.dialogs.open_path(
-            "Open document",
-            &[
-                ("FireCraft document".to_owned(), vec!["png".to_owned()]),
-                (
-                    "Images".to_owned(),
-                    vec![
-                        "png".to_owned(),
-                        "jpg".to_owned(),
-                        "jpeg".to_owned(),
-                        "gif".to_owned(),
-                        "bmp".to_owned(),
-                        "tif".to_owned(),
-                        "tiff".to_owned(),
-                        "webp".to_owned(),
-                    ],
-                ),
-            ],
-        ) else {
-            return;
-        };
-        let bytes = match self.fs.read_file(&path).map_err(|e| e.to_string()) {
-            Ok(bytes) => bytes,
-            Err(error) => {
-                self.status = format!("open failed: {error}");
-                return;
-            }
-        };
-        match Editor::open(&bytes) {
-            Ok(editor) => {
-                self.status = format!("opened {path}");
-                // Park the previous document rather than dropping it
-                // (20.5 multi-document tabs).
-                let previous = DocTab {
-                    editor: std::mem::replace(&mut self.editor, editor),
-                    view: self.view,
-                    raster: self.raster.take(),
-                    raster_scale: self.raster_scale,
-                    doc_name: std::mem::take(&mut self.doc_name),
-                    doc_path: self.doc_path.take(),
-                };
-                self.tabs.push(previous);
-                self.raster = None;
-                self.raster_scale = 1.0;
-                self.view = View::default();
-                self.doc_path = Some(path.clone());
-                self.doc_name = std::path::Path::new(&path)
-                    .file_name()
-                    .map_or_else(|| path.clone(), |name| name.to_string_lossy().into_owned());
-            }
-            Err(document_error) => {
-                // Not a Fireworks PNG — try a plain raster. A raster
-                // opens as its own document, sized to the image, which
-                // is what CS6 does with a JPEG.
-                let name = std::path::Path::new(&path)
-                    .file_name()
-                    .map_or_else(|| path.clone(), |name| name.to_string_lossy().into_owned());
-                // `open_raster_document` overwrites the active
-                // editor, so park the previous document first and
-                // restore it if the decode fails.
-                let previous = DocTab {
-                    editor: std::mem::replace(&mut self.editor, Editor::untitled()),
-                    view: self.view,
-                    raster: self.raster.take(),
-                    raster_scale: self.raster_scale,
-                    doc_name: std::mem::take(&mut self.doc_name),
-                    doc_path: self.doc_path.take(),
-                };
-                match self.open_raster_document(&bytes, &name) {
-                    Ok(()) => {
-                        self.tabs.push(previous);
-                        self.status = format!("opened {path} as an image");
-                        self.raster = None;
-                        self.raster_scale = 1.0;
-                        self.view = View::default();
-                        self.doc_name = name;
-                        self.doc_path = Some(path.clone());
-                    }
-                    Err(_) => {
-                        self.editor = previous.editor;
-                        self.view = previous.view;
-                        self.raster = previous.raster;
-                        self.raster_scale = previous.raster_scale;
-                        self.doc_name = previous.doc_name;
-                        self.doc_path = previous.doc_path;
-                        self.status = format!("open failed: {document_error}");
-                    }
-                }
-            }
-        }
-    }
 
     /// File → Save through the injected traits.
     /// Help ▸ Manage Extensions / Commands ▸ Run Script: pick a
@@ -870,107 +827,18 @@ impl Shell {
     /// automation formats). A script that throws or hits a limit, or
     /// a journal that refuses, leaves the document untouched and
     /// reports the failure on the status line.
-    fn run_script_file(&mut self) {
-        let Some(path) = self.dialogs.open_path(
-            "Run script",
-            &[
-                ("FireCraft script".to_owned(), vec!["jsf".to_owned()]),
-                ("FireCraft steps".to_owned(), vec!["fwsteps".to_owned()]),
-            ],
-        ) else {
-            return;
-        };
-        let source = match self.fs.read_file(&path) {
-            Ok(bytes) => String::from_utf8_lossy(&bytes).into_owned(),
-            Err(error) => {
-                self.status = format!("script read failed: {error}");
-                return;
-            }
-        };
-        let name = std::path::Path::new(&path)
-            .file_name()
-            .map_or_else(|| path.clone(), |n| n.to_string_lossy().into_owned());
-        if path.ends_with(".fwsteps") {
-            match self.editor.replay_steps(&source) {
-                Ok(()) => {
-                    let rows = self.editor.session.journal_len();
-                    self.status = format!("ran steps {name} ({rows} journal row(s))");
-                    self.raster = None;
-                    self.raster_scale = 1.0;
-                }
-                Err(error) => self.status = format!("steps {name} failed: {error}"),
-            }
-            return;
-        }
-        #[cfg(feature = "scripting")]
-        {
-            let mut engine = match scripting::ScriptEngine::new(scripting::Limits::default()) {
-                Ok(engine) => engine,
-                Err(error) => {
-                    self.status = format!("script engine: {error}");
-                    return;
-                }
-            };
-            // The run needs an `Rc`; the shell keeps its own — cloning is
-            // all it takes, no swap, and the shell's handle survives the
-            // script machinery's clones.
-            let fs_for_run = std::rc::Rc::clone(&self.fs);
-            let report = scripting::run_with_file_system(fs_for_run, || {
-                scripting::run_in_session(&mut self.editor.session, &mut engine, &name, &source)
-            });
-            if report.completed() {
-                self.status = format!("ran {name} ({} host call(s))", report.host_calls);
-                self.raster = None;
-                self.raster_scale = 1.0;
-            } else {
-                self.status = format!(
-                    "script {name} failed: {}",
-                    report.message.as_deref().unwrap_or("unknown error")
-                );
-            }
-        }
-    }
 
     /// The Commands/Help extension surface. Today the manager *is*
     /// the script runner: pick and execute a `.jsf`. CS6's broader
     /// extension manager (install/uninstall packages) is recorded as
     /// a gap, not silently absent.
-    fn open_extension_manager(&mut self) {
-        self.run_script_file();
-    }
 
     /// File ▸ File Info: the document's facts on one line — name,
     /// pages, layers, objects, canvas.
-    fn file_info_summary(&self) -> String {
-        let document = self.editor.session.document();
-        let pages = document.pages.len();
-        let layers: usize = document
-            .pages
-            .iter()
-            .map(|page| page.layers.layers.len())
-            .sum();
-        let objects = document.registry.len();
-        let canvas = &document.pages[self.editor.page].info.canvas;
-        format!(
-            "{} — {pages} page(s), {layers} layer(s), {objects} object(s), canvas {}×{}",
-            self.doc_name, canvas.width, canvas.height
-        )
-    }
 
     /// File ▸ Send to E-mail ▸ Fireworks PNG (format)…: the PNG
     /// format facts of the live document — the canvas the format
     /// stores, its color depth, and the object count it carries.
-    fn png_format_summary(&self) -> String {
-        let document = self.editor.session.document();
-        let canvas = &document.pages[self.editor.page].info.canvas;
-        format!(
-            "Fireworks PNG — {}×{} px, 32-bit RGBA, {} object(s); e-mail delivery is not \
-             available in this build",
-            canvas.width,
-            canvas.height,
-            document.registry.len()
-        )
-    }
 
     /// File ▸ Preview in Browser: export the document to PNG file(s)
     /// and open them in the system browser. Saved documents write next
@@ -978,251 +846,36 @@ impl Shell {
     /// secondary-browser row opens the same default handler — CS6's
     /// per-browser configuration is not kept in this build (the Set
     /// Browser rows say so).
-    fn preview_in_browser(&mut self, secondary: bool, all_pages: bool) {
-        let _ = secondary;
-        let dialog = crate::shell::dialogs::ExportDialog::default();
-        let document = self.editor.session.document().clone();
-        let page_count = if all_pages { document.pages.len() } else { 1 };
-        let base = self.doc_path.as_ref().map_or_else(
-            || std::env::temp_dir().join("firecraft-preview"),
-            |path| {
-                let mut stem = std::path::PathBuf::from(path);
-                stem.set_extension("");
-                stem
-            },
-        );
-        let mut opened = 0usize;
-        let mut failed = false;
-        for page in 0..page_count {
-            let mut export_document = document.clone();
-            if let Some(target) = export_document.pages.get_mut(page) {
-                target.export = Some(Self::dialog_options(&dialog));
-            }
-            let name = if page_count == 1 {
-                format!("{}.png", base.display())
-            } else {
-                format!("{}-page{}.png", base.display(), page + 1)
-            };
-            let flags = Self::dialog_flags(&dialog);
-            match app_cli::ops::export_raster(&export_document, &name, &flags) {
-                Ok(bytes) => {
-                    if std::fs::write(&name, &bytes).is_ok()
-                        && self.dialogs.open_url(&format!("file://{name}"))
-                    {
-                        opened += 1;
-                    } else {
-                        failed = true;
-                    }
-                }
-                Err(error) => {
-                    self.status = format!("preview export failed: {error}");
-                    return;
-                }
-            }
-        }
-        self.status = if failed {
-            format!("exported {opened} preview(s); the browser could not be opened")
-        } else {
-            format!("exported and opened {opened} preview(s) in the browser")
-        };
-    }
 
     /// File ▸ Revert: reload the document from the file it was last
     /// saved to, discarding the in-memory edits.
-    fn revert_document(&mut self) {
-        let Some(path) = self.doc_path.clone() else {
-            self.status = "revert needs a document saved to a file".to_owned();
-            return;
-        };
-        // CS6 prompts before discarding unsaved edits; refuse rather
-        // than silently dropping work.
-        if self.editor.session.is_dirty() {
-            self.status = "document has unsaved changes — save before reverting".to_owned();
-            return;
-        }
-        let bytes = match self.fs.read_file(&path).map_err(|error| error.to_string()) {
-            Ok(bytes) => bytes,
-            Err(error) => {
-                self.status = format!("revert failed: {error}");
-                return;
-            }
-        };
-        match Editor::open(&bytes) {
-            Ok(editor) => {
-                self.editor = editor;
-                self.view = View::default();
-                self.raster = None;
-                self.raster_scale = 1.0;
-                self.status = format!("reverted to {path}");
-            }
-            Err(error) => self.status = format!("revert failed: {error}"),
-        }
-    }
 
-    fn save_document(&mut self) {
-        let Some(path) = self.dialogs.save_path(
-            "Save document",
-            "untitled.fw.png",
-            &[("FireCraft document".to_owned(), vec!["png".to_owned()])],
-        ) else {
-            return;
-        };
-        match self.editor.save() {
-            Ok(bytes) => match self.fs.write_file(&path, &bytes) {
-                Ok(()) => {
-                    self.editor.session.mark_clean();
-                    #[cfg(not(target_arch = "wasm32"))]
-                    self.clear_recovery();
-                    self.doc_path = Some(path.clone());
-                    self.doc_name = std::path::Path::new(&path)
-                        .file_name()
-                        .map_or_else(|| path.clone(), |name| name.to_string_lossy().into_owned());
-                    self.status = format!("saved {path} ({} bytes)", bytes.len());
-                }
-                Err(error) => self.status = format!("save failed: {error}"),
-            },
-            Err(error) => self.status = format!("save failed: {error}"),
-        }
-    }
 
     /// Applies through the editor and reports failures on the status
     /// line — the one idiom every menu/panel action shares. Returns
     /// whether the command was accepted.
-    fn run_command(&mut self, name: &str, payload: serde_json::Value) -> bool {
-        match self.editor.apply(name, payload) {
-            Ok(()) => true,
-            Err(error) => {
-                self.status = format!("{name} failed: {error}");
-                false
-            }
-        }
-    }
 
     /// Begin in-canvas editing of the text object under `id` (20.1):
     /// snapshot its characters and open the overlay. Re-opening on the
     /// same object keeps the live buffer (a click back into the edit
     /// must not wipe what was typed).
-    pub(crate) fn begin_text_edit(&mut self, id: doc::ObjectId) {
-        if self.text_edit.as_ref().is_some_and(|edit| edit.id == id) {
-            return;
-        }
-        let original = match self.editor.document().registry.get(id) {
-            Some(doc::ObjectData::Text(text)) => text
-                .runs
-                .iter()
-                .map(|run| run.text.as_str())
-                .collect::<String>(),
-            _ => return,
-        };
-        self.text_edit = Some(TextEditState {
-            id,
-            buffer: original.clone(),
-            original,
-        });
-    }
 
     /// Commit the text-edit overlay: `text.setText` with the buffer
     /// when it changed; then the session closes the editor either way.
-    pub(crate) fn commit_text_edit(&mut self) {
-        let Some(edit) = self.text_edit.take() else {
-            return;
-        };
-        if edit.buffer == edit.original {
-            return;
-        }
-        if !self.run_command(
-            "text.setText",
-            serde_json::json!({ "id": edit.id, "text": edit.buffer }),
-        ) {
-            self.status = "text edit failed".to_owned();
-        }
-    }
 
     /// Cancel the text-edit overlay without touching the document.
-    pub(crate) fn cancel_text_edit(&mut self) {
-        self.text_edit = None;
-    }
 
     /// History → Save Steps…: the session journal written as a
     /// `.fwsteps` command file (JSON lines) through the injected
     /// traits. The file replays through [`Session::reopen`] — the same
     /// path the CLI's `apply` verb drives — so a saved command is not
     /// an export but the session's own restart record.
-    fn save_steps(&mut self) {
-        let Some(path) = self.dialogs.save_path(
-            "Save Steps As Command",
-            "steps.fwsteps",
-            &[("FireCraft steps".to_owned(), vec!["fwsteps".to_owned()])],
-        ) else {
-            return;
-        };
-        let text = self.editor.steps_text();
-        match self.fs.write_file(&path, text.as_bytes()) {
-            Ok(()) => {
-                self.status = format!(
-                    "saved steps {path} ({} rows)",
-                    self.editor.session.journal_len()
-                );
-            }
-            Err(error) => self.status = format!("save steps failed: {error}"),
-        }
-    }
 
     /// History → Replay…: pick a `.fwsteps` file, then the base
     /// document it replays onto (the File → Open flow — a steps file
     /// is a journal prefix, so it needs the pre-steps document). The
     /// replayed session replaces the current one, undo history
     /// included.
-    fn replay_steps(&mut self) {
-        let steps_filters = [("FireCraft steps".to_owned(), vec!["fwsteps".to_owned()])];
-        let Some(steps_path) = self.dialogs.open_path("Replay steps", &steps_filters) else {
-            return;
-        };
-        let steps = match self
-            .fs
-            .read_file(&steps_path)
-            .map_err(|error| error.to_string())
-            .and_then(|bytes| String::from_utf8(bytes).map_err(|error| error.to_string()))
-        {
-            Ok(text) => text,
-            Err(error) => {
-                self.status = format!("replay failed: {error}");
-                return;
-            }
-        };
-        let doc_filters = [("FireCraft document".to_owned(), vec!["png".to_owned()])];
-        let Some(doc_path) = self
-            .dialogs
-            .open_path("Base document for replay", &doc_filters)
-        else {
-            return;
-        };
-        let replayed = self
-            .fs
-            .read_file(&doc_path)
-            .map_err(|e| e.to_string())
-            .and_then(|bytes| {
-                Editor::open(&bytes)
-                    .map_err(|e| e.to_string())
-                    .and_then(|mut editor| {
-                        editor
-                            .replay_steps(&steps)
-                            .map(|()| editor)
-                            .map_err(|e| e.to_string())
-                    })
-            });
-        match replayed {
-            Ok(editor) => {
-                let rows = editor.session.journal_len();
-                self.editor = editor;
-                self.view = View::default();
-                self.raster = None;
-                self.raster_scale = 1.0;
-                self.status = format!("replayed {steps_path} onto {doc_path} ({rows} rows)");
-            }
-            Err(error) => self.status = format!("replay failed: {error}"),
-        }
-    }
 
     /// The CS6 menu bar: ten menus rendered from the [`crate::menus`]
     /// table. Items whose action is [`menus::Action::Inert`] render
@@ -2690,22 +2343,6 @@ impl Shell {
     /// `cmd_EditImageObject`): a selected text object opens the
     /// in-canvas text overlay; anything else reports that the kind has
     /// no editor in this build.
-    fn edit_text_selection(&mut self) {
-        let Some(id) = self.editor.selection else {
-            self.status = "select a text object to edit it".to_owned();
-            return;
-        };
-        let is_text = matches!(
-            self.editor.session.document().registry.get(id),
-            Some(doc::ObjectData::Text(_))
-        );
-        if is_text {
-            self.begin_text_edit(id);
-            self.status = "editing text".to_owned();
-        } else {
-            self.status = "the selected kind has no editor in this build".to_owned();
-        }
-    }
 
     /// Edit ▸ Insert ▸ Hotspot / slice rows / New Button…: the target
     /// rect is the selection's bounds (canvas center when nothing is
@@ -2982,19 +2619,10 @@ impl Shell {
     /// The default recovery sidecar path: `FIRECRAFT_RECOVERY` when
     /// set, else the platform temp dir. Called once, at construction.
     #[cfg(not(target_arch = "wasm32"))]
-    fn default_recovery_path() -> std::path::PathBuf {
-        if let Ok(path) = std::env::var("FIRECRAFT_RECOVERY") {
-            return std::path::PathBuf::from(path);
-        }
-        std::env::temp_dir().join("firecraft-autorecover.fwsteps")
-    }
 
     /// The recovery sidecar path as a `&str` for the injected
     /// [`engine::platform::FileSystem`].
     #[cfg(not(target_arch = "wasm32"))]
-    fn recovery_path_str(&self) -> String {
-        self.recovery_path.to_string_lossy().into_owned()
-    }
 
     /// Periodic journal snapshot to the recovery sidecar (desktop;
     /// the web build persists the whole document through the browser
@@ -3004,108 +2632,26 @@ impl Shell {
     /// first steps must not resurrect a discarded recovery file, and
     /// a cleared journal must not outlive its session.
     #[cfg(not(target_arch = "wasm32"))]
-    fn recovery_tick(&mut self) {
-        let stamp = self.stamp();
-        if self.persisted == Some(stamp) {
-            return;
-        }
-        let path = self.recovery_path_str();
-        let outcome = if self.editor.session.journal_len() == 0 {
-            if self.fs.exists(&path) {
-                self.fs.remove_file(&path)
-            } else {
-                Ok(())
-            }
-        } else {
-            self.fs
-                .write_file(&path, self.editor.steps_text().as_bytes())
-        };
-        if outcome.is_ok() {
-            self.persisted = Some(stamp);
-        }
-    }
 
     /// Removes the recovery sidecar after a clean save or File ▸ New:
     /// the document now has a durable home, so a crash-recovery
     /// replay would only resurrect stale steps.
     #[cfg(not(target_arch = "wasm32"))]
-    fn clear_recovery(&mut self) {
-        let path = self.recovery_path_str();
-        if self.fs.exists(&path) {
-            let _ = self.fs.remove_file(&path);
-        }
-        self.persisted = None;
-    }
 
     /// Checks for a leftover recovery journal and, when found, arms
     /// the restore-offer window. Called from `Shell::new` only — a
     /// mid-session appearance would mean this very session crashed,
     /// which it cannot have.
     #[cfg(not(target_arch = "wasm32"))]
-    fn check_recovery(&mut self) {
-        let path = self.recovery_path_str();
-        if self.fs.exists(&path) {
-            self.recover_open = true;
-        }
-    }
 
     /// Replays the recovery journal onto the fresh untitled session
     /// (the crash-recovery path of `Editor::replay_steps`: history is
     /// reconstructed, so undo works across the crash boundary).
     #[cfg(not(target_arch = "wasm32"))]
-    fn recover_steps(&mut self) -> Result<usize, String> {
-        let path = self.recovery_path_str();
-        let text = self
-            .fs
-            .read_file(&path)
-            .map_err(|error| error.to_string())
-            .and_then(|bytes| String::from_utf8(bytes).map_err(|error| error.to_string()))?;
-        self.editor
-            .replay_steps(&text)
-            .map_err(|error| error.to_string())?;
-        let rows = self.editor.session.journal_len();
-        self.clear_recovery();
-        Ok(rows)
-    }
 
     /// The recovery-offer window: what was found, Recover (replay
     /// onto this session) or Discard (delete the sidecar).
     #[cfg(not(target_arch = "wasm32"))]
-    fn recovery_ui(&mut self, ui: &mut egui::Ui) {
-        if !self.recover_open {
-            return;
-        }
-        egui::Window::new("Recover unsaved work?")
-            .anchor(egui::Align2::CENTER_TOP, [0.0, 80.0])
-            .resizable(false)
-            .collapsible(false)
-            .show(ui.ctx(), |ui| {
-                ui.label(format!(
-                    "A journal snapshot from a previous session exists:\n{}",
-                    self.recovery_path.display()
-                ));
-                ui.label("Recover replays its steps onto this session; undo history comes back with them.");
-                ui.horizontal(|ui| {
-                    if ui.button("Recover").clicked() {
-                        match self.recover_steps() {
-                            Ok(rows) => {
-                                self.status = format!("recovered {rows} step(s) from the snapshot");
-                                self.view = View::default();
-                                self.raster = None;
-                                self.raster_scale = 1.0;
-                            }
-                            Err(error) => self.status = format!("recovery failed: {error}"),
-                        }
-                        self.recover_open = false;
-                    }
-                    if ui.button("Discard").clicked() {
-                        self.clear_recovery();
-                        self.recover_open = false;
-                        self.status = "recovery snapshot discarded".to_owned();
-                    }
-                });
-            });
-    }
 
     /// Files dropped onto the window open through the same one-door
     /// path as File ▸ Open: a Fireworks PNG replaces the document,
