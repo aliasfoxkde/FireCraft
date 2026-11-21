@@ -152,6 +152,37 @@ jobs:
           python3 -m venv /tmp/pipeline-venv
           /tmp/pipeline-venv/bin/pip install --quiet pyyaml
           /tmp/pipeline-venv/bin/python scripts/validate_gitforge_pipeline.py .gitforge.yml
+  wasm32:
+    name: wasm32
+    runs-on: ubuntu-24.04
+    needs: [fmt]
+    if: needs.changes.outputs.code_changed == 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Install Rust stable (rustc 1.100.0) for wasm32
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          # wasm32 check requires rustc 1.100.0+ (rustc 1.99.1 has the
+          # .rmeta version bug). The coverage job uses 1.99.1; wasm32
+          # uses a separate toolchain. See docs/PRODUCTION-AUDIT-2026-11-20.md G-1.
+          toolchain: 1.100.0
+          components: rustfmt
+      - name: Install wasm32 target
+        run: rustup target add wasm32-unknown-unknown
+      - name: Cache cargo registry
+        uses: actions/cache@0057852b881e75b6e75b540449e92b4886f43607fa02 # v4.3.0
+        with:
+          path: ~/.cargo/registry
+          key: cargo-registry-wasm32-${{ hashFiles('**/Cargo.lock') }}
+      - name: Cache build artifacts
+        uses: actions/cache@0057852b881e75b6e75b540449e92b4886f43607fa02 # v4.3.0
+        with:
+          path: target
+          key: cargo-build-wasm32-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+      - name: wasm32 check (pure crates only)
+        run: cargo run --package xtask -- wasm
+
   gate:
     name: gate
     runs-on: ubuntu-latest
