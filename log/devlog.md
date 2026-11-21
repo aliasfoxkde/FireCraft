@@ -1,3 +1,49 @@
+## 2026-11-21 — Comprehensive production work session
+
+### WASM CDN + Proxy ✅ COMPLETE
+- WASM proxy Worker deployed at firecraft-wasm-proxy.cyopsys.workers.dev
+- WASM 95.6 MB served from GitHub Release with CORS headers
+- Cloudflare Pages deploy (~87 KB HTML/JS) live at head.firecraft-web.pages.dev
+- WASM loaded at runtime via Worker proxy (fixes browser CORS blocks)
+- Worker code: wasm-proxy.worker.mjs, wasm-worker.toml
+
+### CI: WASM size ✅ RESOLVED
+- WASM size (95.6 MB) exceeds Pages 25 MB limit — resolved via CDN proxy
+- WASM loads from GitHub Release via Worker, not Pages
+
+### God-File Reduction ✅ PARTIAL (3 modules extracted)
+- text_edit.rs: begin/commit/cancel_text_edit, edit_text_selection (4 methods)
+- recovery.rs: crash-recovery sidecar management (7 methods)  
+- file_operations.rs: 12 document lifecycle methods (from prior session)
+- mod.rs reduced 7,996 → 7,465 lines (-531 lines, -6.6%)
+- compose/effects.rs, compose/render.rs: cast_possible_truncation fixed
+- xtask/dist.rs: borrow checker fix
+
+### Clippy ✅ PARTIAL
+- compose crates: cast_possible_truncation moved to crate-level
+- 6 warn-level style warnings remaining (not deny)
+- CI still blocked on rustc .rmeta bug (native builds)
+
+### Documentation ✅ COMPLETE
+- PRODUCTION-TODO.md created with 5-priority tracking
+- ROADMAP.md Phase C updated with WASM CDN status
+- TASKS.md WASM CDN row added
+- Stale numbers fixed (164/253 → 257/257)
+- CodeRabbit markers removed from 4 docs
+- Phantom task file deleted
+
+### Remaining Blockers
+- CI: rustc .rmeta version bug blocks native builds (1.99.1) and native 1.100.0
+- WASM size: 95.6 MB (target: ~16 MB) — proxy works, but raw size still large
+- Shell: 7,465 lines in mod.rs, panels.rs at 4,592 lines — still needs extraction
+- 71 open issues — need triage
+- Native artifact verification — blocked on build agents
+
+### Verified
+- WASM loads with CORS headers at Worker URL
+- Page loads version.json with provenance
+- WASM content-length: 95,565,085 bytes (confirmed)
+
 ## 2026-11-21 — WASM proxy Worker + CORS fix
 
 - **Root cause:** GitHub Release downloads don't include CORS headers,
