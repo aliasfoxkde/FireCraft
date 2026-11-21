@@ -203,7 +203,7 @@ progress:
 ### Omp session additions
 | # | Task | Priority | Status |
 |---|---|---|---|
-| WASM sharding + CDN loading | P0 | IN PROGRESS — scripting optional done, CDN patching in dist.rs |
+| WASM sharding + CDN loading | P0 | DONE — scripting optional, CDN CDN_URL patch in dist.rs, gzip staging verified (19.9 MB gz under 25 MB limit) |
 | Merge omp session into main | P0 | PENDING — changes on feat/release-provenance |
 | Merge CraftAnything evidence | P1 | PENDING — 100+ Ghidra shards, mechanics.json |
 | Shell/mod.rs refactor | P2 | PENDING — 7,993 lines |
