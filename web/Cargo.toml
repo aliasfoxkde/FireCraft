@@ -19,8 +19,6 @@ compose = { path = "../crates/compose" }
 eframe = { version = "0.36", default-features = false, features = [
     "default_fonts",
     "glow",
-    "wayland",
-    "x11",
 ] }
 engine = { path = "../crates/engine" }
 fwpng = { path = "../crates/fwpng" }
