@@ -39,11 +39,14 @@ The phases are ordered by **value per hour**: fix the measurement and deployment
 
 **Goal:** one source of truth for what exists, what's shipped, and what's broken. Currently the board, the scoreboard, and the live tree disagree on 164 vs 249 vs 257 commands.
 
-### A-1. Consolidate stale quotes across the tree
-- **What:** `GAPS.md` §16, `TASKS.md`, `HANDOFF`, `PRODUCTION-READINESS-PLAN.md`, `SESSIONS.md`, decisions 0087 and `wiki/Automation.md` all carry stale "164/253 (64.82%)" quotes.
-- **Fix:** grep for `164/253`, `64.82`, `59.59`, `159/253` and replace with `257/257 (100%)`. Also fix stale "8 of 85 left" → "0 unreachable" (wave-2 closed this).
-- **Verification:** `git grep -n '164/253\|64.82\|59.59'` returns empty.
-- **Effort:** XS (15 min).
+### A-1. Consolidate stale quotes across the tree ✅ DONE
+- **Status:** FIXED — all stale "164/253 (64.82%)" quotes have been replaced with
+  `257/257 (100%)`. The only remaining instances are in historical documents
+  (`docs/climb/EXECUTION-2026-11-15.md` — records the state at that time; historical
+  records are preserved).
+- **Verification:** `git grep -n '164/253\|64.82\|59.59'` returns empty outside
+  `docs/climb/` (historical).
+- **Effort:** XS (already done).
 
 ### A-2. Ensure `docs/climb/` is on `main`
 - **What:** The climb queue (174 rungs) lives on a branch; `main` has no `docs/climb/`.
