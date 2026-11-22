@@ -1124,6 +1124,7 @@ impl Shell {
 
     /// The dialog's JPEG flags (the stated-over-recorded side of the
     /// same controls).
+    #[cfg(feature = "native")]
     pub(super) fn dialog_flags(dialog: &ExportDialog) -> app_cli::ops::ExportFlags {
         app_cli::ops::ExportFlags {
             quality: if EXPORT_FORMATS[dialog.format] == "jpg" {
@@ -1143,6 +1144,7 @@ impl Shell {
     /// Encodes page 0 / state 0 in `format` with the dialog's settings
     /// stamped onto a cloned document — byte-identical to what Export
     /// writes.
+    #[cfg(feature = "native")]
     pub(super) fn encode_with_dialog(
         &self,
         dialog: &ExportDialog,
@@ -1174,6 +1176,7 @@ impl Shell {
     /// settings, and a lossless PNG for comparison. Each pane keeps
     /// its byte size in the label. `ctx` is the live egui context the
     /// textures are loaded onto.
+    #[cfg(feature = "native")]
     pub(super) fn render_preview(
         &mut self,
         ctx: &egui::Context,
@@ -1221,6 +1224,7 @@ impl Shell {
     /// Export through the save dialog: encode with the dialog's
     /// settings, write through the injected file system. A selected
     /// web workflow routes to [`Self::export_web_via_dialog`] instead.
+    #[cfg(feature = "native")]
     pub(super) fn export_via_dialog(&mut self, dialog: &ExportDialog) {
         if let Some(index) = dialog.web {
             self.export_web_via_dialog(dialog, index);
@@ -1256,6 +1260,7 @@ impl Shell {
     /// CSS); every image file lands beside it under its export name.
     /// The pipeline is [`app_cli::ops::export_web`] — the CLI verb's
     /// exact path, so the dialog cannot drift from the CLI.
+    #[cfg(feature = "native")]
     pub(super) fn export_web_via_dialog(&mut self, dialog: &ExportDialog, index: usize) {
         let Some(workflow) = web_workflow(index) else {
             return;

@@ -259,6 +259,7 @@ impl Shell {
     /// secondary-browser row opens the same default handler — CS6's
     /// per-browser configuration is not kept in this build (the Set
     /// Browser rows say so).
+    #[cfg(feature = "native")]
     pub(super) fn preview_in_browser(&mut self, secondary: bool, all_pages: bool) {
         let _ = secondary;
         let dialog = ExportDialog::default();

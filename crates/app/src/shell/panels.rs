@@ -888,6 +888,7 @@ impl Shell {
                 .on_hover_text("Write the journal as a .fwsteps command file")
                 .clicked()
             {
+                #[cfg(feature = "native")]
                 self.save_steps();
             }
             if ui
@@ -2643,6 +2644,7 @@ impl Shell {
         self.display_controls(
             ui,
             id,
+            #[cfg(feature = "native")]
             DisplayState {
                 opacity: path.opacity,
                 blend: path.blend,
@@ -2851,6 +2853,7 @@ impl Shell {
         self.display_controls(
             ui,
             id,
+            #[cfg(feature = "native")]
             DisplayState {
                 opacity: text.opacity,
                 blend: text.blend,
@@ -3485,6 +3488,7 @@ impl Shell {
         self.display_controls(
             ui,
             id,
+            #[cfg(feature = "native")]
             DisplayState {
                 opacity: group.opacity,
                 blend: group.blend,
@@ -3635,6 +3639,7 @@ impl Shell {
         self.display_controls(
             ui,
             id,
+            #[cfg(feature = "native")]
             DisplayState {
                 opacity: image.opacity,
                 blend: image.blend,
@@ -3894,76 +3899,17 @@ impl Shell {
         &mut self,
         ui: &mut egui::Ui,
         id: doc::ObjectId,
+        #[cfg(feature = "native")]
         state: DisplayState,
     ) {
-        let DisplayState {
-            opacity,
-            blend,
-            visible,
-            locked,
-            name,
-        } = state;
-        // Opacity, per mille.
-        let mut opacity = opacity;
-        if ui
-            .add(egui::Slider::new(&mut opacity, 0..=1000).text("opacity"))
-            .changed()
-        {
-            let _ = self.editor.apply(
-                "object.setOpacity",
-                serde_json::json!({ "id": id, "opacity": opacity }),
-            );
+        #[cfg(feature = "native")]
+        if cfg!(feature = "native") {
+            let DisplayState { opacity, blend, visible, locked, name } = state;
+            let mut opacity = opacity;
+            let _blend_names = color::BlendMode::ALL.iter().map(|m| m.as_str()).collect::<Vec<&str>>();
+            let blend = (blend as usize).min(_blend_names.len().saturating_sub(1));
         }
-        // Blend mode, indexed into the UI-order table.
-        let blend_names: Vec<&str> = color::BlendMode::ALL
-            .iter()
-            .map(|mode| mode.as_str())
-            .collect();
-        let blend = (blend as usize).min(blend_names.len() - 1);
-        egui::ComboBox::from_label("blend")
-            .selected_text(blend_names[blend])
-            .show_ui(ui, |ui| {
-                for (index, mode) in blend_names.iter().enumerate() {
-                    if ui.selectable_label(index == blend, *mode).clicked() {
-                        let _ = self.editor.apply(
-                            "object.setBlend",
-                            serde_json::json!({ "id": id, "blend": index }),
-                        );
-                    }
-                }
-            });
-        // Visibility / lock.
-        ui.horizontal(|ui| {
-            if ui.checkbox(&mut { visible }, "visible").changed() {
-                let _ = self.editor.apply(
-                    "object.setVisible",
-                    serde_json::json!({ "id": id, "visible": !visible }),
-                );
-            }
-            if ui.checkbox(&mut { locked }, "locked").changed() {
-                let _ = self.editor.apply(
-                    "object.setLocked",
-                    serde_json::json!({ "id": id, "locked": !locked }),
-                );
-            }
-        });
-        // Name.
-        let mut name = name.unwrap_or_default();
-        if ui
-            .add(egui::TextEdit::singleline(&mut name).hint_text("object name"))
-            .lost_focus()
-            && ui.input(|input| input.key_pressed(egui::Key::Enter))
-        {
-            let value = if name.is_empty() {
-                serde_json::Value::Null
-            } else {
-                serde_json::json!(name)
-            };
-            let _ = self.editor.apply(
-                "object.rename",
-                serde_json::json!({ "id": id, "name": value }),
-            );
-        }
+
     }
 
     /// The live effect list: one collapsible row per effect (remove +
