@@ -15,8 +15,12 @@ pub(crate) use guides_ui::GridDialog;
 pub(crate) use guides_ui::GuideDraft;
 
 mod canvas_ui;
+mod colors;
+pub mod constants;
 #[cfg(feature = "native")]
 mod dialogs;
+#[cfg(feature = "native")]
+mod file_operations;
 mod filters_ui;
 mod glyphs;
 mod guides_ui;
@@ -24,21 +28,26 @@ mod guides_ui;
 mod html_preview;
 mod icons;
 mod optimize;
+mod page;
 mod palette;
 mod panel_windows;
 mod panels;
 mod panels_web;
-mod slice_editor;
-mod timeline;
-mod text_edit;
-#[cfg(feature = "native")]
-mod file_operations;
 mod recovery;
+mod slice_editor;
+mod text_edit;
+mod timeline;
 
 pub use optimize::OptimizeSettings;
 
+pub use colors::{
+    cmyk_to_rgb, from_hex, hex_of, hls_to_rgb, hsv_to_rgb, rgb_to_cmyk, rgb_to_hls, rgb_to_hsv,
+    swatch_grid,
+};
 pub use glyphs::apply_cs6_theme;
+pub use glyphs::system_is_light;
 pub(crate) use glyphs::{draw_autoshape_glyph, symbol_type_label, tool_key, tool_label};
+pub use page::slugify;
 pub use panel_windows::{DockSide, PanelSummary, panel_inventory};
 
 use doc::{ObjectData, PathObject, SymbolInstanceObject, SymbolType, TextObject};
@@ -517,15 +526,23 @@ impl Shell {
             Editor::untitled(),
             {
                 #[cfg(feature = "native")]
-                { std::rc::Rc::new(app_cli::io::StdFs) }
+                {
+                    std::rc::Rc::new(app_cli::io::StdFs)
+                }
                 #[cfg(not(feature = "native"))]
-                { std::rc::Rc::new(engine::platform::NoOpFs) }
+                {
+                    std::rc::Rc::new(engine::platform::NoOpFs)
+                }
             } as _,
             {
                 #[cfg(feature = "native")]
-                { Box::new(EnvDialogs::default()) as _ }
+                {
+                    Box::new(EnvDialogs::default()) as _
+                }
                 #[cfg(not(feature = "native"))]
-                { Box::new(stubs::StubDialogs::default()) as _ }
+                {
+                    Box::new(stubs::StubDialogs::default()) as _
+                }
             },
         );
         shell.layout = layout;
@@ -874,7 +891,6 @@ impl Shell {
     /// File ▸ Revert: reload the document from the file it was last
     /// saved to, discarding the in-memory edits.
 
-
     /// Applies through the editor and reports failures on the status
     /// line — the one idiom every menu/panel action shares. Returns
     /// whether the command was accepted.
@@ -1206,12 +1222,17 @@ impl Shell {
                 // wired in this build — say so instead of pretending.
                 let mut dialog = ExportDialog::default();
                 if let Some(index) = {
-                        #[cfg(feature = "native")]
-                        { &crate::shell::dialogs::EXPORT_FORMATS }
-                        #[cfg(not(feature = "native"))]
-                        { &[] as &[&str] }
-                    }.iter()
-                    .position(|format| *format == "jpg")
+                    #[cfg(feature = "native")]
+                    {
+                        &crate::shell::dialogs::EXPORT_FORMATS
+                    }
+                    #[cfg(not(feature = "native"))]
+                    {
+                        &[] as &[&str]
+                    }
+                }
+                .iter()
+                .position(|format| *format == "jpg")
                 {
                     dialog.format = index;
                 }
@@ -1348,10 +1369,15 @@ impl Shell {
             menus::ShellAction::EditTextSelection => self.edit_text_selection(),
             menus::ShellAction::PreviewInBrowser { .. } => {
                 #[cfg(feature = "native")]
-                { self.preview_in_browser(secondary, all_pages); }
+                {
+                    self.preview_in_browser(secondary, all_pages);
+                }
                 #[cfg(not(feature = "native"))]
-                { let _: Option<String> = None; let _: Option<bool> = None; }
-            },
+                {
+                    let _: Option<String> = None;
+                    let _: Option<bool> = None;
+                }
+            }
             menus::ShellAction::Quit => self.close_requested = true,
             menus::ShellAction::Undo => match self.editor.undo() {
                 Ok(name) => self.status = format!("undid {name}"),
@@ -7498,64 +7524,212 @@ mod tests {
 }
 #[cfg(not(feature = "native"))]
 mod stub_types {
-    pub(crate) struct DisplayState { pub visible: bool, pub locked: bool, pub opacity: f32, pub blend: u8, pub name: Option<String> }
-    pub(crate) struct ExportDialog { pub format: usize, pub web: Option<usize>, pub quality: u8, pub progressive: bool, pub matte_black: bool }
-    pub(crate) struct CanvasSizeDialog { pub width: f64, pub height: f64 }
-    pub(crate) struct ImageSizeDialog { pub width: f64, pub height: f64, pub resolution: f64 }
-    pub(crate) struct CanvasColorDialog { pub color: [u8; 3] }
-    pub(crate) struct FeatherDialog { pub radius: u8 }
-    pub(crate) struct NumericTransformDialog { pub scale: f64 }
-    impl Default for DisplayState { fn default() -> Self { Self { visible: true, locked: false, opacity: 1.0, blend: 0, name: None } } }
-    impl Default for ExportDialog { fn default() -> Self { Self { format: 0, web: None, quality: 90, progressive: false, matte_black: false } } }
-    impl Default for CanvasSizeDialog { fn default() -> Self { Self { width: 0.0, height: 0.0 } } }
-    impl Default for ImageSizeDialog { fn default() -> Self { Self { width: 0.0, height: 0.0, resolution: 72.0 } } }
-    impl Default for CanvasColorDialog { fn default() -> Self { Self { color: [0, 0, 0] } } }
-    impl Default for FeatherDialog { fn default() -> Self { Self { radius: 0 } } }
-    impl Default for NumericTransformDialog { fn default() -> Self { Self { scale: 1.0 } } }
+    pub(crate) struct DisplayState {
+        pub visible: bool,
+        pub locked: bool,
+        pub opacity: f32,
+        pub blend: u8,
+        pub name: Option<String>,
+    }
+    pub(crate) struct ExportDialog {
+        pub format: usize,
+        pub web: Option<usize>,
+        pub quality: u8,
+        pub progressive: bool,
+        pub matte_black: bool,
+    }
+    pub(crate) struct CanvasSizeDialog {
+        pub width: f64,
+        pub height: f64,
+    }
+    pub(crate) struct ImageSizeDialog {
+        pub width: f64,
+        pub height: f64,
+        pub resolution: f64,
+    }
+    pub(crate) struct CanvasColorDialog {
+        pub color: [u8; 3],
+    }
+    pub(crate) struct FeatherDialog {
+        pub radius: u8,
+    }
+    pub(crate) struct NumericTransformDialog {
+        pub scale: f64,
+    }
+    impl Default for DisplayState {
+        fn default() -> Self {
+            Self {
+                visible: true,
+                locked: false,
+                opacity: 1.0,
+                blend: 0,
+                name: None,
+            }
+        }
+    }
+    impl Default for ExportDialog {
+        fn default() -> Self {
+            Self {
+                format: 0,
+                web: None,
+                quality: 90,
+                progressive: false,
+                matte_black: false,
+            }
+        }
+    }
+    impl Default for CanvasSizeDialog {
+        fn default() -> Self {
+            Self {
+                width: 0.0,
+                height: 0.0,
+            }
+        }
+    }
+    impl Default for ImageSizeDialog {
+        fn default() -> Self {
+            Self {
+                width: 0.0,
+                height: 0.0,
+                resolution: 72.0,
+            }
+        }
+    }
+    impl Default for CanvasColorDialog {
+        fn default() -> Self {
+            Self { color: [0, 0, 0] }
+        }
+    }
+    impl Default for FeatherDialog {
+        fn default() -> Self {
+            Self { radius: 0 }
+        }
+    }
+    impl Default for NumericTransformDialog {
+        fn default() -> Self {
+            Self { scale: 1.0 }
+        }
+    }
 }
 
 #[cfg(not(feature = "native"))]
 mod stubs {
     use super::*;
     pub(super) struct StubDialogs;
-    impl Default for StubDialogs { fn default() -> Self { Self } }
+    impl Default for StubDialogs {
+        fn default() -> Self {
+            Self
+        }
+    }
     impl engine::platform::Dialogs for StubDialogs {
-        fn open_path(&self, _title: &str, _filters: &[(String, Vec<String>)]) -> Option<String> { None }
-        fn save_path(&self, _title: &str, _suggested: &str, _filters: &[(String, Vec<String>)]) -> Option<String> { None }
+        fn open_path(&self, _title: &str, _filters: &[(String, Vec<String>)]) -> Option<String> {
+            None
+        }
+        fn save_path(
+            &self,
+            _title: &str,
+            _suggested: &str,
+            _filters: &[(String, Vec<String>)],
+        ) -> Option<String> {
+            None
+        }
         fn message(&self, _title: &str, _text: &str) {}
-        fn open_url(&self, _url: &str) -> bool { false }
+        fn open_url(&self, _url: &str) -> bool {
+            false
+        }
     }
 }
 
 #[cfg(not(feature = "native"))]
 impl Shell {
-    #[allow(dead_code)] pub(super) fn open_document(&mut self) { self.status = "open".into(); }
-    #[allow(dead_code)] pub(super) fn save_document(&mut self) { self.status = "save".into(); }
-    #[allow(dead_code)] pub(super) fn save_document_as(&mut self, _path: &str) { self.status = "save".into(); }
-    #[allow(dead_code)] pub(super) fn import_raster_dialog(&mut self) { self.status = "import".into(); }
-    #[allow(dead_code)] pub(super) fn export_dialog_ui(&mut self, _ui: &egui::Ui) { }
-    #[allow(dead_code)] pub(super) fn canvas_size_dialog_ui(&mut self, _ui: &egui::Ui) { }
-    #[allow(dead_code)] pub(super) fn canvas_color_dialog_ui(&mut self, _ui: &egui::Ui) { }
-    #[allow(dead_code)] pub(super) fn image_size_dialog_ui(&mut self, _ui: &egui::Ui) { }
-    #[allow(dead_code)] pub(super) fn feather_dialog_ui(&mut self, _ui: &egui::Ui) { }
-    #[allow(dead_code)] pub(super) fn numeric_transform_dialog_ui(&mut self, _ui: &egui::Ui) { }
-    #[allow(dead_code)] pub(super) fn html_preview_panel(&mut self, _ui: &egui::Ui) { }
-    #[allow(dead_code)] pub(super) fn file_info_summary(&self) -> String { "none".into() }
-    #[allow(dead_code)] pub(super) fn place_raster_into_document(&mut self, _bytes: &[u8], _name: &str) -> Result<(), engine::EngineError> { Err(engine::EngineError::InvalidState { name: "import".into(), detail: "not available".into() }) }
-    #[allow(dead_code)] pub(super) fn open_raster_document(&mut self, _bytes: &[u8], _name: &str) -> Result<(), engine::EngineError> { Err(engine::EngineError::InvalidState { name: "import".into(), detail: "not available".into() }) }
-    #[allow(dead_code)] pub(super) fn open_extension_manager(&mut self) { }
-    #[allow(dead_code)] pub(super) fn run_command(&mut self, _name: &str, _payload: serde_json::Value) -> bool { false }
-    #[allow(dead_code)] pub(super) fn save_steps(&mut self, _steps: Vec<String>) { }
-    #[allow(dead_code)] pub(super) fn replay_steps(&mut self) { }
-    #[allow(dead_code)] pub(super) fn revert_document(&mut self) { }
-    #[allow(dead_code)] pub(super) fn png_format_summary(&self) -> String { "png".into() }
-    #[allow(dead_code)] pub(super) fn web_panel(&mut self, _ui: &egui::Ui) { }
-    #[allow(dead_code)] pub(super) fn activate_tab(&mut self, _tab: usize) { }
-    #[allow(dead_code)] pub(super) fn document_has_content(&self) -> bool { false }
-    #[allow(dead_code)] pub(super) fn run_sel(&mut self, _sel: menus::SelAction) { }
-    #[allow(dead_code)] pub(super) fn dropped_files(&mut self, _ctx: &egui::Context) { }
-    #[allow(dead_code)] pub(super) fn preview_in_browser(&mut self, _secondary: bool, _all_pages: bool) { }
+    #[allow(dead_code)]
+    pub(super) fn open_document(&mut self) {
+        self.status = "open".into();
+    }
+    #[allow(dead_code)]
+    pub(super) fn save_document(&mut self) {
+        self.status = "save".into();
+    }
+    #[allow(dead_code)]
+    pub(super) fn save_document_as(&mut self, _path: &str) {
+        self.status = "save".into();
+    }
+    #[allow(dead_code)]
+    pub(super) fn import_raster_dialog(&mut self) {
+        self.status = "import".into();
+    }
+    #[allow(dead_code)]
+    pub(super) fn export_dialog_ui(&mut self, _ui: &egui::Ui) {}
+    #[allow(dead_code)]
+    pub(super) fn canvas_size_dialog_ui(&mut self, _ui: &egui::Ui) {}
+    #[allow(dead_code)]
+    pub(super) fn canvas_color_dialog_ui(&mut self, _ui: &egui::Ui) {}
+    #[allow(dead_code)]
+    pub(super) fn image_size_dialog_ui(&mut self, _ui: &egui::Ui) {}
+    #[allow(dead_code)]
+    pub(super) fn feather_dialog_ui(&mut self, _ui: &egui::Ui) {}
+    #[allow(dead_code)]
+    pub(super) fn numeric_transform_dialog_ui(&mut self, _ui: &egui::Ui) {}
+    #[allow(dead_code)]
+    pub(super) fn html_preview_panel(&mut self, _ui: &egui::Ui) {}
+    #[allow(dead_code)]
+    pub(super) fn file_info_summary(&self) -> String {
+        "none".into()
+    }
+    #[allow(dead_code)]
+    pub(super) fn place_raster_into_document(
+        &mut self,
+        _bytes: &[u8],
+        _name: &str,
+    ) -> Result<(), engine::EngineError> {
+        Err(engine::EngineError::InvalidState {
+            name: "import".into(),
+            detail: "not available".into(),
+        })
+    }
+    #[allow(dead_code)]
+    pub(super) fn open_raster_document(
+        &mut self,
+        _bytes: &[u8],
+        _name: &str,
+    ) -> Result<(), engine::EngineError> {
+        Err(engine::EngineError::InvalidState {
+            name: "import".into(),
+            detail: "not available".into(),
+        })
+    }
+    #[allow(dead_code)]
+    pub(super) fn open_extension_manager(&mut self) {}
+    #[allow(dead_code)]
+    pub(super) fn run_command(&mut self, _name: &str, _payload: serde_json::Value) -> bool {
+        false
+    }
+    #[allow(dead_code)]
+    pub(super) fn save_steps(&mut self, _steps: Vec<String>) {}
+    #[allow(dead_code)]
+    pub(super) fn replay_steps(&mut self) {}
+    #[allow(dead_code)]
+    pub(super) fn revert_document(&mut self) {}
+    #[allow(dead_code)]
+    pub(super) fn png_format_summary(&self) -> String {
+        "png".into()
+    }
+    #[allow(dead_code)]
+    pub(super) fn web_panel(&mut self, _ui: &egui::Ui) {}
+    #[allow(dead_code)]
+    pub(super) fn activate_tab(&mut self, _tab: usize) {}
+    #[allow(dead_code)]
+    pub(super) fn document_has_content(&self) -> bool {
+        false
+    }
+    #[allow(dead_code)]
+    pub(super) fn run_sel(&mut self, _sel: menus::SelAction) {}
+    #[allow(dead_code)]
+    pub(super) fn preview_in_browser(&mut self, _secondary: bool, _all_pages: bool) {}
 }
 
 #[cfg(not(feature = "native"))]
-use stub_types::{CanvasColorDialog, CanvasSizeDialog, DisplayState, ExportDialog, FeatherDialog, ImageSizeDialog, NumericTransformDialog};
+use stub_types::{
+    CanvasColorDialog, CanvasSizeDialog, DisplayState, ExportDialog, FeatherDialog,
+    ImageSizeDialog, NumericTransformDialog,
+};
