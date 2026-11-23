@@ -21,6 +21,11 @@ This page is the documentation map. Start with the overview that matches your go
 4. [CS6 parity matrix](CS6-PARITY.md): the user-visible inventory — every CS6 workflow and UI area, classified with evidence.
 5. [Published Wiki](https://github.com/aliasfoxkde/FireCraft/wiki): concise user and contributor navigation; the source is [`wiki/Home.md`](wiki/Home.md).
 
+### I want to understand the post-MVP product direction
+
+1. [Post-MVP Product and Engineering Roadmap](POST-MVP-ROADMAP.md): detailed product vision, feature specifications, dependencies, priorities, architecture constraints, and acceptance criteria.
+2. [Post-MVP Agent Handoff](POST-MVP-AGENT-HANDOFF.md): mandatory repository audit, local-work reconciliation, task conversion, and execution rules for the next implementation agent.
+
 ### I want to contribute or use an AI agent
 
 1. [`../AGENTS.md`](../AGENTS.md): repository rules, clean-room boundary, commands, and workflow.
@@ -37,6 +42,7 @@ This page is the documentation map. Start with the overview that matches your go
 | Current state | [PROGRESS](PROGRESS.md), [TASKS](TASKS.md), [NEXT](NEXT.md), [CS6-PARITY](CS6-PARITY.md) | What is true now and what comes next |
 | Engineering | [HANDOFF](HANDOFF.md), [PLANNING](PLANNING.md), [TOOLCHAINS](TOOLCHAINS.md), [RELEASING](RELEASING.md) | Building, architecture, and release work |
 | Evidence | [decisions](decisions/), [research](research/), [generated parity and scorecard](planning/generated/) | Specific technical claims and their basis |
+| Product direction | [Post-MVP roadmap](POST-MVP-ROADMAP.md), [agent handoff](POST-MVP-AGENT-HANDOFF.md) | Strategic future scope and its audit/execution contract; not current task status |
 | History | [SESSIONS](SESSIONS.md), [HISTORY](HISTORY.md), [closed milestones](planning/firecraft/), [release notes](releases/) | How the project arrived here; not live task status |
 
 ## Source-of-truth rules
