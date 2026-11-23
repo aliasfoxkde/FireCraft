@@ -1016,6 +1016,16 @@ fn stage_archive(
 /// 0755. The NAS mounts every directory setgid, so an unstaged tree
 /// would carry 2775 dirs and 0664 files into otherwise
 /// deterministic archives (and dpkg-deb refuses setgid outright).
+///
+/// Unix permission bits do not exist on Windows hosts, so there the
+/// normalization is a no-op (GNU tar's `--owner`/`--mode` flags are not
+/// available there either; release archives are produced on Linux).
+#[cfg(not(unix))]
+fn normalize_tree(_root: &Path, _exec_prefix: &str) -> Result<(), String> {
+    Ok(())
+}
+
+#[cfg(unix)]
 fn normalize_tree(root: &Path, exec_prefix: &str) -> Result<(), String> {
     use std::os::unix::fs::PermissionsExt as _;
     let set = |path: &Path, mode: u32| {

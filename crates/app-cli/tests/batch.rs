@@ -249,12 +249,17 @@ fn batch_refuses_empty_dirs_and_aborts_on_first_failure() {
 fn batch_options_accept_a_file_path() {
     let fs = MemFs::default();
     fs.add("src/a.fw.png", &document_bytes("a"));
-    std::fs::write("/var/tmp/firecraft-batch-options.json", r#"{"format": 2}"#)
-        .expect("scratch write");
-    let overlay =
-        ops::parse_export_options("/var/tmp/firecraft-batch-options.json").expect("options file");
+    // Portable scratch path: `/var/tmp` does not exist on Windows hosts.
+    let scratch = std::env::temp_dir().join(format!(
+        "firecraft-batch-options-{}.json",
+        std::process::id()
+    ));
+    std::fs::write(&scratch, r#"{"format": 2}"#).expect("scratch write");
+    let scratch_str = scratch.to_str().expect("utf-8 scratch path");
+    let parsed = ops::parse_export_options(scratch_str);
+    let _ = std::fs::remove_file(&scratch);
+    let overlay = parsed.expect("options file");
     assert_eq!(overlay.format, Some(2));
     let written = ops::batch(&fs, "src", "png", Some(&overlay), Some("out")).expect("batch");
     assert_eq!(written.len(), 1);
-    let _ = std::fs::remove_file("/var/tmp/firecraft-batch-options.json");
 }

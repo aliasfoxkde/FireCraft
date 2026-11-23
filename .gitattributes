@@ -1,0 +1,23 @@
+# Source of truth is LF. Golden files, snapshots and ledgers are compared
+# byte-for-byte by the xtask gates, so a Windows checkout with
+# core.autocrlf=true must not rewrite them to CRLF.
+* text=auto eol=lf
+
+# Binary assets: never touch.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.tif binary
+*.tiff binary
+*.bmp binary
+*.ico binary
+*.wasm binary
+*.psd binary
+*.ttf binary
+*.otf binary
+*.woff binary
+*.woff2 binary
+*.zip binary
+*.gz binary
