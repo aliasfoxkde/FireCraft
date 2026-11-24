@@ -1,6 +1,6 @@
 # T27-60 — Produce the release certification report for the approved scope
 
-> **RP:** RP-08 · **Priority:** P0 · **Status:** NOT STARTED
+> **RP:** RP-08 · **Priority:** P0 · **Status:** SMOKE TESTED
 > **Board row:** [EXECUTION-BOARD.md §6](../release/EXECUTION-BOARD.md)
 > **Depends on:** T27-19, T27-50
 

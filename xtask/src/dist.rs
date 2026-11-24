@@ -256,7 +256,6 @@ pub fn sbom() -> Result<(), String> {
         serde_json::from_slice(&raw.stdout).map_err(|e| format!("parse cargo metadata: {e}"))?;
     let version = workspace_version()?;
 
-    let mut components = Vec::new();
     let packages = meta["packages"]
         .as_array()
         .ok_or("cargo metadata: no packages array")?;
@@ -290,8 +289,13 @@ pub fn sbom() -> Result<(), String> {
     }
 
     let root_ref = format!("urn:firecraft:application:firecraft@{version}");
-    let dependencies = cyclonedx_dependencies(&meta, &package_refs, &root_ref)?;
-    let serial = uuid_from_graph(packages)?;
+    let dependencies = cyclonedx_dependencies(
+        &meta,
+        &inventory.package_refs,
+        &inventory.pinned_only,
+        &root_ref,
+    )?;
+    let serial = uuid_from_graph(&inventory.references)?;
     let bom = serde_json::json!({
         "bomFormat": "CycloneDX",
         "specVersion": "1.5",
@@ -542,10 +546,17 @@ fn package_bom_ref(package: &serde_json::Value) -> Result<(String, Option<String
 }
 
 /// Emits the `CycloneDX` dependency edges from Cargo's resolved graph,
-/// plus a `FireCraft` application root pointing at all workspace members.
+/// plus a `FireCraft` application root pointing at all workspace
+/// members.
+///
+/// A package the lockfile pins but the resolved graph does not contain
+/// has no resolved edge, and it is listed with an empty one: it is
+/// pinned, not linked, and saying so is more useful than leaving the
+/// component out of the graph entirely.
 fn cyclonedx_dependencies(
     metadata: &serde_json::Value,
     package_refs: &BTreeMap<String, String>,
+    pinned_only: &[String],
     root_ref: &str,
 ) -> Result<Vec<serde_json::Value>, String> {
     let nodes = metadata["resolve"]["nodes"]
@@ -577,6 +588,13 @@ fn cyclonedx_dependencies(
         }));
     }
 
+    for reference in pinned_only {
+        dependencies.push(serde_json::json!({
+            "ref": reference,
+            "dependsOn": [],
+        }));
+    }
+
     let members = metadata["workspace_members"]
         .as_array()
         .ok_or("cargo metadata: workspace_members is missing")?;
@@ -600,12 +618,9 @@ fn cyclonedx_dependencies(
 /// Deterministic serial from the locked graph: UUIDv8-shaped digest of
 /// the sorted package bom-refs, so source/version changes are reflected
 /// without depending on absolute checkout paths.
-fn uuid_from_graph(packages: &[serde_json::Value]) -> Result<String, String> {
+fn uuid_from_graph(references: &[String]) -> Result<String, String> {
     use sha2::Digest as _;
-    let mut names: Vec<String> = packages
-        .iter()
-        .map(|package| package_bom_ref(package).map(|(reference, _)| reference))
-        .collect::<Result<_, _>>()?;
+    let mut names = references.to_vec();
     names.sort();
     names.dedup();
     let mut hasher = sha2::Sha256::new();
@@ -1381,6 +1396,9 @@ fn parse_recipes() -> Result<usize, String> {
         "build-flatpak.sh",
         "build-macos-dmg.sh",
         "deb/verify-install.sh",
+        "linux/leg-debian-family.sh",
+        "linux/leg-fedora-family.sh",
+        "linux/leg-wayland.sh",
     ] {
         let script = workspace_root().join("packaging").join(name);
         let status = std::process::Command::new("bash")
@@ -1396,6 +1414,22 @@ fn parse_recipes() -> Result<usize, String> {
         }
         checked += 1;
     }
+    // The compatibility-matrix orchestrator lives beside the other
+    // repository scripts rather than under packaging/, because it drives
+    // the packaging recipes rather than producing a package.
+    let matrix = workspace_root().join("scripts/release-matrix.sh");
+    let status = std::process::Command::new("bash")
+        .args(["-n"])
+        .arg(&matrix)
+        .output()
+        .map_err(|e| format!("spawn bash -n: {e}"))?;
+    if !status.status.success() {
+        return Err(format!(
+            "scripts/release-matrix.sh does not parse:\n{}",
+            String::from_utf8_lossy(&status.stderr).trim()
+        ));
+    }
+    checked += 1;
     // The Flatpak manifest is data, not a script: a YAML parse proves
     // structure. The saphyr dependency lives in xtask's Cargo.toml;
     // `serde_yaml` was rejected here because it is unmaintained and
@@ -1985,18 +2019,98 @@ pub(crate) fn manifest_context(version: &str) -> Result<ManifestContext, String>
             ));
         }
     }
-    let tag = git_tag.or_else(|| {
-        env_value("GITHUB_REF_NAME")
-            .filter(|name| name.strip_prefix('v').unwrap_or(name.as_str()) == version)
-    });
+    let tag = git_tag
+        .or_else(|| {
+            env_value("GITHUB_REF_NAME")
+                .filter(|name| name.strip_prefix('v').unwrap_or(name.as_str()) == version)
+        })
+        .or(stated_release_tag(version)?);
     Ok(ManifestContext {
         version: version.to_owned(),
         tag,
         source_sha,
-        run_url: env_value("GITHUB_RUN_URL"),
+        run_url: run_url(),
         run_id: env_value("GITHUB_RUN_ID"),
         built_at: build_timestamp(),
     })
+}
+
+/// The URL of the CI run that produced the artifacts.
+///
+/// GitHub Actions does not export `GITHUB_RUN_URL` — the default
+/// environment carries the run *id* but not the run *url* — so a
+/// manifest generated in CI came out with `"run_url": null` while
+/// naming its run id. The URL is reconstructed from the three variables
+/// that are exported: the server, the repository and the run id.
+///
+/// The reconstruction is pure so it can be tested without the
+/// environment.
+fn run_url() -> Option<String> {
+    if let Some(url) = env_value("GITHUB_RUN_URL") {
+        return Some(url);
+    }
+    built_run_url(
+        env_value("GITHUB_SERVER_URL").as_deref(),
+        env_value("GITHUB_REPOSITORY").as_deref(),
+        env_value("GITHUB_RUN_ID").as_deref(),
+    )
+}
+
+/// Builds the canonical run URL from the three CI facts, or `None` when
+/// any of them is absent.
+///
+/// `host` is the API root (`https://github.com`), `repository` is
+/// `owner/name`, and `run_id` is the numeric run.
+fn built_run_url(
+    host: Option<&str>,
+    repository: Option<&str>,
+    run_id: Option<&str>,
+) -> Option<String> {
+    let host = host?.trim_end_matches('/');
+    let repository = repository?;
+    let run_id = run_id?;
+    if host.is_empty() || repository.is_empty() || run_id.is_empty() {
+        return None;
+    }
+    Some(format!("{host}/{repository}/actions/runs/{run_id}"))
+}
+
+/// The release tag the caller states for this build, when it states
+/// one.
+///
+/// A rehearsal is built from `main` and its tag is created *after* the
+/// build, so neither the git tag nor the CI ref name can name it: the
+/// manifest came out with `"tag": null` while the release it describes
+/// had a tag. The caller therefore states the tag, and this reads that
+/// statement.
+///
+/// The statement is checked, not trusted: it has to name the workspace
+/// version, either exactly (`v0.2.5`) or with a disposable suffix
+/// (`v0.2.5-dryrun.4`). A tag that names a different version is an
+/// error, not a silent omission — the artifacts carry one version and
+/// the manifest may not claim another.
+fn stated_release_tag(version: &str) -> Result<Option<String>, String> {
+    let Some(tag) = env_value("RELEASE_TAG") else {
+        return Ok(None);
+    };
+    if stated_tag_names_version(&tag, version) {
+        Ok(Some(tag))
+    } else {
+        Err(format!(
+            "the stated release tag {tag} does not name the workspace version {version} — \
+             the tree and the tag disagree about what is being released"
+        ))
+    }
+}
+
+/// Whether a stated tag names this workspace version.
+///
+/// The rule is pure so it can be exercised without touching the
+/// environment: the production tag names the version exactly, and a
+/// rehearsal tag names the version and a disposable suffix.
+fn stated_tag_names_version(tag: &str, version: &str) -> bool {
+    let stripped = tag.strip_prefix('v').unwrap_or(tag);
+    stripped == version || stripped.starts_with(&format!("{version}-"))
 }
 
 /// Runs a git command in `root` and returns its trimmed stdout.
@@ -2205,6 +2319,7 @@ mod sbom_tests {
         let dependencies = cyclonedx_dependencies(
             &metadata,
             &refs,
+            &[],
             "urn:firecraft:application:firecraft@0.1.0",
         )
         .unwrap();
@@ -2562,8 +2677,8 @@ mod manifest_tests {
     #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
     use super::{
         ArtifactSpec, MANIFEST_FILE_NAME, MANIFEST_SCHEMA, ManifestContext, VERIFICATION_COMPUTED,
-        VERIFICATION_VERIFIED, build_manifest, digest_and_size, parse_checksum_list, release_specs,
-        render_manifest, verify_manifest_at,
+        VERIFICATION_VERIFIED, build_manifest, built_run_url, digest_and_size, parse_checksum_list,
+        release_specs, render_manifest, stated_tag_names_version, verify_manifest_at,
     };
     use std::path::{Path, PathBuf};
 
@@ -2721,6 +2836,62 @@ mod manifest_tests {
         assert!(
             first.ends_with('\n'),
             "the manifest must end with a newline"
+        );
+    }
+
+    #[test]
+    fn a_stated_tag_must_name_the_workspace_version() {
+        // The production tag names the version exactly.
+        assert!(stated_tag_names_version("v0.2.5", "0.2.5"));
+        assert!(stated_tag_names_version("0.2.5", "0.2.5"));
+        // A rehearsal tag names the version and a disposable suffix.
+        assert!(stated_tag_names_version("v0.2.5-dryrun.4", "0.2.5"));
+        assert!(stated_tag_names_version("0.2.5-rc.1", "0.2.5"));
+        // A tag that names another version is refused, and so is one
+        // that merely starts with the same digits.
+        assert!(!stated_tag_names_version("v0.2.6", "0.2.5"));
+        assert!(!stated_tag_names_version("v0.2.50", "0.2.5"));
+        assert!(!stated_tag_names_version("main", "0.2.5"));
+        assert!(!stated_tag_names_version("", "0.2.5"));
+    }
+
+    #[test]
+    fn the_run_url_is_reconstructed_from_the_ci_facts() {
+        // GitHub Actions does not export GITHUB_RUN_URL, so the manifest
+        // has to build the URL from the three variables it does export.
+        assert_eq!(
+            built_run_url(
+                Some("https://github.com"),
+                Some("aliasfoxkde/FireCraft"),
+                Some("44179611600")
+            ),
+            Some("https://github.com/aliasfoxkde/FireCraft/actions/runs/44179611600".to_owned())
+        );
+        // A trailing slash on the server root must not double up.
+        assert_eq!(
+            built_run_url(
+                Some("https://github.com/"),
+                Some("aliasfoxkde/FireCraft"),
+                Some("44179611600")
+            ),
+            Some("https://github.com/aliasfoxkde/FireCraft/actions/runs/44179611600".to_owned())
+        );
+        // A missing fact leaves the field absent rather than half-built.
+        assert_eq!(
+            built_run_url(
+                Some("https://github.com"),
+                Some("aliasfoxkde/FireCraft"),
+                None
+            ),
+            None
+        );
+        assert_eq!(
+            built_run_url(None, Some("aliasfoxkde/FireCraft"), Some("44179611600")),
+            None
+        );
+        assert_eq!(
+            built_run_url(Some("https://github.com"), None, Some("44179611600")),
+            None
         );
     }
 

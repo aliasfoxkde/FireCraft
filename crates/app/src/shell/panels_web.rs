@@ -114,17 +114,51 @@ pub(super) struct WebSnapshot {
 impl Shell {
     /// Window ▸ Auto Shapes: the CS6 shape gallery. CS6 drags a shape
     /// from the panel onto the canvas; a click here inserts the same
-    /// shape at the canvas center.
+    /// shape at the canvas center. The explicit Insert/Redraw mode
+    /// decides what a click does — Redraw re-runs the chosen
+    /// generator into the selected path instead of minting a new one
+    /// (decision 0028's parametric redraw, the surface decision 0117
+    /// said the verb lacked).
     pub(super) fn auto_shapes_panel(&mut self, ui: &mut egui::Ui) {
-        ui.label("Click a shape to insert it at the canvas center.");
+        ui.horizontal(|ui| {
+            let insert = ui.selectable_label(!self.autoshape_redraw, "Insert");
+            let redraw = ui.selectable_label(self.autoshape_redraw, "Redraw");
+            if insert.clicked() {
+                self.autoshape_redraw = false;
+            }
+            if redraw.clicked() {
+                self.autoshape_redraw = true;
+            }
+        });
+        if self.autoshape_redraw {
+            ui.label(
+                "Redraw mode: click a shape to regenerate the selected path \
+                 from the panel's box and corner.",
+            );
+        } else {
+            ui.label("Click a shape to insert it at the canvas center.");
+        }
         ui.separator();
         let roster = shape_roster();
         egui::Grid::new("auto_shapes")
             .num_columns(2)
             .show(ui, |ui| {
                 for (label, kind) in roster {
-                    if ui.button(label).clicked() {
-                        self.insert_shape(kind, label);
+                    // Redraw re-runs an `autoshape.*` generator; the
+                    // two primitives have no library entry to
+                    // re-run, so their rows stand down in redraw
+                    // mode rather than pretend.
+                    let redrawable = matches!(kind, ShapeKind::Auto(_));
+                    let enabled = redrawable || !self.autoshape_redraw;
+                    let clicked = ui.add_enabled(enabled, egui::Button::new(label)).clicked();
+                    if clicked {
+                        if self.autoshape_redraw {
+                            if let ShapeKind::Auto(shape) = kind {
+                                self.redraw_shape(shape, label);
+                            }
+                        } else {
+                            self.insert_shape(kind, label);
+                        }
                     }
                     ui.end_row();
                 }
@@ -167,6 +201,46 @@ impl Shell {
         };
         if inserted {
             self.status = format!("{label} inserted.");
+        }
+    }
+
+    /// `autoshape.redraw` — the panel's Redraw mode: re-run the
+    /// chosen library generator into the selected path (decision
+    /// 0028's parametric redraw). The payload is the insert payload
+    /// minus placement — page/layer/cell/name are dead weight on an
+    /// object that already sits in its cell — plus the target id and
+    /// the `kind` string the command id carries (`autoshape.star` →
+    /// `star`). Any selected path is a valid target, like the engine
+    /// says; with none selected the row reports so and dispatches
+    /// nothing (never a silent no-op).
+    pub(super) fn redraw_shape(&mut self, shape: AutoShape, label: &str) {
+        let Some(target) = self.editor.live_selection().into_iter().find(|id| {
+            matches!(
+                self.editor.document().registry.get(*id),
+                Some(doc::ObjectData::Path(_))
+            )
+        }) else {
+            self.status = "Redraw needs a selected path".to_owned();
+            return;
+        };
+        let (x, y, size) = self.insert_box();
+        let mut params = shape.payload_in_rect(0, 0, 0, x, y, size, self.editor.rect_corner);
+        if let Some(object) = params.as_object_mut() {
+            for key in ["page", "layer", "cell", "name"] {
+                object.remove(key);
+            }
+        }
+        let command = shape.command();
+        let kind = command.strip_prefix("autoshape.").unwrap_or(command);
+        if self.run_command(
+            "autoshape.redraw",
+            serde_json::json!({
+                "id": target,
+                "kind": kind,
+                "params": params,
+            }),
+        ) {
+            self.status = format!("{label} redrawn.");
         }
     }
 
@@ -1094,21 +1168,32 @@ impl Shell {
             return;
         };
         ui.label(format!("Target: {}", snapshot.name));
-        let Some(doc::ObjectData::Slice(slice)) = self.editor.document().registry.get(snapshot.id)
-        else {
-            return;
-        };
-        let css = slice_css(slice);
-        if css.is_empty() {
+        let Some(css) = self.css_properties_text() else {
             ui.label("(no CSS properties — this slice carries no background)");
             return;
-        }
+        };
         ui.add(
             egui::TextEdit::multiline(&mut css.as_str())
                 .desired_width(DOCK_CONTENT_WIDTH)
                 .desired_rows(6)
                 .interactive(false),
         );
+    }
+
+    /// The CSS the panel shows: the selected web object's
+    /// declarations. `None` when the selection is not a web object or
+    /// carries nothing the panel can express.
+    ///
+    /// Read-only by design — the edit surfaces are the slice verbs,
+    /// and this panel dispatches nothing.
+    fn css_properties_text(&self) -> Option<String> {
+        let snapshot = self.selected_web_object()?;
+        let doc::ObjectData::Slice(slice) = self.editor.document().registry.get(snapshot.id)?
+        else {
+            return None;
+        };
+        let css = slice_css(slice);
+        (!css.is_empty()).then_some(css)
     }
 
     /// Window ▸ Find and Replace: searches text objects and replaces
@@ -1213,23 +1298,32 @@ impl Shell {
                     egui::DragAndDrop::set_payload(ui.ctx(), *number);
                 }
                 if row.clicked() {
-                    let (x, y) = self.symbol_insert_translation(*number);
-                    let placed = self.run_command(
-                        "symbol.createInstance",
-                        serde_json::json!({
-                            "symbol": number,
-                            "x": x, "y": y,
-                            "page": self.editor.page,
-                            "layer": self.editor.active_layer(),
-                            "cell": self.editor.frame,
-                        }),
-                    );
+                    let placed = self.place_symbol_instance(*number);
                     if placed {
                         self.status = format!("{name} instance inserted.");
                     }
                 }
             });
         }
+    }
+
+    /// Places an instance of the symbol `number` at the panel's
+    /// placement point (`symbol.createInstance`).
+    ///
+    /// The click and the drag both land here, so the verb this panel
+    /// dispatches is one thing — and one thing a regression can name.
+    fn place_symbol_instance(&mut self, number: i64) -> bool {
+        let (x, y) = self.symbol_insert_translation(number);
+        self.run_command(
+            "symbol.createInstance",
+            serde_json::json!({
+                "symbol": number,
+                "x": x, "y": y,
+                "page": self.editor.page,
+                "layer": self.editor.active_layer(),
+                "cell": self.editor.frame,
+            }),
+        )
     }
 }
 
@@ -1588,6 +1682,37 @@ mod tests {
         assert_eq!(
             crate::shell::slice_editor::swap_target_of(&slice).as_deref(),
             Some("button")
+        );
+    }
+
+    /// The behavior the panel attaches reaches the published page.
+    ///
+    /// The panel's contract is the exported page's: a swap behavior
+    /// that never appears in the HTML is a behavior the user attached
+    /// and nothing else, which is the user-visible half of issue
+    /// #93's stopping condition.
+    #[test]
+    fn an_attached_behavior_reaches_the_exported_page() {
+        let (mut shell, plate, _) = slice_shell();
+        assert!(
+            shell.add_targeted_behavior(plate, SWAP_IMAGE_BEHAVIOR, "button"),
+            "the swap behavior attaches"
+        );
+        let options = webexport::WebExportOptions::default();
+        let export = app_cli::ops::export_web(
+            shell.editor.document(),
+            &options,
+            webexport::Workflow::HtmlAndImages,
+        )
+        .expect("the web export runs");
+        let html = export.html.expect("the workflow writes a page");
+        assert!(
+            html.contains("MM_swapImage"),
+            "the exported page carries the behavior:\n{html}"
+        );
+        assert!(
+            html.contains("'button'"),
+            "the exported page names the swap target:\n{html}"
         );
     }
 

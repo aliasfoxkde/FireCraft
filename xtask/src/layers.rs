@@ -9,6 +9,10 @@
 //! L4  io, scripting, webexport        import/export codecs + web export
 //! L5  app, app-cli, firecraft-web     shells
 //! L7  xtask                           verification tooling
+//!
+//! Only crates that exist belong in the table. Registering a name with no
+//! package hides nothing — `run` checks every real package — but it makes
+//! the tier map describe a workspace that is not there.
 //! ```
 
 use crate::util::cargo_metadata;

@@ -157,6 +157,10 @@ pub struct Shell {
     export_dialog: Option<ExportDialog>,
     /// Open Numeric Transform dialog, if any.
     pub(crate) numeric_transform: Option<NumericTransformDialog>,
+    /// Open Scale To dialog, if any.
+    pub(crate) scale_to: Option<ScaleToDialog>,
+    /// Open confirm dialog, if any (the shell's Yes/No mechanism).
+    pub(crate) confirm: Option<ConfirmDialog>,
     /// Open Feather dialog, if any.
     pub(crate) feather: Option<FeatherDialog>,
     /// Open Canvas Size dialog, if any.
@@ -179,6 +183,10 @@ pub struct Shell {
     close_requested: bool,
     /// The Auto Shape flyout is open (toggled by its tool button).
     autoshape_flyout: bool,
+    /// The Auto Shapes panel's mode: insert at the canvas center
+    /// (default) vs regenerate the selected path (`autoshape.redraw`,
+    /// decision 0028's parametric redraw).
+    autoshape_redraw: bool,
     /// The open tool-group flyout: the group's name, its tools, and
     /// the screen position it opened at (CS6's press-and-hold list).
     tool_flyout: Option<(&'static str, Vec<Tool>, Pos2)>,
@@ -219,6 +227,13 @@ pub struct Shell {
     /// The user's UI scale factor (`pixels_per_point`): `None` follows
     /// the platform default. Persisted with the layout.
     ui_scale: Option<f32>,
+    /// The keymap set in force: CS6's own keymap unless the user
+    /// chose another in the preferences. Persisted with the layout.
+    keymap: crate::keymap::KeymapSet,
+    /// The resolved keymap: the CS6 table with the active set's
+    /// overrides applied. Recomputed when the set changes, so the
+    /// dispatch loop and the help panel read the same table.
+    keymap_bindings: Vec<crate::menus::Shortcut>,
     /// The Styles panel's new-style name field.
     style_name: String,
     /// Filter rename drafts, keyed by object, stack position and original effect identity.
@@ -564,6 +579,11 @@ struct ShellLayout {
     /// The user's UI scale (`pixels_per_point`); `None` follows the
     /// platform default.
     ui_scale: Option<f32>,
+    /// The keymap set in force — CS6's own keymap unless the user
+    /// chose another. `#[serde(default)]` — a layout saved before
+    /// the sets existed carries none, which is CS6.
+    #[serde(default)]
+    keymap: crate::keymap::KeymapSet,
     /// The palette's recently-run commands, most recent first.
     #[serde(default)]
     palette_recents: Vec<String>,
@@ -596,6 +616,7 @@ impl Default for ShellLayout {
             show_rulers: false,
             smart_guides: true,
             ui_scale: None,
+            keymap: crate::keymap::KeymapSet::default(),
             palette_recents: Vec::new(),
         }
     }
@@ -607,7 +628,7 @@ impl Shell {
     /// panel set and dock folds.
     #[must_use]
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        apply_cs6_theme(&cc.egui_ctx);
+        apply_chrome_theme(&cc.egui_ctx);
         let layout = cc
             .storage
             .and_then(|storage| eframe::get_value::<ShellLayout>(storage, "shell_layout"))
@@ -660,6 +681,8 @@ impl Shell {
             status: "ready".to_owned(),
             export_dialog: None,
             numeric_transform: None,
+            scale_to: None,
+            confirm: None,
             feather: None,
             canvas_size: None,
             canvas_color: None,
@@ -670,6 +693,7 @@ impl Shell {
             canvas_rect: None,
             close_requested: false,
             autoshape_flyout: false,
+            autoshape_redraw: false,
             tool_flyout: None,
             tool_press: None,
             about_open: false,
@@ -680,6 +704,8 @@ impl Shell {
             #[cfg(not(target_arch = "wasm32"))]
             recovery_path: Self::default_recovery_path(),
             ui_scale: None,
+            keymap: crate::keymap::KeymapSet::default(),
+            keymap_bindings: crate::keymap::KeymapSet::default().bindings(),
             style_name: String::new(),
             filter_names: std::collections::HashMap::new(),
             filter_bake: FilterBakeFields::default(),
@@ -853,6 +879,7 @@ impl Shell {
         self.show_rulers = self.layout.show_rulers;
         self.smart_guides = self.layout.smart_guides;
         self.ui_scale = self.layout.ui_scale;
+        self.set_keymap(self.layout.keymap);
         // Recents naming a command this build lacks are dropped —
         // same rule as the panel inventory above. The list is the
         // registry's ids plus the session-scoped ones, because the
@@ -899,6 +926,7 @@ impl Shell {
             show_rulers: self.show_rulers,
             smart_guides: self.smart_guides,
             ui_scale: self.ui_scale,
+            keymap: self.keymap,
             palette_recents: self.palette.recents.clone(),
         }
     }
@@ -1071,16 +1099,43 @@ impl Shell {
     /// The visible label of one menu row. Rows whose label depends on
     /// live document state resolve it here; the rest show the label
     /// the CS6 resource table carries.
+    ///
+    /// The accelerator printed is the one in force: the active
+    /// keymap set's binding for the row's verb when the set overrides
+    /// it, and the CS6 text otherwise.
     fn item_label(&self, item: &menus::Item) -> String {
         let label = match item.dynamic {
             Some(menus::DynamicLabel::MaskToggle) => self.mask_toggle_label(),
             None => item.label,
         };
+        if let Some(binding) = self.keymap.binding(item.action) {
+            let shortcut = menus::Shortcut {
+                group: item.label,
+                mods: binding.mods,
+                key: binding.key,
+                action: item.action,
+            };
+            return format!("{}\t{}", label, shortcut.label());
+        }
         if item.accel.is_empty() {
             label.to_owned()
         } else {
             format!("{}\t{}", label, item.accel)
         }
+    }
+
+    /// Chooses the keymap set in force. The resolved table is rebuilt
+    /// here, so the dispatch loop, the menu bar and the help panel
+    /// read the same bindings.
+    pub(crate) fn set_keymap(&mut self, set: crate::keymap::KeymapSet) {
+        self.keymap = set;
+        self.keymap_bindings = set.bindings();
+    }
+
+    /// The keymap set in force.
+    #[must_use]
+    pub(crate) fn keymap(&self) -> crate::keymap::KeymapSet {
+        self.keymap
     }
 
     /// Whether a row applies to the current selection. An inert row
@@ -1403,6 +1458,25 @@ impl Shell {
             }
             menus::ShellAction::NumericTransform => {
                 self.numeric_transform = Some(NumericTransformDialog::default());
+            }
+            menus::ShellAction::ScaleTo => {
+                let ids = self.editor.live_selection();
+                if ids.is_empty() {
+                    self.status = "nothing selected".to_owned();
+                } else if let Some(bounds) = union_selection_bounds(self.editor.document(), &ids) {
+                    self.scale_to = Some(ScaleToDialog {
+                        width: bounds.width(),
+                        height: bounds.height(),
+                    });
+                } else {
+                    self.status = "the selection has no bounds".to_owned();
+                }
+            }
+            menus::ShellAction::DeleteAll => {
+                self.confirm = Some(ConfirmDialog {
+                    question: "Delete all objects in the document? This can be undone.".to_owned(),
+                    action: ConfirmAction::DeleteAll,
+                });
             }
             menus::ShellAction::TransformMode(mode) => {
                 self.editor.transform_mode = match mode {
@@ -2682,7 +2756,7 @@ impl Shell {
                         _ => {}
                     }
                 }
-                for shortcut in menus::SHORTCUTS {
+                for shortcut in &self.keymap_bindings {
                     if shortcut.key != *key
                         || shortcut.mods.ctrl != modifiers.ctrl
                         || shortcut.mods.alt != modifiers.alt
@@ -3063,6 +3137,18 @@ impl eframe::App for Shell {
                 .collapsible(false)
                 .show(ui.ctx(), |ui| self.numeric_transform_dialog_ui(ui));
         }
+        if self.scale_to.is_some() {
+            egui::Window::new("Scale To")
+                .resizable(false)
+                .collapsible(false)
+                .show(ui.ctx(), |ui| self.scale_to_dialog_ui(ui));
+        }
+        if self.confirm.is_some() {
+            egui::Window::new("Confirm")
+                .resizable(false)
+                .collapsible(false)
+                .show(ui.ctx(), |ui| self.confirm_dialog_ui(ui));
+        }
         if self.feather.is_some() {
             egui::Window::new("Feather Selection")
                 .resizable(false)
@@ -3189,7 +3275,7 @@ mod tests {
     }
 
     /// A shell whose selection is a text object carrying `text`.
-    fn text_shell(text: &str) -> (Shell, doc::ObjectId) {
+    pub(super) fn text_shell(text: &str) -> (Shell, doc::ObjectId) {
         let mut editor = Editor::untitled();
         editor
             .apply(
@@ -3703,6 +3789,145 @@ mod tests {
                 .len(),
             before + 1,
             "the primitive lands too"
+        );
+    }
+
+    /// The Auto Shapes panel's Insert/Redraw toggle: with a path
+    /// selected, a Redraw-mode click re-runs that generator into it —
+    /// `autoshape.redraw` dispatched from the panel itself — and the
+    /// compositor follows the new contours. The contours come out
+    /// exactly as a fresh insert of the same shape bakes them, so the
+    /// redraw is the generator running again, not a move. With no
+    /// path selected the row reports so and dispatches nothing.
+    #[test]
+    fn the_autoshapes_panel_redraws_the_selected_path() {
+        let mut shell = gui_shell(gui_editor());
+        let id = shell.editor.current_cell().expect("a cell").elements[0];
+        shell.editor.set_selection(vec![id]);
+        shell.editor.rect_corner = 30.0;
+        let before_path = shell_path(&shell, id);
+        let registered = shell.editor.document().registry.iter().count();
+        let before = compose::render(
+            shell.editor.document(),
+            shell.editor.page,
+            shell.editor.frame,
+        )
+        .expect("renders");
+
+        let ctx = egui::Context::default();
+        ctx.global_style_mut(|style| style.animation_time = 0.0);
+        let click = |shell: &mut Shell, label: &str, ctx: &egui::Context| {
+            let draw = |shell: &mut Shell, input| {
+                ctx.run_ui(input, |ui| {
+                    egui::CentralPanel::default().show(ui, |ui| {
+                        shell.auto_shapes_panel(ui);
+                    });
+                })
+            };
+            draw(shell, egui::RawInput::default()).drop_without_applying_deltas();
+            let mut output = draw(shell, egui::RawInput::default());
+            output.textures_delta.clear();
+            let position = output
+                .shapes
+                .iter()
+                .find_map(|shape| match &shape.shape {
+                    egui::epaint::Shape::Text(text) if text.galley.job.text == label => {
+                        Some(text.visual_bounding_rect().center())
+                    }
+                    _ => None,
+                })
+                .unwrap_or_else(|| panic!("the row {label:?} is visible"));
+            for pressed in [true, false] {
+                let input = egui::RawInput {
+                    events: vec![
+                        egui::Event::PointerMoved(position),
+                        egui::Event::PointerButton {
+                            pos: position,
+                            button: egui::PointerButton::Primary,
+                            pressed,
+                            modifiers: egui::Modifiers::default(),
+                        },
+                    ],
+                    ..Default::default()
+                };
+                draw(shell, input).drop_without_applying_deltas();
+            }
+        };
+
+        // Flip the panel to Redraw mode, then click the shape row.
+        click(&mut shell, "Redraw", &ctx);
+        assert!(shell.autoshape_redraw, "the toggle sets redraw mode");
+        click(&mut shell, "Rounded Rectangle", &ctx);
+
+        assert_eq!(
+            shell.editor.document().registry.iter().count(),
+            registered,
+            "the redraw mutates in place — nothing new was minted"
+        );
+        let redrawn = shell_path(&shell, id);
+        assert_ne!(
+            redrawn.contours, before_path.contours,
+            "the generator re-baked the path"
+        );
+        let after = compose::render(
+            shell.editor.document(),
+            shell.editor.page,
+            shell.editor.frame,
+        )
+        .expect("renders");
+        assert_ne!(
+            before.pixels, after.pixels,
+            "the compositor honours the regenerated contours"
+        );
+
+        // One undo step, named for the verb the panel dispatched; it
+        // takes the path back to its original contours.
+        assert_eq!(
+            shell.editor.session.undo().expect("an undo step"),
+            "autoshape.redraw",
+            "the panel dispatched the redraw verb"
+        );
+        assert_eq!(
+            shell_path(&shell, id).contours,
+            before_path.contours,
+            "undo restores the original path"
+        );
+
+        // The redrawn contours equal what a fresh insert of the same
+        // shape bakes with the panel's box and corner — the same
+        // generator, run again.
+        shell.insert_shape(
+            super::panels_web::ShapeKind::Auto(crate::editor::AutoShape::RoundedRect),
+            "Rounded Rectangle",
+        );
+        let fresh_id = shell
+            .editor
+            .current_cell()
+            .expect("a cell")
+            .elements
+            .last()
+            .copied()
+            .expect("the insert landed");
+        assert_ne!(fresh_id, id, "the insert minted a second object");
+        let fresh = shell_path(&shell, fresh_id);
+        assert_eq!(
+            redrawn.contours, fresh.contours,
+            "redraw and insert run the same generator over the same parameters"
+        );
+
+        // No path selected: the row reports and dispatches nothing.
+        let journal = shell.editor.session.journal_len();
+        shell.editor.set_selection(Vec::new());
+        shell.redraw_shape(crate::editor::AutoShape::Star, "Star");
+        assert!(
+            shell.status.contains("Redraw needs a selected path"),
+            "{}",
+            shell.status
+        );
+        assert_eq!(
+            shell.editor.session.journal_len(),
+            journal,
+            "the refusal dispatched nothing"
         );
     }
 
@@ -5138,6 +5363,155 @@ mod tests {
         assert!(shell.numeric_transform.is_none(), "OK closes the dialog");
     }
 
+    /// Modify ▸ Transform ▸ Scale To…: the dialog seeds from the
+    /// selection's bounds and resizes it to the exact box through
+    /// `object.resize`.
+    #[test]
+    fn scale_to_dialog_resizes_to_the_exact_box() {
+        let mut shell = gui_shell(gui_editor());
+        let id = shell.editor.current_cell().unwrap().elements[0];
+        shell.editor.set_selection(vec![id]);
+        let before = crate::editor::bounds_of(&shell_path(&shell, id));
+
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::ScaleTo));
+        let seeded = shell.scale_to.clone().expect("the dialog opened");
+        assert_eq!(
+            (seeded.width, seeded.height),
+            (before.width(), before.height()),
+            "the fields seed from the selection's bounds"
+        );
+
+        shell.apply_scale_to(&ScaleToDialog {
+            width: 80.0,
+            height: 10.0,
+        });
+        let after = crate::editor::bounds_of(&shell_path(&shell, id));
+        assert_eq!(
+            (after.width(), after.height()),
+            (80.0, 10.0),
+            "the selection took the exact box"
+        );
+        assert_eq!(
+            shell.editor.session.undo().expect("an undo step"),
+            "object.resize",
+            "the dialog dispatched the resize"
+        );
+        assert!(shell.scale_to.is_none(), "OK closes the dialog");
+    }
+
+    /// Edit ▸ Delete All… asks first: the row opens the confirm
+    /// dialog, "No" leaves the document untouched, and "Yes" empties
+    /// it through `document.deleteAllInDocument` — the confirmed
+    /// action decision 0117 said did not exist yet. The rendered page
+    /// goes blank with the objects, and the undo label carries the
+    /// verb, so one undo brings everything back.
+    #[test]
+    fn delete_all_asks_before_emptying_the_document() {
+        let mut shell = gui_shell(gui_editor());
+        let before = compose::render(
+            shell.editor.document(),
+            shell.editor.page,
+            shell.editor.frame,
+        )
+        .expect("renders");
+        let objects = shell.editor.current_cell().expect("a cell").elements.len();
+        assert!(objects > 0, "the fixture starts with objects");
+
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::DeleteAll));
+        assert_eq!(
+            shell.confirm.clone().expect("the confirm dialog").action,
+            ConfirmAction::DeleteAll,
+            "the row opens the delete-all confirmation"
+        );
+
+        // Draw the dialog and click "No": nothing happens.
+        let ctx = egui::Context::default();
+        ctx.global_style_mut(|style| style.animation_time = 0.0);
+        let click = |shell: &mut Shell, label: &str, ctx: &egui::Context| {
+            let draw = |shell: &mut Shell, input| {
+                ctx.run_ui(input, |ui| {
+                    egui::CentralPanel::default().show(ui, |ui| {
+                        shell.confirm_dialog_ui(ui);
+                    });
+                })
+            };
+            draw(shell, egui::RawInput::default()).drop_without_applying_deltas();
+            let mut output = draw(shell, egui::RawInput::default());
+            output.textures_delta.clear();
+            let position = output
+                .shapes
+                .iter()
+                .find_map(|shape| match &shape.shape {
+                    egui::epaint::Shape::Text(text) if text.galley.job.text == label => {
+                        Some(text.visual_bounding_rect().center())
+                    }
+                    _ => None,
+                })
+                .expect("the button is visible");
+            for pressed in [true, false] {
+                let input = egui::RawInput {
+                    events: vec![
+                        egui::Event::PointerMoved(position),
+                        egui::Event::PointerButton {
+                            pos: position,
+                            button: egui::PointerButton::Primary,
+                            pressed,
+                            modifiers: egui::Modifiers::default(),
+                        },
+                    ],
+                    ..Default::default()
+                };
+                draw(shell, input).drop_without_applying_deltas();
+            }
+        };
+        click(&mut shell, "No", &ctx);
+        assert!(
+            shell.confirm.is_none(),
+            "No closes the dialog without confirming"
+        );
+        let still_there = compose::render(
+            shell.editor.document(),
+            shell.editor.page,
+            shell.editor.frame,
+        )
+        .expect("renders");
+        assert_eq!(
+            before.pixels, still_there.pixels,
+            "declining leaves the document untouched"
+        );
+        assert!(shell.confirm.is_none(), "the dialog stayed closed");
+
+        // Ask again and click "Yes": every object goes, the render
+        // goes with them, and one undo carries the verb's name.
+        shell.run_action(&menus::Action::Shell(menus::ShellAction::DeleteAll));
+        click(&mut shell, "Yes", &ctx);
+        assert!(shell.confirm.is_none(), "Yes closes the dialog");
+        let after = compose::render(
+            shell.editor.document(),
+            shell.editor.page,
+            shell.editor.frame,
+        )
+        .expect("renders");
+        assert_ne!(
+            before.pixels, after.pixels,
+            "the compositor honours the empty document"
+        );
+        assert!(
+            shell
+                .editor
+                .current_cell()
+                .expect("a cell")
+                .elements
+                .is_empty(),
+            "every top-level element is gone"
+        );
+        assert_eq!(
+            shell.editor.session.undo().expect("an undo step"),
+            "document.deleteAllInDocument",
+            "the confirmed action dispatched the verb"
+        );
+    }
+
     /// The Layers panel's three mutating surfaces: rename, the
     /// per-state lock, and the reorder. The reorder keeps the moved
     /// layer active — the user keeps editing the layer they moved.
@@ -5891,6 +6265,44 @@ mod tests {
         other.layout = saved;
         other.apply_layout();
         assert_eq!(other.ui_scale, Some(1.5));
+    }
+
+    /// The keymap set in force rides the persisted layout: the set
+    /// chosen in Preferences restores with the layout, so the choice
+    /// survives a restart.
+    #[test]
+    fn the_keymap_set_round_trips_the_layout() {
+        let mut shell = gui_shell(gui_editor());
+        assert_eq!(shell.keymap(), crate::keymap::KeymapSet::Cs6);
+        shell.set_keymap(crate::keymap::KeymapSet::Photoshop);
+        let saved = shell.capture_layout();
+        assert_eq!(saved.keymap, crate::keymap::KeymapSet::Photoshop);
+        // A fresh shell restores the set with the layout.
+        let mut other = gui_shell(gui_editor());
+        other.layout = saved;
+        other.apply_layout();
+        assert_eq!(other.keymap(), crate::keymap::KeymapSet::Photoshop);
+    }
+
+    /// The set in force is what the shell dispatches from: choosing
+    /// another set replaces the binding table the key handler reads.
+    #[test]
+    fn the_keymap_set_replaces_the_dispatch_table() {
+        let mut shell = gui_shell(gui_editor());
+        assert_eq!(shell.keymap_bindings.len(), menus::SHORTCUTS.len());
+        shell.set_keymap(crate::keymap::KeymapSet::Illustrator);
+        for binding in crate::keymap::KeymapSet::Illustrator.overrides() {
+            let resolved = shell
+                .keymap_bindings
+                .iter()
+                .find(|shortcut| shortcut.action == binding.action)
+                .expect("the verb stays bound");
+            assert_eq!(
+                (resolved.mods, resolved.key),
+                (binding.mods, binding.key),
+                "the dispatch table carries the set's binding"
+            );
+        }
     }
 
     /// The Canvas Size dialog opens seeded with the live canvas,
@@ -7252,6 +7664,85 @@ mod tests {
         assert!(!facts.hidden, "the mask's attributes are shown again");
     }
 
+    /// The mask panel's *make plain group* row dispatches
+    /// `object.setGroupType` from the panel control itself — the
+    /// click lands, the group's `GRTi` goes 1/2 → 0, and the
+    /// compositor honours it: a *hide all* mask stops masking, so the
+    /// content it was hiding appears. Retyping without the renderer
+    /// following would be a field that engages and changes nothing.
+    #[test]
+    fn the_mask_panel_row_makes_the_mask_group_plain() {
+        let (mut shell, id) = masked_shell("hide all");
+        let facts = shell.mask_facts(id).expect("the selection carries a mask");
+        let group_id = facts.group_id;
+        assert!(facts.enabled, "the row only shows for an enabled mask");
+        let before = compose::render(
+            shell.editor.document(),
+            shell.editor.page,
+            shell.editor.frame,
+        )
+        .expect("renders");
+
+        let ctx = egui::Context::default();
+        ctx.global_style_mut(|style| style.animation_time = 0.0);
+        let draw = |shell: &mut Shell, input| {
+            ctx.run_ui(input, |ui| {
+                egui::CentralPanel::default().show(ui, |ui| {
+                    shell.mask_panel(ui, id);
+                });
+            })
+        };
+        draw(&mut shell, egui::RawInput::default()).drop_without_applying_deltas();
+        let mut output = draw(&mut shell, egui::RawInput::default());
+        output.textures_delta.clear();
+        let position = output
+            .shapes
+            .iter()
+            .find_map(|shape| match &shape.shape {
+                egui::epaint::Shape::Text(text) if text.galley.job.text == "make plain group" => {
+                    Some(text.visual_bounding_rect().center())
+                }
+                _ => None,
+            })
+            .expect("the row is visible while the mask is enabled");
+        for pressed in [true, false] {
+            let input = egui::RawInput {
+                events: vec![
+                    egui::Event::PointerMoved(position),
+                    egui::Event::PointerButton {
+                        pos: position,
+                        button: egui::PointerButton::Primary,
+                        pressed,
+                        modifiers: egui::Modifiers::default(),
+                    },
+                ],
+                ..Default::default()
+            };
+            draw(&mut shell, input).drop_without_applying_deltas();
+        }
+
+        let group_type = match shell.editor.document().registry.get(group_id) {
+            Some(ObjectData::Group(group)) => group.group_type,
+            _ => panic!("the mask owner is still a group"),
+        };
+        assert_eq!(group_type, 0, "the mask group became a plain group");
+        let after = compose::render(
+            shell.editor.document(),
+            shell.editor.page,
+            shell.editor.frame,
+        )
+        .expect("renders");
+        assert_ne!(
+            before.pixels, after.pixels,
+            "the compositor honours the retyped group"
+        );
+        assert_eq!(
+            shell.editor.session.undo().expect("an undo step"),
+            "object.setGroupType",
+            "the panel dispatched the verb"
+        );
+    }
+
     /// The Pages panel's master star: one master per document, the
     /// master's own layer list grows through the engine, and clearing
     /// the master hands the page back.
@@ -7669,6 +8160,162 @@ mod tests {
         shell.paste_channel(target, "alpha", "alpha");
         assert!(!shell.status.contains("failed"), "{}", shell.status);
         assert_eq!(image_alpha(&shell, target), Some(255), "the channel landed");
+    }
+
+    /// A shell holding one rectangle path, selected: the node-editing
+    /// fixture.
+    fn one_path_shell() -> (Shell, doc::ObjectId) {
+        let mut editor = Editor::untitled();
+        editor
+            .apply(
+                "object.createPath",
+                serde_json::json!({
+                    "kind": "rect",
+                    "x": 20.0, "y": 15.0, "width": 40.0, "height": 20.0,
+                    "page": editor.page,
+                    "layer": editor.active_layer(),
+                    "cell": editor.frame,
+                    "name": null,
+                }),
+            )
+            .unwrap();
+        let id = editor.current_cell().unwrap().elements[0];
+        editor.set_selection(vec![id]);
+        (gui_shell(editor), id)
+    }
+
+    /// The first anchor of a path, in world space.
+    fn first_anchor(shell: &Shell, id: doc::ObjectId) -> geom::Point {
+        match shell.editor.document().registry.get(id) {
+            Some(doc::ObjectData::Path(path)) => path.contours[0].points[0].anchor,
+            other => panic!("expected a path, got {other:?}"),
+        }
+    }
+
+    /// Draws the canvas once: the world↔screen mapping a gesture is
+    /// aimed through settles on the first frame.
+    ///
+    /// The input carries a fixed screen size and a raised texture
+    /// cap: egui's default viewport is 10 000 points square, which
+    /// fits the page at a scale whose raster is wider than the
+    /// default texture side.
+    fn draw_canvas(shell: &mut Shell, ctx: &egui::Context, input: egui::RawInput) {
+        let input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(1024.0, 768.0),
+            )),
+            max_texture_side: Some(8192),
+            ..input
+        };
+        ctx.run_ui(input, |ui| {
+            egui::CentralPanel::default().show(ui, |ui| {
+                shell.canvas(ui);
+            });
+        })
+        .drop_without_applying_deltas();
+    }
+
+    /// The window position of a world point on the canvas.
+    fn canvas_point(shell: &Shell, world: geom::Point) -> egui::Pos2 {
+        let rect = shell.canvas_rect.expect("the canvas is laid out");
+        shell.screen_of(world) + rect.left_top().to_vec2()
+    }
+
+    /// Presses at `from`, drags to `to`, and releases — one gesture
+    /// through the canvas.
+    fn canvas_drag(shell: &mut Shell, ctx: &egui::Context, from: egui::Pos2, to: egui::Pos2) {
+        let press = egui::RawInput {
+            events: vec![
+                egui::Event::PointerMoved(from),
+                egui::Event::PointerButton {
+                    pos: from,
+                    button: egui::PointerButton::Primary,
+                    pressed: true,
+                    modifiers: egui::Modifiers::default(),
+                },
+            ],
+            ..Default::default()
+        };
+        draw_canvas(shell, ctx, press);
+        let dragging = egui::RawInput {
+            events: vec![egui::Event::PointerMoved(to)],
+            ..Default::default()
+        };
+        draw_canvas(shell, ctx, dragging);
+        let release = egui::RawInput {
+            events: vec![egui::Event::PointerButton {
+                pos: to,
+                button: egui::PointerButton::Primary,
+                pressed: false,
+                modifiers: egui::Modifiers::default(),
+            }],
+            ..Default::default()
+        };
+        draw_canvas(shell, ctx, release);
+    }
+
+    /// T27-24: the Vector Path tool's node drag. A press on an anchor
+    /// grabs that node and the drag reshapes it; the gesture ends with
+    /// the release, so neither the node drag nor the "Reshape"
+    /// transaction is left open.
+    #[test]
+    fn the_vector_path_tool_reshapes_the_node_and_closes_the_gesture() {
+        let (mut shell, id) = one_path_shell();
+        shell.editor.tool = Tool::VectorPath;
+        let ctx = egui::Context::default();
+        ctx.global_style_mut(|style| style.animation_time = 0.0);
+        draw_canvas(&mut shell, &ctx, egui::RawInput::default());
+
+        let anchor = first_anchor(&shell, id);
+        let from = canvas_point(&shell, anchor);
+        let to = from + egui::vec2(24.0, 12.0);
+        canvas_drag(&mut shell, &ctx, from, to);
+
+        let moved = first_anchor(&shell, id);
+        assert!(
+            (moved.x - anchor.x).abs() > 1.0 || (moved.y - anchor.y).abs() > 1.0,
+            "the drag reshapes the anchor: {anchor:?} → {moved:?}",
+        );
+        assert!(
+            shell.editor.node_drag.is_none(),
+            "the gesture ends with the release",
+        );
+        assert!(
+            !shell.editor.session.transaction_open(),
+            "no transaction is left open",
+        );
+    }
+
+    /// T27-24: a click on an anchor is not a drag — the Vector Path
+    /// tool's click handler must not open a node drag that nothing
+    /// closes, or the next drag would reshape that stale node instead
+    /// of the object under the pointer.
+    #[test]
+    fn a_vector_path_click_leaves_no_node_drag_behind() {
+        let (mut shell, id) = one_path_shell();
+        shell.editor.tool = Tool::VectorPath;
+        let ctx = egui::Context::default();
+        ctx.global_style_mut(|style| style.animation_time = 0.0);
+        draw_canvas(&mut shell, &ctx, egui::RawInput::default());
+
+        let anchor = first_anchor(&shell, id);
+        let at = canvas_point(&shell, anchor);
+        canvas_drag(&mut shell, &ctx, at, at);
+
+        assert!(
+            shell.editor.node_drag.is_none(),
+            "the click opens no node drag",
+        );
+        assert!(
+            !shell.editor.session.transaction_open(),
+            "the click opens no transaction",
+        );
+        assert_eq!(
+            first_anchor(&shell, id),
+            anchor,
+            "the click leaves the path alone",
+        );
     }
 }
 #[cfg(not(feature = "native"))]

@@ -36,6 +36,14 @@
 //! `^0.2.5` does not match `0.2.5-dryrun.3`, so cargo must
 //! re-resolve, and `--locked` refuses to let it.
 //!
+//! The toolchain pin is a stamp of the same shape, one layer up: the
+//! compiler is a single number that lives in `rust-toolchain.toml`,
+//! in every workflow's `toolchain:` input and in the CI image's
+//! `FROM rust:` base (decisions 0102 and 0128, issue #146). Moving
+//! one without the others is the defect this module exists to catch,
+//! so `toolchain` runs as its own gate step, before the expensive
+//! ones.
+//!
 //! The check is deliberately *git-free* and *cargo-free*: it has to
 //! work when the lock is stale, which is exactly the state it exists
 //! to catch.
@@ -47,6 +55,10 @@ use crate::util::workspace_root;
 
 /// The DEB control file's version field.
 const DEB_CONTROL: &str = "packaging/deb/control";
+
+/// The repository's toolchain pin — the source of truth for the
+/// compiler the box, the runner and the image judge with.
+const RUST_TOOLCHAIN: &str = "rust-toolchain.toml";
 
 /// One workspace member: its package name, its manifest path and the
 /// directory that manifest lives in (the base its relative paths
@@ -487,6 +499,127 @@ pub fn verify() -> Result<(), String> {
     Ok(())
 }
 
+/// The compiler pin, checked across the three places that carry it.
+///
+/// `rust-toolchain.toml` is the source of truth (decision 0128): the
+/// workflows' `toolchain:` inputs and the CI image's `FROM rust:`
+/// base have to name the same compiler, or the box, the runner and
+/// the image judge one commit three different ways — a different
+/// clippy verdict and a different coverage number from the same
+/// source, which is the defect issue #146 recorded.
+pub fn toolchain() -> Result<(), String> {
+    let root = workspace_root();
+    let channel = pinned_channel(&read(&root.join(RUST_TOOLCHAIN))?)?;
+
+    let mut drifts = Vec::new();
+    for path in suffixed(&root.join(".github/workflows"), &[".yml", ".yaml"])? {
+        let body = read(&path)?;
+        let file = path.display().to_string();
+        drifts.extend(pin_drifts(&file, &workflow_toolchain_pins(&body), &channel));
+    }
+    for path in suffixed(&root.join("infrastructure/docker"), &[".Dockerfile"])? {
+        let body = read(&path)?;
+        let file = path.display().to_string();
+        drifts.extend(pin_drifts(&file, &dockerfile_rust_pins(&body), &channel));
+    }
+
+    if !drifts.is_empty() {
+        return Err(format!(
+            "the compiler pin drifted from {RUST_TOOLCHAIN}:\n  {}",
+            drifts.join("\n  ")
+        ));
+    }
+    eprintln!(
+        "[xtask] stamp: {channel} agrees with {RUST_TOOLCHAIN}, the workflows and the CI image"
+    );
+    Ok(())
+}
+
+/// The exact version `rust-toolchain.toml` pins.
+///
+/// `channel = "stable"` or a partial `1.99` is not a pin: `stable`
+/// moves under the coverage floor (decision 0102) and a partial
+/// channel resolves to whatever patch a box happens to have installed.
+fn pinned_channel(text: &str) -> Result<String, String> {
+    let channel = toml_field(text, "channel")
+        .ok_or_else(|| format!("{RUST_TOOLCHAIN} has no channel = \"…\""))?;
+    check_version(&channel)
+        .map_err(|err| format!("{RUST_TOOLCHAIN}: channel {channel:?}: {err}"))?;
+    Ok(channel)
+}
+
+/// Every `toolchain:` input a workflow carries, with the line each is
+/// written on (1-based).
+///
+/// The workflows pin the compiler on every install step (decision
+/// 0102). A `uses:` line that merely names the action, a comment, or
+/// any other key that happens to start with `toolchain` is not a pin:
+/// the test is the literal `toolchain:` prefix on the trimmed line.
+fn workflow_toolchain_pins(text: &str) -> Vec<(usize, String)> {
+    text.lines()
+        .enumerate()
+        .filter_map(|(index, line)| {
+            let rest = line.trim().strip_prefix("toolchain:")?;
+            Some((index + 1, unquote(rest)))
+        })
+        .collect()
+}
+
+/// Every `FROM rust:<version>` base an image recipe carries, with the
+/// line each is written on (1-based).
+///
+/// The CI image is the third place the compiler is pinned
+/// (`infrastructure/docker/ci-rust.Dockerfile`): the version is the
+/// first token of the tag, so `FROM rust:1.99.1-slim-bookworm AS
+/// fetch` names the same compiler as the bare stage.
+fn dockerfile_rust_pins(text: &str) -> Vec<(usize, String)> {
+    text.lines()
+        .enumerate()
+        .filter_map(|(index, line)| {
+            let rest = line.trim().strip_prefix("FROM rust:")?;
+            let version = rest.split(['-', ' ', '\t']).next()?;
+            Some((index + 1, version.to_owned()))
+        })
+        .collect()
+}
+
+/// The pins in one document that disagree with `channel`, as
+/// `file:line: …` strings.
+fn pin_drifts(file: &str, pins: &[(usize, String)], channel: &str) -> Vec<String> {
+    pins.iter()
+        .filter(|(_, value)| value != channel)
+        .map(|(line, value)| {
+            format!("{file}:{line}: toolchain {value} does not match {RUST_TOOLCHAIN} ({channel})")
+        })
+        .collect()
+}
+
+/// The files in `dir` whose name ends with one of `suffixes`, sorted.
+///
+/// The directory has to exist: a tree that lost `.github/workflows`
+/// is a tree that lost the pins this gate reads, and failing closed
+/// is the point.
+fn suffixed(dir: &Path, suffixes: &[&str]) -> Result<Vec<PathBuf>, String> {
+    let entries = std::fs::read_dir(dir).map_err(|e| format!("read {}: {e}", dir.display()))?;
+    let mut found = Vec::new();
+    for entry in entries {
+        let entry = entry.map_err(|e| format!("read {}: {e}", dir.display()))?;
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+        let Some(name) = path.file_name() else {
+            continue;
+        };
+        let name = name.to_string_lossy();
+        if suffixes.iter().any(|suffix| name.ends_with(suffix)) {
+            found.push(path);
+        }
+    }
+    found.sort();
+    Ok(found)
+}
+
 /// The lock's dependency references that name no package in the lock.
 ///
 /// A reference has to name a package the lock holds. Cargo qualifies
@@ -807,8 +940,9 @@ fn rewrite_reference(
 mod tests {
     #![allow(clippy::unwrap_used, clippy::expect_used)]
     use super::{
-        check_version, field, lock_reference_drifts, path_requirements, replace_field,
-        replace_quoted, rewrite_lock, rewrite_path_requirements, section_value,
+        check_version, dockerfile_rust_pins, field, lock_reference_drifts, path_requirements,
+        pin_drifts, pinned_channel, replace_field, replace_quoted, rewrite_lock,
+        rewrite_path_requirements, section_value, workflow_toolchain_pins,
     };
 
     const MANIFEST: &str = "\
@@ -1060,5 +1194,69 @@ name = \"color\"
 version = \"0.2.5\"
 ";
         assert!(lock_reference_drifts(lock).is_empty());
+    }
+
+    #[test]
+    fn workflow_pins_read_every_toolchain_input_with_its_line() {
+        let body = "\
+name: gate
+jobs:
+  gate:
+    steps:
+      - uses: dtolnay/rust-toolchain@b725eda52536
+        with:
+          # the pin, explained
+          toolchain: 1.99.1
+          components: clippy
+      - name: second job
+        with:
+          toolchain: \"1.99.1\"
+";
+        // The `uses:` line names the action, not a pin; the comment
+        // cannot be one; both real inputs come back with their lines.
+        assert_eq!(
+            workflow_toolchain_pins(body),
+            vec![(8, "1.99.1".to_owned()), (12, "1.99.1".to_owned())]
+        );
+        assert!(workflow_toolchain_pins("toolchain-file: rust-toolchain.toml").is_empty());
+        assert!(workflow_toolchain_pins("# toolchain: 1.99.1").is_empty());
+    }
+
+    #[test]
+    fn dockerfile_pins_read_the_version_out_of_the_tag() {
+        let body = "\
+FROM rust:1.99.1-slim-bookworm AS fetch
+RUN cargo fetch
+FROM rust:1.99.1-slim-bookworm
+FROM debian:bookworm
+";
+        assert_eq!(
+            dockerfile_rust_pins(body),
+            vec![(1, "1.99.1".to_owned()), (3, "1.99.1".to_owned())]
+        );
+    }
+
+    #[test]
+    fn pin_drifts_names_the_file_line_and_both_values() {
+        let pins = vec![(4, "1.99.0".to_owned()), (9, "1.99.1".to_owned())];
+        assert_eq!(
+            pin_drifts("ci.yml", &pins, "1.99.1"),
+            vec![
+                "ci.yml:4: toolchain 1.99.0 does not match rust-toolchain.toml (1.99.1)".to_owned()
+            ]
+        );
+        assert!(pin_drifts("ci.yml", &[(4, "1.99.1".to_owned())], "1.99.1").is_empty());
+        assert!(pin_drifts("ci.yml", &[], "1.99.1").is_empty());
+    }
+
+    #[test]
+    fn pinned_channel_demands_an_exact_version() {
+        assert_eq!(
+            pinned_channel("[toolchain]\nchannel = \"1.99.1\"\n").unwrap(),
+            "1.99.1"
+        );
+        assert!(pinned_channel("[toolchain]\nchannel = \"stable\"\n").is_err());
+        assert!(pinned_channel("[toolchain]\nchannel = \"1.99\"\n").is_err());
+        assert!(pinned_channel("[toolchain]\n").is_err());
     }
 }

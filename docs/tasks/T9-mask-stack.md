@@ -27,7 +27,16 @@ the operator actually changes the rendered coverage.
 `cargo test -p engine` (the command), `cargo test -p app` (the panel),
 plus the repo gate `cargo run -p xtask -- ci`.
 
-## Status — PARTIAL (2026-11-11)
+## Status — LANDED (2026-11-11; the #114 follow-ups closed 2026-11-19)
+
+The ticket's stopping condition is met: a level's mode survives the
+save/load round trip, the mode a user picks is what the model holds,
+an unrecognized spelling from a future file canonicalizes without
+breaking the load, and the operator demonstrably changes the rendered
+coverage. Issue [#114](https://github.com/aliasfoxkde/FireCraft/issues/114)
+took the two gaps that kept this `PARTIAL` — the compositor's mask
+sampling resolution and the section's screenshot acceptance — and both
+are closed.
 
 **Landed** (decisions [0092](../decisions/0092-mask-stack-combine-mode.md)
 and [0093](../decisions/0093-mask-stack-levels-and-folding.md)):
@@ -53,7 +62,18 @@ and [0093](../decisions/0093-mask-stack-levels-and-folding.md)):
   in the stack in place and contributes no coverage.
 - **The compositor applies the stack.** `compose` folds the levels
   bottom-up into one coverage and scales the content's pixels by it;
-  the mask artwork is never composited as content.
+  the mask artwork is never composited as content. A raster level's
+  mask is sampled on **the mask's own `WPXi`×`HPXi` grid** (issue
+  #114) and the coverage placed at the mask's rounded location, so it
+  is byte-identical whatever the canvas size — a live effect on the
+  mask (a blur) computes against the mask's extent, not the artboard's.
+  Coverage is the mask's gray × its own opacity, the same value the
+  engine's read path takes: a soft edge, a reduced mask opacity, or an
+  effect feathers the content. Feather comes only from the artwork —
+  there is no feather-radius control (CS6's has no equivalent;
+  decision [0093](../decisions/0093-mask-stack-levels-and-folding.md)).
+  Shape masks rasterize at the output resolution, where a vector's
+  anti-aliasing belongs.
 - **The panel lists the levels** — one row per level, top first,
   numbered from the bottom the way CS6 numbers its masks. Each row
   has the enable checkbox, the operator combo, the reorder arrows and
@@ -68,10 +88,9 @@ and [0093](../decisions/0093-mask-stack-levels-and-folding.md)):
 
 **Open:**
 
-- The compositor samples a level's mask at the canvas resolution
-  rather than at the mask image's own resolution, and the fold is a
-  per-pixel operation with no feathering beyond the mask's own gray
-  level.
-- No screenshot acceptance yet — the section is unstyled relative to
-  the rest of the Properties panel, and the Phase 22 screenshot audit
-  has not covered it.
+- Nothing — both #114 items are closed. The compositor's sampling
+  gap is fixed above, and the section was restyled to the Properties
+  panel's house shape (separator, heading, fact readout, one row per
+  level, foot) and captured as a two-row frame; the receipt, with the
+  CS6 no-stack comparison and the pre-existing separator finding, is
+  in [T22](T22-screenshot-ui.md#receipt--the-mask-stack-section-2026-11-19).

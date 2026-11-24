@@ -52,12 +52,12 @@ The editor is being brought closer to the Fireworks CS6 workspace rather than tr
 - Remaining panel work, including Optimize, Common Library, CSS Properties, Find and Replace, and Slices.
 - UI snapshot and interaction gates to prevent visual and behavioral regressions.
 
-Some of these items are partially implemented or still planned. The authoritative, task-level status is maintained in [`docs/NEXT.md`](docs/NEXT.md); see its Phase 22 for the shell-fidelity campaign.
+Some of these items are partially implemented or still planned. The authoritative, task-level status is the live ledger in [`docs/TASKS.md`](docs/TASKS.md); [`docs/NEXT.md`](docs/NEXT.md) carries the Phase 22 shell-fidelity campaign's acceptance criteria for additional detail.
 
 ## Start here
 
 - **Try the app:** [usage guide](docs/USAGE.md)
-- **See what works and what is incomplete:** [feature map](docs/FEATURES.md) · [current gaps](docs/GAPS.md)
+- **See what works and what is incomplete:** [feature map](docs/FEATURES.md) · [historical gaps audit](docs/GAPS.md)
 - **Browse all project docs:** [documentation index](docs/README.md)
 - **Current work and next tasks:** [task board](docs/TASKS.md)
 - **Contributing or handing off work:** [agent handoff](docs/HANDOFF.md) · [repository rules](AGENTS.md)
@@ -153,13 +153,14 @@ The GUI and automation interfaces are intended to drive the same engine commands
 | [Features](docs/FEATURES.md) | Implemented feature surface and evidence/gates |
 | [Usage](docs/USAGE.md) | Build instructions, CLI, shortcuts, browser bridge, MCP |
 | [Next / Roadmap](docs/NEXT.md) | Active phases, acceptance criteria, and open tasks |
-| [Gaps](docs/GAPS.md) | What is missing or evidence-gated, with the authority for each count |
+| [Gaps](docs/GAPS.md) | Historical audit of what was missing (2026-10-21); current work is on the [task board](docs/TASKS.md) |
 | [Doc index](docs/README.md) | The full documentation map |
 | [Releasing](docs/RELEASING.md) | Artifact build and deployment procedures |
+| [Marketing site roadmap](docs/MARKETING-SITE-ROADMAP.md) | Public website scope, Cloudflare Pages deployment, and launch gates |
+| [Creative-app benchmark](docs/research/creative-app-benchmark.md) | Product patterns from Krita, Photopea, and Pixlr, with licensing boundaries |
 | [Progress](docs/PROGRESS.md) | Session-level status and historical progress |
 | [Planning](docs/PLANNING.md) | Product plan, file-format notes, and architecture |
 | [Handoff](docs/HANDOFF.md) | Engineering handoff and agent runbook |
-| [Gaps](docs/GAPS.md) | Current gaps and evidence-gated items |
 | [Task board](docs/TASKS.md) | Active tasks, priority, and status |
 | [Toolchains](docs/TOOLCHAINS.md) | Platform toolchains and packaging recipes |
 | [WebOS](docs/WEBOS.md) | Browser embedding contract |

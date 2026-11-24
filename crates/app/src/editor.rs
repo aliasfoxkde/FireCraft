@@ -758,6 +758,10 @@ pub struct PolygonDraft {
 pub struct PointDraft {
     /// The vertices, in page coordinates.
     pub points: Vec<geom::Point>,
+    /// The tool that started the path. The path belongs to it: a Pen
+    /// path stays a Pen path even when the user picks another tool
+    /// before the path is committed.
+    pub tool: Tool,
 }
 
 /// One place computes the constrained drag geometry — the
@@ -2488,18 +2492,40 @@ impl Editor {
                 false
             }
             Tool::Crop => {
-                // CS6's Crop tool: the page's canvas window moves to
-                // the dragged rectangle, so what falls outside it is
+                // CS6's Crop tool: with vector paths selected the
+                // blade cuts them to the dragged rectangle
+                // (`path.cropSelection` — every selected path is
+                // intersected with it, and one entirely outside is
+                // dropped). With no path under it, the tool keeps
+                // CS6's document crop: the page's canvas window moves
+                // to the rectangle, so what falls outside it is
                 // cropped away.
-                self.apply(
-                    "document.setDocumentCanvasRect",
-                    serde_json::json!({
-                        "page": self.page,
-                        "x": x.min(drag.current.x), "y": y.min(drag.current.y),
-                        "width": width.abs().max(1.0),
-                        "height": height.abs().max(1.0),
-                    }),
-                )?;
+                let ids = self.live_selection();
+                let paths_only = !ids.is_empty()
+                    && ids.iter().all(|id| {
+                        matches!(self.document().registry.get(*id), Some(ObjectData::Path(_)))
+                    });
+                if paths_only {
+                    // The crop reads `Document::object_selection`,
+                    // so the view's selection lands there first.
+                    self.sync_selection()?;
+                    let (x0, y0) = (x.min(drag.current.x), y.min(drag.current.y));
+                    let (x1, y1) = (x.max(drag.current.x), y.max(drag.current.y));
+                    self.apply(
+                        "path.cropSelection",
+                        serde_json::json!({ "rect": [x0, y0, x1, y1] }),
+                    )?;
+                } else {
+                    self.apply(
+                        "document.setDocumentCanvasRect",
+                        serde_json::json!({
+                            "page": self.page,
+                            "x": x.min(drag.current.x), "y": y.min(drag.current.y),
+                            "width": width.abs().max(1.0),
+                            "height": height.abs().max(1.0),
+                        }),
+                    )?;
+                }
                 false
             }
             Tool::Scale => {
@@ -2525,9 +2551,17 @@ impl Editor {
                 )?;
                 false
             }
-            Tool::Freeform | Tool::ReshapeArea => {
-                // CS6's Freeform and Reshape Area: the drag pushes or
-                // pulls the selected path's points.
+            Tool::Freeform => {
+                // CS6's Freeform: the drag pushes the selected
+                // path's points inside a ring at the grab — full
+                // displacement at the center, linear falloff to the
+                // drag's own length (`path.warp`).
+                self.warp_selection(x, y, width, height)?;
+                false
+            }
+            Tool::ReshapeArea => {
+                // CS6's Reshape Area: the drag pushes or pulls the
+                // selected path's points.
                 self.reshape_selection(width, height)?;
                 false
             }
@@ -2636,6 +2670,38 @@ impl Editor {
         self.live_selection()
             .into_iter()
             .find(|id| matches!(document.registry.get(*id), Some(ObjectData::Path(_))))
+    }
+
+    /// CS6's Freeform tool: the drag pushes the selected path's
+    /// points inside a ring centered on the grab — full displacement
+    /// at the center, linear falloff to `radius` (the drag's own
+    /// length, so the gesture's reach is the distance it travelled).
+    ///
+    /// # Errors
+    /// The engine refuses the command; the document is untouched.
+    fn warp_selection(&mut self, x: f64, y: f64, dx: f64, dy: f64) -> Result<(), EngineError> {
+        let Some(id) = self.selected_path() else {
+            return Err(EngineError::InvalidState {
+                name: "path.warp".to_owned(),
+                detail: "no path is selected".to_owned(),
+            });
+        };
+        let radius = dx.hypot(dy);
+        if !radius.is_finite() || radius <= 0.0 {
+            return Err(EngineError::BadPayload {
+                name: "path.warp".to_owned(),
+                detail: "the push ring needs a non-zero drag".to_owned(),
+            });
+        }
+        self.apply(
+            "path.warp",
+            serde_json::json!({
+                "id": id,
+                "x": x, "y": y,
+                "radius": radius,
+                "dx": dx, "dy": dy,
+            }),
+        )
     }
 
     /// CS6's Freeform and Reshape Area: the drag pushes or pulls the
@@ -3385,20 +3451,48 @@ impl Editor {
     /// Adds a vertex to the path being plotted. CS6's Pen, Polygon
     /// Slice and Polygon Hotspot all place their points with clicks,
     /// one click each.
-    pub fn add_draft_point(&mut self, world: geom::Point) {
+    ///
+    /// A plotted path belongs to the tool that started it. Picking
+    /// another tool converts the pending path explicitly: it is
+    /// committed as the tool that plotted it, so its points can never
+    /// be folded into the other tool's object. The answer says whether
+    /// that conversion committed a path.
+    ///
+    /// # Errors
+    /// The engine refuses the conversion; the document is untouched.
+    pub fn add_draft_point(&mut self, world: geom::Point) -> Result<bool, EngineError> {
+        let pending_tool = self.draft.as_ref().map(|draft| draft.tool);
+        let mut converted = false;
+        if let Some(tool) = pending_tool
+            && tool != self.tool
+        {
+            converted = self.commit_draft()?;
+            if !converted {
+                // Too few points to become an object: the path
+                // cannot be committed, so it is dropped rather
+                // than carried into the other tool's path.
+                self.draft = None;
+            }
+        }
         match self.draft.as_mut() {
             Some(draft) => draft.points.push(world),
             None => {
                 self.draft = Some(PointDraft {
                     points: vec![world],
+                    tool: self.tool,
                 });
             }
         }
+        Ok(converted)
     }
 
     /// Commits the plotted path: the Pen's polyline, a polygon slice
     /// or a polygon hotspot. A refused commit keeps the draft, so the
     /// next click adds the point that was missing.
+    ///
+    /// The commit follows the draft's own tool, not the tool that
+    /// happens to be selected: a path plotted with the Pen is a
+    /// polyline even if the user picked another tool since.
     ///
     /// # Errors
     /// The engine refuses the creation; the document is untouched.
@@ -3406,12 +3500,19 @@ impl Editor {
         let Some(draft) = self.draft.as_ref() else {
             return Ok(false);
         };
-        let minimum = match self.tool {
+        let tool = draft.tool;
+        let plotted = draft.points.len();
+        let minimum = match tool {
             Tool::Pen => 2,
             Tool::PolygonSlice | Tool::PolygonHotspot => 3,
-            _ => return Ok(false),
+            _ => {
+                // A path plotted by a tool that cannot make one is
+                // dropped, not left pending forever.
+                self.draft = None;
+                return Ok(false);
+            }
         };
-        if draft.points.len() < minimum {
+        if plotted < minimum {
             return Ok(false);
         }
         let Some(draft) = self.draft.take() else {
@@ -3422,7 +3523,7 @@ impl Editor {
             .iter()
             .map(|point| [point.x, point.y])
             .collect();
-        match self.tool {
+        match tool {
             Tool::Pen => {
                 self.apply(
                     "object.createPolyline",
@@ -3437,37 +3538,73 @@ impl Editor {
                 )?;
             }
             Tool::PolygonSlice | Tool::PolygonHotspot => {
-                let command = if self.tool == Tool::PolygonSlice {
-                    "slice.create"
+                let command = if tool == Tool::PolygonSlice {
+                    "slice.appendPoint"
                 } else {
-                    "hotspot.create"
+                    "hotspot.appendPoint"
                 };
-                let mut x = f64::MAX;
-                let mut y = f64::MAX;
-                let mut right = f64::MIN;
-                let mut bottom = f64::MIN;
-                let anchors: Vec<serde_json::Value> = draft
-                    .points
-                    .iter()
-                    .map(|point| {
-                        x = x.min(point.x);
-                        y = y.min(point.y);
-                        right = right.max(point.x);
-                        bottom = bottom.max(point.y);
-                        serde_json::json!({ "x": point.x, "y": point.y })
-                    })
-                    .collect();
-                self.apply(
-                    command,
-                    serde_json::json!({
-                        "shape": "polygon",
-                        "x": x, "y": y,
-                        "width": right - x, "height": bottom - y,
-                        "points": anchors,
-                        "page": self.page,
-                        "name": null, "link": null, "alt": null,
-                    }),
-                )?;
+                // Design C: the draft replays through the append
+                // state machine — point 1 takes the create branch
+                // (a fresh one-point open polyline), every later
+                // point appends, and the final anchor closes the
+                // outline against the start. One transaction, so the
+                // whole polygon lands as one undo step named for the
+                // verb; a refusal aborts it and the document is
+                // untouched. The local draft UX (click-to-plot) is
+                // unchanged — only the commit moved.
+                let page = self.page;
+                let restore = self.document().object_selection.clone();
+                let first = points[0];
+                let last = points[points.len() - 1];
+                let close = ((last[0] - first[0]).powi(2) + (last[1] - first[1]).powi(2)).sqrt();
+                self.session.begin_transaction(command)?;
+                let replay = (|| -> Result<(), EngineError> {
+                    // Guarantee the create branch: no open polygon
+                    // of this class can swallow the first point.
+                    self.apply("selection.set", serde_json::json!({ "ids": [] }))?;
+                    let delta = self.apply_delta(
+                        command,
+                        serde_json::json!({
+                            "x": first[0], "y": first[1],
+                            "tolerance": 0.0, "page": page,
+                        }),
+                    )?;
+                    let mut created = Vec::new();
+                    collect_created(&delta, &mut created);
+                    let Some(id) = created.last().copied() else {
+                        return Err(EngineError::InvalidState {
+                            name: command.to_owned(),
+                            detail: "the create branch minted no object".to_owned(),
+                        });
+                    };
+                    self.apply("selection.set", serde_json::json!({ "ids": [id] }))?;
+                    for (index, point) in points.iter().enumerate().skip(1) {
+                        // The final anchor closes the outline: the
+                        // engine closes when the new point lands
+                        // within tolerance of the start, so hand it
+                        // exactly that distance — the same formula
+                        // the engine measures with.
+                        let tolerance = if index + 1 == points.len() {
+                            close
+                        } else {
+                            0.0
+                        };
+                        self.apply(
+                            command,
+                            serde_json::json!({
+                                "x": point[0], "y": point[1],
+                                "tolerance": tolerance, "page": page,
+                            }),
+                        )?;
+                    }
+                    self.apply("selection.set", serde_json::json!({ "ids": restore }))?;
+                    Ok(())
+                })();
+                if let Err(error) = replay {
+                    let _ = self.session.abort_transaction();
+                    return Err(error);
+                }
+                self.session.commit_transaction()?;
             }
             _ => {}
         }
@@ -4351,6 +4488,92 @@ mod tests {
             before,
             all_anchors(&editor, id),
             "the vertical-only skew committed"
+        );
+    }
+
+    /// The Freeform tool pushes through `path.warp`: the grab's own
+    /// anchor takes the full drag while anchors beyond the ring do
+    /// not move — the local deformation the rigid `path.reshapeArea`
+    /// translate never produced.
+    #[test]
+    fn the_freeform_tool_pushes_through_path_warp() {
+        let mut editor = Editor::untitled();
+        let id = rect_at(&mut editor, 10.0, 10.0);
+        editor.set_selection(vec![id]);
+        let before = all_anchors(&editor, id);
+
+        editor.tool = Tool::Freeform;
+        editor.begin_drag(geom::Point::new(10.0, 10.0));
+        editor.drag_to(geom::Point::new(30.0, 10.0));
+        editor.end_drag().unwrap();
+
+        let after = all_anchors(&editor, id);
+        let moved: Vec<_> = before
+            .iter()
+            .zip(&after)
+            .filter(|(was, now)| was != now)
+            .collect();
+        assert_eq!(moved.len(), 1, "only the ring's interior moved");
+        assert_eq!(
+            after[0],
+            geom::Point::new(30.0, 10.0),
+            "the grabbed anchor took the whole drag"
+        );
+        assert_eq!(
+            editor.session.undo().expect("an undo step"),
+            "path.warp",
+            "the gesture dispatched the warp"
+        );
+    }
+
+    /// The Crop tool with paths selected cuts them to the blade
+    /// (`path.cropSelection`), not the canvas.
+    #[test]
+    fn the_crop_tool_cuts_the_selected_paths() {
+        let mut editor = Editor::untitled();
+        let id = rect_at(&mut editor, 10.0, 10.0);
+        editor.set_selection(vec![id]);
+
+        editor.tool = Tool::Crop;
+        editor.begin_drag(geom::Point::new(0.0, 0.0));
+        editor.drag_to(geom::Point::new(20.0, 20.0));
+        editor.end_drag().unwrap();
+
+        for anchor in all_anchors(&editor, id) {
+            assert!(
+                (10.0..=20.0).contains(&anchor.x) && (10.0..=20.0).contains(&anchor.y),
+                "every anchor lies inside the blade, got {anchor:?}"
+            );
+        }
+        assert_eq!(
+            editor.session.undo().expect("an undo step"),
+            "path.cropSelection",
+            "the gesture dispatched the crop"
+        );
+    }
+
+    /// With no path selected the Crop tool keeps CS6's document
+    /// crop: the canvas window moves to the blade.
+    #[test]
+    fn the_crop_tool_moves_the_canvas_without_a_path_selection() {
+        let mut editor = Editor::untitled();
+
+        editor.tool = Tool::Crop;
+        editor.begin_drag(geom::Point::new(5.0, 7.0));
+        editor.drag_to(geom::Point::new(25.0, 47.0));
+        editor.end_drag().unwrap();
+
+        let canvas = &editor.document().pages[0].info.canvas;
+        assert_eq!((canvas.x, canvas.y), (5.0, 7.0), "the window moved");
+        assert_eq!(
+            (canvas.width, canvas.height),
+            (20.0, 40.0),
+            "the window took the blade"
+        );
+        assert_eq!(
+            editor.session.undo().expect("an undo step"),
+            "document.setDocumentCanvasRect",
+            "the gesture kept the document crop"
         );
     }
 

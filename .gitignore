@@ -36,6 +36,11 @@ lcov.info
 
 # Session scratch: throwaway helper scripts and probe artifacts
 /.claude/scratch/
+/.scratch/
+
+# Worktree-local build scratch (a private cargo target dir; the shared
+# /cargo-target tree belongs to another session)
+/.cargo/
 
 # Python bytecode from the offline pipeline validator
 __pycache__/

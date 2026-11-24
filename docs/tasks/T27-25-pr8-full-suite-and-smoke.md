@@ -1,6 +1,6 @@
 # T27-25 — Run the full application suite, the CI gate and the web smoke for PR #8
 
-> **RP:** Phase-2 (PR #8 remediation) · **Priority:** P0 · **Status:** NOT STARTED
+> **RP:** Phase-2 (PR #8 remediation) · **Priority:** P0 · **Status:** SMOKE TESTED
 > **Board row:** [EXECUTION-BOARD.md §6](../release/EXECUTION-BOARD.md)
 > **Depends on:** T27-23, T27-24
 

@@ -1,6 +1,6 @@
 # Release artifact matrix — RP-00 inventory (T27)
 
-> **Reconciled 2026-11-09** against the Phase 0 baseline audit
+> **Reconciled 2026-11-17** against the Phase 0 baseline audit
 > ([PHASE-0-AUDIT.md](PHASE-0-AUDIT.md), PR #16, branch
 > `docs/phase-0-baseline-audit`). The audit is the evidence authority
 > for what exists; [decision 0075](../decisions/0075-release-scope-mvp.md)
@@ -42,15 +42,15 @@
 
 | # | Target | Format | What exists today | How it is produced | Status | Rung | Receipt | Blocker |
 |---|---|---|---|---|---|---|---|---|
-| 1 | Linux x86_64 | tar.gz (desktop) | `firecraft-0.2.5-linux-x86_64.tar.gz` | `xtask dist --native` → `dist/native/` | `PUBLISHED` | 11 | GitHub release v0.2.5 asset, 22,084,726 B. Downloaded and checksum-verified 2026-11-09; `sha256sum -c` passes against the published `MANIFEST.sha256`; unpacks to `firecraft-0.2.5/bin/{firecraft,firecraft-cli}` + `share/licenses/LICENSE` | B-18 (a rebuild of the current tree does not reproduce these bytes), B-21 (published out of band, not by the release workflow) |
-| 2 | Linux x86_64 | tar.gz (CLI) | `firecraft-cli-0.2.5-linux-x86_64.tar.gz` | `xtask dist --native` → `dist/native/` | `PUBLISHED` | 11 | GitHub release v0.2.5 asset, 8,072,377 B. Downloaded and checksum-verified 2026-11-09; the extracted `firecraft-cli` **launches** and prints its usage | B-18, B-21 |
-| 3 | Linux x86_64 | DEB | `firecraft_0.2.5_amd64.deb` | `xtask dist --native` from the pinned `packaging/deb/control`; the gate reads the package back with `dpkg-deb` and fail-closes on the declared libc6 floor against the binaries' max GLIBC symbol version (via `objdump`) and on the presence of the desktop entry and icon in the package contents | `PUBLISHED` | 11 | GitHub release v0.2.5 asset, 14,819,904 B. Downloaded and checksum-verified 2026-11-09; `dpkg-deb --info` reads `Version: 0.2.5`, `Architecture: amd64`; the extracted `firecraft-cli` launches. **Clean-container receipts on the published v0.2.3 package** (Debian 12): install → `PASS: installed firecraft 0.2.3`; CLI document round trip → `firecraft-cli info` prints the document JSON, `firecraft-cli export` writes a 97 B PNG with the correct signature `89504e470d0a1a0a`; GUI launch under Xvfb → exit 124, i.e. the binary started and stayed up for the 25 s launch window | **B-7 — OPEN DEFECT.** The declared glibc floor is below the binaries' real requirement, confirmed on the **published** artifact by `objdump -p`, not only on a local rebuild. The floor numbers and the `objdump` floor logic are owned by the stacked `fix/deb-glibc-floor` PR; this row deliberately does not restate them. A package built from this tree under-declares its dependency, so it installs cleanly and then fails to start on older distributions. **This is a defect, not a settled fact.**<br>**B-24 — OPEN DEFECT (owner: PR #41).** The published package carries **no desktop integration at all**: `dpkg-deb --contents` on the published v0.2.5 lists only `./usr/bin/firecraft`, `./usr/bin/firecraft-cli` and `./usr/share/doc/firecraft/copyright`. The install verification run against the published v0.2.3 package in a clean Debian 12 container fails at exactly that point — `FAIL: /usr/share/applications/firecraft.desktop is not installed` — so the package installs cleanly and is still not a desktop application. PR #41 adds the desktop entry and the icon to the payload and makes `dist --native` fail when either is absent from the built package The published package's missing desktop entry and icon are also tracked as board T27-22. |
+| 1 | Linux x86_64 | tar.gz (desktop) | `firecraft-0.2.5-linux-x86_64.tar.gz` | `xtask dist --native` → `dist/native/` | `PUBLISHED` | 11 | GitHub release v0.2.5 asset, 22,084,726 B. Downloaded and checksum-verified 2026-11-09; `sha256sum -c` passes against the published `MANIFEST.sha256`; unpacks to `firecraft-0.2.5/bin/{firecraft,firecraft-cli}` + `share/licenses/LICENSE`. **The workflow's own build path now produces this artifact**: the `v0.2.5-dryrun.6` rehearsal published `firecraft-0.2.5-linux-x86_64.tar.gz` (24,389,908 B, sha256 `cb55a525…`) on **draft** 449279892 — a draft is not a publication, so those bytes are evidence of a working build, not of a published asset; they are also **byte-identical across two independent rehearsals** (dryrun.5 and dryrun.6) | B-18 (a rebuild of the current tree does not reproduce the *published* bytes — the rehearsal's tarball is 2,305,182 B larger), B-21 (published out of band, not by the release workflow) |
+| 2 | Linux x86_64 | tar.gz (CLI) | `firecraft-cli-0.2.5-linux-x86_64.tar.gz` | `xtask dist --native` → `dist/native/` | `PUBLISHED` | 11 | GitHub release v0.2.5 asset, 8,072,377 B. Downloaded and checksum-verified 2026-11-09; the extracted `firecraft-cli` **launches** and prints its usage. **The workflow's own build path now produces this artifact, and it attests its own build**: the `v0.2.5-dryrun.6` rehearsal published `firecraft-cli-0.2.5-linux-x86_64.tar.gz` (8,158,124 B, sha256 `953633e4…`) on **draft** 449279892; the archive was downloaded from that draft, re-hashed locally (the digest matches) and extracted, and the extracted binary prints `firecraft-cli 0.2.5`. It is byte-identical across two independent rehearsals | B-18, B-21 (the production release's bytes were published out of band) |
+| 3 | Linux x86_64 | DEB | `firecraft_0.2.5_amd64.deb` | `xtask dist --native` from the pinned `packaging/deb/control`; the gate reads the package back with `dpkg-deb` and fail-closes on the declared libc6 floor against the binaries' max GLIBC symbol version (via `objdump`) and on the presence of the desktop entry and icon in the package contents | `PUBLISHED` | 11 | GitHub release v0.2.5 asset, 14,819,904 B. Downloaded and checksum-verified 2026-11-09; `dpkg-deb --info` reads `Version: 0.2.5`, `Architecture: amd64`; the extracted `firecraft-cli` launches. **Clean-container receipts on the published v0.2.3 package** (Debian 12): install → `PASS: installed firecraft 0.2.3`; CLI document round trip → `firecraft-cli info` prints the document JSON, `firecraft-cli export` writes a 97 B PNG with the correct signature `89504e470d0a1a0a`; GUI launch under Xvfb → exit 124, i.e. the binary started and stayed up for the 25 s launch window | **B-7 — OPEN DEFECT.** The declared glibc floor is below the binaries' real requirement, confirmed on the **published** artifact by `objdump -p`, not only on a local rebuild. The floor numbers and the `objdump` floor logic are owned by the stacked `fix/deb-glibc-floor` PR; this row deliberately does not restate them. A package built from this tree under-declares its dependency, so it installs cleanly and then fails to start on older distributions. **This is a defect, not a settled fact.**<br>**B-24 — OPEN DEFECT (owner: PR #41).** The published package carries **no desktop integration at all**: `dpkg-deb --contents` on the published v0.2.5 lists only `./usr/bin/firecraft`, `./usr/bin/firecraft-cli` and `./usr/share/doc/firecraft/copyright`. The install verification run against the published v0.2.3 package in a clean Debian 12 container fails at exactly that point — `FAIL: /usr/share/applications/firecraft.desktop is not installed` — so the package installs cleanly and is still not a desktop application. PR #41 adds the desktop entry and the icon to the payload and makes `dist --native` fail when either is absent from the built package The published package's missing desktop entry and icon are also tracked as board T27-22. **The fix is in the tree and the workflow's own build proves it**: the `v0.2.5-dryrun.6` rehearsal published `firecraft_0.2.5_amd64.deb` (16,228,104 B, sha256 `79283696…`) on **draft** 449279892, and the release workflow's package verification ran the repository's eight-stage script against that package in a clean Debian 12 container — **all eight stages passed**, including the desktop entry, the icon and the **upgrade** stage that the distro matrix does not exercise. The gap is therefore between the *published* package and the tree, not inside the tree | B-7 and B-24 remain defects **of the published v0.2.5 package**, which this tree no longer reproduces; they close only when a release is cut from this tree |
 | 4 | Linux x86_64 | AppImage | recipe only — `packaging/build-appimage.sh` | operator-run on a host with `linuxdeploy`; the script is `bash -n` parse-checked by `dist --native` | `NOT STARTED` | 1 | recipe exists and passes the gate's `bash -n` check; **never executed**. On this branch the recipe gained a preflight that fails when the desktop entry or the icon is missing from the tree, so the "no icon → an image with no icon" silent defect cannot reach `linuxdeploy` (audit §11.6) | B-8 (`linuxdeploy` absent, no pinned copy vendored), B-10 (the script stages `target/release/…` and ignores `CARGO_TARGET_DIR`) B-9 (the icon file and the `Icon=` key are in-tree since `a4d74a0`, but `linuxdeploy` has still never run). |
 | 5 | Linux x86_64 | Flatpak | recipe only — `packaging/build-flatpak.sh` + `packaging/flatpak/dev.firecraft.FireCraft.yml` (both added on this branch; **no recipe on `main`**) | operator-run on a host with the Flatpak SDK; the script is `bash -n` parse-checked and the manifest is YAML-parse-checked by `dist --native` | `NOT STARTED` | 1 | recipe and manifest exist on this branch and the gate parse-checks them; **never built**. On this branch the recipe no longer passes the unsupported `flatpak run --repo` argument, installs the bundle into a user installation, launches it with `flatpak run --command=firecraft-cli`, removes it and fails if it is still listed; the manifest installs the icon and points at the canonical desktop entry (audit §11.6) | B-11 (`flatpak` and `flatpak-builder` absent) The manifest's module source is `type: dir, path: ..` — the local working tree, not an immutable upstream revision — so a bundle built from it is not reproducible from the tag SHA (board T27-29). |
 | 6 | Windows x86_64 | portable ZIP | recipe only — `packaging/build-windows.ps1` | operator-run on a Windows host with MSVC | `NOT STARTED` | 1 | recipe exists; the gate **existence-checks** it only — it cannot parse PowerShell on this fleet; **never executed** | B-12 (`pwsh` absent; no MSVC linker on this host). A GNU cross-build and a wine smoke are recorded on the PR #9 branch — preview evidence only, never native certification (campaign §8) The required Windows artifact does not yet exist: the MSVC build, the installer and the clean-Windows-VM install are all outstanding (board T27-36/37/38). |
 | 7 | Windows x86_64 | Inno Setup installer | recipe only — `packaging/windows/firecraft.iss` | compiled by the PowerShell recipe on a Windows host with Inno Setup 6 | `NOT STARTED` | 1 | recipe exists and is existence-checked by the gate; the `__APPVERSION__` placeholder is substituted by the PowerShell recipe, which has never run; **never built** | B-12 (`ISCC` absent). The PowerShell recipe *skips* the installer when `ISCC` is missing, so a Windows run without Inno Setup ships no installer and says nothing |
 | 8 | macOS universal | DMG | recipe only — `packaging/build-macos-dmg.sh` | operator-run on macOS: two `apple-darwin` slices → `lipo` → `hdiutil` | `NOT STARTED` | 1 | recipe exists and is `bash -n` parse-checked by the gate; **never executed** | needs macOS + Xcode CLT; `lipo`/`hdiutil` are absent on this Linux host, so the recipe is off-fleet by design |
-| 9 | Web (WASM) | ZIP bundle | `firecraft-web-0.2.5.zip` | `xtask dist --web` → `dist/web/`, then zipped | `PUBLISHED` | 11 | GitHub release v0.2.5 asset, 7,174,826 B. Downloaded 2026-11-09: 6 entries (bundle `firecraft-web-f9dbe2f14305b2d9{,_bg.wasm}`, `index.html`, `host.html`, `appinfo.json`, inner `MANIFEST.sha256`); `sha256sum -c` passes on all 5 manifest entries | **B-21 / F-16 — the published bundle was never built by the release workflow.** Its entries are stamped 2026-11-03 12:08, six hours before the workflow's own build finished at 18:15:59Z, and its wasm is a different size than the workflow's. No recorded bridge smoke ever ran against the published bytes. Separately, the **live deployment** serves a fourth bundle (`2274ac8c2925b61d`) that matches no release — B-6; the live comparison was **re-verified 2026-11-10** and is recorded in [Live web deployment](#live-web-deployment-b-6-reconciliation) below |
+| 9 | Web (WASM) | ZIP bundle | `firecraft-web-0.2.5.zip` | `xtask dist --web` → `dist/web/`, then zipped | `PUBLISHED` | 11 | GitHub release v0.2.5 asset, 7,174,826 B. Downloaded 2026-11-09: 6 entries (bundle `firecraft-web-f9dbe2f14305b2d9{,_bg.wasm}`, `index.html`, `host.html`, `appinfo.json`, inner `MANIFEST.sha256`); `sha256sum -c` passes on all 5 manifest entries | **B-21 / F-16 — the published bundle was never built by the release workflow.** Its entries are stamped 2026-11-03 12:08, six hours before the workflow's own build finished at 18:15:59Z, and its wasm is a different size than the workflow's. No recorded bridge smoke ever ran against the published bytes. **The workflow's own build path now produces this artifact, and the smoke ran against it**: the `v0.2.5-dryrun.6` rehearsal published `firecraft-web-0.2.5.zip` (5,853,417 B, sha256 `898be851…`) on **draft** 449279892, and the `build artifacts` job's log reads `[xtask] dist web: 7 file(s), wasm 15780814 B …, smoke green` and `[xtask] dist --web ok`. The ZIP's **payload is byte-identical** across two independent rehearsals (all seven files hash the same); only the ZIP container's own timestamps differ. Separately, the **live deployment** serves a fourth bundle (`2274ac8c2925b61d`) that matches no release — B-6; the live comparison was **re-verified 2026-11-10** and is recorded in [Live web deployment](#live-web-deployment-b-6-reconciliation) below |
 | 10 | WebOS | `appinfo.json` + `host.html` | staged into `dist/web/` by `dist --web` from `packaging/webos/` | `xtask dist --web` | `BUILD VERIFIED` | 5 | staged `appinfo.json` reads 0.2.5; the web manifest covers `appinfo.json` and `host.html`; the live site serves the same `appinfo.json` bytes — re-verified 2026-11-10, byte-identical (`7d039c36…`) | device/runtime smoke is `UNVERIFIED` (audit §6); the Pages deploy is manual and currently stale (B-6) |
 | 11 | CLI binaries | `firecraft-cli` (inside #1 and #2) | `firecraft-cli` | `xtask dist --native` | `PUBLISHED` | 11 | the **published** `firecraft-cli` was downloaded and extracted 2026-11-09 and **launches**, printing its full usage string; the locally rebuilt one does the same | — |
 | 12 | Source | tar.gz | `firecraft-0.2.5-source.tar.gz` — the canonical name | `xtask dist --source` (git archive of HEAD; the verb verifies a clean extraction and runs `cargo metadata --locked` inside it). The verb exists on main | `BUILD VERIFIED` | 3 | produced 2026-11-09 on `docs/release-execution-board` @ `08eae4a`: 3.35 MB, 661 entries, sha256 `a0fcaafe…`; clean-extract + `cargo metadata --locked` verified inside the verb. **That build predates the rename**: it shipped as `FireCraft-0.2.5-source.tar.gz`, and the rehearsal (v0.2.5-dryrun.3) exposed the capitalised name as a naming defect. `xtask/src/dist.rs` now emits the lowercase name; the row's receipt is not yet re-earned against it (see [RECEIPT-0.2.5-DRYRUN-3.md](RECEIPT-0.2.5-DRYRUN-3.md), T27-52) | — B-13 (never published) |
@@ -72,22 +72,48 @@
 | `READY` | 0 | — |
 | `IN PROGRESS` | 0 | — |
 | `BLOCKED` | 0 | — |
-| `IMPLEMENTED` | 1 | release manifest JSON |
-| `BUILD VERIFIED` | 3 | WebOS package, source archive, SBOM |
+| `IMPLEMENTED` | 0 | — |
+| `BUILD VERIFIED` | 1 | WebOS package |
 | `INSTALLED` | 0 | — |
 | `LAUNCHED` | 0 | — |
-| `SMOKE TESTED` | 0 | — |
+| `SMOKE TESTED` | 3 | source archive, SBOM, release manifest JSON |
 | `PUBLISHED` | 6 | desktop tar.gz, CLI tar.gz, DEB, web bundle, CLI binaries, checksums/manifest |
 | `CERTIFIED` | 0 | — |
 | `DEFERRED` | 4 | Android arm64, Linux RPM, Linux aarch64, Windows ARM64 |
 | `REJECTED` | 0 | — |
 
-**No artifact has reached `CERTIFIED`.** Five artifacts (desktop tar.gz,
-CLI tar.gz, DEB, web bundle, CLI binaries) reach **rung 11** — they were
-downloaded from the published release and verified against their
-published checksum lists on 2026-11-09, and the CLI binary was launched.
-Nothing has reached rung 9: no artifact is signed and no provenance
-exists.
+**No artifact has reached `CERTIFIED`.** Six artifacts (desktop tar.gz,
+CLI tar.gz, DEB, web bundle, CLI binaries, checksums/manifest) reach
+**rung 11** — they were downloaded from the published release and
+verified against their published checksum lists on 2026-11-09, and the
+CLI binary was launched. Nothing has reached rung 9: no artifact is
+signed and no provenance exists.
+
+**The rehearsal path reaches rung 8 and no further.** The
+`v0.2.5-dryrun.6` rehearsal (run 44188107435, draft 449279892)
+produced all nine artifacts, ran the web bridge smoke green, passed the
+DEB's eight-stage package verification in a clean Debian 12 container,
+and had three of its assets independently re-verified from the draft
+(7/7 checksum entries, 3/3 re-hashes, one clean build on a second
+host). A **draft is not a publication**, so those bytes stop at rung 8
+until a release is cut from the tag. The receipt is
+[RECEIPT-0.2.5-DRYRUN-6.md](RECEIPT-0.2.5-DRYRUN-6.md); the scope that
+this evidence can honestly certify is in
+[CERTIFICATION.md](CERTIFICATION.md).
+
+## Linux platform compatibility
+
+**What is tested on which Linux distribution is published separately**,
+in [LINUX-COMPAT.md](LINUX-COMPAT.md) — it is the authoritative table
+for "does this work on my machine", and it lists the untested
+combinations explicitly rather than leaving them to be inferred.
+
+As of 2026-11-17 the matrix has been run across three distro families
+and two display servers (Ubuntu 24.04, Debian 12, Fedora 45 × X11 and
+Wayland); all six cells pass, and the DEB's eight-stage package
+verification passes on both Debian-family cells. The AppImage and
+Flatpak rows above remain **never built**, and the RPM row remains
+**deferred** — the compat table says so in the same words.
 
 ## Build surfaces (what actually exists)
 
@@ -226,11 +252,16 @@ artifacts without it). Tracked by issue #81 / task #158, defect **B-6**.
    decision is that the site is redeployed from the release bytes.
    The redeploy itself is gated behind maintainer approval.
 5. **The release workflow has never produced a release** (B-4, B-21).
-   All six published releases were operator-published by hand.
+   All six published releases were operator-published by hand. The
+   workflow's own path now runs end to end and produces **drafts** —
+   `v0.2.5-dryrun.5` and `v0.2.5-dryrun.6`, both green — but a draft is
+   not a release.
 6. **The source archive and the SBOM have never been published** (B-13),
-   and their verbs do not exist on `main` (F-9).
+   and their verbs do not exist on `main` (F-9). Both are now published
+   on the rehearsal **drafts** and independently verified there.
 7. **No release-wide checksum file has ever been published** (B-17),
-   and every published asset reports a null GitHub digest.
+   and every published asset reports a null GitHub digest. The workflow
+   writes and publishes one on its drafts, where it verifies 7 of 7.
 8. **Nothing is signed and no provenance exists** (B-14), so nothing
    can be `CERTIFIED`.
 9. **RPM is deferred** by [decision 0070](../decisions/0070-rpm-deferred.md)
@@ -259,5 +290,6 @@ artifacts without it). Tracked by issue #81 / task #158, defect **B-6**.
 
 This matrix describes **evidence state**, not release scope. Which of
 these artifacts constitute an acceptable release cut is decided by
-[decision 0075](../decisions/0075-release-scope-mvp.md), whose approval
-state is *recommended — awaiting maintainer approval*.
+[decision 0075](../decisions/0075-release-scope-mvp.md), which is
+**accepted** (Michael Kinney, 2026-11-17): the approved release scope is
+the MVP candidate scope in that record.

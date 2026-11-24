@@ -51,6 +51,7 @@ mod perf;
 mod provenance;
 mod reachability;
 mod scripts;
+mod shortcuts;
 mod stamp;
 mod status;
 mod styles;
@@ -73,6 +74,7 @@ fn main() -> ExitCode {
             Some("--report") => finish("aegis --report", aegis::report()),
             _ => finish("aegis", aegis::run()),
         },
+        Some("toolchain") => finish("toolchain", stamp::toolchain()),
         Some("coverage") => match std::env::args().nth(2).as_deref() {
             Some("--bless") => finish("coverage --bless", coverage::bless()),
             Some("--measure") => finish("coverage --measure", coverage::measure()),
@@ -103,6 +105,14 @@ fn main() -> ExitCode {
         Some("panel-snapshot") => match std::env::args().nth(2).as_deref() {
             Some("--bless") => finish("panel-snapshot --bless", panelsnapshot::bless()),
             _ => finish("panel-snapshot", panelsnapshot::run()),
+        },
+        Some("icon-survey") => match std::env::args().nth(2).as_deref() {
+            Some("--check") => finish("icon-survey --check", iconsurvey::check()),
+            _ => finish("icon-survey", iconsurvey::run()),
+        },
+        Some("shortcuts") => match std::env::args().nth(2).as_deref() {
+            Some("--bless") => finish("shortcuts --bless", shortcuts::bless()),
+            _ => finish("shortcuts", shortcuts::run()),
         },
         Some("library-gen") => finish("library-gen", library::run()),
         Some("hero-gen") => finish("hero-gen", hero::run()),
@@ -225,6 +235,10 @@ fn run_ci(full: Option<&str>, skip_fmt: bool) -> ExitCode {
             // content, not on line — see `xtask/src/aegis.rs`.
             aegis::run()
         }),
+        // The compiler pin, before the expensive steps: a box or a
+        // workflow that moved off the pinned rustc would otherwise
+        // burn a full gate before anyone saw why (issue #146).
+        ("toolchain", stamp::toolchain),
         ("coverage", coverage::run),
         ("fmt", || {
             util::cargo(&["fmt", "--all", "--", "--check"]).and_then(|()| {
@@ -283,12 +297,19 @@ fn run_ci(full: Option<&str>, skip_fmt: bool) -> ExitCode {
             }
         }),
         ("panel-snapshot", panelsnapshot::run),
+        ("icon-survey", iconsurvey::check),
+        ("shortcuts", shortcuts::run),
         ("parity", status::parity),
         ("scorecard", status::scorecard),
         ("changelog", changelog::run),
     ];
     if skip_fmt {
-        steps.remove(2); // remove "fmt" at index 2
+        // By name, not by index: steps are inserted above this point
+        // (the toolchain pin), and a hardcoded slot silently removes
+        // whatever has moved into it.
+        if let Some(position) = steps.iter().position(|(name, _)| *name == "fmt") {
+            steps.remove(position);
+        }
     }
     if full == Some("--full") || full == Some("full") {
         steps.insert(steps.len() - 2, ("fuzz-full", fuzz::full));

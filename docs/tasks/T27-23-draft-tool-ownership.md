@@ -1,6 +1,6 @@
 # T27-23 — Track the originating tool in plotted-draft state, and cover it with regression tests
 
-> **RP:** Phase-2 (PR #8 remediation) · **Priority:** P0 · **Status:** NOT STARTED
+> **RP:** Phase-2 (PR #8 remediation) · **Priority:** P0 · **Status:** IMPLEMENTED
 > **Board row:** [EXECUTION-BOARD.md §6](../release/EXECUTION-BOARD.md)
 > **Depends on:** T27-03
 

@@ -85,7 +85,8 @@ linker. Therefore:
 | Windows x86_64 (ZIP, installer) | **Unsupported** — the recipe needs a Windows host with MSVC; `pwsh` and `ISCC` are absent here |
 | macOS universal DMG | **Unsupported** — needs macOS + Xcode CLT |
 | Android arm64 | **Unsupported / experimental** — a feasibility report only; no native entrypoint, no SDK image, no device |
-| Linux aarch64, Windows ARM64 | **Unassessed** — no ARM64 host and no ARM64 test environment |
+| Linux aarch64 | **Assessed — feasible-later** ([T27-32](docs/tasks/T27-32-linux-aarch64-assessment.md)): a cross compile plus an architecture-parameterized packaging path, but no ARM64 host on the fleet, so the artifact could not be certified |
+| Windows ARM64 | **Assessed — feasible-later** ([T27-41](docs/tasks/T27-41-windows-arm64-assessment.md)): an ARM64 Windows runner exists (GitHub's hosted `windows-11-arm`, free for public repositories) and the dependency graph is architecture-agnostic, but the `glow` backend needs an OpenGL path that only a real ARM64 Windows machine can provide |
 | Linux RPM | **Deferred** by [decision 0070](decisions/0070-rpm-deferred.md) |
 
 A recipe is not a platform claim. "Supported" above means the fleet can

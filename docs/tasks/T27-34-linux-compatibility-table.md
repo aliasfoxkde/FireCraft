@@ -1,6 +1,6 @@
 # T27-34 — Publish a Linux platform compatibility table
 
-> **RP:** RP-01 · **Priority:** P1 · **Status:** NOT STARTED
+> **RP:** RP-01 · **Priority:** P1 · **Status:** IMPLEMENTED
 > **Board row:** [EXECUTION-BOARD.md §6](../release/EXECUTION-BOARD.md)
 > **Depends on:** T27-33
 
@@ -19,7 +19,7 @@ untested combination; a reader can tell what is supported from what is merely bu
 
 **Verification:** `test -f docs/release/LINUX-COMPAT.md`
 
-**Evidence:** none yet.
+**Evidence:** [LINUX-COMPAT.md](LINUX-COMPAT.md) is published and linked from `docs/release/ARTIFACT-MATRIX.md`. It lists the three tested distributions with their versions and architecture, the artifact under test in each cell with its bytes and SHA-256, the formats with no tested row (AppImage and Flatpak — never built; RPM — deferred), and the untested combinations explicitly: every other distribution and release, every architecture but x86_64, real GPUs and vendor drivers, real desktop sessions, session-level desktop integration, the DEB's upgrade path, and the published v0.2.5 assets. **Done:** 2026-11-17: table published and linked.
 
 **Blockers:** T27-33
 

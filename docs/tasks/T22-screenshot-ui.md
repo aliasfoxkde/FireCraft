@@ -197,3 +197,114 @@ that fails on noise is a gate nobody trusts.
 That defect is now fixed at the tool level rather than by procedure:
 the baseline is content-keyed (decision 0074), so a line shift is not
 a new finding and no whole-tree regeneration is needed.
+
+## Receipt — the CS6 chrome captured and measured, 2026-11-16
+
+**Build.** `a34a40347b9e7201630dacf68e65a02f874104cb`
+(`feat/cs6-chrome-closeout`): the native `firecraft` binary built in
+the CI image on fedora (`cargo build --locked --release -p app`).
+
+**Surface.** The native desktop shell under `Xvfb` (X11, 1280×800×24),
+captured from the app window with ImageMagick `import`; the second
+frame is the same window resized to 1280×400. The frames are tracked
+as `docs/img/chrome-1280x800.png` (sha256 `ddc811ec…4e5b`) and
+`docs/img/chrome-1280x400.png` (sha256 `ec3d9db9…495`).
+
+**Limitation, recorded rather than glossed.** These frames are of the
+*native* shell, not of the web bundle. The headless-chromium capture
+path over the web bundle produced no frame in this environment —
+`page.screenshot` times out at 120 s and a CDP
+`Page.captureScreenshot` kills the renderer (the playwright driver
+dies with `EPIPE`) — and the same failure reproduces against the
+known-good 2026-11-04 bundle the earlier receipts used, so the blocker
+is this host's SwiftShader/compositor path and not this branch. The
+egui chrome is the same code in both builds; the browser-side gate
+remains the repo's own bridge smoke (`xtask dist --web`).
+
+**Criterion 2 — panels reachable at 1280×800, re-measured on the
+current dock.** The dock occupies x 933–1279 (347 px) and its drawn
+content ends at row 586 of 800, so the whole column fits above the
+fold. At a deliberately short 1280×400 the page is clipped at row 376
+and the dock's content at row 397; the dock is a scrolling column, so
+the panels below the fold stay reachable instead of disappearing. The
+tool strip (x 0–33), the menu bar (y 0–27), the tool-options row
+(y 28–45) and the status bar (y 777–799) are unchanged at both sizes.
+
+**Criterion 3 — chrome content.** The menu bar reads `File Edit View
+Select Modify Text Commands Filters Window Help` (OCR) — CS6's own
+menu set in CS6's order; the tool-options row reads `Pointer () —
+143% +. Fit F1 For all shortcuts`; the status bar reads `ready
+untitled - page 1 - state 1 - undo 2 - redo 0 - journal 2`.
+
+**The palette, measured against the CS6 reference rows.** Panel fill
+`#3C3C3C` 35.90 %, canvas surround `#202020` 4.03 %, page `#FFFFFF`
+55.89 %, chrome text `#DDDDDD` 0.07 %, selection accent `#2F5D8A`
+0.33 %. The CS6 reference frame renders `#D6D6D6`/`#EDEDED`/`#999999`
+— so the lightness is **deliberately different** (dark, and recorded
+with its reason and owner in [CS6-PARITY](../CS6-PARITY.md) §C) —
+while the *hue-freeness* is **reproduced**: 0.00 % blue-dominant
+pixels in the menu bar, the tool-options row and the status bar, and
+the only hue in the frame is the documented selection accent plus
+artwork-coloured tool icons. `#DDDDDD` on `#3C3C3C` measures 8.12:1
+and on the raised fill `#444444` 7.17:1 — both above the WCAG AAA
+7:1 threshold the palette test pins.
+
+Full receipt, including the recipe and the per-region hue table:
+[research/fw-ui-evidence.md](../research/fw-ui-evidence.md#the-firecraft-chrome-measured-2026-11-16).
+
+**Still open on 22.5:** the Main toolbar's contents (CS6-PARITY §A
+rows 54, 255, 257, 164).
+
+## Receipt — the mask stack section, 2026-11-19
+
+**Build.** This branch's tree at capture time (base `365c8bc4` plus
+the issue #114 changes — the capture is committed alongside them),
+`cargo build -p app -p app-cli`, debug profile.
+
+**Surface.** The native desktop shell under its own `Xvfb :95`
+(X11, 1280×800×24), captured from the app window with ImageMagick
+`import`. The frames are tracked as
+`docs/img/mask-stack-1280x800.png` (sha256 `1de945fa…837e`) and the
+dock crop `docs/img/mask-stack-panel.png` (sha256 `f354f152…7d27`).
+
+**Document.** A 640×400 flat `#f4f4f4` PNG imported with
+`firecraft-cli import`, then `firecraft-cli run-script mask-stack.jsf`
+queued `selection.selectAll`, `mask.add` (`"reveal all"`) and
+`mask.addLevel` (`"intersect"`). `firecraft-cli info` on the result
+reports `groups: 2, images: 3, live: 5` — the content image plus two
+mask images inside two mask groups, i.e. a genuine two-level stack
+rather than a hand-labelled panel.
+
+**Criterion — the section is styled like its neighbours.** OCR of the
+dock crop reads, top to bottom, `Mask stack`, `2 levels, numbered from
+the bottom`, `Mask 2 … intersect … remove … link`,
+`Mask 1 … add … remove … link`, `add level` — sitting between the
+`Mask` section above and `Filters` below. That is the Properties
+panel's house shape (separator, heading, fact readout, one row per
+level, foot), so the section no longer reads as unstyled beside the
+sections that carry CS6's own vocabulary. The rows are numbered from
+the bottom, matching CS6's mask numbering.
+
+**CS6 reference, and why there is no CS6 frame.** CS6 has no mask
+stack — one element mask per object — so there is no CS6 screenshot of
+this section to diff against; the evidence for the absence is the
+reference install's resource DLL, recorded in
+[T9](T9-mask-stack.md#authority) (the Modify ▸ Mask submenu carries
+`&Mask`, `&Reveal All`, `&Hide All`, `&Paste as Mask`, `&Group as
+Mask`, `&Disable Mask`, `&Delete Mask` and nothing naming a stack, a
+level, or a combine mode). The acceptance therefore compares the
+section against the CS6-owning sections beside it in the same panel —
+`Mask` and `Filters` — which is the comparison the issue asked for.
+
+**Measured, pre-existing, recorded rather than fixed here.**
+`ui.separator()` paints with `visuals.widgets.noninteractive.bg_stroke`,
+whose dark-theme default is `Color32::from_gray(60)` = `#3C3C3C`, and
+`apply_chrome_theme` sets `panel_fill` to the same `#3C3C3C` without
+overriding `bg_stroke`. A pixel scan of the dock column at 1280×800
+finds **no** non-background horizontal rule anywhere — so every
+separator in the app reads as spacing, not as a rule, and the mask
+stack section is indistinguishable from its neighbours in that
+respect. This is a global chrome property (it affects Align,
+Properties, Contents, Mask and Filters equally), not a mask-stack one,
+so fixing it belongs to a chrome acceptance of its own rather than
+being smuggled into #114.

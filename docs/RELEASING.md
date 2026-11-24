@@ -11,8 +11,9 @@
 >
 > **Scope authority:**
 > [decision 0075](decisions/0075-release-scope-mvp.md). Which artifacts
-> constitute an acceptable cut is decided there; its approval state is
-> *recommended — awaiting maintainer approval*.
+> constitute an acceptable cut is decided there; it is **accepted**
+> (Michael Kinney, 2026-11-17), and the approved cut is the MVP
+> candidate scope in that record.
 >
 > **Evidence baseline:** [PHASE-0-AUDIT.md](release/PHASE-0-AUDIT.md)
 > (PR #16, merged; dated 2026-11-09 historical baseline).

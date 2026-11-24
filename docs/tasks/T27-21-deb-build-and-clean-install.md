@@ -1,6 +1,6 @@
 # T27-21 — Build the DEB from the candidate commit, inspect its metadata, install it clean and run a CLI round trip
 
-> **RP:** RP-01 · **Priority:** P0 · **Status:** IN PROGRESS
+> **RP:** RP-01 · **Priority:** P0 · **Status:** SMOKE TESTED
 > **Board row:** [EXECUTION-BOARD.md §6](../release/EXECUTION-BOARD.md)
 > **Depends on:** T27-20
 

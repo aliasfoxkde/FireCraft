@@ -1,6 +1,6 @@
 # T27-10 — Reconcile the release documentation against one scope authority
 
-> **RP:** RP-00 · **Priority:** P1 · **Status:** NOT STARTED
+> **RP:** RP-00 · **Priority:** P1 · **Status:** IMPLEMENTED
 > **Board row:** [EXECUTION-BOARD.md §6](../release/EXECUTION-BOARD.md)
 > **Depends on:** T27-03, T27-09
 
@@ -12,9 +12,12 @@ claims.
 `docs/RELEASING.md`; `docs/TOOLCHAINS.md`; `docs/release/ARTIFACT-MATRIX.md`;
 `docs/decisions/`.
 
-**Authority:** `docs/RELEASE-ENGINEERING-PLAN.md` §1.1 and §3 (the target matrix and
-the MVP candidate currently disagree — §3 lists Windows/macOS/Android as required
-while §1.1 proposes a reduced first cut).
+**Authority:** `docs/decisions/0075-release-scope-mvp.md` — the release-scope
+authority, accepted on 2026-11-17. It resolves the conflict this row was opened
+against: `docs/RELEASE-ENGINEERING-PLAN.md` §3 listed Windows/macOS/Android as
+required while §1.1 proposed a reduced first cut. The approved scope is the MVP
+candidate; §3 remains the standing **campaign** matrix, and the extended targets
+stay outside the release cut until each carries its own acceptance evidence.
 
 **Acceptance criteria:** every release document cites one scope authority; no document
 claims a CI state, artifact state or platform support that the matrix does not

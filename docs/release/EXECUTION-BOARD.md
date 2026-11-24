@@ -59,13 +59,19 @@ still not operationally complete. The board never collapses one into another.
 
 ## 3. Release scope — MVP candidate vs extended scope
 
-**The MVP v1 scope below is a RECOMMENDATION, not an approval.**
-The campaign mandate (`Cross-Platform Releas.txt` §5, P1.3) and the release plan
-(§1.1) both state that the maintainer must approve the scope, and that a recommendation
-must not be recorded as approval. **No approval exists.** The scope decision is tracked as
-[T27-09](../tasks/T27-09-mvp-scope-approval.md) and is **BLOCKED** pending the maintainer.
+**The MVP v1 scope below is the APPROVED release scope.**
+[Decision 0075](../decisions/0075-release-scope-mvp.md) is **accepted** — the
+maintainer (Michael Kinney) approved this candidate on 2026-11-17, and that record
+names the approver and the date. The campaign mandate (`Cross-Platform Releas.txt`
+§5, P1.3) required a recorded maintainer decision rather than a recommendation
+being treated as one; the decision record is that record, and it was tracked as
+[T27-09](../tasks/T27-09-mvp-scope-approval.md).
 
-### MVP v1 candidate (recommended, unapproved)
+The approval covers **scope, not readiness**. Every item below still carries its
+own evidence state in the [artifact matrix](ARTIFACT-MATRIX.md), and an approved
+scope is not a certified artifact.
+
+### MVP v1 candidate (approved 2026-11-17)
 
 - Web/WASM bundle from the exact tag SHA, with bridge smoke on the release bytes.
 - Linux x86_64 desktop tar.gz.
@@ -85,13 +91,16 @@ must not be recorded as approval. **No approval exists.** The scope decision is 
   release matrix. It is **not** "RPM reconsideration" work in this board beyond
   re-validating that decision ([T27-31](../tasks/T27-31-rpm-decision.md)).
 
-### Scope conflict to resolve
+### Scope conflict, resolved
 
 `RELEASE-ENGINEERING-PLAN.md` §3 lists Windows/macOS/Android as **required** deliverables
 in the target matrix, while §1.1 proposes a reduced MVP. The full matrix and the MVP
-candidate must not silently conflict. Until the maintainer decides, the board tracks
-**both**: MVP rows carry P0, extended rows carry P1/P2, and no extended target is
-claimed as supported.
+candidate must not silently conflict. **Resolved 2026-11-17** by the approval in
+[decision 0075](../decisions/0075-release-scope-mvp.md): the approved release scope is
+the MVP candidate below, and the plan's §3 matrix remains the standing **campaign**
+matrix. The board still tracks both — MVP rows carry P0, extended rows carry P1/P2 —
+and no extended target is claimed as supported until it carries its own acceptance
+evidence.
 
 ---
 
@@ -131,7 +140,7 @@ the state does not apply to that artifact type.
 | Web (WASM) bundle | ✓ | ✓ | ✓ | ✓ | ✓ | n/a | ✓ | ✓ | · | ✓ (v0.2.5 zip) | · (deployment stale) |
 | WebOS package | ✓ | ✓ | ✓ | ✓ | ✓ | n/a | · | · | · | · | · |
 | Source tar.gz | ✓ | ✓ | ✓ | ✓ | ✓ | n/a | n/a | ✓ (`cargo metadata --locked`) | · | · | · |
-| SBOM (CycloneDX 1.5) | ✓ | ✓ | ✓ | · (re-validation pending) | · | n/a | n/a | n/a | n/a | · | · |
+| SBOM (CycloneDX 1.5) | ✓ | ✓ | ✓ | ✓ (schema + `Cargo.lock` compared) | · | n/a | n/a | n/a | n/a | · | · |
 | Checksums / manifest | ✓ | ✓ | ✓ | ✓ | ✓ | n/a | n/a | n/a | n/a | ✓ (`MANIFEST.sha256` only) | · |
 | Provenance / attestation | · | · | · | · | · | n/a | n/a | n/a | · | · | · |
 | Release manifest (JSON) | · | · | · | · | · | n/a | n/a | n/a | n/a | · | · |
@@ -198,7 +207,7 @@ condition/verification. **RP** is the release-plan work package the row belongs 
 | T27-38 | Install and smoke the portable ZIP on a clean Windows VM | P1 | NOT STARTED | T27-36 | On a clean Windows VM the app installs, launches, creates and opens a document, edits, saves and reopens, and exports PNG; paths with spaces and non-ASCII characters work | Windows runner release receipt | the 2026-11-06 Wine smoke covered a CLI `import` → `export` PNG round trip and a GUI launch showing a real 1024×768 "FireCraft" window on Xvfb; Wine is supplementary runtime evidence, not the Windows target. | a clean Windows VM | — |
 | T27-39 | Verify installer upgrade, uninstall, reinstall and user-data preservation | P1 | NOT STARTED | T27-37 | Upgrade over the previous version, uninstall, and reinstall each succeed, with user data handled as documented | Windows runner release receipt | — | Clean Windows VM | — |
 | T27-40 | Configure and verify Authenticode signing | P1 | NOT STARTED | T27-36 | The signing infrastructure is identified, secret **names** are documented (never values), the executables and installer are signed and timestamped, and the signatures verify | `signtool verify /pa <exe>` | No signing credential configured anywhere | No Authenticode certificate | — |
-| T27-41 | Assess a Windows ARM64 target | P2 | NOT STARTED | T27-36 | A written assessment covers the ARM64 target, native dependencies and runner availability | `rustup target list \| grep aarch64-pc-windows` | Matrix records Windows ARM64 as "unassessed" | — | — |
+| T27-41 | Assess a Windows ARM64 target | P2 | IMPLEMENTED | T27-36 | A written assessment covers the ARM64 target, native dependencies and runner availability | `rustup target list \| grep aarch64-pc-windows` | The assessment is the ticket itself ([`docs/tasks/T27-41-windows-arm64-assessment.md`](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/tasks/T27-41-windows-arm64-assessment.md)): the toolchain (both `aarch64-pc-windows-msvc` and `aarch64-pc-windows-gnullvm` install for the pinned 1.99.1 toolchain with prebuilt standard libraries, and the MSVC target takes its C runtime from a Visual Studio installation, so linking needs a Windows host), the native stack (the default build compiles no C, the lock file already carries the `windows_aarch64_msvc` and `windows_aarch64_gnullvm` import libraries, `accesskit_windows` gates explicitly on `any(x86_64, aarch64)`, and no workspace crate is x86_64-specific), the GPU story (FireCraft uses eframe's `glow` backend, so a native ARM64 build draws through Microsoft's OpenGL compatibility pack over Direct3D 12, and eframe's GLES fallback is unavailable natively), the runner picture (the GitForge fleet is Linux-only, but GitHub's hosted `windows-11-arm` runner is free for this public repository and carries the ARM64 MSVC toolset, so unlike Linux aarch64 the build needs no new hardware), the packaging path (the `x86_64`-pinned target triple, artifact names and `x64compatible` installer architecture), and the verdict **feasible-later**: no code port is needed, but the artifact cannot rise past a build receipt without an ARM64 Windows environment that can draw, and the x86_64 Windows row T27-36 must land first. Nothing has been built or run for Windows ARM64. | — | 2026-11-16: assessment written |
 
 ### RP-03 — macOS packaging and notarization
 
@@ -299,6 +308,7 @@ graph TD
   T03 --> T24[T27-24 remaining findings]
   T23 --> T25[T27-25 full suite + smoke]
   T24 --> T25
+  T24 --> T62[T27-62 aegis scan on doc changes]
   T03 --> T17[T27-17 gh release asset args]
   T17 --> T18[T27-18 permissions + draft transition]
   T18 --> T19[T27-19 draft-release test tag]
@@ -372,7 +382,7 @@ T27-07 ─► T27-09 (maintainer) ─► T27-60                            (scop
 | B-02 | `release.yml` passes assets to `gh release create` with `-a`, which is not a flag of that command | T27-17, T27-18, T27-19, T27-58, T27-60, T27-61 | High | release workflow owner | Resolved 2026-11-12. The asset upload now passes the files positionally, the form `gh release create` actually takes in gh 2.46 (`release.yml:364` records the contract). The rehearsal's `create draft release` job (run 42937560976) succeeded against the real CLI and draft release 441136236 carries 8 uploaded assets, so the positional invocation works end to end. | closed 2026-11-12 (T27-17) |
 | B-03 | No maintainer decision on the release scope | T27-09, T27-10, T27-60, T27-61 | High | maintainer | `RELEASE-ENGINEERING-PLAN.md` §1.1 and campaign §5 P1.3 both describe an MVP *candidate*; approval does not exist. Board §3 is a recommendation only | The maintainer records a signed scope decision (T27-09) |
 | B-04 | No authorization to publish a production release | T27-19, T27-61 | High | maintainer | Campaign §20 forbids publishing, tagging, signing, deploying or merging a production release without explicit maintainer approval. A disposable test tag is permitted | Written authorization attached to T27-61 |
-| B-05 | No Windows MSVC host, no clean Windows VM | T27-35, T27-36, T27-37, T27-38, T27-39, T27-40, T27-41 | High | infrastructure / operator | Fleet is Linux x86_64 only (`docs/TOOLCHAINS.md`). The 2026-11-06 portable ZIP is a GNU cross-build; Wine is a supplementary runtime, not the release path | An MSVC-capable Windows runner and a clean Windows VM are provisioned |
+| B-05 | No Windows MSVC host, no clean Windows VM | T27-35, T27-36, T27-37, T27-38, T27-39, T27-40, T27-41 | High | infrastructure / operator | Fleet is Linux x86_64 only (`docs/TOOLCHAINS.md`). The 2026-11-06 portable ZIP is a GNU cross-build; Wine is a supplementary runtime, not the release path The Windows ARM64 assessment (T27-41) found that GitHub's hosted `windows-11-arm` runner carries the ARM64 MSVC toolset and is free for this public repository, so the MSVC build half needs no new hardware — but the repository has no Windows job and the campaign's CI is GitForge's Linux-only docker fleet, so wiring that runner is a decision, and the clean-VM half (which needs a GPU for the desktop smoke) remains operator-provisioned. | An MSVC-capable Windows runner and a clean Windows VM are provisioned |
 | B-06 | No macOS host | T27-42, T27-43, T27-44, T27-45 | High | infrastructure / operator | `packaging/build-macos-dmg.sh` is parse-checked only; never built | A macOS host with Xcode CLT, `hdiutil` and `lipo` is provisioned |
 | B-07 | No signing or attestation credentials exist anywhere | T27-40, T27-45, T27-56 | High | maintainer | No Authenticode certificate, no Developer ID identity, no GPG/Sigstore identity configured (artifact matrix secrets inventory) | Credentials are provisioned by the maintainer; secret *names* are documented, never values |
 | B-08 | Chromium is missing from the CI image, so the release lane skips the web bridge smoke | T27-16, T27-49 | High | CI / infrastructure | Resolved 2026-11-12 — the premise was false. `FIRECRAFT_DIST_SKIP_SMOKE` appears nowhere in `.gitforge.yml` or the GitHub workflows on `main` (only in `xtask/src/dist.rs:52` as a comment, in the docs and in issue #110), and `infrastructure/docker/ci-rust.Dockerfile:127` installs bookworm `chromium` for this smoke. The smoke runs: the GitForge `release` job logs `… smoke green` and `[xtask] dist --web ok` — most recently job `ecb488d1-8965-443f-8309-71405883d754` for commit `fcfe6db1`, finished 2026-11-12T06:18:54Z; 12 release jobs carry that line. | closed 2026-11-12 (T27-16, T27-49) |
@@ -409,9 +419,10 @@ binding.
 | D-05 | The fleet-built Windows portable ZIP does **not** satisfy the required-Windows-artifact criterion for certification | It is a cross-build, it has not been installed on a clean Windows VM, and the required installer has never been built | Board judgement, consistent with the campaign's "recipe ≠ built ≠ installed ≠ launched" rule | `PROPOSED` — folded into the scope decision (T27-09) |
 | D-06 | Task IDs are `T27-NN`, two digits, unique across the campaign and never reused | The existing ledger uses `T<N>-<slug>` filenames; `T27-NN` does not collide with any existing ID and sorts inside the T27 namespace | Board, 2026-11-08 | `ACCEPTED` |
 | D-07 | The board's 13 status words are distinct and are never collapsed; the 11-point ladder is tracked separately from status | The campaign requires that recipe, build, produced, metadata, checksum, installed, launched, smoke, security, published and independently-verified be separately evidenced | Campaign §15 / evidence ladder | `ACCEPTED` |
-| D-08 | `docs/TASKS.md` is not modified by this change | The campaign assigns that file to another agent in this session | Assignment ownership constraint | `ACCEPTED` — the TASKS.md owner must add the cross-reference |
+| D-08 | `docs/TASKS.md` is not modified by this change | The campaign assigns that file to another agent in this session | Assignment ownership constraint | `ACCEPTED` — satisfied 2026-11-16: `docs/TASKS.md` row 27 now links this board (62 rows, one per `docs/tasks/T27-*.md`) |
 | D-09 | The Cloudflare Pages deploy step stays commented out until a token and a deployment id exist | An unreviewed deploy step that runs unattended at tag time is a production-deploy risk with no recorded owner | `docs/release/ARTIFACT-MATRIX.md` secrets inventory | `ACCEPTED` (T27-50) |
 | D-10 | The artifact matrix is reconciled in place, not rewritten | The matrix is the RP-00 inventory artifact; the campaign requires reconciliation, and a rewrite would destroy dated evidence | Assignment ownership constraint | `ACCEPTED` |
+| D-11 | `feat/release-workflow-repair` and `docs/release-execution-board-sync` are closed, not merged | Their content is on `main` (the four branch-only commits are each present there in another form); the board-sync branch still carries the *pre-rehearsal* statuses, so merging it would take the release documentation and tooling backwards | [decision 0131](../decisions/0131-the-release-workflow-branch-is-superseded-by-main.md), accepted 2026-11-16 | `ACCEPTED` — the branches' remaining work is verification on `main`, not a merge |
 
 ---
 

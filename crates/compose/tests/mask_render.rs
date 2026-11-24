@@ -79,8 +79,13 @@ fn cell(ids: Vec<ObjectId>) -> doc::Cell {
 
 /// An image object over the canvas origin, `extent` wide and tall.
 fn image(registry: &mut Registry, extent: (i64, i64), tile: u32) -> ObjectId {
+    image_at(registry, extent, Point::new(0.0, 0.0), tile)
+}
+
+/// An image object placed at `location`.
+fn image_at(registry: &mut Registry, extent: (i64, i64), location: Point, tile: u32) -> ObjectId {
     registry.insert(ObjectData::Image(doc::ImageObject {
-        location: Point::new(0.0, 0.0),
+        location,
         offset: Point::new(0.0, 0.0),
         pixels: extent,
         tile_size: raster::TILE_SIDE as i64,
@@ -116,6 +121,46 @@ fn gray_step(left: u8, right: u8, split: usize) -> Tile {
             pixels[index + 1] = gray;
             pixels[index + 2] = gray;
             pixels[index + 3] = 255;
+        }
+    }
+    Tile::from_rgba8(pixels)
+}
+
+/// A mask tile whose gray ramps per column: column `x` carries
+/// `(x * 256 / TILE_SIDE)` clamped to 255 — a distinct value per
+/// source column, so any resampling or mis-sampling is visible in the
+/// output.
+fn gray_ramp() -> Tile {
+    let mut pixels = [0u8; TILE_BYTES];
+    for y in 0..TILE_SIDE {
+        for x in 0..TILE_SIDE {
+            let gray = ((x * 256) / TILE_SIDE).min(255) as u8;
+            let index = (y * TILE_SIDE + x) * 4;
+            pixels[index] = gray;
+            pixels[index + 1] = gray;
+            pixels[index + 2] = gray;
+            pixels[index + 3] = 255;
+        }
+    }
+    Tile::from_rgba8(pixels)
+}
+
+/// A mask tile that is opaque white in an 8×8 block at (4..12) — the
+/// block sits well inside a 16×16 clip of the tile, so a σ1.5 blur
+/// (span-5 boxes) feathers its border without flattening the whole
+/// extent, and the transparent surround gives the falloff room to
+/// land.
+fn soft_center() -> Tile {
+    let mut pixels = [0u8; TILE_BYTES];
+    for y in 0..TILE_SIDE {
+        for x in 0..TILE_SIDE {
+            let index = (y * TILE_SIDE + x) * 4;
+            let opaque = (4..12).contains(&x) && (4..12).contains(&y);
+            let (gray, alpha) = if opaque { (255, 255) } else { (0, 0) };
+            pixels[index] = gray;
+            pixels[index + 1] = gray;
+            pixels[index + 2] = gray;
+            pixels[index + 3] = alpha;
         }
     }
     Tile::from_rgba8(pixels)
@@ -375,4 +420,191 @@ fn a_disabled_top_level_still_applies_the_level_below() {
     let render = render(&doc, 0, 0).expect("render");
     assert_eq!(pixel(&render, 0, 0), RED, "the bottom level applies");
     assert_eq!(pixel(&render, 3, 0), BACKGROUND, "outside the coverage");
+}
+
+// --- native-resolution sampling (issue #114) -----------------------------
+
+/// The coverage the stack applied at `(x, y)`: opaque red content over
+/// the white matte leaves `255 − green` as the coverage. Where the
+/// content does not paint this reads 0 (the matte), which is also what
+/// "outside the mask's footprint" means.
+fn coverage_at(render: &compose::Render, x: u32, y: u32) -> u8 {
+    255 - pixel(render, x, y)[1]
+}
+
+/// A raster mask is sampled on its own `WPXi`×`HPXi` grid: the same
+/// 4×4 mask over the same 4×4 content renders byte-identically on a
+/// canvas the size of the mask and on a canvas twice as large, and the
+/// native ramp columns come through exactly (a canvas-space resample
+/// would land between them).
+#[test]
+fn mask_sampling_is_invariant_to_the_canvas_size() {
+    let build = |canvas: f64| {
+        let mut doc = Document::default();
+        doc.tiles.insert(0, solid(RED));
+        doc.tiles.insert(1, gray_ramp());
+        let content = image(&mut doc.registry, (4, 4), 0);
+        let mask = image(&mut doc.registry, (4, 4), 1);
+        let group = mask_group(&mut doc.registry, vec![mask, content]);
+        doc.pages
+            .push(page(canvas, canvas, vec![layer(vec![cell(vec![group])])]));
+        render(&doc, 0, 0).expect("render")
+    };
+    let small = build(4.0);
+    let large = build(8.0);
+    for y in 0..4u32 {
+        for x in 0..4u32 {
+            assert_eq!(
+                pixel(&small, x, y),
+                pixel(&large, x, y),
+                "the mask's own-resolution region changed with the canvas at ({x},{y})"
+            );
+        }
+    }
+    // The ramp's native columns carry gray 0, 2, 4, 6 — exact.
+    for y in 0..4u32 {
+        assert_eq!(coverage_at(&small, 0, y), 0, "ramp column 0");
+        assert_eq!(coverage_at(&small, 1, y), 2, "ramp column 1");
+        assert_eq!(coverage_at(&small, 2, y), 4, "ramp column 2");
+        assert_eq!(coverage_at(&small, 3, y), 6, "ramp column 3");
+    }
+    // Past the content's footprint the larger canvas shows the matte.
+    for y in 0..8u32 {
+        for x in 0..8u32 {
+            if x < 4 && y < 4 {
+                continue;
+            }
+            assert_eq!(
+                pixel(&large, x, y),
+                BACKGROUND,
+                "content leaked past its footprint at ({x},{y})"
+            );
+        }
+    }
+}
+
+/// The mask image's own opacity (`OPAi`) scales the coverage: a 50%
+/// white mask covers about half. Before issue #114 the gray restore
+/// divided the alpha back out and this read 255 — a no-op mask.
+#[test]
+fn a_mask_image_opacity_scales_the_coverage() {
+    let mut doc = Document::default();
+    doc.tiles.insert(0, solid(RED));
+    doc.tiles.insert(1, gray_step(255, 255, 4)); // full white
+    let content = image(&mut doc.registry, (4, 4), 0);
+    let mask = image(&mut doc.registry, (4, 4), 1);
+    if let Some(ObjectData::Image(image)) = doc.registry.get_mut(mask) {
+        image.opacity = 500;
+    }
+    let group = mask_group(&mut doc.registry, vec![mask, content]);
+    doc.pages
+        .push(page(4.0, 4.0, vec![layer(vec![cell(vec![group])])]));
+
+    let render = render(&doc, 0, 0).expect("render");
+    let cover = coverage_at(&render, 0, 0);
+    assert!(
+        (126..=129).contains(&cover),
+        "50% mask opacity gave coverage {cover}, expected ~127"
+    );
+}
+
+/// A live effect on the mask (a blur feathering the artwork's soft
+/// edge) computes on the mask's own extent — the coverage is
+/// byte-identical between canvas sizes, and the edge is feathered
+/// (strictly between 0 and 255), not the hard cut an unblurred mask
+/// paints.
+#[test]
+fn a_blurred_mask_samples_at_its_own_resolution() {
+    let build = |canvas: f64| {
+        let mut doc = Document::default();
+        doc.tiles.insert(0, solid(RED));
+        doc.tiles.insert(1, soft_center());
+        let content = image(&mut doc.registry, (16, 16), 0);
+        let mask = image(&mut doc.registry, (16, 16), 1);
+        if let Some(ObjectData::Image(image)) = doc.registry.get_mut(mask) {
+            image.effects = vec![doc::Effect {
+                category: String::new(),
+                internal_name: "gaussianBlur".to_owned(),
+                properties: vec![doc::EffectProperty {
+                    key: "gaussian_blur_radius".to_owned(),
+                    value: doc::EffectValue::Text("1.5".to_owned()),
+                }],
+            }];
+        }
+        let group = mask_group(&mut doc.registry, vec![mask, content]);
+        doc.pages
+            .push(page(canvas, canvas, vec![layer(vec![cell(vec![group])])]));
+        render(&doc, 0, 0).expect("render")
+    };
+    let small = build(16.0);
+    let large = build(32.0);
+    for y in 0..16u32 {
+        for x in 0..16u32 {
+            assert_eq!(
+                pixel(&small, x, y),
+                pixel(&large, x, y),
+                "the blurred mask changed with the canvas at ({x},{y})"
+            );
+        }
+    }
+    let edge = coverage_at(&small, 0, 8);
+    let center = coverage_at(&small, 8, 8);
+    assert!(
+        (1..255).contains(&edge),
+        "the blur did not feather the mask's edge: coverage {edge}"
+    );
+    assert!(
+        center > edge,
+        "the artwork's center should stay more covered than its edge: center {center}, edge {edge}"
+    );
+}
+
+/// The mask's footprint lands at its rounded `location + offset` —
+/// the same rounding the canvas-space assemble clipped by — and the
+/// region the mask does not cover stays uncovered.
+#[test]
+fn the_mask_footprint_lands_at_its_rounded_location() {
+    let mut doc = Document::default();
+    doc.tiles.insert(0, solid(RED));
+    doc.tiles.insert(1, gray_step(255, 0, 2));
+    let content = image(&mut doc.registry, (4, 4), 0);
+    let mask = image_at(&mut doc.registry, (4, 4), Point::new(0.5, 0.0), 1);
+    let group = mask_group(&mut doc.registry, vec![mask, content]);
+    doc.pages
+        .push(page(8.0, 4.0, vec![layer(vec![cell(vec![group])])]));
+
+    let render = render(&doc, 0, 0).expect("render");
+    // 0.5 rounds to 1: canvas x0 lies outside the footprint, x1..x2
+    // read the mask's white half, x3 its black half.
+    assert_eq!(pixel(&render, 0, 0), BACKGROUND, "outside the footprint");
+    assert_eq!(pixel(&render, 1, 0), RED, "the mask's white half");
+    assert_eq!(pixel(&render, 2, 0), RED, "the mask's white half");
+    assert_eq!(pixel(&render, 3, 0), BACKGROUND, "the mask's black half");
+}
+
+/// A mask extent beyond the native sampling ceiling (one side past the
+/// rasterizer's `u16` extent, one area past the pixel cap) must never
+/// abort a render that used to succeed: sampling falls back to the
+/// canvas, where the extent clips to the canvas.
+#[test]
+fn a_mask_extent_beyond_the_sampling_ceiling_still_renders() {
+    for extent in [(70_000, 4), (12_000, 6_000)] {
+        let mut doc = Document::default();
+        doc.tiles.insert(0, solid(RED));
+        doc.tiles.insert(1, gray_step(255, 0, 2));
+        let content = image(&mut doc.registry, (4, 4), 0);
+        let mask = image(&mut doc.registry, extent, 1);
+        let group = mask_group(&mut doc.registry, vec![mask, content]);
+        doc.pages
+            .push(page(4.0, 4.0, vec![layer(vec![cell(vec![group])])]));
+
+        let render = render(&doc, 0, 0)
+            .unwrap_or_else(|error| panic!("extent {extent:?} must still render: {error}"));
+        assert_eq!(pixel(&render, 0, 0), RED, "extent {extent:?} left half");
+        assert_eq!(
+            pixel(&render, 3, 0),
+            BACKGROUND,
+            "extent {extent:?} right half"
+        );
+    }
 }

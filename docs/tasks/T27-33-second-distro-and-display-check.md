@@ -1,6 +1,6 @@
 # T27-33 — Test the DEB and tar.gz on a second distro family and check X11/Wayland, desktop integration and fonts
 
-> **RP:** RP-01 · **Priority:** P1 · **Status:** NOT STARTED
+> **RP:** RP-01 · **Priority:** P1 · **Status:** SMOKE TESTED
 > **Board row:** [EXECUTION-BOARD.md §6](../release/EXECUTION-BOARD.md)
 > **Depends on:** T27-21
 

@@ -92,10 +92,18 @@ struct PreviewCache {
     error: Option<String>,
 }
 
+/// The identity of the document a cached export was made from: the
+/// session's id, plus the session's change stamp.
+///
+/// The session id is the document's identity — two sessions are two
+/// documents even when their change stamps match, because a freshly
+/// opened file and a freshly created one both carry an empty history.
+type PreviewKey = (u64, usize, usize, usize);
+
 /// The preview panel's state: the cached export and its textures.
 struct PreviewState {
-    /// The session stamp the cache was made from.
-    stamp: Option<(usize, usize, usize)>,
+    /// The document the cache was made from.
+    stamp: Option<PreviewKey>,
     /// The cached export.
     cache: Option<PreviewCache>,
     /// The textures of the cached files, parallel to `cache.files`.
@@ -137,12 +145,13 @@ impl Shell {
             ..webexport::WebExportOptions::default()
         };
         let stamp = self.stamp();
-        let stale = STATE.with(|state| state.borrow().stamp != Some(stamp));
+        let key = (self.editor.session.id(), stamp.0, stamp.1, stamp.2);
+        let stale = STATE.with(|state| state.borrow().stamp != Some(key));
         if stale {
             let cache = build_cache(self.editor.document(), &options);
             STATE.with(|state| {
                 let mut state = state.borrow_mut();
-                state.stamp = Some(stamp);
+                state.stamp = Some(key);
                 state.cache = Some(cache);
                 state.textures.clear();
             });
@@ -564,6 +573,109 @@ mod tests {
         assert_eq!(layout.cells[1].x, 30.0);
     }
 
+    /// A shell over one document whose slice carries `name`.
+    ///
+    /// The slice's name reaches the exported markup, so the name is
+    /// the marker a test reads the preview's cache back with.
+    fn preview_shell(name: &str) -> Shell {
+        let mut editor = crate::editor::Editor::untitled();
+        editor
+            .apply(
+                "slice.create",
+                serde_json::json!({
+                    "shape": "rect",
+                    "x": 0.0, "y": 0.0,
+                    "width": 32.0, "height": 16.0,
+                    "points": null, "page": 0,
+                    "name": name, "link": null, "alt": null,
+                }),
+            )
+            .expect("slice.create applies");
+        super::super::tests::gui_shell(editor)
+    }
+
+    /// Runs the preview panel headlessly, as the dock draws it.
+    fn draw_preview(shell: &mut Shell) -> egui::FullOutput {
+        let context = egui::Context::default();
+        let input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::pos2(0.0, 0.0),
+                egui::vec2(800.0, 600.0),
+            )),
+            ..egui::RawInput::default()
+        };
+        let mut output = context.run_ui(input, |ui| {
+            egui::CentralPanel::default().show(ui, |ui| {
+                shell.html_preview_panel(ui);
+            });
+        });
+        // The panel draws the exported page's images, so the frame
+        // carries texture deltas. Nothing applies them here — the test
+        // has no GPU — and egui refuses to drop an unapplied delta, so
+        // the frame is cleared the same way the shell's own headless
+        // draws clear it.
+        output.textures_delta.clear();
+        output
+    }
+
+    /// The markup the preview is currently showing.
+    fn cached_html() -> String {
+        STATE.with(|state| {
+            state
+                .borrow()
+                .cache
+                .as_ref()
+                .map(|cache| cache.html.clone())
+                .unwrap_or_default()
+        })
+    }
+
+    /// The preview shows the document it is showing, not the one it
+    /// showed before.
+    ///
+    /// Two freshly opened documents carry the same change stamp — an
+    /// empty history, an empty journal, no undo — so the stamp alone
+    /// cannot tell them apart. The preview's cache is keyed on the
+    /// session's identity as well, or the second document's preview
+    /// is the first document's page.
+    #[test]
+    fn the_preview_follows_the_document() {
+        let mut first = preview_shell("alpha");
+        draw_preview(&mut first);
+        let first_html = cached_html();
+        assert!(
+            first_html.contains("alpha"),
+            "the first document's preview carries its slice:\n{first_html}"
+        );
+
+        let mut second = preview_shell("beta");
+        draw_preview(&mut second);
+        let second_html = cached_html();
+        assert!(
+            second_html.contains("beta"),
+            "the second document's preview carries its own slice:\n{second_html}"
+        );
+        assert!(
+            !second_html.contains("alpha"),
+            "the second document's preview is not the first document's:\n{second_html}"
+        );
+    }
+
+    /// The preview draws the exported page.
+    ///
+    /// The preview is the only place a user sees the web export before
+    /// publishing it, so its drawing path is covered: the panel runs
+    /// headless against a document with a slice, and draws.
+    #[test]
+    fn the_preview_draws_the_exported_page() {
+        let mut shell = preview_shell("plate");
+        let output = draw_preview(&mut shell);
+        assert!(
+            !output.shapes.is_empty(),
+            "the preview draws the exported page"
+        );
+    }
+
     /// The preview is the real export: the markup the panel shows is
     /// the markup the exporter writes, image for image.
     #[test]
@@ -584,5 +696,158 @@ mod tests {
         // The parsed layout places the exported images.
         assert!(!cache.layout.cells.is_empty());
         assert!(cache.layout.width > 0.0);
+    }
+
+    /// The Polygon Hotspot tool commits through the append state
+    /// machine (decision 0029's Design C): point 1 takes
+    /// `hotspot.appendPoint`'s create branch, each later point
+    /// appends, and the final anchor closes the outline — one undo
+    /// step named for the verb. The anchors reach the exported image
+    /// map, so the geometry the replay writes is the geometry a
+    /// browser would hit.
+    #[test]
+    fn the_polygon_hotspot_tool_commits_through_append_point() {
+        let mut editor = crate::editor::Editor::untitled();
+        // A slice covering the canvas gives the hotspot a host piece
+        // — the map hangs off the piece under the hotspot's center.
+        editor.tool = crate::editor::Tool::Slice;
+        editor.begin_drag(geom::Point::new(0.0, 0.0));
+        editor.drag_to(geom::Point::new(320.0, 240.0));
+        editor.end_drag().expect("slice.create applies");
+
+        let selection_before = editor.document().object_selection.clone();
+        editor.tool = crate::editor::Tool::PolygonHotspot;
+        let plotted = [(10.0, 10.0), (60.0, 10.0), (60.0, 40.0)];
+        for (x, y) in plotted {
+            editor
+                .add_draft_point(geom::Point::new(x, y))
+                .expect("the point plots");
+        }
+        editor.commit_draft().expect("the append replay applies");
+
+        let hotspots: Vec<_> = editor
+            .document()
+            .registry
+            .iter()
+            .filter_map(|(id, data)| match data {
+                doc::ObjectData::Slice(slice) if slice.slice_type.is_none() => {
+                    Some((id, slice.clone()))
+                }
+                _ => None,
+            })
+            .collect();
+        assert_eq!(hotspots.len(), 1, "one polygon hotspot was created");
+        let hotspot = &hotspots[0].1;
+        assert_eq!(hotspot.shape, 2, "the area is a polygon");
+        let contour = hotspot.contours.first().expect("the outline");
+        assert!(contour.closed, "the final anchor closes the outline");
+        let anchors: Vec<(f64, f64)> = contour
+            .points
+            .iter()
+            .map(|point| (point.anchor.x, point.anchor.y))
+            .collect();
+        assert_eq!(
+            anchors,
+            plotted.to_vec(),
+            "every plotted anchor landed in order"
+        );
+        assert_eq!(
+            editor.document().object_selection,
+            selection_before,
+            "the replay restores the selection it started with"
+        );
+
+        // The exported image map carries those anchors.
+        let options = webexport::WebExportOptions::default();
+        let cache = build_cache(editor.document(), &options);
+        assert!(cache.error.is_none(), "{:?}", cache.error);
+        assert!(cache.html.contains("<map "), "the export writes a map");
+        assert!(
+            cache
+                .html
+                .contains("shape=\"poly\" coords=\"10,10,60,10,60,40\""),
+            "the map carries the replayed anchors"
+        );
+
+        // One undo step, named for the verb the tool replays.
+        assert_eq!(
+            editor.session.undo().expect("an undo step"),
+            "hotspot.appendPoint",
+            "the tool dispatched the append verb"
+        );
+        assert!(
+            !editor
+                .document()
+                .registry
+                .iter()
+                .any(|(_, data)| matches!(data, doc::ObjectData::Slice(slice) if slice.slice_type.is_none())),
+            "undo takes the replayed hotspot away"
+        );
+    }
+
+    /// The Polygon Slice tool takes the same replay through
+    /// `slice.appendPoint`, and the frame grows to carry every
+    /// anchor.
+    #[test]
+    fn the_polygon_slice_tool_commits_through_append_point() {
+        let mut editor = crate::editor::Editor::untitled();
+        editor.tool = crate::editor::Tool::PolygonSlice;
+        let plotted = [(20.0, 30.0), (80.0, 30.0), (80.0, 70.0)];
+        for (x, y) in plotted {
+            editor
+                .add_draft_point(geom::Point::new(x, y))
+                .expect("the point plots");
+        }
+        editor.commit_draft().expect("the append replay applies");
+
+        let slices: Vec<_> = editor
+            .document()
+            .registry
+            .iter()
+            .filter_map(|(id, data)| match data {
+                doc::ObjectData::Slice(slice) if slice.slice_type.is_some() => {
+                    Some((id, slice.clone()))
+                }
+                _ => None,
+            })
+            .collect();
+        assert_eq!(slices.len(), 1, "one polygon slice was created");
+        let slice = &slices[0].1;
+        assert_eq!(slice.shape, 2, "the slice is a polygon");
+        let contour = slice.contours.first().expect("the outline");
+        assert!(contour.closed, "the final anchor closes the outline");
+        let anchors: Vec<(f64, f64)> = contour
+            .points
+            .iter()
+            .map(|point| (point.anchor.x, point.anchor.y))
+            .collect();
+        assert_eq!(
+            anchors,
+            plotted.to_vec(),
+            "every plotted anchor landed in order"
+        );
+        assert_eq!(
+            (
+                slice.frame.x0,
+                slice.frame.y0,
+                slice.frame.x1,
+                slice.frame.y1
+            ),
+            (20.0, 30.0, 80.0, 70.0),
+            "the frame carries the anchors"
+        );
+        assert_eq!(
+            editor.session.undo().expect("an undo step"),
+            "slice.appendPoint",
+            "the tool dispatched the append verb"
+        );
+        assert!(
+            !editor
+                .document()
+                .registry
+                .iter()
+                .any(|(_, data)| matches!(data, doc::ObjectData::Slice(_))),
+            "undo takes the replayed slice away"
+        );
     }
 }

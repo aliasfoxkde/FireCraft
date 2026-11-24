@@ -64,12 +64,22 @@ the compositor describe one element mask.
 
 ### What this does not do
 
-The compositor folds coverage in the canvas's own space; a level's
-mask is sampled at the canvas resolution rather than at the mask
-image's own resolution, and the fold is a per-pixel operation with no
-feathering beyond the mask's own gray level. The stack's shape is
-also not yet editable from the panel beyond enable/mode/reorder/remove
-(see task 143's remaining scope).
+*Corrected 2026-11-17 (issue #114):* the sampling claim this section
+carried did not reproduce for an unfiltered mask — footprint-invariance
+probes pass at 1× and 2×, with the mask smaller and larger than the
+canvas. The one real case was a mask carrying a live effect: its blur
+ran against the *canvas* buffer, so the coverage depended on the
+artboard size. Fixed in the same issue: a raster level's mask now
+samples on its own `WPXi`×`HPXi` grid and places the coverage at the
+mask's rounded location, canvas-invariantly.
+
+The fold is still a per-pixel operation with no feather-radius control
+(CS6's feather control has no FireCraft equivalent): a level
+contributes its gray × opacity — a soft painted edge, the mask image's
+own opacity, or a live effect on the mask feathers it — and effects
+clamp at the mask's own extent, so a mask whose artwork fills its
+extent blurs without a border feather. Shape masks rasterize at the
+output resolution, where a vector's anti-aliasing belongs.
 
 ## Consequences
 

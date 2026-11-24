@@ -1,11 +1,12 @@
 # FireCraft — Roadmap detail
 
-> **Current execution snapshot (2026-11-14; main `ad3fc655`):** Phase 21's
+> **Current execution snapshot (2026-11-16; main `23f872e0`):** Phase 21's
 > user-facing deliverables have landed. Phase 20.1 and 20.5–20.7 are on
 > main; Optimize/timeline landed 2026-11-11 in #118 and the mask stack
-> landed in #113 as `PARTIAL`. The reachability wave (#143) and the
-> artwork consolidation (#144) merged 2026-11-14 (249/257 commands
-> bound = 96.89%). Phase 22 remains partial: the
+> landed in #113 as `PARTIAL`. The reachability wave (#143), the
+> artwork consolidation (#144) and the wave-2 closeout (#150) merged
+> 2026-11-14 → 11-16: **257/257 commands bound = 100%, floor
+> re-blessed to 100%**. Phase 22 remains partial: the
 > user-visible parity matrix is published, but bitmap inspector
 > capabilities and remaining CS6 chrome are still open/evidence-gated.
 > Use [TASKS.md](TASKS.md) for live status and [PROGRESS.md](PROGRESS.md)
@@ -238,7 +239,7 @@ of replacing it, fill/stroke swatch panel bound to
 Phase 19 batches 19.1–19.5 landed 2026-10-31 → 11-01: transform
 handles + Numeric Transform, Subselect path-node editing, the gradient
 fill editor, the command palette, and the grid/guides/snap set. The
-inert count is 2 of 296 items (was 190); 19.6's menu-wiring
+inert count is 2 of 298 items (was 190); 19.6's menu-wiring
 
 campaign is complete and the Text ▸ Font submenu landed 2026-11-06. The remaining rows require separate feature or
 evidence work, tracked outside that campaign.
@@ -393,6 +394,8 @@ evidence work, tracked outside that campaign.
   at 66.40%. Re-measured 2026-11-14 after PR #143: **257 registry
   commands, 249 bound = 96.89%, 8 unreachable (pre-wave-2; wave-2 closed all 8 on 2026-11-16); the floor was
   deliberately re-blessed to 96.89% in the wave-closeout PR.
+  Re-measured 2026-11-14 after the wave-2 bindings: **257 of 257
+  bound = 100%, 0 unreachable**, floor re-blessed to 100%.
   (The command palette makes the *palette* reach 100% — the gate
   deliberately measures the CS6-visible surface instead, which is the
   surface the 19.x batches widen. Decision
@@ -404,8 +407,8 @@ evidence work, tracked outside that campaign.
   (`INERT_CEILING`), so a newly inert row fails the test until the
   ceiling is deliberately re-pinned. Per-item tracking references were
   dropped as unnecessary — the count is the honest metric and the gate
-  refuses any rise in it. **Latest census (2026-11-11): 2 inert rows of
-  296 total**, with eight separate feature/evidence-gated rows. The
+  refuses any rise in it. **Latest census (2026-11-14): 2 inert rows of
+  298 total**, with eight separate feature/evidence-gated rows. The
   19.6 wiring campaign is complete; do not keep it in progress.
 - **19b.4 Wasm budget re-pin** (S) — **DONE (2026-11-03)**: re-measured
   and re-pinned with evidence. `xtask dist --web` observed
@@ -452,18 +455,27 @@ evidence work, tracked outside that campaign.
   [0096](decisions/0096-animation-playback-clock.md)). Still open:
   state thumbnails, a document-level loop count, per-side onion
   opacity, screenshot acceptance.
-- **20.4 Mask stack UI** (M): add/remove/mode/link/move. **PARTIAL
-  2026-11-11**: the stack, its operators, and its fold landed. The
+- **20.4 Mask stack UI** (M): add/remove/mode/link/move. **LANDED
+  2026-11-11; the #114 follow-ups closed 2026-11-19** — the stack,
+  its operators, and its fold landed. The
   model holds a level's combine mode and persists it
   (`mask.setStackMode`, decisions [0092](decisions/0092-mask-stack-combine-mode.md)
   and [0093](decisions/0093-mask-stack-levels-and-folding.md)); the
   compositor folds the levels bottom-up into one coverage and applies
   it to the content's pixels; the panel lists one row per level with
   its enable flag, operator, link flag, reorder arrows and remove
-  button, and can add a level. The structural commands undo
-  byte-exactly. Still open: the screenshot acceptance; ticket
-  [T9](tasks/T9-mask-stack.md). This is a FireCraft extension, not a
-  CS6 parity claim.
+  button, and can add a level; `mask.addLevel`/`mask.removeLevel`/
+  `mask.moveLevel` are dispatched from that panel. The structural
+  commands undo byte-exactly. Issue
+  [#114](https://github.com/aliasfoxkde/FireCraft/issues/114) closed
+  the two gaps that kept this `PARTIAL`: the compositor's mask
+  sampling resolution (a raster level's mask samples on its own
+  `WPXi`×`HPXi` grid — canvas-invariant; feather comes from the
+  artwork, gray × opacity, with no feather-radius control) and the
+  section's screenshot acceptance (a two-row frame, receipt in
+  [T22](tasks/T22-screenshot-ui.md#receipt--the-mask-stack-section-2026-11-19)).
+  Ticket [T9](tasks/T9-mask-stack.md). This
+  is a FireCraft extension, not a CS6 parity claim.
 - **20.5 Multi-document tabs** (M): **LANDED 2026-11-07** — Open/New
   park the active document as a `DocTab`; Close promotes the newest
   parked tab (refuses dirty documents); the tab strip shows the
@@ -481,7 +493,7 @@ evidence work, tracked outside that campaign.
   payload grounded one step below the document's live depth) and
   `firecraft.listCommands` advertises it
   ([T10](tasks/T10-history-rewind-command.md), decision
-  [0096](decisions/0096-the-rewind-is-a-command-every-surface-can-name.md)).
+  [0130](decisions/0130-the-rewind-is-a-command-every-surface-can-name.md)).
 - **20.7 Slice/hotspot behavior editing + HTML preview** (M):
   **LANDED 2026-11-11** in #107.
 
@@ -534,7 +546,20 @@ performance follow-up, not a reason to reopen the delivered MVP features.
   drag (0.5×–3×, Reset to platform default) applies to the context
   each frame and rides `ShellLayout`, so it persists like the panel
   set. Gate: `preferences_scale_round_trips_the_layout`. The
-  Preferences menu row also left the inert census, now 2 of 296.
+  Preferences menu row also left the inert census, now 2 of 298.
+  **Keymap sets — LANDED 2026-11-16** (issue #92, decision
+  [0126](decisions/0126-the-keymap-sets-are-overrides-of-the-cs6-table.md)):
+  Preferences ▸ Keyboard chooses the keymap set — CS6's own (the
+  default, byte-identical), or the Illustrator, Photoshop, FreeHand and
+  Web Standard sets, each a set of overrides on the CS6 table rather
+  than a second copy of it. The choice rides `ShellLayout::keymap`,
+  and the whole binding table is published as
+  [`SHORTCUTS.md`](SHORTCUTS.md), generated by `xtask shortcuts` and
+  gated in CI so it cannot drift from the code. Gates:
+  `keymap::tests::a_set_binds_no_keystroke_twice`,
+  `keymap::tests::every_override_names_a_bound_verb`,
+  `shell::tests::the_keymap_set_replaces_the_dispatch_table`.
+  Still open on this item: a per-verb rebinding editor.
 - **21.5 accesskit** desktop + web re-audit — **LANDED 2026-11-11**
   in #107 for the supported desktop/accessibility surface. Decision
   0067 remains the authority for the web-canvas screen-reader limitation;
@@ -652,6 +677,13 @@ scope, so no license path is attempted.
   adjudicates each occurrence individually. A rule class that fires
   here gets a class note beside its rows in the baseline, never a
   class-wide switch.
+- Do not treat a documentation-only change as exempt from the Aegis
+  scan. The scan covers `docs/`, and since decision 0132 it runs on
+  documentation-only changes in both CI systems — the GitHub
+  `docs-only-check` job and the GitForge `aegis` job — so a literal in
+  a ticket or a decision is adjudicated when it lands, instead of
+  arriving unblessed and failing a later code change's pipeline for
+  content that change never touched.
 
 
 

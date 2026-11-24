@@ -17,7 +17,7 @@
 
 ---
 
-## 1. State snapshot (2026-11-14; main `ad3fc655`)
+## 1. State snapshot (2026-11-16; main `23f872e0`)
 
 - **Source and release:** canonical `main` is `ad3fc655` after the
   reachability wave (#143) and the artwork consolidation (#144). The
@@ -29,7 +29,7 @@ The latest published release is `v0.2.6` (2026-11-24). The WASM CDN proxy Worker
   the wave-closeout. These measures answer different questions: DOM verbs,
   shell-bound commands, and complete end-user UI/workflow parity must
   not be conflated.
-- **Menu census:** 2 inert rows of 296. The 19.6 menu-wiring campaign is
+- **Menu census:** 2 inert rows of 298. The 19.6 menu-wiring campaign is
   complete; eight additional rows are explicitly feature/evidence-gated.
 - **Delivered work:** Phase 21's user-facing deliverables landed with
   #107. Phase 20.1–20.3 and 20.5–20.7 are on main (Optimize/timeline
@@ -154,7 +154,7 @@ verifiable.
 ### Current program: Phases 20–22
 
 Phase 19's canvas work and menu wiring campaign (batches 1–17) are
-complete. The live menu census is 2 inert rows of 296; eight other rows
+complete. The live menu census is 2 inert rows of 298; eight other rows
 have explicit feature/evidence gates and are not considered inert.
 Path-node add/delete, the reachability gate, and the wasm budget
 re-pin are also complete.
@@ -315,21 +315,31 @@ the absolute repo path.
   six. That is **≈12 job starts per hour, one start every ~5
   minutes** — the runner is saturated, and the queue is the
   bottleneck, not the code.
-  A pipeline is **ten** jobs (`detect-changes`, `fmt-layers`, `layers`,
-  `clippy-test`, `wasm-web`, `corpus-golden`, `perf-budgets`, `fuzz`,
-  `generated-docs`, `release`), so one pipeline costs ~50 minutes of
+  A pipeline is **twelve** jobs (`detect-changes`, `release-ledger`,
+  `aegis`, `fmt-layers`, `layers`, `clippy-test`, `wasm-web`,
+  `corpus-golden`, `perf-budgets`, `fuzz`, `generated-docs`,
+  `release`), so one pipeline costs ~50 minutes of
   queue time and a merge campaign of nine PR branches costs ~7 hours.
   Budget for that when sequencing a campaign; do not read a long
   queue as a hung runner.
 - **Find the run:** `GET /api/pipeline-runs?limit=15` — match
   `commit_hash` (field name is `commit_hash`, *not* `sha`; both are
   `None` in the list view — fetch jobs to identify a run by its
-  ten-job shape).
+  twelve-job shape).
 - **Wait + jobs:** `GET /api/pipeline-runs/{id}` until status is
-  terminal; `GET /api/pipeline-runs/{id}/jobs` for the ten jobs
-  (detect-changes, fmt-layers, layers, clippy-test, wasm-web,
-  corpus-golden, perf-budgets, fuzz, generated-docs, release). All
+  terminal; `GET /api/pipeline-runs/{id}/jobs` for the twelve jobs
+  (detect-changes, release-ledger, aegis, fmt-layers, layers,
+  clippy-test, wasm-web, corpus-golden, perf-budgets, fuzz,
+  generated-docs, release). All
   must be `succeeded`. ~15–18 min once the pipeline has the runner.
+- **The Aegis leg (`aegis` job):** the secret/PII scan covers
+  `docs/`, so it runs on **every** change — the job carries no
+  `skip_if`, and the GitHub backup CI runs the same scan in its
+  `docs-only-check` job. Both systems install the scanner through
+  `scripts/install-aegis.sh` (one release URL, one pinned SHA-256,
+  one identity check) and both exercise the installer's failure
+  modes first with `scripts/install-aegis-selftest.sh`. A finding the
+  baseline does not cover fails the job; see decision 0132.
 - **Job logs:** `GET /api/jobs/{job_id}/logs` — walk
   `data.logs[].chunk` or `data.receipt.step_results[].stdout/stderr`
   (helper: `/var/tmp/getjoblog.py`).
@@ -358,6 +368,35 @@ the absolute repo path.
     moves.
   - *Silent mid-compile death* = a stale image cache or an offline
     refusal → check the job-log ledger FIRST.
+  - *"cannot find function `<x>` in module `app::…`" at an
+    `xtask/src/climb.rs` call site* = a **false red**: the job
+    compiled against an `app` artifact built from a different tree.
+    Measured 2026-11-16 on six branch runs
+    (`a329bda0`, `e2e85b9b`, `57660fb8`, `5e48f383`, `b28fd3f5`,
+    `0757082e`, `a6b23df6`), every one with the same
+    `E0425: cannot find function 'menu_census' in module 'app::menus'`
+    while the run's own commit carries **both** the definition
+    (`crates/app/src/menus.rs`) and the call (`xtask/src/climb.rs`) —
+    so the tree was consistent and the *artifact* was not.
+    **The mechanism is identified** (decision
+    [0122](decisions/0122-the-cargo-cache-is-scoped-per-job-not-per-commit.md)):
+    the pipeline's per-job `cache:` mount is scoped to the *job*, not
+    to the commit, so cargo can reuse another branch's `app` rlib. The
+    mitigation is in the tree — `scripts/ci_refresh_stale_crates.sh`
+    runs before any job compiles and refreshes only the crates whose
+    sources are newer than the cached copy. The last recurrence was
+    the `layers` job of run `5c64a539` (2026-11-16T15:05:32Z); the
+    mitigation landed in `702ad246` (2026-11-17T02:29Z) and the
+    store records **44 runs and 504 jobs with no recurrence since**.
+    The platform defect itself (the cache's scope) stays open with
+    the GitForge platform lane as its owner.
+    **What to do:** do not read the red as a source defect and do not
+    "fix" the call site; confirm the commit is self-consistent
+    (`git grep '<symbol>' <sha> -- crates/app`), then re-trigger the
+    run (an empty commit re-checks-out the tree and the job goes
+    green). If the mitigation's step is *absent* from the job's log,
+    the run predates the mitigation — that is a different situation
+    from a recurrence.
 - **Local gates before any push:** the full gate is
   `cargo run -p xtask -- ci` (fmt, clippy `-D warnings`, tests, layers,
   wasm, corpus, goldens, perf, fuzz-quick, parity, scorecard,
