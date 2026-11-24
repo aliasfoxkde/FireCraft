@@ -838,6 +838,7 @@ mod tests {
 
     /// A shell over a fresh document whose page 0 carries `states`
     /// states.
+    #[cfg(feature = "native")]
     fn shell_with_states(states: i64) -> Shell {
         let mut shell = super::super::tests::gui_shell(crate::editor::Editor::untitled());
         for _ in 1..states {
@@ -880,6 +881,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "native")]
     fn add_state_puts_an_empty_state_after_the_current_one() {
         let mut shell = shell_with_states(2);
         let layer = shell.editor.active_layer();
@@ -893,6 +895,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "native")]
     fn duplicate_state_copies_the_current_state_after_it() {
         let mut shell = shell_with_states(1);
         let layer = shell.editor.active_layer();
@@ -909,6 +912,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "native")]
     fn delete_state_drops_the_current_state_and_the_next_one_takes_its_place() {
         let mut shell = shell_with_states(3);
         shell.editor.frame = 1;
@@ -918,6 +922,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "native")]
     fn the_last_state_stays() {
         // The engine refuses to empty a page, so the refusal is
         // reported on the status line and the view does not move.
@@ -930,6 +935,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "native")]
     fn distribute_to_states_moves_the_items_one_per_state() {
         let mut shell = shell_with_states(1);
         let layer = shell.editor.active_layer();
@@ -943,6 +949,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "native")]
     fn a_single_item_distributes_to_nothing() {
         // CS6's documented no-op: one item cannot be spread.
         let mut shell = shell_with_states(1);
@@ -960,6 +967,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "native")]
     fn moving_a_state_left_swaps_it_with_the_one_before() {
         let mut shell = shell_with_states(3);
         let layer = shell.editor.active_layer();
@@ -974,6 +982,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "native")]
     fn moving_a_state_right_swaps_it_with_the_one_after() {
         let mut shell = shell_with_states(3);
         let layer = shell.editor.active_layer();
@@ -986,6 +995,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "native")]
     fn the_first_and_last_states_do_not_move_off_the_strip() {
         let mut shell = shell_with_states(2);
         let layer = shell.editor.active_layer();
@@ -997,6 +1007,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "native")]
     fn a_cell_hides_and_locks_through_the_commands() {
         let mut shell = shell_with_states(2);
         let layer = shell.editor.active_layer();
@@ -1009,6 +1020,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "native")]
     fn the_selection_is_copied_onto_the_next_state() {
         let mut shell = shell_with_states(2);
         let layer = shell.editor.active_layer();
@@ -1023,6 +1035,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "native")]
     fn the_selection_distributes_one_item_per_state() {
         let mut shell = shell_with_states(1);
         let layer = shell.editor.active_layer();
@@ -1038,6 +1051,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "native")]
     fn the_selection_is_copied_across_a_range_of_states() {
         let mut shell = shell_with_states(3);
         let layer = shell.editor.active_layer();
@@ -1134,6 +1148,7 @@ mod tests {
 
     /// A shell over a page whose three states carry the example's
     /// delays.
+    #[cfg(feature = "native")]
     fn shell_with_delays() -> Shell {
         let mut shell = shell_with_states(3);
         for (frame, duration) in DELAYS.iter().enumerate() {
@@ -1149,6 +1164,7 @@ mod tests {
     }
 
     /// Starts the clock on the shell's first state.
+    #[cfg(feature = "native")]
     fn start(shell: &mut Shell) {
         let strip = TimelineStrip::read(shell.editor.document(), 0).expect("the page is there");
         shell.start_playback(0, 0, &strip);
@@ -1156,6 +1172,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "native")]
     fn playback_moves_the_view_to_the_next_state() {
         let mut shell = shell_with_delays();
         start(&mut shell);
@@ -1170,6 +1187,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "native")]
     fn playback_stops_when_the_document_is_edited() {
         let mut shell = shell_with_delays();
         start(&mut shell);
@@ -1182,6 +1200,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "native")]
     fn playback_stops_when_the_state_count_changes() {
         let mut shell = shell_with_delays();
         start(&mut shell);
@@ -1194,6 +1213,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "native")]
     fn playback_stops_when_the_page_changes() {
         let mut shell = shell_with_delays();
         start(&mut shell);
