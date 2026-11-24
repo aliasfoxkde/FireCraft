@@ -24,10 +24,12 @@ This page is the documentation map. Start with the overview that matches your go
 ### I want to understand the post-MVP product direction
 
 1. [Post-MVP Product and Engineering Roadmap](POST-MVP-ROADMAP.md): detailed product vision, feature specifications, dependencies, priorities, architecture constraints, and acceptance criteria.
-2. [Post-MVP Agent Handoff](POST-MVP-AGENT-HANDOFF.md): mandatory repository audit, local-work reconciliation, task conversion, and execution rules for the next implementation agent.
+2. [Repository Consolidation Handoff](REPOSITORY-CONSOLIDATION-HANDOFF.md): direct phased instructions for branch/PR consolidation, local-work preservation, cleanup, refactoring, feature transfer, and release gates.
+3. [Repository Consolidation and Modernization Plan](REPOSITORY-CONSOLIDATION-AND-MODERNIZATION-PLAN.md): master execution sequence spanning integration, code health, competitive feature adoption, marketing site, reliability, and release readiness.
+4. [Post-MVP Agent Handoff](POST-MVP-AGENT-HANDOFF.md): post-integration baseline audit, task conversion, and execution rules for the next implementation agent.
 3. [Marketing Site Roadmap](MARKETING-SITE-ROADMAP.md): site content, responsive UX, release downloads, privacy, SEO, accessibility, Cloudflare Pages deployment, and launch acceptance gates.
 4. [Post-MVP Baseline Audit](POST-MVP-BASELINE-AUDIT.md): source-backed status of every roadmap workstream, including SITE-01, and the reconciliation of local work that is not yet merged.
-5. [Post-MVP Execution Plan](POST-MVP-EXECUTION-PLAN.md): the merge-safe Gate 0 sequence, the Wave 1 and Track M ticket rosters, verification plan, and next-agent handoff.
+5. [Post-MVP Execution Plan](POST-MVP-EXECUTION-PLAN.md): historical proposal, superseded by the repository consolidation plan.
 
 ### I want to research product direction
 
@@ -49,7 +51,7 @@ This page is the documentation map. Start with the overview that matches your go
 | Current state | [PROGRESS](PROGRESS.md), [TASKS](TASKS.md), [NEXT](NEXT.md), [CS6-PARITY](CS6-PARITY.md) | What is true now and what comes next |
 | Engineering | [HANDOFF](HANDOFF.md), [PLANNING](PLANNING.md), [TOOLCHAINS](TOOLCHAINS.md), [RELEASING](RELEASING.md) | Building, architecture, and release work |
 | Evidence | [decisions](decisions/), [research](research/), [generated parity and scorecard](planning/generated/) | Specific technical claims and their basis |
-| Product direction | [Post-MVP roadmap](POST-MVP-ROADMAP.md), [baseline audit](POST-MVP-BASELINE-AUDIT.md), [execution plan](POST-MVP-EXECUTION-PLAN.md), [agent handoff](POST-MVP-AGENT-HANDOFF.md), [marketing site roadmap](MARKETING-SITE-ROADMAP.md) | Strategic scope, verified per-workstream status, public website plan, and the gated ticket sequence; not live task status |
+| Product direction | [Post-MVP roadmap](POST-MVP-ROADMAP.md), [baseline audit](POST-MVP-BASELINE-AUDIT.md), [repository consolidation plan](REPOSITORY-CONSOLIDATION-AND-MODERNIZATION-PLAN.md), [consolidation handoff](REPOSITORY-CONSOLIDATION-HANDOFF.md), [agent handoff](POST-MVP-AGENT-HANDOFF.md), [marketing site roadmap](MARKETING-SITE-ROADMAP.md) | Product direction, dated baseline, current integration/refactor sequence, post-integration task conversion, and website scope; not live task status |
 | Research | [creative app benchmark](research/creative-app-benchmark.md) | Feature-transfer research and licensing constraints for external creative-app references |
 | History | [SESSIONS](SESSIONS.md), [HISTORY](HISTORY.md), [closed milestones](planning/firecraft/), [release notes](releases/) | How the project arrived here; not live task status |
 
