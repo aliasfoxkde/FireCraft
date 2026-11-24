@@ -4337,3 +4337,19 @@ itself. Diagnostics kept in `/var/tmp/fc-shot/gldisplay.py`,
 3. Steps 2–7 of the gap plan: rescue PRs #178/#181, issue triage
    (#76 closable), MVP release items, Phase 22, Phase 20 residuals,
    quality ratchet.
+
+### 2026-11-24 — Release workflow + WASM publish
+- Fixed `packaging/deb/control` libc6 floor: 2.36 → 2.39 (host glibc 2.41, binary needs 2.39)
+- Fixed `crates/app/src/shell/mod.rs` drop-overlay colors: `palette.selection`/`palette.accent` etc.
+  were on `CommandPalette` struct which has no such fields; replaced with hardcoded `Color32::from_rgb`
+  matching CS6 charcoal dark theme
+- Native dist succeeded: `dist --native` → 3 archives + MANIFEST.sha256
+- WASM release build compiled clean (19MB, under 25MB Pages limit)
+- Web dist assembled: `dist/web/` with release wasm, JS glue, gzipped assets, MANIFEST.sha256
+- Cloudflare Pages deployed to preview branch (https://4b38f144.firecraft-web.pages.dev)
+- **Trunk release build issue:** `trunk build --release` deadlocks on this host — trunk's
+  internal cargo build can't get admission because the target-host lease detects `trunk`
+  as the active process and denies its own child cargo. Worked around by building wasm32
+  release directly, then manually staging files.
+- Pushed `e14aa291` to both remotes on `feat/wasm-cdn-deploy`
+- WASM published to WebOS via Cloudflare Pages
