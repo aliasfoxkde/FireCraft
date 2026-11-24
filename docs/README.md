@@ -25,6 +25,11 @@ This page is the documentation map. Start with the overview that matches your go
 
 1. [Post-MVP Product and Engineering Roadmap](POST-MVP-ROADMAP.md): detailed product vision, feature specifications, dependencies, priorities, architecture constraints, and acceptance criteria.
 2. [Post-MVP Agent Handoff](POST-MVP-AGENT-HANDOFF.md): mandatory repository audit, local-work reconciliation, task conversion, and execution rules for the next implementation agent.
+3. [Marketing Site Roadmap](MARKETING-SITE-ROADMAP.md): site content, responsive UX, release downloads, privacy, SEO, accessibility, Cloudflare Pages deployment, and launch acceptance gates.
+
+### I want to research product direction
+
+1. [Creative-app benchmark](research/creative-app-benchmark.md): transferable ideas from Krita, Photopea, and Pixlr, plus licensing and clean-room limits.
 
 ### I want to contribute or use an AI agent
 
@@ -42,7 +47,8 @@ This page is the documentation map. Start with the overview that matches your go
 | Current state | [PROGRESS](PROGRESS.md), [TASKS](TASKS.md), [NEXT](NEXT.md), [CS6-PARITY](CS6-PARITY.md) | What is true now and what comes next |
 | Engineering | [HANDOFF](HANDOFF.md), [PLANNING](PLANNING.md), [TOOLCHAINS](TOOLCHAINS.md), [RELEASING](RELEASING.md) | Building, architecture, and release work |
 | Evidence | [decisions](decisions/), [research](research/), [generated parity and scorecard](planning/generated/) | Specific technical claims and their basis |
-| Product direction | [Post-MVP roadmap](POST-MVP-ROADMAP.md), [agent handoff](POST-MVP-AGENT-HANDOFF.md) | Strategic future scope and its audit/execution contract; not current task status |
+| Product direction | [Post-MVP roadmap](POST-MVP-ROADMAP.md), [agent handoff](POST-MVP-AGENT-HANDOFF.md), [marketing site roadmap](MARKETING-SITE-ROADMAP.md) | Strategic feature scope, public website plan, and audit/execution contract; not current task status |
+| Research | [creative app benchmark](research/creative-app-benchmark.md) | Feature-transfer research and licensing constraints for external creative-app references |
 | History | [SESSIONS](SESSIONS.md), [HISTORY](HISTORY.md), [closed milestones](planning/firecraft/), [release notes](releases/) | How the project arrived here; not live task status |
 
 ## Source-of-truth rules
