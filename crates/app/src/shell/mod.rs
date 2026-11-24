@@ -64,6 +64,7 @@ use crate::editor::{
     AutoShape, DragConstraint, Editor, GradientHandle, NineSliceEdge, PixelSelectMode, StampShape,
     Tool, TransformHandle,
 };
+use crate::editor::object_bounds;
 use crate::menus;
 use crate::toolstrip;
 
@@ -257,6 +258,10 @@ pub struct Shell {
     /// hints; nothing in the document reads them yet.
     smart_guides: bool,
     snap_to_smart_guides: bool,
+    /// Active smart-guide lines (rendered by the canvas when
+    /// snap_to_smart_guides + smart_guides are on and the selection
+    /// aligns with the page or other selected objects).
+    smart_guides_lines: Vec<(geom::Point, geom::Point)>,
     /// View ▸ 9-Slice Scaling Guides ▸ Lock Guides (display intent
     /// until slice rendering lands).
     slice_locked: bool,
@@ -693,6 +698,7 @@ impl Shell {
             grid_dialog: None,
             smart_guides: true,
             snap_to_smart_guides: true,
+            smart_guides_lines: Vec::new(),
             slice_locked: false,
             slice_guides: true,
             slice_overlay: true,
@@ -2823,7 +2829,56 @@ impl Shell {
     /// shell hands the handle to the installed drop sink (the web
     /// crate reads the file and calls back through
     /// [`Shell::load_document_bytes`]); natively the read is direct.
-    fn dropped_files(&mut self, ctx: &egui::Context) {
+    fn dropped_files(&mut self, ctx: &egui::Context, palette: &theme::Palette) {
+        // Drop overlay: highlight the canvas when files are hovered
+        // or dropped — gives visual feedback that the canvas accepts
+        // file drops for import.
+        let (hovered, dropped) = ctx.input(|i| {
+            (
+                i.raw.hovered_files.clone(),
+                i.raw.dropped_files.clone(),
+            )
+        });
+        if !hovered.is_empty() {
+            let screen = ctx.content_rect();
+            let p = ctx.layer_painter(egui::LayerId::new(
+                egui::Order::Foreground,
+                egui::Id::from(egui::ViewportId::from_hash_of(
+                    "firecraft_drop_overlay",
+                )),
+            ));
+            p.rect_filled(screen, 0.0, palette.selection.gamma_multiply(0.10));
+            p.rect_stroke(
+                screen.shrink(4.0),
+                4.0,
+                egui::Stroke::new(2.0, palette.accent),
+                egui::StrokeKind::Inside,
+            );
+            let hint_r =
+                egui::Rect::from_center_size(screen.center(), egui::vec2(340.0, 44.0));
+            p.rect_filled(hint_r, 4.0, palette.panel.gamma_multiply(0.95));
+            p.rect_stroke(
+                hint_r,
+                4.0,
+                egui::Stroke::new(1.0, palette.accent),
+                egui::StrokeKind::Middle,
+            );
+            p.text(
+                hint_r.center(),
+                egui::Align2::CENTER_CENTER,
+                "Drop Image / SVG to Import onto Canvas",
+                egui::FontId::proportional(12.5),
+                palette.text,
+            );
+        }
+        let dropped = if hovered.is_empty() {
+            dropped
+        } else {
+            dropped
+        };
+        let Some(file) = dropped.into_iter().next() else {
+            return;
+        };
         let dropped: Vec<_> = ctx.input(|input| input.raw.dropped_files.clone());
         let Some(file) = dropped.into_iter().next() else {
             return;
