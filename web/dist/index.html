@@ -31,7 +31,7 @@
             outline-offset: -2px;
         }
     </style>
-<link rel="modulepreload" href="/firecraft-web-3841839c20c25d86.js" crossorigin="anonymous" integrity="sha384-1jwTDjjd7OAaQKNnsfSm03Y5EIfqjEG41oaoPDtU3lgYUsHVhSBaM91YRtLjTRMy"><link rel="preload" href="/firecraft-web-3841839c20c25d86_bg.wasm" crossorigin="anonymous" integrity="sha384-wd5Mu5lnXFvpHhOSb4v725qAM9JfAWD9vSYvAKutgTXZi/EtNH9JzHbbbRAzINDV" as="fetch" type="application/wasm"></head>
+<link rel="modulepreload" href="/firecraft-web.js" crossorigin="anonymous" integrity="sha384-1jwTDjjd7OAaQKNnsfSm03Y5EIfqjEG41oaoPDtU3lgYUsHVhSBaM91YRtLjTRMy"><link rel="preload" href="/firecraft-web_bg.wasm" crossorigin="anonymous" integrity="sha384-wd5Mu5lnXFvpHhOSb4v725qAM9JfAWD9vSYvAKutgTXZi/EtNH9JzHbbbRAzINDV" as="fetch" type="application/wasm"></head>
 <body>
 <!-- Accessible fallback: replaced once the egui runtime takes the
      canvas over; readable by screen readers while the wasm loads and
@@ -45,8 +45,8 @@
 </canvas>
 
 <script type="module">
-import init, * as bindings from '/firecraft-web-3841839c20c25d86.js';
-const wasm = await init({ module_or_path: '/firecraft-web-3841839c20c25d86_bg.wasm' });
+import init, * as bindings from '/firecraft-web.js';
+const wasm = await init({ module_or_path: '/firecraft-web_bg.wasm' });
 
 
 window.wasmBindings = bindings;

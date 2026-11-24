@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Architecture review for FireCraft</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module">
+      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+      mermaid.initialize({ startOnLoad: true, theme: "neutral", securityLevel: "loose" });
+    </script>
+    <style>
+      .seam { stroke-dasharray: 4 4; }
+      .leak { stroke: #dc2626; }
+      .deep { background: linear-gradient(135deg, #0f172a, #1e293b); }
+      .module-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; }
+    </style>
+  </head>
+  <body class="bg-stone-50 text-slate-900 font-sans">
+    <main class="max-w-5xl mx-auto px-6 py-12 space-y-12">
+      <!-- Header with legend -->
+      <header>
+        <h1 class="font-serif text-3xl mb-2">FireCraft shell architecture review</h1>
+        <p class="text-sm text-slate-500 mb-6">2026-11-23 · 25 944 LOC across 22 modules in `crates/app/src/shell/`</p>
+        <div class="flex gap-6 text-xs text-slate-600 border-b border-slate-200 pb-3">
+          <span><span class="inline-block w-4 h-3 bg-slate-700 mr-1"></span> module</span>
+          <span><span class="inline-block w-4 h-px border-t border-dashed border-slate-400 mr-1"></span> seam</span>
+          <span><span class="inline-block w-4 h-px border-t-2 border-red-500 mr-1"></span> leakage</span>
+          <span><span class="inline-block w-4 h-3 bg-stone-900 mr-1"></span> deep module</span>
+        </div>
+      </header>
+- <h2 id="candidates" class="font-serif text-xl mt-12 mb-4">Candidate deepening opportunities</h2>
+
+      <!-- CANDIDATE 1: Collapse shell/mod.rs -->
+      <article class="border border-slate-200 bg-white rounded-lg p-6 space-y-6">
+        <div>
+          <h3 class="font-serif text-lg">Collapse the Shell dispatch monolith</h3>
+        </div>
+        <div class="flex gap-2 text-xs">
+          <span class="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded">Strong</span>
+          <span class="bg-slate-100 text-slate-600 px-2 py-0.5 rounded">in-process</span>
+        </div>
+        <div class="font-mono text-sm text-slate-600">
+          shell/mod.rs (7 820 LOC, 240 functions, ~3 000 LOC tests)
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <!-- Before diagram -->
+          <div class="border border-slate-200 bg-stone-50 p-4 rounded">
+            <p class="text-xs uppercase text-slate-500 mb-2">Before</p>
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <pre class="mermaid">
+flowchart LR
+  menus["menus::Action"]
+  toolstrip["toolstrip"]
+  shell["shell::Shell\n7 820 LOC\n240 functions"]
+  editor["editor::Editor"]
+  engine["engine\ncmd::Command"]
+  menus -.-> shell
+  toolstrip -.-> shell
+  shell --> editor
+  shell --> engine
+              </pre>
+            </div>
+          </div>
+          <!-- After diagram -->
+          <div class="border border-slate-200 bg-stone-50 p-4 rounded">
+            <p class="text-xs uppercase text-slate-500 mb-2">After</p>
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <pre class="mermaid">
+flowchart LR
+  menus["menus::Action"]
+  toolstrip["toolstrip"]
+  dispatch["shell::dispatch\n500 LOC"]
+  shell["shell::Shell\n4 500 LOC"]
+  editor["editor::Editor"]
+  engine["engine\ncmd::Command"]
+  dispatch --> shell
+  dispatch --> engine
+  menus -.-> dispatch
+  toolstrip -.-> shell
+              </pre>
+            </div>
+          </div>
+        </div>
+        <p class="text-sm">The Shell module carries every menu action, every keyboard shortcut, every panel toggle, every selection operation, and every export/import path in one impl block. <code>run_action</code> is a match arm with 10 variants; <code>run_sel</code> has 40+; <code>run_shell</code> has 50+. The interface surface is wide: 8 public methods, 7 <code>pub(super)</code> methods, 20 stubs for <code>#[cfg(not(feature = "native"))]</code>, and 10 dialog state fields that duplicate in <code>Shell</code> what each <code>Dialog</code> struct already carries.</p>
+        <p class="text-sm">The test module (lines 3084–7569) is itself 4 485 LOC — more than half the module — and every test reaches through <code>gui_shell()</code> to seed a full editor + dialog stub + memory filesystem. Testing a single shortcut requires instantiating the entire shell.</p>
+        <p class="text-sm"><strong>Extract a command dispatch module.</strong> Move <code>run_action</code>, <code>run_document</code>, <code>run_shell</code>, <code>run_sel</code>, <code>run_arrange</code> into a separate <code>shell/dispatch.rs</code> with one public interface: <code>impl Shell { fn dispatch(&mut self, action: &Action) }</code>. The dispatch module owns the match arms; the shell struct owns only state.</p>
+        <ul class="text-sm list-disc ml-6 space-y-1">
+          <li>Interface shrinks; implementation absorbs the wrappers</li>
+          <li>Tests hit one dispatch interface</li>
+          <li>Locality: shortcut logic concentrates in one module</li>
+          <li>Delete 20 stub functions from the non-native shim</li>
+        </ul>
+      </article>
+      <!-- CANDIDATE 2: Panels and panels_web split -->
+      <article class="border border-slate-200 bg-white rounded-lg p-6 space-y-6">
+        <div>
+          <h3 class="font-serif text-lg">Collapse the Panels / panels_web seam</h3>
+        </div>
+        <div class="flex gap-2 text-xs">
+          <span class="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded">Strong</span>
+          <span class="bg-slate-100 text-slate-600 px-2 py-0.5 rounded">in-process</span>
+        </div>
+        <div class="font-mono text-sm text-slate-600">
+          panels.rs (5 276 LOC) + panels_web.rs (1 730 LOC)
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div class="border border-slate-200 bg-stone-50 p-4 rounded">
+            <p class="text-xs uppercase text-slate-500 mb-2">Before</p>
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <pre class="mermaid">
+flowchart LR
+  mod["shell/mod.rs"]
+  panels["panels.rs\n5 276 LOC\nProperties, Pages,\nStates, Layers,\nHistory, Styles,\nColor Mixer, Library"]
+  panelsweb["panels_web.rs\n1 730 LOC\nAuto Shapes, URL,\nBehaviors, Slices"]
+  sliceeditor["slice_editor.rs\n738 LOC\nBehavior/action\nmapping"]
+  mod -.-> panels
+  mod -.-> panelsweb
+  panelsweb --> sliceeditor
+              </pre>
+            </div>
+          </div>
+          <div class="border border-slate-200 bg-stone-50 p-4 rounded">
+            <p class="text-xs uppercase text-slate-500 mb-2">After</p>
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <pre class="mermaid">
+flowchart LR
+  mod["shell/mod.rs"]
+  panels["panels.rs\n7 000 LOC\nall right-dock\npanels"]
+  sliceeditor["slice_editor.rs\n738 LOC"]
+  mod -.-> panels
+  panels --> sliceeditor
+              </pre>
+            </div>
+          </div>
+        </div>
+        <p class="text-sm">Understanding the right-hand dock requires bouncing between <code>panels.rs</code> (5 276 LOC: Properties, Pages, States, Layers, History, Styles, Color Mixer, Library) and <code>panels_web.rs</code> (1 730 LOC: Auto Shapes, URL, Behaviors, Slices). The web panels reference <code>slice_editor</code> for their behavior/action mapping, creating a three-module seam. The split is platform-based, not responsibility-based: <code>panels.rs</code> owns desktop panels and <code>panels_web.rs</code> owns web panels, but both are egui-drawing modules with zero runtime variation between native and wasm builds.</p>
+        <p class="text-sm"><strong>Consolidate panels.rs + panels_web.rs into one module.</strong> Remove the platform split: all panel content lives in <code>panels.rs</code>. The <code>cfg(feature = "native")</code> gates on these modules exist because web panels reference desktop-only types — move those types instead of gating the panel module.</p>
+        <ul class="text-sm list-disc ml-6 space-y-1">
+          <li>One module to understand instead of two</li>
+          <li>Interface: single impl Shell block for all panels</li>
+          <li>Locality: Behaviors panel + slice_editor mapping in one read</li>
+          <li>Web panels and desktop panels are identical in this build</li>
+        </ul>
+      </article>
+      <!-- CANDIDATE 3: Canvas UI shallow module -->
+      <article class="border border-slate-200 bg-white rounded-lg p-6 space-y-6">
+        <div>
+          <h3 class="font-serif text-lg">Deepen the Canvas UI module</h3>
+        </div>
+        <div class="flex gap-2 text-xs">
+          <span class="bg-amber-100 text-amber-800 px-2 py-0.5 rounded">Worth exploring</span>
+          <span class="bg-slate-100 text-slate-600 px-2 py-0.5 rounded">in-process</span>
+        </div>
+        <div class="font-mono text-sm text-slate-600">
+          canvas_ui.rs (1 860 LOC)
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div class="border border-slate-200 bg-stone-50 p-4 rounded">
+            <p class="text-xs uppercase text-slate-500 mb-2">Before</p>
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <pre class="mermaid">
+flowchart LR
+  mod["shell/mod.rs\nShell::ui()"]
+  canvas["canvas_ui.rs\n1 860 LOC\nall impl Shell"]
+  toolstrip["toolstrip"]
+  icons["icons"]
+  compose["compose"]
+  mod --> canvas
+  canvas --> toolstrip
+  canvas --> icons
+  canvas --> compose
+              </pre>
+            </div>
+          </div>
+          <div class="border border-slate-200 bg-stone-50 p-4 rounded">
+            <p class="text-xs uppercase text-slate-500 mb-2">After</p>
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <pre class="mermaid">
+flowchart LR
+  mod["shell/mod.rs"]
+  canvas["canvas_ui.rs\n2 200 LOC\none interface"]
+  toolstrip["toolstrip"]
+  icons["icons"]
+  compose["compose"]
+  mod --> canvas
+  canvas --> toolstrip
+  canvas --> icons
+  canvas --> compose
+              </pre>
+            </div>
+          </div>
+        </div>
+        <p class="text-sm">The canvas module is pure egui drawing glue — <code>tools_panel</code>, <code>tool_button</code>, <code>autoshape_button</code>, <code>panel_button</code>, <code>colors_boxes</code>, <code>tool_flyout_ui</code>, <code>context_rows</code>, <code>context_menu</code>, <code>canvas</code> itself — all <code>impl Shell</code>. The module's interface is as wide as its implementation: every method is a <code>Shell</code> method. The <code>context_rows</code> function alone has a 200-line match arm covering 8 <code>SelectionClass</code> variants. The <code>cs6_color_button</code> in <code>panels.rs</code> is 300 lines of hand-rolled picker with its own popup state, swatch grid, HEX editor, RGB sliders, and opacity control.</p>
+        <p class="text-sm"><strong>Extract canvas-local helpers as private functions.</strong> <code>context_rows</code>, <code>transform_handle_at</code>, <code>object_class</code>, <code>transform_handle_points</code> are pure functions with no <code>Shell</code> state. Move them to a <code>canvas_ui/helpers.rs</code> submodule. The <code>cs6_color_button</code> and <code>slider_row</code> helpers in <code>panels.rs</code> are similarly pure — they read <code>ui</code>, write <code>color</code>, return <code>changed</code>.</p>
+        <ul class="text-sm list-disc ml-6 space-y-1">
+          <li>Pure functions extracted for testability; bugs hide in call ordering</li>
+          <li>One interface; many call sites with different Shell state</li>
+          <li>Levers: one interface, N call sites — the real complexity</li>
+        </ul>
+      </article>
+      <!-- CANDIDATE 4: Dialogs and file operations -->
+      <article class="border border-slate-200 bg-white rounded-lg p-6 space-y-6">
+        <div>
+          <h3 class="font-serif text-lg">Collapse the Dialogs / file_operations seam</h3>
+        </div>
+        <div class="flex gap-2 text-xs">
+          <span class="bg-amber-100 text-amber-800 px-2 py-0.5 rounded">Worth exploring</span>
+          <span class="bg-slate-100 text-slate-600 px-2 py-0.5 rounded">ports & adapters</span>
+        </div>
+        <div class="font-mono text-sm text-slate-600">
+          dialogs.rs (1 630 LOC) + file_operations.rs (463 LOC)
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div class="border border-slate-200 bg-stone-50 p-4 rounded">
+            <p class="text-xs uppercase text-slate-500 mb-2">Before</p>
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <pre class="mermaid">
+flowchart LR
+  mod["shell/mod.rs"]
+  dialogs["dialogs.rs\n1 630 LOC\nDialog types,\nExportDialog,\nEnvDialogs\nplatform trait\nopen_path,\nsave_path"]
+  fileops["file_operations.rs\n463 LOC\nopen_document,\nsave_document,\nimport_raster,\nrun_script_file"]
+  mod -.-> dialogs
+  mod -.-> fileops
+  fileops -.leak.-> dialogs
+              </pre>
+            </div>
+          </div>
+          <div class="border border-slate-200 bg-stone-50 p-4 rounded">
+            <p class="text-xs uppercase text-slate-500 mb-2">After</p>
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <pre class="mermaid">
+flowchart LR
+  mod["shell/mod.rs"]
+  iofiles["io_files.rs\n2 100 LOC\nall file/dialog\nops"]
+  mod -.-> iofiles
+              </pre>
+            </div>
+          </div>
+        </div>
+        <p class="text-sm"><code>file_operations.rs</code> opens and saves documents, runs scripts, imports raster files — all gated behind <code>cfg(feature = "native")</code>. It calls <code>self.dialogs.open_path()</code> and <code>self.fs.read_file()</code> from the injected platform traits. <code>dialogs.rs</code> defines the dialog types (<code>NumericTransformDialog</code>, <code>FeatherDialog</code>, <code>CanvasSizeDialog</code>, <code>CanvasColorDialog</code>, <code>ImageSizeDialog</code>, <code>ExportDialog</code>) and implements the <code>EnvDialogs</code> adapter over <code>engine::platform::Dialogs</code>.</p>
+        <p class="text-sm">The seam between dialogs and file_operations is real: every file operation asks the dialog for a path. But the interface of <code>dialogs.rs</code> is nearly as complex as its implementation: it carries the full export format pipeline (12 formats, M11 web workflows) and 6 dialog structs with their default values, plus the <code>EnvDialogs</code> platform adapter.</p>
+        <p class="text-sm"><strong>Merge dialogs.rs into file_operations.rs.</strong> The dialog type definitions and the file operation functions belong to the same responsibility: the file I/O seam. Move dialog types and <code>EnvDialogs</code> into <code>file_operations.rs</code>. Keep the <code>engine::platform::Dialogs</code> trait as the external adapter; the rest concentrates the file I/O seam.</p>
+        <ul class="text-sm list-disc ml-6 space-y-1">
+          <li>File I/O seam concentrates in one module</li>
+          <li>Delete one shallow module; depth moves to file_operations</li>
+          <li>One adapter (EnvDialogs) now alongside its use site</li>
+        </ul>
+      </article>
+      <!-- CANDIDATE 5: Panel windows -->
+      <article class="border border-slate-200 bg-white rounded-lg p-6 space-y-6">
+        <div>
+          <h3 class="font-serif text-lg">Deepen the Panel Windows module</h3>
+        </div>
+        <div class="flex gap-2 text-xs">
+          <span class="bg-slate-100 text-slate-600 px-2 py-0.5 rounded">Speculative</span>
+          <span class="bg-slate-100 text-slate-600 px-2 py-0.5 rounded">in-process</span>
+        </div>
+        <div class="font-mono text-sm text-slate-600">
+          panel_windows.rs (1 146 LOC)
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div class="border border-slate-200 bg-stone-50 p-4 rounded">
+            <p class="text-xs uppercase text-slate-500 mb-2">Before</p>
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <pre class="mermaid">
+flowchart LR
+  mod["shell/mod.rs"]
+  pw["panel_windows.rs\n1 146 LOC\nPanelSpec enum\nDOCK_CONTENT_WIDTH\nPANELS const\ndock / left_dock\nfinish_panel_drag\ngroup_panels\nmove_panel_to_dock"]
+  panels["panels.rs\n5 276 LOC"]
+  mod --> pw
+  mod --> panels
+              </pre>
+            </div>
+          </div>
+          <div class="border border-slate-200 bg-stone-50 p-4 rounded">
+            <p class="text-xs uppercase text-slate-500 mb-2">After</p>
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <pre class="mermaid">
+flowchart LR
+  mod["shell/mod.rs"]
+  panels["panels.rs\n6 200 LOC\n+ panel dock\nlogic from\npanel_windows"]
+  pw["panel_windows.rs\n100 LOC\nPanelSpec\nPANELS const\nonly"]
+              </pre>
+            </div>
+          </div>
+        </div>
+        <p class="text-sm"><code>panel_windows.rs</code> owns the right-dock layout: the <code>PANELS</code> const, <code>PanelSpec</code>, <code>PanelKind</code>, <code>DOCK_CONTENT_WIDTH</code>, the <code>Shell::dock()</code> method, drag-and-drop between docks, panel grouping, and the <code>PanelGroupLayout</code> persistence. It's 1 146 LOC for what is essentially a panel inventory (12 panels) and a stack layout.</p>
+        <p class="text-sm"><strong>Move panel dock logic into panels.rs; leave panel_windows.rs as a data module.</strong> The dock layout logic (1 146 LOC minus ~100 LOC of <code>PANELS</code> const and <code>PanelKind</code> enum) belongs with the panel content in <code>panels.rs</code>. Keep <code>panel_windows.rs</code> as a data-only module with <code>PANELS</code> and <code>PanelKind</code>.</p>
+        <ul class="text-sm list-disc ml-6 space-y-1">
+          <li>Interface shrinks to data-only</li>
+          <li>Panel dock logic and content in one module</li>
+          <li>Delete shallow wrapper; depth moves to panels</li>
+        </ul>
+      </article>
+      <!-- CANDIDATE 6: Filters UI -->
+      <article class="border border-slate-200 bg-white rounded-lg p-6 space-y-6">
+        <div>
+          <h3 class="font-serif text-lg">Deepen the Filters UI module</h3>
+        </div>
+        <div class="flex gap-2 text-xs">
+          <span class="bg-slate-100 text-slate-600 px-2 py-0.5 rounded">Speculative</span>
+          <span class="bg-slate-100 text-slate-600 px-2 py-0.5 rounded">in-process</span>
+        </div>
+        <div class="font-mono text-sm text-slate-600">
+          filters_ui.rs (565 LOC) + timeline.rs (1 208 LOC)
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div class="border border-slate-200 bg-stone-50 p-4 rounded">
+            <p class="text-xs uppercase text-slate-500 mb-2">Before</p>
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <pre class="mermaid">
+flowchart LR
+  mod["shell/mod.rs"]
+  filters["filters_ui.rs\n565 LOC\nFilterPreset const\nFILTER_FAMILIES\nFILTER_BOOL_KEYS\nfilter_preset fn"]
+  timeline["timeline.rs\n1 208 LOC\nFrameRow, TimelineStrip\nPlayback\nState controls"]
+  mod -.-> filters
+  mod -.-> timeline
+              </pre>
+            </div>
+          </div>
+          <div class="border border-slate-200 bg-stone-50 p-4 rounded">
+            <p class="text-xs uppercase text-slate-500 mb-2">After</p>
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <pre class="mermaid">
+flowchart LR
+  mod["shell/mod.rs"]
+  filters["filters_ui.rs\n600 LOC\nFilterPreset +\npanel UI"]
+  timeline["timeline.rs\n1 208 LOC\nno change\nalready deep"]
+              </pre>
+            </div>
+          </div>
+        </div>
+        <p class="text-sm"><code>filters_ui.rs</code> is a static data module: <code>FILTER_FAMILIES</code>, <code>FILTER_BOOL_KEYS</code>, <code>filter_preset()</code>, <code>FilterPreset</code>. The interface is the const itself — 565 LOC of nested static data structures. It's already deep, but its pure-data nature means it leaks across the seam: <code>mod.rs</code> re-exports <code>FILTER_FAMILIES</code>, <code>FILTER_BOOL_KEYS</code>, <code>filter_preset</code>, and <code>FilterPreset</code> publicly. The real filter application lives in <code>mod.rs</code> <code>apply_filter_preset</code> and <code>run_command("filter.add", ...)</code>, separated from the data by a module boundary.</p>
+        <p class="text-sm">The <code>timeline.rs</code> module is the States panel — 1 208 LOC for frame strip rendering, playback state, and onion-skinning controls. It's already deep: one interface, one responsibility.</p>
+        <ul class="text-sm list-disc ml-6 space-y-1">
+          <li>Filters: data and application separated across seam</li>
+          <li>Timeline: already deep; no action needed</li>
+        </ul>
+      </article>
+      <!-- TOP RECOMMENDATION -->
+      <section id="top-recommendation" class="border-2 border-emerald-200 bg-emerald-50 rounded-lg p-6">
+        <h2 class="font-serif text-xl mb-3">Top recommendation</h2>
+        <div class="flex gap-2 text-xs mb-3">
+          <span class="bg-emerald-200 text-emerald-900 px-2 py-0.5 rounded font-bold">Strongest</span>
+        </div>
+        <p class="text-base"><a href="#candidate-1" class="text-emerald-700 hover:underline font-medium">Collapse the Shell dispatch monolith</a></p>
+        <p class="text-sm text-slate-700 mt-2">The 7 820 LOC shell module with 240 functions and 4 485 LOC of tests is the deepest structural problem in the shell. Every user-facing command flows through <code>run_action</code>, which branches into <code>run_document</code>, <code>run_shell</code>, <code>run_sel</code>, and <code>run_arrange</code> — four match arms that together cover the entire menu system. Extracting the dispatch logic into a dedicated module reduces <code>Shell</code> by more than half and gives each command path its own test surface. The deletion test is decisive: removing dispatch concentrates exactly one responsibility (command dispatch) in a deep module instead of scattering it across <code>mod.rs</code>.</p>
+      </section>
+
+    </main>
+  </body>
+</html>

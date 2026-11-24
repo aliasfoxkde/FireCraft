@@ -1,3 +1,8 @@
+#![allow(dead_code)]
+#![allow(clippy::must_use_candidate)]
+#![allow(clippy::too_many_arguments)]
+#![allow(clippy::needless_return)]
+
 //! The egui face of the editor: menus, panels, canvas. Thin by rule —
 //! every document change you see here is an [`Editor::apply`] call,
 //! and every panel reads the document read-only. Desktop file routing
@@ -5,8 +10,8 @@
 //! in [`dialogs`]; real modal dialogs land with desktop integration).
 #[cfg(feature = "native")]
 pub(crate) use dialogs::{
-    CanvasColorDialog, CanvasSizeDialog, DisplayState, EnvDialogs, ExportDialog, FeatherDialog,
-    ImageSizeDialog, NumericTransformDialog,
+    CanvasColorDialog, CanvasSizeDialog, EnvDialogs, ExportDialog, FeatherDialog, ImageSizeDialog,
+    NumericTransformDialog,
 };
 pub(crate) use filters_ui::{
     FILTER_BOOL_KEYS, FILTER_FAMILIES, FILTER_PARAMS, FilterPreset, filter_preset,
@@ -52,8 +57,6 @@ pub use panel_windows::{DockSide, PanelSummary, panel_inventory};
 
 use doc::{ObjectData, PathObject, SymbolInstanceObject, SymbolType, TextObject};
 use egui::{Color32, ColorImage, Pos2, Rect, Sense, TextureHandle, TextureOptions, Vec2};
-
-use base64::Engine as _;
 
 use crate::canvas::View;
 use crate::editor::union_selection_bounds;
@@ -338,6 +341,88 @@ pub struct Shell {
     /// fields; switching swaps those with the parked tab's, so every
     /// existing code path keeps operating on "the current document"
     /// unchanged.
+    /// Default fill color for the palette and new objects.
+    pub(crate) fill_color: Color32,
+    /// Default stroke color for the palette and new objects.
+    pub(crate) stroke_color: Color32,
+    /// Active style library (for the Styles panel dropdown).
+    pub(crate) style_library: constants::StyleLibrary,
+    /// The color panel tab: which sub-tab is shown in the color picker.
+    pub(crate) color_tab: usize,
+    /// Color panel sub-tab: 0=Selector, 1=Mixers, 2=Blender.
+    pub(crate) color_subtab: usize,
+    /// The currently selected style index in the styles panel.
+    pub(crate) selected_style_idx: Option<usize>,
+    /// RulerUnit for canvas rulers.
+    pub(crate) ruler_unit: crate::shell::constants::RulerUnit,
+    /// Snap to objects (alongside snap_to_guides).
+    pub(crate) snap_to_objects: bool,
+    /// Snap object tolerance in pixels.
+    pub(crate) snap_object_tolerance: f32,
+    /// Cursor override (e.g. crosshair during selection).
+    pub(crate) cursor_override: Option<egui::CursorIcon>,
+    /// Left tool dock zone.
+    pub(crate) tools_zone: crate::shell::constants::ToolsDockMode,
+    /// Floating tool dock position.
+    pub(crate) tools_floating_pos: egui::Pos2,
+    /// Right dock collapsed state.
+    pub(crate) right_dock_collapsed: bool,
+    /// Right dock zone.
+    pub(crate) right_dock_zone: crate::shell::constants::ToolsDockMode,
+    /// Floating right dock position.
+    pub(crate) right_dock_floating_pos: egui::Pos2,
+    /// Iconic mode flyout target panel.
+    pub(crate) iconic_flyout_panel: Option<constants::PanelId>,
+    /// Floating doc tab indices.
+    pub(crate) floating_doc_tabs: Vec<usize>,
+    /// Window-level fullscreen toggle.
+    pub(crate) window_fullscreen: bool,
+    /// Panel being dragged for grouping.
+    /// Show HTML setup dialog.
+    pub(crate) show_html_setup_dialog: bool,
+    /// Show page setup dialog.
+    pub(crate) show_page_setup_dialog: bool,
+    /// HTML export settings.
+    pub(crate) html_setup: constants::HtmlExportOptions,
+    /// Page setup settings.
+    pub(crate) page_setup: constants::PageSetupConfig,
+    /// Update dialog open flag.
+    pub(crate) show_update_dialog: bool,
+    /// Update status message.
+    pub(crate) update_status: String,
+    /// Latest version string.
+    pub(crate) update_latest_version: Option<String>,
+    pub(crate) dragging_group: Option<u64>,
+    /// Release URL.
+    pub(crate) update_release_url: Option<String>,
+    /// Tab pending close (Save/Don't Save/Cancel).
+    pub(crate) pending_close_tab: Option<usize>,
+    /// Extra-layer multi-select (row, layer_id).
+    pub(crate) selected_extra_layers: Vec<(usize, usize)>,
+    /// Show canvas footer bar.
+    pub(crate) show_canvas_footer_bar: bool,
+    /// Canvas footer height.
+    pub(crate) canvas_footer_height: f32,
+    /// Show footer transport controls.
+    pub(crate) show_footer_transport: bool,
+    /// Footer resolution display.
+    pub(crate) footer_resolution: String,
+    /// Footer scale display.
+    pub(crate) footer_scale: String,
+    /// Current animation frame.
+    pub(crate) footer_frame: usize,
+    /// Show bottom transport bar.
+    pub(crate) show_transport: bool,
+    /// Transport current frame.
+    pub(crate) transport_frame: usize,
+    /// Transport total frames.
+    pub(crate) transport_total_frames: usize,
+    /// Transport playing flag.
+    pub(crate) transport_playing: bool,
+    /// Transport frame delay (centiseconds).
+    pub(crate) transport_frame_delay: u32,
+
+    /// Background document tabs (20.5).
     tabs: Vec<DocTab>,
 }
 
@@ -541,7 +626,7 @@ impl Shell {
                 }
                 #[cfg(not(feature = "native"))]
                 {
-                    Box::new(stubs::StubDialogs::default()) as _
+                    Box::new(stubs::StubDialogs) as _
                 }
             },
         );
@@ -640,6 +725,46 @@ impl Shell {
             layout: ShellLayout::default(),
             playback: timeline::Playback::default(),
             ctx: None,
+            fill_color: Color32::WHITE,
+            stroke_color: Color32::BLACK,
+            style_library: constants::StyleLibrary::default(),
+            color_tab: 0,
+            color_subtab: 0,
+            selected_style_idx: None,
+            ruler_unit: constants::RulerUnit::default(),
+            snap_to_objects: false,
+            snap_object_tolerance: 4.0,
+            cursor_override: None,
+            tools_zone: constants::ToolsDockMode::default(),
+            tools_floating_pos: egui::Pos2::new(0.0, 0.0),
+            right_dock_collapsed: false,
+            right_dock_zone: constants::ToolsDockMode::default(),
+            right_dock_floating_pos: egui::Pos2::new(0.0, 0.0),
+            iconic_flyout_panel: None,
+            floating_doc_tabs: Vec::new(),
+            window_fullscreen: false,
+            dragging_group: None,
+            show_html_setup_dialog: false,
+            show_page_setup_dialog: false,
+            html_setup: constants::HtmlExportOptions::default(),
+            page_setup: constants::PageSetupConfig::default(),
+            show_update_dialog: false,
+            update_status: String::new(),
+            update_latest_version: None,
+            update_release_url: None,
+            pending_close_tab: None,
+            selected_extra_layers: Vec::new(),
+            show_canvas_footer_bar: true,
+            canvas_footer_height: 28.0,
+            show_footer_transport: true,
+            footer_resolution: String::new(),
+            footer_scale: String::new(),
+            footer_frame: 0,
+            show_transport: true,
+            transport_frame: 0,
+            transport_total_frames: 0,
+            transport_playing: false,
+            transport_frame_delay: 100,
             tabs: Vec::new(),
         }
     }
@@ -799,6 +924,7 @@ impl Shell {
     ///
     /// # Errors
     /// Whatever both readers refuse; the current document is kept.
+    #[allow(unused_variables)]
     pub fn load_document_bytes(&mut self, bytes: &[u8]) -> Result<(), engine::EngineError> {
         #[cfg(feature = "native")]
         {
@@ -854,11 +980,9 @@ impl Shell {
     /// a mutual exchange with the parked slot. The transient
     /// `Editor::untitled()` placeholders exist only between the two
     /// `replace`s and are both overwritten before the call returns.
-
     /// File → Open through the injected traits. A Fireworks PNG
     /// opens as a document; any other supported raster opens as a
     /// document sized to the image — one door, no guessing.
-
     /// File → Save through the injected traits.
     /// Help ▸ Manage Extensions / Commands ▸ Run Script: pick a
     /// `.jsf` script or a `.fwsteps` journal and run it against the
@@ -868,55 +992,43 @@ impl Shell {
     /// automation formats). A script that throws or hits a limit, or
     /// a journal that refuses, leaves the document untouched and
     /// reports the failure on the status line.
-
     /// The Commands/Help extension surface. Today the manager *is*
     /// the script runner: pick and execute a `.jsf`. CS6's broader
     /// extension manager (install/uninstall packages) is recorded as
     /// a gap, not silently absent.
-
     /// File ▸ File Info: the document's facts on one line — name,
     /// pages, layers, objects, canvas.
-
     /// File ▸ Send to E-mail ▸ Fireworks PNG (format)…: the PNG
     /// format facts of the live document — the canvas the format
     /// stores, its color depth, and the object count it carries.
-
     /// File ▸ Preview in Browser: export the document to PNG file(s)
     /// and open them in the system browser. Saved documents write next
     /// to the document file; unsaved ones use a temp directory. The
     /// secondary-browser row opens the same default handler — CS6's
     /// per-browser configuration is not kept in this build (the Set
     /// Browser rows say so).
-
     /// File ▸ Revert: reload the document from the file it was last
     /// saved to, discarding the in-memory edits.
-
     /// Applies through the editor and reports failures on the status
     /// line — the one idiom every menu/panel action shares. Returns
     /// whether the command was accepted.
-
     /// Begin in-canvas editing of the text object under `id` (20.1):
     /// snapshot its characters and open the overlay. Re-opening on the
     /// same object keeps the live buffer (a click back into the edit
     /// must not wipe what was typed).
-
     /// Commit the text-edit overlay: `text.setText` with the buffer
     /// when it changed; then the session closes the editor either way.
-
     /// Cancel the text-edit overlay without touching the document.
-
     /// History → Save Steps…: the session journal written as a
     /// `.fwsteps` command file (JSON lines) through the injected
     /// traits. The file replays through [`Session::reopen`] — the same
     /// path the CLI's `apply` verb drives — so a saved command is not
     /// an export but the session's own restart record.
-
     /// History → Replay…: pick a `.fwsteps` file, then the base
     /// document it replays onto (the File → Open flow — a steps file
     /// is a journal prefix, so it needs the pre-steps document). The
     /// replayed session replaces the current one, undo history
     /// included.
-
     /// The CS6 menu bar: ten menus rendered from the [`crate::menus`]
     /// table. Items whose action is [`menus::Action::Inert`] render
     /// disabled — the bar shows the full CS6 surface while only the
@@ -2400,7 +2512,6 @@ impl Shell {
     /// `cmd_EditImageObject`): a selected text object opens the
     /// in-canvas text overlay; anything else reports that the kind has
     /// no editor in this build.
-
     /// Edit ▸ Insert ▸ Hotspot / slice rows / New Button…: the target
     /// rect is the selection's bounds (canvas center when nothing is
     /// selected); the button row appends a definition to the library.
@@ -2677,11 +2788,9 @@ impl Shell {
     /// The default recovery sidecar path: `FIRECRAFT_RECOVERY` when
     /// set, else the platform temp dir. Called once, at construction.
     #[cfg(not(target_arch = "wasm32"))]
-
     /// The recovery sidecar path as a `&str` for the injected
     /// [`engine::platform::FileSystem`].
     #[cfg(not(target_arch = "wasm32"))]
-
     /// Periodic journal snapshot to the recovery sidecar (desktop;
     /// the web build persists the whole document through the browser
     /// instead). Debounced by the same change stamp the web persist
@@ -2690,27 +2799,22 @@ impl Shell {
     /// first steps must not resurrect a discarded recovery file, and
     /// a cleared journal must not outlive its session.
     #[cfg(not(target_arch = "wasm32"))]
-
     /// Removes the recovery sidecar after a clean save or File ▸ New:
     /// the document now has a durable home, so a crash-recovery
     /// replay would only resurrect stale steps.
     #[cfg(not(target_arch = "wasm32"))]
-
     /// Checks for a leftover recovery journal and, when found, arms
     /// the restore-offer window. Called from `Shell::new` only — a
     /// mid-session appearance would mean this very session crashed,
     /// which it cannot have.
     #[cfg(not(target_arch = "wasm32"))]
-
     /// Replays the recovery journal onto the fresh untitled session
     /// (the crash-recovery path of `Editor::replay_steps`: history is
     /// reconstructed, so undo works across the crash boundary).
     #[cfg(not(target_arch = "wasm32"))]
-
     /// The recovery-offer window: what was found, Recover (replay
     /// onto this session) or Discard (delete the sidecar).
     #[cfg(not(target_arch = "wasm32"))]
-
     /// Files dropped onto the window open through the same one-door
     /// path as File ▸ Open: a Fireworks PNG replaces the document,
     /// any other supported raster opens as a document sized to the
@@ -2977,7 +3081,6 @@ impl eframe::App for Shell {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 mod tests {
     use super::*;
     use crate::editor::union_selection_bounds;
@@ -7531,6 +7634,7 @@ mod stub_types {
         pub blend: u8,
         pub name: Option<String>,
     }
+    #[derive(Debug)]
     pub(crate) struct ExportDialog {
         pub format: usize,
         pub web: Option<usize>,
@@ -7538,15 +7642,23 @@ mod stub_types {
         pub progressive: bool,
         pub matte_black: bool,
     }
+    #[derive(Debug)]
     pub(crate) struct CanvasSizeDialog {
         pub width: f64,
         pub height: f64,
+        pub anchor_x: f64,
+        pub anchor_y: f64,
     }
+    #[derive(Debug)]
     pub(crate) struct ImageSizeDialog {
         pub width: f64,
         pub height: f64,
         pub resolution: f64,
+        pub unit_cm: f64,
+        pub anchor_x: f64,
+        pub anchor_y: f64,
     }
+    #[derive(Debug)]
     pub(crate) struct CanvasColorDialog {
         pub color: [u8; 3],
     }
@@ -7555,6 +7667,9 @@ mod stub_types {
     }
     pub(crate) struct NumericTransformDialog {
         pub scale: f64,
+        pub scale_x: f64,
+        pub scale_y: f64,
+        pub rotate: f64,
     }
     impl Default for DisplayState {
         fn default() -> Self {
@@ -7583,6 +7698,8 @@ mod stub_types {
             Self {
                 width: 0.0,
                 height: 0.0,
+                anchor_x: 0.5,
+                anchor_y: 0.5,
             }
         }
     }
@@ -7591,30 +7708,27 @@ mod stub_types {
             Self {
                 width: 0.0,
                 height: 0.0,
+                anchor_x: 0.5,
+                anchor_y: 0.5,
                 resolution: 72.0,
+                unit_cm: 0.0,
             }
-        }
-    }
-    impl Default for CanvasColorDialog {
-        fn default() -> Self {
-            Self { color: [0, 0, 0] }
-        }
-    }
-    impl Default for FeatherDialog {
-        fn default() -> Self {
-            Self { radius: 0 }
         }
     }
     impl Default for NumericTransformDialog {
         fn default() -> Self {
-            Self { scale: 1.0 }
+            Self {
+                scale: 1.0,
+                scale_x: 1.0,
+                scale_y: 1.0,
+                rotate: 0.0,
+            }
         }
     }
 }
 
 #[cfg(not(feature = "native"))]
 mod stubs {
-    use super::*;
     pub(super) struct StubDialogs;
     impl Default for StubDialogs {
         fn default() -> Self {
@@ -7642,41 +7756,28 @@ mod stubs {
 
 #[cfg(not(feature = "native"))]
 impl Shell {
-    #[allow(dead_code)]
     pub(super) fn open_document(&mut self) {
         self.status = "open".into();
     }
-    #[allow(dead_code)]
     pub(super) fn save_document(&mut self) {
         self.status = "save".into();
     }
-    #[allow(dead_code)]
     pub(super) fn save_document_as(&mut self, _path: &str) {
         self.status = "save".into();
     }
-    #[allow(dead_code)]
     pub(super) fn import_raster_dialog(&mut self) {
         self.status = "import".into();
     }
-    #[allow(dead_code)]
     pub(super) fn export_dialog_ui(&mut self, _ui: &egui::Ui) {}
-    #[allow(dead_code)]
     pub(super) fn canvas_size_dialog_ui(&mut self, _ui: &egui::Ui) {}
-    #[allow(dead_code)]
     pub(super) fn canvas_color_dialog_ui(&mut self, _ui: &egui::Ui) {}
-    #[allow(dead_code)]
     pub(super) fn image_size_dialog_ui(&mut self, _ui: &egui::Ui) {}
-    #[allow(dead_code)]
     pub(super) fn feather_dialog_ui(&mut self, _ui: &egui::Ui) {}
-    #[allow(dead_code)]
     pub(super) fn numeric_transform_dialog_ui(&mut self, _ui: &egui::Ui) {}
-    #[allow(dead_code)]
     pub(super) fn html_preview_panel(&mut self, _ui: &egui::Ui) {}
-    #[allow(dead_code)]
     pub(super) fn file_info_summary(&self) -> String {
         "none".into()
     }
-    #[allow(dead_code)]
     pub(super) fn place_raster_into_document(
         &mut self,
         _bytes: &[u8],
@@ -7687,7 +7788,6 @@ impl Shell {
             detail: "not available".into(),
         })
     }
-    #[allow(dead_code)]
     pub(super) fn open_raster_document(
         &mut self,
         _bytes: &[u8],
@@ -7698,38 +7798,27 @@ impl Shell {
             detail: "not available".into(),
         })
     }
-    #[allow(dead_code)]
     pub(super) fn open_extension_manager(&mut self) {}
-    #[allow(dead_code)]
     pub(super) fn run_command(&mut self, _name: &str, _payload: serde_json::Value) -> bool {
         false
     }
-    #[allow(dead_code)]
     pub(super) fn save_steps(&mut self, _steps: Vec<String>) {}
-    #[allow(dead_code)]
     pub(super) fn replay_steps(&mut self) {}
-    #[allow(dead_code)]
     pub(super) fn revert_document(&mut self) {}
-    #[allow(dead_code)]
     pub(super) fn png_format_summary(&self) -> String {
         "png".into()
     }
-    #[allow(dead_code)]
     pub(super) fn web_panel(&mut self, _ui: &egui::Ui) {}
-    #[allow(dead_code)]
     pub(super) fn activate_tab(&mut self, _tab: usize) {}
-    #[allow(dead_code)]
     pub(super) fn document_has_content(&self) -> bool {
         false
     }
-    #[allow(dead_code)]
     pub(super) fn run_sel(&mut self, _sel: menus::SelAction) {}
-    #[allow(dead_code)]
     pub(super) fn preview_in_browser(&mut self, _secondary: bool, _all_pages: bool) {}
 }
 
 #[cfg(not(feature = "native"))]
 use stub_types::{
-    CanvasColorDialog, CanvasSizeDialog, DisplayState, ExportDialog, FeatherDialog,
-    ImageSizeDialog, NumericTransformDialog,
+    CanvasColorDialog, CanvasSizeDialog, ExportDialog, FeatherDialog, ImageSizeDialog,
+    NumericTransformDialog,
 };

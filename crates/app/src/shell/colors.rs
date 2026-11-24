@@ -28,6 +28,7 @@ pub struct Cmyk {
 }
 
 /// Convert an RGB `Color32` to HSV.
+#[must_use]
 pub fn rgb_to_hsv(c: Color32) -> Hsv {
     let r = c.r() as f32 / 255.0;
     let g = c.g() as f32 / 255.0;
@@ -50,6 +51,7 @@ pub fn rgb_to_hsv(c: Color32) -> Hsv {
 }
 
 /// Convert HSV back to RGB.
+#[must_use]
 pub fn hsv_to_rgb(hsv: Hsv) -> Color32 {
     let h = hsv.h.rem_euclid(360.0);
     let s = hsv.s.clamp(0.0, 1.0);
@@ -73,6 +75,7 @@ pub fn hsv_to_rgb(hsv: Hsv) -> Color32 {
 }
 
 /// Convert RGB to HLS.
+#[must_use]
 pub fn rgb_to_hls(c: Color32) -> Hls {
     let r = c.r() as f32 / 255.0;
     let g = c.g() as f32 / 255.0;
@@ -101,6 +104,7 @@ pub fn rgb_to_hls(c: Color32) -> Hls {
 }
 
 /// Convert HLS back to RGB.
+#[must_use]
 pub fn hls_to_rgb(hls: Hls) -> Color32 {
     let h = hls.h.rem_euclid(360.0);
     let l = hls.l.clamp(0.0, 1.0);
@@ -124,6 +128,7 @@ pub fn hls_to_rgb(hls: Hls) -> Color32 {
 }
 
 /// Convert RGB to CMYK.
+#[must_use]
 pub fn rgb_to_cmyk(c: Color32) -> Cmyk {
     let r = c.r() as f32 / 255.0;
     let g = c.g() as f32 / 255.0;
@@ -146,6 +151,7 @@ pub fn rgb_to_cmyk(c: Color32) -> Cmyk {
 }
 
 /// Convert CMYK back to RGB.
+#[must_use]
 pub fn cmyk_to_rgb(v: Cmyk) -> Color32 {
     let c = v.c.clamp(0.0, 1.0);
     let m = v.m.clamp(0.0, 1.0);
@@ -159,11 +165,13 @@ pub fn cmyk_to_rgb(v: Cmyk) -> Color32 {
 }
 
 /// Hexadecimal string representation of a `Color32`.
+#[must_use]
 pub fn hex_of(c: Color32) -> String {
     format!("#{:02X}{:02X}{:02X}", c.r(), c.g(), c.b())
 }
 
 /// Parse a hexadecimal colour string (`"#RRGGBB"` or `"RRGGBB"`, `"#RGB"` supported).
+#[must_use]
 pub fn from_hex(text: &str) -> Option<Color32> {
     let t = text.trim().trim_start_matches('#');
     if t.len() == 3 {
@@ -184,8 +192,9 @@ pub fn from_hex(text: &str) -> Option<Color32> {
 /// The default Fireworks CS6 Color Cubes swatch ramp (21 columns × 12 rows = 252 swatches):
 /// Col 0 is the 12-step grayscale + primary ramp, followed by the 6×6×6 web-safe cube
 /// laid out in three 6-column blocks across 12 rows.
+#[must_use]
 pub fn swatch_grid() -> Vec<Color32> {
-    use super::constants;
+    use crate::shell::constants;
     let mut out = Vec::with_capacity(constants::SWATCH_COUNT);
     let levels = [0u8, 51, 102, 153, 204, 255];
     let prim = [
@@ -263,7 +272,7 @@ mod tests {
 
     #[test]
     fn swatch_grid_dimensions() {
-        use super::constants;
+        use crate::shell::constants;
         let grid = swatch_grid();
         assert_eq!(grid.len(), constants::SWATCH_COUNT);
     }

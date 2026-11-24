@@ -974,6 +974,7 @@ pub struct GradientDrag {
     pub applied: bool,
 }
 
+#[allow(dead_code)]
 /// Everything the shell shows, minus the window itself.
 pub struct Editor {
     /// The editing session (document + history + journal).

@@ -149,5 +149,7 @@ impl crate::platform::FileSystem for NoOpFs {
             detail: "filesystem is read-only through wasm bridge".to_owned(),
         })
     }
-    fn exists(&self, _path: &str) -> bool { false }
+    fn exists(&self, _path: &str) -> bool {
+        false
+    }
 }

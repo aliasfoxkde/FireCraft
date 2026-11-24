@@ -4253,3 +4253,87 @@ auto-closed the issue two seconds after the merge, so the evidence comment
 as a comment rather than a close-comment:
 https://github.com/aliasfoxkde/FireCraft/issues/114#issuecomment-7048720489
 No CHANGELOG self-entry to revert — the tree was clean post-merge.
+
+## 2026-11-24 — P0 web deployment: receipts, a production collision, and the chromium DISPLAY root cause
+
+### The chromium hang that broke smoke/screenshots for days — root cause
+One environmental fault, three symptoms (bridge smoke `ready` never
+fired → 300 s timeout; Playwright screenshots hang; CLI `--screenshot`
+writes no files). Root cause: the session exports **`DISPLAY=:99`**,
+which points at a wedged Xvfb (another session's, pts/0, started
+Oct 11; no socket in `/tmp/.X11-unix`; `xdpyinfo :99` hangs rc=124
+while `:95` answers). Every fresh chromium's GPU process performs its
+X11 setup handshake against `:99` and blocks forever → WebGL
+`getContext` never returns → eframe never reaches `ready` and frames
+never get produced (screenshots need a frame). Full-tree strace shows
+the stall: setup `writev` sent, `poll` waits for a reply that never
+comes; renderer main thread parked in `futex_wait` on the GPU.
+**Fix on our side: `env -u DISPLAY` for every chromium-invoking
+command** (or `DISPLAY=:95`). With it: WebGL context in 0.5 s,
+Playwright screenshot in 0.8 s. Did not touch `:99` (it's another
+session's display). The production proof script now unsets `DISPLAY`
+itself. Diagnostics kept in `/var/tmp/fc-shot/gldisplay.py`,
+`glstrace2.py`, `glprobe.py`.
+
+### Production P0 — republished and verified, then overwritten same day
+- `env -u DISPLAY cargo run -q -p xtask -- dist --web` GREEN (wasm
+  15 783 714 B < 25 MB warning ceiling, manifest, smoke green) at
+  `6c68c9e3`.
+- **Gotcha:** bare `wrangler pages deploy` defaults to a *preview*
+  of the current git branch — first attempt landed on a
+  `fix-web-deploy-p0` alias while production kept serving old bytes.
+  Production needs `--branch main`.
+- Deployed `7f9adb41` (branch main, source `6c68c9e`, bundle
+  `d25b8751233853ef`): all 6 manifest files digest-matched against
+  served bytes (HTML delta = Cloudflare analytics only, same as
+  #104); browser proof PASS (painted canvas 501 colors, same-origin
+  wasm 200, zero CORS/page errors).
+- **Then a parallel session's release experiment republished over it**
+  (deployment `29225fe2`, bundle `3841839c20c25d86` from
+  `feat/wasm-cdn-deploy`, "v0.3.0 experiment", wasm 19 571 892 B,
+  built in `web/dist`). It proof-PASSes too, but names no release and
+  serves **no MANIFEST.sha256** (Pages SPA fallback answers that path
+  with index.html + 200 — also a latent hazard for
+  `scripts/reconcile_deployment.py`, which parses whatever manifest
+  it fetches without shape validation). **Maintainer direction:
+  leave their deployment/branch/checkout alone.** Production stays
+  on `29225fe2`; re-asserting the verified bundle is one
+  `wrangler pages deploy dist/web --branch main` away if ever wanted.
+
+### Landed on `fix/web-deploy-p0` (PR #184, commit `8e456598`, both remotes)
+- T18 carries **both** receipts (verified publish + supersession +
+  approval record + wrangler gotcha); TASKS P1, PROGRESS wiki
+  Project-Status, T27 B-6/RP-05 now record reconciliation as **open**
+  until the v0.2.7 tagged publish (live names no release, serves no
+  manifest).
+- Gate green attempt 1 (`xtask ci`, env -u DISPLAY); CHANGELOG
+  self-entry reverted before commit.
+- Issue **#183** filed: `head.firecraft-web.pages.dev` is
+  browser-broken (index.html fetches the 95.6 MB wasm straight from
+  GitHub Releases — no CORS headers on either hop) and the
+  `feat-wasm-cdn-deploy` alias still points at the Worker proxy
+  (alive, but serving the obsolete 95.6 MB bundle); plus the
+  reconcile-script manifest hazard. Measurements only — no
+  redeploy/delete recommended without coordinating with the active
+  workstream.
+
+### Corrections to earlier entries (they are wrong as written)
+- **"WASM CDN + Proxy ✅ COMPLETE" (2026-11-21)** — superseded: the
+  same-origin Pages deploy makes the Worker/GitHub-CDN path
+  unnecessary (current wasm 15.8 MB is under the 25 MB limit), the
+  Worker only serves previews now, and the `head.` preview is
+  browser-broken (#183). Do not treat G-6 in PRODUCTION-AUDIT-2026-11-20
+  or the PRODUCTION-TODO Worker section as current strategy.
+- **"CI blocked on rustc .rmeta bug" (2026-11-21)** — stale:
+  `xtask ci` has been green repeatedly since (#179, #180 merged
+  through it; green again today on attempt 1).
+- **"71 open issues"** — measured **49** on 2026-11-24.
+
+### Next
+1. v0.2.7 cut (8 stamps → gate → merge → tag → workflow → inspect
+   draft → **confirm with user before publish** → deploy release's
+   `dist/web` → reconcile; that closes B-6 for real).
+2. Close #30 with the PR #184 receipt (its acceptance is now met).
+3. Steps 2–7 of the gap plan: rescue PRs #178/#181, issue triage
+   (#76 closable), MVP release items, Phase 22, Phase 20 residuals,
+   quality ratchet.
