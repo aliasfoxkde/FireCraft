@@ -68,6 +68,8 @@ bearer-token-url	./xtask/src/aegis.rs	0063f0d1147604f6ef4939d76884d546fb4d0d94c4
 # Individually adjudicated as a false positive; see decision 0074.
 bitcoin-address	./xtask/schema/cyclonedx-bom-1.5.schema.json	16f6ee48f07ca0a2c3f5ebad9e3912853b26412bb37eb0653282afbf3c684fec	1
 # Individually adjudicated as a false positive; see decision 0074.
+content-security-policy	./site/_headers	8762581123975a661f9bbefd341f741e3fc8f09d4ff8e77f2b0ec15e42ca19f7	1
+# Individually adjudicated as a false positive; see decision 0074.
 cors-misconfiguration	./xtask/schema/cyclonedx-bom-1.5.schema.json	b20c31b1e0dc6e8c5dfc6e27866b862c895a4a54f0b7aac7e2a1ef736d893ff1	1
 # A glyph-position golden value (27.345314025878906); its digit run
 # matches the Amex shape, and it is a float literal, not a card number.
@@ -139,6 +141,9 @@ graphql-batch-limit	./xtask/src/aegis.rs	623e18d37f4ff3f0c0acf509bcbc0b05490287b
 # (0.6.0+11769913).
 international-phone	./Cargo.lock	af21a1bff1718128c96522dc5f3a4136e66feeb8aee345e9676fda1199e5378e	1
 international-phone	./xtask/src/aegis.rs	af21a1bff1718128c96522dc5f3a4136e66feeb8aee345e9676fda1199e5378e	1
+# Individually adjudicated as a false positive; see decision 0074.
+missing-security-headers	./site/_headers	8762581123975a661f9bbefd341f741e3fc8f09d4ff8e77f2b0ec15e42ca19f7	1
+missing-security-headers	./site/_headers	9697d0ac11f539825ff0975513363525068f1a1e21d226b6067f7cda6f84e8b1	1
 # The rule's regex is JavaScript-shaped (open / fs. / readFile, then
 # user / input / query) and fires on English prose; this repository has
 # no server-side file read.
@@ -285,6 +290,10 @@ ssrf-localhost	./xtask/src/dist.rs	12ca17b49af2289436f303e0166030a21e525d266e209
 stack-trace-exposure	./docs/PRODUCTION-READINESS-PLAN.md	d26fba73fb8604b0c99010d648d66379756ada54983b96b6dbffcf0626cf0b1a	1
 stack-trace-exposure	./docs/decisions/0090-wasm-bundle-size-policy.md	d26fba73fb8604b0c99010d648d66379756ada54983b96b6dbffcf0626cf0b1a	1
 stack-trace-exposure	./infrastructure/docker/ci-rust.Dockerfile	17ee41935f062dffb434b86c2a8d432567df47fc5988eb4cf2bbae1b690e4747	1
+# Individually adjudicated as a false positive; see decision 0074.
+x-content-type-options	./site/_headers	38f8b78857a9fa6dde973cb9fb80761b979264773e8c0d97b73aed9839a95ad4	1
+# Individually adjudicated as a false positive; see decision 0074.
+x-frame-options	./site/_headers	8dc7783322ff9aac99d062f379b85ac37538ce182e849dbe869dba227b719d4d	1
 # The SVG importer's entity-expansion fixture, which must declare an
 # external entity so the test can observe the importer refusing it, and
 # the Apple plist doctype's quoted public identifier.
