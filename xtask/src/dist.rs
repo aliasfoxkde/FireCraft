@@ -261,6 +261,7 @@ pub fn sbom() -> Result<(), String> {
         .ok_or("cargo metadata: no packages array")?;
     let mut package_refs = BTreeMap::new();
     let spdx_ids = spdx_license_ids()?;
+    let mut components = Vec::new();
     for pkg in packages {
         let name = pkg["name"]
             .as_str()
@@ -289,13 +290,24 @@ pub fn sbom() -> Result<(), String> {
     }
 
     let root_ref = format!("urn:firecraft:application:firecraft@{version}");
-    let dependencies = cyclonedx_dependencies(
-        &meta,
-        &inventory.package_refs,
-        &inventory.pinned_only,
-        &root_ref,
-    )?;
-    let serial = uuid_from_graph(&inventory.references)?;
+    let references: Vec<String> = meta["packages"]
+        .as_array()
+        .ok_or("packages not array")?
+        .iter()
+        .map(|p| p["id"].as_str().unwrap_or("").to_owned())
+        .collect();
+    let pinned_only: Vec<String> = meta["packages"]
+        .as_array()
+        .ok_or("packages not array")?
+        .iter()
+        .filter(|p| {
+            let deps = p.get("dependencies").and_then(|d| d.as_array());
+            deps.map_or(false, |d| d.is_empty())
+        })
+        .map(|p| p["id"].as_str().unwrap_or("").to_owned())
+        .collect();
+    let dependencies = cyclonedx_dependencies(&meta, &package_refs, &pinned_only, &root_ref)?;
+    let serial = uuid_from_graph(&references)?;
     let bom = serde_json::json!({
         "bomFormat": "CycloneDX",
         "specVersion": "1.5",

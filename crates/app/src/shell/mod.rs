@@ -9,10 +9,14 @@
 //! goes through the injected [`engine::platform`] traits ([`EnvDialogs`]
 //! in [`dialogs`]; real modal dialogs land with desktop integration).
 #[cfg(feature = "native")]
-pub(crate) use dialogs::{
-    CanvasColorDialog, CanvasSizeDialog, EnvDialogs, ExportDialog, FeatherDialog, ImageSizeDialog,
-    NumericTransformDialog,
+pub(crate) use dialog_types::DisplayState;
+pub(crate) use dialog_types::{
+    CanvasColorDialog, CanvasSizeDialog, ConfirmAction, ConfirmDialog, ExportDialog, FeatherDialog,
+    ImageSizeDialog, NumericTransformDialog, ScaleToDialog,
 };
+/// Native-only platform services.
+#[cfg(feature = "native")]
+pub(crate) use dialogs::EnvDialogs;
 pub(crate) use filters_ui::{
     FILTER_BOOL_KEYS, FILTER_FAMILIES, FILTER_PARAMS, FilterPreset, filter_preset,
 };
@@ -22,6 +26,7 @@ pub(crate) use guides_ui::GuideDraft;
 mod canvas_ui;
 mod colors;
 pub mod constants;
+mod dialog_types;
 #[cfg(feature = "native")]
 mod dialogs;
 #[cfg(feature = "native")]
@@ -49,7 +54,7 @@ pub use colors::{
     cmyk_to_rgb, from_hex, hex_of, hls_to_rgb, hsv_to_rgb, rgb_to_cmyk, rgb_to_hls, rgb_to_hsv,
     swatch_grid,
 };
-pub use glyphs::apply_cs6_theme;
+pub use glyphs::apply_chrome_theme;
 pub use glyphs::system_is_light;
 pub(crate) use glyphs::{draw_autoshape_glyph, symbol_type_label, tool_key, tool_label};
 pub use page::slugify;
@@ -59,12 +64,12 @@ use doc::{ObjectData, PathObject, SymbolInstanceObject, SymbolType, TextObject};
 use egui::{Color32, ColorImage, Pos2, Rect, Sense, TextureHandle, TextureOptions, Vec2};
 
 use crate::canvas::View;
+use crate::editor::object_bounds;
 use crate::editor::union_selection_bounds;
 use crate::editor::{
     AutoShape, DragConstraint, Editor, GradientHandle, NineSliceEdge, PixelSelectMode, StampShape,
     Tool, TransformHandle,
 };
-use crate::editor::object_bounds;
 use crate::menus;
 use crate::toolstrip;
 
@@ -2907,30 +2912,31 @@ impl Shell {
         // Drop overlay: highlight the canvas when files are hovered
         // or dropped — gives visual feedback that the canvas accepts
         // file drops for import.
-        let (hovered, dropped) = ctx.input(|i| {
-            (
-                i.raw.hovered_files.clone(),
-                i.raw.dropped_files.clone(),
-            )
-        });
+        let (hovered, dropped) =
+            ctx.input(|i| (i.raw.hovered_files.clone(), i.raw.dropped_files.clone()));
         if !hovered.is_empty() {
             let screen = ctx.content_rect();
             let p = ctx.layer_painter(egui::LayerId::new(
                 egui::Order::Foreground,
-                egui::Id::from(egui::ViewportId::from_hash_of(
-                    "firecraft_drop_overlay",
-                )),
+                egui::Id::from(egui::ViewportId::from_hash_of("firecraft_drop_overlay")),
             ));
-            p.rect_filled(screen, 0.0, Color32::from_rgb(0x2f, 0x5d, 0x8a).gamma_multiply(0.10));
+            p.rect_filled(
+                screen,
+                0.0,
+                Color32::from_rgb(0x2f, 0x5d, 0x8a).gamma_multiply(0.10),
+            );
             p.rect_stroke(
                 screen.shrink(4.0),
                 4.0,
                 egui::Stroke::new(2.0, Color32::from_rgb(0x50, 0x7e, 0xab)),
                 egui::StrokeKind::Inside,
             );
-            let hint_r =
-                egui::Rect::from_center_size(screen.center(), egui::vec2(340.0, 44.0));
-            p.rect_filled(hint_r, 4.0, Color32::from_rgb(0x3c, 0x3c, 0x3c).gamma_multiply(0.95));
+            let hint_r = egui::Rect::from_center_size(screen.center(), egui::vec2(340.0, 44.0));
+            p.rect_filled(
+                hint_r,
+                4.0,
+                Color32::from_rgb(0x3c, 0x3c, 0x3c).gamma_multiply(0.95),
+            );
             p.rect_stroke(
                 hint_r,
                 4.0,
@@ -5335,6 +5341,7 @@ mod tests {
 
     /// The Numeric Transform dialog: scale+rotate through the menu
     /// action lands as one undo step through the journal.
+    #[cfg(feature = "native")]
     #[test]
     fn numeric_transform_dialog_applies_one_undo_step() {
         let mut shell = gui_shell(gui_editor());
@@ -5366,6 +5373,7 @@ mod tests {
     /// Modify ▸ Transform ▸ Scale To…: the dialog seeds from the
     /// selection's bounds and resizes it to the exact box through
     /// `object.resize`.
+    #[cfg(feature = "native")]
     #[test]
     fn scale_to_dialog_resizes_to_the_exact_box() {
         let mut shell = gui_shell(gui_editor());
@@ -5634,6 +5642,7 @@ mod tests {
     /// the History panel uses, onto the live document — journal,
     /// history and all. A malformed steps file reports the refusal
     /// and leaves the document untouched.
+    #[cfg(feature = "native")]
     #[test]
     fn run_script_runs_a_steps_file_through_the_replay_door() {
         // Record a real journal, then run it as a script.
@@ -5696,6 +5705,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "native")]
     #[test]
     fn web_export_dialog_writes_html_and_files() {
         // A slice dragged on the canvas, then the dialog pointed at
@@ -5752,6 +5762,7 @@ mod tests {
 
     /// File ▸ Import… places the raster on the active layer, and the
     /// object that lands there is a real image object.
+    #[cfg(feature = "native")]
     #[test]
     fn import_places_a_raster_on_the_active_layer() {
         let mut shell = gui_shell(Editor::untitled());
@@ -5770,6 +5781,7 @@ mod tests {
     /// The active layer decides where the import lands: with a second
     /// layer added and selected, the object goes there — not to the
     /// layer underneath.
+    #[cfg(feature = "native")]
     #[test]
     fn import_lands_on_the_selected_layer() {
         let mut shell = gui_shell(Editor::untitled());
@@ -5799,6 +5811,7 @@ mod tests {
     /// mint a sibling image (the cut also clears the source); with no
     /// bitmap selected they report instead of commanding. Crop
     /// Document shrinks the canvas to the content extents.
+    #[cfg(feature = "native")]
     #[test]
     fn edit_bitmap_rows_drive_the_engine() {
         // Empty Bitmap.
@@ -5858,6 +5871,7 @@ mod tests {
 
     /// A shell with a 4×4 red raster imported on the active layer,
     /// and the imported image's id.
+    #[cfg(feature = "native")]
     fn shell_with_raster() -> (Shell, doc::ObjectId) {
         let mut shell = gui_shell(Editor::untitled());
         shell.import_raster(&red_png(), "red.png").expect("import");
@@ -6213,6 +6227,7 @@ mod tests {
 
     /// The Feather dialog only opens over an active pixel selection,
     /// and the applied radius becomes the next dialog's default.
+    #[cfg(feature = "native")]
     #[test]
     fn the_feather_dialog_gates_on_a_pixel_selection() {
         let mut shell = gui_shell(gui_editor());
@@ -6308,6 +6323,7 @@ mod tests {
     /// The Canvas Size dialog opens seeded with the live canvas,
     /// resizes page 0 through the engine command, and shifts content
     /// opposite the anchor so the anchored corner stays fixed.
+    #[cfg(feature = "native")]
     #[test]
     fn the_canvas_size_dialog_resizes_about_the_anchor() {
         let mut shell = gui_shell(gui_editor());
@@ -6368,6 +6384,7 @@ mod tests {
     /// resolution, scales the document through `document.setImageSize`
     /// (objects ride the affine, images resample), and a failed apply
     /// keeps the dialog's status clean while the document is untouched.
+    #[cfg(feature = "native")]
     #[test]
     fn the_image_size_dialog_scales_the_document() {
         let mut shell = gui_shell(gui_editor());
@@ -6429,6 +6446,7 @@ mod tests {
 
     /// The Canvas Color dialog opens with the current matte, applies
     /// `document.setCanvasColor` document-wide, and cancels cleanly.
+    #[cfg(feature = "native")]
     #[test]
     fn the_canvas_color_dialog_sets_the_matte() {
         let mut shell = gui_shell(gui_editor());
@@ -8319,108 +8337,6 @@ mod tests {
     }
 }
 #[cfg(not(feature = "native"))]
-mod stub_types {
-    pub(crate) struct DisplayState {
-        pub visible: bool,
-        pub locked: bool,
-        pub opacity: f32,
-        pub blend: u8,
-        pub name: Option<String>,
-    }
-    #[derive(Debug)]
-    pub(crate) struct ExportDialog {
-        pub format: usize,
-        pub web: Option<usize>,
-        pub quality: u8,
-        pub progressive: bool,
-        pub matte_black: bool,
-    }
-    #[derive(Debug)]
-    pub(crate) struct CanvasSizeDialog {
-        pub width: f64,
-        pub height: f64,
-        pub anchor_x: f64,
-        pub anchor_y: f64,
-    }
-    #[derive(Debug)]
-    pub(crate) struct ImageSizeDialog {
-        pub width: f64,
-        pub height: f64,
-        pub resolution: f64,
-        pub unit_cm: f64,
-        pub anchor_x: f64,
-        pub anchor_y: f64,
-    }
-    #[derive(Debug)]
-    pub(crate) struct CanvasColorDialog {
-        pub color: [u8; 3],
-    }
-    pub(crate) struct FeatherDialog {
-        pub radius: u8,
-    }
-    pub(crate) struct NumericTransformDialog {
-        pub scale: f64,
-        pub scale_x: f64,
-        pub scale_y: f64,
-        pub rotate: f64,
-    }
-    impl Default for DisplayState {
-        fn default() -> Self {
-            Self {
-                visible: true,
-                locked: false,
-                opacity: 1.0,
-                blend: 0,
-                name: None,
-            }
-        }
-    }
-    impl Default for ExportDialog {
-        fn default() -> Self {
-            Self {
-                format: 0,
-                web: None,
-                quality: 90,
-                progressive: false,
-                matte_black: false,
-            }
-        }
-    }
-    impl Default for CanvasSizeDialog {
-        fn default() -> Self {
-            Self {
-                width: 0.0,
-                height: 0.0,
-                anchor_x: 0.5,
-                anchor_y: 0.5,
-            }
-        }
-    }
-    impl Default for ImageSizeDialog {
-        fn default() -> Self {
-            Self {
-                width: 0.0,
-                height: 0.0,
-                anchor_x: 0.5,
-                anchor_y: 0.5,
-                resolution: 72.0,
-                unit_cm: 0.0,
-            }
-        }
-    }
-    impl Default for NumericTransformDialog {
-        fn default() -> Self {
-            Self {
-                scale: 1.0,
-                scale_x: 1.0,
-                scale_y: 1.0,
-                rotate: 0.0,
-            }
-        }
-    }
-}
-
-#[cfg(not(feature = "native"))]
 mod stubs {
     pub(super) struct StubDialogs;
     impl Default for StubDialogs {
@@ -8467,6 +8383,8 @@ impl Shell {
     pub(super) fn image_size_dialog_ui(&mut self, _ui: &egui::Ui) {}
     pub(super) fn feather_dialog_ui(&mut self, _ui: &egui::Ui) {}
     pub(super) fn numeric_transform_dialog_ui(&mut self, _ui: &egui::Ui) {}
+    pub(super) fn scale_to_dialog_ui(&mut self, _ui: &egui::Ui) {}
+    pub(super) fn confirm_dialog_ui(&mut self, _ui: &egui::Ui) {}
     pub(super) fn html_preview_panel(&mut self, _ui: &egui::Ui) {}
     pub(super) fn file_info_summary(&self) -> String {
         "none".into()
@@ -8495,7 +8413,7 @@ impl Shell {
     pub(super) fn run_command(&mut self, _name: &str, _payload: serde_json::Value) -> bool {
         false
     }
-    pub(super) fn save_steps(&mut self, _steps: Vec<String>) {}
+    pub(super) fn save_steps(&mut self) {}
     pub(super) fn replay_steps(&mut self) {}
     pub(super) fn revert_document(&mut self) {}
     pub(super) fn png_format_summary(&self) -> String {
@@ -8509,9 +8427,3 @@ impl Shell {
     pub(super) fn run_sel(&mut self, _sel: menus::SelAction) {}
     pub(super) fn preview_in_browser(&mut self, _secondary: bool, _all_pages: bool) {}
 }
-
-#[cfg(not(feature = "native"))]
-use stub_types::{
-    CanvasColorDialog, CanvasSizeDialog, ExportDialog, FeatherDialog, ImageSizeDialog,
-    NumericTransformDialog,
-};

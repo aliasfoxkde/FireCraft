@@ -43,6 +43,7 @@ mod floor;
 mod fuzz;
 mod golden;
 mod hero;
+mod iconsurvey;
 mod jsonschema;
 mod layers;
 mod library;
@@ -266,7 +267,13 @@ fn run_ci(full: Option<&str>, skip_fmt: bool) -> ExitCode {
                 )
             })
         }),
-        ("test", || util::cargo(&["test", "--workspace"])),
+        ("test", || {
+            // `--workspace` builds the default feature sets; `app`'s native
+            // surface (dialogs, import/export, scripting files) sits behind
+            // `feature = "native"`, so its unit tests ride this second run.
+            util::cargo(&["test", "--workspace"])
+                .and_then(|()| util::cargo(&["test", "-p", "app", "--features", "native"]))
+        }),
         ("layers", layers::run),
         ("wasm", wasm::run),
         ("corpus", corpus::run),
@@ -280,21 +287,45 @@ fn run_ci(full: Option<&str>, skip_fmt: bool) -> ExitCode {
         ("fuzz", fuzz::quick),
         ("reachability", reachability::run),
         ("audit", || {
-            // Fast (~2-5 s): catches dependency regressions before test run.
-            // The `cargo-audit` binary must be on PATH (installed fleet-wide).
-            // If absent, the step skips with a warning — this keeps the gate
-            // passing on bare development environments where cargo-audit was
-            // not installed yet.
+            // Fast (~2-5 s): catches dependency regressions before the test
+            // run. The report is parsed, not grepped: `cargo audit` also
+            // lists *informational* advisories (unmaintained crates, say),
+            // and a substring match would fail the gate on a crate that has
+            // no vulnerability at all. Only `vulnerabilities.count` fails.
             if !util::has_binary("cargo-audit") {
-                eprintln!("[xtask] audit: cargo-audit not on PATH, skipping");
-                return Ok(());
+                return Err(
+                    "cargo-audit is not on PATH; install it with `cargo install cargo-audit \
+                     --locked` — without it the gate cannot vouch for the dependency tree"
+                        .to_owned(),
+                );
             }
-            let out = util::run_and_capture("cargo-audit", &["audit"])?;
-            if out.contains("vulnerabilities") || out.contains("unmaintained") {
-                Err(format!("cargo audit found issues:\n{}", out))
-            } else {
-                Ok(())
+            let out = util::run_and_capture("cargo-audit", &["audit", "--json"])?;
+            let start = out.find('{').ok_or("cargo audit: no JSON report on stdout")?;
+            let end = out.rfind('}').ok_or("cargo audit: truncated JSON report")?;
+            let report: serde_json::Value = serde_json::from_str(&out[start..=end])
+                .map_err(|error| format!("cargo audit: unreadable report: {error}"))?;
+            let count = report["vulnerabilities"]["count"].as_u64().unwrap_or(0);
+            if count > 0 {
+                let ids: Vec<&str> = report["vulnerabilities"]["list"]
+                    .as_array()
+                    .map(|list| {
+                        list.iter()
+                            .filter_map(|v| v["advisory"]["id"].as_str())
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                return Err(format!(
+                    "cargo audit: {count} vulnerability(ies): {}",
+                    ids.join(", ")
+                ));
             }
+            // Warnings are informational here (unmaintained, unsound-but-
+            // not-a-vuln); they are reported so they do not rot unseen.
+            let warnings = report["warnings"].as_object().map_or(0, |w| w.len());
+            if warnings > 0 {
+                eprintln!("[xtask] audit: {warnings} informational advisory group(s); no vulnerabilities");
+            }
+            Ok(())
         }),
         ("panel-snapshot", panelsnapshot::run),
         ("icon-survey", iconsurvey::check),
