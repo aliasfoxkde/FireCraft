@@ -1,3 +1,11 @@
+> [!WARNING]
+> **SUPERSEDED — DO NOT EXECUTE THIS GATE 0 SEQUENCE.**
+> This file was written against the pre-merge 2026-11-23 state and includes stale instructions such as merging PR #182 and integrating older PR/base SHAs. PR #182 merged into main on 2026-11-24.
+> The current authoritative integration/refactor sequence is [REPOSITORY-CONSOLIDATION-AND-MODERNIZATION-PLAN.md](REPOSITORY-CONSOLIDATION-AND-MODERNIZATION-PLAN.md), with direct agent instructions in [REPOSITORY-CONSOLIDATION-HANDOFF.md](REPOSITORY-CONSOLIDATION-HANDOFF.md).
+> Keep the content below only as a historical proposal; refresh any useful evidence before reuse. TASKS.md remains the live task ledger.
+
+---
+
 # FireCraft — Post-MVP Execution Plan
 
 > **Document type:** execution plan derived from
