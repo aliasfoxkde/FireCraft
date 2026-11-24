@@ -156,6 +156,8 @@ The GUI and automation interfaces are intended to drive the same engine commands
 | [Gaps](docs/GAPS.md) | Historical audit of what was missing (2026-10-21); current work is on the [task board](docs/TASKS.md) |
 | [Doc index](docs/README.md) | The full documentation map |
 | [Releasing](docs/RELEASING.md) | Artifact build and deployment procedures |
+| [Marketing site roadmap](docs/MARKETING-SITE-ROADMAP.md) | Public website scope, Cloudflare Pages deployment, and launch gates |
+| [Creative-app benchmark](docs/research/creative-app-benchmark.md) | Product patterns from Krita, Photopea, and Pixlr, with licensing boundaries |
 | [Progress](docs/PROGRESS.md) | Session-level status and historical progress |
 | [Planning](docs/PLANNING.md) | Product plan, file-format notes, and architecture |
 | [Handoff](docs/HANDOFF.md) | Engineering handoff and agent runbook |
