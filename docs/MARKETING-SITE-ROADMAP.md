@@ -351,7 +351,7 @@ Prefer measurable user outcomes:
 - Page performance, accessibility regressions, broken links, and outdated capability statements.
 - Website maintenance effort per editor release.
 
-Do not add user tracking merely to populate a dashboard. Basic deployment/build evidence and public repository activity are sufficient for the initial launch.
+Do not add visitor analytics merely to populate a metrics view. Deployment/build evidence and public repository activity are sufficient for the initial launch.
 
 ## 15. Stop conditions
 

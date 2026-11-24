@@ -194,7 +194,7 @@ Requirements:
 
 Acceptance:
 - A versioned benchmark corpus covers small, ordinary, large, and stress documents.
-- Measure startup, open, first render, pan/zoom, selection, common edits, save, reopen, export, peak memory, and cache behavior.
+- Measure startup, open, first render, viewport navigation, selection, common edits, save, reopen, export, peak memory, and cache behavior.
 - Publish before/after measurements with same host, build profile, corpus, and source revision.
 - Stress tests verify no unbounded growth during repeated open/edit/undo/export/close cycles.
 - Rendering and editing remain correct when GPU initialization fails or falls back.

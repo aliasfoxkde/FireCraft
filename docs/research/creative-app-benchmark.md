@@ -48,7 +48,7 @@ Treat pen input as a first-class input domain rather than an incidental mouse ev
 - User-adjustable pressure curves and minimum/maximum pressure thresholds.
 - A tablet diagnostic view that reports the events actually received by the application.
 - Input smoothing/latency controls with clear trade-offs.
-- Stylus detection and separate touch gestures for pan, zoom, rotate, and canvas interaction.
+- Stylus detection and separate touch gestures for viewport navigation, zoom, rotate, and canvas interaction.
 - A tablet workspace with larger targets, collapsible docks, canvas-first controls, and a configurable popup palette.
 - Per-device profiles that do not leak into other devices or documents.
 
