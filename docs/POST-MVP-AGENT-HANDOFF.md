@@ -4,6 +4,10 @@
 > **Read first:** [AGENTS.md](../AGENTS.md), [TASKS.md](TASKS.md), [NEXT.md](NEXT.md), [HANDOFF.md](HANDOFF.md), [PROGRESS.md](PROGRESS.md), [CS6-PARITY.md](CS6-PARITY.md), [FEATURES.md](FEATURES.md), and [POST-MVP-ROADMAP.md](POST-MVP-ROADMAP.md), [MARKETING-SITE-ROADMAP.md](MARKETING-SITE-ROADMAP.md), and [research/creative-app-benchmark.md](research/creative-app-benchmark.md).
 > **This is not authorization to start implementation immediately.** The first deliverable is a verified baseline and a deduplicated task plan.
 
+> **Current integration order:** begin with [Repository Consolidation Handoff](REPOSITORY-CONSOLIDATION-HANDOFF.md) and its [master plan](REPOSITORY-CONSOLIDATION-AND-MODERNIZATION-PLAN.md). These documents supersede the older Gate 0 merge sequence in [POST-MVP-EXECUTION-PLAN.md](POST-MVP-EXECUTION-PLAN.md), which predates the merge of PR #182. Do not merge #182 again.
+>
+> The consolidation handoff covers the active PRs/branches, local work preservation, repository cleanup, module refactoring, feature transfer/licensing, workflow polish, the marketing-site branch, and release verification. The post-MVP audit/ticket conversion in this document remains relevant after the integration baseline is established.
+
 ---
 
 ## 1. Mission
