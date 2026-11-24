@@ -27,13 +27,13 @@ This page is the documentation map. Start with the overview that matches your go
 2. [Repository Consolidation Handoff](REPOSITORY-CONSOLIDATION-HANDOFF.md): direct phased instructions for branch/PR consolidation, local-work preservation, cleanup, refactoring, feature transfer, and release gates.
 3. [Repository Consolidation and Modernization Plan](REPOSITORY-CONSOLIDATION-AND-MODERNIZATION-PLAN.md): master execution sequence spanning integration, code health, competitive feature adoption, marketing site, reliability, and release readiness.
 4. [Post-MVP Agent Handoff](POST-MVP-AGENT-HANDOFF.md): post-integration baseline audit, task conversion, and execution rules for the next implementation agent.
-3. [Marketing Site Roadmap](MARKETING-SITE-ROADMAP.md): site content, responsive UX, release downloads, privacy, SEO, accessibility, Cloudflare Pages deployment, and launch acceptance gates.
-4. [Post-MVP Baseline Audit](POST-MVP-BASELINE-AUDIT.md): source-backed status of every roadmap workstream, including SITE-01, and the reconciliation of local work that is not yet merged.
-5. [Post-MVP Execution Plan](POST-MVP-EXECUTION-PLAN.md): historical proposal, superseded by the repository consolidation plan.
+5. [Marketing Site Roadmap](MARKETING-SITE-ROADMAP.md): site content, responsive UX, release downloads, privacy, SEO, accessibility, Cloudflare Pages deployment, and launch acceptance gates.
+6. [Post-MVP Baseline Audit](POST-MVP-BASELINE-AUDIT.md): dated source-backed status of every roadmap workstream, including SITE-01. Refresh it after integration.
+7. [Post-MVP Execution Plan](POST-MVP-EXECUTION-PLAN.md): historical proposal, superseded by the repository consolidation plan.
 
 ### I want to research product direction
 
-1. [Creative-app benchmark](research/creative-app-benchmark.md): transferable ideas from Krita, Photopea, and Pixlr, plus licensing and clean-room limits.
+1. [Creative-app benchmark](research/creative-app-benchmark.md): transferable ideas and code-reuse boundaries for Krita, GIMP, Inkscape, Photopea, Pixlr, Penpot, and SVG-Edit.
 
 ### I want to contribute or use an AI agent
 
