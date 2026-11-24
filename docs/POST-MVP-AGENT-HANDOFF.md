@@ -1,7 +1,7 @@
 # FireCraft — Post-MVP Agent Handoff and Execution Contract
 
 > **Purpose:** instructions for the AI/coding agent that begins post-MVP planning after the current FireCraft development work is complete.
-> **Read first:** [AGENTS.md](../AGENTS.md), [TASKS.md](TASKS.md), [NEXT.md](NEXT.md), [HANDOFF.md](HANDOFF.md), [PROGRESS.md](PROGRESS.md), [CS6-PARITY.md](CS6-PARITY.md), [FEATURES.md](FEATURES.md), and [POST-MVP-ROADMAP.md](POST-MVP-ROADMAP.md), [MARKETING-SITE-ROADMAP.md](MARKETING-SITE-ROADMAP.md), and [research/creative-app-benchmark.md](research/creative-app-benchmark.md).
+> **Read first:** [AGENTS.md](../AGENTS.md), [Repository Consolidation Handoff](REPOSITORY-CONSOLIDATION-HANDOFF.md), [Repository Consolidation Plan](REPOSITORY-CONSOLIDATION-AND-MODERNIZATION-PLAN.md), [TASKS.md](TASKS.md), [NEXT.md](NEXT.md), [HANDOFF.md](HANDOFF.md), [PROGRESS.md](PROGRESS.md), [CS6-PARITY.md](CS6-PARITY.md), [FEATURES.md](FEATURES.md), [POST-MVP-ROADMAP.md](POST-MVP-ROADMAP.md), [MARKETING-SITE-ROADMAP.md](MARKETING-SITE-ROADMAP.md), and [research/creative-app-benchmark.md](research/creative-app-benchmark.md).
 > **This is not authorization to start implementation immediately.** The first deliverable is a verified baseline and a deduplicated task plan.
 
 > **Current integration order:** begin with [Repository Consolidation Handoff](REPOSITORY-CONSOLIDATION-HANDOFF.md) and its [master plan](REPOSITORY-CONSOLIDATION-AND-MODERNIZATION-PLAN.md). These documents supersede the older Gate 0 merge sequence in [POST-MVP-EXECUTION-PLAN.md](POST-MVP-EXECUTION-PLAN.md), which predates the merge of PR #182. Do not merge #182 again.
