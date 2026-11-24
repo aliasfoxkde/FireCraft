@@ -36,6 +36,7 @@ It should extend those strengths with:
 - Developer handoff, CLI, automation, MCP, plugins, and documented APIs.
 - An accessible in-app Help and community experience.
 - Optional AI assistance and collaboration built on safe, reversible operations.
+- A compelling, evidence-led public product website, independently deployed through Cloudflare Pages from the same repository.
 - Strong data integrity, performance, portability, and long-term document preservation.
 
 This roadmap is deliberately broader than the next release. It is a product direction and feature-completeness specification. It must be converted into small, verifiable tasks only after the current MVP work is merged or otherwise reconciled.
@@ -1270,6 +1271,65 @@ Acceptance:
 
 ---
 
+## 5.20 Product marketing website and project presence
+
+### SITE-01 — Public FireCraft marketing website
+
+**Priority: P1.** This is a public product-discovery, adoption, download, and contribution surface. It may proceed as a separately owned static-site track after the current editor baseline is reconciled; it must not destabilize the editor, its WebAssembly build, or its Pages deployment.
+
+**Existing foundation:** the inspected repository snapshot already contains a standalone static site under the site directory (HTML, CSS, JavaScript, and approved brand assets), plus a root Wrangler configuration that names firecraft-site and points at the site output. The existing browser editor deployment is documented separately as firecraft-web and uses dist/web. These paths must remain separate. Re-audit the actual local tree and Cloudflare dashboard before changing either.
+
+**Objective:** provide a compelling, credible public home for FireCraft that helps a visitor understand the product, see authentic editor workflows, try or download the current release, assess maturity, and contribute.
+
+**Required experience:**
+- Clear product positioning: an open-source creative editor combining vector and bitmap workflows, inspired by classic Fireworks and built on a modern Rust foundation.
+- Strong first-screen explanation and primary actions: try the browser build when verified, download a supported release, see real screenshots, and explore the source.
+- Feature pages or sections that distinguish Available, Preview, In development, and Planned capabilities.
+- Authentic screenshots and gallery material captured from identified current builds, with captions, alt text, and evidence dates.
+- Current release/download discovery driven by published GitHub release assets, checksums, and manifests, with robust fallback behavior.
+- Getting-started guidance, platform availability, format-fidelity limitations, project/community information, contribution paths, license, and attribution.
+- Responsive design for desktop, tablet, and mobile web viewports; accessible navigation and keyboard operation.
+- Search metadata, canonical/social metadata, sitemap, robots policy, a useful not-found response, and appropriate security/cache headers.
+
+**Content integrity:**
+- Every externally visible capability, format, platform, performance, and privacy claim must link internally to current source/test/release evidence.
+- Do not market roadmap items as shipped features.
+- Do not call FireCraft a complete Photoshop/Figma/Fireworks replacement or claim format/platform parity without evidence.
+- Do not show planned installers as downloads. Availability must be derived from current published release assets.
+- Distinguish real product screenshots from mockups or concept illustrations.
+- Keep public copy aligned with FEATURES.md, CS6-PARITY.md, TASKS.md, release notes, and the verified build.
+
+**Technical and deployment requirements:**
+- Begin with the existing site directory and improve it incrementally; do not create a duplicate marketing application or replace it with a framework starter without a measured reason.
+- Keep the site static and independent from the Rust editor workspace, editor WASM build, and editor runtime. No backend, account system, database, or Worker is required for the initial site.
+- Preserve the approved FireCraft brand asset and existing Apache-2.0/attribution rules. Do not copy assets, UI artwork, copy, or code from benchmarked commercial products.
+- Audit the current GitHub release API client for safe DOM construction, URL allowlisting, rate-limit/network/error handling, prerelease handling, and a working Releases-page fallback.
+- Keep secrets and privileged tokens out of all browser assets and public build variables.
+- Avoid unapproved trackers, session replay, advertising pixels, forms, and third-party script/font requests. Any analytics requires an explicit privacy decision and disclosure.
+- Maintain a separate Cloudflare Pages project for the public marketing site (the inspected config names firecraft-site) and preserve the existing editor project firecraft-web. Confirm actual project state and deployment mode before using Wrangler or dashboard controls.
+- If Git integration is selected, use monorepo root/build settings and build-watch paths scoped to the site and its actual shared dependencies. If the existing project uses direct upload, do not migrate deployment mode without a separate owner-approved decision.
+- Preview and production deployment must be independent of the editor's dist/web deployment. Production deploy requires explicit owner approval and a receipt identifying source SHA, project, deployment URL, and rollback target.
+
+**Acceptance criteria:**
+1. The existing site is audited and improved rather than duplicated.
+2. The principal visitor journeys work from a clean browser on desktop, tablet, and phone.
+3. Every product claim maps to verified implementation/release evidence and clearly states maturity.
+4. Screenshots and third-party resources have known provenance, rights, accessible alternatives, and optimized delivery.
+5. Release downloads reflect only real published assets; malformed responses, rate limiting, network outage, and missing assets degrade safely.
+6. All routes work on direct navigation and refresh; site output is static and Pages-compatible.
+7. Automated and manual accessibility checks are recorded; WCAG 2.2 AA is the target, not a claim based on score alone.
+8. Mobile Lighthouse Performance is at least 90 and Accessibility, Best Practices, and SEO are at least 95 on recorded representative runs, or an exception is documented with remediation.
+9. SEO metadata, sitemap, robots, not-found behavior, security headers, caching, and external links are validated.
+10. Site changes cannot alter the editor deployment target or its production configuration.
+11. Preview deployment is reviewed; production launch is owner-approved and verified independently.
+12. README, documentation index, and operational handoff point to the actual public site only after its production URL is verified.
+
+**Detailed specification:** [MARKETING-SITE-ROADMAP.md](MARKETING-SITE-ROADMAP.md). The existing static implementation and Cloudflare deployment topology are the starting point, not proof of launch status.
+
+**Benchmark inputs:** [creative-app-benchmark.md](research/creative-app-benchmark.md) informs the product-feature presentation and differentiation, but benchmark applications are not runtime dependencies or sources of copied code/assets.
+
+---
+
 # 6. Prioritization and dependency order
 
 This roadmap is not a mandate to implement every workstream in sequence. The project should use parallel specialist work only where ownership boundaries are clean and shared interfaces have been agreed.
@@ -1298,6 +1358,19 @@ Priority is not a promise of delivery date. Reprioritize with evidence and expli
 - Do not start parallel post-MVP feature implementation while the shared document model, shell state, or current branch integration is unsettled.
 
 **Exit:** owner-approved MVP baseline, clean handoff, current task ledger and parity evidence refreshed.
+
+### Track M — Public product website
+
+This track begins only after Gate 0 has reconciled the current local editor work and deployment ownership. It can be implemented independently of core editor work when the site directory and release interfaces have clear ownership.
+
+- SITE-01: audit and elevate the existing static site; do not scaffold a duplicate.
+- Verify the current Pages topology: marketing site firecraft-site versus editor firecraft-web; inspect each project's real deployment mode, production branch, domain, and output path.
+- Build content from the audited current product state, authentic screenshots, published release assets, and verified documentation.
+- Improve responsive design, accessibility, SEO, privacy, safe release metadata, and performance.
+- Use Pages preview deployments and browser evidence before production.
+- Obtain explicit owner approval before production deployment and update the operational handoff with the verified deployment recipe.
+
+**Exit:** a credible, accessible, responsive public site with correct downloads and evidence-backed claims, independently deployed and verified without changing the editor deployment.
 
 ### Wave 1 — Production confidence and discoverability
 
@@ -1531,6 +1604,7 @@ Track a small set of metrics that measure user outcomes, not vanity feature coun
 | Accessibility audit completion | Inclusive usability |
 | Platform install/launch/smoke receipts | Honest cross-platform support |
 | Plugin API compatibility | Ecosystem stability |
+| Public site task completion, accessibility, performance, and download integrity | Product discovery and launch quality |
 | Issue triage and resolution time | Community responsiveness |
 | Duplicate issue rate | Quality of in-app issue search |
 | Contribution onboarding success | Open-source project health |
@@ -1592,6 +1666,8 @@ Use these documents together:
 - [RELEASE-ENGINEERING-PLAN.md](RELEASE-ENGINEERING-PLAN.md) and [TOOLCHAINS.md](TOOLCHAINS.md) — release/platform evidence.
 - [decision 0067](decisions/0067-wcag-aaa-web-host.md) — documented accessibility limitations of the current web canvas.
 - [decision 0006](decisions/0006-psd-fidelity.md) — PSD compatibility contract and known fidelity limits.
+- [MARKETING-SITE-ROADMAP.md](MARKETING-SITE-ROADMAP.md) — website content, UX, technical architecture, Cloudflare Pages deployment, verification, and launch gates.
+- [research/creative-app-benchmark.md](research/creative-app-benchmark.md) — feature-transfer research for Krita, Photopea, and Pixlr, with clean-room and licensing boundaries.
 
 **Authority rule:** current source, tests, and generated evidence outrank dated documentation. TASKS/NEXT remain the execution authority for active work. This post-MVP plan is a strategic backlog until the owner approves a concrete task sequence.
 
