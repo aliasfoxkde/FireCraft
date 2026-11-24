@@ -195,3 +195,72 @@ This table is a prioritization proposal only. The baseline audit determines whet
 4. For any new architecture or document-format semantics, write an ADR/spike before broad implementation.
 5. Implement a small end-to-end workflow with evidence before adding more engine variants or format labels.
 6. Update this benchmark when a source behavior, license, or strategic recommendation changes.
+
+
+## 10. Additional application references and source-reuse candidates
+
+The benchmark is intentionally broader than the initial Krita/Photopea/Pixlr comparison. These additional products illuminate gaps across raster editing, vector editing, interface design, and browser SVG workflows.
+
+### 10.1 GIMP and GEGL
+
+**Study:** selections, transforms, masks, filters, channel operations, layer workflows, tiled image processing, color conversion, and the separation between image operations and the application UI.
+
+**FireCraft opportunities:** audit whether existing raster, compose, filter, selection, and tile abstractions cover the same user outcomes. Use GIMP/GEGL/babl as architectural research, not as a mandate to replace FireCraft's renderer or document model.
+
+**License boundary:** GIMP is distributed under GPL version 3 or later. Do not port GPL-covered code into the Apache-2.0 FireCraft application without an explicit owner decision to change the licensing posture and legal review. Inspect GEGL and babl licenses independently; do not assume they inherit GIMP's top-level license or are automatically compatible.
+
+References:
+- [GIMP license FAQ](https://www.gimp.org/docs/userfaq.html)
+- [GIMP source/development map](https://developer.gimp.org/core/setup/git/)
+
+### 10.2 Inkscape and lib2geom
+
+**Study:** precision vector editing, node and handle workflows, snapping, path operations, SVG object semantics, filters, gradients, markers, and vector export fidelity.
+
+**FireCraft opportunities:** improve path/node manipulation, SVG round-trip tests, snapping and guides, boolean operations, and precision-oriented UI. Compare current vector engine and SVG importer/exporter before adding libraries.
+
+**License boundary:** Inkscape is GPL-licensed. Treat its application code as behavioral/architectural reference only unless a separate licensing decision permits reuse. lib2geom is a separate project and must have its own current license, commit, dependency, maintenance, and portability review before any source or binding is considered.
+
+References:
+- [Inkscape licensing](https://inkscape.org/about/license/)
+- [Inkscape source repository pointer](https://github.com/inkscape/inkscape)
+
+### 10.3 Penpot
+
+**Study:** reusable components, variants, design tokens, page and component navigation, prototyping, inspector/handoff surfaces, and the distinction between a design file and its reusable system assets.
+
+**FireCraft opportunities:** inform a component/variant architecture and developer handoff flow, but retain FireCraft's own document model, command registry, and local-first file behavior. Component/variant work requires an ADR and a migration strategy before adding persistent nodes.
+
+**License boundary:** the Penpot repository's package metadata identifies MPL-2.0. MPL obligations apply at the covered-file level. Do not copy files or modules without reviewing exact notices, modifications, dependency licenses, redistribution requirements, and how the material will coexist with FireCraft's Apache-2.0 source distribution.
+
+Reference:
+- [Penpot repository](https://github.com/penpot/penpot)
+
+### 10.4 SVG-Edit
+
+**Study:** browser-native SVG selection, path editing, transform handles, shape creation, style controls, and serialization behavior.
+
+**FireCraft opportunities:** use it as a possible code/algorithm candidate for narrow self-contained SVG routines only if they solve a proven gap and fit the Rust engine. Its JavaScript browser editor is not a replacement for FireCraft's shared native/WASM command engine.
+
+**License boundary:** the SVG-Edit repository identifies MIT. Reuse still requires checking the exact commit, file-level copyright/headers, bundled dependencies, test data, and required notices. Record the reused material in docs/ATTRIBUTION.md.
+
+References:
+- [SVG-Edit repository](https://github.com/SVG-Edit/svgedit/)
+- [SVG-Edit MIT license file](https://github.com/SVG-Edit/svgedit/blob/master/LICENSE-MIT.txt)
+
+### 10.5 Proprietary design and image editors
+
+Use Photoshop, Affinity Photo/Designer, Figma, Canva, and similar products for workflow comparisons only unless a clearly licensed public SDK or API is intentionally integrated. Do not copy source, artwork, brand assets, product copy, proprietary UI assets, or protected implementation details. Treat API access, file compatibility, and permission to reuse code as separate questions.
+
+### 10.6 Reuse decision table
+
+| Source type | Default decision |
+|---|---|
+| MIT/BSD/ISC/Apache-2.0 individual library | Candidate after exact license, dependency, security, wasm, MSRV, performance, and attribution checks. |
+| MPL-2.0 file/module | Requires file-level obligations and explicit license review before use. |
+| GPL/AGPL application code | Do not incorporate into the Apache-2.0 application by default; require owner-approved licensing strategy and legal review. |
+| Proprietary product or service | Feature/workflow reference only; no source/assets/copy/automation/scraping/decompilation. |
+| Public API or SDK | Evaluate terms, data flow, persistence, cost, availability, and privacy separately; API access is not source-code permission. |
+| Generated model output or sample resources | Verify ownership, provenance, usage rights, and whether the asset can legally ship with FireCraft. |
+
+**Source references checked:** 2026-11-24. License claims are triage guidance only. The exact source revision and file-level notices must be reviewed at the time of reuse; this document is not legal advice.
