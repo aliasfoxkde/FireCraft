@@ -12,18 +12,19 @@ project's own editor. No Adobe code, artwork, icon, or screenshot is present.
 
 ## Why the PNG brand files were replaced
 
-`firecraft-mark.png` and `favicon.png` previously contained the same 15,000-byte
-blob as `docs/img/logo.png` and `assets/branding/firecraft-approved-master.png`,
-and that blob is not a PNG (no PNG signature). Browsers therefore showed a broken
+Every brand raster in the repository — `firecraft-mark.png`, `favicon.png`,
+`docs/img/logo.png`, and `assets/branding/firecraft-approved-master.png` — held
+the same 15,000-byte blob with no PNG signature, so browsers showed a broken
 image wherever the mark appeared.
 
-The site now ships the mark as SVG, rendered from the approved vector path, so it
-stays sharp at every size and needs no raster fallback. The broken raster files
-were removed from this directory.
-
-The same invalid blob is still used by the README and the branding master. That is
-a repository asset problem separate from the website and should be fixed at the
-source rather than patched here.
+The site ships the mark as SVG, rendered from the approved vector path, so it
+stays sharp at every size and needs no raster fallback. The repository rasters are
+now real rasterizations of that same path: the branding master at 512 px, the
+README logo and hicolor icon at 256 px, and the web favicon at 64 px. They were
+produced by printing the SVG at 512 px with headless Chrome and converting through
+`pdftocairo -png -transp`, which keeps both the gradient and the transparent
+background. ImageMagick's built-in SVG renderer is not usable here: it flattens
+the gradient to solid black.
 
 ## Rebuilding
 

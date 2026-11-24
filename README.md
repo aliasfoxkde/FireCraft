@@ -171,10 +171,10 @@ The GUI and automation interfaces are intended to drive the same engine commands
 
 FireCraft uses the approved flame artwork as its single visual identity. The same supplied image—with its red-to-orange flame gradient, blue Bézier nodes and handles, gradient-direction indicator, and transparent background—is reused throughout the project. The README, website, favicon, and desktop application icon use identical artwork; there are no separately redrawn logo variants.
 
-The master artwork is stored at [`assets/branding/firecraft-approved-master.png`](assets/branding/firecraft-approved-master.png). The README and platform-specific asset locations are byte-identical exports of that master image, not alternate interpretations.
+The canonical artwork is the vector path in [`site/assets/firecraft-mark.svg`](site/assets/firecraft-mark.svg). [`assets/branding/firecraft-approved-master.png`](assets/branding/firecraft-approved-master.png) is a 512 px rasterization of that path, and the README, favicon, and desktop icon files are resized exports of it — one artwork, not alternate interpretations.
 
 <p align="center">
-  <img src="docs/img/logo.png" alt="The approved FireCraft flame artwork shown in vector-editing mode, with Bézier nodes, curve handles, and gradient direction controls" width="256" />
+  <img src="docs/img/logo.png" alt="The FireCraft flame mark: the approved flame path with its red-to-orange gradient on a transparent background" width="256" />
 </p>
 
 Third-party assets must retain their license notices and be recorded in [`docs/ATTRIBUTION.md`](docs/ATTRIBUTION.md). FireCraft's source is licensed under Apache-2.0.
