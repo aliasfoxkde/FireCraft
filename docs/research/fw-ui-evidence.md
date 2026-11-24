@@ -165,10 +165,6 @@ authority for what each CS6 panel command id *is*:
 
 Two consequences:
 
-<!-- coderabbit-ai-generated:v1 -->
-
-<!-- coderabbit-ai-generated-section:v1:16020a4d80f0a856913e0b16d903252ff5c1fa6859d990f9d4ffe1c5dfe0c092 -->
-
 1. The two ids the exe table carried that the Window-menu
    transcription did not — **43421** (Answers) and **35425**
    (What's New) — are **not Window-menu panel rows**. They are
@@ -183,8 +179,6 @@ Two consequences:
    **evidence-gated**, rather than a confirmed missing panel. Do not
    use that list to assert a settled total. ToolPalette is the
    workspace name for Tools, already included in the Window-menu roster.
-
-<!-- /coderabbit-ai-generated:v1 -->
 
 ### The `486xx` ids remain unidentified
 

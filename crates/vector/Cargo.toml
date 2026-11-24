@@ -6,7 +6,6 @@ license.workspace = true
 rust-version.workspace = true
 authors.workspace = true
 repository.workspace = true
-homepage.workspace = true
 description = "Vector depth for FireCraft: path booleans and curve-aware path operations."
 
 [dependencies]

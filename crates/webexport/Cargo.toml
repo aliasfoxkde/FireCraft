@@ -6,7 +6,6 @@ license.workspace = true
 rust-version.workspace = true
 authors.workspace = true
 repository.workspace = true
-homepage.workspace = true
 description = "FireCraft web export workflows: HTML+Images, Images Only."
 
 [dependencies]

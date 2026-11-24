@@ -20,7 +20,7 @@ a clear feasible / not-feasible / feasible-later verdict with its conditions.
 
 **Verification:** `rustup target list --installed`
 
-**Evidence:** The assessment is the ticket itself ([`docs/tasks/T27-32-linux-aarch64-assessment.md`](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/tasks/T27-32-linux-aarch64-assessment.md)): the toolchain (Rust's aarch64 standard library is installed, but the host has no aarch64 C toolchain and the CI image carries only the wasm target), the native stack (the default build is pure Rust — X11, Wayland and OpenGL are all loaded at run time, and the one C library, `libwebp-sys`, sits behind a non-default feature), the packaging path (the x86_64-pinned artifact names, the DEB's `Architecture` field, and the AppImage and Flatpak output names), the CI cost (one cross-build job plus one image revision), and the verdict **feasible-later**: no code port is needed, but the artifact cannot rise above a build receipt without an ARM64 test environment. Nothing has been cross-built or run on aarch64. **Done:** 2026-11-16: assessment written.
+**Evidence:** Matrix records aarch64 as "unassessed"
 
 **Blockers:** —
 

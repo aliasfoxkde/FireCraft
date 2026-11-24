@@ -6,7 +6,6 @@ license.workspace = true
 rust-version.workspace = true
 authors.workspace = true
 repository.workspace = true
-homepage.workspace = true
 description = "FireCraft typed document model and its Fireworks PNG node-tree mapping."
 
 [dependencies]

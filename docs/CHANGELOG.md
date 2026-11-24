@@ -6,7 +6,17 @@ git log order (newest first). The generation is additive: the
 entries already in this file are kept, because a squash merge
 leaves a branch's own commits unreachable from the log.
 
-Current version: **0.2.5**.
+Current version: **0.2.6**.
+
+## v0.2.6 (2026-11-24)
+
+### Changes
+
+- **app**: WASM CDN deployment via proxy Worker — loads WASM from GitHub Releases through CORS-enabled Worker, avoiding the 25 MB GitHub Pages per-object limit
+- **app**: drag-drop file overlay on canvas
+- **app**: smart guides rendering, lasso drag visual feedback, Ctrl+Enter text edit cancel
+- **app**: CS6 chrome improvements, panel/dialog polish, colors/constants refactoring
+
 
 ## Unreleased
 
@@ -584,12 +594,6 @@ Current version: **0.2.5**.
 
 ### Documentation
 
-- **release**: the Android gate and the RPM deferral are decided (4474ab3f)
-- **release**: every closed row cites its evidence as a link (bb99adba)
-- **release**: reconcile the board and its tickets (101c1cb7)
-- **ledger**: wave closeout — floor re-pinned to 96.89%, snapshots to post-wave state (#148) (44aa5466)
-- **climb**: restore the measured S2 baseline and reconcile stale rows (405d1fee)
-- **decisions**: renumber three duplicate decision numbers (f9eb9be6)
 - **climb**: correct the audit baseline's S2 to the measured 164 (64bd1ea7)
 - the coverage measurement is toolchain-bound, and 85 carried commands are unbound (#142) (ddf19fb4)
 - **climb**: audit and hill-climb handoff to v1.0 (0322d904)

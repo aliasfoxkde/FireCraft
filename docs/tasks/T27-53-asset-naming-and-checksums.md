@@ -21,7 +21,7 @@ provenance and signature files when they exist; the list verifies with `sha256su
 
 **Verification:** `cd dist && sha256sum -c RELEASE_SHA256.txt`
 
-**Evidence:** [`release.yml`](https://github.com/aliasfoxkde/FireCraft/blob/main/.github/workflows/release.yml) generates `RELEASE_SHA256.txt` for 7 files and names each file explicitly, because the globs over-match. The naming defect the rehearsal-3 receipt found is closed: every published asset now carries the lowercase canonical name (`firecraft-0.2.5-source.tar.gz`, not `FireCraft-…`). The rehearsal published the list (664 B, sha256 `af054b99…`); downloaded from the draft, its 7 entries match the API digests of the 7 assets it covers — 7/7. The list does not cover itself and does not cover the manifest, which is why it holds seven entries for nine assets. The native `MANIFEST.sha256` is byte-identical across two rehearsals. **Done:** 2026-11-17: the checksum list verified 7/7 against the rehearsal's published digests.
+**Evidence:** [`release.yml`](https://github.com/aliasfoxkde/FireCraft/blob/main/.github/workflows/release.yml) generates `RELEASE_SHA256.txt` for 7 files (no provenance/signature files). The rehearsal published it (718 B, sha256 `6ae766e7…`); downloaded from the draft, its 7 entries match the API digests of the 7 assets it covers — 7/7. **Naming is not yet canonical**: the source archive still ships as `FireCraft-<version>-source.tar.gz` while every other asset is lowercase; the rename to `firecraft-<version>-source.tar.gz` is implemented and lands with this row's next rebuild **Done:** 2026-11-11: checksum list verified against the published digests (rehearsal `v0.2.5-dryrun.3`).
 
 **Blockers:** —
 

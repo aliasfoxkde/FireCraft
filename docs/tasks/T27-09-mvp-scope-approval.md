@@ -24,9 +24,9 @@ marked approved rather than recommended.
 
 **Verification:** `grep -n 'Approved by' docs/decisions/00XX-*.md`
 
-**Evidence:** [decision 0075](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/decisions/0075-release-scope-mvp.md) is **accepted**: its Status line reads `accepted` and names the approver (Michael Kinney, maintainer) and the date (2026-11-17). Its *Approval state* section states that the approved scope is the MVP candidate scope (items 1–9), that the plan's full target matrix remains the standing **campaign** matrix outside that cut, and that nothing outside the candidate may be advertised as a supported production package. The approval covers scope, not readiness: an item inside the scope still carries its own evidence state **Done:** 2026-11-17.
+**Evidence:** `RELEASE-ENGINEERING-PLAN.md` §1.1 recommends; approval does not exist
 
-**Blockers:** —
+**Blockers:** Maintainer decision required
 
 **Stopping condition:** a decision record exists and the board cites it. The record
 exists and the board cites it, so T27-10 is unblocked; T27-60 and T27-61 remain

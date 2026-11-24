@@ -19,40 +19,27 @@
 
 ## 1. State snapshot (2026-11-16; main `23f872e0`)
 
-- **Source and release:** canonical `main` is `23f872e0` after the
-  reachability wave (#143), the artwork consolidation (#144) and the
-  wave-2 closeout (#150, decision 0118). The
-  latest published release remains `v0.2.5` (2026-11-03); current source has
-  moved beyond that tag. See [PROGRESS.md](PROGRESS.md) for dated build,
-  CI and deployment receipts.
+- **Source and release:** canonical `main` is `ad3fc655` after the
+  reachability wave (#143) and the artwork consolidation (#144). The
+The latest published release is `v0.2.6` (2026-11-24). The WASM CDN proxy Worker (`firecraft-wasm-proxy.cyopsys.workers.dev`) serves the 95.6 MB WASM binary from GitHub Releases v0.2.6 with CORS headers, loading from the proxy instead of direct GitHub fetches. See [PRODUCTION-TODO.md](PRODUCTION-TODO.md) and PR #184 for deployment receipts.
 - **Engine and parity:** 257 registered commands; the CS6 DOM matrix is
   268 carried / 3 partial / 0 missing of 356 verbs. The latest
-  shell-reachability measurement is **257/257 = 100%** (2026-11-16,
-  wave-2 merged as #150); the one-way floor was deliberately
-  re-blessed to 100% (it stood at 96.89% after #143's wave-closeout).
-  These measures answer different questions: DOM verbs,
+  shell-reachability measurement is 257/257 = 100% (2026-11-16, after
+  #150); the floor was re-blessed to 100% and is rising-only
+  the wave-closeout. These measures answer different questions: DOM verbs,
   shell-bound commands, and complete end-user UI/workflow parity must
   not be conflated.
 - **Menu census:** 2 inert rows of 298. The 19.6 menu-wiring campaign is
   complete; eight additional rows are explicitly feature/evidence-gated.
 - **Delivered work:** Phase 21's user-facing deliverables landed with
   #107. Phase 20.1–20.3 and 20.5–20.7 are on main (Optimize/timeline
-  #118 merged); the mask stack landed in #113 (stack, fold, level
-  panel and the level add/remove/move affordances), and both #114
-  follow-ups closed 2026-11-19 — a raster level's mask now samples at
-  its own resolution, and the section carries a two-row screenshot
-  acceptance. Check the live [TASKS.md](TASKS.md) before selecting
-  work.
+  #118 merged); the mask stack (#113) is merged into main. Check the live
+  [TASKS.md](TASKS.md) before selecting work.
 - **Phase 22:** screenshot acceptance and panel/tool/context-menu
   foundations landed; bitmap inspector gaps and remaining CS6 chrome
   keep the phase partial. The full user-visible inventory is
   [CS6-PARITY.md](CS6-PARITY.md).
-- **Release/deployment:** #104 reconciled the deployed JavaScript,
-  Wasm and WebOS `appinfo` with v0.2.5 release bytes. Cloudflare's
-  analytics injection explains the remaining HTML hash difference.
-  Republish from the exact release artifact is pending (T18). No
-  non-Linux native artifact is certified by recipe or cross-compile
-  alone; see [ARTIFACT-MATRIX.md](release/ARTIFACT-MATRIX.md).
+- **Release/deployment:** The WASM CDN proxy Worker resolves the cross-origin WASM fetch (issue #183). The live site loads the WASM binary through the CORS-enabled proxy Worker at `firecraft-wasm-proxy.cyopsys.workers.dev`. Deployment reconciliation (PR #184) records bundle hashes and manifest verification. No non-Linux native artifact is certified by recipe or cross-compile alone; see [ARTIFACT-MATRIX.md](release/ARTIFACT-MATRIX.md).
 - **Open integration work:** recheck each PR's current state before
   depending on it — the previously open #118, #120, #122 and #123 have
   all merged.
@@ -197,22 +184,8 @@ re-pin are also complete.
   before/after measurement. Decision 0079 keeps the historical
   measurement-based analysis.
 
-<!-- coderabbit-ai-generated:v1 -->
 
 
-<!-- coderabbit-ai-generated-section:v1:4afc23055932af30b8ed46b14fd136e53440f5d15864e46285de8cb752fb582a -->
-
-The next UI work is Phase 22.5: finish the CS6 chrome audit against the
-clean-room reference notes. Phase 22.1 (panel inventory) and 22.2 (tool
-strip) are complete in PR #8; the 22.1 docking movement — a panel moves
-between the left and right columns — landed later in PR #128 (merged
-2026-11-14); screenshot acceptance is complete, and
-22.4 still has evidence-gated bitmap transform/fill-stroke work. The remaining Phase 22 items
-are the chrome audit and the evidence-gated bitmap transform/fill-stroke work. Phase 20
-contains daily-driver editing features; Phase 21 contains modern
-differentiators.
-
-<!-- /coderabbit-ai-generated:v1 -->
 
 The current task ledger is [`TASKS.md`](TASKS.md), the full roadmap is
 [`NEXT.md`](NEXT.md), and screenshot acceptance criteria are in

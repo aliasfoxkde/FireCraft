@@ -1,0 +1,6 @@
+name = "firecraft-wasm-proxy"
+main = "wasm-proxy.worker.mjs"
+compatibility_date = "2026-11-08"
+
+[vars]
+WASM_SOURCE = "https://github.com/aliasfoxkde/FireCraft/releases/download/v0.2.6/firecraft-web-a259c7543f160268_bg.wasm"

@@ -77,8 +77,8 @@ visibility, Window-menu togglability.
   `cargo run -p xtask -- ci`.
 - The measurement is derived, so it cannot drift from the code the way
   a hand-quoted count did. The measured value on `main` at
-  2026-11-10 is **245 registry commands, 146 bound by the shell =
-  59.59%**; 99 are unbound.
+  2026-11-16 is **257 / 257 (100%)** shell-reachable engine commands
+  (all 257 registered commands are bound in the CS6-visible shell).
 - The floor is a *share*, not a raw count: a new command that nobody
   binds also lowers it, which is the intended pressure.
 - The scan is a literal scan, so a command id mentioned in a comment

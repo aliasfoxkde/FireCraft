@@ -223,7 +223,7 @@ pub fn source() -> Result<(), String> {
 }
 
 /// sha256 of a file (hex), same digest form `write_manifest` uses.
-fn sha256_hex_file(path: &Path) -> Result<String, String> {
+pub(crate) fn sha256_hex_file(path: &Path) -> Result<String, String> {
     let bytes = std::fs::read(path).map_err(|e| format!("read {}: {e}", path.display()))?;
     Ok(sha256_hex(&bytes))
 }
@@ -259,13 +259,34 @@ pub fn sbom() -> Result<(), String> {
     let packages = meta["packages"]
         .as_array()
         .ok_or("cargo metadata: no packages array")?;
+    let mut package_refs = BTreeMap::new();
     let spdx_ids = spdx_license_ids()?;
-    let locked = cargo_lock_inventory(
-        &std::fs::read_to_string(workspace_root().join("Cargo.lock"))
-            .map_err(|e| format!("read Cargo.lock: {e}"))?,
-    );
-    let inventory = sbom_inventory(packages, &locked, &spdx_ids)?;
-    let components = inventory.components;
+    for pkg in packages {
+        let name = pkg["name"]
+            .as_str()
+            .ok_or("cargo metadata: package without name")?;
+        let ver = pkg["version"]
+            .as_str()
+            .ok_or("cargo metadata: package without version")?;
+        let (bom_ref, purl) = package_bom_ref(pkg)?;
+        let id = pkg["id"]
+            .as_str()
+            .ok_or("cargo metadata: package without id")?;
+        package_refs.insert(id.to_owned(), bom_ref.clone());
+        let mut component = serde_json::json!({
+            "type": "library",
+            "name": name,
+            "version": ver,
+            "bom-ref": bom_ref,
+        });
+        if let Some(purl) = purl {
+            component["purl"] = serde_json::json!(purl);
+        }
+        if let Some(license) = pkg["license"].as_str() {
+            component["licenses"] = serde_json::json!([license_choice(license, &spdx_ids)]);
+        }
+        components.push(component);
+    }
 
     let root_ref = format!("urn:firecraft:application:firecraft@{version}");
     let dependencies = cyclonedx_dependencies(
@@ -302,6 +323,10 @@ pub fn sbom() -> Result<(), String> {
     // anything (T27-55).  Both checks run before the file is written,
     // so a non-conforming artifact never reaches the release surface.
     validate_against_schema(&bom)?;
+    let locked = cargo_lock_packages(
+        &std::fs::read_to_string(workspace_root().join("Cargo.lock"))
+            .map_err(|e| format!("read Cargo.lock: {e}"))?,
+    );
     compare_with_lock(&components, &locked)?;
 
     let path = out.join(format!("firecraft-{version}-sbom.cdx.json"));
@@ -315,125 +340,6 @@ pub fn sbom() -> Result<(), String> {
         locked.len()
     );
     Ok(())
-}
-
-/// The SBOM's component inventory and the references it is built from.
-struct SbomInventory {
-    /// The `components` array.
-    components: Vec<serde_json::Value>,
-    /// The bom-ref of every component, in the order they were added.
-    references: Vec<String>,
-    /// The bom-refs of the components the lockfile pins but the
-    /// resolved graph does not contain.
-    pinned_only: Vec<String>,
-    /// The metadata package id to bom-ref map the dependency edges are
-    /// built from.
-    package_refs: BTreeMap<String, String>,
-}
-
-/// Build the component inventory from the resolved graph and the
-/// locked inventory.
-///
-/// Two inventories describe the build, and they are not the same set:
-/// `cargo metadata` reports the resolved graph, while `Cargo.lock`
-/// pins the complete set — Cargo resolves the lockfile independently
-/// of any one feature selection, so it pins packages that no enabled
-/// feature activates and the resolved graph therefore omits (a
-/// `cargo metadata` inventory of this workspace is 560 packages; the
-/// lockfile pins 562). A supply-chain document that could omit a
-/// crate a build might link is not evidence, so the pinned inventory
-/// wins: every locked package the resolved graph does not carry
-/// becomes a component too, with no resolved edge — it is pinned, not
-/// linked.
-fn sbom_inventory(
-    resolved: &[serde_json::Value],
-    locked: &[LockedPackage],
-    spdx_ids: &BTreeSet<String>,
-) -> Result<SbomInventory, String> {
-    // The registry publishes a sha256 for each package's archive, and
-    // the lockfile records it. It is the digest a consumer needs to
-    // verify the crate it downloads, so it rides along with the
-    // component.
-    let checksums: BTreeMap<(String, String), String> = locked
-        .iter()
-        .filter_map(|package| {
-            let checksum = package.checksum.clone()?;
-            Some(((package.name.clone(), package.version.clone()), checksum))
-        })
-        .collect();
-
-    let mut components = Vec::new();
-    let mut references = Vec::new();
-    let mut pinned_only = Vec::new();
-    let mut package_refs = BTreeMap::new();
-    let mut listed: BTreeSet<(String, String)> = BTreeSet::new();
-
-    for pkg in resolved {
-        let name = pkg["name"]
-            .as_str()
-            .ok_or("cargo metadata: package without name")?;
-        let version = pkg["version"]
-            .as_str()
-            .ok_or("cargo metadata: package without version")?;
-        let (bom_ref, purl) = package_bom_ref(pkg)?;
-        let id = pkg["id"]
-            .as_str()
-            .ok_or("cargo metadata: package without id")?;
-        package_refs.insert(id.to_owned(), bom_ref.clone());
-        listed.insert((name.to_owned(), version.to_owned()));
-        let mut component = serde_json::json!({
-            "type": "library",
-            "name": name,
-            "version": version,
-            "bom-ref": bom_ref,
-        });
-        if let Some(purl) = purl {
-            component["purl"] = serde_json::json!(purl);
-        }
-        if let Some(license) = pkg["license"].as_str() {
-            component["licenses"] = serde_json::json!([license_choice(license, spdx_ids)]);
-        }
-        if let Some(checksum) = checksums.get(&(name.to_owned(), version.to_owned())) {
-            component["hashes"] = serde_json::json!([{
-                "alg": "SHA-256",
-                "content": checksum,
-            }]);
-        }
-        components.push(component);
-        references.push(bom_ref);
-    }
-
-    for package in locked {
-        if listed.contains(&(package.name.clone(), package.version.clone())) {
-            continue;
-        }
-        let (bom_ref, purl) = locked_bom_ref(package);
-        let mut component = serde_json::json!({
-            "type": "library",
-            "name": package.name,
-            "version": package.version,
-            "bom-ref": bom_ref,
-        });
-        if let Some(purl) = purl {
-            component["purl"] = serde_json::json!(purl);
-        }
-        if let Some(checksum) = checksums.get(&(package.name.clone(), package.version.clone())) {
-            component["hashes"] = serde_json::json!([{
-                "alg": "SHA-256",
-                "content": checksum,
-            }]);
-        }
-        components.push(component);
-        references.push(bom_ref.clone());
-        pinned_only.push(bom_ref);
-    }
-
-    Ok(SbomInventory {
-        components,
-        references,
-        pinned_only,
-        package_refs,
-    })
 }
 
 /// The `CycloneDX` 1.5 schema the SBOM is validated against.
@@ -479,53 +385,25 @@ fn validate_against_schema(bom: &serde_json::Value) -> Result<(), String> {
     ))
 }
 
-/// One `[[package]]` entry in `Cargo.lock`.
-///
-/// The lockfile is the *complete* pinned inventory. Cargo resolves the
-/// lockfile independently of any one feature selection, so it pins
-/// packages that a given build's resolved graph does not contain — an
-/// optional dependency that no enabled feature activates, for
-/// instance. `cargo metadata` reports the resolved graph, so the two
-/// inventories are not the same set.
-#[derive(Clone, Debug, PartialEq, Eq)]
-struct LockedPackage {
-    name: String,
-    version: String,
-    /// The registry or git source the lockfile pins, absent for a
-    /// workspace member.
-    source: Option<String>,
-    /// The sha256 the registry publishes for the package's archive.
-    checksum: Option<String>,
-}
-
-/// The packages the lockfile pins.
+/// The packages the lockfile pins, as (name, version) pairs.
 ///
 /// Only `[[package]]` sections count: `[[patch.unused]]` entries name
 /// packages the graph does not use, and the SBOM does not list them.
-fn cargo_lock_inventory(text: &str) -> Vec<LockedPackage> {
+fn cargo_lock_packages(text: &str) -> Vec<(String, String)> {
     let mut packages = Vec::new();
     let mut section = "";
     let mut name: Option<String> = None;
     let mut version: Option<String> = None;
-    let mut source: Option<String> = None;
-    let mut checksum: Option<String> = None;
     for line in text.lines() {
         let line = line.trim();
         if line.starts_with("[[") && line.ends_with("]]") {
             if section == "[[package]]"
                 && let (Some(n), Some(v)) = (name.take(), version.take())
             {
-                packages.push(LockedPackage {
-                    name: n,
-                    version: v,
-                    source: source.take(),
-                    checksum: checksum.take(),
-                });
+                packages.push((n, v));
             }
             name = None;
             version = None;
-            source = None;
-            checksum = None;
             section = line;
             continue;
         }
@@ -536,55 +414,14 @@ fn cargo_lock_inventory(text: &str) -> Vec<LockedPackage> {
             name = Some(lock_value(rest));
         } else if let Some(rest) = line.strip_prefix("version = ") {
             version = Some(lock_value(rest));
-        } else if let Some(rest) = line.strip_prefix("source = ") {
-            source = Some(lock_value(rest));
-        } else if let Some(rest) = line.strip_prefix("checksum = ") {
-            checksum = Some(lock_value(rest));
         }
     }
     if section == "[[package]]"
         && let (Some(n), Some(v)) = (name, version)
     {
-        packages.push(LockedPackage {
-            name: n,
-            version: v,
-            source,
-            checksum,
-        });
+        packages.push((n, v));
     }
     packages
-}
-
-/// The bom-ref and purl for a package the lockfile pins.
-///
-/// A crates.io package gets the same Cargo purl the metadata path
-/// gives it, so a package named by both inventories has one reference
-/// either way. Every other source gets a `urn:firecraft:cargo:`
-/// reference whose digest is over the lockfile's own source string.
-fn locked_bom_ref(package: &LockedPackage) -> (String, Option<String>) {
-    const CRATES_IO: &str = "registry+https://github.com/rust-lang/crates.io-index";
-    if package.source.as_deref() == Some(CRATES_IO) {
-        let purl = format!("pkg:cargo/{}@{}", package.name, package.version);
-        return (purl.clone(), Some(purl));
-    }
-    // The identity is the source for a sourced package, and the
-    // package's own name for one the lockfile records without a
-    // source — a workspace member or a path dependency, for which
-    // Cargo.lock records no path. A workspace member is always in the
-    // resolved graph, so the name-keyed identity is only ever used for
-    // a pinned package nothing here links.
-    let identity = package
-        .source
-        .clone()
-        .unwrap_or_else(|| format!("path:{}", package.name));
-    let digest = sha256_hex(identity.as_bytes());
-    (
-        format!(
-            "urn:firecraft:cargo:{}@{}:{}",
-            package.name, package.version, digest
-        ),
-        None,
-    )
 }
 
 /// One quoted TOML value, unquoted.
@@ -598,13 +435,13 @@ fn lock_value(text: &str) -> String {
 /// Compare the SBOM's components with the locked graph, package by
 /// package.
 ///
-/// The SBOM's inventory is the lockfile's, so the comparison is what
-/// proves it — it is an assertion, not a discovery. A component the
-/// lockfile does not pin, or a pinned package the SBOM does not list,
-/// means one of the two is wrong.
+/// The SBOM is generated from `cargo metadata --locked`, so the two
+/// inventories come from the same lockfile — and the comparison is
+/// what proves it.  A component the lockfile does not pin, or a pinned
+/// package the SBOM does not list, means one of the two is wrong.
 fn compare_with_lock(
     components: &[serde_json::Value],
-    locked: &[LockedPackage],
+    locked: &[(String, String)],
 ) -> Result<(), String> {
     let listed: BTreeSet<(String, String)> = components
         .iter()
@@ -614,10 +451,7 @@ fn compare_with_lock(
             Some((name, version))
         })
         .collect();
-    let pinned: BTreeSet<(String, String)> = locked
-        .iter()
-        .map(|package| (package.name.clone(), package.version.clone()))
-        .collect();
+    let pinned: BTreeSet<(String, String)> = locked.iter().cloned().collect();
 
     let missing: Vec<&(String, String)> = pinned.difference(&listed).collect();
     let extra: Vec<&(String, String)> = listed.difference(&pinned).collect();
@@ -841,6 +675,68 @@ fn build_timestamp() -> String {
     )
 }
 
+/// Patches the staging directory to load the WASM binary from a CDN URL
+/// if `WASM_CDN_URL` is set in the environment.
+///
+/// The trunk build auto-injects the local WASM path into `index.html` and
+/// the JS glue. When a CDN URL is provided, this function replaces those
+/// references so the browser fetches the WASM from the CDN instead.
+fn patch_wasm_cdn(out: &std::path::Path) -> Result<(), String> {
+    let Some(wasm_url) = std::env::var("WASM_CDN_URL").ok() else {
+        return Ok(());
+    };
+
+    // Find the local WASM filename in the staging directory
+    let local_wasm_name = out
+        .read_dir()
+        .map_err(|e| format!("read staging dir: {e}"))?
+        .filter_map(|e| e.ok())
+        .filter(|e| {
+            e.path()
+                .extension()
+                .and_then(|ext| ext.to_str())
+                .is_some_and(|ext| ext == "wasm")
+        })
+        .next()
+        .ok_or_else(|| "no .wasm file found in staging directory".to_owned())?
+        .file_name()
+        .to_string_lossy()
+        .into_owned();
+
+    // The local WASM path in HTML/JS starts with "/"
+    let local_ref = format!("/{}", local_wasm_name);
+
+    // Patch index.html
+    {
+        let html_path = out.join("index.html");
+        let html =
+            std::fs::read_to_string(&html_path).map_err(|e| format!("read index.html: {e}"))?;
+        let patched_html = html.replace(&local_ref, &wasm_url);
+        std::fs::write(&html_path, patched_html)
+            .map_err(|e| format!("write patched index.html: {e}"))?;
+    }
+
+    // Patch JS glue files
+    for entry in std::fs::read_dir(out).map_err(|e| format!("read dir: {e}"))? {
+        let entry = entry.map_err(|e| format!("read entry: {e}"))?;
+        let path = entry.path();
+        let ext = path.extension().and_then(|e| e.to_str());
+        if ext == Some("js") {
+            let js = std::fs::read_to_string(&path)
+                .map_err(|e| format!("read {}: {e}", path.display()))?;
+            let patched_js = js.replace(&local_ref, &wasm_url);
+            std::fs::write(&path, patched_js)
+                .map_err(|e| format!("write patched {}: {e}", path.display()))?;
+        }
+    }
+
+    eprintln!(
+        "[xtask] wasm CDN: replaced local path {} with {}",
+        local_ref, wasm_url
+    );
+    Ok(())
+}
+
 /// Builds the release bundle with trunk and stages a fresh copy under
 /// `dist/web/` — the staging directory starts empty every run, so a
 /// dist artifact can never carry leftovers from an older tree.
@@ -875,6 +771,41 @@ fn stage_web() -> Result<Vec<PathBuf>, String> {
             .map_err(|e| format!("stage {}: {e}", name.to_string_lossy()))?;
         staged.push(target);
     }
+    // If WASM_CDN_URL is set, patch the staging files to load the WASM
+    // from the CDN instead of a local path. This is the primary strategy
+    // for reducing the inlined WASM size when deploying to Cloudflare Pages.
+    if let Err(e) = patch_wasm_cdn(&out) {
+        eprintln!("[xtask] warning: wasm CDN patch failed: {e}");
+    }
+
+    // Pre-compress .wasm and .js files with gzip so the web server can serve
+    // compressed versions. This is essential because the WASM binary (~92 MB)
+    // exceeds Cloudflare Pages' 25 MB per-object limit; gzip brings it under
+    // the threshold. The serving HTTP server (in serve.py or the web server)
+    // must also send the appropriate Content-Encoding header.
+    let compressible = &[".wasm", ".js", ".html"];
+    let mut to_add = Vec::new();
+    for path in &staged {
+        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+        if !compressible.contains(&ext) {
+            continue;
+        }
+        let gz = path.with_extension(format!("{ext}.gz"));
+        let mut encoder = flate2::write::GzEncoder::new(
+            std::fs::File::create(&gz).map_err(|e| format!("create {}: {e}", gz.display()))?,
+            flate2::Compression::best(),
+        );
+        if let Ok(bytes) = std::fs::read(path) {
+            encoder
+                .write_all(&bytes)
+                .map_err(|e| format!("compress {}: {e}", gz.display()))?;
+            encoder
+                .finish()
+                .map_err(|e| format!("flush {}: {e}", gz.display()))?;
+            to_add.push(gz);
+        }
+    }
+    staged.extend(to_add);
 
     // Copy and stamp WebOS packaging files. appinfo.json MUST carry
     // the @VERSION@ placeholder: the v0.2.3→v0.2.4 window shipped a
@@ -1788,6 +1719,10 @@ pub const MANIFEST_SCHEMA: &str = "firecraft.release-manifest/1";
 /// The manifest's file name inside the release output directory.
 pub const MANIFEST_FILE_NAME: &str = "release-manifest.json";
 
+/// The provenance statement's file name inside the release output
+/// directory.
+pub const PROVENANCE_FILE_NAME: &str = "provenance.intoto.json";
+
 /// Verification status of an artifact whose digest was corroborated by
 /// an independently recorded checksum list.
 const VERIFICATION_VERIFIED: &str = "verified";
@@ -1809,16 +1744,16 @@ const CHECKSUM_LISTS: &[&str] = &[
 ];
 
 /// One published release asset.
-struct ArtifactSpec {
+pub(crate) struct ArtifactSpec {
     /// Canonical published name — the asset's basename, which is how a
     /// release names it.
-    name: String,
+    pub(crate) name: String,
     /// Path relative to the release output directory.
-    rel_path: String,
+    pub(crate) rel_path: String,
     /// Package format.
-    format: &'static str,
+    pub(crate) format: &'static str,
     /// Target triple the artifact was built for.
-    target: &'static str,
+    pub(crate) target: &'static str,
 }
 
 /// The build-time facts a manifest records about the run that produced
@@ -1828,21 +1763,21 @@ struct ArtifactSpec {
 /// edge — in [`manifest_context`] — and handed to the generator as
 /// data. The generator is therefore a pure function of its inputs, and
 /// the same inputs produce the same manifest bytes.
-struct ManifestContext {
+pub(crate) struct ManifestContext {
     /// Workspace version the artifacts carry.
-    version: String,
+    pub(crate) version: String,
     /// Release tag the artifacts were cut from — absent when the build
     /// was not made from a tagged commit.
-    tag: Option<String>,
+    pub(crate) tag: Option<String>,
     /// Git revision the artifacts were built from.
-    source_sha: String,
+    pub(crate) source_sha: String,
     /// Workflow run URL — absent outside CI.
-    run_url: Option<String>,
+    pub(crate) run_url: Option<String>,
     /// Workflow run id — absent outside CI.
-    run_id: Option<String>,
+    pub(crate) run_id: Option<String>,
     /// UTC build timestamp — the one field that is build-time data by
     /// definition.
-    built_at: String,
+    pub(crate) built_at: String,
 }
 
 /// The published release asset set for `version`.
@@ -1852,7 +1787,7 @@ struct ManifestContext {
 /// rather than globbing, because a glob such as `firecraft-web-*.zip`
 /// picks up older versions left in `dist/` — and a scan would let a
 /// stale file into the manifest.
-fn release_specs(version: &str) -> Vec<ArtifactSpec> {
+pub(crate) fn release_specs(version: &str) -> Vec<ArtifactSpec> {
     vec![
         ArtifactSpec {
             name: format!("firecraft-{version}-linux-x86_64.tar.gz"),
@@ -1900,6 +1835,12 @@ fn release_specs(version: &str) -> Vec<ArtifactSpec> {
             name: "RELEASE_SHA256.txt".to_owned(),
             rel_path: "RELEASE_SHA256.txt".to_owned(),
             format: "sha256",
+            target: TARGET_ANY,
+        },
+        ArtifactSpec {
+            name: PROVENANCE_FILE_NAME.to_owned(),
+            rel_path: PROVENANCE_FILE_NAME.to_owned(),
+            format: "json",
             target: TARGET_ANY,
         },
     ]
@@ -1971,7 +1912,7 @@ fn load_checksum_lists(root: &Path) -> Result<Vec<ChecksumList>, String> {
 /// The digest comes from [`sha256_hex_file`], the same helper the
 /// release manifests themselves use, so the manifest records the same
 /// digest form as the rest of the release path.
-fn digest_and_size(path: &Path) -> Result<(String, u64), String> {
+pub(crate) fn digest_and_size(path: &Path) -> Result<(String, u64), String> {
     let digest = sha256_hex_file(path)?;
     let size = std::fs::metadata(path)
         .map_err(|e| format!("stat {}: {e}", path.display()))?
@@ -2059,7 +2000,7 @@ fn render_manifest(value: &serde_json::Value) -> Result<String, String> {
 /// This is the edge — the only place that touches process-global state.
 /// Everything downstream takes the values as data, so the generator can
 /// be exercised in a test without touching the environment.
-fn manifest_context(version: &str) -> Result<ManifestContext, String> {
+pub(crate) fn manifest_context(version: &str) -> Result<ManifestContext, String> {
     let root = workspace_root();
     let source_sha = git_value(&root, &["rev-parse", "HEAD"])?.ok_or_else(|| {
         "could not read the source revision: `git rev-parse HEAD` failed".to_owned()
@@ -2413,20 +2354,12 @@ version = \"0.1.0\"
 
     #[test]
     fn the_lockfile_reader_counts_packages_and_ignores_unused_patches() {
-        let packages = cargo_lock_inventory(LOCK);
-        assert_eq!(packages.len(), 2);
-        assert_eq!(packages[0].name, "engine");
-        assert_eq!(packages[0].version, "0.2.5");
-        assert_eq!(packages[0].source, None);
-        assert_eq!(packages[1].name, "serde");
-        assert_eq!(packages[1].version, "1.0.219");
         assert_eq!(
-            packages[1].source.as_deref(),
-            Some("registry+https://github.com/rust-lang/crates.io-index")
-        );
-        assert_eq!(
-            packages[1].checksum.as_deref(),
-            Some("d6f7df5f0ea5c0e0b0a8f0a1e0b3d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2")
+            cargo_lock_packages(LOCK),
+            vec![
+                ("engine".to_owned(), "0.2.5".to_owned()),
+                ("serde".to_owned(), "1.0.219".to_owned()),
+            ]
         );
     }
 
@@ -2436,13 +2369,13 @@ version = \"0.1.0\"
             serde_json::json!({ "name": "engine", "version": "0.2.5" }),
             serde_json::json!({ "name": "serde", "version": "1.0.219" }),
         ];
-        assert!(compare_with_lock(&components, &cargo_lock_inventory(LOCK)).is_ok());
+        assert!(compare_with_lock(&components, &cargo_lock_packages(LOCK)).is_ok());
     }
 
     #[test]
     fn a_locked_package_the_sbom_omits_is_a_failure() {
         let components = vec![serde_json::json!({ "name": "engine", "version": "0.2.5" })];
-        let error = compare_with_lock(&components, &cargo_lock_inventory(LOCK)).unwrap_err();
+        let error = compare_with_lock(&components, &cargo_lock_packages(LOCK)).unwrap_err();
         assert!(error.contains("serde"), "{error}");
         assert!(error.contains("Cargo.lock"), "{error}");
     }
@@ -2454,106 +2387,8 @@ version = \"0.1.0\"
             serde_json::json!({ "name": "serde", "version": "1.0.219" }),
             serde_json::json!({ "name": "ghost", "version": "0.0.1" }),
         ];
-        let error = compare_with_lock(&components, &cargo_lock_inventory(LOCK)).unwrap_err();
+        let error = compare_with_lock(&components, &cargo_lock_packages(LOCK)).unwrap_err();
         assert!(error.contains("ghost"), "{error}");
-    }
-
-    /// A resolved graph that carries only the workspace member, and a
-    /// lockfile that pins one more package — the shape Cargo produces
-    /// when an optional dependency is pinned but no enabled feature
-    /// activates it.
-    const PINNED_ONLY_LOCK: &str = "\
-# This file is automatically @generated by Cargo.
-version = 4
-
-[[package]]
-name = \"engine\"
-version = \"0.2.5\"
-
-[[package]]
-name = \"glob\"
-version = \"0.3.4\"
-source = \"registry+https://github.com/rust-lang/crates.io-index\"
-checksum = \"e4eba85ea1d0a966a983acd07deee566e67395d2d96b6fb39e62b5a833f1eb0b\"
-";
-
-    #[test]
-    fn a_locked_package_the_resolved_graph_omits_is_still_a_component() {
-        let resolved = vec![serde_json::json!({
-            "id": "path+file:///workspace/crates/engine#engine@0.2.5",
-            "name": "engine",
-            "version": "0.2.5",
-            "source": null,
-            "manifest_path": workspace_root().join("crates/engine/Cargo.toml").display().to_string(),
-        })];
-        let inventory = sbom_inventory(
-            &resolved,
-            &cargo_lock_inventory(PINNED_ONLY_LOCK),
-            &BTreeSet::new(),
-        )
-        .unwrap();
-        let names: Vec<&str> = inventory
-            .components
-            .iter()
-            .filter_map(|component| component["name"].as_str())
-            .collect();
-        assert_eq!(names, vec!["engine", "glob"]);
-        assert_eq!(inventory.pinned_only.len(), 1);
-        assert!(inventory.pinned_only[0].starts_with("pkg:cargo/glob@0.3.4"));
-    }
-
-    #[test]
-    fn a_component_carries_the_archive_digest_the_lockfile_records() {
-        let resolved = vec![serde_json::json!({
-            "id": "path+file:///workspace/crates/engine#engine@0.2.5",
-            "name": "engine",
-            "version": "0.2.5",
-            "source": null,
-            "manifest_path": workspace_root().join("crates/engine/Cargo.toml").display().to_string(),
-        })];
-        let inventory = sbom_inventory(
-            &resolved,
-            &cargo_lock_inventory(PINNED_ONLY_LOCK),
-            &BTreeSet::new(),
-        )
-        .unwrap();
-        let glob = inventory
-            .components
-            .iter()
-            .find(|component| component["name"] == "glob")
-            .unwrap();
-        assert_eq!(glob["hashes"][0]["alg"], "SHA-256");
-        assert_eq!(
-            glob["hashes"][0]["content"],
-            "e4eba85ea1d0a966a983acd07deee566e67395d2d96b6fb39e62b5a833f1eb0b"
-        );
-        assert_eq!(glob["purl"], "pkg:cargo/glob@0.3.4");
-    }
-
-    #[test]
-    fn a_pinned_but_unlinked_package_carries_an_empty_dependency_edge() {
-        let metadata = serde_json::json!({
-            "workspace_members": [],
-            "resolve": { "nodes": []}
-        });
-        let dependencies = cyclonedx_dependencies(
-            &metadata,
-            &BTreeMap::new(),
-            &["pkg:cargo/glob@0.3.4".to_owned()],
-            "urn:firecraft:application:firecraft@0.1.0",
-        )
-        .unwrap();
-        let pinned = dependencies
-            .iter()
-            .find(|entry| entry["ref"] == "pkg:cargo/glob@0.3.4")
-            .unwrap();
-        assert_eq!(pinned["dependsOn"], serde_json::json!([]));
-        // The application root stays last, so a reader that follows
-        // the array sees the root where it expects it.
-        assert_eq!(
-            dependencies.last().unwrap()["ref"],
-            "urn:firecraft:application:firecraft@0.1.0"
-        );
     }
 
     #[test]

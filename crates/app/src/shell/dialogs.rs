@@ -228,7 +228,7 @@ impl engine::platform::Dialogs for EnvDialogs {
 /// the document's `FMTi` export-format id, so new formats append —
 /// reordering would re-point every saved document's setting.
 pub(crate) const EXPORT_FORMATS: &[&str] = &[
-    "png", "jpg", "bmp", "tiff", "wbmp", "svg", "psd", "gif", "webp",
+    "png", "jpg", "bmp", "tiff", "wbmp", "svg", "psd", "gif", "webp", "avif", "heic", "ai",
 ];
 
 /// The web export workflows the dialog offers (the M11 set), in menu
@@ -264,6 +264,102 @@ pub(crate) fn web_workflow(index: usize) -> Option<webexport::Workflow> {
     })
 }
 
+/// HTML export style (File ▸ HTML Setup).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum HtmlExportStyle {
+    Html5,
+    Xhtml1,
+    CssGrid,
+}
+
+impl Default for HtmlExportStyle {
+    fn default() -> Self {
+        HtmlExportStyle::Html5
+    }
+}
+
+/// Paper size for page setup.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum PaperSize {
+    Letter,
+    A4,
+    Legal,
+    Tabloid,
+}
+
+impl PaperSize {
+    pub(crate) fn label(&self) -> &'static str {
+        match self {
+            PaperSize::Letter => "Letter (8.5×11 in)",
+            PaperSize::A4 => "A4 (210×297 mm)",
+            PaperSize::Legal => "Legal (8.5×14 in)",
+            PaperSize::Tabloid => "Tabloid (11×17 in)",
+        }
+    }
+}
+
+/// The HTML Setup dialog's fields — File ▸ HTML Setup: output style,
+/// extension, slice inclusion, and browser centering.
+#[derive(Clone, Debug)]
+pub(crate) struct HtmlSetupDialog {
+    /// HTML output style.
+    pub style: HtmlExportStyle,
+    /// File extension (.html or .htm).
+    pub extension: &'static str,
+    /// Include slices and hotspots in the export.
+    pub include_slices: bool,
+    /// Center the stage in browser.
+    pub center_in_browser: bool,
+    /// Include responsive viewport meta tag.
+    pub include_viewport_meta: bool,
+    /// Export document background color.
+    pub export_doc_bg: bool,
+}
+
+impl Default for HtmlSetupDialog {
+    fn default() -> Self {
+        Self {
+            style: HtmlExportStyle::Html5,
+            extension: ".html",
+            include_slices: true,
+            center_in_browser: true,
+            include_viewport_meta: true,
+            export_doc_bg: true,
+        }
+    }
+}
+
+/// The Page Setup dialog's fields — File ▸ Page Setup: paper,
+/// orientation, margins, and print scaling.
+#[derive(Clone, Debug)]
+pub(crate) struct PageSetupDialog {
+    /// Paper size preset.
+    pub paper: PaperSize,
+    /// Landscape orientation.
+    pub landscape: bool,
+    /// Margin in inches (0..=3).
+    pub margin_in: f64,
+    /// Fit artwork to page.
+    pub fit_to_page: bool,
+    /// Scale percentage (10..=400, used when !fit_to_page).
+    pub scale_pct: i32,
+    /// Print guides and slice overlays.
+    pub print_guides: bool,
+}
+
+impl Default for PageSetupDialog {
+    fn default() -> Self {
+        Self {
+            paper: PaperSize::Letter,
+            landscape: false,
+            margin_in: 0.5,
+            fit_to_page: false,
+            scale_pct: 100,
+            print_guides: false,
+        }
+    }
+}
+
 /// Export-dialog state (File → Export…): format, per-format controls,
 /// and the cached 2-Up preview. The controls mirror the `EXPv` fields
 /// the model maps; Export stamps them onto a cloned document and runs
@@ -296,10 +392,23 @@ pub(crate) struct ExportDialog {
     pub(super) gif_diff: bool,
     /// GIF Floyd–Steinberg amount (`PLDi`), percent.
     pub(super) gif_dither: i32,
+    /// Export transparent background for formats that support it (PNG, WebP, SVG).
+    pub(super) transparent_bg: bool,
+    /// Export quality percentage (applies to lossy formats: JPEG, WebP, AVIF).
+    pub(super) export_quality: i32,
+    /// Include slices and hotspots in HTML export.
+    pub(super) include_slices: bool,
+    /// Center the stage in browser window.
+    pub(super) center_in_browser: bool,
+    /// Include responsive viewport meta tag.
+    pub(super) include_viewport_meta: bool,
+    /// Export document background color.
+    pub(super) export_doc_bg: bool,
+    /// HTML export style: 0=HTML5, 1=XHTML, 2=CSS Grid.
+    pub(super) html_style: usize,
     /// Cached 2-Up panes and the settings stamp they were made from.
     pub(super) preview: Option<(u64, TextureHandle, String, TextureHandle, String)>,
 }
-
 impl Default for ExportDialog {
     fn default() -> Self {
         Self {
@@ -315,6 +424,13 @@ impl Default for ExportDialog {
             gif_crop: false,
             gif_diff: false,
             gif_dither: 0,
+            transparent_bg: false,
+            export_quality: 90,
+            include_slices: true,
+            center_in_browser: true,
+            include_viewport_meta: true,
+            export_doc_bg: true,
+            html_style: 0,
             preview: None,
         }
     }
@@ -405,19 +521,28 @@ impl Shell {
     pub(super) fn import_raster_dialog(&mut self) {
         let Some(path) = self.dialogs.open_path(
             "Import image",
-            &[(
-                "Images".to_owned(),
-                vec![
-                    "png".to_owned(),
-                    "jpg".to_owned(),
-                    "jpeg".to_owned(),
-                    "gif".to_owned(),
-                    "bmp".to_owned(),
-                    "tif".to_owned(),
-                    "tiff".to_owned(),
-                    "webp".to_owned(),
-                ],
-            )],
+            &[
+                (
+                    "Images".to_owned(),
+                    vec![
+                        "png".to_owned(),
+                        "jpg".to_owned(),
+                        "jpeg".to_owned(),
+                        "gif".to_owned(),
+                        "bmp".to_owned(),
+                        "tif".to_owned(),
+                        "tiff".to_owned(),
+                        "webp".to_owned(),
+                        "avif".to_owned(),
+                        "heic".to_owned(),
+                    ],
+                ),
+                ("SVG".to_owned(), vec!["svg".to_owned()]),
+                (
+                    "PSD/AI".to_owned(),
+                    vec!["psd".to_owned(), "psb".to_owned(), "ai".to_owned()],
+                ),
+            ],
         ) else {
             return;
         };
@@ -683,6 +808,44 @@ impl Shell {
                     ui.checkbox(&mut dialog.gif_crop, "Crop frames");
                     ui.checkbox(&mut dialog.gif_diff, "Diff frames");
                     ui.add(egui::Slider::new(&mut dialog.gif_dither, 0..=100).text("Dither %"));
+                }
+                // Quality slider for all lossy formats: JPEG, WebP, AVIF.
+                match EXPORT_FORMATS[dialog.format] {
+                    "jpg" | "webp" | "avif" => {
+                        ui.add(
+                            egui::Slider::new(&mut dialog.export_quality, 10..=100)
+                                .text("Export Quality"),
+                        );
+                    }
+                    _ => {}
+                }
+                // Transparent background for formats that support alpha.
+                if matches!(EXPORT_FORMATS[dialog.format], "png" | "webp" | "svg") {
+                    ui.checkbox(&mut dialog.transparent_bg, "Transparent BG");
+                }
+                // HTML export options.
+                if matches!(EXPORT_FORMATS[dialog.format], "html" | "htm") {
+                    egui::ComboBox::from_label("Style")
+                        .selected_text(match dialog.html_style {
+                            0 => "HTML5",
+                            1 => "XHTML 1.0",
+                            _ => "CSS Grid",
+                        })
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(&mut dialog.html_style, 0, "HTML5");
+                            ui.selectable_value(&mut dialog.html_style, 1, "XHTML 1.0");
+                            ui.selectable_value(&mut dialog.html_style, 2, "CSS Grid");
+                        });
+                    ui.checkbox(&mut dialog.include_slices, "Include Slices & Hotspots");
+                    ui.checkbox(&mut dialog.center_in_browser, "Center Stage in Browser");
+                    ui.checkbox(
+                        &mut dialog.include_viewport_meta,
+                        "Include Responsive Viewport Meta",
+                    );
+                    ui.checkbox(
+                        &mut dialog.export_doc_bg,
+                        "Export Document Background Color",
+                    );
                 }
             });
 
@@ -1221,6 +1384,13 @@ impl Shell {
             dialog.gif_crop,
             dialog.gif_diff,
             dialog.gif_dither,
+            dialog.transparent_bg,
+            dialog.export_quality,
+            dialog.include_slices,
+            dialog.center_in_browser,
+            dialog.include_viewport_meta,
+            dialog.export_doc_bg,
+            dialog.html_style,
             self.stamp(),
         )
             .hash(&mut hasher);
@@ -1232,6 +1402,8 @@ impl Shell {
     pub(super) fn dialog_options(dialog: &ExportDialog) -> doc::ExportOptions {
         let jpg = EXPORT_FORMATS[dialog.format] == "jpg";
         let gif = EXPORT_FORMATS[dialog.format] == "gif";
+        let lossy = matches!(EXPORT_FORMATS[dialog.format], "jpg" | "webp" | "avif");
+        let is_html = matches!(EXPORT_FORMATS[dialog.format], "html" | "htm");
         doc::ExportOptions {
             format: Some(i64::try_from(dialog.format).unwrap_or(0)),
             jpeg_quality: jpg.then_some(i64::from(dialog.quality)),
@@ -1244,18 +1416,54 @@ impl Shell {
             anim_crop: gif.then_some(dialog.gif_crop),
             anim_diff: gif.then_some(dialog.gif_diff),
             dither: gif.then_some(i64::from(dialog.gif_dither)),
+            transparent_bg: if is_html || dialog.transparent_bg {
+                Some(dialog.transparent_bg)
+            } else {
+                None
+            },
+            export_quality: if lossy {
+                Some(i64::from(dialog.export_quality))
+            } else {
+                None
+            },
+            html_style: if is_html {
+                Some(dialog.html_style as i64)
+            } else {
+                None
+            },
+            include_slices: if is_html {
+                Some(dialog.include_slices)
+            } else {
+                None
+            },
+            center_in_browser: if is_html {
+                Some(dialog.center_in_browser)
+            } else {
+                None
+            },
+            include_viewport_meta: if is_html {
+                Some(dialog.include_viewport_meta)
+            } else {
+                None
+            },
+            export_doc_bg: if is_html {
+                Some(dialog.export_doc_bg)
+            } else {
+                None
+            },
             ..doc::ExportOptions::default()
         }
     }
 
     /// The dialog's JPEG flags (the stated-over-recorded side of the
     /// same controls).
+    #[cfg(feature = "native")]
     pub(super) fn dialog_flags(dialog: &ExportDialog) -> app_cli::ops::ExportFlags {
         app_cli::ops::ExportFlags {
-            quality: if EXPORT_FORMATS[dialog.format] == "jpg" {
-                Some(u8::try_from(dialog.quality).unwrap_or(90))
-            } else {
-                None
+            quality: match EXPORT_FORMATS[dialog.format] {
+                "jpg" => Some(u8::try_from(dialog.quality).unwrap_or(90)),
+                "avif" | "webp" => Some(u8::try_from(dialog.export_quality).unwrap_or(90)),
+                _ => None,
             },
             progressive: dialog.progressive,
             matte: if dialog.matte_black {
@@ -1269,6 +1477,7 @@ impl Shell {
     /// Encodes page 0 / state 0 in `format` with the dialog's settings
     /// stamped onto a cloned document — byte-identical to what Export
     /// writes.
+    #[cfg(feature = "native")]
     pub(super) fn encode_with_dialog(
         &self,
         dialog: &ExportDialog,
@@ -1300,6 +1509,7 @@ impl Shell {
     /// settings, and a lossless PNG for comparison. Each pane keeps
     /// its byte size in the label. `ctx` is the live egui context the
     /// textures are loaded onto.
+    #[cfg(feature = "native")]
     pub(super) fn render_preview(
         &mut self,
         ctx: &egui::Context,
@@ -1347,6 +1557,7 @@ impl Shell {
     /// Export through the save dialog: encode with the dialog's
     /// settings, write through the injected file system. A selected
     /// web workflow routes to [`Self::export_web_via_dialog`] instead.
+    #[cfg(feature = "native")]
     pub(super) fn export_via_dialog(&mut self, dialog: &ExportDialog) {
         if let Some(index) = dialog.web {
             self.export_web_via_dialog(dialog, index);
@@ -1382,6 +1593,7 @@ impl Shell {
     /// CSS); every image file lands beside it under its export name.
     /// The pipeline is [`app_cli::ops::export_web`] — the CLI verb's
     /// exact path, so the dialog cannot drift from the CLI.
+    #[cfg(feature = "native")]
     pub(super) fn export_web_via_dialog(&mut self, dialog: &ExportDialog, index: usize) {
         let Some(workflow) = web_workflow(index) else {
             return;
@@ -1439,4 +1651,134 @@ impl Shell {
         self.status = format!("exported {count} files to {}", dir.to_string_lossy());
         self.export_dialog = None;
     }
+}
+/// HTML Setup dialog (File ▸ HTML Setup…).
+pub(super) fn html_setup_dialog_ui(&mut self, ui: &mut egui::Ui) {
+    let Some(mut dialog) = self.html_setup_dialog.take() else {
+        return;
+    };
+    ui.set_min_width(320.0);
+    egui::Grid::new("html_setup_grid")
+        .num_columns(2)
+        .spacing([8.0, 6.0])
+        .show(ui, |ui| {
+            ui.strong("HTML Style:");
+            egui::ComboBox::from_id_salt("html_setup_style")
+                .selected_text(match dialog.style {
+                    HtmlExportStyle::Html5 => "HTML5 Semantic",
+                    HtmlExportStyle::Xhtml1 => "XHTML 1.0 Transitional",
+                    HtmlExportStyle::CssGrid => "HTML5 + CSS Grid",
+                })
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(
+                        &mut dialog.style,
+                        HtmlExportStyle::Html5,
+                        "HTML5 Semantic",
+                    );
+                    ui.selectable_value(
+                        &mut dialog.style,
+                        HtmlExportStyle::Xhtml1,
+                        "XHTML 1.0 Transitional",
+                    );
+                    ui.selectable_value(
+                        &mut dialog.style,
+                        HtmlExportStyle::CssGrid,
+                        "HTML5 + CSS Grid",
+                    );
+                });
+            ui.end_row();
+            ui.strong("Extension:");
+            egui::ComboBox::from_id_salt("html_setup_ext")
+                .selected_text(dialog.extension)
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(&mut dialog.extension, ".html", ".html");
+                    ui.selectable_value(&mut dialog.extension, ".htm", ".htm");
+                });
+            ui.end_row();
+        });
+    ui.checkbox(&mut dialog.include_slices, "Include Slices & Hotspots");
+    ui.checkbox(&mut dialog.center_in_browser, "Center Stage in Browser");
+    ui.checkbox(
+        &mut dialog.include_viewport_meta,
+        "Include Responsive Viewport Meta",
+    );
+    ui.checkbox(
+        &mut dialog.export_doc_bg,
+        "Export Document Background Color",
+    );
+    ui.separator();
+    ui.horizontal(|ui| {
+        if ui.button("Preview in Browser (F12)").clicked() {
+            self.status = "preview in browser".to_owned();
+        }
+        if ui.button("OK").clicked() {
+            self.status = "Updated HTML Setup options".to_owned();
+        }
+        if ui.button("Cancel").clicked() {
+            self.status = "html setup cancelled".to_owned();
+        }
+    });
+    self.html_setup_dialog = Some(dialog);
+}
+
+/// Page Setup dialog (File ▸ Page Setup…).
+pub(super) fn page_setup_dialog_ui(&mut self, ui: &mut egui::Ui) {
+    let Some(mut dialog) = self.page_setup_dialog.take() else {
+        return;
+    };
+    ui.set_min_width(320.0);
+    egui::Grid::new("page_setup_grid")
+        .num_columns(2)
+        .spacing([8.0, 6.0])
+        .show(ui, |ui| {
+            ui.strong("Paper Size:");
+            egui::ComboBox::from_id_salt("page_setup_paper")
+                .selected_text(dialog.paper.label())
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(&mut dialog.paper, PaperSize::Letter, "Letter");
+                    ui.selectable_value(&mut dialog.paper, PaperSize::A4, "A4");
+                    ui.selectable_value(&mut dialog.paper, PaperSize::Legal, "Legal");
+                    ui.selectable_value(&mut dialog.paper, PaperSize::Tabloid, "Tabloid");
+                });
+            ui.end_row();
+            ui.strong("Orientation:");
+            ui.horizontal(|ui| {
+                ui.radio_value(&mut dialog.landscape, false, "Portrait");
+                ui.radio_value(&mut dialog.landscape, true, "Landscape");
+            });
+            ui.end_row();
+            ui.strong("Margins:");
+            ui.add(
+                egui::DragValue::new(&mut dialog.margin_in)
+                    .speed(0.05)
+                    .range(0.0..=3.0)
+                    .suffix(" in"),
+            );
+            ui.end_row();
+        });
+    ui.checkbox(&mut dialog.fit_to_page, "Fit Artwork to Page");
+    if !dialog.fit_to_page {
+        ui.horizontal(|ui| {
+            ui.add(
+                egui::DragValue::new(&mut dialog.scale_pct)
+                    .speed(1.0)
+                    .range(10..=400)
+                    .suffix("%"),
+            );
+        });
+    }
+    ui.checkbox(&mut dialog.print_guides, "Print Guides & Slice Overlays");
+    ui.separator();
+    ui.horizontal(|ui| {
+        if ui.button("Print…").clicked() {
+            self.status = "print document".to_owned();
+        }
+        if ui.button("OK").clicked() {
+            self.status = format!("Page Setup updated ({})", dialog.paper.label());
+        }
+        if ui.button("Cancel").clicked() {
+            self.status = "page setup cancelled".to_owned();
+        }
+    });
+    self.page_setup_dialog = Some(dialog);
 }

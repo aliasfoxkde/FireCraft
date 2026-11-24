@@ -45,7 +45,7 @@ document rather than guess at its shape.
 
 ## The asset set
 
-The manifest describes the published release asset set — the eight files the
+The manifest describes the published release asset set — the nine files the
 release attaches beside the manifest itself. The set is a fixed table in the
 generator, not a scan of the
 output directory: the release names every asset explicitly (a glob such as
@@ -62,12 +62,13 @@ would let a stale file into the manifest.
 | `firecraft-<v>-source.tar.gz` | `source/firecraft-<v>-source.tar.gz` | `tar.gz` | `any` |
 | `firecraft-<v>-sbom.cdx.json` | `sbom/firecraft-<v>-sbom.cdx.json` | `json` | `any` |
 | `RELEASE_SHA256.txt` | `RELEASE_SHA256.txt` | `sha256` | `any` |
+| `provenance.intoto.json` | `provenance.intoto.json` | `json` | `any` |
 
 `<v>` is the workspace version.
 
-The manifest is written **after** every asset exists — including the web zip
-and `RELEASE_SHA256.txt`, which the release workflow produces — so it
-describes the whole release and not a part of it.
+The manifest is written **after** every asset exists — including the web zip,
+`RELEASE_SHA256.txt` and the provenance statement, which the release workflow
+produces — so it describes the whole release and not a part of it.
 
 ## Determinism
 

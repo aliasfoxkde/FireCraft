@@ -100,6 +100,27 @@ and verifies a clean extraction plus `cargo metadata --locked` inside it;
 `dist --sbom` produces `dist/sbom/firecraft-<v>-sbom.cdx.json`
 (CycloneDX 1.5) over the locked dependency graph.
 
+## Build provenance
+
+    cargo run -p xtask -- dist --provenance
+    cargo run -p xtask -- dist --verify-provenance
+
+`dist --provenance` writes `dist/provenance.intoto.json` — an in-toto
+statement whose subjects are the published artifacts with their SHA-256
+digests, and whose predicate records the source revision, the tag, the
+workflow and the builder. `dist --verify-provenance` re-reads the
+statement and re-hashes the artifacts it names; a statement that
+disagrees with the bytes on disk fails the release.
+
+The statement is unsigned. A signed attestation — verifiable with
+`gh attestation verify <digest> --repo aliasfoxkde/FireCraft` — needs
+the runner's OIDC identity (`id-token: write` and `attestations: write`
+on the build job), which this repository has not been granted.
+
+Run it after the artifacts and `dist/RELEASE_SHA256.txt` exist and
+before the manifest: the manifest lists the statement as an asset of the
+release.
+
 ## Release manifest
 
     cargo run -p xtask -- dist --manifest
@@ -108,7 +129,7 @@ and verifies a clean extraction plus `cargo metadata --locked` inside it;
 `dist --manifest` writes `dist/release-manifest.json` — the
 machine-readable description of the release. It lands in the release
 output directory next to the artifacts it describes, and it is
-published with them as a ninth release asset.
+published with them as a tenth release asset.
 
 The manifest carries the version, the tag, the source revision, the
 workflow run URL and id, and the build timestamp; and for every
@@ -209,12 +230,14 @@ jobs:
    metadata`; `dist --native`, `dist --web`, `dist --source`,
    `dist --sbom`; zips the web bundle; writes `dist/RELEASE_SHA256.txt`
    over the seven digested files plus `MANIFEST.sha256`; writes
+   `dist/provenance.intoto.json` with `dist --provenance` and re-verifies
+   it with `dist --verify-provenance`; writes
    `dist/release-manifest.json` with `dist --manifest` and re-verifies
-   it with `dist --verify-manifest`; uploads nine paths as one artifact.
+   it with `dist --verify-manifest`; uploads ten paths as one artifact.
 2. **`create draft release`** — downloads that artifact, flattens it
    with `packaging/release-assets.sh stage`, runs a **fail-closed
    aggregate validation** (`scripts/validate_release_aggregate.sh`:
-   all nine required artifacts present and non-empty, nothing else in
+   all ten required artifacts present and non-empty, nothing else in
    the release set, `sha256sum -c RELEASE_SHA256.txt` passing, the
    release manifest agreeing with the assets it describes, and every
    required platform represented), classifies the tag's release mode,
@@ -323,7 +346,7 @@ Every step below is one the repository can actually perform today.
    GitForge only when the lineage question is resolved; the GitForge
    remote carries tags only and has no release-asset surface.
 9. The tag push fires `release.yml`, which creates a **draft** release
-   with the nine validated assets. Inspect the draft: confirm the
+   with the ten validated assets. Inspect the draft: confirm the
    asset list, confirm the digests against `RELEASE_SHA256.txt` and the
    release manifest, and confirm the release notes are
    `docs/releases/<tag>.md`.

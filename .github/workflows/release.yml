@@ -6,8 +6,9 @@
 #   3. Builds a clean-extract-verified source archive
 #   4. Generates a CycloneDX 1.5 SBOM
 #   5. Generates release-wide SHA-256 checksums
-#   6. Generates the machine-readable release manifest (release-manifest.json)
-#   7. Validates all 9 assets and creates a draft GitHub Release
+#   6. Generates the build provenance statement (provenance.intoto.json)
+#   7. Generates the machine-readable release manifest (release-manifest.json)
+#   8. Validates all 10 assets and creates a draft GitHub Release
 #
 # What it does NOT do (operator handles):
 #   - Bumping versions (8 stamps in Cargo.toml files)
@@ -217,6 +218,28 @@ jobs:
         env:
           VERSION: ${{ steps.version.outputs.version }}
 
+      - name: Generate provenance statement
+        # The build provenance (T27-56): an in-toto statement that binds
+        # every published artifact's SHA-256 to the source revision, the
+        # tag and the workflow that produced it. The statement is
+        # generated after the artifacts and the checksum list exist —
+        # it attests to them — and the manifest is generated after the
+        # statement, so the manifest lists the statement as an asset of
+        # the release.
+        #
+        # `dist --verify-provenance` re-reads the statement and re-hashes
+        # the artifacts it names: a statement that disagrees with the
+        # bytes on disk fails the release here, not at a consumer.
+        #
+        # The statement is unsigned: it binds the digests to the build,
+        # but it carries no signature. A signed attestation needs the
+        # runner's OIDC identity (`id-token: write` plus
+        # `attestations: write` on this job), which this repository has
+        # not been granted — see T27-56.
+        run: |
+          cargo run --quiet --package xtask -- dist --provenance
+          cargo run --quiet --package xtask -- dist --verify-provenance
+
       - name: Generate release manifest
         # The machine-readable release manifest (T27-54): one JSON
         # document describing every published asset — canonical name,
@@ -250,6 +273,7 @@ jobs:
             dist/firecraft-web-*.zip
             dist/source/firecraft-*-source.tar.gz
             dist/sbom/firecraft-*-sbom.cdx.json
+            dist/provenance.intoto.json
             dist/RELEASE_SHA256.txt
             dist/release-manifest.json
           retention-days: 5

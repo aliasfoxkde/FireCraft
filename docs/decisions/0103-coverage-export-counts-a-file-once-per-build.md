@@ -122,7 +122,7 @@ against 5167: `LF` is the lines the export found, `DA` the lines it
 wrote a counter for, and the two differ for 138 of the 171 files —
 the ordinary case, not a defect. The check is restated, and the
 gate's marker corrected with it, in decision
-[0129](0129-the-export-counts-lines-found-and-lines-with-counters.md).
+[0118](0118-the-export-counts-lines-found-and-lines-with-counters.md).
 
 See also decision [0102](0102-coverage-floor-is-measured-with-a-pinned-toolchain.md)
 — the same defect one layer up: the floor was a claim about a compiler

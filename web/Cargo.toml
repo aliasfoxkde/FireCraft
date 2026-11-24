@@ -6,7 +6,6 @@ rust-version = "1.95"
 license = "Apache-2.0"
 authors = ["FireCraft contributors"]
 repository = "https://github.com/aliasfoxkde/FireCraft"
-homepage = "https://github.com/aliasfoxkde/FireCraft"
 description = "FireCraft editor shell for the browser: the app shell under trunk, plus a postMessage bridge for WebOS embedding. Clean-room implementation."
 
 [[bin]]
@@ -14,15 +13,12 @@ name = "firecraft-web"
 path = "src/main.rs"
 
 [dependencies]
-app = { path = "../crates/app" }
-app-cli = { path = "../crates/app-cli" }
+app = { path = "../crates/app", default-features = false }
 base64 = "0.22"
 compose = { path = "../crates/compose" }
 eframe = { version = "0.36", default-features = false, features = [
     "default_fonts",
     "glow",
-    "wayland",
-    "x11",
 ] }
 engine = { path = "../crates/engine" }
 fwpng = { path = "../crates/fwpng" }
