@@ -4,8 +4,9 @@
 > [MARKETING-SITE-ROADMAP.md](../MARKETING-SITE-ROADMAP.md)).
 > **Priority:** P1 — the public site is the product's front door, and the tracked
 > deploy path does not currently pass its own validation.
-> **Status:** `IN PROGRESS` — Phase 0 only. Editor feature work stays behind Gate 0;
-> this track touches no Rust code.
+> **Status:** `IN PROGRESS` — Phase 0 repository work is complete and the site has
+> been rebuilt; production deployment is owner-gated and not verified. Editor
+> feature work stays behind Gate 0; this track touches no Rust code.
 > **Owner:** unassigned. **Created:** 2026-11-24.
 > **Dependencies:** Gate 0 confirms no other agent owns `site/`; Cloudflare account
 > access for project topology. No editor-code dependency.
@@ -47,6 +48,41 @@ also never been checked against a build.
 - No `sitemap.xml`, `robots.txt`, custom `404.html`, or `_headers` exists.
 - Screenshot provenance: `docs/img/app-main.png` is referenced but not
   build-stamped in the page.
+
+### 2.1 Implementation status (2026-11-23)
+
+Landed in `site/` (all static, no framework, no build step):
+
+- Seven pages — Home, Features, Gallery, Formats, Downloads, Docs, Project — plus
+  a custom `404.html`, `robots.txt`, and Cloudflare `_headers` (CSP, nosniff,
+  referrer policy, frame denial, permissions policy).
+- One design system in `styles.css`: dark-first tokens, flame and Bézier-node
+  accents, responsive breakpoints, visible focus rings, skip links, and a
+  `prefers-reduced-motion` branch.
+- `app.js` progressive enhancement: keyboard-operable mobile nav, current-page
+  state, copy buttons, reveal-on-scroll that degrades to static, and a release
+  loader that validates download URLs against an HTTPS host allowlist, groups
+  assets from uploaded release metadata only, and falls back to the canonical
+  release page on any failure. No `innerHTML`.
+- Brand: the mark is `firecraft-mark.svg`, extracted unchanged from the approved
+  vector path in the existing preview artwork. The previous raster mark was an
+  invalid 15,000-byte non-PNG blob and is removed from `site/`.
+- Provenance: `site/assets/README.md` records every image's source, the capture
+  build/date, and the broken-blob replacement.
+- Deploy validation now checks every page, the headers file, the assets, and the
+  accessibility anchors, and fails if a third-party font or analytics host appears.
+- Aegis: five header-name findings in `site/_headers` are adjudicated in the
+  content baseline (definitions of security headers, not missing headers); no rule
+  class was disabled and no other baseline row changed.
+
+Still open, all owner- or environment-gated:
+
+- Pages topology (mode, production branch, domain, deployed SHA) and a production
+  receipt. `firecraft-site.pages.dev` does not resolve from this host.
+- Browser, axe, and Lighthouse baselines. Headless Chromium cannot render on this
+  host (a screenshot of `about:blank` times out), so no rendered evidence exists.
+- `sitemap.xml` once the production hostname is confirmed; claim-matrix sign-off.
+- The invalid brand PNG blobs used by the README and the branding master.
 
 ## 3. Scope
 

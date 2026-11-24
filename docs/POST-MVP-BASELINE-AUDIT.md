@@ -69,7 +69,7 @@ reset, cleaned, or committed by this audit.
 
 | PR | Branch | State | Size | Note |
 |---|---|---|---|---|
-| #182 | `docs/post-mvp-product-roadmap` | `UNSTABLE`; `docs-only-check` fails | docs only, 9 commits, 6 files, +691/−5 | This audit's base branch, now at `645f6699`; it adds the roadmap, handoff, [MARKETING-SITE-ROADMAP.md](MARKETING-SITE-ROADMAP.md), [creative-app benchmark](research/creative-app-benchmark.md), and SITE-01. Reproduced locally: three false positives — two view-navigation words (also a financial-account abbreviation) and one analytics phrase. All reworded on this branch; re-run `cargo run --locked -p xtask -- aegis` before merge. |
+| #182 | `docs/post-mvp-product-roadmap` | Pushed at `bbf3a782`; docs-only CI | docs only, plus this audit, the execution plan, and PM-01…PM-08 | PR head `645f6699` adds the roadmap, handoff, [MARKETING-SITE-ROADMAP.md](MARKETING-SITE-ROADMAP.md), [creative-app benchmark](research/creative-app-benchmark.md), and SITE-01. Four gate false positives (two view-navigation words, one analytics phrase, one spelled-out header name) are reworded or adjudicated; `aegis` and the link check pass locally. |
 | #181 | `feat/wasm-cdn-deploy` | `DIRTY` | 233 files, +23,275 / −1,668 | Carries the WASM CDN deploy, god-file reduction, production-readiness work, and the uncommitted local UI changes above are on its checkout. |
 | #178 | `feature/issue-93-behavior-export` | `DIRTY` | — | Webexport behavior-target fix; needs rebase and a re-run. |
 
@@ -226,7 +226,7 @@ through the shared command registry; `—` = not exposed on that surface.
 
 | ID | Status | Evidence | Remaining behavior | Surfaces | Next action |
 |---|---|---|---|---|---|
-| SITE-01 | `PA` | `site/` static one-pager (`index.html`, `styles.css`, `app.js`, 3 assets); `wrangler.toml` names `firecraft-site` with output `./site`; `.github/workflows/deploy-site.yml` deploys on `site/**`; `app.js` renders the latest GitHub release with a fallback link; `docs/SITE-DEPLOYMENT.md` documents the editor/site split | **Deploy was broken**: the workflow's validation required `site/assets/firecraft-mark.svg`, which does not exist (only `.png`); fixed in this change. `firecraft-site.pages.dev` does not resolve from this host, so there is no production receipt. One page only — no Features, Gallery, Downloads, Getting-started, or Community routes; no sitemap, robots, custom 404, or security headers; external Google Fonts and a `raw.githubusercontent.com` screenshot; release-asset URL allowlisting and API failure paths untested | W | **PM-08** (Phase 0 audit) |
+| SITE-01 | `PA` | `site/` is now a seven-page static site — Home, Features, Gallery, Formats, Downloads, Docs, Project — plus `404.html`, `_headers`, `robots.txt`, and a single stylesheet/script; the mark ships as `firecraft-mark.svg` derived from the approved vector path; real captures are copied into `site/assets/` with provenance in `site/assets/README.md`; `app.js` allowlists `github.com` and the GitHub asset hosts over HTTPS and falls back on API failure; `.github/workflows/deploy-site.yml` validates every page and rejects third-party font/analytics hosts | **Not deployed:** `firecraft-site.pages.dev` still does not resolve from this host and no deployment receipt exists, so no page calls the site live. No sitemap (production hostname unconfirmed) and no recorded browser/axe/Lighthouse baseline — headless Chromium cannot render in this environment. Claim review is per-page copy, not yet a signed-off matrix. The brand PNG blobs elsewhere (`docs/img/logo.png`, the branding master) remain invalid 15,000-byte non-PNG data | W | **PM-08** (Phase 0 repo work done; deploy owner-gated) |
 
 ### 3.14 Status totals
 
@@ -283,11 +283,13 @@ documentation stream, labelled `DOCS-01` here for traceability.
 11. **Release scope is unapproved.** Decision 0075 is still *recommended — awaiting
     maintainer approval*; nothing is `CERTIFIED`; no signing identities exist.
     PM-07 may inventory but not change claims.
-12. **The marketing site exists but is not deployable as written.** The tracked
-    site is a credible one-pager, but the deploy workflow validated a logo file
-    that is not in the tree (fixed here), and `firecraft-site.pages.dev` does not
-    resolve. SITE-01 must not be described as live until a deployment receipt
-    exists; nothing in this audit does so.
+12. **The marketing site is rebuilt and deploy-ready, but not deployed.** Seven
+    pages plus a custom 404, `robots.txt`, and response headers; no third-party
+    font, analytics, or image host; a release loader that validates download
+    origins; and a deploy workflow that validates the whole page set. The deploy
+    path's missing-logo defect is fixed. `firecraft-site.pages.dev` still does not
+    resolve and no receipt exists, so SITE-01 stays `PA` and nothing here calls it
+    live.
 
 ---
 
