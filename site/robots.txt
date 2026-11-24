@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+
+# The marketing site is a small static set of pages.
+# The editor's WebAssembly build is a separate deployment.

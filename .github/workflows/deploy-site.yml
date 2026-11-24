@@ -29,13 +29,30 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Validate static site
         run: |
-          test -s site/index.html
+          # Every page must exist and be non-empty; Pages serves these paths directly.
+          for page in index features gallery formats downloads docs project 404; do
+            test -s "site/${page}.html"
+          done
           test -s site/styles.css
           test -s site/app.js
-          test -s site/assets/firecraft-mark.png
+          test -s site/_headers
+          test -s site/robots.txt
+          test -s site/assets/firecraft-mark.svg
+          test -s site/assets/app-main.png
+          test -s site/assets/mask-stack.png
+
+          # Content and accessibility anchors the pages depend on.
           grep -q 'name="description"' site/index.html
           grep -q 'prefers-reduced-motion' site/styles.css
-          grep -q 'loadRelease' site/app.js
+          grep -q 'data-release' site/app.js
+          grep -q 'skip-link' site/index.html
+
+          # The site promises no third-party font, script, or analytics host.
+          if grep -rIlE 'fonts\.googleapis|fonts\.gstatic|googletagmanager|google-analytics' site; then
+            echo "site/ must not reference a third-party font or analytics host."
+            exit 1
+          fi
+
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@9acf94ace14e7dc412b076f2c5c20b8ce93c79cd # v3.15.0
         with:

@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0a0b0e">
+<title>Gallery — FireCraft</title>
+<meta name="description" content="Captures of the FireCraft editor workspace with build and date provenance, plus clearly labelled concept artwork.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Gallery — FireCraft">
+<meta property="og:description" content="Real editor captures and one labelled mock-up, each with its build and date.">
+<meta property="og:image" content="https://raw.githubusercontent.com/aliasfoxkde/FireCraft/main/docs/img/app-main.png">
+<link rel="icon" href="./assets/firecraft-mark.svg" type="image/svg+xml">
+<link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header">
+  <div class="wrap header-inner">
+    <a class="brand" href="./index.html" aria-label="FireCraft home">
+      <img src="./assets/firecraft-mark.svg" alt="" width="34" height="34">
+      <span>Fire<span class="brand-hot">Craft</span></span>
+    </a>
+    <button class="nav-toggle" aria-expanded="false" aria-controls="primary-nav" aria-label="Open navigation">
+      <span></span><span></span><span></span>
+    </button>
+    <nav id="primary-nav" class="nav" aria-label="Primary">
+      <a href="./features.html">Features</a>
+      <a href="./gallery.html" aria-current="page">Gallery</a>
+      <a href="./formats.html">Formats</a>
+      <a href="./downloads.html">Downloads</a>
+      <a href="./project.html">Project</a>
+      <a class="nav-cta" href="https://github.com/aliasfoxkde/FireCraft" target="_blank" rel="noreferrer">GitHub ↗</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+  <section class="page-hero">
+    <div class="wrap">
+      <p class="breadcrumb"><a href="./index.html">Home</a><span>/</span>Gallery</p>
+      <p class="eyebrow">Workspace captures</p>
+      <h1>The editor, as it<br><span class="muted">actually renders.</span></h1>
+      <p class="lede">Every image below carries its provenance. Captures are labelled with the build and date they came from; concept artwork is labelled as concept artwork so it is never mistaken for a screenshot.</p>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="wrap grid grid--2">
+      <figure class="shot reveal">
+        <div class="frame">
+          <div class="frame-bar">
+            <span class="frame-dots"><i></i><i></i><i></i></span>
+            <span class="frame-title">capture · 2026-11-04</span>
+          </div>
+          <img src="./assets/app-main.png" width="1280" height="800" alt="FireCraft workspace: menu bar and tool strip above a canvas with a selected vector object, layers and properties panels on the right.">
+        </div>
+        <figcaption>
+          <span><b>Editor workspace</b> — a vector object selected, panels docked.</span>
+          <span class="provenance">real capture · web bundle 2026-11-04 · 1280 × 800</span>
+        </figcaption>
+      </figure>
+
+      <figure class="shot reveal">
+        <div class="frame">
+          <div class="frame-bar">
+            <span class="frame-dots"><i></i><i></i><i></i></span>
+            <span class="frame-title">capture · mask stack</span>
+          </div>
+          <img src="./assets/mask-stack.png" width="1280" height="800" alt="FireCraft workspace with a mask stack on the canvas and the mask controls visible in a docked panel." loading="lazy">
+        </div>
+        <figcaption>
+          <span><b>Mask stack</b> — masked artwork with panel-level controls.</span>
+          <span class="provenance">real capture · 1280 × 800</span>
+        </figcaption>
+      </figure>
+
+      <figure class="shot reveal" style="grid-column:1/-1">
+        <div class="frame">
+          <div class="frame-bar">
+            <span class="frame-dots"><i></i><i></i><i></i></span>
+            <span class="frame-title">concept artwork · not a screenshot</span>
+          </div>
+          <img src="./assets/app-preview-dark.svg" width="1280" height="760" alt="Vector illustration of the FireCraft dark workspace: the flame mark on the artboard with path nodes on its outline, a layers list, and an optimize preview." loading="lazy">
+        </div>
+        <figcaption>
+          <span><b>Dark workspace study</b> — the project's own flame artwork under edit. This is a drawn mock-up, not a screen capture.</span>
+          <span class="provenance">vector concept · labelled mock-up</span>
+        </figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="section section--edge">
+    <div class="wrap">
+      <div class="callout callout--info">
+        <span aria-hidden="true">i</span>
+        <p style="margin:0"><b>How captures are handled.</b> Screenshots come from identified builds and real workflows. When a capture is older than the current release it stays visible only with its build date, so the site never implies that an old workspace is today's workspace. Concept art is never presented as a capture.</p>
+      </div>
+      <p class="small dim" style="margin-top:1rem">Want your artwork here? Open an issue with the document and a description of the workflow — captures of real projects are more useful than empty canvases.</p>
+      <div class="actions" style="margin-top:1rem">
+        <a class="btn btn--ghost" href="https://github.com/aliasfoxkde/FireCraft/issues" target="_blank" rel="noreferrer">Share a capture ↗</a>
+        <a class="btn btn--primary" href="./downloads.html">Download FireCraft</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <div class="footer-grid">
+      <div>
+        <a class="brand" href="./index.html" aria-label="FireCraft home">
+          <img src="./assets/firecraft-mark.svg" alt="" width="34" height="34">
+          <span>Fire<span class="brand-hot">Craft</span></span>
+        </a>
+        <p class="small muted" style="margin-top:.9rem;max-width:34ch">Free, open-source creative software. Vector and bitmap in one editable document, built in Rust.</p>
+      </div>
+      <div>
+        <h4>Product</h4>
+        <ul>
+          <li><a href="./features.html">Features</a></li>
+          <li><a href="./gallery.html">Gallery</a></li>
+          <li><a href="./formats.html">Formats</a></li>
+          <li><a href="./downloads.html">Downloads</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Project</h4>
+        <ul>
+          <li><a href="./project.html">About</a></li>
+          <li><a href="./project.html#roadmap">Roadmap</a></li>
+          <li><a href="./docs.html">Documentation</a></li>
+          <li><a href="https://github.com/aliasfoxkde/FireCraft/blob/main/LICENSE" target="_blank" rel="noreferrer">License</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Community</h4>
+        <ul>
+          <li><a href="https://github.com/aliasfoxkde/FireCraft" target="_blank" rel="noreferrer">Source code</a></li>
+          <li><a href="https://github.com/aliasfoxkde/FireCraft/issues" target="_blank" rel="noreferrer">Issues</a></li>
+          <li><a href="https://github.com/aliasfoxkde/FireCraft/blob/main/.github/CONTRIBUTING.md" target="_blank" rel="noreferrer">Contributing</a></li>
+          <li><a href="https://github.com/aliasfoxkde/FireCraft/blob/main/docs/ATTRIBUTION.md" target="_blank" rel="noreferrer">Attribution</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-legal">
+      <p>© <span id="year">2026</span> FireCraft contributors. Licensed under Apache-2.0.</p>
+      <p>Adobe and Fireworks are trademarks of Adobe Inc. FireCraft is independent and not affiliated with Adobe.</p>
+    </div>
+  </div>
+</footer>
+<script src="./app.js" defer></script>
+</body>
+</html>
