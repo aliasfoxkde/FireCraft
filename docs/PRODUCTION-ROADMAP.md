@@ -13,7 +13,7 @@
 
 | Dimension | Value | Source |
 |---|---|---|
-| Latest release | `v0.2.5` (2026-11-03) | `docs/TASKS.md` |
+| Latest release | `v0.2.6` (2026-11-24) | `docs/TASKS.md` |
 | Latest commit | `365c8bc4` (2026-11-17, toolchain pin gate) | `log/devlog.md` |
 | Engine commands | 257 registered, 257 bound = **100% reachable** | devlog 2026-11-16 |
 | Menu census | 298 items, 2 inert | devlog 2026-11-16 |
@@ -22,7 +22,7 @@
 | Coverage | 81.1% lines / 78.7% functions | SCOREBOARD.tsv |
 | CI gate | Green (~18 min) | devlog |
 | God files >2,000 lines | 18 (largest `shell/mod.rs` ~7,993) | EXECUTION-2026-11-15 |
-| Live web deploy | Unattributable — different bytes than v0.2.5 | ARTIFACT-MATRIX.md §Live |
+| Live web deploy | WASM loaded via proxy Worker; deployment reconciled in PR #184 | PR #184 |
 | Release artifacts | 6 published (Linux tar.gz, DEB, web ZIP, CLI, checksums); 7 NOT STARTED; 4 DEFERRED | ARTIFACT-MATRIX.md §Status counts |
 | Release certification | **None** — no signing, no provenance | ARTIFACT-MATRIX.md §rung ceiling |
 | Release scope | decision 0075: recommended, awaiting maintainer approval | TASKS.md |
@@ -95,7 +95,7 @@ The phases are ordered by **value per hour**: fix the measurement and deployment
 - **What:** T8's animation timeline landed strip/timing/onion/playback. Remaining: document-level loop count (CS6's `{loopCount:%Ai}`), state thumbnails, per-side opacity.
 - **Effort:** S.
 
-### B-6. Cover the remaining 71 open issues
+### B-6. Remaining open issues (42 after 2026-11-24 triage)
 - **What:** Classify each as: open-valid, duplicate, fixed-on-main, blocked externally, cannot reproduce, or obsolete.
 - **Fix:** close fixed/duplicate/obsolete with evidence; leave open-valid with owner + next action.
 - **Effort:** M (1–2 hours of triage).
@@ -118,7 +118,7 @@ The phases are ordered by **value per hour**: fix the measurement and deployment
 - **Verification:** `head.firecraft-web.pages.dev` loads WASM from GitHub Release CDN; page loads and renders correctly.
 - **Note:** The wasm32 build with rustc 1.100.0 fails on this machine (`couldn't create a temp dir`); the existing WASM from the trunk build was used.
 
-### C-2. Republish v0.2.5 web bundle to Cloudflare Pages ✅ DONE (2026-11-20)
+### C-2. Republish v0.2.6 web bundle to Cloudflare Pages ✅ DONE (2026-11-20)
 
 - **What:** Deploy `xtask dist --web` output (HTML + JS only) to `firecraft-web.pages.dev`.
 - **Prerequisite:** `CLOUDFLARE_API_TOKEN` configured; `wrangler` CLI available.

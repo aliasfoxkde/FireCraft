@@ -160,7 +160,7 @@ Eighteen have a Window-menu row; five do not.
 | URL (43414, `cmd_Panels_URLMgr`) | panel; link + alt text, Apply | **implemented** | `S/panels_web.rs::url_panel` | — |
 | Behaviors (43413) | panel; list, Add menu, Add swap image | **implemented** | `S/panels_web.rs::behaviors_panel` | — |
 | Tools (35058, `cmd_Toolbars_Art`) | the left tool strip | **implemented** | `S/canvas_ui.rs::tools_panel` | 22.2 |
-| **Optimize** (43409, `cmd_Panels_ExportPanel`) | panel; page export settings (`EXPv`) and preview | **implemented** — base panel landed 2026-11-06; full encoder-backed settings, format-aware clearing and preview are in open PR #118, not on main | `S/panels.rs::optimize_panel`, `M` id 43409 | 20.2 / PR #118 |
+| **Optimize** (43409, `cmd_Panels_ExportPanel`) | panel; page export settings (`EXPv`) and preview | **implemented** — base panel landed 2026-11-06; full encoder-backed settings, format-aware clearing and preview landed with the shell-lineage train (#118, merged into #107) | `S/panels.rs::optimize_panel`, `M` id 43409 | 20.2 / PR #118 |
 | **Common Library** (45816) | panel; lists the document's own symbols (drag-to-place like Document Library) | **partial** — CS6's *shipped* libraries are proprietary resources and are deliberately not copied; the panel says so | `S/panels_web.rs::common_library_panel`, `M` id 45816 | 22.1 |
 | **CSS Properties** (49125) | panel; the selected slice's generated CSS, read-only | **partial** — CS6 edits properties here; FireCraft's edit surfaces are the slice verbs | `S/panels_web.rs::css_properties_panel`, `M` id 49125 | 22.1 |
 | **Find and Replace** (43402, `cmd_PanelFind`) | panel; find over text objects with per-match replace / replace-all (`text.setText`) | **implemented** — landed 2026-11-06 | `S/panels_web.rs::find_replace_panel`, `M` id 43402 | — |
@@ -294,7 +294,7 @@ the matrix does not read them as missing CS6 features.
 
 | Addition | Why it exists | Evidence |
 |---|---|---|
-| Command palette (Ctrl+P) over the whole registry | CS6 had no palette; FireCraft's registry is 253 commands and a palette makes every one reachable | `S/palette.rs` |
+| Command palette (Ctrl+P) over the whole registry | CS6 had no palette; FireCraft's registry is 257 commands and a palette makes every one reachable | `S/palette.rs` |
 | Rust-native `.fw.png` engine, CLI, journal, MCP server | headless automation and scripting parity beyond CS6's surface | `crates/app-cli` |
 | ExtendScript host running the CS6 `.jsf` corpus | scripting parity, headless | `crates/scripting` |
 | The **Web Layer** panel | FireCraft's own always-present web panel; CS6's web state lives in the Properties/Slices panels | `S/dialogs.rs::web_panel` |

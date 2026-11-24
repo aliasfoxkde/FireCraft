@@ -673,8 +673,8 @@ scope, so no license path is attempted.
 
 | Fact | Value |
 |---|---|
-| Live site | <https://firecraft-web.pages.dev> (manifest differs from local dist; deployed revision unknown) |
-| Latest release | v0.2.5 (2026-11-03) |
+| Live site | <https://firecraft-web.pages.dev> (WASM loads via proxy Worker at `firecraft-wasm-proxy.cyopsys.workers.dev`; deployment reconciled in PR #184) |
+| Latest release | v0.2.6 (2026-11-24) |
 | Coverage floors | 81.1% lines / 78.7% functions (rising-only; `xtask/src/coverage.rs`) |
 | CI image | `firecraft-ci-rust:1` — rebuild + re-ship when ANY lockfile moves |
 | GitForge API | 127.0.0.1:42780, bearer via `~/.config/gitforge/mkinney-credentials.env` |

@@ -4,7 +4,7 @@ FireCraft's GUI, CLI, scripting host, journal, MCP server and browser bridge are
 
 ## Command coverage
 
-The engine currently registers **253 command IDs**. The latest shell-reachability measurement is **257/257 (100%)** in the CS6-visible UI. The command palette exposes the full registry; the reachability metric deliberately measures the designed shell surface, not the palette. DOM/API parity is tracked separately at 268 carried / 3 partial / 0 missing of 356 verbs.
+The engine currently registers **257 command IDs**. The latest shell-reachability measurement is **257/257 (100%)** in the CS6-visible UI. The command palette exposes the full registry; the reachability metric deliberately measures the designed shell surface, not the palette. DOM/API parity is tracked separately at 268 carried / 3 partial / 0 missing of 356 verbs.
 
 These figures must not be described as complete GUI parity. The [CS6 user-visible matrix](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/CS6-PARITY.md) records menus, tools, panels, inspector fields, workflows and evidence-gated gaps.
 

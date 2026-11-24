@@ -20,7 +20,7 @@ A DOM command being carried does not prove that its GUI surface exists. A row ap
 |---|---|
 | User-visible parity inventory | Complete and published (T26); update it as real behavior lands |
 | Phase 22 — CS6 shell fidelity | In progress; panel inventory, tool strip, adaptive context menus and icon pack landed; inspector/chrome follow-ups remain |
-| Phase 20 — daily-driver editor workflows | Partially delivered: text editing and multi-document/history/slice workflows on main; Optimize/timeline in PR #118; mask stack in PR #113 |
+| Phase 20 — daily-driver editor workflows | Partially delivered: text editing and multi-document/history/slice workflows on main; Optimize/timeline (#118) and mask stack (#113) merged |
 | Phase 21 — modern additions | User-facing deliverables landed: autosave/recovery, HiDPI, command palette, preferences, accessibility work and scripting |
 | Phase 19.6 — menu wiring | Complete: 2 inert of 296 rows; eight explicit feature/evidence gates remain |
 

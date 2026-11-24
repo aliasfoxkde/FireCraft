@@ -129,15 +129,15 @@ authoritative source that supersedes this table.
 
 | Dimension | Status | Notes |
 |---|---|---|
-| **Shipped** | v0.2.5 on GitHub (2026-11-03) | ✅ `v0.2.4` was released without a tag; see PROGRESS |
+| **Shipped** | v0.2.6 on GitHub (2026-11-24) | ✅ WASM CDN via proxy Worker deployed; v0.2.5 was released without a tag; see PROGRESS |
 | **CI** | GitHub Actions: `fmt` (fast) + `gate` (`xtask ci-no-fmt`); GitForge 7-job pipeline | ✅ |
 | **aegis** | Baseline clean; scan 0.17 s | `.aegisignore` excludes `target/`, `web/dist/`, `fuzz/`; baseline is content-keyed (decision 0074), which supersedes the rule-class and per-finding suppression of decision 0070 |
 | **Coverage** | floors 81.1 % lines / 78.7 % funcs (`xtask/src/coverage.rs`), measured with rustc 1.99.1 | The toolchain is pinned (decision 0102): rustc 1.100.0 reads the same tree 4.9 points lower, so a floating `stable` moved the floor. Local `llvm-cov` fails on stale artifacts; CI works |
 | **Code** | 144,122 Rust lines | No `unwrap()`/`panic!()` outside `#[cfg(test)]`; no `todo!`/`unimplemented!` |
-| **Registry** | 253 commands | Every command executable from the GUI via the Ctrl+P palette (19.4); menu reachability is the remaining gap |
+| **Registry** | 257 commands | 257/257 bound (100%) — reachability wave PR #143/#150 merged 2026-11-16; every command executable from the GUI via the Ctrl+P palette |
 | **Menu reachability** | 2 inert of 296 items | *live* — derived + gated (`menus::tests::inert_count_never_rises`) |
 | **Parity** | 268 C / 3 P / 0 M / 85 N | 3 P rows are evidence-gated (Phase 12 oracle) |
-| **Decision docs** | 92 (0001–0092) | Next: 0093 |
+| **Decision docs** | 103 (0001–0103+) | Next: 0104 |
 | **Web bundle** | 21,608,249 B observed; 25,000,000 B warning / 50,000,000 B hard cap | Policy decision 0090; web build uses Rust opt-level=z and Binaryen wasm-opt=z. Cap is a guardrail, not a target; A/B size evidence remains required |
 
 

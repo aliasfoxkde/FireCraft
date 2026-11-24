@@ -69,9 +69,7 @@ This is a dated execution baseline, not a substitute for refreshing GitHub
 before each session. The current live task ledger and release artifact matrix
 are authoritative for task and platform status.
 
-- **Canonical source:** `main` at `b61f198` on 2026-11-11. The latest
-  published version remains `v0.2.5` (2026-11-03); the source tree has
-  advanced beyond that tag.
+- **Canonical source:** `main` at `e14aa291` on 2026-11-24. The latest published version is `v0.2.6` (2026-11-24).
 - **Editor surface:** All 257 registered engine commands are bound in the
   CS6-visible shell surface (257/257 = 100%). The DOM API parity is
   268 carried / 3 partial / 0 missing of 356 verbs (separate measurements;
@@ -82,8 +80,7 @@ are authoritative for task and platform status.
   `docs/CS6-PARITY.md`.
 - **Recent delivered work:** Phase 21's user-facing deliverables and Phase
   20.1/20.5–20.7 landed in the 2026-11-11 shell-lineage train (#107).
-  Optimize/timeline work is in open PR #118; the mask stack is in open
-  PR #113. These are not shipped until merged.
+  Optimize/timeline (#118) and mask stack (#113) are merged into main.
 - **WASM/release policy:** the web-only Cargo `opt-level=z` and Binaryen
   `wasm-opt=z` path is scoped to Trunk; decision 0090 sets a
   25,000,000-byte investigation warning and 50,000,000-byte hard ceiling.
@@ -92,13 +89,9 @@ are authoritative for task and platform status.
   hosted on a GitHub Release and loaded at runtime. The 21,608,249-byte
   observation from 2026-11-10 is a dated feature-branch measurement, not
   a new main-branch release receipt.
-- **Deployment:** #104 reconciled the deployed JavaScript, Wasm and
-  `appinfo` with v0.2.5 release bytes; Cloudflare injects an analytics
-  beacon into the served HTML, which explains the remaining HTML hash
-  difference. Republish from the canonical release artifact is pending
-  (T18).
+- **Deployment:** The WASM CDN proxy Worker (`firecraft-wasm-proxy.cyopsys.workers.dev`) serves the WASM binary from GitHub Releases v0.2.6 with CORS headers, resolving the cross-origin WASM fetch (issue #183). The live site loads from the proxy Worker instead of direct GitHub fetches. Deployment reconciliation recorded in PR #184.
 - **Release certification:** Linux x86_64 desktop/CLI archives, DEB and
-  the web bundle have published receipts for v0.2.5. Off-fleet Windows,
+  the web bundle have published receipts for v0.2.6. Off-fleet Windows,
   macOS, AppImage and Flatpak recipes are not target-native release
   receipts. No target may be called certified without build, install,
   launch, functional smoke and publication evidence. See

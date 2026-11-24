@@ -21,9 +21,7 @@
 
 - **Source and release:** canonical `main` is `ad3fc655` after the
   reachability wave (#143) and the artwork consolidation (#144). The
-  latest published release remains `v0.2.5` (2026-11-03); current source has
-  moved beyond that tag. See [PROGRESS.md](PROGRESS.md) for dated build,
-  CI and deployment receipts.
+The latest published release is `v0.2.6` (2026-11-24). The WASM CDN proxy Worker (`firecraft-wasm-proxy.cyopsys.workers.dev`) serves the 95.6 MB WASM binary from GitHub Releases v0.2.6 with CORS headers, loading from the proxy instead of direct GitHub fetches. See [PRODUCTION-TODO.md](PRODUCTION-TODO.md) and PR #184 for deployment receipts.
 - **Engine and parity:** 257 registered commands; the CS6 DOM matrix is
   268 carried / 3 partial / 0 missing of 356 verbs. The latest
   shell-reachability measurement is 257/257 = 100% (2026-11-16, after
@@ -35,18 +33,13 @@
   complete; eight additional rows are explicitly feature/evidence-gated.
 - **Delivered work:** Phase 21's user-facing deliverables landed with
   #107. Phase 20.1–20.3 and 20.5–20.7 are on main (Optimize/timeline
-  #118 merged); the mask stack is in open PR #113. Check the live
+  #118 merged); the mask stack (#113) is merged into main. Check the live
   [TASKS.md](TASKS.md) before selecting work.
 - **Phase 22:** screenshot acceptance and panel/tool/context-menu
   foundations landed; bitmap inspector gaps and remaining CS6 chrome
   keep the phase partial. The full user-visible inventory is
   [CS6-PARITY.md](CS6-PARITY.md).
-- **Release/deployment:** #104 reconciled the deployed JavaScript,
-  Wasm and WebOS `appinfo` with v0.2.5 release bytes. Cloudflare's
-  analytics injection explains the remaining HTML hash difference.
-  Republish from the exact release artifact is pending (T18). No
-  non-Linux native artifact is certified by recipe or cross-compile
-  alone; see [ARTIFACT-MATRIX.md](release/ARTIFACT-MATRIX.md).
+- **Release/deployment:** The WASM CDN proxy Worker resolves the cross-origin WASM fetch (issue #183). The live site loads the WASM binary through the CORS-enabled proxy Worker at `firecraft-wasm-proxy.cyopsys.workers.dev`. Deployment reconciliation (PR #184) records bundle hashes and manifest verification. No non-Linux native artifact is certified by recipe or cross-compile alone; see [ARTIFACT-MATRIX.md](release/ARTIFACT-MATRIX.md).
 - **Open integration work:** recheck each PR's current state before
   depending on it — the previously open #118, #120, #122 and #123 have
   all merged.
