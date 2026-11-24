@@ -2829,7 +2829,7 @@ impl Shell {
     /// shell hands the handle to the installed drop sink (the web
     /// crate reads the file and calls back through
     /// [`Shell::load_document_bytes`]); natively the read is direct.
-    fn dropped_files(&mut self, ctx: &egui::Context, palette: &theme::Palette) {
+    fn dropped_files(&mut self, ctx: &egui::Context) {
         // Drop overlay: highlight the canvas when files are hovered
         // or dropped — gives visual feedback that the canvas accepts
         // file drops for import.
