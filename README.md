@@ -156,8 +156,10 @@ The GUI and automation interfaces are intended to drive the same engine commands
 | [Gaps](docs/GAPS.md) | Historical audit of what was missing (2026-10-21); current work is on the [task board](docs/TASKS.md) |
 | [Doc index](docs/README.md) | The full documentation map |
 | [Releasing](docs/RELEASING.md) | Artifact build and deployment procedures |
+| [Repository consolidation plan](docs/REPOSITORY-CONSOLIDATION-AND-MODERNIZATION-PLAN.md) | Phased branch/PR cleanup, refactoring, feature transfer, UX polish, reliability, and release plan |
+| [Repository consolidation handoff](docs/REPOSITORY-CONSOLIDATION-HANDOFF.md) | Direct execution instructions and first-run checklist for the integration agent |
 | [Marketing site roadmap](docs/MARKETING-SITE-ROADMAP.md) | Public website scope, Cloudflare Pages deployment, and launch gates |
-| [Creative-app benchmark](docs/research/creative-app-benchmark.md) | Product patterns from Krita, Photopea, and Pixlr, with licensing boundaries |
+| [Creative-app benchmark](docs/research/creative-app-benchmark.md) | Product patterns and code-reuse boundaries for Krita, GIMP, Inkscape, Photopea, Pixlr, Penpot, and SVG-Edit |
 | [Progress](docs/PROGRESS.md) | Session-level status and historical progress |
 | [Planning](docs/PLANNING.md) | Product plan, file-format notes, and architecture |
 | [Handoff](docs/HANDOFF.md) | Engineering handoff and agent runbook |
