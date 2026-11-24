@@ -161,6 +161,21 @@
   drags, engine commands, and the postMessage bridge all work;
   console clean. Brush no-op on an empty document is by-design
   (paint targets require an image under the pointer).
+- **Production republished, then superseded — reconciliation still
+  open (2026-11-24):** a maintainer-directed P0 fix republished the
+  live site from `main` @ `6c68c9e3` (Pages deployment `7f9adb41`,
+  bundle `firecraft-web-d25b8751233853ef`, wasm 15 783 714 B
+  `44652f43…`); every manifest file matched the served bytes (the
+  HTML delta is the injected Cloudflare analytics beacon only) and a
+  headless-browser proof passed (painted canvas 1280×800,
+  same-origin wasm 200, zero CORS/page errors). Later the same day
+  a parallel release experiment republished over it (deployment
+  `29225fe2`, bundle `3841839c20c25d86` from `feat/wasm-cdn-deploy`;
+  proof PASS but no `MANIFEST.sha256` served), and the maintainer
+  directed it stay live. B-6 therefore stays open in a new form —
+  live names no release and now serves no manifest — and closes with
+  the v0.2.7 tagged publish. Both receipts:
+  [`tasks/T18-release.md`](tasks/T18-release.md).
 - **Phase 2/11 complete (2026-10-21):** AVIF policy (dec. 0064),
   HEIC refusal (dec. 0065), import surface parity, lossy WebP export
   (`libwebp-sys`, `lossy-webp` feature, native only). All GAPS.md
