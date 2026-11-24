@@ -366,3 +366,17 @@ Stop and report when:
 - Production deployment would require changing account configuration or DNS without explicit owner authorization.
 
 The public site must be accurate before it is impressive, and impressive without becoming a second application to maintain.
+
+
+## 16. Cloudflare Pages reference documentation
+
+Use current official documentation during deployment work; account configuration and Wrangler behavior can change.
+
+- [Pages monorepos](https://developers.cloudflare.com/pages/configuration/monorepos/) — separate projects, root directories, and project limits.
+- [Pages build configuration](https://developers.cloudflare.com/pages/configuration/build-configuration/) — root directory, build command, and output directory.
+- [Pages build watch paths](https://developers.cloudflare.com/pages/configuration/build-watch-paths/) — reduce unrelated builds for multiple projects in one repository.
+- [Pages Git integration](https://developers.cloudflare.com/pages/configuration/git-integration/) — branch deployments and preview behavior.
+- [Pages GitHub integration](https://developers.cloudflare.com/pages/configuration/git-integration/github-integration/) — repository integration and pull-request previews.
+- [Deploy static HTML to Pages](https://developers.cloudflare.com/pages/framework-guides/deploy-anything/) — static output and direct deployment workflow.
+
+Do not treat this documentation as evidence that FireCraft's account is already configured. The live account and project settings must be inspected independently.
