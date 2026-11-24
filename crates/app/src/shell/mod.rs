@@ -2847,20 +2847,20 @@ impl Shell {
                     "firecraft_drop_overlay",
                 )),
             ));
-            p.rect_filled(screen, 0.0, palette.selection.gamma_multiply(0.10));
+            p.rect_filled(screen, 0.0, Color32::from_rgb(0x2f, 0x5d, 0x8a).gamma_multiply(0.10));
             p.rect_stroke(
                 screen.shrink(4.0),
                 4.0,
-                egui::Stroke::new(2.0, palette.accent),
+                egui::Stroke::new(2.0, Color32::from_rgb(0x50, 0x7e, 0xab)),
                 egui::StrokeKind::Inside,
             );
             let hint_r =
                 egui::Rect::from_center_size(screen.center(), egui::vec2(340.0, 44.0));
-            p.rect_filled(hint_r, 4.0, palette.panel.gamma_multiply(0.95));
+            p.rect_filled(hint_r, 4.0, Color32::from_rgb(0x3c, 0x3c, 0x3c).gamma_multiply(0.95));
             p.rect_stroke(
                 hint_r,
                 4.0,
-                egui::Stroke::new(1.0, palette.accent),
+                egui::Stroke::new(1.0, Color32::from_rgb(0x50, 0x7e, 0xab)),
                 egui::StrokeKind::Middle,
             );
             p.text(
@@ -2868,18 +2868,9 @@ impl Shell {
                 egui::Align2::CENTER_CENTER,
                 "Drop Image / SVG to Import onto Canvas",
                 egui::FontId::proportional(12.5),
-                palette.text,
+                Color32::from_rgb(0xdd, 0xdd, 0xdd),
             );
         }
-        let dropped = if hovered.is_empty() {
-            dropped
-        } else {
-            dropped
-        };
-        let Some(file) = dropped.into_iter().next() else {
-            return;
-        };
-        let dropped: Vec<_> = ctx.input(|input| input.raw.dropped_files.clone());
         let Some(file) = dropped.into_iter().next() else {
             return;
         };
