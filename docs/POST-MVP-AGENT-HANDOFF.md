@@ -1,14 +1,14 @@
 # FireCraft — Post-MVP Agent Handoff and Execution Contract
 
 > **Purpose:** instructions for the AI/coding agent that begins post-MVP planning after the current FireCraft development work is complete.
-> **Read first:** [AGENTS.md](../AGENTS.md), [TASKS.md](TASKS.md), [NEXT.md](NEXT.md), [HANDOFF.md](HANDOFF.md), [PROGRESS.md](PROGRESS.md), [CS6-PARITY.md](CS6-PARITY.md), [FEATURES.md](FEATURES.md), and [POST-MVP-ROADMAP.md](POST-MVP-ROADMAP.md).
+> **Read first:** [AGENTS.md](../AGENTS.md), [TASKS.md](TASKS.md), [NEXT.md](NEXT.md), [HANDOFF.md](HANDOFF.md), [PROGRESS.md](PROGRESS.md), [CS6-PARITY.md](CS6-PARITY.md), [FEATURES.md](FEATURES.md), and [POST-MVP-ROADMAP.md](POST-MVP-ROADMAP.md), [MARKETING-SITE-ROADMAP.md](MARKETING-SITE-ROADMAP.md), and [research/creative-app-benchmark.md](research/creative-app-benchmark.md).
 > **This is not authorization to start implementation immediately.** The first deliverable is a verified baseline and a deduplicated task plan.
 
 ---
 
 ## 1. Mission
 
-Convert the strategic scope in [POST-MVP-ROADMAP.md](POST-MVP-ROADMAP.md) into an evidence-backed, prioritized, implementation-ready post-MVP backlog.
+Convert the strategic scope in [POST-MVP-ROADMAP.md](POST-MVP-ROADMAP.md) into an evidence-backed, prioritized, implementation-ready backlog. Include the independent public-site workstream and the creative-app benchmark, but audit the current state before creating tickets.
 
 The project owner has stated that substantial UI/UX and feature work is still local/in progress. Do not assume the public main branch contains all current work. Do not discard, overwrite, reset, clean, stash, or replace any local changes to make the repository match a remote snapshot.
 
@@ -27,7 +27,8 @@ Before making code changes or creating implementation tasks:
 7. Read TASKS.md, NEXT.md, HANDOFF.md, PROGRESS.md, CS6-PARITY.md, FEATURES.md, PLANNING.md, PRODUCTION-READINESS-PLAN.md, and the current relevant task tickets.
 8. Compare current source and generated evidence to every relevant status statement. Treat dated counts as historical until regenerated.
 9. Identify whether any work described in the strategic plan is already implemented in local branches or uncommitted files.
-10. Preserve current work and report conflicts before touching shared files.
+10. Inspect the existing site/ source, root wrangler.toml, README marketing links, docs/HANDOFF.md deployment recipe, Pages project topology, and currently deployed URLs/revisions. Confirm whether firecraft-site exists and how it deploys; do not assume dashboard state from configuration alone.
+11. Preserve current work and report conflicts before touching shared files.
 
 **Stop condition:** if current work is uncommitted or integration is unstable, do not begin a competing feature branch or edit shared implementation files. Produce the audit and proposed merge-safe sequence first.
 
@@ -56,6 +57,8 @@ For each status record:
 
 Do not classify a feature as complete because a command ID exists. Verify a real workflow at the appropriate surface.
 
+For SITE-01, audit the existing static site and its live deployment as separate evidence sources. Verify every feature/platform/format claim against a current build; verify screenshots against their source build; verify download URLs against published release assets; and verify the Pages project, deployment mode, production branch, domain, output directory, and deployed SHA. Mark unknown dashboard or DNS state UNVERIFIED rather than inferring it from wrangler.toml.
+
 ### 3.1 Mandatory audit categories
 
 At minimum, audit:
@@ -82,6 +85,7 @@ At minimum, audit:
 - Community reporting, GitHub integration, and public roadmap.
 - Collaboration, version history, and AI-assisted editing.
 - Platform builds, installers, WebOS integration, and target-native evidence.
+- Public marketing website, its existing static implementation, content/claim accuracy, asset provenance, accessibility/SEO, release downloads, and separate Cloudflare Pages deployment.
 
 ### 3.2 Specific repository evidence rules
 
@@ -143,7 +147,7 @@ Every ticket must include:
 17. Risks, rollback, and stopping condition.
 18. Evidence required to close the task.
 
-Use the workstream IDs in POST-MVP-ROADMAP.md as parent identifiers. Create a limited number of tickets per iteration; do not pre-author detailed implementation tickets for every hypothetical future feature before dependencies are understood.
+Use the workstream IDs in POST-MVP-ROADMAP.md as parent identifiers. For creative-app benchmark ideas, map Krita/Photopea/Pixlr patterns to existing source and tests before proposing new functionality; follow the license and clean-room boundaries in research/creative-app-benchmark.md. For the public site, use SITE-01 and MARKETING-SITE-ROADMAP.md. Search existing issues and task tickets before creating any child ticket. Create a limited number of tickets per iteration; do not pre-author detailed implementation tickets for every hypothetical future feature before dependencies are understood.
 
 ## 6. Recommended sequencing
 
@@ -155,6 +159,22 @@ Use this order unless the audit provides evidence for a better one:
 - Validate merge order and branch cleanup.
 - Establish a clean, tested MVP baseline.
 - Reconcile current docs and generated evidence.
+
+### Track M — Public marketing site (separate deployment)
+
+After Gate A has stabilized the integrated editor baseline, audit and improve the existing site/ application as a separately owned static-site track. The remote snapshot already contains site/index.html, site/styles.css, site/app.js, site/assets/, and a root Wrangler configuration naming firecraft-site; do not scaffold a second site.
+
+Required order:
+1. Audit current local site work, current site content, screenshots, brand asset provenance, README links, and all site-related branches/PRs.
+2. Verify Cloudflare project topology and deployment mode. Keep firecraft-site (marketing) separate from firecraft-web (editor output dist/web). Never repoint one project at the other's output.
+3. Produce a feature-claim evidence matrix and screenshot refresh plan before rewriting copy.
+4. Create/reconcile SITE-01 tickets for content, responsive design, gallery, downloads, SEO, accessibility, privacy, and deployment.
+5. Implement in small site-only slices. Preserve the static architecture unless a measured requirement justifies a framework.
+6. Run site-specific automated and manual browser checks. A Rust CI pass is not a substitute for site/browser testing.
+7. Deploy preview and obtain review. Production deployment requires explicit owner approval, a verified project/domain, and a deployment receipt.
+8. Add the verified site deployment procedure to docs/HANDOFF.md and update public links only after production verification.
+
+Keep this track independent of editor/WASM release work. Parallelize only after file ownership and Pages project boundaries are clear.
 
 ### Gate B — Reliability and usability
 
@@ -241,6 +261,7 @@ Use focused crate/test commands during development and the full gate before fina
 - Plugin sandbox and malicious-package tests for extensibility.
 - Privacy/redaction tests for diagnostics and issue submission.
 - Assistive-technology tests with OS, tool version, and workflow receipts.
+- For site/ changes: validate static output, metadata, links, sitemap/robots, release API fallback and URL allowlisting; run Playwright at desktop/tablet/mobile viewports; check keyboard, focus, reduced motion, text scaling, console/network errors, and axe/manual accessibility; record Lighthouse results. Deploy and verify a Pages preview independently from the editor build.
 
 Never treat a green compile as proof that a workflow works.
 
@@ -276,6 +297,8 @@ Stop and report rather than guessing when:
 - A user-facing claim cannot be tested on the target platform.
 - An issue appears to duplicate an existing one but the relationship is uncertain.
 - A community integration would require storing privileged tokens in the client.
+- The actual marketing Pages project, deployment mode, domain, or production source revision cannot be verified.
+- Production-site deployment or DNS changes would require owner approval or account access the agent does not have.
 - A plugin or AI integration cannot be adequately permissioned and sandboxed.
 
 A partial audit with clear evidence and blockers is better than a large speculative implementation.
