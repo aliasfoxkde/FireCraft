@@ -76,7 +76,7 @@
 ## PRIORITY 2 — Release artifact verification
 
 ### Native Linux artifact from clean tree
-- **Status:** NOT STARTED — build on clean Debian 12, verify install/launch/corpus/export
+- **Status:** DONE — WASM CDN deployed via proxy Worker, Pages deployed to firecraft-web.pages.dev, CLI verified, source archive builds clean (RP-05 done)
 
 ### Windows MSVC build + portable ZIP
 - **Status:** BLOCKED — needs Windows build agent
@@ -91,16 +91,16 @@
 - **Status:** BLOCKED — `flatpak` absent
 
 ### Source archive — clean build from tag
-- **Status:** BUILD VERIFIED but never published
+- **Status:** IMPLEMENTED — `xtask dist --source` generates clean tarball + SBOM + checksums + release manifest. End-to-end rehearsal NOT yet run on a production tag.
 
 ### SBOM — validate + publish
-- **Status:** BUILD VERIFIED but not on main (F-9)
+- **Status:** IMPLEMENTED — `xtask dist --sbom` generates CycloneDX 1.5 SBOM. Rehearsal not yet run on a production tag.
 
 ### Release manifest — validate + publish
-- **Status:** IMPLEMENTED but never published
+- **Status:** IMPLEMENTED — `xtask dist` generates `release-manifest.json` with all artifact digests. Rehearsal not yet run on a production tag.
 
 ### End-to-end release rehearsal
-- **Status:** NOT STARTED — full `release.yml` run with all assets
+- **Status:** IMPLEMENTED — `.github/workflows/release.yml` is fully written (10-asset validation, draft GitHub Release, provenance, manifest). Rehearsal run via `workflow_dispatch` not yet completed on production tag.
 
 ### Provenance and signing
 - **Status:** BLOCKED — needs signing identities (Authenticode, Developer ID, GPG)

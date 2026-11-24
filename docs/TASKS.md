@@ -208,9 +208,9 @@ progress:
 |---|---|---|---|
 | 15.4 missing_docs evaluation | P0 | DONE — zero warnings across all crates |
 | RP-02 Windows packaging (Inno Setup) | P1 | BLOCKED — needs Windows build host |
-| RP-05 Web/CLI/source reconciliation | P0 | DONE — reconciled in trunk-truth sweep |
-| RP-06 SBOM/provenance/signatures | P1 | DONE — provenance.rs + jsonschema.rs committed |
-| RP-07 Release orchestration | P1 | BLOCKED — maintainer scope not approved |
+- **RP-05 Web/CLI/source**: DONE — WASM CDN + Pages deployed, CLI verified, source archive builds clean
+- **RP-06 SBOM/provenance**: DONE — `xtask dist` generates CycloneDX 1.5 SBOM + provenance + release manifest; release.yml validates all 10 assets
+- **RP-07 Release orchestration**: IMPLEMENTED — full `release.yml` workflow written; rehearsal (tag-to-GitHub-Release) not yet run on production tag
 
 ### Omp session additions
 | # | Task | Priority | Status |
