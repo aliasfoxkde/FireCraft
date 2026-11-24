@@ -8,7 +8,7 @@ From the repository root, run a static HTTP server with site/ as its document ro
 
     python3 -m http.server 8080 --directory site
 
-Then open http://localhost:8080. The screenshot links to the tracked application screenshot at docs/img/app-main.png on the default branch. The logo is a self-contained SVG in site/assets/.
+Then open http://localhost:8080. The screenshot links to the tracked application screenshot at docs/img/app-main.png on the default branch. The logo is the tracked PNG at `site/assets/firecraft-mark.png`.
 
 ## Cloudflare Pages deployment
 
