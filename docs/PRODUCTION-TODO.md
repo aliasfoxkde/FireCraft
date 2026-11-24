@@ -41,8 +41,8 @@
 - **Status:** NOT STARTED
 
 ### Missing `missing_docs` evaluation
-- **Status:** PENDING (T15.4)
-- **Action:** evaluate per-crate enablement in `xtask ci`
+- **Status:** ✅ DONE (2026-11-21, closed issue #29)
+- Zero `missing_docs` warnings across all crates.
 
 ### God file reduction — `shell/mod.rs` (~7,993 lines)
 - **Status:** PARTIAL (2026-11-21)
@@ -158,5 +158,16 @@
 ---
 
 ## Open issues to triage
+## Closed issues (2026-11-24 triage)
 
-- **71 open issues** — classify each: open-valid, duplicate, fixed-on-main, blocked externally, cannot reproduce, or obsolete
+- **#136** (Text depth) — All 257 commands bound, 257/257 = 100%
+- **#137** (Symbol depth) — All 16 symbol.* commands bound via States panel
+- **#78** (History rewind) — Phase 20.6 landed in #107 shell-lineage train
+- **#93** (Slice behaviors editing) — Phase 20.7 landed in #107 shell-lineage train
+- **#183** (WASM CORS) — WASM proxy Worker deployed
+- **#29** (missing_docs evaluation) — zero warnings across all crates
+- **#38** (DEB glibc floor) — Fixed in commit e14aa291
+- **#39** (DEB runtime deps) — X11/GL deps declared in DEB control
+
+**Current open issues: 42** (was 71 before triage)
+

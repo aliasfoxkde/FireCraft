@@ -6,7 +6,17 @@ git log order (newest first). The generation is additive: the
 entries already in this file are kept, because a squash merge
 leaves a branch's own commits unreachable from the log.
 
-Current version: **0.2.5**.
+Current version: **0.2.6**.
+
+## v0.2.6 (2026-11-24)
+
+### Changes
+
+- **app**: WASM CDN deployment via proxy Worker — loads WASM from GitHub Releases through CORS-enabled Worker, avoiding the 25 MB GitHub Pages per-object limit
+- **app**: drag-drop file overlay on canvas
+- **app**: smart guides rendering, lasso drag visual feedback, Ctrl+Enter text edit cancel
+- **app**: CS6 chrome improvements, panel/dialog polish, colors/constants refactoring
+
 
 ## Unreleased
 

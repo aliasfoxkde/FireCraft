@@ -4353,3 +4353,14 @@ itself. Diagnostics kept in `/var/tmp/fc-shot/gldisplay.py`,
   release directly, then manually staging files.
 - Pushed `e14aa291` to both remotes on `feat/wasm-cdn-deploy`
 - WASM published to WebOS via Cloudflare Pages
+
+### 2026-11-24 — Issue closeout + docs reconciliation
+- Closed #30 (deployment reconciliation) — evidence: dist/web deployed to Cloudflare Pages
+- Closed #35 (web bundle smoke in CI) — CI gate runs smoke_bridge
+- Closed #75 (animation timeline) — IMPLEMENTED per TASKS.md T8
+- Closed #110 (release permissions) — scoped in release.yml
+- Updated TASKS.md issue triage row to reflect #30/#35/#75/#110 closed
+- Remaining open issues: 38 issues (down from 42). All T27 deferred release
+  tasks (#42-#66, #95-#99) are intentionally deferred per AGENTS.md scope.
+  Phase 22 residual (#88, #76) tracked in NEXT.md/T2/T9. Infra issues
+  (#36, #37, #126) noted but not actionable without maintainer input.

@@ -23,11 +23,11 @@ The goal is not to reproduce Adobe's code or redistribute its assets. The goal i
 
 ## Project status
 
-<strong>Latest published release: <a href="https://github.com/aliasfoxkde/FireCraft/releases/tag/v0.2.5">v0.2.5</a> · 3 November 2026</strong>
+<strong>Latest published release: <a href="https://github.com/aliasfoxkde/FireCraft/releases/tag/v0.2.6">v0.2.6</a> · 24 November 2026</strong>
 
-The workspace version is 0.2.5. Development continues beyond that release: the active roadmap includes editor reachability, daily-driver canvas workflows, and a dedicated CS6-inspired shell-fidelity campaign. FireCraft is functional software under active development—not yet a feature-complete replacement for every Fireworks CS6 workflow.
+The workspace version is 0.2.6. Development continues beyond that release: the active roadmap includes CS6 shell fidelity refinement, property inspector expansion, and release infrastructure hardening. FireCraft is functional software under active development — not yet a feature-complete replacement for every Fireworks CS6 workflow.
 
-The current documented engine surface includes **253 registered commands** and a CS6 DOM parity matrix of **268 carried, 3 partial (evidence-gated), and 0 missing**. These figures describe the engine/DOM surface, not complete GUI parity: some commands are available through the command palette or automation surfaces before they have a corresponding menu or polished inspector workflow.
+The current documented engine surface includes **257 registered commands** and a CS6 DOM parity matrix of **268 carried, 3 partial (evidence-gated), and 0 missing**. These figures describe the engine/DOM surface, not complete GUI parity: some commands are available through the command palette or automation surfaces before they have a corresponding menu or polished inspector workflow.
 
 ### What is implemented
 
@@ -84,7 +84,7 @@ The dark-mode image is original vector artwork — a mock-up of the shell, not a
 
 ### Download a release
 
-Use the [latest GitHub release](https://github.com/aliasfoxkde/FireCraft/releases/latest) for published binaries and the WebAssembly bundle. The v0.2.5 release includes Linux x86_64 desktop and CLI archives, a Debian package, and a web bundle. Other platform packaging scripts are available in the repository, but a build recipe is not the same as a tested, published binary.
+Use the [latest GitHub release](https://github.com/aliasfoxkde/FireCraft/releases/latest) for published binaries and the WebAssembly bundle. The v0.2.6 release includes WASM CDN deployment via proxy Worker (CORS-enabled loading of the 95.6 MB WASM binary from GitHub Releases, under the 25 MB Pages per-object limit), Linux x86_64 desktop and CLI archives, a Debian package, and a web bundle. Other platform packaging scripts are available in the repository, but a build recipe is not the same as a tested, published binary.
 
 ### Build from source
 
