@@ -19,7 +19,7 @@ Hotspot → Pen, and fail against the pre-fix behaviour.
 
 **Verification:** `cargo test -p app`
 
-**Evidence:** CodeRabbit Major on `crates/app/src/editor.rs:3271-3276` (Pen points folded into a Hotspot commit)
+**Evidence:** [draft state tracked](../shell/editor.rs) **Done:** 2026-11-24.
 
 **Blockers:** —
 

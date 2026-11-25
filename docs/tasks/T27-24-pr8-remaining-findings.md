@@ -22,7 +22,7 @@ ones carry a written reason naming the code that is actually correct.
 
 **Verification:** `cargo test -p app -p engine`
 
-**Evidence:** Candidates: `editor.rs:619` drag_quadrangle, `editor.rs:2376` redraw trace, `editor.rs:2595` live_selection, `panels_web.rs:574/595` payload, `retouch.rs:656/1149` saturating multiplication
+**Evidence:** [PR #8 findings](https://github.com/aliasfoxkde/FireCraft/pull/8) fixed **Done:** 2026-11-24.
 
 **Blockers:** —
 

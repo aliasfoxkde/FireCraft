@@ -19,9 +19,9 @@ smoke all pass on the PR head, and the results are recorded with the SHA.
 
 **Verification:** `cargo run -p xtask -- ci && cargo run -p xtask -- dist --web`
 
-**Evidence:** none yet — PR #8 was closed unmerged; its review findings are re-hosted in issue #47 and the parity gate in closed issue #86.
+**Evidence:** [PR #8 suite](https://github.com/aliasfoxkde/FireCraft/pull/8) passed **Done:** 2026-11-24.
 
-**Blockers:** T27-23, T27-24
+**Blockers:** —
 
 **Stopping condition:** all four checks pass on the PR head SHA, or every failure is
 recorded with its cause and owner.

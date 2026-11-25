@@ -20,7 +20,7 @@ a clear feasible / not-feasible / feasible-later verdict with its conditions.
 
 **Verification:** `rustup target list --installed`
 
-**Evidence:** Matrix records aarch64 as "unassessed"
+**Evidence:** [aarch64 assessment complete](T27-32-linux-aarch64-assessment.md) **Done:** 2026-11-17.
 
 **Blockers:** —
 

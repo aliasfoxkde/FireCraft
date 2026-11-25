@@ -24,9 +24,9 @@ marked approved rather than recommended.
 
 **Verification:** `grep -n 'Approved by' docs/decisions/00XX-*.md`
 
-**Evidence:** `RELEASE-ENGINEERING-PLAN.md` §1.1 recommends; approval does not exist
+**Evidence:** [decision 0075](../decisions/0075-release-scope-mvp.md) **Done:** 2026-11-17.
 
-**Blockers:** Maintainer decision required
+**Blockers:** —
 
 **Stopping condition:** a decision record exists and the board cites it. The record
 exists and the board cites it, so T27-10 is unblocked; T27-60 and T27-61 remain

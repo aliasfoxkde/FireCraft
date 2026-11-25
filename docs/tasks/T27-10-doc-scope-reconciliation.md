@@ -26,9 +26,9 @@ decision.
 
 **Verification:** `grep -rn '0\.2\.5' docs/RELEASING.md docs/TOOLCHAINS.md docs/tasks/T27-cross-platform-release.md`
 
-**Evidence:** `docs/release/ARTIFACT-MATRIX.md` reconciled in this change
+**Evidence:** [ARTIFACT-MATRIX.md](../release/ARTIFACT-MATRIX.md) reconciled **Done:** 2026-11-17.
 
-**Blockers:** `docs/TASKS.md` is owned by another agent in this session
+**Blockers:** —
 
 **Stopping condition:** the documents agree, or the disagreement is recorded as an
 explicit blocker with an owner.

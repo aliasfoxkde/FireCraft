@@ -19,7 +19,7 @@ feasible / not-feasible / feasible-later verdict with its conditions.
 
 **Verification:** `rustup target list | grep aarch64-pc-windows`
 
-**Evidence:** Matrix records Windows ARM64 as "unassessed"
+**Evidence:** [Windows ARM64](T27-41-windows-arm64-assessment.md) feasible **Done:** 2026-11-16.
 
 **Blockers:** —
 

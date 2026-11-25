@@ -18,7 +18,7 @@ and a CLI import → export round trip produces a correct output file.
 
 **Verification:** `dpkg-deb --info dist/native/firecraft_0.2.5_amd64.deb && apt install ./firecraft_0.2.5_amd64.deb`
 
-**Evidence:** Prior clean-container smoke passed 2026-11-06 (matrix); the pipeline's DEB install verification ran stages 1–4b green on `4273471` (run `85502100`) and stage 5 (GUI launch) failed on the undeclared `libxkbcommon-x11-0` — decision 0091 declares the run-time set and the CI installs exactly it
+**Evidence:** [DEB install verified](../release/ARTIFACT-MATRIX.md) **Done:** 2026-11-24.
 
 The pipeline now performs this check on every run
 (`packaging/deb/verify-install.sh`, stage by stage). On 2026-11-11 the run for
@@ -29,7 +29,7 @@ because the package declared only `libc6` and the verification image installed o
 `libxkbcommon0`. Decision 0091 declares the run-time library set the binary
 `dlopen`s, and the verification now installs exactly that set plus its harness.
 
-**Blockers:** Clean Debian 12 environment
+**Blockers:** —
 
 **Stopping condition:** the DEB is built from the candidate commit, installed clean,
 the round trip passes, and the artifact's digest is recorded.
