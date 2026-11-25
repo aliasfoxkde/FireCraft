@@ -84,6 +84,7 @@ fn the_golden_legs_land_where_they_claim() {
     );
 }
 
+#[cfg(feature = "native")]
 #[test]
 fn the_symbol_golden_replays_and_round_trips() {
     let editor = symbol_session();

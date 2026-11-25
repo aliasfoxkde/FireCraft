@@ -19,6 +19,7 @@ fn fixture(name: &str) -> Vec<u8> {
     std::fs::read(&path).unwrap_or_else(|e| panic!("read {path}: {e}"))
 }
 
+#[cfg(feature = "native")]
 #[test]
 fn open_fixture_edit_save_round_trips() {
     let mut editor = Editor::open(&fixture("composed.fw.png")).unwrap();

@@ -564,6 +564,7 @@ fn library_export_import_round_trips_a_symbol() {
     );
 }
 
+#[cfg(feature = "native")]
 #[test]
 fn import_styles_refuses_non_library_bytes() {
     let mut editor = Editor::untitled();
