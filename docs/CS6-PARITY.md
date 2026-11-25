@@ -178,6 +178,16 @@ Eighteen have a Window-menu row; five do not.
 
 ### Panel *arrangement* (not just inventory)
 
+| Property | CS6 | FireCraft | Verdict | Evidence | Ticket |
+|---|---|---|---|---|---|
+| Right dock is **five stacked tab-groups** | yes | one flat column of 18 collapsible panels + the Web Layer panel; the *tab-group* structure did not land | **missing** | **R** (`Expanded Mode.xml`), `S/panel_windows.rs::dock` | 22.1 |
+| Left dock holds the ToolPalette | yes | left tool panel, 34 px | **partial** — placement matches; the *toolbar* form does not | **R**, `S/mod.rs` (left `Panel` arm) | 22.2 |
+| Top dock holds the Main toolbar (778×28) | yes | a main toolbar row exists | **partial** — row exists; contents are not the CS6 main toolbar | **R** | 22.5 |
+| Bottom dock holds the Properties tab-group | yes | properties live in the right dock instead | **partial** | **R** | 22.1 |
+| Panels dockable left↔right, collapsible, resizable | yes | resizable + collapsible + reopenable from the Window menu; **not** left↔right movable | **partial** | `S/panel_windows.rs::dock_section` | 22.1 |
+| Dock geometry persists across restart | yes | eframe `persistence` + `ShellLayout` snapshot | **implemented** | `D` 0067/0069, `S/mod.rs` | — |
+| The dock **reserves** width so the canvas shrinks rather than being covered | yes (a dock) | yes — `egui::Panel::right`, 258 pt, scrolling column | **implemented** | `S/panel_windows.rs:154` | 22.5 |
+| Every panel reachable at 1280×800 | yes | T22 captures and reachability check complete for the recorded build; dock scroll verified at 1280×400. Newer dock/panel inventory still needs a capture. | **verified for captured build; newer dock evidence-gated** | [T22 receipts](tasks/T22-screenshot-ui.md#receipts--2026-11-04) | 22.5 / T22 |
 
 ---
 
