@@ -3,4 +3,3 @@ date	commit	rung	S1_gate	S2_bound	S2_registry	S3_reportgap	S4_inert	S5a_impl	S5b
 2026-11-16	7766d175	C0.08	n/a	249	257	52	2	82	25	11	1902	18	21271259	n/a	n/a	n/a	123	n/a	measured by xtask climb; S1/S9/S10/S11/S13 need external state
 2026-11-19	f5fa9cc0	measure	n/a	249	257	52	2	82	25	11	1941	18	21271259	n/a	n/a	n/a	2	n/a	measured by xtask climb; S1/S9/S10/S11/S13 need external state
 2026-11-24	dd334fde	measure	n/a	257	257	52	2	81	21	9	1998	19	19580630	n/a	n/a	n/a	124	n/a	measured by xtask climb; S1/S9/S10/S11/S13 need external state
-2026-11-24	dd334fde	measure	n/a	257	257	52	2	81	21	9	1998	19	19580630	n/a	n/a	n/a	124	n/a	measured by xtask climb; S1/S9/S10/S11/S13 need external state
