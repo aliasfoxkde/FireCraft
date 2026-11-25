@@ -3303,6 +3303,7 @@ mod tests {
     /// step the size presets, and Convert to Paths freezes the glyphs
     /// into a path object.
     #[test]
+    #[cfg(feature = "native")]
     fn text_menu_actions_reach_the_engine() {
         let (mut shell, id) = text_shell("hello");
         shell
@@ -3354,6 +3355,7 @@ mod tests {
     /// document; Close refuses to discard unsaved edits; Revert
     /// reloads the file the document was opened from.
     #[test]
+    #[cfg(feature = "native")]
     fn file_rows_report_and_guard_the_document() {
         let mut shell = gui_shell(Editor::untitled());
         shell.run_action(&menus::Action::Shell(menus::ShellAction::FileInfo));
@@ -3445,6 +3447,7 @@ mod tests {
     /// the action lays the text along the path's contours; a
     /// selection missing either half reports, and does not command.
     #[test]
+    #[cfg(feature = "native")]
     fn attach_to_path_needs_a_text_and_a_rail() {
         let (mut shell, text_id) = text_shell("along");
 
@@ -3504,6 +3507,7 @@ mod tests {
     /// objects, Delete removes through the registry, Arrange reorders
     /// with a post-removal index, and Inert renders but does nothing.
     #[test]
+    #[cfg(feature = "native")]
     fn menu_actions_drive_the_editor() {
         let mut shell = gui_shell(gui_editor());
         let first = shell.editor.current_cell().unwrap().elements[0];
@@ -3550,6 +3554,7 @@ mod tests {
     /// View ▸ Show All re-shows every hidden carrier in the document,
     /// driving `object.setVisible` per object through the registry.
     #[test]
+    #[cfg(feature = "native")]
     fn show_all_resurrects_hidden_objects() {
         let mut shell = gui_shell(gui_editor());
         let first = shell.editor.current_cell().unwrap().elements[0];
@@ -3744,6 +3749,7 @@ mod tests {
     /// lands on the active layer's cell, and the journal records the
     /// command — so the panel is a real edit, not a view.
     #[test]
+    #[cfg(feature = "native")]
     fn the_auto_shapes_panel_inserts_through_the_engine() {
         let mut shell = gui_shell(Editor::untitled());
         let journal = shell.editor.session.journal_len();
@@ -3806,6 +3812,7 @@ mod tests {
     /// redraw is the generator running again, not a move. With no
     /// path selected the row reports so and dispatches nothing.
     #[test]
+    #[cfg(feature = "native")]
     fn the_autoshapes_panel_redraws_the_selected_path() {
         let mut shell = gui_shell(gui_editor());
         let id = shell.editor.current_cell().expect("a cell").elements[0];
@@ -3940,6 +3947,7 @@ mod tests {
     /// The URL panel writes the anchor link and the alt text onto the
     /// selected slice, and an empty field clears the stored value.
     #[test]
+    #[cfg(feature = "native")]
     fn the_url_panel_stores_and_clears_the_link() {
         let (mut shell, id) = slice_shell("banner");
 
@@ -3965,6 +3973,7 @@ mod tests {
     /// through the engine — the stored kinds and the swap target are
     /// the document's own, not panel state.
     #[test]
+    #[cfg(feature = "native")]
     fn the_behaviors_panel_adds_and_removes_behaviors() {
         let (mut shell, id) = slice_shell("banner");
 
@@ -4669,6 +4678,7 @@ mod tests {
     /// and the canvas rotations re-map the page — all through the
     /// journal (undo restores the previous shape).
     #[test]
+    #[cfg(feature = "native")]
     fn page_frame_actions_drive_the_document() {
         // State: one frame in the seed, insert appends and activates.
         let mut shell = gui_shell(gui_editor());
@@ -4725,6 +4735,7 @@ mod tests {
     /// across frames — all through the journal — and each pick with
     /// nothing (or too little) selected is a status line, not a row.
     #[test]
+    #[cfg(feature = "native")]
     fn symbol_actions_drive_the_library() {
         // Convert to Symbol with content: one definition appears and
         // the command landed in the journal.
@@ -4804,6 +4815,7 @@ mod tests {
     /// `filter.setParam` through the journal (so undo restores
     /// it), and a pick with nothing selected is a status line.
     #[test]
+    #[cfg(feature = "native")]
     fn filter_actions_flow_through_the_journal() {
         let mut shell = gui_shell(gui_editor());
         shell.run_action(&menus::Action::Shell(menus::ShellAction::SelectAll));
@@ -4852,6 +4864,7 @@ mod tests {
     /// the rendered page — a preset that lands as an effect stack the
     /// kernel skips leaves the render untouched.
     #[test]
+    #[cfg(feature = "native")]
     fn the_shadowed_and_embossed_presets_reach_the_renderer() {
         for name in ["dropShadow", "emboss", "pillowEmboss"] {
             let mut shell = gui_shell(gui_editor());
@@ -4975,6 +4988,7 @@ mod tests {
     /// the page the editor edits — every object of the page and state
     /// the selection does not cover.
     #[test]
+    #[cfg(feature = "native")]
     fn select_inverse_complements_the_page() {
         let mut shell = gui_shell(gui_editor_two());
         let ids = shell.editor.current_cell().unwrap().elements.clone();
@@ -5004,6 +5018,7 @@ mod tests {
     /// active one — and the selection goes through the engine's
     /// command door, so the journal carries it.
     #[test]
+    #[cfg(feature = "native")]
     fn select_all_covers_every_layer_of_the_page() {
         let mut editor = gui_editor();
         let lower = editor.current_cell().unwrap().elements[0];
@@ -5044,6 +5059,7 @@ mod tests {
     /// Select ▸ Deselect: the object selection goes empty in the
     /// document as well as in the view — CS6's `dom.selectNone()`.
     #[test]
+    #[cfg(feature = "native")]
     fn deselect_clears_the_document_selection() {
         let mut shell = gui_shell(gui_editor());
         shell.run_action(&menus::Action::Shell(menus::ShellAction::SelectAll));
@@ -5063,6 +5079,7 @@ mod tests {
     /// `selection.selectAllOnLayer` scopes the selection to one layer
     /// and state, whatever else the page carries.
     #[test]
+    #[cfg(feature = "native")]
     fn select_layer_objects_scopes_to_one_layer() {
         let mut editor = gui_editor();
         let lower = editor.current_cell().unwrap().elements[0];
@@ -5092,6 +5109,7 @@ mod tests {
     /// page and `page.delete` removes it — and the last page cannot
     /// go.
     #[test]
+    #[cfg(feature = "native")]
     fn the_pages_panel_renames_and_deletes_pages() {
         let mut shell = gui_shell(gui_editor());
         shell.run_command("page.add", serde_json::json!({ "index": null }));
@@ -5124,6 +5142,7 @@ mod tests {
     /// appearance becomes the named style, and the scale multiplies
     /// every style's text size.
     #[test]
+    #[cfg(feature = "native")]
     fn the_styles_panel_redefines_and_scales_styles() {
         let mut shell = gui_shell(gui_editor());
         let id = shell.editor.current_cell().unwrap().elements[0];
@@ -5187,6 +5206,7 @@ mod tests {
     /// The text properties' anti-alias dials: the custom sharpness,
     /// strength and oversampling reach the text object.
     #[test]
+    #[cfg(feature = "native")]
     fn the_text_properties_write_the_anti_alias_dials() {
         let (mut shell, id) = text_shell("hello");
         shell.set_custom_anti_alias_sharpness(id, 200);
@@ -5203,6 +5223,7 @@ mod tests {
 
     /// The text properties' run field: one line per run, in order.
     #[test]
+    #[cfg(feature = "native")]
     fn the_text_properties_write_the_runs() {
         let (mut shell, id) = text_shell("hello");
         shell.set_text_runs(id, "one\ntwo");
@@ -5217,6 +5238,7 @@ mod tests {
     /// The text properties' frame: the box the text flows inside is
     /// written, and the object's own placement stays put.
     #[test]
+    #[cfg(feature = "native")]
     fn the_text_properties_write_the_text_frame() {
         let (mut shell, id) = text_shell("hello");
         shell.set_text_rectangle(id, 120.0, 30.0);
@@ -5231,6 +5253,7 @@ mod tests {
 
     /// The Pages panel's guide rows: a guide moves and goes away.
     #[test]
+    #[cfg(feature = "native")]
     fn the_guides_move_and_go_away() {
         let mut shell = gui_shell(gui_editor());
         shell.run_command(
@@ -5261,6 +5284,7 @@ mod tests {
     /// The Layers panel's "move the selection here": the object
     /// leaves its layer for the named one.
     #[test]
+    #[cfg(feature = "native")]
     fn the_selection_moves_to_another_layer() {
         let mut editor = gui_editor();
         let id = editor.current_cell().unwrap().elements[0];
@@ -5285,6 +5309,7 @@ mod tests {
     /// Modify ▸ Group / Ungroup: the group lands in the cell where the
     /// members were, and ungroup puts the members back.
     #[test]
+    #[cfg(feature = "native")]
     fn group_and_ungroup_fold_the_selection() {
         let mut shell = gui_shell(gui_editor_two());
         let ids = shell.editor.current_cell().unwrap().elements.clone();
@@ -5312,6 +5337,7 @@ mod tests {
     /// Modify ▸ Transform: a quarter turn swaps the object's extents,
     /// and a flip moves its points.
     #[test]
+    #[cfg(feature = "native")]
     fn transform_rotates_and_flips_the_selection() {
         let mut shell = gui_shell(gui_editor());
         let id = shell.editor.current_cell().unwrap().elements[0];
@@ -5414,6 +5440,7 @@ mod tests {
     /// goes blank with the objects, and the undo label carries the
     /// verb, so one undo brings everything back.
     #[test]
+    #[cfg(feature = "native")]
     fn delete_all_asks_before_emptying_the_document() {
         let mut shell = gui_shell(gui_editor());
         let before = compose::render(
@@ -5524,6 +5551,7 @@ mod tests {
     /// per-state lock, and the reorder. The reorder keeps the moved
     /// layer active — the user keeps editing the layer they moved.
     #[test]
+    #[cfg(feature = "native")]
     fn the_layers_panel_renames_locks_and_reorders() {
         let mut shell = gui_shell(gui_editor());
         shell.run_action(&menus::Action::Sel(menus::SelAction::NewLayer));
@@ -5563,6 +5591,7 @@ mod tests {
     /// Modify ▸ Flatten Selection: the selection bakes into one
     /// bitmap, in place of the members.
     #[test]
+    #[cfg(feature = "native")]
     fn flatten_selection_bakes_into_one_bitmap() {
         let mut shell = gui_shell(gui_editor_two());
         let ids = shell.editor.current_cell().unwrap().elements.clone();
@@ -5596,6 +5625,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "native")]
     fn history_panel_saves_and_replays_steps() {
         let editor = gui_editor();
         let steps = editor.steps_text();
@@ -5886,6 +5916,7 @@ mod tests {
     /// The brush lays its dabs on the image under the pointer, and the
     /// whole stroke undoes as one step.
     #[test]
+    #[cfg(feature = "native")]
     fn the_brush_paints_a_stroke_on_the_image() {
         let (mut shell, id) = shell_with_raster();
         shell.editor.tool = Tool::Paintbrush;
@@ -5925,6 +5956,7 @@ mod tests {
     /// The pencil draws a hard one-pixel line — the dab carries no
     /// size, edge or shape slot.
     #[test]
+    #[cfg(feature = "native")]
     fn the_pencil_draws_a_hard_line() {
         let (mut shell, id) = shell_with_raster();
         shell.editor.tool = Tool::Pencil;
@@ -5951,6 +5983,7 @@ mod tests {
     /// The paint bucket fills the image under the pointer with the
     /// paint color.
     #[test]
+    #[cfg(feature = "native")]
     fn the_paint_bucket_fills_the_image() {
         let (mut shell, id) = shell_with_raster();
         shell.editor.tool = Tool::PaintBucket;
@@ -5967,6 +6000,7 @@ mod tests {
     /// The eyedropper reads the pixel under the pointer into the
     /// brush model — the color model, not the document.
     #[test]
+    #[cfg(feature = "native")]
     fn the_eyedropper_picks_the_color_under_the_pointer() {
         let (mut shell, id) = shell_with_raster();
         shell.editor.tool = Tool::Eyedropper;
@@ -5983,6 +6017,7 @@ mod tests {
     /// The gradient tool paints a ramp between the press and the
     /// release points.
     #[test]
+    #[cfg(feature = "native")]
     fn the_gradient_paints_a_ramp_between_its_handles() {
         let (mut shell, id) = shell_with_raster();
         shell.editor.tool = Tool::Gradient;
@@ -6009,6 +6044,7 @@ mod tests {
     /// File ▸ Open on a plain raster opens it as its own document,
     /// with the canvas sized to the image.
     #[test]
+    #[cfg(feature = "native")]
     fn open_raster_sizes_the_document_to_the_image() {
         let mut shell = gui_shell(Editor::untitled());
         shell
@@ -6035,6 +6071,7 @@ mod tests {
     /// holds objects *places* it (the Import door) — the browser's one
     /// file input must not silently swap out the user's artwork.
     #[test]
+    #[cfg(feature = "native")]
     fn load_into_a_drawing_places_the_image_instead_of_replacing_it() {
         // Empty document: the raster becomes the document.
         let mut shell = gui_shell(Editor::untitled());
@@ -6070,6 +6107,7 @@ mod tests {
     /// `document_has_content` separates the two doors: empty page
     /// (fresh editor) is content-free, a drag-created rect is not.
     #[test]
+    #[cfg(feature = "native")]
     fn document_has_content_follows_the_cell() {
         assert!(!gui_shell(Editor::untitled()).document_has_content());
         assert!(gui_shell(gui_editor()).document_has_content());
@@ -6209,6 +6247,7 @@ mod tests {
 
     /// A pixel-selection helper shared by the 19.6 tests: a shell
     /// with a red raster and a committed non-empty marquee over it.
+    #[cfg(feature = "native")]
     fn shell_with_marquee() -> (Shell, doc::ObjectId) {
         let (mut shell, id) = shell_with_raster();
         shell.editor.tool = Tool::Marquee;
@@ -6498,6 +6537,7 @@ mod tests {
     /// Marquee ⇄ path conversion and the bitmap-selection save/restore
     /// actions route to their engine commands through the shell.
     #[test]
+    #[cfg(feature = "native")]
     fn marquee_conversion_and_saved_selection_actions_dispatch() {
         let (mut shell, _id) = shell_with_marquee();
 
@@ -6523,6 +6563,7 @@ mod tests {
     /// Mask verbs refuse cleanly with nothing selected and route to
     /// `mask.*` commands with a live selection.
     #[test]
+    #[cfg(feature = "native")]
     fn mask_actions_require_a_selection() {
         let mut shell = gui_shell(gui_editor());
         shell.run_sel(menus::SelAction::AddMask { mode: "hide all" });
@@ -6545,6 +6586,7 @@ mod tests {
     /// flips with the mask's state: the toggle disables an enabled
     /// mask, re-enables a disabled one, and the row follows.
     #[test]
+    #[cfg(feature = "native")]
     fn mask_toggle_flips_the_mask_and_its_label() {
         let mut shell = gui_shell(gui_editor());
         let id = shell.editor.current_cell().unwrap().elements[0];
@@ -6700,6 +6742,7 @@ mod tests {
     /// the selection bounds (canvas center when nothing is selected),
     /// and New Button appends a button definition to the library.
     #[test]
+    #[cfg(feature = "native")]
     fn insert_web_rows_create_web_objects_and_buttons() {
         let (mut shell, id) = shell_with_raster();
         shell.editor.selection_set = vec![id];
@@ -6788,6 +6831,7 @@ mod tests {
     /// selected path, Edit Symbol enters the selected instance's
     /// definition scope, and non-instance selections report instead.
     #[test]
+    #[cfg(feature = "native")]
     fn fill_edge_and_edit_symbol_rows_drive_the_selection() {
         let mut shell = gui_shell(gui_editor());
         assert!(
@@ -6881,6 +6925,7 @@ mod tests {
     /// keystrokes, commit writes `text.setText` once, and re-opening
     /// the same object keeps the live buffer.
     #[test]
+    #[cfg(feature = "native")]
     fn text_edit_session_buffers_and_commits() {
         let (mut shell, id) = text_shell("hello");
         shell.begin_text_edit(id);
@@ -6920,6 +6965,7 @@ mod tests {
     /// 20.1 focus paths: a tool switch commits (CS6 commits the edit
     /// when you leave the Text tool); Esc closes without writing.
     #[test]
+    #[cfg(feature = "native")]
     fn text_edit_focus_paths() {
         let (mut shell, id) = text_shell("keep");
         // Tool switch commits a changed buffer exactly once.
@@ -6946,6 +6992,7 @@ mod tests {
     /// canvas geometry, resolution with unit, canvas color — and the
     /// multi-selection set fans a display edit out to every member.
     #[test]
+    #[cfg(feature = "native")]
     fn inspector_document_and_multi_selection_sets() {
         // Document set: canvas color and resolution round-trip.
         let (mut shell, _) = text_shell("doc");
@@ -7014,6 +7061,7 @@ mod tests {
     /// 22.5: Repeat Filter re-applies the last filter preset to the
     /// selection; with nothing applied yet it reports, never acts.
     #[test]
+    #[cfg(feature = "native")]
     fn repeat_filter_reapplies_the_last_preset() {
         let (mut shell, _id) = two_path_shell();
         // Nothing applied yet — the CS6 "no filters to repeat" report.
@@ -7067,6 +7115,7 @@ mod tests {
     /// 20.5 tabs: opening a second document parks the first and the
     /// tab strip state follows the active document.
     #[test]
+    #[cfg(feature = "native")]
     fn open_parks_the_previous_document() {
         let mut shell = open_shell("/mem/first.png");
         shell.open_document();
@@ -7078,6 +7127,7 @@ mod tests {
 
     /// Switching to a parked tab restores its editor, name, and path.
     #[test]
+    #[cfg(feature = "native")]
     fn activate_tab_swaps_state() {
         let mut shell = open_shell("/mem/first.png");
         shell.open_document();
@@ -7111,6 +7161,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "native")]
     fn close_promotes_the_last_parked_tab() {
         let mut shell = open_shell("/mem/first.png");
         shell.open_document();
@@ -7136,6 +7187,7 @@ mod tests {
 
     /// New parks the current document rather than discarding it.
     #[test]
+    #[cfg(feature = "native")]
     fn new_parks_the_current_document() {
         let mut shell = open_shell("/mem/first.png");
         shell.open_document();
@@ -7193,6 +7245,7 @@ mod tests {
     }
 
     /// The animation carrier of an instance.
+    #[cfg(feature = "native")]
     fn animation_of(shell: &Shell, id: doc::ObjectId) -> doc::SymbolAnimation {
         match shell.editor.document().registry.get(id) {
             Some(doc::ObjectData::SymbolInstance(instance)) => instance
@@ -7218,6 +7271,7 @@ mod tests {
     /// family: the frame count, the travel, the rotation, the
     /// scaling and the opacity ramp.
     #[test]
+    #[cfg(feature = "native")]
     fn the_animation_fields_write_the_span() {
         let (mut shell, id) = symbol_instance_shell("animation");
         shell.set_anim_num_frames(5);
@@ -7243,6 +7297,7 @@ mod tests {
     /// The button's four state flags live on the definition; the
     /// panel writes them through the engine.
     #[test]
+    #[cfg(feature = "native")]
     fn the_button_flags_write_the_definition() {
         let (mut shell, _id) = symbol_instance_shell("button");
         let number = shell.editor.document().symbols[0].symbol_number;
@@ -7260,6 +7315,7 @@ mod tests {
     /// The instance's parameters and custom data reach the engine's
     /// `currentValues` and `DTAv` stores.
     #[test]
+    #[cfg(feature = "native")]
     fn the_instance_carries_parameters_and_custom_data() {
         let (mut shell, id) = symbol_instance_shell("graphic");
         shell.set_symbol_param(id, "size", "text", "42");
@@ -7283,6 +7339,7 @@ mod tests {
     /// The definition's content: the panel lifts an object out of the
     /// symbol and moves one within the symbol's z-order.
     #[test]
+    #[cfg(feature = "native")]
     fn the_definition_content_detaches_and_reorders() {
         let mut editor = gui_editor();
         let first = editor.current_cell().unwrap().elements[0];
@@ -7325,6 +7382,7 @@ mod tests {
     /// "Duplicate for alias": the selected instance points at a copy
     /// of the definition it named.
     #[test]
+    #[cfg(feature = "native")]
     fn the_instance_can_be_duplicated_for_an_alias() {
         let (mut shell, id) = symbol_instance_shell("graphic");
         let number = shell.editor.document().symbols[0].symbol_number;
@@ -7356,6 +7414,7 @@ mod tests {
 
     /// The markup verbs restyle the *runs*, not the base style.
     #[test]
+    #[cfg(feature = "native")]
     fn the_markup_verbs_restyle_the_runs() {
         let (mut shell, id) = text_shell("hello");
         shell.apply_character_markup(id, "b");
@@ -7434,6 +7493,7 @@ mod tests {
     /// definitions, one across the definitions the selected instances
     /// reference.
     #[test]
+    #[cfg(feature = "native")]
     fn the_button_text_reaches_the_library_and_the_instances() {
         let (mut shell, id) = button_with_text_shell();
         shell.replace_button_text("Library");
@@ -7445,6 +7505,7 @@ mod tests {
     }
 
     /// One effect of an object.
+    #[cfg(feature = "native")]
     fn effect_of(shell: &Shell, id: doc::ObjectId, index: usize) -> doc::Effect {
         match shell.editor.document().registry.get(id) {
             Some(doc::ObjectData::Path(path)) => path.effects[index].clone(),
@@ -7453,6 +7514,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "native")]
     fn filter_rename_uses_the_draft_from_an_earlier_frame() {
         let (mut shell, id) = two_path_shell();
         shell.apply_filter_preset(id, FILTER_FAMILIES[0].1[0]);
@@ -7540,6 +7602,7 @@ mod tests {
     /// CS6's `setEffectName`: the effect keeps its category and takes
     /// the new internal name.
     #[test]
+    #[cfg(feature = "native")]
     fn the_effect_can_be_renamed() {
         let (mut shell, id) = two_path_shell();
         shell.apply_filter_preset(id, FILTER_FAMILIES[0].1[0]);
@@ -7554,6 +7617,7 @@ mod tests {
     /// convolution kernel's count must match its sides, and the
     /// motion blur's kind must be one the dom knows.
     #[test]
+    #[cfg(feature = "native")]
     fn the_bake_verbs_carry_the_dom_payloads() {
         let (mut shell, _id) = two_path_shell();
         shell.convolve_selection(3, 3, &[0, 0, 0, 0], false);
@@ -7623,6 +7687,7 @@ mod tests {
     /// image follows `mask.moveBy`, and the content it hides follows
     /// `mask.moveContentsBy`.
     #[test]
+    #[cfg(feature = "native")]
     fn the_mask_nudges_move_the_mask_and_the_content() {
         let (mut shell, id) = masked_shell("reveal all");
         let facts = shell.mask_facts(id).expect("the selection carries a mask");
@@ -7660,6 +7725,7 @@ mod tests {
     /// The mask converts between CS6's raster and vector forms, and
     /// the conversion rewrites the mask child and the group's kind.
     #[test]
+    #[cfg(feature = "native")]
     fn the_mask_converts_between_raster_and_vector() {
         let (mut shell, id) = masked_shell("reveal all");
         shell.mask_set_mode(id, "mask to path");
@@ -7672,6 +7738,7 @@ mod tests {
 
     /// The mask's own fill and stroke can be hidden and shown again.
     #[test]
+    #[cfg(feature = "native")]
     fn the_mask_attributes_can_be_hidden_and_shown() {
         let (mut shell, id) = masked_shell("reveal all");
         shell.mask_set_show_attrs(id, false);
@@ -7689,6 +7756,7 @@ mod tests {
     /// content it was hiding appears. Retyping without the renderer
     /// following would be a field that engages and changes nothing.
     #[test]
+    #[cfg(feature = "native")]
     fn the_mask_panel_row_makes_the_mask_group_plain() {
         let (mut shell, id) = masked_shell("hide all");
         let facts = shell.mask_facts(id).expect("the selection carries a mask");
@@ -7765,6 +7833,7 @@ mod tests {
     /// master's own layer list grows through the engine, and clearing
     /// the master hands the page back.
     #[test]
+    #[cfg(feature = "native")]
     fn the_pages_panel_marks_the_master_page() {
         let mut shell = gui_shell(gui_editor());
         shell.set_master_page(0);
@@ -7796,6 +7865,7 @@ mod tests {
     /// can detach its own copy, and unsharing gives the pages their
     /// own layers again.
     #[test]
+    #[cfg(feature = "native")]
     fn the_layers_panel_shares_layers() {
         let mut shell = gui_shell(gui_editor());
         shell
@@ -7875,6 +7945,7 @@ mod tests {
     /// and the source rectangle travel through the engine's primitive
     /// commands.
     #[test]
+    #[cfg(feature = "native")]
     fn the_properties_panel_rounds_a_rectangle() {
         let mut shell = gui_shell(gui_editor());
         let id = shell.editor.current_cell().unwrap().elements[0];
@@ -7904,6 +7975,7 @@ mod tests {
     /// The Properties panel's pixel-mask section: the mask is set,
     /// moved, and cleared over the bitmap.
     #[test]
+    #[cfg(feature = "native")]
     fn the_bitmap_panel_moves_the_pixel_mask() {
         let mut shell = gui_shell(gui_editor());
         shell
@@ -7952,6 +8024,7 @@ mod tests {
     /// The Fill & Stroke panel's pattern section: an image in the
     /// document becomes the selection's repeating fill.
     #[test]
+    #[cfg(feature = "native")]
     fn the_fill_panel_applies_a_pattern() {
         let mut shell = gui_shell(gui_editor());
         shell
@@ -7990,6 +8063,7 @@ mod tests {
     /// The Slices panel's editors: the web object's rectangle moves,
     /// and its background knobs carry their own fields.
     #[test]
+    #[cfg(feature = "native")]
     fn the_slices_panel_edits_the_web_object() {
         let mut shell = gui_shell(gui_editor());
         shell
@@ -8048,6 +8122,7 @@ mod tests {
     /// The Slices panel's "Selection → hotspot": the selection becomes
     /// a web object of its own.
     #[test]
+    #[cfg(feature = "native")]
     fn the_slices_panel_makes_a_web_object_from_the_selection() {
         let mut shell = gui_shell(gui_editor());
         let id = shell.editor.current_cell().unwrap().elements[0];
@@ -8076,6 +8151,7 @@ mod tests {
     /// typed name takes the selection's appearance, and a name with no
     /// style is refused rather than creating one.
     #[test]
+    #[cfg(feature = "native")]
     fn the_styles_panel_updates_a_named_style() {
         let mut shell = gui_shell(gui_editor());
         let id = shell.editor.current_cell().unwrap().elements[0];
@@ -8121,6 +8197,7 @@ mod tests {
     /// The Properties panel's channel section: the clipboard's channel
     /// lands in the image's own.
     #[test]
+    #[cfg(feature = "native")]
     fn the_properties_panel_pastes_a_channel() {
         let mut shell = gui_shell(gui_editor());
         // A source bitmap, opaque.

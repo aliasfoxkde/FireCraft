@@ -512,6 +512,7 @@ mod tests {
     /// same codec. The two halves are pinned together here, and the
     /// change with them — a quality the panel applies is a quality the
     /// exported bytes carry.
+    #[cfg(feature = "native")]
     #[test]
     fn the_preview_encodes_what_the_export_encodes() {
         let mut shell = shell();

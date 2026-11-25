@@ -280,6 +280,17 @@ jobs:
       - name: Install trunk (if uncached)
         if: steps.cache-trunk.outputs.cache-hit != 'true'
         run: cargo install trunk --locked
+      - name: Cache cargo-audit
+        id: cache-audit
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.cargo/bin/cargo-audit
+          key: cargo-audit-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+      - name: Install cargo-audit (if uncached)
+        # The audit gate fails closed when the binary is missing: without
+        # cargo-audit the gate cannot vouch for the dependency tree.
+        if: steps.cache-audit.outputs.cache-hit != 'true'
+        run: cargo install cargo-audit --locked
       - name: Full gate (xtask ci-no-fmt)
         run: cargo run --package xtask -- ci-no-fmt
       - name: Web bundle smoke

@@ -1,1 +1,5 @@
-{"version":"0.3.0","wasm_sha256":"046ce14f44a413ce622280db4ca3211b7d81a7efed6aaef05b52154f13a215f3","exe_sha256":"bcb83a12216812bc1a778c945d1f35bc4cc2aa4da3f971e1790f7dc8af7e26b0","date":"2026-11-24"}
+{
+  "version": "0.2.5",
+  "commit": "695795f0",
+  "build": "2026-11-19"
+}

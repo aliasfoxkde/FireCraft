@@ -6,7 +6,9 @@
     <meta name="description" content="FireCraft — a clean-room Fireworks-class vector and bitmap editor, running in the browser via WebAssembly."/>
     <title>FireCraft</title>
     <link rel="icon" href="favicon.png" type="image/png">
-
+    
+    
+    
     <style>
         html, body {
             margin: 0;
@@ -29,7 +31,7 @@
             outline-offset: -2px;
         }
     </style>
-</head>
+<link rel="modulepreload" href="/firecraft-web-b54b722470176d6d.js" crossorigin="anonymous" integrity="sha384-3KC548hguhMPjgckJejo0uE3YR7MHqVTmEHp5A4C5uC+vf0Yas4EUpyMqWLJgwgt"><link rel="preload" href="/firecraft-web-b54b722470176d6d_bg.wasm" crossorigin="anonymous" integrity="sha384-FDRQdn3gj3iVJzz+BtkRxuChhjMowG1X86Y1q7w1xsw0Pm1KD1B+iDAMVJQiPaNc" as="fetch" type="application/wasm"></head>
 <body>
 <!-- Accessible fallback: replaced once the egui runtime takes the
      canvas over; readable by screen readers while the wasm loads and
@@ -43,8 +45,14 @@
 </canvas>
 
 <script type="module">
-import init from '/firecraft-web.js';
-init();
-</script>
-</body>
+import init, * as bindings from '/firecraft-web-b54b722470176d6d.js';
+const wasm = await init({ module_or_path: '/firecraft-web-b54b722470176d6d_bg.wasm' });
+
+
+window.wasmBindings = bindings;
+
+
+dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
+
+</script></body>
 </html>

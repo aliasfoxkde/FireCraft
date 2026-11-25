@@ -4364,3 +4364,49 @@ itself. Diagnostics kept in `/var/tmp/fc-shot/gldisplay.py`,
   tasks (#42-#66, #95-#99) are intentionally deferred per AGENTS.md scope.
   Phase 22 residual (#88, #76) tracked in NEXT.md/T2/T9. Infra issues
   (#36, #37, #126) noted but not actionable without maintainer input.
+
+## 2026-11-24 — non-native build repaired; one dialog type set
+
+The gate was red on the tree as found: `cargo test --workspace` builds `app`
+with its default features (`scripting`), and that configuration did not
+compile. `crates/app/src/shell/mod.rs` carried a hand-written
+`mod stub_types` mirror of the native dialog structs; the shell god-file split
+(`895b2974`, `04450d6b`) had added fields and methods to `shell/dialogs.rs`
+without updating it. 39–43 compile errors, all from the mirror drifting.
+
+Repair, not patch:
+
+- `shell/dialog_types.rs` is now the single home for every dialog-state type
+  (`DisplayState`, `NumericTransformDialog`, `ConfirmDialog`, `ConfirmAction`,
+  `ScaleToDialog`, `FeatherDialog`, `CanvasSizeDialog`, `CanvasColorDialog`,
+  `ImageSizeDialog`, `ExportDialog`). It compiles in both configurations, so a
+  new field can no longer exist in one build and not the other.
+- `shell/dialogs.rs` and the `stub_types` module lost their copies; `mod.rs`
+  re-exports the shared set unconditionally (`DisplayState` and `EnvDialogs`
+  stay native-gated, as only native code uses them).
+- `save_steps` stub now matches the native zero-argument signature.
+- The tests that drive native-only surfaces are `#[cfg(feature = "native")]`:
+  dialogs' apply paths, import/export, script files, history save/replay, the
+  bitmap/vector paint suite, the panels' command verbs, and two library
+  round-trip tests in `editor_surface`. They ran nowhere before (the
+  configuration never compiled); `xtask ci`'s test step now also runs
+  `cargo test -p app --features native` so they run somewhere.
+- The four `crates/app/tests/*.rs` targets that use `app_cli` are gated the
+  same way, and two `app_cli`-dependent unit tests in `optimize`/`panels_web`.
+
+Gate repairs reapplied after the tree reset to `e9be92df`:
+
+- `audit` parses `cargo audit --json`: only `vulnerabilities.count` fails;
+  informational advisories (unmaintained, say) are reported to stderr. A
+  missing `cargo-audit` is a hard error. `ci.yml` installs it (cached).
+- `.aegisignore` excludes `.wrangler/`, `nas/`, `node_modules/`,
+  `test-results/` instead of blessing generated debris.
+- The eight panel-*arrangement* rows are back in `docs/CS6-PARITY.md` under
+  the heading that commit `8544fc1f` left behind.
+- `editor_surface`'s two `export_library`/`import_library` tests are native
+  tests — the API is.
+
+Still open when this entry was written: the aegis baseline re-bless, the
+reachability floor (100.00% recorded vs. the 249/257 the last measurement
+reported), the climb board's S12 cell, the compiler pin (wasm job 1.100.0 vs
+`rust-toolchain.toml` 1.99.1), and the 109 worktrees.

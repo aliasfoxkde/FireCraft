@@ -1633,6 +1633,7 @@ mod tests {
     /// The Slices panel's type editor writes the engine's `TSLi`
     /// value: a background slice carries 2, a hotspot carries none.
     #[test]
+    #[cfg(feature = "native")]
     fn the_type_editor_writes_the_engines_slice_type() {
         let (mut shell, plate, _) = slice_shell();
         assert!(shell.set_slice_kind(plate, SliceKind::Background));
@@ -1646,6 +1647,7 @@ mod tests {
     /// The export editor sets the slice's own format and drops the
     /// override again when the page default is chosen.
     #[test]
+    #[cfg(feature = "native")]
     fn the_export_editor_sets_and_clears_the_override() {
         let (mut shell, plate, _) = slice_shell();
         assert!(shell.set_slice_format(plate, Some(ExportFormat::Jpeg)));
@@ -1658,6 +1660,7 @@ mod tests {
     /// The shape editor runs the CS6 shape verb on the selected web
     /// object.
     #[test]
+    #[cfg(feature = "native")]
     fn the_shape_editor_runs_the_shape_verb() {
         let (mut shell, plate, _) = slice_shell();
         assert!(shell.set_slice_shape(plate, SliceShape::Ellipse));
@@ -1670,6 +1673,7 @@ mod tests {
     /// engine: the behavior kind is on the object and the target's
     /// name rides the export key the web export reads.
     #[test]
+    #[cfg(feature = "native")]
     fn a_swap_behavior_round_trips_through_the_engine() {
         let (mut shell, plate, _) = slice_shell();
         assert!(
@@ -1691,6 +1695,7 @@ mod tests {
     /// that never appears in the HTML is a behavior the user attached
     /// and nothing else, which is the user-visible half of issue
     /// #93's stopping condition.
+    #[cfg(feature = "native")]
     #[test]
     fn an_attached_behavior_reaches_the_exported_page() {
         let (mut shell, plate, _) = slice_shell();
@@ -1765,6 +1770,7 @@ mod tests {
     /// `text.setText` verb — the panel's own verb, not a silent
     /// in-panel edit that no other surface would see.
     #[test]
+    #[cfg(feature = "native")]
     fn the_find_and_replace_panel_dispatches_text_set_text() {
         let (mut shell, id) = text_shell("alpha alpha");
         shell.replace_text(id, "alpha", "beta");
@@ -1788,6 +1794,7 @@ mod tests {
     /// The Slices panel's type editor reaches the registry as the
     /// `slice.setType` verb.
     #[test]
+    #[cfg(feature = "native")]
     fn the_slices_panel_dispatches_the_slice_verbs() {
         let (mut shell, plate, _) = slice_shell();
         assert!(shell.set_slice_kind(plate, SliceKind::Hotspot));
@@ -1810,6 +1817,7 @@ mod tests {
     /// as declarations, and the knob it edits reaches the registry
     /// as `slice.setBackground`.
     #[test]
+    #[cfg(feature = "native")]
     fn the_css_properties_panel_dispatches_the_background_verb() {
         let (mut shell, plate, _) = slice_shell();
         shell.set_slice_background(plate, "repeat", serde_json::json!(2));

@@ -300,7 +300,9 @@ fn run_ci(full: Option<&str>, skip_fmt: bool) -> ExitCode {
                 );
             }
             let out = util::run_and_capture("cargo-audit", &["audit", "--json"])?;
-            let start = out.find('{').ok_or("cargo audit: no JSON report on stdout")?;
+            let start = out
+                .find('{')
+                .ok_or("cargo audit: no JSON report on stdout")?;
             let end = out.rfind('}').ok_or("cargo audit: truncated JSON report")?;
             let report: serde_json::Value = serde_json::from_str(&out[start..=end])
                 .map_err(|error| format!("cargo audit: unreadable report: {error}"))?;
@@ -323,7 +325,9 @@ fn run_ci(full: Option<&str>, skip_fmt: bool) -> ExitCode {
             // not-a-vuln); they are reported so they do not rot unseen.
             let warnings = report["warnings"].as_object().map_or(0, |w| w.len());
             if warnings > 0 {
-                eprintln!("[xtask] audit: {warnings} informational advisory group(s); no vulnerabilities");
+                eprintln!(
+                    "[xtask] audit: {warnings} informational advisory group(s); no vulnerabilities"
+                );
             }
             Ok(())
         }),

@@ -858,10 +858,7 @@ impl Shell {
                 .iter()
                 .map(|p| {
                     let screen = self.view.to_screen(*p);
-                    Pos2::new(
-                        rect.left() + screen.x,
-                        rect.top() + screen.y,
-                    )
+                    Pos2::new(rect.left() + screen.x, rect.top() + screen.y)
                 })
                 .collect();
             ui.painter().add(egui::Shape::convex_polygon(
@@ -1042,7 +1039,10 @@ impl Shell {
                             .any(|x| (x - target_x).abs() < tol);
                             if aligned {
                                 let a = to_screen(geom::Point::new(target_x, page_bounds.y));
-                                let b = to_screen(geom::Point::new(target_x, page_bounds.y + page_bounds.height));
+                                let b = to_screen(geom::Point::new(
+                                    target_x,
+                                    page_bounds.y + page_bounds.height,
+                                ));
                                 painter.line_segment([a, b], (1.5, ink));
                             }
                         }
@@ -1057,7 +1057,10 @@ impl Shell {
                             .any(|y| (y - target_y).abs() < tol);
                             if aligned {
                                 let a = to_screen(geom::Point::new(page_bounds.x, target_y));
-                                let b = to_screen(geom::Point::new(page_bounds.x + page_bounds.width, target_y));
+                                let b = to_screen(geom::Point::new(
+                                    page_bounds.x + page_bounds.width,
+                                    target_y,
+                                ));
                                 painter.line_segment([a, b], (1.5, ink));
                             }
                         }
@@ -1568,7 +1571,10 @@ impl Shell {
         // the object's frame. Esc cancels; any other commit path
         // (click-away, tool switch) goes through `commit_text_edit`.
         if self.text_edit.is_some() {
-            let esc = ui.input(|i| i.key_pressed(egui::Key::Escape) || (i.modifiers.ctrl && i.key_pressed(egui::Key::Enter)));
+            let esc = ui.input(|i| {
+                i.key_pressed(egui::Key::Escape)
+                    || (i.modifiers.ctrl && i.key_pressed(egui::Key::Enter))
+            });
             if esc {
                 self.cancel_text_edit();
             } else {

@@ -5253,6 +5253,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "native")]
     fn edits_round_trip_through_save_and_open() {
         let mut editor = Editor::untitled();
         editor.tool = Tool::Rect;
@@ -5739,6 +5740,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "native")]
     fn save_and_open_round_trip_preserves_elements() {
         let mut editor = Editor::untitled();
         editor.tool = Tool::Ellipse;

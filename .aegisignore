@@ -72,3 +72,11 @@ log/
 # every finding's path and content digest, so scanning it feeds those
 # paths and digests back into the very report they belong to.
 .aegis-baseline.tsv
+
+# Local tool output and vendored debris. All generated, all churn per
+# run: the Pages CLI's build cache, the NAS artifacts symlink, npm's
+# install tree, and Playwright's report directory.
+.wrangler/
+nas/
+node_modules/
+test-results/

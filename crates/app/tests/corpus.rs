@@ -4,6 +4,7 @@
 //! and its journal must replay to the same document the apply loop
 //! produced (surface equivalence).
 
+#![cfg(feature = "native")]
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use app::editor::{Editor, Tool};
