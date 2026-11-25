@@ -24,6 +24,7 @@
 # points, and the GitHub release, asset, run and check identifiers
 # quoted in the release receipts; this repository holds no tax
 # identifiers.
+australian-tfn	./.wrangler/state/v3/r2/amortyx-releases/blobs/62743077b883cd43afcef14561e59258612176d3c2a5d44524c740ef44e4fbbe000001a1fcc7bd47	c5e808da6dca3e6e0e2bd60b8913754080c03951bddc120ac8df87098946ed08	2
 australian-tfn	./docs/TASKS.md	90854b2dc477585b494af511ebe7e260c09e9e6d1582f8d75c35733426d6d710	2
 australian-tfn	./docs/release/ARTIFACT-MATRIX.md	90854b2dc477585b494af511ebe7e260c09e9e6d1582f8d75c35733426d6d710	9
 australian-tfn	./docs/release/CERTIFICATION.md	90854b2dc477585b494af511ebe7e260c09e9e6d1582f8d75c35733426d6d710	2
@@ -44,6 +45,7 @@ australian-tfn	./xtask/src/aegis.rs	1004a585bc60d363038c5889d022bd6f58278338fe66
 # Matches the same 9-digit observed value range in the PNG node
 # dictionary and the GitHub release, asset, run and check identifiers
 # quoted in the release receipts; this repository holds no banking data.
+bank-routing-number	./.wrangler/state/v3/r2/amortyx-releases/blobs/62743077b883cd43afcef14561e59258612176d3c2a5d44524c740ef44e4fbbe000001a1fcc7bd47	c5e808da6dca3e6e0e2bd60b8913754080c03951bddc120ac8df87098946ed08	2
 bank-routing-number	./docs/TASKS.md	90854b2dc477585b494af511ebe7e260c09e9e6d1582f8d75c35733426d6d710	2
 bank-routing-number	./docs/release/ARTIFACT-MATRIX.md	90854b2dc477585b494af511ebe7e260c09e9e6d1582f8d75c35733426d6d710	9
 bank-routing-number	./docs/release/CERTIFICATION.md	90854b2dc477585b494af511ebe7e260c09e9e6d1582f8d75c35733426d6d710	2
@@ -157,6 +159,7 @@ pci-cardholder-data	./crates/app/src/canvas.rs	fd92d952db92eff57586865ef7b6ae628
 pci-cardholder-data	./crates/app/src/editor.rs	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	1
 pci-cardholder-data	./crates/app/src/menus.rs	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	1
 pci-cardholder-data	./crates/app/src/shell/canvas_ui.rs	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	3
+pci-cardholder-data	./crates/app/src/shell/constants.rs	fd92d952db92eff57586865ef7b6ae62897642d1abedbe203d56e2d4ced964ed	1
 pci-cardholder-data	./crates/app/src/shell/mod.rs	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	1
 pci-cardholder-data	./docs/NEXT.md	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	1
 pci-cardholder-data	./docs/SESSIONS.md	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	5
@@ -227,6 +230,7 @@ sql-query	./docs/tasks/T22-screenshot-ui.md	6ba454ee08d4ce45364f6e849176079be5c6
 # dictionary and the GitHub release, asset, run and check identifiers
 # quoted in the release receipts; this repository holds no
 # social-security numbers.
+ssn-no-dashes	./.wrangler/state/v3/r2/amortyx-releases/blobs/62743077b883cd43afcef14561e59258612176d3c2a5d44524c740ef44e4fbbe000001a1fcc7bd47	c5e808da6dca3e6e0e2bd60b8913754080c03951bddc120ac8df87098946ed08	2
 ssn-no-dashes	./docs/TASKS.md	90854b2dc477585b494af511ebe7e260c09e9e6d1582f8d75c35733426d6d710	2
 ssn-no-dashes	./docs/release/ARTIFACT-MATRIX.md	90854b2dc477585b494af511ebe7e260c09e9e6d1582f8d75c35733426d6d710	9
 ssn-no-dashes	./docs/release/CERTIFICATION.md	90854b2dc477585b494af511ebe7e260c09e9e6d1582f8d75c35733426d6d710	2
@@ -308,6 +312,7 @@ xml-external-entity	./packaging/build-macos-dmg.sh	7b16906a7de9206c7488979eb86e8
 # assessment and by the decision and ticket that record the Aegis scan
 # defect (19041, 22621, 26100, 37710) are build identifiers, not postal
 # data. This repository holds no postal data.
+zip-code	./.wrangler/cache/cf.json	b6f19cf8bdfb8ea2278ba12ac79fa90327c8426564b189cb88540722a83bd26a	1
 zip-code	./crates/app-cli/src/mcp.rs	0e5c81ceee464db1c0cb9ed801d134fab0dd2a28c0dc62e35aa21a8e13ff0ebc	1
 zip-code	./crates/app-cli/src/mcp.rs	20d70708103e5223b6f2fb00f00947832fb93d12ebef11eb10bc5599efefe184	1
 zip-code	./crates/app-cli/src/mcp.rs	e27c72fe629f258a871404eed323c0cf57a7a26c19dc8d5a6ac90770241af8f5	1
@@ -573,7 +578,7 @@ zip-code	./crates/app/src/menus.rs	fe4b5aaceb85434cb5ab2dd46e956d10971a5de67e5f8
 zip-code	./crates/app/src/menus.rs	fe71955958a0844d86cd6217c0144e33825cd4c111f1fd815232c6b8fb4f6ec0	1
 zip-code	./crates/app/src/menus.rs	fec32d6024e177ac05e94de175bfccd84ec3d389034f6f57067fb167302534b6	4
 zip-code	./crates/app/src/menus.rs	ffdfd59d08e67eeff2569e91641bb6adb12fc0bf42ef8f0f2c197ed14369f10d	1
-zip-code	./crates/app/src/shell/dialogs.rs	158cb7c22ce6943d7fe7d3e01d61b78ab5b2d080cbffdd81c5de41218a6d65ed	1
+zip-code	./crates/app/src/shell/dialog_types.rs	158cb7c22ce6943d7fe7d3e01d61b78ab5b2d080cbffdd81c5de41218a6d65ed	1
 zip-code	./crates/app/src/shell/dialogs.rs	f2f89ede8e7d4b3d2243dea1ca96b8ece56f793811d9708b4a0181bf81a50011	1
 zip-code	./crates/app/src/shell/mod.rs	876c9b16254e157d1eb645390dcfae6f29b9d3cd394e73a91de8ee5d0e67ee43	1
 zip-code	./crates/app/tests/automation.rs	e27c72fe629f258a871404eed323c0cf57a7a26c19dc8d5a6ac90770241af8f5	1
