@@ -52,3 +52,7 @@ ron = "0.12"
 
 [lints]
 workspace = true
+
+[[test]]
+name = "library"
+required-features = ["native"]

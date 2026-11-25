@@ -147,11 +147,6 @@ pub(crate) const PANELS: &[PanelSpec] = &[
         open_by_default: false,
     },
     PanelSpec {
-        name: "Document Library",
-        kind: PanelKind::DocumentLibrary,
-        open_by_default: false,
-    },
-    PanelSpec {
         name: "Align",
         kind: PanelKind::Align,
         open_by_default: false,
@@ -283,7 +278,7 @@ const DOCK_SIDE: DockSide = DockSide::Right;
 /// moves, so a group is anchored on its first member: the anchor is
 /// the member the group is drawn at, and the member a move carries
 /// with it.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub(crate) struct PanelGroup {
     /// The panels in the group, in tab order. The first member is
     /// the group's anchor.
@@ -328,7 +323,7 @@ pub(crate) fn cancel_panel_drag(ctx: &egui::Context) {
 /// panel-snapshot gate pins. The content a panel draws is not: it
 /// changes with every feature, and a content change is reviewed as
 /// code, not as a golden diff.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct PanelSummary {
     /// The panel's stable id: its CS6 name, lowercased with the
     /// spaces turned into dashes.
@@ -931,6 +926,7 @@ impl Shell {
             collapsed: false,
             body_height: 300.0,
         });
+        self.next_panel_group_id += 1;
     }
 
     /// Switches a tab group to another member.
@@ -1122,7 +1118,13 @@ mod tests {
                 "HTML Preview",
                 "CSS Properties",
                 "Find and Replace",
-                "Common Library"
+                "Common Library",
+                "Special Characters",
+                "Image Editing",
+                "Auto Shape Properties",
+                "Align",
+                "Path",
+                "Color Palette"
             ]
         );
     }

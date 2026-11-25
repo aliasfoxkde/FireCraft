@@ -383,3 +383,40 @@ mod tests {
         assert!(!RESOLUTION_PRESETS.is_empty());
     }
 }
+
+/// Find & Replace operating mode.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum FindReplaceMode {
+    #[default]
+    Text,
+    FillColor,
+    StrokeColor,
+    AnyColor,
+}
+
+impl FindReplaceMode {
+    pub const ALL: [FindReplaceMode; 4] = [
+        FindReplaceMode::Text,
+        FindReplaceMode::FillColor,
+        FindReplaceMode::StrokeColor,
+        FindReplaceMode::AnyColor,
+    ];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            FindReplaceMode::Text => "Text & object names",
+            FindReplaceMode::FillColor => "Fill color",
+            FindReplaceMode::StrokeColor => "Stroke color",
+            FindReplaceMode::AnyColor => "Any color",
+        }
+    }
+
+    pub fn short_label(self) -> &'static str {
+        match self {
+            FindReplaceMode::Text => "Text",
+            FindReplaceMode::FillColor => "Fill",
+            FindReplaceMode::StrokeColor => "Stroke",
+            FindReplaceMode::AnyColor => "Any color",
+        }
+    }
+}

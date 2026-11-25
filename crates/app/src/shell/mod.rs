@@ -418,6 +418,10 @@ pub struct Shell {
     /// Latest version string.
     pub(crate) update_latest_version: Option<String>,
     pub(crate) dragging_group: Option<u64>,
+    /// Monotonically increasing id for panel groups.
+    pub(crate) next_panel_group_id: u64,
+    /// Panel being dragged individually (for floating panel groups).
+    pub(crate) dragging_panel: Option<u64>,
     /// Release URL.
     pub(crate) update_release_url: Option<String>,
     /// Tab pending close (Save/Don't Save/Cancel).
@@ -788,6 +792,8 @@ impl Shell {
             show_update_dialog: false,
             update_status: String::new(),
             update_latest_version: None,
+            next_panel_group_id: 0,
+            dragging_panel: None,
             update_release_url: None,
             pending_close_tab: None,
             selected_extra_layers: Vec::new(),
@@ -872,7 +878,16 @@ impl Shell {
                 .map(|spec| spec.name)
                 .filter(|name| members.contains(name))
                 .unwrap_or(members[0]);
-            groups.push(panel_windows::PanelGroup { members, active });
+            groups.push(panel_windows::PanelGroup {
+                members,
+                active,
+                id: self.next_panel_group_id,
+                floating_pos: egui::Pos2::ZERO,
+                floating_width: 220.0,
+                stack_parent: None,
+                collapsed: false,
+                body_height: 300.0,
+            });
         }
         groups.retain(|group| group.members.len() > 1);
         self.panel_groups = groups;
