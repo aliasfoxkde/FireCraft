@@ -5392,3 +5392,54 @@ fn parse_kernel(text: &str, width: i64, height: i64) -> Result<Vec<i64>, String>
     }
     Ok(values)
 }
+
+impl Shell {
+    /// Special Characters panel stub (CS6 special chars insertion).
+    pub(super) fn special_chars_panel(&mut self, ui: &mut egui::Ui) {
+        ui.weak("Special Characters — insert special characters.");
+        ui.add_space(4.0);
+        ui.weak("Inserts symbols, dingbats, and special Unicode characters.");
+    }
+
+    /// Image Editing panel stub (CS6 image editing tools).
+    pub(super) fn image_editing_panel(&mut self, ui: &mut egui::Ui) {
+        ui.weak("Image Editing — adjust and edit raster images.");
+        ui.add_space(4.0);
+        ui.weak("Resize, rotate, crop, and apply filters to raster images.");
+    }
+
+    /// Auto Shape Properties panel stub (parametric auto shape controls).
+    pub(super) fn auto_shape_props_panel(&mut self, ui: &mut egui::Ui) {
+        ui.weak("Auto Shape Properties — parametric controls for auto shapes.");
+        ui.add_space(4.0);
+        ui.weak("Sides, inner radius, star points, and other parametric values.");
+    }
+
+    /// Document Library panel stub (CS6 document assets).
+    pub(super) fn document_library_panel(&mut self, ui: &mut egui::Ui) {
+        ui.weak("Document Library — shared assets and symbols.");
+        ui.add_space(4.0);
+        ui.weak("Symbols, templates, and other document-level assets.");
+    }
+
+    /// Align panel stub (CS6 alignment tools).
+    pub(super) fn align_panel(&mut self, ui: &mut egui::Ui) {
+        ui.weak("Align — align and distribute objects.");
+        ui.add_space(4.0);
+        ui.weak("Align to page, selection, or each other.");
+    }
+
+    /// Path panel stub (CS6 path editing).
+    pub(super) fn path_panel(&mut self, ui: &mut egui::Ui) {
+        ui.weak("Path — edit vector paths and sub-paths.");
+        ui.add_space(4.0);
+        ui.weak("Add, delete, and convert path nodes.");
+    }
+
+    /// Color Palette panel stub (CS6 color palette).
+    pub(super) fn color_palette_panel(&mut self, ui: &mut egui::Ui) {
+        ui.weak("Color Palette — manage color swatches and palettes.");
+        ui.add_space(4.0);
+        ui.weak("View, edit, and organize color swatches.");
+    }
+}

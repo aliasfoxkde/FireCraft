@@ -131,6 +131,41 @@ pub(crate) const PANELS: &[PanelSpec] = &[
         kind: PanelKind::CommonLibrary,
         open_by_default: false,
     },
+    PanelSpec {
+        name: "Special Characters",
+        kind: PanelKind::SpecialChars,
+        open_by_default: false,
+    },
+    PanelSpec {
+        name: "Image Editing",
+        kind: PanelKind::ImageEditing,
+        open_by_default: false,
+    },
+    PanelSpec {
+        name: "Auto Shape Properties",
+        kind: PanelKind::AutoShapeProps,
+        open_by_default: false,
+    },
+    PanelSpec {
+        name: "Document Library",
+        kind: PanelKind::DocumentLibrary,
+        open_by_default: false,
+    },
+    PanelSpec {
+        name: "Align",
+        kind: PanelKind::Align,
+        open_by_default: false,
+    },
+    PanelSpec {
+        name: "Path",
+        kind: PanelKind::Path,
+        open_by_default: false,
+    },
+    PanelSpec {
+        name: "Color Palette",
+        kind: PanelKind::ColorPalette,
+        open_by_default: false,
+    },
 ];
 
 /// The Web Layer panel has no Window-menu row in CS6 — it is always
@@ -179,6 +214,14 @@ pub(crate) enum PanelKind {
     HtmlPreview,
     CssProperties,
     FindReplace,
+    // New CS6 panels from experiment
+    SpecialChars,
+    ImageEditing,
+    AutoShapeProps,
+    DocumentLibrary,
+    Align,
+    Path,
+    ColorPalette,
     CommonLibrary,
 }
 
@@ -247,6 +290,19 @@ pub(crate) struct PanelGroup {
     pub(crate) members: Vec<&'static str>,
     /// The member whose content the group shows.
     pub(crate) active: &'static str,
+    /// Unique group id for tracking floating stacks.
+    pub(crate) id: u64,
+    /// Floating position when the group is undocked.
+    pub(crate) floating_pos: egui::Pos2,
+    /// Floating width when the group is undocked.
+    pub(crate) floating_width: f32,
+    /// When set, this floating group is stacked under the referenced group and
+    /// follows it when that group moves.
+    pub(crate) stack_parent: Option<u64>,
+    /// Whether the group is currently collapsed (iconic mode).
+    pub(crate) collapsed: bool,
+    /// Body height for floating panels.
+    pub(crate) body_height: f32,
 }
 
 /// The payload a panel drag carries: which panel is being moved.
@@ -756,6 +812,13 @@ impl Shell {
             PanelKind::CssProperties => self.css_properties_panel(ui),
             PanelKind::FindReplace => self.find_replace_panel(ui),
             PanelKind::CommonLibrary => self.common_library_panel(ui),
+            PanelKind::SpecialChars => self.special_chars_panel(ui),
+            PanelKind::ImageEditing => self.image_editing_panel(ui),
+            PanelKind::AutoShapeProps => self.auto_shape_props_panel(ui),
+            PanelKind::DocumentLibrary => self.document_library_panel(ui),
+            PanelKind::Align => self.align_panel(ui),
+            PanelKind::Path => self.path_panel(ui),
+            PanelKind::ColorPalette => self.color_palette_panel(ui),
         }
     }
 
@@ -861,6 +924,12 @@ impl Shell {
         self.panel_groups.push(PanelGroup {
             members,
             active: panel,
+            id: self.next_panel_group_id,
+            floating_pos: egui::pos2(0.0, 0.0),
+            floating_width: DOCK_CONTENT_WIDTH,
+            stack_parent: None,
+            collapsed: false,
+            body_height: 300.0,
         });
     }
 
