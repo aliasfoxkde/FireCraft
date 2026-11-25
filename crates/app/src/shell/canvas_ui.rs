@@ -844,6 +844,33 @@ impl Shell {
                 egui::StrokeKind::Outside,
             );
         }
+        // Lasso selection path: draw the pointer trace as a filled
+        // polygon while the lasso tool is dragging — gives visual
+        // feedback that the marquee is selecting by shape, not just
+        // by bounding box.
+        if let Some(drag) = &self.editor.drag
+            && drag.moving.is_none()
+            && self.editor.tool == Tool::Lasso
+            && drag.trace.len() >= 3
+        {
+            let pts: Vec<Pos2> = drag
+                .trace
+                .iter()
+                .map(|p| {
+                    let screen = self.view.to_screen(*p);
+                    Pos2::new(rect.left() + screen.x, rect.top() + screen.y)
+                })
+                .collect();
+            ui.painter().add(egui::Shape::convex_polygon(
+                pts.clone(),
+                Color32::from_rgb(120, 180, 255).gamma_multiply(0.14),
+                egui::Stroke::new(1.0, Color32::from_rgb(120, 180, 255)),
+            ));
+            ui.painter().add(egui::Shape::closed_line(
+                pts,
+                egui::Stroke::new(1.0, Color32::from_rgb(120, 180, 255)),
+            ));
+        }
 
         // Grid overlay: lines across the page at the effective cell
         // size, from the page's grid override or the document grid.
@@ -946,6 +973,98 @@ impl Shell {
                         draft.horizontal,
                         Color32::from_rgb(0x60, 0xd0, 0xff),
                     );
+                }
+            }
+        }
+        // Smart guides (display-only alignment hints): drawn when the
+        // selection aligns with the page or another selected object's
+        // edges or center. The tolerance is proportional to zoom.
+        if self.smart_guides && self.editor.live_selection().len() > 0 {
+            let tol: f64 = ((6.0 / self.view.zoom.max(0.25)).clamp(3.0, 14.0)) as f64;
+            let page = self.editor.document().pages.get(self.editor.page);
+            if let Some(page) = page {
+                let pw = page.info.canvas.width;
+                let ph = page.info.canvas.height;
+                let to_screen = |pt: geom::Point| {
+                    Pos2::new(
+                        rect.left() + self.view.to_screen(pt).x,
+                        rect.top() + self.view.to_screen(pt).y,
+                    )
+                };
+                let selected_bounds: Vec<geom::Rect> = self
+                    .editor
+                    .live_selection()
+                    .iter()
+                    .filter_map(|id| {
+                        self.editor
+                            .document()
+                            .registry
+                            .get(*id)
+                            .map(|data| object_bounds(self.editor.document(), data, 0))
+                    })
+                    .collect();
+                let mut x_targets: Vec<f64> = Vec::new();
+                let mut y_targets: Vec<f64> = Vec::new();
+                // Page center lines.
+                x_targets.push(pw as f64 / 2.0);
+                y_targets.push(ph as f64 / 2.0);
+                // Page edges.
+                x_targets.extend([0.0, pw as f64]);
+                y_targets.extend([0.0, ph as f64]);
+                // Selected object bounds and centers.
+                for bounds in selected_bounds {
+                    x_targets.push(bounds.x0 as f64);
+                    x_targets.push(bounds.x1 as f64);
+                    x_targets.push((bounds.x0 + bounds.x1) as f64 / 2.0);
+                    y_targets.push(bounds.y0 as f64);
+                    y_targets.push(bounds.y1 as f64);
+                    y_targets.push((bounds.y0 + bounds.y1) as f64 / 2.0);
+                }
+                let ink = Color32::from_rgb(0xff, 0x44, 0x44);
+                let painter = ui.painter();
+                let page_bounds = &page.info.canvas;
+                let sel_ids = self.editor.live_selection();
+                for id in &sel_ids {
+                    if let Some(data) = self.editor.document().registry.get(*id)
+                        && let bounds = object_bounds(self.editor.document(), data, 0)
+                    {
+                        // Vertical alignment lines.
+                        for &target_x in &x_targets {
+                            let aligned = [
+                                bounds.x0 as f64,
+                                (bounds.x0 + bounds.x1) as f64 / 2.0,
+                                bounds.x1 as f64,
+                            ]
+                            .into_iter()
+                            .any(|x| (x - target_x).abs() < tol);
+                            if aligned {
+                                let a = to_screen(geom::Point::new(target_x, page_bounds.y));
+                                let b = to_screen(geom::Point::new(
+                                    target_x,
+                                    page_bounds.y + page_bounds.height,
+                                ));
+                                painter.line_segment([a, b], (1.5, ink));
+                            }
+                        }
+                        // Horizontal alignment lines.
+                        for &target_y in &y_targets {
+                            let aligned = [
+                                bounds.y0 as f64,
+                                (bounds.y0 + bounds.y1) as f64 / 2.0,
+                                bounds.y1 as f64,
+                            ]
+                            .into_iter()
+                            .any(|y| (y - target_y).abs() < tol);
+                            if aligned {
+                                let a = to_screen(geom::Point::new(page_bounds.x, target_y));
+                                let b = to_screen(geom::Point::new(
+                                    page_bounds.x + page_bounds.width,
+                                    target_y,
+                                ));
+                                painter.line_segment([a, b], (1.5, ink));
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -1452,7 +1571,10 @@ impl Shell {
         // the object's frame. Esc cancels; any other commit path
         // (click-away, tool switch) goes through `commit_text_edit`.
         if self.text_edit.is_some() {
-            let esc = ui.input(|i| i.key_pressed(egui::Key::Escape));
+            let esc = ui.input(|i| {
+                i.key_pressed(egui::Key::Escape)
+                    || (i.modifiers.ctrl && i.key_pressed(egui::Key::Enter))
+            });
             if esc {
                 self.cancel_text_edit();
             } else {

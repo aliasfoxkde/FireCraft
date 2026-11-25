@@ -34,6 +34,7 @@ fn gui_session() -> Editor {
     editor
 }
 
+#[cfg(feature = "native")]
 #[test]
 fn saved_steps_replay_to_a_byte_equal_document() {
     let editor = gui_session();

@@ -86,6 +86,44 @@ pub fn apply_chrome_theme(ctx: &egui::Context) {
     });
 }
 
+/// Reads the operating system's light/dark preference on Windows (cached).
+/// Uses `OnceLock` to ensure the registry query runs exactly once.
+pub fn system_is_light() -> bool {
+    static CACHED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *CACHED.get_or_init(|| {
+        #[cfg(target_os = "windows")]
+        {
+            use std::os::windows::process::CommandExt;
+            const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+            let out = std::process::Command::new("reg")
+                .args([
+                    "query",
+                    r"HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
+                    "/v",
+                    "AppsUseLightTheme",
+                ])
+                .creation_flags(CREATE_NO_WINDOW)
+                .output();
+            if let Ok(out) = out {
+                let text = String::from_utf8_lossy(&out.stdout);
+                for token in text.split_whitespace() {
+                    if token.eq_ignore_ascii_case("0x0") {
+                        return false;
+                    }
+                    if token.eq_ignore_ascii_case("0x1") {
+                        return true;
+                    }
+                }
+            }
+            false
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            false
+        }
+    })
+}
+
 /// Display name for a tool (the CS6 tool names).
 ///
 /// The names live in [`crate::toolstrip`], next to the strip's order

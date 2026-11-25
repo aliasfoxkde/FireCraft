@@ -978,6 +978,7 @@ pub struct GradientDrag {
     pub applied: bool,
 }
 
+#[allow(dead_code)]
 /// Everything the shell shows, minus the window itself.
 pub struct Editor {
     /// The editing session (document + history + journal).
@@ -1172,6 +1173,7 @@ impl Editor {
     ///
     /// # Errors
     /// Whatever the reader refuses (bad PNG, no mkTS, model drift).
+    #[cfg(feature = "native")]
     pub fn open(bytes: &[u8]) -> Result<Self, EngineError> {
         let loaded = app_cli::io::open(bytes).map_err(|error| EngineError::Io {
             path: "<bytes>".to_owned(),
@@ -1184,6 +1186,7 @@ impl Editor {
     ///
     /// # Errors
     /// Whatever the writer refuses.
+    #[cfg(feature = "native")]
     pub fn save(&self) -> Result<Vec<u8>, EngineError> {
         app_cli::io::save(self.session.document(), &self.unknown, &self.chunks).map_err(|error| {
             EngineError::Io {
@@ -1201,6 +1204,7 @@ impl Editor {
     ///
     /// # Errors
     /// An unknown name or a dangling member id (corrupt library).
+    #[cfg(feature = "native")]
     pub fn export_library(&self, names: &[&str]) -> Result<Vec<u8>, EngineError> {
         let library = doc::library::extract(self.session.document(), names).map_err(|error| {
             EngineError::InvalidState {
@@ -1226,6 +1230,7 @@ impl Editor {
     /// # Errors
     /// Whatever the reader refuses, or an import refuses (a payload
     /// whose closure is incomplete — a corrupt library file).
+    #[cfg(feature = "native")]
     pub fn import_library(
         &mut self,
         bytes: &[u8],
@@ -5248,6 +5253,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "native")]
     fn edits_round_trip_through_save_and_open() {
         let mut editor = Editor::untitled();
         editor.tool = Tool::Rect;
@@ -5734,6 +5740,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "native")]
     fn save_and_open_round_trip_preserves_elements() {
         let mut editor = Editor::untitled();
         editor.tool = Tool::Ellipse;
@@ -5885,5 +5892,20 @@ mod tests {
         let color = editor.pick_color(geom::Point::new(0.5, 0.5));
         assert_eq!(color, Some([255, 0, 0, 255]), "the raster is opaque red");
         assert_eq!(editor.pick_color(geom::Point::new(900.0, 900.0)), None);
+    }
+}
+#[cfg(not(feature = "native"))]
+impl Editor {
+    pub fn open(_bytes: &[u8]) -> Result<Self, engine::EngineError> {
+        Err(engine::EngineError::InvalidState {
+            name: "open".into(),
+            detail: "use load_document_bytes instead".into(),
+        })
+    }
+    pub fn save(&self) -> Result<Vec<u8>, engine::EngineError> {
+        Err(engine::EngineError::InvalidState {
+            name: "save".into(),
+            detail: "documents saved through wasm bridge".into(),
+        })
     }
 }

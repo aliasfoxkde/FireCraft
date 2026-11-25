@@ -201,6 +201,7 @@ impl Shell {
 }
 
 /// Runs the export and decodes its image files.
+#[cfg(feature = "native")]
 fn build_cache(document: &doc::Document, options: &webexport::WebExportOptions) -> PreviewCache {
     let export = match app_cli::ops::export_web(document, options, WORKFLOW) {
         Ok(export) => export,

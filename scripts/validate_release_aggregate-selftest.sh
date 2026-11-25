@@ -52,6 +52,7 @@ make_set() {
   printf 'sbom\n' > "$dir/firecraft-${version}-sbom.cdx.json"
   printf 'manifest\n' > "$dir/MANIFEST.sha256"
   printf 'checksums\n' > "$dir/RELEASE_SHA256.txt"
+  printf 'provenance\n' > "$dir/provenance.intoto.json"
 
   # The checksum list covers the digested files, by bare name.
   (
@@ -84,7 +85,8 @@ make_set() {
       "firecraft-web-${version}.zip:wasm32-unknown-unknown" \
       "firecraft-${version}-source.tar.gz:any" \
       "firecraft-${version}-sbom.cdx.json:any" \
-      "RELEASE_SHA256.txt:any"; do
+      "RELEASE_SHA256.txt:any" \
+      "provenance.intoto.json:any"; do
       name=${entry%%:*}
       local target=${entry#*:}
       sha=$(digest "$dir/$name")

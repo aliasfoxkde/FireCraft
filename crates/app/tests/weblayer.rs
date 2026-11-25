@@ -3,6 +3,7 @@
 //! `app_cli::ops::export_web` pipeline the CLI verb and the export
 //! dialog share — byte-equal to calling `webexport::export` directly.
 
+#![cfg(feature = "native")]
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use app::editor::{Editor, Tool};
