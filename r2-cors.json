@@ -1,0 +1,12 @@
+{
+  "rules": [
+    {
+      "allowedOrigins": [
+        "*"
+      ],
+      "allowedMethods": [
+        "GET"
+      ]
+    }
+  ]
+}
