@@ -765,7 +765,10 @@ fn stage_web() -> Result<Vec<PathBuf>, String> {
         Some(&web),
         "trunk",
         &["build", "--release"],
-        &[("CARGO_PROFILE_RELEASE_OPT_LEVEL", "z")],
+        &[
+            ("NO_COLOR", "false"),
+            ("CARGO_PROFILE_RELEASE_OPT_LEVEL", "z"),
+        ],
     )?;
 
     let mut staged = Vec::new();
