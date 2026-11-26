@@ -20,6 +20,21 @@ struct SharedLayer {
     slots: Vec<(usize, usize)>,
 }
 
+fn layer_icon_button(
+    ui: &mut egui::Ui,
+    icon: super::vector_icons::Icon,
+    tooltip: &str,
+) -> egui::Response {
+    let response = ui.add_sized([20.0, 18.0], egui::Button::new(""));
+    let color = if response.hovered() {
+        ui.visuals().widgets.hovered.fg_stroke.color
+    } else {
+        ui.visuals().text_color()
+    };
+    super::vector_icons::draw(ui.painter(), response.rect.shrink(2.0), icon, color, 1.0);
+    response.on_hover_text(tooltip)
+}
+
 impl Shell {
     /// Edit ▸ Paste as Mask / Paste Inside: the clipboard becomes the
     /// selection's mask. Both commands read the document's selection,
@@ -548,12 +563,12 @@ impl Shell {
         for (layer_index, (label, display, locked)) in layers.iter().enumerate() {
             let mut rename = label.clone();
             ui.horizontal(|ui| {
-                let eye = if *display { "👁" } else { "·" };
-                if ui
-                    .button(eye)
-                    .on_hover_text("Toggle layer display")
-                    .clicked()
-                {
+                let eye = if *display {
+                    super::vector_icons::Icon::Eye
+                } else {
+                    super::vector_icons::Icon::EyeOff
+                };
+                if layer_icon_button(ui, eye, "Toggle layer display").clicked() {
                     let _ = self.editor.apply(
                         "layer.setDisplay",
                         serde_json::json!({
@@ -563,12 +578,12 @@ impl Shell {
                         }),
                     );
                 }
-                let lock = if *locked { "🔒" } else { "🔓" };
-                if ui
-                    .button(lock)
-                    .on_hover_text("Lock this layer in the current state")
-                    .clicked()
-                {
+                let lock = if *locked {
+                    super::vector_icons::Icon::Lock
+                } else {
+                    super::vector_icons::Icon::Unlock
+                };
+                if layer_icon_button(ui, lock, "Lock this layer in the current state").clicked() {
                     let _ = self.editor.apply(
                         "layer.setLocked",
                         serde_json::json!({
@@ -611,29 +626,31 @@ impl Shell {
                 {
                     self.select_layer_objects(layer_index);
                 }
-                if ui
-                    .small_button("✎")
-                    .on_hover_text("Rename this layer")
+                if layer_icon_button(ui, super::vector_icons::Icon::Pencil, "Rename this layer")
                     .clicked()
                 {
                     self.rename_layer = Some(layer_index);
                 }
-                if ui
-                    .small_button("↑")
-                    .on_hover_text("Move this layer up")
-                    .clicked()
+                if layer_icon_button(
+                    ui,
+                    super::vector_icons::Icon::BringForward,
+                    "Move this layer up",
+                )
+                .clicked()
                 {
                     self.reorder_layer(layer_index, true);
                 }
-                if ui
-                    .small_button("↓")
-                    .on_hover_text("Move this layer down")
-                    .clicked()
+                if layer_icon_button(
+                    ui,
+                    super::vector_icons::Icon::SendBackward,
+                    "Move this layer down",
+                )
+                .clicked()
                 {
                     self.reorder_layer(layer_index, false);
                 }
                 if ui
-                    .small_button("⇔")
+                    .small_button("To")
                     .on_hover_text("Move the selection onto this layer")
                     .clicked()
                 {

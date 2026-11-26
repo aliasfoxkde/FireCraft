@@ -879,14 +879,14 @@ impl Shell {
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing = Vec2::new(2.0, 0.0);
             if ui
-                .small_button("⇄")
+                .small_button("SW")
                 .on_hover_text("Swap Fill & Stroke (X)")
                 .clicked()
             {
                 self.run_panel_button(Tool::SwapStrokeFill);
             }
             if ui
-                .small_button("▣")
+                .small_button("D")
                 .on_hover_text("Default Colors (D)")
                 .clicked()
             {
@@ -894,7 +894,7 @@ impl Shell {
             }
             if !self.tools_collapsed
                 && ui
-                    .small_button("⊘")
+                    .small_button("NF")
                     .on_hover_text("No Fill / Clear Stroke")
                     .clicked()
             {
@@ -902,7 +902,7 @@ impl Shell {
             }
             if !self.tools_collapsed
                 && ui
-                    .small_button("⛶")
+                    .small_button("FS")
                     .on_hover_text("Cycle Screen Mode (F)")
                     .clicked()
             {
