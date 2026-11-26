@@ -4,8 +4,8 @@
 > **Status:** proposed plan; no implementation status is implied by this document.
 > **Canonical repository:** https://github.com/aliasfoxkde/FireCraft
 > **Primary branch:** `main`
-> **Companion strategy:** [Post-MVP Product and Engineering Roadmap](POST-MVP-ROADMAP.md)
-> **Existing authorities:** [AGENTS.md](../AGENTS.md), [TASKS.md](TASKS.md), [NEXT.md](NEXT.md), [HANDOFF.md](HANDOFF.md), [CS6-PARITY.md](CS6-PARITY.md), [FEATURES.md](FEATURES.md), [PROGRESS.md](PROGRESS.md), [PRODUCTION-READINESS-PLAN.md](PRODUCTION-READINESS-PLAN.md), [POST-MVP-AGENT-HANDOFF.md](POST-MVP-AGENT-HANDOFF.md), and [MARKETING-SITE-ROADMAP.md](MARKETING-SITE-ROADMAP.md).
+> **Companion strategy:** [Post-MVP Product and Engineering Roadmap](../POST-MVP-ROADMAP.md)
+> **Existing authorities:** [AGENTS.md](../../AGENTS.md), [TASKS.md](../TASKS.md), [NEXT.md](../NEXT.md), [HANDOFF.md](../HANDOFF.md), [CS6-PARITY.md](../CS6-PARITY.md), [FEATURES.md](../FEATURES.md), [PROGRESS.md](../PROGRESS.md), [PRODUCTION-READINESS-PLAN.md](../PRODUCTION-READINESS-PLAN.md), [POST-MVP-AGENT-HANDOFF.md](../POST-MVP-AGENT-HANDOFF.md), and [MARKETING-SITE-ROADMAP.md](../MARKETING-SITE-ROADMAP.md).
 > **Prepared against remote snapshot:** `main` at `4ff8f786e365c8b7d7609e435424c9c746e61d6d`, 2026-11-26.
 > **Owner context:** the project owner reports that the CraftAnything experiment is currently the better-feeling UI baseline and that an agent is already working in a newer branch/worktree on icons, look-and-feel, polish, and consolidation. That in-flight work is not visible in this remote snapshot and MUST be discovered and preserved before integration.
 
@@ -135,7 +135,7 @@ For each open PR:
 For #186/#187 specifically, compare:
 - Shell/panel modules and panel inventory.
 - Toolbar/icon assets, keymap, color system, menus, dialogs, dock behavior.
-- Canvas zoom/pan/infinite canvas and input gestures.
+- Canvas zoom, drag-to-navigate/infinite canvas behavior, and input gestures.
 - Inline text editing and cancellation semantics.
 - Smart guides, lasso feedback, drag/drop overlay, context menus, quit confirmation.
 - WASM glue/CDN and deploy behavior.
@@ -227,12 +227,14 @@ The target is roughly 80% of the common workflows requested by the intended firs
    - Clear handling of malformed, unsupported, or partially compatible files.
 3. **Hybrid canvas editing**
    - Import/place raster images.
+   - Perform at least one real pixel-editing operation on a raster layer (such as brush/erase, crop, selection-based removal or an adjustment) through an engine/registry command, then undo/redo it.
+   - Save/reopen/export the edited raster result and verify the output bytes or rendered pixels; importing and repositioning an image alone does not satisfy the bitmap-editing acceptance.
    - Create/select/move/resize/rotate vector objects.
    - Bézier path creation and node/handle editing.
    - Text create/edit/format with reliable commit/cancel behavior.
    - Fill, stroke, color, opacity, gradients, alignment, arrangement, and basic transforms.
    - Selection, multi-selection, copy/paste/duplicate, undo/redo.
-   - Predictable zoom, pan, fit-to-content, pixel-accurate zoom, guides/grid/snapping.
+   - Predictable zoom, canvas navigation, fit-to-content, pixel-accurate zoom, guides/grid/snapping.
 4. **Organization**
    - Layers with visibility, lock, reorder, rename, and selection behavior.
    - Pages or artboards with dependable navigation and document persistence.
@@ -368,7 +370,7 @@ Rules:
 - Do not use invasive fingerprinting or collect unrelated hardware/software inventories.
 - Do not collect precise location, contacts, browsing history, installed applications, clipboard, or other unrelated data.
 - Do not automatically upload active artwork, source files, filenames, paths, or full memory dumps.
-- Screenshots can expose private artwork or personal data. Make them opt-in, previewable, crop/redact-capable, and removable.
+- Screenshots can expose private artwork or sensitive user details. Make them opt-in, previewable, crop/redact-capable, and removable.
 - Log capture is opt-in, bounded (for example, last 5–10 minutes or a fixed maximum size), sanitized, and previewable.
 - Provide “Copy diagnostics” and “Export report” locally, even when the user declines network submission.
 - State retention and public visibility: GitHub issues are public unless a separate private security-reporting path is used. Warn before submission.
@@ -443,7 +445,7 @@ At minimum:
 - Layer visibility/lock/reorder/rename.
 - Page navigation and persistence.
 - Panel open/close/resize/dock/reset and layout persistence.
-- Zoom/pan/fit, pixel-accurate zoom, guide/grid/snap interactions.
+- Zoom, canvas navigation and fit, pixel-accurate zoom, guide/grid/snap interactions.
 - Context menu and menu/toolbar command parity for common operations.
 - Drag/drop supported files and invalid-file handling.
 - Unsaved changes, save failures, recovery prompt, and malformed document.
@@ -520,7 +522,7 @@ Automation must not:
 
 ### 8.3 Human validation and staged rollout
 
-For each candidate:
+For FireCraft 1.0, staged validation is mandatory and is a P0 release gate. Apply the same workflow to later candidates where appropriate. For each candidate:
 1. Publish candidate to staging with a unique build identifier and commit SHA.
 2. Run automated smoke and regression suites.
 3. Invite the reporting user to test the fix, if they opted in to follow-up/beta testing.
@@ -564,11 +566,12 @@ A platform is **Supported** only after a real artifact is installed/launched and
 
 ### 9.2 1.0 release gates
 
-Do not tag 1.0 until all are true:
+Do not tag or publish 1.0 until all are true. Staging, cohort validation and a human promotion/rollback drill are mandatory gates, not optional post-release polish:
 
 - The canonical integration branch is merged and reproducible from a clean clone.
 - No known P0 data-loss, corruption, startup, save, or export defect remains.
-- P0 workflows in §5.2 pass on each claimed supported target.
+- P0 workflows in §5.2 pass on each claimed supported target, including at least one verified raster pixel-editing workflow (not merely importing/positioning a bitmap).
+- The 1.0 release candidate passes the staging deployment, automated staging smoke/regression suite, opt-in reporter/cohort validation and human promotion/rollback drill in §8.3. Staging is a P0 release gate, not post-1.0 optional work.
 - Native and WASM builds pass their required CI and manual smoke checks.
 - GUI interaction and screenshot regression suite is stable and useful.
 - The feedback flow is usable, privacy-reviewed, and has offline fallback.
@@ -631,13 +634,13 @@ Suggested work packages:
 | FC10-06 | Diagnostic schema, metadata providers, redaction | P0 | architecture review | Unit tests and privacy test corpus |
 | FC10-07 | In-app feedback UI and report preview | P0 | FC10-06 | Native/WASM form and offline export |
 | FC10-08 | GitHub submission broker or safe issue-form fallback | P0 | FC10-07 | End-to-end issue creation; rate-limit/security tests |
-| FC10-09 | Staging environment and artifact provenance | P1 | FC10-02 | Staging deploy tied to immutable commit/artifact |
+| FC10-09 | Staging environment and artifact provenance | P0 | FC10-02 | Staging deploy tied to immutable commit/artifact; candidate smoke and rollback receipt |
 | FC10-10 | Issue → agent branch/PR workflow | P1 | FC10-08, FC10-09 | Demo on a non-production test issue |
-| FC10-11 | Beta cohort and release promotion checklist | P1 | FC10-09 | Human-approved candidate promotion/rollback drill |
+| FC10-11 | Beta cohort and release promotion checklist | P0 | FC10-09 | Reporter/cohort validation and human-approved candidate promotion/rollback drill |
 | FC10-12 | Platform install/launch/core workflow matrix | P0 | FC10-02 | Evidence per claimed supported target |
 | FC10-13 | README/site/release documentation refresh | P0 | FC10-04, FC10-12 | Claims match published artifacts |
 | FC10-14 | Branch/worktree cleanup | P1 | all integration work merged | Safe cleanup report, no unmerged work lost |
-| FC10-15 | 1.0 RC, external user test, final release | P0 | all P0 work | Owner sign-off and release checklist |
+| FC10-15 | 1.0 RC, external user test, final release | P0 | all P0 work, including FC10-09 and FC10-11 | Staging/candidate validation, owner sign-off and release checklist |
 
 The owner may reorder tasks based on the active worktree and actual blockers. Do not begin the feedback backend or broad refactors before the integration baseline and current UI direction are agreed.
 
