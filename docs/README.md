@@ -69,3 +69,13 @@ This page is the documentation map. Start with the overview that matches your go
 3. [Marketing Site Roadmap](MARKETING-SITE-ROADMAP.md): existing `site/` audit, landing-page content, Cloudflare Pages separation, deployment gates, accessibility, SEO, and launch acceptance.
 
 These plans are proposals until approved. `TASKS.md` remains the only live task ledger; speculative roadmap items must not be bulk-added as active work.
+
+
+### Expanded FireCraft 1.0 execution and release closeout
+
+1. [End-to-End Execution, Distribution, Documentation, and GitHub Closeout Plan](planning/FIRECRAFT-1.0-END-TO-END-EXECUTION-AND-RELEASE-CLOSEOUT.md): phase 0 through final 1.0 publication, local CraftAnything experiment audit, complete Windows/macOS/Linux/WASM package matrix, README/wiki refactor, full issue/PR cleanup and release certification.
+2. [1.0 Consolidation and Release Handoff](planning/FIRECRAFT-1.0-CONSOLIDATION-AND-RELEASE-HANDOFF.md): product-level MVP and feedback loop.
+3. [Product Expansion Roadmap](planning/FIRECRAFT-PRODUCT-ROADMAP-AND-EXPANSION.md): longer-term feature horizons.
+4. [Marketing Site Roadmap](MARKETING-SITE-ROADMAP.md): public landing page and separate Cloudflare Pages deployment.
+
+The end-to-end plan is the phase/workstream reference. TASKS.md continues to be the only live task ledger.
