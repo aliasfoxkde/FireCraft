@@ -153,3 +153,8 @@ instead.
 `log/devlog.md` is the untracked handoff journal: one entry per work
 session — what landed, gate status, what's next. Read it first when
 picking up work.
+
+
+## 1.0 launch and product roadmap references
+
+The current cross-workstream execution proposal is [docs/planning/FIRECRAFT-1.0-CONSOLIDATION-AND-RELEASE-HANDOFF.md](docs/planning/FIRECRAFT-1.0-CONSOLIDATION-AND-RELEASE-HANDOFF.md). Longer-term feature horizons are in [docs/planning/FIRECRAFT-PRODUCT-ROADMAP-AND-EXPANSION.md](docs/planning/FIRECRAFT-PRODUCT-ROADMAP-AND-EXPANSION.md), and the marketing website/Cloudflare Pages requirements are in [docs/MARKETING-SITE-ROADMAP.md](docs/MARKETING-SITE-ROADMAP.md). These are planning references; `docs/TASKS.md` remains the only live task ledger. The marketing `site/` project and WASM `dist/web` project are separate deploy targets.
