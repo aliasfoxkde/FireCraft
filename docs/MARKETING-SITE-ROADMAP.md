@@ -380,3 +380,60 @@ Use current official documentation during deployment work; account configuration
 - [Deploy static HTML to Pages](https://developers.cloudflare.com/pages/framework-guides/deploy-anything/) — static output and direct deployment workflow.
 
 Do not treat this documentation as evidence that FireCraft's account is already configured. The live account and project settings must be inspected independently.
+
+
+---
+
+## 14. 1.0 launch integration and execution addendum
+
+The marketing site is an explicit part of the FireCraft 1.0 release definition. Existing source is a starting point, not proof of a complete landing page or production deployment. This roadmap is the detailed site spec; the [1.0 Consolidation Handoff](planning/FIRECRAFT-1.0-CONSOLIDATION-AND-RELEASE-HANDOFF.md) is the cross-project release authority.
+
+### 14.1 Required launch journeys and pages
+
+Minimum useful public experience:
+- **Home:** concise product promise, authentic editor visual, Try/Download actions, hybrid vector/bitmap differentiator, maturity and platform status.
+- **Features:** grouped capabilities with Available/Preview/In development/Planned status and evidence/limitations links.
+- **Gallery:** authentic current captures, workflow sequence, build context, accessible alt text; never present mockups as a running app.
+- **Downloads:** verified release assets, platform/architecture, checksums/signature state, install guidance, release notes, browser link when stable.
+- **Getting started:** first launch, create/open/save/export, sample project, common issues, browser storage caveats.
+- **Project/community:** license, repository, contribution path, roadmap, issue tracker, security reporting, support boundaries.
+- **Privacy/accessibility:** accurate local-document, optional-diagnostics, website-data, and known accessibility statements.
+
+A page is not required merely to meet a route count. Each page must answer a real user question and have an owner.
+
+### 14.2 Landing page hierarchy
+
+1. Hero with owner-approved “Create. Edit. Design.” positioning and one-sentence hybrid editing explanation.
+2. Primary CTAs: Try in browser (only if production-ready), Download, Explore features.
+3. Real product proof: current screenshot or accessible workflow capture.
+4. Three-to-five differentiators: editable hybrid documents, Fireworks-inspired workflow, native/web access, open source/local-first, production export.
+5. Workflow strip: create/import → edit/organize → export.
+6. Availability block: stable release, preview status, supported platforms, known limits.
+7. Feature highlights linked to evidence.
+8. Community trust: source, license, releases, contribution, feedback.
+9. Footer: docs, privacy, accessibility, security, GitHub, releases.
+
+No invented testimonials/user counts, unsupported platform claims, competitor disparagement, or roadmap features represented as shipped.
+
+### 14.3 Cloudflare Pages contract
+
+- Reinspect `wrangler.toml`, GitHub Actions, Cloudflare dashboard settings, domains, and latest deployment metadata.
+- Keep marketing and WASM editor as separate Pages projects, output directories, workflows, environment configuration, and rollback paths.
+- Historical names: `firecraft-site` (marketing) and `firecraft-web` (editor); verify before deployment.
+- Use PR previews, a dedicated staging environment/project, protected production promotion, and human approval.
+- Scope production credentials to protected deployment workflows; never commit tokens.
+- Pin build tools where practical; build reproducibly from a clean checkout.
+- Record source SHA, workflow run, Pages deployment ID/URL, and verification date.
+- Test rollback to last known-good deploy. Green build is not deployment evidence.
+
+### 14.4 Site quality gates
+
+Verify responsive mobile/tablet/desktop; keyboard/focus/semantic structure/contrast/reduced motion/alt text; declared browser matrix; all links/CTAs/downloads; release API failure/rate-limit/malformed/missing-asset fallback; checksums/signing status; SEO/social metadata/canonical/sitemap/robots/favicon/404; image optimization/cache/security headers/CSP/dependency audit/no secrets; performance baseline (LCP/CLS/INP or equivalent); and deployed preview/production journeys.
+
+No analytics or third-party tracking by default. Any analytics requires explicit privacy review, disclosure, and approval.
+
+### 14.5 Content governance and completion
+
+Tie every feature claim to `FEATURES.md`, published release, test evidence, or a documented limitation. Refresh screenshots after material UI changes. Update downloads/support matrix with each release. Keep changelog canonical in GitHub Releases. Assign owners for content, deployment, accessibility, and security.
+
+The site workstream is complete only when site-specific checks pass, journeys work on deployed staging, an authorized human promotes production, rollback is documented/tested, and the deployed commit is traceable. A Pages project or local HTML render is insufficient.
