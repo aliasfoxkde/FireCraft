@@ -3108,24 +3108,26 @@ mod manifest_tests {
 
     #[test]
     fn compressible_web_assets_match_without_leading_dots() {
-        assert!(is_compressible_web_asset(Path::new(
+        assert!(super::is_compressible_web_asset(Path::new(
             "dist/web/firecraft-web_bg.wasm"
         )));
-        assert!(is_compressible_web_asset(Path::new(
+        assert!(super::is_compressible_web_asset(Path::new(
             "dist/web/firecraft-web.js"
         )));
-        assert!(is_compressible_web_asset(Path::new("dist/web/index.html")));
-        assert!(!is_compressible_web_asset(Path::new(
+        assert!(super::is_compressible_web_asset(Path::new(
+            "dist/web/index.html"
+        )));
+        assert!(!super::is_compressible_web_asset(Path::new(
             "dist/web/favicon.png"
         )));
-        assert!(!is_compressible_web_asset(Path::new(
+        assert!(!super::is_compressible_web_asset(Path::new(
             "dist/web/firecraft-web_bg.wasm.gz"
         )));
     }
 
     #[test]
     fn web_index_declares_trunk_rust_wasm_opt_z() {
-        let index = std::fs::read_to_string(workspace_root().join("web/index.html"))
+        let index = std::fs::read_to_string(crate::util::workspace_root().join("web/index.html"))
             .expect("read web/index.html");
         assert!(
             index.contains("data-trunk")
