@@ -42,7 +42,7 @@
   4. Record preview URL, deployment ID, and current production rollback ID in `PROGRESS.md`.
 - **Verify:**
   ```bash
-  curl -fsSI "<preview-url>" | grep -iE "HTTP/|content-security-policy"
+  curl -fsSI "<preview-url>" | head -n 20
   ```
 
 ---
