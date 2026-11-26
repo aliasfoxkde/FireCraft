@@ -736,3 +736,16 @@ Update implementation docs in the same code PR. Do not duplicate this entire str
 10. Prepare release candidates, external tester validation, provenance, support docs, and human go/no-go.
 
 Final handoff must mark each workstream Done/Partial/Blocked/Deferred and include commit/PR links, test commands and receipts, deploy IDs/URLs, risks, and next bounded tasks.
+
+
+---
+
+## 19. Expanded end-to-end execution authority
+
+The phase-by-phase execution sequence, local experiment inspection instructions, full Windows/macOS/Linux/WASM release matrix, PhotoCraft benchmark, README/wiki refactor, GitHub issue/PR/branch audit, target-native packaging receipts, draft-first release publication and final 1.0 closeout are now specified in [FIRECRAFT-1.0-END-TO-END-EXECUTION-AND-RELEASE-CLOSEOUT.md](FIRECRAFT-1.0-END-TO-END-EXECUTION-AND-RELEASE-CLOSEOUT.md).
+
+**Important owner input:** inspect /nas/Temp/repo/FireCraft-CraftAnything-Experiment on the owner's machine. That path was not mounted in the environment used to author the documentation; the experiment has not been inspected here. The agent must inventory it before importing or discarding UI work.
+
+The expanded owner-requested release scope must be reconciled formally with accepted decision 0075 and RPM deferral decision 0070. Do not silently override repository decisions or mark any platform/package supported without target-native evidence.
+
+Use the end-to-end execution document as the detailed phase/runbook companion. This handoff remains the product-level orientation and core MVP statement; TASKS.md remains the sole live task ledger.
