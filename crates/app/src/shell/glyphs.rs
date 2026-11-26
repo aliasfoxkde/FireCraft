@@ -54,7 +54,7 @@ pub const CHROME_ACCENT_STROKE: Color32 = Color32::from_rgb(0x50, 0x7e, 0xab);
 /// The name says *chrome*, not *CS6*, on purpose: CS6 has no palette
 /// of its own to reproduce (see the constants above).
 pub fn apply_chrome_theme(ctx: &egui::Context) {
-    // The tool-strip icons are embedded Lucide SVGs; the loader
+    // The tool-strip icons are embedded Phosphor SVGs; the loader
     // rasterizes them at the exact on-screen size. Idempotent.
     egui_extras::install_image_loaders(ctx);
     ctx.all_styles_mut(|style| {

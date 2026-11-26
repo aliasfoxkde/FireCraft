@@ -23,119 +23,126 @@ fn main() {}
 /// fade-in animation, and progress bar. User can click to dismiss early.
 #[cfg(not(target_arch = "wasm32"))]
 fn show_native_splash() {
-    use egui::*;
     use std::time::Instant;
 
-    let ctx = Context::default();
+    // The splash screen requires an egui Context with fonts loaded.
+    // Context::default() only works after egui initializes one globally
+    // (which hasn't happened yet — run_native_app creates it later).
+    // We use a minimal Context for a brief splash, accepting the limitation
+    // that fonts won't render. If the context can't be created (e.g. no
+    // display server), we skip the splash entirely.
+    let result = std::panic::catch_unwind(|| {
+        let ctx = egui::Context::new(Default::default());
 
-    // Load splash logo from the crate's source directory.
-    // Path: crates/app/src/logo.png
-    let logo_bytes = include_bytes!("logo.png");
-    let img = image::load_from_memory(logo_bytes).expect("valid splash logo");
-    let size = [img.width() as usize, img.height() as usize];
-    let rgba = img.to_rgba8();
-    let color_img = ColorImage::from_rgba_unmultiplied(size, rgba.as_raw());
-    let tex = ctx.load_texture("splash_logo", color_img, TextureOptions::LINEAR);
-
-    // Minimum splash duration (prevents flash on fast machines)
-    let start = Instant::now();
-    let min_duration = std::time::Duration::from_millis(800);
-
-    // Use a reasonable center for the splash (hardcoded since we don't have
-    // a frame yet — 1920x1080 is standard)
-    let splash_pos = Pos2::new(740.0, 385.0); // Centered on 1920x1080
-    let splash_size = [420.0, 260.0];
-
-    let mut can_dismiss = false;
-
-    // Run splash loop until user dismisses or minimum time elapses
-    loop {
-        let t = ctx.input(|i| i.time);
-        let elapsed = start.elapsed();
-
-        // Fade-in/fade-out alpha
-        let alpha = if t < 0.35 {
-            (t / 0.35) as f32
-        } else if t > 1.9 {
-            ((2.4 - t) / 0.5).clamp(0.0, 1.0) as f32
-        } else {
-            1.0
+        // Load splash logo from the crate's source directory.
+        let logo_bytes = include_bytes!("logo.png");
+        let img = match image::load_from_memory(logo_bytes) {
+            Ok(img) => img,
+            Err(_) => return, // silently skip splash if image is broken
         };
+        let size = [img.width() as usize, img.height() as usize];
+        let rgba = img.to_rgba8();
+        let color_img = egui::ColorImage::from_rgba_unmultiplied(size, rgba.as_raw());
+        let tex = ctx.load_texture("splash_logo", color_img, egui::TextureOptions::LINEAR);
 
-        // Render splash window
-        egui::Window::new("Splash")
-            .title_bar(false)
-            .resizable(false)
-            .movable(false)
-            .collapsible(false)
-            .default_size(Vec2::from(splash_size))
-            .fixed_pos(splash_pos)
-            .show(&ctx, |ui| {
-                let rect = ui.max_rect();
-                let painter = ui.painter();
+        let start = Instant::now();
+        let min_duration = std::time::Duration::from_millis(800);
+        let splash_pos = egui::Pos2::new(740.0, 385.0);
+        let splash_size = [420.0, 260.0];
+        let mut can_dismiss = false;
 
-                // Dark charcoal background
-                let bg = Color32::from_rgba_unmultiplied(26, 26, 30, (215.0 * alpha) as u8);
-                painter.rect_filled(rect, 0.0, bg);
+        loop {
+            let t = ctx.input(|i| i.time);
+            let elapsed = start.elapsed();
 
-                // Accent border
-                let accent = Color32::from_rgb(0x3a, 0x72, 0xa8);
-                painter.rect_stroke(
-                    rect,
-                    0.0,
-                    Stroke::new(1.5, accent.gamma_multiply(alpha)),
-                    StrokeKind::Inside,
-                );
+            let alpha = if t < 0.35 {
+                (t / 0.35) as f32
+            } else if t > 1.9 {
+                ((2.4 - t) / 0.5).clamp(0.0, 1.0) as f32
+            } else {
+                1.0
+            };
 
-                // Pulsing logo
-                let pulse = 1.0 + 0.04 * (t as f32 * 5.0).sin();
-                let logo_sz = Vec2::splat(136.0 * pulse);
-                let logo_r =
-                    Rect::from_center_size(Pos2::new(rect.center().x, rect.top() + 92.0), logo_sz);
-                painter.image(
-                    tex.id(),
-                    logo_r,
-                    Rect::from_min_max(Pos2::new(0.0, 0.0), Pos2::new(1.0, 1.0)),
-                    Color32::from_white_alpha((255.0 * alpha) as u8),
-                );
+            egui::Window::new("Splash")
+                .title_bar(false)
+                .resizable(false)
+                .movable(false)
+                .collapsible(false)
+                .default_size(egui::Vec2::from(splash_size))
+                .fixed_pos(splash_pos)
+                .show(&ctx, |ui| {
+                    let rect = ui.max_rect();
+                    let painter = ui.painter();
 
-                // "FireCraft Studio" text
-                painter.text(
-                    Pos2::new(rect.center().x, rect.bottom() - 62.0),
-                    Align2::CENTER_CENTER,
-                    "FireCraft Studio",
-                    FontId::proportional(20.0),
-                    Color32::from_white_alpha((245.0 * alpha) as u8),
-                );
+                    let bg =
+                        egui::Color32::from_rgba_unmultiplied(26, 26, 30, (215.0 * alpha) as u8);
+                    painter.rect_filled(rect, 0.0, bg);
 
-                // Progress bar
-                let prog = (t / 2.2).clamp(0.0, 1.0) as f32;
-                let bar_bg = Rect::from_min_size(
-                    Pos2::new(rect.left() + 48.0, rect.bottom() - 32.0),
-                    Vec2::new(rect.width() - 96.0, 5.0),
-                );
-                painter.rect_filled(bar_bg, 0.0, Color32::from_white_alpha((45.0 * alpha) as u8));
-                let bar_fg = Rect::from_min_size(
-                    bar_bg.min,
-                    Vec2::new(bar_bg.width() * prog, bar_bg.height()),
-                );
-                painter.rect_filled(bar_fg, 0.0, accent.gamma_multiply(alpha));
+                    let accent = egui::Color32::from_rgb(0x3a, 0x72, 0xa8);
+                    painter.rect_stroke(
+                        rect,
+                        0.0,
+                        egui::Stroke::new(1.5, accent.gamma_multiply(alpha)),
+                        egui::StrokeKind::Inside,
+                    );
 
-                // Check for click on splash area
-                let resp = ui.interact(rect, ui.id(), Sense::click());
-                if resp.clicked() {
-                    can_dismiss = true;
-                }
-            });
+                    let pulse = 1.0 + 0.04 * (t as f32 * 5.0).sin();
+                    let logo_sz = egui::Vec2::splat(136.0 * pulse);
+                    let logo_r = egui::Rect::from_center_size(
+                        egui::Pos2::new(rect.center().x, rect.top() + 92.0),
+                        logo_sz,
+                    );
+                    painter.image(
+                        tex.id(),
+                        logo_r,
+                        egui::Rect::from_min_max(
+                            egui::Pos2::new(0.0, 0.0),
+                            egui::Pos2::new(1.0, 1.0),
+                        ),
+                        egui::Color32::from_white_alpha((255.0 * alpha) as u8),
+                    );
 
-        ctx.request_repaint();
+                    painter.text(
+                        egui::Pos2::new(rect.center().x, rect.bottom() - 62.0),
+                        egui::Align2::CENTER_CENTER,
+                        "FireCraft Studio",
+                        egui::FontId::proportional(20.0),
+                        egui::Color32::from_white_alpha((245.0 * alpha) as u8),
+                    );
 
-        // Exit if user dismissed or minimum time elapsed
-        if can_dismiss || elapsed >= min_duration {
-            break;
+                    let prog = (t / 2.2).clamp(0.0, 1.0) as f32;
+                    let bar_bg = egui::Rect::from_min_size(
+                        egui::Pos2::new(rect.left() + 48.0, rect.bottom() - 32.0),
+                        egui::Vec2::new(rect.width() - 96.0, 5.0),
+                    );
+                    painter.rect_filled(
+                        bar_bg,
+                        0.0,
+                        egui::Color32::from_white_alpha((45.0 * alpha) as u8),
+                    );
+                    let bar_fg = egui::Rect::from_min_size(
+                        bar_bg.min,
+                        egui::Vec2::new(bar_bg.width() * prog, bar_bg.height()),
+                    );
+                    painter.rect_filled(bar_fg, 0.0, accent.gamma_multiply(alpha));
+
+                    let resp = ui.interact(rect, ui.id(), egui::Sense::click());
+                    if resp.clicked() {
+                        can_dismiss = true;
+                    }
+                });
+
+            ctx.request_repaint();
+
+            if can_dismiss || elapsed >= min_duration {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(16));
         }
-        std::thread::sleep(std::time::Duration::from_millis(16));
-    }
+    });
+
+    // Splash is best-effort; if it panics (e.g. missing fonts), silently continue.
+    let _ = result;
 }
 
 /// Run the main eframe application.
