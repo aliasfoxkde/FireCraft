@@ -962,6 +962,7 @@ fn stage_archive(
 /// 0755. The NAS mounts every directory setgid, so an unstaged tree
 /// would carry 2775 dirs and 0664 files into otherwise
 /// deterministic archives (and dpkg-deb refuses setgid outright).
+#[cfg(unix)]
 fn normalize_tree(root: &Path, exec_prefix: &str) -> Result<(), String> {
     use std::os::unix::fs::PermissionsExt as _;
     let set = |path: &Path, mode: u32| {
@@ -987,6 +988,11 @@ fn normalize_tree(root: &Path, exec_prefix: &str) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+#[cfg(not(unix))]
+fn normalize_tree(_root: &Path, _exec_prefix: &str) -> Result<(), String> {
+    Err("distribution archive mode normalization requires a Unix host".to_owned())
 }
 
 /// GNU tar | gzip -n into `out`. Deterministic by construction:
