@@ -139,7 +139,7 @@ GH_ARGV_FILE="$prod/argv" GH_NOTES_CAPTURE="$prod/notes-capture" \
     bash "$script" create v0.2.6 assets.zlist docs/releases/v0.2.6.md production 2>&1)
 argv=$(cat "$prod/argv" 2>/dev/null || true)
 if printf '%s\n' "$argv" | grep -qx -- '--draft' \
-  && printf '%s\n' "$argv" | grep -qx -- '0.2.6' \
+  && printf '%s\n' "$argv" | grep -qx -- 'v0.2.6' \
   && ! printf '%s\n' "$argv" | grep -qx -- '--prerelease' \
   && ! printf '%s\n' "$argv" | grep -q '^TEST '; then
   ok "create in production mode is a draft titled by the version"
@@ -162,7 +162,7 @@ out=$(cd "$testmode" && PATH="$testmode/bin:$PATH" GH_ARGV_FILE="$testmode/argv"
   bash "$script" create v0.2.6-dryrun.1 assets.zlist RELEASE_SHA256.txt test 2>&1)
 argv=$(cat "$testmode/argv" 2>/dev/null || true)
 if printf '%s\n' "$argv" | grep -qx -- '--prerelease' \
-  && printf '%s\n' "$argv" | grep -qx -- 'TEST 0.2.6-dryrun.1'; then
+  && printf '%s\n' "$argv" | grep -qx -- 'TEST v0.2.6-dryrun.1'; then
   ok "create in test mode is a prerelease titled TEST <version>"
 else
   bad "create in test mode is a prerelease titled TEST <version>" "$argv"

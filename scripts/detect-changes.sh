@@ -20,7 +20,7 @@ while IFS= read -r file; do
   case "$file" in
     docs/planning/generated/*|crates/app/panels.snapshot)
       DOCS=1; GENERATED=1; continue ;;
-    docs/*|README.md|CHANGELOG.md|CONTRIBUTING.md|LICENSE|CODE_OF_CONDUCT.md)
+    docs/*|README.md|LICENSE|.github/CHANGELOG.md|.github/CONTRIBUTING.md|.github/SECURITY.md|.github/CODE_OF_CONDUCT.md|.github/ISSUE_TEMPLATE/*|.github/PULL_REQUEST_TEMPLATE.md)
       DOCS=1; continue ;;
     tests/*|*/tests/*|*_test.rs|*.fw.png|corpus/*|*/fixtures/*)
       TESTS=1; continue ;;

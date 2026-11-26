@@ -56,13 +56,13 @@
 
 ### `L8.5` `[LUNA]` Freeze `1.0.0` Stamps, Tag `v1.0.0`, Build Draft Release & Independently Re-Hash Every Asset (`P10.1`–`P10.4`)
 
-- **Files:** 8 version-stamped files (`xtask stamps`), `docs/CHANGELOG.md`, `docs/releases/v1.0.0.md`
+- **Files:** 8 version-stamped files (`xtask stamps`), `.github/CHANGELOG.md`, `docs/releases/v1.0.0.md`
 - **Pre-check:**
   ```bash
   ssh fedora 'export PATH="$HOME/.cargo/bin:$PATH"; export CARGO_TARGET_DIR=/var/tmp/firecraft-target-fedora; cd /nas/Temp/repos/FireCraft-git && cargo run -p xtask -- stamps'
   ```
 - **Do:**
-  1. Stamp `1.0.0` across all 8 version files, finalize `docs/CHANGELOG.md` and `docs/releases/v1.0.0.md`, and verify full `cargo run -p xtask -- ci` is green on `fedora`.
+  1. Stamp `1.0.0` across all 8 version files, finalize `.github/CHANGELOG.md` and `docs/releases/v1.0.0.md`, and verify full `cargo run -p xtask -- ci` is green on `fedora`.
   2. Push annotated `v1.0.0` tag to `gitforge` then `origin` (ONLY after `L8.4` Go!).
   3. Wait for `.github/workflows/release.yml` to finish creating the draft `v1.0.0` release.
   4. Independently download EVERY draft asset to `/var/tmp/firecraft-v1-verify/`, verify `sha256sum -c RELEASE_SHA256.txt`, validate CycloneDX SBOM, and stage `site/` + `firecraft-web` from exact `v1.0.0` bytes.

@@ -4,13 +4,17 @@
 
 <!-- What and why, in a few sentences. -->
 
+## Related issue
+
+<!-- Link the issue or write "None" for maintenance-only changes. -->
+
 ## Verification
 
 - [ ] `cargo run -p xtask -- ci` passes (fmt, clippy `-D warnings`,
       tests, layer enforcement, wasm build)
 - [ ] New behavior is covered by tests
 - [ ] Any new non-code asset has a `docs/ATTRIBUTION.md` row
-- [ ] User-visible changes noted in `docs/CHANGELOG.md`
+- [ ] User-visible changes noted in `.github/CHANGELOG.md`
 
 ## Clean-room attestation
 

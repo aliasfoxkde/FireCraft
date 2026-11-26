@@ -55,6 +55,9 @@ This page is the documentation map. Start with the overview that matches your go
 2. [Handoff](HANDOFF.md): short orientation and session closeout procedure.
 3. [Architecture and format plan](PLANNING.md): technical design and file format detail.
 4. [Decisions](decisions/): durable design choices; [research](research/): observed format behavior.
+5. [Contribution guide](../.github/CONTRIBUTING.md), [security policy](../.github/SECURITY.md), and [Code of Conduct](../.github/CODE_OF_CONDUCT.md): how to contribute and where to report concerns.
+6. [Issue forms](../.github/ISSUE_TEMPLATE/): structured bug reports and feature requests; the [pull-request template](../.github/PULL_REQUEST_TEMPLATE.md) lists review evidence.
+7. [Changelog](../.github/CHANGELOG.md): generated release history and unreleased changes.
 
 ## Reference shelves
 

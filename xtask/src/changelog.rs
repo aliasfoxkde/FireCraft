@@ -1,5 +1,5 @@
 //! Release chore (M12 task 6): `xtask changelog` regenerates
-//! `docs/CHANGELOG.md` from the conventional-commit log — the same
+//! `.github/CHANGELOG.md` from the conventional-commit log — the same
 //! committed-generated-doc discipline as parity/scorecard — and
 //! verifies the release's stamps while it is at it: the Apache-2.0
 //! license claim against the license file and the manifests, and one
@@ -52,15 +52,15 @@ const SECTIONS: &[(&str, &str)] = &[
 /// The heading that opens the generated block.
 const UNRELEASED_HEADING: &str = "## Unreleased";
 
-/// Regenerates `docs/CHANGELOG.md`, then verifies the release stamps.
+/// Regenerates `.github/CHANGELOG.md`, then verifies the release stamps.
 pub fn run() -> Result<(), String> {
     let (doc, unreleased, released) = generate()?;
-    let path = workspace_root().join("docs/CHANGELOG.md");
+    let path = workspace_root().join(".github/CHANGELOG.md");
     std::fs::write(&path, &doc).map_err(|e| format!("write {}: {e}", path.display()))?;
     stamps()?;
     eprintln!(
         "[xtask] changelog: {unreleased} unreleased entries, {released} in released sections \
-         -> docs/CHANGELOG.md; {STAMP_SUMMARY}"
+         -> .github/CHANGELOG.md; {STAMP_SUMMARY}"
     );
     Ok(())
 }
@@ -83,14 +83,14 @@ pub fn run() -> Result<(), String> {
 /// the CI image. See decision 0086.
 pub fn check() -> Result<(), String> {
     let (doc, _, _) = generate_with(true)?;
-    let path = workspace_root().join("docs/CHANGELOG.md");
+    let path = workspace_root().join(".github/CHANGELOG.md");
     let committed =
         std::fs::read_to_string(&path).map_err(|e| format!("read {}: {e}", path.display()))?;
     if committed == doc {
         return Ok(());
     }
     Err(format!(
-        "docs/CHANGELOG.md is not what the generator produces.\n\
+        ".github/CHANGELOG.md is not what the generator produces.\n\
          Run `cargo run -p xtask -- changelog` and commit the result.\n{}",
         first_difference(&committed, &doc)
     ))
@@ -118,7 +118,7 @@ pub fn cut(version: &str) -> Result<(), String> {
              Stamp the workspace first: `cargo run -p xtask -- stamp {version}`"
         ));
     }
-    let path = workspace_root().join("docs/CHANGELOG.md");
+    let path = workspace_root().join(".github/CHANGELOG.md");
     let (doc, _, _) = generate()?;
     let refreshed = Committed::parse(&doc);
     if refreshed.entries.is_empty() {
@@ -503,7 +503,7 @@ fn generate() -> Result<(String, usize, usize), String> {
 /// without the tip commit.
 fn generate_with(exclude_tip: bool) -> Result<(String, usize, usize), String> {
     let root = workspace_root();
-    let path = root.join("docs/CHANGELOG.md");
+    let path = root.join(".github/CHANGELOG.md");
     let committed = Committed::read(&path);
     let logged = log_entries(exclude_tip)?;
     let grouped = merge_sections(logged, &committed);

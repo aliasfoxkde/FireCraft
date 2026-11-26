@@ -7,7 +7,7 @@
 
 ## Context
 
-`xtask changelog` regenerates `docs/CHANGELOG.md` from the conventional-commit
+`xtask changelog` regenerates `.github/CHANGELOG.md` from the conventional-commit
 log. The regeneration used to be *log-only*: the file was written from
 `git log` on every run.
 

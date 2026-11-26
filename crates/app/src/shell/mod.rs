@@ -1644,12 +1644,12 @@ impl Shell {
                 };
             }
             menus::ShellAction::ReleaseNotes => {
-                let url = "https://github.com/aliasfoxkde/FireCraft/blob/main/CHANGELOG.md";
+                let url = "https://github.com/aliasfoxkde/FireCraft/blob/main/.github/CHANGELOG.md";
                 let opened = self.dialogs.open_url(url);
                 self.status = if opened {
                     format!("opening release notes at {url}")
                 } else {
-                    "release notes: see CHANGELOG.md".to_owned()
+                    "release notes: see .github/CHANGELOG.md".to_owned()
                 };
             }
             menus::ShellAction::ManageExtensions => self.open_extension_manager(),

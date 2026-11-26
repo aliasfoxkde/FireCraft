@@ -18,12 +18,15 @@ WASM build.
 - **Assets.** Any non-code asset (font, image, icon set) must be an
   original work or permissively licensed, and must add a row to
   `docs/ATTRIBUTION.md` in the same change.
+- **Community standards.** Participation follows the
+  [Code of Conduct](CODE_OF_CONDUCT.md). Report security issues through
+  the private process in [SECURITY.md](SECURITY.md), not a public issue.
 
 ## Workflow
 
 1. Fork / branch from `main`.
 2. Make your change. The architecture is a layered crate workspace —
-   see `docs/PLANNING.md` §7 and `CLAUDE.md` for the layout.
+   see `docs/PLANNING.md` §7 and `AGENTS.md` for the repository rules.
 3. Run the full gate before pushing:
 
    ```
@@ -44,7 +47,7 @@ WASM build.
 - No `unwrap()` or `panic!` in non-test code; return `Result`.
 - `unsafe_code = "forbid"` — do not relax it.
 - Never break the wasm build.
-- User-visible changes should update `docs/CHANGELOG.md`.
+- User-visible changes should update `.github/CHANGELOG.md`.
 
 ## Where to discuss
 

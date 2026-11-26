@@ -8,6 +8,9 @@ current snapshot and operational runbooks. The master plan is
 `docs/planning/firecraft/`. When snapshots conflict, current source,
 tests, and generated evidence take precedence; reconcile the docs in
 the same change rather than choosing whichever copy looks newest.
+GitHub community policy, contribution guidance, issue and pull-request
+forms, and release history live in `.github/`; the documentation index
+is `docs/README.md`.
 
 ## What FireCraft is
 

@@ -64,7 +64,7 @@ jobs:
           while IFS= read -r file; do
             [[ -z "$file" ]] && continue
             case "$file" in
-              docs/*|README.md|CHANGELOG.md|CONTRIBUTING.md|LICENSE|CODE_OF_CONDUCT.md) ;;
+              docs/*|README.md|LICENSE|.github/CHANGELOG.md|.github/CONTRIBUTING.md|.github/SECURITY.md|.github/CODE_OF_CONDUCT.md|.github/ISSUE_TEMPLATE/*|.github/PULL_REQUEST_TEMPLATE.md) ;;
               *) docs_only=false; break ;;
             esac
           done <<< "$files"
@@ -113,7 +113,7 @@ jobs:
       - name: Validate whitespace and merge markers
         run: |
           set -euo pipefail
-          if grep -RInE '^(<<<<<<<|=======|>>>>>>>)' docs README.md CONTRIBUTING.md 2>/dev/null; then
+          if grep -RInE '^(<<<<<<<|=======|>>>>>>>)' docs README.md .github --include='*.md' 2>/dev/null; then
             echo "Unresolved merge-conflict marker found in documentation."
             exit 1
           fi

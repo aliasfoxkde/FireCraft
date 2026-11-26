@@ -155,7 +155,7 @@ release notes — the dist manifests cover only what the fleet built.
 
     cargo run -p xtask -- changelog
 
-Regenerates `docs/CHANGELOG.md` from the conventional-commit log
+Regenerates `.github/CHANGELOG.md` from the conventional-commit log
 (grouped by type, git log order, every commit accounted for) and
 verifies the license files against the Apache-2.0 claim and the
 version stamps. **The verb writes the file** — it is a step of the
@@ -238,8 +238,8 @@ recognise:
 
 | Tag | Mode | What it produces |
 |---|---|---|
-| `vX.Y.Z` | production | a draft release titled `X.Y.Z`, described by `docs/releases/vX.Y.Z.md` |
-| `vX.Y.Z-dryrun.N` | test | a **prerelease** titled `TEST X.Y.Z-dryrun.N`, described by a banner that says it must not be published |
+| `vX.Y.Z` | production | a draft release titled exactly `vX.Y.Z`, described by `docs/releases/vX.Y.Z.md` |
+| `vX.Y.Z-dryrun.N` | test | a **prerelease** titled `TEST vX.Y.Z-dryrun.N`, described by a banner that says it must not be published |
 
 A production release must carry its tracked release notes; a checksum
 dump is not a release description. A rehearsal may fall back to the
@@ -309,7 +309,7 @@ Every step below is one the repository can actually perform today.
 5. `xtask dist --source` and `xtask dist --sbom` green — clean-extract
    verification and CycloneDX output present.
 6. `xtask changelog --cut <version>` run at the stamped version, the
-   regenerated `docs/CHANGELOG.md` committed, and
+   regenerated `.github/CHANGELOG.md` committed, and
    `xtask changelog --check` green — the committed file is exactly
    what the generator produces.
 7. Off-fleet recipes executed on their platforms (only for those

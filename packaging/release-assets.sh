@@ -30,7 +30,7 @@
 #       <notes-file> <assets...>` with the staged assets as positional
 #       arguments. `mode` is `production` (the default) or `test`:
 #
-#         production — the title is the bare version, the release is an
+#         production — the title is the `v`-prefixed tag, the release is an
 #         ordinary draft, and the notes must be the tracked release
 #         notes under `docs/releases/`; a release whose description is a
 #         checksum dump is not a release.
@@ -199,11 +199,10 @@ cmd_create() {
   done
 
   # Assets are the positional filename arguments after the tag. `gh
-  # release create` has no -a/--asset flag. The title is the bare
-  # version ("0.2.6") — the repository name and the asset filenames
-  # already carry the product name. A rehearsal is titled `TEST <version>`
+  # release create` has no -a/--asset flag. The title is the exact
+  # version tag ("v0.2.6") for consistent SemVer formatting. A rehearsal is titled `TEST <tag>`
   # and is a prerelease, so it cannot be mistaken for the release.
-  local title="${tag#v}"
+  local title="$tag"
   local -a flags=()
   local notes_arg=$notes
   local banner=""
