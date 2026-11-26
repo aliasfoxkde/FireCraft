@@ -183,7 +183,7 @@ Clean stale code, dependencies, feature flags, scripts, generated files, metadat
 
 Compare experiment and current app in:
 - Application frame, title/menu bars, toolbars/flyouts, iconography, themes, typography, spacing, hover/selected/disabled states.
-- Canvas transparency, infinite canvas, zoom/pan, guides, rulers, grid, snapping, smart guides, handles, selection outlines and high-DPI.
+- Canvas transparency, infinite canvas, zoom, drag-to-navigate, guides, rulers, grid, snapping, smart guides, handles, selection outlines and high-DPI.
 - Tabs, unsaved state, multi-document workflow, recovery, close/quit prompts and layout persistence.
 - Selection, transform, shapes, Bézier/path editing, text-in-place, raster tools, crop, gradients, masks and context menus.
 - Tools, Layers, Properties/Inspector, Optimize, Pages/States, Timeline, History, Common Library, CSS Properties, Slices, Find/Replace.
