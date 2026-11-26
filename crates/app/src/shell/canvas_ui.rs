@@ -979,7 +979,7 @@ impl Shell {
         // Smart guides (display-only alignment hints): drawn when the
         // selection aligns with the page or another selected object's
         // edges or center. The tolerance is proportional to zoom.
-        if self.smart_guides && self.editor.live_selection().len() > 0 {
+        if self.smart_guides && !self.editor.live_selection().is_empty() {
             let tol: f64 = ((6.0 / self.view.zoom.max(0.25)).clamp(3.0, 14.0)) as f64;
             let page = self.editor.document().pages.get(self.editor.page);
             if let Some(page) = page {
@@ -1006,19 +1006,19 @@ impl Shell {
                 let mut x_targets: Vec<f64> = Vec::new();
                 let mut y_targets: Vec<f64> = Vec::new();
                 // Page center lines.
-                x_targets.push(pw as f64 / 2.0);
-                y_targets.push(ph as f64 / 2.0);
+                x_targets.push(pw / 2.0);
+                y_targets.push(ph / 2.0);
                 // Page edges.
-                x_targets.extend([0.0, pw as f64]);
-                y_targets.extend([0.0, ph as f64]);
+                x_targets.extend([0.0, pw]);
+                y_targets.extend([0.0, ph]);
                 // Selected object bounds and centers.
                 for bounds in selected_bounds {
-                    x_targets.push(bounds.x0 as f64);
-                    x_targets.push(bounds.x1 as f64);
-                    x_targets.push((bounds.x0 + bounds.x1) as f64 / 2.0);
-                    y_targets.push(bounds.y0 as f64);
-                    y_targets.push(bounds.y1 as f64);
-                    y_targets.push((bounds.y0 + bounds.y1) as f64 / 2.0);
+                    x_targets.push(bounds.x0);
+                    x_targets.push(bounds.x1);
+                    x_targets.push((bounds.x0 + bounds.x1) / 2.0);
+                    y_targets.push(bounds.y0);
+                    y_targets.push(bounds.y1);
+                    y_targets.push((bounds.y0 + bounds.y1) / 2.0);
                 }
                 let ink = Color32::from_rgb(0xff, 0x44, 0x44);
                 let painter = ui.painter();
@@ -1030,13 +1030,9 @@ impl Shell {
                     {
                         // Vertical alignment lines.
                         for &target_x in &x_targets {
-                            let aligned = [
-                                bounds.x0 as f64,
-                                (bounds.x0 + bounds.x1) as f64 / 2.0,
-                                bounds.x1 as f64,
-                            ]
-                            .into_iter()
-                            .any(|x| (x - target_x).abs() < tol);
+                            let aligned = [bounds.x0, (bounds.x0 + bounds.x1) / 2.0, bounds.x1]
+                                .into_iter()
+                                .any(|x| (x - target_x).abs() < tol);
                             if aligned {
                                 let a = to_screen(geom::Point::new(target_x, page_bounds.y));
                                 let b = to_screen(geom::Point::new(
@@ -1048,13 +1044,9 @@ impl Shell {
                         }
                         // Horizontal alignment lines.
                         for &target_y in &y_targets {
-                            let aligned = [
-                                bounds.y0 as f64,
-                                (bounds.y0 + bounds.y1) as f64 / 2.0,
-                                bounds.y1 as f64,
-                            ]
-                            .into_iter()
-                            .any(|y| (y - target_y).abs() < tol);
+                            let aligned = [bounds.y0, (bounds.y0 + bounds.y1) / 2.0, bounds.y1]
+                                .into_iter()
+                                .any(|y| (y - target_y).abs() < tol);
                             if aligned {
                                 let a = to_screen(geom::Point::new(page_bounds.x, target_y));
                                 let b = to_screen(geom::Point::new(

@@ -7,6 +7,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use app::editor::{Editor, NineSliceEdge, Tool};
+#[allow(unused_imports)]
 use engine::Session;
 
 /// The scripted golden, in order: CREATE (draw a rect, make it a

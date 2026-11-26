@@ -10,6 +10,7 @@
 
 use app::editor::Editor;
 use doc::ObjectData;
+#[allow(unused_imports)]
 use engine::Session;
 use scripting::{Limits, ScriptEngine, rederive_symbol};
 

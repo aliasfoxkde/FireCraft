@@ -279,7 +279,7 @@ pub struct Shell {
     smart_guides: bool,
     snap_to_smart_guides: bool,
     /// Active smart-guide lines (rendered by the canvas when
-    /// snap_to_smart_guides + smart_guides are on and the selection
+    /// `snap_to_smart_guides` + `smart_guides` are on and the selection
     /// aligns with the page or other selected objects).
     smart_guides_lines: Vec<(geom::Point, geom::Point)>,
     /// View ▸ 9-Slice Scaling Guides ▸ Lock Guides (display intent
@@ -378,9 +378,9 @@ pub struct Shell {
     pub(crate) color_subtab: usize,
     /// The currently selected style index in the styles panel.
     pub(crate) selected_style_idx: Option<usize>,
-    /// RulerUnit for canvas rulers.
+    /// `RulerUnit` for canvas rulers.
     pub(crate) ruler_unit: crate::shell::constants::RulerUnit,
-    /// Snap to objects (alongside snap_to_guides).
+    /// Snap to objects (alongside `snap_to_guides`).
     pub(crate) snap_to_objects: bool,
     /// Snap object tolerance in pixels.
     pub(crate) snap_object_tolerance: f32,
@@ -426,7 +426,7 @@ pub struct Shell {
     pub(crate) update_release_url: Option<String>,
     /// Tab pending close (Save/Don't Save/Cancel).
     pub(crate) pending_close_tab: Option<usize>,
-    /// Extra-layer multi-select (row, layer_id).
+    /// Extra-layer multi-select (row, `layer_id`).
     pub(crate) selected_extra_layers: Vec<(usize, usize)>,
     /// Show canvas footer bar.
     pub(crate) show_canvas_footer_bar: bool,
@@ -3235,9 +3235,12 @@ impl eframe::App for Shell {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+    #![allow(clippy::items_after_test_module)]
     use super::*;
+    #[allow(unused_imports)]
     use crate::editor::union_selection_bounds;
-    use engine::platform::{FileSystem, MemoryFs};
+    use engine::platform::MemoryFs;
 
     /// Scripted dialogs: the steps path answers the replay/save
     /// picks, the document path the base pick — matched by title.

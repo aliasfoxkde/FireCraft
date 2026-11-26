@@ -4254,6 +4254,7 @@ fn rekey_tidi(
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+    #![allow(clippy::items_after_test_module)]
     use super::*;
 
     #[test]
