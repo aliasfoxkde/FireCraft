@@ -501,3 +501,10 @@ Phase 10 defects passed every desktop gate. The working pattern
    verify CI on the final hash.
 6. If `web/` or the shell changed: §6.2 against the live URL, then a
    Pages redeploy if the bundle moved.
+
+
+## 8. FireCraft 1.0 and website launch handoff
+
+Before starting broad integration or release work, read the [1.0 Consolidation and Release Handoff](planning/FIRECRAFT-1.0-CONSOLIDATION-AND-RELEASE-HANDOFF.md), [Product Expansion Roadmap](planning/FIRECRAFT-PRODUCT-ROADMAP-AND-EXPANSION.md), and [Marketing Site Roadmap](MARKETING-SITE-ROADMAP.md). The marketing site is a 1.0 deliverable. It lives in `site/` and deploys to its own Cloudflare Pages project; the WASM editor is built to `dist/web` and deploys separately. Historical project names are `firecraft-site` and `firecraft-web`; revalidate them against the current Cloudflare configuration before deployment. Do not infer deployment success from local build success.
+
+The product expansion roadmap is strategic, not a live task list. `TASKS.md` remains authoritative; only create bounded, owner-approved tickets after auditing current source and active worktrees. Preserve local work, verify all PR ancestry and unique changes, and require human approval for production promotion.
