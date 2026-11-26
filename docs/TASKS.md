@@ -119,6 +119,7 @@ Commands menu). Scope detail stays in
 | 21 | egui_kittest snapshot gates per panel/toolbar | — | `NOT STARTED` | quality lane | needs a stable per-panel harness |
 | 22 | Screenshot-driven frontend audit + systematic refinement | — | `IN PROGRESS` | frontend lane | audit against the CS6 shell-parity directive; record screenshots per panel |
 | 25 | Responsive/adaptive layout audit + fixes | — | `NOT STARTED` | frontend lane | follows the responsive audit in the current UI work |
+| 29 | FireCraft extension API, safe local manager, public official/community catalog, moderated author submissions, and in-app discovery | [tasks/T29-extension-ecosystem.md](tasks/T29-extension-ecosystem.md) | `NOT STARTED` beyond research and the informational Extensions page; no API/SDK, package intake, operational catalog, or install flow exists | extensions lane | complete the versioned package/API contract and security threat model before implementing execution or opening submissions |
 
 ### Production readiness and T27 work-package detail
 

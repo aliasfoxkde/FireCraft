@@ -10,6 +10,8 @@ The strongest pattern across these references is that extensions remove repeated
 
 The history also exposes failure modes to design out. Fireworks installation depended on legacy MXP/Extension Manager workflows, sometimes privileged installation, copied shortcut files, and restarts. Source mirrors may be incomplete, stale, or messy; `.JSF` commands could be paired with `.FLA`/`.SWF` panels; catalog descriptions are not compatibility tests. FireCraft should adopt the workflow ideas while using its own versioned API, modern package metadata, per-user verified installation, capability controls, rollback, and a clear distinction between official and community software.
 
+The updated Speckyboy index and Smashing Magazine's categorized guide sharpen the catalog requirements: group by the work users are trying to finish, and make an entry actionable with selection/document scope, output, shortcut or menu location, supported version, and installation state. Examples span grids and presets, responsive prototypes, page/state exports, SVG and sprite generation, named-asset export, smart-resize anchors, and editable tools. These are workflow references only; they do not establish current FireCraft support or grant reuse rights.
+
 ## What the sources show
 
 | Source | Observed material | FireCraft insight | Limit |
@@ -41,6 +43,10 @@ An extension can belong to more than one category. Catalog metadata should captu
 ## Public Extension Library and community marketplace
 
 The marketing site should have a durable **Extensions** page (for example, `/extensions`) linked from product navigation and the README. It should explain the extension model and show official and community catalogs without implying equivalent support. The page can exist before in-app installation; it must not pretend one-click installation works until the signed package flow is implemented.
+
+The current site page is an informational program page, not a live marketplace: it accepts extension ideas through the project's existing issue form, but it does not accept package submissions, list installable extensions, or provide one-click installation. Keep that distinction visible until a real catalog and submission service pass their launch gates. When the catalog is operational, provide separate official and community browse views, task/category filters, compatibility and capability facets, and a publisher submission path with review-status tracking. Do not use a mock catalog or fabricated review badges to make the page look populated.
+
+Historical catalogs also suggest a practical listing format: title, publisher, concise task description, extension kind, supported app/API versions, platform, selection/document scope, shortcut or menu location, expected output, screenshots, install/update instructions, release history, and license. Search should match both user phrasing ("export selected layers as assets") and implementation terms ("batch export", "sprite", "SVG").
 
 ### Official vs community status
 

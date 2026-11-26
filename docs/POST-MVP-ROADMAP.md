@@ -994,6 +994,9 @@ Acceptance:
 - Incompatible or malicious packages are rejected safely.
 - Plugin failure cannot corrupt the document or crash the application.
 - Plugin APIs have compatibility tests and documented deprecation policy.
+- Community submissions carry an immutable version artifact, source revision, license, publisher/ownership details, changelog, compatibility, and declared capabilities. Automated validation and human review are separate status signals.
+- Catalog entries distinguish official from community ownership and show only checks that actually ran. Submission, security report/takedown, advisory, abandoned-package, and official-promotion paths have named owners and auditable history.
+- One-click discovery may download and stage a package; executable activation remains an explicit user action after capability review. Permission expansion requires renewed consent, and rollback, uninstall, and safe startup work before public launch.
 
 ## 5.15 Open-source community, feedback, and in-app issue tracking
 
