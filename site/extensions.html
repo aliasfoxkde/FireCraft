@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#17191f">
+<meta name="description" content="Explore FireCraft's planned extension program: a safer, clearly supported home for official tools and community extensions.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Extensions — FireCraft">
+<meta property="og:description" content="A transparent roadmap for FireCraft's future extension ecosystem.">
+<title>Extensions — FireCraft</title>
+<link rel="icon" href="./assets/favicon.png" type="image/png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./styles.css">
+</head>
+<body class="extensions-page">
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="topbar">
+<a class="brand" href="./index.html" aria-label="FireCraft home"><img src="./assets/firecraft-mark.png" alt=""><span>Fire<span class="brand-hot">Craft</span></span></a>
+<button class="nav-toggle" aria-expanded="false" aria-controls="primary-nav" aria-label="Toggle navigation"><span></span><span></span><span></span></button>
+<nav id="primary-nav" class="nav" aria-label="Main navigation">
+<a href="./index.html#features">Features</a><a href="./index.html#workflow">Workflow</a><a href="./extensions.html" aria-current="page">Extensions</a><a href="./index.html#download">Download</a><a href="./index.html#project">Project</a><a class="nav-github" href="https://github.com/aliasfoxkde/FireCraft" target="_blank" rel="noreferrer">GitHub ↗</a>
+</nav>
+</header>
+<main id="main">
+<section class="ext-hero section-wrap">
+<div class="ext-copy">
+<p class="eyebrow"><span class="eyebrow-dot"></span> EXTENSIONS · IN DEVELOPMENT</p>
+<h1>Make room for <span class="gradient-text">your workflow.</span></h1>
+<p class="ext-lede">FireCraft is planning an extension ecosystem for focused commands, panels, tools, and reusable resources. Today, there is no public extension catalog or one-click installer. This page explains what we intend to build and the safeguards it must meet first.</p>
+<div class="hero-actions"><a class="button button-primary" href="https://github.com/aliasfoxkde/FireCraft/issues/new/choose" target="_blank" rel="noreferrer">Suggest an extension idea <span aria-hidden="true">↗</span></a><a class="button button-quiet" href="https://github.com/aliasfoxkde/FireCraft/blob/main/docs/PLANNING.md" target="_blank" rel="noreferrer">Read the project roadmap</a></div>
+<p class="ext-status"><span class="status-mark" aria-hidden="true"></span><strong>Planning stage</strong><span>No submissions or installs are currently available.</span></p>
+</div>
+<aside class="ext-callout" aria-label="Extension program principles"><span class="eyebrow">DESIGNED FOR TRUST</span><h2>Know what you install.</h2><p>Publisher, source, license, compatibility, permissions, and review status should be visible before an extension can be enabled.</p><div class="callout-rule"></div><p class="callout-note">Fetching and staging a package must never silently turn on its code.</p></aside>
+</section>
+<section class="ext-section section-wrap" aria-labelledby="workflows-title">
+<div class="ext-section-heading"><p class="eyebrow">BUILT AROUND REAL TASKS</p><h2 id="workflows-title">Useful tools, close to the canvas.</h2><p>Historical Fireworks extensions show the value of compact tools that remove repetitive work. These are categories to explore, not current FireCraft features or promised delivery dates.</p></div>
+<div class="ext-grid">
+<article class="ext-card"><span class="ext-index">01 / ARRANGE</span><h3>Layout &amp; geometry</h3><p>Alignment, spacing, grids, smart resizing, and repeatable object transforms.</p></article>
+<article class="ext-card"><span class="ext-index">02 / DOCUMENT</span><h3>Pages &amp; layers</h3><p>Batch document operations, reusable setup, and predictable layer workflows.</p></article>
+<article class="ext-card"><span class="ext-index">03 / EXPORT</span><h3>Web &amp; asset output</h3><p>Repeatable export presets and tools for preparing assets across a project.</p></article>
+<article class="ext-card"><span class="ext-index">04 / CREATE</span><h3>Vectors, text &amp; resources</h3><p>Focused path, typography, color, brush, template, and resource helpers as the app APIs support them.</p></article>
+</div>
+</section>
+<section class="ext-section ext-trust section-wrap" aria-labelledby="support-title">
+<div class="ext-section-heading"><p class="eyebrow">TWO CLEAR SUPPORT TIERS</p><h2 id="support-title">Know who stands behind it.</h2><p>Community visibility does not imply FireCraft endorsement. Each tier needs its own ownership and support expectations.</p></div>
+<div class="tier-grid">
+<article class="tier-card tier-official"><div class="tier-label">MAINTAINER OWNED</div><h3>Official</h3><p>FireCraft maintainers own the compatibility promise, test releases against supported API versions, publish immutable releases, and handle support through the project.</p><ul><li>Maintainer source and release history</li><li>Declared app/API compatibility</li><li>Explicit support owner</li></ul></article>
+<article class="tier-card"><div class="tier-label">INDEPENDENT PUBLISHER</div><h3>Community</h3><p>Independent authors retain ownership and support. A listing should show the publisher, source, license, compatibility, permissions, and the precise checks completed.</p><ul><li>No implied maintainer endorsement</li><li>Review labels name the actual checks</li><li>Promotion requires an explicit ownership transfer</li></ul></article>
+</div>
+</section>
+<section class="ext-section section-wrap" aria-labelledby="safety-title">
+<div class="ext-section-heading"><p class="eyebrow">A RELEASE GATE, NOT A BADGE</p><h2 id="safety-title">Safety before convenience.</h2><p>A public catalog and in-app installation should launch only after the package and review systems can support them.</p></div>
+<div class="safety-grid">
+<div><span class="safety-number">01</span><h3>Provenance</h3><p>Trace each immutable package to its source revision, publisher, license, and release record.</p></div>
+<div><span class="safety-number">02</span><h3>Compatibility</h3><p>Validate the manifest and app/API range; publish exactly which automated and human checks ran.</p></div>
+<div><span class="safety-number">03</span><h3>Permission clarity</h3><p>Show capabilities and data/network behavior before install and again before first enable. Ask again when permissions expand.</p></div>
+<div><span class="safety-number">04</span><h3>Recovery</h3><p>Stage installs per user, retain prior versions, support rollback and safe startup, and provide a security-report path.</p></div>
+</div>
+<p class="ext-footnote">A one-click flow is a future goal, not a current capability. Downloading or staging must remain separate from explicitly enabling executable code.</p>
+</section>
+<section class="ext-cta section-wrap" aria-labelledby="participate-title"><div><p class="eyebrow">HELP SHAPE THE PROGRAM</p><h2 id="participate-title">Start with a use case.</h2><p>Share the task you want an extension to solve. Public submissions will open when the intake, review, provenance, and moderation process is ready.</p></div><a class="button button-primary" href="https://github.com/aliasfoxkde/FireCraft/issues/new/choose" target="_blank" rel="noreferrer">Open a GitHub issue <span aria-hidden="true">↗</span></a></section>
+</main>
+<footer class="footer section-wrap">
+<a class="brand" href="./index.html"><img src="./assets/firecraft-mark.png" alt=""><span>Fire<span class="brand-hot">Craft</span></span></a>
+<p>Independent. Open source. Made for creators.</p>
+<div class="footer-links"><a href="./extensions.html" aria-current="page">Extensions</a><a href="https://github.com/aliasfoxkde/FireCraft">GitHub</a><a href="https://github.com/aliasfoxkde/FireCraft/releases">Releases</a><a href="https://github.com/aliasfoxkde/FireCraft/blob/main/LICENSE">License</a><a href="https://github.com/aliasfoxkde/FireCraft/blob/main/docs/ATTRIBUTION.md">Attribution</a></div>
+<small>© <span id="year"></span> FireCraft contributors. Adobe and Fireworks are trademarks of Adobe Inc. FireCraft is independent and not affiliated with Adobe.</small>
+</footer>
+<script src="./app.js" defer></script>
+</body>
+</html>
