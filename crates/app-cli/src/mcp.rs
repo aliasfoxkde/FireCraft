@@ -445,7 +445,10 @@ mod tests {
     use engine::platform::MemoryFs;
 
     fn session() -> Session {
-        Session::new(doc::Document::default())
+        let mut document = doc::Document::default();
+        document.info.canvas.width = 64.0;
+        document.info.canvas.height = 64.0;
+        Session::new(document)
     }
 
     fn fs() -> Rc<dyn FileSystem> {
