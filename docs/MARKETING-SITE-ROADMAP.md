@@ -2,7 +2,7 @@
 
 > **Document type:** implementation roadmap and acceptance specification for the public product website.
 > **Status:** planned enhancement to the existing static site; not a claim that the public site is complete or deployed.
-> **Reviewed:** 2026-11-23.
+> **Reviewed:** 2026-11-26.
 > **Parent workstream:** SITE-01.
 > **Companion:** [Post-MVP Agent Handoff](POST-MVP-AGENT-HANDOFF.md).
 > **Hosting target:** Cloudflare Pages, in the existing FireCraft repository.
@@ -82,6 +82,7 @@ Build a small, coherent site. Prefer a few useful pages over a large collection 
 | Screenshots / Gallery | Current, authentic editor captures with meaningful captions, build/date context, responsive display, descriptive alt text | No mockup is presented as a real application screenshot; outdated screenshots are labeled or replaced. |
 | Downloads | Latest published release, asset list grouped by verified platform/artifact type, checksums/manifest, install notes, browser-build link | Download destinations are taken from current release metadata or canonical release pages. Unsupported platforms are not advertised as available. |
 | Getting started | First launch, create/open/save, import/export, browser build caveats, links to full usage docs | Instructions are reproducible from a clean environment and match the current release. |
+| Extensions | Official/community program, researched workflow categories, submission and safety plan, and current implementation status | The page links to the detailed ecosystem plan and clearly states that the catalog, package intake, and one-click install are not yet operational. |
 | Project / Community | License, repository, contribution guide, issue reporting, roadmap, release history, attribution | Visitors can identify the project governance and participate without a hidden signup requirement. |
 
 ### 5.2 Recommended follow-on pages
@@ -92,6 +93,7 @@ Add only when the content is real and maintainable:
 - Privacy and data-handling statement based on actual application and website behavior.
 - Accessibility statement that records the audited site scope and any known limitations.
 - Format compatibility reference generated from or linked to the repository's capability matrix.
+- An operational extension catalog and author submission portal, after the extension API, package verification, review process, moderation, and rollback gates in [`research/fireworks-extensions.md`](research/fireworks-extensions.md) are implemented.
 
 Avoid adding a blog or CMS until there is an owner and a durable publishing workflow. Avoid duplicating the entire repository documentation set on the marketing site.
 
