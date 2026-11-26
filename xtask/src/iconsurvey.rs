@@ -116,18 +116,17 @@ pub fn check() -> Result<(), String> {
 /// Builds the survey text from the tree.
 fn render() -> Result<String, String> {
     let root = workspace_root();
-    let mut files: Vec<(String, u64)> = all_files(&root.join(PHOSPHOR_DIR))?;
+    let mut files: Vec<(String, u64)> = all_files(&root.join(PHOSPHOR_DIR), PHOSPHOR_DIR)?;
     // Append Lucide files (deprecated set)
     let lucide_dir = root.join(ICON_DIR);
     if lucide_dir.exists() {
-        files.extend(all_files(&lucide_dir)?);
+        files.extend(all_files(&lucide_dir, ICON_DIR)?);
     }
-    let mut license_text = String::new();
-    let phosphor_license = std::fs::read_to_string(root.join(PHOSPHOR_LICENSE))
+    let _phosphor_license = std::fs::read_to_string(root.join(PHOSPHOR_LICENSE))
         .map_err(|e| format!("read {PHOSPHOR_LICENSE}: {e}"))?;
     let mut feather = Vec::new();
     if Path::new(&root.join(LUCIDE_LICENSE)).exists() {
-        license_text = std::fs::read_to_string(root.join(LUCIDE_LICENSE))
+        let license_text = std::fs::read_to_string(root.join(LUCIDE_LICENSE))
             .map_err(|e| format!("read {LUCIDE_LICENSE}: {e}"))?;
         feather = feather_derived(&license_text);
     }
@@ -400,21 +399,21 @@ fn other_for(
 }
 
 /// Every file under the icon directory, as (relative path, bytes).
-fn all_files(dir: &Path) -> Result<Vec<(String, u64)>, String> {
+fn all_files(dir: &Path, prefix: &str) -> Result<Vec<(String, u64)>, String> {
     let mut out = Vec::new();
-    walk(dir, dir, &mut out)?;
+    walk(dir, dir, prefix, &mut out)?;
     out.sort();
     Ok(out)
 }
 
 /// Walks one directory, collecting the files under it.
-fn walk(root: &Path, dir: &Path, out: &mut Vec<(String, u64)>) -> Result<(), String> {
+fn walk(root: &Path, dir: &Path, prefix: &str, out: &mut Vec<(String, u64)>) -> Result<(), String> {
     let entries = std::fs::read_dir(dir).map_err(|e| format!("read {}: {e}", dir.display()))?;
     for entry in entries {
         let entry = entry.map_err(|e| format!("read {}: {e}", dir.display()))?;
         let path = entry.path();
         if path.is_dir() {
-            walk(root, &path, out)?;
+            walk(root, &path, prefix, out)?;
             continue;
         }
         let bytes = entry
@@ -426,7 +425,7 @@ fn walk(root: &Path, dir: &Path, out: &mut Vec<(String, u64)>) -> Result<(), Str
             .map_err(|e| format!("{} is not under {}: {e}", path.display(), root.display()))?
             .to_string_lossy()
             .replace('\\', "/");
-        out.push((format!("{ICON_DIR}/{rel}"), bytes));
+        out.push((format!("{prefix}/{rel}"), bytes));
     }
     Ok(())
 }
@@ -649,7 +648,7 @@ mod tests {
     fn the_survey_lists_every_shipped_icon() {
         let text = render().unwrap_or_else(|e| panic!("the survey renders: {e}"));
         let root = workspace_root();
-        let files = all_files(&root.join(PHOSPHOR_DIR)).unwrap();
+        let files = all_files(&root.join(PHOSPHOR_DIR), PHOSPHOR_DIR).unwrap();
         for (rel, _) in &files {
             assert!(text.contains(rel), "{rel} is missing from the survey");
         }

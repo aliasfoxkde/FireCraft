@@ -962,30 +962,38 @@ fn stage_archive(
 /// would carry 2775 dirs and 0664 files into otherwise
 /// deterministic archives (and dpkg-deb refuses setgid outright).
 fn normalize_tree(root: &Path, exec_prefix: &str) -> Result<(), String> {
-    use std::os::unix::fs::PermissionsExt as _;
-    let set = |path: &Path, mode: u32| {
-        std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode))
-            .map_err(|e| format!("chmod {}: {e}", path.display()))
-    };
-    let mut stack = vec![root.to_owned()];
-    while let Some(dir) = stack.pop() {
-        set(&dir, 0o755)?;
-        for entry in std::fs::read_dir(&dir).map_err(|e| format!("readdir {dir:?}: {e}"))? {
-            let entry = entry.map_err(|e| format!("readdir {dir:?}: {e}"))?;
-            let path = entry.path();
-            if path.is_dir() {
-                stack.push(path);
-            } else {
-                let exec = entry
-                    .path()
-                    .strip_prefix(root)
-                    .map(|rel| rel.starts_with(exec_prefix))
-                    .unwrap_or(false);
-                set(&path, if exec { 0o755 } else { 0o644 })?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt as _;
+        let set = |path: &Path, mode: u32| {
+            std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode))
+                .map_err(|e| format!("chmod {}: {e}", path.display()))
+        };
+        let mut stack = vec![root.to_owned()];
+        while let Some(dir) = stack.pop() {
+            set(&dir, 0o755)?;
+            for entry in std::fs::read_dir(&dir).map_err(|e| format!("readdir {dir:?}: {e}"))? {
+                let entry = entry.map_err(|e| format!("readdir {dir:?}: {e}"))?;
+                let path = entry.path();
+                if path.is_dir() {
+                    stack.push(path);
+                } else {
+                    let exec = entry
+                        .path()
+                        .strip_prefix(root)
+                        .map(|rel| rel.starts_with(exec_prefix))
+                        .unwrap_or(false);
+                    set(&path, if exec { 0o755 } else { 0o644 })?;
+                }
             }
         }
+        Ok(())
     }
-    Ok(())
+    #[cfg(not(unix))]
+    {
+        let _ = (root, exec_prefix);
+        Ok(())
+    }
 }
 
 /// GNU tar | gzip -n into `out`. Deterministic by construction:

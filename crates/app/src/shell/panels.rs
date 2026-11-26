@@ -5394,52 +5394,656 @@ fn parse_kernel(text: &str, width: i64, height: i64) -> Result<Vec<i64>, String>
 }
 
 impl Shell {
-    /// Special Characters panel stub (CS6 special chars insertion).
+    /// Special Characters panel — clickable CS6 symbol grid that copies or
+    /// inserts into active text editing.
     pub(super) fn special_chars_panel(&mut self, ui: &mut egui::Ui) {
-        ui.weak("Special Characters — insert special characters.");
-        ui.add_space(4.0);
-        ui.weak("Inserts symbols, dingbats, and special Unicode characters.");
+        let p = self.active_palette();
+        const CHARS: &[&str] = &[
+            "©", "®", "™", "•", "—", "–", "…", "§", "¶", "†", "‡", "°", "±", "×", "÷", "≠", "≤",
+            "≥", "∞", "→", "←", "↑", "↓", "★", "☆", "✓", "✕", "€", "£", "¥", "¢", "α", "β", "π",
+            "Ω", "◊",
+        ];
+        ui.label(
+            egui::RichText::new("Click a glyph to insert or copy:")
+                .small()
+                .color(p.text_dim),
+        );
+        ui.add_space(3.0);
+        egui::Grid::new("cs6_special_chars_grid")
+            .num_columns(6)
+            .spacing([3.0, 3.0])
+            .show(ui, |ui| {
+                for (i, ch) in CHARS.iter().enumerate() {
+                    if ui
+                        .add_sized([28.0, 22.0], egui::Button::new(*ch))
+                        .on_hover_text(format!("Insert / copy {ch}"))
+                        .clicked()
+                    {
+                        if let Some(edit) = &mut self.text_edit {
+                            edit.buffer.push_str(ch);
+                        } else {
+                            ui.ctx().copy_text((*ch).to_owned());
+                        }
+                        self.status = format!("Character '{ch}' copied/inserted");
+                    }
+                    if (i + 1) % 6 == 0 {
+                        ui.end_row();
+                    }
+                }
+            });
     }
 
-    /// Image Editing panel stub (CS6 image editing tools).
+    /// Image Editing panel — quick CS6 canvas, transform, and filter actions.
     pub(super) fn image_editing_panel(&mut self, ui: &mut egui::Ui) {
-        ui.weak("Image Editing — adjust and edit raster images.");
-        ui.add_space(4.0);
-        ui.weak("Resize, rotate, crop, and apply filters to raster images.");
+        let p = self.active_palette();
+        ui.label(
+            egui::RichText::new("Canvas & Image")
+                .small()
+                .color(p.text_dim),
+        );
+        ui.horizontal_wrapped(|ui| {
+            if ui.small_button("Canvas Size…").clicked() {
+                self.run_shell(menus::ShellAction::CanvasSize);
+            }
+            if ui.small_button("Image Size…").clicked() {
+                self.run_shell(menus::ShellAction::ImageSize);
+            }
+            if ui.small_button("Fit Canvas").clicked() {
+                self.run_command(
+                    "document.setDocumentCanvasSizeToDocumentExtents",
+                    serde_json::json!({}),
+                );
+            }
+        });
+        ui.separator();
+        ui.label(
+            egui::RichText::new("Transform & Flatten")
+                .small()
+                .color(p.text_dim),
+        );
+        ui.horizontal_wrapped(|ui| {
+            if ui.small_button("Rotate 90° CW").clicked() {
+                self.run_sel(menus::SelAction::Rotate(90.0));
+            }
+            if ui.small_button("Rotate 90° CCW").clicked() {
+                self.run_sel(menus::SelAction::Rotate(-90.0));
+            }
+            if ui.small_button("Flip H").clicked() {
+                self.run_sel(menus::SelAction::Reflect {
+                    horizontal: true,
+                    vertical: false,
+                });
+            }
+            if ui.small_button("Flip V").clicked() {
+                self.run_sel(menus::SelAction::Reflect {
+                    horizontal: false,
+                    vertical: true,
+                });
+            }
+            if ui.small_button("Flatten Selection").clicked() {
+                self.run_sel(menus::SelAction::FlattenSelection);
+            }
+        });
     }
 
-    /// Auto Shape Properties panel stub (parametric auto shape controls).
+    /// Auto Shape Properties panel — quick parametric shape tool selector.
     pub(super) fn auto_shape_props_panel(&mut self, ui: &mut egui::Ui) {
-        ui.weak("Auto Shape Properties — parametric controls for auto shapes.");
-        ui.add_space(4.0);
-        ui.weak("Sides, inner radius, star points, and other parametric values.");
+        let p = self.active_palette();
+        ui.label(
+            egui::RichText::new("Auto Shape Tool & Redraw")
+                .small()
+                .color(p.text_dim),
+        );
+        ui.checkbox(&mut self.autoshape_redraw, "Redraw selected shape");
+        ui.add_space(3.0);
+        self.auto_shapes_panel(ui);
     }
 
-    /// Document Library panel stub (CS6 document assets).
+    /// Document Library panel — delegates directly to the live symbol library.
     pub(super) fn document_library_panel(&mut self, ui: &mut egui::Ui) {
-        ui.weak("Document Library — shared assets and symbols.");
-        ui.add_space(4.0);
-        ui.weak("Symbols, templates, and other document-level assets.");
+        self.library_panel(ui);
     }
 
-    /// Align panel stub (CS6 alignment tools).
+    /// Align panel — real CS6 Align & Distribute icon grid wired to `object.align`
+    /// and `object.distribute`.
     pub(super) fn align_panel(&mut self, ui: &mut egui::Ui) {
-        ui.weak("Align — align and distribute objects.");
+        use super::vector_icons::{self, AlignIcon};
+        let p = self.active_palette();
+        let draw_btn = |ui: &mut egui::Ui, icon: AlignIcon, tip: &str| -> bool {
+            let (rect, resp) =
+                ui.allocate_exact_size(egui::Vec2::splat(24.0), egui::Sense::click());
+            if resp.hovered() {
+                ui.painter().rect_filled(rect, 0.0, p.surface);
+                ui.painter().rect_stroke(
+                    rect,
+                    0.0,
+                    egui::Stroke::new(1.0, p.selection),
+                    egui::StrokeKind::Inside,
+                );
+            } else {
+                ui.painter().rect_filled(rect, 0.0, p.panel_alt);
+                ui.painter().rect_stroke(
+                    rect,
+                    0.0,
+                    egui::Stroke::new(1.0, p.stroke),
+                    egui::StrokeKind::Inside,
+                );
+            }
+            vector_icons::draw_align(ui.painter(), rect.shrink(2.0), icon, p.text);
+            resp.on_hover_text(tip).clicked()
+        };
+
+        ui.label(
+            egui::RichText::new("Align Objects")
+                .small()
+                .color(p.text_dim),
+        );
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing = egui::Vec2::new(3.0, 2.0);
+            for (icon, mode, tip) in [
+                (AlignIcon::AlignLeft, "left", "Align Left Edges"),
+                (
+                    AlignIcon::AlignCenterH,
+                    "center_x",
+                    "Align Horizontal Centers",
+                ),
+                (AlignIcon::AlignRight, "right", "Align Right Edges"),
+                (AlignIcon::AlignTop, "top", "Align Top Edges"),
+                (
+                    AlignIcon::AlignCenterV,
+                    "center_y",
+                    "Align Vertical Centers",
+                ),
+                (AlignIcon::AlignBottom, "bottom", "Align Bottom Edges"),
+            ] {
+                if draw_btn(ui, icon, tip) {
+                    self.run_action(&menus::Action::Align(mode));
+                }
+            }
+        });
         ui.add_space(4.0);
-        ui.weak("Align to page, selection, or each other.");
+        ui.label(egui::RichText::new("Distribute").small().color(p.text_dim));
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing = egui::Vec2::new(3.0, 2.0);
+            if draw_btn(ui, AlignIcon::DistributeCenterH, "Distribute Horizontally") {
+                self.run_action(&menus::Action::Distribute("horizontal"));
+            }
+            if draw_btn(ui, AlignIcon::DistributeCenterV, "Distribute Vertically") {
+                self.run_action(&menus::Action::Distribute("vertical"));
+            }
+        });
     }
 
-    /// Path panel stub (CS6 path editing).
+    /// Path panel — real CS6 Combine Paths & Alter Paths icon grids wired to
+    /// `path.boolean`, `path.splitPaths`, `path.simplify`, `path.expandStroke`, `path.inset`.
     pub(super) fn path_panel(&mut self, ui: &mut egui::Ui) {
-        ui.weak("Path — edit vector paths and sub-paths.");
+        use super::vector_icons::{self, PathIcon};
+        let p = self.active_palette();
+        let draw_btn = |ui: &mut egui::Ui, icon: PathIcon, tip: &str| -> bool {
+            let (rect, resp) =
+                ui.allocate_exact_size(egui::Vec2::splat(24.0), egui::Sense::click());
+            if resp.hovered() {
+                ui.painter().rect_filled(rect, 0.0, p.surface);
+                ui.painter().rect_stroke(
+                    rect,
+                    0.0,
+                    egui::Stroke::new(1.0, p.selection),
+                    egui::StrokeKind::Inside,
+                );
+            } else {
+                ui.painter().rect_filled(rect, 0.0, p.panel_alt);
+                ui.painter().rect_stroke(
+                    rect,
+                    0.0,
+                    egui::Stroke::new(1.0, p.stroke),
+                    egui::StrokeKind::Inside,
+                );
+            }
+            vector_icons::draw_path(ui.painter(), rect.shrink(2.0), icon, p.text);
+            resp.on_hover_text(tip).clicked()
+        };
+
+        ui.label(
+            egui::RichText::new("Combine Paths")
+                .small()
+                .color(p.text_dim),
+        );
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing = egui::Vec2::new(3.0, 2.0);
+            for (icon, op, tip) in [
+                (PathIcon::Union, "union", "Union Paths"),
+                (PathIcon::Intersect, "intersect", "Intersect Paths"),
+                (PathIcon::Punch, "punch", "Punch Paths"),
+                (PathIcon::Crop, "crop", "Crop Paths"),
+            ] {
+                if draw_btn(ui, icon, tip) {
+                    let ids = self.editor.live_selection();
+                    if ids.len() >= 2 {
+                        self.run_command(
+                            "path.boolean",
+                            serde_json::json!({ "a": ids[0], "b": ids[1], "op": op }),
+                        );
+                    } else {
+                        self.status = format!("{op} requires two selected paths");
+                    }
+                }
+            }
+            if draw_btn(ui, PathIcon::Split, "Split Compound Path") {
+                if let Some(id) = self.editor.selected_live() {
+                    self.run_command("path.splitPaths", serde_json::json!({ "id": id }));
+                } else {
+                    self.status = "Select a path to split".to_owned();
+                }
+            }
+        });
         ui.add_space(4.0);
-        ui.weak("Add, delete, and convert path nodes.");
+        ui.label(egui::RichText::new("Alter Paths").small().color(p.text_dim));
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing = egui::Vec2::new(3.0, 2.0);
+            if draw_btn(ui, PathIcon::Simplify, "Simplify Path") {
+                self.run_sel(menus::SelAction::Simplify);
+            }
+            if draw_btn(ui, PathIcon::ExpandStroke, "Expand Stroke") {
+                self.run_sel(menus::SelAction::ExpandStroke);
+            }
+            if draw_btn(ui, PathIcon::InsetExpand, "Inset Path (+4 px)") {
+                self.run_sel(menus::SelAction::Inset(4.0));
+            }
+        });
     }
 
-    /// Color Palette panel stub (CS6 color palette).
+    /// Color Palette panel — Experiment's live CS6 Color Selector / Mixers / Blender
+    /// with 2D Saturation/Value square, vertical rainbow Hue strip, HLS/HSV/CMYK/RGB
+    /// sliders, and hex inputs wired directly to Fill/Stroke and selected objects.
     pub(super) fn color_palette_panel(&mut self, ui: &mut egui::Ui) {
-        ui.weak("Color Palette — manage color swatches and palettes.");
-        ui.add_space(4.0);
-        ui.weak("View, edit, and organize color swatches.");
+        let p = self.active_palette();
+        ui.spacing_mut().item_spacing = egui::Vec2::new(3.0, 2.0);
+
+        // Sync active fill/stroke from editor
+        let ef = self.editor.fill_color;
+        let es = self.editor.stroke_color;
+        let mut fill = Color32::from_rgba_unmultiplied(ef[0], ef[1], ef[2], ef[3]);
+        let mut stroke = Color32::from_rgba_unmultiplied(es[0], es[1], es[2], es[3]);
+        let mut fill_changed = false;
+        let mut stroke_changed = false;
+
+        // Segmented sub-tabs: Selector | Mixers | Blender
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing = egui::Vec2::new(2.0, 1.0);
+            for (i, label) in ["Selector", "Mixers", "Blender"].iter().enumerate() {
+                if ui
+                    .selectable_label(self.color_subtab == i, egui::RichText::new(*label).small())
+                    .clicked()
+                {
+                    self.color_subtab = i;
+                }
+            }
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if ui
+                    .small_button("⇄")
+                    .on_hover_text("Swap Fill & Stroke")
+                    .clicked()
+                {
+                    self.run_panel_button(Tool::SwapStrokeFill);
+                }
+                if ui.small_button("⊘").on_hover_text("No Fill").clicked() {
+                    self.run_panel_button(Tool::NoStrokeFill);
+                }
+            });
+        });
+
+        // Stroke & Fill swatch + Hex inputs
+        ui.horizontal(|ui| {
+            let (st_r, st_resp) =
+                ui.allocate_exact_size(egui::Vec2::new(16.0, 14.0), Sense::click());
+            ui.painter().rect_filled(st_r, 0.0, stroke);
+            ui.painter().rect_stroke(
+                st_r,
+                0.0,
+                egui::Stroke::new(1.0, p.stroke),
+                egui::StrokeKind::Middle,
+            );
+            if st_resp.on_hover_text("Stroke Color").clicked() {
+                self.run_panel_button(Tool::SwapStrokeFill);
+            }
+            let mut shex = hex_of(stroke);
+            if ui
+                .add(
+                    egui::TextEdit::singleline(&mut shex)
+                        .desired_width(62.0)
+                        .font(egui::FontId::monospace(10.0)),
+                )
+                .changed()
+                && let Some(c) = from_hex(&shex)
+            {
+                stroke = c;
+                stroke_changed = true;
+            }
+
+            ui.add_space(4.0);
+
+            let (fl_r, _) = ui.allocate_exact_size(egui::Vec2::new(16.0, 14.0), Sense::hover());
+            ui.painter().rect_filled(fl_r, 0.0, fill);
+            ui.painter().rect_stroke(
+                fl_r,
+                0.0,
+                egui::Stroke::new(1.0, p.selection),
+                egui::StrokeKind::Middle,
+            );
+            let mut fhex = hex_of(fill);
+            if ui
+                .add(
+                    egui::TextEdit::singleline(&mut fhex)
+                        .desired_width(62.0)
+                        .font(egui::FontId::monospace(10.0)),
+                )
+                .changed()
+                && let Some(c) = from_hex(&fhex)
+            {
+                fill = c;
+                fill_changed = true;
+            }
+        });
+
+        if self.color_subtab == 2 {
+            // 12-step Blender interpolation ramp between Stroke and Fill
+            ui.label(
+                egui::RichText::new("Blend Ramp (L-click: Fill, R-click: Stroke)")
+                    .small()
+                    .color(p.text_dim),
+            );
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing = egui::Vec2::new(2.0, 2.0);
+                for step in 0..12 {
+                    let t = step as f32 / 11.0;
+                    let r = (f32::from(stroke.r()) * (1.0 - t) + f32::from(fill.r()) * t) as u8;
+                    let g = (f32::from(stroke.g()) * (1.0 - t) + f32::from(fill.g()) * t) as u8;
+                    let b = (f32::from(stroke.b()) * (1.0 - t) + f32::from(fill.b()) * t) as u8;
+                    let c = Color32::from_rgb(r, g, b);
+                    let (cell, resp) =
+                        ui.allocate_exact_size(egui::Vec2::new(17.0, 48.0), Sense::click());
+                    ui.painter().rect_filled(cell, 0.0, c);
+                    ui.painter().rect_stroke(
+                        cell,
+                        0.0,
+                        egui::Stroke::new(1.0, p.stroke),
+                        egui::StrokeKind::Middle,
+                    );
+                    if resp.clicked() {
+                        fill = c;
+                        fill_changed = true;
+                    }
+                    if resp.secondary_clicked() {
+                        stroke = c;
+                        stroke_changed = true;
+                    }
+                    resp.on_hover_text(hex_of(c));
+                }
+            });
+        } else {
+            // Color space tabs: HLS | HSV | CMYK | RGB
+            ui.horizontal(|ui| {
+                for (i, name) in ["HLS", "HSV", "CMYK", "RGB"].iter().enumerate() {
+                    if ui
+                        .selectable_label(self.color_tab == i, egui::RichText::new(*name).small())
+                        .clicked()
+                    {
+                        self.color_tab = i;
+                    }
+                }
+            });
+
+            // Live 2D SV Color Square + Vertical Rainbow Hue Strip + Sliders
+            ui.horizontal(|ui| {
+                let mut hsv = rgb_to_hsv(fill);
+                let (square, sq_resp) =
+                    ui.allocate_exact_size(egui::Vec2::new(88.0, 66.0), Sense::click_and_drag());
+                let ptr = ui.painter();
+                let sx = 20usize;
+                let sy = 16usize;
+                for iy in 0..sy {
+                    for ix in 0..sx {
+                        let s = ix as f32 / (sx - 1) as f32;
+                        let v = 1.0 - iy as f32 / (sy - 1) as f32;
+                        let c = hsv_to_rgb(colors::Hsv { h: hsv.h, s, v });
+                        let cell = Rect::from_min_size(
+                            Pos2::new(
+                                square.left() + square.width() * ix as f32 / sx as f32,
+                                square.top() + square.height() * iy as f32 / sy as f32,
+                            ),
+                            Vec2::new(
+                                square.width() / sx as f32 + 0.8,
+                                square.height() / sy as f32 + 0.8,
+                            ),
+                        );
+                        ptr.rect_filled(cell, 0.0, c);
+                    }
+                }
+                ptr.rect_stroke(
+                    square,
+                    0.0,
+                    egui::Stroke::new(1.0, p.stroke),
+                    egui::StrokeKind::Middle,
+                );
+                let cur = Pos2::new(
+                    square.left() + hsv.s.clamp(0.0, 1.0) * square.width(),
+                    square.top() + (1.0 - hsv.v.clamp(0.0, 1.0)) * square.height(),
+                );
+                ptr.circle_stroke(cur, 3.5, egui::Stroke::new(1.2, Color32::WHITE));
+                ptr.circle_stroke(cur, 4.5, egui::Stroke::new(1.0, Color32::BLACK));
+                if (sq_resp.clicked() || sq_resp.dragged())
+                    && let Some(pos) = sq_resp.interact_pointer_pos()
+                {
+                    hsv.s = ((pos.x - square.left()) / square.width()).clamp(0.0, 1.0);
+                    hsv.v = (1.0 - (pos.y - square.top()) / square.height()).clamp(0.0, 1.0);
+                    fill = hsv_to_rgb(hsv);
+                    fill_changed = true;
+                }
+
+                // Vertical rainbow Hue strip
+                let (bar, bar_resp) =
+                    ui.allocate_exact_size(egui::Vec2::new(14.0, 66.0), Sense::click_and_drag());
+                let h_steps = 24usize;
+                for iy in 0..h_steps {
+                    let h = 360.0 * (iy as f32 / h_steps as f32);
+                    let c = hsv_to_rgb(colors::Hsv { h, s: 1.0, v: 1.0 });
+                    let band = Rect::from_min_size(
+                        Pos2::new(
+                            bar.left(),
+                            bar.top() + bar.height() * iy as f32 / h_steps as f32,
+                        ),
+                        Vec2::new(bar.width(), bar.height() / h_steps as f32 + 0.8),
+                    );
+                    ui.painter().rect_filled(band, 0.0, c);
+                }
+                ui.painter().rect_stroke(
+                    bar,
+                    0.0,
+                    egui::Stroke::new(1.0, p.stroke),
+                    egui::StrokeKind::Middle,
+                );
+                let hy = bar.top() + (hsv.h / 360.0).clamp(0.0, 1.0) * bar.height();
+                ui.painter().line_segment(
+                    [
+                        Pos2::new(bar.left() - 1.0, hy),
+                        Pos2::new(bar.right() + 1.0, hy),
+                    ],
+                    egui::Stroke::new(2.0, Color32::WHITE),
+                );
+                if (bar_resp.clicked() || bar_resp.dragged())
+                    && let Some(pos) = bar_resp.interact_pointer_pos()
+                {
+                    hsv.h = (((pos.y - bar.top()) / bar.height()).clamp(0.0, 1.0)) * 360.0;
+                    fill = hsv_to_rgb(hsv);
+                    fill_changed = true;
+                }
+
+                // Compact channel sliders
+                ui.vertical(|ui| {
+                    ui.spacing_mut().slider_width = 58.0;
+                    match self.color_tab {
+                        0 => {
+                            let mut hls = rgb_to_hls(fill);
+                            let mut h_deg = hls.h;
+                            let mut l_pct = hls.l * 100.0;
+                            let mut s_pct = hls.s * 100.0;
+                            let mut ch = false;
+                            ui.horizontal(|ui| {
+                                ui.label(egui::RichText::new("H").small());
+                                ch |= ui
+                                    .add(
+                                        egui::DragValue::new(&mut h_deg)
+                                            .range(0.0..=360.0)
+                                            .suffix("°"),
+                                    )
+                                    .changed();
+                            });
+                            ui.horizontal(|ui| {
+                                ui.label(egui::RichText::new("L").small());
+                                ch |= ui
+                                    .add(
+                                        egui::DragValue::new(&mut l_pct)
+                                            .range(0.0..=100.0)
+                                            .suffix("%"),
+                                    )
+                                    .changed();
+                            });
+                            ui.horizontal(|ui| {
+                                ui.label(egui::RichText::new("S").small());
+                                ch |= ui
+                                    .add(
+                                        egui::DragValue::new(&mut s_pct)
+                                            .range(0.0..=100.0)
+                                            .suffix("%"),
+                                    )
+                                    .changed();
+                            });
+                            if ch {
+                                hls.h = h_deg;
+                                hls.l = l_pct / 100.0;
+                                hls.s = s_pct / 100.0;
+                                fill = hls_to_rgb(hls);
+                                fill_changed = true;
+                            }
+                        }
+                        1 => {
+                            let mut h_deg = hsv.h;
+                            let mut s_pct = hsv.s * 100.0;
+                            let mut v_pct = hsv.v * 100.0;
+                            let mut ch = false;
+                            ui.horizontal(|ui| {
+                                ui.label(egui::RichText::new("H").small());
+                                ch |= ui
+                                    .add(
+                                        egui::DragValue::new(&mut h_deg)
+                                            .range(0.0..=360.0)
+                                            .suffix("°"),
+                                    )
+                                    .changed();
+                            });
+                            ui.horizontal(|ui| {
+                                ui.label(egui::RichText::new("S").small());
+                                ch |= ui
+                                    .add(
+                                        egui::DragValue::new(&mut s_pct)
+                                            .range(0.0..=100.0)
+                                            .suffix("%"),
+                                    )
+                                    .changed();
+                            });
+                            ui.horizontal(|ui| {
+                                ui.label(egui::RichText::new("V").small());
+                                ch |= ui
+                                    .add(
+                                        egui::DragValue::new(&mut v_pct)
+                                            .range(0.0..=100.0)
+                                            .suffix("%"),
+                                    )
+                                    .changed();
+                            });
+                            if ch {
+                                hsv.h = h_deg;
+                                hsv.s = s_pct / 100.0;
+                                hsv.v = v_pct / 100.0;
+                                fill = hsv_to_rgb(hsv);
+                                fill_changed = true;
+                            }
+                        }
+                        2 => {
+                            let mut cmyk = rgb_to_cmyk(fill);
+                            let mut c = cmyk.c * 100.0;
+                            let mut m = cmyk.m * 100.0;
+                            let mut y = cmyk.y * 100.0;
+                            let mut k = cmyk.k * 100.0;
+                            let mut ch = false;
+                            for (lbl, val) in
+                                [("C", &mut c), ("M", &mut m), ("Y", &mut y), ("K", &mut k)]
+                            {
+                                ui.horizontal(|ui| {
+                                    ui.label(egui::RichText::new(lbl).small());
+                                    ch |= ui
+                                        .add(
+                                            egui::DragValue::new(val)
+                                                .range(0.0..=100.0)
+                                                .suffix("%"),
+                                        )
+                                        .changed();
+                                });
+                            }
+                            if ch {
+                                cmyk.c = c / 100.0;
+                                cmyk.m = m / 100.0;
+                                cmyk.y = y / 100.0;
+                                cmyk.k = k / 100.0;
+                                fill = cmyk_to_rgb(cmyk);
+                                fill_changed = true;
+                            }
+                        }
+                        _ => {
+                            let mut r = fill.r();
+                            let mut g = fill.g();
+                            let mut b = fill.b();
+                            let mut ch = false;
+                            for (lbl, val) in [("R", &mut r), ("G", &mut g), ("B", &mut b)] {
+                                ui.horizontal(|ui| {
+                                    ui.label(egui::RichText::new(lbl).small());
+                                    ch |=
+                                        ui.add(egui::DragValue::new(val).range(0..=255)).changed();
+                                });
+                            }
+                            if ch {
+                                fill = Color32::from_rgb(r, g, b);
+                                fill_changed = true;
+                            }
+                        }
+                    }
+                });
+            });
+        }
+
+        if fill_changed {
+            let rgba = [fill.r(), fill.g(), fill.b(), 255];
+            self.editor.fill_color = rgba;
+            self.fill_color = fill;
+            let raw = abgr_pack(rgba);
+            for id in self.editor.live_selection() {
+                self.run_command(
+                    "object.setFill",
+                    serde_json::json!({ "id": id, "color_raw": raw }),
+                );
+            }
+        }
+        if stroke_changed {
+            let rgba = [stroke.r(), stroke.g(), stroke.b(), 255];
+            self.editor.stroke_color = rgba;
+            self.stroke_color = stroke;
+            let raw = abgr_pack(rgba);
+            for id in self.editor.live_selection() {
+                self.run_command(
+                    "object.setStroke",
+                    serde_json::json!({ "id": id, "color_raw": raw }),
+                );
+            }
+        }
     }
 }

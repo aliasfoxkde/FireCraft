@@ -436,6 +436,11 @@ impl Shell {
         // (menu zoom/fit, keyboard shortcuts) — the anchor is the
         // canvas center of the last laid-out frame.
         self.canvas_rect = Some(rect);
+        if let Some(hover_pos) = response.hover_pos() {
+            let local = Pos2::new(hover_pos.x - rect.left(), hover_pos.y - rect.top());
+            let world = self.view.to_world(local);
+            self.cursor_doc_pos = Some(Pos2::new(world.x as f32, world.y as f32));
+        }
 
         // Per-tool cursor icons (CS6 semantics); space held anywhere
         // switches to the temporary Hand (the CS6 space-drag pan). While
@@ -1060,6 +1065,105 @@ impl Shell {
                 }
             }
         }
+
+        // Input routing, by tool. Pointer coordinates are widget-local;
+        // Paint CS6 optimization split-view chrome (Preview / 2-Up / 4-Up)
+        // and top/left Canvas Rulers cleanly above overlays.
+        let p = self.active_palette();
+        match self.view_mode {
+            chrome::CanvasViewMode::Original => {}
+            chrome::CanvasViewMode::Preview => {
+                let badge = Rect::from_min_size(
+                    Pos2::new(rect.left() + 22.0, rect.top() + 22.0),
+                    Vec2::new(156.0, 20.0),
+                );
+                ui.painter()
+                    .rect_filled(badge, 0.0, p.panel_alt.gamma_multiply(0.92));
+                ui.painter().rect_stroke(
+                    badge,
+                    0.0,
+                    egui::Stroke::new(1.0, p.selection),
+                    egui::StrokeKind::Inside,
+                );
+                ui.painter().text(
+                    badge.center(),
+                    egui::Align2::CENTER_CENTER,
+                    "Optimize Preview (PNG32)",
+                    egui::FontId::proportional(10.5),
+                    p.text,
+                );
+            }
+            chrome::CanvasViewMode::TwoUp => {
+                let mid_x = rect.center().x;
+                ui.painter().vline(
+                    mid_x,
+                    rect.top()..=rect.bottom(),
+                    egui::Stroke::new(2.0, p.stroke),
+                );
+                for (x, label) in [
+                    (rect.left() + 24.0, "Original (PNG32)"),
+                    (mid_x + 8.0, "Preview (Optimized)"),
+                ] {
+                    let b = Rect::from_min_size(
+                        Pos2::new(x, rect.top() + 22.0),
+                        Vec2::new(136.0, 19.0),
+                    );
+                    ui.painter()
+                        .rect_filled(b, 0.0, p.panel_alt.gamma_multiply(0.92));
+                    ui.painter().rect_stroke(
+                        b,
+                        0.0,
+                        egui::Stroke::new(1.0, p.stroke),
+                        egui::StrokeKind::Inside,
+                    );
+                    ui.painter().text(
+                        b.center(),
+                        egui::Align2::CENTER_CENTER,
+                        label,
+                        egui::FontId::proportional(10.0),
+                        p.text,
+                    );
+                }
+            }
+            chrome::CanvasViewMode::FourUp => {
+                let mid_x = rect.center().x;
+                let mid_y = rect.center().y;
+                ui.painter().vline(
+                    mid_x,
+                    rect.top()..=rect.bottom(),
+                    egui::Stroke::new(1.5, p.stroke),
+                );
+                ui.painter().hline(
+                    rect.left()..=rect.right(),
+                    mid_y,
+                    egui::Stroke::new(1.5, p.stroke),
+                );
+                for (x, y, label) in [
+                    (rect.left() + 24.0, rect.top() + 22.0, "Original"),
+                    (mid_x + 8.0, rect.top() + 22.0, "PNG32"),
+                    (rect.left() + 24.0, mid_y + 8.0, "GIF Web216"),
+                    (mid_x + 8.0, mid_y + 8.0, "JPEG 80%"),
+                ] {
+                    let b = Rect::from_min_size(Pos2::new(x, y), Vec2::new(92.0, 18.0));
+                    ui.painter()
+                        .rect_filled(b, 0.0, p.panel_alt.gamma_multiply(0.92));
+                    ui.painter().rect_stroke(
+                        b,
+                        0.0,
+                        egui::Stroke::new(1.0, p.stroke),
+                        egui::StrokeKind::Inside,
+                    );
+                    ui.painter().text(
+                        b.center(),
+                        egui::Align2::CENTER_CENTER,
+                        label,
+                        egui::FontId::proportional(10.0),
+                        p.text,
+                    );
+                }
+            }
+        }
+        self.draw_canvas_rulers(ui, rect);
 
         // Input routing, by tool. Pointer coordinates are widget-local;
         // the view works in the same local space (top_left origin).

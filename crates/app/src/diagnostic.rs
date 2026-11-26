@@ -104,7 +104,9 @@ fn scrub_home_paths(s: &str) -> String {
         if let Some(idx) = res.find(prefix) {
             let after = &res[idx + prefix.len()..];
             let sep = if prefix.contains('\\') { '\\' } else { '/' };
-            let end = after.find(sep).map_or(res.len(), |off| idx + prefix.len() + off);
+            let end = after
+                .find(sep)
+                .map_or(res.len(), |off| idx + prefix.len() + off);
             res.replace_range(idx..end, "<HOME>");
         }
     }

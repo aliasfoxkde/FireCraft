@@ -57,33 +57,7 @@ pub fn apply_chrome_theme(ctx: &egui::Context) {
     // The tool-strip icons are embedded Phosphor SVGs; the loader
     // rasterizes them at the exact on-screen size. Idempotent.
     egui_extras::install_image_loaders(ctx);
-    ctx.all_styles_mut(|style| {
-        let visuals = &mut style.visuals;
-        visuals.dark_mode = true;
-        visuals.panel_fill = CHROME_PANEL_FILL;
-        visuals.window_fill = CHROME_WINDOW_FILL;
-        visuals.extreme_bg_color = CHROME_CANVAS_FILL;
-        visuals.faint_bg_color = CHROME_SURFACE_FILL;
-        // 0xdd against the darkest fill we put text on (faint 0x44)
-        // is 7.2:1 — WCAG 2.1 AAA (≥7:1). 0xd9 was 6.9:1, a hair short.
-        visuals.override_text_color = Some(CHROME_TEXT);
-        visuals.selection.bg_fill = CHROME_ACCENT;
-        visuals.selection.stroke = (1.0, CHROME_ACCENT_STROKE).into();
-        visuals.window_corner_radius = egui::CornerRadius::ZERO;
-        visuals.menu_corner_radius = egui::CornerRadius::ZERO;
-        for widget in [
-            &mut visuals.widgets.noninteractive,
-            &mut visuals.widgets.inactive,
-            &mut visuals.widgets.hovered,
-            &mut visuals.widgets.active,
-            &mut visuals.widgets.open,
-        ] {
-            widget.corner_radius = egui::CornerRadius::ZERO;
-        }
-        style.spacing.menu_margin = egui::Margin::same(2);
-        style.spacing.button_padding = egui::Vec2::new(6.0, 2.0);
-        style.spacing.item_spacing = egui::Vec2::new(6.0, 3.0);
-    });
+    super::theme::apply_cs6_style(ctx, &super::theme::DARK, true);
 }
 
 /// Reads the operating system's light/dark preference on Windows (cached).

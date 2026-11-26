@@ -24,8 +24,10 @@ pub(crate) use guides_ui::GridDialog;
 pub(crate) use guides_ui::GuideDraft;
 
 mod canvas_ui;
+mod chrome;
 mod colors;
 pub mod constants;
+mod demo;
 mod dialog_types;
 #[cfg(feature = "native")]
 mod dialogs;
@@ -46,7 +48,10 @@ mod panels_web;
 mod recovery;
 mod slice_editor;
 mod text_edit;
+pub mod theme;
 mod timeline;
+mod vector_icons;
+mod welcome_overlay;
 
 pub use optimize::OptimizeSettings;
 
@@ -450,6 +455,30 @@ pub struct Shell {
     pub(crate) transport_playing: bool,
     /// Transport frame delay (centiseconds).
     pub(crate) transport_frame_delay: u32,
+    /// Active workspace theme mode (CS6 Charcoal Dark / Classic Light / System).
+    pub(crate) theme_mode: theme::ThemeMode,
+    /// Active workspace preset name ("Expanded Mode" / "Iconic Mode" / "Compact Mode").
+    pub(crate) workspace_preset: &'static str,
+    /// Active canvas view mode (Original / Preview / 2-Up / 4-Up).
+    pub(crate) view_mode: chrome::CanvasViewMode,
+    /// Whether the left CS6 Tools palette is collapsed to 1 column.
+    pub(crate) tools_collapsed: bool,
+    /// Show the bottom CS6 Properties Inspector dock.
+    pub(crate) show_bottom_inspector: bool,
+    /// Whether the bottom Properties Inspector dock is collapsed to its header bar.
+    pub(crate) bottom_collapsed: bool,
+    /// Owner-controlled bottom Properties Inspector dock height (118..=340 px).
+    pub(crate) bottom_height: f32,
+    /// Active tab in the bottom Properties Inspector dock (0=Properties, 1=Symbol, 2=Info).
+    pub(crate) bottom_tab: usize,
+    /// Whether the CS6 Welcome Screen modal is currently shown.
+    pub show_welcome: bool,
+    /// "Don't show again" checkbox in the Welcome Screen modal.
+    pub(crate) dont_show_welcome_again: bool,
+    /// Latest pointer coordinate in document space (for rulers + status bar).
+    pub(crate) cursor_doc_pos: Option<Pos2>,
+    /// Active flyout panel name when the right dock is collapsed to Iconic Mode.
+    pub(crate) iconic_flyout_name: Option<&'static str>,
 
     /// Background document tabs (20.5).
     tabs: Vec<DocTab>,
@@ -638,10 +667,11 @@ impl Shell {
     #[must_use]
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         apply_chrome_theme(&cc.egui_ctx);
-        let layout = cc
+        let saved_layout = cc
             .storage
-            .and_then(|storage| eframe::get_value::<ShellLayout>(storage, "shell_layout"))
-            .unwrap_or_default();
+            .and_then(|storage| eframe::get_value::<ShellLayout>(storage, "shell_layout"));
+        let has_saved_layout = saved_layout.is_some();
+        let layout = saved_layout.unwrap_or_default();
         let mut shell = Self::with_platform(
             Editor::untitled(),
             {
@@ -665,8 +695,19 @@ impl Shell {
                 }
             },
         );
-        shell.layout = layout;
-        shell.apply_layout();
+        if has_saved_layout {
+            shell.layout = layout;
+            shell.apply_layout();
+            if shell.panel_groups.is_empty() {
+                shell.ensure_cs6_dock_groups();
+            }
+            shell.show_rulers = true;
+            shell.show_bottom_inspector = true;
+            shell.show_welcome = true;
+            shell.load_demo_showcase();
+        } else {
+            shell.apply_studio_defaults();
+        }
         #[cfg(not(target_arch = "wasm32"))]
         shell.check_recovery();
         shell
@@ -808,6 +849,18 @@ impl Shell {
             transport_total_frames: 0,
             transport_playing: false,
             transport_frame_delay: 100,
+            theme_mode: theme::ThemeMode::Dark,
+            workspace_preset: "Expanded Mode",
+            view_mode: chrome::CanvasViewMode::Original,
+            tools_collapsed: false,
+            show_bottom_inspector: false,
+            bottom_collapsed: false,
+            bottom_height: 148.0,
+            bottom_tab: 0,
+            show_welcome: false,
+            dont_show_welcome_again: false,
+            cursor_doc_pos: None,
+            iconic_flyout_name: None,
             tabs: Vec::new(),
         }
     }
@@ -3043,7 +3096,13 @@ impl eframe::App for Shell {
     /// Layout only: documents are saved explicitly through the File
     /// menu, never as a side effect of closing the window.
     fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
-        [30.0 / 255.0, 30.0 / 255.0, 34.0 / 255.0, 1.0]
+        let bg = self.active_palette().bg;
+        [
+            f32::from(bg.r()) / 255.0,
+            f32::from(bg.g()) / 255.0,
+            f32::from(bg.b()) / 255.0,
+            1.0,
+        ]
     }
 
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
@@ -3052,8 +3111,10 @@ impl eframe::App for Shell {
 
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         // Keep the context reachable for out-of-frame mutators (the
-        // web bridge's request_repaint).
+        // web bridge's request_repaint) and keep CS6 theme synced.
         self.ctx = Some(ui.ctx().clone());
+        self.apply_active_theme(ui.ctx());
+        let p = self.active_palette();
         // Preferences UI scale (21.4): apply the user factor when it
         // differs from what the context currently runs at. `None`
         // means "follow the platform default" — restore it when the
@@ -3085,107 +3146,103 @@ impl eframe::App for Shell {
         #[cfg(not(target_arch = "wasm32"))]
         self.recovery_tick();
         // Panels first, CentralPanel last (egui's required order), in
-        // the CS6 arrangement: menu, context options bar, tool strip,
-        // panel stack (Properties included), status strip, canvas.
-        // The screen mode folds chrome on top of the dock folds: Full
-        // Screen hides menus, toolbars, tools, panels, status and the
-        // document tab strip against a black backdrop; Full Screen
-        // with Menus keeps the menu bar and paints the gray backdrop
-        // (fwref 1178–1185).
+        // the CS6 Studio arrangement: menu + header bar, main toolbar,
+        // bottom status bar, bottom resizable Properties Inspector dock,
+        // left 2-column CS6 tools palette, right stacked tab-group dock,
+        // central document tabs + view bar + canvas + unified canvas footer.
         let full_screen = self.screen_mode == ScreenMode::FullScreen;
         let menus_visible = !full_screen;
         if menus_visible {
-            egui::Panel::top(egui::Id::new("menu")).show(ui, |ui| self.menu_bar(ui));
+            egui::Panel::top(egui::Id::new("menu"))
+                .exact_size(26.0)
+                .frame(
+                    egui::Frame::new()
+                        .fill(p.panel)
+                        .inner_margin(egui::Margin::symmetric(6, 2)),
+                )
+                .show(ui, |ui| self.cs6_menu_bar(ui));
         }
         if !self.options_bar_hidden && !full_screen {
-            egui::Panel::top(egui::Id::new("options")).show(ui, |ui| self.options_bar(ui));
+            egui::Panel::top(egui::Id::new("options"))
+                .exact_size(28.0)
+                .frame(
+                    egui::Frame::new()
+                        .fill(p.panel_alt)
+                        .stroke(egui::Stroke::new(1.0, p.stroke))
+                        .inner_margin(egui::Margin::symmetric(6, 2)),
+                )
+                .show(ui, |ui| self.cs6_main_toolbar(ui));
+        }
+        if !full_screen {
+            egui::Panel::bottom(egui::Id::new("status"))
+                .exact_size(22.0)
+                .frame(
+                    egui::Frame::new()
+                        .fill(p.panel_alt)
+                        .stroke(egui::Stroke::new(1.0, p.stroke))
+                        .inner_margin(egui::Margin::symmetric(6, 2)),
+                )
+                .show(ui, |ui| self.cs6_status_bar(ui));
+        }
+        if self.show_bottom_inspector && !full_screen {
+            let dock_h = if self.bottom_collapsed {
+                28.0
+            } else {
+                self.bottom_height.clamp(118.0, 340.0)
+            };
+            egui::Panel::bottom(egui::Id::new("cs6_bottom_properties"))
+                .exact_size(dock_h)
+                .resizable(false)
+                .frame(
+                    egui::Frame::new()
+                        .fill(p.panel)
+                        .stroke(egui::Stroke::new(1.0, p.stroke))
+                        .inner_margin(egui::Margin::symmetric(
+                            6,
+                            if self.bottom_collapsed { 2 } else { 4 },
+                        )),
+                )
+                .show(ui, |ui| self.cs6_bottom_properties_dock(ui));
         }
         if !self.tools_hidden && !full_screen {
+            let tools_w = if self.tools_collapsed { 40.0 } else { 72.0 };
             egui::Panel::left(egui::Id::new("tools"))
-                .exact_size(34.0)
-                .show(ui, |ui| self.tools_panel(ui));
+                .exact_size(tools_w)
+                .resizable(false)
+                .frame(
+                    egui::Frame::new()
+                        .fill(p.panel)
+                        .stroke(egui::Stroke::new(1.0, p.stroke))
+                        .inner_margin(egui::Margin::symmetric(4, 2)),
+                )
+                .show(ui, |ui| self.cs6_tools_panel(ui));
         }
-        // The CS6 panel group: the right dock, one column of stacked
-        // panels. A side panel *reserves* its width, so the canvas
-        // shrinks instead of being covered, and the column scrolls so
-        // every panel stays reachable at any viewport height.
-        //
-        // The left column appears when a panel has been moved out of
-        // the right stack, or while a panel is being dragged — the
-        // drop target has to be there before the drag reaches it.
+        // The CS6 panel group: the right dock, stacked tabbed CS6 panel
+        // groups (or collapsed Iconic Mode icon rail with flyouts).
         if !self.panels_hidden && !full_screen {
-            // The title rects are this frame's drop targets, so they
-            // are recorded afresh: a panel dropped on another panel's
-            // title is tabbed with it.
             self.panel_title_rects.clear();
             let right = self.dock(ui);
             let left = self.left_dock(ui);
             self.finish_panel_drag(ui, right, left);
         } else {
-            // No dock is drawn, so no drop can be resolved — a drag
-            // still in flight is cancelled rather than left to move a
-            // panel on a later release.
             panel_windows::cancel_panel_drag(ui.ctx());
         }
-        if !full_screen {
-            egui::Panel::bottom(egui::Id::new("status")).show(ui, |ui| {
-                ui.horizontal(|ui| {
-                    ui.label(&self.status);
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        ui.label(format!(
-                            "{} · page {} · state {} · undo {} · redo {} · journal {}",
-                            self.doc_name,
-                            self.editor.page + 1,
-                            self.editor.frame + 1,
-                            self.editor.session.undo_len(),
-                            self.editor.session.redo_len(),
-                            self.editor.session.journal_len(),
-                        ));
-                    });
-                });
-            });
-        }
         egui::CentralPanel::default()
-            .frame(egui::Frame::NONE)
+            .frame(egui::Frame::new().fill(p.canvas_pad))
             .show(ui, |ui| {
-                // The document tab strip (20.5): the active document
-                // plus every parked tab, click to switch. A dot marks
-                // a tab with unsaved edits. Full Screen drops the
-                // title bar, tab strip included.
                 if !full_screen {
-                    ui.horizontal(|ui| {
-                        let tab_button =
-                            |ui: &mut egui::Ui, name: &str, is_dirty: bool, selected: bool| {
-                                let label = if is_dirty {
-                                    format!("{name} •")
-                                } else {
-                                    name.to_owned()
-                                };
-                                ui.add(
-                                    egui::Button::new(egui::RichText::new(label).size(11.0))
-                                        .selected(selected),
-                                )
-                            };
-                        tab_button(ui, &self.doc_name, self.editor.session.is_dirty(), true);
-                        // Snapshot labels/dirty flags so the switch
-                        // (a `&mut self` call) can't fight the
-                        // iterator.
-                        let parked: Vec<(String, bool)> = self
-                            .tabs
-                            .iter()
-                            .map(|tab| (tab.doc_name.clone(), tab.editor.session.is_dirty()))
-                            .collect();
-                        // Most recently parked first (CS6 stacks
-                        // newest-rightmost; `tabs` holds oldest
-                        // first).
-                        for index in (0..parked.len()).rev() {
-                            let (name, is_dirty) = &parked[index];
-                            if tab_button(ui, name, *is_dirty, false).clicked() {
-                                self.activate_tab(index);
-                            }
-                        }
-                        ui.weak("FireCraft");
-                    });
+                    self.cs6_document_tab_strip(ui);
+                    if self.show_canvas_footer_bar {
+                        egui::Panel::bottom(egui::Id::new("cs6_canvas_footer"))
+                            .exact_size(24.0)
+                            .frame(
+                                egui::Frame::new()
+                                    .fill(p.panel)
+                                    .stroke(egui::Stroke::new(1.0, p.stroke))
+                                    .inner_margin(egui::Margin::symmetric(8, 2)),
+                            )
+                            .show(ui, |ui| self.cs6_canvas_footer_bar(ui));
+                    }
                 }
                 self.canvas(ui);
             });
@@ -3261,6 +3318,7 @@ impl eframe::App for Shell {
         if self.help_open {
             self.help_panel(ui.ctx());
         }
+        self.render_welcome_overlay(ui.ctx());
         if self.close_requested {
             self.close_requested = false;
             ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);

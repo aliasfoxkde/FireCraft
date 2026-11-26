@@ -1,5 +1,5 @@
-//! Numeric constants extracted from Fireworks CS6's Fireworks.exe.
-//! Every constant is cited with its source function address.
+//! Standard workspace numeric constants (canvas presets, zoom stops,
+//! swatch grid dimensions, DPI presets, and layout geometry).
 #![allow(rustdoc::invalid_html_tags)]
 
 /// Default canvas width in pixels (1920 px Full HD default).
@@ -8,31 +8,31 @@ pub const DEFAULT_WIDTH: f32 = 1920.0;
 /// Default canvas height in pixels (1080 px Full HD default).
 pub const DEFAULT_HEIGHT: f32 = 1080.0;
 
-/// Default zoom level (100%). Cited from `sub_9aa430` at `0x9aa430`.
+/// Default zoom level (100%).
 pub const DEFAULT_ZOOM: f32 = 1.0;
 
-/// Minimum zoom level (6%). Cited from `sub_9aa430` at `0x9aa430`.
+/// Minimum zoom level (6%).
 pub const ZOOM_MIN: f32 = 0.06;
 
-/// Maximum zoom level (6400%). Cited from `sub_9aa430` at `0x9aa430`.
+/// Maximum zoom level (6400%).
 pub const ZOOM_MAX: f32 = 64.0;
 
-/// Zoom step factor (1.25×). Cited from `sub_9aa430` at `0x9aa430`.
+/// Zoom step factor (1.25×).
 pub const ZOOM_STEP: f32 = 1.25;
 
-/// Undo history limit. Cited from `sub_401cb0` at `0x401cb0`.
+/// Default undo history limit for compact UI summaries.
 pub const UNDO_LIMIT: usize = 32;
 
-/// Total swatch colors. Cited from binary data at `0xb75d00`.
+/// Total swatch colors (21 × 12 web-safe color cube + grayscale/primaries).
 pub const SWATCH_COUNT: usize = 252;
 
-/// Swatch grid columns. Cited from binary data at `0xb75d00`.
+/// Swatch grid columns.
 pub const SWATCH_COLS: usize = 21;
 
-/// Swatch grid rows. Cited from binary data at `0xb75d00`.
+/// Swatch grid rows.
 pub const SWATCH_ROWS: usize = 12;
 
-/// Export default format. Cited from `sub_402060` at `0x402060`.
+/// Export default format.
 pub const EXPORT_DEFAULT_FORMAT: &str = "PNG32";
 
 /// Export default DPI (144 DPI `HiDPI` default).
@@ -87,11 +87,10 @@ impl StyleLibrary {
     }
 }
 
-/// Default brush size in pixels. Cited from `0x402070`.
+/// Default brush size in pixels.
 pub const BRUSH_SIZE_DEFAULT: f32 = 5.0;
 
-/// Preset zoom levels as fractions (6% to 6400%, matching Fireworks CS6 View > Magnification).
-/// Cited from `sub_9aa430` at `0x9aa430`.
+/// Preset zoom levels as fractions (6% to 6400%).
 pub const ZOOM_PRESETS: &[f32] = &[
     0.06, 0.12, 0.25, 0.33, 0.50, 0.66, 1.0, 1.5, 2.0, 3.0, 4.0, 8.0, 16.0, 32.0, 64.0,
 ];

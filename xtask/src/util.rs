@@ -154,6 +154,7 @@ pub fn has_binary(name: &str) -> bool {
 }
 
 /// Runs `cargo` and returns stdout+stderr, failing only on spawn error.
+#[allow(dead_code)]
 pub fn cargo_raw(args: &[&str]) -> Result<String, String> {
     let output = spawn(None, "cargo", args)?;
     let out = String::from_utf8_lossy(&output.stdout).into_owned();

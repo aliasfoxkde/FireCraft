@@ -532,7 +532,7 @@ impl Shell {
     /// length as it starts: those are the session facts a page switch,
     /// an edit or a state-count change would contradict, and the
     /// clock stops when one of them no longer holds.
-    fn start_playback(&mut self, page: usize, current: usize, strip: &TimelineStrip) {
+    pub(super) fn start_playback(&mut self, page: usize, current: usize, strip: &TimelineStrip) {
         let durations: Vec<i64> = strip.frames.iter().map(|row| row.duration).collect();
         let journal_len = self.editor.session.journal_len();
         self.playback.start(current, &durations, page, journal_len);
