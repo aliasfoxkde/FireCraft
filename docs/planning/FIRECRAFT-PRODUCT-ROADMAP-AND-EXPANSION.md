@@ -117,7 +117,7 @@ Potential future capabilities: shareable review links/comments, version history,
 - Review screenshot/golden changes rather than blindly updating baselines.
 
 ### 3.3 Performance and reliability
-Benchmark representative fixtures for cold start, open/save, first paint, pan/zoom, selection/transform latency, export, memory, and WASM bundle size. Set target-specific budgets. Profile before optimizing. Handle GPU initialization failure with a viable fallback. Avoid blocking UI on large imports/exports; define progress and cancellation.
+Benchmark representative fixtures for cold start, open/save, first paint, canvas navigation and zoom, selection/transform latency, export, memory, and WASM bundle size. Set target-specific budgets. Profile before optimizing. Handle GPU initialization failure with a viable fallback. Avoid blocking UI on large imports/exports; define progress and cancellation.
 
 ### 3.4 Compatibility and portability
 Maintain a format matrix by feature, direction, fidelity, and evidence. Maintain a platform/browser matrix by artifact, OS/browser version, architecture, install, launch, smoke, signing, and certification. Compile success is not install/launch evidence. Document browser storage quotas, file APIs, downloads, lifecycle, and recovery.
