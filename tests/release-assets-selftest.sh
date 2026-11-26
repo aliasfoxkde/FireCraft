@@ -163,9 +163,9 @@ out=$(cd "$testmode" && PATH="$testmode/bin:$PATH" GH_ARGV_FILE="$testmode/argv"
 argv=$(cat "$testmode/argv" 2>/dev/null || true)
 if printf '%s\n' "$argv" | grep -qx -- '--prerelease' \
   && printf '%s\n' "$argv" | grep -qx -- 'TEST v0.2.6-dryrun.1'; then
-  ok "create in test mode is a prerelease titled TEST <version>"
+  ok "create in test mode is a prerelease titled TEST <tag>"
 else
-  bad "create in test mode is a prerelease titled TEST <version>" "$argv"
+  bad "create in test mode is a prerelease titled TEST <tag>" "$argv"
 fi
 if head -1 "$testmode/notes-capture" 2>/dev/null | grep -q 'TEST RELEASE'; then
   ok "create in test mode banners the notes as not for publication"
