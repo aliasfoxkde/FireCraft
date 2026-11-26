@@ -2124,3 +2124,34 @@ impl Shell {
         });
     }
 }
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::expect_used, clippy::unwrap_used)]
+
+    use super::super::tests::{gui_editor, gui_shell};
+    use super::*;
+
+    #[test]
+    fn app_frame_renders_the_complete_studio_shell() {
+        let mut shell = gui_shell(gui_editor());
+        shell.apply_studio_defaults();
+
+        let context = egui::Context::default();
+        context.global_style_mut(|style| style.animation_time = 0.0);
+        let mut frame = eframe::Frame::_new_kittest();
+        let output = context.run_ui(
+            egui::RawInput {
+                screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(1440.0, 900.0))),
+                ..Default::default()
+            },
+            |ui| eframe::App::ui(&mut shell, ui, &mut frame),
+        );
+
+        assert!(
+            !output.shapes.is_empty(),
+            "the app frame should paint the studio shell"
+        );
+        output.drop_without_applying_deltas();
+    }
+}
