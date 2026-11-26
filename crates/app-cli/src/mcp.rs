@@ -80,7 +80,7 @@ pub fn handle(
         )),
         "ping" => Some(ok_reply(id, serde_json::json!({}))),
         "tools/list" => Some(ok_reply(id, tools_value())),
-        "tools/call" => Some(tool_call(session, fs, id, request)),
+        "tools/call" => Some(tool_call(session, &fs, id, request)),
         "resources/list" => Some(ok_reply(id, resources_value())),
         "resources/read" => Some(resource_read(session, id, request)),
         other => Some(error_reply(
@@ -215,7 +215,7 @@ fn resource_read(
 /// runScript tool; without `scripting` it rides along unused.
 fn tool_call(
     session: &mut Session,
-    #[cfg_attr(not(feature = "scripting"), allow(unused_variables))] fs: Rc<dyn FileSystem>,
+    #[cfg_attr(not(feature = "scripting"), allow(unused_variables))] fs: &Rc<dyn FileSystem>,
     id: serde_json::Value,
     request: &serde_json::Value,
 ) -> serde_json::Value {
@@ -237,7 +237,7 @@ fn tool_call(
         "firecraft.redo" => undo_tool(session, id, true),
         "firecraft.listCommands" => list_commands_tool(session, id),
         #[cfg(feature = "scripting")]
-        "firecraft.runScript" => run_script_tool(session, fs, id, &arguments),
+        "firecraft.runScript" => run_script_tool(session, Rc::clone(fs), id, &arguments),
         other => error_reply(id, INVALID_PARAMS, &format!("unknown tool: {other}")),
     }
 }
