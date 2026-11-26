@@ -1669,8 +1669,8 @@ impl Shell {
             menus::ShellAction::SelectPage(step) => self.select_page_relative(step),
             menus::ShellAction::EditTextSelection => self.edit_text_selection(),
             menus::ShellAction::PreviewInBrowser {
-                secondary: _,
-                all_pages: _,
+                secondary,
+                all_pages,
             } => {
                 #[cfg(feature = "native")]
                 {
@@ -1678,8 +1678,7 @@ impl Shell {
                 }
                 #[cfg(not(feature = "native"))]
                 {
-                    let _: Option<String> = None;
-                    let _: Option<bool> = None;
+                    let _ = (secondary, all_pages);
                 }
             }
             menus::ShellAction::Quit => self.close_requested = true,
