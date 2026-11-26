@@ -22,7 +22,7 @@
 
 ## Phase 1 — PR #189 CI, Visual Bugs & WASM Smoke (`PHASE-1-CI-AND-VISUAL-POLISH.md`)
 - [x] `L1.1` `[HUMAN GATE]` Verify PR `#189` full CI green & merge to `main`
-- [ ] `L1.2` `[LUNA]` Fix top-right theme button clipping in menu bar (`chrome.rs`)
+- [x] `L1.2` `[LUNA]` Fix top-right theme button clipping in menu bar (`chrome.rs`)
 - [ ] `L1.3` `[LUNA]` Fix narrow-viewport (`960x640`) canvas footer overlap (`chrome.rs`)
 - [ ] `L1.4` `[LUNA]` Eliminate missing-glyph `□` boxes in Layers & Tools footer + visual proof (`panels.rs`, `chrome.rs`)
 - [ ] `L1.5` `[LUNA]` Real-browser Playwright smoke of CS6 Studio WASM build (`xtask dist --web` + `web/test.spec.ts`)
@@ -110,6 +110,7 @@
 | 2026-11-26 | `BASE-6` | `/nas/Temp/repos/FireCraft/dist/windows-review/firecraft.exe` | Built on `t5500` (`x86_64-pc-windows-gnu`, release) from `942bf239`: PE32+ GUI, 32,142,623 bytes, SHA-256 `8fdf2b6db032a84c9b0e0321081963fe71e558a86a638541b77638b4a42f78d6` |
 | 2026-11-26 | `BASE-7` | `docs/planning/luna/` | 8-phase atomic GPT-6-Luna handoff (63 total atomic tasks, 1-goal/1-verify each) committed & Aegis-verified |
 | 2026-11-26 | `L1.1` | `5a5a1b2c` (squash merge of PR `#189`; head `2c25307e`) | `gh pr checks 189 --repo aliasfoxkde/FireCraft`: exit 0, all required checks passed; screenshot `docs/img/app-main.png` visually inspected at 1440×900; Windows review binary verified as PE32+ GUI, SHA-256 `8fdf2b6db032a84c9b0e0321081963fe71e558a86a638541b77638b4a42f78d6`; merged to `main` |
+| 2026-11-26 | `L1.2` | `84036eda` | `cargo test -p app` (exit 0); `cargo clippy -p app --all-targets -- -D warnings` (exit 0); `cargo run -p xtask -- ci` on Fedora (exit 0); `xvfb-run` 1440×900 and 960×640 captures visually inspected with the top-right theme button fully visible; local Windows review binary is PE32+ GUI, 46,438,975 bytes, SHA-256 `d09b8882578003cf367ab7c0e6f0ac3f3a4a2d8c24eba70903627588a2a9fcf8` |
 
 ## Resolved Blockers & Escalations
 - `L1.1` escalation resolved (2026-11-26): after the two logged Fedora failures (`56ef5c6f`, missing native `FileSystem` trait import; `16987c63`, default-feature clippy rejecting that import), the import was gated to `feature = "native"` in `e049a2f7`. Fedora then exposed an existing destructuring error in `PreviewInBrowser`; binding the two options in native code and explicitly consuming them otherwise fixed it in `fbac2023`. `icon-survey` then exposed a stale generated report, refreshed in `2c25307e`. Fedora `cargo run -p xtask -- ci-no-fmt` passed on `2c25307e`; both GitHub full gates, Windows, macOS, WASM, fmt, CodeQL and classifiers passed. PR `#189` merged by squash as `5a5a1b2c`.
