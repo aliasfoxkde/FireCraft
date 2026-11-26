@@ -1807,7 +1807,7 @@ impl Shell {
                     1920,
                     1080,
                     144,
-                    abgr_pack([255, 255, 255, 255]),
+                    abgr_pack(255, 255, 255, 255),
                     "PNG32".to_owned(),
                     1,
                 ));
@@ -1837,12 +1837,12 @@ impl Shell {
                         ui.label(RichText::new("Canvas:").small().color(p.text_dim));
                         let mut edit_bg = bg_c32;
                         if ui.color_edit_button_srgba(&mut edit_bg).changed() {
-                            let raw = abgr_pack([
+                            let raw = abgr_pack(
                                 edit_bg.r(),
                                 edit_bg.g(),
                                 edit_bg.b(),
                                 edit_bg.a(),
-                            ]);
+                            );
                             self.run_command(
                                 "document.setCanvasColor",
                                 serde_json::json!({ "color_raw": raw }),
@@ -1967,7 +1967,7 @@ impl Shell {
                     "Symbol Instance",
                     Icon::Star,
                     sym.name.clone().unwrap_or_else(|| "Symbol".to_owned()),
-                    sym.opacity,
+                    1000,
                 ),
             };
             (kind_lbl, icon, name, opacity)

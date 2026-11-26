@@ -11,14 +11,14 @@ use doc::ObjectId;
 use crate::editor::Editor;
 
 fn pack_rgb(r: u8, g: u8, b: u8) -> i64 {
-    abgr_pack([r, g, b, 255])
+    abgr_pack(r, g, b, 255)
 }
 
 fn latest_object_id(editor: &Editor) -> Option<ObjectId> {
     let page = editor.document().pages.get(editor.page)?;
     let layer = page.layers.layers.get(editor.active_layer)?;
     let cell = layer.cells.get(editor.frame)?;
-    cell.objects.last().copied()
+    cell.elements.last().copied()
 }
 
 /// Build a fresh 1920×1080 FireCraft Studio Showcase `Editor`.

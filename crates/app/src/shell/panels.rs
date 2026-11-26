@@ -6025,7 +6025,7 @@ impl Shell {
             let rgba = [fill.r(), fill.g(), fill.b(), 255];
             self.editor.fill_color = rgba;
             self.fill_color = fill;
-            let raw = abgr_pack(rgba);
+            let raw = abgr_pack(fill.r(), fill.g(), fill.b(), 255);
             for id in self.editor.live_selection() {
                 self.run_command(
                     "object.setFill",
@@ -6037,7 +6037,7 @@ impl Shell {
             let rgba = [stroke.r(), stroke.g(), stroke.b(), 255];
             self.editor.stroke_color = rgba;
             self.stroke_color = stroke;
-            let raw = abgr_pack(rgba);
+            let raw = abgr_pack(stroke.r(), stroke.g(), stroke.b(), 255);
             for id in self.editor.live_selection() {
                 self.run_command(
                     "object.setStroke",

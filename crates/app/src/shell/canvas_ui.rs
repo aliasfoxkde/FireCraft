@@ -173,7 +173,7 @@ impl Shell {
     }
 
     /// The open tool flyout: CS6's press-and-hold tool list.
-    fn tool_flyout_ui(&mut self, ui: &mut egui::Ui) {
+    pub(super) fn tool_flyout_ui(&mut self, ui: &mut egui::Ui) {
         let Some((name, tools, at)) = self.tool_flyout.clone() else {
             return;
         };
