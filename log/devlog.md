@@ -4410,3 +4410,17 @@ Still open when this entry was written: the aegis baseline re-bless, the
 reachability floor (100.00% recorded vs. the 249/257 the last measurement
 reported), the climb board's S12 cell, the compiler pin (wasm job 1.100.0 vs
 `rust-toolchain.toml` 1.99.1), and the 109 worktrees.
+
+---
+
+## 2026-11-26 — Neon Forensic Audit, CS6 Studio UI Integration & GPT-6-Luna Handoff
+
+- **What landed on `integration/firecraft-1.0` (PR `#189`):**
+  - Audited FireCraft vs `/nas/Temp/repos/FireCraft-CraftAnything-Experiment` (read-only) and fixed all 6 Hydrogen regressions/failures.
+  - Extracted & wired the real clean-room CS6 Studio UI/front-end (`crates/app/src/shell/{theme,vector_icons,chrome,demo,welcome_overlay,panel_windows,panels,canvas_ui,mod}.rs`, `main.rs`) over FireCraft's real 17-crate engine (`278/278` app tests, `184/184` xtask tests, `clippy -D warnings`, `wasm32-unknown-unknown`, `layers`, `toolchain`, `panel-snapshot`, `reachability` 257/257, `icon-survey`, `aegis` all green on `fedora`).
+  - Scrubbed forbidden binary/subroutine comments from `crates/app/src/shell/constants.rs`; fixed Windows MSVC `PermissionsExt` gate in `xtask/src/dist.rs`; fixed `ICON_DIR` prefix bug in `xtask/src/iconsurvey.rs`.
+  - Restored `<link data-trunk rel="rust" data-bin="firecraft-web" data-wasm-opt="z"/>` in `web/index.html` (deleted by Hydrogen in `10187ec0`) and fixed `is_compressible_web_asset` in `xtask/src/dist.rs` (leading-dot bug made `.gz` pre-compression a no-op) + regression tests.
+  - Captured and visually inspected real `xvfb-run` desktop screenshots (`1440x900` Welcome, `1440x900` Studio Workspace, `960x640` min viewport) and updated `docs/img/app-main.png`, `docs/img/app-welcome.png`, and `site/assets/app-main.png`.
+  - Built fresh Windows review binary on `t5500`: `/nas/Temp/repos/FireCraft/dist/windows-review/firecraft.exe` (PE32+ GUI, 32,142,623 bytes, SHA-256 `8fdf2b6db032a84c9b0e0321081963fe71e558a86a638541b77638b4a42f78d6`).
+  - Created comprehensive **GPT-6-Luna Execution Package** in `docs/planning/luna/` (mirrored to `plan/luna/`): `README.md`, `PROGRESS.md`, `PHASE-A-CI-UI-AND-POLISH.md` (including full **Phosphor Icons** unification + 3 visually-caught polish fixes), `PHASE-B-OPTIMIZATION-AND-MODULAR-LAYOUT.md` (`T31`: Twiggy baseline, build-time Phosphor atlas/font to drop runtime `resvg`, JS minification/mangling, Brotli `.br` + Gzip `.gz`, modular `examples/`/`libraries/`/`extensions/`/`modules/` folders), `PHASE-C-DOCS-SITE-AND-WIKI.md`, `PHASE-D-PACKAGING-RELEASE-AND-CLOSEOUT.md`.
+- **Next:** Start GPT-6-Luna from `docs/planning/luna/README.md` & `docs/planning/luna/PROGRESS.md` (first task `L-A1`: verify PR `#189` CI green & maintainer merge).
