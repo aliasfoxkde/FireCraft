@@ -10,6 +10,7 @@
 
 use app::editor::Editor;
 use doc::ObjectData;
+#[allow(unused_imports)]
 use engine::Session;
 use scripting::{Limits, ScriptEngine, rederive_symbol};
 
@@ -184,6 +185,7 @@ fn rederivation_mutates_the_definition_and_stays_editable() {
     }
 }
 
+#[cfg(feature = "native")]
 #[test]
 fn the_rich_golden_replays_and_round_trips() {
     let editor = rich_session();

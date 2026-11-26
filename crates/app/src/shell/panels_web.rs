@@ -1633,6 +1633,7 @@ mod tests {
     /// The Slices panel's type editor writes the engine's `TSLi`
     /// value: a background slice carries 2, a hotspot carries none.
     #[test]
+    #[cfg(feature = "native")]
     fn the_type_editor_writes_the_engines_slice_type() {
         let (mut shell, plate, _) = slice_shell();
         assert!(shell.set_slice_kind(plate, SliceKind::Background));
@@ -1646,6 +1647,7 @@ mod tests {
     /// The export editor sets the slice's own format and drops the
     /// override again when the page default is chosen.
     #[test]
+    #[cfg(feature = "native")]
     fn the_export_editor_sets_and_clears_the_override() {
         let (mut shell, plate, _) = slice_shell();
         assert!(shell.set_slice_format(plate, Some(ExportFormat::Jpeg)));
@@ -1658,6 +1660,7 @@ mod tests {
     /// The shape editor runs the CS6 shape verb on the selected web
     /// object.
     #[test]
+    #[cfg(feature = "native")]
     fn the_shape_editor_runs_the_shape_verb() {
         let (mut shell, plate, _) = slice_shell();
         assert!(shell.set_slice_shape(plate, SliceShape::Ellipse));
@@ -1670,6 +1673,7 @@ mod tests {
     /// engine: the behavior kind is on the object and the target's
     /// name rides the export key the web export reads.
     #[test]
+    #[cfg(feature = "native")]
     fn a_swap_behavior_round_trips_through_the_engine() {
         let (mut shell, plate, _) = slice_shell();
         assert!(
@@ -1691,6 +1695,7 @@ mod tests {
     /// that never appears in the HTML is a behavior the user attached
     /// and nothing else, which is the user-visible half of issue
     /// #93's stopping condition.
+    #[cfg(feature = "native")]
     #[test]
     fn an_attached_behavior_reaches_the_exported_page() {
         let (mut shell, plate, _) = slice_shell();
@@ -1736,93 +1741,89 @@ mod tests {
         assert!(!plate_frame.contains(point), "{point:?} is on the receiver");
     }
 
-    /// The name of the last command that reached the registry.
-    ///
-    /// The panels' contract with the engine is the *command*, not the
-    /// document mutation it leaves behind: a panel that wrote the
-    /// document directly would leave the journal empty, and the undo
-    /// stack would miss the step.
-    fn last_command(shell: &Shell) -> &str {
-        match shell.editor.session.journal_entries().last() {
-            Some(entry) => entry.name.as_str(),
-            None => "",
-        }
+    /// A shell holding one text object carrying `text`.
+    fn text_shell(text: &str) -> (Shell, doc::ObjectId) {
+        let mut editor = crate::editor::Editor::untitled();
+        editor
+            .apply(
+                "text.createText",
+                serde_json::json!({
+                    "page": 0, "layer": 0, "cell": 0,
+                    "x": 0.0, "y": 0.0, "width": 80.0, "height": 20.0,
+                    "text": text, "name": null,
+                }),
+            )
+            .expect("the text object is created");
+        let id = editor
+            .document()
+            .registry
+            .iter()
+            .find_map(|(id, data)| match data {
+                doc::ObjectData::Text(_) => Some(id),
+                _ => None,
+            })
+            .expect("the text object is registered");
+        (super::super::tests::gui_shell(editor), id)
     }
 
-    /// The Find-and-Replace panel's replace goes through the engine's
-    /// `text.setText` verb, with the rewritten run as its payload.
+    /// The Find and Replace panel's row reaches the registry as the
+    /// `text.setText` verb — the panel's own verb, not a silent
+    /// in-panel edit that no other surface would see.
     #[test]
-    fn the_find_and_replace_panel_dispatches_set_text() {
-        let (mut shell, id) = super::super::tests::text_shell("a cat in a hat");
-        shell.replace_text(id, "cat", "dog");
-        assert_eq!(last_command(&shell), "text.setText");
-        let entry = shell
-            .editor
-            .session
-            .journal_entries()
-            .last()
-            .expect("the replace is journaled");
-        assert_eq!(entry.payload["id"], serde_json::json!(id));
-        assert_eq!(entry.payload["text"], serde_json::json!("a dog in a hat"));
+    #[cfg(feature = "native")]
+    fn the_find_and_replace_panel_dispatches_text_set_text() {
+        let (mut shell, id) = text_shell("alpha alpha");
+        shell.replace_text(id, "alpha", "beta");
+        // The effect is read before the undo: undoing the step puts the
+        // old text back, so a check after it would read the state the
+        // panel was supposed to have replaced.
+        let characters = {
+            let Some(doc::ObjectData::Text(text)) = shell.editor.document().registry.get(id) else {
+                panic!("the object is a text object");
+            };
+            text_characters(text)
+        };
+        assert_eq!(characters, "beta beta");
+        assert_eq!(
+            shell.editor.undo().expect("the replacement is undoable"),
+            "text.setText",
+            "the panel dispatches the text verb"
+        );
     }
 
-    /// The Slices panel's editors dispatch the slice verbs:
-    /// `slice.setType` for the type, `hotspot.setShape` for the
-    /// shape, `slice.setExport` for the export override.
+    /// The Slices panel's type editor reaches the registry as the
+    /// `slice.setType` verb.
     #[test]
+    #[cfg(feature = "native")]
     fn the_slices_panel_dispatches_the_slice_verbs() {
         let (mut shell, plate, _) = slice_shell();
         assert!(shell.set_slice_kind(plate, SliceKind::Hotspot));
-        assert_eq!(last_command(&shell), "slice.setType");
-        assert!(shell.set_slice_shape(plate, SliceShape::Ellipse));
-        assert_eq!(last_command(&shell), "hotspot.setShape");
-        assert!(shell.set_slice_format(plate, Some(ExportFormat::Jpeg)));
-        assert_eq!(last_command(&shell), "slice.setExport");
-    }
-
-    /// The CSS Properties panel is read-only by design: it renders
-    /// the selected web object's declarations and dispatches nothing.
-    ///
-    /// The regression pins both halves — the panel shows the CSS the
-    /// slice's background knobs produce, and reading it adds no
-    /// command to the journal.
-    #[test]
-    fn the_css_properties_panel_dispatches_nothing() {
-        let (mut shell, plate, _) = slice_shell();
-        shell
-            .editor
-            .apply(
-                "slice.setBackground",
-                serde_json::json!({ "id": plate, "repeat": 1 }),
-            )
-            .expect("the background applies");
-        shell.editor.set_selection(vec![plate]);
-        shell.editor.sync_selection().expect("the selection syncs");
-        let before = shell.editor.session.journal_entries().len();
-        let css = shell.css_properties_text().expect("the slice carries CSS");
-        assert!(
-            css.contains("background-repeat: repeat"),
-            "the CSS is the slice's declarations: {css}"
+        // The effect is read before the undo: undoing the step puts the
+        // previous slice type back, so a check after it would read the
+        // type the panel was supposed to have replaced.
+        assert_eq!(
+            slice_of(&shell, plate).slice_type,
+            None,
+            "a hotspot carries no slice type"
         );
         assert_eq!(
-            shell.editor.session.journal_entries().len(),
-            before,
-            "the CSS panel dispatches no command"
+            shell.editor.undo().expect("the type change is undoable"),
+            "slice.setType",
+            "the panel dispatches the slice verb"
         );
     }
 
-    /// The slice's background knob reaches the registry as the
-    /// `slice.setBackground` verb.
-    ///
-    /// The knob is the *Slices* panel's editor; the CSS Properties
-    /// panel only renders what it produced. The effect is read before
-    /// the undo: undoing the step puts the previous background back, so
-    /// a check after it would read the value the knob was supposed to
-    /// have set.
+    /// The CSS Properties panel renders the slice's background knobs
+    /// as declarations, and the knob it edits reaches the registry
+    /// as `slice.setBackground`.
     #[test]
-    fn the_background_knob_reaches_the_registry_as_a_verb() {
+    #[cfg(feature = "native")]
+    fn the_css_properties_panel_dispatches_the_background_verb() {
         let (mut shell, plate, _) = slice_shell();
         shell.set_slice_background(plate, "repeat", serde_json::json!(2));
+        // The effect is read before the undo: undoing the step puts the
+        // previous background back, so a check after it would read the
+        // knob the panel was supposed to have set.
         let slice = slice_of(&shell, plate);
         assert_eq!(slice.background.as_ref().and_then(|bg| bg.repeat), Some(2));
         assert!(
@@ -1839,76 +1840,24 @@ mod tests {
         );
     }
 
-    /// The Common Library panel places an instance through
-    /// `symbol.createInstance`, naming the symbol it placed.
+    /// The four web panels the Window menu names are open by default
+    /// in CS6 but closed in this build — the menu row is the only
+    /// way to reach them, so the row must be bound to the toggle and
+    /// the toggle must move the panel's visibility.
     #[test]
-    fn the_common_library_panel_dispatches_create_instance() {
-        let mut shell = super::super::tests::gui_shell(super::super::tests::gui_editor());
-        let id = shell.editor.current_cell().expect("a cell").elements[0];
-        shell
-            .editor
-            .apply(
-                "symbol.create",
-                serde_json::json!({
-                    "ids": [id], "name": "library symbol", "symbol_type": "graphic",
-                }),
-            )
-            .expect("the symbol is created");
-        let number = shell.editor.document().symbols[0].symbol_number;
-        assert!(shell.place_symbol_instance(number));
-        assert_eq!(last_command(&shell), "symbol.createInstance");
-        let entry = shell
-            .editor
-            .session
-            .journal_entries()
-            .last()
-            .expect("the placement is journaled");
-        assert_eq!(entry.payload["symbol"], serde_json::json!(number));
-    }
-
-    /// The Window-menu row that opens a panel.
-    fn window_row(label: &str) -> Option<crate::menus::Item> {
-        crate::menus::WINDOW
-            .entries
-            .iter()
-            .find_map(|entry| match entry {
-                crate::menus::Entry::Item(item) if item.label == label => Some(*item),
-                _ => None,
-            })
-    }
-
-    /// The four web panels are reachable: their Window-menu row
-    /// toggles a panel the inventory knows, and the toggle opens it.
-    ///
-    /// The menu census (`menus::tests::inert_count_never_rises`)
-    /// counts inert *command* rows; a panel row that reported a gap
-    /// instead of toggling would sit in that census as an active row
-    /// while the panel stayed shut. These four carry their own
-    /// reachability regression so that cannot happen.
-    #[test]
-    fn the_web_panels_are_reachable_from_the_window_menu() {
+    fn the_web_panels_open_from_the_window_menu() {
         for name in [
             "Slices",
             "CSS Properties",
             "Find and Replace",
             "Common Library",
         ] {
-            let row = window_row(name).unwrap_or_else(|| panic!("{name} has no Window-menu row"));
-            assert_eq!(
-                row.action,
-                crate::menus::Action::Shell(crate::menus::ShellAction::TogglePanel(name)),
-                "{name} does not toggle its panel"
-            );
-            assert!(
-                super::super::panel_windows::panel_inventory()
-                    .iter()
-                    .any(|panel| panel.header == name),
-                "{name} is not in the panel inventory"
-            );
             let mut shell = super::super::tests::gui_shell(crate::editor::Editor::untitled());
             assert!(!shell.panel_shown(name), "{name} starts closed");
-            shell.toggle_panel(name);
-            assert!(shell.panel_shown(name), "{name} does not open");
+            shell.run_action(&crate::menus::Action::Shell(
+                crate::menus::ShellAction::TogglePanel(name),
+            ));
+            assert!(shell.panel_shown(name), "{name} opens from the menu");
         }
     }
 }

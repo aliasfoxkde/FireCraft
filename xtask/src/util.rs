@@ -143,6 +143,37 @@ pub fn cargo_metadata() -> Result<serde_json::Value, String> {
     }
     serde_json::from_slice(&output.stdout).map_err(|e| format!("cargo metadata JSON: {e}"))
 }
+/// Returns `true` if an executable named `name` is on PATH.
+pub fn has_binary(name: &str) -> bool {
+    std::process::Command::new("which")
+        .arg(name)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map_or(false, |s| s.success())
+}
+
+/// Runs `cargo` and returns stdout+stderr, failing only on spawn error.
+pub fn cargo_raw(args: &[&str]) -> Result<String, String> {
+    let output = spawn(None, "cargo", args)?;
+    let out = String::from_utf8_lossy(&output.stdout).into_owned();
+    let err = String::from_utf8_lossy(&output.stderr).into_owned();
+    if !output.status.success() {
+        return Err(format!(
+            "`cargo {}` exited {}:\n{}",
+            args.join(" "),
+            output.status,
+            output_tail(&output)
+        ));
+    }
+    Ok(format!("{}{}", out, err))
+}
+
+/// Runs a program and captures stdout+stderr as a single string.
+pub fn run_and_capture(program: &str, args: &[&str]) -> Result<String, String> {
+    let (stdout, stderr) = capture_in(None, program, args)?;
+    Ok(format!("{}{}", stdout, stderr))
+}
 
 fn spawn(dir: Option<&std::path::Path>, program: &str, args: &[&str]) -> Result<Output, String> {
     spawn_with_env(dir, program, args, &[])

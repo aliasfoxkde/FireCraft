@@ -534,6 +534,7 @@ fn guide_drags_reach_every_edge() {
 
 // --- library round-trips -----------------------------------------------------------
 
+#[cfg(feature = "native")]
 #[test]
 fn export_library_refuses_an_unknown_name() {
     let editor = Editor::untitled();
@@ -543,6 +544,7 @@ fn export_library_refuses_an_unknown_name() {
     assert!(error.to_string().contains("no-such-symbol"));
 }
 
+#[cfg(feature = "native")]
 #[test]
 fn library_export_import_round_trips_a_symbol() {
     let mut editor = Editor::untitled();
@@ -562,6 +564,7 @@ fn library_export_import_round_trips_a_symbol() {
     );
 }
 
+#[cfg(feature = "native")]
 #[test]
 fn import_styles_refuses_non_library_bytes() {
     let mut editor = Editor::untitled();

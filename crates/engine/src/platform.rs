@@ -132,3 +132,24 @@ impl FileSystem for MemoryFs {
             })
     }
 }
+
+/// No-op filesystem for non-native builds.
+pub struct NoOpFs;
+
+impl crate::platform::FileSystem for NoOpFs {
+    fn read_file(&self, _path: &str) -> Result<Vec<u8>, crate::EngineError> {
+        Err(crate::EngineError::Io {
+            path: "".to_owned(),
+            detail: "filesystem is read-only through wasm bridge".to_owned(),
+        })
+    }
+    fn write_file(&self, _path: &str, _bytes: &[u8]) -> Result<(), crate::EngineError> {
+        Err(crate::EngineError::Io {
+            path: "".to_owned(),
+            detail: "filesystem is read-only through wasm bridge".to_owned(),
+        })
+    }
+    fn exists(&self, _path: &str) -> bool {
+        false
+    }
+}

@@ -8,7 +8,6 @@
 //! L3  compose, engine                 rendering + orchestration
 //! L4  io, scripting, webexport        import/export codecs + web export
 //! L5  app, app-cli, firecraft-web     shells
-//! L6  (unused)                        test-only crates may depend on anything
 //! L7  xtask                           verification tooling
 //!
 //! Only crates that exist belong in the table. Registering a name with no

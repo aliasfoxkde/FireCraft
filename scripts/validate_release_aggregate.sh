@@ -71,6 +71,7 @@ expected=(
   "firecraft-${version}-sbom.cdx.json"
   "MANIFEST.sha256"
   "RELEASE_SHA256.txt"
+  "provenance.intoto.json"
   "release-manifest.json"
 )
 

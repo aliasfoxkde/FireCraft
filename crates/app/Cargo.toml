@@ -6,7 +6,6 @@ rust-version = "1.95"
 license = "Apache-2.0"
 authors = ["FireCraft contributors"]
 repository = "https://github.com/aliasfoxkde/FireCraft"
-homepage = "https://github.com/aliasfoxkde/FireCraft"
 description = "FireCraft editor shell: one canvas, one registry — every mutation goes through the engine. Clean-room implementation."
 
 [[bin]]
@@ -14,7 +13,7 @@ name = "firecraft"
 path = "src/main.rs"
 
 [dependencies]
-app-cli = { path = "../app-cli" }
+app-cli = { path = "../app-cli", optional = true }
 color = { path = "../color" }
 compose = { path = "../compose" }
 doc = { path = "../doc" }
@@ -36,8 +35,14 @@ eframe = { version = "0.36", default-features = false, features = [
 ] }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["float_roundtrip"] }
+image = { version = "0.25", default-features = false, features = ["png"] }
 base64 = "0.22"
-scripting = { path = "../scripting" }
+scripting = { path = "../scripting", optional = true }
+
+[features]
+default = ["scripting"]
+
+native = ["app-cli"]
 
 [dev-dependencies]
 # The test-side mirror of eframe's own persistence encoding (its
@@ -47,3 +52,7 @@ ron = "0.12"
 
 [lints]
 workspace = true
+
+[[test]]
+name = "library"
+required-features = ["native"]
