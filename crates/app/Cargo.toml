@@ -13,7 +13,7 @@ name = "firecraft"
 path = "src/main.rs"
 
 [dependencies]
-app-cli = { path = "../app-cli", optional = true }
+app-cli = { path = "../app-cli", default-features = false, optional = true }
 color = { path = "../color" }
 compose = { path = "../compose" }
 doc = { path = "../doc" }

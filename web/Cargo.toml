@@ -13,7 +13,7 @@ name = "firecraft-web"
 path = "src/main.rs"
 
 [dependencies]
-app = { path = "../crates/app", default-features = false }
+app = { path = "../crates/app", default-features = false, features = ["native"] }
 base64 = "0.22"
 compose = { path = "../crates/compose" }
 eframe = { version = "0.36", default-features = false, features = [
