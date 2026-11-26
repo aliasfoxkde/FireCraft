@@ -60,3 +60,12 @@ This page is the documentation map. Start with the overview that matches your go
 - `docs/SESSIONS.md` and `docs/HISTORY.md` are historical. Do not infer current work from an old entry.
 - `docs/planning/generated/` is generated output; use its generator rather than editing derived counts by hand.
 - `source/` and Adobe-derived local extracts are reference-only and must never be committed.
+
+
+### FireCraft 1.0 launch and product expansion
+
+1. [1.0 Consolidation, MVP, Community Feedback, and Release Handoff](planning/FIRECRAFT-1.0-CONSOLIDATION-AND-RELEASE-HANDOFF.md): integration, MVP scope, in-app feedback, staging, release, marketing-site launch gate, documentation synchronization, and agent execution order.
+2. [Product Expansion Roadmap](planning/FIRECRAFT-PRODUCT-ROADMAP-AND-EXPANSION.md): staged 1.0/1.x/2.x feature horizons and cross-cutting quality, security, accessibility, data-integrity, ecosystem, and collaboration scope.
+3. [Marketing Site Roadmap](MARKETING-SITE-ROADMAP.md): existing `site/` audit, landing-page content, Cloudflare Pages separation, deployment gates, accessibility, SEO, and launch acceptance.
+
+These plans are proposals until approved. `TASKS.md` remains the only live task ledger; speculative roadmap items must not be bulk-added as active work.
