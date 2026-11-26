@@ -2116,8 +2116,11 @@ mod tests {
             PathIcon::NextPoint,
         ];
 
-        let output = context.run(Default::default(), |ctx| {
-            let painter = ctx.layer_painter(LayerId::new(Order::Foreground, Id::new("icons")));
+        let output = context.run_ui(Default::default(), |ui| {
+            let painter = ui
+                .painter()
+                .clone()
+                .with_layer_id(LayerId::new(Order::Foreground, Id::new("icons")));
             for (index, icon) in icons.into_iter().enumerate() {
                 let origin = pos2((index % 10) as f32 * 32.0, (index / 10) as f32 * 32.0);
                 draw(
