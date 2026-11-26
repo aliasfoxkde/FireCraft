@@ -32,7 +32,7 @@ fn show_native_splash() {
     // that fonts won't render. If the context can't be created (e.g. no
     // display server), we skip the splash entirely.
     let result = std::panic::catch_unwind(|| {
-        let ctx = egui::Context::new(Default::default());
+        let ctx = egui::Context::default();
 
         // Load splash logo from the crate's source directory.
         let logo_bytes = include_bytes!("logo.png");
@@ -58,7 +58,7 @@ fn show_native_splash() {
             let alpha = if t < 0.35 {
                 (t / 0.35) as f32
             } else if t > 1.9 {
-                ((2.4 - t) / 0.5).clamp(0.0, 1.0) as f32
+                ((2.4 - t) / 0.5).clamp(0.0_f32, 1.0_f32) as f32
             } else {
                 1.0
             };
@@ -110,7 +110,7 @@ fn show_native_splash() {
                         egui::Color32::from_white_alpha((245.0 * alpha) as u8),
                     );
 
-                    let prog = (t / 2.2).clamp(0.0, 1.0) as f32;
+                    let prog = (t / 2.2).clamp(0.0_f32, 1.0_f32) as f32;
                     let bar_bg = egui::Rect::from_min_size(
                         egui::Pos2::new(rect.left() + 48.0, rect.bottom() - 32.0),
                         egui::Vec2::new(rect.width() - 96.0, 5.0),
