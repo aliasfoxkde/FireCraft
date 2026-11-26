@@ -302,7 +302,7 @@ pub fn sbom() -> Result<(), String> {
         .iter()
         .filter(|p| {
             let deps = p.get("dependencies").and_then(|d| d.as_array());
-            deps.map_or(false, |d| d.is_empty())
+            deps.is_some_and(Vec::is_empty)
         })
         .map(|p| p["id"].as_str().unwrap_or("").to_owned())
         .collect();
@@ -702,14 +702,13 @@ fn patch_wasm_cdn(out: &std::path::Path) -> Result<(), String> {
     let local_wasm_name = out
         .read_dir()
         .map_err(|e| format!("read staging dir: {e}"))?
-        .filter_map(|e| e.ok())
-        .filter(|e| {
+        .filter_map(Result::ok)
+        .find(|e| {
             e.path()
                 .extension()
                 .and_then(|ext| ext.to_str())
                 .is_some_and(|ext| ext == "wasm")
         })
-        .next()
         .ok_or_else(|| "no .wasm file found in staging directory".to_owned())?
         .file_name()
         .to_string_lossy()
