@@ -185,3 +185,10 @@ Third-party assets must retain their license notices and be recorded in [`docs/A
 ## License
 
 Licensed under the [Apache License 2.0](LICENSE).
+
+
+## 1.0 launch and release planning
+
+The phase-by-phase 1.0 integration, full cross-platform release, documentation/wiki, GitHub issue closeout and publication plan is in the [End-to-End 1.0 Execution Plan](docs/planning/FIRECRAFT-1.0-END-TO-END-EXECUTION-AND-RELEASE-CLOSEOUT.md). The [1.0 Consolidation Handoff](docs/planning/FIRECRAFT-1.0-CONSOLIDATION-AND-RELEASE-HANDOFF.md) and [Product Expansion Roadmap](docs/planning/FIRECRAFT-PRODUCT-ROADMAP-AND-EXPANSION.md) provide the companion product scope.
+
+The README and download claims must be refreshed from verified release artifacts. Planned Windows/macOS/Linux package formats are not available until the corresponding target build and runtime receipts exist.
