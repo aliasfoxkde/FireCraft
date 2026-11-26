@@ -1,140 +1,117 @@
-//! `firecraft` — the desktop shell entry point. The wasm face of this
-//! crate is the library (consumed by `firecraft-web`); the binary is
-//! native-only.
+//! `firecraft` — the native desktop shell entry point.
 //!
-//! Native splash screen: Fireworks CS6 style — appears before the main
-//! app window. The splash shows the CS6-style logo with fade-in animation
-//! while eframe initializes. After initialization, the splash closes and
-//! the main app appears.
+//! Release builds use the Windows GUI subsystem so Explorer/taskbar launches do
+//! not flash a console. Debug builds retain the console for startup diagnostics.
+
+#![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
 #[cfg(not(target_arch = "wasm32"))]
 fn main() -> eframe::Result {
-    // Show native OS splash before app loads
-    show_native_splash();
-    // Run the main application
     run_native_app()
 }
 
 #[cfg(target_arch = "wasm32")]
 fn main() {}
 
-/// Show a native OS splash screen before the main application starts.
-/// Mimics Fireworks CS6 splash — centered window with CS6 logo,
-/// fade-in animation, and progress bar. User can click to dismiss early.
+/// One eframe app/event loop transitions from the floating splash to the
+/// editor. Desktop event loops cannot safely be restarted after closing a
+/// separate splash window.
 #[cfg(not(target_arch = "wasm32"))]
-fn show_native_splash() {
-    use egui::*;
-    use std::time::Instant;
+struct FireCraftApp {
+    started: std::time::Instant,
+    logo: egui::TextureHandle,
+    editor: app::shell::Shell,
+    splash_complete: bool,
+}
 
-    let ctx = Context::default();
+#[cfg(not(target_arch = "wasm32"))]
+impl FireCraftApp {
+    fn new(cc: &eframe::CreationContext<'_>) -> Result<Self, image::ImageError> {
+        let image = image::load_from_memory(include_bytes!("logo.png"))?.to_rgba8();
+        let size = [image.width() as usize, image.height() as usize];
+        let color_image = egui::ColorImage::from_rgba_unmultiplied(size, image.as_raw());
+        let logo = cc.egui_ctx.load_texture(
+            "firecraft-splash-logo",
+            color_image,
+            egui::TextureOptions::LINEAR,
+        );
+        let editor = app::shell::Shell::new(cc);
+        Ok(Self {
+            started: std::time::Instant::now(),
+            logo,
+            editor,
+            splash_complete: false,
+        })
+    }
+}
 
-    // Load splash logo from the crate's source directory.
-    // Path: crates/app/src/logo.png
-    let logo_bytes = include_bytes!("logo.png");
-    let img = image::load_from_memory(logo_bytes).expect("valid splash logo");
-    let size = [img.width() as usize, img.height() as usize];
-    let rgba = img.to_rgba8();
-    let color_img = ColorImage::from_rgba_unmultiplied(size, rgba.as_raw());
-    let tex = ctx.load_texture("splash_logo", color_img, TextureOptions::LINEAR);
+#[cfg(not(target_arch = "wasm32"))]
+impl eframe::App for FireCraftApp {
+    fn save(&mut self, storage: &mut dyn eframe::Storage) {
+        self.editor.save(storage);
+    }
 
-    // Minimum splash duration (prevents flash on fast machines)
-    let start = Instant::now();
-    let min_duration = std::time::Duration::from_millis(800);
+    fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
+        let ctx = ui.ctx().clone();
+        if self.splash_complete {
+            self.editor.ui(ui, frame);
+            return;
+        }
+        let elapsed = self.started.elapsed();
+        let duration = std::time::Duration::from_millis(2200);
+        if elapsed >= duration {
+            self.splash_complete = true;
+            ctx.send_viewport_cmd(egui::ViewportCommand::Decorations(true));
+            ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize([1280.0, 800.0].into()));
+            ctx.send_viewport_cmd(egui::ViewportCommand::WindowLevel(
+                egui::viewport::WindowLevel::Normal,
+            ));
+            self.editor.ui(ui, frame);
+            return;
+        }
 
-    // Use a reasonable center for the splash (hardcoded since we don't have
-    // a frame yet — 1920x1080 is standard)
-    let splash_pos = Pos2::new(740.0, 385.0); // Centered on 1920x1080
-    let splash_size = [420.0, 260.0];
-
-    let mut can_dismiss = false;
-
-    // Run splash loop until user dismisses or minimum time elapses
-    loop {
-        let t = ctx.input(|i| i.time);
-        let elapsed = start.elapsed();
-
-        // Fade-in/fade-out alpha
-        let alpha = if t < 0.35 {
-            (t / 0.35) as f32
-        } else if t > 1.9 {
-            ((2.4 - t) / 0.5).clamp(0.0, 1.0) as f32
-        } else {
-            1.0
-        };
-
-        // Render splash window
-        egui::Window::new("Splash")
-            .title_bar(false)
-            .resizable(false)
-            .movable(false)
-            .collapsible(false)
-            .default_size(Vec2::from(splash_size))
-            .fixed_pos(splash_pos)
-            .show(&ctx, |ui| {
+        let fade = (elapsed.as_secs_f32() / 0.25).clamp(0.0, 1.0);
+        egui::CentralPanel::default()
+            .frame(egui::Frame::new().fill(egui::Color32::from_rgb(30, 30, 34)))
+            .show(ui, |ui| {
                 let rect = ui.max_rect();
                 let painter = ui.painter();
-
-                // Dark charcoal background
-                let bg = Color32::from_rgba_unmultiplied(26, 26, 30, (215.0 * alpha) as u8);
-                painter.rect_filled(rect, 0.0, bg);
-
-                // Accent border
-                let accent = Color32::from_rgb(0x3a, 0x72, 0xa8);
+                let border = egui::Color32::from_rgb(58, 114, 168).gamma_multiply(fade);
                 painter.rect_stroke(
-                    rect,
-                    0.0,
-                    Stroke::new(1.5, accent.gamma_multiply(alpha)),
-                    StrokeKind::Inside,
+                    rect.shrink(1.0),
+                    5.0,
+                    egui::Stroke::new(2.0, border),
+                    egui::StrokeKind::Inside,
                 );
 
-                // Pulsing logo
-                let pulse = 1.0 + 0.04 * (t as f32 * 5.0).sin();
-                let logo_sz = Vec2::splat(136.0 * pulse);
-                let logo_r =
-                    Rect::from_center_size(Pos2::new(rect.center().x, rect.top() + 92.0), logo_sz);
+                let logo_size = egui::Vec2::splat(176.0);
+                let logo_rect = egui::Rect::from_center_size(
+                    egui::Pos2::new(rect.center().x, rect.center().y - 32.0),
+                    logo_size,
+                );
                 painter.image(
-                    tex.id(),
-                    logo_r,
-                    Rect::from_min_max(Pos2::new(0.0, 0.0), Pos2::new(1.0, 1.0)),
-                    Color32::from_white_alpha((255.0 * alpha) as u8),
+                    self.logo.id(),
+                    logo_rect,
+                    egui::Rect::from_min_max(egui::Pos2::ZERO, egui::Pos2::new(1.0, 1.0)),
+                    egui::Color32::from_white_alpha((255.0 * fade) as u8),
                 );
-
-                // "FireCraft Studio" text
                 painter.text(
-                    Pos2::new(rect.center().x, rect.bottom() - 62.0),
-                    Align2::CENTER_CENTER,
-                    "FireCraft Studio",
-                    FontId::proportional(20.0),
-                    Color32::from_white_alpha((245.0 * alpha) as u8),
+                    egui::Pos2::new(rect.center().x, rect.bottom() - 72.0),
+                    egui::Align2::CENTER_CENTER,
+                    "FireCraft",
+                    egui::FontId::proportional(28.0),
+                    egui::Color32::from_white_alpha((245.0 * fade) as u8),
                 );
-
-                // Progress bar
-                let prog = (t / 2.2).clamp(0.0, 1.0) as f32;
-                let bar_bg = Rect::from_min_size(
-                    Pos2::new(rect.left() + 48.0, rect.bottom() - 32.0),
-                    Vec2::new(rect.width() - 96.0, 5.0),
+                painter.text(
+                    egui::Pos2::new(rect.center().x, rect.bottom() - 42.0),
+                    egui::Align2::CENTER_CENTER,
+                    "Open Source Raster and Vector Graphics Editor",
+                    egui::FontId::proportional(14.0),
+                    egui::Color32::from_white_alpha((175.0 * fade) as u8),
                 );
-                painter.rect_filled(bar_bg, 0.0, Color32::from_white_alpha((45.0 * alpha) as u8));
-                let bar_fg = Rect::from_min_size(
-                    bar_bg.min,
-                    Vec2::new(bar_bg.width() * prog, bar_bg.height()),
-                );
-                painter.rect_filled(bar_fg, 0.0, accent.gamma_multiply(alpha));
-
-                // Check for click on splash area
-                let resp = ui.interact(rect, ui.id(), Sense::click());
-                if resp.clicked() {
-                    can_dismiss = true;
-                }
             });
 
-        ctx.request_repaint();
-
-        // Exit if user dismissed or minimum time elapsed
-        if can_dismiss || elapsed >= min_duration {
-            break;
-        }
-        std::thread::sleep(std::time::Duration::from_millis(16));
+        ctx.request_repaint_after(std::time::Duration::from_millis(16));
     }
 }
 
@@ -143,13 +120,16 @@ fn show_native_splash() {
 fn run_native_app() -> eframe::Result {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([1280.0, 800.0])
+            .with_inner_size([560.0, 400.0])
+            .with_decorations(false)
+            .with_transparent(false)
+            .with_always_on_top()
             .with_title("FireCraft"),
         ..eframe::NativeOptions::default()
     };
     eframe::run_native(
         "FireCraft",
         options,
-        Box::new(|_cc| Ok(Box::new(app::shell::Shell::new(_cc)))),
+        Box::new(|cc| Ok(Box::new(FireCraftApp::new(cc)?))),
     )
 }

@@ -1563,6 +1563,42 @@ impl Shell {
                     "online help: see the project wiki".to_owned()
                 };
             }
+            menus::ShellAction::FeatureList => {
+                let url = "https://github.com/aliasfoxkde/FireCraft/blob/main/docs/FEATURES.md";
+                let opened = self.dialogs.open_url(url);
+                self.status = if opened {
+                    format!("opening {url}")
+                } else {
+                    "feature list: see docs/FEATURES.md".to_owned()
+                };
+            }
+            menus::ShellAction::Tutorials => {
+                let url = "https://github.com/aliasfoxkde/FireCraft/wiki/Tutorials";
+                let opened = self.dialogs.open_url(url);
+                self.status = if opened {
+                    format!("opening {url}")
+                } else {
+                    "tutorials: see the FireCraft wiki".to_owned()
+                };
+            }
+            menus::ShellAction::ReportIssue => {
+                let url = "https://github.com/aliasfoxkde/FireCraft/issues/new/choose";
+                let opened = self.dialogs.open_url(url);
+                self.status = if opened {
+                    format!("opening issue templates at {url}")
+                } else {
+                    "report a bug or request a feature: see GitHub Issues".to_owned()
+                };
+            }
+            menus::ShellAction::ReleaseNotes => {
+                let url = "https://github.com/aliasfoxkde/FireCraft/blob/main/CHANGELOG.md";
+                let opened = self.dialogs.open_url(url);
+                self.status = if opened {
+                    format!("opening release notes at {url}")
+                } else {
+                    "release notes: see CHANGELOG.md".to_owned()
+                };
+            }
             menus::ShellAction::ManageExtensions => self.open_extension_manager(),
             menus::ShellAction::TogglePanel(name) => self.toggle_panel(name),
             menus::ShellAction::ToggleTools => self.toggle_tools(),
@@ -1579,7 +1615,10 @@ impl Shell {
             menus::ShellAction::SelectFrame(step) => self.select_frame_relative(step),
             menus::ShellAction::SelectPage(step) => self.select_page_relative(step),
             menus::ShellAction::EditTextSelection => self.edit_text_selection(),
-            menus::ShellAction::PreviewInBrowser { .. } => {
+            menus::ShellAction::PreviewInBrowser {
+                secondary,
+                all_pages,
+            } => {
                 #[cfg(feature = "native")]
                 {
                     self.preview_in_browser(secondary, all_pages);
@@ -3240,7 +3279,7 @@ mod tests {
     use super::*;
     #[allow(unused_imports)]
     use crate::editor::union_selection_bounds;
-    use engine::platform::MemoryFs;
+    use engine::platform::{FileSystem, MemoryFs};
 
     /// Scripted dialogs: the steps path answers the replay/save
     /// picks, the document path the base pick — matched by title.

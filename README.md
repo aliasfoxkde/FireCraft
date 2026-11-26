@@ -1,13 +1,15 @@
 <div align="center">
   <img src="docs/img/logo.png" alt="FireCraft flame mark" width="112" height="112" />
   <h1>FireCraft</h1>
-  <p><strong>Create. Edit. Design.</strong></p>
-  <p>A modern, open-source graphics editor inspired by the workflows of Adobe Fireworks CS6.</p>
+  <p><strong>FireCraft — Open Source Raster and Vector Graphics Editor.</strong></p>
+  <p>A modern, open-source editor inspired by the workflows of Adobe Fireworks CS6.</p>
   <p>
     <a href="https://github.com/aliasfoxkde/FireCraft/releases/latest">Downloads</a> ·
     <a href="https://firecraft-web.pages.dev">Try the web build</a> ·
     <a href="docs/USAGE.md">Documentation</a> ·
-    <a href="docs/NEXT.md">Roadmap</a>
+    <a href="docs/PUBLIC-ROADMAP.md">Public roadmap</a> ·
+    <a href="docs/PRODUCT-UX-ROADMAP.md">Product and UX plan</a> ·
+    <a href="docs/FEATURES.md">Feature list</a>
   </p>
 </div>
 
@@ -57,7 +59,12 @@ Some of these items are partially implemented or still planned. The authoritativ
 ## Start here
 
 - **Try the app:** [usage guide](docs/USAGE.md)
-- **See what works and what is incomplete:** [feature map](docs/FEATURES.md) · [historical gaps audit](docs/GAPS.md)
+- **See what works and what is incomplete:** [feature list](docs/FEATURES.md) · [CS6 parity matrix](docs/CS6-PARITY.md)
+- **See what is planned:** [public roadmap](docs/PUBLIC-ROADMAP.md) · [detailed post-MVP plan](docs/POST-MVP-ROADMAP.md)
+- **See the phased UX plan:** [product and UX roadmap](docs/PRODUCT-UX-ROADMAP.md)
+- **Understand WASM and extension packaging:** [measured modular delivery plan](docs/tasks/T31-modular-packaging-and-wasm-size.md)
+- **Learn the editor:** [wiki tutorials](docs/wiki/Tutorials.md) · [keyboard shortcuts](docs/SHORTCUTS.md)
+- **Report a bug or request a feature:** [GitHub issue templates](https://github.com/aliasfoxkde/FireCraft/issues/new/choose)
 - **Browse all project docs:** [documentation index](docs/README.md)
 - **Current work and next tasks:** [task board](docs/TASKS.md)
 - **Contributing or handing off work:** [agent handoff](docs/HANDOFF.md) · [repository rules](AGENTS.md)
@@ -151,13 +158,18 @@ The GUI and automation interfaces are intended to drive the same engine commands
 | Document | Purpose |
 |---|---|
 | [Features](docs/FEATURES.md) | Implemented feature surface and evidence/gates |
+| [Public roadmap](docs/PUBLIC-ROADMAP.md) | User-facing summary of shipped capabilities and planned work |
+| [Post-MVP roadmap](docs/POST-MVP-ROADMAP.md) | Detailed product direction, proposed features, dependencies and acceptance criteria |
+| [WASM delivery and extension packages](docs/tasks/T31-modular-packaging-and-wasm-size.md) | Raw/compressed size budgets, lazy feature loading, and a capability-limited extension design |
+| [Tutorials](docs/wiki/Tutorials.md) | Practical, keyboard-oriented walkthroughs |
 | [Usage](docs/USAGE.md) | Build instructions, CLI, shortcuts, browser bridge, MCP |
 | [Next / Roadmap](docs/NEXT.md) | Active phases, acceptance criteria, and open tasks |
 | [Gaps](docs/GAPS.md) | Historical audit of what was missing (2026-10-21); current work is on the [task board](docs/TASKS.md) |
 | [Doc index](docs/README.md) | The full documentation map |
 | [Releasing](docs/RELEASING.md) | Artifact build and deployment procedures |
 | [Marketing site roadmap](docs/MARKETING-SITE-ROADMAP.md) | Public website scope, Cloudflare Pages deployment, and launch gates |
-| [Creative-app benchmark](docs/research/creative-app-benchmark.md) | Product patterns from Krita, Photopea, and Pixlr, with licensing boundaries |
+| [Creative-app benchmark](docs/research/creative-app-benchmark.md) | Cross-product synthesis from Krita, Photopea, Pixlr, and Graphite |
+| [Graphite product benchmark](docs/research/graphite-product-benchmark.md) | Graphite's current alpha, procedural layer/node approach, transferable ideas, and FireCraft fit |
 | [Progress](docs/PROGRESS.md) | Session-level status and historical progress |
 | [Planning](docs/PLANNING.md) | Product plan, file-format notes, and architecture |
 | [Handoff](docs/HANDOFF.md) | Engineering handoff and agent runbook |

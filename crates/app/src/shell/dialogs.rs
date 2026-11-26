@@ -1,6 +1,7 @@
 //! Dialog types and the import/export plumbing on [`Shell`].
 
 use super::*;
+use base64::Engine as _;
 use engine::EngineError;
 
 /// Desktop file routing for v1: the open/save path comes from
@@ -423,7 +424,14 @@ impl Shell {
         ui.heading("Web Layer");
         let page = self.editor.page;
         let frame = self.editor.frame;
-        let rows: Vec<WebRow> = {
+        let rows: Vec<(
+            doc::ObjectId,
+            String,
+            bool,
+            Option<String>,
+            Option<String>,
+            i64,
+        )> = {
             let document = self.editor.document();
             let Some(layer) = document.pages.get(page).and_then(|page| {
                 page.layers
@@ -1130,23 +1138,27 @@ impl Shell {
         };
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
         (
-            dialog.format,
-            dialog.quality,
-            dialog.progressive,
-            dialog.matte_black,
-            dialog.gif_loop,
-            dialog.gif_times,
-            dialog.gif_crop,
-            dialog.gif_diff,
-            dialog.gif_dither,
-            dialog.transparent_bg,
-            dialog.export_quality,
-            dialog.include_slices,
-            dialog.center_in_browser,
-            dialog.include_viewport_meta,
-            dialog.export_doc_bg,
-            dialog.html_style,
-            self.stamp(),
+            (
+                dialog.format,
+                dialog.quality,
+                dialog.progressive,
+                dialog.matte_black,
+                dialog.gif_loop,
+                dialog.gif_times,
+                dialog.gif_crop,
+                dialog.gif_diff,
+                dialog.gif_dither,
+                dialog.transparent_bg,
+                dialog.export_quality,
+                dialog.include_slices,
+            ),
+            (
+                dialog.center_in_browser,
+                dialog.include_viewport_meta,
+                dialog.export_doc_bg,
+                dialog.html_style,
+                self.stamp(),
+            ),
         )
             .hash(&mut hasher);
         hasher.finish()
@@ -1157,12 +1169,16 @@ impl Shell {
     pub(super) fn dialog_options(dialog: &ExportDialog) -> doc::ExportOptions {
         let jpg = EXPORT_FORMATS[dialog.format] == "jpg";
         let gif = EXPORT_FORMATS[dialog.format] == "gif";
-        let lossy = matches!(EXPORT_FORMATS[dialog.format], "jpg" | "webp" | "avif");
-        let is_html = matches!(EXPORT_FORMATS[dialog.format], "html" | "htm");
+        let lossy = matches!(EXPORT_FORMATS[dialog.format], "jpg");
         doc::ExportOptions {
             format: Some(i64::try_from(dialog.format).unwrap_or(0)),
             jpeg_quality: jpg.then_some(i64::from(dialog.quality)),
             jpeg_progressive: jpg.then_some(dialog.progressive),
+            matte_raw: lossy.then_some(if dialog.matte_black {
+                0xFF00_0000
+            } else {
+                0xFFFF_FFFF
+            }),
             frame_loop: gif.then_some(match dialog.gif_loop {
                 0 => 0,
                 1 => -1,
@@ -1171,41 +1187,6 @@ impl Shell {
             anim_crop: gif.then_some(dialog.gif_crop),
             anim_diff: gif.then_some(dialog.gif_diff),
             dither: gif.then_some(i64::from(dialog.gif_dither)),
-            transparent_bg: if is_html || dialog.transparent_bg {
-                Some(dialog.transparent_bg)
-            } else {
-                None
-            },
-            export_quality: if lossy {
-                Some(i64::from(dialog.export_quality))
-            } else {
-                None
-            },
-            html_style: if is_html {
-                Some(dialog.html_style as i64)
-            } else {
-                None
-            },
-            include_slices: if is_html {
-                Some(dialog.include_slices)
-            } else {
-                None
-            },
-            center_in_browser: if is_html {
-                Some(dialog.center_in_browser)
-            } else {
-                None
-            },
-            include_viewport_meta: if is_html {
-                Some(dialog.include_viewport_meta)
-            } else {
-                None
-            },
-            export_doc_bg: if is_html {
-                Some(dialog.export_doc_bg)
-            } else {
-                None
-            },
             ..doc::ExportOptions::default()
         }
     }
@@ -1406,134 +1387,4 @@ impl Shell {
         self.status = format!("exported {count} files to {}", dir.to_string_lossy());
         self.export_dialog = None;
     }
-}
-/// HTML Setup dialog (File ▸ HTML Setup…).
-pub(super) fn html_setup_dialog_ui(&mut self, ui: &mut egui::Ui) {
-    let Some(mut dialog) = self.html_setup_dialog.take() else {
-        return;
-    };
-    ui.set_min_width(320.0);
-    egui::Grid::new("html_setup_grid")
-        .num_columns(2)
-        .spacing([8.0, 6.0])
-        .show(ui, |ui| {
-            ui.strong("HTML Style:");
-            egui::ComboBox::from_id_salt("html_setup_style")
-                .selected_text(match dialog.style {
-                    HtmlExportStyle::Html5 => "HTML5 Semantic",
-                    HtmlExportStyle::Xhtml1 => "XHTML 1.0 Transitional",
-                    HtmlExportStyle::CssGrid => "HTML5 + CSS Grid",
-                })
-                .show_ui(ui, |ui| {
-                    ui.selectable_value(
-                        &mut dialog.style,
-                        HtmlExportStyle::Html5,
-                        "HTML5 Semantic",
-                    );
-                    ui.selectable_value(
-                        &mut dialog.style,
-                        HtmlExportStyle::Xhtml1,
-                        "XHTML 1.0 Transitional",
-                    );
-                    ui.selectable_value(
-                        &mut dialog.style,
-                        HtmlExportStyle::CssGrid,
-                        "HTML5 + CSS Grid",
-                    );
-                });
-            ui.end_row();
-            ui.strong("Extension:");
-            egui::ComboBox::from_id_salt("html_setup_ext")
-                .selected_text(dialog.extension)
-                .show_ui(ui, |ui| {
-                    ui.selectable_value(&mut dialog.extension, ".html", ".html");
-                    ui.selectable_value(&mut dialog.extension, ".htm", ".htm");
-                });
-            ui.end_row();
-        });
-    ui.checkbox(&mut dialog.include_slices, "Include Slices & Hotspots");
-    ui.checkbox(&mut dialog.center_in_browser, "Center Stage in Browser");
-    ui.checkbox(
-        &mut dialog.include_viewport_meta,
-        "Include Responsive Viewport Meta",
-    );
-    ui.checkbox(
-        &mut dialog.export_doc_bg,
-        "Export Document Background Color",
-    );
-    ui.separator();
-    ui.horizontal(|ui| {
-        if ui.button("Preview in Browser (F12)").clicked() {
-            self.status = "preview in browser".to_owned();
-        }
-        if ui.button("OK").clicked() {
-            self.status = "Updated HTML Setup options".to_owned();
-        }
-        if ui.button("Cancel").clicked() {
-            self.status = "html setup cancelled".to_owned();
-        }
-    });
-    self.html_setup_dialog = Some(dialog);
-}
-
-/// Page Setup dialog (File ▸ Page Setup…).
-pub(super) fn page_setup_dialog_ui(&mut self, ui: &mut egui::Ui) {
-    let Some(mut dialog) = self.page_setup_dialog.take() else {
-        return;
-    };
-    ui.set_min_width(320.0);
-    egui::Grid::new("page_setup_grid")
-        .num_columns(2)
-        .spacing([8.0, 6.0])
-        .show(ui, |ui| {
-            ui.strong("Paper Size:");
-            egui::ComboBox::from_id_salt("page_setup_paper")
-                .selected_text(dialog.paper.label())
-                .show_ui(ui, |ui| {
-                    ui.selectable_value(&mut dialog.paper, PaperSize::Letter, "Letter");
-                    ui.selectable_value(&mut dialog.paper, PaperSize::A4, "A4");
-                    ui.selectable_value(&mut dialog.paper, PaperSize::Legal, "Legal");
-                    ui.selectable_value(&mut dialog.paper, PaperSize::Tabloid, "Tabloid");
-                });
-            ui.end_row();
-            ui.strong("Orientation:");
-            ui.horizontal(|ui| {
-                ui.radio_value(&mut dialog.landscape, false, "Portrait");
-                ui.radio_value(&mut dialog.landscape, true, "Landscape");
-            });
-            ui.end_row();
-            ui.strong("Margins:");
-            ui.add(
-                egui::DragValue::new(&mut dialog.margin_in)
-                    .speed(0.05)
-                    .range(0.0..=3.0)
-                    .suffix(" in"),
-            );
-            ui.end_row();
-        });
-    ui.checkbox(&mut dialog.fit_to_page, "Fit Artwork to Page");
-    if !dialog.fit_to_page {
-        ui.horizontal(|ui| {
-            ui.add(
-                egui::DragValue::new(&mut dialog.scale_pct)
-                    .speed(1.0)
-                    .range(10..=400)
-                    .suffix("%"),
-            );
-        });
-    }
-    ui.checkbox(&mut dialog.print_guides, "Print Guides & Slice Overlays");
-    ui.separator();
-    ui.horizontal(|ui| {
-        if ui.button("Print…").clicked() {
-            self.status = "print document".to_owned();
-        }
-        if ui.button("OK").clicked() {
-            self.status = format!("Page Setup updated ({})", dialog.paper.label());
-        }
-        if ui.button("Cancel").clicked() {
-            self.status = "page setup cancelled".to_owned();
-        }
-    });
-    self.page_setup_dialog = Some(dialog);
 }

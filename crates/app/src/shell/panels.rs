@@ -3985,7 +3985,7 @@ impl Shell {
                 locked,
                 name,
             } = state;
-            let mut opacity = opacity;
+            let opacity = opacity;
             let _blend_names = color::BlendMode::ALL
                 .iter()
                 .map(|m| m.as_str())

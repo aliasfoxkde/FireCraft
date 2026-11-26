@@ -1,8 +1,10 @@
 # FireCraft — Feature surface
 
-> Feature inventory originally audited 2026-11-01; status and
-> command/reachability counts refreshed 2026-11-11 against `main`
-> (`b61f198`). Claims are grounded in the command registry,
+> Feature inventory baseline audited 2026-11-01; this working branch
+> refreshed the Help entry points and menu total on 2026-11-25.
+> Product capability claims remain subject to the per-surface evidence
+> and task ledger; command counts are measured point-in-time values.
+> Claims are grounded in the command registry,
 > generated DOM parity, menu census, CLI and current task ledger.
 > Where a feature is a *recipe* rather than a built artifact, it says
 > so. A DOM verb or CLI command is not by itself proof of a complete,
@@ -35,7 +37,7 @@ verbs.
 Surfaces that drive it:
 
 - **GUI** — the shell (`crates/app/src/shell/`); menus map CS6 menu
-  ids to actions (`crates/app/src/menus.rs`; 2 of 298 items still
+  ids to actions (`crates/app/src/menus.rs`; 2 of 302 items still
   render inert — the 19.6 burn-down closed the rest, and the census
   is derived (`menus::tests::inert_worklist`) and test-gated), and the Ctrl+P
   command palette makes **every** registry command executable from
