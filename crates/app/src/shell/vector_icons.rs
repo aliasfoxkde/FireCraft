@@ -2116,7 +2116,7 @@ mod tests {
             PathIcon::NextPoint,
         ];
 
-        let output = context.run_ui(Default::default(), |ui| {
+        let mut output = context.run_ui(Default::default(), |ui| {
             let painter = ui
                 .painter()
                 .clone()
