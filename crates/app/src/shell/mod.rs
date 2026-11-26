@@ -1033,7 +1033,7 @@ impl Shell {
     /// Whatever both readers refuse; the current document is kept.
     #[allow(unused_variables)]
     pub fn load_document_bytes(&mut self, bytes: &[u8]) -> Result<(), engine::EngineError> {
-        #[cfg(feature = "native")]
+        #[cfg(feature = "document-io")]
         {
             match Editor::open(bytes) {
                 Ok(editor) => {
@@ -1061,11 +1061,11 @@ impl Shell {
                 }
             }
         }
-        #[cfg(not(feature = "native"))]
+        #[cfg(not(feature = "document-io"))]
         {
             return Err(engine::EngineError::InvalidState {
                 name: "load".into(),
-                detail: "documents require native build".into(),
+                detail: "document I/O feature is disabled".into(),
             });
         }
     }

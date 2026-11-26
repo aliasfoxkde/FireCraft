@@ -41,8 +41,9 @@ scripting = { path = "../scripting", optional = true }
 
 [features]
 default = ["scripting"]
+document-io = ["app-cli"]
 
-native = ["app-cli"]
+native = ["document-io"]
 
 [dev-dependencies]
 # The test-side mirror of eframe's own persistence encoding (its

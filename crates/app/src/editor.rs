@@ -1173,7 +1173,7 @@ impl Editor {
     ///
     /// # Errors
     /// Whatever the reader refuses (bad PNG, no mkTS, model drift).
-    #[cfg(feature = "native")]
+    #[cfg(feature = "document-io")]
     pub fn open(bytes: &[u8]) -> Result<Self, EngineError> {
         let loaded = app_cli::io::open(bytes).map_err(|error| EngineError::Io {
             path: "<bytes>".to_owned(),
@@ -1186,7 +1186,7 @@ impl Editor {
     ///
     /// # Errors
     /// Whatever the writer refuses.
-    #[cfg(feature = "native")]
+    #[cfg(feature = "document-io")]
     pub fn save(&self) -> Result<Vec<u8>, EngineError> {
         app_cli::io::save(self.session.document(), &self.unknown, &self.chunks).map_err(|error| {
             EngineError::Io {
@@ -5895,18 +5895,18 @@ mod tests {
         assert_eq!(editor.pick_color(geom::Point::new(900.0, 900.0)), None);
     }
 }
-#[cfg(not(feature = "native"))]
+#[cfg(not(feature = "document-io"))]
 impl Editor {
     pub fn open(_bytes: &[u8]) -> Result<Self, engine::EngineError> {
         Err(engine::EngineError::InvalidState {
             name: "open".into(),
-            detail: "use load_document_bytes instead".into(),
+            detail: "document I/O feature is disabled".into(),
         })
     }
     pub fn save(&self) -> Result<Vec<u8>, engine::EngineError> {
         Err(engine::EngineError::InvalidState {
             name: "save".into(),
-            detail: "documents saved through wasm bridge".into(),
+            detail: "document I/O feature is disabled".into(),
         })
     }
 }
