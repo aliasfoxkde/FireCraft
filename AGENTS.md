@@ -158,3 +158,8 @@ picking up work.
 ## 1.0 launch and product roadmap references
 
 The current cross-workstream execution proposal is [docs/planning/FIRECRAFT-1.0-CONSOLIDATION-AND-RELEASE-HANDOFF.md](docs/planning/FIRECRAFT-1.0-CONSOLIDATION-AND-RELEASE-HANDOFF.md). Longer-term feature horizons are in [docs/planning/FIRECRAFT-PRODUCT-ROADMAP-AND-EXPANSION.md](docs/planning/FIRECRAFT-PRODUCT-ROADMAP-AND-EXPANSION.md), and the marketing website/Cloudflare Pages requirements are in [docs/MARKETING-SITE-ROADMAP.md](docs/MARKETING-SITE-ROADMAP.md). These are planning references; `docs/TASKS.md` remains the only live task ledger. The marketing `site/` project and WASM `dist/web` project are separate deploy targets.
+
+
+## FireCraft 1.0 end-to-end execution
+
+Use [docs/planning/FIRECRAFT-1.0-END-TO-END-EXECUTION-AND-RELEASE-CLOSEOUT.md](docs/planning/FIRECRAFT-1.0-END-TO-END-EXECUTION-AND-RELEASE-CLOSEOUT.md) for the owner-requested phase-gated 1.0 execution, including the local CraftAnything experiment audit, complete native/WASM package matrix, docs/wiki and README refactor, GitHub issue/PR audit, and final release. It supplements but does not override this operating manual or accepted decision records. TASKS.md remains the single live ledger. Never claim a package or platform supported without target-native build/runtime evidence.
