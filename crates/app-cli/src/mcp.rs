@@ -436,3 +436,300 @@ fn error_reply(id: serde_json::Value, code: i64, message: &str) -> serde_json::V
         "error": { "code": code, "message": message },
     })
 }
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::expect_used, clippy::panic, clippy::unwrap_used)]
+
+    use super::*;
+    use engine::platform::MemoryFs;
+
+    fn session() -> Session {
+        Session::new(doc::Document::default())
+    }
+
+    fn fs() -> Rc<dyn FileSystem> {
+        Rc::new(MemoryFs::new())
+    }
+
+    fn request(
+        session: &mut Session,
+        fs: Rc<dyn FileSystem>,
+        method: &str,
+        params: serde_json::Value,
+    ) -> serde_json::Value {
+        handle(
+            session,
+            fs,
+            &serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": 17,
+                "method": method,
+                "params": params,
+            }),
+        )
+        .expect("requests with an id return a reply")
+    }
+
+    fn call_tool(
+        session: &mut Session,
+        fs: Rc<dyn FileSystem>,
+        name: &str,
+        arguments: serde_json::Value,
+    ) -> serde_json::Value {
+        request(
+            session,
+            fs,
+            "tools/call",
+            serde_json::json!({ "name": name, "arguments": arguments }),
+        )
+    }
+
+    fn result_text(reply: &serde_json::Value) -> &str {
+        reply["result"]["content"][0]["text"]
+            .as_str()
+            .expect("tool replies carry text content")
+    }
+
+    #[test]
+    fn protocol_dispatch_handles_initialize_ping_notifications_and_errors() {
+        let mut session = session();
+        let fs = fs();
+
+        let initialized = request(
+            &mut session,
+            fs.clone(),
+            "initialize",
+            serde_json::json!({}),
+        );
+        assert_eq!(initialized["result"]["protocolVersion"], PROTOCOL_VERSION);
+        assert_eq!(initialized["result"]["serverInfo"]["name"], "firecraft");
+
+        let ping = request(&mut session, fs.clone(), "ping", serde_json::json!({}));
+        assert_eq!(ping["result"], serde_json::json!({}));
+
+        let notification = serde_json::json!({ "method": "notifications/initialized" });
+        assert_eq!(handle(&mut session, fs.clone(), &notification), None);
+
+        let unknown = request(&mut session, fs.clone(), "made/up", serde_json::json!({}));
+        assert_eq!(unknown["error"]["code"], METHOD_NOT_FOUND);
+        assert!(
+            unknown["error"]["message"]
+                .as_str()
+                .unwrap()
+                .contains("made/up")
+        );
+
+        let no_method = handle(&mut session, fs.clone(), &serde_json::json!({ "id": 9 }));
+        assert_eq!(no_method.unwrap()["error"]["code"], INVALID_PARAMS);
+        let bad_method = handle(
+            &mut session,
+            fs,
+            &serde_json::json!({ "id": 10, "method": 4 }),
+        );
+        assert_eq!(bad_method.unwrap()["error"]["code"], INVALID_PARAMS);
+        assert_eq!(parse_error("bad JSON")["error"]["code"], PARSE_ERROR);
+    }
+
+    #[test]
+    fn tool_and_resource_lists_are_discoverable_over_json_rpc() {
+        let mut session = session();
+        let fs = fs();
+
+        let tools = request(
+            &mut session,
+            fs.clone(),
+            "tools/list",
+            serde_json::json!({}),
+        );
+        let names: Vec<_> = tools["result"]["tools"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|tool| tool["name"].as_str())
+            .collect();
+        assert!(names.contains(&"firecraft.apply"));
+        assert!(names.contains(&"firecraft.info"));
+        assert!(names.contains(&"firecraft.listCommands"));
+
+        let resources = request(&mut session, fs, "resources/list", serde_json::json!({}));
+        assert_eq!(
+            resources["result"]["resources"][0]["uri"],
+            "document://current"
+        );
+    }
+
+    #[test]
+    fn current_document_resource_and_info_tool_share_real_document_summary() {
+        let mut session = session();
+        let fs = fs();
+        let canvas_width = session.document().info.canvas.width;
+
+        let resource = request(
+            &mut session,
+            fs.clone(),
+            "resources/read",
+            serde_json::json!({ "uri": "document://current" }),
+        );
+        let summary: serde_json::Value =
+            serde_json::from_str(resource["result"]["contents"][0]["text"].as_str().unwrap())
+                .unwrap();
+        assert_eq!(summary["canvas"]["width"], canvas_width);
+
+        let missing_uri = request(
+            &mut session,
+            fs.clone(),
+            "resources/read",
+            serde_json::json!({}),
+        );
+        assert_eq!(missing_uri["error"]["code"], INVALID_PARAMS);
+        let unknown_uri = request(
+            &mut session,
+            fs.clone(),
+            "resources/read",
+            serde_json::json!({ "uri": "document://missing" }),
+        );
+        assert_eq!(unknown_uri["error"]["code"], INVALID_PARAMS);
+
+        let info = call_tool(&mut session, fs, "firecraft.info", serde_json::json!({}));
+        let info_summary: serde_json::Value = serde_json::from_str(result_text(&info)).unwrap();
+        assert_eq!(info_summary, summary);
+        assert_eq!(info["result"]["isError"], false);
+    }
+
+    #[test]
+    fn apply_undo_redo_and_list_commands_use_the_session_registry() {
+        let mut session = session();
+        let fs = fs();
+
+        let no_name = request(
+            &mut session,
+            fs.clone(),
+            "tools/call",
+            serde_json::json!({}),
+        );
+        assert_eq!(no_name["error"]["code"], INVALID_PARAMS);
+        let unknown = call_tool(
+            &mut session,
+            fs.clone(),
+            "firecraft.unknown",
+            serde_json::json!({}),
+        );
+        assert_eq!(unknown["error"]["code"], INVALID_PARAMS);
+
+        let missing_command = call_tool(
+            &mut session,
+            fs.clone(),
+            "firecraft.apply",
+            serde_json::json!({}),
+        );
+        assert_eq!(missing_command["result"]["isError"], true);
+
+        let pages_before = session.document().pages.len();
+        let added = call_tool(
+            &mut session,
+            fs.clone(),
+            "firecraft.apply",
+            serde_json::json!({ "command": "page.add", "args": {} }),
+        );
+        assert_eq!(added["result"]["isError"], false);
+        assert_eq!(session.document().pages.len(), pages_before + 1);
+        assert!(session.journal_len() > 0);
+
+        let commands = call_tool(
+            &mut session,
+            fs.clone(),
+            "firecraft.listCommands",
+            serde_json::json!({}),
+        );
+        let command_list = result_text(&commands);
+        assert!(command_list.lines().any(|line| line == "history.rewind"));
+        assert!(command_list.lines().any(|line| line == "page.add"));
+        assert!(
+            command_list
+                .lines()
+                .zip(command_list.lines().skip(1))
+                .all(|(a, b)| a <= b)
+        );
+
+        let undone = call_tool(
+            &mut session,
+            fs.clone(),
+            "firecraft.undo",
+            serde_json::json!({}),
+        );
+        assert_eq!(undone["result"]["isError"], false);
+        assert_eq!(session.document().pages.len(), pages_before);
+        let redone = call_tool(&mut session, fs, "firecraft.redo", serde_json::json!({}));
+        assert_eq!(redone["result"]["isError"], false);
+        assert_eq!(session.document().pages.len(), pages_before + 1);
+    }
+
+    #[test]
+    fn export_tool_validates_inputs_and_writes_a_real_png_to_the_injected_filesystem() {
+        let mut session = session();
+        let memory_fs = Rc::new(MemoryFs::new());
+        let fs: Rc<dyn FileSystem> = memory_fs.clone();
+
+        let page = call_tool(
+            &mut session,
+            fs.clone(),
+            "firecraft.apply",
+            serde_json::json!({ "command": "page.add", "args": {} }),
+        );
+        assert_eq!(page["result"]["isError"], false);
+
+        let missing_path = call_tool(
+            &mut session,
+            fs.clone(),
+            "firecraft.export",
+            serde_json::json!({}),
+        );
+        assert_eq!(missing_path["result"]["isError"], true);
+
+        let bad_quality = call_tool(
+            &mut session,
+            fs.clone(),
+            "firecraft.export",
+            serde_json::json!({ "path": "design.jpg", "quality": 101 }),
+        );
+        assert!(result_text(&bad_quality).contains("quality must be 1..=100"));
+
+        let bad_format = call_tool(
+            &mut session,
+            fs.clone(),
+            "firecraft.export",
+            serde_json::json!({ "path": "design.unknown" }),
+        );
+        assert_eq!(bad_format["result"]["isError"], true);
+
+        let exported = call_tool(
+            &mut session,
+            fs,
+            "firecraft.export",
+            serde_json::json!({ "path": "design.png" }),
+        );
+        assert_eq!(
+            exported["result"]["isError"],
+            false,
+            "{}",
+            result_text(&exported)
+        );
+        let bytes = memory_fs.read_file("design.png").unwrap();
+        assert_eq!(&bytes[..8], b"\x89PNG\r\n\x1a\n");
+    }
+
+    #[cfg(feature = "scripting")]
+    #[test]
+    fn script_tool_reports_a_missing_path_as_a_tool_error() {
+        let mut session = session();
+        let reply = call_tool(
+            &mut session,
+            fs(),
+            "firecraft.runScript",
+            serde_json::json!({}),
+        );
+        assert_eq!(reply["result"]["isError"], true);
+        assert!(result_text(&reply).contains("needs a string \"path\""));
+    }
+}
