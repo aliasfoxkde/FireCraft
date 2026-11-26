@@ -17,6 +17,21 @@ use super::theme::{self, Palette, ThemeMode};
 use super::vector_icons::{self, Icon};
 use super::*;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct FooterVisibility {
+    show_dpi: bool,
+    show_resolution: bool,
+    compact_format: bool,
+}
+
+fn footer_visibility(width: f32) -> FooterVisibility {
+    FooterVisibility {
+        show_dpi: width >= 620.0,
+        show_resolution: width >= 540.0,
+        compact_format: width < 680.0,
+    }
+}
+
 /// Canvas display mode (CS6 Document Window tabs).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) enum CanvasViewMode {
@@ -1216,6 +1231,8 @@ impl Shell {
     /// Unified 24px Canvas Footer Bar directly below the canvas viewport:
     /// Format badge | Snap pill | Rulers/Guides toggles | State Transport | Zoom | Size | DPI.
     pub(super) fn cs6_canvas_footer_bar(&mut self, ui: &mut Ui) {
+        let avail = ui.available_width();
+        let visibility = footer_visibility(avail);
         let p = self.active_palette();
         let (pw, ph, dpi, format_lbl, state_count) = self
             .editor
@@ -1243,11 +1260,12 @@ impl Shell {
 
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing = Vec2::new(4.0, 0.0);
-            ui.label(
-                RichText::new(format!("{format_lbl} (Document)"))
-                    .small()
-                    .color(p.text_dim),
-            );
+            let format_text = if visibility.compact_format && format_lbl == "PNG32" {
+                format_lbl.clone()
+            } else {
+                format!("{format_lbl} (Document)")
+            };
+            ui.label(RichText::new(format_text).small().color(p.text_dim));
             ui.separator();
 
             let snap_on = self.snap_to_guides || self.snap_to_grid || self.snap_to_smart_guides;
@@ -1288,55 +1306,60 @@ impl Shell {
             }
 
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                // DPI ComboBox
-                let cur_dpi = if dpi == 0 { 144 } else { dpi };
-                egui::ComboBox::from_id_salt("canvas_footer_dpi")
-                    .width(66.0)
-                    .selected_text(format!("{cur_dpi} ppi"))
-                    .show_ui(ui, |ui| {
-                        for &preset_dpi in constants::DPI_PRESETS {
-                            if ui
-                                .selectable_label(
-                                    cur_dpi == preset_dpi,
-                                    format!("{preset_dpi} ppi"),
-                                )
-                                .clicked()
-                            {
-                                self.run_command(
-                                    "document.setResolution",
-                                    serde_json::json!({
-                                        "resolution": f64::from(preset_dpi),
-                                        "unit": "inch",
-                                    }),
-                                );
+                if visibility.show_dpi {
+                    // DPI ComboBox
+                    let cur_dpi = if dpi == 0 { 144 } else { dpi };
+                    egui::ComboBox::from_id_salt("canvas_footer_dpi")
+                        .width(66.0)
+                        .selected_text(format!("{cur_dpi} ppi"))
+                        .show_ui(ui, |ui| {
+                            for &preset_dpi in constants::DPI_PRESETS {
+                                if ui
+                                    .selectable_label(
+                                        cur_dpi == preset_dpi,
+                                        format!("{preset_dpi} ppi"),
+                                    )
+                                    .clicked()
+                                {
+                                    self.run_command(
+                                        "document.setResolution",
+                                        serde_json::json!({
+                                            "resolution": f64::from(preset_dpi),
+                                            "unit": "inch",
+                                        }),
+                                    );
+                                }
                             }
-                        }
-                    });
+                        });
+                }
 
-                // Canvas Size ComboBox
-                egui::ComboBox::from_id_salt("canvas_footer_res")
-                    .width(116.0)
-                    .selected_text(format!("{pw} × {ph}"))
-                    .show_ui(ui, |ui| {
-                        for &(label, w, h) in constants::RESOLUTION_PRESETS {
-                            let active = (pw as f32 - w).abs() < 0.5 && (ph as f32 - h).abs() < 0.5;
-                            if ui.selectable_label(active, label).clicked() {
-                                self.run_command(
-                                    "page.setCanvasSize",
-                                    serde_json::json!({
-                                        "page": self.editor.page,
-                                        "width": f64::from(w),
-                                        "height": f64::from(h),
-                                    }),
-                                );
-                                self.raster = None;
+                if visibility.show_resolution {
+                    // Canvas Size ComboBox
+                    egui::ComboBox::from_id_salt("canvas_footer_res")
+                        .width(116.0)
+                        .selected_text(format!("{pw} × {ph}"))
+                        .show_ui(ui, |ui| {
+                            for &(label, w, h) in constants::RESOLUTION_PRESETS {
+                                let active =
+                                    (pw as f32 - w).abs() < 0.5 && (ph as f32 - h).abs() < 0.5;
+                                if ui.selectable_label(active, label).clicked() {
+                                    self.run_command(
+                                        "page.setCanvasSize",
+                                        serde_json::json!({
+                                            "page": self.editor.page,
+                                            "width": f64::from(w),
+                                            "height": f64::from(h),
+                                        }),
+                                    );
+                                    self.raster = None;
+                                }
                             }
-                        }
-                        ui.separator();
-                        if ui.button("Custom Canvas Size…").clicked() {
-                            self.run_shell(menus::ShellAction::CanvasSize);
-                        }
-                    });
+                            ui.separator();
+                            if ui.button("Custom Canvas Size…").clicked() {
+                                self.run_shell(menus::ShellAction::CanvasSize);
+                            }
+                        });
+                }
 
                 // Zoom ComboBox
                 let zoom_pct = (self.view.zoom * 100.0).round() as i32;
@@ -2142,6 +2165,30 @@ mod tests {
 
     use super::super::tests::{gui_editor, gui_shell};
     use super::*;
+
+    #[test]
+    fn footer_metadata_hides_at_the_documented_width_thresholds() {
+        assert_eq!(
+            footer_visibility(680.0),
+            FooterVisibility {
+                show_dpi: true,
+                show_resolution: true,
+                compact_format: false,
+            }
+        );
+        assert_eq!(
+            footer_visibility(679.0),
+            FooterVisibility {
+                show_dpi: true,
+                show_resolution: true,
+                compact_format: true,
+            }
+        );
+        assert!(!footer_visibility(619.0).show_dpi);
+        assert!(footer_visibility(620.0).show_dpi);
+        assert!(!footer_visibility(539.0).show_resolution);
+        assert!(footer_visibility(540.0).show_resolution);
+    }
 
     #[test]
     fn app_frame_renders_the_complete_studio_shell() {
