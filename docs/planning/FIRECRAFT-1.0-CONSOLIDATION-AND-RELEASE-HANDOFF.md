@@ -679,3 +679,60 @@ FireCraft 1.0 is successful when a new user can install or open a supported buil
 The project is operationally successful when a maintainer can receive that report, reproduce it from its metadata or a deliberately shared sample, hand it to an isolated AI agent, review a tested fix, deploy it to staging, invite the reporter/opt-in testers to validate it, and promote a known-good build through a human-approved release process.
 
 That is the 1.0 promise: **a useful graphics editor and a trustworthy, continuously improving open-source project—not an unfinished feature checklist disguised as a release.**
+
+
+---
+
+## 15. Expanded launch scope — marketing website is a 1.0 deliverable
+
+The public site is part of the product launch, not optional later polish. The repository already contains `site/` and a dedicated [Marketing Site Roadmap](../MARKETING-SITE-ROADMAP.md); preserve and complete that implementation rather than starting a competing site.
+
+**1.0 acceptance:** audit, refine, make responsive/accessibile, complete content, test, and deploy the existing site to its dedicated Cloudflare Pages project. Do not share or overwrite the separate WASM editor deployment.
+
+Required user journeys:
+- Understand FireCraft's purpose and differentiator from the first screen.
+- See authentic, current screenshots and a workflow demonstration if available.
+- Try the browser build only when verified, or download a supported desktop artifact.
+- Understand feature availability, limitations, file compatibility, privacy, and platform support.
+- Find getting-started docs, releases/changelog, GitHub source, issue reporting, contribution instructions, and license.
+
+Implementation: inspect `site/`, `wrangler.toml`, workflows, Pages settings, domains, secrets, and live deployment commit; refine brand/typography/spacing/responsive behavior; use real screenshots; make downloads release-driven with checksums/fallbacks; add SEO/social metadata, sitemap/robots/404, privacy/security/accessibility/performance checks; configure preview/staging/protected production promotion and rollback; test deployed journeys. Historical Pages names are `firecraft-site` for marketing and `firecraft-web` for WASM; revalidate before deployment. See [Marketing Site Roadmap](../MARKETING-SITE-ROADMAP.md) for the complete acceptance specification.
+
+## 16. Strategic scope and overlooked workstreams
+
+See the new [FireCraft Product Expansion Roadmap](FIRECRAFT-PRODUCT-ROADMAP-AND-EXPANSION.md) for staged 1.0, 1.x workflow depth, asset-production tooling, advanced design, ecosystem/optional intelligence, and possible collaboration horizons. It is strategic planning, not a commitment to implement every item.
+
+Additional workstreams explicitly considered: atomic saves and backup/recovery; schema migration and round-trip fidelity; keyboard/accessibility; measured performance budgets; untrusted-file/SVG security; dependency/license audits, SBOM and signing; typography/font licensing and color profiles; localization; contribution guide, Code of Conduct, support/security policy, triage labels, maintainer ownership; privacy-safe metrics; and safe extension/AI boundaries. Keep these out of 1.0 unless evidence makes them core release requirements.
+
+## 17. Documentation authority and synchronization
+
+| Document | Authority and synchronization |
+|---|---|
+| `AGENTS.md` | Stable repository rules; link the current handoff and roadmap |
+| `docs/README.md` | Documentation navigation |
+| `docs/TASKS.md` | Only approved, actionable live tasks; do not import speculative scope |
+| `docs/NEXT.md` | Detailed phase and acceptance plan; link strategic scope |
+| `docs/HANDOFF.md` | Current agent orientation and separate Pages deployment boundary |
+| `docs/PLANNING.md` | Master technical/product plan; update only when decisions change |
+| `FEATURES.md` / `CS6-PARITY.md` | Verified implementation status only |
+| `PROGRESS.md` | Dated evidence, never intentions |
+| `POST-MVP-ROADMAP.md` | Existing strategic detail; reconcile overlaps and cross-link |
+| `MARKETING-SITE-ROADMAP.md` | Website implementation and deployment evidence |
+| Release docs and site copy | Exact supported artifacts, known limits, privacy behavior |
+
+Update implementation docs in the same code PR. Do not duplicate this entire strategy across every file. Audit links and stale claims after integration; current source, tests, generated evidence, and deployed artifacts outrank dated snapshots.
+
+## 18. Updated agent execution order
+
+1. Read `AGENTS.md`, `TASKS.md`, `NEXT.md`, `HANDOFF.md`, this handoff, the product expansion roadmap, and marketing-site roadmap.
+2. Preserve and audit all worktrees/branches/PRs; no destructive cleanup before reconciliation.
+3. Establish one integration baseline and pass CI/browser gates.
+4. Reconcile the current GUI polish and implement the 1.0 core workflows.
+5. Audit/complete the existing marketing site, preferably in a separate worktree/PR after ownership is clear.
+6. Implement feedback intake and privacy controls.
+7. Complete recovery, accessibility, security, platform, and performance gates.
+8. Update canonical docs from evidence; ticketize only approved remaining work.
+9. Deploy marketing site to its dedicated Pages staging environment, verify, and promote with human approval.
+10. Prepare release candidates, external tester validation, provenance, support docs, and human go/no-go.
+
+Final handoff must mark each workstream Done/Partial/Blocked/Deferred and include commit/PR links, test commands and receipts, deploy IDs/URLs, risks, and next bounded tasks.
