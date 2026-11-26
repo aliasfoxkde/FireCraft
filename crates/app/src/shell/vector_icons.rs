@@ -1976,3 +1976,178 @@ fn polygon_vertices(
     }
     pts
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{AlignIcon, Icon, PathIcon, draw, draw_align, draw_path};
+    use egui::{Color32, Context, Id, LayerId, Order, Rect, Vec2, pos2};
+
+    #[test]
+    fn every_painter_icon_variant_emits_shapes() {
+        let context = Context::default();
+        let icons = [
+            Icon::New,
+            Icon::Open,
+            Icon::Save,
+            Icon::Import,
+            Icon::Export,
+            Icon::Cut,
+            Icon::Copy,
+            Icon::Paste,
+            Icon::Duplicate,
+            Icon::Undo,
+            Icon::Redo,
+            Icon::Select,
+            Icon::Subselect,
+            Icon::Scale,
+            Icon::Marquee,
+            Icon::Lasso,
+            Icon::Wand,
+            Icon::Crop,
+            Icon::Hand,
+            Icon::Zoom,
+            Icon::Brush,
+            Icon::Pencil,
+            Icon::Eraser,
+            Icon::Stamp,
+            Icon::Line,
+            Icon::Rectangle,
+            Icon::Rounded,
+            Icon::Ellipse,
+            Icon::Polygon,
+            Icon::Star,
+            Icon::Pen,
+            Icon::Knife,
+            Icon::Text,
+            Icon::Picker,
+            Icon::Fill,
+            Icon::Gradient,
+            Icon::Blur,
+            Icon::Sharpen,
+            Icon::Dodge,
+            Icon::Burn,
+            Icon::Slice,
+            Icon::Hotspot,
+            Icon::ZoomIn,
+            Icon::ZoomOut,
+            Icon::Fit,
+            Icon::Group,
+            Icon::Ungroup,
+            Icon::BringFront,
+            Icon::BringForward,
+            Icon::SendBackward,
+            Icon::SendBack,
+            Icon::RotateCCW,
+            Icon::RotateCW,
+            Icon::FlipH,
+            Icon::FlipV,
+            Icon::Eye,
+            Icon::EyeOff,
+            Icon::Lock,
+            Icon::Unlock,
+            Icon::Trash,
+            Icon::Folder,
+            Icon::StateFirst,
+            Icon::StatePrev,
+            Icon::StatePlay,
+            Icon::StatePause,
+            Icon::StateNext,
+            Icon::StateLast,
+        ];
+        let align_icons = [
+            AlignIcon::RelativeToObject,
+            AlignIcon::RelativeToCanvas,
+            AlignIcon::AlignLeft,
+            AlignIcon::AlignCenterH,
+            AlignIcon::AlignRight,
+            AlignIcon::AlignTop,
+            AlignIcon::AlignCenterV,
+            AlignIcon::AlignBottom,
+            AlignIcon::DistributeTop,
+            AlignIcon::DistributeCenterV,
+            AlignIcon::DistributeBottom,
+            AlignIcon::DistributeLeft,
+            AlignIcon::DistributeCenterH,
+            AlignIcon::DistributeRight,
+            AlignIcon::MatchWidth,
+            AlignIcon::MatchHeight,
+            AlignIcon::MatchBoth,
+            AlignIcon::SpaceVertical,
+            AlignIcon::SpaceHorizontal,
+        ];
+        let path_icons = [
+            PathIcon::Join,
+            PathIcon::Split,
+            PathIcon::Union,
+            PathIcon::Intersect,
+            PathIcon::Punch,
+            PathIcon::Crop,
+            PathIcon::Simplify,
+            PathIcon::ExpandStroke,
+            PathIcon::InsetExpand,
+            PathIcon::HardEdge,
+            PathIcon::AntiAlias,
+            PathIcon::FeatherEdge,
+            PathIcon::StrokeToFill,
+            PathIcon::ReverseDirection,
+            PathIcon::ClosePath,
+            PathIcon::OpenPath,
+            PathIcon::PathToMarquee,
+            PathIcon::SnapToPixel,
+            PathIcon::FlattenPath,
+            PathIcon::AddPoints,
+            PathIcon::DeletePoints,
+            PathIcon::CornerPoint,
+            PathIcon::SmoothPoint,
+            PathIcon::RoundPoints,
+            PathIcon::FilletPoints,
+            PathIcon::ChamferPoints,
+            PathIcon::BreakPath,
+            PathIcon::JoinPoints,
+            PathIcon::AlignPointsH,
+            PathIcon::AlignPointsV,
+            PathIcon::KnifeSplit,
+            PathIcon::ExtendPath,
+            PathIcon::SharpApex,
+            PathIcon::InversePoints,
+            PathIcon::SelectAllPoints,
+            PathIcon::FirstPoint,
+            PathIcon::PrevPoint,
+            PathIcon::NextPoint,
+        ];
+
+        let output = context.run(Default::default(), |ctx| {
+            let painter = ctx.layer_painter(LayerId::new(Order::Foreground, Id::new("icons")));
+            for (index, icon) in icons.into_iter().enumerate() {
+                let origin = pos2((index % 10) as f32 * 32.0, (index / 10) as f32 * 32.0);
+                draw(
+                    &painter,
+                    Rect::from_min_size(origin, Vec2::splat(24.0)),
+                    icon,
+                    Color32::WHITE,
+                    1.5,
+                );
+            }
+            for (index, icon) in align_icons.into_iter().enumerate() {
+                let origin = pos2(index as f32 * 32.0, 320.0);
+                draw_align(
+                    &painter,
+                    Rect::from_min_size(origin, Vec2::splat(24.0)),
+                    icon,
+                    Color32::WHITE,
+                );
+            }
+            for (index, icon) in path_icons.into_iter().enumerate() {
+                let origin = pos2(index as f32 * 32.0, 352.0);
+                draw_path(
+                    &painter,
+                    Rect::from_min_size(origin, Vec2::splat(24.0)),
+                    icon,
+                    Color32::WHITE,
+                );
+            }
+        });
+
+        assert!(!output.shapes.is_empty());
+    }
+}
