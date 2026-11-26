@@ -3042,6 +3042,10 @@ impl eframe::App for Shell {
     /// memory) — on native to `storage_dir`, on web to localStorage.
     /// Layout only: documents are saved explicitly through the File
     /// menu, never as a side effect of closing the window.
+    fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
+        [30.0 / 255.0, 30.0 / 255.0, 34.0 / 255.0, 1.0]
+    }
+
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
         eframe::set_value(storage, "shell_layout", &self.capture_layout());
     }

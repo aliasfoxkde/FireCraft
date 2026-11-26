@@ -47,6 +47,10 @@ impl FireCraftApp {
 
 #[cfg(not(target_arch = "wasm32"))]
 impl eframe::App for FireCraftApp {
+    fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
+        [30.0 / 255.0, 30.0 / 255.0, 34.0 / 255.0, 1.0]
+    }
+
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
         self.editor.save(storage);
     }
