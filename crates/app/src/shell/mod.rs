@@ -1616,8 +1616,8 @@ impl Shell {
             menus::ShellAction::SelectPage(step) => self.select_page_relative(step),
             menus::ShellAction::EditTextSelection => self.edit_text_selection(),
             menus::ShellAction::PreviewInBrowser {
-                secondary,
-                all_pages,
+                secondary: _,
+                all_pages: _,
             } => {
                 #[cfg(feature = "native")]
                 {

@@ -143,7 +143,15 @@ fn render() -> Result<String, String> {
     for (rel, bytes) in &files {
         if rel.ends_with(".svg") {
             let in_phosphor = rel.contains("icons-phosphor");
-            icons.push(icon_for(&root, rel, *bytes, &feather, &rows, &table, in_phosphor)?);
+            icons.push(icon_for(
+                &root,
+                rel,
+                *bytes,
+                &feather,
+                &rows,
+                &table,
+                in_phosphor,
+            )?);
         } else {
             let in_phosphor = rel.contains("phosphor");
             others.push(other_for(rel, *bytes, &rows, in_phosphor)?);
@@ -346,10 +354,14 @@ fn icon_for(
         embedded: table.contains(&format!("assets/icons-phosphor/{stem}.svg"))
             || table.contains(&format!("assets/icons/{stem}.svg")),
     })
-}}
-   }
+}
 /// Describes one shipped file that is not an SVG icon.
-fn other_for(rel: &str, bytes: u64, rows: &[Row], is_phosphor_license: bool) -> Result<Other, String> {
+fn other_for(
+    rel: &str,
+    bytes: u64,
+    rows: &[Row],
+    is_phosphor_license: bool,
+) -> Result<Other, String> {
     let (what, attribution) = if is_phosphor_license {
         (
             "The Phosphor licence (MIT) for the tool/UI icons above".to_owned(),
@@ -360,7 +372,8 @@ fn other_for(rel: &str, bytes: u64, rows: &[Row], is_phosphor_license: bool) -> 
         )
     } else if rel == LUCIDE_LICENSE {
         (
-            "The Lucide licence (ISC) and the Feather licence (MIT) for the deprecated icons above".to_owned(),
+            "The Lucide licence (ISC) and the Feather licence (MIT) for the deprecated icons above"
+                .to_owned(),
             rows.iter()
                 .filter(|row| row.licence.contains("LICENSE-lucide.txt"))
                 .map(|row| citation(row, LUCIDE_LICENSE))
@@ -378,14 +391,13 @@ fn other_for(rel: &str, bytes: u64, rows: &[Row], is_phosphor_license: bool) -> 
              row is a licence defect, not a documentation gap"
         ));
     }
-    Ok(Other {{
+    Ok(Other {
         path: rel.to_owned(),
         bytes,
         what,
         attribution,
     })
-}}
-
+}
 
 /// Every file under the icon directory, as (relative path, bytes).
 fn all_files(dir: &Path) -> Result<Vec<(String, u64)>, String> {
@@ -467,7 +479,7 @@ fn covering_rows(rows: &[Row], path: &str, set_covered: bool) -> Vec<String> {
         }
     }
     out
-}}
+}
 
 /// The Lucide icons that Lucide itself derives from Feather — those
 /// ship under the MIT terms the licence file carries.
