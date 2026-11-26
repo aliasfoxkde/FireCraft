@@ -158,6 +158,7 @@ The GUI and automation interfaces are intended to drive the same engine commands
 | [Releasing](docs/RELEASING.md) | Artifact build and deployment procedures |
 | [Marketing site roadmap](docs/MARKETING-SITE-ROADMAP.md) | Public website scope, Cloudflare Pages deployment, and launch gates |
 | [Creative-app benchmark](docs/research/creative-app-benchmark.md) | Product patterns from Krita, Photopea, and Pixlr, with licensing boundaries |
+| [Fireworks extension ecosystem](docs/research/fireworks-extensions.md) | Historical workflow research, extension API design, and official/community marketplace plan |
 | [Progress](docs/PROGRESS.md) | Session-level status and historical progress |
 | [Planning](docs/PLANNING.md) | Product plan, file-format notes, and architecture |
 | [Handoff](docs/HANDOFF.md) | Engineering handoff and agent runbook |

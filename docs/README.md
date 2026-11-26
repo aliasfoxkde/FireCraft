@@ -32,6 +32,7 @@ This page is the documentation map. Start with the overview that matches your go
 ### I want to research product direction
 
 1. [Creative-app benchmark](research/creative-app-benchmark.md): transferable ideas from Krita, Photopea, and Pixlr, plus licensing and clean-room limits.
+2. [Fireworks extension ecosystem](research/fireworks-extensions.md): historical extension workflows, marketplace safeguards, community submission lifecycle, and phased implementation plan.
 
 ### I want to contribute or use an AI agent
 
@@ -50,7 +51,7 @@ This page is the documentation map. Start with the overview that matches your go
 | Engineering | [HANDOFF](HANDOFF.md), [PLANNING](PLANNING.md), [TOOLCHAINS](TOOLCHAINS.md), [RELEASING](RELEASING.md) | Building, architecture, and release work |
 | Evidence | [decisions](decisions/), [research](research/), [generated parity and scorecard](planning/generated/) | Specific technical claims and their basis |
 | Product direction | [Post-MVP roadmap](POST-MVP-ROADMAP.md), [baseline audit](POST-MVP-BASELINE-AUDIT.md), [execution plan](POST-MVP-EXECUTION-PLAN.md), [agent handoff](POST-MVP-AGENT-HANDOFF.md), [marketing site roadmap](MARKETING-SITE-ROADMAP.md) | Strategic scope, verified per-workstream status, public website plan, and the gated ticket sequence; not live task status |
-| Research | [creative app benchmark](research/creative-app-benchmark.md) | Feature-transfer research and licensing constraints for external creative-app references |
+| Research | [creative app benchmark](research/creative-app-benchmark.md), [Fireworks extension ecosystem](research/fireworks-extensions.md) | Feature-transfer, licensing, extension API, and marketplace research |
 | History | [SESSIONS](SESSIONS.md), [HISTORY](HISTORY.md), [closed milestones](planning/firecraft/), [release notes](releases/) | How the project arrived here; not live task status |
 
 ## Source-of-truth rules

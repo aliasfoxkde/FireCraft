@@ -956,6 +956,11 @@ Acceptance:
 
 ## 5.14 Plugin ecosystem and extensibility
 
+The historical Fireworks workflow research and detailed public catalog plan are
+maintained in [`research/fireworks-extensions.md`](research/fireworks-extensions.md).
+It records source-by-source observations, rights caveats, the staged community
+submission flow, and conditions required before one-click install is enabled.
+
 **Priority: P2/P3.**
 
 ### PLUG-01 — Plugin API and SDK
