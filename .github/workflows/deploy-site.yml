@@ -32,7 +32,7 @@ jobs:
           test -s site/index.html
           test -s site/styles.css
           test -s site/app.js
-          test -s site/assets/firecraft-mark.svg
+          test -s site/assets/firecraft-mark.png
           grep -q 'name="description"' site/index.html
           grep -q 'prefers-reduced-motion' site/styles.css
           grep -q 'loadRelease' site/app.js
