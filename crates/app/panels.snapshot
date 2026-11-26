@@ -25,4 +25,10 @@ html-preview	right	15	HTML Preview	false	true	collapse,title,overflow,close
 css-properties	right	16	CSS Properties	false	true	collapse,title,overflow,close
 find-and-replace	right	17	Find and Replace	false	true	collapse,title,overflow,close
 common-library	right	18	Common Library	false	true	collapse,title,overflow,close
-web-layer	right	19	Web Layer	true	false	collapse,title,overflow
+special-characters	right	19	Special Characters	false	true	collapse,title,overflow,close
+image-editing	right	20	Image Editing	false	true	collapse,title,overflow,close
+auto-shape-properties	right	21	Auto Shape Properties	false	true	collapse,title,overflow,close
+align	right	22	Align	false	true	collapse,title,overflow,close
+path	right	23	Path	false	true	collapse,title,overflow,close
+color-palette	right	24	Color Palette	false	true	collapse,title,overflow,close
+web-layer	right	25	Web Layer	true	false	collapse,title,overflow

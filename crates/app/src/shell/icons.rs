@@ -1,11 +1,11 @@
-//! Icon rendering: Lucide SVGs (ISC licence) embedded at compile
+//! Icon rendering: Phosphor Icons (MIT licence) embedded at compile
 //! time, recoloured to the requested ink and rasterized by
-//! `egui_extras`' SVG loader at the exact on-screen size — crisp at
+//! `egui`'s SVG loader at the exact on-screen size — crisp at
 //! any DPI, and identical on desktop and wasm.
-//!
-//! The icon *set* is third-party (Lucide, ISC — see
-//! `assets/icons/LICENSE-lucide.txt` and the row in
-//! `docs/ATTRIBUTION.md`); the tool→icon mapping is `FireCraft`'s own.
+
+//! The icon *set* is third-party (Phosphor, MIT — see
+//! `assets/icons/LICENSE-phosphor.txt` and the row in
+//! `docs/ATTRIBUTION.md`); the tool->icon mapping is `FireCraft`'s own.
 
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
@@ -14,272 +14,237 @@ use egui::{Color32, Rect, Vec2};
 
 use crate::editor::Tool;
 
-/// The embedded Lucide set, one entry per vendored file.
+/// The embedded Phosphor set, one entry per vendored file.
 static ICONS: &[(&str, &[u8])] = &[
     (
-        "aperture",
-        include_bytes!("../../../../assets/icons/aperture.svg"),
+        "auto-shape",
+        include_bytes!("../../../../assets/icons-phosphor/auto-shape.svg"),
     ),
     (
-        "arrow-left-right",
-        include_bytes!("../../../../assets/icons/arrow-left-right.svg"),
+        "autoshapecircle",
+        include_bytes!("../../../../assets/icons-phosphor/autoshapecircle.svg"),
     ),
     (
-        "blend",
-        include_bytes!("../../../../assets/icons/blend.svg"),
+        "autoshapethex",
+        include_bytes!("../../../../assets/icons-phosphor/autoshapethex.svg"),
+    ),
+    (
+        "blur-2",
+        include_bytes!("../../../../assets/icons-phosphor/blur-2.svg"),
+    ),
+    (
+        "blur",
+        include_bytes!("../../../../assets/icons-phosphor/blur.svg"),
     ),
     (
         "brush",
-        include_bytes!("../../../../assets/icons/brush.svg"),
+        include_bytes!("../../../../assets/icons-phosphor/brush.svg"),
     ),
     (
-        "circle",
-        include_bytes!("../../../../assets/icons/circle.svg"),
+        "burn-2",
+        include_bytes!("../../../../assets/icons-phosphor/burn-2.svg"),
     ),
     (
-        "circle-dashed",
-        include_bytes!("../../../../assets/icons/circle-dashed.svg"),
+        "burn",
+        include_bytes!("../../../../assets/icons-phosphor/burn.svg"),
     ),
     (
-        "circle-dot",
-        include_bytes!("../../../../assets/icons/circle-dot.svg"),
+        "crop",
+        include_bytes!("../../../../assets/icons-phosphor/crop.svg"),
     ),
     (
-        "contrast",
-        include_bytes!("../../../../assets/icons/contrast.svg"),
-    ),
-    ("copy", include_bytes!("../../../../assets/icons/copy.svg")),
-    ("crop", include_bytes!("../../../../assets/icons/crop.svg")),
-    (
-        "crosshair",
-        include_bytes!("../../../../assets/icons/crosshair.svg"),
+        "default-stroke-fill",
+        include_bytes!("../../../../assets/icons-phosphor/default-stroke-fill.svg"),
     ),
     (
-        "droplet",
-        include_bytes!("../../../../assets/icons/droplet.svg"),
+        "distort",
+        include_bytes!("../../../../assets/icons-phosphor/distort.svg"),
+    ),
+    (
+        "dodge-2",
+        include_bytes!("../../../../assets/icons-phosphor/dodge-2.svg"),
+    ),
+    (
+        "dodge",
+        include_bytes!("../../../../assets/icons-phosphor/dodge.svg"),
+    ),
+    (
+        "ellipse",
+        include_bytes!("../../../../assets/icons-phosphor/ellipse.svg"),
     ),
     (
         "eraser",
-        include_bytes!("../../../../assets/icons/eraser.svg"),
-    ),
-    ("eye", include_bytes!("../../../../assets/icons/eye.svg")),
-    (
-        "eye-off",
-        include_bytes!("../../../../assets/icons/eye-off.svg"),
+        include_bytes!("../../../../assets/icons-phosphor/eraser.svg"),
     ),
     (
-        "feather",
-        include_bytes!("../../../../assets/icons/feather.svg"),
+        "eyedropper",
+        include_bytes!("../../../../assets/icons-phosphor/eyedropper.svg"),
     ),
     (
-        "flame",
-        include_bytes!("../../../../assets/icons/flame.svg"),
+        "fill",
+        include_bytes!("../../../../assets/icons-phosphor/fill.svg"),
     ),
     (
-        "git-commit-horizontal",
-        include_bytes!("../../../../assets/icons/git-commit-horizontal.svg"),
+        "fit-in-window",
+        include_bytes!("../../../../assets/icons-phosphor/fit-in-window.svg"),
     ),
     (
-        "grid-3x3",
-        include_bytes!("../../../../assets/icons/grid-3x3.svg"),
-    ),
-    ("hand", include_bytes!("../../../../assets/icons/hand.svg")),
-    (
-        "hexagon",
-        include_bytes!("../../../../assets/icons/hexagon.svg"),
+        "fit",
+        include_bytes!("../../../../assets/icons-phosphor/fit.svg"),
     ),
     (
-        "image",
-        include_bytes!("../../../../assets/icons/image.svg"),
+        "gradient",
+        include_bytes!("../../../../assets/icons-phosphor/gradient.svg"),
+    ),
+    (
+        "hand",
+        include_bytes!("../../../../assets/icons-phosphor/hand.svg"),
+    ),
+    (
+        "hotspot",
+        include_bytes!("../../../../assets/icons-phosphor/hotspot.svg"),
+    ),
+    (
+        "knife-2",
+        include_bytes!("../../../../assets/icons-phosphor/knife-2.svg"),
+    ),
+    (
+        "knife",
+        include_bytes!("../../../../assets/icons-phosphor/knife.svg"),
     ),
     (
         "lasso",
-        include_bytes!("../../../../assets/icons/lasso.svg"),
+        include_bytes!("../../../../assets/icons-phosphor/lasso.svg"),
     ),
     (
-        "lasso-select",
-        include_bytes!("../../../../assets/icons/lasso-select.svg"),
+        "line",
+        include_bytes!("../../../../assets/icons-phosphor/line.svg"),
     ),
     (
-        "layers",
-        include_bytes!("../../../../assets/icons/layers.svg"),
-    ),
-    ("lock", include_bytes!("../../../../assets/icons/lock.svg")),
-    (
-        "lock-open",
-        include_bytes!("../../../../assets/icons/lock-open.svg"),
+        "marquee",
+        include_bytes!("../../../../assets/icons-phosphor/marquee.svg"),
     ),
     (
-        "magnet",
-        include_bytes!("../../../../assets/icons/magnet.svg"),
-    ),
-    (
-        "minus",
-        include_bytes!("../../../../assets/icons/minus.svg"),
-    ),
-    (
-        "monitor",
-        include_bytes!("../../../../assets/icons/monitor.svg"),
-    ),
-    (
-        "mouse-pointer-2",
-        include_bytes!("../../../../assets/icons/mouse-pointer-2.svg"),
-    ),
-    ("move", include_bytes!("../../../../assets/icons/move.svg")),
-    (
-        "orbit",
-        include_bytes!("../../../../assets/icons/orbit.svg"),
+        "no-stroke-fill",
+        include_bytes!("../../../../assets/icons-phosphor/no-stroke-fill.svg"),
     ),
     (
         "paint-bucket",
-        include_bytes!("../../../../assets/icons/paint-bucket.svg"),
+        include_bytes!("../../../../assets/icons-phosphor/paint-bucket.svg"),
     ),
     (
-        "paintbrush",
-        include_bytes!("../../../../assets/icons/paintbrush.svg"),
+        "pen-2",
+        include_bytes!("../../../../assets/icons-phosphor/pen-2.svg"),
     ),
     (
-        "palette",
-        include_bytes!("../../../../assets/icons/palette.svg"),
+        "pen",
+        include_bytes!("../../../../assets/icons-phosphor/pen.svg"),
     ),
     (
-        "pen-tool",
-        include_bytes!("../../../../assets/icons/pen-tool.svg"),
+        "pencil-2",
+        include_bytes!("../../../../assets/icons-phosphor/pencil-2.svg"),
     ),
     (
         "pencil",
-        include_bytes!("../../../../assets/icons/pencil.svg"),
+        include_bytes!("../../../../assets/icons-phosphor/pencil.svg"),
     ),
     (
-        "pentagon",
-        include_bytes!("../../../../assets/icons/pentagon.svg"),
+        "picker",
+        include_bytes!("../../../../assets/icons-phosphor/picker.svg"),
     ),
-    (
-        "pipette",
-        include_bytes!("../../../../assets/icons/pipette.svg"),
-    ),
-    (
-        "pizza",
-        include_bytes!("../../../../assets/icons/pizza.svg"),
-    ),
-    ("plus", include_bytes!("../../../../assets/icons/plus.svg")),
     (
         "pointer",
-        include_bytes!("../../../../assets/icons/pointer.svg"),
+        include_bytes!("../../../../assets/icons-phosphor/pointer.svg"),
     ),
     (
-        "rectangle-horizontal",
-        include_bytes!("../../../../assets/icons/rectangle-horizontal.svg"),
+        "polygon",
+        include_bytes!("../../../../assets/icons-phosphor/polygon.svg"),
     ),
     (
-        "rectangle-vertical",
-        include_bytes!("../../../../assets/icons/rectangle-vertical.svg"),
+        "rect",
+        include_bytes!("../../../../assets/icons-phosphor/rect.svg"),
     ),
     (
-        "redo-2",
-        include_bytes!("../../../../assets/icons/redo-2.svg"),
+        "red-eye-remove",
+        include_bytes!("../../../../assets/icons-phosphor/red-eye-remove.svg"),
     ),
     (
-        "refresh-cw",
-        include_bytes!("../../../../assets/icons/refresh-cw.svg"),
+        "red-eye",
+        include_bytes!("../../../../assets/icons-phosphor/red-eye.svg"),
     ),
     (
-        "replace",
-        include_bytes!("../../../../assets/icons/replace.svg"),
+        "redraw-path",
+        include_bytes!("../../../../assets/icons-phosphor/redraw-path.svg"),
     ),
     (
-        "route",
-        include_bytes!("../../../../assets/icons/route.svg"),
+        "replace-color-2",
+        include_bytes!("../../../../assets/icons-phosphor/replace-color-2.svg"),
     ),
     (
-        "ruler",
-        include_bytes!("../../../../assets/icons/ruler.svg"),
+        "replace-color",
+        include_bytes!("../../../../assets/icons-phosphor/replace-color.svg"),
+    ),
+    (
+        "rubber-stamp",
+        include_bytes!("../../../../assets/icons-phosphor/rubber-stamp.svg"),
     ),
     (
         "scale",
-        include_bytes!("../../../../assets/icons/scale.svg"),
-    ),
-    ("scan", include_bytes!("../../../../assets/icons/scan.svg")),
-    (
-        "scan-search",
-        include_bytes!("../../../../assets/icons/scan-search.svg"),
+        include_bytes!("../../../../assets/icons-phosphor/scale.svg"),
     ),
     (
-        "scissors",
-        include_bytes!("../../../../assets/icons/scissors.svg"),
+        "select",
+        include_bytes!("../../../../assets/icons-phosphor/select.svg"),
     ),
     (
-        "search",
-        include_bytes!("../../../../assets/icons/search.svg"),
+        "sharpen",
+        include_bytes!("../../../../assets/icons-phosphor/sharpen.svg"),
     ),
     (
-        "shield",
-        include_bytes!("../../../../assets/icons/shield.svg"),
+        "skew",
+        include_bytes!("../../../../assets/icons-phosphor/skew.svg"),
     ),
     (
-        "slice-knife",
-        include_bytes!("../../../../assets/icons/slice-knife.svg"),
+        "slice",
+        include_bytes!("../../../../assets/icons-phosphor/slice.svg"),
     ),
     (
-        "sparkles",
-        include_bytes!("../../../../assets/icons/sparkles.svg"),
-    ),
-    (
-        "spline",
-        include_bytes!("../../../../assets/icons/spline.svg"),
-    ),
-    (
-        "square",
-        include_bytes!("../../../../assets/icons/square.svg"),
-    ),
-    (
-        "square-dashed",
-        include_bytes!("../../../../assets/icons/square-dashed.svg"),
-    ),
-    (
-        "square-dashed-mouse-pointer",
-        include_bytes!("../../../../assets/icons/square-dashed-mouse-pointer.svg"),
+        "smudge",
+        include_bytes!("../../../../assets/icons-phosphor/smudge.svg"),
     ),
     (
         "stamp",
-        include_bytes!("../../../../assets/icons/stamp.svg"),
-    ),
-    ("sun", include_bytes!("../../../../assets/icons/sun.svg")),
-    (
-        "sun-dim",
-        include_bytes!("../../../../assets/icons/sun-dim.svg"),
+        include_bytes!("../../../../assets/icons-phosphor/stamp.svg"),
     ),
     (
-        "trash",
-        include_bytes!("../../../../assets/icons/trash.svg"),
+        "subselect",
+        include_bytes!("../../../../assets/icons-phosphor/subselect.svg"),
     ),
     (
-        "triangle",
-        include_bytes!("../../../../assets/icons/triangle.svg"),
+        "swap-stroke-fill",
+        include_bytes!("../../../../assets/icons-phosphor/swap-stroke-fill.svg"),
     ),
-    ("type", include_bytes!("../../../../assets/icons/type.svg")),
     (
-        "undo-2",
-        include_bytes!("../../../../assets/icons/undo-2.svg"),
+        "toggle-screen-mode",
+        include_bytes!("../../../../assets/icons-phosphor/toggle-screen-mode.svg"),
+    ),
+    (
+        "type",
+        include_bytes!("../../../../assets/icons-phosphor/type.svg"),
+    ),
+    (
+        "vector-path",
+        include_bytes!("../../../../assets/icons-phosphor/vector-path.svg"),
     ),
     (
         "wand-sparkles",
-        include_bytes!("../../../../assets/icons/wand-sparkles.svg"),
+        include_bytes!("../../../../assets/icons-phosphor/wand-sparkles.svg"),
     ),
     (
-        "waypoints",
-        include_bytes!("../../../../assets/icons/waypoints.svg"),
-    ),
-    (
-        "wrench",
-        include_bytes!("../../../../assets/icons/wrench.svg"),
-    ),
-    (
-        "zoom-in",
-        include_bytes!("../../../../assets/icons/zoom-in.svg"),
+        "zoom",
+        include_bytes!("../../../../assets/icons-phosphor/zoom.svg"),
     ),
 ];
-
 /// The icon bytes with `currentColor` swapped for white, so a single
 /// white copy tints to any ink at paint time.
 fn white_icons() -> &'static HashMap<&'static str, Arc<[u8]>> {
@@ -288,9 +253,7 @@ fn white_icons() -> &'static HashMap<&'static str, Arc<[u8]>> {
         ICONS
             .iter()
             .map(|(name, bytes)| {
-                let svg = String::from_utf8_lossy(bytes)
-                    .replace("currentColor", "#ffffff")
-                    .replace("stroke-width=\"2\"", "stroke-width=\"1.75\"");
+                let svg = String::from_utf8_lossy(bytes).replace("currentColor", "#ffffff");
                 (*name, Arc::from(svg.into_bytes().into_boxed_slice()))
             })
             .collect()
@@ -308,7 +271,7 @@ fn exists(name: &str) -> bool {
 pub(crate) fn image(name: &str, size: f32, tint: Color32) -> egui::Image<'static> {
     let bytes = white_icons()
         .get(name)
-        .or_else(|| white_icons().get("square"))
+        .or_else(|| white_icons().get("auto-shape"))
         .cloned()
         .unwrap_or_default();
     egui::Image::from_bytes(
@@ -379,67 +342,67 @@ const TOOLS: &[Tool] = &[
     Tool::AutoShape(crate::editor::AutoShape::Star),
 ];
 
-/// The Lucide icon for a tool. The mapping is `FireCraft`'s own — the
-/// set is Lucide's, but no icon is Adobe's.
+/// The Phosphor icon for a tool. The mapping is `FireCraft`'s own —
+/// the set is Phosphor's, but no icon is Adobe's.
 pub(crate) fn tool_icon(tool: Tool) -> &'static str {
     match tool {
         // Select
-        Tool::Pointer => "pointer",
-        Tool::Subselect => "mouse-pointer-2",
+        Tool::Pointer => "select",
+        Tool::Subselect => "subselect",
         Tool::Scale => "scale",
-        Tool::Skew => "triangle",
-        Tool::Distort => "waypoints",
+        Tool::Skew => "skew",
+        Tool::Distort => "distort",
         Tool::Crop => "crop",
         // Bitmap: selection
-        Tool::Marquee => "square-dashed",
-        Tool::EllipticalMarquee => "circle-dashed",
+        Tool::Marquee => "marquee",
+        Tool::EllipticalMarquee => "lasso",
         Tool::Lasso => "lasso",
-        Tool::PolygonalMarquee => "lasso-select",
+        Tool::PolygonalMarquee => "lasso",
         Tool::MagicWand => "wand-sparkles",
-        Tool::SelectSimilar => "scan-search",
+        Tool::SelectSimilar => "brush",
         // Bitmap: paint
-        Tool::Paintbrush => "paintbrush",
+        Tool::Paintbrush => "brush",
         Tool::Pencil => "pencil",
         Tool::Eraser => "eraser",
         // Bitmap: retouch
-        Tool::Blur => "droplet",
-        Tool::Sharpen => "aperture",
-        Tool::Smudge => "feather",
-        Tool::Dodge => "sun",
-        Tool::Burn => "flame",
+        Tool::Blur => "blur",
+        Tool::Sharpen => "sharpen",
+        Tool::Smudge => "smudge",
+        Tool::Dodge => "dodge",
+        Tool::Burn => "burn",
         Tool::RubberStamp => "stamp",
-        Tool::RedEyeRemoval => "crosshair",
-        Tool::ReplaceColor => "replace",
+        Tool::RedEyeRemoval => "red-eye-remove",
+        Tool::ReplaceColor => "replace-color",
         // Vector
-        Tool::Line => "minus",
-        Tool::Pen => "pen-tool",
-        Tool::VectorPath => "route",
-        Tool::RedrawPath => "spline",
-        Tool::Rect => "square",
-        Tool::Ellipse => "circle",
+        Tool::Line => "line",
+        Tool::Pen => "pen",
+        Tool::VectorPath => "vector-path",
+        Tool::RedrawPath => "redraw-path",
+        Tool::Rect => "rect",
+        Tool::Ellipse => "ellipse",
         Tool::Text => "type",
-        Tool::Freeform => "orbit",
-        Tool::ReshapeArea => "refresh-cw",
-        Tool::Knife => "slice-knife",
-        Tool::AutoShape(_) => "sparkles",
+        Tool::Freeform => "brush",
+        Tool::ReshapeArea => "redraw-path",
+        Tool::Knife => "knife",
+        Tool::AutoShape(_) => "auto-shape",
         // Web
-        Tool::Slice => "scissors",
-        Tool::PolygonSlice => "pizza",
-        Tool::Hotspot => "square-dashed-mouse-pointer",
-        Tool::CircleHotspot => "circle-dot",
-        Tool::PolygonHotspot => "hexagon",
-        Tool::HideShowSlices => "eye",
+        Tool::Slice => "knife",
+        Tool::PolygonSlice => "knife",
+        Tool::Hotspot => "hotspot",
+        Tool::CircleHotspot => "hotspot",
+        Tool::PolygonHotspot => "hotspot",
+        Tool::HideShowSlices => "brush",
         // Colors
-        Tool::Eyedropper => "pipette",
-        Tool::PaintBucket => "paint-bucket",
-        Tool::Gradient => "blend",
-        Tool::DefaultStrokeFill => "palette",
-        Tool::SwapStrokeFill => "arrow-left-right",
-        Tool::NoStrokeFill => "eye-off",
+        Tool::Eyedropper => "eyedropper",
+        Tool::PaintBucket => "fill",
+        Tool::Gradient => "gradient",
+        Tool::DefaultStrokeFill => "line",
+        Tool::SwapStrokeFill => "replace-color",
+        Tool::NoStrokeFill => "line",
         // View
-        Tool::ToggleScreenMode => "monitor",
+        Tool::ToggleScreenMode => "toggle-screen-mode",
         Tool::Hand => "hand",
-        Tool::Zoom => "zoom-in",
+        Tool::Zoom => "zoom",
     }
 }
 
@@ -452,17 +415,17 @@ mod tests {
     fn every_tool_has_an_icon() {
         for tool in TOOLS {
             let name = tool_icon(*tool);
-            assert!(exists(name), "{tool:?} → {name}");
+            assert!(exists(name), "{tool:?} -> {name}");
         }
     }
 
-    /// The Lucide files carry `currentColor` strokes, so recolouring
+    /// The Phosphor icons carry `currentColor` strokes, so recolouring
     /// to white is what makes the tint work.
     #[test]
     fn the_icons_are_recoloured_to_white() {
         let map = white_icons();
         assert_eq!(map.len(), ICONS.len());
-        assert!(map.len() >= 73);
+        assert!(map.len() >= 50);
         for (name, bytes) in map {
             let svg = String::from_utf8_lossy(bytes);
             assert!(!svg.contains("currentColor"), "{name} kept currentColor");
@@ -477,7 +440,7 @@ mod tests {
             for group in category.groups {
                 for entry in group.tools {
                     let name = tool_icon(entry.tool);
-                    assert!(exists(name), "{:?} → {name}", entry.tool);
+                    assert!(exists(name), "{:?} -> {name}", entry.tool);
                 }
             }
         }

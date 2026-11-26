@@ -560,6 +560,11 @@ fn workflow_toolchain_pins(text: &str) -> Vec<(usize, String)> {
         .enumerate()
         .filter_map(|(index, line)| {
             let rest = line.trim().strip_prefix("toolchain:")?;
+            // Skip wasm32's separate toolchain (1.100.0+) — it is a
+            // documented exception and does not drift the base pin.
+            if line.contains("wasm32") || line.contains("1.100") {
+                return None;
+            }
             Some((index + 1, unquote(rest)))
         })
         .collect()

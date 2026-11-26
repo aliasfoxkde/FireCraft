@@ -7,6 +7,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use app::editor::{Editor, NineSliceEdge, Tool};
+#[allow(unused_imports)]
 use engine::Session;
 
 /// The scripted golden, in order: CREATE (draw a rect, make it a
@@ -84,6 +85,7 @@ fn the_golden_legs_land_where_they_claim() {
     );
 }
 
+#[cfg(feature = "native")]
 #[test]
 fn the_symbol_golden_replays_and_round_trips() {
     let editor = symbol_session();

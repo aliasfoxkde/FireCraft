@@ -5,6 +5,7 @@
 //! place, and render.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![cfg(feature = "native")]
 
 use app::editor::Editor;
 use compose::render;

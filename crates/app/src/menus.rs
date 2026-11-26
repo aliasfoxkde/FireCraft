@@ -213,6 +213,14 @@ pub enum ShellAction {
     ImageSize,
     /// Help ▸ Online Help — opens the project wiki in the browser.
     OnlineHelp,
+    /// Help ▸ Feature List — opens the feature inventory.
+    FeatureList,
+    /// Help ▸ Tutorials — opens the user tutorial index.
+    Tutorials,
+    /// Help ▸ Report an issue — opens the issue template chooser.
+    ReportIssue,
+    /// Help ▸ Release notes — opens the project changelog.
+    ReleaseNotes,
     /// Help ▸ Manage Extensions… — the extension (script) manager.
     ManageExtensions,
     /// Window ▸ (panel name) — toggle one right-dock panel.
@@ -955,9 +963,7 @@ pub static EDIT: Menu = Menu {
             35429,
             "Keyboard Shortcuts...",
             "",
-            Action::Shell(ShellAction::ReportGap(
-                "Keyboard Shortcuts needs the shortcut editor, which this build does not ship",
-            )),
+            Action::Shell(ShellAction::ShowShortcuts),
         ),
     ],
 };
@@ -2262,6 +2268,30 @@ pub static HELP: Menu = Menu {
             "Keyboard Shortcuts\tF1",
             "",
             Action::Shell(ShellAction::ShowShortcuts),
+        ),
+        item(
+            0,
+            "Feature List",
+            "",
+            Action::Shell(ShellAction::FeatureList),
+        ),
+        item(
+            0,
+            "Roadmap and Tutorials",
+            "",
+            Action::Shell(ShellAction::Tutorials),
+        ),
+        item(
+            0,
+            "Report a Bug or Request a Feature...",
+            "",
+            Action::Shell(ShellAction::ReportIssue),
+        ),
+        item(
+            0,
+            "Release Notes",
+            "",
+            Action::Shell(ShellAction::ReleaseNotes),
         ),
         Entry::Sep,
         item(
@@ -3603,6 +3633,10 @@ pub fn action_name(action: Action) -> String {
             ShellAction::ImageSize => "Image Size".into(),
             ShellAction::CanvasColor => "Canvas Color".into(),
             ShellAction::OnlineHelp => "Online Help".into(),
+            ShellAction::FeatureList => "Feature list".into(),
+            ShellAction::Tutorials => "Roadmap and tutorials".into(),
+            ShellAction::ReportIssue => "Report an issue".into(),
+            ShellAction::ReleaseNotes => "Release notes".into(),
             ShellAction::ManageExtensions => "Manage Extensions".into(),
             ShellAction::TogglePanel(name) => format!("{name} panel"),
             ShellAction::ToggleTools => "Tools panel".into(),
@@ -3937,14 +3971,14 @@ mod tests {
     /// inert count. A change here means the surface changed —
     /// update the docs in the same change.
     ///
-    /// The two web-panel rows (Slices, HTML Preview) and Edit ▸ Delete
-    /// All... are this build's own, so the total is three above the
-    /// CS6 transcription.
+    /// The two web-panel rows (Slices, HTML Preview), Edit ▸ Delete
+    /// All..., and the four Help information/feedback links are this build's own,
+    /// so the total is seven above the CS6 transcription.
     #[test]
     fn menu_item_total_is_pinned() {
         let (total, _) = census();
         assert_eq!(
-            total, 298,
+            total, 302,
             "menu item total changed — update the docs that quote it"
         );
     }

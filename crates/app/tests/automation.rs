@@ -4,6 +4,7 @@
 //! (malformed JSON is a typed reply, never a panic, and never a
 //! touched journal).
 
+#![cfg(feature = "native")]
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use std::rc::Rc;

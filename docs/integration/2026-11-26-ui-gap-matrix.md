@@ -1,0 +1,16 @@
+# Phase 2 — UI Gap Matrix (CraftAnything Experiment vs Consolidated FireCraft)
+
+> **Date:** 2026-11-26 (Reconciled after Forensic Audit & Full CS6 Studio UI Integration)
+> **Reference:** `/nas/Temp/repos/FireCraft-CraftAnything-Experiment` (`dab457c`)
+> **Target:** `/var/tmp/firecraft-int-1.0/crates/app/src/shell/`
+
+| # | Dimension | Experiment Behavior | Consolidated FireCraft Behavior (Post-Integration) | Status | Target Module |
+|---|---|---|---|---|---|
+| 1 | **Theme, Frame, Toolbars & Icons** | CS6 Charcoal Dark / Classic Light / System, square corners, dark widget fills, custom vector icons, Main Toolbar, 2-col collapsible tool rail w/ pinned footer | Integrated `theme.rs` (WCAG AA/AAA verified), `vector_icons.rs`, `cs6_menu_bar`, `cs6_main_toolbar`, `cs6_tools_panel` w/ pinned Fill/Stroke/Screen-Mode footer | `INTEGRATED` | `theme.rs`, `vector_icons.rs`, `chrome.rs` |
+| 2 | **Canvas, Rulers, View Modes & Footer** | `Original/Preview/2-Up/4-Up` bar + Page selector, top/left rulers (`px/in/cm/mm`) + cursor hairlines, unified canvas footer (format, snap, transport, zoom, size, DPI) | Integrated `cs6_document_tab_strip`, `draw_canvas_rulers`, `CanvasViewMode` split overlays, `cs6_canvas_footer_bar`, `cs6_status_bar` | `INTEGRATED` | `chrome.rs`, `canvas_ui.rs` |
+| 3 | **Document Tabs & Multi-Doc Chrome** | Sculpted active tab accent bar, `*` dirty dot, embedded `×` close, middle-click close, wheel switching, overflow `…` menu, `+` new tab, context menu | Integrated in `cs6_document_tab_strip` over FireCraft's `DocTab` switcher | `INTEGRATED` | `chrome.rs` |
+| 4 | **Bottom Properties Inspector** | Single bottom header, collapse chevron, owner-controlled vertical resize (118–340px), horizontal CS6 Document & Object summary + deep inspector | Integrated `cs6_bottom_properties_dock` + `cs6_horizontal_properties_body` wired to `object.rename`, `object.setBounds`, `object.setOpacity`, `document.setCanvasColor`, `page.setCanvasSize`, `document.setResolution` | `INTEGRATED` | `chrome.rs`, `mod.rs` |
+| 5 | **Right Dock Panels & Iconic Mode** | Dock header (`>> Panels`, Expand/Collapse All), 4 stacked collapsible tabbed CS6 groups, 36px Iconic Mode rail w/ flyouts, real Align/Path/Color Palette/Special Chars/Image/AutoShape panels | Integrated in `panel_windows.rs` + replaced all 7 stub panels in `panels.rs` (including live 2D SV + Hue + HLS/HSV/CMYK/RGB + 12-step Blender) while preserving `panels.snapshot` | `INTEGRATED` | `panel_windows.rs`, `panels.rs` |
+| 6 | **Welcome Screen & 1080p Showcase** | CS6 `Fc` Welcome modal + 1080p interactive vector/text/slice Showcase demo | Integrated clean-room `welcome_overlay.rs` + live engine-command `demo.rs` (1920×1080 Showcase) | `INTEGRATED` | `welcome_overlay.rs`, `demo.rs` |
+| 7 | **Windows Shell & Clear Color** | Theme-matched `App::clear_color` (no white flash), decorated `1440×900` window, COM Jump List | Integrated `clear_color` + decorated `1440×900` window + embedded app icon; COM Jump List deferred to `T30` (conflicts with workspace `unsafe_code = "forbid"`) | `INTEGRATED (Jump List -> T30)` | `main.rs`, `mod.rs` |
+| 8 | **Vector, Bitmap, Text, Mask & WASM** | Core editing + browser target | Preserved 100% of FireCraft's 17-crate engine, 257/257 reachable commands, `.fw.png` round-trip, and `wasm32-unknown-unknown` build | `VERIFYING` | `crates/*`, `web/` |

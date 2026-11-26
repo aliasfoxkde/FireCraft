@@ -32,7 +32,6 @@
 //! inventory, the dock, and the open/closed bookkeeping.
 
 use super::*;
-use egui::Widget;
 
 /// The panels this shell implements, in the CS6 right-dock order.
 pub(crate) const PANELS: &[PanelSpec] = &[
@@ -131,6 +130,36 @@ pub(crate) const PANELS: &[PanelSpec] = &[
         kind: PanelKind::CommonLibrary,
         open_by_default: false,
     },
+    PanelSpec {
+        name: "Special Characters",
+        kind: PanelKind::SpecialChars,
+        open_by_default: false,
+    },
+    PanelSpec {
+        name: "Image Editing",
+        kind: PanelKind::ImageEditing,
+        open_by_default: false,
+    },
+    PanelSpec {
+        name: "Auto Shape Properties",
+        kind: PanelKind::AutoShapeProps,
+        open_by_default: false,
+    },
+    PanelSpec {
+        name: "Align",
+        kind: PanelKind::Align,
+        open_by_default: false,
+    },
+    PanelSpec {
+        name: "Path",
+        kind: PanelKind::Path,
+        open_by_default: false,
+    },
+    PanelSpec {
+        name: "Color Palette",
+        kind: PanelKind::ColorPalette,
+        open_by_default: false,
+    },
 ];
 
 /// The Web Layer panel has no Window-menu row in CS6 — it is always
@@ -179,6 +208,14 @@ pub(crate) enum PanelKind {
     HtmlPreview,
     CssProperties,
     FindReplace,
+    // New CS6 panels from experiment
+    SpecialChars,
+    ImageEditing,
+    AutoShapeProps,
+    DocumentLibrary,
+    Align,
+    Path,
+    ColorPalette,
     CommonLibrary,
 }
 
@@ -240,13 +277,26 @@ const DOCK_SIDE: DockSide = DockSide::Right;
 /// moves, so a group is anchored on its first member: the anchor is
 /// the member the group is drawn at, and the member a move carries
 /// with it.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub(crate) struct PanelGroup {
     /// The panels in the group, in tab order. The first member is
     /// the group's anchor.
     pub(crate) members: Vec<&'static str>,
     /// The member whose content the group shows.
     pub(crate) active: &'static str,
+    /// Unique group id for tracking floating stacks.
+    pub(crate) id: u64,
+    /// Floating position when the group is undocked.
+    pub(crate) floating_pos: egui::Pos2,
+    /// Floating width when the group is undocked.
+    pub(crate) floating_width: f32,
+    /// When set, this floating group is stacked under the referenced group and
+    /// follows it when that group moves.
+    pub(crate) stack_parent: Option<u64>,
+    /// Whether the group is currently collapsed (iconic mode).
+    pub(crate) collapsed: bool,
+    /// Body height for floating panels.
+    pub(crate) body_height: f32,
 }
 
 /// The payload a panel drag carries: which panel is being moved.
@@ -272,7 +322,7 @@ pub(crate) fn cancel_panel_drag(ctx: &egui::Context) {
 /// panel-snapshot gate pins. The content a panel draws is not: it
 /// changes with every feature, and a content change is reviewed as
 /// code, not as a golden diff.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct PanelSummary {
     /// The panel's stable id: its CS6 name, lowercased with the
     /// spaces turned into dashes.
@@ -394,6 +444,47 @@ pub(crate) const DOCK_WIDTH: f32 = 258.0;
 /// dock frame, the scroll bar, and the panel's own padding.
 pub(crate) const DOCK_CONTENT_WIDTH: f32 = DOCK_WIDTH - 26.0;
 
+fn panel_mini_icon(name: &str) -> super::vector_icons::Icon {
+    use super::vector_icons::Icon;
+    match name {
+        "Optimize" | "Slices" => Icon::Slice,
+        "History" => Icon::Undo,
+        "Align" => Icon::Group,
+        "Path" => Icon::Pen,
+        "Pages" => Icon::New,
+        "States" => Icon::Duplicate,
+        "Layers" | "Web Layer" => Icon::Folder,
+        "Styles" => Icon::Star,
+        "Color Palette" | "Color Mixer" | "Swatches" => Icon::Picker,
+        "Info" => Icon::Select,
+        "Special Characters" => Icon::Text,
+        "Image Editing" => Icon::Brush,
+        "Auto Shapes" | "Auto Shape Properties" => Icon::Polygon,
+        "Document Library" | "Common Library" => Icon::Open,
+        "CSS Properties" | "HTML Preview" => Icon::Export,
+        "URL" => Icon::Hotspot,
+        "Behaviors" | "Find and Replace" => Icon::Wand,
+        _ => Icon::Rectangle,
+    }
+}
+
+fn short_tab_title(name: &'static str) -> &'static str {
+    match name {
+        "Color Palette" => "Palette",
+        "Color Mixer" => "Mixer",
+        "Special Characters" => "Chars",
+        "Image Editing" => "Image",
+        "Auto Shapes" => "Shapes",
+        "Auto Shape Properties" => "Shape Prop",
+        "Document Library" => "Library",
+        "Common Library" => "Common",
+        "CSS Properties" => "CSS",
+        "Find and Replace" => "Find",
+        "HTML Preview" => "HTML",
+        _ => name,
+    }
+}
+
 impl Shell {
     /// Draws the CS6 right dock: the column of stacked panels.
     ///
@@ -426,8 +517,13 @@ impl Shell {
         self.dock_column(ui, DockSide::Left)
     }
 
-    /// One dock column: the panels that live in it, stacked.
+    /// One dock column: CS6 header bar (`>> Panels` collapse-to-iconic-strip +
+    /// expand/collapse all) above either the 36 px Iconic Mode strip or the
+    /// stacked collapsible tabbed panel groups.
     fn dock_column(&mut self, ui: &mut egui::Ui, side: DockSide) -> Option<egui::Rect> {
+        let p = self.active_palette();
+        let is_right = side == DockSide::Right;
+        let iconic = is_right && self.right_dock_collapsed;
         let (column_id, scroll_id) = match side {
             DockSide::Left => ("cs6_left_dock", "cs6_left_dock_scroll"),
             DockSide::Right => ("cs6_dock", "cs6_dock_scroll"),
@@ -437,15 +533,221 @@ impl Shell {
             DockSide::Right => egui::Panel::right(egui::Id::new(column_id)),
         };
         let mut rect = None;
-        column
-            .resizable(true)
-            .default_size(DOCK_WIDTH)
+        let panel_builder = if iconic {
+            column.exact_size(36.0).resizable(false)
+        } else {
+            column
+                .resizable(true)
+                .default_size(276.0)
+                .min_size(236.0)
+                .max_size(380.0)
+        };
+
+        panel_builder
+            .frame(
+                egui::Frame::new()
+                    .fill(p.panel)
+                    .stroke(egui::Stroke::new(1.0, p.stroke))
+                    .inner_margin(egui::Margin::same(3)),
+            )
             .show_separator_line(true)
             .show(ui, |ui| {
                 rect = Some(ui.max_rect());
-                // The column scrolls: CS6's dock does too when the
-                // stack is taller than the window, and it is what keeps
-                // every panel reachable at a short viewport.
+
+                // CS6 Dock Header Bar (>> Panels + Expand All / Collapse All)
+                let (bar_r, _) = ui.allocate_exact_size(
+                    egui::Vec2::new(ui.available_width(), 17.0),
+                    egui::Sense::hover(),
+                );
+                let ptr = ui.painter();
+                ptr.rect_filled(bar_r, 0.0, p.panel_alt);
+                ptr.line_segment(
+                    [bar_r.left_bottom(), bar_r.right_bottom()],
+                    egui::Stroke::new(1.0, p.stroke),
+                );
+                if is_right {
+                    let chev_r = egui::Rect::from_min_max(
+                        egui::pos2(bar_r.left() + 1.0, bar_r.top() + 1.0),
+                        egui::pos2(
+                            (bar_r.left() + 20.0).min(bar_r.right() - 1.0),
+                            bar_r.bottom() - 1.0,
+                        ),
+                    );
+                    let chev_resp = ui.interact(
+                        chev_r,
+                        ui.make_persistent_id("cs6_right_dock_collapse"),
+                        egui::Sense::click(),
+                    );
+                    if chev_resp.hovered() {
+                        ptr.rect_filled(chev_r, 0.0, p.well);
+                    }
+                    ptr.text(
+                        chev_r.center(),
+                        egui::Align2::CENTER_CENTER,
+                        if iconic { "<<" } else { ">>" },
+                        egui::FontId::proportional(9.5),
+                        if chev_resp.hovered() {
+                            p.selection
+                        } else {
+                            p.text_dim
+                        },
+                    );
+                    if chev_resp
+                        .on_hover_text(if iconic {
+                            "Expand Panels Dock"
+                        } else {
+                            "Collapse Panels Dock to Iconic Strip"
+                        })
+                        .clicked()
+                    {
+                        self.right_dock_collapsed = !self.right_dock_collapsed;
+                        self.workspace_preset = if self.right_dock_collapsed {
+                            "Iconic Mode"
+                        } else {
+                            "Expanded Mode"
+                        };
+                        if !self.right_dock_collapsed {
+                            self.iconic_flyout_name = None;
+                        }
+                    }
+
+                    if !iconic {
+                        ptr.text(
+                            egui::pos2(chev_r.right() + 6.0, bar_r.center().y),
+                            egui::Align2::LEFT_CENTER,
+                            "Panels",
+                            egui::FontId::proportional(9.5),
+                            p.text_dim,
+                        );
+                        let dots_start = chev_r.right() + 52.0;
+                        let dots_end = bar_r.right() - 44.0;
+                        if dots_end > dots_start + 8.0 {
+                            let mut x = dots_start;
+                            while x < dots_end {
+                                ptr.rect_filled(
+                                    egui::Rect::from_center_size(
+                                        egui::pos2(x, bar_r.center().y),
+                                        egui::Vec2::splat(1.4),
+                                    ),
+                                    0.0,
+                                    p.text_dim.gamma_multiply(0.6),
+                                );
+                                x += 4.5;
+                            }
+                        }
+                        let exp_r = egui::Rect::from_min_max(
+                            egui::pos2(bar_r.right() - 18.0, bar_r.top() + 1.0),
+                            egui::pos2(bar_r.right() - 1.0, bar_r.bottom() - 1.0),
+                        );
+                        let col_r = egui::Rect::from_min_max(
+                            egui::pos2(exp_r.left() - 18.0, bar_r.top() + 1.0),
+                            egui::pos2(exp_r.left() - 1.0, bar_r.bottom() - 1.0),
+                        );
+                        let exp_resp = ui.interact(
+                            exp_r,
+                            ui.make_persistent_id("cs6_dock_expand_all"),
+                            egui::Sense::click(),
+                        );
+                        let col_resp = ui.interact(
+                            col_r,
+                            ui.make_persistent_id("cs6_dock_collapse_all"),
+                            egui::Sense::click(),
+                        );
+                        if exp_resp.hovered() {
+                            ptr.rect_filled(exp_r, 0.0, p.well);
+                        }
+                        if col_resp.hovered() {
+                            ptr.rect_filled(col_r, 0.0, p.well);
+                        }
+                        ptr.text(
+                            exp_r.center(),
+                            egui::Align2::CENTER_CENTER,
+                            "▸",
+                            egui::FontId::proportional(9.5),
+                            if exp_resp.hovered() {
+                                p.selection
+                            } else {
+                                p.text_dim
+                            },
+                        );
+                        ptr.text(
+                            col_r.center(),
+                            egui::Align2::CENTER_CENTER,
+                            "▾",
+                            egui::FontId::proportional(9.5),
+                            if col_resp.hovered() {
+                                p.selection
+                            } else {
+                                p.text_dim
+                            },
+                        );
+                        if exp_resp.on_hover_text("Expand all panels").clicked() {
+                            set_every_panel_open(ui.ctx(), true);
+                            for g in &mut self.panel_groups {
+                                g.collapsed = false;
+                            }
+                        }
+                        if col_resp.on_hover_text("Collapse all panels").clicked() {
+                            set_every_panel_open(ui.ctx(), false);
+                            for g in &mut self.panel_groups {
+                                g.collapsed = true;
+                            }
+                        }
+                    }
+                }
+
+                ui.add_space(3.0);
+
+                if iconic {
+                    let visible_panels: Vec<&'static str> = dock_roster()
+                        .into_iter()
+                        .filter(|s| self.panel_shown(s.name) && self.panel_home(s.name) == side)
+                        .map(|s| s.name)
+                        .collect();
+                    egui::ScrollArea::vertical()
+                        .id_salt("cs6_iconic_rail_scroll")
+                        .auto_shrink([false, false])
+                        .show(ui, |ui| {
+                            ui.vertical_centered(|ui| {
+                                ui.spacing_mut().item_spacing = egui::Vec2::new(0.0, 3.0);
+                                for name in visible_panels {
+                                    let active = self.iconic_flyout_name == Some(name);
+                                    let (ir, resp) = ui.allocate_exact_size(
+                                        egui::Vec2::splat(26.0),
+                                        egui::Sense::click(),
+                                    );
+                                    if active {
+                                        ui.painter().rect_filled(ir, 0.0, p.accent);
+                                        ui.painter().rect_stroke(
+                                            ir,
+                                            0.0,
+                                            egui::Stroke::new(1.0, p.selection),
+                                            egui::StrokeKind::Inside,
+                                        );
+                                    } else if resp.hovered() {
+                                        ui.painter().rect_filled(ir, 0.0, p.surface);
+                                    }
+                                    super::vector_icons::draw(
+                                        ui.painter(),
+                                        ir.shrink(3.0),
+                                        panel_mini_icon(name),
+                                        if active {
+                                            egui::Color32::WHITE
+                                        } else {
+                                            p.text_dim
+                                        },
+                                        1.15,
+                                    );
+                                    if resp.on_hover_text(name).clicked() {
+                                        self.iconic_flyout_name =
+                                            if active { None } else { Some(name) };
+                                    }
+                                }
+                            });
+                        });
+                    return;
+                }
+
                 egui::ScrollArea::vertical()
                     .id_salt(scroll_id)
                     .auto_shrink([false, false])
@@ -458,25 +760,71 @@ impl Shell {
                                 continue;
                             }
                             match self.group_index(spec.name) {
-                                // A panel that is alone in the dock
-                                // draws its own header.
                                 None => {
                                     let closable = spec.kind != PanelKind::WebLayer;
                                     self.dock_section(ui, &spec, closable, side);
+                                    ui.add_space(3.0);
                                 }
-                                // A tab group draws once, at its anchor.
                                 Some(index) => {
                                     let is_anchor =
                                         self.panel_groups[index].members.first().copied()
                                             == Some(spec.name);
                                     if is_anchor {
                                         self.dock_group(ui, index, side);
+                                        ui.add_space(3.0);
                                     }
                                 }
                             }
                         }
                     });
             });
+
+        if iconic
+            && let Some(fly_name) = self.iconic_flyout_name
+            && let Some(dock_rect) = rect
+            && let Some(spec) = panel_spec(fly_name)
+        {
+            let mut close_flyout = false;
+            egui::Area::new(egui::Id::new("cs6_iconic_flyout_area"))
+                .order(egui::Order::Foreground)
+                .fixed_pos(egui::pos2(
+                    (dock_rect.left() - 284.0).max(8.0),
+                    dock_rect.top() + 24.0,
+                ))
+                .show(ui.ctx(), |ui| {
+                    egui::Frame::new()
+                        .fill(p.panel)
+                        .stroke(egui::Stroke::new(1.0, p.stroke))
+                        .shadow(egui::epaint::Shadow {
+                            offset: [0, 6],
+                            blur: 18,
+                            spread: 0,
+                            color: egui::Color32::from_black_alpha(130),
+                        })
+                        .inner_margin(egui::Margin::same(6))
+                        .show(ui, |ui| {
+                            ui.set_width(270.0);
+                            ui.horizontal(|ui| {
+                                ui.label(egui::RichText::new(fly_name).strong().color(p.text));
+                                ui.with_layout(
+                                    egui::Layout::right_to_left(egui::Align::Center),
+                                    |ui| {
+                                        if ui.small_button("×").clicked() {
+                                            close_flyout = true;
+                                        }
+                                    },
+                                );
+                            });
+                            ui.separator();
+                            egui::ScrollArea::vertical()
+                                .max_height(360.0)
+                                .show(ui, |ui| self.draw_panel_content(ui, &spec));
+                        });
+                });
+            if close_flyout || ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+                self.iconic_flyout_name = None;
+            }
+        }
         rect
     }
 
@@ -642,80 +990,231 @@ impl Shell {
         };
         let members = group.members.clone();
         let active = group.active;
+        let collapsed = group.collapsed;
+        let body_height = group.body_height;
         let Some(anchor) = members.first().copied() else {
             return;
         };
+        let p = self.active_palette();
         let mut activate: Option<&'static str> = None;
+        let mut toggle_collapse = false;
         let mut close = false;
         let mut move_to_other = false;
         let mut ungroup = false;
         let mut tab_rects: Vec<(&'static str, egui::Rect)> = Vec::new();
-        let state = egui::collapsing_header::CollapsingState::load_with_default_open(
-            ui.ctx(),
-            egui::Id::new(("cs6_dock_group", anchor)),
-            true,
-        );
-        let header = state.show_header(ui, |ui| {
-            ui.horizontal(|ui| {
-                for member in &members {
-                    let selected = *member == active;
-                    let drag_id = egui::Id::new(("cs6_panel_drag", *member));
-                    let dragging = ui.ctx().is_being_dragged(drag_id);
-                    let drag = ui.dnd_drag_source(
-                        drag_id,
-                        PanelDrag { name: member },
-                        // The tab is drawn, not clicked: the drag source
-                        // below owns the click, so that a single widget
-                        // can both switch the tab and drag the group.
-                        |ui| {
-                            egui::Button::selectable(selected, *member)
-                                .sense(egui::Sense::hover())
-                                .ui(ui)
-                        },
-                    );
-                    // One widget, both senses. egui postpones the
-                    // click-or-drag decision until the pointer moves,
-                    // so a click still switches the tab and a drag
-                    // still moves the group.
-                    let clicked = !dragging
-                        && ui
-                            .interact(drag.response.rect, drag_id, egui::Sense::click())
-                            .clicked();
-                    if clicked {
-                        activate = Some(*member);
+
+        egui::Frame::new()
+            .fill(p.panel)
+            .stroke(egui::Stroke::new(1.0, p.stroke))
+            .inner_margin(egui::Margin::same(3))
+            .show(ui, |ui| {
+                // Sculpted CS6 Group Header Strip
+                let (bar, _) = ui.allocate_exact_size(
+                    egui::Vec2::new(ui.available_width(), 20.0),
+                    egui::Sense::hover(),
+                );
+                let ptr = ui.painter();
+                ptr.rect_filled(bar, 0.0, p.panel_alt);
+                ptr.line_segment(
+                    [bar.left_bottom(), bar.right_bottom()],
+                    egui::Stroke::new(1.0, p.stroke),
+                );
+
+                // Collapse chevron on left
+                let chev_r = egui::Rect::from_min_size(
+                    egui::pos2(bar.left() + 2.0, bar.top() + 3.0),
+                    egui::Vec2::splat(14.0),
+                );
+                let chev_resp = ui.interact(
+                    chev_r,
+                    ui.make_persistent_id(("cs6_grp_chev", anchor)),
+                    egui::Sense::click(),
+                );
+                if chev_resp.hovered() {
+                    ptr.rect_filled(chev_r, 0.0, p.well);
+                }
+                let (cx, cy) = (chev_r.center().x, chev_r.center().y);
+                let ccol = if chev_resp.hovered() {
+                    p.selection
+                } else {
+                    p.text_dim
+                };
+                if collapsed {
+                    ptr.add(egui::Shape::convex_polygon(
+                        vec![
+                            egui::pos2(cx - 2.5, cy - 3.5),
+                            egui::pos2(cx + 2.5, cy + 0.5),
+                            egui::pos2(cx - 2.5, cy + 3.5),
+                        ],
+                        ccol,
+                        egui::Stroke::NONE,
+                    ));
+                } else {
+                    ptr.add(egui::Shape::convex_polygon(
+                        vec![
+                            egui::pos2(cx - 3.5, cy - 2.5),
+                            egui::pos2(cx + 3.5, cy - 2.5),
+                            egui::pos2(cx, cy + 2.5),
+                        ],
+                        ccol,
+                        egui::Stroke::NONE,
+                    ));
+                }
+                if chev_resp.clicked() {
+                    toggle_collapse = true;
+                }
+
+                // Close & Menu controls on far right
+                let close_r = egui::Rect::from_min_size(
+                    egui::pos2(bar.right() - 16.0, bar.top() + 2.0),
+                    egui::Vec2::new(15.0, 16.0),
+                );
+                let close_resp = ui.interact(
+                    close_r,
+                    ui.make_persistent_id(("cs6_grp_close", anchor)),
+                    egui::Sense::click(),
+                );
+                if close_resp.hovered() {
+                    ptr.rect_filled(close_r, 0.0, p.accent.gamma_multiply(0.45));
+                }
+                ptr.text(
+                    close_r.center(),
+                    egui::Align2::CENTER_CENTER,
+                    "×",
+                    egui::FontId::proportional(11.0),
+                    if close_resp.hovered() {
+                        p.text
+                    } else {
+                        p.text_dim
+                    },
+                );
+                if close_resp.on_hover_text("Close active panel tab").clicked() {
+                    close = true;
+                }
+
+                let move_r = egui::Rect::from_min_size(
+                    egui::pos2(close_r.left() - 16.0, bar.top() + 2.0),
+                    egui::Vec2::new(15.0, 16.0),
+                );
+                let move_resp = ui.interact(
+                    move_r,
+                    ui.make_persistent_id(("cs6_grp_move", anchor)),
+                    egui::Sense::click(),
+                );
+                if move_resp.hovered() {
+                    ptr.rect_filled(move_r, 0.0, p.well);
+                }
+                ptr.text(
+                    move_r.center(),
+                    egui::Align2::CENTER_CENTER,
+                    "≡",
+                    egui::FontId::proportional(10.5),
+                    if move_resp.hovered() {
+                        p.selection
+                    } else {
+                        p.text_dim
+                    },
+                );
+                move_resp.context_menu(|ui| {
+                    if ui.button("Ungroup tabs").clicked() {
+                        ungroup = true;
+                        ui.close();
                     }
-                    tab_rects.push((*member, drag.response.rect));
+                    if ui
+                        .button(match side {
+                            DockSide::Left => "Move group to right dock",
+                            DockSide::Right => "Move group to left dock",
+                        })
+                        .clicked()
+                    {
+                        move_to_other = true;
+                        ui.close();
+                    }
+                });
+                if move_resp
+                    .on_hover_text("Click to collapse/expand · Right-click for group options")
+                    .clicked()
+                {
+                    toggle_collapse = true;
+                }
+
+                // Sculpted CS6 Tab Buttons fitting between chevron and right controls
+                let tabs_left = chev_r.right() + 3.0;
+                let tabs_right = move_r.left() - 3.0;
+                let tabs_w = (tabs_right - tabs_left).max(40.0);
+                let per_tab_w = (tabs_w / members.len().max(1) as f32).clamp(36.0, 74.0);
+                let mut tx = tabs_left;
+                for member in &members {
+                    if tx + 24.0 > tabs_right {
+                        break;
+                    }
+                    let tw = per_tab_w.min(tabs_right - tx);
+                    let tr = egui::Rect::from_min_size(
+                        egui::pos2(tx, bar.top() + 1.0),
+                        egui::Vec2::new(tw, 19.0),
+                    );
+                    let selected = *member == active;
+                    let resp = ui.interact(
+                        tr,
+                        ui.make_persistent_id(("cs6_grp_tab", anchor, *member)),
+                        egui::Sense::click(),
+                    );
+                    if selected {
+                        ptr.rect_filled(tr, 0.0, p.panel);
+                        ptr.line_segment(
+                            [tr.left_top(), tr.right_top()],
+                            egui::Stroke::new(1.5, p.selection),
+                        );
+                        ptr.line_segment(
+                            [tr.left_top(), tr.left_bottom()],
+                            egui::Stroke::new(1.0, p.stroke),
+                        );
+                        ptr.line_segment(
+                            [tr.right_top(), tr.right_bottom()],
+                            egui::Stroke::new(1.0, p.stroke),
+                        );
+                    } else if resp.hovered() {
+                        ptr.rect_filled(tr, 0.0, p.well);
+                    }
+                    let short = short_tab_title(member);
+                    ptr.with_clip_rect(tr.shrink2(egui::Vec2::new(2.0, 0.0)))
+                        .text(
+                            tr.center(),
+                            egui::Align2::CENTER_CENTER,
+                            short,
+                            egui::FontId::proportional(10.0),
+                            if selected { p.text } else { p.text_dim },
+                        );
+                    if resp.on_hover_text(*member).clicked() {
+                        activate = Some(*member);
+                        if collapsed {
+                            toggle_collapse = true;
+                        }
+                    }
+                    tab_rects.push((*member, tr));
+                    tx += tw + 1.0;
+                }
+
+                // Panel Body inside fixed scrollable region when expanded
+                if !collapsed {
+                    ui.add_space(3.0);
+                    egui::ScrollArea::vertical()
+                        .id_salt(("cs6_grp_body", anchor))
+                        .max_height(body_height.clamp(96.0, 260.0))
+                        .auto_shrink([false, false])
+                        .show(ui, |ui| {
+                            if let Some(spec) = panel_spec(active) {
+                                self.draw_panel_content(ui, &spec);
+                            }
+                        });
                 }
             });
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                close = ui
-                    .small_button("×")
-                    .on_hover_text("Close this panel")
-                    .clicked();
-                ungroup = ui
-                    .small_button("split")
-                    .on_hover_text("Ungroup the panels")
-                    .clicked();
-                move_to_other = ui
-                    .small_button(match side {
-                        DockSide::Left => "»",
-                        DockSide::Right => "«",
-                    })
-                    .on_hover_text(match side {
-                        DockSide::Left => "Move the panel group to the right dock",
-                        DockSide::Right => "Move the panel group to the left dock",
-                    })
-                    .clicked();
-            });
-        });
-        header.body_unindented(|ui| {
-            ui.set_min_width(DOCK_CONTENT_WIDTH);
-            if let Some(spec) = panel_spec(active) {
-                self.draw_panel_content(ui, &spec);
-            }
-        });
+
         for (name, rect) in tab_rects {
             self.panel_title_rects.push((name, rect));
+        }
+        if toggle_collapse && let Some(g) = self.panel_groups.get_mut(group_index) {
+            g.collapsed = !g.collapsed;
         }
         if let Some(member) = activate {
             self.set_active_tab(group_index, member);
@@ -756,6 +1255,13 @@ impl Shell {
             PanelKind::CssProperties => self.css_properties_panel(ui),
             PanelKind::FindReplace => self.find_replace_panel(ui),
             PanelKind::CommonLibrary => self.common_library_panel(ui),
+            PanelKind::SpecialChars => self.special_chars_panel(ui),
+            PanelKind::ImageEditing => self.image_editing_panel(ui),
+            PanelKind::AutoShapeProps => self.auto_shape_props_panel(ui),
+            PanelKind::DocumentLibrary => self.document_library_panel(ui),
+            PanelKind::Align => self.align_panel(ui),
+            PanelKind::Path => self.path_panel(ui),
+            PanelKind::ColorPalette => self.color_palette_panel(ui),
         }
     }
 
@@ -861,7 +1367,14 @@ impl Shell {
         self.panel_groups.push(PanelGroup {
             members,
             active: panel,
+            id: self.next_panel_group_id,
+            floating_pos: egui::pos2(0.0, 0.0),
+            floating_width: DOCK_CONTENT_WIDTH,
+            stack_parent: None,
+            collapsed: false,
+            body_height: 300.0,
         });
+        self.next_panel_group_id += 1;
     }
 
     /// Switches a tab group to another member.
@@ -1053,7 +1566,13 @@ mod tests {
                 "HTML Preview",
                 "CSS Properties",
                 "Find and Replace",
-                "Common Library"
+                "Common Library",
+                "Special Characters",
+                "Image Editing",
+                "Auto Shape Properties",
+                "Align",
+                "Path",
+                "Color Palette"
             ]
         );
     }

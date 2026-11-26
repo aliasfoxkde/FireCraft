@@ -68,6 +68,8 @@ bearer-token-url	./xtask/src/aegis.rs	0063f0d1147604f6ef4939d76884d546fb4d0d94c4
 # Individually adjudicated as a false positive; see decision 0074.
 bitcoin-address	./xtask/schema/cyclonedx-bom-1.5.schema.json	16f6ee48f07ca0a2c3f5ebad9e3912853b26412bb37eb0653282afbf3c684fec	1
 # Individually adjudicated as a false positive; see decision 0074.
+content-security-policy	./site/_headers	8762581123975a661f9bbefd341f741e3fc8f09d4ff8e77f2b0ec15e42ca19f7	1
+# Individually adjudicated as a false positive; see decision 0074.
 cors-misconfiguration	./xtask/schema/cyclonedx-bom-1.5.schema.json	b20c31b1e0dc6e8c5dfc6e27866b862c895a4a54f0b7aac7e2a1ef736d893ff1	1
 # A glyph-position golden value (27.345314025878906); its digit run
 # matches the Amex shape, and it is a float literal, not a card number.
@@ -92,6 +94,10 @@ credit-card-visa	./scripts/ci_refresh_stale_crates-selftest.sh	e92b90d3f5a1714a0
 # the climb plan's export-parity document uses as its example: a file
 # name that carries a scale marker before its extension, not a mailbox.
 email-address	./docs/climb/P4-export-parity.md	70de8b1cfdc1e34390ce5cb5567686e31d0a9c728604c4435dc42878291dfa8d	1
+email-address	./docs/integration/2026-11-26-phase0-baseline.md	40702c8ad0d70e6e30527168b755a11388a794bbc1765ac681a64c1625d6b7c9	1
+email-address	./docs/integration/2026-11-26-phase0-baseline.md	795f1b9707957e5ff3335ba0e0ba245c09ff49a4cc6a95ece94ff730e1388beb	1
+email-address	./docs/integration/2026-11-26-phase0-baseline.md	d4a76b1a87d69404820d6d0e0a32d9eed048f118441b1d4694ccb9a3344e87d8	1
+email-address	./docs/integration/2026-11-26-phase0-baseline.md	ec972f58eccbb9061a4184e341b890adb9f1d86ae292d3a8fe2a71f87ffa2ca0	1
 email-address	./tests/detect-changes-selftest.sh	852e7b941ea2052143c1b0a0f7b007a06c49c056312aac64e2649dc35d13f994	1
 # The scripting crate's own boa context.eval() call — that crate
 # implements the CS6 scripting DOM's eval() — plus Rust curve-segment
@@ -139,6 +145,9 @@ graphql-batch-limit	./xtask/src/aegis.rs	623e18d37f4ff3f0c0acf509bcbc0b05490287b
 # (0.6.0+11769913).
 international-phone	./Cargo.lock	af21a1bff1718128c96522dc5f3a4136e66feeb8aee345e9676fda1199e5378e	1
 international-phone	./xtask/src/aegis.rs	af21a1bff1718128c96522dc5f3a4136e66feeb8aee345e9676fda1199e5378e	1
+# Individually adjudicated as a false positive; see decision 0074.
+missing-security-headers	./site/_headers	8762581123975a661f9bbefd341f741e3fc8f09d4ff8e77f2b0ec15e42ca19f7	1
+missing-security-headers	./site/_headers	9697d0ac11f539825ff0975513363525068f1a1e21d226b6067f7cda6f84e8b1	1
 # The rule's regex is JavaScript-shaped (open / fs. / readFile, then
 # user / input / query) and fires on English prose; this repository has
 # no server-side file read.
@@ -157,6 +166,7 @@ pci-cardholder-data	./crates/app/src/canvas.rs	fd92d952db92eff57586865ef7b6ae628
 pci-cardholder-data	./crates/app/src/editor.rs	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	1
 pci-cardholder-data	./crates/app/src/menus.rs	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	1
 pci-cardholder-data	./crates/app/src/shell/canvas_ui.rs	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	3
+pci-cardholder-data	./crates/app/src/shell/constants.rs	fd92d952db92eff57586865ef7b6ae62897642d1abedbe203d56e2d4ced964ed	1
 pci-cardholder-data	./crates/app/src/shell/mod.rs	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	1
 pci-cardholder-data	./docs/NEXT.md	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	1
 pci-cardholder-data	./docs/SESSIONS.md	00e37ffae0562ab6818d8f4f97457ac5f9679723c1b57f4b371b93f379f1c17a	5
@@ -270,6 +280,7 @@ ssrf-localhost	./docs/SESSIONS.md	49960de5880e8c687434170f6476605b8fe4aeb9a28632
 ssrf-localhost	./docs/SITE-DEPLOYMENT.md	49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763	1
 ssrf-localhost	./docs/decisions/0074-aegis-content-keyed-baseline.md	49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763	1
 ssrf-localhost	./docs/decisions/0083-aegis-rebless-parity-matrix.md	49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763	1
+ssrf-localhost	./docs/integration/2026-11-26-phase0-baseline.md	49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763	1
 ssrf-localhost	./docs/release/EXECUTION-BOARD.md	49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763	4
 ssrf-localhost	./docs/tasks/T22-screenshot-ui.md	49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763	1
 ssrf-localhost	./docs/tasks/T27-12-adjudicate-aegis-findings.md	12ca17b49af2289436f303e0166030a21e525d266e209267433801a8fd4071a0	1
@@ -278,6 +289,7 @@ ssrf-localhost	./docs/tasks/T27-24-pr8-remaining-findings.md	49960de5880e8c68743
 ssrf-localhost	./packaging/deb/control	49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763	1
 ssrf-localhost	./scripts/install-aegis-selftest.sh	12ca17b49af2289436f303e0166030a21e525d266e209267433801a8fd4071a0	2
 ssrf-localhost	./scripts/reconcile_deployment-selftest.py	12ca17b49af2289436f303e0166030a21e525d266e209267433801a8fd4071a0	5
+ssrf-localhost	./web/test.spec.ts	49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763	3
 ssrf-localhost	./xtask/src/aegis.rs	49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d9763	2
 ssrf-localhost	./xtask/src/dist.rs	12ca17b49af2289436f303e0166030a21e525d266e209267433801a8fd4071a0	1
 # A comment quoting a V8 crash dump observed in CI; it documents a
@@ -285,6 +297,8 @@ ssrf-localhost	./xtask/src/dist.rs	12ca17b49af2289436f303e0166030a21e525d266e209
 stack-trace-exposure	./docs/PRODUCTION-READINESS-PLAN.md	d26fba73fb8604b0c99010d648d66379756ada54983b96b6dbffcf0626cf0b1a	1
 stack-trace-exposure	./docs/decisions/0090-wasm-bundle-size-policy.md	d26fba73fb8604b0c99010d648d66379756ada54983b96b6dbffcf0626cf0b1a	1
 stack-trace-exposure	./infrastructure/docker/ci-rust.Dockerfile	17ee41935f062dffb434b86c2a8d432567df47fc5988eb4cf2bbae1b690e4747	1
+# Individually adjudicated as a false positive; see decision 0074.
+x-content-type-options	./site/_headers	38f8b78857a9fa6dde973cb9fb80761b979264773e8c0d97b73aed9839a95ad4	1
 # The SVG importer's entity-expansion fixture, which must declare an
 # external entity so the test can observe the importer refusing it, and
 # the Apple plist doctype's quoted public identifier.
@@ -573,7 +587,7 @@ zip-code	./crates/app/src/menus.rs	fe4b5aaceb85434cb5ab2dd46e956d10971a5de67e5f8
 zip-code	./crates/app/src/menus.rs	fe71955958a0844d86cd6217c0144e33825cd4c111f1fd815232c6b8fb4f6ec0	1
 zip-code	./crates/app/src/menus.rs	fec32d6024e177ac05e94de175bfccd84ec3d389034f6f57067fb167302534b6	4
 zip-code	./crates/app/src/menus.rs	ffdfd59d08e67eeff2569e91641bb6adb12fc0bf42ef8f0f2c197ed14369f10d	1
-zip-code	./crates/app/src/shell/dialogs.rs	158cb7c22ce6943d7fe7d3e01d61b78ab5b2d080cbffdd81c5de41218a6d65ed	1
+zip-code	./crates/app/src/shell/dialog_types.rs	158cb7c22ce6943d7fe7d3e01d61b78ab5b2d080cbffdd81c5de41218a6d65ed	1
 zip-code	./crates/app/src/shell/dialogs.rs	f2f89ede8e7d4b3d2243dea1ca96b8ece56f793811d9708b4a0181bf81a50011	1
 zip-code	./crates/app/src/shell/mod.rs	876c9b16254e157d1eb645390dcfae6f29b9d3cd394e73a91de8ee5d0e67ee43	1
 zip-code	./crates/app/tests/automation.rs	e27c72fe629f258a871404eed323c0cf57a7a26c19dc8d5a6ac90770241af8f5	1
@@ -699,6 +713,7 @@ zip-code	./docs/decisions/0132-the-secret-scan-runs-on-documentation-changes.md	
 zip-code	./docs/decisions/0132-the-secret-scan-runs-on-documentation-changes.md	8f0287fed25004a3261c7953e4c8286dd2f639c21b55323b7c931781c6f6abcb	1
 zip-code	./docs/decisions/0132-the-secret-scan-runs-on-documentation-changes.md	b3cb7d030fce5d1824bae203e63a8455fbf0b817f8b5d9a2174c704179204471	1
 zip-code	./docs/img/app-preview-dark.svg	16b024b09ebcb9d66f6a9968858d7e01081e51a14a4922edf3c8e3c2009c0000	1
+zip-code	./docs/integration/2026-11-26-phase0-baseline.md	9ddff7e7f21000ac8a8bf11b01b108605e9b60c1ee60e7adc92859a0d96722a5	1
 zip-code	./docs/planning/firecraft/M8-import-export.md	f2f89ede8e7d4b3d2243dea1ca96b8ece56f793811d9708b4a0181bf81a50011	2
 zip-code	./docs/planning/firecraft/M9-scripting.md	0e5c81ceee464db1c0cb9ed801d134fab0dd2a28c0dc62e35aa21a8e13ff0ebc	1
 zip-code	./docs/planning/firecraft/M9-scripting.md	20d70708103e5223b6f2fb00f00947832fb93d12ebef11eb10bc5599efefe184	1
@@ -776,8 +791,10 @@ zip-code	./docs/tasks/T27-41-windows-arm64-assessment.md	36b212ef149cc79e63eb109
 zip-code	./docs/tasks/T27-41-windows-arm64-assessment.md	6a0d62bf9572742690225db40eb2eb3b89fd0574bcadf54e48f4f71b1b090977	2
 zip-code	./docs/tasks/T27-41-windows-arm64-assessment.md	8f0287fed25004a3261c7953e4c8286dd2f639c21b55323b7c931781c6f6abcb	1
 zip-code	./docs/tasks/T27-41-windows-arm64-assessment.md	b3cb7d030fce5d1824bae203e63a8455fbf0b817f8b5d9a2174c704179204471	1
+zip-code	./playwright.config.js	891937cb335016e9c7074c3781dcb1364e0c660733a8889bbeae83e6aa759be6	1
 zip-code	./scripts/ci_refresh_stale_crates-selftest.sh	b045dd9c18caa8be1e17a4b902152cc1fd292b242b7b9dd74ba8c40896239424	1
 zip-code	./site/assets/app-preview-dark.svg	16b024b09ebcb9d66f6a9968858d7e01081e51a14a4922edf3c8e3c2009c0000	1
+zip-code	./web/test.spec.ts	d55d01d0341ed0ba2cd99b322e8c5b609254f47d10c7cd12b99b4922effeba44	1
 zip-code	./xtask/schema/cyclonedx-bom-1.5.schema.json	2f8c341cfba7dbae13b543198125c62c118349e8ff38ca7a4c4593a4819550c8	1
 zip-code	./xtask/schema/cyclonedx-bom-1.5.schema.json	d66d3f2c187ac5996d755bd3b2695ea0acb0ada05ab3863041b30df40ba7426a	3
 zip-code	./xtask/schema/cyclonedx-bom-1.5.schema.json	dc137b7c3d59a3512aa33b3913ab0403af3243e29849ed6792734534d25b94d5	2

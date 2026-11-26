@@ -2,6 +2,7 @@
 //! command door routes the session-scoped `history.rewind` id, and the
 //! document returns to the state the clicked step recorded.
 
+#![cfg(feature = "native")]
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use std::rc::Rc;

@@ -1,176 +1,8 @@
 //! Dialog types and the import/export plumbing on [`Shell`].
 
 use super::*;
+use base64::Engine as _;
 use engine::EngineError;
-
-/// The display quartet plus name, captured read-only from any
-/// property-bearing kind.
-pub(crate) struct DisplayState {
-    pub(super) opacity: i64,
-    pub(super) blend: i64,
-    pub(super) visible: bool,
-    pub(super) locked: bool,
-    pub(super) name: Option<String>,
-}
-
-/// One Web Layer panel row: id, display name, is-foreground-slice,
-/// link, alt text, and the raw `TSLi` behind the foreground toggle.
-pub(crate) type WebRow = (
-    doc::ObjectId,
-    String,
-    bool,
-    Option<String>,
-    Option<String>,
-    i64,
-);
-
-/// The Numeric Transform dialog's fields — CS6's Modify ▸ Transform ▸
-/// Numeric Transform: a uniform or per-axis scale, then a rotate and a
-/// skew, composed about the selection bounds center and applied as one
-/// transaction step (`scale` × `rotate` × `skew`, in that order).
-#[derive(Clone, Debug, PartialEq)]
-pub(crate) struct NumericTransformDialog {
-    /// Horizontal scale percent (100 = unchanged).
-    pub scale_x: f64,
-    /// Vertical scale percent.
-    pub scale_y: f64,
-    /// Uniform-scale toggle: `scale_y` follows `scale_x`.
-    pub uniform: bool,
-    /// Clockwise rotation in degrees.
-    pub rotate: f64,
-    /// Horizontal skew angle in degrees.
-    pub skew_x: f64,
-    /// Vertical skew angle in degrees.
-    pub skew_y: f64,
-}
-
-impl Default for NumericTransformDialog {
-    fn default() -> Self {
-        Self {
-            scale_x: 100.0,
-            scale_y: 100.0,
-            uniform: true,
-            rotate: 0.0,
-            skew_x: 0.0,
-            skew_y: 0.0,
-        }
-    }
-}
-
-/// The Scale To dialog's fields — CS6's Modify ▸ Transform ▸ Scale
-/// To…: an exact pixel box for the selection, seeded from its
-/// current bounds. Applying keeps the selection's top-left corner in
-/// place (`object.resize`).
-#[derive(Clone, Debug, PartialEq)]
-pub(crate) struct ScaleToDialog {
-    /// Target selection width in pixels.
-    pub width: f64,
-    /// Target selection height in pixels.
-    pub height: f64,
-}
-
-/// What a confirmed action runs once the user says yes. This is the
-/// shell's confirmation mechanism — decision 0117 named its absence
-/// as the reason `document.deleteAllInDocument` could not be bound
-/// ("a confirmed action that does not exist yet").
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum ConfirmAction {
-    /// Empty the document (`document.deleteAllInDocument`).
-    DeleteAll,
-}
-
-/// The confirm dialog's state: the question asked, and what "Yes"
-/// runs. "No" (or any dismissal) leaves the document untouched.
-#[derive(Clone, Debug, PartialEq)]
-pub(crate) struct ConfirmDialog {
-    /// The question shown to the user.
-    pub question: String,
-    /// What "Yes" runs.
-    pub action: ConfirmAction,
-}
-
-/// The Feather dialog's field — Select ▸ Feather…: softens the active
-/// pixel selection's edge by a radius in pixels (1..=64, the engine's
-/// kernel cap).
-#[derive(Clone, Debug, PartialEq)]
-pub(crate) struct FeatherDialog {
-    /// Feather radius in pixels.
-    pub radius: u8,
-}
-
-/// The Canvas Size dialog's fields — Modify ▸ Canvas ▸ Canvas Size:
-/// absolute width/height in document units plus the CS6 anchor grid
-/// (which corner the resize grows from).
-#[derive(Clone, Debug, PartialEq)]
-pub(crate) struct CanvasSizeDialog {
-    /// New canvas width in document units.
-    pub width: f64,
-    /// New canvas height in document units.
-    pub height: f64,
-    /// Anchor column 0..=2 (left/center/right).
-    pub anchor_x: usize,
-    /// Anchor row 0..=2 (top/middle/bottom).
-    pub anchor_y: usize,
-}
-
-/// The Canvas Color dialog's field — Modify ▸ Canvas ▸ Canvas Color:
-/// the document-wide matte (`document.setCanvasColor`), ABGR raw.
-#[derive(Clone, Debug, PartialEq)]
-pub(crate) struct CanvasColorDialog {
-    /// Matte color, sRGB bytes (r, g, b).
-    pub color: [u8; 3],
-}
-
-impl Default for CanvasSizeDialog {
-    fn default() -> Self {
-        Self {
-            width: 640.0,
-            height: 480.0,
-            anchor_x: 1,
-            anchor_y: 1,
-        }
-    }
-}
-
-impl Default for CanvasColorDialog {
-    fn default() -> Self {
-        Self {
-            color: [255, 255, 255],
-        }
-    }
-}
-
-impl Default for FeatherDialog {
-    fn default() -> Self {
-        Self { radius: 2 }
-    }
-}
-
-/// The Image Size dialog's fields — Modify ▸ Image Size (CS6
-/// command 35226): scales the document into the target rectangle
-/// (`document.setImageSize`) and sets the resolution.
-#[derive(Clone, Debug, PartialEq)]
-pub(crate) struct ImageSizeDialog {
-    /// New width in document units.
-    pub width: f64,
-    /// New height in document units.
-    pub height: f64,
-    /// Pixels per unit for the document resolution.
-    pub resolution: f64,
-    /// Whether the resolution unit is cm (false = inch).
-    pub unit_cm: bool,
-}
-
-impl Default for ImageSizeDialog {
-    fn default() -> Self {
-        Self {
-            width: 640.0,
-            height: 480.0,
-            resolution: 72.0,
-            unit_cm: false,
-        }
-    }
-}
 
 /// Desktop file routing for v1: the open/save path comes from
 /// `FIRECRAFT_DOC` (default `untitled.fw.png` in the working
@@ -228,7 +60,7 @@ impl engine::platform::Dialogs for EnvDialogs {
 /// the document's `FMTi` export-format id, so new formats append —
 /// reordering would re-point every saved document's setting.
 pub(crate) const EXPORT_FORMATS: &[&str] = &[
-    "png", "jpg", "bmp", "tiff", "wbmp", "svg", "psd", "gif", "webp",
+    "png", "jpg", "bmp", "tiff", "wbmp", "svg", "psd", "gif", "webp", "avif", "heic", "ai",
 ];
 
 /// The web export workflows the dialog offers (the M11 set), in menu
@@ -264,58 +96,98 @@ pub(crate) fn web_workflow(index: usize) -> Option<webexport::Workflow> {
     })
 }
 
-/// Export-dialog state (File → Export…): format, per-format controls,
-/// and the cached 2-Up preview. The controls mirror the `EXPv` fields
-/// the model maps; Export stamps them onto a cloned document and runs
-/// the same codec path the CLI does. A web workflow replaces the
-/// raster format entirely — the dialog then drives
-/// [`app_cli::ops::export_web`], the same entry point the CLI verb
-/// shares.
-pub(crate) struct ExportDialog {
-    /// Index into [`EXPORT_FORMATS`].
-    pub(super) format: usize,
-    /// Selected web workflow, or `None` for the raster formats.
-    pub(super) web: Option<usize>,
-    /// Emit the 1px shim row/column (web table workflows).
-    pub(super) web_shim: bool,
-    /// Give areas without slices their own image (`include_undefined`).
-    pub(super) web_undefined: bool,
-    /// JPEG quality 1..=100.
-    pub(super) quality: i32,
-    /// Progressive JPEG scans.
-    pub(super) progressive: bool,
-    /// Matte for alpha-less formats: false = white, true = black.
-    pub(super) matte_black: bool,
-    /// GIF loop: 0 infinite, 1 never, 2 repeat n times.
-    pub(super) gif_loop: usize,
-    /// Repeat count when `gif_loop == 2`.
-    pub(super) gif_times: i32,
-    /// GIF per-frame ink crop (`AACb`).
-    pub(super) gif_crop: bool,
-    /// GIF diff frames (`AADb`).
-    pub(super) gif_diff: bool,
-    /// GIF Floyd–Steinberg amount (`PLDi`), percent.
-    pub(super) gif_dither: i32,
-    /// Cached 2-Up panes and the settings stamp they were made from.
-    pub(super) preview: Option<(u64, TextureHandle, String, TextureHandle, String)>,
+/// HTML export style (File ▸ HTML Setup).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum HtmlExportStyle {
+    Html5,
+    Xhtml1,
+    CssGrid,
 }
 
-impl Default for ExportDialog {
+impl Default for HtmlExportStyle {
+    fn default() -> Self {
+        HtmlExportStyle::Html5
+    }
+}
+
+/// Paper size for page setup.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum PaperSize {
+    Letter,
+    A4,
+    Legal,
+    Tabloid,
+}
+
+impl PaperSize {
+    pub(crate) fn label(&self) -> &'static str {
+        match self {
+            PaperSize::Letter => "Letter (8.5×11 in)",
+            PaperSize::A4 => "A4 (210×297 mm)",
+            PaperSize::Legal => "Legal (8.5×14 in)",
+            PaperSize::Tabloid => "Tabloid (11×17 in)",
+        }
+    }
+}
+
+/// The HTML Setup dialog's fields — File ▸ HTML Setup: output style,
+/// extension, slice inclusion, and browser centering.
+#[derive(Clone, Debug)]
+pub(crate) struct HtmlSetupDialog {
+    /// HTML output style.
+    pub style: HtmlExportStyle,
+    /// File extension (.html or .htm).
+    pub extension: &'static str,
+    /// Include slices and hotspots in the export.
+    pub include_slices: bool,
+    /// Center the stage in browser.
+    pub center_in_browser: bool,
+    /// Include responsive viewport meta tag.
+    pub include_viewport_meta: bool,
+    /// Export document background color.
+    pub export_doc_bg: bool,
+}
+
+impl Default for HtmlSetupDialog {
     fn default() -> Self {
         Self {
-            format: 0,
-            web: None,
-            web_shim: true,
-            web_undefined: true,
-            quality: 90,
-            progressive: false,
-            matte_black: false,
-            gif_loop: 0,
-            gif_times: 3,
-            gif_crop: false,
-            gif_diff: false,
-            gif_dither: 0,
-            preview: None,
+            style: HtmlExportStyle::Html5,
+            extension: ".html",
+            include_slices: true,
+            center_in_browser: true,
+            include_viewport_meta: true,
+            export_doc_bg: true,
+        }
+    }
+}
+
+/// The Page Setup dialog's fields — File ▸ Page Setup: paper,
+/// orientation, margins, and print scaling.
+#[derive(Clone, Debug)]
+pub(crate) struct PageSetupDialog {
+    /// Paper size preset.
+    pub paper: PaperSize,
+    /// Landscape orientation.
+    pub landscape: bool,
+    /// Margin in inches (0..=3).
+    pub margin_in: f64,
+    /// Fit artwork to page.
+    pub fit_to_page: bool,
+    /// Scale percentage (10..=400, used when !fit_to_page).
+    pub scale_pct: i32,
+    /// Print guides and slice overlays.
+    pub print_guides: bool,
+}
+
+impl Default for PageSetupDialog {
+    fn default() -> Self {
+        Self {
+            paper: PaperSize::Letter,
+            landscape: false,
+            margin_in: 0.5,
+            fit_to_page: false,
+            scale_pct: 100,
+            print_guides: false,
         }
     }
 }
@@ -405,19 +277,28 @@ impl Shell {
     pub(super) fn import_raster_dialog(&mut self) {
         let Some(path) = self.dialogs.open_path(
             "Import image",
-            &[(
-                "Images".to_owned(),
-                vec![
-                    "png".to_owned(),
-                    "jpg".to_owned(),
-                    "jpeg".to_owned(),
-                    "gif".to_owned(),
-                    "bmp".to_owned(),
-                    "tif".to_owned(),
-                    "tiff".to_owned(),
-                    "webp".to_owned(),
-                ],
-            )],
+            &[
+                (
+                    "Images".to_owned(),
+                    vec![
+                        "png".to_owned(),
+                        "jpg".to_owned(),
+                        "jpeg".to_owned(),
+                        "gif".to_owned(),
+                        "bmp".to_owned(),
+                        "tif".to_owned(),
+                        "tiff".to_owned(),
+                        "webp".to_owned(),
+                        "avif".to_owned(),
+                        "heic".to_owned(),
+                    ],
+                ),
+                ("SVG".to_owned(), vec!["svg".to_owned()]),
+                (
+                    "PSD/AI".to_owned(),
+                    vec!["psd".to_owned(), "psb".to_owned(), "ai".to_owned()],
+                ),
+            ],
         ) else {
             return;
         };
@@ -543,7 +424,14 @@ impl Shell {
         ui.heading("Web Layer");
         let page = self.editor.page;
         let frame = self.editor.frame;
-        let rows: Vec<WebRow> = {
+        let rows: Vec<(
+            doc::ObjectId,
+            String,
+            bool,
+            Option<String>,
+            Option<String>,
+            i64,
+        )> = {
             let document = self.editor.document();
             let Some(layer) = document.pages.get(page).and_then(|page| {
                 page.layers
@@ -683,6 +571,44 @@ impl Shell {
                     ui.checkbox(&mut dialog.gif_crop, "Crop frames");
                     ui.checkbox(&mut dialog.gif_diff, "Diff frames");
                     ui.add(egui::Slider::new(&mut dialog.gif_dither, 0..=100).text("Dither %"));
+                }
+                // Quality slider for all lossy formats: JPEG, WebP, AVIF.
+                match EXPORT_FORMATS[dialog.format] {
+                    "jpg" | "webp" | "avif" => {
+                        ui.add(
+                            egui::Slider::new(&mut dialog.export_quality, 10..=100)
+                                .text("Export Quality"),
+                        );
+                    }
+                    _ => {}
+                }
+                // Transparent background for formats that support alpha.
+                if matches!(EXPORT_FORMATS[dialog.format], "png" | "webp" | "svg") {
+                    ui.checkbox(&mut dialog.transparent_bg, "Transparent BG");
+                }
+                // HTML export options.
+                if matches!(EXPORT_FORMATS[dialog.format], "html" | "htm") {
+                    egui::ComboBox::from_label("Style")
+                        .selected_text(match dialog.html_style {
+                            0 => "HTML5",
+                            1 => "XHTML 1.0",
+                            _ => "CSS Grid",
+                        })
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(&mut dialog.html_style, 0, "HTML5");
+                            ui.selectable_value(&mut dialog.html_style, 1, "XHTML 1.0");
+                            ui.selectable_value(&mut dialog.html_style, 2, "CSS Grid");
+                        });
+                    ui.checkbox(&mut dialog.include_slices, "Include Slices & Hotspots");
+                    ui.checkbox(&mut dialog.center_in_browser, "Center Stage in Browser");
+                    ui.checkbox(
+                        &mut dialog.include_viewport_meta,
+                        "Include Responsive Viewport Meta",
+                    );
+                    ui.checkbox(
+                        &mut dialog.export_doc_bg,
+                        "Export Document Background Color",
+                    );
                 }
             });
 
@@ -1212,16 +1138,27 @@ impl Shell {
         };
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
         (
-            dialog.format,
-            dialog.quality,
-            dialog.progressive,
-            dialog.matte_black,
-            dialog.gif_loop,
-            dialog.gif_times,
-            dialog.gif_crop,
-            dialog.gif_diff,
-            dialog.gif_dither,
-            self.stamp(),
+            (
+                dialog.format,
+                dialog.quality,
+                dialog.progressive,
+                dialog.matte_black,
+                dialog.gif_loop,
+                dialog.gif_times,
+                dialog.gif_crop,
+                dialog.gif_diff,
+                dialog.gif_dither,
+                dialog.transparent_bg,
+                dialog.export_quality,
+                dialog.include_slices,
+            ),
+            (
+                dialog.center_in_browser,
+                dialog.include_viewport_meta,
+                dialog.export_doc_bg,
+                dialog.html_style,
+                self.stamp(),
+            ),
         )
             .hash(&mut hasher);
         hasher.finish()
@@ -1232,10 +1169,16 @@ impl Shell {
     pub(super) fn dialog_options(dialog: &ExportDialog) -> doc::ExportOptions {
         let jpg = EXPORT_FORMATS[dialog.format] == "jpg";
         let gif = EXPORT_FORMATS[dialog.format] == "gif";
+        let lossy = matches!(EXPORT_FORMATS[dialog.format], "jpg");
         doc::ExportOptions {
             format: Some(i64::try_from(dialog.format).unwrap_or(0)),
             jpeg_quality: jpg.then_some(i64::from(dialog.quality)),
             jpeg_progressive: jpg.then_some(dialog.progressive),
+            matte_raw: lossy.then_some(if dialog.matte_black {
+                0xFF00_0000
+            } else {
+                0xFFFF_FFFF
+            }),
             frame_loop: gif.then_some(match dialog.gif_loop {
                 0 => 0,
                 1 => -1,
@@ -1250,12 +1193,13 @@ impl Shell {
 
     /// The dialog's JPEG flags (the stated-over-recorded side of the
     /// same controls).
+    #[cfg(feature = "native")]
     pub(super) fn dialog_flags(dialog: &ExportDialog) -> app_cli::ops::ExportFlags {
         app_cli::ops::ExportFlags {
-            quality: if EXPORT_FORMATS[dialog.format] == "jpg" {
-                Some(u8::try_from(dialog.quality).unwrap_or(90))
-            } else {
-                None
+            quality: match EXPORT_FORMATS[dialog.format] {
+                "jpg" => Some(u8::try_from(dialog.quality).unwrap_or(90)),
+                "avif" | "webp" => Some(u8::try_from(dialog.export_quality).unwrap_or(90)),
+                _ => None,
             },
             progressive: dialog.progressive,
             matte: if dialog.matte_black {
@@ -1269,6 +1213,7 @@ impl Shell {
     /// Encodes page 0 / state 0 in `format` with the dialog's settings
     /// stamped onto a cloned document — byte-identical to what Export
     /// writes.
+    #[cfg(feature = "native")]
     pub(super) fn encode_with_dialog(
         &self,
         dialog: &ExportDialog,
@@ -1300,6 +1245,7 @@ impl Shell {
     /// settings, and a lossless PNG for comparison. Each pane keeps
     /// its byte size in the label. `ctx` is the live egui context the
     /// textures are loaded onto.
+    #[cfg(feature = "native")]
     pub(super) fn render_preview(
         &mut self,
         ctx: &egui::Context,
@@ -1347,6 +1293,7 @@ impl Shell {
     /// Export through the save dialog: encode with the dialog's
     /// settings, write through the injected file system. A selected
     /// web workflow routes to [`Self::export_web_via_dialog`] instead.
+    #[cfg(feature = "native")]
     pub(super) fn export_via_dialog(&mut self, dialog: &ExportDialog) {
         if let Some(index) = dialog.web {
             self.export_web_via_dialog(dialog, index);
@@ -1382,6 +1329,7 @@ impl Shell {
     /// CSS); every image file lands beside it under its export name.
     /// The pipeline is [`app_cli::ops::export_web`] — the CLI verb's
     /// exact path, so the dialog cannot drift from the CLI.
+    #[cfg(feature = "native")]
     pub(super) fn export_web_via_dialog(&mut self, dialog: &ExportDialog, index: usize) {
         let Some(workflow) = web_workflow(index) else {
             return;

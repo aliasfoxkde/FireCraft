@@ -17,14 +17,10 @@
 
 ---
 
-## 1. State snapshot (2026-11-16; main `23f872e0`)
+## 1. State snapshot (2026-11-26; `integration/firecraft-1.0` PR #189 over `origin/main` `4ff8f786`)
 
-- **Source and release:** canonical `main` is `23f872e0` after the
-  reachability wave (#143), the artwork consolidation (#144) and the
-  wave-2 closeout (#150, decision 0118). The
-  latest published release remains `v0.2.5` (2026-11-03); current source has
-  moved beyond that tag. See [PROGRESS.md](PROGRESS.md) for dated build,
-  CI and deployment receipts.
+- **Consolidated 1.0 integration & CS6 Studio UI:** Active integration work lives on `integration/firecraft-1.0` (PR `#189`). See [docs/PLAN.md](PLAN.md), [docs/integration/2026-11-26-code-ui-audit.md](integration/2026-11-26-code-ui-audit.md), and [docs/integration/2026-11-26-ui-gap-matrix.md](integration/2026-11-26-ui-gap-matrix.md). The full CS6 Studio chrome (`theme.rs`, `vector_icons.rs`, `chrome.rs`, `demo.rs`, `welcome_overlay.rs`, stacked right dock + Iconic Mode, and 7 real engine-wired panels replacing stubs) is integrated over FireCraft's 17-crate engine while preserving `panels.snapshot`, 257/257 command reachability, clean-room boundaries, and WASM support.
+- **Source and release:** canonical `origin/main` is `4ff8f786`. The latest published release remains `v0.2.5` (2026-11-03); current source has moved beyond that tag. See [PROGRESS.md](PROGRESS.md) for dated build, CI and deployment receipts.
 - **Engine and parity:** 257 registered commands; the CS6 DOM matrix is
   268 carried / 3 partial / 0 missing of 356 verbs. The latest
   shell-reachability measurement is **257/257 = 100%** (2026-11-16,
@@ -33,8 +29,10 @@
   These measures answer different questions: DOM verbs,
   shell-bound commands, and complete end-user UI/workflow parity must
   not be conflated.
-- **Menu census:** 2 inert rows of 298. The 19.6 menu-wiring campaign is
-  complete; eight additional rows are explicitly feature/evidence-gated.
+- **Menu census:** the CS6 baseline is 298 rows; this isolated branch adds
+  two FireCraft Help links, for 300 total and still 2 inert. The 19.6
+  menu-wiring campaign is complete; eight additional rows are explicitly
+  feature/evidence-gated. This branch-specific count is not a main receipt.
 - **Delivered work:** Phase 21's user-facing deliverables landed with
   #107. Phase 20.1–20.3 and 20.5–20.7 are on main (Optimize/timeline
   #118 merged); the mask stack landed in #113 (stack, fold, level
@@ -167,10 +165,13 @@ verifiable.
 ### Current program: Phases 20–22
 
 Phase 19's canvas work and menu wiring campaign (batches 1–17) are
-complete. The live menu census is 2 inert rows of 298; eight other rows
-have explicit feature/evidence gates and are not considered inert.
+complete. The main menu baseline is 2 inert rows of 298; this isolated
+branch adds two Help links (300 total). Eight other rows have explicit
+feature/evidence gates and are not considered inert.
 Path-node add/delete, the reachability gate, and the wasm budget
-re-pin are also complete.
+re-pin are also complete. The main menu baseline is 298 rows; the isolated
+product/UX branch adds two Help entries (300 total) without changing the
+CS6 census.
 
 - **CS6 keymap parity (2026-11-10, decisions 0080 + 0085):** every
   accelerator the menu bar prints is bound at the printed key.

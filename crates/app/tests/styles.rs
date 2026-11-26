@@ -80,6 +80,7 @@ fn editor_with_selection() -> (Editor, doc::ObjectId) {
     (editor, id)
 }
 
+#[cfg(feature = "native")]
 #[test]
 fn import_appends_rekeyed_and_survives_reopen() {
     let mut editor = Editor::untitled();
@@ -155,6 +156,7 @@ fn apply_paints_an_imported_bundle() {
     }
 }
 
+#[cfg(feature = "native")]
 #[test]
 fn import_keeps_base_styles_separate() {
     // A document that already carries one style: the import re-keys
