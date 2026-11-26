@@ -157,7 +157,7 @@ Android is a **gated workstream**, not an assumed packaging task.
 ### 3.6 Source and developer distributions
 
 - Publish GitHub-generated source ZIP/tar.gz for the exact release tag and a separately generated canonical source archive if additional files are needed.
-- Ensure the source archive contains all workspace crates, `Cargo.lock`, licenses, README, contribution/build docs, release notes, required codegen inputs, and packaging manifests; exclude caches, local secrets, untracked artifacts, and personal data.
+- Ensure the source archive contains all workspace crates, `Cargo.lock`, licenses, README, contribution/build docs, release notes, required codegen inputs, and packaging manifests; exclude caches, local secrets, untracked artifacts, and private or identifying material.
 - Verify a clean extraction can run `cargo build --locked`, `cargo test --locked`, and the documented relevant `xtask` gates with declared prerequisites.
 - Publish a source-only checksum and include commit SHA/tag, Rust toolchain, target triples, and build instructions.
 - Do not claim byte-for-byte reproducible native binaries unless independent rebuilds produce matching hashes. Start with reproducible build inputs and provenance, then measure reproducibility.
