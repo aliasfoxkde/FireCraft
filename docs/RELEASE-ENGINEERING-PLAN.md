@@ -547,3 +547,16 @@ A release is **not** complete merely because:
 6. RP-08: build a release candidate, download it independently, install/test each supported target, and certify.
 
 **Immediate rule:** do not cut or publish a new production tag until the existing PR #8 correctness findings are resolved or explicitly dispositioned, the release workflow is validated, and the release artifact matrix is agreed.
+
+
+---
+
+## Owner-requested 1.0 scope expansion (2026-11-26)
+
+The detailed application/repository sequencing and final release closeout now lives in [FIRECRAFT-1.0-END-TO-END-EXECUTION-AND-RELEASE-CLOSEOUT.md](planning/FIRECRAFT-1.0-END-TO-END-EXECUTION-AND-RELEASE-CLOSEOUT.md). This existing document remains the technical authority for platform packaging, toolchains, artifact verification and certification; do not duplicate its package recipes.
+
+The owner has expanded the intended public 1.0 scope to require ready-to-use browser/WASM, Windows, macOS and Linux distributions, including Linux AppImage, DEB, Flatpak and a decision on RPM, plus CLI/source/integrity materials. This expands the earlier narrow candidate scope recorded in decision 0075. Before changing the official release matrix, create a successor/superseding decision for 0075 and explicitly re-evaluate RPM decision 0070. Preserve the historical records.
+
+PhotoCraft is a useful benchmark for release breadth and process: https://github.com/storytold/photocraft/releases and https://github.com/storytold/photocraft/blob/main/docs/releasing.md. The current FireCraft artifact status must continue to be derived from ARTIFACT-MATRIX and actual receipts. A recipe or cross-compile is not a target-native package/runtime certification.
+
+Use the end-to-end plan to coordinate the experiment UI integration, website, README/wiki refresh, issue cleanup, staging and publication with the technical packaging work here.
